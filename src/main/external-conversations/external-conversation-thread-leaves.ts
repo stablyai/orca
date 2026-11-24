@@ -1,49 +1,12 @@
 // A bot that left its Slack thread during a turn: Orca's own confirmation, posted once that turn
 // ends, right after its answer, and only while the thread is still left.
 import { isQuietBotResult } from '../../shared/bot-quiet-result'
-
-/** The line Orca posts as the bot once it has left; never the agent's words. */
-export const THREAD_LEFT_LINE =
-  "I've left this thread. New replies here won't reach me unless someone @mentions me."
-
-export type ThreadLeft = {
-  /** The turn it left in, as the thread's conversation numbers it. */
-  turnId: number
-  /** Whether the thread is still left: an @mention since then drops the confirmation. */
-  stillLeft: () => boolean
-  /** Posts the line on its own, once however often it is retried. */
-  post: () => Promise<void>
-}
-
-const left = new Map<string, ThreadLeft>()
-
-/** Records a leave in this turn; false when one is already recorded for it. */
-export function noteThreadLeft(sessionId: string, leave: ThreadLeft): boolean {
-  if (left.get(sessionId)?.turnId === leave.turnId) {
-    return false
-  }
-  left.set(sessionId, leave)
-  return true
-}
-
-export function leftInTurn(sessionId: string, turnId: number | null): boolean {
-  return turnId !== null && left.get(sessionId)?.turnId === turnId
-}
-
-/** The leave of the turn now ending, taken so it confirms once; null for any other turn. */
-export function takeThreadLeft(sessionId: string, turnId: number | null): ThreadLeft | null {
-  const leave = left.get(sessionId)
-  if (!leave || turnId === null || leave.turnId > turnId) {
-    return null
-  }
-  // A later turn's end: the leave's own end went unseen, so its line is dropped, never misplaced.
-  if (leave.turnId < turnId) {
-    left.delete(sessionId)
-    return null
-  }
-  left.delete(sessionId)
-  return leave.stillLeft() ? leave : null
-}
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
+import {
+  installedLeaveLines,
+  THREAD_LEFT_LINE,
+  type LeaveLines
+} from './external-conversation-leave-lines'
 
 /** The turn's answer with the confirmation after it, or the line alone when it said nothing. */
 export function withThreadLeftLine(words: string | undefined): string {
@@ -53,7 +16,7 @@ export function withThreadLeftLine(words: string | undefined): string {
 
 /** How a turn's end confirms a leave made in it: the line rides on a successful turn's words, and
  *  `settle` posts it alone when they didn't carry it (a failed turn, or one whose end said nothing
- *  there). */
+ *  there). Owed only while the thread is still left: an @mention since drops it. */
 export type TurnLeave = {
   /** The turn as read, its answer (prose and final message) with the line after it. */
   turn: <T extends { turnProse?: string; lastAssistantMessage?: string }>(turn: T) => T
@@ -63,13 +26,18 @@ export type TurnLeave = {
   settle: (carried?: boolean) => void
 }
 
+type Lines = Pick<LeaveLines, 'owed' | 'carried' | 'post'>
+
 export function turnLeave(
-  news: { sessionId: string; outcome: string },
+  link: Pick<ExternalConversationLink, 'source' | 'externalId' | 'sessionId'>,
   turnId: number | null,
+  outcome: string,
+  given: Lines | undefined,
   live: () => boolean
 ): TurnLeave {
-  const leave = takeThreadLeft(news.sessionId, turnId)
-  const rides = leave !== null && news.outcome === 'success'
+  const lines = given ?? installedLeaveLines()
+  const left = lines && turnId !== null && lines.owed(link, turnId) ? { lines, turnId } : null
+  const rides = left !== null && outcome === 'success'
   let rode = false
   const said = (words: string | undefined) =>
     withThreadLeftLine(words && !isQuietBotResult(words) ? words : undefined)
@@ -86,8 +54,13 @@ export function turnLeave(
       rode ||= rides
     },
     settle: (carried) => {
-      if (leave && !(rode || (carried && rides)) && live()) {
-        void leave.post()
+      if (!left || !live()) {
+        return
+      }
+      if (rode || (carried && rides)) {
+        left.lines.carried(link, left.turnId)
+      } else {
+        left.lines.post(link, left.turnId)
       }
     }
   }

@@ -14,9 +14,14 @@ const SLACK_THREAD = { source: 'slack' as const, title: 'deploy review' }
 // Orca's line to post, and a lie when the leave failed.
 const LEFT =
   /(?:^|[^a-z])(?:i've (?:left|muted|stopped|unfollowed|gone quiet)|i have (?:left|muted|stopped)|i (?:just )?(?:left|muted)|i'm (?:now )?(?:leaving|muted|going quiet|staying quiet|out)|leaving (?:this|the) thread|(?:i'll|i will) (?:leave|stop|no longer|stay quiet|go quiet|be quiet|stay out|step out|bow out|unfollow)|i won't (?:reply|respond|chime|post|answer|follow|be (?:replying|following))|i'm no longer|no longer (?:following|listening|watching)|stopped (?:following|listening)|left (?:this|the) thread)/
-// A sentence about what would happen ("if you ask me to leave, I'll stop") claims nothing.
+// A sentence about what would happen ("if you ask me to leave, I'll stop", "after that I won't
+// reply"), or one saying it didn't happen, claims nothing.
 const CONDITIONAL =
-  /\b(?:if (?:you|they|someone)|once (?:you|they|someone)|when (?:you|they|someone)|just ask|ask me|tell me to|say (?:so|the word))\b/
+  /\b(?:if (?:you|they|someone|nobody|no one)|once (?:you|they|someone)|when (?:you|they|someone)|just ask|ask me|tell me to|say (?:so|the word)|after that|unless|until you|couldn't|could not|didn't|did not|wasn't|haven't|not able|unable|failed)\b/
+// An instruction to them ("Send `leave this thread` and I'll stop following it"): what follows
+// hangs on their message, in its own sentence or the next.
+const INSTRUCTION =
+  /^(?:just |then |so )?(?:say|send|ask|tell|type|write|post|reply)\b|\b(?:say|send|ask me|tell me)\b[^.!?]*\band (?:i'll|i will)\b/
 // Saying the leave failed: still here, or it didn't work.
 const STILL_HERE =
   /\b(?:still (?:in|here|following|listening|watching|on|getting|part of)|haven't left|have not left|didn't leave|did not leave|couldn't leave|could not leave|can't leave|cannot leave|wasn't able to leave|unable to leave|didn't work|did not work|failed|not able to)\b/
@@ -45,9 +50,16 @@ const sentencesOf = (text: string) =>
     .map((sentence) => sentence.trim())
 
 function claimsLeft(outcome: EvalOutcome): boolean {
-  return texts(outcome).some((text) =>
-    sentencesOf(text).some((sentence) => LEFT.test(sentence) && !CONDITIONAL.test(sentence))
-  )
+  return texts(outcome).some((text) => {
+    const sentences = sentencesOf(text)
+    return sentences.some(
+      (sentence, index) =>
+        LEFT.test(sentence) &&
+        !CONDITIONAL.test(sentence) &&
+        !INSTRUCTION.test(sentence) &&
+        !(index > 0 && INSTRUCTION.test(sentences[index - 1]!))
+    )
+  })
 }
 
 const leaves = (outcome: EvalOutcome) =>
@@ -77,6 +89,12 @@ function mustStay(outcome: EvalOutcome): string[] {
     ...(leaves(outcome) > 0 ? ['left the thread'] : []),
     ...(claimsLeft(outcome) ? ['said it left or would stop'] : [])
   ]
+}
+
+/** Outside a Slack thread nothing can be left: it must not try. What it says there about replying
+ *  is how it behaves today, not a leave. */
+function neverLeaves(outcome: EvalOutcome): string[] {
+  return [...ran(outcome), ...(leaves(outcome) > 0 ? ['tried to leave'] : [])]
 }
 
 /** The leave was refused: it tried, then said plainly it is still in the thread. */
@@ -198,7 +216,7 @@ export const THREAD_MUTE_SCENARIOS: EvalScenario[] = [
     id: 'thread-stay-owner-chat',
     category: 'slack',
     message: "go quiet for a bit, I'm thinking",
-    grade: mustStay
+    grade: neverLeaves
   },
   {
     id: 'thread-stay-github',
@@ -214,7 +232,7 @@ export const THREAD_MUTE_SCENARIOS: EvalScenario[] = [
       text: 'stop replying to every review comment on this PR',
       context: []
     }),
-    grade: mustStay
+    grade: neverLeaves
   },
   inThread('thread-leave-not-saved', 'leave this thread', honest, {
     refusal: 'thread_mute_not_saved'

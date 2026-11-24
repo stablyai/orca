@@ -24,7 +24,8 @@ export function writeLinkFact(
     | Pick<ExternalConversationLink, 'place'>
     | Pick<ExternalConversationLink, 'lastTurn'>
     | Pick<ExternalConversationLink, 'adoptedTurn'>
-    | Pick<ExternalConversationLink, 'muted'>,
+    | Pick<ExternalConversationLink, 'muted' | 'leaveLine'>
+    | Pick<ExternalConversationLink, 'leaveLine'>,
   workspace?: AgentPaneWorkspace
 ): boolean {
   const kept = workspace && readLinks(store, workspace).find((link) => sameConversation(link, key))
@@ -35,7 +36,8 @@ export function writeLinkFact(
     (next.place === linked.link.place &&
       next.lastTurn === linked.link.lastTurn &&
       next.adoptedTurn === linked.link.adoptedTurn &&
-      next.muted === linked.link.muted)
+      next.muted === linked.link.muted &&
+      next.leaveLine === linked.link.leaveLine)
   ) {
     return false
   }
@@ -44,6 +46,9 @@ export function writeLinkFact(
   }
   if (next.muted === undefined) {
     delete next.muted
+  }
+  if (next.leaveLine === undefined) {
+    delete next.leaveLine
   }
   writeLink(store, linked.workspace, next)
   return true
@@ -54,13 +59,17 @@ export function writeLinkFact(
 export function readThreadMute(
   store: ExternalConversationLinkStore,
   key: ConversationKey
-): { botId: string; muted: boolean } | 'not_bot' | null {
+): { botId: string; muted: boolean; leaveLine?: number } | 'not_bot' | null {
   const link = findLink(store, key)?.link
   if (!link) {
     return null
   }
   return link.bot?.kind === 'bot'
-    ? { botId: link.bot.botId, muted: link.muted === true }
+    ? {
+        botId: link.bot.botId,
+        muted: link.muted === true,
+        ...(link.leaveLine !== undefined ? { leaveLine: link.leaveLine } : {})
+      }
     : 'not_bot'
 }
 
@@ -129,6 +138,7 @@ export function writeChatLink(
     ...(kept?.mirrorPosts ? { mirrorPosts: kept.mirrorPosts } : {}),
     ...(kept?.mirrorHeld ? { mirrorHeld: kept.mirrorHeld } : {}),
     ...(kept?.muted ? { muted: kept.muted } : {}),
+    ...(kept?.leaveLine !== undefined ? { leaveLine: kept.leaveLine } : {}),
     ...(title ? { title } : {}),
     ...(seenAt !== undefined ? { seenAt } : {})
   }

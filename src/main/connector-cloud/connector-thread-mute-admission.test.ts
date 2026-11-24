@@ -23,19 +23,19 @@ import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-sc
 import type { ConnectorConversation } from '../../shared/connectors/connector-cloud-contract'
 import { DeliveryReceipts } from '../external-conversations/external-conversation-delivery-receipts'
 import type { ExternalConversationHost } from '../external-conversations/external-conversation-host'
-import { writeLink } from '../external-conversations/external-conversation-links'
+import { findLink, writeLink } from '../external-conversations/external-conversation-links'
 import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
 import { closeTestStores, createStore, testState } from '../persistence/persistence-test-harness'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { dispatchDelivery } from './connector-deliveries'
 import { handleThreadMute } from './connector-thread-mute'
-import { threadMuteSaves } from './connector-thread-mute-saves'
+import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../runtime/rpc/methods/connector-leave-thread'
 import {
-  takeThreadLeft,
+  leaveLines,
   THREAD_LEFT_LINE
-} from '../external-conversations/external-conversation-thread-leaves'
+} from '../external-conversations/external-conversation-leave-lines'
 
 const THREAD = 'T1:C1:1800000000.000100'
 const FIRST: ConnectorConversation = { source: 'slack', externalId: `${THREAD}:U0BOT` }
@@ -131,6 +131,7 @@ function connector(
     waiting: new Map<string, Promise<unknown>>(),
     read: (key: ConnectorConversation) => readThreadMute(store, key),
     write: threadMuteSaves(store),
+    saving: threadMuteSaving,
     queued: (_key: ConnectorConversation, work?: () => Promise<unknown>) =>
       Promise.resolve(work?.()).then(() => undefined)
   }
@@ -184,6 +185,12 @@ function leaver(store: ReturnType<typeof createStore>) {
     }
   ]
   const posted: unknown[] = []
+  const cloud = {
+    reply: async (reply: unknown) => {
+      posted.push(reply)
+      return { ok: true }
+    }
+  }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: leaving reads only these runtime fields.
   const context = {
     runtime: {
@@ -196,17 +203,14 @@ function leaver(store: ReturnType<typeof createStore>) {
           await work()
           return undefined
         }
-      }),
-      getConnectorCloud: () => ({
-        reply: async (reply: unknown) => {
-          posted.push(reply)
-          return { ok: true }
-        }
       })
     }
   } as unknown as Parameters<typeof CONNECTOR_LEAVE_THREAD_METHOD.handler>[1]
   const leave = () => CONNECTOR_LEAVE_THREAD_METHOD.handler({ sessionId: 'session-bot1' }, context)
-  return { leave, posted }
+  // What the turn's end, or a restart, posts with.
+  const lines = (on = store) => leaveLines({ store: on, cloud: () => cloud })
+  const link = () => findLink(store, FIRST)!.link
+  return { leave, posted, lines, link }
 }
 
 describe('a muted bot thread', () => {
@@ -261,20 +265,30 @@ describe('a muted bot thread', () => {
 describe('a bot that leaves its thread', () => {
   it('stays left across a restart, for that bot and thread only, until a mention', async () => {
     const store = await botHome({})
-    const { leave, posted } = leaver(store)
+    const { leave, posted, lines } = leaver(store)
 
     expect(await leave()).toEqual({ ok: true })
-    // Asked again in the same turn: already left, and still one line to post.
+    // Asked again in the same turn: already left, and its line is owed once.
     expect(await leave()).toEqual({ ok: true, already: true })
-    await takeThreadLeft('session-bot1', TURN_ID)?.post()
-    expect(takeThreadLeft('session-bot1', TURN_ID)).toBeNull()
-    expect(posted).toEqual([expect.objectContaining({ text: THREAD_LEFT_LINE, turnId: TURN_ID })])
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: true, leaveLine: TURN_ID })
 
+    // Orca quit before the turn ended: the line owed is posted once it watches again, then no more.
     await closeTestStores()
     const reopened = createStore()
-    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
+    expect(readThreadMute(reopened, FIRST)).toEqual({
+      botId: 'bot1',
+      muted: true,
+      leaveLine: TURN_ID
+    })
     expect(readThreadMute(reopened, SECOND)).toEqual({ botId: 'bot2', muted: false })
     expect(readThreadMute(reopened, ELSEWHERE)).toEqual({ botId: 'bot1', muted: false })
+    lines(reopened).resume(() => null)
+    await expect.poll(() => posted.length).toBe(1)
+    lines(reopened).resume(() => null)
+    expect(posted).toEqual([
+      expect.objectContaining({ text: THREAD_LEFT_LINE, turnId: TURN_ID, turnFor: 'none' })
+    ])
+    expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: true })
 
     const after = connector(reopened)
     const quiet = send(FIRST, 'thanks all')
@@ -288,29 +302,41 @@ describe('a bot that leaves its thread', () => {
     expect(readThreadMute(reopened, FIRST)).toEqual({ botId: 'bot1', muted: false })
   })
 
-  it('posts no line once a mention has brought it back', async () => {
+  it('owes no line once a mention has brought it back, and can leave again in that turn', async () => {
     const store = await botHome({})
-    const { leave, posted } = leaver(store)
+    const { leave, posted, lines, link } = leaver(store)
     await leave()
     const { deliver, turns } = connector(store)
     await deliver(send(FIRST, 'wait, one more', { mentioned: true }))
     expect(turns).toEqual(['wait, one more'])
-    expect(takeThreadLeft('session-bot1', TURN_ID)).toBeNull()
+    expect(lines().owed(link(), TURN_ID)).toBe(false)
+    lines().resume(() => null)
     expect(posted).toEqual([])
+    // Asked again in the same turn: it leaves again, never "already".
+    expect(await leave()).toEqual({ ok: true })
+    expect(lines().owed(link(), TURN_ID)).toBe(true)
   })
 
-  it('whose save fails is refused, posts nothing, and still wakes on the next reply', async () => {
+  it('whose save fails is refused, owes nothing, and silences no reply sent meanwhile', async () => {
     const store = await botHome({})
-    const { leave, posted } = leaver(store)
+    const { leave, posted, lines, link } = leaver(store)
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    vi.spyOn(store, 'flushPendingOrThrowAsync').mockRejectedValueOnce(new Error('disk full'))
-
-    await expect(leave()).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
-    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
-    expect(takeThreadLeft('session-bot1', TURN_ID)).toBeNull()
-    expect(posted).toEqual([])
+    let fail = (): void => {}
+    vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementationOnce(
+      () => new Promise((_resolve, reject) => (fail = () => reject(new Error('disk full'))))
+    )
     const { deliver, turns } = connector(store)
-    await deliver(send(FIRST, 'still there?'))
+
+    const leaving = leave()
+    await expect.poll(() => readThreadMute(store, FIRST)).toMatchObject({ muted: true })
+    // A reply while the save is on its way waits for it, so the failed save swallows nothing.
+    const replied = deliver(send(FIRST, 'still there?'))
+    fail()
+    await expect(leaving).rejects.toMatchObject({ code: 'thread_mute_not_saved' })
+    await replied
+    expect(readThreadMute(store, FIRST)).toEqual({ botId: 'bot1', muted: false })
+    expect(lines().owed(link(), TURN_ID)).toBe(false)
+    expect(posted).toEqual([])
     expect(turns).toEqual(['still there?'])
   })
 

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,
-  AgentJournalRenderItem
+  AgentJournalRenderItem,
+  AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { leaveEligibleBatch } from '../external-conversations/external-conversation-thread-leaves'
 import { leaveThreadRefusal } from './bot-leave-thread-authority'
 
 const THREAD = { source: 'slack', externalId: 'T1:C1:1800000000.000100:U0BOT' }
@@ -38,10 +40,20 @@ const fromThread = (asker: unknown, extra: Record<string, unknown> = {}) => ({
 })
 const typedInOrca = { kind: 'message', role: 'user', text: 'leave this thread' }
 
-/** A turn running now, opened by `opener`, after an earlier finished turn a person asked in. */
-function running(opener: unknown, steered: unknown[] = []) {
+type Sent = Pick<AgentJournalSubmission, 'origin' | 'source'>
+// The owner's send from Orca, and Orca's own continue after a restart or a usage limit.
+const PERSON: Sent = { origin: 'client', source: { kind: 'user' } }
+const ORCA: Sent = { origin: 'host' }
+
+/** A turn running now, opened by `opener` (sent as `sent`), after an earlier finished turn a person
+ *  asked in. */
+function running(opener: unknown, steered: unknown[] = [], sent?: Sent) {
   sequence = 0
-  return [
+  const submissions = sent
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a submission with only the fields the check reads.
+      [{ clientMessageId: 'c1', providerItemId: 'u1', ...sent } as AgentJournalSubmission]
+    : []
+  const items = [
     row('u0', fromThread(person())),
     row('t0', { kind: 'turn', turnId: 'p0', state: 'completed', userItemId: 'u0' }),
     row('u1', opener),
@@ -50,13 +62,17 @@ function running(opener: unknown, steered: unknown[] = []) {
       row(`s${index}`, body, { turnScope: { kind: 'turn', turnItemId: 't1' } })
     )
   ]
+  return { items, submissions }
 }
 
 // Hardcoded: who may make a bot leave its thread, from Orca's own record of the running turn.
-const cases: [string, AgentJournalRenderItem[], ReturnType<typeof leaveThreadRefusal>][] = [
+const cases: [string, ReturnType<typeof running>, ReturnType<typeof leaveThreadRefusal>][] = [
   ['a member asking in this thread', running(fromThread(person())), null],
   ['the owner asking in this thread', running(fromThread(person('owner'))), null],
-  ['the owner typing in Orca', running(typedInOrca), null],
+  ['the owner typing in Orca', running(typedInOrca, [], PERSON), null],
+  // Orca's continue opens the next turn: it never inherits the cut turn's request, or its refusal.
+  ['Orca continuing a cut-short turn', running(typedInOrca, [], ORCA), 'leave_refused_mixed'],
+  ['a message Orca has no send for', running(typedInOrca), 'leave_refused_mixed'],
   ['two people in this thread', running(fromThread(person()), [fromThread(person('owner'))]), null],
   [
     'another Slack app',
@@ -90,12 +106,12 @@ const cases: [string, AgentJournalRenderItem[], ReturnType<typeof leaveThreadRef
   // A worker's report woke the chat: the person's request before it never counts.
   [
     'a worker’s report after a person’s turn',
-    running({ ...typedInOrca, from: { sessionId: 'worker-1' } }),
+    running({ ...typedInOrca, from: { sessionId: 'worker-1' } }, [], PERSON),
     'leave_refused_mixed'
   ],
   [
     'an automation’s run',
-    running({ ...typedInOrca, automationRun: { runId: 'r1' } }),
+    running({ ...typedInOrca, automationRun: { runId: 'r1' } }, [], PERSON),
     'leave_refused_mixed'
   ],
   [
@@ -116,8 +132,8 @@ const cases: [string, AgentJournalRenderItem[], ReturnType<typeof leaveThreadRef
 ]
 
 describe('who may make a bot leave its Slack thread', () => {
-  it.each(cases)('%s', (_name, items, refusal) => {
-    expect(leaveThreadRefusal(items, [], THREAD)).toBe(refusal)
+  it.each(cases)('%s', (_name, { items, submissions }, refusal) => {
+    expect(leaveThreadRefusal(items, submissions, THREAD)).toBe(refusal)
   })
 
   it('never from a turn that is over, or one that took no message', () => {
@@ -131,5 +147,21 @@ describe('who may make a bot leave its Slack thread', () => {
     >)
     expect(leaveThreadRefusal([asked, done, bare], [], THREAD)).toBe('leave_refused_stale')
     expect(leaveThreadRefusal([], [], THREAD)).toBe('leave_refused_stale')
+  })
+})
+
+describe('the mark a delivered batch carries', () => {
+  it('is set only when a person in the thread wrote every message of it', () => {
+    const link = { ...THREAD, bot: { kind: 'bot' } }
+    expect(leaveEligibleBatch(link, person(), [{ asker: person('owner') }])).toEqual({
+      leaveEligible: true
+    })
+    expect(
+      leaveEligibleBatch(link, person(), [{ asker: person('member', { app: true }) }])
+    ).toEqual({})
+    expect(leaveEligibleBatch(link, person(), [{}])).toEqual({})
+    expect(leaveEligibleBatch(link, undefined)).toEqual({})
+    expect(leaveEligibleBatch({ ...link, bot: undefined }, person())).toEqual({})
+    expect(leaveEligibleBatch({ ...link, source: 'github' }, person())).toEqual({})
   })
 })

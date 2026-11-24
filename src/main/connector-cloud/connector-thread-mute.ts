@@ -75,6 +75,8 @@ export type ThreadMuteDeps = {
   ) => Promise<Delivery | undefined>
   /** Each thread's newest reply still deciding (its link being written, its mute being saved). */
   waiting: Map<string, Promise<unknown>>
+  /** The thread's mute on its way to disk (a leave saving), which a reply waits for. */
+  saving?: (key: ConnectorConversation) => Promise<unknown> | undefined
 }
 
 const ACCEPTED = { outcome: 'accepted' } as const
@@ -107,9 +109,9 @@ export function handleThreadMute(
     const decided = inPlace(deps, delivery, record, () => carriedBefore.catch(() => false))
     return { decided: hold(deps, id, decided) }
   }
-  // A reply behind one still deciding (its link being written, or its mute or unmute being saved)
-  // waits its turn, so it is decided on what that one left and never overtakes it.
-  const ahead = deps.waiting.get(id)
+  // A reply behind one still deciding (its link being written, or its mute or unmute being saved,
+  // a leave's included) waits its turn, so it is decided on what that one left and never overtakes it.
+  const ahead = deps.waiting.get(id) ?? deps.saving?.(key)
   if (ahead) {
     const decided = inPlace(deps, delivery, record, async () => {
       await ahead.catch(() => undefined)

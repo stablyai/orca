@@ -242,6 +242,7 @@ export class ChatTurns {
     if (linked.link.adoptedTurn) {
       this.deps.keepAdoptedTurn(linked, undefined)
     }
+    const live = () => generation === this.generation
     const end: ChatTurnEnd = {
       ended,
       news,
@@ -249,8 +250,8 @@ export class ChatTurns {
       emit: this.deps.emit,
       turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
       workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
-      current: () => generation === this.generation,
-      leave: turnLeave(news, ended.turnId, () => generation === this.generation)
+      current: live,
+      leave: turnLeave(linked.link, ended.turnId, news.outcome, this.deps.leaveLines, live)
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {

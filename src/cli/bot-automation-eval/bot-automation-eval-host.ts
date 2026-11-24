@@ -1,5 +1,5 @@
-import type { LeaveThreadRefusalCode } from '../../shared/connectors/connector-leave-thread-copy'
 // Runs one benchmark turn: the real agent CLI as a bot, in a scratch home, with the stand-in `orca`.
+import type { LeaveThreadRefusalCode } from '../../shared/connectors/connector-leave-thread-copy'
 import { randomUUID } from 'node:crypto'
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir, userInfo } from 'node:os'

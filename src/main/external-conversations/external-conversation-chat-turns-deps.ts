@@ -8,6 +8,7 @@ import type { ConnectorWorkLink } from '../../shared/connector-work-link-contrac
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { LinkedConversation } from './external-conversation-links'
 import type { ConversationWorkersDeps } from './external-conversation-workers'
+import type { LeaveLines } from './external-conversation-leave-lines'
 import type { ChatTurnReplies, SlackMirrorTurn } from './external-conversation-turn-ends'
 
 export type ChatTurnsDeps = ConversationWorkersDeps &
@@ -44,4 +45,6 @@ export type ChatTurnsDeps = ConversationWorkersDeps &
     ) => void
     /** A chat's turn ended, heard or not. */
     turnEnded?: (paneKey: string) => void
+    /** The "I've left this thread" lines a turn's end owes its thread. */
+    leaveLines?: Pick<LeaveLines, 'owed' | 'carried' | 'post'>
   }

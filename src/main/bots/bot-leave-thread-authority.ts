@@ -3,11 +3,11 @@
 // never an earlier one a worker's report would read back to, and every message it took must be a
 // person who can ask the bot in this thread, or the owner typing in Orca.
 import type {
-  AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isStructuredAgentSessionCommandEntry } from '../../shared/agent-session/requests/structured-agent-session-command-entry'
 import { structuredAgentTurnAnchors } from '../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import {
@@ -32,7 +32,30 @@ function isRootUserMessage(item: AgentJournalRenderItem): boolean {
   )
 }
 
-function eligible(body: AgentJournalItemBody, conversation: Conversation): boolean {
+/** Whether a person sent it from Orca: never Orca's own message (a continue after a restart or a
+ *  usage limit), nor an agent's. */
+function typedByPerson(
+  item: AgentJournalRenderItem,
+  submissions: readonly AgentJournalSubmission[]
+): boolean {
+  const sent = submissions.find(
+    (submission) =>
+      agentJournalSubmissionKey(submission.clientMessageId) === item.itemId ||
+      submission.providerItemId === item.itemId
+  )
+  // As the journal reads a personal send; Orca's continues name no sender and come from the host.
+  return (
+    sent !== undefined &&
+    (sent.source?.kind === 'user' || (sent.source === undefined && sent.origin === 'client'))
+  )
+}
+
+function eligible(
+  item: AgentJournalRenderItem,
+  submissions: readonly AgentJournalSubmission[],
+  conversation: Conversation
+): boolean {
+  const body = item.body
   if (body.kind !== 'message') {
     return false
   }
@@ -42,7 +65,9 @@ function eligible(body: AgentJournalItemBody, conversation: Conversation): boole
   }
   if (body.origin === undefined) {
     // The owner's own message, typed in Orca: an automation's run or event is marked, never this.
-    return !body.asker && !body.memorySource && !body.automationRun
+    return (
+      !body.asker && !body.memorySource && !body.automationRun && typedByPerson(item, submissions)
+    )
   }
   if (body.origin !== 'connector' || body.memorySource || !body.asker) {
     return false
@@ -82,5 +107,7 @@ export function leaveThreadRefusal(
   if (messages.length === 0) {
     return 'leave_refused_stale'
   }
-  return messages.every((item) => eligible(item.body, conversation)) ? null : 'leave_refused_mixed'
+  return messages.every((item) => eligible(item, submissions, conversation))
+    ? null
+    : 'leave_refused_mixed'
 }

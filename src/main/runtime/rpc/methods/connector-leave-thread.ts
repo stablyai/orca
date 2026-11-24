@@ -1,24 +1,16 @@
 // `orca bot reply --leave-thread`: the calling bot stops being woken in the Slack thread its chat
 // answers, until someone @mentions it. Orca decides which bot, which thread and whether this turn
-// may, from its own records; the agent names nothing. Orca posts the confirmation itself.
-import { createHash } from 'node:crypto'
+// may, from its own records; the agent names nothing. The thread is then owed Orca's own
+// confirmation, saved with the mute, which the turn's end posts.
 import { ConnectorLeaveThread } from '../../../../shared/rpc-contract/connectors/connector-params'
-import { cloudConversation } from '../../../../shared/connectors/connector-cloud-contract'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { requireStructuredHost } from '../../../bots/bot-chat-session'
 import { leaveThreadRefusal } from '../../../bots/bot-leave-thread-authority'
 import { REPLY_ONLY_REFUSAL, LOOK_AROUND_REFUSAL } from '../../../bots/bot-look-around-policy'
-import { botTurnFor } from '../../../bots/bot-turn-for'
 import { slackThreadBotUser } from '../../../connector-cloud/connector-thread-mute'
 import { threadMuteSaves } from '../../../connector-cloud/connector-thread-mute-saves'
 import { chatPaneKey } from '../../../external-conversations/external-conversation-chat'
 import { readThreadMute } from '../../../external-conversations/external-conversation-link-writes'
-import {
-  leftInTurn,
-  noteThreadLeft,
-  THREAD_LEFT_LINE
-} from '../../../external-conversations/external-conversation-thread-leaves'
-import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import { defineMethod } from '../core'
 import { ConnectorActError } from './connector-act'
 import { LEAVE_THREAD_REFUSALS } from '../../../../shared/connectors/connector-leave-thread-copy'
@@ -64,7 +56,8 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     if (turnId === null) {
       throw new ConnectorActError('leave_refused_stale', STALE)
     }
-    if (leftInTurn(sessionId, turnId)) {
+    // Left in this turn and no @mention since: nothing to save, and its line is already owed.
+    if (thread.muted && thread.leaveLine === turnId) {
       return { ok: true as const, already: true as const }
     }
     // Only the turn running now: a report that woke it never borrows the request before it.
@@ -79,7 +72,7 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
     // In the thread's queue, ordered with its deliveries; the save is on disk before this answers.
     const save: { saving?: Promise<void> } = {}
     await seam.queued(key, async () => {
-      save.saving = threadMuteSaves(store)(key, true)
+      save.saving = threadMuteSaves(store)(key, true, turnId)
       await save.saving.catch(() => undefined)
     })
     try {
@@ -92,31 +85,7 @@ export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
       console.warn('[connectors] could not save that a bot left its thread', error)
       throw new ConnectorActError('thread_mute_not_saved', NOT_SAVED)
     }
-    const conversation = cloudConversation(key)
-    const turnFor = await botTurnFor(
-      runtime,
-      sessionId,
-      sessionCallerOf(context.orchestrationCaller)?.sessionId
-    )
-    noteThreadLeft(sessionId, {
-      turnId,
-      stillLeft: () => {
-        const now = readThreadMute(store, key)
-        return typeof now === 'object' && now !== null && now.muted
-      },
-      // Once per turn, however often retried: its reply id is the turn's.
-      post: async () => {
-        const replyId = `leave-${createHash('sha256').update(`${sessionId}:${turnId}`).digest('base64url')}`
-        const sent =
-          conversation &&
-          (await runtime
-            .getConnectorCloud()
-            ?.reply({ replyId, conversation, turnId, text: THREAD_LEFT_LINE, turnFor }))
-        if (!sent || !sent.ok) {
-          console.warn('[connectors] could not post that a bot left its thread')
-        }
-      }
-    })
+    // The turn's end posts the line, after its answer; the link keeps it owed until then.
     return { ok: true as const }
   }
 })

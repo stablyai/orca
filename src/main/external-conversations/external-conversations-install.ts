@@ -1,3 +1,8 @@
+import {
+  installLeaveLines,
+  leaveLines,
+  type LeaveLinesCloud
+} from './external-conversation-leave-lines'
 import { setConnectorClaimSource } from '../native-chat/agent-session-wire/recovery/structured-agent-session-connector-claims'
 import type { AgentTransitionDetector } from '../agent-hooks/observations/agent-transition-detector'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
@@ -62,6 +67,7 @@ export function installExternalConversations(
           refResolver(): ConnectorRefResolver | null
           orcaAccountName(): string
           repliesFilled(): void
+          reply: LeaveLinesCloud['reply']
         })
       | null
   }
@@ -98,12 +104,16 @@ export function installExternalConversations(
         signal
       })
     let replyOutbox: ReturnType<typeof connectorReplyOutbox> | null = null
+    const lines = leaveLines({ store, cloud: () => runtime.getConnectorCloud?.() ?? null })
+    installLeaveLines(lines)
     const restartCuts = heldTurnEnds(() => seam)
     seam = new ExternalConversationSeam({
       slackMirror: () => mirror,
       watched: () => {
         mirror?.flushHeld()
         restartCuts.flush()
+        // Lines a quit or a reset cut short; a turn still running posts its own as it ends.
+        lines.resume((link) => seam?.replyTarget(link.paneKey)?.turnId ?? null)
       },
       replyFill: () => replyOutbox?.fill ?? null,
       replyAdmitted: (sessionId) => replyOutbox?.admitted(sessionId),
