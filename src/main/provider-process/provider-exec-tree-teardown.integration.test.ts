@@ -43,17 +43,14 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
   'provider exec tree teardown',
   () => {
     let dir = ''
-    const started: number[] = []
     let exec: ChildProcess | undefined
+    let outsider: ChildProcess | undefined
 
+    // Signalled only through handles: a bare PID may already belong to another process. Every
+    // process the CLI starts expires by itself if the watcher fails to stop it.
     afterEach(async () => {
       exec?.kill('SIGKILL')
-      for (const pid of started) {
-        try {
-          process.kill(pid, 'SIGKILL')
-        } catch {}
-      }
-      started.length = 0
+      outsider?.kill('SIGKILL')
       await rm(dir, { recursive: true, force: true })
     })
 
@@ -68,8 +65,8 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
         binary
       ])
       // The tool shell takes its own session and exits, orphaning a tagged tool and a SIP binary.
-      const tool = `'${process.execPath}' -e 'setInterval(() => {}, 1000)' & echo $! > ${dir}/a; sleep 1000 & echo $! > ${dir}/b`
-      const cli = `require('child_process').spawn('/bin/sh', ['-c', ${JSON.stringify(tool)}], { detached: true, stdio: 'ignore' }).unref(); setInterval(() => {}, 1000)`
+      const tool = `'${process.execPath}' -e 'setTimeout(() => {}, 30000)' & echo $! > ${dir}/a; sleep 30 & echo $! > ${dir}/b`
+      const cli = `require('child_process').spawn('/bin/sh', ['-c', ${JSON.stringify(tool)}], { detached: true, stdio: 'ignore' }).unref(); setTimeout(() => {}, 30000)`
       exec = spawn(
         binary,
         [
@@ -89,16 +86,14 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
         }
       )
       const [owner, gate, status] = exec.stdio.slice(3, 6).map(socket)
-      started.push(Number(/"leaderPid":(\d+)/.exec(await readLine(status))?.[1]))
+      await readLine(status)
       gate.write('g\n')
 
-      const outsider = spawn('sleep', ['1000'], { detached: true, stdio: 'ignore' })
-      started.push(outsider.pid!)
+      outsider = spawn('sleep', ['1000'], { detached: true, stdio: 'ignore' })
       await vi.waitFor(() => expect(readFileSync(join(dir, 'b'), 'utf8').trim()).not.toBe(''), {
         timeout: 5000
       })
       const tools = ['a', 'b'].map((name) => Number(readFileSync(join(dir, name), 'utf8')))
-      started.push(...tools)
       expect(tools.every(alive)).toBe(true)
 
       const completion = readLine(owner)
@@ -106,8 +101,7 @@ describe.skipIf(process.platform !== 'darwin' && process.platform !== 'linux')(
       expect(await completion).toBe('group-absent')
       // A killed orphan stays a zombie until init reaps it.
       await expect.poll(() => tools.some(alive), { timeout: 2000 }).toBe(false)
-      // Confirmed gone, so their PIDs may be reused and must not be signalled in cleanup.
-      started.splice(0, started.length, outsider.pid!)
+      expect(outsider.exitCode).toBeNull()
       expect(alive(outsider.pid!)).toBe(true)
     })
   }

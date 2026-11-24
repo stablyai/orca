@@ -21,6 +21,7 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -34,7 +35,9 @@
 #include <sys/syscall.h>
 #endif
 #if defined(__APPLE__)
+#include <libproc.h>
 #include <limits.h>
+#include <mach/mach.h>
 #include <sys/proc.h>
 #include <sys/sysctl.h>
 #endif
@@ -249,6 +252,7 @@ struct watcher {
     pid_t reaper;
     long long reaper_start;
     long long leader_start;
+    uint64_t leader_unique;
     char tree_tag[64];
     long long next_sweep_ns;
     unsigned stdin_end_grace_ms;
@@ -344,6 +348,21 @@ static struct proc_row *read_table(size_t *count) {
     return NULL;
 }
 
+// The kernel's unique IDs never repeat within a boot and keep the original parent's after
+// reparenting (proc_info flavor 17, struct proc_uniqidentifierinfo).
+struct unique_ids {
+    uint8_t uuid[16];
+    uint64_t unique;
+    uint64_t parent;
+    int32_t id_version;
+    uint32_t original_parent_version;
+    uint64_t reserved[2];
+};
+
+static int read_unique_ids(pid_t pid, struct unique_ids *ids) {
+    return proc_pidinfo(pid, 17, 0, ids, sizeof *ids) == (int)sizeof *ids;
+}
+
 // Reads the environment the process was exec'd with; unreadable means not provably ours.
 static int carries_tree_tag(pid_t pid, const char *tag) {
     static char *args;
@@ -360,27 +379,20 @@ static int carries_tree_tag(pid_t pid, const char *tag) {
     }
     int mib[] = {CTL_KERN, KERN_PROCARGS2, pid};
     size_t size = args_max;
-    int argc;
-    if (sysctl(mib, 3, args, &size, NULL, 0) != 0 || size < sizeof argc) {
+    if (sysctl(mib, 3, args, &size, NULL, 0) != 0 || size < sizeof(int)) {
         return 0;
     }
-    memcpy(&argc, args, sizeof argc);
-    const char *p = args + sizeof argc;
+    // An empty argv[0] is indistinguishable from the exec path's padding, so every string after
+    // that path is checked; an argument can only match by already holding this chat's random tag.
+    const char *p = memchr(args + sizeof(int), '\0', size - sizeof(int));
     const char *end = args + size;
-    const char *z = memchr(p, '\0', (size_t)(end - p));
-    if (z == NULL) {
-        return 0;
-    }
-    for (p = z; p < end && *p == '\0'; p++) {
-    }
-    // Arguments may be empty; the environment ends at the first empty string after them.
     size_t tag_length = strlen(tag);
-    for (int i = 0; p < end && (i < argc || *p != '\0'); i++) {
-        z = memchr(p, '\0', (size_t)(end - p));
+    while (p != NULL && p < end) {
+        const char *z = memchr(p, '\0', (size_t)(end - p));
         if (z == NULL) {
             return 0;
         }
-        if (i >= argc && (size_t)(z - p) == tag_length && memcmp(p, tag, tag_length) == 0) {
+        if ((size_t)(z - p) == tag_length && memcmp(p, tag, tag_length) == 0) {
             return 1;
         }
         p = z + 1;
@@ -525,6 +537,11 @@ static int tree_root(struct watcher *w, const struct tree_scan *scan, const stru
     if (row->ppid != 1 || row->uid != geteuid() || row->start < w->leader_start || row->zombie) {
         return 0;
     }
+    // Its original parent started no earlier than the leader: never a launchd job or older daemon.
+    struct unique_ids ids;
+    if (!read_unique_ids(row->pid, &ids) || ids.parent < w->leader_unique) {
+        return 0;
+    }
     pid_t sid = getsid(row->pid);
     int owned = (sid > 0 && member_session(scan, sid)) || carries_tree_tag(row->pid, w->tree_tag);
     return owned && same_identity(row);
@@ -617,43 +634,47 @@ static int drop_stale_members(struct tree_scan *scan, const struct proc_row *lea
 }
 
 #if defined(__linux__)
-#if !defined(SYS_pidfd_open) && defined(__NR_pidfd_open)
-#define SYS_pidfd_open __NR_pidfd_open
+// Older glibc headers lack the numbers; both are the same on every architecture Orca builds.
+#if !defined(SYS_pidfd_open)
+#define SYS_pidfd_open 434
 #endif
-#if !defined(SYS_pidfd_send_signal) && defined(__NR_pidfd_send_signal)
-#define SYS_pidfd_send_signal __NR_pidfd_send_signal
+#if !defined(SYS_pidfd_send_signal)
+#define SYS_pidfd_send_signal 424
 #endif
 #endif
 
-// Returns whether the member was still alive. On Linux a pidfd taken before the identity check
-// pins the signal to that process; elsewhere the check immediately precedes the kill.
+// Returns whether the member may still be alive. The kernel handle is taken before the start-time
+// check, so the signal reaches that process or none: a pidfd on Linux, an audit token (which
+// carries the PID version) on macOS. A member whose handle is refused is never signalled, and
+// counts as alive unless it is gone.
 static int signal_member(const struct proc_row *row, int signal_number) {
-#if defined(__linux__) && defined(SYS_pidfd_open) && defined(SYS_pidfd_send_signal)
-    // Only ESRCH proves absence; any other refusal falls back to the checked kill.
+#if defined(__linux__)
     int fd = (int)syscall(SYS_pidfd_open, row->pid, 0);
-    if (fd < 0 && errno == ESRCH) {
-        return 0;
+    if (fd < 0) {
+        return errno != ESRCH && same_identity(row);
     }
     int alive = same_identity(row);
     if (alive && signal_number != 0) {
-        if (fd >= 0) {
-            syscall(SYS_pidfd_send_signal, fd, signal_number, NULL, 0);
-        } else {
-            kill(row->pid, signal_number);
-        }
+        syscall(SYS_pidfd_send_signal, fd, signal_number, NULL, 0);
     }
-    if (fd >= 0) {
-        close(fd);
-    }
+    close(fd);
     return alive;
 #else
-    if (!same_identity(row)) {
-        return 0;
+    mach_port_t name = MACH_PORT_NULL;
+    audit_token_t token;
+    mach_msg_type_number_t count = TASK_AUDIT_TOKEN_COUNT;
+    // val[5] is the PID and val[7] its version (audit_token_to_pid without linking libbsm).
+    int held = task_name_for_pid(mach_task_self(), row->pid, &name) == KERN_SUCCESS;
+    held = held && task_info(name, TASK_AUDIT_TOKEN, (task_info_t)&token, &count) == KERN_SUCCESS &&
+           (pid_t)token.val[5] == row->pid;
+    if (name != MACH_PORT_NULL) {
+        mach_port_deallocate(mach_task_self(), name);
     }
-    if (signal_number != 0) {
-        kill(row->pid, signal_number);
+    int alive = same_identity(row);
+    if (alive && held && signal_number != 0) {
+        proc_signal_with_audittoken(&token, signal_number);
     }
-    return 1;
+    return alive;
 #endif
 }
 
@@ -683,13 +704,18 @@ static int sweep_tree(struct watcher *w, int signal_number) {
 #endif
     const struct proc_row *leader = find_row(scan.rows, scan.n, w->group);
     scan.leader_alive = leader != NULL && !leader->zombie && leader->start == w->leader_start;
-    do {
+    int dropped = 0;
+    for (;;) {
 #if defined(__APPLE__)
         collect_member_sessions(w, &scan);
 #else
         resolve_members(w, &scan);
 #endif
-    } while (drop_stale_members(&scan, leader));
+        if (!drop_stale_members(&scan, leader)) {
+            break;
+        }
+        dropped = 1;
+    }
     live = 0;
     for (size_t i = 0; i < scan.n; i++) {
         const struct proc_row *row = &scan.rows[i];
@@ -698,6 +724,10 @@ static int sweep_tree(struct watcher *w, int signal_number) {
                 signal_member(row, signal_number)) {
             live++;
         }
+    }
+    // A dropped member may live on under a new parent, so this sweep cannot prove the tree empty.
+    if (dropped && live == 0) {
+        live = -1;
     }
 done:
     free(scan.rows);
@@ -745,7 +775,9 @@ static void kill_group(struct watcher *w) {
         return;
     }
     int members = sweep_tree(w, SIGKILL);
-    if (kill(-w->group, SIGKILL) < 0 && errno == ESRCH && members == 0) {
+    // A tool the CLI started after that sweep is found by the one after the group is gone.
+    if (kill(-w->group, SIGKILL) < 0 && errno == ESRCH && members == 0 &&
+            sweep_tree(w, SIGKILL) == 0) {
         watcher_complete(1);
     }
     w->phase = WATCH_REAP;
@@ -755,7 +787,8 @@ static void kill_group(struct watcher *w) {
 // TERM grace starts once TERM is issued, so a late wakeup never spends it beforehand.
 static void watcher_term(struct watcher *w) {
     int members = sweep_tree(w, SIGTERM);
-    if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH && members == 0) {
+    if (kill(-w->group, SIGTERM) < 0 && errno == ESRCH && members == 0 &&
+            sweep_tree(w, SIGTERM) == 0) {
         watcher_complete(1);
     }
     if (w->sigterm_grace_ms == 0) {
@@ -1052,6 +1085,10 @@ static _Noreturn void run_leader(struct watcher *watcher, char *command[]) {
         fail(EXIT_BOOTSTRAP);
     }
     watcher->leader_start = leader_row.start;
+    struct unique_ids leader_ids;
+    // Without the leader's unique ID no orphan can be proven ours, so none is admitted.
+    watcher->leader_unique = read_unique_ids(watcher->group, &leader_ids) ? leader_ids.unique
+                                                                          : UINT64_MAX;
     // Random, so no unrelated process can carry it by deriving it from public process data.
     unsigned char nonce[16];
     arc4random_buf(nonce, sizeof nonce);
