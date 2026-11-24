@@ -42,10 +42,12 @@ export const MobileHomeBotRow = memo(function MobileHomeBotRow(props: {
   const stop = useMobileBotUsageLimitStop(live ? row.pairedHostId : null, workspaceIds, now)
   const limitText =
     row.kind === 'bot'
-      ? mobileBotRowLimitText(stop, row.line, {
-          dot: row.dot,
-          chatSessionId: row.bot.chatSessionId
-        })
+      ? mobileBotRowLimitText(
+          stop,
+          row.line,
+          { dot: row.dot, chatSessionId: row.bot.chatSessionId },
+          now
+        )
       : null
   return (
     <MobileBotRowView

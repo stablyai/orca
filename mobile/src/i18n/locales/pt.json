@@ -4789,7 +4789,6 @@
       "empty": "Nenhum espaço de trabalho",
       "loadFailed": "Não foi possível carregar os espaços de trabalho deste host",
       "noFilterMatches": "Nenhum espaço de trabalho corresponde aos filtros",
-      "noMatches": "Nenhum espaço de trabalho encontrado",
       "reopen": "Reabrir para atualizar",
       "reopenDetail": "Este host lista os espaços de trabalho em um formato que esta página ainda não reconhece.",
       "loading": "Carregando espaços…",
@@ -5141,10 +5140,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Rolar para a esquerda · {{amount}} ocultos",
-      "scrollRight": "Rolar para a direita · {{amount}} ocultos"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",
@@ -5857,6 +5853,7 @@
     },
     "usageLimit": {
       "continuesAt": "Continua às {{time}}",
+      "continues": "Continua às {{time}}",
       "hitLimit": "Limite atingido · reinicia às {{time}}"
     }
   },

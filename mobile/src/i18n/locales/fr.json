@@ -4222,7 +4222,6 @@
       "empty": "Aucun espace de travail",
       "loadFailed": "Impossible de charger les espaces de travail de cet hôte",
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
-      "noMatches": "Aucun espace de travail correspondant",
       "reopen": "Rouvrir pour mettre à jour",
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore."
     },
@@ -4567,10 +4566,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Défiler vers la gauche · {{amount}} masqués",
-      "scrollRight": "Défiler vers la droite · {{amount}} masqués"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -5283,6 +5279,7 @@
     },
     "usageLimit": {
       "continuesAt": "Reprend à {{time}}",
+      "continues": "Reprend à {{time}}",
       "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
     }
   },

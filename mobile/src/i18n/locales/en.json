@@ -1026,8 +1026,14 @@
       "tryAgain": "Try again",
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
-      "checkingHost": "Checking host",
-      "screenNeedsUpdate": "This screen needs a newer Orca. Update Orca Mobile and Orca on this host, then try again."
+      "checkingHost": "Checking host"
+    },
+    "pageRouteUnavailable": {
+      "updateTitle": "Update Orca",
+      "updateMessage": "This screen needs a newer Orca on your phone or on {{host}}.",
+      "updateMessageNoHost": "This screen needs a newer Orca.",
+      "serverTitle": "Can’t reach this server",
+      "serverMessage": "Your phone can’t reach this workspace’s server through {{host}}."
     }
   },
   "navigation": {
@@ -1160,7 +1166,6 @@
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
       "loadFailed": "Could not load workspaces from this host",
-      "noMatches": "No matching workspaces",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
@@ -5734,8 +5739,6 @@
       "hide": "Hide {{name}}’s workspaces"
     },
     "section": {
-      "scrollLeft": "Scroll left · {{amount}} hidden",
-      "scrollRight": "Scroll right · {{amount}} hidden",
       "title": "Bots",
       "summary": "{{title}}, {{total}} bots, {{attention}} need you, {{unread}} unread, {{working}} working",
       "newBot": "New bot",
@@ -6278,7 +6281,8 @@
     },
     "search": {
       "pausedMatches_one": "{{count}} paused match",
-      "pausedMatches_other": "{{count}} paused matches"
+      "pausedMatches_other": "{{count}} paused matches",
+      "showPausedAction": "Show paused"
     },
     "list": {
       "updateOrcaOn": "Update Orca on {{host}}",
@@ -6286,7 +6290,8 @@
       "noBotsYet": "No bots yet.",
       "offline": "Offline",
       "updateToSee": "Update Orca on {{host}} to see its bots.",
-      "offEnd": "Bots are off on {{host}}."
+      "offEnd": "Bots are off on {{host}}.",
+      "readFailed": "Couldn’t load the bots on {{host}}."
     },
     "chats": {
       "replying": "Replying…",
@@ -6319,7 +6324,6 @@
       "terminalRunDesktopOnly": "Terminal run · open it in Automations on the computer",
       "searchFailed": "Couldn't search this bot's chats.",
       "searchRetry": "Try again",
-      "loadingChats": "Loading chats",
       "handedOverInline": "handed over",
       "fromClosedChatInline": "from closed chat",
       "statusUnknown": "Status unknown",
@@ -7936,6 +7940,7 @@
     },
     "usageLimit": {
       "continuesAt": "Continues at {{time}}",
+      "continues": "Continues {{time}}",
       "hitLimit": "Hit limit · resets {{time}}"
     },
     "upcoming": {

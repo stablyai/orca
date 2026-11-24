@@ -4116,7 +4116,6 @@
       "empty": "Çalışma alanı yok",
       "loadFailed": "Bu sunucudan çalışma alanları yüklenemedi",
       "noFilterMatches": "Filtrelerle eşleşen çalışma alanı yok",
-      "noMatches": "Eşleşen çalışma alanı yok",
       "reopen": "Güncellemek için yeniden açın",
       "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor."
     },
@@ -4461,10 +4460,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Sola kaydır · {{amount}} gizli",
-      "scrollRight": "Sağa kaydır · {{amount}} gizli"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Bilgisayar eşleyin",
       "pairRequired": "Bu bağlantıyı açmak için bu telefonu bir bilgisayarla eşleyin, ardından bağlantıyı yeniden açın.",
@@ -5171,6 +5167,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}} saatinde devam eder",
+      "continues": "{{time}} saatinde devam eder",
       "hitLimit": "Limite ulaşıldı · {{time}} saatinde sıfırlanır"
     }
   },

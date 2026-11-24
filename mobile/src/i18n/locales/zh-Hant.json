@@ -4110,7 +4110,6 @@
       "empty": "沒有工作區",
       "loadFailed": "無法從此主機載入工作區",
       "noFilterMatches": "沒有符合篩選條件的工作區",
-      "noMatches": "找不到相符的工作區",
       "reopen": "重新開啟以更新",
       "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。"
     },
@@ -4455,10 +4454,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
-      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個"
-    },
+    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -5165,6 +5161,7 @@
     },
     "usageLimit": {
       "continuesAt": "將於 {{time}} 繼續",
+      "continues": "將於 {{time}} 繼續",
       "hitLimit": "已達上限 · {{time}} 重設"
     }
   },

@@ -26,6 +26,8 @@ type MobileStateViewProps = {
   /** Raw text a person can open for support, never shown by default. */
   details?: string | null
   action?: MobileStateAction | null
+  /** A second action beside the first, such as Back next to an update link. */
+  secondaryAction?: MobileStateAction | null
   loading?: boolean
   /** Keeps the content centred above a floating bottom bar. */
   bottomInset?: number
@@ -41,6 +43,7 @@ export function MobileStateView({
   message,
   details,
   action,
+  secondaryAction,
   loading = false,
   bottomInset = 0,
   children
@@ -58,7 +61,14 @@ export function MobileStateView({
       <Text style={loading ? styles.message : styles.title}>{title}</Text>
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {details ? <MobileStateDetails details={details} /> : null}
-      {action ? <MobileStateButton label={action.label} onPress={action.onPress} /> : null}
+      {action && secondaryAction ? (
+        <View style={styles.actions}>
+          <MobileStateButton label={secondaryAction.label} onPress={secondaryAction.onPress} />
+          <MobileStateButton label={action.label} onPress={action.onPress} />
+        </View>
+      ) : action ? (
+        <MobileStateButton label={action.label} onPress={action.onPress} />
+      ) : null}
       {children ? <View style={styles.children}>{children}</View> : null}
     </View>
   )
@@ -262,6 +272,7 @@ const styles = themedStyleSheet(() => ({
   },
   // bgRaised is a dark group's own fill, so the edge alone draws it there, as a line button.
   actionInRow: { marginTop: 0, borderColor: colors.floatingCardBorder },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: spacing.sm },
   actionPressed: { opacity: feedback.pressedOpacity },
   actionDisabled: { opacity: 0.5 },
   actionText: {
