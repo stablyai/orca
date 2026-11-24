@@ -392,7 +392,12 @@
     },
     "serverPage": {
       "download": {
-        "started": "Downloading to {{path}} on {{host}}"
+        "started": "Downloading to {{path}} on {{host}}",
+        "saveHere": "Save to this computer",
+        "copying": "Downloading {{filename}} to this computer…",
+        "copied": "Saved to {{path}}",
+        "copyFailed": "Couldn't save {{filename}} to this computer.",
+        "showInFolder": "Show in Folder"
       },
       "print": {
         "failed": "Couldn't save the page as a PDF"

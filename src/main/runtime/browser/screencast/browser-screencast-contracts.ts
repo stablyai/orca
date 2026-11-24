@@ -40,6 +40,8 @@ export type BrowserScreencastParams = {
   driverEvents?: 1
   // The viewer hears the page's downloads start and end: `downloadRequested`, `downloadFinished`.
   downloads?: 1
+  // With `downloads`: each finished download this host saved carries a `copyId` only this device can read.
+  downloadCopies?: 1
   // The viewer saves the page as a PDF when its own input makes the page print: `print` events.
   prints?: 1
 } & BrowserCommandTargetParams

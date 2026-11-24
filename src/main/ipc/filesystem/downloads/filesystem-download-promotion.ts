@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { rename, rm, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { copyFile, link, rename, rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { isENOENT } from '../../../filesystem/local-file-io/filesystem-path-containment'
 
@@ -72,6 +73,46 @@ export async function promoteDownloadedFile(
     }
     throw error
   }
+}
+
+// Volumes without hard links (FAT, exFAT, some network shares).
+const NO_HARD_LINK_CODES = new Set(['EPERM', 'ENOTSUP', 'EOPNOTSUPP', 'ENOSYS', 'EXDEV', 'EMLINK'])
+
+/**
+ * Moves the finished file to the first name nothing holds, never replacing a file: a link (or, on
+ * a volume without links, an exclusive copy) fails when the name was taken while it downloaded,
+ * and the next free name is tried.
+ */
+export async function promoteDownloadedFileWithoutOverwrite(
+  tempPath: string,
+  destinationPath: string,
+  nextFreePath: () => Promise<string>
+): Promise<string> {
+  let target = destinationPath
+  let hardLinks = true
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    try {
+      await (hardLinks
+        ? link(tempPath, target)
+        : copyFile(tempPath, target, constants.COPYFILE_EXCL))
+      await cleanupLocalTransferPath(tempPath)
+      return target
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? ''
+      if (code === 'EEXIST') {
+        target = await nextFreePath()
+      } else if (hardLinks && NO_HARD_LINK_CODES.has(code)) {
+        hardLinks = false
+      } else {
+        if (!hardLinks) {
+          // The exclusive copy made it, so a part-written copy is ours to remove.
+          await cleanupLocalTransferPath(target)
+        }
+        throw error
+      }
+    }
+  }
+  throw new Error('Could not choose a unique file name in Downloads.')
 }
 
 export type DownloadFileResult = { canceled: true } | { canceled: false; destinationPath: string }
