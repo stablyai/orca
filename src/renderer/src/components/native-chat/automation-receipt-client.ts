@@ -1,14 +1,15 @@
 import { useAppStore } from '@/store'
-import { acknowledgeAutomationDefinition } from '@/components/automations/events/automation-definition-acknowledgements'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import {
+  getRuntimeEnvironmentRevision,
+  onRuntimeEnvironmentRevisionsChanged,
+  onRuntimeEnvironmentsRetired
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { AutomationReceiptRead } from '../../../../shared/automations/automation-receipt-read'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
-import type { WebhookKey } from '../../../../shared/rpc-contract/webhooks-params'
 import { readAutomationReceiptFacts } from '../../../../shared/automations/automation-receipt-facts'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import type { NativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
@@ -77,7 +78,43 @@ export function automationReceiptSourceCurrent(source: AutomationReceiptSource):
   )
 }
 
-async function call<T>(
+/** Revokes on any change of the receipt's host: a re-pair or retirement of its environment, or a
+ *  status change that leaves it refused, restarted or gone. A local host never changes. */
+export function watchAutomationReceiptHost(
+  source: AutomationReceiptSource,
+  revoke: () => void
+): () => void {
+  if (source.target.kind === 'local') {
+    return () => {}
+  }
+  const environmentId = source.target.environmentId
+  // Retirement fires before the registry changes, so the host's own id is what revokes it.
+  const leaveHost = (environmentIds: readonly string[]): void => {
+    if (environmentIds.includes(environmentId)) {
+      revoke()
+    }
+  }
+  const unsubscribeStore = useAppStore.subscribe((state, previous) => {
+    if (
+      (state.runtimeStatusByEnvironmentId !== previous.runtimeStatusByEnvironmentId ||
+        state.runtimeEnvironments !== previous.runtimeEnvironments) &&
+      !automationReceiptSourceCurrent(source)
+    ) {
+      revoke()
+    }
+  })
+  const unsubscribeRetired = onRuntimeEnvironmentsRetired(leaveHost)
+  const unsubscribeRepaired = onRuntimeEnvironmentRevisionsChanged(leaveHost)
+  return () => {
+    unsubscribeStore()
+    unsubscribeRetired()
+    unsubscribeRepaired()
+  }
+}
+
+/** One receipt-bound host call: refused unless the captured pairing and runtime still hold, before
+ *  it is sent and again once it settles. */
+export async function callReceiptHost<T>(
   source: AutomationReceiptSource,
   method: string,
   params: unknown
@@ -101,10 +138,14 @@ export async function readAutomationReceipt(
 ): Promise<AutomationReceiptRead> {
   let result: AutomationReceiptRead
   try {
-    result = await call<AutomationReceiptRead>(source, 'agentSession.automationReceipt', {
-      sessionId: source.sessionId,
-      itemId: source.itemId
-    })
+    result = await callReceiptHost<AutomationReceiptRead>(
+      source,
+      'agentSession.automationReceipt',
+      {
+        sessionId: source.sessionId,
+        itemId: source.itemId
+      }
+    )
   } catch (error) {
     if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
       return { status: 'unverified' }
@@ -164,12 +205,17 @@ export async function openCardAutomation(
   // Why: once superseded, the gesture settles now instead of holding its row busy until a reply.
   const superseded = Promise.withResolvers<'stale'>()
   const drop = (): void => superseded.resolve('stale')
-  // Leaving and returning is a new view generation, even if its final IDs match.
+  // Leaving and returning is a new view generation, even if its final IDs match. Losing the host
+  // that captured the receipt does the same, so its Open is released without waiting for the reply.
   const unsubscribe = useAppStore.subscribe(() => {
     current &&= sameView()
     if (!current) {
       drop()
     }
+  })
+  const unwatchHost = watchAutomationReceiptHost(source, () => {
+    current = false
+    drop()
   })
   signal.addEventListener('abort', drop, { once: true })
   // Why: a reply after re-pair or a runtime restart is stale even when the view is unchanged.
@@ -192,66 +238,8 @@ export async function openCardAutomation(
   } finally {
     signal.removeEventListener('abort', drop)
     unsubscribe()
+    unwatchHost()
   }
-}
-
-export async function readReceiptRuns(
-  source: AutomationReceiptSource,
-  id: string,
-  owner: AutomationOwnerPrecondition
-): Promise<AutomationRun[]> {
-  const result = await call<{ runs: AutomationRun[] }>(source, 'automation.runs', {
-    automationId: id,
-    expectedOwner: owner,
-    limit: 3,
-    preview: true
-  })
-  return result.runs.slice(0, 3)
-}
-
-export async function updateReceiptAutomation(
-  source: AutomationReceiptSource,
-  automation: Automation,
-  owner: AutomationOwnerPrecondition,
-  enabled: boolean
-): Promise<Automation> {
-  const result = await call<{ automation: Automation }>(source, 'automation.update', {
-    id: automation.id,
-    expectedOwner: owner,
-    updates: { enabled }
-  })
-  acknowledgeAutomationDefinition(source.target, automation.id)
-  return result.automation
-}
-
-export async function deleteReceiptAutomation(
-  source: AutomationReceiptSource,
-  automation: Automation,
-  owner: AutomationOwnerPrecondition
-): Promise<boolean> {
-  const result = await call<{ removed: boolean; id: string }>(source, 'automation.delete', {
-    id: automation.id,
-    expectedOwner: owner
-  })
-  if (result.removed) {
-    acknowledgeAutomationDefinition(source.target, automation.id)
-  }
-  return result.removed
-}
-
-export async function runReceiptAutomation(
-  source: AutomationReceiptSource,
-  automation: Automation,
-  owner: AutomationOwnerPrecondition
-): Promise<void> {
-  await call(source, 'automation.runNow', { id: automation.id, expectedOwner: owner })
-}
-
-export async function readReceiptWebhookKey(
-  source: AutomationReceiptSource,
-  hookId: string
-): Promise<WebhookKey> {
-  return await call(source, 'webhooks.reveal', { hookId })
 }
 
 export function openReceiptAutomation(

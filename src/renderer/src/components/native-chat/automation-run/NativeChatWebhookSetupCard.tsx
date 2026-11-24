@@ -14,7 +14,10 @@ import {
   webhookStateStatus,
   webhookStatus
 } from '@/components/bots/webhooks/webhook-copy'
-import type { WebhookErrorCode } from '@/components/bots/webhooks/webhook-host-client'
+import type {
+  WebhookErrorCode,
+  WebhookHostTarget
+} from '@/components/bots/webhooks/webhook-host-client'
 import { WebhookField, WebhookKeyFields } from '@/components/bots/webhooks/webhook-key-fields'
 import { WebhookCopyUrlButton } from '@/components/bots/webhooks/WebhookCopyUrlButton'
 import { WebhookSecretDialog } from '@/components/bots/webhooks/WebhookSecretDialog'
@@ -23,7 +26,6 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useNow } from '@/lib/window-activity/use-now'
 import { webhookAdapterName } from '../../../../../shared/bots/webhook-card-view'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
 import {
   NativeChatCardAvatar,
@@ -40,7 +42,7 @@ export function NativeChatWebhookSetupCard({
   botName,
   name
 }: {
-  target: RuntimeClientTarget
+  target: WebhookHostTarget
   hookId: string
   botName: string
   /** The automation's name. */
@@ -144,7 +146,7 @@ function WebhookSetupKeyFields({
   refreshError,
   botName
 }: {
-  target: RuntimeClientTarget
+  target: WebhookHostTarget
   summary: WebhookSummary
   refreshError: WebhookErrorCode | null
   botName: string

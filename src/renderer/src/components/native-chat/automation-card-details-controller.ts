@@ -7,14 +7,17 @@ import { automationWebhookTrigger } from '../../../../shared/automation-event-tr
 import { hookIdOfRule } from '../../../../shared/connector-webhook-contract'
 import {
   automationReceiptSourceCurrent,
-  deleteReceiptAutomation,
   readAutomationReceipt,
+  watchAutomationReceiptHost,
+  type AutomationReceiptSource
+} from './automation-receipt-client'
+import {
+  deleteReceiptAutomation,
   readReceiptRuns,
   readReceiptWebhookKey,
   runReceiptAutomation,
-  updateReceiptAutomation,
-  type AutomationReceiptSource
-} from './automation-receipt-client'
+  updateReceiptAutomation
+} from './automation-receipt-actions'
 
 export type AutomationCardDetails = (
   | { status: 'loading' | 'unverified' | 'missing' | 'mismatch' | 'error' }
@@ -29,6 +32,8 @@ export type AutomationCardDetails = (
 
 type Transport = {
   current: () => boolean
+  /** Calls `revoke` whenever the bound host may have changed; returns the unsubscribe. */
+  watch?: (revoke: () => void) => () => void
   read: () => Promise<AutomationReceiptRead>
   runs: (automation: Automation, owner: AutomationOwnerPrecondition) => Promise<AutomationRun[]>
   update: (
@@ -44,6 +49,7 @@ type Transport = {
 export function receiptDetailsTransport(source: AutomationReceiptSource): Transport {
   return {
     current: () => automationReceiptSourceCurrent(source),
+    watch: (revoke) => watchAutomationReceiptHost(source, revoke),
     read: () => readAutomationReceipt(source),
     runs: (automation, owner) => readReceiptRuns(source, automation.id, owner),
     update: (automation, owner, enabled) =>
@@ -53,6 +59,9 @@ export function receiptDetailsTransport(source: AutomationReceiptSource): Transp
     webhookKey: (hookId) => readReceiptWebhookKey(source, hookId)
   }
 }
+
+/** How long after an acknowledged write the host's notice of that same write is still expected. */
+const WRITE_NOTICE_WINDOW_MS = 5_000
 
 /** One intentional disclosure's lifetime. Mutation acknowledgements fence every earlier read. */
 export class AutomationCardDetailsController {
@@ -65,12 +74,31 @@ export class AutomationCardDetailsController {
   private bindingValid = true
   private mutating = false
   private acknowledgement: 'deleted' | undefined
+  private unwatch: (() => void) | null = null
+  /** Until when the host's notice of this card's own acknowledged write may still arrive. */
+  private ownNoticeUntil: number | null = null
 
   constructor(private readonly transport: Transport | null) {}
 
   start = (): void => {
     this.disposed = false
+    this.watchHost()
     void this.reload()
+  }
+
+  /** Why: a hidden pane keeps its in-flight write, so a host change while hidden must still void it,
+   *  even if the host looks the same again by the time the pane returns. */
+  private watchHost(): void {
+    if (!this.unwatch && this.transport?.watch) {
+      this.unwatch = this.transport.watch(this.invalidate)
+    }
+  }
+
+  private releaseHostWatch(): void {
+    if (this.disposed && !this.mutating) {
+      this.unwatch?.()
+      this.unwatch = null
+    }
   }
 
   getSnapshot = (): AutomationCardDetails => this.state
@@ -146,6 +174,29 @@ export class AutomationCardDetailsController {
     }
   }
 
+  /**
+   * A host's automation notice. The first definition notice after this card's own write is that
+   * write's echo: its post-ack read already starts after the host published it, so a second read
+   * would only race the first. Any other notice is an independent change and reads again.
+   */
+  hostChanged = (reason: 'definition' | 'run' | undefined): void => {
+    const until = this.ownNoticeUntil
+    if (reason === 'definition' && until !== null && Date.now() <= until) {
+      this.ownNoticeUntil = null
+      if (this.mutating) {
+        this.mutationGeneration++
+      }
+      return
+    }
+    this.changed()
+  }
+
+  /** An echo already taken while the write was in flight is not expected again. */
+  private settleOwnNotice(acknowledged: boolean): void {
+    this.ownNoticeUntil =
+      acknowledged && this.ownNoticeUntil !== null ? Date.now() + WRITE_NOTICE_WINDOW_MS : null
+  }
+
   private ready(): Extract<AutomationCardDetails, { status: 'ready' }> {
     if (
       this.disposed ||
@@ -163,19 +214,24 @@ export class AutomationCardDetailsController {
     const { automation, owner } = this.ready()
     const binding = this.bindingGeneration
     this.mutating = true
+    this.ownNoticeUntil = Number.POSITIVE_INFINITY
+    let acknowledged = false
     try {
       await this.transport!.update(automation, owner, enabled)
       if (binding !== this.bindingGeneration || !this.transport!.current()) {
         return
       }
+      acknowledged = true
       this.mutationGeneration++
       this.readGeneration++
       this.publish({ status: 'loading' })
-    } finally {
-      this.mutating = false
-      if (!this.disposed && binding === this.bindingGeneration && this.transport!.current()) {
-        void this.reload()
+    } catch (error) {
+      // A write whose host binding was revoked is settled by the card's unverified state, not a toast.
+      if (binding === this.bindingGeneration) {
+        throw error
       }
+    } finally {
+      this.settleMutation(binding, acknowledged)
     }
   }
 
@@ -183,6 +239,8 @@ export class AutomationCardDetailsController {
     const { automation, owner } = this.ready()
     const binding = this.bindingGeneration
     this.mutating = true
+    this.ownNoticeUntil = Number.POSITIVE_INFINITY
+    let acknowledged = false
     try {
       const removed = await this.transport!.remove(automation, owner)
       if (binding !== this.bindingGeneration || !this.transport!.current()) {
@@ -194,16 +252,27 @@ export class AutomationCardDetailsController {
         }
         throw new Error('Automation was not removed. Reopen the receipt to check its state.')
       }
+      acknowledged = true
       this.mutationGeneration++
       this.readGeneration++
       // Definition removal does not establish the outcome of an already admitted run.
       this.acknowledgement = 'deleted'
       this.publish({ status: 'loading' })
-    } finally {
-      this.mutating = false
-      if (!this.disposed && binding === this.bindingGeneration && this.transport!.current()) {
-        void this.reload()
+    } catch (error) {
+      if (binding === this.bindingGeneration) {
+        throw error
       }
+    } finally {
+      this.settleMutation(binding, acknowledged)
+    }
+  }
+
+  private settleMutation(binding: number, acknowledged: boolean): void {
+    this.mutating = false
+    this.settleOwnNotice(acknowledged)
+    this.releaseHostWatch()
+    if (!this.disposed && binding === this.bindingGeneration && this.transport!.current()) {
+      void this.reload()
     }
   }
 
@@ -219,12 +288,14 @@ export class AutomationCardDetailsController {
   /**
    * Ends this mount, which a hidden <Activity> pane may resume with start(). A mutation still in
    * flight keeps its binding: its acknowledgement fences every earlier read and its one post-ack
-   * read runs now if mounted, else from start(). Re-pair or restart still voids it via invalidate().
+   * read runs now if mounted, else from start(). The host watch stays until that mutation settles,
+   * so a re-pair, restart or refusal while hidden still voids it via invalidate().
    */
   dispose = (): void => {
     this.disposed = true
     this.readGeneration++
     this.listeners.clear()
+    this.releaseHostWatch()
   }
 
   copyWebhookUrl = async (copy: (url: string) => void): Promise<void> => {

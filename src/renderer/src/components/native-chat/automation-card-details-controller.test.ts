@@ -298,7 +298,7 @@ it.each([
       read = () => resumed.promise
       controller.start()
       if (notice === 'host notice first') {
-        controller.changed()
+        controller.hostChanged('definition')
       }
       const reconcile = deferred<AutomationReceiptRead>()
       read = () => reconcile.promise
@@ -321,3 +321,148 @@ it.each([
     )
   }
 )
+
+/** A retained pane's controller with held writes, counted reads and a host watch it can trip. */
+function heldRig() {
+  let reads = 0
+  let read: () => Promise<AutomationReceiptRead> = async () => present
+  const revokers = new Set<() => void>()
+  const updated = deferred<typeof automation>()
+  const controller = new AutomationCardDetailsController({
+    current: () => true,
+    watch: (revoke) => {
+      revokers.add(revoke)
+      return () => revokers.delete(revoke)
+    },
+    read: () => {
+      reads++
+      return read()
+    },
+    runs: async () => [],
+    update: () => updated.promise,
+    remove: async () => true,
+    run: async () => {}
+  })
+  return {
+    controller,
+    revokers,
+    updated,
+    reads: () => reads,
+    read: (next: typeof read) => {
+      read = next
+    }
+  }
+}
+
+it.each(['acknowledged', 'rejected'] as const)(
+  'voids a hidden pane’s write when its host is refused and recovers while hidden (%s), with no toast',
+  async (outcome) => {
+    const { controller, revokers, updated, reads } = heldRig()
+    controller.start()
+    await settled(controller, 'ready')
+    const writing = controller.setEnabled(false)
+    controller.dispose()
+    // The pane is hidden; the host is refused, then looks the same again before it returns.
+    expect(revokers.size).toBe(1)
+    revokers.forEach((revoke) => revoke())
+    if (outcome === 'acknowledged') {
+      updated.resolve({ ...automation, enabled: false })
+    } else {
+      updated.reject(new Error('The chat’s host changed.'))
+    }
+    // The old caller settles quietly: nothing for its toast.
+    await expect(writing).resolves.toBeUndefined()
+    const before = reads()
+    controller.start()
+    await flush()
+    expect(reads()).toBe(before)
+    expect(controller.getSnapshot()).toEqual({ status: 'unverified' })
+  }
+)
+
+it('keeps the host watch only while a hidden write is in flight, and drops it on true unmount', async () => {
+  const { controller, revokers, updated, reads } = heldRig()
+  controller.start()
+  await settled(controller, 'ready')
+  controller.dispose()
+  expect(revokers.size).toBe(0)
+  controller.start()
+  await settled(controller, 'ready')
+  const writing = controller.setEnabled(false)
+  // Unmounted for good while the write is in flight.
+  controller.dispose()
+  expect(revokers.size).toBe(1)
+  const before = reads()
+  updated.resolve({ ...automation, enabled: false })
+  await writing
+  await flush()
+  expect(revokers.size).toBe(0)
+  expect(reads()).toBe(before)
+})
+
+it.each(['while its reconcile read is in flight', 'after it settles'] as const)(
+  'reads once for its own write when the host’s notice of it lands %s, and again for a later change',
+  async (when) => {
+    const { controller, updated, reads, read } = heldRig()
+    controller.start()
+    await settled(controller, 'ready')
+    const writing = controller.setEnabled(false)
+    const reconcile = deferred<AutomationReceiptRead>()
+    read(() => reconcile.promise)
+    updated.resolve({ ...automation, enabled: false })
+    await writing
+    expect(reads()).toBe(2)
+    const paused = { ...present, automation: { ...automation, enabled: false } }
+    if (when === 'after it settles') {
+      reconcile.resolve(paused)
+      await flush()
+    }
+    controller.hostChanged('definition')
+    if (when === 'while its reconcile read is in flight') {
+      reconcile.resolve(paused)
+      await flush()
+    }
+    // The echo neither reads again nor displaces the reconcile's observation.
+    expect(reads()).toBe(2)
+    expect(controller.getSnapshot()).toEqual({ ...paused, runs: [] })
+    read(async () => present)
+    controller.hostChanged('definition')
+    await flush()
+    expect(reads()).toBe(3)
+    expect(controller.getSnapshot()).toEqual({ ...present, runs: [] })
+  }
+)
+
+it.each([
+  ['a run notice', 'run', 0],
+  ['a definition notice past the window', 'definition', 5_001]
+] as const)('still reads for %s after its own write', async (_case, reason, later) => {
+  const { controller, updated, reads } = heldRig()
+  controller.start()
+  await settled(controller, 'ready')
+  const writing = controller.setEnabled(false)
+  updated.resolve({ ...automation, enabled: false })
+  await writing
+  await flush()
+  const now = Date.now()
+  vi.spyOn(Date, 'now').mockReturnValue(now + later)
+  controller.hostChanged(reason)
+  await flush()
+  vi.restoreAllMocks()
+  expect(reads()).toBe(3)
+})
+
+it('takes a notice that lands before its own reply as the echo, so the next one reads', async () => {
+  const { controller, updated, reads } = heldRig()
+  controller.start()
+  await settled(controller, 'ready')
+  const writing = controller.setEnabled(false)
+  controller.hostChanged('definition')
+  updated.resolve({ ...automation, enabled: false })
+  await writing
+  await flush()
+  expect(reads()).toBe(2)
+  controller.hostChanged('definition')
+  await flush()
+  expect(reads()).toBe(3)
+})

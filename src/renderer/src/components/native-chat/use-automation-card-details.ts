@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
-import { useAppStore } from '@/store'
-import {
-  onRuntimeEnvironmentRevisionsChanged,
-  onRuntimeEnvironmentsRetired
-} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { subscribeAutomationDefinitionAcknowledgements } from '@/components/automations/events/automation-definition-acknowledgements'
 import { subscribeAutomationHostInvalidation } from '@/components/automations/hosts/automation-host-invalidation-window-events'
 import type { AutomationReceiptSource } from './automation-receipt-client'
-import { automationReceiptSourceCurrent } from './automation-receipt-client'
 import {
   AutomationCardDetailsController,
   receiptDetailsTransport
@@ -25,11 +19,10 @@ export function useAutomationCardDetails(source: AutomationReceiptSource | null)
     if (!source) {
       return controller.dispose
     }
-    const refreshKnown = (): void => {
+    // An unverified or mismatched card stays as it is until it is opened again.
+    const known = (): boolean => {
       const status = controller.getSnapshot().status
-      if (status !== 'unverified' && status !== 'mismatch') {
-        controller.changed()
-      }
+      return status !== 'unverified' && status !== 'mismatch'
     }
     const unsubscribe = subscribeAutomationHostInvalidation((event) => {
       const authority = event.authority
@@ -37,46 +30,29 @@ export function useAutomationCardDetails(source: AutomationReceiptSource | null)
         source.target.kind === 'local'
           ? authority.kind === 'desktop'
           : authority.kind === 'runtime' && authority.environmentId === source.target.environmentId
-      if (matches && event.reason !== 'usage') {
-        refreshKnown()
+      if (matches && event.reason !== 'usage' && known()) {
+        controller.hostChanged(event.reason)
       }
     })
-    const unsubscribeStore = useAppStore.subscribe((state, previous) => {
-      if (
-        state.runtimeStatusByEnvironmentId === previous.runtimeStatusByEnvironmentId &&
-        state.runtimeEnvironments === previous.runtimeEnvironments
-      ) {
-        return
-      }
-      if (!automationReceiptSourceCurrent(source)) {
-        controller.invalidate()
-      }
-    })
+    // Another surface's write to this automation; this card's own write acknowledges while mutating.
     const unsubscribeAcks = subscribeAutomationDefinitionAcknowledgements(
       ({ target, automationId }) => {
         if (
           source.automationId === automationId &&
           source.target.kind === target.kind &&
           (source.target.kind === 'local' ||
-            (target.kind === 'environment' && source.target.environmentId === target.environmentId))
+            (target.kind === 'environment' &&
+              source.target.environmentId === target.environmentId)) &&
+          known()
         ) {
-          refreshKnown()
+          controller.changed()
         }
       }
     )
-    const invalidateEnvironment = (ids: readonly string[]): void => {
-      if (source.target.kind === 'environment' && ids.includes(source.target.environmentId)) {
-        controller.invalidate()
-      }
-    }
-    const unsubscribeRetired = onRuntimeEnvironmentsRetired(invalidateEnvironment)
-    const unsubscribeRepaired = onRuntimeEnvironmentRevisionsChanged(invalidateEnvironment)
+    // The host watch is the controller's: it outlives a hidden pane while a write is in flight.
     return () => {
       unsubscribe()
-      unsubscribeStore()
       unsubscribeAcks()
-      unsubscribeRetired()
-      unsubscribeRepaired()
       controller.dispose()
     }
   }, [controller, source])

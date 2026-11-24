@@ -9,29 +9,24 @@ import type { AutomationReceiptRead } from '../../../../../shared/automations/au
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatVisualOwner } from '../media/visuals/native-chat-visual-owner'
 import type { AutomationReceiptSource } from '../automation-receipt-client'
-import { useVerifiedReceiptWebhook } from './use-verified-receipt-webhook'
+import {
+  useVerifiedReceiptWebhook,
+  type VerifiedReceiptWebhook
+} from './use-verified-receipt-webhook'
 
 // Setup's live controls need the chat's own host to confirm the receipt, under the same pairing.
 
 type Fixture = {
   reads: PromiseWithResolvers<AutomationReceiptRead>[]
   current: boolean
-  repairListeners: Set<() => void>
+  repairListeners: Set<(ids: readonly string[]) => void>
+  retireListeners: Set<(ids: readonly string[]) => void>
 }
 const fixture = vi.hoisted((): Fixture => ({
   reads: [],
   current: true,
-  repairListeners: new Set()
-}))
-vi.mock('@/store', () => ({
-  useAppStore: { subscribe: () => () => {} }
-}))
-vi.mock('@/runtime/rpc/environment-revisions/runtime-environment-revision', () => ({
-  onRuntimeEnvironmentsRetired: () => () => {},
-  onRuntimeEnvironmentRevisionsChanged: (listener: () => void) => {
-    fixture.repairListeners.add(listener)
-    return () => fixture.repairListeners.delete(listener)
-  }
+  repairListeners: new Set(),
+  retireListeners: new Set()
 }))
 vi.mock('../automation-receipt-client', () => ({
   captureAutomationReceiptSource: (
@@ -46,12 +41,26 @@ vi.mock('../automation-receipt-client', () => ({
           itemId,
           automationId: saved.automation.id,
           createdAt: 42,
-          botId: undefined,
+          botId: saved.automation.bot?.botId,
           pairingRevision: 1,
           runtimeId: 'runtime-1'
         }
       : null,
   automationReceiptSourceCurrent: () => fixture.current,
+  // The real watch's contract: re-pair or retirement of this environment revokes, others don't.
+  watchAutomationReceiptHost: (source: AutomationReceiptSource, revoke: () => void) => {
+    const leave = (ids: readonly string[]): void => {
+      if (source.target.kind === 'environment' && ids.includes(source.target.environmentId)) {
+        revoke()
+      }
+    }
+    fixture.repairListeners.add(leave)
+    fixture.retireListeners.add(leave)
+    return () => {
+      fixture.repairListeners.delete(leave)
+      fixture.retireListeners.delete(leave)
+    }
+  },
   readAutomationReceipt: () => {
     const read = Promise.withResolvers<AutomationReceiptRead>()
     fixture.reads.push(read)
@@ -98,10 +107,12 @@ const ready = (on = [hookRule]): AutomationReceiptRead => ({
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
+let verified: VerifiedReceiptWebhook | null = null
 let result: string | null = null
 
 function Probe({ saved, shortened = false }: { saved: AutomationSaved; shortened?: boolean }) {
-  result = useVerifiedReceiptWebhook(owner, 'receipt', saved, shortened)
+  verified = useVerifiedReceiptWebhook(owner, 'receipt', saved, shortened)
+  result = verified?.hookId ?? null
   return null
 }
 
@@ -117,6 +128,8 @@ afterEach(() => {
   fixture.reads.length = 0
   fixture.current = true
   fixture.repairListeners.clear()
+  fixture.retireListeners.clear()
+  verified = null
   result = null
 })
 
@@ -157,8 +170,45 @@ it('withdraws Setup when the pairing that confirmed it is replaced', async () =>
   await answer(ready())
   expect(result).toBe('wh_abcdefgh12345678')
   fixture.current = false
-  act(() => fixture.repairListeners.forEach((listener) => listener()))
+  act(() => fixture.repairListeners.forEach((listener) => listener(['E'])))
   expect(result).toBeNull()
+})
+
+it('withdraws Setup when its host is retired, before the registry says so', async () => {
+  act(() => root.render(<Probe saved={receipt()} />))
+  await answer(ready())
+  expect(result).toBe('wh_abcdefgh12345678')
+  // Retirement is announced while the old revision still reads as current.
+  act(() => fixture.retireListeners.forEach((listener) => listener(['E'])))
+  expect(result).toBeNull()
+})
+
+it('ignores another host’s re-pair or retirement', async () => {
+  act(() => root.render(<Probe saved={receipt()} />))
+  await answer(ready())
+  act(() => fixture.repairListeners.forEach((listener) => listener(['other'])))
+  act(() => fixture.retireListeners.forEach((listener) => listener(['other'])))
+  expect(result).toBe('wh_abcdefgh12345678')
+})
+
+it('hands Setup the confirming host pinned to its pairing and runtime, and the receipt’s bot', async () => {
+  act(() => root.render(<Probe saved={receipt({ bot: { botId: 'bot-R' } })} />))
+  await answer(ready())
+  expect(verified).toMatchObject({
+    hookId: 'wh_abcdefgh12345678',
+    botId: 'bot-R',
+    target: {
+      kind: 'environment',
+      environmentId: 'E',
+      binding: { pairingRevision: 1, runtimeId: 'runtime-1' }
+    }
+  })
+  const { target } = verified!
+  const binding = target.kind === 'environment' ? target.binding : undefined
+  expect(binding?.current()).toBe(true)
+  // The binding follows the confirming source, so a control acting later sees the host change.
+  fixture.current = false
+  expect(binding?.current()).toBe(false)
 })
 
 it('ignores a confirmation that lands after the pairing changed', async () => {

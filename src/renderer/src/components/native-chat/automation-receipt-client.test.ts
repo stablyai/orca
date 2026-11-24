@@ -4,11 +4,11 @@ import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-re
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import {
   captureAutomationReceiptSource,
-  deleteReceiptAutomation,
   openCardAutomation,
   openReceiptAutomation,
   readAutomationReceipt
 } from './automation-receipt-client'
+import { deleteReceiptAutomation } from './automation-receipt-actions'
 
 const fixture = vi.hoisted(() => {
   const navigation: unknown = null
@@ -38,9 +38,15 @@ vi.mock('@/store', () => ({
       },
       openAutomationsPage: () => {}
     }),
-    subscribe: (listener: () => void) => {
-      fixture.listeners.add(listener)
-      return () => fixture.listeners.delete(listener)
+    // Every notification reports a status change, so host watchers recheck on each one.
+    subscribe: (listener: (state: unknown, previous: unknown) => void) => {
+      const notify = (): void =>
+        listener(
+          { runtimeStatusByEnvironmentId: fixture.status },
+          { runtimeStatusByEnvironmentId: new Map() }
+        )
+      fixture.listeners.add(notify)
+      return () => fixture.listeners.delete(notify)
     }
   }
 }))
@@ -371,5 +377,55 @@ it.each(['abort', 'view'] as const)(
     reply.resolve({ status: 'ready', automation, owner })
     await reply.promise
     expect(fixture.navigation).toBeNull()
+  }
+)
+
+it.each(['re-pair', 'restart', 'refusal cleared', 'retire'] as const)(
+  'releases a paired Open on a same-view %s while its read is held, and its late reply leaves a newer Open alone',
+  async (change) => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'E', createdAt: 1, pairingRevision: 7 }])
+    fixture.status.set('E', { status: { runtimeId: 'W' } })
+    const paired = {
+      target: { kind: 'environment' as const, environmentId: 'E' },
+      sessionId: 'chat-on-W',
+      worktreeId: 'project-Y',
+      tabId: 'chat-tab'
+    }
+    const held = Promise.withResolvers<unknown>()
+    fixture.reply = held.promise
+    const first = openCardAutomation(paired, 'receipt', saved, false, new AbortController().signal)
+    await Promise.resolve()
+    const notifyStore = (): void => fixture.listeners.forEach((listener) => listener())
+    if (change === 're-pair') {
+      replaceRuntimeEnvironmentRevisions([{ id: 'E', createdAt: 1, pairingRevision: 8 }])
+    } else if (change === 'restart') {
+      fixture.status.set('E', { status: { runtimeId: 'W-restarted' } })
+      notifyStore()
+    } else if (change === 'refusal cleared') {
+      fixture.status.set('E', {
+        status: { runtimeId: 'W' },
+        snapshot: { status: { runtimeId: 'W' }, verification: 'blocked' }
+      })
+      notifyStore()
+      fixture.status.set('E', { status: { runtimeId: 'W' } })
+      notifyStore()
+    } else {
+      replaceRuntimeEnvironmentRevisions([{ id: 'E', createdAt: 1, pairingRevision: 7 }], {
+        retired: ['E'],
+        sameHost: []
+      })
+    }
+    // Settled with the old read still held: the row's Open is free again.
+    expect(await first).toBe('stale')
+
+    const newer = Promise.withResolvers<unknown>()
+    fixture.reply = newer.promise
+    const second = openCardAutomation(paired, 'receipt', saved, false, new AbortController().signal)
+    held.resolve({ status: 'ready', automation, owner })
+    await held.promise
+    expect(fixture.navigation).toBeNull()
+    newer.resolve({ status: 'ready', automation, owner })
+    expect(await second).toBe('opened')
+    expect(fixture.navigation).toMatchObject({ automationId: 'collision', hostId: 'runtime:E' })
   }
 )

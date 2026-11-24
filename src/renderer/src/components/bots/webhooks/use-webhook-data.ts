@@ -3,12 +3,17 @@
 import { useCallback, useSyncExternalStore } from 'react'
 import { BOTS_CHANGED_EVENT } from '@/lib/bots-changed-window-event'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WebhookCallRow,
   WebhookSummary
 } from '../../../../../shared/rpc-contract/webhooks-params'
-import { callWebhookHost, webhookErrorCode, type WebhookErrorCode } from './webhook-host-client'
+import {
+  callWebhookHost,
+  webhookErrorCode,
+  webhookHostKey,
+  type WebhookErrorCode,
+  type WebhookHostTarget
+} from './webhook-host-client'
 
 // The fallback for a change botsChanged doesn't cover, such as a call the cloud is still holding.
 const REFRESH_MS = 30_000
@@ -147,16 +152,12 @@ const useCallsRead = hostReads<WebhookCallRow[]>()
 // The saved-automation card needs a hook only until it's live, so it stops polling then.
 const usePendingSummaryRead = hostReads<WebhookSummary>((summary) => summary.state === 'pending')
 
-function targetKey(target: RuntimeClientTarget): string {
-  return target.kind === 'local' ? 'local' : `env:${target.environmentId}`
-}
-
 /** One hook, for its chat card. */
 export function useWebhookSummary(
-  target: RuntimeClientTarget,
+  target: WebhookHostTarget,
   hookId: string
 ): WebhookRead<WebhookSummary> {
-  return useSummaryRead(`${targetKey(target)}|card|${hookId}`, () =>
+  return useSummaryRead(`${webhookHostKey(target)}|card|${hookId}`, () =>
     callWebhookHost(target, 'webhooks.card', { hookId })
   )
 }
@@ -164,30 +165,30 @@ export function useWebhookSummary(
 /** One hook, read again only while Orca Cloud hasn't taken it yet (or on a change); for a card
  *  that waits for the URL. */
 export function usePendingWebhookSummary(
-  target: RuntimeClientTarget,
+  target: WebhookHostTarget,
   hookId: string
 ): WebhookRead<WebhookSummary> {
-  return usePendingSummaryRead(`${targetKey(target)}|pending|${hookId}`, () =>
+  return usePendingSummaryRead(`${webhookHostKey(target)}|pending|${hookId}`, () =>
     callWebhookHost(target, 'webhooks.card', { hookId })
   )
 }
 
 /** A bot's hooks, for its Webhooks row. */
 export function useBotWebhooks(
-  target: RuntimeClientTarget,
+  target: WebhookHostTarget,
   botId: string
 ): WebhookRead<WebhookSummary[]> {
-  return useHooksRead(`${targetKey(target)}|list|${botId}`, () =>
+  return useHooksRead(`${webhookHostKey(target)}|list|${botId}`, () =>
     callWebhookHost(target, 'webhooks.list', { botId }).then((result) => result.hooks)
   )
 }
 
 /** A hook's recent calls; mounted only while its row is open. */
 export function useWebhookCalls(
-  target: RuntimeClientTarget,
+  target: WebhookHostTarget,
   hookId: string
 ): WebhookRead<WebhookCallRow[]> {
-  return useCallsRead(`${targetKey(target)}|calls|${hookId}`, () =>
+  return useCallsRead(`${webhookHostKey(target)}|calls|${hookId}`, () =>
     callWebhookHost(target, 'webhooks.calls', { hookId }).then((result) => result.calls)
   )
 }

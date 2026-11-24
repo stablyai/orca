@@ -9,6 +9,7 @@ import { botAccessHost } from '../bots/bot-access-host'
 import { botAccessSeenFile, createBotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import { notifyBotCouldNotFinish, runtimeBotOwnerNotice } from '../bots/bot-could-not-finish'
 import { WebhookHostService } from '../webhooks/webhook-host-service'
+import type { WebhookCloudCalls } from '../webhooks/webhook-cloud-routes'
 import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upkeep'
 import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -28,6 +29,8 @@ export type ConnectorHostOptions = {
   kind: ConnectorRuntimeKind
   /** Quitting or relaunching: nothing new starts. */
   isFenced: () => boolean
+  /** Development only: webhook routes that stand in for Orca Cloud's (webhook-synthetic-routes). */
+  webhookRoutes?: WebhookCloudCalls
 }
 
 export type ConnectorHost = {
@@ -47,7 +50,8 @@ export function installConnectorHost({
   store,
   userDataPath,
   kind,
-  isFenced
+  isFenced,
+  webhookRoutes
 }: ConnectorHostOptions): ConnectorHost {
   const gitHubInstallations = new ConnectorGitHubInstallations({
     account: () => connectorAccount(userDataPath),
@@ -65,7 +69,9 @@ export function installConnectorHost({
   const webhooks = new WebhookHostService({
     userDataPath,
     account: () => connectorAccount(userDataPath),
-    cloud: () => runtime.getConnectorCloud(),
+    // Stand-in routes replace the cloud entirely, so its sign-in never gates them.
+    cloud: () => (webhookRoutes ? null : runtime.getConnectorCloud()),
+    ...(webhookRoutes ? { routes: webhookRoutes } : {}),
     automations: {
       list: () => store.listAutomations(),
       runs: (automationId) => store.listAutomationRuns(automationId),
@@ -124,6 +130,19 @@ export function installConnectorHost({
         // A deleted bot, hook or automation leaves Composio triggers to remove.
         if (event.type === 'automationsChanged') {
           composio.soon()
+        }
+      },
+      { consumesTerminalSideEffects: false }
+    )
+    runtime.onBotsWritten(() => webhooks.botsWritten())
+    void webhooks.start()
+  } else if (webhookRoutes) {
+    runtime.setWebhooks(webhooks)
+    stops.push(() => webhooks.stop())
+    runtime.onClientEvent(
+      (event) => {
+        if (event.type === 'automationsChanged' || event.type === 'reposChanged') {
+          webhooks.changed()
         }
       },
       { consumesTerminalSideEffects: false }

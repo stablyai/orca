@@ -6,29 +6,40 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { EVENT_ONLY_SCHEDULE } from '../../../../../shared/automation-event-triggers'
 import { webhookRuleId } from '../../../../../shared/connector-webhook-contract'
 import { automationWebhookUrlCopy } from '../../bots/webhooks/automation-webhook-url'
-import { setWebhookHostTransportForTests } from '../../bots/webhooks/webhook-host-client'
+import {
+  setWebhookHostTransportForTests,
+  type WebhookHostTarget
+} from '../../bots/webhooks/webhook-host-client'
 import { webhookSummaryFixture } from '../../bots/webhooks/webhook-summary.test-fixture'
 import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 
 // The card's own behavior, past the host check use-verified-receipt-webhook.test.tsx covers.
+const confirmed = vi.hoisted(() => ({ target: null as WebhookHostTarget | null }))
 vi.mock('./use-verified-receipt-webhook', async () => {
   const { automationHookId } = await import('../../../../../shared/automation-event-triggers')
   return {
     useVerifiedReceiptWebhook: (
-      _owner: unknown,
+      owner: { target: WebhookHostTarget },
       _itemId: unknown,
       saved: { automation: Parameters<typeof automationHookId>[0] }
-    ) => automationHookId(saved.automation)
+    ) => {
+      const hookId = automationHookId(saved.automation)
+      return hookId ? { hookId, target: confirmed.target ?? owner.target, botId: 'bot-1' } : null
+    }
   }
 })
 
 const HOOK = 'wh_SetupCardTest001'
+// Its own hook, since a hook copied once keeps its copied receipt for the session.
+const BOUND = 'wh_SetupCardBound01'
 // A hook the host no longer has: its read fails.
 const GONE = 'wh_SetupCardGone001'
 const URL = `https://connector.orca.dev/hooks/${HOOK}/secret-key`
 const writes: string[] = []
 const reveals: unknown[] = []
+const sent: { method: string; target: unknown; binding: unknown }[] = []
+let replyGate: Promise<void> | null = null
 
 let container: HTMLDivElement
 let root: ReturnType<typeof createRoot>
@@ -36,7 +47,14 @@ let root: ReturnType<typeof createRoot>
 beforeEach(() => {
   writes.length = 0
   reveals.length = 0
-  setWebhookHostTransportForTests(async (target, method, params) => {
+  sent.length = 0
+  replyGate = null
+  confirmed.target = null
+  setWebhookHostTransportForTests(async (target, method, params, binding) => {
+    sent.push({ method, target, binding })
+    if (method === 'webhooks.reveal' && replyGate) {
+      await replyGate
+    }
     if ('hookId' in params && params.hookId === GONE) {
       throw new Error('webhook_not_found')
     }
@@ -153,4 +171,45 @@ it('offers no key panel when the hook cannot be read', async () => {
   await settle()
   expect(copyButton()).toBeDefined()
   expect(container.textContent).not.toContain('Key and signing secret')
+})
+
+it('sends every Setup read and control only to the host incarnation that confirmed the receipt', async () => {
+  let current = true
+  confirmed.target = {
+    kind: 'environment',
+    environmentId: 'E',
+    binding: { pairingRevision: 7, runtimeId: 'W', current: () => current }
+  }
+  renderSaved(BOUND)
+  await settle()
+  act(() => copyButton()!.click())
+  await settle()
+  await settle()
+  expect(writes).toEqual([URL])
+  expect(sent.map(({ method }) => method)).toEqual(
+    expect.arrayContaining(['webhooks.card', 'webhooks.reveal'])
+  )
+  for (const call of sent) {
+    expect(call).toEqual({
+      method: call.method,
+      target: { kind: 'environment', environmentId: 'E' },
+      binding: { pairingRevision: 7, runtimeId: 'W' }
+    })
+  }
+
+  // A key revealed after the host changed is never copied.
+  writes.length = 0
+  const held = Promise.withResolvers<void>()
+  replyGate = held.promise
+  const copyAgain = [...container.querySelectorAll('button')].find(
+    (button) => button.textContent === 'Copied'
+  )
+  act(() => copyAgain!.click())
+  await settle()
+  current = false
+  held.resolve()
+  await settle()
+  await settle()
+  expect(sent.filter(({ method }) => method === 'webhooks.reveal')).toHaveLength(2)
+  expect(writes).toEqual([])
 })

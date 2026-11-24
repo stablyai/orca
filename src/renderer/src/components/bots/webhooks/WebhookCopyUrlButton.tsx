@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { WebhookHostTarget } from './webhook-host-client'
 import { usePendingWebhookSummary } from './use-webhook-data'
 import { useWebhookKey } from './use-webhook-key'
 
@@ -15,7 +15,7 @@ export function WebhookCopyUrlButton({
   copied = false,
   onCopied
 }: {
-  target: RuntimeClientTarget
+  target: WebhookHostTarget
   hookId: string
   botName: string
   variant?: 'outline' | 'default'
