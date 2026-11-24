@@ -128,9 +128,11 @@ export type ProviderRelayKeepSpec = {
   lines: string[]
   /** Client request `method`s still awaiting an answer are listed on attach, and count as work. */
   outstanding: string[]
+  /** Client request `method`s whose latest accepted request is kept (its answer says nothing). */
+  requests?: string[]
 }
 
-/** A kept line's seq and the name it was kept under (`a:<method>` or `l:<marker>`). */
+/** A kept line's seq and the name it was kept under (`a:<method>`, `q:<method>` or `l:<marker>`). */
 export type ProviderRelayKeptLine = { seq: number; name: string }
 
 /** A client request the agent has not answered yet, or `answered` in the replay that follows;

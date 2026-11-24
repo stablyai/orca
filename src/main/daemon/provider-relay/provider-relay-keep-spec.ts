@@ -18,10 +18,11 @@ export function readProviderRelayKeepSpec(value: unknown): ProviderRelayKeepSpec
   const answers = 'answers' in value ? value.answers : undefined
   const lines = 'lines' in value ? value.lines : undefined
   const outstanding = 'outstanding' in value ? value.outstanding : undefined
-  if (!keepNames(answers) || !keepNames(lines) || !keepNames(outstanding)) {
+  const requests = 'requests' in value ? value.requests : []
+  if (!keepNames(answers) || !keepNames(lines) || !keepNames(outstanding) || !keepNames(requests)) {
     return null
   }
-  return answers.length > 0 || lines.length > 0 || outstanding.length > 0
-    ? { answers, lines, outstanding }
+  return answers.length > 0 || lines.length > 0 || outstanding.length > 0 || requests.length > 0
+    ? { answers, lines, outstanding, requests }
     : null
 }
