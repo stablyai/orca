@@ -193,7 +193,7 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
       frame &&
       this.isListedAsServerPage(guestWebContentsId) &&
       !this.isAgentCommandRunningInTab(ownerTabId)
-        ? this.pageInputCredit.peek(ownerTabId)
+        ? this.pageInputCredit.printer(ownerTabId)
         : null
     if (pairedDeviceId && frame) {
       const title = webContents.fromId(guestWebContentsId)?.getTitle() ?? ''

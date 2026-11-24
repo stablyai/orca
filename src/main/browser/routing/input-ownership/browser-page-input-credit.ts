@@ -15,12 +15,18 @@ export class BrowserPageInputCredit {
   // The command each page is running; queued commands run one at a time per page.
   private readonly runnerByPageId = new Map<string, Runner>()
   private readonly creditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
+  // The same input, for what the page prints; opening a tab doesn't spend it.
+  private readonly printCreditByTabId = new Map<string, { pairedDeviceId: string; at: number }>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
   /** Nothing to credit or clear: no command is running and no credit is held. */
   get idle(): boolean {
-    return this.runnerByPageId.size === 0 && this.creditByTabId.size === 0
+    return (
+      this.runnerByPageId.size === 0 &&
+      this.creditByTabId.size === 0 &&
+      this.printCreditByTabId.size === 0
+    )
   }
 
   /** Runs one queued command on the page, so input it delivers is credited to its caller. */
@@ -54,27 +60,31 @@ export class BrowserPageInputCredit {
   creditInput(browserTabId: string, browserPageId: string): void {
     const pairedDeviceId = this.runnerByPageId.get(browserPageId)?.pairedDeviceId ?? null
     if (!pairedDeviceId) {
-      this.creditByTabId.delete(browserTabId)
+      this.withdraw(browserTabId)
       return
     }
     const now = this.now()
     // Unconsumed credits for tabs that opened nothing would otherwise pile up.
-    for (const [tabId, credit] of this.creditByTabId) {
-      if (!isRecentBrowserGuestInput(credit.at, now)) {
-        this.creditByTabId.delete(tabId)
+    for (const credits of [this.creditByTabId, this.printCreditByTabId]) {
+      for (const [tabId, credit] of credits) {
+        if (!isRecentBrowserGuestInput(credit.at, now)) {
+          credits.delete(tabId)
+        }
       }
     }
     this.creditByTabId.set(browserTabId, { pairedDeviceId, at: now })
+    this.printCreditByTabId.set(browserTabId, { pairedDeviceId, at: now })
   }
 
   /** An agent acts on the tab now: what the page does next is not the earlier input's. */
   withdraw(browserTabId: string): void {
     this.creditByTabId.delete(browserTabId)
+    this.printCreditByTabId.delete(browserTabId)
   }
 
-  /** Whose input just reached the tab, without spending it on what that input opens. */
-  peek(browserTabId: string): string | null {
-    const credit = this.creditByTabId.get(browserTabId)
+  /** Whose input just reached the tab, for a print it makes; a tab that input opened doesn't spend it. */
+  printer(browserTabId: string): string | null {
+    const credit = this.printCreditByTabId.get(browserTabId)
     return credit && isRecentBrowserGuestInput(credit.at, this.now()) ? credit.pairedDeviceId : null
   }
 
