@@ -179,7 +179,7 @@ export function botRequestView(
       for: askers,
       ...originLine(record),
       kind: 'status: for your information; there is no job to take and nothing to answer',
-      next: `Use it in your own work if it bears on it. If it needs nothing from you, your final message is only ${BOT_QUIET_MARKER}.`
+      next: `Use it in your own work if it bears on it. If it needs nothing from you, stay silent with ${BOT_QUIET_MARKER}.`
     }
   }
   const reply = (body: string) => `orca orchestration reply --id ${messageId} --body "${body}"`
@@ -263,7 +263,7 @@ export function botAnswerView(
         ? `${ON_THE_CARD} Finish the job with it. ${ONLY_WHATS_NEW}`
         : 'Finish the job with this answer.'
       : posted
-        ? `${record.toBotName} already posted its answer where it was asked, so don't post it again; your final message is only ${BOT_QUIET_MARKER}.`
+        ? `${record.toBotName} already posted its answer where it was asked, so don't post it again; stay silent with ${BOT_QUIET_MARKER}.`
         : owners
           ? `${ON_THE_CARD} ${ONLY_WHATS_NEW}`
           : `Pass this answer on to ${askersOf(record)} as your final message.`

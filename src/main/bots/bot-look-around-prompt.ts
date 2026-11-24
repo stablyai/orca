@@ -49,7 +49,7 @@ export function lookAroundPrompt(input: {
     '- link: the thread, issue or pull request it is about.',
     'Quote each value in single quotes, on one line, with no apostrophe inside; other quoting is refused. Suggest only things with a concrete next step; if nothing is worth it, suggest nothing.',
     '',
-    `When done, your final message is only ${BOT_QUIET_MARKER}.`
+    `When done, end with ${BOT_QUIET_MARKER}; one short line for your owner may come before it.`
   ]
     .filter((line, index, lines) => line !== '' || lines[index - 1] !== '')
     .join('\n')
