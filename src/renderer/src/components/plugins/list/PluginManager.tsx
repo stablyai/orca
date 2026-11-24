@@ -40,6 +40,8 @@ import {
   type PluginListFilter
 } from './plugin-list-filter'
 import { PluginDetailPage } from '../page/PluginDetailPage'
+import { pluginCatalogComparators, type PluginCatalogSort } from './plugin-catalog-sort'
+import { usePluginInstallCountsStore } from '@/store/plugins/installation/plugin-install-counts'
 import { useOrcaVersion, type PluginPageNavigation } from '../state/use-plugin-page-navigation'
 import type { PluginLogsState } from '../state/use-plugin-logs'
 
@@ -101,6 +103,9 @@ export function PluginManager({
   const [search, setSearch] = useState('')
   const [chosenTab, setTab] = useState<PluginCatalogFilter>('all')
   const [listFilter, setListFilter] = useState<PluginListFilter>(NO_PLUGIN_LIST_FILTER)
+  const [sort, setSort] = useState<PluginCatalogSort>('default')
+  const installCounts = usePluginInstallCountsStore((state) => state.counts)
+  const installCountsLoaded = usePluginInstallCountsStore((state) => state.loaded)
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
   const { openKey, open, back } = page
   usePluginBrowseRequest({ page, setTab, setSearch, setListFilter })
@@ -331,6 +336,8 @@ export function PluginManager({
             filter={listFilter}
             sources={catalog.sources}
             onFilterChange={setListFilter}
+            sort={sort}
+            onSortChange={setSort}
             refreshBusy={catalog.refreshBusy}
             onRefresh={() => void catalog.refresh()}
           />
@@ -386,6 +393,12 @@ export function PluginManager({
                 capped={capped}
                 showAll={showAll}
                 openSources={() => setSourcesOpen(true)}
+                comparator={
+                  // Preserve catalog order until counts arrive; zero counts would reshuffle it.
+                  sort === 'default' || (sort === 'most-installed' && !installCountsLoaded)
+                    ? undefined
+                    : (left, right) => pluginCatalogComparators[sort](left, right, installCounts)
+                }
               />
             )}
           </div>

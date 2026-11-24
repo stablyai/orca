@@ -2,8 +2,10 @@ import { RefreshCw } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api/plugins/plugin-host-api'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import type { PluginListFilter } from './plugin-list-filter'
+import { isPluginCatalogSort, type PluginCatalogSort } from './plugin-catalog-sort'
 import { PluginFilterPopover } from './PluginFilterPopover'
 
 /** Tools beside the search: Update all (on the Updates filter), catalog filter, and refresh. */
@@ -13,6 +15,8 @@ export function PluginListToolbar({
   filter,
   sources,
   onFilterChange,
+  sort,
+  onSortChange,
   refreshBusy,
   onRefresh
 }: {
@@ -22,11 +26,14 @@ export function PluginListToolbar({
   filter: PluginListFilter
   sources: readonly PluginMarketplaceHostSourceState[]
   onFilterChange: (filter: PluginListFilter) => void
+  sort: PluginCatalogSort
+  onSortChange: (sort: PluginCatalogSort) => void
   refreshBusy: boolean
   onRefresh: () => void
 }): React.JSX.Element {
   const t = useTranslate()
   const refreshLabel = t('auto.components.settings.PluginManager.refreshLabel', 'Refresh catalogs')
+  const sortLabel = t('auto.components.settings.PluginManager.sortLabel', 'Sort plugins')
   return (
     <>
       {updateCount > 0 ? (
@@ -37,6 +44,35 @@ export function PluginListToolbar({
       {sources.length > 0 ? (
         <PluginFilterPopover filter={filter} sources={sources} onChange={onFilterChange} />
       ) : null}
+      <Select
+        value={sort}
+        onValueChange={(value) => {
+          if (isPluginCatalogSort(value)) {
+            onSortChange(value)
+          }
+        }}
+      >
+        <SelectTrigger size="sm" aria-label={sortLabel}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent align="end">
+          <SelectItem value="default">
+            {t('auto.components.settings.PluginManager.sortDefault', 'Default')}
+          </SelectItem>
+          <SelectItem value="most-installed">
+            {t('auto.components.settings.PluginManager.sortMostInstalled', 'Most installed')}
+          </SelectItem>
+          <SelectItem value="recently-added">
+            {t('auto.components.settings.PluginManager.sortRecentlyAdded', 'Recently added')}
+          </SelectItem>
+          <SelectItem value="recently-updated">
+            {t('auto.components.settings.PluginManager.sortRecentlyUpdated', 'Recently updated')}
+          </SelectItem>
+          <SelectItem value="name">
+            {t('auto.components.settings.PluginManager.sortName', 'Name')}
+          </SelectItem>
+        </SelectContent>
+      </Select>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

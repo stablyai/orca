@@ -16,6 +16,7 @@ import { installedPluginControls, type InstalledRowHandlers } from '../list/Plug
 import type { usePluginCatalog } from '../state/use-plugin-catalog'
 import type { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import type { usePluginInstallAction } from '../state/use-plugin-install-action'
+import type { PluginCatalogComparator } from '../list/plugin-catalog-sort'
 
 function sourceDetail(source: PluginMarketplaceHostSourceState, t: Translate = translate): string {
   const trust = source.official
@@ -190,7 +191,8 @@ export function PluginCatalogGroups({
   narrowed,
   capped,
   showAll,
-  openSources
+  openSources,
+  comparator
 }: {
   catalog: ReturnType<typeof usePluginCatalog>
   available: readonly PluginListEntry[]
@@ -203,6 +205,7 @@ export function PluginCatalogGroups({
   capped: (groupId: string, rows: PluginListEntry[]) => PluginListEntry[]
   showAll: (groupId: string) => () => void
   openSources: () => void
+  comparator?: PluginCatalogComparator
 }): React.JSX.Element {
   const t = useTranslate()
   const order = new Map(
@@ -217,8 +220,10 @@ export function PluginCatalogGroups({
   const availableBySource = catalog.sources.map((source) => {
     const rows = listed
       .filter((entry) => entry.listing?.marketplaceSourceId === source.id && matches(entry))
-      .sort((left, right) => rank(left) - rank(right))
-    return { source, rows }
+      .sort(comparator ?? ((left, right) => rank(left) - rank(right)))
+    // Why a copy: .sort() mutates, so re-sorting on a comparator change must not reuse the same
+    // array the previous render already sorted in place.
+    return { source, rows: [...rows] }
   })
   return catalog.loading ? (
     <PluginListGroup
