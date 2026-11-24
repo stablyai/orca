@@ -136,13 +136,12 @@ export function conversationReplyFill(
     // whole reply, except to its owner in their own DM.
     const markerMayQuiet = turn.bot && turn.outcome === 'success' && isQuietBotResult(turn.prose)
     const silencedWhole = new Set<JournalConnectorReplyRow>()
-    for (const row of markerMayQuiet ? own : []) {
-      const key = keyOf(row.account, row.deliveryId)
+    for (const row of markerMayQuiet ? own.filter((row) => row.quietRule === undefined) : []) {
       const ownerDm =
         isSlackDirectMessage(row.conversation) &&
-        (ownerAsked.has(key) ||
+        (ownerAsked.has(keyOf(row.account, row.deliveryId)) ||
           (await askedByOwner?.(turn.sessionId, row.messageId).catch(() => false)) === true)
-      if (row.quietRule === undefined && !ownerDm) {
+      if (!ownerDm) {
         silencedWhole.add(row)
       }
     }
