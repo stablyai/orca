@@ -17,6 +17,8 @@ import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-sub
 const RUN_TIMEOUT_MS = 12 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
+// The host runs a few --version probes at a time; a dozen slow CLIs outlast the 15s default.
+const CHECK_TIMEOUT_MS = 60_000
 
 export type AgentCliUpdateRun =
   | { phase: 'running' }
@@ -136,9 +138,12 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       let check = checks.get(key)
       if (!check) {
         checkedAt.set(key, Date.now())
-        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(target, 'agentCliUpdate.check', {
-          agents: AGENT_CLI_UPDATE_AGENTS
-        })
+        check = callRuntimeRpc<{ updates: AgentCliUpdate[] }>(
+          target,
+          'agentCliUpdate.check',
+          { agents: AGENT_CLI_UPDATE_AGENTS },
+          { timeoutMs: CHECK_TIMEOUT_MS }
+        )
           .then(({ updates }) => {
             // An unchanged answer leaves the store alone, so the status bar doesn't re-render.
             if (!sameUpdates(get().agentCliUpdates.get(key)?.updates ?? [], updates)) {
