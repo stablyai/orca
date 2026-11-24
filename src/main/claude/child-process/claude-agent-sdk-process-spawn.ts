@@ -15,6 +15,7 @@ import {
 import { CLAUDE_RELAY_WORK_MARKERS } from '../relay/claude-relay-markers'
 import { ClaudeRelaySpawnStandIn } from '../relay/claude-relay-spawn-stand-in'
 import { relayedClaudeChildTree } from '../relay/claude-relayed-child-tree'
+import { claudeRelaySdkRecordTaking } from '../relay/claude-relay-sdk-record-taking'
 import {
   createClaudeChildTreeReaper,
   type ClaudeChildTreeReaper
@@ -34,6 +35,8 @@ export type ClaudeCodeProcessSpawn = {
   readonly bound: Promise<void>
   /** The terminal daemon owns the agent (and reaps its group). */
   readonly relayed: boolean
+  /** Orca handled a message the SDK yielded; a relay acks only what was handled. */
+  handled: (message: Record<string, unknown>) => void
   /** Descendant evidence for the close ladder; the daemon's own exit proof when relayed. */
   treeReaper: (exited: () => boolean) => ClaudeChildTreeReaper
 }
@@ -80,6 +83,7 @@ export function createClaudeCodeProcessSpawn(
   const relayChatKey = launch?.relayChatKey
   let managed: ManagedProviderProcess | null = null
   let relayed = false
+  let taking: ReturnType<typeof claudeRelaySdkRecordTaking> | null = null
   let bound: Promise<void> = Promise.resolve()
   return {
     spawn: (options) => {
@@ -125,6 +129,15 @@ export function createClaudeCodeProcessSpawn(
         })
         relayed = kept !== null
         managed = kept?.managed ?? direct()
+        if (kept) {
+          taking = claudeRelaySdkRecordTaking(kept.child.stdout.relayRecords)
+          // Same tick as the SDK's reader, so the tap sees every line it reads.
+          if (standIn.stdout.listenerCount('data') + standIn.stdout.listenerCount('readable') > 0) {
+            standIn.stdout.on('data', taking.observe)
+          } else {
+            observeStdoutWithReader(standIn.stdout, taking.observe)
+          }
+        }
         standIn.bind(managed.child)
       })().catch((error: unknown) => {
         const failure = error instanceof Error ? error : new Error(String(error))
@@ -157,6 +170,7 @@ export function createClaudeCodeProcessSpawn(
     get relayed() {
       return relayed
     },
+    handled: (message) => taking?.handled(message),
     treeReaper: (exited) => {
       if (relayed || !managed) {
         return relayedClaudeChildTree(exited)

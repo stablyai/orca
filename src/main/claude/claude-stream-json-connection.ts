@@ -227,6 +227,7 @@ export async function openClaudeStreamJsonConnection(
             throw new Error('claude stream-json yielded a non-object message')
           }
           handlers.onMessage?.(next.value)
+          spawner.handled(next.value)
         }
       } finally {
         if (!completed) {
@@ -245,9 +246,7 @@ export async function openClaudeStreamJsonConnection(
     }
     handleUnexpectedEnd(error)
   })
-  child.on('close', () => {
-    handleUnexpectedEnd(undefined, true)
-  })
+  child.on('close', () => handleUnexpectedEnd(undefined, true))
   child.stdin.on('error', (error) => {
     if (!closing) {
       void handleTransportFailure(error)
