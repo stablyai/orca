@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { Activity } from 'react'
+import { act, cleanup, render, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { readLocalImagePreview } from './local-image-src-reader'
 import {
@@ -102,4 +103,34 @@ it('is ready at once on returning to an image the cache still holds', async () =
   rerender({ path: '/tmp/a.png' })
   expect(result.current.status).toBe('ready')
   expect(result.current.src).toBe(shown)
+})
+
+it('reads again when shown after the window refocused while its pane was hidden', async () => {
+  vi.mocked(readLocalImagePreview).mockResolvedValue({
+    content: 'AAAA',
+    isBinary: true,
+    mimeType: 'image/png'
+  })
+  let latest: ReturnType<typeof useLocalImageSrcResult> | undefined
+  function Image(): null {
+    latest = useLocalImageSrcResult('/tmp/a.png', '/tmp/a.png')
+    return null
+  }
+  const pane = (visible: boolean) => (
+    <Activity mode={visible ? 'visible' : 'hidden'}>
+      <Image />
+    </Activity>
+  )
+  const { rerender } = render(pane(true))
+  await act(async () => {})
+  const first = latest?.src
+  expect(latest?.status).toBe('ready')
+
+  rerender(pane(false))
+  act(() => invalidateLocalImageCache())
+  rerender(pane(true))
+  await act(async () => {})
+  expect(latest?.status).toBe('ready')
+  expect(latest?.src).toBeDefined()
+  expect(latest?.src).not.toBe(first)
 })
