@@ -17,6 +17,7 @@ import {
   waitForInFlightNavigation
 } from './agent-browser-navigation-settle'
 import { AgentBrowserBridgeQueue } from '../command-queue/agent-browser-bridge-queue'
+import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { assertRemoteCliPageAccess } from '../../routing/input-ownership/remote-cli-page-admission'
 import { agentBrowserSnapshotArgs } from '../protocol/agent-browser-snapshot-arguments'
 import { getBrowserPasskeyRequest } from '../../webauthn/browser-passkey-requests'
@@ -107,15 +108,7 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
         if (firstLoad && firstLoad.guest === wc) {
           const deadline = Date.now() + EMBEDDED_NAVIGATION_TIMEOUT_MS
           await firstLoad.load
-          // As below: a page that navigated on from its first load reports once that one settles.
-          const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
-          if (
-            isWaitingForMainFrameResponse(wc) ||
-            (pendingUrl !== null && pendingUrl !== wc.getURL())
-          ) {
-            await waitForInFlightNavigation(wc, Math.max(0, deadline - Date.now()))
-          }
-          return { url: wc.getURL(), title: wc.getTitle() }
+          return this.settleNavigation(worktreeId, target, wc, navigationUrl, false, deadline)
         }
         // A new tab's profile may still be starting its extensions; its first page waits for them.
         await whenBrowserExtensionsReadyForPage(wc)
@@ -173,47 +166,64 @@ export abstract class AgentBrowserBridgeCoreCommands extends AgentBrowserBridgeQ
             clearTimeout(navigationTimeout)
           }
         }
-        // A superseding navigation can still be loading when the first load rejects. The outgoing
-        // page (its own load ending, a beforeunload replaceState) can also settle loadURL while
-        // the requested navigation is pending, so getURL() still names the outgoing document.
-        const committedUrl = wc.getURL()
-        const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
-        const settledBeforeCommit =
-          !navigationAborted &&
-          committedUrl !== navigationUrl &&
-          (isWaitingForMainFrameResponse(wc) ||
-            (pendingUrl !== null && pendingUrl !== committedUrl))
-        const navigationInFlight = navigationAborted || settledBeforeCommit
-        if (navigationInFlight) {
-          const outcome = await waitForInFlightNavigation(
-            wc,
-            Math.max(0, navigationDeadline - Date.now())
-          )
-          // Only an aborted load fails at the deadline; an early-settled one reports the current page.
-          if (navigationAborted && outcome === 'timed-out') {
-            throw new BrowserError(
-              'browser_error',
-              `Failed to navigate browser page ${target.browserPageId}: Browser navigation timed out after ${EMBEDDED_NAVIGATION_TIMEOUT_MS}ms`
-            )
-          }
-        }
-
-        // Process swaps can replace the guest while retaining the page ID.
-        const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
-        const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
-        const loadError = navigationInFlight
-          ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
-          : null
-        if (loadError) {
-          throw new BrowserError(
-            'browser_error',
-            `Failed to navigate browser page ${target.browserPageId}: ${loadError.description} (${loadError.code})`
-          )
-        }
-        return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
+        return this.settleNavigation(
+          worktreeId,
+          target,
+          wc,
+          navigationUrl,
+          navigationAborted,
+          navigationDeadline
+        )
       },
       { ensureSession: false, ...options }
     )
+  }
+
+  private async settleNavigation(
+    worktreeId: string | undefined,
+    target: ResolvedBrowserCommandTarget,
+    wc: Electron.WebContents,
+    navigationUrl: string,
+    navigationAborted: boolean,
+    navigationDeadline: number
+  ): Promise<BrowserGotoResult> {
+    // A superseding navigation can still be loading when the first load rejects. The outgoing
+    // page (its own load ending, a beforeunload replaceState) can also settle loadURL while
+    // the requested navigation is pending, so getURL() still names the outgoing document.
+    const committedUrl = wc.getURL()
+    const pendingUrl = this.browserManager.getInFlightNavigationUrl(wc)
+    const settledBeforeCommit =
+      !navigationAborted &&
+      committedUrl !== navigationUrl &&
+      (isWaitingForMainFrameResponse(wc) || (pendingUrl !== null && pendingUrl !== committedUrl))
+    const navigationInFlight = navigationAborted || settledBeforeCommit
+    if (navigationInFlight) {
+      const outcome = await waitForInFlightNavigation(
+        wc,
+        Math.max(0, navigationDeadline - Date.now())
+      )
+      // Only an aborted load fails at the deadline; an early-settled one reports the current page.
+      if (navigationAborted && outcome === 'timed-out') {
+        throw new BrowserError(
+          'browser_error',
+          `Failed to navigate browser page ${target.browserPageId}: Browser navigation timed out after ${EMBEDDED_NAVIGATION_TIMEOUT_MS}ms`
+        )
+      }
+    }
+
+    // Process swaps can replace the guest while retaining the page ID.
+    const navigatedTarget = this.resolveCommandTarget(worktreeId, target.browserPageId)
+    const navigatedWebContents = this.requireTargetWebContents(navigatedTarget)
+    const loadError = navigationInFlight
+      ? this.browserManager.getBrowserPageLoadError(target.browserPageId)
+      : null
+    if (loadError) {
+      throw new BrowserError(
+        'browser_error',
+        `Failed to navigate browser page ${target.browserPageId}: ${loadError.description} (${loadError.code})`
+      )
+    }
+    return { url: navigatedWebContents.getURL(), title: navigatedWebContents.getTitle() }
   }
 
   async fill(
