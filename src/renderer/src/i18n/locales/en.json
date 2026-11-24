@@ -24521,6 +24521,9 @@
     "scanTooLarge": "Quick Open scan too large ({{reason}})."
   },
   "checksPanel": {
+    "commentsUnavailable": "Could not load comments.",
+    "linkedReviewUnavailable": "Could not load the linked pull request.",
+    "loadingReviewDetails": "Loading review details…",
     "unlinked": {
       "title": "Pull request unlinked",
       "description": "PR #{{number}} is hidden for this workspace. Link it again to restore checks and review details.",
