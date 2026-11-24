@@ -56,11 +56,10 @@ export function hasRuntimeRpcErrorCode(error: unknown, expectedCode: string): bo
   return false
 }
 
-// Machine tokens only (snake_case), so a logged code can never carry a URL or user text.
-const MACHINE_CODE = /^[a-z][a-z0-9_]{0,63}$/
+const GENERIC_RUNTIME_ERROR_CODE = 'runtime_error'
 
-/** The first machine error code along the cause chain, for diagnostics that must not log messages. */
-export function readRuntimeRpcErrorCode(error: unknown): string | null {
+function structuredErrorCodes(error: unknown): string[] {
+  const codes: string[] = []
   const seen = new Set<unknown>()
   let current = error
   while (current && typeof current === 'object' && !seen.has(current)) {
@@ -72,11 +71,33 @@ export function readRuntimeRpcErrorCode(error: unknown): string | null {
       response?: { error?: { code?: unknown } }
     }
     for (const code of [candidate.code, candidate.error?.code, candidate.response?.error?.code]) {
-      if (typeof code === 'string' && MACHINE_CODE.test(code)) {
-        return code
+      if (typeof code === 'string') {
+        codes.push(code)
       }
     }
     current = candidate.cause
   }
-  return null
+  return codes
+}
+
+/**
+ * The failure's code from `known` only, for diagnostics that must not log messages: a host can put
+ * any text in `code`, so other codes read as `other_code`. A specific code beats the generic
+ * runtime_error wrapper, including one older hosts flatten into its message.
+ */
+export function readRuntimeRpcErrorCode(error: unknown, known: readonly string[]): string | null {
+  const structured = structuredErrorCodes(error)
+  const specific =
+    structured.find((code) => code !== GENERIC_RUNTIME_ERROR_CODE && known.includes(code)) ??
+    known.find((code) => code !== GENERIC_RUNTIME_ERROR_CODE && hasRuntimeRpcErrorCode(error, code))
+  if (specific) {
+    return specific
+  }
+  if (
+    structured.includes(GENERIC_RUNTIME_ERROR_CODE) &&
+    known.includes(GENERIC_RUNTIME_ERROR_CODE)
+  ) {
+    return GENERIC_RUNTIME_ERROR_CODE
+  }
+  return structured.length > 0 ? 'other_code' : null
 }

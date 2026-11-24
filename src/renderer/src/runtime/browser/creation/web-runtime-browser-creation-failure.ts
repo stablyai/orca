@@ -32,13 +32,23 @@ function isDefinitiveBrowserCreateFailure(error: unknown): boolean {
   return DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.some((code) => hasRuntimeRpcErrorCode(error, code))
 }
 
-/** The failure's machine code (never its message, which can name the URL). */
+// Codes a browser create can fail with; any other host-supplied code is logged as other_code.
+const REPORTED_BROWSER_CREATE_FAILURE_CODES = [
+  ...DEFINITIVE_BROWSER_CREATE_FAILURE_CODES,
+  'browser_unavailable',
+  'browser_profile_unavailable',
+  'browser_owner_unavailable',
+  'browser_command_unavailable',
+  'browser_tab_not_found',
+  'browser_timeout',
+  'runtime_compat_block',
+  'runtime_unavailable',
+  'runtime_error'
+]
+
+/** The failure's known machine code (never its message, which can name the URL). */
 export function browserCreateFailureCode(error: unknown): string | null {
-  return (
-    readRuntimeRpcErrorCode(error) ??
-    DEFINITIVE_BROWSER_CREATE_FAILURE_CODES.find((code) => hasRuntimeRpcErrorCode(error, code)) ??
-    null
-  )
+  return readRuntimeRpcErrorCode(error, REPORTED_BROWSER_CREATE_FAILURE_CODES)
 }
 
 type WebRuntimeBrowserCreationFailure = {

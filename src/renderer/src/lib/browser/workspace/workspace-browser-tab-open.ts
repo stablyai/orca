@@ -29,7 +29,8 @@ import {
 import {
   intentPresentation,
   openFailure,
-  validateTarget
+  validateTarget,
+  WorkspaceBrowserOpenError
 } from './workspace-browser-tab-presentation'
 import type {
   BrowserLinkOpenContext,
@@ -291,8 +292,15 @@ export async function openWorkspaceBrowserTabForLink(
         outcome = result
       }
     })
-  } catch {
-    return { status: request.linkContext.isCurrentRequest?.() === false ? 'superseded' : 'failed' }
+  } catch (error) {
+    if (request.linkContext.isCurrentRequest?.() === false) {
+      return { status: 'superseded' }
+    }
+    // A failure that knows its reason keeps it, so the toast can name it.
+    if (error instanceof WorkspaceBrowserOpenError) {
+      throw error
+    }
+    return { status: 'failed' }
   }
   return outcome
 }

@@ -1,21 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import { readRuntimeRpcErrorCode } from './runtime-rpc-error-code'
 
+const KNOWN = ['invalid_argument', 'selector_not_found', 'runtime_error']
+
 describe('readRuntimeRpcErrorCode', () => {
-  it('finds a host error code wrapped in causes', () => {
+  it('finds a known host error code wrapped in causes', () => {
     const rpcError = Object.assign(new Error('Browser profile work was not found'), {
       code: 'invalid_argument'
     })
-    expect(readRuntimeRpcErrorCode(new Error('wrapped', { cause: rpcError }))).toBe(
+    expect(readRuntimeRpcErrorCode(new Error('wrapped', { cause: rpcError }), KNOWN)).toBe(
       'invalid_argument'
-    )
-    expect(readRuntimeRpcErrorCode({ response: { error: { code: 'selector_not_found' } } })).toBe(
-      'selector_not_found'
     )
   })
 
-  it('never returns free text, which can carry a URL', () => {
-    expect(readRuntimeRpcErrorCode({ code: 'https://github.com/org/repo/pull/1' })).toBeNull()
-    expect(readRuntimeRpcErrorCode(new Error('invalid_argument'))).toBeNull()
+  it("names an older host's specific refusal, not the runtime_error it was flattened into", () => {
+    const flattened = {
+      response: { error: { code: 'runtime_error', message: 'selector_not_found' } }
+    }
+    expect(readRuntimeRpcErrorCode(flattened, KNOWN)).toBe('selector_not_found')
+  })
+
+  it('never returns a code outside the known list, which a host could fill with any text', () => {
+    expect(readRuntimeRpcErrorCode({ code: 'session_token_abc123' }, KNOWN)).toBe('other_code')
+    expect(readRuntimeRpcErrorCode(new Error('plain failure'), KNOWN)).toBeNull()
   })
 })
