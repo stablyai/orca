@@ -5,6 +5,7 @@ import {
   type RelayedProviderProcess
 } from '../../provider-relay/app-provider-relays'
 import { acpRelayWorkMarkers, acpSpecRelays } from './acp-relay-work-markers'
+import { AcpRelayTurns } from './acp-relay-ack-floor'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
 import { isJsonRpcAnswerAbove, jsonRpcResultOf } from '../../provider-relay/relayed-json-rpc-lines'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
@@ -137,6 +138,9 @@ export function restorableAcpSession(
     : null
 }
 
+/** A relayed ACP agent with the prompt turns its ack floor reads. */
+export type AcpRelayedProcess = RelayedProviderProcess & { turns: AcpRelayTurns }
+
 /**
  * Starts a chat's agent under the terminal daemon, or reattaches the one it kept running, so it
  * outlives a restart. Null: relaying isn't available here, and the caller launches as today. A
@@ -152,7 +156,7 @@ export async function launchRelayedAcpAgent(
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
   launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants'>,
   processLaunch: ProviderProcessLaunch
-): Promise<RelayedProviderProcess | null> {
+): Promise<AcpRelayedProcess | null> {
   const { spec } = input.deps
   // A bot's tool grants live only in this app, so a kept bot would lose its tools.
   if (!acpSpecRelays(spec) || launch.appBoundGrants) {
@@ -165,9 +169,10 @@ export async function launchRelayedAcpAgent(
   }
   // Answers to this app's own requests pass a reattach's hold; everything else waits for the chat.
   let floor = Number.POSITIVE_INFINITY
+  const turns = new AcpRelayTurns()
   const relay: ProviderRelayLaunch = {
     chatKey: input.acquire.identity.sessionId,
-    markers: acpRelayWorkMarkers(spec.agent),
+    markers: { ...acpRelayWorkMarkers(spec.agent), ackFloor: turns.ackFloor },
     keep: ACP_RELAY_KEEP,
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }
@@ -190,5 +195,5 @@ export async function launchRelayedAcpAgent(
   if (relayed && input.abandoned()) {
     void relayed.managed.close().catch(() => undefined)
   }
-  return relayed
+  return relayed && { ...relayed, turns }
 }

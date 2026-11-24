@@ -25,7 +25,6 @@ import { acpAuthenticationRequired, acpPromptErrorDetail } from '../turns/acp-pr
 import type { AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from '../generated/acp-protocol.generated'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 export type AcpTimelineTranslatorOptions = {
   sessionId: string
@@ -60,9 +59,7 @@ export class AcpTimelineTranslator {
     this.providerSessionId = options.sessionId
     this.injectsPromptIdentity = this.dialect.injectedPromptIdentity === true
     this.failures = new AcpTurnFailures(options.sessionId, this.dialect, options.agentName)
-    this.backgroundTasks = new AcpBackgroundTaskTimeline((callId) =>
-      this.ownership.tools.join(callId)
-    )
+    this.backgroundTasks = new AcpBackgroundTaskTimeline(this.ownership.tools)
     this.prompts = new AcpPromptTurns(options.sessionId, this.dialect, options.agentName)
     const tools = this.ownership.tools
     this.children = new AcpChildSessions(options.sessionId, this.dialect, this.subagents, tools)
@@ -168,10 +165,6 @@ export class AcpTimelineTranslator {
   /** Provisionally settle missing tasks; later provider endings may revise the outcome. */
   reconcileBackgroundTask = (taskId: string): ProviderTimelineEvent[] =>
     this.backgroundTasks.reconcile(taskId, this.options.sessionId)
-
-  /** A call the earlier app saved, so a kept agent's update to it keeps what was saved. */
-  carryTool = (saved: AgentJournalToolCallItem): void =>
-    this.ownership.tools.carry(saved, this.prompts.current?.turn)
 
   sessionEvent(event: AcpSessionEvent, at: number): ProviderTimelineEvent[] {
     const params = event.kind === 'known' ? event.notification : event.raw

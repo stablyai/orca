@@ -12,9 +12,9 @@ const MAX_CARRIED_TASKS = 32
 
 /**
  * Background tasks still running when the earlier app quit: their turns ended, so their starts
- * were acked and won't replay. Before output is let through, each is restated from its saved row
- * (so it reads as running, not unavailable), and so is the call behind it, so the agent's later
- * updates revise both instead of replacing them with bare ones. No row is written.
+ * were acked and won't replay. Before output is let through, each is restated from its saved row,
+ * so it reads as running (not unavailable) and a call Orca made it of reports to it again: the
+ * call's final update settles the task instead of replacing the closed call row. No row is written.
  */
 export async function carryKeptAcpBackgroundWork(
   child: AcpStructuredChild,
@@ -36,15 +36,9 @@ export async function carryKeptAcpBackgroundWork(
     const { itemId } = rows.item('item', providerKey(key), namespace)
     return history.readInOrder((reads) => reads.itemDetail(itemId)).catch(() => null)
   }
-  // A task Orca made of a call is keyed by the call's id; an agent's own task has no call row.
-  const keys = taskIds.flatMap((id) => [`background-task:${id}`, `tool:${id}`])
-  for (const row of await Promise.all(keys.map(read))) {
-    if (row?.body.kind === 'tool-call') {
-      translator.carryTool(row.body)
-    } else if (row?.body.kind === 'message') {
-      for (const block of backgroundTaskBlocks(row.body.blocks)) {
-        translator.backgroundTasks.restate(block)
-      }
+  for (const row of await Promise.all(taskIds.map((id) => read(`background-task:${id}`)))) {
+    for (const block of row?.body.kind === 'message' ? backgroundTaskBlocks(row.body.blocks) : []) {
+      translator.backgroundTasks.restate(block)
     }
   }
 }

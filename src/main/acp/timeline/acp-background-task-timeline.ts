@@ -9,6 +9,7 @@ import type {
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpBackgroundTaskUpdate } from '../acp-dialects/acp-dialect'
+import type { AcpToolTimeline } from './acp-tool-timeline'
 
 /** Retain running snapshots and bounded settled labels; the assembler owns durable placement. */
 export class AcpBackgroundTaskTimeline {
@@ -19,17 +20,19 @@ export class AcpBackgroundTaskTimeline {
     sizeOf: (block, key) => Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(block))
   })
 
-  constructor(private readonly toolJoin: (callId: string) => ProviderTimelineJoin) {}
+  constructor(private readonly tools: Pick<AcpToolTimeline, 'join' | 'restateBackgrounded'>) {}
 
   /** Tasks still running, by the id their agent names them. */
   get runningIds(): string[] {
     return [...this.running.keys()]
   }
 
-  /** A task an earlier app saw start, as it saved it; no row is written. */
+  /** A task an earlier app saw start, as it saved it, still running; one Orca made of a call ends
+   *  with that call again. No row is written. */
   restate(block: NativeChatBackgroundTaskBlock): void {
     if (!this.running.has(block.taskId) && !isSettledBackgroundTaskState(block.state)) {
       this.running.set(block.taskId, block)
+      this.tools.restateBackgrounded(block)
     }
   }
 
@@ -59,7 +62,7 @@ export class AcpBackgroundTaskTimeline {
         this.settled.delete(block.taskId)
         this.running.set(block.taskId, block)
       }
-      const parent = block.parentToolUseId ? this.toolJoin(block.parentToolUseId) : {}
+      const parent = block.parentToolUseId ? this.tools.join(block.parentToolUseId) : {}
       return {
         type: 'item.update',
         item: `background-task:${block.taskId}`,

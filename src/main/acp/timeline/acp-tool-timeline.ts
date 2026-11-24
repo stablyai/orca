@@ -104,15 +104,10 @@ export class AcpToolTimeline {
     return { events, tasks }
   }
 
-  /** A running call the earlier app saved: this run's updates to it revise what was saved. */
-  carry(saved: AgentJournalToolCallItem, turn: string | undefined): void {
-    const { callId } = saved
-    if (callId === undefined || saved.state !== 'running' || this.tools.has(callId)) {
-      return
-    }
-    this.tools.set(callId, { body: saved, ...(turn === undefined ? {} : { turn }) })
-    if (turn !== undefined) {
-      this.owners.remember(`tool:${callId}`, turn)
+  /** A task an earlier app made of a call, still running: the call's updates report it again. */
+  restateBackgrounded(task: { taskId: string; parentToolUseId?: string }): void {
+    if (task.parentToolUseId === task.taskId && !this.backgrounded.has(task.taskId)) {
+      this.backgrounded.set(task.taskId, true)
     }
   }
 

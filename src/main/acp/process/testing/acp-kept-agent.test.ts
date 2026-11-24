@@ -8,6 +8,7 @@ import { relayedManagedProcess } from '../../../provider-relay/relayed-managed-p
 import { createAcpAgentConnection } from '../acp-agent-connection'
 import type { AcpSessionEvent } from '../../protocol/acp-session-events'
 import { acpKeptAgent, restorableAcpSession } from '../acp-kept-agent'
+import { AcpRelayTurns } from '../acp-relay-ack-floor'
 
 const policy = () => ({ idleStopMs: null, markers: [] })
 const line = (message: Record<string, unknown>): string =>
@@ -77,7 +78,14 @@ describe('kept ACP agent reattach', () => {
     await child.start(1)
     const connection = createAcpAgentConnection(
       { command: 'agent', args: [], cwd: '/tmp' },
-      { relayed: { managed: relayedManagedProcess(child), child, reattached: true } }
+      {
+        relayed: {
+          managed: relayedManagedProcess(child),
+          child,
+          reattached: true,
+          turns: new AcpRelayTurns()
+        }
+      }
     )
     const events: AcpSessionEvent[] = []
     const kinds = () =>

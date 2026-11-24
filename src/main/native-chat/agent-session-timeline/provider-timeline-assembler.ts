@@ -73,6 +73,7 @@ export function createProviderTimelineAssembler(
     sessionId: deps.sessionId,
     agent: deps.agent,
     generation: deps.generation,
+    ...(deps.requestGeneration ? { requestGeneration: deps.requestGeneration } : {}),
     rows: new ProviderTimelineRows({
       scheme: createLegacyProviderTimelineIdentityScheme({
         agent: deps.agent,

@@ -1,6 +1,7 @@
 import type { z } from 'zod'
 import type { RelayedProviderChild } from '../../provider-relay/relayed-provider-child'
-import type { RelayedProviderProcess } from '../../provider-relay/app-provider-relays'
+
+export type { AcpRelayedProcess }
 import { settleAcpSessionCall } from '../protocol/acp-session-call'
 import type { AcpPendingCalls } from '../transport/acp-pending-calls'
 import {
@@ -8,7 +9,12 @@ import {
   type InitializeResponse,
   type PromptResponse
 } from '../generated/acp-protocol.generated'
-import { acpKeptAgent, restorableAcpSession, type AcpKeptAgent } from './acp-kept-agent'
+import {
+  acpKeptAgent,
+  restorableAcpSession,
+  type AcpKeptAgent,
+  type AcpRelayedProcess
+} from './acp-kept-agent'
 
 const SESSION_STARTS = new Set(['session/new', 'session/load', 'session/resume'])
 
@@ -19,14 +25,17 @@ const SESSION_STARTS = new Set(['session/new', 'session/load', 'session/resume']
  */
 export class AcpKeptSession {
   private readonly kept: AcpKeptAgent
+  private readonly child: RelayedProviderChild
   private startTaken = false
 
   constructor(
-    private readonly child: RelayedProviderChild,
+    private readonly relayed: AcpRelayedProcess,
     private readonly calls: AcpPendingCalls,
     /** Delivers a kept state update as if the agent had just sent it. */
     private readonly notify: (method: string, params: unknown) => void
   ) {
+    const { child } = relayed
+    this.child = child
     this.kept = acpKeptAgent(child)
     child.dropKeptLines()
     calls.startAbove(this.kept.requestFloor)
@@ -102,13 +111,14 @@ export class AcpKeptSession {
    *  agent (the earlier app quit before writing it), so its turn fails instead of hanging. */
   earlierPrompt(): Promise<PromptResponse> {
     const id = this.kept.earlierPromptId
-    return id === null
-      ? Promise.reject(new Error('The message did not reach the agent before Orca restarted'))
-      : this.calls.adoptEarlier(
-          id,
-          'session/prompt',
-          settleAcpSessionCall('session/prompt', PromptResponseSchema, undefined)
-        )
+    if (id === null) {
+      return Promise.reject(new Error('The message did not reach the agent before Orca restarted'))
+    }
+    const settle = settleAcpSessionCall('session/prompt', PromptResponseSchema, undefined)
+    return this.relayed.turns.track(
+      () => this.calls.adoptEarlier(id, 'session/prompt', settle),
+      true
+    )
   }
 
   /** Background work the daemon still counted open at this attach, by its first key part. */
@@ -123,9 +133,9 @@ export class AcpKeptSession {
 }
 
 export function keptAcpSession(
-  relayed: RelayedProviderProcess | undefined,
+  relayed: AcpRelayedProcess | undefined,
   calls: AcpPendingCalls,
   notify: (method: string, params: unknown) => void
 ): AcpKeptSession | null {
-  return relayed?.reattached ? new AcpKeptSession(relayed.child, calls, notify) : null
+  return relayed?.reattached ? new AcpKeptSession(relayed, calls, notify) : null
 }
