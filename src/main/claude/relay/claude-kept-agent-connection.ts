@@ -291,8 +291,10 @@ export async function openKeptClaudeAgentConnection(
   void inbox
     .writeEach((message) => write(`${JSON.stringify(message)}\n`), relayWriteNeverReachedAgent)
     .catch((error: unknown) => {
-      inbox.fail(error instanceof Error ? error : new Error(String(error)))
-      void close()
+      const failure = error instanceof Error ? error : new Error(String(error))
+      inbox.fail(failure)
+      // An unwritten message is handed to a new agent with its note; any other loss is a fault.
+      void (relayWriteNeverReachedAgent(failure) ? close() : inputBroke())
     })
 
   return {
