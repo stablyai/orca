@@ -1,18 +1,18 @@
 import type { AcpSessionRuntimeOptions } from './acp-session-runtime-options'
 import type { Readable, Writable } from 'node:stream'
 import { z } from 'zod'
-import { AcpRpcError } from '../transport/acp-errors'
 import { AcpPromptRequest } from './acp-prompt-request'
 import {
   acpCheckProtocolVersion,
   acpConfigOptionRequest,
   acpInitializeRequest,
   acpWithMeta,
-  callAcpSession
+  callAcpSession,
+  dispatchAcpSessionNotification,
+  handleAcpSessionRequest
 } from './acp-session-call'
 import { AcpJsonRpcPeer, type AcpRequestContext } from '../transport/acp-json-rpc-peer'
-import { answerAcpPermission, readAcpPermissionRequest } from './acp-permission-requests'
-import { readAcpSessionEvent, type AcpSessionEvent } from './acp-session-events'
+import type { AcpSessionEvent } from './acp-session-events'
 import {
   setupAcpSession,
   type AcpSessionStarted,
@@ -162,14 +162,27 @@ export class AcpSessionRuntime {
   async prompt(
     prompt: PromptRequest['prompt'],
     meta?: Meta,
-    received?: (response: PromptResponse) => void
+    received?: (response: PromptResponse) => void,
+    rejected?: (error: unknown) => void
   ): Promise<PromptResponse> {
     const params: PromptRequest = { sessionId: this.sessionId(), prompt, ...acpWithMeta(meta) }
     return this.prompts.run((release) =>
-      this.call('session/prompt', params, PromptResponseSchema, (response) => {
-        release()
-        received?.(response)
-      })
+      this.call(
+        'session/prompt',
+        params,
+        PromptResponseSchema,
+        (response) => {
+          release()
+          received?.(response)
+        },
+        null,
+        (error) => {
+          if (!this.prompts.willRetry(error)) {
+            release()
+            rejected?.(error)
+          }
+        }
+      )
     )
   }
 
@@ -259,7 +272,8 @@ export class AcpSessionRuntime {
     params: unknown,
     schema: z.ZodType<T>,
     received?: (response: T) => void,
-    timeoutMs: number | null = null
+    timeoutMs: number | null = null,
+    rejected?: (error: unknown) => void
   ): Promise<T> {
     return callAcpSession(
       this.peer,
@@ -268,27 +282,20 @@ export class AcpSessionRuntime {
       schema,
       this.options.onAuthAnswered,
       received,
-      timeoutMs
+      timeoutMs,
+      rejected
     )
   }
 
   private handleRequest(method: string, params: unknown, context: AcpRequestContext): unknown {
-    if (method !== 'session/request_permission') {
-      if (!this.options.onRequest) {
-        throw new AcpRpcError(-32601, `Unknown ACP client method: ${method}`)
-      }
-      return this.options.onRequest(method, params, context)
-    }
-    const diagnose = (message: string): void => this.diagnose(message)
-    const request = readAcpPermissionRequest(params, diagnose)
-    if (!request) {
-      throw new AcpRpcError(-32602, 'Invalid ACP permission request')
-    }
-    // Only the started session asks the caller; the caller decides who can answer.
-    if (request.sessionId !== this.started?.sessionId) {
-      return { outcome: { outcome: 'cancelled' } }
-    }
-    return answerAcpPermission(request, context, this.options.onPermission, diagnose)
+    return handleAcpSessionRequest(
+      method,
+      params,
+      context,
+      this.started?.sessionId,
+      this.options,
+      (message) => this.diagnose(message)
+    )
   }
 
   private diagnose(message: string): void {
@@ -300,29 +307,19 @@ export class AcpSessionRuntime {
   }
 
   private handleNotification(method: string, params: unknown): void {
-    if (method !== 'session/update') {
-      try {
-        this.options.onExtensionNotification?.(method, params)
-      } catch (error) {
-        this.diagnose(`ACP extension listener failed: ${String(error)}`)
+    dispatchAcpSessionNotification(
+      method,
+      params,
+      this.listeners,
+      this.options.onExtensionNotification,
+      (message) => this.diagnose(message),
+      () => {
+        if (this.reportedUpdateAnomaly) {
+          return false
+        }
+        this.reportedUpdateAnomaly = true
+        return true
       }
-      return
-    }
-    const event = readAcpSessionEvent(params)
-    if (!event) {
-      this.diagnose('Ignored invalid ACP session update envelope')
-      return
-    }
-    if (event.kind === 'unrecognized' && !this.reportedUpdateAnomaly) {
-      this.reportedUpdateAnomaly = true
-      this.diagnose('Forwarded unrecognized ACP session update')
-    }
-    for (const listener of this.listeners) {
-      try {
-        listener(event)
-      } catch (error) {
-        this.diagnose(`ACP event listener failed: ${String(error)}`)
-      }
-    }
+    )
   }
 }

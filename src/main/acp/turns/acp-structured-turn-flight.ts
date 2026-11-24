@@ -40,16 +40,17 @@ export function sendAcpTurnPrompt(
     settled = true
     handlers.onResult(result)
   }
-  // Handle responses synchronously so steering promotes before later updates in the same chunk.
-  const answered = deps.connection.prompt(entry.send.prompt, meta, onResult)
-  entry.sent = true
-  answered.then(onResult, (error: unknown) => {
+  const onError = (error: unknown): void => {
     if (settled) {
       return
     }
     settled = true
     handlers.onError(error)
-  })
+  }
+  // Handle replies synchronously so steering settles and promotes in wire frame order.
+  const answered = deps.connection.prompt(entry.send.prompt, meta, onResult, onError)
+  entry.sent = true
+  answered.then(onResult, onError)
 }
 
 export type AcpTurnFlightContext = {
@@ -162,7 +163,12 @@ export class AcpTurnFlight {
   private promote(entry: AcpInFlightTurn): void {
     this.active = entry
     openAcpPromptTurn(this.ctx.deps.lane, entry.send)
+    const interrupted = this.cancelPromoted
+    this.cancelPromoted = false
     if (entry.settled) {
+      if (interrupted) {
+        this.steerCancelled = entry.send
+      }
       const settled = entry.settled
       entry.settled = undefined
       if (settled.ok) {
@@ -178,8 +184,7 @@ export class AcpTurnFlight {
       void this.ctx.deps.connection.cancel().catch(() => undefined)
       return
     }
-    if (this.cancelPromoted || this.ctx.isPreparingSteers()) {
-      this.cancelPromoted = false
+    if (interrupted || this.ctx.isPreparingSteers()) {
       this.cancelForSteer()
       return
     }

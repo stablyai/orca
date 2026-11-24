@@ -370,6 +370,33 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     })
   })
 
+  it('settles a refused steer before active end_turn when both frames arrive in one stdout chunk', async () => {
+    const h = await createHarness({ promptSteers: true })
+    h.send('m1', 'first')
+    h.send('m2', 'refused steer')
+    await tick()
+    expect(h.prompts).toHaveLength(2)
+
+    const errorFrame = JSON.stringify({
+      jsonrpc: '2.0',
+      id: h.prompts[1].id,
+      error: { code: -32602, message: 'Invalid prompt' }
+    })
+    const activeEndFrame = JSON.stringify({
+      jsonrpc: '2.0',
+      id: h.prompts[0].id,
+      result: { stopReason: 'end_turn' }
+    })
+    h.agent.stdout.write(`${errorFrame}\n${activeEndFrame}\n`)
+    await tick()
+
+    expect(h.settlements).toContainEqual(
+      expect.objectContaining({ clientMessageId: 'm2', state: 'rejected' })
+    )
+    expect(endedTurnRows(h.steps).map((row) => row.turnId)).toEqual(['prompt:m1'])
+    expect(h.turns.running).toBe(false)
+  })
+
   it('buffers an out-of-order steer reply until the active prompt yields', async () => {
     const h = await createHarness({ promptSteers: true })
     h.send('m1', 'first')
@@ -428,6 +455,33 @@ describe('AcpStructuredTurns concurrent prompt steering', () => {
     h.agent.reply(h.prompts[1], { stopReason: 'cancelled' })
     await tick()
     expect(h.turns.running).toBe(false)
+  })
+
+  it('marks a buffered steer cancelled on permission interrupt without sending a second cancel', async () => {
+    const h = await createHarness({ promptSteers: true })
+    const promptResult = vi.spyOn(h.lane.translator, 'promptResult')
+    h.send('m1', 'first')
+    h.send('m2', 'in flight steer')
+    await tick()
+
+    h.turns.interruptForPermissionTransition()
+    await tick()
+    expect(h.cancels).toHaveLength(1)
+
+    // Steer answers end_turn out of order before the active prompt finishes.
+    h.agent.reply(h.prompts[1], { stopReason: 'end_turn' })
+    await tick()
+    h.agent.reply(h.prompts[0], { stopReason: 'cancelled' })
+    await tick()
+
+    expect(h.cancels).toHaveLength(1)
+    expect(h.turns.running).toBe(false)
+    expect(promptResult).toHaveBeenCalledWith(
+      'm2',
+      { stopReason: 'end_turn' },
+      expect.any(Number),
+      true
+    )
   })
 
   it('keeps cancel-to-steer when promptSteers is disabled', async () => {

@@ -184,7 +184,8 @@ export type AcpDialect = {
     response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
   }
   injectedPromptIdentity?: true
-  /** A second `session/prompt` sent while one runs steers it in place without `session/cancel`. */
+  /** A second `session/prompt` sent while one runs steers it in place without `session/cancel`;
+   *  requires the agent to reply to the active prompt before emitting the steered prompt's updates. */
   promptSteers?: true
   /** Calls still running at a prompt's end were backgrounded, and the agent later resumes work
    *  unprompted to report them; that work arrives with no open turn. */

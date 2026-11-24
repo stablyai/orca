@@ -28,6 +28,10 @@ export class AcpPromptRequest {
     return this.waitingCount > 0
   }
 
+  willRetry(error: unknown): boolean {
+    return this.retryBusy && sessionBusy(error)
+  }
+
   async run(request: (release: () => void) => Promise<PromptResponse>): Promise<PromptResponse> {
     if (!this.concurrent && this.active.size > 0) {
       throw new Error('ACP prompt already in progress')
