@@ -2,11 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
 
-const ipc = vi.hoisted(() => ({ handlers: new Map<string, (...args: unknown[]) => unknown>() }))
+type Handler = (event: unknown, args: unknown) => Promise<RuntimeRpcResponse<unknown>>
+const ipc = vi.hoisted(() => ({ handlers: new Map<string, Handler>() }))
 vi.mock('electron', () => ({
   ipcMain: {
-    handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
-      ipc.handlers.set(channel, handler),
+    handle: (channel: string, handler: Handler) => ipc.handlers.set(channel, handler),
     removeHandler: (channel: string) => ipc.handlers.delete(channel)
   }
 }))
@@ -51,7 +51,7 @@ const hosts = {
 
 function windowCall(selector: string, method: string): Promise<RuntimeRpcResponse<unknown>> {
   const handler = ipc.handlers.get('runtimeEnvironments:call')!
-  return handler({}, { selector, method, params: {} }) as Promise<RuntimeRpcResponse<unknown>>
+  return handler({}, { selector, method, params: {} })
 }
 
 function windowDocument() {
