@@ -29,7 +29,8 @@ export function googleOfferFace(
       canAdd: defaultAccount !== undefined
     }
   }
-  // An old host keeps no default, so a second account there would break its calls: today's card.
+  // No default to offer: an old host keeps none (a second account would break its calls), or this
+  // host can't read its saved one. Connect only turns Google on; calls then ask for a default.
   if (!fallback || (host !== 'connected' && host !== 'reconnect')) {
     return { kind: 'connect' }
   }

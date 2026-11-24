@@ -1,4 +1,5 @@
 import { BotFailureError } from '../../shared/bots/bot-failure-copy'
+import { RemoteComputerRefusal, refusedAsk } from './bot-group-remote-refusal'
 import type { z } from 'zod'
 import {
   botGroupRemoteKey,
@@ -150,21 +151,6 @@ export async function resolveNewGroupRemoteMembers(
   return resolveRemoteMembers(groups, localBots, input, undefined, computers)
 }
 
-/** Asking bots on other computers is the owner's own act at this computer's window. */
-export function assertRemotePoster(
-  groups: BotGroupRuntime,
-  group: Pick<BotGroup, 'remoteMembers'>,
-  fromThisWindow: boolean
-): void {
-  if ((group.remoteMembers?.length ?? 0) > 0 && !fromThisWindow) {
-    throw new BotFailureError('groupPostFromHost', { host: groups.runtime.readMachineName() })
-  }
-}
-
-/** The paired computer gave no answer (off, asleep or off the network): posting again may reach
- *  it, unlike any other refusal. */
-class RemoteComputerUnreachable extends Error {}
-
 /** The paired computer, refused with the group's own words when its Orca can't take bot questions. */
 async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: string) {
   let name = environmentId
@@ -175,11 +161,8 @@ async function requireRemoteComputer(groups: BotGroupRuntime, environmentId: str
     if (error instanceof OrchestrationError && error.code === 'server_mail_unsupported') {
       throw new BotFailureError('groupPeerTooOld', { host: name })
     }
-    const message = `Couldn't reach ${name}. ${text(error)}`.trim()
     // Only no answer at all may clear by itself; an unpaired computer or a refusal won't.
-    throw isRemoteServerUnreachable(error)
-      ? new RemoteComputerUnreachable(message)
-      : new Error(message)
+    throw new RemoteComputerRefusal(name, text(error), isRemoteServerUnreachable(error))
   }
 }
 
@@ -214,15 +197,9 @@ export async function deliverRemoteAsks(
           try {
             server = await requireRemoteComputer(groups, environmentId)
           } catch (error) {
-            const reason = text(error)
+            const refused = refusedAsk(error)
             for (const ask of computerAsks) {
-              await settleAsk(groups, message, ask.requestId, {
-                state: 'failed',
-                error:
-                  error instanceof RemoteComputerUnreachable
-                    ? `${/[.!?]$/.test(reason) ? reason : `${reason}.`} Post again to retry.`
-                    : reason
-              })
+              await settleAsk(groups, message, ask.requestId, { state: 'failed', ...refused })
             }
             return
           }
@@ -264,7 +241,7 @@ export async function deliverRemoteAsks(
     for (const ask of asks) {
       sending.delete(ask.requestId)
     }
-    groups.changed()
+    groups.changed(message.groupId)
   }
 }
 
@@ -290,7 +267,7 @@ async function settleAsk(
   groups: BotGroupRuntime,
   message: Pick<BotGroupMessage, 'id' | 'groupId'>,
   requestId: string,
-  outcome: Pick<BotGroupRemoteAsk, 'state' | 'error'>
+  outcome: Pick<BotGroupRemoteAsk, 'state' | 'error' | 'failure'>
 ): Promise<void> {
   await runKeyedSerializedOperation(groups.queues, message.groupId, async () => {
     const current = groups.store.message(message.id)
@@ -301,11 +278,20 @@ async function settleAsk(
       ...current,
       remoteAsks: current.remoteAsks.map((ask) =>
         ask.requestId === requestId && !ask.reply
-          ? { ...ask, state: outcome.state, ...(outcome.error ? { error: outcome.error } : {}) }
+          ? { ...(outcome.error ? newError(ask, outcome) : ask), state: outcome.state }
           : ask
       )
     })
   })
+}
+
+/** An ask with the outcome's error in place of its own, and the code only that error has. */
+function newError(
+  ask: BotGroupRemoteAsk,
+  { error, failure }: Pick<BotGroupRemoteAsk, 'error' | 'failure'>
+): BotGroupRemoteAsk {
+  const { failure: _previous, ...rest } = ask
+  return { ...rest, error, ...(failure ? { failure } : {}) }
 }
 
 /** The room's newest post across all its threads: a member joining now has seen up to here. */

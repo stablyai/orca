@@ -2,6 +2,9 @@ import type { BotChangeKind } from '../../../../src/shared/bots/bot-change-scope
 import type { BotGroup } from '../../../../src/shared/bots/bot-group-schema'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
 import { readBotComputerAnswers, type BotComputerAnswer } from '../../bots/bot-link-host-reads'
+import { readHostAccessRequests } from '../../bots/bot-access-request-operations'
+import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
+import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { groupList } from '../../bots/bot-group-operations'
 import { hostBotsKey } from '../../bots/host-bots-read'
 import type { NO_HOST_LIST_INPUT } from '../../host-screen/catalog/host-list-queries'
@@ -24,6 +27,8 @@ export type HomeComputerBots = {
   answers: readonly BotComputerAnswer[]
   /** The paired computer's rooms; null when unknown (not read, or the read failed), so the last ones stand. */
   groups: readonly BotGroup[] | null
+  /** Each answer's waiting access requests, by its key, as the Bots list counts them; absent unread. */
+  accessRequests: Readonly<Record<string, readonly ConnectorAccessRequest[]>>
   /** The connection every answer came over: Needs you counts are live only on that one. */
   epoch: string
   readAt: number
@@ -41,16 +46,35 @@ export const homeBotsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, HomeComp
       own?.answer.kind !== 'bots'
         ? null
         : own.answer.enabled
-          ? await groupList
+          ? groupList
               .request(client, undefined)
               .then((reply) => groupList.interpret(reply).groups)
               .catch(() => null)
           : []
+    // As the Bots list: a computer with bots on and some to ask for is asked its access requests.
+    const access = Promise.all(
+      answers.map(async (entry) =>
+        entry.answer.kind === 'bots' && entry.answer.enabled && entry.answer.bots.length > 0
+          ? ([
+              entry.key,
+              await readHostAccessRequests(
+                entry.executionHost === LOCAL_EXECUTION_HOST_ID
+                  ? client
+                  : scopeRpcClientToExecutionHost(client, entry.executionHost)
+              )
+            ] as const)
+          : null
+      )
+    )
+    const [rooms, asked] = await Promise.all([groups, access])
     // A read that spans a reconnect mixes two connections' counts; it reads again on the newest one.
     if (hostConnectionEpoch(client) !== epoch) {
       throw new ReadCrossedReconnectError()
     }
-    return { answers, groups, epoch, readAt: Date.now() }
+    const accessRequests = Object.fromEntries(
+      asked.flatMap((read) => (read?.[1] ? [[read[0], read[1]]] : []))
+    )
+    return { answers, groups: rooms, accessRequests, epoch, readAt: Date.now() }
   },
   staleTime: HOME_BOTS_REFRESH_FLOOR_MS,
   // Home stays mounted for the whole launch; its bots must not empty while it sits under a screen.

@@ -1,9 +1,10 @@
+import { BOT_FAILURE_COPY, botFailure } from '../../shared/bots/bot-failure-copy'
 import type { BotGroupMessage, BotGroupTurn } from '../../shared/bots/bot-group'
 import { requireStructuredHost } from './bot-chat-session'
 import type { BotGroupRuntime } from './bot-group-runtime'
 
 /** What a mail turn whose operation can never run settles to, in place of "Starting…". */
-export const BOT_GROUP_MAIL_NEVER_STARTED = 'This mail never started a turn.'
+export const BOT_GROUP_MAIL_NEVER_STARTED = BOT_FAILURE_COPY.groupMailNeverStarted
 
 /** A turn still open (a card waiting, an attempt in the lane) is asked again no sooner than this,
  *  so reads that follow each other do not each ask the chat. */
@@ -98,11 +99,15 @@ async function settle(
     ...current,
     turns: current.turns.map((item) =>
       item.operationId === turn.operationId
-        ? { ...item, error: BOT_GROUP_MAIL_NEVER_STARTED }
+        ? {
+            ...item,
+            error: BOT_GROUP_MAIL_NEVER_STARTED,
+            failure: botFailure('groupMailNeverStarted')
+          }
         : item
     )
   })
-  groups.changed()
+  groups.changed(current.groupId)
   return false
 }
 

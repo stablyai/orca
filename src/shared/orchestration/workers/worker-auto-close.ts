@@ -1,6 +1,18 @@
 /** Kept open, or temporary with the host's deadline (null while it runs or works again); the host
  *  answers null when nothing closes it. Hosts without orchestration.worker-keep-open.v1 lack the method. */
-export type WorkerAutoCloseState = { kept: true } | { kept: false; closesAt: string | null }
+export type WorkerAutoCloseState =
+  | { kept: true }
+  | { kept: false; closesAt: string | null; boundTo?: BoundWorker }
+
+/** On a terminal that closes with a worker: that worker, by its pane and the name its record has.
+ *  Older hosts omit it. */
+export type BoundWorker = {
+  paneKey: string
+  worktreeId: string | null
+  name: string | null
+  /** The agent the worker started with, for its icon once its tab is gone. */
+  agent: string | null
+}
 
 export function readWorkerAutoCloseReply(result: unknown): WorkerAutoCloseState | null {
   if (typeof result !== 'object' || result === null || !('autoClose' in result)) {
@@ -14,7 +26,30 @@ export function readWorkerAutoCloseReply(result: unknown): WorkerAutoCloseState 
     return { kept: true }
   }
   const closesAt = 'closesAt' in state ? state.closesAt : null
-  return { kept: false, closesAt: typeof closesAt === 'string' ? closesAt : null }
+  const boundTo = 'boundTo' in state ? readBoundWorker(state.boundTo) : null
+  return {
+    kept: false,
+    closesAt: typeof closesAt === 'string' ? closesAt : null,
+    ...(boundTo ? { boundTo } : {})
+  }
+}
+
+function readBoundWorker(value: unknown): BoundWorker | null {
+  if (typeof value !== 'object' || value === null || !('paneKey' in value)) {
+    return null
+  }
+  const { paneKey } = value
+  const worktreeId = 'worktreeId' in value ? value.worktreeId : null
+  const name = 'name' in value ? value.name : null
+  const agent = 'agent' in value ? value.agent : null
+  return typeof paneKey === 'string'
+    ? {
+        paneKey,
+        worktreeId: typeof worktreeId === 'string' ? worktreeId : null,
+        name: typeof name === 'string' ? name : null,
+        agent: typeof agent === 'string' ? agent : null
+      }
+    : null
 }
 
 /** m:ss until the host's deadline, never below 0:00. */

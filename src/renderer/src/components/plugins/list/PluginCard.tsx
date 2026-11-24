@@ -1,6 +1,7 @@
 import { BadgeCheck, Check } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
+import { pluginDisplayPublisher } from '../presentation/plugin-author'
 import { pluginDisplayText } from '../../../../../shared/plugins/plugin-display-text'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
@@ -46,6 +47,7 @@ export function PluginCard({
 }: PluginCardProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
+  const publisher = pluginDisplayPublisher(entry, t)
   const installCount = usePluginInstallCount(entry)
   const cover =
     servedPluginHostImages(entry.installed?.images)?.cover ??
@@ -92,7 +94,7 @@ export function PluginCard({
             <button
               type="button"
               data-plugin-row-name=""
-              aria-label={[entry.name, entry.publisher, statusText].filter(Boolean).join(', ')}
+              aria-label={[entry.name, publisher, statusText].filter(Boolean).join(', ')}
               className="text-left outline-none after:absolute after:inset-0 after:content-['']"
               onClick={onOpen}
             >
@@ -108,15 +110,15 @@ export function PluginCard({
           ) : null}
         </div>
         <p className="h-4 truncate text-xs text-muted-foreground">
-          {entry.publisher}
+          {publisher}
           {metaDetail ? (
             <span data-plugin-meta-detail="">
-              {entry.publisher ? ' · ' : ''}
+              {publisher ? ' · ' : ''}
               {metaDetail}
             </span>
           ) : installCount !== null ? (
             <span data-plugin-install-count="">
-              {entry.publisher ? ' · ' : ''}
+              {publisher ? ' · ' : ''}
               {pluginInstallCountLabel(installCount, t, intlLocale)}
             </span>
           ) : null}

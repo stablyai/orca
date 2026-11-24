@@ -83,6 +83,21 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.clipboard.write'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
+  // A group room: Back and its item hops navigate, Copy writes the clipboard, and + picks photos (all three media verbs, as a chat's).
+  {
+    pathname: '/h/[hostId]/group/[groupId]',
+    grants: [
+      'navigate',
+      'storage',
+      'externalLink',
+      'haptics',
+      'native.clipboard.write',
+      'native.media.pick',
+      'native.media.read',
+      'native.media.release'
+    ],
+    optionalGrants: ['externalNavigation', 'native.image.act', DEVICE_STORE_GRANT]
+  },
   // Session alone needs media/audio/screencast grants: native clipboard read/write, navigation/storage/external links/haptics come from actual closure callers.
   // Media pick/read/release are all-or-none; partial set can start handle upload it cannot finish. Audio start/read/stop likewise must permit closing mic; device owns wake lock.
   // screencastBinary lets the pane request wantsBinary from shells that encode frames.
@@ -104,7 +119,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.read',
       'native.audio.stop'
     ],
-    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks.
+    // Optional media.name falls back to the file type; terminalKeyRail falls back to the page's row; the image viewer drops its actions without native.image.act; dictation uses the computer without native.speech.act; without native.a11y.announce only the page's live region speaks; without native.link.open a link counts as opened once the shell takes it.
     optionalGrants: [
       'externalNavigation',
       'native.media.name',
@@ -112,6 +127,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.image.act',
       'native.speech.act',
       'native.a11y.announce',
+      'native.link.open',
       'terminalKeyRail',
       DEVICE_STORE_GRANT
     ]

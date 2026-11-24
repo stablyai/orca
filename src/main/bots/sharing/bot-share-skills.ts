@@ -3,7 +3,8 @@
 // is checked on its own before precedence applies, so a copy reached through another folder's link
 // never hides the real one.
 import { createHash } from 'node:crypto'
-import { realpath } from 'node:fs/promises'
+import { lstat, realpath } from 'node:fs/promises'
+import type { Stats } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import type { Bot } from '../../../shared/bot-types'
 import {
@@ -39,6 +40,10 @@ export type BotShareSkill = {
 /** A project the bot links for skills, on this host. */
 export type BotShareSkillProject = { name: string; path: string }
 
+/** A linked project with the real folder its path resolved to (null: it could not be resolved),
+ *  resolved once so the listing is read from, and kept under, the same folder. */
+export type BotShareSkillRoot = BotShareSkillProject & { real: string | null }
+
 type Source = {
   skills: ScannedSkill[]
   /** The folder every skill must really be in, since a link out of the home is the owner's, not the
@@ -55,9 +60,10 @@ type Source = {
 async function homeSources(
   bot: Pick<Bot, 'agent'>,
   home: Home,
-  leftOut: BotShareLeftOut[]
+  leftOut: BotShareLeftOut[],
+  signal?: AbortSignal
 ): Promise<Source[]> {
-  const own = await readBotOwnSkills(home.path)
+  const own = await readBotOwnSkills(home.path, signal)
   const agentFirst: BotAgentSkillsFolder[] =
     bot.agent === 'claude' ? ['claude', 'agents'] : ['agents', 'claude']
   const folders: { folder: string; skills: ScannedSkill[] }[] = [
@@ -83,34 +89,65 @@ async function homeSources(
   return sources
 }
 
-/** Linked projects' skills, scanned the way a chat's launch and Settings scan them. */
-async function projectSources(projects: readonly BotShareSkillProject[]): Promise<Source[]> {
-  const sources = await Promise.all(
-    projects.map(async (project): Promise<Source | null> => {
-      const scanned = await scanSkillProject(project.path)
-      const real = await realpath(project.path).catch(() => null)
-      if (!scanned || real === null) {
-        return null
+/** Linked projects' skills, scanned the way a chat's launch and Settings scan them, and `moved`: run
+ *  once the listing is complete, true when a project's folder went missing, or was put back or
+ *  swapped for a link, since it was first checked. */
+async function projectSources(
+  projects: readonly BotShareSkillRoot[],
+  signal?: AbortSignal
+): Promise<{ sources: Source[]; moved: () => Promise<boolean> }> {
+  const scans = await Promise.all(
+    projects.map(async ({ real, ...project }) => {
+      // The folder the path resolved to, not the path again: a link moved since lists nothing new.
+      if (real === null) {
+        return { source: null, moved: async () => false }
       }
-      return {
+      const before = await lstat(real).catch(() => null)
+      const scanned = before?.isDirectory() ? await scanSkillProject(real, signal) : null
+      const moved = async () => {
+        const after = await lstat(real).catch(() => null)
+        return (
+          !before?.isDirectory() ||
+          !after ||
+          !sameEntry(before, after) ||
+          (await realpath(real).catch(() => null)) !== real
+        )
+      }
+      const source: Source | null = scanned && {
         skills: scanned.skills,
         root: null,
         label: () => project.name,
         homePath: () => null,
         optInFrom: (folder) => (within(real, folder) ? undefined : project.name)
       }
+      return { source, moved }
     })
   )
-  return sources.filter((source): source is Source => source !== null)
+  return {
+    sources: scans.flatMap(({ source }) => (source ? [source] : [])),
+    moved: async () => (await Promise.all(scans.map((scan) => scan.moved()))).some(Boolean)
+  }
 }
 
+/** The same folder, unchanged at its own level: a folder moved away and back, or made again, has a
+ *  new change time or inode. */
+function sameEntry(left: Stats, right: Stats): boolean {
+  return left.dev === right.dev && left.ino === right.ino && left.ctimeMs === right.ctimeMs
+}
+
+/** The skills a dialog lists; `moved` when a linked project's folder moved while it was read, so
+ *  that listing is not one to keep. */
 export async function readShareSkills(
   bot: Pick<Bot, 'agent'>,
   home: Home,
   leftOut: BotShareLeftOut[],
-  projects: readonly BotShareSkillProject[] = []
-): Promise<BotShareSkill[]> {
-  const sources = [...(await homeSources(bot, home, leftOut)), ...(await projectSources(projects))]
+  projects: readonly BotShareSkillRoot[] = [],
+  /** Aborted when a newer read replaces this one: it stops walking and rejects. */
+  signal?: AbortSignal
+): Promise<{ skills: BotShareSkill[]; moved: boolean }> {
+  const fromHome = await homeSources(bot, home, leftOut, signal)
+  const projectsFound = await projectSources(projects, signal)
+  const sources = [...fromHome, ...projectsFound.sources]
   const valid: { skill: ScannedSkill; source: Source }[] = []
   const refused: { folder: string; entry: BotShareLeftOut }[] = []
   for (const source of sources) {
@@ -161,9 +198,11 @@ export async function readShareSkills(
       leftOut.push(entry)
     }
   }
-  return withinLimit(await packable(skills, leftOut), leftOut).sort((left, right) =>
+  const listed = withinLimit(await packable(skills, leftOut, signal), leftOut).sort((left, right) =>
     left.name.localeCompare(right.name, 'en-US')
   )
+  // After the shape checks too: a folder gone while they ran leaves its skills out of this listing.
+  return { skills: listed, moved: await projectsFound.moved() }
 }
 
 function optInField(
@@ -189,15 +228,18 @@ function withinLimit(skills: BotShareSkill[], leftOut: BotShareLeftOut[]): BotSh
 const SHAPE_CHECKS_AT_ONCE = 4
 
 /** The skills the packager would take: one it refuses (a link or a special file inside, too big) is
- *  left out with why, so it never stops the others from going out with the default picks. This runs
- *  on every pick change, so it checks shape only: no asset is read or hashed (discovery still reads
- *  each SKILL.md). Picked skills are read when packed, where one that can't be read is left out too. */
+ *  left out with why, so it never stops the others from going out with the default picks. It checks
+ *  shape only: no asset is read or hashed (discovery still reads each SKILL.md). Picked skills are
+ *  read when packed, where one that can't be read is left out too. */
 async function packable(
   skills: BotShareSkill[],
-  leftOut: BotShareLeftOut[]
+  leftOut: BotShareLeftOut[],
+  signal?: AbortSignal
 ): Promise<BotShareSkill[]> {
   const refusals: (ReturnType<typeof unpackableWhy> | null)[] = []
   for (let start = 0; start < skills.length; start += SHAPE_CHECKS_AT_ONCE) {
+    // A replaced read stops here, so a walk cut short is never taken for a refusal.
+    signal?.throwIfAborted()
     const batch = skills.slice(start, start + SHAPE_CHECKS_AT_ONCE)
     refusals.push(
       ...(await Promise.all(
@@ -205,7 +247,8 @@ async function packable(
           checkSkillPackageShape(
             skill.directory,
             SKILL_PACKAGE_OBSERVATION_LIMITS,
-            isNestedSkill
+            isNestedSkill,
+            signal
           ).then(
             () => null,
             (error: unknown) => unpackableWhy(error)
@@ -214,6 +257,7 @@ async function packable(
       ))
     )
   }
+  signal?.throwIfAborted()
   return skills.filter((skill, index) => {
     const why = refusals[index]
     if (why !== null) {
@@ -236,6 +280,11 @@ export function unpackableWhy(error: unknown): 'link' | 'size' | 'unreadable' {
  *  discovery admits a skill by) is another skill, listed or left out on its own, so it is skipped
  *  unread and never rides along in this one's preview or archive. Any other SKILL.md is a document. */
 export async function ownSkillFiles(directory: string): Promise<ObservedSkillPackage['files']> {
+  // `directory` is the real folder the listing checked, which may be older than this read: one no
+  // longer at its own real path (a link put in place of it or a folder above it) is not that folder.
+  if ((await realpath(directory)) !== directory) {
+    throw new Error('skill-package-link')
+  }
   const { files } = await observeSkillPackage(
     directory,
     SKILL_PACKAGE_OBSERVATION_LIMITS,

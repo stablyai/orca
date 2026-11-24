@@ -207,17 +207,26 @@ registerWorkspaceHttpLinkBrowserOpener(async (request) => {
       outcome.status === 'failed' ||
       (outcome.status === 'refused' && !request.linkContext.linkIntent?.targetGroupId)
     ) {
-      const { intentPresentation } =
+      const { intentPresentation, openFailure } =
         await import('@/lib/browser/workspace/workspace-browser-tab-presentation')
-      throw new Error(intentPresentation(request.intent, request.url).error)
+      throw openFailure(
+        intentPresentation(request.intent, request.url).error,
+        `link open ${outcome.status}`,
+        undefined,
+        outcome.status === 'refused'
+          ? { kind: 'link-blocked' }
+          : outcome.status === 'failed' && outcome.cause === 'client-create-rejected'
+            ? { kind: 'host-error', stage: 'create', code: 'client_create_rejected' }
+            : null
+      )
     }
     if (
       request.linkContext.linkIntent?.targetGroupId &&
       (outcome.status === 'refused' || outcome.status === 'unsupported')
     ) {
-      const { showOpenInGroupRefusedToast } =
+      const { showLinkOpenInGroupRefusedToast } =
         await import('@/components/terminal-pane/links/files/terminal-file-open-in-group-toast')
-      showOpenInGroupRefusedToast(request.url)
+      showLinkOpenInGroupRefusedToast()
     }
     return outcome.status === 'opened' ? outcome.result.browserPageId : null
   }

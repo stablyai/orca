@@ -8,6 +8,7 @@ import {
   type BotItemStatus
 } from '../../shared/bots/bot-items'
 import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
 
@@ -48,6 +49,12 @@ export type BotItemSetInput = {
   ask?: BotItemAsk
   /** On the comment `comment` or `ask` writes; admitted and claimed on the host first. */
   images?: readonly BotItemCommentImage[]
+  /** Set by the host, never a client: the chat whose conversation's turn asked `ask`, so the
+   *  owner's answer goes back to that conversation. */
+  askedInConversation?: string
+  /** Set by the host, never a client: whom the chat that closes the item acts for, kept on the
+   *  close so the journal says whose work it was. */
+  closedFor?: readonly BotRequestAsker[]
 }
 
 /** What a write did. */
@@ -79,6 +86,22 @@ export function assertBotItemText(
       `${field} is ${value.length} characters; the limit is ${limit}. Put the details in a file and link it.`
     )
   }
+}
+
+/** What a Waiting item waits on: one line, refused when missing or longer, in the caller's words (an
+ *  agent's name its CLI flags; the owner's don't). */
+export function botItemWaitText(
+  note: string | undefined,
+  words: { missing: string; tooLong: string }
+): string {
+  const text = note?.trim() ?? ''
+  if (!text) {
+    throw new BotItemError('invalid_argument', words.missing)
+  }
+  if (text.length > BOT_ITEM_LIMITS.wait || /[\r\n]/.test(text)) {
+    throw new BotItemError('invalid_argument', words.tooLong)
+  }
+  return text
 }
 
 /** A status move's comment data. With an ask, it holds the question lines and their quick replies, and

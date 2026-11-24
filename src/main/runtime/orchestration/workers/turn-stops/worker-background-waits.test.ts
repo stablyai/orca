@@ -117,13 +117,13 @@ describe('a worker waiting on its own background task', () => {
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
-    advanceTo(TURN_END + 59 * MINUTE)
+    advanceTo(TURN_END + 19 * MINUTE)
     expect(notices()).toEqual([])
 
-    advanceTo(TURN_END + 60 * MINUTE)
+    advanceTo(TURN_END + 20 * MINUTE)
     expect(notices()).toHaveLength(1)
     expect(notices()[0]).toContain(
-      `Worker ${HANDLE} has been waiting on its background task \`./rig/soak.sh 3\` for 60 min`
+      `Worker ${HANDLE} has been waiting on its background task \`./rig/soak.sh 3\` for 20 min`
     )
 
     // The same wait seen again, live or after a restart that remints the process id, is the same fact.
@@ -181,8 +181,8 @@ describe('a worker waiting on its own background task', () => {
     const orca = startOrca()
     row = heldRow(TURN_END)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
-    advanceTo(TURN_END + 30 * MINUTE)
-    row = leadWorkingRow(TURN_END + 30 * MINUTE)
+    advanceTo(TURN_END + 15 * MINUTE)
+    row = leadWorkingRow(TURN_END + 15 * MINUTE)
     orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
     advanceTo(TURN_END + 90 * MINUTE)
     expect(notices()).toEqual([])
@@ -222,11 +222,79 @@ describe('a worker waiting on its own background task', () => {
       phase: 'working',
       at: 0
     })
-    advanceTo(TURN_END + 20 * MINUTE)
+    advanceTo(TURN_END + 10 * MINUTE)
     // The old process's timer died with it.
     timers = []
     startOrca().arm(db, dispatchId)
-    advanceTo(TURN_END + 60 * MINUTE)
+    advanceTo(TURN_END + 20 * MINUTE)
     expect(notices()).toHaveLength(1)
+  })
+  it('reports a lead turn that failed under its background task once, across a restart', () => {
+    const errors = () =>
+      db.db
+        .prepare(`SELECT body FROM messages
+            WHERE subject = 'Worker stopped on an error without reporting' ORDER BY rowid`)
+        .all()
+        .map((message) => String(message.body))
+    const orca = startOrca()
+    row = heldRow(TURN_END)
+    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 0 })
+    const failedAt = TURN_END + 10 * MINUTE
+    // The task's notification woke the lead and its request failed; another task keeps the pane working.
+    row = {
+      ...heldRow(failedAt),
+      lastAssistantMessage: 'API Error: 503 All accounts are temporarily unavailable.',
+      mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: failedAt }
+    }
+    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 1 })
+    expect(errors()).toHaveLength(1)
+    expect(errors()[0]).toContain(`Worker ${HANDLE} ended its turn on an error without sending`)
+    expect(errors()[0]).toContain('API Error: 503')
+
+    orca.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 2 })
+    // A restart remints the process id and its sweep reads the same restored row.
+    const restarted = startOrca('incarnation_after_restart')
+    restarted.observe({
+      kind: 'seeded',
+      paneKey: PANE,
+      workspace: { worktreeId: 'repo::/w', sshHostId: null },
+      phase: 'working',
+      at: 3
+    })
+    expect(restarted.reportFailedLeadTurn(PANE)).toBe(true)
+    // A prompt in between, then the all-clear of the same failed turn, report it under the same fence.
+    const target = { kind: 'local' as const, dispatch: db.getDispatchContextById(dispatchId)! }
+    const reportDeps = { getDb: () => db, isWaitingForMail: () => false, notify: () => {} }
+    observeWorker(
+      db,
+      target,
+      {
+        presence: 'at-rest',
+        fence: 'prompt:1',
+        legacyStopKey: 'prompt:1',
+        rest: { from: HANDLE, reason: 'needs-input', lastOutput: undefined }
+      },
+      reportDeps
+    )
+    observeWorker(
+      db,
+      target,
+      {
+        presence: 'at-rest',
+        fence: `failed-lead:${failedAt}`,
+        legacyStopKey: 'all-clear',
+        rest: { from: HANDLE, reason: 'errored', lastOutput: 'API Error: 503' }
+      },
+      reportDeps
+    )
+    // The failure replaced the wait, so no background-wait notice follows it either.
+    advanceTo(TURN_END + 120 * MINUTE)
+    expect(errors()).toHaveLength(1)
+    expect(notices()).toEqual([])
+
+    // The lead's next turn, still under the live task, is work again.
+    row = leadWorkingRow(TURN_END + 121 * MINUTE)
+    restarted.observe({ kind: 'observed', paneKey: PANE, workspace: null, phase: 'working', at: 4 })
+    expect(readWorkerPresence(db, dispatchId)?.presence).toBe('working')
   })
 })

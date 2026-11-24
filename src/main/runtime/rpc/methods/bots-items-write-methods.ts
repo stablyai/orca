@@ -23,6 +23,8 @@ import type { BotItemLinkInput } from '../../../bots/bot-items-input'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { Bot } from '../../../../shared/bot-types'
 import { commentAsMaker } from './bots-items-maker-comment'
+import { runtimeChatHost } from '../../../external-conversations/external-conversation-chat'
+import { closingChatActsFor } from './bots-items-close-acts-for'
 import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-write-support'
 
 const ADD = defineMethod({
@@ -59,12 +61,37 @@ const SET = defineMethod({
       comment = attached.text
     }
     const images = attached.images.length > 0 ? attached.images : undefined
-    const changes = { title, description, doneMeans, status, note, reason, comment, ask, images }
+    // Asked by the item's own thread chat while its thread's turn ran, the owner's answer, mailed to
+    // that chat, goes back to that thread. Home Chat, which the bot's direct messages share with its
+    // owner in Orca, keeps it in Orca, as does an ask about another chat's item.
+    const asked =
+      ask &&
+      writer.source.kind === 'thread' &&
+      writer.actor.chatId === item.chatId &&
+      context.runtime
+        .getExternalConversationSeam()
+        ?.conversationTurn(runtimeChatHost(context.runtime), writer.sessionId)
+        ? { askedInConversation: writer.sessionId }
+        : {}
+    const closing = status === 'done' || status === 'canceled'
+    const changes = {
+      ...(closing ? { closedFor: await closingChatActsFor(context, writer) } : {}),
+      title,
+      description,
+      doneMeans,
+      status,
+      note,
+      reason,
+      comment,
+      ask,
+      images,
+      ...asked
+    }
     const defined = Object.fromEntries(
       Object.entries(changes).filter(([, value]) => value !== undefined)
     )
     const outcome = await store.set(item.uid, defined, writer.actor)
-    const result = await writeResult(context.runtime, outcome, writer)
+    const result = await writeResult(context, outcome, writer)
     // A tip back to the bot when its ask may be hard to read; the ask is already posted as written.
     const advice =
       status === 'needs_you' && result.eventId !== null ? botItemAskAdvice({ comment, ask }) : null
@@ -88,7 +115,7 @@ const COMMENT = defineMethod({
       item.ownerBotId !== writer.bot.id && item.madeBy?.botId === writer.bot.id
         ? await commentAsMaker(context, writer, item, text, images)
         : await store.comment(item.uid, text, writer.actor, images)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -100,8 +127,9 @@ const DONE = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const outcome = await store.close(item.uid, 'done', params.note, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    const actsFor = await closingChatActsFor(context, writer)
+    const outcome = await store.close(item.uid, 'done', params.note, writer.actor, actsFor)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -113,8 +141,9 @@ const CANCEL = defineMethod({
     const writer = writerOf(params, context)
     const store = context.runtime.botItems.store()
     const item = await resolveItem(store, params.item)
-    const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor)
-    return writeResult(context.runtime, outcome, writer)
+    const actsFor = await closingChatActsFor(context, writer)
+    const outcome = await store.close(item.uid, 'canceled', params.reason, writer.actor, actsFor)
+    return writeResult(context, outcome, writer)
   }
 })
 
@@ -134,10 +163,13 @@ const LINK = defineMethod({
         : startersOf(db, requested, context.runtime.bots.list())
     // Every worker named is checked, one already linked too, so a mixed call fails whole.
     assertBotItemAttach(item, writer.actor, requested, (id) => startedBy[id] ?? null)
+    if (params.check) {
+      return null
+    }
     // A step of a follow-up chain the item already links is that worker again: no second link.
     const links = linksOutsideLinkedChains(db, await store.links(item.uid), requested)
     const outcome = await store.link(item.uid, links, writer.actor, startedBy)
-    return writeResult(context.runtime, outcome, writer)
+    return writeResult(context, outcome, writer)
   }
 })
 
