@@ -86,6 +86,10 @@ export const BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY = 'bots.avatar-revision.v3'
 // phone keeps the read-only row.
 export const BOTS_SLACK_POST_AS_RUNTIME_CAPABILITY = 'bots.slack-post-as.v1' as const
 
+// Host lets a phone run Google's sign-in (google.signIn.start/wait/cancel), its page in Orca's browser there;
+// an older host refuses those calls, so the phone hands that step to the computer.
+export const BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY = 'bots.google-phone-sign-in.v1' as const
+
 export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_GROUPS_RUNTIME_CAPABILITY,
   BOTS_GROUP_ATTACHMENTS_RUNTIME_CAPABILITY,
@@ -109,5 +113,6 @@ export const BOT_RUNTIME_CAPABILITIES = [
   BOTS_HOME_PIN_RUNTIME_CAPABILITY,
   BOTS_ITEM_WAITING_CAPABILITY,
   BOTS_ITEM_CANCEL_NO_REASON_CAPABILITY,
-  BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY
+  BOTS_AVATAR_REVISION_RUNTIME_CAPABILITY,
+  BOTS_GOOGLE_PHONE_SIGN_IN_RUNTIME_CAPABILITY
 ] as const
