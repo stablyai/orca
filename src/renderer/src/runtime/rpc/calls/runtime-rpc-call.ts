@@ -67,6 +67,7 @@ export async function callRuntimeRpcResponse<TResult>(
           ensureRuntimeEnvironmentCompatible(target.environmentId, {
             ...options,
             expectedEnvironmentPairingRevision,
+            background,
             wake
           }),
           options.signal

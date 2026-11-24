@@ -28,6 +28,8 @@ export async function ensureRuntimeEnvironmentCompatible(
     expectedEnvironmentPairingRevision?: number
     /** The caller's own wake intent: the probe is what reaches an idle-stopped WSL host first. */
     wake?: boolean
+    /** The caller is a poll: its probe must not count as use of an idle host either (#46567). */
+    background?: boolean
   } = {}
 ): Promise<RuntimeStatus | null> {
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
@@ -50,6 +52,7 @@ export async function ensureRuntimeEnvironmentCompatible(
       params: undefined,
       timeoutMs: options.timeoutMs,
       expectedEnvironmentPairingRevision: options.expectedEnvironmentPairingRevision,
+      ...(options.background ? { background: true } : {}),
       wake: options.wake
     })
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(
