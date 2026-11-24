@@ -124,13 +124,14 @@ export function structuredAgentSessionStatusSummary({
 /** Marks chats whose pinned account runs a host program, which need no managed install. */
 export function structuredSummaryHostProgram(
   record: Pick<AgentSessionConversationView, 'provider' | 'accountHome'> | null
-): Pick<AgentSessionStatusSummary, 'hostProgram'> {
-  return record &&
-    structuredAgentRuntimeMetadata(record.provider)?.definition.runsHostProgram?.(
-      record.accountHome
-    )
-    ? { hostProgram: true }
-    : {}
+): Pick<AgentSessionStatusSummary, 'hostProgram' | 'ownLogin'> {
+  const definition = record && structuredAgentRuntimeMetadata(record.provider)?.definition
+  if (!record || !definition?.runsHostProgram?.(record.accountHome)) {
+    return {}
+  }
+  return definition.usesOwnLogin?.(record.accountHome)
+    ? { hostProgram: true, ownLogin: true }
+    : { hostProgram: true }
 }
 
 type StructuredSummaryNaming = Pick<

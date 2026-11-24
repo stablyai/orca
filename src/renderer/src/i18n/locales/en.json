@@ -22832,7 +22832,8 @@
         "yourAgyVersion": "Your agy · v{{version}}",
         "orcasAgy": "Orca's agy",
         "orcasAgyVersion": "Orca's agy · v{{version}}",
-        "runsOn": "Runs on: {{program}}"
+        "runsOn": "Runs on: {{program}}",
+        "keepsOwnLogin": "This chat keeps agy's own Google login. New chats use {{method}}."
       },
       "pairedServerAsk": {
         "always": "Always allow {{server}}",

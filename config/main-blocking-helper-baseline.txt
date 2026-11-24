@@ -66,7 +66,6 @@
 1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-chat-sign-in.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
 3 src/main/antigravity/native-account-launch.ts

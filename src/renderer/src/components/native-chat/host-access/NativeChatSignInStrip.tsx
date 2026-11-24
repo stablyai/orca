@@ -58,9 +58,10 @@ export const nativeChatSignInTitle = (agentLabel: string, t: Translate = transla
 function failedLine(view: AntigravityChatSignInView, t: Translate): string {
   const text = view.error || view.flow?.error || ''
   const reason = antigravityAuthFailureReason({ text })
+  // The host's sentence says what to do (a code Google refused, a missing install).
   return reason === 'noSubscription' || reason === 'ineligible'
     ? antigravityAuthFailureLead(reason, t)
-    : t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
+    : text || t('accounts.antigravity.chatFailed', 'Sign-in failed. Try again.')
 }
 
 /** The install strip's sibling once agy is installed: the detected ways to sign in first, then

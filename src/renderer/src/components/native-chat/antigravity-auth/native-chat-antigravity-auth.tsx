@@ -52,6 +52,8 @@ export type NativeChatAntigravityAuthTarget = {
   agy: 'orcas' | 'yours' | null
   /** The version of Orca's installed agy, when the host has reported one. */
   managedVersion: string | null
+  /** This chat runs on agy's own home and Google login, whatever method new chats use. */
+  ownLogin: boolean
 }
 
 /** How an Antigravity chat signs in, and one-click ways to change it. */
@@ -134,6 +136,7 @@ export function NativeChatAntigravityAuthProvider({
   const hostProp = target?.host ?? null
   const agy = target?.agy ?? null
   const managedVersion = target?.managedVersion ?? null
+  const ownLogin = target?.ownLogin === true
   const t = useTranslate()
   // Callers rebuild the target each render; one per host keeps the context value steady.
   const shown = hostProp !== null
@@ -222,6 +225,7 @@ export function NativeChatAntigravityAuthProvider({
       host,
       agy,
       managedVersion,
+      ownLogin,
       detection,
       keyAndAdc,
       switching,
@@ -237,7 +241,7 @@ export function NativeChatAntigravityAuthProvider({
       openSettings: () => openAntigravitySignInSettings(host),
       refresh: () => void refreshAntigravityChatAuthDetection(host, { force: true })
     }
-  }, [host, agy, managedVersion, detection, keyAndAdc, switching, decide])
+  }, [host, agy, managedVersion, ownLogin, detection, keyAndAdc, switching, decide])
 
   const confirmTitle = t(
     'components.native-chat.antigravityAuth.confirmTitle',

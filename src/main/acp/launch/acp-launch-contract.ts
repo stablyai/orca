@@ -164,6 +164,8 @@ export type AcpHostBackend = {
   spec: AcpLaunchSpec
   /** Whether chats pinned to `home` run the host program (any of its homes). */
   pins(home: AgentSessionAccountHome): boolean
+  /** Whether chats pinned to `home` run on the program's own login, not the saved method. */
+  ownLogin?(home: AgentSessionAccountHome): boolean
   /** The spec a pinned home launches, when the host program runs differently per home (its own
    *  home, or one Orca owns); absent or null launches `spec`. */
   specFor?(home: AgentSessionAccountHome): AcpLaunchSpec | null

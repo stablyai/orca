@@ -32,6 +32,7 @@ const auth = (
   host: { kind: 'local' },
   agy,
   managedVersion: agy === 'orcas' ? '1.5.16' : null,
+  ownLogin: false,
   detection,
   keyAndAdc: true,
   switching: null,

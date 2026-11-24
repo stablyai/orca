@@ -15,7 +15,10 @@ import {
   useAntigravityChatSignInStrip,
   type NativeChatSignInStripState
 } from './NativeChatSignInStrip'
-import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
+import {
+  useStructuredAgentSessionHostProgram,
+  useStructuredAgentSessionOwnLogin
+} from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
@@ -50,6 +53,7 @@ export function useNativeChatInstallSlot(
 } {
   const t = useTranslate()
   const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
+  const ownLogin = useStructuredAgentSessionOwnLogin(props.sessionId, props.target)
   // Chats on the host program follow it too: Orca's agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
   const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
@@ -68,14 +72,16 @@ export function useNativeChatInstallSlot(
     signIn,
     sendBlockedReason: unavailableHint ?? installSlotSendBlockedReason(slot, agentLabel, t),
     unavailableHint,
-    antigravityAuth: antigravity ? { host: props.target, ...antigravityAgy(observation) } : null
+    antigravityAuth: antigravity
+      ? { host: props.target, ownLogin, ...antigravityAgy(observation) }
+      : null
   }
 }
 
 /** Which agy runs Antigravity chats on the host, once its install status says. */
 function antigravityAgy(
   observation: ManagedRuntimeInstallObservation
-): Omit<NativeChatAntigravityAuthTarget, 'host'> {
+): Pick<NativeChatAntigravityAuthTarget, 'agy' | 'managedVersion'> {
   const state =
     observation.kind === 'active' && observation.snapshot.kind === 'known'
       ? observation.snapshot.state

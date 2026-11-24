@@ -40,8 +40,10 @@ export function NativeChatAntigravityAuthChip({
     return null
   }
   const items = antigravityChatAuthMenuItems(auth.detection, auth.keyAndAdc)
-  const label = antigravityChatAuthMethodLabel(method, t) ?? ''
-  const project = method === 'agent-platform' ? auth.detection?.adc.project : null
+  // A chat on agy's own home keeps its Google login; the saved method applies to new chats.
+  const chatMethod = auth.ownLogin ? 'oauth-personal' : method
+  const label = antigravityChatAuthMethodLabel(chatMethod, t) ?? ''
+  const project = chatMethod === 'agent-platform' ? auth.detection?.adc.project : null
   const shown = project ? `${label} · ${project}` : label
   // The host's current version; a chat started before an upgrade runs the older one until it restarts.
   const program = auth.agy
@@ -51,7 +53,8 @@ export function NativeChatAntigravityAuthChip({
         t
       )
     : null
-  const Icon = ICONS[method]
+  const Icon = ICONS[chatMethod]
+  const newChatsDiffer = chatMethod !== method
   return (
     <DropdownMenu onOpenChange={(open) => open && auth.refresh()}>
       <DropdownMenuTrigger asChild>
@@ -115,6 +118,15 @@ export function NativeChatAntigravityAuthChip({
           ))}
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        {newChatsDiffer ? (
+          <p className="px-2 py-1.5 text-2xs text-muted-foreground">
+            {t(
+              'components.native-chat.antigravityAuth.keepsOwnLogin',
+              "This chat keeps agy's own Google login. New chats use {{method}}.",
+              { method: antigravityChatAuthMethodLabel(method, t) ?? method }
+            )}
+          </p>
+        ) : null}
         {program ? (
           <p data-antigravity-program="" className="px-2 py-1.5 text-2xs text-muted-foreground">
             {t('components.native-chat.antigravityAuth.runsOn', 'Runs on: {{program}}', {

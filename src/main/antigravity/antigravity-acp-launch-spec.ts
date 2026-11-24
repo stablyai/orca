@@ -180,6 +180,7 @@ export const ANTIGRAVITY_LAUNCH_SPEC = {
   hostBackend: {
     spec: ANTIGRAVITY_AGY_LAUNCH_SPEC,
     pins: (home) => isAntigravityHostAccountHome(home) || antigravityOrcaHomeFolder(home) !== null,
+    ownLogin: isAntigravityHostAccountHome,
     specFor: agyOrcaHomeSpec,
     otherSpecs: [ANTIGRAVITY_AGY_ORCA_HOME_LAUNCH_SPEC],
     // The saved method alone picks the home, so nothing here waits on agy.
