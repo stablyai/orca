@@ -72,6 +72,12 @@ describe('pluginEngineFloor for real panel icons', () => {
   const floor = (value: unknown) =>
     pluginEngineFloor(pluginPanelContributionSchema, { icon: value })
 
+  it('sets the path icon floor past the published v1.4.273, which reads only named icons', () => {
+    // Why pinned: v1.4.273 is the latest published release and would accept a path icon it draws
+    // as `puzzle`. Re-check this value when the release that carries path icons ships.
+    expect(PLUGIN_PANEL_PATH_ICON_SINCE).toBe('1.4.274')
+  })
+
   it('needs the path icon release only for a path icon', () => {
     expect(floor({ path: 'M4 4h16v16H4z' })).toEqual({
       version: PLUGIN_PANEL_PATH_ICON_SINCE,

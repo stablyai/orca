@@ -96,6 +96,20 @@ it('refuses an integer part near the float limit, even when the exponent scales 
   expect(svgPathDataIssue('M0 0L-3.4028235e38 1')).toMatch(/too large/)
 })
 
+it('counts leading zeros toward the integer digit limit, so padding cannot bypass it', () => {
+  // 39 written digits, all but the last zero: the value is 1, but the spelling is past the limit.
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(38)}1 1`)).toMatch(/too large/)
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(38)}1e-10 1`)).toMatch(/too large/)
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(39)}1e0 1`)).toMatch(/too large/)
+  expect(svgPathDataIssue(`M0 0L-${'0'.repeat(38)}1 1`)).toMatch(/too large/)
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(60)}.5 1`)).toMatch(/too large/)
+  // 38 written digits, zeros included, is still within the limit.
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(37)}1 1`)).toBeNull()
+  expect(svgPathDataIssue(`M0 0L${'0'.repeat(30)}.5 1`)).toBeNull()
+  // A padded spelling in a later segment is refused too, and names where it starts.
+  expect(svgPathDataIssue(`M0 0L1 1L${'0'.repeat(38)}1 1`)).toMatch(/position 10 /)
+})
+
 it('keeps the rest of a path whose numbers are within range', () => {
   // A neighboring spelling of the same magnitude with a 38-digit integer part.
   expect(svgPathDataIssue('M2 2H34028235000000000000000000000000000000e-37M8 8h8')).toBeNull()

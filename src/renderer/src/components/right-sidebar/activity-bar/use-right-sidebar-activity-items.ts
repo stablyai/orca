@@ -22,6 +22,8 @@ import {
   type PluginPanelsFetchStatus
 } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
+import { getActiveChecksStatus } from '../checks-panel/status/active-checks-status'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { ActivityBarItem } from './activity-bar-buttons'
@@ -105,6 +107,11 @@ export function useRightSidebarActivityItems({
     () => collectInstalledPluginTabKeys(installedPlugins),
     [installedPlugins]
   )
+  // Why here: the checks tab announces this status, so a plugin tab's name is judged against it.
+  const creatingWorktree = useAppStore(selectWorktreeCreationSurfaceShown)
+  const checksStatus = useAppStore((s) =>
+    s.rightSidebarOpen && !creatingWorktree ? getActiveChecksStatus(s) : null
+  )
 
   // A bot's page labels every tab (labeledTab): Home, Connectors, Chats, Files.
   const activityItems = useMemo<ActivityBarItem[]>(() => {
@@ -159,9 +166,19 @@ export function useRightSidebarActivityItems({
           isBot,
           isGroupHome,
           hasChatWorkers
-        })
+        }),
+        (item) => item.statusIndicator ?? (item.id === 'checks' ? checksStatus : null)
       ),
-    [activityItems, isFolder, isFolderWorkspace, hasRemoteHost, isBot, isGroupHome, hasChatWorkers]
+    [
+      activityItems,
+      isFolder,
+      isFolderWorkspace,
+      hasRemoteHost,
+      isBot,
+      isGroupHome,
+      hasChatWorkers,
+      checksStatus
+    ]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

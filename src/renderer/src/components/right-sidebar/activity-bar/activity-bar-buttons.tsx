@@ -18,9 +18,9 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
 import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
+import { activityItemAriaLabel, activityItemTooltip } from './activity-bar-item-names'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -57,23 +57,6 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   pending: 'bg-amber-500',
   neutral: 'bg-muted-foreground',
   cancelled: 'bg-muted-foreground'
-}
-
-function activityItemAriaLabel(
-  item: ActivityBarItem,
-  status?: CheckStatus | null,
-  t: Translate = translate
-): string {
-  const title = item.accessibleTitle ?? item.title
-  const titled = item.shortcut ? `${title} (${item.shortcut})` : title
-  const base = item.count
-    ? `${titled}, ${item.countLabel ?? t('bots.upNext.newCount', '{{count}} new', { count: item.count })}`
-    : titled
-  return status === 'failure'
-    ? `${base} — ${t('auto.components.right.sidebar.activityBar.error', 'Error')}`
-    : status === 'cancelled'
-      ? `${base} — ${t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
-      : base
 }
 
 function openKeyboardContextMenu(event: React.KeyboardEvent<HTMLElement>): void {
@@ -365,9 +348,7 @@ export function ActivityBarButton({
     <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.shortcut
-          ? `${item.accessibleTitle ?? item.title} (${item.shortcut})`
-          : (item.accessibleTitle ?? item.title)}
+        {activityItemTooltip(item)}
       </TooltipContent>
     </Tooltip>
   )

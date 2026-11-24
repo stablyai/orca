@@ -265,18 +265,27 @@ it('never lets a plugin tab read as exactly a built-in tab name', () => {
   const builtIn: ActivityBarItem = {
     id: 'explorer',
     icon: () => null,
-    title: 'Files',
+    title: 'Explorer',
     shortcut: '⌘⇧E'
   }
+  // The built-in tab announces and shows its shortcut hint, so that is its final name.
   const builtInNames = builtInTabNames([builtIn])
-  expect(builtInNames).toEqual(new Set(['files']))
-  // A plugin named Files with a title of Files would otherwise read as the built-in tab.
-  expect(pluginPanelAccessibleTitle('Files', 'Files', builtInNames)).toBe('Files: Files')
-  expect(pluginPanelAccessibleTitle('Acme', 'FILES', builtInNames)).toBe('Acme: FILES')
-  expect(pluginPanelAccessibleTitle('Files', 'Files', new Set())).toBe('Files')
+  expect(builtInNames).toEqual(new Set(['explorer (⌘⇧e)']))
+  // A plugin named with the shortcut hint and titled the same would read as the built-in tab.
+  expect(pluginPanelAccessibleTitle('Explorer (⌘⇧E)', 'Explorer (⌘⇧E)', builtInNames)).toBe(
+    'Explorer (⌘⇧E): Explorer (⌘⇧E)'
+  )
+  // Without the hint the names differ, so nothing is prefixed.
+  expect(pluginPanelAccessibleTitle('Explorer', 'Explorer', builtInNames)).toBe('Explorer')
+  expect(pluginPanelAccessibleTitle('Acme', 'EXPLORER (⌘⇧E)', builtInNames)).toBe(
+    'Acme: EXPLORER (⌘⇧E)'
+  )
+  expect(pluginPanelAccessibleTitle('Explorer (⌘⇧E)', 'Explorer (⌘⇧E)', new Set())).toBe(
+    'Explorer (⌘⇧E)'
+  )
 
   const [copy] = getPluginPanelActivityItems(
-    [panel('files-app', 'Files', 'main', 'Files')],
+    [panel('explorer-app', 'Explorer (⌘⇧E)', 'main', 'Explorer (⌘⇧E)')],
     {},
     builtInNames
   )
@@ -285,7 +294,68 @@ it('never lets a plugin tab read as exactly a built-in tab name', () => {
   }
   const items = withDistinctPluginPanelNames([builtIn, copy])
   expect(items[0]).toBe(builtIn)
-  expect(spokenNames(items)).toEqual(['Files', 'Files: Files'])
+  expect(spokenNames(items)).toEqual(['Explorer', 'Explorer (⌘⇧E): Explorer (⌘⇧E)'])
+
+  // Even without the built-in names, the collision is caught on the tooltip the tab shows.
+  const [unnamed] = getPluginPanelActivityItems([
+    panel('explorer-app', 'Explorer (⌘⇧E)', 'main', 'Explorer (⌘⇧E)')
+  ])
+  if (!unnamed) {
+    throw new Error('expected a plugin panel item')
+  }
+  expect(spokenNames(withDistinctPluginPanelNames([builtIn, unnamed]))).toEqual([
+    'Explorer',
+    'Explorer (⌘⇧E) (explorer-app)'
+  ])
+})
+
+it('judges collisions on the final announced names, status words included', () => {
+  // A failing "Jobs" tab is announced "Ops: Jobs — Error"; a healthy tab titled "Jobs — Error"
+  // is announced the same, so neither name may stand alone.
+  const items = withDistinctPluginPanelNames(
+    getPluginPanelActivityItems(
+      [panel('ops-a', 'Ops', 'main', 'Jobs'), panel('ops-b', 'Ops', 'main', 'Jobs — Error')],
+      { 'plugin:ops-a/main': true }
+    )
+  )
+  expect(spokenNames(items)).toEqual(['Ops: Jobs (ops-a)', 'Ops: Jobs — Error (ops-b)'])
+  const announced = items.map((item) =>
+    item.statusIndicator === 'failure'
+      ? `${item.accessibleTitle} — Error`
+      : (item.accessibleTitle ?? item.title)
+  )
+  expect(new Set(announced).size).toBe(announced.length)
+  // The tooltips differ too, so a hovered tab never shows another tab's text.
+  expect(new Set(items.map((item) => item.accessibleTitle)).size).toBe(items.length)
+})
+
+it('keeps a status-tagged tab distinct from a built-in tab with the same status word', () => {
+  const checks: ActivityBarItem = { id: 'checks', icon: () => null, title: 'Checks', shortcut: '' }
+  const [plugin] = getPluginPanelActivityItems([
+    panel('acme/checks', 'Checks', 'main', 'Checks — Error')
+  ])
+  if (!plugin) {
+    throw new Error('expected a plugin panel item')
+  }
+  // The checks tab announces its own failure, which the plugin tab's name must not match.
+  const items = withDistinctPluginPanelNames([checks, plugin], (item) =>
+    item.id === 'checks' ? 'failure' : item.statusIndicator
+  )
+  expect(spokenNames(items)).toEqual(['Checks', 'Checks — Error (acme/checks)'])
+})
+
+it('names a plugin by its id when its display name is blank', () => {
+  expect(
+    getPluginPanelActivityItems([panel('acme/db', '   ', 'main', 'Dashboard')])[0]?.accessibleTitle
+  ).toBe('acme/db: Dashboard')
+  expect(
+    getPluginPanelActivityItems([panel('acme/db', '\t', 'main', 'Dashboard')])[0]?.accessibleTitle
+  ).toBe('acme/db: Dashboard')
+  // A padded display name names the plugin by its trimmed text.
+  expect(
+    getPluginPanelActivityItems([panel('acme/db', '  Acme  ', 'main', 'Dashboard')])[0]
+      ?.accessibleTitle
+  ).toBe('Acme: Dashboard')
 })
 
 it('announces a dragged plugin panel by its distinct name', () => {

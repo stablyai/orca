@@ -93,8 +93,9 @@ function numberIssue(literal: string, at: number): string | null {
     return `has a number at position ${at + 1} that ends with a dot; write a digit after it or drop the dot`
   }
   const exponent = POSITIVE_EXPONENT.exec(literal)?.[1]
-  // Why strip zeros: leading zeros are not digits of the magnitude.
-  const integerDigits = (INTEGER_PART.exec(literal)?.[1] ?? '').replace(/^0+/, '')
+  // Why count leading zeros: the limit bounds the spelling, so a zero prefix cannot pad a written
+  // integer part past it. A spelling refused for its zeros alone is the same rule, not a new one.
+  const integerDigits = INTEGER_PART.exec(literal)?.[1] ?? ''
   // Why `>=` and not a rounded check: a value just above FLT_MAX rounds back to FLT_MAX, so
   // Math.fround would accept what Chromium cuts short.
   if (
