@@ -181,7 +181,12 @@ export function createBrowserCookieImportActions(
       }
     },
 
-    clearBrowserProfileCookies: async ({ hostId, profileId, pairingRevision }) => {
+    clearBrowserProfileCookies: async ({
+      hostId,
+      profileId,
+      pairingRevision,
+      serverClearsAnyProfile
+    }) => {
       const parsedHostId = parseExecutionHostId(hostId)
       let ok = false
       try {
@@ -196,7 +201,8 @@ export function createBrowserCookieImportActions(
             hostId,
             parsedHostId.environmentId,
             profileId,
-            pairingRevision
+            pairingRevision,
+            serverClearsAnyProfile === true
           )
         } else {
           ok = await window.api.browser.sessionClearCookies({ profileId })

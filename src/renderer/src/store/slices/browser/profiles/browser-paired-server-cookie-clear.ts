@@ -1,20 +1,9 @@
 import type { BrowserProfileClearDefaultCookiesResult } from '../../../../../../shared/browser/runtime/runtime-browser-contracts'
-import { BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { BrowserSliceGet } from '../browser-slice-contract'
 
 const CLEAR_TIMEOUT_MS = 15_000
-
-/** Older servers clear only Default, through browser.profileClearDefaultCookies. */
-export function pairedServerClearsAnyProfileCookies(environmentId: string): boolean {
-  return (
-    readRuntimeStatuses()
-      .get(environmentId)
-      ?.status?.capabilities?.includes(BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY) === true
-  )
-}
 
 /**
  * A server profile has two jars: this desktop's for its This-device pages (where Settings import
@@ -25,9 +14,10 @@ export async function clearPairedServerProfileCookies(
   hostId: ExecutionHostId,
   environmentId: string,
   profileId: string,
-  pairingRevision: number | undefined
+  pairingRevision: number | undefined,
+  /** False for an older server, which clears only Default (browser.profileClearDefaultCookies). */
+  anyProfile: boolean
 ): Promise<boolean> {
-  const anyProfile = pairedServerClearsAnyProfileCookies(environmentId)
   if (!anyProfile && profileId !== 'default') {
     return false
   }

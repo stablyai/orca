@@ -313,6 +313,8 @@ export type BrowserSlice = {
     hostId: ExecutionHostId
     profileId: string
     pairingRevision?: number
+    /** The paired server advertises browser.profile-cookie-clear.v1. */
+    serverClearsAnyProfile?: boolean
   }) => Promise<boolean>
   browserUrlHistory: BrowserHistoryEntry[]
   addBrowserHistoryEntry: (url: string, title: string, faviconUrl?: string | null) => void

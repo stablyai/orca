@@ -73,7 +73,7 @@ export function useProfileCookieClear(
     }
     const token = lifetime.current
     // The dialog names this host and profile; a later host switch must not redirect the clear.
-    const target = { hostId: host.id, profileId }
+    const target = { hostId: host.id, profileId, serverClearsAnyProfile: clearsAnyProfile }
     const pairingRevision = environmentId ? getRuntimeEnvironmentRevision(environmentId) : undefined
     running.current = true
     setBusy(true)
@@ -104,7 +104,7 @@ async function confirmAndClearProfileCookies({
   t,
   confirm
 }: {
-  target: { hostId: ExecutionHostId; profileId: string }
+  target: { hostId: ExecutionHostId; profileId: string; serverClearsAnyProfile: boolean }
   kind: ProfileCookieClearHost['kind']
   environmentId: string | null
   pairingRevision: number | undefined
