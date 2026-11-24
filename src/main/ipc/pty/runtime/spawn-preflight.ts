@@ -1,3 +1,4 @@
+import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { withClaudeProfileTerminalEnv } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'
@@ -50,7 +51,9 @@ export async function prepareRuntimePtySpawn(
   if (freshSpawnRecovery) {
     await freshSpawnRecovery
   }
-  ctx.isClaudeLaunch = !ctx.preAdoptedStablePane && isClaudeLaunchCommand(args.command)
+  ctx.isClaudeLaunch =
+    !ctx.preAdoptedStablePane &&
+    isClaudeLaunchCommand(resolveSetupAgentSequenceLaunchCommand(args.env ?? {}, args.command))
   ctx.isDaemonHostSpawn =
     !(ctx.provider instanceof LocalPtyProvider) && !routesFreshSpawnsToLocalProvider(ctx.provider)
   ctx.callerRequestedSessionId = args.sessionId

@@ -103,6 +103,7 @@ export function configureLocalPtyProvider(args: {
         settings: ptySettings
       }),
       launchCommand: ctx?.command,
+      cwd: ctx?.cwd,
       launchAgent: ctx?.launchAgent,
       shellPath: ctx?.shellPath,
       isWsl: ctx?.isWsl,

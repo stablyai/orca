@@ -1,4 +1,4 @@
-import { withClaudeAgentViewPlugin } from '../../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view-launch'
+import { prepareClaudeTerminalLaunch } from '../../../claude/agent-view/claude-terminal-sideload'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -139,6 +139,8 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       terminalWindowsShell: input.shellOverride ?? input.getSettings?.()?.terminalWindowsShell
     })
   )
+  const wsl =
+    input.codexRuntime === 'wsl' ? { distro: input.expectedWslDistro ?? undefined } : undefined
   const openCodeLaunch = await prepareOpenCodePtyLaunch({
     command: input.launchCommand,
     agent: launchAgent,
@@ -148,9 +150,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     connectionId,
     isFreshLaunch: !input.preAdoptedStablePane && input.launchCommand !== undefined,
     shell,
-    ...(input.codexRuntime === 'wsl'
-      ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
-      : {})
+    wsl
   })
   const settings = input.getSettings?.()
   const env = { ...openCodeLaunch.env }
@@ -161,11 +161,15 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
     settings?.terminalInlineImages,
     input.headlessHost
   )
-  const pluginDir = !connectionId ? env.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
-  const launchCommand =
-    pluginDir && openCodeLaunch.command
-      ? withClaudeAgentViewPlugin(openCodeLaunch.command, pluginDir, shell)
-      : openCodeLaunch.command
+  const launchCommand = connectionId
+    ? openCodeLaunch.command
+    : prepareClaudeTerminalLaunch({
+        env,
+        command: openCodeLaunch.command,
+        cwd: input.cwd,
+        shell,
+        wsl
+      })
   promoteAgentTeamsShimPath(env, input.requestedAgentTeamsPath)
   const spawnOptions: PtySpawnOptions = {
     cols: args.cols,

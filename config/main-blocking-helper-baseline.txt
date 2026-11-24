@@ -207,6 +207,7 @@
 13 src/main/claude/agent-view/agent-view-install.ts
 2 src/main/claude/agent-view/agent-view-plugin.ts
 1 src/main/claude/agent-view/agent-view-service.ts
+2 src/main/claude/agent-view/claude-terminal-sideload.ts # Background per-config startup probes only; terminal launch never waits. Reviewer sign-off required.
 1 src/main/claude/child-process/claude-agent-sdk-process-spawn.ts
 1 src/main/claude/claude-stream-json-connection.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
