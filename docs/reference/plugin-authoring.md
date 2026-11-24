@@ -253,7 +253,9 @@ plugin.on('todos.changed', ({ count }) => {})
   `unavailable` when the worker cannot start, or the `code` the handler threw (`invalid_params`,
   `conflict` and the other host error codes; anything else is `action_failed`).
 - Inputs and answers are JSON: an input up to 64 KiB, an answer up to 1 MiB. Posts are fire and
-  forget, up to 256 KiB each and 200 per 10 seconds per plugin.
+  forget, up to 256 KiB each and 200 per 10 seconds per plugin. A post over 256 KiB, with more than
+  10,000 objects or nested deeper than 100 levels throws `too_large` in the worker; one past the rate
+  is dropped, with a line in `orca plugin logs`.
 - Only the same plugin's panels and worker can reach each other.
 
 Storage, settings and secrets are the plugin's own, shared by every surface:

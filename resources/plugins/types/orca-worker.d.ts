@@ -55,7 +55,8 @@ declare module 'orca/worker' {
       handler: (input: JsonValue | undefined, context: PanelRequestContext) => unknown
     ): Disposable
     /** To every open panel of this plugin, or one (`panel` from a request's context). Fire and
-     *  forget: at most 256 KiB, 200 per 10 s. */
+     *  forget, 200 per 10 s; a payload over 256 KiB, with more than 10,000 objects or nested deeper
+     *  than 100 levels throws `too_large`. */
     post<K extends keyof PluginPanelEvents>(
       event: K,
       payload: PluginPanelEvents[K],
