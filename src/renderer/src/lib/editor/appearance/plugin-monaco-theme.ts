@@ -16,6 +16,12 @@ const BUILT_IN_SYNTAX: Record<'light' | 'dark', readonly string[]> = {
   dark: ['#608b4e', '#ce9178', '#569cd6', '#3dc9b0', '#b5cea8']
 }
 
+// main.css --callout-note, used when an editor-only theme paints no link color.
+const BUILT_IN_LINK: Record<'light' | 'dark', string> = {
+  light: '#0969da',
+  dark: '#4493f8'
+}
+
 // [Monaco color, token, hue the token follows when omitted]. Why only when the theme painted one:
 // themes that set none keep Monaco's stock diff and link colors, exactly as before these tokens.
 const MONACO_OPT_IN_COLORS: readonly (readonly [string, string, string])[] = [
@@ -58,6 +64,13 @@ function accentSurface(args: {
 /** Monaco's find overlays are translucent so they do not hide decorations underneath. */
 function accentOverlay(hue: Rgba, percent: number): Rgba {
   return [hue[0], hue[1], hue[2], percent / 100]
+}
+
+/** A find match also sits over the selection when Find navigates to it. */
+function readableFindOverlay(overlay: Rgba, surfaces: readonly Rgba[], foreground: Rgba): boolean {
+  return surfaces.every(
+    (surface) => contrastRatio(foreground, over(overlay, surface)) >= MIN_TEXT_CONTRAST
+  )
 }
 
 function hex([r, g, b, a]: Rgba): string {
@@ -113,16 +126,32 @@ export function derivePluginMonacoTheme(input: {
   const accent = color('--accent')
   const ring = color('--ring') ?? foreground
   const themed = input.painted['--editor-selection'] ? color('--editor-selection') : null
-  const link = color('--text-link') ?? color('--callout-note')
+  const link =
+    color('--text-link') ?? color('--callout-note') ?? input.probe(BUILT_IN_LINK[input.base])
+  // Only custom foregrounds Monaco will actually paint should constrain the accent surfaces.
+  const acceptedTokenForeground = (value: string): Rgba | null => {
+    const parsed = input.probe(value)
+    if (!parsed) {
+      return null
+    }
+    const [r, g, b, a] = parsed
+    const opaque: Rgba = [
+      r * a + background[0] * (1 - a),
+      g * a + background[1] * (1 - a),
+      b * a + background[2] * (1 - a),
+      1
+    ]
+    return contrastRatio(opaque, background) >= MIN_SYNTAX_CONTRAST ? opaque : null
+  }
   const syntaxColors = [
-    ...BUILT_IN_SYNTAX[input.base],
+    ...BUILT_IN_SYNTAX[input.base].flatMap((value) => {
+      const syntax = input.probe(value)
+      return syntax ? [syntax] : []
+    }),
     ...(input.tokenColors ?? []).flatMap((rule) =>
-      rule.settings.foreground ? [rule.settings.foreground] : []
+      rule.settings.foreground ? [acceptedTokenForeground(rule.settings.foreground)] : []
     )
-  ].flatMap((value) => {
-    const syntax = input.probe(value)
-    return syntax ? [syntax[3] < 1 ? over(syntax, background) : syntax] : []
-  })
+  ].filter((value): value is Rgba => value !== null)
   const selectionMix = input.base === 'dark' ? 34 : 28
   const accentSelection = link
     ? accentSurface({ hue: link, background, foreground, syntaxColors, percent: selectionMix })
@@ -137,7 +166,9 @@ export function derivePluginMonacoTheme(input: {
       : selection
   const searchMixes =
     input.base === 'dark' ? { inactive: 26, active: 50 } : { inactive: 22, active: 45 }
-  const searchActive = link
+  const selectionSurface = over(selection, background)
+  const inactiveSurface = over(inactive, background)
+  const activeSurface = link
     ? accentSurface({
         hue: link,
         background,
@@ -146,15 +177,32 @@ export function derivePluginMonacoTheme(input: {
         percent: searchMixes.active
       })
     : null
-  const searchInactive =
-    link && searchActive
+  const inactiveSurfaceCandidate =
+    link && activeSurface
       ? accentSurface({
           hue: link,
           background,
           foreground,
           syntaxColors,
-          percent: Math.min(searchMixes.inactive, searchActive.percent - 2)
+          percent: Math.min(searchMixes.inactive, activeSurface.percent - 2)
         })
+      : null
+  const findSurfaces = [selectionSurface, inactiveSurface]
+  const searchActive =
+    link &&
+    activeSurface &&
+    readableFindOverlay(accentOverlay(link, activeSurface.percent), findSurfaces, foreground)
+      ? activeSurface
+      : null
+  const searchInactive =
+    link &&
+    inactiveSurfaceCandidate &&
+    readableFindOverlay(
+      accentOverlay(link, inactiveSurfaceCandidate.percent),
+      findSurfaces,
+      foreground
+    )
+      ? inactiveSurfaceCandidate
       : null
   const popover = color('--popover')
   const border = color('--border')
@@ -172,10 +220,8 @@ export function derivePluginMonacoTheme(input: {
   if (accent) {
     colors['editor.lineHighlightBackground'] = hex(accent)
   }
-  if (searchInactive && link) {
+  if (searchActive && searchInactive && link) {
     colors['editor.findMatchHighlightBackground'] = hex(accentOverlay(link, searchInactive.percent))
-  }
-  if (searchActive && link) {
     colors['editor.findMatchBackground'] = hex(accentOverlay(link, searchActive.percent))
   }
   if (popover) {
@@ -195,19 +241,8 @@ export function derivePluginMonacoTheme(input: {
     base: input.base === 'dark' ? 'vs-dark' : 'vs',
     inherit: true,
     rules: pluginMonacoTokenRules(input.tokenColors ?? [], (value) => {
-      const parsed = input.probe(value)
-      if (!parsed) {
-        return null
-      }
-      // Why blend: Monaco token colors are opaque, so a translucent one is painted onto the editor.
-      const [r, g, b, a] = parsed
-      const opaque: Rgba = [
-        r * a + background[0] * (1 - a),
-        g * a + background[1] * (1 - a),
-        b * a + background[2] * (1 - a),
-        1
-      ]
-      return contrastRatio(opaque, background) >= MIN_SYNTAX_CONTRAST ? hex(opaque) : null
+      const opaque = acceptedTokenForeground(value)
+      return opaque ? hex(opaque) : null
     }),
     colors
   }
