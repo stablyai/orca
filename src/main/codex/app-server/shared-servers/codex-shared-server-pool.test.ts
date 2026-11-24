@@ -525,16 +525,19 @@ describe('shared Codex app-servers', () => {
   })
 
   it('never shares a server with the switch off, for a custom Codex command, or on Windows without the job exports', () => {
-    const opener = codexConnectionOpener({ sharedServers: () => true }, 's', {
-      customCommand: true
-    })
-    expect(opener).toBe(spawnCodexAppServerConnection)
+    const sharingOn = { sharedServers: () => true }
+    for (const platform of ['linux', 'darwin', 'win32'] as const) {
+      const opener = codexConnectionOpener(sharingOn, 's', { customCommand: true }, {}, platform)
+      expect(opensSharedCodexServer(opener)).toBe(false)
+    }
     expect(
       codexConnectionOpener({ sharedServers: () => true }, 's', {}, {}, 'win32', () => false)
     ).toBe(spawnCodexAppServerConnection)
-    expect(codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')).toBe(
-      spawnCodexAppServerConnection
-    )
+    expect(
+      opensSharedCodexServer(
+        codexConnectionOpener({ sharedServers: () => false }, 's', {}, {}, 'linux')
+      )
+    ).toBe(false)
     // Off on Windows never even loads the job addon.
     const windowsSharing = vi.fn(() => true)
     expect(
