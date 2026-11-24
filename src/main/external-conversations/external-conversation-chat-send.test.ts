@@ -19,6 +19,8 @@ const CHAT: LinkableChat = {
   agent: 'codex',
   bot: { kind: 'bot', botId: 'bot-1' }
 }
+// Later than any send here: 2100-01-01.
+const AFTER_EVERY_SEND = 4_102_444_800_000
 let rig: QueuedMessageTestRig | undefined
 afterEach(async () => {
   await rig?.dispose()
@@ -114,8 +116,8 @@ it('a Retry racing the send leaves the delivery its own turn, not the Retry’s'
       // The owner presses Retry on the card after the send read it.
       expect(await rig!.sendNow(root)).toMatchObject({ ok: true })
     } else {
-      // The Retry's turn starts before the message is sent again.
-      retryTurn = deliveries.started(SESSION, Date.now() + 1)
+      // The Retry's turn starts before the message is sent again (any time after the first attempt).
+      retryTurn = deliveries.started(SESSION, AFTER_EVERY_SEND)
     }
   })
 
