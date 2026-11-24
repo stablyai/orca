@@ -37,10 +37,7 @@ export class ConnectorCloud {
   private clientStop: string | null = null
   private readonly reach = new ConnectorReach(() => this.options.onStatusChanged?.())
   // One token cache per account, shared by the poll and the bot calls.
-  private transport: {
-    account: string
-    transport: ConnectorAccountTransport
-  } | null = null
+  private transport: { account: string; transport: ConnectorAccountTransport } | null = null
 
   // The account the last sign-in hook saw, so a refresh of the same one is not a switch.
   private lastAccount: string | null
@@ -98,11 +95,10 @@ export class ConnectorCloud {
     this.holds++
     try {
       this.reconcile()
-      const { client } = this
-      if (client) {
+      if (this.client) {
         const waited = new AbortController()
         const timer = setTimeout(() => waited.abort(), HOLD_HELLO_WAIT_MS)
-        await client.helloTaken(waited.signal)
+        await this.client.helloTaken(waited.signal)
         clearTimeout(timer)
       }
       return await run()
@@ -139,25 +135,23 @@ export class ConnectorCloud {
     connectorNeedsSignIn?: true
   } {
     const connectorStatus = this.status()
+    const features = this.cloudFeatures()
+    const needsSignIn = this.needsSignIn() || connectorStatus === 'needs-sign-in'
     return {
       threadReplies: this.takesThreadReplies(),
       // Whether it sends GitHub's newer events and label=, so trigger-options offers only those it does.
-      githubEvents2:
-        this.cloudFeatures()?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
+      githubEvents2: features?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
       // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
-      githubWorkflows:
-        this.cloudFeatures()?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
+      githubWorkflows: features?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
       // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
       githubCiFinished:
-        this.cloudFeatures()?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
+        features?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
       connectorStatus,
       ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
       this.reach.refusal
         ? { connectorMessage: this.reach.refusal }
         : {}),
-      ...(this.needsSignIn() || connectorStatus === 'needs-sign-in'
-        ? { connectorNeedsSignIn: true }
-        : {})
+      ...(needsSignIn ? { connectorNeedsSignIn: true } : {})
     }
   }
 

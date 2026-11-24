@@ -2,7 +2,6 @@
 import type { HookCallback, Options as ClaudeAgentSdkOptions } from '@anthropic-ai/claude-agent-sdk'
 import {
   LOOK_AROUND_DISALLOWED_TOOLS,
-  LOOK_AROUND_REFUSAL,
   lookAroundToolDecision,
   type ReadOnlySessionMode,
   REPLY_ONLY_REFUSAL
@@ -14,14 +13,15 @@ function preToolUse(mode: ReadOnlySessionMode): HookCallback {
     if (input.hook_event_name !== 'PreToolUse') {
       return {}
     }
-    const decision =
-      mode === 'look-around' ? lookAroundToolDecision(input.tool_name, input.tool_input) : 'deny'
-    const reason = mode === 'look-around' ? LOOK_AROUND_REFUSAL : REPLY_ONLY_REFUSAL
+    const answer =
+      mode === 'look-around'
+        ? lookAroundToolDecision(input.tool_name, input.tool_input)
+        : { decision: 'deny' as const, reason: REPLY_ONLY_REFUSAL }
     return {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
-        permissionDecision: decision,
-        ...(decision === 'deny' ? { permissionDecisionReason: reason } : {})
+        permissionDecision: answer.decision,
+        ...(answer.decision === 'deny' ? { permissionDecisionReason: answer.reason } : {})
       }
     }
   }
