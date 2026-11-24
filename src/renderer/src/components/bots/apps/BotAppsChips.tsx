@@ -75,6 +75,11 @@ export function BotAppsChips({
   const mirrorRef = useRef<HTMLDivElement>(null)
   const moreMenuRef = useRef<HTMLDivElement>(null)
   const restoreMenuFocus = useRef(false)
+  // The category whose menu option had focus when a resize brought its chip back into the row.
+  const menuHandoff = useRef<string | null>(null)
+  // Set once focus is handed to a chip, so the closing menu doesn't send it back to More.
+  const handedOff = useRef(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const all: Chip = { value: 'all', label: t('bots.apps.chip.all', 'All') }
   const categoryChips: Chip[] = categories.map((category) => ({
     value: category,
@@ -99,11 +104,27 @@ export function BotAppsChips({
     }
     const measure = (): void => {
       const next = fitCategoryChips(row, mirror)
-      if (
-        next === categoryCount &&
-        moreMenuRef.current?.contains(row.ownerDocument.activeElement)
-      ) {
-        restoreMenuFocus.current = true
+      const active = row.ownerDocument.activeElement
+      if (moreMenuRef.current?.contains(active)) {
+        const option =
+          active instanceof HTMLElement
+            ? active.closest<HTMLElement>('[data-more-option]')?.dataset.moreOption
+            : undefined
+        const order = [...mirror.querySelectorAll<HTMLElement>('[data-measure="category"]')].map(
+          (node) => node.dataset.value
+        )
+        const index = option === undefined ? -1 : order.indexOf(option)
+        const unfolds = index !== -1 && index < next
+        // The focused option leaves More, or More itself goes: close it and hand focus to the row.
+        if (unfolds || next === categoryCount) {
+          restoreMenuFocus.current = true
+          menuHandoff.current = unfolds ? (option ?? null) : null
+          setMenuOpen(false)
+        }
+      }
+      if (next === categoryCount) {
+        // More remounts closed when a later resize folds categories again.
+        setMenuOpen(false)
       }
       setShown(next)
       updateScrollFade(row)
@@ -142,15 +163,24 @@ export function BotAppsChips({
 
   useLayoutEffect(() => {
     const row = rowRef.current
-    const moreWasRemoved =
-      folded.length === 0 && (focusedChip === 'more' || restoreMenuFocus.current)
+    const restore = restoreMenuFocus.current
+    const target = menuHandoff.current
     restoreMenuFocus.current = false
-    // Losing the focused chip to resize leaves focus on the document body.
-    if (
-      row &&
-      (focusedChipFolds || moreWasRemoved) &&
-      row.ownerDocument.activeElement === row.ownerDocument.body
-    ) {
+    menuHandoff.current = null
+    if (!row) {
+      return
+    }
+    const doc = row.ownerDocument
+    // Losing the focused chip or menu option to resize leaves focus on the document body.
+    const lost = doc.activeElement === doc.body
+    const unfolded = target ? row.querySelector<HTMLButtonElement>(`[data-chip="${target}"]`) : null
+    if (restore && unfolded && (lost || moreMenuRef.current?.contains(doc.activeElement))) {
+      handedOff.current = true
+      unfolded.focus()
+      return
+    }
+    const moreWasRemoved = folded.length === 0 && (focusedChip === 'more' || restore)
+    if ((focusedChipFolds || moreWasRemoved) && lost) {
       row.querySelector<HTMLButtonElement>('[data-chip][tabindex="0"]')?.focus()
     }
   }, [focusedChip, focusedChipFolds, folded.length])
@@ -223,7 +253,16 @@ export function BotAppsChips({
         {chip(all)}
         {visible.map(chip)}
         {folded.length > 0 ? (
-          <DropdownMenu modal={false}>
+          <DropdownMenu
+            modal={false}
+            open={menuOpen}
+            onOpenChange={(open) => {
+              if (open) {
+                handedOff.current = false
+              }
+              setMenuOpen(open)
+            }}
+          >
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
@@ -240,7 +279,16 @@ export function BotAppsChips({
                 <MoreFace label={foldedPick?.label ?? moreLabel} />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent ref={moreMenuRef} align="start">
+            <DropdownMenuContent
+              ref={moreMenuRef}
+              align="start"
+              onCloseAutoFocus={(event) => {
+                if (handedOff.current) {
+                  handedOff.current = false
+                  event.preventDefault()
+                }
+              }}
+            >
               <DropdownMenuRadioGroup
                 value={selected}
                 onValueChange={(value) => {
@@ -251,7 +299,11 @@ export function BotAppsChips({
                 }}
               >
                 {folded.map((option) => (
-                  <DropdownMenuRadioItem key={option.value} value={option.value}>
+                  <DropdownMenuRadioItem
+                    key={option.value}
+                    value={option.value}
+                    data-more-option={option.value}
+                  >
                     {option.label}
                   </DropdownMenuRadioItem>
                 ))}
@@ -274,7 +326,7 @@ export function BotAppsChips({
           </span>
         ))}
         {categoryChips.map((item) => (
-          <span key={item.value} data-measure="category" className={CHIP}>
+          <span key={item.value} data-measure="category" data-value={item.value} className={CHIP}>
             {item.label}
           </span>
         ))}
