@@ -918,19 +918,29 @@ static size_t row_top(struct watcher *w, struct tree_scan *scan, size_t *top, si
 
 // Admits every launchd orphan in a session a member holds, the first time that session is seen.
 // Only a session read between two identity checks of a member is that member's session.
-static void open_session(struct tree_scan *scan, struct launchd_tree *t, pid_t sid) {
-    struct session_root key = {.sid = sid};
+// The first root in sid's run, which carries the run's opened flag, or root_count if there is none.
+static size_t session_first(const struct launchd_tree *t, pid_t sid) {
     size_t low = 0;
     size_t high = t->root_count;
     while (low < high) {
         size_t mid = low + (high - low) / 2;
-        if (compare_session_root(&t->roots[mid], &key) < 0) {
+        if (t->roots[mid].sid < sid) {
             low = mid + 1;
         } else {
             high = mid;
         }
     }
-    if (low == t->root_count || t->roots[low].sid != sid || t->roots[low].opened) {
+    return low < t->root_count && t->roots[low].sid == sid ? low : t->root_count;
+}
+
+static int session_unopened(const struct launchd_tree *t, pid_t sid) {
+    size_t first = session_first(t, sid);
+    return first < t->root_count && !t->roots[first].opened;
+}
+
+static void open_session(struct tree_scan *scan, struct launchd_tree *t, pid_t sid) {
+    size_t low = session_first(t, sid);
+    if (low == t->root_count || t->roots[low].opened) {
         return;
     }
     t->roots[low].opened = 1;
@@ -944,20 +954,6 @@ static void open_session(struct tree_scan *scan, struct launchd_tree *t, pid_t s
             }
         }
     }
-}
-
-static int session_unopened(const struct launchd_tree *t, pid_t sid) {
-    struct session_root key = {.sid = sid};
-    const struct session_root *hit =
-        bsearch(&key, t->roots, t->root_count, sizeof *t->roots, compare_session_root);
-    if (hit == NULL) {
-        return 0;
-    }
-    // bsearch may land anywhere in the run; the run's first entry carries the flag.
-    while (hit > t->roots && hit[-1].sid == sid) {
-        hit--;
-    }
-    return !hit->opened;
 }
 
 // Admits rows top by top: the leader's children, then each launchd orphan in a member's session,
@@ -1212,6 +1208,15 @@ static int probe_known_members(struct watcher *w, int signal_number) {
     return live;
 }
 
+#if defined(__linux__)
+// Without the subreaper no new member can be proven, but those proven earlier still are the chat's,
+// so they keep getting signals through their own handles until they are gone.
+static int anchor_lost(struct watcher *w, int signal_number) {
+    int live = probe_known_members(w, signal_number);
+    return live > 0 ? live : TREE_UNPROVABLE;
+}
+#endif
+
 // Signals each live descendant once through its kernel handle. Returns how many were alive, or -1
 // when the tree could not be read, its anchor is unproven, or a member vanished mid-sweep.
 static int sweep_once(struct watcher *w, int signal_number) {
@@ -1235,7 +1240,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
     struct pollfd anchor = {.fd = w->reaper_fd, .events = POLLIN};
     if (w->reaper_fd < 0 || w->reaper_start == REAPER_UNPROVEN || poll(&anchor, 1, 0) != 0) {
         // The subreaper exited (or its pidfd is unusable), so its PID anchors nothing.
-        return TREE_UNPROVABLE;
+        return anchor_lost(w, signal_number);
     }
     if (w->reaper_start == REAPER_START_UNREAD) {
         // The row is its own only if the pidfd still shows it alive after the read.
@@ -1276,7 +1281,7 @@ static int sweep_once(struct watcher *w, int signal_number) {
     const struct proc_row *reaper = find_row(scan.rows, scan.n, w->reaper);
     // A reaper gone or replaced can't come back; a failed identity read can be retried.
     if (reaper == NULL || reaper->start != w->reaper_start) {
-        live = TREE_UNPROVABLE;
+        live = anchor_lost(w, signal_number);
         goto done;
     }
     if (!same_identity(reaper)) {
