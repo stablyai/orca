@@ -185,6 +185,7 @@ export async function getWorkItemWithExactRepository(
   localGitOptions: LocalGitExecOptions = {},
   options: {
     preview?: boolean
+    allowSameHost?: boolean
     issueDetails?: { fresh: boolean }
     includeChecksSummary?: boolean
   } = {}
@@ -193,7 +194,7 @@ export async function getWorkItemWithExactRepository(
     const matchedRepository = await resolveGitHubWorkItemLinkRepository(
       repoPath,
       ownerRepo,
-      { allowSameHost: options.preview },
+      { allowSameHost: options.preview || options.allowSameHost },
       connectionId,
       localGitOptions
     )

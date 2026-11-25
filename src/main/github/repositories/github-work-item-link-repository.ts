@@ -32,7 +32,6 @@ export async function resolveGitHubWorkItemLinkRepository(
   )
   const requestedKey = githubRepoIdentityKey(requestedRepository)
   const requestedHostKey = githubHostKey(requestedRepository.host)
-  // Link previews may read another repository on a host already configured for the workspace.
   return (
     candidates.find((candidate) => githubRepoIdentityKey(candidate) === requestedKey) ??
     (allowSameHost &&

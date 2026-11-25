@@ -124,7 +124,11 @@ export async function getWorkItemDetails(
             type === 'pr' ? 'pr' : 'issue',
             connectionId,
             localGitOptions,
-            { issueDetails: { fresh: canonical }, includeChecksSummary: false }
+            {
+              allowSameHost: type === 'issue',
+              issueDetails: { fresh: canonical },
+              includeChecksSummary: false
+            }
           )
         : await getWorkItemWithRepository(
             repoPath,
