@@ -44,6 +44,7 @@ export function TabGroupPaneActionsMenu({
   const [offerQuickCommands, setOfferQuickCommands] = useState(false)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const dismissedOutsideRef = useRef(false)
   const quickCommands = useNativeChatQuickCommandsMenu(
     offerQuickCommands ? { worktreeId, groupId } : undefined,
     () => setOpen(false),
@@ -62,6 +63,7 @@ export function TabGroupPaneActionsMenu({
   const handleOpenChange = (next: boolean): void => {
     // Why: the menu renders in a portal, so check the strip's container-query result when it opens.
     if (next) {
+      dismissedOutsideRef.current = false
       setOfferQuickCommands(isSlotHidden(quickCommandsSlotRef.current))
     }
     setOpen(next)
@@ -119,14 +121,23 @@ export function TabGroupPaneActionsMenu({
             align="end"
             side="bottom"
             sideOffset={4}
+            onInteractOutside={() => {
+              dismissedOutsideRef.current = true
+            }}
             onCloseAutoFocus={(event) => {
+              const dismissedOutside = dismissedOutsideRef.current
+              dismissedOutsideRef.current = false
               if (!isFocused) {
                 event.preventDefault()
                 return
               }
-              // Why: widening the strip hides ⋯ under an open menu, and a hidden trigger can't take the restored focus.
+              // Why: widening the strip hides ⋯ under an open menu, and a hidden trigger can't take the restored focus; a click elsewhere keeps the focus it just moved.
               const close = closeButtonRef.current
-              if (triggerRef.current?.offsetParent === null && close?.offsetParent) {
+              if (
+                !dismissedOutside &&
+                triggerRef.current?.offsetParent === null &&
+                close?.offsetParent
+              ) {
                 event.preventDefault()
                 close.focus()
               }

@@ -216,3 +216,27 @@ test('closing the ⋯ menu after the strip widens under it lands on Close', asyn
   await orcaPage.keyboard.press('Escape')
   await expect.poll(() => focusTarget(orcaPage, groupId)).toBe('owner-pane-close')
 })
+
+test('clicking a strip control to dismiss the ⋯ menu after the strip widens keeps focus there', async ({
+  orcaPage
+}) => {
+  const groupId = await seedOwnerPane(orcaPage)
+  await narrowOwnerPane(orcaPage, groupId)
+  await orcaPage
+    .locator(`[data-tab-group-strip-id="${groupId}"] [data-pane-actions-menu-trigger]`)
+    .click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Quick Commands' })).toBeVisible()
+  await widenOwnerPane(orcaPage, groupId)
+  await orcaPage
+    .locator(`[data-tab-group-strip-id="${groupId}"]`)
+    .getByRole('button', { name: 'Scroll tabs right' })
+    .click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Quick Commands' })).toHaveCount(0)
+  // Focus moves in the frames after the menu unmounts; read it once they settle, not mid-move.
+  await orcaPage.evaluate(async () => {
+    for (let frame = 0; frame < 3; frame++) {
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    }
+  })
+  expect(await focusTarget(orcaPage, groupId)).toBe('owner-strip-control')
+})
