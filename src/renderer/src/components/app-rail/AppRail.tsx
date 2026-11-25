@@ -140,18 +140,22 @@ export function AppRail({
 
   const renderedKey = renderedItems.join(',')
   const renderedItemsRef = useRef(renderedItems)
+  // An owner whose recovery frame has not run yet; a change that cancels the frame must hand it to the next one.
+  const pendingRecoveryOwnerRef = useRef<AppRailItemId | null>(null)
   useLayoutEffect(() => {
     renderedItemsRef.current = renderedItems
   })
   // If the transition removed the focused button or its open menu, focus its new home: the button itself if it is
   // still rendered, else the "…" slot (More it folded into, or Customize/More swapping forms). Connected focus stays.
   useLayoutEffect(() => {
-    const owner = transitionOwnerRef.current
+    const owner = transitionOwnerRef.current ?? pendingRecoveryOwnerRef.current
     transitionOwnerRef.current = null
+    pendingRecoveryOwnerRef.current = owner
     if (!owner) {
       return
     }
     const frame = requestAnimationFrame(() => {
+      pendingRecoveryOwnerRef.current = null
       const active = document.activeElement
       if (active && active !== document.body && active.isConnected) {
         return
