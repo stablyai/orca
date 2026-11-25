@@ -16,6 +16,8 @@ import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
+import { splitHtmlDocumentFences } from '../../../../../shared/markdown/html-document-fences'
+import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -65,6 +67,17 @@ export const CONNECTOR_METHODS = [
           : // A terminal pane's reply names no chat whose turn Orca can read.
             'someone_else'
       const cloud = context.runtime.getConnectorCloud()
+      // Slack shows a whole page as an .html file; the CLI resends it with the page attached.
+      const features = cloud?.cloudFeatures()
+      if (
+        conversation.source === 'slack' &&
+        'sessionId' in params &&
+        features?.has('files.direct' satisfies ConnectorCloudFeature) &&
+        features.has('reply.files' satisfies ConnectorCloudFeature) &&
+        splitHtmlDocumentFences(text).documents.length > 0
+      ) {
+        throw new Error('html_document_as_file')
+      }
       // Under replies.outbox a reply naming its turn's request takes that request's answer key.
       const keyed =
         target.answerDeliveryId &&

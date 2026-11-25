@@ -23,6 +23,7 @@ import {
 } from '../slack/slack-action-files'
 import { readMessageText } from '../slack/slack-action-args'
 import type { ActionResult } from '../slack/slack-action-format'
+import { HTML_DOCUMENT_AS_FILE, withHtmlPageFiles } from './bot-reply-html-pages'
 
 // The host retries an unavailable cloud itself, waiting out Retry-After, so the call can take a while.
 const REPLY_TIMEOUT_MS = 180_000
@@ -268,6 +269,7 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
       choices && text && sessionId
         ? await settledReply(client, sessionId, { text, choices, postId: newPostId() })
         : undefined
+    let pageFiles: { files: number; sent: Awaited<ReturnType<typeof replyWithFiles>> } | undefined
     const replied =
       text && files.length === 0 && !offered
         ? await client
@@ -282,9 +284,21 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
               },
               { timeoutMs: REPLY_TIMEOUT_MS }
             )
-            .catch(refusalOf)
+            .catch(async (error: unknown) => {
+              if (
+                !(error instanceof RuntimeClientError && error.code === HTML_DOCUMENT_AS_FILE) ||
+                !sessionId
+              ) {
+                return refusalOf(error)
+              }
+              pageFiles = await withHtmlPageFiles(text, async (pages, rest) => ({
+                files: pages.length,
+                sent: await replyWithFiles(client, sessionId, pages, rest)
+              }))
+              return undefined
+            })
         : undefined
-    const envelope = replied ?? attached ?? offered ?? reacted
+    const envelope = replied ?? attached ?? pageFiles?.sent ?? offered ?? reacted
     if (!envelope) {
       return
     }
@@ -292,6 +306,7 @@ export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
       ...(reacted && emoji ? { reacted: emoji } : {}),
       ...(replied ? { reply: replied.result } : {}),
       ...(attached ? { attached: { ...attached.result, files: files.length } } : {}),
+      ...(pageFiles ? { attached: { ...pageFiles.sent.result, files: pageFiles.files } } : {}),
       ...(offered && choices ? { offered: { ...offered.result, choices: choices.length } } : {})
     }
     printResult({ ...envelope, result }, json, (value) =>
