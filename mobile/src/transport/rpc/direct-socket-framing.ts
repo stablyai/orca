@@ -4,11 +4,11 @@ import {
   type PairedE2EEFraming
 } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES } from '../encryption/mobile-paired-e2ee-primitives'
-import { MobileE2EEV2ClientSession } from '../encryption/mobile-e2ee-v2-client-session'
 import {
-  MobileE2EEAuthenticationError,
-  MobileE2EEV2PhysicalChannel
-} from '../encryption/mobile-e2ee-v2-physical-channel'
+  PairedE2EEAuthenticationError,
+  PairedE2EEV2PhysicalChannel
+} from '../../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
+import { inflateMobileCompressedFrame } from '../encryption/compressed-frame-inflate'
 import type { ConnectionLogEmitter } from '../../diagnostics/connection/connection-log-types'
 import { websocketPayloadToUint8 } from '../encryption/websocket-payload-bytes'
 
@@ -45,14 +45,17 @@ export function createDirectSocketFraming(args: {
 function createV2Framing(args: Parameters<typeof createDirectSocketFraming>[0]) {
   const { events } = args
   let authenticated = false
-  const channel = new MobileE2EEV2PhysicalChannel({
-    session: MobileE2EEV2ClientSession.create({
-      desktopPublicKeyB64: args.serverPublicKeyB64,
+  const channel = new PairedE2EEV2PhysicalChannel({
+    handshake: createPairedE2EEClientHandshake({
+      primitives: MOBILE_PAIRED_E2EE_PRIMITIVES,
+      hostPublicKeyB64: args.serverPublicKeyB64,
+      framing: 'v2',
       transport: 'direct'
     }),
     socket: args.socket,
-    deviceToken: args.deviceToken,
+    credential: { kind: 'token', deviceToken: args.deviceToken },
     decodeBinary: websocketPayloadToUint8,
+    inflateFrame: inflateMobileCompressedFrame,
     onReadyAccepted: () => {
       args.emitLog('success', 'Received e2ee_ready (v2)', 'Sending device token')
       events.onReadyAccepted()
@@ -65,7 +68,7 @@ function createV2Framing(args: Parameters<typeof createDirectSocketFraming>[0]) 
     onBinary: events.onBinary,
     // Count handshake failures against auth retries; a legacy reply to a v2 hello must never trigger downgrade.
     onError: (error) =>
-      error instanceof MobileE2EEAuthenticationError || !authenticated
+      error instanceof PairedE2EEAuthenticationError || !authenticated
         ? events.onAuthRejected()
         : events.onProtocolError(error)
   })

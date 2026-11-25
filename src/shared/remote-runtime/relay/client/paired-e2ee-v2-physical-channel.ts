@@ -1,32 +1,29 @@
 import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
-} from '../../../../src/shared/network/websocket/ws-outbound-backpressure-queue'
-import {
-  classifyPairedE2EEV2AuthReply,
-  pairedE2EEV2TokenAuth
-} from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import type { PairedE2EEV2ClientSession as MobileE2EEV2ClientSession } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
-import { WsInboundMessageQueue } from '../../../../src/shared/network/websocket/ws-inbound-message-queue'
-import { inflateMobileCompressedFrame } from './compressed-frame-inflate'
+} from '../../../network/websocket/ws-outbound-backpressure-queue'
+import { WsInboundMessageQueue } from '../../../network/websocket/ws-inbound-message-queue'
+import type {
+  PairedE2EEAuthCredential,
+  PairedE2EEClientHandshake,
+  PairedE2EEDeviceKeyCredential
+} from '../../e2ee/paired-e2ee-client-handshake'
+import type { InflatedFrame } from '../../e2ee/paired-e2ee-compressed-frame'
+import type { RelayClientSocket } from './relay-client-platform'
 
 type ChannelState = 'awaiting-ready' | 'awaiting-authenticated' | 'ready'
 type OutboundItem = { kind: 'text'; plaintext: string } | { kind: 'binary'; plaintext: Uint8Array }
 
-export class MobileE2EEAuthenticationError extends Error {
+export type PairedE2EEClientCredential = PairedE2EEAuthCredential | PairedE2EEDeviceKeyCredential
+
+export class PairedE2EEAuthenticationError extends Error {
   constructor() {
     super('E2EE device authentication rejected')
   }
 }
 
-export type MobileE2EEV2Socket = {
-  readonly OPEN: number
-  readonly readyState: number
-  readonly bufferedAmount: number
-  send: (frame: string | Uint8Array) => void
-}
-
-export class MobileE2EEV2PhysicalChannel {
+/** One socket's E2EE v2 client: hello, ready, auth, then sealed frames in order. */
+export class PairedE2EEV2PhysicalChannel {
   private state: ChannelState = 'awaiting-ready'
   private generation = 0
   private readonly inbound: WsInboundMessageQueue
@@ -34,10 +31,11 @@ export class MobileE2EEV2PhysicalChannel {
 
   constructor(
     private readonly args: {
-      session: MobileE2EEV2ClientSession
-      socket: MobileE2EEV2Socket
-      deviceToken: string
+      handshake: PairedE2EEClientHandshake
+      socket: Pick<RelayClientSocket, 'OPEN' | 'readyState' | 'bufferedAmount' | 'send'>
+      credential: PairedE2EEClientCredential
       decodeBinary: (raw: unknown) => Promise<Uint8Array | null>
+      inflateFrame: (frame: Uint8Array) => InflatedFrame | null
       onReadyAccepted?: () => void
       onAuthenticated: () => void
       onText: (plaintext: string) => void
@@ -45,9 +43,13 @@ export class MobileE2EEV2PhysicalChannel {
       onError: (error: Error) => void
     }
   ) {
+    if (args.handshake.framing !== 'v2') {
+      throw new Error('E2EE v2 physical channel needs a v2 handshake')
+    }
+    const { channel } = args.handshake
     this.inbound = new WsInboundMessageQueue(
       (raw) => this.processMessage(raw, this.generation),
-      (error) => args.onError(error instanceof Error ? error : new Error(String(error)))
+      (error) => args.onError(asError(error))
     )
     this.outboundQueue = createWsOutboundBackpressureQueue<OutboundItem>({
       // Why: encryption happens only when an admitted item reaches the wire,
@@ -55,8 +57,8 @@ export class MobileE2EEV2PhysicalChannel {
       send: (item) => {
         args.socket.send(
           item.kind === 'text'
-            ? args.session.sealText(item.plaintext)
-            : args.session.sealBinary(item.plaintext)
+            ? channel.sealText(item.plaintext)
+            : channel.sealBinary(item.plaintext)
         )
       },
       byteLengthOf: (item) =>
@@ -70,7 +72,7 @@ export class MobileE2EEV2PhysicalChannel {
   }
 
   start(): void {
-    this.args.socket.send(JSON.stringify(this.args.session.hello))
+    this.args.socket.send(this.args.handshake.helloText())
   }
 
   handleMessage(raw: unknown): Promise<void> {
@@ -96,22 +98,22 @@ export class MobileE2EEV2PhysicalChannel {
       return
     }
     if (this.state === 'awaiting-ready') {
-      this.acceptReady(raw)
+      this.acceptReady(raw, generation)
       return
     }
-
+    const { channel } = this.args.handshake
     const plaintext =
-      typeof raw === 'string'
-        ? this.args.session.openText(raw)
-        : await this.openBinary(raw, generation)
+      typeof raw === 'string' ? channel.openText(raw) : await this.openBinary(raw, generation)
     if (generation !== this.generation || plaintext === null) {
       return
     }
     if (this.state === 'awaiting-authenticated') {
-      if (typeof plaintext === 'string' && isAuthenticationRejection(plaintext)) {
-        throw new MobileE2EEAuthenticationError()
+      const reply =
+        typeof plaintext === 'string' ? this.args.handshake.classifyAuthReply(plaintext) : null
+      if (reply?.kind === 'rejected' && reply.type === 'e2ee_error') {
+        throw new PairedE2EEAuthenticationError()
       }
-      if (typeof plaintext !== 'string' || !this.isAuthenticated(plaintext)) {
+      if (reply?.kind !== 'authenticated') {
         throw new Error('Invalid E2EE v2 authenticated response')
       }
       this.state = 'ready'
@@ -119,7 +121,7 @@ export class MobileE2EEV2PhysicalChannel {
     } else if (typeof plaintext === 'string') {
       this.args.onText(plaintext)
     } else {
-      const inflated = inflateMobileCompressedFrame(plaintext)
+      const inflated = this.args.inflateFrame(plaintext)
       if (inflated?.kind === 'text') {
         this.args.onText(inflated.text)
       } else {
@@ -128,27 +130,37 @@ export class MobileE2EEV2PhysicalChannel {
     }
   }
 
-  private acceptReady(raw: unknown): void {
+  private acceptReady(raw: unknown, generation: number): void {
     if (typeof raw !== 'string') {
       throw new Error('Expected plaintext E2EE v2 ready')
     }
-    let ready: unknown
-    try {
-      ready = JSON.parse(raw)
-    } catch {
-      throw new Error('Invalid E2EE v2 ready JSON')
-    }
-    if (!this.args.session.acceptReady(ready)) {
+    if (this.args.handshake.acceptReadyText(raw) !== 'accepted') {
       throw new Error('Invalid E2EE v2 ready')
     }
     this.state = 'awaiting-authenticated'
     this.args.onReadyAccepted?.()
-    this.outboundQueue.enqueue({
-      kind: 'text',
-      plaintext: JSON.stringify(
-        pairedE2EEV2TokenAuth(this.args.session.transcriptHashB64, this.args.deviceToken)
-      )
-    })
+    void this.sendAuth(generation)
+  }
+
+  // Why direct, not queued: auth is the only frame before authenticated, and a device key signs asynchronously.
+  private async sendAuth(generation: number): Promise<void> {
+    let frame: string
+    try {
+      frame = await this.args.handshake.sealAuth(this.args.credential)
+    } catch (error) {
+      if (generation === this.generation) {
+        this.args.onError(asError(error))
+      }
+      return
+    }
+    if (generation !== this.generation) {
+      return
+    }
+    try {
+      this.args.socket.send(frame)
+    } catch (error) {
+      this.args.onError(asError(error))
+    }
   }
 
   private async openBinary(raw: unknown, generation: number): Promise<Uint8Array | null> {
@@ -156,18 +168,7 @@ export class MobileE2EEV2PhysicalChannel {
     if (!bytes || generation !== this.generation) {
       return null
     }
-    return this.args.session.openBinary(bytes)
-  }
-
-  private isAuthenticated(plaintext: string): boolean {
-    try {
-      return (
-        classifyPairedE2EEV2AuthReply(JSON.parse(plaintext), this.args.session.transcriptHashB64)
-          .kind === 'authenticated'
-      )
-    } catch {
-      return false
-    }
+    return this.args.handshake.channel.openBinary(bytes)
   }
 
   private enqueueReady(item: OutboundItem): boolean {
@@ -179,11 +180,6 @@ export class MobileE2EEV2PhysicalChannel {
   }
 }
 
-function isAuthenticationRejection(plaintext: string): boolean {
-  try {
-    const message = JSON.parse(plaintext) as Record<string, unknown>
-    return message.type === 'e2ee_error'
-  } catch {
-    return false
-  }
+function asError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error))
 }

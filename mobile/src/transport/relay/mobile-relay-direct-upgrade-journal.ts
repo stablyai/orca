@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
 import * as z from 'zod'
-import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
+import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
 import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
@@ -36,7 +36,7 @@ export function createMobileRelayDirectUpgradeJournal(
     hostId,
     reqId: `upgrade-${encodeBase64Url(randomBytes(16))}`,
     pendingResumeToken,
-    pendingResumeTokenHash: hashMobileRelayCredential(pendingResumeToken)
+    pendingResumeTokenHash: hashRelayCredential(pendingResumeToken)
   })
 }
 

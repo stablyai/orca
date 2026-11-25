@@ -1,7 +1,7 @@
 import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
-import { RelayOuterError } from '../transport/encryption/mobile-relay-e2ee-link'
+import { RelayOuterError } from '../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
 import {

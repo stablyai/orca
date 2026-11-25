@@ -1,4 +1,4 @@
-import type * as MobileRelayCredentialHashModule from '../../../transport/relay/mobile-relay-credential-hash'
+import type * as RelayCredentialHashModule from '../../../../../src/shared/remote-runtime/relay/relay-credential-hash'
 import type { MobileRelayCredentialBundle } from '../../../host-credentials/mobile-relay-credential-bundle'
 import type { MobileRelayPairingJournal } from '../../../pairing/mobile-relay-pairing-journal'
 import type { MountContext } from '../scenarios/recording-scenario'
@@ -22,9 +22,9 @@ const INVITE_LIFETIME_MS = 5 * 60 * 1000
 
 /** The product's own credential hash, loaded from source: a stand-in would record a fiction. */
 export function credentialHash(modules: ReturnType<typeof operationModuleLoader>) {
-  return modules.load<typeof MobileRelayCredentialHashModule>(
-    'mobile/src/transport/relay/mobile-relay-credential-hash.ts'
-  ).hashMobileRelayCredential
+  return modules.load<typeof RelayCredentialHashModule>(
+    'src/shared/remote-runtime/relay/relay-credential-hash.ts'
+  ).hashRelayCredential
 }
 
 function relayEndpoint() {

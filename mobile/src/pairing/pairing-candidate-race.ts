@@ -5,7 +5,7 @@ import {
 } from '../transport/connection/host-status-probe-operations'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
-import { MobileE2EEAuthenticationError } from '../transport/encryption/mobile-e2ee-v2-physical-channel'
+import { PairedE2EEAuthenticationError } from '../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
 import { AUTH_REJECTED } from '../transport/rpc/rpc-client-authentication-retry'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
@@ -19,7 +19,7 @@ export class PairingCodeRejectedError extends Error {
 // Relay and direct report a refused credential differently; old desktops use the same signals.
 function isRefusedError(error: unknown): boolean {
   return (
-    error instanceof MobileE2EEAuthenticationError ||
+    error instanceof PairedE2EEAuthenticationError ||
     (error instanceof Error && error.message === AUTH_REJECTED)
   )
 }

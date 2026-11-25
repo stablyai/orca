@@ -1,4 +1,4 @@
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
+import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import { isExplicitCredentialRejection } from './relay-credential-eligibility'
 import { RelayDirectorHttpError } from './mobile-relay-resume-director'
 import {

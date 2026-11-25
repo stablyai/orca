@@ -12,14 +12,16 @@ vi.mock('expo-crypto', () => ({
 }))
 
 import { deriveSharedKey } from './e2ee'
-import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
+import { PairedE2EEV2ClientSession } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-client-session'
+import { MOBILE_PAIRED_E2EE_PRIMITIVES } from './mobile-paired-e2ee-primitives'
 import { derivePairedE2EEV2KeySchedule as deriveMobileE2EEV2KeySchedule } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-v2-key-schedule'
 
 const desktop = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(1))
 const client = nacl.box.keyPair.fromSecretKey(new Uint8Array(32).fill(2))
 
 function setup() {
-  const session = MobileE2EEV2ClientSession.create({
+  const session = PairedE2EEV2ClientSession.create({
+    primitives: MOBILE_PAIRED_E2EE_PRIMITIVES,
     desktopPublicKeyB64: Buffer.from(desktop.publicKey).toString('base64'),
     transport: 'relay',
     relayHostId: 'AbCdEf0123_-xyZ9',

@@ -5,7 +5,7 @@ import { salvagedOptional } from '../../../../../src/shared/validation/zod-salva
 import { SUPPORTED_UI_LOCALES } from '../../../../../src/shared/i18n/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../../transport/connection/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../../transport/rpc/rpc-envelope-fields'
-import { isRpcResponse } from '../../../transport/rpc/rpc-response-shape'
+import { isRpcResponse } from '../../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import { BridgeConnectionSnapshotSchema } from './bridge-connection-snapshot'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'

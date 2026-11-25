@@ -9,9 +9,10 @@ import {
   type DeviceResumeConfirmed,
   type MobileRelayEndpoint
 } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { MobileRelayE2eeLink } from '../encryption/mobile-relay-e2ee-link'
+import { RelayE2eeLink } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
+import { MOBILE_RELAY_CLIENT_PLATFORM } from '../encryption/mobile-relay-client-platform'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
-import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
+import { PairedE2EEAuthenticationError } from '../../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
 import { markRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
 import {
   withRpcEnvelopeFields,
@@ -19,7 +20,7 @@ import {
   type RpcRequestFrame
 } from '../rpc/rpc-envelope-fields'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from '../rpc/rpc-request-budget'
-import { isRpcResponse } from '../rpc/rpc-response-shape'
+import { isRpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
 import { RelayDialStageTracker } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { MobileRelayConnectWaiters } from './mobile-relay-connect-waiters'
@@ -45,7 +46,6 @@ export function connectMobileRelayRpcSession(args: {
   deviceToken: string
   desktopPublicKeyB64: string
   requestTimeoutMs?: number
-  createSocket?: (url: string) => WebSocket
   onHostCloseReason?: (reason: RelayHostCloseReason) => void
   onLog?: ConnectionLogSink
   /** The paired host, so the capabilities its loaded page declares are advertised too. */
@@ -71,13 +71,13 @@ export function connectMobileRelayRpcSession(args: {
     waitForConnected: () => connectWaiters.wait(requestTimeoutMs)
   })
 
-  const link = new MobileRelayE2eeLink({
+  const link = new RelayE2eeLink({
+    platform: MOBILE_RELAY_CLIENT_PLATFORM,
     endpoint: args.relay,
     credential: args.resumeToken,
     expectedCredentialKind: 'resume',
-    deviceToken: args.deviceToken,
+    authCredential: { kind: 'token', deviceToken: args.deviceToken },
     desktopPublicKeyB64: args.desktopPublicKeyB64,
-    createSocket: args.createSocket,
     onHostCloseReason: args.onHostCloseReason,
     onOpen: () => dialStage.advance('awaiting-hello'),
     onHello: (hello) => {
@@ -306,7 +306,7 @@ export function connectMobileRelayRpcSession(args: {
     streams.clear()
     link.close()
     pending.rejectAll(error)
-    publishState(error instanceof MobileE2EEAuthenticationError ? 'auth-failed' : 'disconnected')
+    publishState(error instanceof PairedE2EEAuthenticationError ? 'auth-failed' : 'disconnected')
   }
 }
 

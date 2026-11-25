@@ -1,7 +1,7 @@
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
-import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
-import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
+import { PairedE2EEAuthenticationError } from '../../../../src/shared/remote-runtime/relay/client/paired-e2ee-v2-physical-channel'
+import { RelayOuterError } from '../../../../src/shared/remote-runtime/relay/client/relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
 import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
 import {
@@ -258,7 +258,7 @@ export class RelayReconnectController {
       ? this.delays.hostOfflineDelayMs(this.failureCount.claimAttachTimeoutRedial(error))
       : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
-    if (error instanceof MobileE2EEAuthenticationError) {
+    if (error instanceof PairedE2EEAuthenticationError) {
       // E2EE rejection can be transient during credential commit; gate slow reprobes instead of waiting forever for a nudge.
       this.holdGate(scheduleRetry, 'external-signal')
       return
