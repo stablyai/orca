@@ -382,7 +382,7 @@ const ORCA_CLI_MARKDOWN = [
   "ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --run-hooks --json",
   "```",
   "",
-  "For `worktree rm`, pass `--run-hooks` to run the configured archive hook. Removal skips archive hooks without it. The archive hook may clean up resources allocated by setup hooks. With no archive hook configured, or when the native Windows marker is missing, removal skips the hook even with `--run-hooks`; clean up those resources yourself. A failed archive hook blocks removal even with `--force`.",
+  "For `worktree rm`, pass `--run-hooks` to request the configured archive hook. Removal skips archive hooks without it. Even with `--run-hooks`, removal can skip the hook if no archive hook is configured, the native Windows marker is missing, or Git has no registration for the worktree or has a stale registration. The unregistered and stale-registration paths can skip the hook without a warning. If a setup hook allocated resources that the archive hook would normally release, clean them up manually whenever the archive hook is skipped. A failed archive hook blocks removal even with `--force`.",
   "",
   "`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.",
   "",
