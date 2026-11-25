@@ -9,6 +9,7 @@ vi.mock('../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
 const { electronDocumentEndpoint } = await import('./electron-document-endpoint')
 
 type InvokeSource = Pick<IpcMainInvokeEvent, 'sender' | 'senderFrame'>
+type FakeSenderFrame = { readonly frameToken: string; readonly detached: boolean }
 
 // Models Electron 43: one WebFrameMain re-pointed at each new document, `detached` stuck after a crash.
 class FakeMainFrame {
@@ -34,7 +35,7 @@ function fakeWindow() {
       delivered.push(args)
     }
   })
-  const invokeFrom = (senderFrame: object | null = frame) => {
+  const invokeFrom = (senderFrame: FakeSenderFrame | null = frame) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the endpoint reads only the members modeled here.
     const event = { sender, senderFrame } as unknown as InvokeSource
     return electronDocumentEndpoint(event)
