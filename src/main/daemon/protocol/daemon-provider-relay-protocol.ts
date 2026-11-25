@@ -196,9 +196,9 @@ export type ProviderRelayAttachResult = {
   /** Tasks the daemon saw end while detached, which the app may still show running: restate them. */
   endedWork?: Record<string, string[][]>
   /**
-   * Set only when kept lines (`keepFrom`) after the client's cursor were dropped at the spool file
-   * cap before this attach: its replay starts after this seq, inside the item the client asked to
-   * keep. Older clients ignore it.
+   * Set once kept lines were given up (at the spool's cap, or by a cut ack), wherever the cursor
+   * is: an item split there may still be open, so its later lines arrive without their start.
+   * Older clients ignore it.
    */
   truncatedThrough?: number
   /** Sent as `relayKept` events before this reply; absent from daemons without `providerRelayKeep`. */

@@ -138,16 +138,19 @@ export async function seedKeptCodexCommandOutput(
  * never saw them start, so their rows would read "status unavailable". They are restated from the
  * same history, under the same task ids, without writing any chat row. `ended` ([threadId, itemId])
  * are commands that finished while no app was attached: restated as running, so the replayed end
- * settles their rows instead of leaving them running.
+ * settles their rows instead of leaving them running. `open` ([threadId, itemId]) are commands the
+ * daemon carried still running: restated even when history no longer reports them running.
  */
 export function restateKeptCodexBackgroundWork(
   tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork'>,
   turns: readonly KeptCodexTurn[],
-  ended: readonly (readonly string[])[] = []
+  ended: readonly (readonly string[])[] = [],
+  open: readonly (readonly string[])[] = []
 ): void {
-  if (turns.length === 0) {
+  if (turns.length === 0 && open.length === 0) {
     return
   }
+  const restated = new Set<string>()
   const endedHere = new Set(ended.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
   for (const { threadId, turnId, status, items } of turns) {
     const turn = { id: turnId, status: status ?? 'inProgress' }
@@ -156,9 +159,14 @@ export function restateKeptCodexBackgroundWork(
     }
     for (const item of items) {
       const endedDetached = endedHere.has(`${threadId}\u0000${item.id}`)
-      if (item.type === 'commandExecution' && (item.status === 'inProgress' || endedDetached)) {
-        const running = endedDetached ? { ...item, status: 'inProgress' } : item
+      const carried = openHere(open, threadId, item.id)
+      if (
+        item.type === 'commandExecution' &&
+        (item.status === 'inProgress' || endedDetached || carried)
+      ) {
+        const running = item.status === 'inProgress' ? item : { ...item, status: 'inProgress' }
         tracker.observe({ method: 'item/started', threadId, params: { turnId, item: running } })
+        restated.add(`${threadId}\u0000${item.id}`)
       }
     }
     // A finished turn's live commands are its background work, as when the turn ended live.
@@ -166,5 +174,16 @@ export function restateKeptCodexBackgroundWork(
       tracker.observe({ method: 'turn/completed', threadId, params: { turn } })
     }
   }
+  // Carried commands from turns history didn't return (an earlier turn's) still read running.
+  for (const [threadId, itemId] of open) {
+    if (threadId && itemId && !restated.has(`${threadId}\u0000${itemId}`)) {
+      const item = { type: 'commandExecution', id: itemId, status: 'inProgress' }
+      tracker.observe({ method: 'item/started', threadId, params: { item } })
+    }
+  }
   tracker.publishChildWork()
+}
+
+function openHere(open: readonly (readonly string[])[], threadId: string, itemId: string): boolean {
+  return open.some(([thread, item]) => thread === threadId && item === itemId)
 }

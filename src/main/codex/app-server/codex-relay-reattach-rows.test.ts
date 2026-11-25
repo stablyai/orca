@@ -453,4 +453,27 @@ describe('codex rows across a reattach', () => {
     expect(tracker.relayOpenWork(false).command).toEqual([['main', 'c1']])
     expect(tracker.state?.tasks?.map((task) => task.kind)).toEqual(['command'])
   })
+
+  it('restates a command the daemon carried open even when history no longer reads it running', () => {
+    const tracker = new CodexBackgroundTaskTracker('main')
+    const turn = {
+      threadId: 'main',
+      turnId: 'turn-2',
+      status: 'completed',
+      items: [{ type: 'commandExecution', id: 'c1', status: 'completed', command: 'npm run dev' }]
+    }
+    restateKeptCodexBackgroundWork(
+      tracker,
+      [turn],
+      [],
+      [
+        ['main', 'c1'],
+        ['main', 'c0']
+      ]
+    )
+    expect(tracker.relayOpenWork(false).command).toEqual([
+      ['main', 'c1'],
+      ['main', 'c0']
+    ])
+  })
 })

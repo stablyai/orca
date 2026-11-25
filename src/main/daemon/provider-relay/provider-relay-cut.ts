@@ -15,15 +15,13 @@ export class ProviderRelayCut {
     }
   }
 
-  /** What an attach from `cursor` reports; the spool's own drops count as a cut no key names. */
-  report(
-    spoolTruncated: number,
-    cursor: number
-  ): Pick<ProviderRelayAttachResult, 'truncatedThrough' | 'cutKeys'> {
+  /**
+   * What an attach reports; the spool's own drops count as a cut no key names. A cut before the
+   * cursor counts too: an item it split may still be open, and its start never replays again.
+   */
+  report(spoolTruncated: number): Pick<ProviderRelayAttachResult, 'truncatedThrough' | 'cutKeys'> {
     const truncatedThrough = Math.max(spoolTruncated, this.through)
-    // Lines the client already had before its cursor were never missing from its replay.
-    // A cut at the cursor counts too: the kept lines it gave up were the ones a replay needed.
-    if (truncatedThrough <= 0 || truncatedThrough < cursor) {
+    if (truncatedThrough <= 0) {
       return {}
     }
     return this.keys && this.through >= spoolTruncated
