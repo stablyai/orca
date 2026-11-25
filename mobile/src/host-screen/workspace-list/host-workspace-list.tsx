@@ -85,24 +85,35 @@ export function HostWorkspaceList({
   const offline = isConnectionOutage(controller.connectionVerdict)
   // Notices and action errors are one-line toasts, not banners stacked over the title. A sheet
   // over the list would hide one, so it shows once the sheets close, then clears itself.
-  const sheetOpen = state.showWorkspaceOptions || state.actionTarget !== null
-  const notice = sheetOpen ? null : state.actionError || state.serverNotice || routeNotice || null
+  const { actionError, serverNotice, setActionError, setServerNotice } = state
+  const sheetOpen =
+    state.showWorkspaceOptions || state.actionTarget !== null || state.showNewWorktree
+  const notice = sheetOpen ? null : actionError || serverNotice || routeNotice || null
+  // Keyed to the notice alone, so other updates to the page don't restart its three seconds.
   useEffect(() => {
     if (!notice) {
       return
     }
     AccessibilityInfo.announceForAccessibility(notice)
     const timer = setTimeout(() => {
-      if (state.actionError) {
-        state.setActionError('')
-      } else if (state.serverNotice) {
-        state.setServerNotice(null)
+      if (actionError) {
+        setActionError('')
+      } else if (serverNotice) {
+        setServerNotice(null)
       } else {
         setDismissedNotice(noticeParam ?? null)
       }
     }, NOTICE_TOAST_MS)
     return () => clearTimeout(timer)
-  }, [notice, state, noticeParam, setDismissedNotice])
+  }, [
+    notice,
+    actionError,
+    serverNotice,
+    setActionError,
+    setServerNotice,
+    noticeParam,
+    setDismissedNotice
+  ])
   const renameDrafts = useHostMutationDrafts()
   const resetTitle = pageTitle?.collapsing.reset
   useEffect(() => {
