@@ -67,8 +67,9 @@ export function openSshRoutedUrlInSystemBrowser(
   } catch {
     return
   }
-  const hostname = parsed.hostname.toLowerCase()
-  const port = Number(parsed.port) || (parsed.protocol === 'https:' ? 443 : 80)
+  // A root dot (localhost.) still names localhost to a browser.
+  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '')
+  const port = parsed.port === '' ? (parsed.protocol === 'https:' ? 443 : 80) : Number(parsed.port)
   const forward =
     LOOPBACK_NAMES.has(hostname) || hostname.endsWith('.localhost')
       ? forwards.find((entry) => entry.localPort === port)
