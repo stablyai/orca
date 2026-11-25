@@ -6,17 +6,15 @@ import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { z } from 'zod'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { announceBotToolCredentialsEnded } from './bot-tool-credential-ended'
 import {
-  CredentialsFile,
   type Entry,
   openEntry,
+  parseEnvelopes,
   refuseUnsealedSecrets,
   sealEntry,
-  warnOnce,
   type Stored
 } from './bot-tool-credential-envelope'
 import { announceIfShownChanged } from './bot-tool-sign-in-changed'
@@ -44,8 +42,6 @@ export type BotToolOAuthEntry = {
   revision: number
   record: BotToolOAuthRecord
 }
-
-const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
 
 let rootOverride: string | null = null
 
@@ -76,43 +72,27 @@ function readFileText(path: string): string | null {
   }
 }
 
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-/**
- * The file's entries. A file in the older layout, with plaintext addresses beside separately sealed
- * values, is never opened: nothing vouches for its addresses, so its tools need signing in again.
- */
+/** The file's entries, each opened the first time it is read: most reads and writes touch one. */
 function parseStored(folder: string, text: string | null): Stored {
-  if (text === null) {
-    return {}
-  }
-  const json = parseJson(text)
-  const parsed = CredentialsFile.safeParse(json)
-  if (parsed.success) {
-    return Object.fromEntries(
-      Object.entries(parsed.data.credentials).map(([id, envelope]) => [
-        id,
-        { envelope, entry: openEntry(folder, id, envelope) }
-      ])
-    )
-  }
-  if (OlderLayout.safeParse(json).success) {
-    warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
-    return {}
-  }
-  throw new BotFailureError('toolCredentialsUnreadable')
+  return Object.fromEntries(
+    Object.entries(parseEnvelopes(text)).map(([id, envelope]) => {
+      let opened: Entry | null | undefined
+      const slot = {
+        envelope,
+        get entry() {
+          return opened === undefined ? (opened = openEntry(folder, id, envelope)) : opened
+        }
+      }
+      return [id, slot]
+    })
+  )
 }
 
 const readSealed = (folder: string): Stored =>
   parseStored(folder, readFileText(botToolCredentialsPath(folder)))
 
-const entryOf = (stored: Stored, id: string): Entry | null => stored[id]?.entry ?? null
+const entryOf = (stored: Stored, id: string): Entry | null =>
+  Object.hasOwn(stored, id) ? stored[id]!.entry : null
 
 /**
  * Publishes `next` only while the file still holds `expected`, so a write from another Orca on the
@@ -175,8 +155,8 @@ type BotToolCredentialsReader = {
 }
 
 /**
- * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, which opens
- * every entry; taken on the first id asked for, so a caller with none reads nothing.
+ * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, taken on
+ * the first id asked for, so a caller with none reads nothing. Only the entries asked for are opened.
  */
 export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
   let sealed: Stored | undefined

@@ -156,13 +156,13 @@ function usable(entry: BotToolOAuthEntry | null): BotToolGrant | null {
 
 /**
  * The token to send now, refreshed first when it's about to expire; null when there is no sign-in
- * a call could use. Never opens a browser and never registers.
+ * a call could use. Never opens a browser and never registers. `entry`: the sign-in just read.
  */
 export async function botToolAccessToken(
   key: BotToolOAuthKey,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  entry = readBotToolOAuth(key.folder, key.credentialId)
 ): Promise<BotToolGrant | null> {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
   if (!entry?.record.tokens) {
     return null
   }
@@ -181,9 +181,9 @@ export async function botToolAccessToken(
 export async function refreshBotToolAccessToken(
   key: BotToolOAuthKey,
   rejected: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  entry = readBotToolOAuth(key.folder, key.credentialId)
 ): Promise<BotToolGrant | null> {
-  const entry = readBotToolOAuth(key.folder, key.credentialId)
   const tokens = entry?.record.tokens
   if (!entry || !tokens) {
     return null
