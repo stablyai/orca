@@ -106,7 +106,13 @@ export const MCP_SERVER_METHODS = [
           const servers: McpServer[] = []
           try {
             for (const server of given) {
-              servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+              servers.push(
+                await addMcpServer(server, {
+                  nameGiven,
+                  signal: context.signal,
+                  workspaces: params.workspaces
+                })
+              )
             }
           } catch (error) {
             // The ones added before the refusal are on the list: other clients re-read it.
@@ -223,7 +229,10 @@ export const MCP_SERVER_METHODS = [
     handler: (params, context) =>
       onHost(
         context,
-        async () => changed(await setMcpServerWorkspaces(params.id, params.workspaces)),
+        async () =>
+          changed(
+            await setMcpServerWorkspaces(params.id, params.workspaces, { base: params.base })
+          ),
         true
       )
   }),
@@ -244,7 +253,7 @@ export const MCP_SERVER_METHODS = [
     params: McpServerDiscover,
     handler: (_params, context) =>
       onHost(context, async () => ({
-        servers: await listAgentMcpServers(await agentMcpImportHost(context.runtime))
+        servers: await listAgentMcpServers(agentMcpImportHost(context.runtime))
       }))
   }),
   defineMethod({

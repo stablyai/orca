@@ -43,6 +43,19 @@ afterEach(() => {
 })
 
 describe("a host's MCP server list", () => {
+  // A repo's "Add a server for this repo": a second call to limit it could fail and leave it on everywhere.
+  it('stores the workspaces an add names with the server, in the same write', async () => {
+    const folder = tempDir('mcp-host-list-')
+    const onlyHere = { later: false, on: ['repo-1'], off: [] }
+    const added = await addMcpServer(
+      { name: 'postgres', command: 'npx', args: ['-y', 'server-postgres'] },
+      { nameGiven: true, workspaces: onlyHere },
+      folder
+    )
+    expect(added.workspaces).toEqual(onlyHere)
+    expect((await listMcpServers(folder))[0]?.workspaces).toEqual(onlyHere)
+  })
+
   it('keeps each server’s id, agents and workspaces and the agent-file consent through edits, and header values sealed', async () => {
     const folder = tempDir('mcp-host-list-')
     const added = await addMcpServer(
@@ -60,7 +73,7 @@ describe("a host's MCP server list", () => {
     const { version } = await mcpServerDetails(added.id, folder)
     // A switch flipped while the editor is open doesn't make its save stale.
     const workspaces = { later: false, on: ['repo-1', 'folder:notes'], off: ['repo-2'] }
-    await setMcpServerWorkspaces(added.id, workspaces, folder)
+    await setMcpServerWorkspaces(added.id, workspaces, { folder })
     // A bot-tools write that knows nothing of these keys keeps them.
     await changeBotToolServers(folder, (servers) => [...servers])
     const updated = await updateMcpServer(
@@ -120,5 +133,27 @@ describe("a host's MCP server list", () => {
       docs?.id
     ])
     expect((await listMcpServers(folder)).map((server) => server.id)).toEqual([pg?.id, docs?.id])
+  })
+
+  // Two editors open on "All workspaces": each saves its own exclusion from what it was showing.
+  it('keeps an exclusion another editor saved while this one still showed the old choice', async () => {
+    const folder = tempDir('mcp-host-list-')
+    const added = await addMcpServer(
+      { name: 'postgres', command: 'npx', args: ['-y', 'server-postgres'] },
+      { nameGiven: true },
+      folder
+    )
+    const shown = { later: true, on: [], off: [] }
+    await setMcpServerWorkspaces(
+      added.id,
+      { later: true, on: [], off: ['repo-x'] },
+      { base: shown, folder }
+    )
+    const saved = await setMcpServerWorkspaces(
+      added.id,
+      { later: true, on: [], off: ['repo-y'] },
+      { base: shown, folder }
+    )
+    expect(saved.workspaces).toEqual({ later: true, on: [], off: ['repo-x', 'repo-y'] })
   })
 })

@@ -5416,7 +5416,7 @@
           "4f8368c272": "Orca 작업 트리만 해당",
           "cfe2282ffa": "알 수 없음",
           "7765a4c3e1": "해당 없음",
-          "2d41fd45c6": "• 마지막 스캔 오류: {{value0}}",
+          "2d41fd45c6": " • 마지막 스캔 오류: {{value0}}",
           "rangeLast7Days": "최근 7일",
           "rangeLast30Days": "최근 30일",
           "rangeLast90Days": "최근 90일",
@@ -5465,7 +5465,7 @@
           "4fe8820098": "모든 로컬 Codex 사용",
           "201766b754": "Orca 작업 트리만 해당",
           "bf6cf2d4dd": "알 수 없음",
-          "8a6655f7a2": "• 마지막 스캔 오류: {{value0}}",
+          "8a6655f7a2": " • 마지막 스캔 오류: {{value0}}",
           "rangeLast7Days": "최근 7일",
           "rangeLast30Days": "최근 30일",
           "rangeLast90Days": "최근 90일",
@@ -5506,7 +5506,7 @@
           "144a6050e9": "모든 로컬 OpenCode 사용",
           "e04c58327c": "Orca 작업 트리만 해당",
           "362231082f": "알 수 없음",
-          "6cc7782458": "• 마지막 스캔 오류: {{value0}}",
+          "6cc7782458": " • 마지막 스캔 오류: {{value0}}",
           "rangeLast7Days": "최근 7일",
           "rangeLast30Days": "최근 30일",
           "rangeLast90Days": "최근 90일",
@@ -6114,7 +6114,7 @@
           "hostUpdateRequired": "스킬을 삭제하려면 선택한 컴퓨터에서 Orca를 업데이트하세요.",
           "nothingOne": "해당 스킬은 여기에서 삭제할 수 없습니다.",
           "placementSummaryParts": "{{roots}}에서 {{parts}}을(를) 제거합니다.",
-          "placementJoin": "그리고",
+          "placementJoin": "와 ",
           "retainedSource": "스킬 자체는 {{path}}에 유지됩니다.",
           "nothing_other": "선택한 스킬 {{count}}개 중 여기서 삭제할 수 있는 스킬이 없습니다.",
           "nothing_one": "선택한 스킬 {{count}}개는 여기서 삭제할 수 없습니다."
@@ -11753,8 +11753,8 @@
           "yaml_no_themes_found": "선택한 파일에서 테마를 찾을 수 없습니다.",
           "loading": "Warp 테마 로드 중...",
           "found_theme_one": "테마 {{value0}}개를 찾았습니다.",
-          "found_theme_other": "테마 {{value0}}개를 찾았습니다.",
-          "found_in_source": "{{value0}}에서",
+          "found_theme_other": "테마 {{value0}}개를 찾았습니다",
+          "found_in_source": " ({{value0}})",
           "clear_all": "모두 지우기",
           "select_all": "모두 선택",
           "colors_only": "색상만",
@@ -11771,7 +11771,7 @@
           "00aaf588da": "폴더 선택",
           "import_theme": "테마 {{value0}}개 가져오기",
           "77f3e3d390": "파일 선택",
-          "found_theme": "테마 {{value0}}개를 찾았습니다."
+          "found_theme": "테마 {{value0}}개를 찾았습니다"
         },
         "useWarpThemeImport": {
           "unknown_error": "알 수 없는 오류",
@@ -13051,7 +13051,7 @@
             "weekly": "주간",
             "mcp": "매월 MCP"
           },
-          "resetIn": "— {{value0}} 후 초기화",
+          "resetIn": " — {{value0}} 후 초기화",
           "keySaved": "GLM Coding Plan API 키를 저장했습니다.",
           "keySaveFailed": "GLM Coding Plan 자격 증명 업데이트에 실패했습니다.",
           "title": "GLM Coding Plan",
@@ -15499,7 +15499,7 @@
             "pr": {
               "stack": {
                 "confirmation": {
-                  "84f6f5b9eb": "포함됨: {{numbers}}.",
+                  "84f6f5b9eb": "포함됨: {{numbers}}. ",
                   "541984b2eb": "#{{pr}}을(를) 통해 대기열에 등록하시겠습니까?",
                   "1feef35ca4": "#{{pr}}을(를) 통해 병합하시겠습니까?",
                   "queueDescription_one": "{{included}}GitHub이(가) PR {{count}}개를 병합 대기열에 함께 추가합니다. 대기열이 병합 방식을 선택하며, 여러 그룹으로 나누어 병합할 수 있습니다.",
@@ -20444,6 +20444,8 @@
         "permissionAppliesNextMessage": "{{saved}}은(는) 다음 메시지부터 적용됩니다. 현재 {{active}} 사용 중",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "모델 및 추론 수준",
+        "modelsLoading": "모델 로드 중…",
+        "signInForModels": "사용할 수 있는 모델을 보려면 로그인하세요.",
         "agents": "에이전트",
         "recent": "최근",
         "bots": "봇",
@@ -21449,6 +21451,7 @@
         "template": "템플릿",
         "nameTaken": "이름이 {{name}}인 봇이 이미 있습니다.",
         "open": "열기",
+        "openBot": "{{name}} 열기",
         "edit": "편집",
         "rename": "이름 바꾸기",
         "create": "봇 생성",
@@ -21718,7 +21721,8 @@
         "signIn": "로그인",
         "signsInClaudeAccount": "이 Claude 계정으로 로그인합니다",
         "runsCommand": "터미널에서 {{command}}을(를) 실행합니다",
-        "thenSlashCommand": "로그인한 뒤 {{slashCommand}}을(를) 입력하세요."
+        "thenSlashCommand": "로그인한 뒤 {{slashCommand}}을(를) 입력하세요.",
+        "signsInAgy": "브라우저에서 Google로 agy에 로그인합니다"
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity는 {{method}}(으)로 로그인합니다. 변경",
@@ -21752,7 +21756,16 @@
         "yourAgyVersion": "내 agy · v{{version}}",
         "orcasAgy": "Orca의 agy",
         "orcasAgyVersion": "Orca의 agy · v{{version}}",
-        "runsOn": "실행 위치: {{program}}"
+        "runsOn": "실행 위치: {{program}}",
+        "keepsOwnLogin": "이 채팅은 agy 자체 Google 로그인을 유지합니다. 새 채팅은 다음을 사용합니다: {{method}}.",
+        "apiKeyEnvironment": "환경 변수에서 가져옴",
+        "foundGcloud": "gcloud 로그인도 사용할 수 있습니다.",
+        "foundKey": "Gemini API 키도 사용할 수 있습니다.",
+        "foundKeyAndGcloud": "Gemini API 키와 gcloud 로그인도 사용할 수 있습니다.",
+        "gcloudProject": "프로젝트 {{project}}",
+        "otherWaysMenu": "다른 로그인 방법…",
+        "useGcloudLogin": "gcloud 로그인 사용",
+        "otherWaysLabel": "다른 로그인 방법"
       },
       "pairedServerAsk": {
         "always": "{{server}}에서 오는 메시지 항상 허용",
@@ -21785,6 +21798,7 @@
         "dismiss": "닫기",
         "openWorker": "워커 열기",
         "remoteOwner": "이 워커가 실행 중인 컴퓨터에서 중지하거나 지우세요",
+        "workspaceRemoved": "이 워커의 워크스페이스가 삭제되었습니다",
         "restore": "목록에 다시 표시",
         "alreadyStopped": "이미 중지됨",
         "cantStop": "지금은 중지할 수 없음",
@@ -21922,6 +21936,7 @@
           "unfinished": "로그인이 아직 완료되지 않았습니다. 열린 페이지에서 완료한 다음 “완료”를 누르세요.",
           "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "MCP 서버 관리",
         "title": "MCP 서버",
         "close": "닫기",
         "loading": "불러오는 중…",
@@ -23229,6 +23244,9 @@
       "fileRenameFailed": "'{{name}}'의 이름을 바꾸지 못했습니다.",
       "worktreeCreateFailed": "워크트리를 만들지 못했습니다.",
       "missingBaseBranchHelp": "초기 커밋을 만들거나(예: main), 생성 기준에서 기존 브랜치를 선택한 뒤 다시 시도하세요.",
+      "baseBranchLookupFailedTitle": "기본 브랜치를 확인할 수 없음",
+      "baseBranchLookupFailedMessage": "이 저장소의 기본 베이스 브랜치를 확인하는 중 Git이 실패했거나 시간 초과되었습니다.",
+      "baseBranchLookupFailedHelp": "다시 시도하거나 생성 기준에서 베이스 브랜치를 선택하세요.",
       "dropTooManyPaths": "놓은 항목에 경로가 너무 많습니다.",
       "dropPathsTooLarge": "드롭 경로 목록이 너무 큽니다.",
       "fileOwnerResolveFailed": "파일 소유자를 확인하지 못했습니다."

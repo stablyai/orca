@@ -1,11 +1,38 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { parse } from 'jsonc-parser'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addMcpServer, setMcpAgentFileAllowed } from '../mcp-host-list'
+import { mcpAgentFileHeldPath } from './mcp-agent-file-entry'
 import { McpAgentFileLedger } from './mcp-agent-file-ledger'
 import { syncMcpAgentFiles, type McpAgentFileSyncDeps } from './mcp-agent-file-sync'
+
+/** Runs right after each read of a file: a save landing just after that read. */
+const afterRead = vi.hoisted(() => {
+  const state: { hook: ((path: string) => void) | null } = { hook: null }
+  return state
+})
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const fs = await importOriginal<typeof FsPromises>()
+  return {
+    ...fs,
+    readFile: async (...args: Parameters<typeof fs.readFile>) => {
+      const result = await fs.readFile(...args)
+      afterRead.hook?.(String(args[0]))
+      return result
+    }
+  }
+})
 
 const dirs: string[] = []
 const tempDir = (prefix: string): string => {
@@ -154,6 +181,74 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
     await setMcpAgentFileAllowed('cursor', false, folder)
     await syncMcpAgentFiles(app)
     expect(read(paths.cursor)).toBe(CURSOR_BEFORE.replace('"dark"', '"light"'))
+  })
+
+  it.each([
+    [
+      '{',
+      '{\n  // keep: my token lives in ~/.factory/env',
+      '{\n  // keep: my token lives in ~/.factory/env\n}\n'
+    ],
+    [
+      '"mcpServers": {',
+      '"mcpServers": {\n    // keep: my token lives in ~/.factory/env',
+      '{\n  "mcpServers": {\n    // keep: my token lives in ~/.factory/env\n  }\n}\n'
+    ]
+  ])('keeps a file Orca made once the user writes a comment after %s', async (at, noted, left) => {
+    const { homeDir, folder, paths } = await setUp()
+    const app = instance(folder, homeDir, join(homeDir, 'orca'))
+    await setMcpAgentFileAllowed('droid', true, folder)
+    await syncMcpAgentFiles(app)
+    writeFileSync(paths.droid, read(paths.droid).replace(at, noted))
+
+    await setMcpAgentFileAllowed('droid', false, folder)
+    await syncMcpAgentFiles(app)
+    expect(read(paths.droid)).toBe(left)
+  })
+
+  // After the sync's own read, or after the read that decides the removal.
+  it.each([1, 2])(
+    'never deletes a save that lands after read %i of the last entry’s removal',
+    async (at) => {
+      const { homeDir, folder, paths } = await setUp()
+      const app = instance(folder, homeDir, join(homeDir, 'orca'))
+      await setMcpAgentFileAllowed('droid', true, folder)
+      await syncMcpAgentFiles(app)
+      await setMcpAgentFileAllowed('droid', false, folder)
+
+      const save = '{ "mcpServers": { "mine": { "command": "my-mcp" } } }\n'
+      let reads = 0
+      afterRead.hook = (path) => {
+        if (path.startsWith(paths.droid) && ++reads === at) {
+          afterRead.hook = null
+          writeFileSync(paths.droid, save)
+        }
+      }
+      try {
+        await syncMcpAgentFiles(app)
+      } finally {
+        afterRead.hook = null
+      }
+      expect(reads).toBeGreaterThanOrEqual(at)
+      expect(read(paths.droid)).toBe(save)
+      expect(readdirSync(dirname(paths.droid))).toEqual(['mcp.json'])
+    }
+  )
+
+  it('puts back a file that a removal stopped by a quit left held', async () => {
+    const { homeDir, folder, paths } = await setUp()
+    const app = instance(folder, homeDir, join(homeDir, 'orca'))
+    await setMcpAgentFileAllowed('droid', true, folder)
+    await syncMcpAgentFiles(app)
+    await setMcpAgentFileAllowed('droid', false, folder)
+    // The user's save, moved to the held name just before Orca quit.
+    const save = '{ "mcpServers": { "mine": { "command": "my-mcp" } } }\n'
+    writeFileSync(mcpAgentFileHeldPath(paths.droid, app.userDataPath), save)
+    rmSync(paths.droid)
+
+    await syncMcpAgentFiles(app)
+    expect(read(paths.droid)).toBe(save)
+    expect(readdirSync(dirname(paths.droid))).toEqual(['mcp.json'])
   })
 
   it('writes nothing while the MCP servers switch is off', async () => {

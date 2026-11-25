@@ -18106,7 +18106,7 @@
           "13822cdfda": "Düz metin"
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ gezin&nbsp;&nbsp;↵ seç&nbsp;&nbsp;esc kapat",
+          "e17b987473": "↑↓ gezin  ↵ seç  esc kapat",
           "63ced7cb9b": "Belge bulunamadı",
           "0e8489bc11": "Markdown belge bağlantıları",
           "showingOfTotal": "{{total}} öğeden {{shown}} tanesi gösteriliyor"
@@ -21479,7 +21479,9 @@
         "noOtherChats": "Başka sohbet yok",
         "retryChats": "Yeniden dene",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model ve akıl yürütme düzeyi"
+        "modelAndEffort": "Model ve akıl yürütme düzeyi",
+        "modelsLoading": "Modeller yükleniyor…",
+        "signInForModels": "Kullanabileceğiniz modelleri görmek için oturum açın."
       },
       "tool": {
         "exitCode": "çıkış {{value0}}",
@@ -22651,7 +22653,8 @@
         "signIn": "Oturum aç",
         "signsInClaudeAccount": "Bu Claude hesabında oturum açar",
         "runsCommand": "Terminalde {{command}} komutunu çalıştırır",
-        "thenSlashCommand": "Oturum açtıktan sonra {{slashCommand}} yazın."
+        "thenSlashCommand": "Oturum açtıktan sonra {{slashCommand}} yazın.",
+        "signsInAgy": "agy oturumunu tarayıcınızda Google ile açar"
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity oturum açma yöntemi: {{method}}. Değiştir",
@@ -22685,7 +22688,16 @@
         "yourAgyVersion": "Sizin agy sürümünüz · v{{version}}",
         "orcasAgy": "Orca'nın agy kopyası",
         "orcasAgyVersion": "Orca’nın agy sürümü · v{{version}}",
-        "runsOn": "Çalıştığı program: {{program}}"
+        "runsOn": "Çalıştığı program: {{program}}",
+        "keepsOwnLogin": "Bu sohbet agy’nin kendi Google oturumunu kullanmaya devam eder. Yeni sohbetlerde kullanılacak yöntem: {{method}}.",
+        "apiKeyEnvironment": "Ortamınızdan",
+        "foundGcloud": "gcloud oturumunuz da kullanılabilir.",
+        "foundKey": "Gemini API anahtarınız da kullanılabilir.",
+        "foundKeyAndGcloud": "Gemini API anahtarınız ve gcloud oturumunuz da kullanılabilir.",
+        "gcloudProject": "Proje: {{project}}",
+        "otherWaysMenu": "Diğer oturum açma yolları…",
+        "useGcloudLogin": "gcloud oturumunuzu kullanın",
+        "otherWaysLabel": "Diğer oturum açma yolları"
       },
       "pairedServerAsk": {
         "always": "{{server}} için her zaman izin ver",
@@ -22715,6 +22727,7 @@
         "dismiss": "Kapat",
         "openWorker": "Çalışanı aç",
         "remoteOwner": "Bunu, çalıştığı bilgisayardan durdurun veya temizleyin",
+        "workspaceRemoved": "Bu çalışanın çalışma alanı kaldırıldı",
         "restore": "Listede yeniden göster",
         "alreadyStopped": "Zaten durduruldu",
         "cantStop": "Şu anda durdurulamıyor",
@@ -22866,6 +22879,7 @@
           "unfinished": "Oturum açma henüz tamamlanmadı. Açılan sayfada tamamlayıp “Bitti” düğmesine basın.",
           "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "MCP sunucularını yönet",
         "title": "MCP sunucuları",
         "close": "Kapat",
         "loading": "Yükleniyor…",
@@ -24273,6 +24287,9 @@
       "fileRenameFailed": "“{{name}}” yeniden adlandırılamadı.",
       "worktreeCreateFailed": "Worktree oluşturulamadı.",
       "missingBaseBranchHelp": "İlk commit’i oluşturun (örneğin main üzerinde) veya kaynak branch seçiminden mevcut bir branch'i seçip yeniden deneyin.",
+      "baseBranchLookupFailedTitle": "Temel branch belirlenemedi",
+      "baseBranchLookupFailedMessage": "Bu deponun varsayılan temel branch'i aranırken Git başarısız oldu veya zaman aşımına uğradı.",
+      "baseBranchLookupFailedHelp": "Yeniden deneyin veya kaynak branch seçiminden bir temel branch seçin.",
       "dropTooManyPaths": "Tek seferde çok fazla dosya veya klasör bıraktınız.",
       "dropPathsTooLarge": "Bırakma yolu listesi çok büyük.",
       "fileOwnerResolveFailed": "Dosyanın sahibi belirlenemedi."

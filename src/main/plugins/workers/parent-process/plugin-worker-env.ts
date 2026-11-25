@@ -6,6 +6,10 @@ const WORKER_ENV_ALLOWLIST = [
   'PATH',
   'HOME',
   'USERPROFILE',
+  // Login names (not credentials): Bun-built CLIs like Claude Code key Keychain logins by them.
+  'USER',
+  'LOGNAME',
+  'USERNAME',
   'LANG',
   'LC_ALL',
   'LC_CTYPE',

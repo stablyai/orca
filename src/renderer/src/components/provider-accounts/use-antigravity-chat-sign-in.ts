@@ -78,6 +78,8 @@ function signInAction(
   return auth === 'signedIn' ? 'changeAccount' : 'signIn'
 }
 
+const subscribeToNothing = (): (() => void) => () => {}
+
 const NOT_FOLLOWED: AntigravityChatSignInView = {
   status: 'unknown',
   flow: null,
@@ -103,7 +105,12 @@ export function useAntigravityChatSignIn(
   )
   const read = (): AntigravityChatSignInView =>
     owner ? readAntigravityChatSignIn(owner) : NOT_FOLLOWED
-  return useSyncExternalStore(subscribeAntigravityChatSignIns, read, read)
+  // Panes that follow no host (every non-Antigravity chat) skip this store's publications.
+  return useSyncExternalStore(
+    shown ? subscribeAntigravityChatSignIns : subscribeToNothing,
+    read,
+    read
+  )
 }
 
 /** Share host auth across Settings layouts; auth stays unknown until a chat or sign-in asks the host. */
