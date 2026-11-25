@@ -161,10 +161,10 @@ export function claudeLaunchPermissions(
       picked: () => {
         if (!policy && kept) {
           live ??= createClaudeFullAccessPolicy(launch.providerSessionId, true)
-          live.arm()
         }
+        ;(policy ?? live)?.arm()
       },
-      unpicked: () => live?.revoke()
+      unpicked: () => (policy ?? live)?.revoke()
     }
   }
 }

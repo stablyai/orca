@@ -45,12 +45,19 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
   let partial = ''
   let ids: (string | null)[] = []
   let head = 0
+  const compact = (): void => {
+    if (head > 1_024 && head * 2 > ids.length) {
+      ids = ids.slice(head)
+      head = 0
+    }
+  }
   const takeReached = (): void => {
     while (head < ids.length && ids[head] === TAKEN_ON_REACH) {
       ids[head] = null
       head += 1
       records.taken()
     }
+    compact()
   }
   return {
     observe: (chunk) => {
@@ -83,10 +90,6 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
         records.taken()
       }
       takeReached()
-      if (head > 1_024 && head * 2 > ids.length) {
-        ids = ids.slice(head)
-        head = 0
-      }
     }
   }
 }
