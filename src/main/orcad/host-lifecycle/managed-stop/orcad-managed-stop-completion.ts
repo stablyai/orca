@@ -10,11 +10,11 @@ import {
 } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   compareOrcadProcessIdentity,
-  readOrcadProcessStartedAtMsAsync,
   recordedOrcadProcessIncarnation,
   type OrcadProcessIdentityReaders,
   type OrcadRecordedIdentity
 } from '../../instance-lock/orcad-process-start-time'
+import { getPsProcessIdentityAsync } from '../../../daemon/endpoint/identity/daemon-process-identity-query'
 import {
   hasErrorCode,
   inspectProcessSignal
@@ -57,11 +57,14 @@ async function observeInstance(
   if (probe !== 'alive') {
     return probe === 'missing' ? 'exited' : 'unverifiable'
   }
-  // Read the start time first so each poll's ps runs off this event loop; incarnations never need it.
+  // macOS reads start time by forking setuid ps: run it async so polls never block this loop.
+  // Linux procfs, Windows kernel reads and recorded incarnations stay with the sync readers.
   const startedAtMs =
-    options.startedAtMs || recordedOrcadProcessIncarnation(recorded)
+    process.platform !== 'darwin' ||
+    options.startedAtMs ||
+    recordedOrcadProcessIncarnation(recorded)
       ? undefined
-      : await readOrcadProcessStartedAtMsAsync(instance.pid)
+      : ((await getPsProcessIdentityAsync(instance.pid))?.startedAtMs ?? null)
   // Wall-clock drift alone cannot prove PID reuse.
   const identity = compareOrcadProcessIdentity(
     instance.pid,
