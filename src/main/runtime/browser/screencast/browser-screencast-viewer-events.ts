@@ -76,12 +76,14 @@ function watchDownloadsWithCopies(
 ): () => void {
   let stopped = false
   const stop = browserManager.watchDownloads(browserPageId, (event) => {
-    // A client-hosted page's download went to its workspace, not a file this host keeps.
+    // A client-hosted page's download went to its workspace, and a claimed one is deleted once
+    // its feature reads it: neither is a file this host keeps.
     if (
       event.type !== 'downloadFinished' ||
       event.download.status !== 'completed' ||
       !event.download.savePath ||
-      event.download.remoteDestination
+      event.download.remoteDestination ||
+      event.download.claimLabel
     ) {
       emit(event)
       return

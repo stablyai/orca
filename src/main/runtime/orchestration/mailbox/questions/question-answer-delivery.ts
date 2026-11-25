@@ -63,6 +63,8 @@ export async function waitForQuestionAnswer(args: {
   timeoutMs: number
   signal?: AbortSignal
   recordMutationReceipt?: (receipt: unknown) => void
+  /** Re-proves a restart-recovered asker before each take; false leaves the answer for its worker. */
+  callerCurrent?: () => boolean
 }): Promise<unknown> {
   const { questionId, timeoutMs } = args
   const unanswered = { answer: null, messageId: questionId, threadId: questionId, timeoutMs }
@@ -76,15 +78,25 @@ export async function waitForQuestionAnswer(args: {
   const deadline = Date.now() + timeoutMs
   while (true) {
     const current = args.readQuestion()
-    if (args.signal?.aborted) {
-      // A departed caller must not take the answer: leave it unread and wake the worker with it.
+    // A departed or replaced caller must not take the answer: leave it unread and wake the worker with it.
+    const wakeWorker = (): void => {
       if (current?.status === 'answered' || (current && unreadNotice(args.runtime, current))) {
         args.runtime.notifyMessageArrived(`dispatch:${current.dispatch_id}`, 'status')
       }
+    }
+    if (args.signal?.aborted) {
+      wakeWorker()
       return { ...unanswered, timedOut: false, cancelled: true, connectionLost: true }
     }
     if (!current || current.status === 'closed') {
       throw new OrchestrationError('dispatch_inactive', args.closedMessage)
+    }
+    if (args.callerCurrent && !args.callerCurrent()) {
+      wakeWorker()
+      throw new OrchestrationError(
+        'consumer_fenced',
+        `This asker no longer holds the Dispatch of question ${questionId}; its answer stays unread for its worker.`
+      )
     }
     if (current.status === 'answered') {
       // This caller shows the answer, so its Dispatch mail must not deliver it again.

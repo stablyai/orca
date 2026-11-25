@@ -1,6 +1,7 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from '../../browser-error'
 import { withAgentInputInjection } from '../input/agent-input-injection'
+import { sendOffscreenPagePointerInput } from '../input/offscreen-frame-pointer-route'
 import {
   readRemoteCliAdmittedPage,
   trackRemoteCliInput
@@ -12,16 +13,9 @@ const VIEW_RESIZING_CDP_METHODS: ReadonlySet<string> = new Set([
   'Emulation.setVisibleSize'
 ])
 
-type GuestCdpTarget = Pick<
-  WebContents,
-  'id' | 'isDestroyed' | 'isCrashed' | 'setIgnoreMenuShortcuts'
-> & {
-  debugger: Pick<WebContents['debugger'], 'sendCommand'>
-}
-
 /** Gate viewport and passthrough CDP commands against crashed guests. */
 export function sendGuestCdpCommand(
-  guest: GuestCdpTarget,
+  guest: WebContents,
   method: string,
   params?: Record<string, unknown>,
   sessionId?: string
@@ -36,12 +30,23 @@ export function sendGuestCdpCommand(
         )
       )
     }
-    return trackRemoteCliInput(guest.id, method, params, () =>
+    const sendRaw = (
+      rawMethod: string,
+      rawParams?: Record<string, unknown>,
+      rawSessionId?: string
+    ): Promise<unknown> =>
       Promise.resolve(
-        sessionId === undefined
-          ? guest.debugger.sendCommand(method, params)
-          : guest.debugger.sendCommand(method, params, sessionId)
+        rawSessionId === undefined
+          ? guest.debugger.sendCommand(rawMethod, rawParams)
+          : guest.debugger.sendCommand(rawMethod, rawParams, rawSessionId)
       )
+    return trackRemoteCliInput(guest.id, method, params, () =>
+      method === 'Input.dispatchMouseEvent' &&
+      sessionId === undefined &&
+      params &&
+      guest.isOffscreen()
+        ? sendOffscreenPagePointerInput(guest, sendRaw, params)
+        : sendRaw(method, params, sessionId)
     )
   }
   // Input already sent remains valid after revocation; its response carries no page data.

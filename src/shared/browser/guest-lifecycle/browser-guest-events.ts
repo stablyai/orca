@@ -50,6 +50,9 @@ export type BrowserDownloadRequestedEvent = {
   totalBytes: number | null
   mimeType: string | null
   savePath: string
+  /** Set when a feature in Orca took the download (e.g. "Google setup in Orca"): shown as where it
+   *  went instead of savePath, a private file the feature deletes, so there is nothing to open or copy. */
+  claimLabel?: string
   status: 'downloading'
 }
 
@@ -68,6 +71,8 @@ export type BrowserDownloadFinishedEvent = {
   savePath: string | null
   /** Present only when a client-hosted page's download was written to the remote workspace instead. */
   remoteDestination?: { workspaceRelativePath: string; hostLabel: string }
+  /** As on the requested event. */
+  claimLabel?: string
   /** Human-readable UI copy only; must never contain secrets. */
   error: string | null
 }

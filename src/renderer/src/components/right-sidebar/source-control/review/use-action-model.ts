@@ -4,6 +4,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import { isStageableStatusEntry } from '../../../../../../shared/source-control/listing/source-control-discard-all-sequence'
 import { resolveDropdownItems } from '../panel/source-control-dropdown-items'
+import type { SourceControlRebaseModel } from '../panel/base-rebase-state'
 import { resolveCommitAreaPrimaryAction } from './source-control-primary-action'
 import { resolveCreatePrHeaderAction } from './primary-create-pr-intent-action'
 import { resolveVisibleCreatePrHeaderAction } from './create-pr-intent-state'
@@ -39,7 +40,9 @@ export function useSourceControlActionModel({
   hostedReviewReviewLabel,
   hasSuppressedGitHubPRState,
   conflictOperation,
-  effectiveBaseRef
+  effectiveBaseRef,
+  rebaseMenu,
+  suppressPullAfterRebase
 }: {
   grouped: SourceControlEntryGroups
   commitMessage: string
@@ -67,6 +70,11 @@ export function useSourceControlActionModel({
   hasSuppressedGitHubPRState: boolean
   conflictOperation: DropdownInput['conflictOperation']
   effectiveBaseRef: string | null
+  rebaseMenu: Pick<
+    SourceControlRebaseModel,
+    'rebaseBehindCount' | 'rebaseBlockedByDirtyTree' | 'rebaseContinueState'
+  >
+  suppressPullAfterRebase: boolean
 }) {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
@@ -110,9 +118,11 @@ export function useSourceControlActionModel({
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        isPrIntentInFlight: isCreatePrIntentInFlight
+        isPrIntentInFlight: isCreatePrIntentInFlight,
+        suppressPullAfterRebase
       }),
     [
+      suppressPullAfterRebase,
       commitMessage,
       grouped.staged.length,
       hasStageableChanges,
@@ -214,6 +224,7 @@ export function useSourceControlActionModel({
       ? createPrHeaderAction
       : null
   const visibleCreatePrHeaderAction = resolveVisibleCreatePrHeaderAction({ createPrHeaderAction })
+  const { rebaseBehindCount, rebaseBlockedByDirtyTree, rebaseContinueState } = rebaseMenu
   const dropdownItems = useMemo(
     () =>
       resolveDropdownItems({
@@ -236,9 +247,20 @@ export function useSourceControlActionModel({
           branchSummary?.status === 'ready' ? (branchSummary.commitsAhead ?? 0) : undefined,
         hasCurrentBranch: Boolean(branchName),
         canPushLinkedReviewWithoutUpstream: canUseHostedReviewPushTarget,
-        rebaseBaseRef: effectiveBaseRef
+        rebaseBaseRef: effectiveBaseRef,
+        rebaseBehindCount,
+        rebaseBlockedByDirtyTree,
+        rebaseContinueReady: rebaseContinueState === 'ready',
+        suppressPullAfterRebase,
+        primaryActionKind: primaryAction.disabled ? undefined : primaryAction.kind
       }),
     [
+      rebaseBehindCount,
+      rebaseContinueState,
+      rebaseBlockedByDirtyTree,
+      suppressPullAfterRebase,
+      primaryAction.disabled,
+      primaryAction.kind,
       commitMessage,
       grouped.staged.length,
       hasStageableChanges,

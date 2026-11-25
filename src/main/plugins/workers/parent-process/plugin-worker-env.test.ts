@@ -21,6 +21,12 @@ describe('buildPluginWorkerEnv', () => {
     })
   })
 
+  it('passes login names so CLIs that key logins by account can find them', () => {
+    const logins = { USER: 'ada', LOGNAME: 'ada', USERNAME: 'ada' }
+    expect(buildPluginWorkerEnv({ ...sessionEnv, ...logins }, 'darwin')).toMatchObject(logins)
+    expect(buildPluginWorkerEnv({ username: 'ada' }, 'win32').USERNAME).toBe('ada')
+  })
+
   it("drops Chromium's disabled: bus marker so GLib falls back to $XDG_RUNTIME_DIR/bus", () => {
     const env = buildPluginWorkerEnv(
       { ...sessionEnv, DBUS_SESSION_BUS_ADDRESS: 'disabled:' },

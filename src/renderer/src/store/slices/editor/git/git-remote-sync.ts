@@ -2,6 +2,8 @@ import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { gitOperationExecutionHostId, resolveGitOperationTarget } from './git-operation-target'
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import type { RebaseFromBaseResult } from '../../../../../../shared/git/status/git-status-types'
 import {
   fetchRuntimeGit,
   getRuntimeGitUpstreamStatus,
@@ -98,8 +100,9 @@ export function createGitRemoteSync(
     ) => {
       const runtimeTarget = resolveGitOperationTarget(get(), worktreeId, options)
       const endRemoteOperation = get().beginRemoteOperation('rebase', worktreeId)
+      let result: RebaseFromBaseResult
       try {
-        await rebaseRuntimeGitFromBase(
+        result = await rebaseRuntimeGitFromBase(
           { target: runtimeTarget, worktreeId, worktreePath, connectionId },
           baseRef
         )
@@ -119,6 +122,16 @@ export function createGitRemoteSync(
           gitOperationExecutionHostId(runtimeTarget, connectionId)
         )
       }
+      if (result.autostashConflict) {
+        // The rebase landed, so this is not a failure, but it is not a clean success either.
+        toast.warning(
+          translate(
+            'auto.components.right.sidebar.SourceControl.rebaseAutostashConflict',
+            "Rebased. Your uncommitted changes didn't reapply cleanly; they're saved in the stash."
+          )
+        )
+      }
+      return result
     },
     fetchBranch: async (worktreeId, worktreePath, connectionId, pushTarget, options) => {
       const runtimeTarget = resolveGitOperationTarget(get(), worktreeId, options)

@@ -51,12 +51,15 @@ import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
 import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
+import { CodexComposerPredictions } from '../turns/codex-composer-predictions'
+import { codexHoldsLiveProviderProcess } from './codex-live-provider-process'
 
 export class CodexStructuredSessionAdapter implements SessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
   private readonly teardown: CodexStructuredSessionTeardown
+  private readonly predictions = new CodexComposerPredictions(this.sessions, () => this.deps)
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
     this.atRestCommands = deps.atRestCommands
@@ -127,6 +130,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
 
   open: SessionAdapter['open'] = (input) => openCodexStart(this.acquisitions, input)
 
+  promptSuggestionInterestChanged = this.predictions.interestChanged
+
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(
     acquisition: CodexAcquisitionAttempt['window'],
@@ -169,6 +174,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       // After the journal and the parent's republished row, never ahead of either.
       session.backgroundTasks.publishChildWork()
       startCodexTerminalStopProbe(this.sessions, event.sessionId, session, this.deps)
+      this.predictions.observe(session, event)
     }
     requestEndWait.settleCodexRequestEndWaiters(session)
     this.deps.onEvent?.(event)
@@ -201,19 +207,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
 
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    const starting = this.acquisitions.get(sessionId)
-    if (starting?.acquisitionGeneration === acquisitionGeneration) {
-      return !starting.exitProven && starting.window.connection?.pid !== undefined
-    }
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      !session.ended &&
-      session.exitObservedAt === undefined
-    )
-  }
+  holdsLiveProviderProcess = codexHoldsLiveProviderProcess(this.sessions, this.acquisitions)
 
   backgroundTaskStops: NonNullable<SessionAdapter['backgroundTaskStops']> = (sessionId) =>
     backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))
