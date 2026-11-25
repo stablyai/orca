@@ -21727,7 +21727,8 @@
         "signIn": "로그인",
         "signsInClaudeAccount": "이 Claude 계정으로 로그인합니다",
         "runsCommand": "터미널에서 {{command}}을(를) 실행합니다",
-        "thenSlashCommand": "로그인한 뒤 {{slashCommand}}을(를) 입력하세요."
+        "thenSlashCommand": "로그인한 뒤 {{slashCommand}}을(를) 입력하세요.",
+        "signsInAgy": "브라우저에서 Google로 agy에 로그인합니다"
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity는 {{method}}(으)로 로그인합니다. 변경",
@@ -21761,7 +21762,16 @@
         "yourAgyVersion": "내 agy · v{{version}}",
         "orcasAgy": "Orca의 agy",
         "orcasAgyVersion": "Orca의 agy · v{{version}}",
-        "runsOn": "실행 위치: {{program}}"
+        "runsOn": "실행 위치: {{program}}",
+        "keepsOwnLogin": "이 채팅은 agy 자체 Google 로그인을 유지합니다. 새 채팅은 다음을 사용합니다: {{method}}.",
+        "apiKeyEnvironment": "환경 변수에서 가져옴",
+        "foundGcloud": "gcloud 로그인도 사용할 수 있습니다.",
+        "foundKey": "Gemini API 키도 사용할 수 있습니다.",
+        "foundKeyAndGcloud": "Gemini API 키와 gcloud 로그인도 사용할 수 있습니다.",
+        "gcloudProject": "프로젝트 {{project}}",
+        "otherWaysMenu": "다른 로그인 방법…",
+        "useGcloudLogin": "gcloud 로그인 사용",
+        "otherWaysLabel": "다른 로그인 방법"
       },
       "pairedServerAsk": {
         "always": "{{server}}에서 오는 메시지 항상 허용",
@@ -21931,6 +21941,7 @@
           "unfinished": "로그인이 아직 완료되지 않았습니다. 열린 페이지에서 완료한 다음 “완료”를 누르세요.",
           "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "MCP 서버 관리",
         "title": "MCP 서버",
         "close": "닫기",
         "loading": "불러오는 중…",
