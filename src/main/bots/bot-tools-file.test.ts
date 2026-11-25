@@ -104,6 +104,30 @@ describe("a bot's tools file", () => {
     expect(await readBotToolServers(folder)).toEqual([server])
   })
 
+  // A hand edit pointed a signed-in row elsewhere and left values inline: the row starts a new
+  // sign-in for its address instead of every read of the file being refused.
+  it('reads a row whose sign-in is for another address, with values left inline', async () => {
+    const folder = tempDir('bot-tools-file-')
+    const credential = newBotToolCredentialId()
+    commitBotToolOAuth(folder, credential, () => ({
+      url: 'https://elsewhere.example.com/mcp',
+      grant: 0,
+      record: { resource: 'https://elsewhere.example.com/mcp' }
+    }))
+    mkdirSync(join(folder, '.orca'), { recursive: true })
+    writeFileSync(
+      botToolsPath(folder),
+      JSON.stringify({
+        servers: [{ ...notion, transport: 'http', credential, headers: { 'x-api-key': SECRET } }]
+      })
+    )
+    const [server] = await readBotToolServers(folder)
+    expect(readFileSync(botToolsPath(folder), 'utf8')).not.toContain(SECRET)
+    const id = server && 'credential' in server ? server.credential : ''
+    expect(id).not.toBe(credential)
+    expect(readBotToolOAuth(folder, id!)?.url).toBe(notion.url)
+  })
+
   it("drops a removed tool's saved values", async () => {
     const folder = tempDir('bot-tools-file-')
     await writeBotToolServers(folder, [{ ...notion, headers: { authorization: SECRET } }])

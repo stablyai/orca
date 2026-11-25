@@ -75,9 +75,14 @@ function writeServers(
       return { ...unknown, ...server }
     }
     const { headers, credential, ...rest } = server
-    // Only an address or credential new to this entry can leave a sign-in for another app.
-    const moved = previous?.url !== server.url || previous?.credential !== credential
-    const signIn = credential && moved ? saved.oauth(credential) : null
+    // A row other than the one edited, with the address and credential it had and no values to
+    // save, can't newly hold a sign-in for another app; every other row's is checked.
+    const checked =
+      rename?.to === server.name ||
+      previous?.url !== server.url ||
+      previous?.credential !== credential ||
+      Object.keys(headers ?? {}).length > 0
+    const signIn = credential && checked ? saved.oauth(credential) : null
     if (signIn && signIn.url !== server.url) {
       // A new address is another app to sign in to: the old sign-in goes, and a new one starts out.
       const id = newBotToolCredentialId()
