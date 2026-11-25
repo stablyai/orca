@@ -39,9 +39,11 @@ import { resolveAgentSessionReplayOutcome } from '../operations/structured-agent
 import { captureAttachedHydration } from './structured-agent-session-attach-hydration'
 import { acquireOwner } from './structured-agent-session-acquisition'
 import {
+  closePreparedAdoptedTranscript,
   importAdoptedTranscript,
   prepareAdoptedTranscript
 } from './structured-agent-session-adopted-import'
+import type { PrepareClaudeImport } from '../../agent-session-journal/history-import/journal-claude-import-stage'
 import {
   withAgentSessionCreatePhase,
   type AgentSessionCreatePhaseRecorder
@@ -59,6 +61,7 @@ export type AttachedOwner = 'acquired' | 'kept' | 'none'
 
 export type AttachFlowInput = {
   store: AgentSessionRecordStore
+  prepareClaudeImport?: PrepareClaudeImport
   adapter: StructuredAgentSessionAdapter
   agents: Pick<StructuredAgentRegistry, 'definition'>
   logger: StructuredAgentSessionLogger
@@ -148,162 +151,169 @@ export async function performAttach(
   const lock = input.lock ?? heldStructuredAgentSessionAttachLock(input.acquireSignal)
   const preparedTranscript = store.getRecord(sessionId)
     ? { ok: true as const, items: null }
-    : await prepareAdoptedTranscript(params, lock.signal)
+    : await prepareAdoptedTranscript(params, lock.signal, input.prepareClaudeImport)
   if (!preparedTranscript.ok) {
     return preparedTranscript
   }
   try {
-    const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
-      lock.commit(() =>
-        store.reserveOwner(
-          reserveRequestFor({
-            sessionId,
-            params,
-            authority: input.authority,
-            callerKey: input.callerKey,
-            fingerprint: admitted.fingerprint,
-            now: input.now(),
-            models: input.models
-          })
+    try {
+      const reserved = await withAgentSessionCreatePhase('reserve_owner', input.recordPhase, () =>
+        lock.commit(() =>
+          store.reserveOwner(
+            reserveRequestFor({
+              sessionId,
+              params,
+              authority: input.authority,
+              callerKey: input.callerKey,
+              fingerprint: admitted.fingerprint,
+              now: input.now(),
+              models: input.models
+            })
+          )
         )
       )
-    )
-    record = reserved.record
-    replayed = reserved.disposition === 'replayed'
-    // Recheck support after reservation; settle pending reservations invalidated by drift.
-    reservedRecord = record
-    if (!supported(record)) {
+      record = reserved.record
+      replayed = reserved.disposition === 'replayed'
+      // Recheck support after reservation; settle pending reservations invalidated by drift.
+      reservedRecord = record
+      if (!supported(record)) {
+        if (
+          record.lease.claimStatus === 'reserved' &&
+          record.lease.handoffStage === 'new-owner-proving' &&
+          record.lease.reservedSpawnToken
+        ) {
+          unsupportedReservationSettlementAttempted = true
+          await settleUnsupportedReservation(input, record)
+        }
+        return unsupported()
+      }
       if (
-        record.lease.claimStatus === 'reserved' &&
-        record.lease.handoffStage === 'new-owner-proving' &&
-        record.lease.reservedSpawnToken
+        replayed &&
+        reserved.operationRow.outcome.status !== 'pending' &&
+        reserved.operationRow.outcome.status !== 'succeeded'
       ) {
-        unsupportedReservationSettlementAttempted = true
-        await settleUnsupportedReservation(input, record)
+        const replay = resolveAgentSessionReplayOutcome({
+          operationId: params.envelope.clientOperationId,
+          outcome: reserved.operationRow.outcome,
+          reconstruct: () => null
+        })
+        if (replay.decision === 'refuse') {
+          return { ok: false, refusal: replay.refusal }
+        }
       }
-      return unsupported()
-    }
-    if (
-      replayed &&
-      reserved.operationRow.outcome.status !== 'pending' &&
-      reserved.operationRow.outcome.status !== 'succeeded'
-    ) {
-      const replay = resolveAgentSessionReplayOutcome({
-        operationId: params.envelope.clientOperationId,
-        outcome: reserved.operationRow.outcome,
-        reconstruct: () => null
-      })
-      if (replay.decision === 'refuse') {
-        return { ok: false, refusal: replay.refusal }
+      if (agentSessionLeaseAdmitsWriter(record.lease)) {
+        // Keep the existing live owner.
+      } else if (replayed && reserved.operationRow.outcome.status === 'succeeded') {
+        // Successful creates replay at rest after their child ends; next send starts another.
+        owner = 'none'
+      } else {
+        const acquired = await withAgentSessionCreatePhase('acquire_owner', input.recordPhase, () =>
+          acquireOwner(input, record)
+        )
+        record = acquired.record
+        acquisitionGeneration = acquired.acquisitionGeneration
+        accountHome = acquired.accountHome
+        owner = 'acquired'
       }
-    }
-    if (agentSessionLeaseAdmitsWriter(record.lease)) {
-      // Keep the existing live owner.
-    } else if (replayed && reserved.operationRow.outcome.status === 'succeeded') {
-      // Successful creates replay at rest after their child ends; next send starts another.
-      owner = 'none'
-    } else {
-      const acquired = await withAgentSessionCreatePhase('acquire_owner', input.recordPhase, () =>
-        acquireOwner(input, record)
-      )
-      record = acquired.record
-      acquisitionGeneration = acquired.acquisitionGeneration
-      accountHome = acquired.accountHome
-      owner = 'acquired'
-    }
-  } catch (error) {
-    const wording = {
-      record: reservedRecord ?? store.getRecord(sessionId),
-      newSession: !params.providerHandle
-    }
-    const spawnToken = reservedRecord?.lease.reservedSpawnToken
-    if (reservedRecord && spawnToken && !unsupportedReservationSettlementAttempted) {
-      try {
-        await store.settleFailedAcquisition({
+    } catch (error) {
+      const wording = {
+        record: reservedRecord ?? store.getRecord(sessionId),
+        newSession: !params.providerHandle
+      }
+      const spawnToken = reservedRecord?.lease.reservedSpawnToken
+      if (reservedRecord && spawnToken && !unsupportedReservationSettlementAttempted) {
+        try {
+          await store.settleFailedAcquisition({
+            sessionId,
+            fence: reservedRecord.lease.runtimeFence,
+            spawnToken,
+            callerKey: input.callerKey,
+            operationId: params.envelope.clientOperationId,
+            ...failedAcquisitionSettlement(error, wording),
+            now: input.now()
+          })
+        } catch (settlementError) {
+          throw new AggregateError(
+            [error, settlementError],
+            'agent session acquisition failure settlement failed'
+          )
+        }
+      }
+      input.onAcquisitionFailed?.(error)
+      const failed = failedAcquisitionRefusal(error, wording)
+      const thrown = failed ? error : preSpawnFailureInWords(error, wording)
+      if (failed || thrown !== error) {
+        input.logger.warn('starting the provider failed', {
+          scope: 'provider-start',
           sessionId,
-          fence: reservedRecord.lease.runtimeFence,
-          spawnToken,
+          error
+        })
+      }
+      return (
+        failed ?? {
+          ok: false,
+          refusal: classifyStoreFailure(
+            thrown,
+            store.getRecord(sessionId)?.lease.runtimeFence ?? null,
+            store.getRecord(sessionId)
+          )
+        }
+      )
+    }
+
+    let attached: AttachedJournal
+    try {
+      const acquired = record
+      attached = await lock.commit(async () => {
+        await input.beforeJournalOpen?.()
+        const journal = await attachJournal({
+          record: acquired,
+          openConversation: input.openConversation
+        })
+        await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, {
+          store,
+          prepareClaudeImport: input.prepareClaudeImport
+        })
+        await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
+        return journal
+      })
+      await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())
+      const recordOutcome = () =>
+        store.recordOperationOutcome({
           callerKey: input.callerKey,
           operationId: params.envelope.clientOperationId,
-          ...failedAcquisitionSettlement(error, wording),
-          now: input.now()
+          outcome: { status: 'succeeded', sessionId }
         })
-      } catch (settlementError) {
-        throw new AggregateError(
-          [error, settlementError],
-          'agent session acquisition failure settlement failed'
-        )
-      }
+      await lock.commit(() =>
+        input.onPublish ? input.onPublish(attached, recordOutcome) : recordOutcome()
+      )
+    } catch (error) {
+      return settlePostAcquisitionAttachFailure(input, record, error)
     }
-    input.onAcquisitionFailed?.(error)
-    const failed = failedAcquisitionRefusal(error, wording)
-    const thrown = failed ? error : preSpawnFailureInWords(error, wording)
-    if (failed || thrown !== error) {
-      input.logger.warn('starting the provider failed', {
-        scope: 'provider-start',
-        sessionId,
-        error
-      })
-    }
-    return (
-      failed ?? {
-        ok: false,
-        refusal: classifyStoreFailure(
-          thrown,
-          store.getRecord(sessionId)?.lease.runtimeFence ?? null,
-          store.getRecord(sessionId)
-        )
-      }
-    )
-  }
 
-  let attached: AttachedJournal
-  try {
-    const acquired = record
-    attached = await lock.commit(async () => {
-      await input.beforeJournalOpen?.()
-      const journal = await attachJournal({
-        record: acquired,
-        openConversation: input.openConversation
-      })
-      await importAdoptedTranscript(params, journal, acquired, preparedTranscript.items, { store })
-      await input.onAttached(journal, acquisitionGeneration, owner, accountHome)
-      return journal
-    })
-    await lock.wait(input.beforePublish?.(owner) ?? Promise.resolve())
-    const recordOutcome = () =>
-      store.recordOperationOutcome({
-        callerKey: input.callerKey,
-        operationId: params.envelope.clientOperationId,
-        outcome: { status: 'succeeded', sessionId }
-      })
-    await lock.commit(() =>
-      input.onPublish ? input.onPublish(attached, recordOutcome) : recordOutcome()
-    )
-  } catch (error) {
-    return settlePostAcquisitionAttachFailure(input, record, error)
-  }
-
-  const fence = record.lease.runtimeFence
-  const tabId = store.getSessionTabId(sessionId)
-  const { page, cursor } = await captureAttachedHydration(
-    store,
-    sessionId,
-    attached.journal,
-    fence,
-    withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId))
-  )
-  return {
-    ok: true,
-    replayed,
-    fence,
-    cursor,
-    value: {
+    const fence = record.lease.runtimeFence
+    const tabId = store.getSessionTabId(sessionId)
+    const { page, cursor } = await captureAttachedHydration(
+      store,
       sessionId,
+      attached.journal,
       fence,
-      page,
-      unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
-      ...(tabId ? { tabId } : {})
+      withForkMarker(undefined, () => readForkMarker(store, params.envelope.sessionId))
+    )
+    return {
+      ok: true,
+      replayed,
+      fence,
+      cursor,
+      value: {
+        sessionId,
+        fence,
+        page,
+        unconfirmedClientMessageIds: attached.unconfirmedClientMessageIds,
+        ...(tabId ? { tabId } : {})
+      }
     }
+  } finally {
+    await closePreparedAdoptedTranscript(preparedTranscript.items)
   }
 }

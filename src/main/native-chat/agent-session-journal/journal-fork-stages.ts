@@ -1,3 +1,12 @@
+import {
+  applyJournalImportStage,
+  installJournalImportStage,
+  type ImportStage
+} from './journal-import-stage'
+import type {
+  ClaudeImportAuthority,
+  ClaudeImportInstall
+} from './history-import/journal-claude-import-stage'
 import { applyJournalForkStagePage } from './journal-fork-stage-page'
 import { registerJournalForkStages, type Stage } from './journal-fork-stage-state'
 import { randomUUID } from 'node:crypto'
@@ -28,6 +37,8 @@ export type JournalForkStageOperation =
       ordinal: number
       items: readonly JournalReplacementItem[]
     }
+  | { kind: 'import-stage-begin'; authority: ClaudeImportAuthority; count: number }
+  | { kind: 'import-stage-page'; token: string; ordinal: number; bytes: Uint8Array }
   | { kind: 'fork-abort'; token: string }
   | { kind: 'fork-source-hold'; sessionId: string }
   | { kind: 'fork-source-release'; token: string }
@@ -40,7 +51,8 @@ export type JournalForkStageResult =
 export class JournalForkStages {
   private live = new Map<string, Stage>()
   private sources = new Map<string, string>()
-  private committed = { stages: new Map<string, Stage>(), sources: new Map<string, string>() }
+  private imports = new Map<string, ImportStage>()
+  private committed = this.checkpoint()
   constructor(
     private readonly db: Database.Database,
     private readonly stateDirectory: string
@@ -53,11 +65,16 @@ export class JournalForkStages {
       .map((stage) => stage.epoch)
   }
   checkpoint() {
-    return { stages: new Map(this.live), sources: new Map(this.sources) }
+    return {
+      stages: new Map(this.live),
+      sources: new Map(this.sources),
+      imports: new Map(this.imports)
+    }
   }
   rollback(checkpoint = this.committed): void {
     this.live = new Map(checkpoint.stages)
     this.sources = new Map(checkpoint.sources)
+    this.imports = new Map(checkpoint.imports)
   }
   acknowledge(): void {
     this.committed = this.checkpoint()
@@ -84,6 +101,12 @@ export class JournalForkStages {
     if (operation.kind === 'fork-stage-begin') {
       return this.begin(operation.input)
     }
+    if (operation.kind === 'import-stage-begin' || operation.kind === 'import-stage-page') {
+      return applyJournalImportStage(this.imports, operation)
+    }
+    if (operation.kind === 'fork-abort' && this.imports.delete(operation.token)) {
+      return null
+    }
     const stage = this.live.get(operation.token)
     if (!stage) {
       if (operation.kind === 'fork-abort') {
@@ -107,6 +130,10 @@ export class JournalForkStages {
     )
     this.live.set(next.token, next)
     return result
+  }
+
+  installImport(command: JournalWriterCommand, install: ClaudeImportInstall): JournalWriterCommand {
+    return installJournalImportStage(this.db, this.imports, command, install)
   }
 
   install(command: JournalWriterCommand, installation: JournalForkInstall): JournalWriterCommand {

@@ -1,3 +1,11 @@
+import { ClaudeImportResourceError } from '../../agent-session-journal/history-import/journal-claude-import-resource-error'
+import {
+  journalClaudeImport,
+  type ClaudeImportStage,
+  type PrepareClaudeImport
+} from '../../agent-session-journal/history-import/journal-claude-import-stage'
+import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
+import { resolveNativeChatTranscriptAgent } from '../../../../shared/native-chat/native-chat-agent-support'
 import type { JournalForkInstall } from '../../agent-session-journal/journal-fork-stages'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
@@ -9,28 +17,70 @@ import {
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
-import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
+import {
+  prepareClaudeLegacyImport,
+  prepareLegacyTranscriptImport
+} from '../../agent-session-journal/history-import/journal-legacy-import'
 import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+
+export type PreparedAdoptedTranscript = JournalReplacementItem[] | ClaudeImportStage | null
+
+export function adoptedFoundingReceipt(
+  prepared: PreparedAdoptedTranscript,
+  hasFirstMessage: boolean,
+  receipt: () => JournalOperationReceipt
+) {
+  return prepared && !Array.isArray(prepared) && !hasFirstMessage ? receipt() : undefined
+}
+
+export function closePreparedAdoptedTranscript(prepared: PreparedAdoptedTranscript) {
+  return prepared && !Array.isArray(prepared) ? prepared.close() : undefined
+}
 
 export async function prepareCreateTranscript(
   context: StructuredAgentSessionAttachContext,
   params: AgentSessionAttachParams
 ) {
   const acquisition = context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
+  let staged = false
   try {
-    return await prepareAdoptedTranscript(params, acquisition.signal)
+    const prepared = await prepareAdoptedTranscript(
+      params,
+      acquisition.signal,
+      journalClaudeImport(context.deps.journalDatabase)
+    )
+    if (prepared.ok && prepared.items && !Array.isArray(prepared.items)) {
+      const history = prepared.items
+      staged = true
+      return {
+        ...prepared,
+        items: {
+          ...history,
+          async close() {
+            try {
+              await history.close()
+            } finally {
+              acquisition.end()
+            }
+          }
+        }
+      }
+    }
+    return prepared
   } finally {
-    acquisition.end()
+    if (!staged) {
+      acquisition.end()
+    }
   }
 }
 
 export async function prepareAdoptedTranscript(
   params: AgentSessionAttachParams,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  prepareClaude?: PrepareClaudeImport
 ): Promise<
-  | { ok: true; items: JournalReplacementItem[] | null }
-  | { ok: false; refusal: AgentSessionWireRefusal }
+  { ok: true; items: PreparedAdoptedTranscript } | { ok: false; refusal: AgentSessionWireRefusal }
 > {
   if (params.fork) {
     return { ok: true, items: null }
@@ -40,8 +90,11 @@ export async function prepareAdoptedTranscript(
   }
   try {
     throwIfSignalAborted(signal)
-    const items = await readAdoptedTranscript(params, signal)
-    throwIfSignalAborted(signal)
+    const items = await readAdoptedTranscript(params, signal, prepareClaude)
+    if (signal?.aborted) {
+      await closePreparedAdoptedTranscript(items)
+      throwIfSignalAborted(signal)
+    }
     return { ok: true, items }
   } catch (error) {
     return {
@@ -60,8 +113,9 @@ export async function prepareAdoptedTranscript(
 // Validate before a new record can claim the provider conversation.
 async function readAdoptedTranscript(
   params: AgentSessionAttachParams,
-  signal?: AbortSignal
-): Promise<JournalReplacementItem[] | null> {
+  signal?: AbortSignal,
+  prepareClaude?: PrepareClaudeImport
+): Promise<PreparedAdoptedTranscript> {
   const adopt = params.adopt
   if (!adopt) {
     return null
@@ -71,11 +125,29 @@ async function readAdoptedTranscript(
       reason: 'transcriptNotFound'
     })
   }
-  const prepared = await prepareLegacyTranscriptImport({
+  const input = {
     agent: params.agent,
     sessionId: adopt.providerHandle.nativeId,
     options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
-  })
+  }
+  if (resolveNativeChatTranscriptAgent(params.agent) === 'claude') {
+    if (!prepareClaude) {
+      throw new Error('Claude history import requires a journal writer.')
+    }
+    const staged = await prepareClaudeLegacyImport(input, prepareClaude, {
+      sessionId: params.envelope.sessionId,
+      operationId: params.envelope.clientOperationId,
+      fingerprint: params.envelope.payloadFingerprint
+    })
+    if (staged.count) {
+      return staged
+    }
+    await staged.close()
+    throw agentSessionRefusalError('agent_session_identity_required', {
+      reason: staged.sourceEmpty ? 'transcriptNotFound' : 'transcriptUnreadable'
+    })
+  }
+  const prepared = await prepareLegacyTranscriptImport(input)
   if (!prepared.ok) {
     throw isAgentSessionRefusalError(prepared.cause) ? prepared.cause : new Error(prepared.error)
   }
@@ -92,8 +164,13 @@ export async function importAdoptedTranscript(
   params: AgentSessionAttachParams,
   attached: AttachedJournal,
   record: AgentSessionRecord,
-  prepared: JournalReplacementItem[] | null,
-  options: { uncommittedCreate?: true; store?: AgentSessionRecordStore } = {}
+  prepared: PreparedAdoptedTranscript,
+  options: {
+    uncommittedCreate?: true
+    store?: AgentSessionRecordStore
+    receipt?: JournalOperationReceipt
+    prepareClaudeImport?: PrepareClaudeImport
+  } = {}
 ): Promise<JournalForkInstall | undefined> {
   if (params.fork) {
     const installation = await attached.journal.stageFork(params.fork.prepared, {
@@ -129,6 +206,12 @@ export async function importAdoptedTranscript(
     }
     return
   }
+  if (prepared && !Array.isArray(prepared)) {
+    if (options.uncommittedCreate || attached.journal.cursor().sequence <= 1) {
+      await installAdoptedClaudeHistory(prepared, attached, record, options.receipt)
+    }
+    return
+  }
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
     if (prepared || attached.journal.cursor().sequence > 1) {
@@ -142,7 +225,7 @@ export async function importAdoptedTranscript(
     return
   }
   // Failed import must not close the conversation-owned journal.
-  await applyAdoptedTranscript(params, attached, record, prepared, options.store)
+  await applyAdoptedTranscript(params, attached, record, prepared, options.prepareClaudeImport)
   return undefined
 }
 
@@ -151,7 +234,7 @@ async function applyAdoptedTranscript(
   attached: AttachedJournal,
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
-  store?: AgentSessionRecordStore
+  prepareClaudeImport?: PrepareClaudeImport
 ): Promise<void> {
   const adopt = params.adopt
   // Preserve durable writes after the initial epoch row.
@@ -175,11 +258,38 @@ async function applyAdoptedTranscript(
       reason: 'transcriptNotFound'
     })
   }
-  const read = await readAdoptedTranscript(params)
-  if (!read?.length) {
-    throw agentSessionRefusalError('agent_session_identity_required', {
-      reason: 'transcriptUnreadable'
-    })
+  const read = await readAdoptedTranscript(params, undefined, prepareClaudeImport)
+  try {
+    if (read && !Array.isArray(read)) {
+      await installAdoptedClaudeHistory(read, attached, record)
+    } else if (read?.length) {
+      await applyAdoptedTranscript(params, attached, record, read)
+    } else {
+      throw agentSessionRefusalError('agent_session_identity_required', {
+        reason: 'transcriptUnreadable'
+      })
+    }
+  } finally {
+    await closePreparedAdoptedTranscript(read)
   }
-  await applyAdoptedTranscript(params, attached, record, read, store)
+}
+
+async function installAdoptedClaudeHistory(
+  prepared: ClaudeImportStage,
+  attached: AttachedJournal,
+  record: AgentSessionRecord,
+  receipt?: JournalOperationReceipt
+): Promise<void> {
+  try {
+    await prepared.install(attached.journal, record.lease.runtimeFence, receipt)
+  } catch (error) {
+    if (error instanceof ClaudeImportResourceError) {
+      throw agentSessionRefusalError(
+        'agent_session_identity_required',
+        { reason: 'transcriptUnreadable' },
+        error.message
+      )
+    }
+    throw error
+  }
 }

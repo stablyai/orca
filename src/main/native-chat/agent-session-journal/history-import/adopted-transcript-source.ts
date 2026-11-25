@@ -139,26 +139,28 @@ export function adoptedTranscriptSourceObserver(input: {
     }
     return { sessionId, cwd }
   }
+  function observeRecord(record: Record<string, unknown> | null): boolean {
+    if (!record) {
+      return cwd !== null
+    }
+    if (input.agent === 'claude') {
+      sessionId = extractString(record.sessionId) ?? sessionId
+      cwd ??= extractString(record.cwd)
+    } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
+      sawCodexMetadata = true
+      const payload = asRecord(record.payload)
+      sessionId = extractString(payload?.id) ?? sessionId
+    } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
+      sessionId = extractString(record.id)
+      cwd = extractString(record.cwd)
+    }
+    return cwd !== null
+  }
+
   return {
     /** True once the line stream has given the conversation's folder. */
-    observe(line: string): boolean {
-      const record = parseJsonObject(line)
-      if (!record) {
-        return cwd !== null
-      }
-      if (input.agent === 'claude') {
-        sessionId = extractString(record.sessionId) ?? sessionId
-        cwd ??= extractString(record.cwd)
-      } else if (input.agent === 'codex' && record.type === 'session_meta' && !sawCodexMetadata) {
-        sawCodexMetadata = true
-        const payload = asRecord(record.payload)
-        sessionId = extractString(payload?.id) ?? sessionId
-      } else if ((input.agent === 'omp' || input.agent === 'pi') && record.type === 'session') {
-        sessionId = extractString(record.id)
-        cwd = extractString(record.cwd)
-      }
-      return cwd !== null
-    },
+    observe: (line: string) => observeRecord(parseJsonObject(line)),
+    observeRecord,
     identity,
     async validate() {
       await assertAdoptedSourceIdentity(

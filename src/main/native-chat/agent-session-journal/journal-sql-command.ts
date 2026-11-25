@@ -1,3 +1,4 @@
+import { assertJournalImportCurrent } from './journal-import-stage'
 import { runJournalSqlCommand } from './journal-sql-command-dispatch'
 import type { JournalForkStages } from './journal-fork-stages'
 import { journalForkStageHeld } from './journal-fork-stage-state'
@@ -31,7 +32,16 @@ export class JournalSqlCommand {
         }
         command = this.forks.install(command, installation)
       }
+      if (command.claudeImport) {
+        if (!this.forks) {
+          throw new Error('Journal import requires its live writer owner.')
+        }
+        command = this.forks.installImport(command, command.claudeImport)
+      }
       const result = await runJournalSqlCommand(this.db, this.stateDirectory, command, now)
+      if (command.claudeImport) {
+        assertJournalImportCurrent(command.claudeImport)
+      }
       const commit = installation
         ? {
             ...result,

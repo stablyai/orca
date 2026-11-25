@@ -1,22 +1,27 @@
+import type { ClaudeSourceVersion } from './journal-claude-import-source'
 import { AgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { spawnHeavyWorker } from '../../../utility-worker-host/heavy-worker-spawn'
+import {
+  retryHeavyWorkers,
+  spawnHeavyWorker
+} from '../../../utility-worker-host/heavy-worker-spawn'
+import { UtilityWorkerHostPausedError } from '../../../utility-worker-host/utility-worker-host-protocol'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../../../worker-threads/worker-thread-entry-path'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
-import { collectClaudeImportWindow, type ClaudeImportResult } from './journal-claude-import-window'
 import type {
-  ClaudeImportPage,
+  ClaudeImportHeader,
   ClaudeImportWork,
   ClaudeImportWorkerRequest,
   ClaudeImportWorkerResponse
 } from './journal-claude-import-worker-protocol'
 
 type Slots = { limit: number; active: number; waiting: (() => void)[] }
-// The main process retains each assembled window until the import returns.
+// At most 384 MiB of charged index storage across the two worker slots.
 const importSlots: Slots = { limit: 2, active: 0, waiting: [] }
 const pageSlots: Slots = { limit: 2, active: 0, waiting: [] }
+let reportedHostPause = false
 
 async function takeSlot(pool: Slots, signal?: AbortSignal): Promise<() => void> {
   signal?.throwIfAborted()
@@ -55,27 +60,27 @@ async function takeSlot(pool: Slots, signal?: AbortSignal): Promise<() => void> 
   }
 }
 
-/** One import per worker; a crash, OOM or paused host degrades like a full scratch disk. */
-export async function importClaudeTranscriptInWorker(
-  input: ClaudeImportWork & { signal?: AbortSignal }
-): Promise<ClaudeImportResult> {
-  const { signal, ...work } = input
-  const release = await takeSlot(importSlots, signal)
-  try {
-    // A slot can open in the same tick as an abort.
-    signal?.throwIfAborted()
-    return await runImportWorker(work, signal)
-  } finally {
-    release()
-  }
+export type ClaudeImportWorker = ClaudeImportHeader & {
+  verify(): Promise<ClaudeSourceVersion>
+  close(): Promise<void>
 }
 
-async function runImportWorker(
-  work: ClaudeImportWork,
-  signal: AbortSignal | undefined
-): Promise<ClaudeImportResult> {
+/** One page credit stays held until the receiving writer has acknowledged it. */
+export async function importClaudeTranscriptInWorker(
+  input: ClaudeImportWork & { signal?: AbortSignal },
+  acceptPage: (bytes: Uint8Array, ordinal: number, header: ClaudeImportHeader) => Promise<void>
+): Promise<ClaudeImportWorker> {
+  const { signal, ...work } = input
+  // Only a new request after a pause refusal can retry the host.
+  const retryHost = reportedHostPause
+  const releaseWorker = await takeSlot(importSlots, signal)
   let worker: ReturnType<typeof spawnHeavyWorker>
   try {
+    signal?.throwIfAborted()
+    if (retryHost && reportedHostPause) {
+      reportedHostPause = false
+      retryHeavyWorkers()
+    }
     const entry = resolveWorkerThreadEntryPath(
       currentWorkerEntryLayout(__dirname),
       'journal-claude-import-worker-entry.js'
@@ -85,52 +90,34 @@ async function runImportWorker(
       workerData: work
     })
   } catch (error) {
+    releaseWorker()
+    if (error instanceof UtilityWorkerHostPausedError) {
+      reportedHostPause = true
+    }
+    signal?.throwIfAborted()
     throw new ClaudeImportResourceError('Claude history import worker is unavailable.', {
       cause: error
     })
   }
   const lifetime = new AbortController()
-  let terminated: Promise<number> | undefined
-  const terminate = () => (terminated ??= worker.terminate())
   const first = Promise.withResolvers<ClaudeImportWorkerResponse>()
   let pending: typeof first | undefined = first
-  let scanning = true
+  let closing: Promise<void> | undefined
   const stop = (error: unknown) => {
     lifetime.abort(error)
     pending?.reject(error)
     pending = undefined
   }
-  const post = (request: ClaudeImportWorkerRequest) => {
-    try {
-      worker.postMessage(request)
-    } catch (error) {
-      stop(
-        new ClaudeImportResourceError('Claude history import worker stopped receiving.', {
-          cause: error
-        })
-      )
-    }
-  }
   const onMessage = (response: ClaudeImportWorkerResponse, release?: () => void) => {
-    try {
-      pending?.resolve(response)
-      pending = undefined
-    } finally {
-      release?.()
-    }
+    pending?.resolve(response)
+    pending = undefined
+    release?.()
   }
   const onError = (error: Error) =>
     stop(new ClaudeImportResourceError(error.message, { cause: error }))
   const onExit = (code: number) =>
     stop(new ClaudeImportResourceError(`Claude history import worker exited (${code}).`))
-  const abort = () => {
-    if (scanning) {
-      // The scan closes its scratch before replying to a cooperative abort.
-      post({ kind: 'abort' })
-    } else {
-      stop(signal?.reason)
-    }
-  }
+  const abort = () => stop(signal?.reason)
   const check = () => {
     signal?.throwIfAborted()
     lifetime.signal.throwIfAborted()
@@ -140,28 +127,39 @@ async function runImportWorker(
   worker.once('exit', onExit)
   signal?.addEventListener('abort', abort, { once: true })
 
-  async function pull(): Promise<ClaudeImportPage> {
-    const release = await takeSlot(pageSlots, lifetime.signal)
-    try {
-      check()
-      const reply = Promise.withResolvers<ClaudeImportWorkerResponse>()
-      pending = reply
-      post({ kind: 'pull' })
-      const response = await reply.promise
-      if (response.kind !== 'page') {
-        failImport(response, signal)
-      }
-      return response
-    } finally {
-      try {
-        // A late reply can still be in flight after cancellation rejects the pending pull.
-        if (lifetime.signal.aborted) {
-          await terminate()
-        }
-      } finally {
-        release()
-      }
+  async function request(message: ClaudeImportWorkerRequest): Promise<ClaudeImportWorkerResponse> {
+    if (pending) {
+      throw new Error('Claude history import worker already has a pending request.')
     }
+    const reply = Promise.withResolvers<ClaudeImportWorkerResponse>()
+    pending = reply
+    try {
+      worker.postMessage(message)
+    } catch (error) {
+      stop(
+        new ClaudeImportResourceError('Claude history import worker stopped receiving.', {
+          cause: error
+        })
+      )
+    }
+    return reply.promise
+  }
+
+  function close(): Promise<void> {
+    return (closing ??= (async () => {
+      try {
+        if (!lifetime.signal.aborted && !pending) {
+          await request({ kind: 'close' }).catch(() => undefined)
+        }
+        await worker.terminate()
+      } finally {
+        signal?.removeEventListener('abort', abort)
+        worker.off('message', onMessage)
+        worker.off('error', onError)
+        worker.off('exit', onExit)
+        releaseWorker()
+      }
+    })())
   }
 
   try {
@@ -169,37 +167,65 @@ async function runImportWorker(
       abort()
     }
     const response = await first.promise
-    scanning = false
     check()
     if (response.kind !== 'imported') {
-      failImport(response, signal)
+      failImport(response)
     }
-    return await collectClaudeImportWindow(response.header, pull, check)
-  } finally {
-    signal?.removeEventListener('abort', abort)
-    try {
-      await terminate()
-    } finally {
-      worker.off('message', onMessage)
-      worker.off('error', onError)
-      worker.off('exit', onExit)
+    const { header } = response
+    for (let ordinal = 0; header.count > 0; ordinal++) {
+      const releasePage = await takeSlot(pageSlots, lifetime.signal)
+      try {
+        check()
+        const page = await request({ kind: 'pull' })
+        check()
+        if (page.kind === 'finished') {
+          break
+        }
+        if (page.kind !== 'page') {
+          failImport(page)
+        }
+        await acceptPage(page.bytes, ordinal, header)
+      } finally {
+        try {
+          if (lifetime.signal.aborted) {
+            await close()
+          }
+        } finally {
+          releasePage()
+        }
+      }
     }
+    return {
+      ...header,
+      async verify() {
+        check()
+        const result = await request({ kind: 'verify' })
+        check()
+        if (result.kind !== 'verified') {
+          failImport(result)
+        }
+        return result.version
+      },
+      close
+    }
+  } catch (error) {
+    await close()
+    throw error
   }
 }
 
-function failImport(response: ClaudeImportWorkerResponse, signal?: AbortSignal): never {
+function failImport(response: ClaudeImportWorkerResponse): never {
   switch (response.kind) {
     case 'resource':
+    case 'failed':
       throw new ClaudeImportResourceError(response.message)
     case 'refusal':
       throw new AgentSessionRefusalError(response.refusal)
-    case 'aborted':
-      signal?.throwIfAborted()
-      throw new Error('Claude history import was cancelled.')
-    case 'failed':
-      throw new Error(response.message)
     case 'imported':
     case 'page':
+    case 'finished':
+    case 'verified':
+    case 'closed':
       throw new ClaudeImportResourceError('Unexpected Claude history import response.')
   }
 }

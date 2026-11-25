@@ -1,9 +1,11 @@
+import { randomUUID } from 'node:crypto'
+import type { ClaudeImportAuthority, PrepareClaudeImport } from './journal-claude-import-stage'
+import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import {
   LEGACY_IMPORT_BLOCK_LIMITS,
-  MAX_LEGACY_IMPORT_RETAINED_BYTES,
-  prepareJsonlTranscriptImport,
-  type PreparedLegacyImport
-} from './journal-jsonl-import'
+  MAX_LEGACY_IMPORT_RETAINED_BYTES
+} from './journal-transcript-import-limits'
+import { prepareJsonlTranscriptImport, type PreparedLegacyImport } from './journal-jsonl-import'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   validateAdoptedOpenCodeSource,
@@ -30,7 +32,7 @@ import type { AgentSessionJournal } from '../journal-store'
 // Import replaces provider presentation at a context boundary. Canonical input stays in the
 // ordered log; later structured history replaces only this reconstructed presentation.
 
-export { LEGACY_IMPORT_BLOCK_LIMITS } from './journal-jsonl-import'
+export { LEGACY_IMPORT_BLOCK_LIMITS } from './journal-transcript-import-limits'
 
 export type LegacyImportOptions = ResolveSessionFileOptions & {
   filePath?: string
@@ -56,7 +58,37 @@ export async function importLegacyTranscriptIntoJournal(input: {
   sessionId: string
   fence: number
   options?: LegacyImportOptions
+  prepareClaudeImport?: PrepareClaudeImport
 }): Promise<LegacyImportResult> {
+  if (resolveNativeChatTranscriptAgent(input.agent) === 'claude') {
+    const operationId = randomUUID()
+    try {
+      if (!input.prepareClaudeImport) {
+        throw new ClaudeImportResourceError('Claude history import requires a journal writer.')
+      }
+      const prepared = await prepareClaudeLegacyImport(input, input.prepareClaudeImport, {
+        sessionId: input.journal.identity.sessionId,
+        operationId,
+        fingerprint: operationId
+      })
+      try {
+        const cursor = prepared.count
+          ? (await prepared.install(input.journal, input.fence)).cursor
+          : input.journal.cursor()
+        return {
+          ok: true,
+          epoch: cursor.epoch,
+          cursor,
+          imported: prepared.count,
+          replaced: prepared.count > 0
+        }
+      } finally {
+        await prepared.close()
+      }
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
   const prepared = await prepareLegacyTranscriptImport(input)
   if (!prepared.ok) {
     return prepared
@@ -98,6 +130,9 @@ export async function prepareLegacyTranscriptImport(input: {
   if (!transcriptAgent) {
     return { ok: false, error: `Unsupported agent for journal import: ${input.agent}` }
   }
+  if (transcriptAgent === 'claude') {
+    return { ok: false, error: 'Claude history import requires a journal writer.' }
+  }
   if (transcriptAgent === 'opencode') {
     return prepareOpenCodeImport({ ...input, limits })
   }
@@ -121,6 +156,33 @@ export async function prepareLegacyTranscriptImport(input: {
     limits,
     ...(input.agent === 'pi' ? { createCollector: createPiTranscriptCollector } : {})
   })
+}
+
+export async function prepareClaudeLegacyImport(
+  input: Parameters<typeof prepareLegacyTranscriptImport>[0],
+  prepare: PrepareClaudeImport,
+  authority: ClaudeImportAuthority
+) {
+  const options = input.options ?? {}
+  const filePath =
+    options.filePath ?? (await resolveSessionFilePath(input.agent, input.sessionId, options))
+  if (!filePath) {
+    throw new ClaudeImportResourceError(
+      `No transcript found for ${input.agent} session ${input.sessionId}`
+    )
+  }
+  return prepare(
+    {
+      agent: input.agent,
+      sessionId: input.sessionId,
+      filePath,
+      source: options.source,
+      signal: options.signal,
+      limits: options.limits,
+      decodedMessageIdentities: options.decodedMessageIdentities
+    },
+    authority
+  )
 }
 
 // OpenCode database message IDs are stable; reuse the existing transcript reader.

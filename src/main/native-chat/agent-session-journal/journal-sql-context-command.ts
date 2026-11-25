@@ -48,6 +48,8 @@ export function applyJournalSqlContextCommand(
       epoch: position.cursor.epoch,
       seq: position.cursor.sequence
     })),
-    [...result.items.map((item) => item.itemId), ...result.removedItemIds]
+    command.claudeImport
+      ? []
+      : [...result.items.map((item) => item.itemId), ...result.removedItemIds]
   )
 }

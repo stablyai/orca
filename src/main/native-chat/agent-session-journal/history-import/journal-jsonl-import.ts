@@ -1,6 +1,3 @@
-import { mayBeClaudeConversationRecord } from '../../transcript-decoding/transcript-line-decoders-claude'
-import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
-import { importClaudeTranscriptInWorker } from './journal-claude-import-worker'
 import { createImportedForkTip, observeOmpForkTip } from './imported-fork-tip'
 import {
   adoptedTranscriptSourceObserver,
@@ -21,9 +18,10 @@ import { createCodexHistoryCollector } from './journal-codex-history'
 import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 import type { JournalPayloadLimits } from '../item-lifecycle/journal-payload-bounds'
 
-export const LEGACY_IMPORT_BLOCK_LIMITS: JournalPayloadLimits = { inlineHeadBytes: 16 * 1024 }
-// Keep only recent history in memory; the provider resumes the complete source transcript.
-export const MAX_LEGACY_IMPORT_RETAINED_BYTES = 16 * 1024 * 1024
+import {
+  LEGACY_IMPORT_BLOCK_LIMITS,
+  MAX_LEGACY_IMPORT_RETAINED_BYTES
+} from './journal-transcript-import-limits'
 
 export type PreparedLegacyImport =
   | { ok: true; items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds?: string[] }
@@ -55,7 +53,7 @@ export async function prepareJsonlTranscriptImport(
 /** Bound during decode so memory follows retained history rather than source-file size. */
 async function decodeJsonlReplacementItems(input: {
   filePath: string
-  transcriptAgent: keyof typeof TRANSCRIPT_DECODERS
+  transcriptAgent: Exclude<keyof typeof TRANSCRIPT_DECODERS, 'claude'>
   agent: AgentType
   sessionId: string
   decodedMessageIdentities?: true
@@ -65,32 +63,9 @@ async function decodeJsonlReplacementItems(input: {
   limits?: JournalPayloadLimits
   createCollector?: LegacyTranscriptCollectorFactory
 }): Promise<{ items: JournalReplacementItem[]; sourceEmpty: boolean; forkTipItemIds: string[] }> {
-  if (input.transcriptAgent === 'claude') {
-    try {
-      return {
-        ...(await importClaudeTranscriptInWorker({
-          agent: input.agent,
-          filePath: input.filePath,
-          sessionId: input.sessionId,
-          signal: input.signal,
-          source: input.source,
-          limits: input.limits ?? LEGACY_IMPORT_BLOCK_LIMITS,
-          retainedBytes: MAX_LEGACY_IMPORT_RETAINED_BYTES,
-          decodedMessageIdentities: input.decodedMessageIdentities
-        })),
-        forkTipItemIds: []
-      }
-    } catch (error) {
-      input.signal?.throwIfAborted()
-      // Without the spool, keep the plain newest window.
-      if (!(error instanceof ClaudeImportResourceError)) {
-        throw error
-      }
-    }
-  }
   const source = input.source
     ? adoptedTranscriptSourceObserver({
-        agent: input.transcriptAgent === 'claude' ? 'claude' : input.agent,
+        agent: input.agent,
         filePath: input.filePath,
         source: input.source,
         signal: input.signal,
@@ -115,8 +90,6 @@ async function decodeJsonlReplacementItems(input: {
   )
   const forkTip = createImportedForkTip()
   let lineIndex = 0
-  // A Claude file of metadata alone is one nothing was sent in; an undecodable turn still counts.
-  let conversation = input.transcriptAgent !== 'claude'
   try {
     const { consumedBytes } = await readLegacyImportTranscript(
       {
@@ -138,7 +111,6 @@ async function decodeJsonlReplacementItems(input: {
           return null
         }
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
-        conversation ||= !!message || mayBeClaudeConversationRecord(line)
         if (message) {
           const identity =
             recordId || input.decodedMessageIdentities
@@ -164,13 +136,13 @@ async function decodeJsonlReplacementItems(input: {
         : undefined
     )
     // A file with no conversation adopts nothing, so it has no identity to prove.
-    if (consumedBytes > 0 && conversation) {
+    if (consumedBytes > 0) {
       await source?.validate()
     }
     if (collector) {
       await collector.project(retained.push)
     }
-    const sourceEmpty = consumedBytes === 0 || !conversation
+    const sourceEmpty = consumedBytes === 0
     return {
       items: retained.items(),
       sourceEmpty,

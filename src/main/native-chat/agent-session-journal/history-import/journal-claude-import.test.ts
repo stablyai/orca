@@ -1,12 +1,63 @@
-import { appendFile, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdtemp, rename, rm, truncate, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { prepareLegacyTranscriptImport } from './journal-legacy-import'
-import { useImportScratch } from './journal-claude-import-worker.test-fixture'
-import { importClaudeTranscriptInWorker } from './journal-claude-import-worker'
+import { importClaudeTranscript, type ClaudeImportInput } from './journal-claude-import'
+import { ClaudeImportSource, type ClaudeRange } from './journal-claude-import-source'
+import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
+import type { JournalReplacementItem } from '../context-epochs/journal-epoch-replacement'
 
 let root: string | undefined
+const utf8 = (item: Buffer): JournalReplacementItem => JSON.parse(item.toString('utf8'))
+const entry = (uuid: string, parentUuid: string | null, extra: Record<string, unknown> = {}) => ({
+  type: 'assistant',
+  uuid,
+  parentUuid,
+  sessionId: 'session',
+  timestamp: '2026-11-01T00:00:00.000Z',
+  message: { content: uuid },
+  ...extra
+})
+const boundary = (compactMetadata: unknown) => ({
+  type: 'system',
+  subtype: 'compact_boundary',
+  uuid: 'boundary',
+  parentUuid: null,
+  logicalParentUuid: 'old',
+  compactMetadata
+})
+
+async function transcript(rows: unknown[]): Promise<ClaudeImportInput> {
+  root = await mkdtemp(join(tmpdir(), 'orca-claude-import-'))
+  const filePath = join(root, 'session.jsonl')
+  await writeFile(filePath, rows.map((row) => `${JSON.stringify(row)}\n`).join(''))
+  return {
+    filePath,
+    sessionId: 'session',
+    agent: 'claude',
+    retainedBytes: 16 * 1024 * 1024,
+    limits: { inlineHeadBytes: 16 * 1024 }
+  }
+}
+
+async function items(input: ClaudeImportInput) {
+  const result = await importClaudeTranscript(input)
+  try {
+    await result.verify()
+    return result.items.map(utf8)
+  } finally {
+    await result.close()
+  }
+}
+
+const identities = (items: JournalReplacementItem[]) =>
+  items.map(({ identity }) =>
+    identity.provider === 'claude'
+      ? identity.uuid
+      : identity.provider === 'legacy'
+        ? identity.recordId
+        : identity.provider
+  )
 
 afterEach(async () => {
   if (root) {
@@ -14,311 +65,244 @@ afterEach(async () => {
   }
 })
 
-it('imports only the newest main chain', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-chain-'))
-  const filePath = join(root, 'session.jsonl')
-  const message = (uuid: string, parentUuid: string | null, extra = {}) => ({
-    type: 'assistant',
-    uuid,
-    parentUuid,
-    sessionId: 'chain-session',
-    message: { role: 'assistant', content: [{ type: 'text', text: uuid }] },
-    ...extra
-  })
-  await writeFile(
-    filePath,
-    `${[
-      message('root', null),
-      message('abandoned-answer', 'root'),
-      message('selected-answer', 'root'),
-      message('sidechain-answer', 'selected-answer', { isSidechain: true }),
-      message('tool-sidechain-answer', 'selected-answer', { parent_tool_use_id: 'tool-1' })
-    ]
-      .map((row) => JSON.stringify(row))
-      .join('\n')}\n`
+it('uses the later physical leaf on ties, and follows late system markers through progress', async () => {
+  const root = entry('root', null)
+  const left = entry('left', 'root')
+  const right = entry('right', 'root')
+  const progress = { type: 'progress', uuid: 'bridge', parentUuid: 'left' }
+  const input = await transcript([
+    root,
+    left,
+    right,
+    progress,
+    { type: 'attachment', uuid: 'brief', parentUuid: 'left', attachment: { type: 'fork_briefing' } }
+  ])
+  expect(identities(await items(input))).toEqual(['root', 'right'])
+  await appendFile(
+    input.filePath,
+    `${JSON.stringify({
+      type: 'system',
+      uuid: 'marker',
+      parentUuid: 'bridge'
+    })}\n`
   )
-  const imported = await prepareLegacyTranscriptImport({
-    agent: 'claude',
-    sessionId: 'chain-session',
-    options: { filePath }
-  })
-  expect(
-    imported.ok && imported.items.map((item) => ({ identity: item.identity, body: item.body }))
-  ).toEqual([
+  expect(identities(await items(input))).toEqual(['root', 'left'])
+})
+
+it('keeps progress links amid huge skipped objects and trailing progress rows', async () => {
+  const input = await transcript([
+    entry('root', null),
     {
-      identity: { provider: 'claude', sessionId: 'chain-session', uuid: 'root' },
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'root' }] }
+      type: 'attachment',
+      uuid: 'attachment',
+      parentUuid: 'root',
+      attachment: { type: 'prompt_snapshot', payload: '🚀'.repeat(1_200_000) }
     },
     {
-      identity: { provider: 'claude', sessionId: 'chain-session', uuid: 'selected-answer' },
-      body: {
-        kind: 'message',
-        role: 'assistant',
-        blocks: [{ type: 'text', text: 'selected-answer' }]
-      }
-    }
-  ])
-})
-
-it('keeps the same suffix as the plain newest window for 60k messages', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-60k-'))
-  const filePath = join(root, 'session.jsonl')
-  await writeFile(
-    filePath,
-    `${Array.from({ length: 60_000 }, (_, index) =>
-      JSON.stringify({
-        type: 'assistant',
-        uuid: `m-${index}`,
-        parentUuid: index ? `m-${index - 1}` : null,
-        message: { content: 'x'.repeat(400) }
-      })
-    ).join('\n')}\n`
-  )
-  const input = { agent: 'claude' as const, options: { filePath } }
-  useImportScratch('raw', { reserveBytes: Infinity })
-  const [plain, forward] = await Promise.all([
-    prepareLegacyTranscriptImport({ ...input, sessionId: 'raw' }),
-    prepareLegacyTranscriptImport({ ...input, sessionId: '60k' })
-  ])
-  const uuids = (prepared: Awaited<ReturnType<typeof prepareLegacyTranscriptImport>>) =>
-    prepared.ok
-      ? prepared.items.map(({ identity }) =>
-          identity.provider === 'claude' ? identity.uuid : null
-        )
-      : prepared.error
-  const expected = Array.from({ length: 29_641 }, (_, index) => `m-${30_359 + index}`)
-  expect(uuids(plain)).toEqual(expected)
-  expect(uuids(forward)).toEqual(expected)
-})
-
-it('falls back to the plain newest window when scratch fills during a first import', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-scratch-full-'))
-  const filePath = join(root, 'session.jsonl')
-  await writeFile(
-    filePath,
-    [
-      '{"type":"user","uuid":"question","parentUuid":null,"message":{"content":"Question"}}',
-      ...Array.from({ length: 4096 }, (_, index) =>
-        JSON.stringify({ type: 'progress', uuid: `p-${index}`, parentUuid: 'question' })
-      ),
-      '{"type":"assistant","uuid":"answer","parentUuid":"question","message":{"content":"Answer"}}',
-      ''
-    ].join('\n')
-  )
-  const scratch = { parent: join(root, 'scratch'), quotaBytes: 128 * 1024 }
-  useImportScratch('full', scratch)
-  const first = await prepareLegacyTranscriptImport({
-    agent: 'claude',
-    sessionId: 'full',
-    options: { filePath }
-  })
-  expect(first.ok && first.items.map(({ body }) => body)).toEqual([
-    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Question' }] },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
-  ])
-  expect(await readdir(scratch.parent)).toEqual([])
-})
-
-it('keeps parallel tool forks and drops rewound branches', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-tool-fork-'))
-  const filePath = join(root, 'session.jsonl')
-  const assistant = (uuid: string, parentUuid: string, id: string, tool: string) => ({
-    type: 'assistant',
-    uuid,
-    parentUuid,
-    sessionId: 'parallel-session',
-    message: {
-      id,
-      role: 'assistant',
-      content: [{ type: 'tool_use', id: tool, name: 'Read', input: {} }]
-    }
-  })
-  const result = (uuid: string, parentUuid: string, tool: string) => ({
-    type: 'user',
-    uuid,
-    parentUuid,
-    sessionId: 'parallel-session',
-    message: {
-      role: 'user',
-      content: [{ type: 'tool_result', tool_use_id: tool, content: tool }]
-    }
-  })
-  await writeFile(
-    filePath,
-    `${[
-      { type: 'user', uuid: 'root', parentUuid: null, message: { content: 'Question' } },
-      assistant('abandoned', 'root', 'old-message', 'old-tool'),
-      result('abandoned-result', 'abandoned', 'old-tool'),
-      assistant('A', 'root', 'shared-message', 'tool-1'),
-      assistant('B', 'A', 'shared-message', 'tool-2'),
-      result('C', 'B', 'tool-2'),
-      result('D', 'A', 'tool-1')
-    ]
-      .map((row) => JSON.stringify(row))
-      .join('\n')}\n`
-  )
-  const imported = await prepareLegacyTranscriptImport({
-    agent: 'claude',
-    sessionId: 'parallel-session',
-    options: { filePath }
-  })
-  expect(
-    imported.ok &&
-      imported.items.map(({ identity }) => (identity.provider === 'claude' ? identity.uuid : null))
-  ).toEqual(['root', 'A', 'B', 'C', 'D'])
-})
-
-it('keeps both messages after 20k trailing progress rows', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-progress-'))
-  const filePath = join(root, 'session.jsonl')
-  await writeFile(
-    filePath,
-    `${[
-      { type: 'user', uuid: 'question', parentUuid: null, message: { content: 'Question' } },
-      {
-        type: 'assistant',
-        uuid: 'answer',
-        parentUuid: 'question',
-        message: { content: 'Answer' }
-      }
-    ]
-      .map((row) => JSON.stringify(row))
-      .join('\n')}\n`
-  )
-  let parentUuid = 'answer'
-  const progress = Array.from({ length: 20_000 }, (_, index) => {
-    const uuid = `progress-${index.toString().padStart(64, '0')}`
-    const row = JSON.stringify({ type: 'progress', uuid, parentUuid })
-    parentUuid = uuid
-    return row
-  })
-  await appendFile(filePath, `${progress.join('\n')}\n`)
-  const imported = await prepareLegacyTranscriptImport({
-    agent: 'claude',
-    sessionId: 'progress-session',
-    options: { filePath }
-  })
-  expect(imported.ok && imported.items.map((item) => item.body)).toEqual([
-    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Question' }] },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
-  ])
-})
-
-it('keeps an active progress bridge among unrelated links', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-bridge-'))
-  const filePath = join(root, 'session.jsonl')
-  const unrelated = Array.from({ length: 30_000 }, (_, index) =>
-    JSON.stringify({
       type: 'progress',
-      uuid: `progress-${String(index).padStart(64, '0')}`,
-      parentUuid: 'unrelated-parent-0000-0000-000000000000'
-    })
-  )
+      uuid: 'bridge',
+      parentUuid: 'attachment',
+      data: { payload: 'x'.repeat(4_000_000) }
+    },
+    entry('answer', 'bridge'),
+    entry('abandoned', 'root'),
+    { type: 'system', uuid: 'marker', parentUuid: 'answer' },
+    ...Array.from({ length: 20_000 }, (_, index) => ({
+      type: 'progress',
+      uuid: `progress-${index}`,
+      parentUuid: index ? `progress-${index - 1}` : 'abandoned'
+    }))
+  ])
+  expect(identities(await items(input))).toEqual(['root', 'answer'])
+})
+
+it('ends at a compact boundary when logicalParentUuid is the only old link', async () => {
+  const input = await transcript([
+    entry('old', null),
+    boundary(undefined),
+    entry('new', 'boundary')
+  ])
+  expect(identities(await items(input))).toEqual(['new'])
+})
+
+it('rewires preserved messages and skips an incomplete list', async () => {
+  const head = [
+    entry('old', null),
+    entry('before', 'old'),
+    entry('preserve-first', 'before'),
+    entry('preserve-last', 'before')
+  ]
+  const input = await transcript([
+    ...head,
+    boundary({
+      preservedMessages: { anchorUuid: 'boundary', uuids: ['preserve-first', 'preserve-last'] }
+    }),
+    entry('new', 'boundary')
+  ])
+  expect(identities(await items(input))).toEqual(['preserve-first', 'preserve-last', 'new'])
   await writeFile(
-    filePath,
+    input.filePath,
     [
-      '{"type":"user","uuid":"ancestor","parentUuid":null,"message":{"content":"Question"}}',
-      '{"type":"progress","uuid":"bridge","parentUuid":"ancestor"}',
-      ...unrelated,
-      '{"type":"assistant","uuid":"newest","parentUuid":"bridge","message":{"content":"Answer"}}',
-      ''
-    ].join('\n')
+      ...head,
+      boundary({
+        preservedMessages: { anchorUuid: 'boundary', uuids: ['preserve-first', 'missing'] }
+      }),
+      entry('new', 'boundary')
+    ]
+      .map((row) => `${JSON.stringify(row)}\n`)
+      .join('')
   )
-  const imported = await importClaudeTranscriptInWorker({
-    agent: 'claude',
-    filePath,
-    sessionId: 'bridge-session',
-    limits: { inlineHeadBytes: 1024 },
-    retainedBytes: 2400
-  })
-  expect(imported.items.map(({ body }) => body)).toEqual([
-    { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Question' }] },
-    { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Answer' }] }
+  expect(identities(await items(input))).toEqual(['new'])
+})
+
+it('rewires a preserved segment after a large raw offset', async () => {
+  const input = await transcript([
+    entry('old', null),
+    { type: 'progress', data: 'x'.repeat(6 * 1024 * 1024) },
+    entry('head', 'old'),
+    entry('tail', 'head'),
+    boundary({ preservedSegment: { anchorUuid: 'boundary', headUuid: 'head', tailUuid: 'tail' } }),
+    entry('new', 'boundary')
+  ])
+  expect(identities(await items(input))).toEqual(['head', 'tail', 'new'])
+})
+
+it('closes parallel tool calls with canonical UUIDs and unambiguous result ownership', async () => {
+  const tool = (uuid: string, group: string, id: string) =>
+    entry(uuid, 'root', {
+      message: { id: group, content: [{ type: 'tool_use', name: 'Read', id, input: {} }] }
+    })
+  const result = (uuid: string, parentUuid: string, id: string, extra = {}) =>
+    entry(uuid, parentUuid, {
+      type: 'user',
+      message: { content: [{ type: 'tool_result', tool_use_id: id, content: uuid }] },
+      ...extra
+    })
+  const input = await transcript([
+    entry('root', null),
+    tool('abandoned', 'other', 'shared'),
+    tool('replacement', 'active', 'old-id'),
+    tool('selected', 'active', 'shared'),
+    tool('parallel', 'active', 'unique'),
+    tool('replacement', 'active', 'new-id'),
+    result('direct', 'selected', 'shared'),
+    result('ambiguous', 'abandoned', 'shared', { sourceToolAssistantUUID: 'selected' }),
+    result('cross-parent', 'abandoned', 'unique', { sourceToolAssistantUUID: 'parallel' }),
+    result('duplicate-cross', 'abandoned', 'unique'),
+    result('obsolete', 'abandoned', 'old-id'),
+    result('subagent', 'selected', 'shared', { parent_tool_use_id: 'subagent-call' }),
+    entry('answer', 'direct')
+  ])
+  const actual = await items(input)
+  expect(identities(actual)).toEqual([
+    'root',
+    'selected',
+    'parallel',
+    'replacement',
+    'direct',
+    'cross-parent',
+    'answer'
+  ])
+  expect(actual[3].body).toMatchObject({ kind: 'tool-call', callId: 'new-id' })
+})
+
+it('keeps the legacy line and decoded-offset identities across CRLF and malformed UTF-8', async () => {
+  const input = await transcript([])
+  const records = [
+    Buffer.from(`${JSON.stringify(entry('root', null))}\r\n`),
+    Buffer.from([0xc0, 0x0d, 0x0a]),
+    Buffer.from(`${JSON.stringify({ type: 'assistant', message: { content: 'legacy' } })}\r\n`),
+    Buffer.from(`${JSON.stringify(entry('lost', 'root'))}\r\n`),
+    Buffer.from(
+      `${JSON.stringify({ type: 'assistant', parentUuid: 'lost', message: { content: 'orphan' } })}\r\n`
+    ),
+    Buffer.from(`${JSON.stringify(entry('chosen', 'root'))}\r\n`)
+  ]
+  await writeFile(input.filePath, Buffer.concat(records))
+  expect(identities(await items(input))).toEqual(['root', '#2', 'chosen'])
+  const decoded = await items({ ...input, decodedMessageIdentities: true })
+  expect(identities(decoded)).toEqual([
+    'root',
+    `${input.filePath}:${String(records[0].length + 5).padStart(16, '0')}`,
+    'chosen'
   ])
 })
 
-it('budgets active answers before newer abandoned answers', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-active-budget-'))
-  const filePath = join(root, 'session.jsonl')
-  const message = (uuid: string, parentUuid: string | null, size = 800) =>
-    JSON.stringify({
+it('keeps the same newest suffix as a linear 60k import', async () => {
+  const input = await transcript(
+    Array.from({ length: 60_000 }, (_, index) => ({
       type: 'assistant',
-      uuid,
-      parentUuid,
-      message: { content: uuid + 'x'.repeat(size) }
+      uuid: `m-${index}`,
+      parentUuid: index ? `m-${index - 1}` : null,
+      message: { content: 'x'.repeat(400) }
+    }))
+  )
+  const result = await items({ ...input, sessionId: '60k' })
+  expect(identities(result)).toEqual(
+    Array.from({ length: 29_641 }, (_, index) => `m-${30_359 + index}`)
+  )
+})
+
+it('accepts verified appends but refuses an edit to a discarded link', async () => {
+  const input = await transcript([entry('old', null), entry('lost', 'old'), entry('answer', 'old')])
+  const result = await importClaudeTranscript(input)
+  try {
+    await appendFile(input.filePath, `${JSON.stringify(entry('append', 'answer'))}\n`)
+    await result.verify()
+    const file = [
+      entry('old', null),
+      entry('lost', 'xxx'),
+      entry('answer', 'old'),
+      entry('append', 'answer')
+    ]
+    await writeFile(input.filePath, file.map((row) => `${JSON.stringify(row)}\n`).join(''))
+    await expect(result.verify()).rejects.toThrow(ClaudeImportResourceError)
+  } finally {
+    await result.close()
+  }
+})
+
+it.each(['truncation', 'replacement'] as const)(
+  'refuses %s of the snapshot before publication',
+  async (change) => {
+    const input = await transcript([entry('a', null)])
+    const result = await importClaudeTranscript(input)
+    try {
+      if (change === 'truncation') {
+        await truncate(input.filePath, 0)
+      } else {
+        await rename(input.filePath, `${input.filePath}.old`)
+        await writeFile(input.filePath, `${JSON.stringify(entry('a', null))}\n`)
+      }
+      await expect(result.verify()).rejects.toThrow(ClaudeImportResourceError)
+    } finally {
+      await result.close()
+    }
+  }
+)
+
+it('refuses a rewritten selected row during the offset reread', async () => {
+  const input = await transcript([entry('root', null)])
+  const source = await ClaudeImportSource.open(input.filePath)
+  try {
+    const ranges: ClaudeRange[] = []
+    await source.scan((_, range) => {
+      ranges.push(range)
     })
-  await writeFile(
-    filePath,
-    [
-      message('selected', null),
-      message('abandoned', 'selected', 3600),
-      message('newest', 'selected'),
-      ''
-    ].join('\n')
-  )
-  const imported = await importClaudeTranscriptInWorker({
-    agent: 'claude',
-    filePath,
-    sessionId: 'active-budget-session',
-    limits: { inlineHeadBytes: 1024 },
-    retainedBytes: 2400
-  })
-  expect(imported.items.map(({ identity }) => identity)).toEqual([
-    { provider: 'claude', sessionId: 'active-budget-session', uuid: 'selected' },
-    { provider: 'claude', sessionId: 'active-budget-session', uuid: 'newest' }
-  ])
+    await writeFile(input.filePath, `${JSON.stringify(entry('edit', null))}\n`)
+    await expect(source.reread(ranges).next()).rejects.toThrow(ClaudeImportResourceError)
+  } finally {
+    await source.close()
+  }
 })
 
-it('preserves the requested agent and absolute line index for UUID-less legacy messages', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-identity-'))
-  const filePath = join(root, 'session.jsonl')
-  await writeFile(
-    filePath,
-    Buffer.concat([
-      Buffer.from('{"type":"progress"}\r\n'),
-      Buffer.from([0xff, 0x0a]),
-      Buffer.from('{"type":"assistant","message":{"role":"assistant","content":"Saved answer"}}')
-    ])
+it('validates adoption using the requested agent identity', async () => {
+  const input = await transcript([entry('root', null)])
+  const workspaceCwd = root!
+  const source = { providerSessionId: 'session', workspaceCwd }
+  await writeFile(input.filePath, JSON.stringify(entry('root', null, { cwd: workspaceCwd })))
+  expect(identities(await items({ ...input, source }))).toEqual(['root'])
+  await expect(items({ ...input, agent: 'openclaude', source })).rejects.toThrow(
+    'The saved conversation does not match the requested provider identity.'
   )
-  const imported = await prepareLegacyTranscriptImport({
-    agent: 'openclaude',
-    sessionId: 'legacy-session',
-    options: { filePath }
-  })
-  expect(imported.ok && imported.items.map((item) => item.identity)).toEqual([
-    { provider: 'legacy', agent: 'openclaude', sessionId: 'legacy-session', recordId: '#2' }
-  ])
-
-  await appendFile(filePath, '\n{"type":"user","uuid":"prompt","message":{"content":"Question"}}\n')
-  const adopted = await prepareLegacyTranscriptImport({
-    agent: 'openclaude',
-    sessionId: 'legacy-session',
-    options: { filePath, decodedMessageIdentities: true }
-  })
-  expect(adopted.ok && adopted.items.at(-1)?.identity).toEqual({
-    provider: 'legacy',
-    agent: 'openclaude',
-    sessionId: 'legacy-session',
-    recordId: 'prompt'
-  })
-})
-
-it('honours a cancel before the worker starts', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-claude-cancel-'))
-  const filePath = join(root, 'session.jsonl')
-  await writeFile(
-    filePath,
-    '{"type":"user","uuid":"q","parentUuid":null,"message":{"content":"Question"}}\n'
-  )
-  const controller = new AbortController()
-  const imported = importClaudeTranscriptInWorker({
-    agent: 'claude',
-    filePath,
-    sessionId: 'cancel-session',
-    limits: { inlineHeadBytes: 1024 },
-    retainedBytes: 2400,
-    signal: controller.signal
-  })
-  controller.abort(new Error('Import closed'))
-  await expect(imported).rejects.toThrow('Import closed')
 })

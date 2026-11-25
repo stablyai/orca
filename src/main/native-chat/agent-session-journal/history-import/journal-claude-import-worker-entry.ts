@@ -1,17 +1,15 @@
-// The import spool is synchronous SQLite; it runs here so the host's event loop stays free.
 import { parentPort, workerData } from 'node:worker_threads'
+import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
 import { serializedWorkerReplyBytes } from '../../../utility-worker-host/utility-worker-reply-size'
 import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { installWorkerSendLedger } from '../../../worker-threads/worker-send-ledger'
 import { importClaudeTranscript } from './journal-claude-import'
 import { ClaudeImportResourceError } from './journal-claude-import-resource-error'
 import { claudeImportPages } from './journal-claude-import-pages'
-import { CLAUDE_IMPORT_PAGE_BYTES } from './journal-claude-import-worker-protocol'
-import type {
-  ClaudeImportPage,
-  ClaudeImportWork,
-  ClaudeImportWorkerRequest,
-  ClaudeImportWorkerResponse
+import {
+  CLAUDE_IMPORT_PAGE_BYTES,
+  type ClaudeImportWork,
+  type ClaudeImportWorkerRequest,
+  type ClaudeImportWorkerResponse
 } from './journal-claude-import-worker-protocol'
 
 installWorkerSendLedger('orca-claude-history-import')
@@ -21,25 +19,45 @@ if (!parentPort) {
 }
 const port = parentPort
 const controller = new AbortController()
-let pages: Generator<ClaudeImportPage> | undefined
+const work: ClaudeImportWork = workerData
+const preparation = importClaudeTranscript({ ...work, signal: controller.signal })
+let pages: IterableIterator<Uint8Array> | undefined
+let requests = preparation.then(
+  ({ items, sourceEmpty }) => {
+    pages = claudeImportPages(items)
+    send({ kind: 'imported', header: { count: items.length, sourceEmpty } })
+  },
+  (error: unknown) => send(failure(error))
+)
+
 port.on('message', (request: ClaudeImportWorkerRequest) => {
-  if (request.kind === 'abort') {
+  if (request.kind === 'close') {
     controller.abort()
-  } else if (pages) {
+  }
+  requests = requests.then(async () => {
     try {
-      const next = pages.next()
-      if (next.value && !next.done) {
-        send(next.value)
+      const result = await preparation
+      if (request.kind === 'close') {
+        pages = undefined
+        await result.close()
+        send({ kind: 'closed' })
+      } else if (request.kind === 'verify') {
+        send({ kind: 'verified', version: await result.verify() })
+      } else {
+        const next = pages?.next()
+        send(next?.done === false ? { kind: 'page', bytes: next.value } : { kind: 'finished' })
       }
     } catch (error) {
-      pages = undefined
       send(failure(error))
     }
-  }
+  })
 })
 
 function send(response: ClaudeImportWorkerResponse): void {
-  if (serializedWorkerReplyBytes(response).framed > CLAUDE_IMPORT_PAGE_BYTES) {
+  if (
+    response.kind !== 'page' &&
+    serializedWorkerReplyBytes(response).framed > CLAUDE_IMPORT_PAGE_BYTES
+  ) {
     port.postMessage({ kind: 'resource', message: 'A Claude import reply exceeds the page limit.' })
   } else {
     port.postMessage(response)
@@ -47,9 +65,6 @@ function send(response: ClaudeImportWorkerResponse): void {
 }
 
 function failure(error: unknown): ClaudeImportWorkerResponse {
-  if (controller.signal.aborted) {
-    return { kind: 'aborted' }
-  }
   if (error instanceof ClaudeImportResourceError) {
     return { kind: 'resource', message: error.message }
   }
@@ -58,12 +73,3 @@ function failure(error: unknown): ClaudeImportWorkerResponse {
   }
   return { kind: 'failed', message: error instanceof Error ? error.message : String(error) }
 }
-
-const work: ClaudeImportWork = workerData
-void importClaudeTranscript({ ...work, signal: controller.signal }).then(
-  ({ items, ...header }) => {
-    pages = claudeImportPages(items)
-    send({ kind: 'imported', header })
-  },
-  (error: unknown) => send(failure(error))
-)
