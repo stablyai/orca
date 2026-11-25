@@ -26066,7 +26066,17 @@
       "searchRetry": "Повторить попытку",
       "personHome": "Home ({{name}})",
       "older": "Показать старые: {{count}}",
-      "hideOlder": "Скрыть старые"
+      "hideOlder": "Скрыть старые",
+      "noMessages": "Сообщений пока нет",
+      "searchPerson": "Поиск в чатах {{name}}",
+      "searchOwn": "Поиск в ваших чатах",
+      "noneFromPerson": "Нет чатов от {{name}}.",
+      "noneFromYou": "Нет ваших чатов.",
+      "filter": {
+        "label": "Фильтр по человеку",
+        "you": "Вы",
+        "everyone": "Все"
+      }
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",

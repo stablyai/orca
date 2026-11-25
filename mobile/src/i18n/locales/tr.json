@@ -7981,7 +7981,8 @@
       "runningCount": "{{count}} çalışıyor",
       "needsYouCount": "{{count}} sizi bekliyor",
       "open": "Aç",
-      "delete": "Sohbeti sil"
+      "delete": "Sohbeti sil",
+      "noMessages": "Henüz mesaj yok"
     },
     "panel": {
       "backTo": "{{name}} ekranına dön",

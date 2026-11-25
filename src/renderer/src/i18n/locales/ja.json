@@ -26415,7 +26415,17 @@
       "readFailed": "このボットのチャットを読み取れませんでした。",
       "personHome": "{{name}} の Home",
       "older": "古い{{count}}件を表示",
-      "hideOlder": "古い項目を隠す"
+      "hideOlder": "古い項目を隠す",
+      "noMessages": "まだメッセージはありません",
+      "searchPerson": "{{name}} のチャットを検索",
+      "searchOwn": "自分のチャットを検索",
+      "noneFromPerson": "{{name}} のチャットはありません。",
+      "noneFromYou": "自分のチャットはありません。",
+      "filter": {
+        "label": "人で絞り込む",
+        "you": "自分",
+        "everyone": "全員"
+      }
     },
     "needs": {
       "chat": "{{name}} とのチャット",

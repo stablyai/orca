@@ -25854,7 +25854,17 @@
       "readFailed": "Impossible de lire les chats de ce bot.",
       "personHome": "Home de {{name}}",
       "older": "Afficher {{count}} plus anciens",
-      "hideOlder": "Masquer les plus anciens"
+      "hideOlder": "Masquer les plus anciens",
+      "noMessages": "Aucun message pour l’instant",
+      "searchPerson": "Rechercher dans les chats de {{name}}",
+      "searchOwn": "Rechercher dans vos chats",
+      "noneFromPerson": "Aucun chat de {{name}}.",
+      "noneFromYou": "Aucun chat de votre part.",
+      "filter": {
+        "label": "Filtrer par personne",
+        "you": "Vous",
+        "everyone": "Tout le monde"
+      }
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",

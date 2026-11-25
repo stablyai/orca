@@ -25830,7 +25830,17 @@
       "readFailed": "No se pudieron leer los chats de este bot.",
       "personHome": "Home de {{name}}",
       "older": "Mostrar {{count}} anteriores",
-      "hideOlder": "Ocultar anteriores"
+      "hideOlder": "Ocultar anteriores",
+      "noMessages": "Aún no hay mensajes",
+      "searchPerson": "Buscar en los chats de {{name}}",
+      "searchOwn": "Buscar en tus chats",
+      "noneFromPerson": "No hay chats de {{name}}.",
+      "noneFromYou": "No hay chats tuyos.",
+      "filter": {
+        "label": "Filtrar por persona",
+        "you": "Tú",
+        "everyone": "Todos"
+      }
     },
     "needs": {
       "chat": "Tu chat con {{name}}",

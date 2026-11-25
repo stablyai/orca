@@ -27275,7 +27275,17 @@
       "actions": "聊天操作",
       "needsYouCount": "{{count}} 個需要你處理",
       "older": "顯示 {{count}} 個較早的",
-      "hideOlder": "隱藏較早的"
+      "hideOlder": "隱藏較早的",
+      "noMessages": "尚無訊息",
+      "searchPerson": "搜尋 {{name}} 的聊天",
+      "searchOwn": "搜尋你的聊天",
+      "noneFromPerson": "沒有 {{name}} 的聊天。",
+      "noneFromYou": "沒有你的聊天。",
+      "filter": {
+        "label": "依人員篩選",
+        "you": "你",
+        "everyone": "所有人"
+      }
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",

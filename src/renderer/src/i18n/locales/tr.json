@@ -28461,7 +28461,6 @@
       "cantReachHost": "{{host}} sunucusuna ulaşılamıyor",
       "statusUnknown": "Durum bilinmiyor",
       "onHost": "{{host}} üzerinde",
-      "new": "Yeni sohbet",
       "title": "Sohbetler",
       "search": "Sohbetlerde ve çalışanlarda ara",
       "empty": "Yan sohbetler, Slack ve Linear yazışmaları ve otomasyon çalıştırmaları burada listelenir. Her birinin altında başlattığı çalışanları görebilirsiniz.",
@@ -28483,7 +28482,17 @@
       "open": "Aç",
       "actions": "Sohbet işlemleri",
       "needsYouCount": "{{count}} sizi bekliyor",
-      "hideOlder": "Eski kayıtları gizle"
+      "hideOlder": "Eski kayıtları gizle",
+      "noMessages": "Henüz mesaj yok",
+      "searchPerson": "{{name}} adlı kişinin sohbetlerinde ara",
+      "searchOwn": "Sohbetlerinde ara",
+      "noneFromPerson": "{{name}} adlı kişiden sohbet yok.",
+      "noneFromYou": "Senden sohbet yok.",
+      "filter": {
+        "label": "Kişiye göre filtrele",
+        "you": "Sen",
+        "everyone": "Herkes"
+      }
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",

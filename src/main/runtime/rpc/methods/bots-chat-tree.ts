@@ -8,7 +8,11 @@ import { readSharedBotChatTree, runtimeBotChatTreeHost } from '../../../bots/bot
 import { readBotOwnChatPanes } from '../../../bots/bot-own-chat-panes'
 import { runtimeBotChatSearchHost, searchBotChats } from '../../../bots/bot-chat-search-host'
 import { defineMethod } from '../core'
-import { botShareChatFilter, botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
+import {
+  botShareChatFilter,
+  botShareScopeOf,
+  withBotChatPeople
+} from '../../../bots/team-share/bot-share-chats'
 import { botShareScopedView } from '../../../bots/team-share/bot-share-scoped-view'
 import { botChatTreeForViewer, type BotChatTreeViewer } from '../../../bots/bot-chat-tree-viewer'
 import { NO_HOME_CHAT_ID } from '../../../../shared/bots/bot-chat-tree-model'
@@ -29,6 +33,7 @@ export const BOT_CHAT_TREE_METHODS = [
           ? { ...params, chatId: botHomePlaceholderId(share.accountId) }
           : params
       const tree = await readSharedBotChatTree(runtime, read)
+      const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
       const viewer: BotChatTreeViewer = share
         ? {
             kind: 'teammate',
@@ -37,13 +42,10 @@ export const BOT_CHAT_TREE_METHODS = [
           }
         : {
             kind: 'owner',
-            personName: (accountId) =>
-              botSharePersonName(
-                runtime.bots.list().find((bot) => bot.id === params.botId) ?? {},
-                accountId
-              )
+            personName: (accountId) => botSharePersonName(bot ?? {}, accountId)
           }
-      return botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
+      const view = botChatTreeForViewer(tree, viewer, { page: params.chatId !== undefined })
+      return share ? view : withBotChatPeople(runtime, bot, view)
     }
   }),
   // Each bot's own side chats, pane and title, so its row's line says what any of them is doing.
@@ -67,6 +69,11 @@ export const BOT_CHAT_TREE_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: BotChatSearch,
-    handler: (params, { runtime }) => searchBotChats(runtimeBotChatSearchHost(runtime), params)
+    handler: async (params, { runtime }) =>
+      withBotChatPeople(
+        runtime,
+        runtime.bots.list().find((bot) => bot.id === params.botId),
+        await searchBotChats(runtimeBotChatSearchHost(runtime), params)
+      )
   })
 ]

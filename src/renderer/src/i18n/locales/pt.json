@@ -26333,7 +26333,17 @@
       "searchRetry": "Tentar novamente",
       "personHome": "Home de {{name}}",
       "older": "Mostrar {{count}} mais antigos",
-      "hideOlder": "Ocultar mais antigos"
+      "hideOlder": "Ocultar mais antigos",
+      "noMessages": "Ainda não há mensagens",
+      "searchPerson": "Pesquisar nos chats de {{name}}",
+      "searchOwn": "Pesquisar nos seus chats",
+      "noneFromPerson": "Nenhum chat de {{name}}.",
+      "noneFromYou": "Nenhum chat seu.",
+      "filter": {
+        "label": "Filtrar por pessoa",
+        "you": "Você",
+        "everyone": "Todos"
+      }
     },
     "needs": {
       "chat": "Seu chat com {{name}}",

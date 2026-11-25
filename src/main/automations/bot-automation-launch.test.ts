@@ -53,8 +53,8 @@ const ACTS_FOR: Record<string, BotRequestAsker[]> = {
 }
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stamping reads only this record.
 const db = {
-  getBotConversationActsFor: (root: string) =>
-    ACTS_FOR[root] ? { actsFor: ACTS_FOR[root] } : undefined
+  listBotConversationActsFor: (roots: readonly string[]) =>
+    new Map(roots.flatMap((root) => (ACTS_FOR[root] ? [[root, { actsFor: ACTS_FOR[root] }]] : [])))
 } as unknown as OrchestrationDb
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stamping reads the agent list and these records.
 const runtime = {

@@ -7714,7 +7714,8 @@
       "runningCount": "Выполняются: {{count}}",
       "needsYouCount": "Требуют внимания: {{count}}",
       "open": "Открыть",
-      "delete": "Удалить чат"
+      "delete": "Удалить чат",
+      "noMessages": "Сообщений пока нет"
     },
     "panel": {
       "backTo": "Назад к {{name}}",

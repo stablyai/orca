@@ -2,12 +2,16 @@
 // or acts in. Others' chats are not theirs to see, Home Chat included.
 import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
+import type { Bot } from '../../../shared/bot-types'
+import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
+import { botSharePersonName } from '../../../shared/bots/bot-home-of'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { createChatOrcaSessionIdResolver } from '../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { botOfSession } from '../bot-session-tabs'
 import {
+  botHomesOfChats,
   readBotConversationActsFor,
   type BotConversationActsForSources
 } from '../bot-conversation-acts-for'
@@ -87,5 +91,34 @@ export function emptyChatReusableBy(
     }
     const recorded = readBotConversationActsFor(sources, chatId)
     return recorded === undefined || actsForOwner(recorded.actsFor)
+  }
+}
+
+/** The owner's chats, each a teammate's own naming them, by whose Home it falls under: the one place
+ *  the desktop and the phone learn whose a chat is. A chat Orca never recorded stays the owner's. */
+export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
+  sources: BotConversationActsForSources,
+  bot: Pick<Bot, 'shares'> | undefined,
+  read: T
+): T {
+  if (!bot?.shares?.some((share) => share.kind === 'account')) {
+    return read
+  }
+  const homes = botHomesOfChats(
+    sources,
+    bot,
+    read.chats.map((chat) => chat.chatId)
+  )
+  return {
+    ...read,
+    chats: read.chats.map((chat) => {
+      const of = homes.get(chat.chatId)
+      return of && of !== 'owner'
+        ? {
+            ...chat,
+            person: { accountId: of.accountId, name: botSharePersonName(bot, of.accountId) }
+          }
+        : chat
+    })
   }
 }

@@ -5692,7 +5692,8 @@
     },
     "saveFailed": "Não foi possível salvar",
     "chats": {
-      "readFailedTitle": "Não foi possível carregar os chats"
+      "readFailedTitle": "Não foi possível carregar os chats",
+      "noMessages": "Ainda não há mensagens"
     },
     "panel": {
       "backTo": "Voltar para {{name}}"

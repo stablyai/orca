@@ -75,8 +75,13 @@ function useChatLine(bot: TreeBot, chat: BotChatTreeChat, folded: boolean): stri
     chat.preview ??
     (chat.origin === 'home'
       ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
-      : null)
-  return [place, chat.closed ? t('bots.chats.closedShort', 'closed') : null, preview]
+      : t('bots.chats.noMessages', 'No messages yet'))
+  return [
+    place,
+    chat.homeOf ? null : chat.person?.name,
+    chat.closed ? t('bots.chats.closedShort', 'closed') : null,
+    preview
+  ]
     .filter(Boolean)
     .join(' · ')
 }

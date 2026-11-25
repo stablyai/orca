@@ -5000,7 +5000,8 @@
     },
     "saveFailed": "無法儲存",
     "chats": {
-      "readFailedTitle": "無法載入聊天"
+      "readFailedTitle": "無法載入聊天",
+      "noMessages": "尚無訊息"
     },
     "panel": {
       "backTo": "返回 {{name}}"

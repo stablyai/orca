@@ -5603,7 +5603,8 @@
     },
     "saveFailed": "저장하지 못함",
     "chats": {
-      "readFailedTitle": "채팅을 불러오지 못함"
+      "readFailedTitle": "채팅을 불러오지 못함",
+      "noMessages": "아직 메시지가 없습니다"
     },
     "panel": {
       "backTo": "{{name}}(으)로 돌아가기"
