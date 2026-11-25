@@ -42,7 +42,7 @@ export function MobileBotAgentPage(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { bot } = props
-  const choices = useNewBotAgentChoices(props.client)
+  const choices = useNewBotAgentChoices(props.client)?.agents ?? null
   const [switching, setSwitching] = useState<BotAgent | null>(null)
   const [picking, setPicking] = useState<'model' | 'effort' | null>(null)
   const modelChoices = useBotModelChoices(props.client, props.online, bot)

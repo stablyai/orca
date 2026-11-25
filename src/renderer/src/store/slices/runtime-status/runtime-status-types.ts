@@ -41,6 +41,7 @@ export type RuntimeStatusStoreState = RuntimeStatusSlice &
       | 'settings'
       | 'remoteBrowserPageHandlesByPageId'
       | 'retainRuntimeDetectedAgents'
+      | 'setRuntimeAgentOrchestrationByPaneKey'
       | 'retainRuntimeTerminalQuickCommands'
       | 'retainEnvironmentSshState'
       | 'clearRuntimeDetectedAgents'

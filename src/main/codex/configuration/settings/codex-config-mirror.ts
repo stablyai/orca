@@ -93,14 +93,14 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   }
   // Advance the baseline only after mirroring so unpromoted changes remain eligible for retry.
   const complete = snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
+    ...promotionPlan,
     conflicts: new Map(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
     ),
     // Missing marketplace/plugin tables in later source configs now count as removals.
     mirroredRegistrations: true,
     mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
-    mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot,
-    guestCarryForward: promotionPlan.guestCarryForward
+    mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
   })
   return { ran: true, complete }
 }

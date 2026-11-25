@@ -36,7 +36,7 @@ import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
 import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
-import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { codexArgsMcpServerNames, codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { codexReadOnlyThreadConfig } from '../prompts/codex-structured-read-only'
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
@@ -184,7 +184,8 @@ export function codexStructuredLaunchPart(
       await basis.toolServers(),
       async () => [
         ...(await readCodexInheritedToolNames(codexHome)),
-        ...(await agentOwnMcpServerNames('codex', environment, launchDirectory))
+        ...(await agentOwnMcpServerNames('codex', environment, launchDirectory)),
+        ...codexArgsMcpServerNames(args)
       ]
     )
     const threadConfig = basis.readOnly

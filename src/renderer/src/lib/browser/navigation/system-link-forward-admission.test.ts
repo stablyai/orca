@@ -124,8 +124,7 @@ describe('a System Browser open of a paired server localhost link', () => {
       'superseded'
     ])
     expect(openUrl).not.toHaveBeenCalled()
-    expect(toastSuccess).toHaveBeenCalledTimes(1)
-    expect(toastSuccess.mock.calls[0]?.[1]).toBeUndefined()
+    expect(toastSuccess).not.toHaveBeenCalled()
   })
 
   it('admits a link from this computer straight from the shell (control)', async () => {

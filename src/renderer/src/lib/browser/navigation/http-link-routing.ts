@@ -29,12 +29,11 @@ import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
-import type { BrowserOpenOutcome } from './browser-link-destination'
 import {
-  admissionForBrowserOutcome,
   onceAdmission,
   openSystemHttpLink as openSystemHttpLinkForAdmission,
   openOwnedSystemHttpLinkAdmitted,
+  settleFromBrowserOutcome,
   settleHttpLinkBrowserOpen
 } from './http-link-admission'
 
@@ -131,6 +130,7 @@ export function canHttpLinkOpenInSourceGroup(
 }
 
 export { openSystemHttpLinkResolved as openSystemHttpLink } from './http-link-admission'
+export { openSystemHttpLinkReportingOutcome } from './http-link-admission'
 
 export type HttpLinkDestination = 'orca-browser' | 'system-browser' | 'none'
 
@@ -165,8 +165,7 @@ function executeHttpLink(
     return 'none'
   }
   const state = storeAccessor?.()
-  const onDetailedOutcome = (outcome: BrowserOpenOutcome): void =>
-    settle(admissionForBrowserOutcome(outcome))
+  const onDetailedOutcome = settleFromBrowserOutcome(settle)
   const effectiveSourceOwner = sourceOwner
   const sourceIsLocal = effectiveSourceOwner
     ? effectiveSourceOwner.kind === 'local'

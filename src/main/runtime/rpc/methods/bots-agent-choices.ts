@@ -1,12 +1,17 @@
-// `bots.agentChoices`: the agents this host's New bot offers, for a client that can't read this host's
-// agent menu itself (a phone). Same rows and filter as the desktop's New bot, from this host's own facts.
+// `bots.agentChoices`: the agents this host's New bot offers, and the one it picks first, for a client
+// that can't read this host's agent menu itself (a phone). Same rows, filter and pick as the desktop's
+// New bot, from this host's own facts.
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { botAgentChoices } from '../../../../shared/bots/bot-agent-choices'
+import {
+  botAgentChoices,
+  newBotAgent,
+  readyBotDefaultAgent
+} from '../../../../shared/bots/bot-agent-choices'
 import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
@@ -84,16 +89,17 @@ export async function hostBotAgentChoices(runtime: OrcaRuntimeService) {
     offerAgentSetup: true,
     hostPlatform: process.platform
   })
-  return botAgentChoices({
-    state: 'settled',
-    rows,
-    detection: { detectedIds }
-  })
+  const model = { state: 'settled' as const, rows, detection: { detectedIds } }
+  const agents = botAgentChoices(model)
+  return {
+    agents,
+    defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, settings.defaultTuiAgent))
+  }
 }
 
 export const BOT_AGENT_CHOICES_METHOD = defineMethod({
   name: 'bots.agentChoices',
   permission: 'workspace',
   params: null,
-  handler: async (_params, { runtime }) => ({ agents: await hostBotAgentChoices(runtime) })
+  handler: async (_params, { runtime }) => hostBotAgentChoices(runtime)
 })
