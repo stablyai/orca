@@ -6,6 +6,7 @@ import {
   type GroupedUsagePool
 } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { formatPoolWindowLabel } from './usage-pool-label'
+import { formatRateLimitWindowChipLabel } from './rate-limit-window-localized-label'
 import { formatBareUsagePercentage } from './usage-percentage-label'
 import { useTranslate } from '../../../i18n/use-translate'
 
@@ -40,12 +41,14 @@ export function GroupedPoolUsage({
   visibleBuckets,
   allBuckets,
   display,
-  now
+  now,
+  showResetCountdown = false
 }: {
   visibleBuckets: readonly GroupedUsagePool[]
   allBuckets: readonly RateLimitBucket[]
   display: UsagePercentageDisplay
   now: number
+  showResetCountdown?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const groups = new Map<string, RateLimitBucket[]>()
@@ -68,7 +71,9 @@ export function GroupedPoolUsage({
             </span>
             {windows.map(({ bucket, key }, index) => {
               const percentage = formatBareUsagePercentage(bucket.usedPercent, display, t)
-              const window = formatPoolWindowLabel(bucket, now, t)
+              const window = showResetCountdown
+                ? formatRateLimitWindowChipLabel(bucket, now)
+                : formatPoolWindowLabel(bucket, now, t)
               return (
                 <React.Fragment key={key}>
                   {index > 0 ? <span className="text-muted-foreground">·</span> : null}

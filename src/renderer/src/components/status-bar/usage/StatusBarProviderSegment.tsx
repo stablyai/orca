@@ -278,6 +278,7 @@ export function ProviderSegment({
     : null
   const sections = getStatusBarUsageSections(p, mode, t)
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
+  const showGroupedPoolReset = provider === 'antigravity'
   const showLabels = mode === 'verbose' || !compact
   // Why: gate only the clock, never the label, so visibility can't change width and re-trigger itself.
   const now = useResetCountdownClock(
@@ -287,7 +288,11 @@ export function ProviderSegment({
         ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
         : mode === 'verbose'
           ? groupedBuckets
-              .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
+              .filter(
+                (bucket) =>
+                  showGroupedPoolReset ||
+                  clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT
+              )
               .map((bucket) => bucket.resetsAt)
           : []
   )
@@ -354,6 +359,7 @@ export function ProviderSegment({
           allBuckets={p.buckets ?? []}
           display={display}
           now={now}
+          showResetCountdown={showGroupedPoolReset}
         />
       ) : (
         sections.map((section, index) => (
