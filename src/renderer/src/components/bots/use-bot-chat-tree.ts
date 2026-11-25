@@ -64,13 +64,14 @@ function useChangeUnread(bot: Bot | null): boolean {
     if (!hostId || !botId) {
       return
     }
-    let latest = 0
+    const notices = { latest: 0 }
     const stop = onBotsChanged(
       () => {
-        const notice = ++latest
+        notices.latest += 1
+        const notice = notices.latest
         setUnread(true)
         void chatTreeRead.requestSettled({ hostId, id: botId }).then((settled) => {
-          if (settled.ok && notice === latest) {
+          if (settled.ok && notice === notices.latest) {
             setUnread(false)
           }
         })
@@ -79,7 +80,7 @@ function useChangeUnread(bot: Bot | null): boolean {
       { botId, kinds: chatTreeRead.kinds }
     )
     return () => {
-      latest += 1
+      notices.latest += 1
       stop()
     }
   }, [hostId, botId])

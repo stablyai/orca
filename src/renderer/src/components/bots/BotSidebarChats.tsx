@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCards'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -107,10 +107,14 @@ export function BotSidebarChats({
       setBotChatFold(bot.hostId, bot.id, foldedHolder, 'open')
     }
   }, [revealNonce, foldedHolder, setBotChatFold, bot.hostId, bot.id])
-  const hold = useListHold()
+  const { held, ref: holdRef, handlers: holdHandlers } = useListHold()
   const front = useBotHomeFrontTab(bot.folderWorkspaceId)
   // Focus in a listed older row, its portaled menu included (React's tree), so Hide can take focus first.
-  const olderFocused = useRef(false)
+  const olderFocusedRef = useRef(false)
+  const setOlderFocused = useCallback((focused: boolean) => {
+    olderFocusedRef.current = focused
+  }, [])
+  const olderFocused = useCallback(() => olderFocusedRef.current, [])
   const liveLineIds = useMemo(() => botLiveWorkspaceIds(chats), [chats])
   const revealHeld = useMemo(
     () =>
@@ -136,11 +140,14 @@ export function BotSidebarChats({
     reveal: revealHeld,
     front,
     fresh: tree.state === 'ready' && tree.landed && !tree.refreshFailed && !tree.changeUnread,
-    held: hold.held
+    held
   })
   // The toggle unmounting while it had focus (fewer than two left to fold) hands focus to the last chat
   // row; focus anywhere else is left alone.
   const toggleLeftWithFocus = useRef(false)
+  const markToggleLeftWithFocus = useCallback(() => {
+    toggleLeftWithFocus.current = true
+  }, [])
   useLayoutEffect(() => {
     if (!toggleLeftWithFocus.current) {
       return
@@ -148,11 +155,11 @@ export function BotSidebarChats({
     toggleLeftWithFocus.current = false
     if (document.activeElement === null || document.activeElement === document.body) {
       const rows = [
-        ...(hold.ref.current?.querySelectorAll<HTMLElement>('[data-bot-sidebar-chat]') ?? [])
+        ...(holdRef.current?.querySelectorAll<HTMLElement>('[data-bot-sidebar-chat]') ?? [])
       ]
       rows.at(-1)?.focus()
     }
-  }, [older.length, hold.ref])
+  }, [older.length, holdRef])
   const notes = useMemo(() => {
     const labels = new Map<string, string>()
     for (const [worktreeId, note] of view.notes) {
@@ -175,7 +182,7 @@ export function BotSidebarChats({
       view={folded ? olderRowView(chatView) : chatView}
       folded={folded}
       front={front}
-      olderFocused={olderFocused}
+      onOlderFocus={setOlderFocused}
       notes={notes}
       lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
       onStep={(next) => onStep(chatView.chat.chatId, next)}
@@ -193,7 +200,7 @@ export function BotSidebarChats({
             count={older.length}
             open={showOlder}
             onToggle={onToggleOlder}
-            removedWithFocus={toggleLeftWithFocus}
+            onRemovedWithFocus={markToggleLeftWithFocus}
             olderFocused={olderFocused}
           />
         ]
@@ -203,7 +210,7 @@ export function BotSidebarChats({
 
   return (
     // `contents`, so the rows stay the parent's flex children; it only watches the pointer and focus.
-    <div ref={hold.ref} className="contents" {...hold.handlers}>
+    <div ref={holdRef} className="contents" {...holdHandlers}>
       {rows}
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
@@ -250,7 +257,7 @@ function BotSidebarChat({
   view,
   folded,
   front,
-  olderFocused,
+  onOlderFocus,
   notes,
   lineageChildrenByParentIdentity,
   onStep,
@@ -261,7 +268,7 @@ function BotSidebarChat({
   /** Listed under "Hide older". */
   folded: boolean
   front: BotHomeFrontTab | null
-  olderFocused: React.RefObject<boolean>
+  onOlderFocus: (focused: boolean) => void
   notes: ReadonlyMap<string, string>
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   onStep: (steps: number) => void
@@ -293,20 +300,8 @@ function BotSidebarChat({
     <div
       className="flex flex-col gap-1"
       data-bot-sidebar-older-chat={folded ? '' : undefined}
-      onFocus={
-        folded
-          ? () => {
-              olderFocused.current = true
-            }
-          : undefined
-      }
-      onBlur={
-        folded
-          ? () => {
-              olderFocused.current = false
-            }
-          : undefined
-      }
+      onFocus={folded ? () => onOlderFocus(true) : undefined}
+      onBlur={folded ? () => onOlderFocus(false) : undefined}
     >
       <BotChatContextMenu bot={bot} chat={chat} onOpen={() => pressRow({ detail: 1 })}>
         {/* Its label names the slot's kind and state; pr-0.5 puts the chevron on the bot chevron's edge. */}

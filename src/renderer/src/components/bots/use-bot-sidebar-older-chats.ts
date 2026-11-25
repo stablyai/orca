@@ -42,7 +42,7 @@ export function tabOfBotHost(tab: Tab, hostId: string): boolean {
 
 /** The chat tab in front of the bot's home, read once for the whole list: its rows' current marker and
  *  the fold's hold both use it, so no row scans the tabs itself. */
-export type BotHomeFrontTab = { id: string; entityId: string; executionHostId?: string }
+export type BotHomeFrontTab = Pick<Tab, 'id' | 'entityId' | 'executionHostId'>
 
 export function useBotHomeFrontTab(folderWorkspaceId: string): BotHomeFrontTab | null {
   const homeKey = useMemo(() => folderWorkspaceKey(folderWorkspaceId), [folderWorkspaceId])
