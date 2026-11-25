@@ -229,15 +229,15 @@ export function useMobileDiffReviewInteractions(input: InteractionInput) {
     sendRange: async (
       sheet: Extract<ReviewSheet, { kind: 'range' }>,
       terminals?: readonly MobileReviewTerminalTab[]
-    ) => {
+    ): Promise<{ ok: true } | { ok: false; error: string | null }> => {
       const saved = await saveRangeNote(sheet)
       if (!('comment' in saved)) {
-        return saved.error
+        return { ok: false, error: saved.error }
       }
       clearSavedNote(saved.comment.body)
       sheets.closeSheet('range', sheet)
       await sendNoteNow(saved.comment, terminals)
-      return null
+      return { ok: true }
     },
     // Staging drops the file from the uncommitted queue; land on the file after it, wrapping from the last.
     stageAndOpenNext: async () => {

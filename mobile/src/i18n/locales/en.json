@@ -1794,6 +1794,9 @@
     "smartRailRow": {
       "title": "Smart rail",
       "subtitle": "Shows keys for what your agent is doing"
+    },
+    "diffReviewScreen": {
+      "backToDiff": "Back to diff"
     }
   },
   "pullRequest": {
