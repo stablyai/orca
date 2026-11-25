@@ -7113,15 +7113,15 @@
           "installAvailable": "Yüklenebilir",
           "otherBuild": "Orca'nın başka bir sürümü tarafından yüklendi",
           "otherBuildKept": "Korundu: Orca'nın başka bir sürümü tarafından yazıldı",
-          "differsFromOrca": "Bu kopya Orca’nınkinden farklı",
+          "differsFromOrca": "Bu kopya Orca'nın kopyasından farklı",
           "replaceMovesFolder": "Değiştirme işlemi, ek dosyalar dahil tüm klasörü {{folder}} konumuna taşır.",
-          "replaceMovesFolderOnHost": "Değiştirme işlemi, ek dosyalar dahil tüm klasörü {{host}} üzerinde {{folder}} konumuna taşır.",
+          "replaceMovesFolderOnHost": "Değiştirme işlemi, ek dosyalar dahil tüm klasörü {{host}} üzerindeki {{folder}} konumuna taşır.",
           "replaceMovesLink": "Değiştirme işlemi bu bağlantıyı {{folder}} konumuna taşır.",
-          "replaceMovesLinkOnHost": "Değiştirme işlemi bu bağlantıyı {{host}} üzerinde {{folder}} konumuna taşır.",
+          "replaceMovesLinkOnHost": "Değiştirme işlemi bu bağlantıyı {{host}} üzerindeki {{folder}} konumuna taşır.",
           "replaceMovesFile": "Değiştirme işlemi bu dosyayı {{folder}} konumuna taşır.",
-          "replaceMovesFileOnHost": "Değiştirme işlemi bu dosyayı {{host}} üzerinde {{folder}} konumuna taşır.",
+          "replaceMovesFileOnHost": "Değiştirme işlemi bu dosyayı {{host}} üzerindeki {{folder}} konumuna taşır.",
           "replaceMovesCopy": "Değiştirme işlemi bu kopyayı {{folder}} konumuna taşır.",
-          "replaceMovesCopyOnHost": "Değiştirme işlemi bu kopyayı {{host}} üzerinde {{folder}} konumuna taşır."
+          "replaceMovesCopyOnHost": "Değiştirme işlemi bu kopyayı {{host}} üzerindeki {{folder}} konumuna taşır."
         },
         "installResult": {
           "installed": "Yüklendi ve doğrulandı.",
@@ -7147,7 +7147,7 @@
         },
         "SkillBackupPathLine": {
           "movedTo": "Eski kopyanın taşındığı yer:",
-          "movedToOnHost": "Eski kopyanın {{host}} üzerinde taşındığı yer:",
+          "movedToOnHost": "Eski kopyanın taşındığı yer ({{host}}):",
           "showFolder": "Klasörü göster"
         }
       },
@@ -14470,10 +14470,10 @@
           "attentionSharedNotCurrent": "Dikkat gerekiyor · Bu klasörün kullandığı paylaşılan kopya Orca'ya ait değil",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} konumda güncelleme atlandı: {{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · {{agent}} için güncelleme atlandı: {{reason}}",
-          "attentionDiffersFromOrca": "İlgilenmeniz gerekiyor · Bu kopya Orca’nınkinden farklı",
-          "replaceMovesCopyToBackup": "Değiştirme işlemi, ek dosyalar dahil geçerli kopyayı bir yedeğe taşır.",
-          "replaceMovesCopyToFolder": "Değiştirme işlemi, ek dosyalar dahil geçerli kopyayı {{folder}} konumuna taşır.",
-          "replaceMovesCopyToFolderOnHost": "Değiştirme işlemi, ek dosyalar dahil geçerli kopyayı {{host}} üzerinde {{folder}} konumuna taşır."
+          "attentionDiffersFromOrca": "Dikkat gerekiyor · Bu kopya Orca'nın kopyasından farklı",
+          "replaceMovesCopyToBackup": "Değiştirme işlemi, ek dosyalar dahil mevcut kopyayı bir yedeğe taşır.",
+          "replaceMovesCopyToFolder": "Değiştirme işlemi, ek dosyalar dahil mevcut kopyayı {{folder}} konumuna taşır.",
+          "replaceMovesCopyToFolderOnHost": "Değiştirme işlemi, ek dosyalar dahil mevcut kopyayı {{host}} üzerindeki {{folder}} konumuna taşır."
         },
         "recoverServer": {
           "checking": "Kilit kontrol ediliyor…",
