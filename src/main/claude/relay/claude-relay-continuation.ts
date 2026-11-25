@@ -66,8 +66,8 @@ export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
     if (event === null) {
       return null
     }
-    // A final frame goes on its message's continuation, but a subagent's unstreamed message is
-    // nothing but final frames: one alone never starts a move.
+    // A final frame goes on its message's continuation (a cut replay may start with one), but a
+    // subagent's unstreamed message is nothing but final frames, so they hold nothing open.
     return {
       key: scopeKey(line),
       start: event === 'message_start',

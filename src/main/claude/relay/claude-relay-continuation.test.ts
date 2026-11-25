@@ -93,3 +93,27 @@ describe("a continuation's final whose block streamed nothing after the cut", ()
     expect(placed).toEqual([{ provider: 'claude', sessionId: 's', uuid: 'block:msg_1:1' }])
   })
 })
+
+describe('final frames after an older cut', () => {
+  const final = (parent: string | null, uuid: string) =>
+    JSON.stringify({
+      type: 'assistant',
+      message: { id: 'msg_9', content: [{ type: 'text', text: 'done' }] },
+      session_id: 's',
+      parent_tool_use_id: parent,
+      uuid
+    })
+
+  it("re-keys a cut message's final that its replay starts with", () => {
+    const continuation = new RelayedProviderContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 4, 6)
+    const [tagged] = continuation.lines(5, final(null, 'u5'), undefined)
+    expect(JSON.parse(tagged)).toHaveProperty(CLAUDE_RELAY_CONTINUATION_KEY, 'relay:r1:5')
+  })
+
+  it("lets a subagent's unstreamed message end the continuation with its replay", () => {
+    const continuation = new RelayedProviderContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 4, 6)
+    continuation.lines(5, final('call_1', 'u5'), undefined)
+    continuation.lines(6, final('call_1', 'u6'), undefined)
+    expect(continuation.done).toBe(true)
+  })
+})

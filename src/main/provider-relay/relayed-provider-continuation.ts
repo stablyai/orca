@@ -7,7 +7,8 @@ import type { ProviderRelayAckFloor } from './relayed-provider-output'
  */
 export type ProviderRelayItemContinuation = {
   /** The streamed item a line belongs to, and whether the line starts it or ends it. `follows`:
-   *  the line goes with a moved item but never moves one itself (it may be a whole message). */
+   *  a line that may also be a whole item by itself, so an item seen only through such lines
+   *  holds the continuation open no longer than its replay. */
   item(line: string): { key: string; start: boolean; end: boolean; follows?: boolean } | null
   /** The line with its item moved to the continuation named by `tag` (stable across attaches). */
   rekey(line: string, tag: string): string
@@ -48,6 +49,8 @@ export class RelayedProviderContinuation {
   ) {}
 
   private lastSeq = 0
+  /** Moved items seen only through `follows` lines: maybe whole already, so they hold nothing open. */
+  private readonly whole = new Set<string>()
 
   /**
    * Nothing is left to move: past the replay with no item moved (a cut item still streaming shows
@@ -55,7 +58,7 @@ export class RelayedProviderContinuation {
    */
   get done(): boolean {
     return (
-      (this.lastSeq >= this.replayThrough && this.moved.size === 0) ||
+      (this.lastSeq >= this.replayThrough && this.moved.size === this.whole.size) ||
       (this.open !== null && this.open.size === 0)
     )
   }
@@ -74,24 +77,28 @@ export class RelayedProviderContinuation {
       return [line]
     }
     if (item.start) {
+      // One item per key at a time: a new start ends whatever was moved under it.
       this.started.add(item.key)
+      this.moved.delete(item.key)
+      this.whole.delete(item.key)
       return [line]
     }
     let tag = this.moved.get(item.key)
     if (tag === undefined) {
-      if (
-        item.follows ||
-        this.started.has(item.key) ||
-        (this.cutKeys && !this.cutKeys.has(item.key))
-      ) {
+      if (this.started.has(item.key) || (this.cutKeys && !this.cutKeys.has(item.key))) {
         return [line]
       }
       tag = `relay:${this.relayId}:${seq}`
       this.moved.set(item.key, tag)
+      this.whole.add(item.key)
       floor?.observe(seq, this.hook.start(line, tag))
+    }
+    if (!item.follows) {
+      this.whole.delete(item.key)
     }
     if (item.end) {
       this.moved.delete(item.key)
+      this.whole.delete(item.key)
       this.started.add(item.key)
       return this.hook.finish?.(line, tag) ?? [this.hook.rekey(line, tag)]
     }
