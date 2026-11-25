@@ -2214,9 +2214,6 @@
           "wslCodexHomeUnavailable": "{{distro}}의 WSL Codex 홈을 사용할 수 없습니다",
           "wslKimiHomeUnavailable": "{{distro}}의 WSL Kimi 홈을 사용할 수 없습니다"
         }
-      },
-      "terminalOrchestrationNoticeMask": {
-        "label": "Orca가 오케스트레이션 메시지를 전달함"
       }
     },
     "hooks": {

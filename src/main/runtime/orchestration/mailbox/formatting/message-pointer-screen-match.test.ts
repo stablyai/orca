@@ -59,6 +59,14 @@ describe('findOrchestrationPointerSpans', () => {
     }
   })
 
+  it('covers the prompt glyph before a pointer, but not words before one', () => {
+    const pointer = POINTERS[0].trim()
+    const [prompted] = findOrchestrationPointerSpans([row(`❯ ${pointer}`)])
+    expect(prompted).toMatchObject({ start: 0, first: true })
+    const [said] = findOrchestrationPointerSpans([row(`Got: ${pointer}`)])
+    expect(said).toMatchObject({ start: 'Got: '.length, first: true })
+  })
+
   it('leaves the agent quoting part of a pointer alone', () => {
     expect(
       covered([

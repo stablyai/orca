@@ -20,7 +20,17 @@ export type ScreenSpan = Readonly<{
 const POINTER =
   /You have \d+ orchestration messages?(?: \([^)]*\))?\. Run (?:`[^`]{1,400}`\.?|orca[\w-]* orchestration check[^`]{0,400}?\.(?= |$))|You have \d+ new orchestration messages?.{0,1600}? for the new mail\./g
 
-/** Where a typed orchestration pointer sits on screen, as the cells to cover row by row. */
+/** Only a prompt glyph (Claude's `❯`) or indent stands before the pointer on its first row. */
+function promptOnlyBefore(row: ScreenRow, start: number): boolean {
+  const before = [...row.text]
+    .filter((_, index) => (row.columns[index] ?? index) < start)
+    .join('')
+    .trim()
+  return before.length <= 2 && !/[\p{L}\p{N}]/u.test(before)
+}
+
+/** Where a typed orchestration pointer sits on screen, as the cells to cover row by row. A first
+ *  row's prompt glyph is covered with it, so a hidden pointer leaves no stray `❯`. */
 export function findOrchestrationPointerSpans(rows: readonly ScreenRow[]): ScreenSpan[] {
   let text = ''
   const at: { row: number; column: number }[] = []
@@ -68,7 +78,13 @@ export function findOrchestrationPointerSpans(rows: readonly ScreenRow[]): Scree
       if (open) {
         spans.push(open)
       }
-      open = { row, start: column, end: column + 1, first: !open }
+      const first = !open
+      open = {
+        row,
+        start: first && promptOnlyBefore(rows[row], column) ? 0 : column,
+        end: column + 1,
+        first
+      }
     }
     if (open) {
       spans.push(open)

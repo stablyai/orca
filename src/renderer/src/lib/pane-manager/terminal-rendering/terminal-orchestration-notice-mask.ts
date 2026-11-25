@@ -8,12 +8,11 @@ import type {
   Terminal
 } from '@xterm/xterm'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
 import {
   findOrchestrationPointerSpans,
   type ScreenRow
 } from '../../../../../shared/orchestration/mailbox/orchestration-pointer-screen-match'
-import { hexToRgb, mix, rgbaToHex } from '../../../../../shared/color/rgba-contrast'
+import { hexToRgb, rgbaToHex } from '../../../../../shared/color/rgba-contrast'
 
 // Coalesce a TUI's redraw bursts into one viewport read.
 const SCAN_DELAY_MS = 60
@@ -49,27 +48,26 @@ const ANSI_NAMES = [
   'brightWhite'
 ] as const
 
-/** The colour a cell paints behind (`bg`) or as (`fg`) its text, so the cover and its label
- *  match a TUI's own tinted input row rather than the terminal theme. */
-function cellColor(
+/** The colour a cell paints behind its text, so the cover matches a TUI's own tinted input row
+ *  rather than the terminal theme. */
+function cellBackground(
   cell: IBufferCell | undefined,
-  layer: 'bg' | 'fg',
   theme: ITheme | undefined,
   fallback: string
 ): string {
   if (!cell) {
     return fallback
   }
-  // Inverse cells swap the two.
-  const bg = (layer === 'bg') !== (cell.isInverse() !== 0)
-  const value = bg ? cell.getBgColor() : cell.getFgColor()
-  if (bg ? cell.isBgRGB() : cell.isFgRGB()) {
+  // Inverse cells paint their foreground behind the text.
+  const inverse = cell.isInverse() !== 0
+  const value = inverse ? cell.getFgColor() : cell.getBgColor()
+  if (inverse ? cell.isFgRGB() : cell.isBgRGB()) {
     return `#${value.toString(16).padStart(6, '0')}`
   }
-  if ((bg ? cell.isBgPalette() : cell.isFgPalette()) && value < ANSI_NAMES.length) {
+  if ((inverse ? cell.isFgPalette() : cell.isBgPalette()) && value < ANSI_NAMES.length) {
     return hexColor(theme?.[ANSI_NAMES[value]], fallback)
   }
-  return hexColor(bg ? theme?.background : theme?.foreground, fallback)
+  return hexColor(inverse ? theme?.foreground : theme?.background, fallback)
 }
 
 function viewportRows(terminal: Terminal, buffer: IBuffer): ScreenRow[] | null {
@@ -100,6 +98,53 @@ function viewportRows(terminal: Terminal, buffer: IBuffer): ScreenRow[] | null {
   })
 }
 
+type Cover = { row: number; start: number; end: number; background: string }
+
+/** The cells to paint over each pointer on screen. A row holding nothing but the pointer is wiped
+ *  to the terminal's own background, with the blank rows of the tinted band a TUI draws around a
+ *  message (Claude Code's input rows), so the spot reads as plain empty lines. */
+function pointerCovers(terminal: Terminal, buffer: IBuffer, rows: ScreenRow[]): Cover[] {
+  const theme = terminal.options.theme
+  const plain = hexColor(theme?.background, '#000000')
+  const backgroundAt = (row: number, column: number): string =>
+    cellBackground(buffer.getLine(buffer.viewportY + row)?.getCell(column), theme, plain)
+  const blank = (row: number): boolean => rows[row].text.trim() === ''
+  const onlyPointer = (row: number, start: number, end: number): boolean =>
+    [...rows[row].text].every((char, index) => {
+      const column = rows[row].columns[index] ?? index
+      return (column >= start && column < end) || /\s/.test(char)
+    })
+  const wipe = (row: number): Cover => ({ row, start: 0, end: terminal.cols, background: plain })
+  const covers: Cover[] = []
+  const spans = findOrchestrationPointerSpans(rows)
+  spans.forEach((span, index) => {
+    const tint = backgroundAt(span.row, span.start)
+    if (!onlyPointer(span.row, span.start, span.end)) {
+      covers.push({ ...span, background: tint })
+      return
+    }
+    covers.push(wipe(span.row))
+    if (tint === plain) {
+      return
+    }
+    if (span.first) {
+      for (let row = span.row - 1; row >= 0 && blank(row) && backgroundAt(row, 0) === tint; row--) {
+        covers.push(wipe(row))
+      }
+    }
+    if (index === spans.length - 1 || spans[index + 1].first) {
+      for (
+        let row = span.row + 1;
+        row < rows.length && blank(row) && backgroundAt(row, 0) === tint;
+        row++
+      ) {
+        covers.push(wipe(row))
+      }
+    }
+  })
+  return covers
+}
+
 /** Covers the "You have N orchestration messages" pointer Orca types into terminal agents when
  *  the user hides orchestration notices. Display only: the PTY, the agent and terminal reads keep
  *  the text. */
@@ -124,17 +169,12 @@ export function installTerminalOrchestrationNoticeMask(terminal: Terminal): IDis
       clear()
       return
     }
-    const theme = terminal.options.theme
     const wanted = new Set<string>()
-    for (const span of findOrchestrationPointerSpans(rows)) {
-      const line = buffer.viewportY + span.row
-      const text = rows[span.row].text
-      const cell = buffer.getLine(line)?.getCell(span.start)
-      const background = cellColor(cell, 'bg', theme, '#000000')
-      const label = rgbaToHex(
-        mix(hexToRgb(cellColor(cell, 'fg', theme, '#ffffff')), hexToRgb(background), 55)
-      )
-      const key = `${buffer.type}:${line}:${span.start}:${span.end}:${span.first}:${background}:${text}`
+    for (const cover of pointerCovers(terminal, buffer, rows)) {
+      const { start, end, background } = cover
+      const line = buffer.viewportY + cover.row
+      const text = rows[cover.row].text
+      const key = `${buffer.type}:${line}:${start}:${end}:${background}:${text}`
       wanted.add(key)
       const existing = shown.get(key)
       // A TUI's redraw scrolls its screen, and xterm disposes the markers on lines it drops.
@@ -148,8 +188,8 @@ export function installTerminalOrchestrationNoticeMask(terminal: Terminal): IDis
       }
       const decoration = terminal.registerDecoration({
         marker,
-        x: span.start,
-        width: span.end - span.start,
+        x: start,
+        width: end - start,
         backgroundColor: background,
         foregroundColor: background,
         layer: 'top'
@@ -170,26 +210,14 @@ export function installTerminalOrchestrationNoticeMask(terminal: Terminal): IDis
           const cellWidth = screen.clientWidth / terminal.cols
           const cellHeight = screen.clientHeight / terminal.rows
           element.style.top = `${row * cellHeight}px`
-          element.style.left = `${span.start * cellWidth}px`
-          element.style.width = `${Math.round((span.end - span.start) * cellWidth)}px`
+          element.style.left = `${start * cellWidth}px`
+          element.style.width = `${Math.round((end - start) * cellWidth)}px`
           element.style.height = `${cellHeight}px`
           element.style.lineHeight = `${cellHeight}px`
         }
         element.style.display = 'block'
         element.style.pointerEvents = 'none'
         element.style.backgroundColor = background
-        if (!span.first) {
-          return
-        }
-        element.style.color = label
-        element.style.fontFamily = terminal.options.fontFamily ?? ''
-        element.style.fontSize = `${terminal.options.fontSize ?? 13}px`
-        element.style.overflow = 'hidden'
-        element.style.whiteSpace = 'nowrap'
-        element.textContent = translate(
-          'auto.lib.terminalOrchestrationNoticeMask.label',
-          'Orca delivered an orchestration message'
-        )
       })
       shown.set(key, { decoration, marker })
     }

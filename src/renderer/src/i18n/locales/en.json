@@ -3165,9 +3165,6 @@
         "mergeRequest": "Merge request",
         "linkedIssue": "Linked issue",
         "listeningPort": "Listening port"
-      },
-      "terminalOrchestrationNoticeMask": {
-        "label": "Orca delivered an orchestration message"
       }
     },
     "hooks": {
