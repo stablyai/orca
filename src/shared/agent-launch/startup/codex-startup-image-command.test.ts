@@ -10,6 +10,7 @@ import {
 } from './codex-startup-image-command'
 import { recognizeAgentProcessFromCommandLine } from '../../agent-status/process/agent-process-recognition'
 import { withManagedAgentProgram } from './managed-agent-launch-program'
+import { quoteStartupArg } from './tui-agent-startup-shell'
 
 const folder = mkdtempSync(join(tmpdir(), 'orca codex '))
 const codex = join(folder, 'codex')
@@ -18,7 +19,13 @@ chmodSync(codex, 0o755)
 afterAll(() => rmSync(folder, { recursive: true, force: true }))
 
 function run(args: string): string[] {
-  const command = withCodexDirectLaunchCommand(`'${codex}' ${args}`, 'posix', { images: false })
+  const command = withCodexDirectLaunchCommand(
+    `${quoteStartupArg(codex, 'posix')} ${args}`,
+    'posix',
+    {
+      images: false
+    }
+  )
   const shell = spawnSync('/bin/sh', ['-c', command], {
     encoding: 'utf8',
     env: { PATH: '/usr/bin:/bin', ORCA_TERMINAL_HANDLE: 'term_1', ORCA_WORKTREE_ID: 'wt 1' }
@@ -39,11 +46,12 @@ it.skipIf(process.platform === 'win32')(
     ])
     // A command that shares a Codex server keeps that server's identity.
     expect(run('agents list')).toEqual(['agents', 'list'])
+    const invocation = `${quoteStartupArg(codex, 'posix')} --x`
     expect(
       unwrapDirectAgentLaunchCommand(
-        withCodexDirectLaunchCommand(`'${codex}' --x`, 'posix', { images: true })
+        withCodexDirectLaunchCommand(invocation, 'posix', { images: true })
       )
-    ).toBe(`'${codex}' --x`)
+    ).toBe(invocation)
   }
 )
 
@@ -61,7 +69,7 @@ it.skipIf(process.platform === 'win32')(
       '#!/bin/sh\nprintf \'%s\\n\' "$CLAUDE_CONFIG_DIR" "$ORCA_CLAUDE_INJECTED_CONFIG_DIR" "$@"\n'
     )
     chmodSync(claude, 0o755)
-    const invocation = `'${claude}' --resume 'abc def'`
+    const invocation = `${quoteStartupArg(claude, 'posix')} --resume 'abc def'`
     const command = prepareShellNativeAgentLaunch(invocation, 'posix', false)
     const result = spawnSync('/bin/sh', ['-c', command], {
       encoding: 'utf8',
@@ -100,7 +108,7 @@ printf '%s\n' "$PWD" "$CODEX_HOME" "$DEBUG" "\${TRACE-unset}" "$SSH_CONNECTION" 
       chmodSync(executable, 0o755)
       chmodSync(preflight, 0o755)
       const command = withCodexDirectLaunchCommand(
-        `cd '${scope}'&&CODEX_HOME='/account' env -u TRACE DEBUG=1 '${executable}' resume 'abc'`,
+        `cd ${quoteStartupArg(scope, 'posix')}&&CODEX_HOME='/account' env -u TRACE DEBUG=1 ${quoteStartupArg(executable, 'posix')} resume 'abc'`,
         'posix',
         { images: true, probeInShell: true }
       )
@@ -137,6 +145,15 @@ printf '%s\n' "$PWD" "$CODEX_HOME" "$DEBUG" "\${TRACE-unset}" "$SSH_CONNECTION" 
     }
   }
 )
+
+it('unwraps Codex when the cwd contains the wrapper prefix', () => {
+  const command = withCodexDirectLaunchCommand(
+    "cd '/tmp/project/bin/sh -c notes'&&command codex --version",
+    'posix',
+    { images: false }
+  )
+  expect(unwrapDirectAgentLaunchCommand(command)).toBe('codex --version')
+})
 
 it('routes the PowerShell argument array through native escaping after adding Codex identity', () => {
   const command = withCodexDirectLaunchCommand(

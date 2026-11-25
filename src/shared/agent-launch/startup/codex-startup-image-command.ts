@@ -162,8 +162,10 @@ export function prepareShellNativeAgentLaunch(
 /** Recover the invocation from Orca's direct launches for startup classification. */
 export function unwrapDirectAgentLaunchCommand(command: string): string {
   const prefix = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
-  const index = prefix.indexOf('/bin/sh -c ')
-  if (index !== -1 && readLaunchPosition(command, 'posix')?.start === index) {
+  const index = prefix.includes('/bin/sh -c ')
+    ? readLaunchPosition(command, 'posix')?.start
+    : undefined
+  if (index !== undefined) {
     if (command.startsWith(CLAUDE_DIRECT_POSIX_PREFIX, index)) {
       return command.slice(index + CLAUDE_DIRECT_POSIX_PREFIX.length)
     }

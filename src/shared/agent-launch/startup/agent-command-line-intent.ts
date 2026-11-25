@@ -1,4 +1,5 @@
 import { inferLaunchShell, readLaunchPosition } from './launch-position'
+import { unwrapDirectAgentLaunchCommand } from './codex-startup-image-command'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
 import {
   COMMAND_TOKEN_SCAN_MAX_CHARS,
@@ -58,12 +59,16 @@ export function recognizeAgentLaunchCommand(
 ): RecognizedAgentProcess | null {
   const text = commandLine ?? ''
   const dialect = inferLaunchShell(text)
-  const command = dialect === 'posix' ? extractAgentLaunchCommand(text) : text
+  const command = unwrapDirectAgentLaunchCommand(
+    dialect === 'posix' ? extractAgentLaunchCommand(text) : text
+  )
   const launch = readLaunchPosition(command, dialect)
   return recognizeAgentProcessFromCommandLine(
     launch && /[\\/]/.test(launch.executable)
       ? getCommandTokenPathBasename(launch.executable) + command.slice(launch.end)
-      : extractAgentLaunchCommand(text),
+      : dialect === 'posix'
+        ? command
+        : extractAgentLaunchCommand(command),
     options
   )
 }

@@ -3,6 +3,8 @@ import {
   ORCA_IMAGE_PROTOCOL_VALUE
 } from '../../../terminal/images/terminal-image-protocol'
 
+const posixClaudeImageCondition = `[ "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" = '${ORCA_IMAGE_PROTOCOL_VALUE}' ] && [ -z "\${CLAUDE_CODE_FORCE_TERMINAL_IMAGES+x}" ]`
+
 function posixClaudeAccountRouting(
   run: string,
   runScoped: (setup: string) => string,
@@ -32,7 +34,7 @@ function posixClaudeAccountRouting(
 
 export function getPosixClaudeDirectLaunchScript(): string {
   const run = 'exec "$__orca_claude_program" "$@"'
-  return `__orca_claude_program=$1; shift; ${posixClaudeAccountRouting(run, (setup) => `${setup}; ${run}`, 'exit')}`
+  return `__orca_claude_program=$1; shift; if ${posixClaudeImageCondition}; then export CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1; fi; ${posixClaudeAccountRouting(run, (setup) => `${setup}; ${run}`, 'exit')}`
 }
 
 /** Re-read account selection on every launch in Orca-routed panes with a real claude binary. Missing/empty pointer restores the user’s config; another pane override wins. Create account homes without a login silently and preserve Anthropic auth. Refuse nonabsolute pointers rather than run under the wrong account. */
@@ -49,7 +51,7 @@ if ! typeset -f claude >/dev/null 2>&1 && [[ -n "\${__orca_claude_binary:-}" && 
    [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:-}" || "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' ]]; then
   function claude {
     local __orca_claude_home __orca_claude_pointer
-    if [[ "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' && -z "\${CLAUDE_CODE_FORCE_TERMINAL_IMAGES+x}" ]]; then
+    if ${posixClaudeImageCondition}; then
       local -x CLAUDE_CODE_FORCE_TERMINAL_IMAGES=1
     fi
     ${routing}
@@ -98,16 +100,16 @@ set -e __orca_claude_type
 `
 }
 
+const powerShellClaudeImageSetup = `if ($env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:CLAUDE_CODE_FORCE_TERMINAL_IMAGES)) { $env:CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1' }`
+
 export function getPowerShellClaudeShellFunction(): string {
   return `$orcaClaudeCommand = Get-Command claude -ErrorAction SilentlyContinue | Select-Object -First 1
 if (($env:ORCA_CLAUDE_PROFILE_POINTER -or $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}') -and $orcaClaudeCommand -and
     $orcaClaudeCommand.CommandType -in @("Application", "ExternalScript")) {
 function Global:claude {
-    ${powerShellSaveClaudeEnv(true)}
+    ${powerShellSaveClaudeEnv}
     try {
-        if ($env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:CLAUDE_CODE_FORCE_TERMINAL_IMAGES)) {
-            $env:CLAUDE_CODE_FORCE_TERMINAL_IMAGES = '1'
-        }
+        ${powerShellClaudeImageSetup}
         ${powerShellClaudeAccountRouting}
         $binary = Get-Command claude -CommandType Application,ExternalScript -ErrorAction Stop | Select-Object -First 1
         $claudeArgs = @(__OrcaEscapeNativeArgs $binary.Source $args)
@@ -121,13 +123,9 @@ Remove-Variable orcaClaudeCommand -ErrorAction SilentlyContinue
 `
 }
 
-function powerShellSaveClaudeEnv(images: boolean): string {
-  const imageEnv = images ? ", 'CLAUDE_CODE_FORCE_TERMINAL_IMAGES'" : ''
-  return (
-    `$names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR'${imageEnv}); $saved = @{}; ` +
-    "foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }"
-  )
-}
+const powerShellSaveClaudeEnv =
+  "$names = @('CLAUDE_CONFIG_DIR', 'ORCA_CLAUDE_INJECTED_CONFIG_DIR', 'CLAUDE_CODE_FORCE_TERMINAL_IMAGES'); $saved = @{}; " +
+  "foreach ($name in $names) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }"
 
 // On .NET 9+, SetEnvironmentVariable with a null value can leave an empty variable.
 const powerShellRestoreClaudeEnv =
@@ -156,7 +154,7 @@ const powerShellClaudeAccountRouting = [
 
 export function getPowerShellClaudeDirectLaunchScope(): { before: string; after: string } {
   return {
-    before: `${powerShellSaveClaudeEnv(false)}; try { ${powerShellClaudeAccountRouting}; `,
+    before: `${powerShellSaveClaudeEnv}; try { ${powerShellClaudeImageSetup}; ${powerShellClaudeAccountRouting}; `,
     after: ` } finally { ${powerShellRestoreClaudeEnv} }`
   }
 }

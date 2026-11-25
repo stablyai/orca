@@ -63,7 +63,9 @@ export function renderCmdLaunchForPowerShell(
       : `$env:${name}=${quoteStartupArg(value, 'powershell')}`
   )
   if (launch.cwd) {
-    statements.push(`Set-Location -LiteralPath ${quoteStartupArg(launch.cwd, 'powershell')}`)
+    statements.push(
+      `Set-Location -LiteralPath ${quoteStartupArg(launch.cwd, 'powershell')} -ErrorAction Stop`
+    )
   }
   statements.push(renderLaunchInvocation(executable, args, 'powershell'))
   return statements.join('; ')

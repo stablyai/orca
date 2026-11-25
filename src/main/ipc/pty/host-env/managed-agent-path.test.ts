@@ -27,6 +27,9 @@ vi.mock('../../../pi/managed-extensions/titlebar-extension-service', () => ({
 vi.mock('../../../cli/launchers/orca-cli-child-path', () => ({
   prependOrcaCliDirToChildPath: () => {}
 }))
+vi.mock('../../../pty/environment/windows-environment-path', () => ({
+  mergePersistedWindowsPath: () => {}
+}))
 vi.mock('../../../cli/wsl/wsl-managed-cli', () => ({
   getManagedWslCliDir: () => undefined,
   getWslCliCommandName: () => 'orca-ide'

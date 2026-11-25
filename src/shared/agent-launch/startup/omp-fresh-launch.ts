@@ -35,7 +35,10 @@ const CMD_FRESH_CONFIG_FOR = 'for %! in (.) do @'
 const FRESH_ERROR =
   'Orca: fresh OMP settings are unavailable on this host. Restart the terminal after updating Orca.'
 
-function freshOmpGuard(shell: AgentStartupShell): { start: string; config: string; end: string } {
+function freshOmpGuard(
+  shell: AgentStartupShell,
+  legacyCmd = false
+): { start: string; config: string; end: string } {
   if (shell === 'powershell') {
     const path = `"$env:${ORCA_OMP_FRESH_CONFIG_ENV}"`
     return {
@@ -46,9 +49,11 @@ function freshOmpGuard(shell: AgentStartupShell): { start: string; config: strin
   }
   if (shell === 'cmd') {
     // FOR's by-name lookup also works in expanded startup variables.
-    const path = `"%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!"`
+    const path = legacyCmd
+      ? `"%${ORCA_OMP_FRESH_CONFIG_ENV}%"`
+      : `"%~$${ORCA_OMP_FRESH_CONFIG_ENV}:!"`
     return {
-      start: `${CMD_FRESH_CONFIG_FOR}if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (`,
+      start: `${legacyCmd ? '' : CMD_FRESH_CONFIG_FOR}if exist ${path} (if not exist "${path.slice(1, -1)}\\*" (`,
       config: ` --config ${path}`,
       end: `) else (echo ${FRESH_ERROR} 1>&2 & verify invalid 2>nul)) else (echo ${FRESH_ERROR} 1>&2 & verify invalid 2>nul)`
     }
@@ -105,7 +110,7 @@ export async function prepareFreshOmpLaunch(
   }
   const draft = readOmpDraftCleanup(command, shell)
   const source = draft ?? command
-  const guard = freshOmpGuard(shell)
+  const guard = freshOmpGuard(shell, shell === 'cmd' && source.startsWith('if exist '))
   if (!source.startsWith(guard.start) || !source.endsWith(guard.end)) {
     return command
   }

@@ -19,6 +19,7 @@ import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storag
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
+import { normalizePathEntry } from '../../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   resolveCliCommandAsync,
   resolveExecutableCommandAsync
@@ -195,6 +196,7 @@ function onTerminalPath(file: string, pathEnv: string): boolean {
   const folder = dirname(file)
   return pathEnv
     .split(delimiter)
+    .map((entry) => normalizePathEntry(process.platform, entry))
     .some(
       (entry) => entry && isPathInsideOrEqual(entry, folder) && isPathInsideOrEqual(folder, entry)
     )

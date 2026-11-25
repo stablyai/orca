@@ -9,19 +9,23 @@ vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/data/orca'
 }))
 
-it('leaves a PATH-installed Claude available to shell account routing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'orca-claude-path-'))
-  const bin = join(dir, process.platform === 'win32' ? 'claude.exe' : 'claude')
-  try {
-    await writeFile(bin, '', { mode: 0o755 })
-    expect(
-      await readHostManagedAgentCommands({}, ['claude'], { pathEnv: dir, forDelivery: true })
-    ).toEqual({})
-  } finally {
-    await unlink(bin)
-    await rmdir(dir)
+it.each(process.platform === 'win32' ? ['unquoted', 'quoted'] : ['unquoted'])(
+  'keeps the stock Claude name for a %s PATH entry',
+  async (entry) => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-claude-path-'))
+    const bin = join(dir, process.platform === 'win32' ? 'claude.exe' : 'claude')
+    const pathEnv = entry === 'quoted' ? `"${dir}"` : dir
+    try {
+      await writeFile(bin, '', { mode: 0o755 })
+      expect(
+        await readHostManagedAgentCommands({}, ['claude'], { pathEnv, forDelivery: true })
+      ).toEqual({})
+    } finally {
+      await unlink(bin)
+      await rmdir(dir)
+    }
   }
-})
+)
 
 it.skipIf(process.platform === 'win32')(
   'uses a reattached cwd and inline PATH to replace a retired managed path with the stock name',

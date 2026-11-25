@@ -27,19 +27,47 @@ type LaunchSettings = Partial<
   >
 >
 
+type QueuedLaunchPty = NonNullable<ReturnType<OrcaRuntimeService['readQueuedLaunchPty']>>
+
 export async function prepareQueuedAgentLaunch(
   runtime: Pick<OrcaRuntimeService, 'readQueuedLaunchPty'>,
   ptyId: string,
   launch: QueuedAgentLaunch,
   settings: LaunchSettings | undefined
 ): Promise<PreparedAgentLaunch> {
-  const pty = runtime.readQueuedLaunchPty(ptyId)
-  const owner = parseExecutionHostId(resolvePtyExecutionHost(ptyId))
-  if (!pty || (owner?.kind !== 'local' && owner?.kind !== 'ssh')) {
-    return { preparedCommand: null }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const pty = runtime.readQueuedLaunchPty(ptyId)
+    const owner = parseExecutionHostId(resolvePtyExecutionHost(ptyId))
+    if (!pty || (owner?.kind !== 'local' && owner?.kind !== 'ssh')) {
+      break
+    }
+    const recordedShell = ptyShellPath.get(ptyId)
+    const isCurrent = () =>
+      pty.isCurrent() &&
+      resolvePtyExecutionHost(ptyId) === owner.id &&
+      ptyShellPath.get(ptyId) === recordedShell
+    try {
+      const ssh = owner.kind === 'ssh' || Boolean(pty.connectionId)
+      const preparedCommand = await prepareForPty(pty, ssh, recordedShell, launch, settings)
+      if (isCurrent()) {
+        return { preparedCommand }
+      }
+    } catch (error) {
+      if (isCurrent()) {
+        throw error
+      }
+    }
   }
-  const ssh = owner.kind === 'ssh' || Boolean(pty.connectionId)
-  const recordedShell = ptyShellPath.get(ptyId)
+  return { preparedCommand: null }
+}
+
+async function prepareForPty(
+  pty: QueuedLaunchPty,
+  ssh: boolean,
+  recordedShell: string | undefined,
+  launch: QueuedAgentLaunch,
+  settings: LaunchSettings | undefined
+): Promise<string> {
   const foreground =
     !ssh && !recordedShell && !pty.wslDistro && process.platform === 'win32'
       ? await pty.readForegroundProcess()
@@ -81,11 +109,9 @@ export async function prepareQueuedAgentLaunch(
     },
     shell
   )
-  return {
-    preparedCommand: prepareShellNativeAgentLaunch(
-      command ?? launch.command,
-      shell,
-      launch.images !== false && settings?.terminalInlineImages !== false
-    )
-  }
+  return prepareShellNativeAgentLaunch(
+    command ?? launch.command,
+    shell,
+    launch.images !== false && settings?.terminalInlineImages !== false
+  )
 }

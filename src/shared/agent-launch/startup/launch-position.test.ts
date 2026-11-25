@@ -142,15 +142,23 @@ it.each([
   expect(readLaunchPosition(`"${path}" --resume abc`, 'cmd')).toBeNull()
 })
 
-it('quotes a cmd setup launch for the PowerShell gate', () => {
+it('quotes a cmd setup launch for PowerShell and stops on a failed directory change', () => {
   const command = 'cd /d "C:\\work tree"&&set "PATH=C:\\tools" & claude --resume "a$HOME & b"'
   const launch = readLaunchPosition(command, 'cmd')
   if (!launch) {
     throw new Error('Missing executable')
   }
   expect(renderCmdLaunchForPowerShell(command, launch, "C:\\O'Brien\\claude.exe")).toBe(
-    "$env:PATH='C:\\tools'; Set-Location -LiteralPath 'C:\\work tree'; & 'C:\\O''Brien\\claude.exe' '--resume' 'a$HOME & b'"
+    "$env:PATH='C:\\tools'; Set-Location -LiteralPath 'C:\\work tree' -ErrorAction Stop; & 'C:\\O''Brien\\claude.exe' '--resume' 'a$HOME & b'"
   )
+})
+
+it('keeps the final Windows environment write after differently cased aliases', () => {
+  const command = 'set "CODEX_HOME=C:\\a" & set "Codex_Home=C:\\b" & set "CODEX_HOME=C:\\c" & codex'
+  expect(Array.from(readLaunchPosition(command, 'cmd')?.env ?? [])).toEqual([
+    ['Codex_Home', 'C:\\b'],
+    ['CODEX_HOME', 'C:\\c']
+  ])
 })
 
 it('keeps the OMP fresh config after a long POSIX system prompt', () => {

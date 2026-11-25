@@ -48,6 +48,10 @@ export function readLaunchPosition(
   let cwd: string | undefined
   let bypassesShellFunction = false
   const env = new Map<string, string | undefined>()
+  const writeEnv = (name: string, value: string | undefined): void => {
+    env.delete(name)
+    env.set(name, value)
+  }
   const space = (): void => {
     while (cursor < limit && /[ \t]/.test(command[cursor])) {
       cursor++
@@ -138,7 +142,7 @@ export function readLaunchPosition(
       if (!value || !operator(';')) {
         return null
       }
-      env.set(assignment[1], value.value)
+      writeEnv(assignment[1], value.value)
       continue
     }
     const invocationStart = cursor
@@ -163,7 +167,13 @@ export function readLaunchPosition(
       if (shell === 'posix' && dir?.raw === '--') {
         dir = word()
       }
-      if (!dir?.value || !operator(shell === 'powershell' ? ';' : '&&')) {
+      const followedByLaunch =
+        operator(shell === 'powershell' ? ';' : '&&') ||
+        (shell === 'powershell' &&
+          word()?.raw.toLowerCase() === '-erroraction' &&
+          word()?.raw.toLowerCase() === 'stop' &&
+          operator(';'))
+      if (!dir?.value || !followedByLaunch) {
         return null
       }
       cwd = dir.value
@@ -179,7 +189,7 @@ export function readLaunchPosition(
       ) {
         return null
       }
-      env.set(target[1], undefined)
+      writeEnv(target[1], undefined)
       continue
     }
     if (shell === 'cmd' && builtin === 'set') {
@@ -188,14 +198,14 @@ export function readLaunchPosition(
       if (!assignmentWord || !name || !operator('&&', '&')) {
         return null
       }
-      env.set(name.slice(0, -1), assignmentWord.value.slice(name.length) || undefined)
+      writeEnv(name.slice(0, -1), assignmentWord.value.slice(name.length) || undefined)
       continue
     }
     let target = head
     if (shell === 'posix') {
       while (ASSIGNMENT.test(target.raw)) {
         const equals = target.value.indexOf('=')
-        env.set(target.value.slice(0, equals), target.value.slice(equals + 1))
+        writeEnv(target.value.slice(0, equals), target.value.slice(equals + 1))
         const next = word()
         if (!next) {
           return null
@@ -221,11 +231,11 @@ export function readLaunchPosition(
             if (!name || !NAME.test(name.raw)) {
               return null
             }
-            env.set(name.value, undefined)
+            writeEnv(name.value, undefined)
           } else if (ASSIGNMENT.test(next.raw)) {
             seenAssignment = true
             const equals = next.value.indexOf('=')
-            env.set(next.value.slice(0, equals), next.value.slice(equals + 1))
+            writeEnv(next.value.slice(0, equals), next.value.slice(equals + 1))
           } else {
             break
           }

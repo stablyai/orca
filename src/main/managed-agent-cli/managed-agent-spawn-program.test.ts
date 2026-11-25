@@ -112,6 +112,24 @@ it('prepares the executable before re-rendering the guarded OMP invocation', asy
   )
 })
 
+it('resolves the program inside a legacy cmd OMP guard', async () => {
+  host.resolve.mockResolvedValue({ omp: 'C:\\current\\omp.exe' })
+  const guard = 'if exist "%ORCA_OMP_FRESH_CONFIG%" (if not exist "%ORCA_OMP_FRESH_CONFIG%\\*" ('
+  const failure =
+    'echo Orca: fresh OMP settings are unavailable on this host. Restart the terminal after updating Orca. 1>&2 & verify invalid 2>nul'
+  const suffix = ` --config "%ORCA_OMP_FRESH_CONFIG%") else (${failure})) else (${failure})`
+  expect(
+    await alignManagedAgentLaunchAtSpawn(
+      {
+        launchCommand: `${guard}omp${suffix}`,
+        queuedPath: 'C:\\tools',
+        getSettings: () => settings
+      },
+      'cmd'
+    )
+  ).toBe(`${guard}"C:\\current\\omp.exe"${suffix}`)
+})
+
 it('resolves the OMP executable without imposing the launch prefix limit on a prompt', async () => {
   host.resolve.mockResolvedValue({ omp: '/current/omp' })
   const guard = `${ompGuard} || ${ompFailure}; ${ompGuard} && `

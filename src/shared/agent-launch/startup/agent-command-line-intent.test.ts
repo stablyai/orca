@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { prepareShellNativeAgentLaunch } from './codex-startup-image-command'
 import {
   getAgentLaunchCommandToken,
   recognizeAgentLaunchCommand
@@ -8,6 +9,14 @@ it("recognizes a PowerShell launch of a quoted program path, such as Orca's own 
   expect(
     recognizeAgentLaunchCommand("& 'C:\\Users\\a b\\orca\\claude.exe' --resume 'x'")?.agent
   ).toBe('claude')
+})
+
+it('recognizes the same Claude agent before and after POSIX launch preparation', () => {
+  const invocation = '/opt/orca/claude --resume abc'
+  const prepared = prepareShellNativeAgentLaunch(invocation, 'posix', false)
+  expect(
+    [invocation, prepared].map((command) => recognizeAgentLaunchCommand(command)?.agent)
+  ).toEqual(['claude', 'claude'])
 })
 
 it('returns the decoded executable for capability probes', () => {
