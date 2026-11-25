@@ -98,7 +98,7 @@ function NewBotForm(props: NewBotSheetProps) {
   const [name, setName] = useState(seed?.proposal.name ?? '')
   const [purpose, setPurpose] = useState('')
   const [computerId, setComputerId] = useState(props.computerId)
-  const [picked, setPicked] = useState<BotAgent>(seed?.agent ?? 'claude')
+  const [picked, setPicked] = useState<BotAgent | undefined>(seed?.agent)
   const [avatar, setAvatar] = useState(() =>
     seed?.proposal.mascot && isBotMascotId(seed.proposal.mascot)
       ? mascotAvatar(seed.proposal.mascot)
@@ -129,11 +129,14 @@ function NewBotForm(props: NewBotSheetProps) {
   }
   const computer = listed ?? (computerId === lastChosen?.id ? lastChosen : undefined)
   const client = listed && listed.refusal === undefined ? props.clientFor(listed.id) : null
-  const choices = useNewBotAgentChoices(client)
+  const answer = useNewBotAgentChoices(client)
+  const choices = answer?.agents ?? null
   const importRead = useBotImportSources(seed ? null : client)
   const nudge = importRead.status === 'ready' ? botImportNudge(importRead.sources) : null
-  // The kept agent moves to the computer's first when it lacks it; until it answers, the kept one shows.
-  const agent = choices?.length && !choices.includes(picked) ? choices[0] : picked
+  // The kept agent moves to the computer's default (else its first) when it lacks it, as does none
+  // kept; until it answers, the kept one shows.
+  const kept = picked && (!choices?.length || choices.includes(picked)) ? picked : undefined
+  const agent = kept ?? answer?.defaultAgent ?? choices?.[0] ?? 'claude'
   const otherAccount = useOtherOrcaAccount(
     computer?.hostId.startsWith('runtime:') ? client : null,
     computer ? props.pairedClientFor(computer.id) : null

@@ -138,9 +138,9 @@ export function NewBotDialog({
   const { hostId, blocked, label } = hostChoice.host
   const hostBots = useHostBots(hostId)
   const name = typedName ?? (fromShare ? freeBotName(fromShare.review.bot.name, hostBots) : '')
-  const { model, choices } = useNewBotAgentMenu(hostId, open)
+  const menu = useNewBotAgentMenu(hostId, open)
   // A bot from someone else's link starts on Ask, whatever the owner's chats do.
-  const agentSetup = useBotAgentSetup(choices, hostId, initialAgent, fromShare && 'ask')
+  const agentSetup = useBotAgentSetup(menu, hostId, initialAgent, fromShare && 'ask')
   const [creating, setCreating] = useState(false)
   const createInFlight = useRef(false)
   const [submitted, setSubmitted] = useState(false)
@@ -194,7 +194,7 @@ export function NewBotDialog({
     if (createInFlight.current || hostChoice.busy) {
       return
     }
-    if (!trimmedName || purposeTooLong || blocked || !choices.length || intake.reading) {
+    if (!trimmedName || purposeTooLong || blocked || !menu.choices.length || intake.reading) {
       flushSync(() => setSubmitted(true))
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
       return
@@ -374,8 +374,8 @@ export function NewBotDialog({
               variant="fields"
               hostChoice={hostChoice}
               setup={agentSetup.setup}
-              model={model}
-              choices={choices}
+              model={menu.model}
+              choices={menu.choices}
               onSetupChange={agentSetup.setSetup}
               keptPermission={agentSetup.intent}
               onAddHost={hosts ? undefined : setAddHostMode}
