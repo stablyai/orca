@@ -1221,7 +1221,7 @@
         "eventsSetUp": "Kur",
         "eventsByHand": "Elle kurulum",
         "keyAdded": "✓ Anahtar eklendi",
-        "declined": "Geçersiz kılındı",
+        "declined": "Kapatıldı",
         "keyRejectedTitle": "Composio anahtarınızı değiştirin",
         "keyTitle": "Composio anahtarınızı ekleyin",
         "keyRejectedNote": "Composio kayıtlı anahtarı artık kabul etmiyor. Composio’da Settings › API Keys bölümünden yeni bir anahtar oluşturun.",
@@ -1452,7 +1452,7 @@
       "showUnchangedLines": "Değişmeyen {{count}} satırı göster",
       "unchangedLines_one": "Değişmeyen {{count}} satır",
       "unchangedLines_other": "Değişmeyen {{count}} satır",
-      "allStaged": "Tüm değişiklikler hazırlama alanına eklendi"
+      "allStaged": "Tüm değişiklikler stage edildi"
     },
     "diffReviewDrawers": {
       "addNote": "Not Ekle",
@@ -1485,7 +1485,7 @@
       "notes_one": "{{count}} not",
       "notes_other": "{{count}} not",
       "allViewedTitle": "Tüm dosyalar görüntülendi",
-      "unstageFile": "Hazırlama alanından çıkar",
+      "unstageFile": "Stage'den çıkar",
       "addFileNote": "Dosyaya not ekle",
       "pullRequest": "Pull request",
       "discardChanges": "Değişiklikleri At",
@@ -1501,7 +1501,7 @@
       "editFileNote": "Dosya notunu düzenle",
       "stale": "Güncel Değil",
       "untracked": "İzlenmeyen",
-      "notStaged": "Hazırlama alanına eklenmedi",
+      "notStaged": "Stage edilmedi",
       "viewed": "Görüntülendi",
       "renamedFrom": "Önceki adı: {{oldPath}}",
       "threadsWhenInSync_one": "Bu branch pull request ile eşleştiğinde GitHub yorumu burada görünür.",
@@ -2456,7 +2456,7 @@
       "saveFailed": "Sunucu kaydedilemedi.",
       "saveHost": "Sunucuyu kaydet",
       "title": "Sunucuyu düzenle",
-      "removeHost": "Cihazı kaldır",
+      "removeHost": "Sunucuyu kaldır",
       "updateStepsServiceManager": "Paket yöneticisi veya hizmet yöneticisiyle güncelleyin.",
       "updateStepsSourceCheckout": "Kaynak kodun bulunduğu Git çalışma kopyasından güncelleyin.",
       "updateStepsServer": "Sunucuda Orca’yı güncelleyip yeniden başlatın.",
@@ -3388,7 +3388,7 @@
       "newTab": "Yeni sekme",
       "quickCommands": "Hızlı komutlar",
       "items": "Öğeler",
-      "itemsNeedYou": "Sizinle ilgili {{count}} öğe var",
+      "itemsNeedYou": "Öğeler, {{count}} tanesi sizi bekliyor",
       "textSize": "Metin boyutu"
     },
     "headerMoreActionsSheet": {
@@ -4313,7 +4313,7 @@
       "stageFile": "Commit'lemek için en az bir dosya stage edin",
       "useCommitAndForcePush": "Commit ve force push seçeneğini kullanın — remote'da yalnızca yerel commit'lerin eski kopyaları var",
       "statusConflicts": "Çakışmalar",
-      "statusNothingStaged": "Hazırlama alanı boş",
+      "statusNothingStaged": "Stage edilmiş değişiklik yok",
       "statusNeedsMessage": "Mesaj gerekiyor",
       "statusNotPublished": "Yayımlanmadı",
       "statusNoBranch": "Branch yok"
@@ -4802,7 +4802,7 @@
       "conflictsMayRemain": "Tüm dosyalar listelenmediği için çözülmemiş çakışmalar olabilir. Bilgisayarınızda kontrol edin."
     },
     "fileList": {
-      "stageAll": "Tümünü hazırlama alanına ekle",
+      "stageAll": "Tümünü stage et",
       "mergedCleanly": "Çakışma olmadan merge edildi",
       "unstageAll": "Tümünü stage'den çıkar",
       "onThisBranch": "Bu branch'te: {{count}}",
@@ -5497,7 +5497,7 @@
       "unverifiable": "Yakın zamanda güncelleme yok",
       "waiting": "Girdi bekleniyor",
       "working": "Çalışıyor",
-      "permission": "İlgi gerekiyor"
+      "permission": "Dikkat gerekiyor"
     },
     "hostWorkspaceListStates": {
       "checkHost": "Bilgisayarınızın uyanık ve Orca'nın çalışır durumda olduğunu kontrol edin",
@@ -6675,7 +6675,7 @@
       "needsPermission": "İzin gerekiyor",
       "taskComplete": "Görev tamamlandı",
       "couldNotFinish": "Tamamlanamadı",
-      "couldNotFinishDetail": "Bir otomasyon çalıştırması veya işçi başarısız olduğunda bildirim gönderir.",
+      "couldNotFinishDetail": "Bir otomasyon çalıştırması veya çalışan başarısız olduğunda bildirim gönderir.",
       "whoCanAskName": "{{name}} botuna kimler istekte bulunabilir?",
       "you": "Siz",
       "owner": "Sahip",

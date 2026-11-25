@@ -1513,7 +1513,7 @@
       "status": {
         "running": "Kaldırılıyor",
         "done": "Tamam",
-        "problem": "İlgi gerekiyor",
+        "problem": "Dikkat gerekiyor",
         "kept": "Korundu"
       },
       "stepFailed": "Orca bu adımı tamamlayamadı.",
@@ -1819,11 +1819,11 @@
         "empty": "Henüz değişiklik yok."
       },
       "notifyNeedsPermission": "İzin gerekiyor",
-      "notifyNeedsPermissionDescription": "Bot veya bir işçi onayınıza ihtiyaç duyduğunda bildirim gönderir.",
+      "notifyNeedsPermissionDescription": "Bot veya bir çalışan onayınıza ihtiyaç duyduğunda bildirim gönderir.",
       "notifyTaskComplete": "Görev tamamlandı",
-      "notifyTaskCompleteDescription": "Bir konuşma dizisi, otomasyon veya işçi tamamlandığında bildirim gönderir.",
+      "notifyTaskCompleteDescription": "Bir konuşma dizisi, otomasyon veya çalışan tamamlandığında bildirim gönderir.",
       "notifyCouldNotFinish": "Tamamlanamadı",
-      "notifyCouldNotFinishDescription": "Bir otomasyon çalıştırması veya işçi başarısız olduğunda bildirim gönderir.",
+      "notifyCouldNotFinishDescription": "Bir otomasyon çalıştırması veya çalışan başarısız olduğunda bildirim gönderir.",
       "notifications": "Bildirimler",
       "soul": "Kişilik",
       "memory": "Hafıza",
@@ -1945,7 +1945,7 @@
       "composioKeyDescription": "Composio’dan bağladığınız uygulamalar için bu bilgisayardaki tüm botlar tek anahtar kullanır. Uygulamaların oturum bilgilerini Composio saklar.",
       "askNewHomeChat": "Yeni ana sohbet açmadan önce sor",
       "askNewHomeChatDescription": "Yeni ana sohbet, botun sürdürdüğü konuşmanın yerini almadan önce onay iste.",
-      "notifyCouldNotFinishOnHostDescription": "Bir otomasyon çalıştırması veya işçi başarısız olduğunda yalnızca {{host}} ile eşleştirilmiş telefonlara bildirim gönderir.",
+      "notifyCouldNotFinishOnHostDescription": "Bir otomasyon çalıştırması veya çalışan başarısız olduğunda yalnızca {{host}} ile eşleştirilmiş telefonlara bildirim gönderir.",
       "group": {
         "noAccount": "Orca hesabı",
         "notSignedIn": "Oturum açılmadı · {{computers}}",
@@ -16047,7 +16047,7 @@
                   "titleUnpublishedForcePushCount_one": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
                   "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
                   "statusConflicts": "Çakışmalar",
-                  "statusNothingStaged": "Hazırlama alanı boş",
+                  "statusNothingStaged": "Stage edilmiş değişiklik yok",
                   "statusNeedsMessage": "Mesaj gerekiyor",
                   "statusNotPublished": "Yayımlanmadı",
                   "statusNoBranch": "Branch yok",
@@ -19810,7 +19810,7 @@
           "result": "Sonuç"
         },
         "listGroups": {
-          "attention": "İlgi gerekiyor",
+          "attention": "Dikkat gerekiyor",
           "active": "Etkin",
           "paused": "Duraklatıldı"
         }
@@ -21801,7 +21801,7 @@
           "reviewTitle": "Önerilen planı incele",
           "refineHint": "Planı iyileştir seçeneği, değişiklik isteklerinizi gönderebilmeniz için incelemeyi kapatır."
         },
-        "reasonSentAsMessage": "Mesaj olarak gönderilecek gerekçe",
+        "reasonSentAsMessage": "Mesaj olarak gönderilen gerekçe",
         "folderTrust": {
           "title": "Bu klasöre güveniyor musunuz?",
           "hint": "Ajan bu klasördeki dosyaları okumadan, düzenlemeden veya çalıştırmadan önce izin ister.",
@@ -24263,7 +24263,7 @@
       "keywordSignIn": "oturum aç",
       "selectLabel": "Yeni sekmelerin profili",
       "inherit": "Tarayıcı ayarı ({{scope}})",
-      "deletedOption": "Profil silindi",
+      "deletedOption": "Silinmiş profil",
       "deleted": "Bu proje için seçilen profil silindi. Yeni sekmeler artık Tarayıcı ayarını kullanıyor.",
       "saveFailed": "Tarayıcı profili kaydedilemedi. Projenin bulunduğu bilgisayarda Orca’yı güncellemeniz gerekebilir."
     },
@@ -25926,8 +25926,8 @@
       "entryNeedsAttention": "{{title}}, ilgilenmeniz gerekiyor",
       "moreTabs_one": "{{count}} sekme daha",
       "moreTabs_other": "{{count}} sekme daha",
-      "needAttention_one": ", {{count}} sekme ilgi bekliyor",
-      "needAttention_other": ", {{count}} sekme ilgi bekliyor",
+      "needAttention_one": ", {{count}} sekme ilgilenmenizi bekliyor",
+      "needAttention_other": ", {{count}} sekme ilgilenmenizi bekliyor",
       "openTabs_one": "{{count}} açık sekme",
       "openTabs_other": "{{count}} açık sekme"
     }
@@ -29032,7 +29032,7 @@
       "oldBot": "Eski bot",
       "nameAnother": "Yeni bota ad verin",
       "keysStay": "Anahtarlar ve girişler geride kalır",
-      "removePath": "{{name}} klasörünü kaldır",
+      "removePath": "{{name}} öğesini kaldır",
       "sendStep": "Eski botunuza bu mesajı gönderin",
       "copied": "Kopyalandı",
       "seeMessage": "Mesajı gör",
@@ -29683,7 +29683,7 @@
         "homePage": "Uygulamanın ana sayfası",
         "privacyPolicy": "Uygulamanın gizlilik politikası bağlantısı",
         "authorizedDomain": "Yetkilendirilmiş alan adı",
-        "copy": "{{label}} komutunu kopyala",
+        "copy": "Kopyala: {{label}}",
         "owner": "Bu Google uygulamasının sahibi sizsiniz; bu bağlantılar yalnızca Orca’ya yönlendirir."
       },
       "setUp": "Google kurulumunu başlat",
@@ -30290,7 +30290,7 @@
         "twoBots": "{{first}} ve {{second}}",
         "botsAndOneOther": "{{first}}, {{second}} ve 1 kişi daha",
         "botsAndOthers": "{{first}}, {{second}} ve {{others}} kişi daha",
-        "action": "Çıkış yap"
+        "action": "Oturumu kapat"
       }
     },
     "connector": {
@@ -30378,7 +30378,7 @@
         "keyRejectedNote": "Composio kayıtlı anahtarı artık kabul etmiyor. Composio’da Settings › API Keys bölümünden yeni bir anahtar oluşturun.",
         "dismiss": "Kapat",
         "keyAdded": "✓ Anahtar eklendi",
-        "declined": "Geçersiz kılındı",
+        "declined": "Kapatıldı",
         "connectTitle": "{{app}} uygulamasına bağlan",
         "connectNote": "Composio üzerinden tarayıcınızda {{app}} oturum açma sayfası açılır. Oturum bilgilerinizi Composio saklar; Orca saklamaz.",
         "keyFirst": "Önce Composio anahtarınızı ekleyin.",
@@ -30505,7 +30505,7 @@
       "people": "Kişiler",
       "peopleNote": "{{bot}} botuna sorabilen herkes kullanabilir",
       "remove": "Kaldır",
-      "removeNamed": "{{app}} kaldır",
+      "removeNamed": "{{app}} uygulamasını kaldır",
       "removeNote": "{{bot}} artık {{app}} uygulamasını kullanamaz. İstediğiniz zaman yeniden ekleyebilirsiniz.",
       "removeTitle": "{{app}} kaldırılsın mı?",
       "signIn": "Oturum aç",
