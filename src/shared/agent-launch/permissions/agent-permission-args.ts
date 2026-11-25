@@ -66,6 +66,8 @@ const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   gemini: ['--approval-mode', '-y'],
   // Why: Cursor exits when --auto-review meets --force (or its -f, --yolo aliases).
   cursor: ['-f', '--force'],
+  // Why: agy parses Go flags, accepting single-dash aliases for --mode and --dangerously-skip-permissions.
+  antigravity: ['-mode', '-dangerously-skip-permissions'],
   // Why: Kimi rejects --yolo (and its aliases) combined with --auto.
   kimi: ['-y', '--yolo', '--yes', '--auto-approve']
 }
@@ -106,7 +108,11 @@ function words(text: string): string[] {
 }
 
 export function optionName(agent: TuiAgent, token: string): string {
-  if ((agent === 'codex' && /^-[acs].+/.test(token)) || /^-m.+/.test(token)) {
+  // Why: Go flags like agy's -mode are multi-letter single-dash names, not packed -m<value>.
+  if (
+    agent !== 'antigravity' &&
+    ((agent === 'codex' && /^-[acs].+/.test(token)) || /^-m.+/.test(token))
+  ) {
     return token.slice(0, 2)
   }
   return token.split('=', 1)[0]
@@ -133,7 +139,9 @@ export function permissionOptionInventory(agent: TuiAgent): PermissionOptionInve
     return tokens.map((token, index) => ({ token, next: tokens[index + 1] }))
   })
   const carriers = new Set(EXTRA_CARRIERS[agent])
-  const values = new Set(agent === 'codex' ? CODEX_VALUES : [])
+  const values = new Set(
+    agent === 'codex' ? CODEX_VALUES : agent === 'antigravity' ? ['-mode'] : []
+  )
   const switches = new Set<string>(
     agent === 'claude' || agent === 'claude-agent-teams' ? CLAUDE_SWITCHES : []
   )
