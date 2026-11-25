@@ -204,3 +204,15 @@ for (const how of ['Save', 'Cancel', 'Escape'] as const) {
     await expectLandingAndTabOrder(orcaPage, groupId, 'owner-pane-close')
   })
 }
+
+test('closing the ⋯ menu after the strip widens under it lands on Close', async ({ orcaPage }) => {
+  const groupId = await seedOwnerPane(orcaPage)
+  await narrowOwnerPane(orcaPage, groupId)
+  await orcaPage
+    .locator(`[data-tab-group-strip-id="${groupId}"] [data-pane-actions-menu-trigger]`)
+    .click()
+  await expect(orcaPage.getByRole('menuitem', { name: 'Quick Commands' })).toBeVisible()
+  await widenOwnerPane(orcaPage, groupId)
+  await orcaPage.keyboard.press('Escape')
+  await expect.poll(() => focusTarget(orcaPage, groupId)).toBe('owner-pane-close')
+})

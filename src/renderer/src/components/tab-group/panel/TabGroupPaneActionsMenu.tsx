@@ -122,6 +122,13 @@ export function TabGroupPaneActionsMenu({
             onCloseAutoFocus={(event) => {
               if (!isFocused) {
                 event.preventDefault()
+                return
+              }
+              // Why: widening the strip hides ⋯ under an open menu, and a hidden trigger can't take the restored focus.
+              const close = closeButtonRef.current
+              if (triggerRef.current?.offsetParent === null && close?.offsetParent) {
+                event.preventDefault()
+                close.focus()
               }
             }}
           >
