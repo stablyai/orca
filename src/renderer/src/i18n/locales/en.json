@@ -8534,8 +8534,8 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "descriptionMoveFromSidebar": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.",
-          "descriptionAutoMove": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
+          "descriptionMoveFromSidebar": "Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.",
+          "descriptionAutoMove": "Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
@@ -14228,7 +14228,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "Toggle WSL distros as hosts",
           "title": "WSL distros as hosts",
-          "description": "Add a WSL 2 distro as a host. Orca runs its server inside the distro, so git, files and terminals in new projects there run natively in Linux.",
+          "description": "Run Orca’s server inside a WSL 2 distro, so git, files and terminals run natively in Linux.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "distro"
@@ -14236,17 +14236,17 @@
         "wslHosts": {
           "title": "WSL hosts",
           "experimental": "Experimental",
-          "description": "Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.",
+          "description": "Orca runs a server inside each distro. To start a stopped distro, click Start, open a terminal, or connect it here.",
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
           "chip": "WSL",
-          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "notStartedAsWslHost": "An SSH host started this server, so projects can't move here. Restart it as a WSL host to fix this.",
           "restartAsWslHost": {
             "button": "Restart as WSL host",
             "title": "Restart as WSL host?",
-            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "description": "Ends every terminal and agent on {{host}}, including ones an SSH host opened, then restarts Orca’s server as a WSL host.",
             "cancel": "Cancel",
             "action": "End terminals and restart"
           }
@@ -24170,9 +24170,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Keep open",
-        "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
-        "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
-        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
+        "bannerRunning": "Closes {{minutes}} min after finishing",
+        "bannerFinished": "Finished · closes in {{countdown}}",
+        "bannerFinishedStatus": "Worker finished · closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"

@@ -22408,9 +22408,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Оставить открытым",
-        "bannerRunning": "Воркер оркестрации · Закроется через 2 минуты после завершения",
-        "bannerFinished": "Воркер оркестрации завершён · Закроется через {{countdown}}",
-        "bannerFinishedStatus": "Воркер оркестрации завершён · Скоро закроется",
+        "bannerRunning": "Закроется через {{minutes}} мин после завершения",
+        "bannerFinished": "Завершён · закроется через {{countdown}}",
+        "bannerFinishedStatus": "Воркер завершён · скоро закроется",
         "boundRunning": "Закроется вместе с: {{worker}}",
         "boundFinished": "{{worker}} завершён · Закроется через {{countdown}}",
         "boundFallbackName": "воркер"
