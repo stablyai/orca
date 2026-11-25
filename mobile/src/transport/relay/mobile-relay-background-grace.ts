@@ -9,6 +9,8 @@ type RelayBackgroundGraceDependencies = {
   now: () => number
   setTimer: ScheduleTimer
   clearTimer: typeof clearTimeout
+  /** Read on each arm so a setting change applies to the next background. */
+  relayBackgroundGraceMs: () => number
 }
 
 export class MobileRelayBackgroundGraceTimer {
@@ -23,7 +25,8 @@ export class MobileRelayBackgroundGraceTimer {
 
   arm(): void {
     this.clear()
-    this.deadlineAt = this.dependencies.now() + RELAY_BACKGROUND_GRACE_MS
+    const graceMs = this.dependencies.relayBackgroundGraceMs()
+    this.deadlineAt = this.dependencies.now() + graceMs
     const generation = this.generation
     this.timer = this.dependencies.setTimer(() => {
       if (generation !== this.generation || this.deadlineAt === null) {
@@ -32,7 +35,7 @@ export class MobileRelayBackgroundGraceTimer {
       this.timer = null
       this.deadlineAt = null
       this.onExpired()
-    }, RELAY_BACKGROUND_GRACE_MS)
+    }, graceMs)
   }
 
   consumeExpired(): boolean {

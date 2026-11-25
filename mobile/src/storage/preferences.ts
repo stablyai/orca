@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
+import { RELAY_BACKGROUND_GRACE_MS } from '../transport/relay/mobile-relay-background-grace'
 import { snapTerminalTextScale } from '../terminal/preferences/terminal-text-scales'
 import {
   readTerminalFontStyle,
@@ -133,6 +134,31 @@ export async function loadHostSidebarWidth(): Promise<number> {
 export async function saveHostSidebarWidth(width: number): Promise<void> {
   const value = String(clampHostSidebarWidth(width))
   await persistMirrored(SIDEBAR_WIDTH_KEY, value)
+}
+
+const RELAY_GRACE_KEY = 'orca:relayBackgroundGraceMs'
+
+export const RELAY_GRACE_MIN_MS = 5_000
+export const RELAY_GRACE_MAX_MS = 10 * 60 * 1000
+
+export function clampRelayBackgroundGraceMs(ms: number): number {
+  if (!Number.isFinite(ms)) {
+    return RELAY_BACKGROUND_GRACE_MS
+  }
+  return Math.min(RELAY_GRACE_MAX_MS, Math.max(RELAY_GRACE_MIN_MS, Math.round(ms)))
+}
+
+export async function loadRelayBackgroundGraceMs(): Promise<number> {
+  try {
+    const raw = await AsyncStorage.getItem(RELAY_GRACE_KEY)
+    return raw === null ? RELAY_BACKGROUND_GRACE_MS : clampRelayBackgroundGraceMs(Number(raw))
+  } catch {
+    return RELAY_BACKGROUND_GRACE_MS
+  }
+}
+
+export async function saveRelayBackgroundGraceMs(ms: number): Promise<void> {
+  await persistMirrored(RELAY_GRACE_KEY, String(clampRelayBackgroundGraceMs(ms)))
 }
 
 const DOCK_WIDTH_KEY = 'orca:hostDockWidth'
