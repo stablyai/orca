@@ -354,7 +354,7 @@ export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Pr
       })
     }
   }
-  return true
+  return !options?.draft || chatSessionId !== null
 }
 
 /** Reads the host's list first when nothing has loaded it yet. False for no such bot. */

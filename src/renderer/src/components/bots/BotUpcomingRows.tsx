@@ -212,6 +212,7 @@ function AutomationRow({
     openBotAutomation({
       bot,
       automationId: automation.id,
+      owner: rowOwner,
       runId: card.failed ? (row.latestRunId ?? null) : null,
       originRowKey: card.key
     })
@@ -277,6 +278,7 @@ function AutomationRow({
                     openBotAutomation({
                       bot,
                       automationId: automation.id,
+                      owner: rowOwner,
                       runId: null,
                       intent: 'page'
                     })

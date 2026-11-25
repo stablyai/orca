@@ -21,9 +21,12 @@ import { AutomationDestinationField } from './AutomationDestinationField'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import type { Bot } from '../../../../../shared/bot-types'
-import { AutomationBotResultsFields, AutomationBotWhenFields } from './AutomationBotSectionFields'
-import { openBotHomeTab } from '@/lib/bot-catalog'
+import { AutomationBotTargetFields } from './AutomationBotTargetFields'
+import { AutomationBotAgentField } from './AutomationBotAgentField'
+import { AutomationBotEventsField } from './AutomationBotEventsField'
+import { openBotHomeTab, useBotThreadReplies } from '@/lib/bot-catalog'
 import { isSameBot, type BotRef } from '@/lib/bot-hosts'
+import { botEventsHaveThreads } from '../../../../../shared/automations/bot-automation-target-edit'
 
 const SETTINGS_SIDEBAR_CLASS =
   'flex w-[320px] shrink-0 flex-col overflow-auto border-l border-border/50 bg-muted/20 px-5 py-5 scrollbar-sleek @max-[35rem]:w-full @max-[35rem]:overflow-visible @max-[35rem]:border-t @max-[35rem]:border-l-0'
@@ -91,6 +94,7 @@ export function AutomationEditorSettingsSidebar({
           (draft.botHostId === undefined || entry.hostId === draft.botHostId)
       ) ?? null)
     : null
+  const threadReplies = useBotThreadReplies(targetBot?.hostId ?? null)
   const selectBot = (ref: BotRef): void => {
     const bot = bots.find((entry) => isSameBot(entry, ref))
     if (!bot || (targetBot && isSameBot(bot, targetBot))) {
@@ -171,17 +175,51 @@ export function AutomationEditorSettingsSidebar({
     return (
       <aside className={SETTINGS_SIDEBAR_CLASS}>
         {targetPicker}
-        <AutomationBotWhenFields
-          draft={draft}
-          label={t('automations.botTarget.when', 'When')}
-          onDraftChange={onDraftChange}
-          askInChat={askInChat}
-        />
-        <AutomationBotResultsFields
-          draft={draft}
+        {schedulePicker(
+          t('automations.botTarget.when', 'When'),
+          askInChat
+            ? () =>
+                askInChat(
+                  saved
+                    ? t(
+                        'automations.botEvents.addDraft',
+                        'Change the automation “{{name}}” so it also runs when ',
+                        { name: saved.name }
+                      )
+                    : t('automations.botEvents.newDraft', 'Set up an automation that runs when ')
+                )
+            : undefined
+        )}
+        {saved?.on.length ? (
+          <AutomationBotEventsField
+            triggers={saved.on}
+            onEditInChat={
+              askInChat
+                ? () =>
+                    askInChat(
+                      t('automations.botEvents.editDraft', 'Change the automation “{{name}}”: ', {
+                        name: saved.name
+                      })
+                    )
+                : undefined
+            }
+          />
+        ) : null}
+        <AutomationBotTargetFields
           target={botTarget}
           bot={targetBot}
-          onDraftChange={onDraftChange}
+          agentField={
+            targetBot ? (
+              <AutomationBotAgentField
+                target={botTarget}
+                bot={targetBot}
+                onChange={(bot) => onDraftChange((current) => ({ ...current, bot }))}
+              />
+            ) : null
+          }
+          threadReplies={threadReplies}
+          hasEventThread={botEventsHaveThreads(draft.eventsOnly === true, saved?.on ?? [])}
+          onChange={(bot) => onDraftChange((current) => ({ ...current, bot }))}
         />
       </aside>
     )

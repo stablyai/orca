@@ -66,17 +66,3 @@ export function buildAutomationEditDraft(automation: Automation): AutomationDraf
           )
   }
 }
-
-export function buildBotAutomationSectionDraft(automation: Automation): AutomationDraft {
-  return {
-    ...buildAutomationEditDraft(automation),
-    prompt: '',
-    extraAgentArgs: '',
-    launchPreferences: undefined,
-    agentArgs: undefined,
-    precheckCommand: '',
-    projectId: '',
-    workspaceId: '',
-    baseBranch: ''
-  }
-}

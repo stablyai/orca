@@ -1,6 +1,3 @@
-// A bot's automation in its side panel: the Automations page's detail pieces, sections and editors
-// at panel width, read through the shared automation loader on the bot's own host. What is bot-only
-// here: the crumb, Back/Escape and focus return, Edit in chat, and the host the bot names.
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { ChevronLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -14,10 +11,7 @@ import { useAutomationDetails } from '../automations/details/use-automation-deta
 import { useAutomationDetailKeys } from '../automations/details/use-automation-detail-keys'
 import { BotAutomationScreenBody } from './BotAutomationScreenBody'
 import type { BotAutomationPlace } from './bot-automation-place'
-import { botAutomationPlaceKey } from './bot-automation-place'
 import { openBotAutomation } from './bot-automation-open'
-import { useBotAutomationEditing } from './use-bot-automation-editing'
-import { BotAutomationDiscardDialog } from './BotAutomationDiscardDialog'
 
 export const BOT_AUTOMATION_RECENT_RUNS = 5
 
@@ -63,23 +57,29 @@ function Crumb({
 export function BotAutomationPanel({
   bot,
   place,
-  onBack,
-  onDeleted
+  onBack
 }: {
   bot: Bot
   place: BotAutomationPlace
   /** Back to Activity; it restores focus and scroll. */
   onBack: () => void
-  /** Deleted from here: back to Activity, focus on its Automations card. */
-  onDeleted: () => void
 }): React.JSX.Element {
   // Captured once: every read and action goes to the machine this was opened against.
-  const [owner] = useState(() => automationOwnerForHostId(bot.hostId, useAppStore.getState()))
+  const [owner] = useState(
+    () => place.owner ?? automationOwnerForHostId(bot.hostId, useAppStore.getState())
+  )
   const t = useTranslate()
   const backRef = useRef<HTMLButtonElement>(null)
+  const fallbackRegion = useRef<HTMLDivElement>(null)
+  useAutomationDetailKeys({ scope: fallbackRegion, onBack })
+  useEffect(() => {
+    if (!owner) {
+      backRef.current?.focus({ preventScroll: true })
+    }
+  }, [owner])
   if (!owner) {
     return (
-      <div className="@container flex min-h-0 flex-1 flex-col gap-3 px-2 py-3">
+      <div ref={fallbackRegion} className="@container flex min-h-0 flex-1 flex-col gap-3 px-2 py-3">
         <Crumb bot={bot} onBack={onBack} backRef={backRef} />
         <p className="px-2 text-sm text-muted-foreground">
           {t('bots.automationPanel.unroutable', "Can't reach {{name}}'s computer from this app.", {
@@ -107,14 +107,7 @@ export function BotAutomationPanel({
     )
   }
   return (
-    <BotAutomationScreen
-      bot={bot}
-      place={place}
-      owner={owner}
-      onBack={onBack}
-      onDeleted={onDeleted}
-      backRef={backRef}
-    />
+    <BotAutomationScreen bot={bot} place={place} owner={owner} onBack={onBack} backRef={backRef} />
   )
 }
 
@@ -123,35 +116,24 @@ function BotAutomationScreen({
   place,
   owner,
   onBack,
-  onDeleted,
   backRef
 }: {
   bot: Bot
   place: BotAutomationPlace
   owner: AutomationOwnerRef
   onBack: () => void
-  onDeleted: () => void
   backRef: React.RefObject<HTMLButtonElement | null>
 }): React.JSX.Element {
   const region = useRef<HTMLDivElement>(null)
+  const t = useTranslate()
   const titleId = useId()
-  const screenKey = botAutomationPlaceKey(place)
   const details = useAutomationDetails({
     owner,
     automationId: place.automationId,
     recentLimit: BOT_AUTOMATION_RECENT_RUNS,
     runId: place.runId
   })
-  const { editing, setEditing, discard } = useBotAutomationEditing(screenKey)
-  const [confirmingBack, setConfirmingBack] = useState(false)
-  const requestBack = (): void => {
-    if (editing) {
-      setConfirmingBack(true)
-      return
-    }
-    onBack()
-  }
-  useAutomationDetailKeys({ scope: region, onBack: requestBack })
+  useAutomationDetailKeys({ scope: region, onBack })
   // The screen takes focus when it opens, so Escape and screen readers start here.
   useEffect(() => {
     region.current?.focus({ preventScroll: true })
@@ -162,35 +144,21 @@ function BotAutomationScreen({
     <div
       ref={region}
       role="region"
-      aria-labelledby={titleId}
+      aria-label={t('bots.automationPanel.crumb', 'Automation')}
+      aria-labelledby={details.snapshot.definition.value ? titleId : undefined}
       tabIndex={-1}
       data-bot-automation-screen=""
       className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-2 py-3 outline-none"
     >
-      <Crumb bot={bot} onBack={requestBack} backRef={backRef} />
+      <Crumb bot={bot} onBack={onBack} backRef={backRef} />
       <BotAutomationScreenBody
         bot={bot}
         owner={details.snapshot.owner}
         snapshot={details.snapshot}
         controller={details.controller}
-        place={place}
         titleId={titleId}
-        screenKey={screenKey}
-        editing={editing}
-        setEditing={setEditing}
         askInChat={askInChat}
-        onDeleted={onDeleted}
         onRetired={onBack}
-      />
-      <BotAutomationDiscardDialog
-        open={confirmingBack}
-        section={editing?.section ?? 'when'}
-        onKeep={() => setConfirmingBack(false)}
-        onDiscard={() => {
-          setConfirmingBack(false)
-          discard()
-          onBack()
-        }}
       />
     </div>
   )

@@ -1,8 +1,4 @@
-// The Automation screen below its crumb: header, one notice, Recent runs, When, Results,
-// Instructions and Setup, each built from the Automations page's own pieces.
-import { useRuntimeEnvironmentCapabilityAnswer } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
-import { AUTOMATION_UPDATE_GUARD_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { BotAutomationRunAgainDialog } from './BotAutomationRunAgainDialog'
 import { toast } from 'sonner'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -10,7 +6,6 @@ import { openBotAutomation } from './bot-automation-open'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotWebhooks } from '@/lib/bot-catalog'
 import { useBotHostOffline } from '@/lib/bot-host-views'
-import { useAppStore } from '@/store'
 import { useNow } from '@/lib/window-activity/use-now'
 import type { Bot } from '../../../../shared/bot-types'
 import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
@@ -19,8 +14,6 @@ import {
   getToneForAutomationRunStatus,
   indexLatestAutomationRuns
 } from '../../../../shared/automation-last-run'
-import { AutomationDeleteDialog } from '../automations/authoring/AutomationDeleteDialogs'
-import { persistSkipDeleteAutomationConfirm } from '../automations/authoring/automation-delete-confirm-preference'
 import {
   AutomationDetailHeader,
   type AutomationControlState
@@ -37,14 +30,10 @@ import {
   type AutomationDetailsSnapshot
 } from '../automations/details/automation-details-model'
 import {
-  deleteAutomationForOwner,
   runAutomationNowForOwner,
   updateAutomationForOwner
 } from '../automations/hosts/automation-scoped-list-client'
-import { AutomationHostScopeUnsupportedError } from '../automations/hosts/automation-capability-probe'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { BotAutomationPlace } from './bot-automation-place'
-import { botAutomationDraftsFull } from './bot-automation-drafts'
 import { botErrorMessage } from './bot-presentation'
 import { upcomingAt } from './bot-upcoming-copy'
 import { useOrcaCloudSignedOut } from './orca-cloud-signed-out'
@@ -63,13 +52,8 @@ type BodyProps = {
   owner: AutomationOwnerRef
   snapshot: AutomationDetailsSnapshot
   controller: AutomationDetailsController
-  place: BotAutomationPlace
   titleId: string
-  screenKey: string
-  editing: SectionProps['editing']
-  setEditing: SectionProps['setEditing']
   askInChat: (sentence: string) => Promise<boolean>
-  onDeleted: () => void
   onRetired: () => void
 }
 
@@ -91,37 +75,19 @@ function statusLine(
 
 export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const t = useTranslate()
-  const { bot, owner, snapshot, controller, place } = props
-  const remoteGuard = useRuntimeEnvironmentCapabilityAnswer(
-    owner.authority.kind === 'runtime' ? owner.authority.environmentId : null,
-    AUTOMATION_UPDATE_GUARD_RUNTIME_CAPABILITY
-  )
-  // Only an answer without the guard counts: no answer says nothing, and Save still checks for it.
-  const guardAnswer = owner.authority.kind === 'desktop' ? 'supported' : remoteGuard
+  const { bot, owner, snapshot, controller } = props
   const now = useNow(60_000)
   const offline = useBotHostOffline(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
   const hostName = hostLabel ?? t('bots.host.thisComputer', 'this computer')
-  const settings = useAppStore((state) => state.settings)
   const [runAttempt, setRunNow] = useState<RunNowAttempt>(null)
-  const [oldHost, setOldHost] = useState(false)
-  // A save refused as too old holds until a newer answer (reconnect, update) or a save that lands.
-  const [refusal, setRefusal] = useState<{ answer: typeof guardAnswer; saves: number } | null>(null)
-  const [deleting, setDeleting] = useState<Automation | null>(null)
-  const [dontAskAgain, setDontAskAgain] = useState(false)
   const [announcement, setAnnouncement] = useState('')
-  const [savedCount, setSavedCount] = useState(0)
-  const guardMissing =
-    guardAnswer === 'unsupported' ||
-    (refusal?.answer === guardAnswer && refusal.saves === savedCount)
   const [confirmingRun, setConfirmingRun] = useState(false)
-  const confirmRef = useRef<HTMLButtonElement>(null)
   const automation = snapshot.definition.value
   const signedOut = useOrcaCloudSignedOut(bot.hostId)
   const webhooks = useBotWebhooks(bot.hostId)
   const wontFire = automation ? automationWontFire(automation, [bot], webhooks, signedOut) : null
   const unsupported =
-    oldHost ||
     snapshot.definition.error?.kind === 'unsupported' ||
     snapshot.runs.error?.kind === 'unsupported' ||
     snapshot.selected?.status === 'unsupported'
@@ -133,13 +99,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     (snapshot.acknowledgedRun &&
       getToneForAutomationRunStatus(snapshot.acknowledgedRun.status) === 'running')
   )
-  const newManualRun =
-    runAttempt?.state === 'unconfirmed'
-      ? snapshot.runs.value.find(
-          (run) => run.trigger === 'manual' && !runAttempt.knownRunIds.includes(run.id)
-        )
-      : undefined
-  const runNow = newManualRun ? null : runAttempt
+  const runNow = runAttempt
   const runningAction =
     latestRun && (!snapshot.acknowledgedRun || latestRun.id === snapshot.acknowledgedRun.id)
       ? botAutomationRunAction(bot, latestRun)
@@ -151,7 +111,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     snapshot,
     controller,
     offline,
-    oldHost: unsupported ? 'read' : guardMissing ? 'edit' : null,
+    oldHost: unsupported,
     runNow,
     running,
     runningAction: runningAction
@@ -164,17 +124,11 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
         }
       : null,
     wontFire,
-    draftsFull: botAutomationDraftsFull(props.screenKey) && !props.editing,
     onRetired: props.onRetired,
     onCheckAgain: () => {
       setAnnouncement('')
-      void controller.refreshRuns().then((runs) => {
-        if (
-          !runAttempt ||
-          !runs.some((run) => run.trigger === 'manual' && !runAttempt.knownRunIds.includes(run.id))
-        ) {
-          setAnnouncement(t('bots.automationPanel.stillUnconfirmed', "Still couldn't confirm"))
-        }
+      void controller.refreshRuns().then(() => {
+        setAnnouncement(t('bots.automationPanel.stillUnconfirmed', "Still couldn't confirm"))
       })
     },
     onDismissRunNow: () =>
@@ -188,10 +142,6 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const foreign = Boolean(automation?.bot && automation.bot.botId !== bot.id)
 
   const fail = (error: unknown): void => {
-    if (error instanceof AutomationHostScopeUnsupportedError) {
-      setOldHost(true)
-      return
-    }
     toast.error(botErrorMessage(error))
   }
   const toggle = (current: Automation): void => {
@@ -203,9 +153,8 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
       .catch(fail)
   }
   const startRun = (current: Automation): void => {
-    const knownRunIds = snapshot.runs.value.map((run) => run.id)
     setAnnouncement('')
-    setRunNow({ state: 'starting', knownRunIds })
+    setRunNow({ state: 'starting' })
     void controller
       .startRun((o) => runAutomationNowForOwner(o, current.id))
       .then(() => {
@@ -214,26 +163,13 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
       })
       .catch((error: unknown) => {
         if (automationActionOutcomeUnknown(error)) {
-          setRunNow({ state: 'unconfirmed', knownRunIds })
+          setRunNow({ state: 'unconfirmed' })
           return
         }
         setRunNow(null)
         fail(error)
       })
   }
-  const remove = (current: Automation): void => {
-    void controller
-      .mutate(
-        (o) => deleteAutomationForOwner(o, current.id),
-        () => 'deleted'
-      )
-      .then(() => {
-        toast.message(t('bots.automationPanel.deleted', 'Deleted {{name}}', { name: current.name }))
-        props.onDeleted()
-      })
-      .catch(fail)
-  }
-
   if (!automation) {
     return (
       <>
@@ -249,36 +185,11 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
 
   const hostActions: AutomationControlState | null =
     blocked ?? (foreign ? { unavailable: true, describedBy: notices.ids.foreign } : null)
-  const editState: AutomationControlState =
-    hostActions ??
-    (unsupported || guardMissing
-      ? { unavailable: true, describedBy: notices.ids.oldHost }
-      : botAutomationDraftsFull(props.screenKey) && !props.editing
-        ? { unavailable: true, describedBy: notices.ids.draftsFull }
-        : {})
-  const sectionProps: SectionProps = {
-    bot,
-    automation,
-    owner,
-    controller,
-    screenKey: props.screenKey,
-    editing: props.editing,
-    setEditing: props.setEditing,
-    editState,
-    hostName,
-    onSaved: () => setSavedCount((count) => count + 1),
-    onUnsupported: () => setRefusal({ answer: guardAnswer, saves: savedCount }),
-    askInChat: (sentence) => void props.askInChat(sentence)
-  }
+  const sectionProps: SectionProps = { automation, owner }
   return (
     <>
       <p role="status" aria-live="polite" className="sr-only">
-        {newManualRun ? t('bots.automationPanel.runStarted', 'Run started') : announcement}
-      </p>
-      <p role="status" aria-live="polite" className="sr-only">
-        <span key={savedCount}>
-          {savedCount > 0 ? t('bots.automationPanel.saved', 'Saved') : ''}
-        </span>
+        {announcement}
       </p>
       <AutomationDetailHeader
         automation={automation}
@@ -295,9 +206,6 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
               : undefined
         }
         onToggle={toggle}
-        onDelete={(current) =>
-          settings?.skipDeleteAutomationConfirm ? remove(current) : setDeleting(current)
-        }
         runNowState={
           hostActions ??
           (runNow?.state === 'starting'
@@ -313,32 +221,22 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
                     : undefined)
         }
         toggleState={hostActions ?? (snapshot.mutating ? { pending: true } : undefined)}
-        deleteState={hostActions ?? (snapshot.mutating ? { pending: true } : undefined)}
         menuItems={
-          <>
-            <DropdownMenuItem
-              onSelect={() =>
-                openBotAutomation({
-                  bot,
-                  automationId: automation.id,
-                  hostId: bot.hostId,
-                  runId: null,
-                  intent: 'page'
-                })
-              }
-            >
-              {t('bots.automationPanel.openOnPage', 'Open in Automations')}{' '}
-              <span aria-hidden="true">↗</span>
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onSelect={() => void window.api.ui.writeClipboardText(automation.prompt)}
-            >
-              {t(
-                'auto.components.automations.AutomationPromptDisclosure.copyInstructions',
-                'Copy instructions'
-              )}
-            </DropdownMenuItem>
-          </>
+          <DropdownMenuItem
+            onSelect={() =>
+              openBotAutomation({
+                bot,
+                automationId: automation.id,
+                hostId: bot.hostId,
+                runId: snapshot.selected?.runId ?? null,
+                owner,
+                intent: 'page'
+              })
+            }
+          >
+            {t('bots.automationPanel.openOnPage', 'Open in Automations')}{' '}
+            <span aria-hidden="true">↗</span>
+          </DropdownMenuItem>
         }
       />
       <AutomationDetailNotices
@@ -360,7 +258,6 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
           automation={automation}
           snapshot={snapshot}
           controller={controller}
-          initialRunId={place.runId}
           now={now}
         />
       )}
@@ -377,30 +274,8 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
         onClose={() => setConfirmingRun(false)}
         onConfirm={() => {
           setConfirmingRun(false)
-          startRun(automation)
-        }}
-      />
-      <AutomationDeleteDialog
-        deleteTarget={deleting}
-        dontAskDeleteAgain={dontAskAgain}
-        confirmButtonRef={confirmRef}
-        initialFocus="cancel"
-        onOpenChange={(open) => (open ? undefined : setDeleting(null))}
-        onDontAskAgainToggle={() => setDontAskAgain(!dontAskAgain)}
-        onCancel={() => setDeleting(null)}
-        onConfirm={() => {
-          const target = deleting
-          setDeleting(null)
-          if (dontAskAgain) {
-            const state = useAppStore.getState()
-            persistSkipDeleteAutomationConfirm({
-              updateSettings: state.updateSettings,
-              openSettingsPage: state.openSettingsPage,
-              openSettingsTarget: state.openSettingsTarget
-            })
-          }
-          if (target) {
-            remove(target)
+          if (!running && !hostActions && !unsupported && !snapshot.mutating) {
+            startRun(automation)
           }
         }}
       />

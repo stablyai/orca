@@ -152,15 +152,20 @@ export function reconcileAutomationRuns(
   for (const id of ids) {
     acknowledgedRunIds.delete(id)
   }
-  const covered = paged && page.nextCursor ? mergeRuns(firstPage, previous.value) : firstPage
-  const value = newestFirst([...acknowledged, ...covered]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
+  const continuous =
+    paged && firstPage.some((run) => previous.value.some((old) => old.id === run.id))
+  const covered = continuous && page.nextCursor ? mergeRuns(firstPage, previous.value) : firstPage
+  const value = newestFirst([
+    ...new Map([...acknowledged, ...covered].map((run) => [run.id, run])).values()
+  ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
+  const nextCursor = continuous && page.nextCursor ? previous.nextCursor : page.nextCursor
   return {
     status: 'ready',
     value,
     error: null,
     stale: false,
-    nextCursor: paged && page.nextCursor ? previous.nextCursor : page.nextCursor,
-    loadingMore: previous.loadingMore,
+    nextCursor,
+    loadingMore: nextCursor === previous.nextCursor && previous.loadingMore,
     capped: value.length >= AUTOMATION_DETAILS_MAX_RUNS
   }
 }

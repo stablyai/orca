@@ -1,7 +1,6 @@
 // The Automation screen's own notices, beside the ones the page shows too. Disabled controls point
 // at them with aria-describedby, so each has a stable id.
 import { useId } from 'react'
-import { openBotAutomation } from './bot-automation-open'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../shared/bot-types'
@@ -9,12 +8,10 @@ import type { AutomationDetailNotice } from '../automations/details/automation-d
 import type { AutomationDetailsController } from '../automations/details/automation-details-controller'
 import type { AutomationDetailsSnapshot } from '../automations/details/automation-details-model'
 import { manageConnectors } from './AddConnectorDialog'
-import { BOT_AUTOMATION_DRAFT_CAP } from './bot-automation-drafts'
 
 /** A Run now press: starting, or sent with no answer, so it may or may not have started. */
 export type RunNowAttempt = {
   state: 'starting' | 'unconfirmed' | 'dismissed'
-  knownRunIds: string[]
 } | null
 
 type NoticeIds = {
@@ -24,7 +21,6 @@ type NoticeIds = {
   unconfirmed: string
   foreign: string
   running: string
-  draftsFull: string
 }
 
 function Action({ label, onPress }: { label: string; onPress: () => void }): React.JSX.Element {
@@ -47,7 +43,6 @@ export function useBotAutomationNotices({
   running,
   runningAction,
   wontFire,
-  draftsFull,
   onRetired,
   onCheckAgain,
   onDismissRunNow
@@ -59,12 +54,11 @@ export function useBotAutomationNotices({
   controller: AutomationDetailsController
   offline: boolean
   /** The host is too old: to read or act on this automation, or only to edit its settings here. */
-  oldHost: 'read' | 'edit' | null
+  oldHost: boolean
   runNow: RunNowAttempt
   running: boolean
   runningAction: { label: string; onOpen: () => void } | null
   wontFire: { bot: Bot; label: string; needsConnector: boolean } | null
-  draftsFull?: boolean
   onRetired: () => void
   onCheckAgain: () => void
   onDismissRunNow: () => void
@@ -77,8 +71,7 @@ export function useBotAutomationNotices({
     checking: `${base}-checking`,
     oldHost: `${base}-oldhost`,
     unconfirmed: `${base}-unconfirmed`,
-    foreign: `${base}-foreign`,
-    draftsFull: `${base}-drafts`
+    foreign: `${base}-foreign`
   }
   const list: AutomationDetailNotice[] = []
   const { definition, continuity } = snapshot
@@ -138,38 +131,10 @@ export function useBotAutomationNotices({
       id: ids.oldHost,
       tone: 'amber',
       cause: 'host',
-      // Edit alone being unavailable never hides what the automation is doing (Running, a failure).
-      ...(oldHost === 'edit' ? { minor: true as const } : {}),
-      content: (
-        <>
-          <span className="font-medium">
-            {oldHost === 'edit'
-              ? t(
-                  'bots.automationPanel.updateOrcaToEdit',
-                  'Update Orca on {{host}} to edit here.',
-                  {
-                    host: hostName
-                  }
-                )
-              : t('bots.automationPanel.updateOrca', 'Update Orca on {{host}}', { host: hostName })}
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            onClick={() =>
-              openBotAutomation({
-                bot,
-                automationId: controller.automationId,
-                runId: snapshot.selected?.runId ?? null,
-                intent: 'page'
-              })
-            }
-          >
-            {t('bots.automationPanel.openOnPage', 'Open in Automations')}{' '}
-            <span aria-hidden="true">↗</span>
-          </Button>
-        </>
+      content: t(
+        'bots.automationPanel.updateOrcaHistory',
+        'Update Orca on {{host}} to read automation history in the panel or Automations page.',
+        { host: hostName }
       )
     })
   }
@@ -237,20 +202,13 @@ export function useBotAutomationNotices({
       )
     })
   }
-  if (draftsFull) {
-    list.push({
-      key: 'drafts-full',
-      id: ids.draftsFull,
-      tone: 'info',
-      content: t(
-        'bots.automationPanel.draftsFull',
-        'Save or discard unsaved changes on one of {{count}} other automations first.',
-        { count: BOT_AUTOMATION_DRAFT_CAP }
-      )
-    })
-  }
   // A read problem the host's own notices don't already explain.
-  if (definition.error && !offline && oldHost !== 'read' && continuity === 'same') {
+  if (
+    definition.error &&
+    !offline &&
+    definition.error.kind !== 'unsupported' &&
+    continuity === 'same'
+  ) {
     list.push({
       key: 'definition-read',
       tone: automation ? 'info' : 'red',

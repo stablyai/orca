@@ -13,6 +13,7 @@ import {
   automationWhenLines
 } from '@/components/automations/details/automation-bot-facts'
 import { useAutomationDetails } from '@/components/automations/details/use-automation-details'
+import type { AutomationRunsSlice } from '@/components/automations/details/automation-details-model'
 import type { AutomationDetailsController } from '@/components/automations/details/automation-details-controller'
 import { automationOwnerForEnvironment } from '@/components/automations/hosts/automation-host-owner'
 import {
@@ -22,7 +23,6 @@ import {
 import { AutomationRecentRunList } from '@/components/automations/runs/AutomationRecentRunList'
 import { useAppStore } from '@/store'
 import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
 import { automationOpenFromCard } from './native-chat-automation-open'
@@ -52,12 +52,26 @@ function RecentRuns({
   runs
 }: {
   automation: Pick<Automation, 'id'> & { bot?: { botId: string } }
-  runs: readonly AutomationRun[]
+  runs: AutomationRunsSlice
 }): React.JSX.Element {
   const t = useTranslate()
   const now = useNow(60_000)
   const owner = useNativeChatVisualOwner()
-  if (runs.length === 0) {
+  if (runs.status === 'loading') {
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        {t('auto.components.automations.AutomationRunsDashboard.loading', 'Loading runs…')}
+      </p>
+    )
+  }
+  if (runs.error && runs.value.length === 0) {
+    return (
+      <p role="status" className="text-sm text-muted-foreground">
+        {runs.error.message}
+      </p>
+    )
+  }
+  if (runs.value.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         {t('components.native-chat.automationSaved.noRuns', 'No runs yet')}
@@ -67,7 +81,7 @@ function RecentRuns({
   return (
     <AutomationRecentRunList
       ariaLabel={t('components.native-chat.automationSaved.recentRuns', 'Recent runs')}
-      runs={runs}
+      runs={runs.value}
       now={now}
       onPress={(run) => openBotAutomation(automationOpenFromCard(owner, automation, run.id))}
     />
@@ -82,7 +96,7 @@ function ReadyDetails({
   onEditInChat
 }: {
   automation: Automation
-  runs: readonly AutomationRun[]
+  runs: AutomationRunsSlice
   controller: AutomationDetailsController
   mutating: boolean
   onEditInChat: (() => void) | null
@@ -133,7 +147,19 @@ function ReadyDetails({
             {automationAgentLabel(automation)}
           </NativeChatCardFact>
         </dl>
-        <RecentRuns automation={automation} runs={runs} />
+        <div>
+          <RecentRuns automation={automation} runs={runs} />
+          {runs.error && runs.value.length > 0 ? (
+            <p role="status" className="text-sm text-muted-foreground">
+              {runs.error.message}
+            </p>
+          ) : null}
+          {runs.error ? (
+            <Button variant="link" size="inlineText" onClick={() => controller.reload()}>
+              {t('bots.automationPanel.retry', 'Retry')}
+            </Button>
+          ) : null}
+        </div>
       </div>
       {automation.prompt ? (
         <p className="mt-3 line-clamp-6 whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm text-foreground">
@@ -209,15 +235,22 @@ export function NativeChatAutomationCardDetails({
           {t('components.native-chat.automationSaved.loadFailed', 'Couldn’t read this automation')}
         </p>
       ) : (
-        // A failed runs read keeps the settings: the runs are just left out.
         <ReadyDetails
           automation={definition.value}
-          runs={runs.value}
+          runs={runs}
           controller={controller}
           mutating={snapshot.mutating}
           onEditInChat={onEditInChat}
         />
       )}
+      {definition.error && definition.value ? (
+        <p role="status" className="mt-3 text-sm text-muted-foreground">
+          {t('bots.automationPanel.settingsStale', "Couldn't read the latest settings.")}{' '}
+          <Button variant="link" size="inlineText" onClick={() => controller.reload()}>
+            {t('bots.automationPanel.retry', 'Retry')}
+          </Button>
+        </p>
+      ) : null}
       {definition.status === 'deleted' ? null : (
         <Button
           type="button"

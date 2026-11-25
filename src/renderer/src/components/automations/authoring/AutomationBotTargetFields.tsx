@@ -31,7 +31,6 @@ type AutomationBotTargetFieldsProps = {
   threadReplies: boolean
   /** Shown after Runs in, which decides whether a run can pick its own agent. */
   agentField?: React.ReactNode
-  resultsOnly?: boolean
   onChange: (target: AutomationBotTarget) => void
 }
 
@@ -44,7 +43,6 @@ export function AutomationBotTargetFields({
   hasEventThread,
   threadReplies,
   agentField,
-  resultsOnly = false,
   onChange
 }: AutomationBotTargetFieldsProps): React.JSX.Element {
   const t = useTranslate()
@@ -56,47 +54,41 @@ export function AutomationBotTargetFields({
   const reactId = useId()
   return (
     <div className="flex flex-col gap-4">
-      {resultsOnly ? null : (
-        <>
-          <Field
-            labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
-            label={t('automations.botTarget.runsIn', 'Runs in')}
-          >
-            <Select
-              value={target.chat ? RUNS_IN_SAVED_CHAT : target.runsIn}
-              onValueChange={(next: AutomationBotTarget['runsIn'] | typeof RUNS_IN_SAVED_CHAT) => {
-                if (next !== RUNS_IN_SAVED_CHAT) {
-                  // A run in a chat stays on that chat's agent, so its own agent goes.
-                  const { agentSetup, ...rest } = target
-                  onChange({
-                    ...rest,
-                    runsIn: next,
-                    chat: undefined,
-                    ...(next === 'new' && agentSetup ? { agentSetup } : {})
-                  })
-                }
-              }}
-            >
-              <SelectTrigger className="w-full" wrap>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
-                <SelectItem value="new">
-                  {t('automations.botTarget.runsInNew', 'A new conversation each time')}
-                </SelectItem>
-                <SelectItem value="chat">{chatLabel}</SelectItem>
-                {/* A chat named with --runs-in chat:<id>; only the CLI picks one, so it is offered only once saved. */}
-                {target.chat ? (
-                  <SelectItem value={RUNS_IN_SAVED_CHAT}>
-                    {botTargetChatTitle(target.chat)}
-                  </SelectItem>
-                ) : null}
-              </SelectContent>
-            </Select>
-          </Field>
-          {agentField}
-        </>
-      )}
+      <Field
+        labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
+        label={t('automations.botTarget.runsIn', 'Runs in')}
+      >
+        <Select
+          value={target.chat ? RUNS_IN_SAVED_CHAT : target.runsIn}
+          onValueChange={(next: AutomationBotTarget['runsIn'] | typeof RUNS_IN_SAVED_CHAT) => {
+            if (next !== RUNS_IN_SAVED_CHAT) {
+              // A run in a chat stays on that chat's agent, so its own agent goes.
+              const { agentSetup, ...rest } = target
+              onChange({
+                ...rest,
+                runsIn: next,
+                chat: undefined,
+                ...(next === 'new' && agentSetup ? { agentSetup } : {})
+              })
+            }
+          }}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
+            <SelectItem value="new">
+              {t('automations.botTarget.runsInNew', 'A new conversation each time')}
+            </SelectItem>
+            <SelectItem value="chat">{chatLabel}</SelectItem>
+            {/* A chat named with --runs-in chat:<id>; only the CLI picks one, so it is offered only once saved. */}
+            {target.chat ? (
+              <SelectItem value={RUNS_IN_SAVED_CHAT}>{botTargetChatTitle(target.chat)}</SelectItem>
+            ) : null}
+          </SelectContent>
+        </Select>
+      </Field>
+      {agentField}
       <Field
         labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
         label={t('automations.botTarget.resultsTo', 'Send results to')}
@@ -107,7 +99,7 @@ export function AutomationBotTargetFields({
             onChange({ ...target, resultsTo: botResultsToOf(next) })
           }
         >
-          <SelectTrigger className="w-full" wrap>
+          <SelectTrigger className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
@@ -131,7 +123,7 @@ export function AutomationBotTargetFields({
             </SelectItem>
             {/* A channel post goes through the bot's Slack app, so it needs one. */}
             <SelectItem value="channel" disabled={!bot?.slack && choice !== 'channel'}>
-              {bot?.slack || choice === 'channel'
+              {bot?.slack
                 ? t('automations.botTarget.resultsToChannel', 'A channel')
                 : t(
                     'automations.botTarget.resultsToChannelNeedsSlack',
@@ -140,7 +132,7 @@ export function AutomationBotTargetFields({
             </SelectItem>
             {/* A comment goes through Orca's Linear app, so the bot must be on Linear. */}
             <SelectItem value="linear" disabled={!bot?.linear && choice !== 'linear'}>
-              {bot?.linear || choice === 'linear'
+              {bot?.linear
                 ? t('automations.botTarget.resultsToLinear', 'A Linear issue')
                 : t(
                     'automations.botTarget.resultsToLinearNeedsLinear',

@@ -54,7 +54,7 @@ type HeaderProps = {
   subtitle: string
   onRunNow: (automation: Automation) => void
   onToggle: (automation: Automation) => void
-  onDelete: (automation: Automation) => void
+  onDelete?: (automation: Automation) => void
   runNowState?: AutomationControlState
   /** Run now's label while pending ("Starting…"). */
   runNowPendingLabel?: string
@@ -96,22 +96,26 @@ function ActionsMenu({
       </Tooltip>
       <DropdownMenuContent align="end" className="w-48">
         {menuItems}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem
-          variant="destructive"
-          aria-disabled={deleteOff || undefined}
-          aria-describedby={deleteState?.unavailable ? deleteState.describedBy : undefined}
-          onSelect={(event) => {
-            if (deleteOff) {
-              event.preventDefault()
-              return
-            }
-            onDelete(automation)
-          }}
-        >
-          <Trash2 className="size-3.5" />
-          {t('auto.components.automations.AutomationDetail.deleteEllipsis', 'Delete…')}
-        </DropdownMenuItem>
+        {onDelete ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              variant="destructive"
+              aria-disabled={deleteOff || undefined}
+              aria-describedby={deleteState?.unavailable ? deleteState.describedBy : undefined}
+              onSelect={(event) => {
+                if (deleteOff) {
+                  event.preventDefault()
+                  return
+                }
+                onDelete(automation)
+              }}
+            >
+              <Trash2 className="size-3.5" />
+              {t('auto.components.automations.AutomationDetail.deleteEllipsis', 'Delete…')}
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

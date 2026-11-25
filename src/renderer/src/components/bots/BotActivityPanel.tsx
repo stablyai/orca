@@ -85,7 +85,6 @@ function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
           bot={bot}
           place={automation}
           onBack={() => returnToActivity(panel.current, automation, 'origin')}
-          onDeleted={() => returnToActivity(panel.current, automation, 'automations')}
         />
       </div>
     )

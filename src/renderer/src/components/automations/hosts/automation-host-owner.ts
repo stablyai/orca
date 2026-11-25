@@ -78,13 +78,14 @@ export function evaluateAutomationOwner(owner: AutomationOwnerRef): AutomationOw
   if (current === captured) {
     return { status: 'same', owner }
   }
-  if (resolveContinuedRuntimeEnvironmentRevision(environmentId, captured) === current) {
+  const resolved = resolveContinuedRuntimeEnvironmentRevision(environmentId, captured)
+  if (resolved === current) {
     return {
       status: 'continued',
       owner: { ...owner, authority: { ...authority, pairingRevision: current } }
     }
   }
-  if (isRuntimeEnvironmentContinuationPending(environmentId, captured)) {
+  if (isRuntimeEnvironmentContinuationPending(environmentId, resolved)) {
     return { status: 'checking' }
   }
   return { status: 'retired' }

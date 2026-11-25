@@ -1,4 +1,3 @@
-import type { AutomationUpdateGuard } from './automation-update-guard'
 /** Run only against supplied captured ownership. Return expected owner conflicts with established recovery verbs rather than generic toasts; never infer from ambient state. */
 
 import type {
@@ -164,13 +163,12 @@ export async function updateOwnedAutomation(
   authority: AutomationAuthorityRef,
   id: string,
   updates: AutomationUpdateInput,
-  destination?: AutomationDestination,
-  guard?: AutomationUpdateGuard
+  destination?: AutomationDestination
 ): Promise<AutomationActionResult<Automation>> {
   return await attempt(
     availability,
-    (owner) => updateAutomationForOwner(owner, id, updates, destination, guard),
-    () => updateOrphanAutomation(authority, id, updates, destination, guard)
+    (owner) => updateAutomationForOwner(owner, id, updates, destination),
+    () => updateOrphanAutomation(authority, id, updates, destination)
   )
 }
 

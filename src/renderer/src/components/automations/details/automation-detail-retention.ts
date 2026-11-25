@@ -1,10 +1,9 @@
 import type { AutomationDetailsSnapshot } from './automation-details-model'
 import { translate } from '@/i18n/i18n'
 
-const MAX_RETAINED_BYTES = 32 * 1024 * 1024
-const LIMITS = { read: 24 * 1024 * 1024, draft: 8 * 1024 * 1024 }
-const totals = { read: 0, draft: 0 }
-const retained = new Map<string | symbol, { bytes: number; kind: 'read' | 'draft' }>()
+const MAX_RETAINED_BYTES = 24 * 1024 * 1024
+let totalBytes = 0
+const retained = new Map<symbol, number>()
 
 /** Conservative payload accounting, including UTF-16 strings and object overhead. */
 function payloadBytes(value: unknown, seen = new Set<object>()): number {
@@ -32,34 +31,19 @@ function payloadBytes(value: unknown, seen = new Set<object>()): number {
   )
 }
 
-/** Admission is shared by all mounted detail consumers and retained section drafts. */
-export function retainAutomationPayload(
-  key: string | symbol,
-  value: unknown,
-  kind: 'read' | 'draft' = 'read'
-): boolean {
+function retainAutomationPayload(key: symbol, value: unknown): boolean {
   const bytes = payloadBytes(value)
-  const previous = retained.get(key)
-  const next = totals[kind] - (previous?.kind === kind ? previous.bytes : 0) + bytes
-  if (
-    next > LIMITS[kind] ||
-    totals.read + totals.draft - (previous?.bytes ?? 0) + bytes > MAX_RETAINED_BYTES
-  ) {
+  const next = totalBytes - (retained.get(key) ?? 0) + bytes
+  if (next > MAX_RETAINED_BYTES) {
     return false
   }
-  if (previous) {
-    totals[previous.kind] -= previous.bytes
-  }
-  totals[kind] += bytes
-  retained.set(key, { bytes, kind })
+  totalBytes = next
+  retained.set(key, bytes)
   return true
 }
 
-export function releaseAutomationPayload(key: string | symbol): void {
-  const previous = retained.get(key)
-  if (previous) {
-    totals[previous.kind] -= previous.bytes
-  }
+export function releaseAutomationPayload(key: symbol): void {
+  totalBytes -= retained.get(key) ?? 0
   retained.delete(key)
 }
 
@@ -100,7 +84,12 @@ export function admitAutomationDetailSnapshot(
               capped: true
             }
           : next.runs,
-      selected: next.selected ? { ...next.selected, status: 'error', run: null } : next.selected
+      selected:
+        previous.selected?.runId === next.selected?.runId
+          ? previous.selected
+          : next.selected
+            ? { ...next.selected, status: 'error', run: null }
+            : null
     }
     retainAutomationPayload(key, payload(next))
   }

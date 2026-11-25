@@ -195,9 +195,8 @@ export function AutomationTimeField({
   }
 
   return (
-    // In a narrow container (a bot's side panel) the clock glyph goes so the period still fits.
-    <div className={cn(TIME_SHELL_CLASS, '@max-[15rem]:gap-1 @max-[15rem]:px-2', className)}>
-      <Clock className="size-4 shrink-0 text-muted-foreground @max-[15rem]:hidden" aria-hidden />
+    <div className={cn(TIME_SHELL_CLASS, className)}>
+      <Clock className="size-4 shrink-0 text-muted-foreground" aria-hidden />
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {mode === 'time' ? (
           <>

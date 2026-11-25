@@ -119,6 +119,14 @@ function RunRow({
           <p className="mt-1 max-h-60 overflow-y-auto whitespace-pre-wrap rounded-sm border border-border/60 bg-background px-2 py-1.5 text-xs leading-relaxed [overflow-wrap:anywhere] scrollbar-sleek">
             {getAutomationRunContent(run, t)}
           </p>
+          {run.outputSnapshot?.truncated ? (
+            <p className="mt-1 text-2xs text-muted-foreground">
+              {t(
+                'bots.automationPanel.outputTruncated',
+                'Output preview is truncated. Open this run in Automations for full details.'
+              )}
+            </p>
+          ) : null}
           {actions ? <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">{actions}</div> : null}
         </div>
       ) : null}

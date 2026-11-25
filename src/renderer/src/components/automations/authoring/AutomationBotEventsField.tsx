@@ -73,16 +73,9 @@ export function AutomationBotEventsField({
           ))}
         </ul>
         {onEditInChat ? (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-auto max-w-full self-start whitespace-normal text-left"
-            onClick={onEditInChat}
-          >
+          <Button variant="outline" size="sm" className="self-start" onClick={onEditInChat}>
             <MessageSquare />
-            <span className="min-w-0">
-              {t('automations.botEvents.changeEventsInChat', 'Change events in chat')}
-            </span>
+            {t('automations.botEvents.editInChat', 'Edit in chat')}
           </Button>
         ) : null}
       </div>

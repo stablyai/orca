@@ -9,7 +9,6 @@ export const AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE =
   'Editing automations on this host requires a newer Orca server. Update the HUB and try again.'
 export const AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'automation.create-idempotency.v1' as const
-export const AUTOMATION_UPDATE_GUARD_RUNTIME_CAPABILITY = 'automation.update-guard.v1' as const
 export const AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY =
   'automation.bounded-history.v1' as const
 // Older hosts strip extraAgentArgs and would run without the user's arguments.
@@ -24,7 +23,6 @@ export const AUTOMATION_SURFACE_RUNTIME_CAPABILITY = 'automations.surface.v1' as
 export const AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY = 'automations.launch-setup.v1' as const
 
 export const AUTOMATION_RUNTIME_CAPABILITIES = [
-  AUTOMATION_UPDATE_GUARD_RUNTIME_CAPABILITY,
   AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY,
   AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY,
   AUTOMATION_SURFACE_RUNTIME_CAPABILITY,

@@ -11,7 +11,6 @@ import { makeAutomation, makeRun } from '../automations/automations-page-fixture
 import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { setBotAutomationPlace } from './bot-automation-place'
-import { clearRetainedBotAutomationDrafts } from './bot-automation-drafts'
 
 const now = Date.now()
 const HOUR = 3_600_000
@@ -75,8 +74,6 @@ type Scenario =
   | 'unconfirmed'
   | 'offline'
   | 'update'
-  | 'conflict'
-  | 'saveError'
   | 'homeFails'
   | 'deleted'
 
@@ -86,8 +83,6 @@ function setup(
   scenario: Scenario = 'default'
 ): () => void {
   return () => {
-    // Each fixture opens fresh: no edit kept from another one.
-    clearRetainedBotAutomationDrafts()
     setBotHostListing({ hosts: [{ hostId: 'local', state: 'live' }], updateNeeded: [] })
     stubBotPanel(ACTIVITY)()
     publishBots([fixtureCos], { threadReplies: false, webhooks: true })
@@ -96,12 +91,14 @@ function setup(
     }
     const shownDigest =
       scenario !== 'default' && scenario !== 'failed' ? { ...digest, on: [] } : digest
-    let reads = 0
     const runtime = window.api.runtime
     const fallback = runtime.call
     Reflect.set(window.api, 'runtime', {
       ...runtime,
       call: async (request: Parameters<typeof fallback>[0]) => {
+        if (request.method === 'pairedServerAsks.list') {
+          return { ok: true, result: { cards: [] } }
+        }
         const params: { runId?: string } =
           typeof request.params === 'object' && request.params !== null ? request.params : {}
         if (request.method === 'bots.items.owner.list') {
@@ -114,17 +111,13 @@ function setup(
           return { ok: true, result: { sessionId: 'chat-cos' } }
         }
         if (request.method === 'automation.show') {
-          reads += 1
           if (scenario === 'deleted') {
             return { ok: false, error: { code: 'runtime_error', message: 'Automation not found.' } }
           }
           return {
             ok: true,
             result: {
-              automation:
-                scenario === 'conflict' && reads > 1
-                  ? { ...digest, bot: { ...digest.bot, resultsTo: { channel: '#latest-channel' } } }
-                  : shownDigest
+              automation: shownDigest
             }
           }
         }
@@ -213,30 +206,6 @@ export const pinnedOlderRun280 = defineFixture({
   render: () => <BotPanelFrame />
 })
 
-export const editingWhen220 = defineFixture({
-  width: 220,
-  store: botPanelPage(true, null),
-  setup: setup(null, RUNS.slice(0, 1)),
-  interact: async (frame) => {
-    await settle()
-    frame.querySelector<HTMLButtonElement>('[aria-label="Edit when it runs"]')?.click()
-    await settle()
-  },
-  render: () => <BotPanelFrame />
-})
-
-export const editingResults280 = defineFixture({
-  width: 280,
-  store: botPanelPage(true, null),
-  setup: setup(null, RUNS.slice(0, 1)),
-  interact: async (frame) => {
-    await settle()
-    frame.querySelector<HTMLButtonElement>('[aria-label="Edit where results go"]')?.click()
-    await settle()
-  },
-  render: () => <BotPanelFrame />
-})
-
 export const instructionsAndSetup280 = defineFixture({
   width: 280,
   store: botPanelPage(true, null),
@@ -258,20 +227,6 @@ function scenarioFixture(scenario: Scenario, width: number) {
         )
       if (scenario === 'unconfirmed') {
         button('Run now')?.click()
-      }
-      if (scenario === 'conflict' || scenario === 'saveError') {
-        frame.querySelector<HTMLButtonElement>('[aria-label="Edit where results go"]')?.click()
-        await settle()
-        const input = frame.querySelector<HTMLInputElement>('[aria-label="Channel"]')
-        if (input) {
-          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(
-            input,
-            '#changed-channel'
-          )
-          input.dispatchEvent(new Event('input', { bubbles: true }))
-        }
-        await settle()
-        button('Save')?.click()
       }
       if (scenario === 'homeFails') {
         useAppStore.setState({
@@ -306,26 +261,10 @@ export const offline220 = scenarioFixture('offline', 220)
 export const offline280 = scenarioFixture('offline', 280)
 export const update220 = scenarioFixture('update', 220)
 export const update280 = scenarioFixture('update', 280)
-export const conflict220 = scenarioFixture('conflict', 220)
-export const conflict280 = scenarioFixture('conflict', 280)
-export const saveError220 = scenarioFixture('saveError', 220)
-export const saveError280 = scenarioFixture('saveError', 280)
 export const homeFails220 = scenarioFixture('homeFails', 220)
 export const homeFails280 = scenarioFixture('homeFails', 280)
 export const deleted220 = scenarioFixture('deleted', 220)
 export const deleted280 = scenarioFixture('deleted', 280)
-
-export const editingResults220 = defineFixture({
-  width: 220,
-  store: botPanelPage(true, null),
-  setup: setup(null, RUNS.slice(0, 1)),
-  interact: async (frame) => {
-    await settle()
-    frame.querySelector<HTMLButtonElement>('[aria-label="Edit where results go"]')?.click()
-    await settle()
-  },
-  render: () => <BotPanelFrame />
-})
 
 export const menu280 = defineFixture({
   width: 280,

@@ -55,6 +55,10 @@ export class AutomationDetailsController extends AutomationDetailsRuns {
   /** Late answers after this are dropped. */
   dispose(): void {
     this.disposed = true
+    this.epoch += 1
+    this.ownerEpoch += 1
+    this.runsEpoch += 1
+    this.selectedRead += 1
     this.releaseRuns()
   }
 
@@ -199,6 +203,7 @@ export class AutomationDetailsController extends AutomationDetailsRuns {
       return result
     } finally {
       this.epoch += 1
+      this.snapshot = { ...this.snapshot, mutating: false }
       this.update({ mutating: false })
       if (
         this.snapshot.definition.status !== 'deleted' &&

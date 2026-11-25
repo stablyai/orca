@@ -1,7 +1,6 @@
 import { useAppStore } from '@/store'
 import type { BotRef } from '@/lib/bot-hosts'
 import type { BotActivity } from '../../../../../shared/bots/bot-activity-model'
-import type { BotAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import { automationOwnerForHostId, evaluateAutomationOwner } from './automation-host-owner'
 
@@ -12,21 +11,19 @@ export function captureBotAutomationOwners(bot: BotRef): (activity: BotActivity)
   const owner = automationOwnerForHostId(bot.hostId, useAppStore.getState())
   return (activity) => {
     let changed = false
-    for (const row of [...activity.automations, ...activity.waits]) {
-      const previous = owners.get(row.automation)
+    const records = [...activity.automations, ...activity.waits].map((row) => row.automation)
+    for (const record of [...records, ...activity.inProgress, ...activity.completed]) {
+      const previous = owners.get(record)
       if (previous !== undefined && JSON.stringify(previous) !== JSON.stringify(owner)) {
         changed = true
       }
-      owners.set(row.automation, owner)
+      owners.set(record, owner)
     }
     return changed ? { ...activity } : activity
   }
 }
 
-export function botAutomationRowOwner(
-  automation: BotAutomationFacts,
-  bot: BotRef
-): AutomationOwnerRef | null {
+export function botAutomationRowOwner(automation: object, bot: BotRef): AutomationOwnerRef | null {
   const captured = owners.get(automation)
   if (captured !== undefined) {
     return captured

@@ -1,6 +1,6 @@
 // Recent runs on the Automation screen: the shared compact run list, rows expanding in place, an
 // asked-for older run pinned at the top, and Show more until the page takes over.
-import React, { useState } from 'react'
+import React from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { revealWorkerPane } from '@/lib/open-orchestration-worker'
@@ -66,18 +66,15 @@ export function BotAutomationRuns({
   automation,
   snapshot,
   controller,
-  initialRunId,
   now
 }: {
   bot: Bot
   automation: Automation
   snapshot: AutomationDetailsSnapshot
   controller: AutomationDetailsController
-  initialRunId: string | null
   now: number
 }): React.JSX.Element {
   const t = useTranslate()
-  const [expanded, setExpanded] = useState<string | null>(initialRunId)
   const { runs, selected } = snapshot
   const pinnedRun =
     selected?.status === 'ready' &&
@@ -86,7 +83,13 @@ export function BotAutomationRuns({
       ? selected.run
       : null
   const toPage = (runId: string | null): void =>
-    openBotAutomation({ bot, automationId: automation.id, runId, intent: 'page' })
+    openBotAutomation({
+      bot,
+      automationId: automation.id,
+      runId,
+      owner: snapshot.owner,
+      intent: 'page'
+    })
   const selectedNote =
     selected && selected.status !== 'in-window' && selected.status !== 'ready'
       ? selected.status === 'loading'
@@ -122,7 +125,7 @@ export function BotAutomationRuns({
           <p role="status" className="px-2 text-xs text-muted-foreground">
             {t('auto.components.automations.AutomationRunsDashboard.loading', 'Loading runs…')}
           </p>
-        ) : runs.status === 'error' ? (
+        ) : runs.status === 'error' && !pinnedRun ? (
           <p className="flex flex-wrap items-center gap-2 px-2 text-xs text-muted-foreground">
             {t('bots.automationPanel.runsFailed', "Couldn't read its runs.")}
             <button type="button" className={LINK} onClick={() => controller.reload()}>
@@ -146,14 +149,30 @@ export function BotAutomationRuns({
                   }
                 : null
             }
-            expandedRunId={expanded}
-            onPress={(run) => setExpanded((current) => (current === run.id ? null : run.id))}
-            renderActions={(run) => <RunActions bot={bot} run={run} />}
+            expandedRunId={selected?.runId ?? null}
+            onPress={(run) => controller.selectRun(selected?.runId === run.id ? null : run.id)}
+            renderActions={(run) => (
+              <>
+                <RunActions bot={bot} run={run} />
+                {run.outputSnapshot?.truncated ? (
+                  <button type="button" className={LINK} onClick={() => toPage(run.id)}>
+                    {t('bots.automationPanel.openOnPage', 'Open in Automations')} ↗
+                  </button>
+                ) : null}
+              </>
+            )}
           />
         )}
-        {runs.stale ? (
+        {runs.error && (runs.status !== 'error' || pinnedRun) ? (
           <p className="px-2 text-2xs text-muted-foreground">
-            {t('bots.automationPanel.runsStale', "Couldn't read newer runs.")}
+            {runs.status === 'error'
+              ? t('bots.automationPanel.runsFailed', "Couldn't read its runs.")
+              : runs.stale
+                ? t('bots.automationPanel.runsStale', "Couldn't read newer runs.")
+                : t(
+                    'bots.automationPanel.moreRunsFailed',
+                    "Couldn't read older runs. Try Show more again."
+                  )}
           </p>
         ) : null}
         {runs.capped ? (

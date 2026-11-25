@@ -14,11 +14,7 @@ import {
 import { recordAutomationSavedCard } from '../../../automation-saved-card'
 import { deleteAutomationRecordingCancelledWait } from '../../../../bots/bot-wait-cancel'
 import { LOOK_AROUND_REFUSAL } from '../../../../bots/bot-look-around-policy'
-import {
-  automationForClient,
-  readsGoogleRules,
-  unchangedSinceForClient
-} from '../../google-rules-for-client'
+import { automationForClient, readsGoogleRules } from '../../google-rules-for-client'
 import { targetInCallerChat } from './runs-in-caller-chat'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { onceClaimed } from '../../../../../shared/automation-once'
@@ -143,11 +139,6 @@ export const AUTOMATION_METHODS = [
       const automation = await context.runtime.updateAutomation(params.id, params.updates, {
         expectedOwner: mutationOwner(params.id, params.expectedOwner, context),
         destination: params.destination,
-        unchangedSince: unchangedSinceForClient(
-          params.unchangedSince,
-          () => context.runtime.showAutomation(params.id),
-          context
-        ),
         expectedWorkspaceMode: params.expectedWorkspaceMode
       })
       const caller = chatOfCaller(params.callerSessionId, context)

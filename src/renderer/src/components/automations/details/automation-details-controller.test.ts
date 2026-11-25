@@ -10,13 +10,6 @@ import type { AutomationOwnerContinuity } from '../hosts/automation-host-owner'
 import { makeAutomation, makeRun } from '../automations-page-fixtures'
 import { AutomationDetailsController } from './automation-details-controller'
 import {
-  retainBotAutomationDraft,
-  readRetainedBotAutomationDraft,
-  clearRetainedBotAutomationDrafts
-} from '../../bots/bot-automation-drafts'
-import { buildAutomationEditDraft } from '../authoring/automation-edit-draft'
-import { botAutomationEditBase, botSectionBase } from '../authoring/automation-bot-section-save'
-import {
   AutomationMutationBusyError,
   AutomationOwnerChangedError,
   automationActionOutcomeUnknown,
@@ -30,7 +23,6 @@ const OWNER: AutomationOwnerRef = {
 const controllers: AutomationDetailsController[] = []
 afterEach(() => {
   controllers.splice(0).forEach((controller) => controller.dispose())
-  clearRetainedBotAutomationDrafts()
 })
 
 function automation(patch: Partial<Automation> = {}): Automation {
@@ -156,60 +148,6 @@ describe('AutomationDetailsController reads', () => {
       '1'
     ])
     expect(h.controller.getSnapshot().runs.nextCursor).toBeNull()
-  })
-
-  it('shares retained payload admission across consumers and preserves accepted drafts', async () => {
-    const saved = automation()
-    const draft = {
-      section: 'when' as const,
-      draft: { ...buildAutomationEditDraft(saved), time: '10:30' },
-      savedAutomation: botAutomationEditBase(saved),
-      base: botSectionBase('when', saved)
-    }
-    retainBotAutomationDraft('kept', draft)
-    const first = harness()
-    const second = harness()
-    first.controller.start()
-    second.controller.start()
-    first.pages[0].resolve({
-      runs: [
-        {
-          ...run('large-first', 10),
-          outputSnapshot: {
-            format: 'plain_text',
-            content: 'x'.repeat(9 * 1024 * 1024),
-            capturedAt: 1,
-            truncated: false
-          }
-        }
-      ],
-      nextCursor: null
-    })
-    await flush()
-    second.pages[0].resolve({
-      runs: [
-        {
-          ...run('large-second', 10),
-          outputSnapshot: {
-            format: 'plain_text',
-            content: 'y'.repeat(9 * 1024 * 1024),
-            capturedAt: 1,
-            truncated: false
-          }
-        }
-      ],
-      nextCursor: null
-    })
-    await flush()
-    expect(second.controller.getSnapshot().runs).toMatchObject({ value: [], capped: true })
-    expect(readRetainedBotAutomationDraft('kept')?.draft.time).toBe('10:30')
-    expect(
-      retainBotAutomationDraft('kept', {
-        ...draft,
-        draft: { ...draft.draft, customSchedule: 'z'.repeat(20 * 1024 * 1024) }
-      })
-    ).toBe(false)
-    expect(readRetainedBotAutomationDraft('kept')?.draft.time).toBe('10:30')
   })
 
   it('keeps the server cursor order for paged rows whose creation times tie', async () => {
@@ -488,6 +426,137 @@ describe('AutomationDetailsController selected run', () => {
 })
 
 describe('AutomationDetailsController paging', () => {
+  it('rebases an unexpanded window before accepting an older page from its old cursor', async () => {
+    const h = harness()
+    h.controller.start()
+    h.pages[0].resolve({
+      runs: [10, 9, 8, 7, 6].map((id) => run(String(id), id)),
+      nextCursor: 'after-6'
+    })
+    await flush()
+    h.controller.loadMore()
+    h.controller.reload()
+    h.pages[2].resolve({
+      runs: [11, 10, 9, 8, 7].map((id) => run(String(id), id)),
+      nextCursor: 'after-7'
+    })
+    await flush()
+    h.pages[1].resolve({ runs: [run('5', 5)], nextCursor: null })
+    await flush()
+    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
+      '11',
+      '10',
+      '9',
+      '8',
+      '7'
+    ])
+    expect(h.controller.getSnapshot().runs).toMatchObject({
+      nextCursor: 'after-7',
+      loadingMore: false
+    })
+    h.controller.loadMore()
+    h.pages[3].resolve({ runs: [run('6', 6)], nextCursor: 'after-6' })
+    await flush()
+    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
+      '11',
+      '10',
+      '9',
+      '8',
+      '7',
+      '6'
+    ])
+  })
+
+  it('rebases exhausted history on a disjoint refresh and retains a byte-short overlapping page', async () => {
+    const h = harness()
+    h.controller.start()
+    h.pages[0].resolve({
+      runs: [10, 9, 8, 7, 6].map((id) => run(String(id), id)),
+      nextCursor: 'after-6'
+    })
+    await flush()
+    h.controller.loadMore()
+    h.pages[1].resolve({ runs: [5, 4, 3, 2, 1].map((id) => run(String(id), id)), nextCursor: null })
+    await flush()
+    h.controller.reload()
+    h.pages[2].resolve({
+      runs: [16, 15, 14, 13, 12].map((id) => run(String(id), id)),
+      nextCursor: 'after-12'
+    })
+    await flush()
+    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
+      '16',
+      '15',
+      '14',
+      '13',
+      '12'
+    ])
+    expect(h.controller.getSnapshot().runs.nextCursor).toBe('after-12')
+    h.controller.loadMore()
+    h.pages[3].resolve({ runs: [run('11', 11)], nextCursor: 'after-11' })
+    await flush()
+    h.controller.reload()
+    h.pages[4].resolve({ runs: [run('17', 17), run('16', 16)], nextCursor: 'after-16' })
+    await flush()
+    expect(h.controller.getSnapshot().runs.value.map((run) => run.id)).toEqual([
+      '17',
+      '16',
+      '15',
+      '14',
+      '13',
+      '12',
+      '11'
+    ])
+    expect(h.controller.getSnapshot().runs.nextCursor).toBe('after-11')
+  })
+
+  it('settles an acknowledged run from an older page without duplicating it', async () => {
+    const h = harness()
+    await h.controller.startRun(async () => ({ ...run('ack', 6), status: 'dispatched' }))
+    h.pages[0].resolve({
+      runs: [11, 10, 9, 8, 7].map((id) => run(String(id), id)),
+      nextCursor: 'after-7'
+    })
+    await flush()
+    h.controller.loadMore()
+    h.pages[1].resolve({ runs: [{ ...run('ack', 6), status: 'completed' }], nextCursor: null })
+    await flush()
+    expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
+    expect(h.controller.getSnapshot().runs.value.map((run) => [run.id, run.status])).toEqual([
+      ['11', 'completed'],
+      ['10', 'completed'],
+      ['9', 'completed'],
+      ['8', 'completed'],
+      ['7', 'completed'],
+      ['ack', 'completed']
+    ])
+  })
+
+  it('invalidates reads across disposal and releases a settled mutation before restarting', async () => {
+    const h = harness()
+    h.controller.start()
+    const change = deferred<Automation>()
+    const saving = h.controller.mutate(
+      () => change.promise,
+      (next) => next
+    )
+    h.controller.dispose()
+    change.resolve(automation({ enabled: false }))
+    await saving
+    h.controller.start()
+    h.shows[0].resolve(automation({ name: 'obsolete' }))
+    h.pages[0].resolve({ runs: [run('obsolete', 1)], nextCursor: null })
+    await flush()
+    expect(h.controller.getSnapshot().definition.value).toBeNull()
+    expect(h.controller.getSnapshot().runs.value).toEqual([])
+    await expect(
+      h.controller.mutate(
+        async () => automation(),
+        (next) => next
+      )
+    ).resolves.toMatchObject({ id: 'a1' })
+  })
+
   it('drops an older page that arrives after its owner is retired', async () => {
     const h = harness()
     h.controller.start()

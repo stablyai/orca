@@ -34,8 +34,7 @@ export function AutomationDeleteDialog({
   onCancel,
   onConfirm,
   onCloseAutoFocus,
-  confirmDisabledReason,
-  initialFocus = 'confirm'
+  confirmDisabledReason
 }: {
   deleteTarget: AutomationDeleteTarget | null
   dontAskDeleteAgain: boolean
@@ -48,8 +47,6 @@ export function AutomationDeleteDialog({
   onCloseAutoFocus?: (event: Event) => void
   /** Delete can't run now, and why (its host is offline); Cancel still closes. */
   confirmDisabledReason?: string | null
-  /** Where focus lands on open; a side panel starts on Cancel so Enter can't delete by accident. */
-  initialFocus?: 'confirm' | 'cancel'
 }): React.JSX.Element {
   const t = useTranslate()
   const reasonId = useId()
@@ -66,14 +63,13 @@ export function AutomationDeleteDialog({
       {t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
     </Button>
   )
-  const cancelButtonRef = React.useRef<HTMLButtonElement>(null)
   return (
     <Dialog open={deleteTarget !== null} onOpenChange={onOpenChange}>
       <DialogContent
         className="max-w-md"
         onOpenAutoFocus={(event) => {
           event.preventDefault()
-          ;(initialFocus === 'cancel' ? cancelButtonRef : confirmButtonRef).current?.focus()
+          confirmButtonRef.current?.focus()
         }}
         onCloseAutoFocus={onCloseAutoFocus}
       >
@@ -132,7 +128,7 @@ export function AutomationDeleteDialog({
           {t('auto.components.automations.AutomationsPage.1e2e41392f', "Don't ask again")}
         </button>
         <DialogFooter>
-          <Button ref={cancelButtonRef} variant="outline" onClick={onCancel}>
+          <Button variant="outline" onClick={onCancel}>
             {t('auto.components.automations.AutomationsPage.73f630b49d', 'Cancel')}
           </Button>
           {confirmDisabledReason ? (

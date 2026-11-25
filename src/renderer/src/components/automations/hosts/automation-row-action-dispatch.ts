@@ -1,4 +1,3 @@
-import type { AutomationUpdateGuard } from './automation-update-guard'
 /** Prefer captured ownership, refuse qualified non-executable rows, and use unfenced fallback only when metadata was never captured, preserving mixed-version clients. */
 
 import type {
@@ -111,8 +110,7 @@ export async function dispatchAutomationUpdate(
   updates: AutomationUpdateInput,
   legacy: () => Promise<Automation>,
   action: AutomationRowAction = 'toggle',
-  destination?: AutomationDestination,
-  guard?: AutomationUpdateGuard
+  destination?: AutomationDestination
 ): Promise<AutomationDispatchResult<Automation>> {
   return await dispatch(
     context,
@@ -124,8 +122,7 @@ export async function dispatchAutomationUpdate(
         capturedAutomationOwner(context.capturedOwners, row.rowKey).authority ?? context.authority,
         row.automationId,
         updates,
-        destination,
-        guard
+        destination
       ),
     legacy
   )

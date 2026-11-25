@@ -8,6 +8,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-rows'
 import type { BotOnHost, BotRef } from '@/lib/bot-hosts'
+import { botAutomationRowOwner } from '../automations/hosts/bot-automation-row-owner'
 import { openBotAutomation } from './bot-automation-open'
 import { BotItemNumberColumn } from './items/BotItemNumberColumn'
 import { BotRowHoverCard } from './BotPanelRow'
@@ -203,6 +204,7 @@ export const StoppedForSignInRow = memo(function StoppedForSignInRow({
         onOpen: () =>
           openBotAutomation({
             bot,
+            ...(bot ? { owner: botAutomationRowOwner(automation, bot) } : {}),
             automationId: automation.id,
             runId: latestRunId ?? null,
             hostId,

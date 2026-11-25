@@ -11,6 +11,8 @@ import {
   AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
   AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY
 } from '../../../../../shared/automations/automation-runtime-capabilities'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
@@ -143,13 +145,25 @@ export async function assertOwnerFencingSupported(
 
 export async function assertAutomationHistorySupported(
   authority: AutomationAuthorityRef
-): Promise<void> {
-  await assertAuthorityCapability(
-    authority,
-    AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY,
-    'Update Orca on this computer to read automation history here.',
-    { cacheConfirmation: false }
+): Promise<string | undefined> {
+  if (authority.kind === 'desktop') {
+    return undefined
+  }
+  const status = await callRuntimeRpc<RuntimeStatus>(
+    { kind: 'environment', environmentId: authority.environmentId },
+    'status.get',
+    undefined,
+    { timeoutMs: REQUEST_TIMEOUT_MS, expectedEnvironmentPairingRevision: authority.pairingRevision }
   )
+  if (
+    !status.runtimeId ||
+    !status.capabilities?.includes(AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY)
+  ) {
+    throw new AutomationHostScopeUnsupportedError(
+      'Update Orca on this computer to read automation history in the panel or Automations page.'
+    )
+  }
+  return status.runtimeId
 }
 
 export async function assertAutomationCreateIdempotencySupported(
