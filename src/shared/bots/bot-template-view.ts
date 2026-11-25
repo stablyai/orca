@@ -1,4 +1,5 @@
-import { BOT_NAME_MAX_LENGTH, botFolderName } from '../bot-types'
+import { BOT_NAME_MAX_LENGTH } from '../bot-types'
+import { botFolderName } from './bot-folder-name'
 import {
   BOT_CONNECTOR_NAMES,
   BOT_TEMPLATE_CATEGORIES,

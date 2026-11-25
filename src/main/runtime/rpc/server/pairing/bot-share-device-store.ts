@@ -19,6 +19,9 @@ import { BOT_SHARE_DEVICES_FILENAME } from './mobile-pairing-files'
 
 export type BotShareGrant = { botId: string; accountId: string; name: string }
 
+/** Whether the share a row stands on is still on the bot's list; a row without one signs in as nothing. */
+export type BotShareGranted = (grant: Pick<BotShareGrant, 'botId' | 'accountId'>) => boolean
+
 export type BotShareDevice = BotShareGrant & {
   deviceId: string
   /** `runtime`: the teammate's desktop; `mobile`: a phone that desktop provisioned (`parentDeviceId`). */
@@ -73,7 +76,10 @@ export class BotShareDeviceStore {
   private unparsedRows: unknown[] = []
   private writing: Promise<void> = Promise.resolve()
 
-  constructor(userDataPath: string) {
+  constructor(
+    userDataPath: string,
+    private readonly granted: BotShareGranted
+  ) {
     this.path = join(userDataPath, BOT_SHARE_DEVICES_FILENAME)
     this.load()
   }
@@ -95,7 +101,7 @@ export class BotShareDeviceStore {
       // A client erases its key on unknown, so only a whole read may say so.
       return this.doubtful ? { kind: 'unavailable' } : { kind: 'unknown' }
     }
-    return this.withParent(device) ? { kind: 'found', device } : { kind: 'refused' }
+    return this.signsIn(device) ? { kind: 'found', device } : { kind: 'refused' }
   }
 
   /** A signed-in socket's row as it is now: gone, or no longer the same grant, refuses it. */
@@ -104,7 +110,7 @@ export class BotShareDeviceStore {
     return device &&
       device.botId === grant.botId &&
       device.accountId === grant.accountId &&
-      this.withParent(device)
+      this.signsIn(device)
       ? device
       : null
   }
@@ -168,8 +174,13 @@ export class BotShareDeviceStore {
     return bound
   }
 
-  private withParent(device: BotShareDevice): boolean {
-    return device.parentDeviceId === undefined || this.get(device.parentDeviceId) !== null
+  /** Its parent row is still here and its share still on the bot's list: a removed teammate's
+   *  leftover row (a revoke that failed or raced an accept) refuses every frame and reconnect. */
+  private signsIn(device: BotShareDevice): boolean {
+    return (
+      (device.parentDeviceId === undefined || this.get(device.parentDeviceId) !== null) &&
+      this.granted(device)
+    )
   }
 
   private load(): void {

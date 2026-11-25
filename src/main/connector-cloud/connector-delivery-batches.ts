@@ -13,9 +13,23 @@ import {
   type DispatchedDelivery,
   type DispatchMachine,
   type RequestDelivery,
-  type SendDelivery,
-  type ThreadDelivery
+  type SendDelivery
 } from './connector-deliveries'
+
+const THREADLESS_KINDS = [
+  'trigger',
+  'webhook_notice',
+  'pr_event',
+  'share_resolved',
+  'share_accept'
+] as const
+const THREADLESS: ReadonlySet<string> = new Set(THREADLESS_KINDS)
+type ThreadDelivery = Exclude<ConnectorDelivery, { kind: (typeof THREADLESS_KINDS)[number] }>
+
+/** A delivery of a thread's conversation, which a thread's later sends may join. */
+function isThreadDelivery(delivery: ConnectorDelivery): delivery is ThreadDelivery {
+  return !THREADLESS.has(delivery.kind)
+}
 
 /** A start or send and the sends queued right behind it in the same poll: the same person's, run
  *  as one turn. Anything else, and a send that is its own bare mention, goes on its own. */
@@ -39,12 +53,7 @@ export function connectorDeliveryUnits(
   for (const raw of raws) {
     const parsed = ConnectorDelivery.safeParse(raw)
     const delivery = parsed.success ? parsed.data : null
-    if (
-      !delivery ||
-      delivery.kind === 'trigger' ||
-      delivery.kind === 'webhook_notice' ||
-      delivery.kind === 'pr_event'
-    ) {
+    if (!delivery || !isThreadDelivery(delivery)) {
       units.push({ raw })
       continue
     }

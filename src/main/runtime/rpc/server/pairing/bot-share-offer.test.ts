@@ -10,7 +10,10 @@ import { mintBotShareOffer } from './bot-share-offer'
 const RELAY_HOST = 'AbCdEf0123_-xyZ9'
 
 function setup() {
-  const store = new BotShareDeviceStore(mkdtempSync(join(tmpdir(), 'orca-share-offer-')))
+  const store = new BotShareDeviceStore(
+    mkdtempSync(join(tmpdir(), 'orca-share-offer-')),
+    () => false
+  )
   let invites = 0
   const createPairingRelay = vi.fn(async (relayDeviceId: string) => {
     invites += 1

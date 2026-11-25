@@ -6,6 +6,7 @@ import nacl from 'tweetnacl'
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
+import { revokeDeletedBotShareDevices } from '../../../bots/team-share/bot-share-access'
 
 const key = () => Buffer.from(nacl.sign.keyPair().publicKey).toString('base64')
 
@@ -119,5 +120,55 @@ describe('revoking a teammate’s share devices', () => {
       await server.stop()
       rmSync(userDataPath, { recursive: true, force: true })
     }
+  })
+
+  it('ends every teammate’s devices on a deleted bot, through the server the runtime holds', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-share-revoke-'))
+    const runtime = new OrcaRuntimeService()
+    const server = new OrcaRuntimeRpcServer({
+      runtime,
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0
+    })
+    await server.start()
+    try {
+      const shares = server.getBotShareDevices()!
+      const grant = { botId: 'bot-1', accountId: 'acct-alice', name: 'Alice' }
+      await shares.add({ ...grant, scope: 'runtime', devicePublicKeyB64: key() })
+      await shares.add({
+        ...grant,
+        accountId: 'acct-bob',
+        name: 'Bob',
+        scope: 'runtime',
+        devicePublicKeyB64: key()
+      })
+      const otherBot = await shares.add({
+        ...grant,
+        botId: 'bot-2',
+        scope: 'runtime',
+        devicePublicKeyB64: key()
+      })
+
+      await revokeDeletedBotShareDevices(runtime.botShareDevices, 'bot-1')
+
+      expect(shares.list().map((device) => device.deviceId)).toEqual([otherBot.deviceId])
+    } finally {
+      await server.stop()
+      rmSync(userDataPath, { recursive: true, force: true })
+    }
+  })
+
+  it('logs a failed revoke on delete instead of rejecting', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const devices = {
+      mintBotShareOffer: vi.fn(),
+      revokeBotShareDevices: vi.fn(async () => {
+        throw new Error('disk full')
+      })
+    }
+    await expect(revokeDeletedBotShareDevices(devices, 'bot-1')).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalledOnce()
+    warn.mockRestore()
   })
 })

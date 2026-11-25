@@ -14,6 +14,8 @@ import {
   DEVICE_REGISTRY_FILENAME
 } from '../server/pairing/mobile-pairing-files'
 import { BotShareDeviceStore } from '../server/pairing/bot-share-device-store'
+import { botSharedWithAccount } from '../../../bots/team-share/bot-share-access'
+import type { Bot } from '../../../../shared/bot-types'
 import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/testing/simulated-mobile-e2ee-v2-peer'
 import { registerSocketDeviceKey } from '../server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
@@ -275,11 +277,28 @@ describe('device-key authentication (host)', () => {
       basisConnId: 'basis',
       credentialKind: 'resume'
     })
+    const sharedWithAlice = (): Pick<Bot, 'id' | 'shares'>[] => [
+      {
+        id: 'bot-1',
+        shares: [
+          {
+            kind: 'account',
+            shareId: 'share-alice',
+            accountId: 'acct-alice',
+            email: 'alice@example.com',
+            addedAt: 1
+          }
+        ]
+      }
+    ]
+    // The store as the server makes it: rows stand on the bot's share list.
+    const shareStore = (dir: string, bots: () => readonly Pick<Bot, 'id' | 'shares'>[]) =>
+      new BotShareDeviceStore(dir, (grant) => botSharedWithAccount(bots(), grant))
 
     it('signs in as its one-bot grant, never as a paired device, and is cut off once removed', async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))
       const registry = new DeviceRegistry(dir)
-      const shares = new BotShareDeviceStore(dir)
+      const shares = shareStore(dir, sharedWithAlice)
       const key = nacl.sign.keyPair()
       const device = await shares.add({
         botId: 'bot-1',
@@ -316,6 +335,38 @@ describe('device-key authentication (host)', () => {
       })
     })
 
+    it('refuses a removed teammate whose device row is still on disk, every frame and every reconnect', async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))
+      const registry = new DeviceRegistry(dir)
+      let bots = sharedWithAlice()
+      const shares = shareStore(dir, () => bots)
+      const key = nacl.sign.keyPair()
+      const device = await shares.add({
+        botId: 'bot-1',
+        accountId: 'acct-alice',
+        name: 'Alice',
+        scope: 'runtime',
+        devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64')
+      })
+      const keyAuth = (hash: string) => ({
+        deviceId: device.deviceId,
+        deviceProofB64: sign(key, 'auth', hash)
+      })
+      const { connect, transport } = harness(registry, relay(device.deviceId), shares)
+      const signedIn = connect(keyAuth)
+      expect(signedIn.reply).toMatchObject({ type: 'e2ee_authenticated' })
+
+      // Removed from the list, while a revoke that failed (or raced an accept) left the row.
+      bots = [{ id: 'bot-1', shares: [] }]
+      expect(shares.get(device.deviceId)).not.toBeNull()
+      transport.receive(signedIn.ws, signedIn.peer.sealText('{}'))
+      expect(signedIn.ws.close).toHaveBeenCalledWith(4001, 'Unauthorized')
+      expect(harness(registry, relay(device.deviceId), shares).connect(keyAuth).reply).toEqual({
+        type: 'e2ee_error',
+        error: { code: 'unauthorized' }
+      })
+    })
+
     it('refuses a malformed row without telling the client its key is gone', () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-share-key-'))
       const key = nacl.sign.keyPair()
@@ -330,7 +381,7 @@ describe('device-key authentication (host)', () => {
       // No botId: a row this build can't fully read grants nothing, and is never a phone.
       writeFileSync(join(dir, BOT_SHARE_DEVICES_FILENAME), JSON.stringify({ v: 1, devices: [row] }))
       const registry = new DeviceRegistry(dir)
-      const { connect } = harness(registry, undefined, new BotShareDeviceStore(dir))
+      const { connect } = harness(registry, undefined, shareStore(dir, sharedWithAlice))
       const refused = connect((hash) => ({
         deviceId: row.deviceId,
         deviceProofB64: sign(key, 'auth', hash)

@@ -16,6 +16,8 @@ export type RuntimeRpcClientActivity = {
 export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
   constructor(options: OrcaRuntimeRpcServerOptions) {
     super(options)
+    // Its share device store owns teammates' devices; the share list and connector reach them here.
+    this.runtime.botShareDevices = this
   }
 
   /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */

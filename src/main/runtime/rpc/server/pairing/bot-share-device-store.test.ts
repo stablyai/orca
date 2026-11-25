@@ -15,7 +15,7 @@ describe('the share device file', () => {
     // A newer build's row: unreadable here, but maybe a teammate's working device.
     const unknown = { deviceId: 'newer', botId: 'bot-1', kind: 'from-the-future' }
     writeFileSync(path, JSON.stringify({ v: 1, devices: [unknown] }))
-    const store = new BotShareDeviceStore(dir)
+    const store = new BotShareDeviceStore(dir, () => false)
     await store.add({
       botId: 'bot-1',
       accountId: 'acct-carol',
@@ -28,6 +28,8 @@ describe('the share device file', () => {
       devices: [expect.objectContaining({ accountId: 'acct-carol' }), unknown]
     })
     // Still unread after a restart, so its device is never told it was revoked.
-    expect(new BotShareDeviceStore(dir).lookupDeviceKey('newer')).toEqual({ kind: 'unavailable' })
+    expect(new BotShareDeviceStore(dir, () => false).lookupDeviceKey('newer')).toEqual({
+      kind: 'unavailable'
+    })
   })
 })
