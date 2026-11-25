@@ -2737,6 +2737,10 @@
             "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
             "restoredMoved": "Forwarded port {{port}} from {{host}} to localhost:{{localPort}}",
             "restoredMovedReason": "localhost:{{previousPort}} is in use on this computer."
+          },
+          "forwardedUrl": {
+            "openedIpv4": "Opened 127.0.0.1:{{port}} instead of localhost",
+            "openedIpv4Reason": "Another app on this computer uses localhost:{{port}}."
           }
         }
       },

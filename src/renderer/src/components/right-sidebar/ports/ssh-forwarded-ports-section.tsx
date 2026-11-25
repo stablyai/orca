@@ -13,6 +13,7 @@ import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import type { PortForwardDialogState } from './ssh-port-forward-dialog'
 import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
 import { portForwardOwnerKey, type PortForwardOwner } from './port-forward-owner'
+import { openForwardedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
 
 const NO_FORWARDS: readonly PortForwardEntry[] = []
 const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
@@ -79,7 +80,11 @@ export function SshForwardedPortsSection({
                 onEdit={() => onOpenDialog({ mode: 'edit', owner, entry })}
                 // Use the system browser: this forward listens locally, while Orca’s browser may run on another host.
                 onOpenInBrowser={() =>
-                  void window.api.shell.openUrl(browserUrlForPortForwardEntry(entry))
+                  void openForwardedUrlInSystemBrowser(
+                    browserUrlForPortForwardEntry(entry),
+                    entry,
+                    owner.kind === 'ssh' ? 'ssh' : 'paired'
+                  )
                 }
               />
             ))}
