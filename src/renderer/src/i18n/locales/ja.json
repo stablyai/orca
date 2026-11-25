@@ -20839,7 +20839,6 @@
         "showQuestion": "{{name}} の質問を表示",
         "show": "表示",
         "runningCount": "実行中 {{count}} 件",
-        "cleared_other": "ワーカー {{count}} 件をクリアしました",
         "stopAll": "すべて停止",
         "clearFailed": "失敗したものをクリア",
         "unlistedDetail": "一部のバックグラウンド処理はここに表示されません",

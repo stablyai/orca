@@ -20791,8 +20791,6 @@
         "showQuestion": "Frage von {{name}} anzeigen",
         "show": "Anzeigen",
         "runningCount": "{{count}} laufend",
-        "cleared_one": "1 Worker entfernt",
-        "cleared_other": "{{count}} Worker entfernt",
         "stopAll": "Alle stoppen",
         "clearFailed": "Fehlgeschlagene entfernen",
         "unlistedDetail": "Einige Hintergrundarbeiten werden hier nicht aufgeführt",

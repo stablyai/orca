@@ -3131,8 +3131,6 @@
       "workerDock": {
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
-        "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
         "workerCount_one": "{{count}} worker",

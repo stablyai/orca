@@ -21869,8 +21869,6 @@
         "showQuestion": "{{name}} 질문 표시",
         "show": "표시",
         "runningCount": "{{count}}개 실행 중",
-        "cleared_one": "워커 1개를 지웠습니다",
-        "cleared_other": "워커 {{count}}개를 지웠습니다",
         "stopAll": "모두 중지",
         "clearFailed": "실패한 워커 지우기",
         "unlisted": "백그라운드 작업 실행 중",
