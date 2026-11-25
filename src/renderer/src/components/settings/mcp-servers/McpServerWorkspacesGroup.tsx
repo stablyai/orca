@@ -26,17 +26,24 @@ import { showMcpServerChangeToast } from './mcp-server-change-toast'
 function CheckRow({
   id,
   checked,
+  disabled = false,
   onChange,
   children
 }: {
   id: string
   checked: boolean
+  disabled?: boolean
   onChange: (checked: boolean) => void
   children: React.ReactNode
 }): React.JSX.Element {
   return (
     <div data-settings-row="" className="flex min-h-11 items-center gap-3 py-2">
-      <Checkbox id={id} checked={checked} onCheckedChange={(next) => onChange(next === true)} />
+      <Checkbox
+        id={id}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(next) => onChange(next === true)}
+      />
       <label htmlFor={id} className="flex min-w-0 flex-1 items-center gap-2 text-sm">
         {children}
       </label>
@@ -113,6 +120,9 @@ export function McpServerWorkspacesGroup({
       <CheckRow
         id="mcp-workspaces-later"
         checked={chosen.later}
+        // Flipping it writes out every known workspace's state; before the host lists them, that
+        // would turn off the ones on only through "added later".
+        disabled={workspaces.length === 0}
         onChange={(later) =>
           save(
             withMcpWorkspacesLater(
