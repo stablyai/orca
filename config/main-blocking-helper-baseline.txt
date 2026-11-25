@@ -66,10 +66,9 @@
 1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-chat-sign-in.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-3 src/main/antigravity/native-account-launch.ts
+2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -96,12 +95,12 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
-2 src/main/bots/bot-structured-session-wiring.ts
+1 src/main/bots/bot-structured-session-wiring.ts
 14 src/main/bots/bot-tool-credentials.ts
-2 src/main/bots/bot-tool-details.ts
+3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
 3 src/main/bots/bot-tool-secret-scrub.ts
-2 src/main/bots/bot-tools-claude.ts
-20 src/main/bots/bot-tools-file.ts
+4 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: the user and per-folder config reads readClaudeInheritedTools and readClaudeMirror already do, once per chat launch that has host servers
+21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys
 13 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
@@ -220,7 +219,7 @@
 3 src/main/claude/hooks/windows-hook-files.ts
 2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
-1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
+2 src/main/claude/structured/launch/claude-structured-launch-resolution.ts # claudeOwnServerNames: one config-file lookup per launch, only when the host list adds servers
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
 1 src/main/claude/transcripts/claude-conversation-copy.ts
@@ -292,7 +291,7 @@
 27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
-2 src/main/codex/configuration/settings/config-settings-baseline.ts
+3 src/main/codex/configuration/settings/config-settings-baseline.ts # same one sync write, now temp file plus rename so a cut-off write keeps the old baseline
 2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedAncestor: realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable, so a host ~/.codex linked into a WSL distro is never written (#45247)
 9 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
@@ -512,7 +511,6 @@
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
-6 src/main/gemini/hook-service.ts
 1 src/main/git/command-runner/git-environment/git-ssh-policy-env.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 3 src/main/git/command-runner/git-exec-file.ts
@@ -756,6 +754,11 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+1 src/main/mcp-servers/agent-files/mcp-agent-file-sync.ts # resolves this app's CLI launcher once when the sync starts (the Linux packaged shim check)
+1 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect
+3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+1 src/main/mcp-servers/session-mcp-launch.ts # the bot launch read of its tools file, moved here from bot-tools-file.ts
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
@@ -1044,7 +1047,6 @@
 1 src/main/provider-process/provider-ownership-journal.ts
 1 src/main/provider-process/provider-process-spawn.ts
 1 src/main/provider-process/supervised-provider-child-location.ts
-2 src/main/providers/accounts/provider-account-services.ts
 1 src/main/providers/execution-host-provider-dispatch.ts
 2 src/main/providers/foreground/agent-process.ts
 1 src/main/providers/foreground/windows/process-rows.ts
@@ -1113,7 +1115,7 @@
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
-2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts # claudeStructuredLaunchPart now names claudeOwnServerNames (one config lookup per launch with host servers)
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
 2 src/main/runtime/agent-session/installation/structured-agent-session-runtime.ts
@@ -1219,7 +1221,6 @@
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
 2 src/main/runtime/rpc/dispatcher.ts
-4 src/main/runtime/rpc/methods/accounts/antigravity-accounts.ts
 3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
 11 src/main/runtime/rpc/methods/bots-tools.ts
@@ -1230,6 +1231,8 @@
 1 src/main/runtime/rpc/methods/host-management/environment-doctor.ts
 1 src/main/runtime/rpc/methods/host-management/host-capabilities.ts
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
+3 src/main/runtime/rpc/methods/mcp-servers-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+3 src/main/runtime/rpc/methods/mcp-servers.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts

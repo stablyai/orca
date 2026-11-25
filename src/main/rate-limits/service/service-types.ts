@@ -64,8 +64,6 @@ export type ZcodePlanResolvedConfig = {
   error: string | null
 }
 
-export type GeminiCliOAuthEnabledResolver = () => boolean
-
 export type AntigravityUsageEnabledResolver = () => boolean
 export type ClaudeOAuthUsageEnabledResolver = () => boolean
 export type MuseUsageEnabledResolver = () => boolean
@@ -108,7 +106,6 @@ export const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 export type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null

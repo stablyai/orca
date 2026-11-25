@@ -128,17 +128,23 @@ export class MobileRelaySessionEstablisher {
     if (!args.isActive() || !bundle) {
       return { ok: false, error: new RelayDialAbortedError() }
     }
-    const session = args.openRelay(
-      this.relay,
-      credential,
-      `confirm-${encodeBase64Url(args.randomBytes(16))}`,
-      // Read the controller latch because close reasons can arrive after the dial failed; only connection clears it.
-      (reason) => {
-        if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
-          args.controller.assertHostReachability('signed-out')
+    let session: ReturnType<typeof args.openRelay>
+    try {
+      session = args.openRelay(
+        this.relay,
+        credential,
+        `confirm-${encodeBase64Url(args.randomBytes(16))}`,
+        // Read the controller latch because close reasons can arrive after the dial failed; only connection clears it.
+        (reason) => {
+          if (reason === RELAY_HOST_CLOSE_REASON.SIGNED_OUT) {
+            args.controller.assertHostReachability('signed-out')
+          }
         }
-      }
-    )
+      )
+    } catch (error) {
+      // Why: a socket constructor throw is a failed dial; it must book a retry, not reject the recovery.
+      return { ok: false, error: toError(error) }
+    }
     try {
       // Why: backgrounding or a direct winner withdraws this dial before cutover.
       await args.logical.migrateTo(

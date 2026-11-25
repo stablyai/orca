@@ -23,6 +23,7 @@ import { getOrcaManagedCodexHomePath } from '../codex/configuration/homes/codex-
 import { hydrateAgentCliShellPath } from '../agent-hooks/installation/local-agent-cli-presence'
 import { isAgentStatusHooksEnabledForAgent } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/installation/managed-agent-hook-startup'
+import { startMcpAgentFileSync } from '../mcp-servers/agent-files/mcp-agent-file-sync'
 import { shouldInstallManagedHooks } from '../startup/configure-process'
 import { installFirstWorkRenameHookSubscription } from '../agent-hooks/first-work/first-work-rename-hook-subscription'
 import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
@@ -289,6 +290,8 @@ export async function composeDesktopCore(
   void providerMaintenanceReady.then(() =>
     startCodexStateDbBackfillRecoveryInBackground(getOrcaManagedCodexHomePath())
   )
+  // Grok's, Cursor's and Droid's own MCP files follow the host list; off with the MCP servers switch.
+  void providerMaintenanceReady.then(() => deps.registerCleanup(startMcpAgentFileSync()))
   // Register launch reconciliation now; defer background probes and scratch cleanup until first paint.
   startCodexHooks({
     startAfter: providerMaintenanceReady,

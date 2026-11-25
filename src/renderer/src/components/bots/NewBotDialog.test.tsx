@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import { NewBotDialog } from './NewBotDialog'
+import { NewBotPurposeField } from './NewBotPurposeField'
 
 vi.mock('@/lib/bot-catalog', () => ({
   createBot: async () => ({ id: 'bot-1', name: 'Pebble', hostId: 'local' }),
@@ -67,3 +68,37 @@ it.each(['Close', 'Create'])(
     expect(await openGenerate()).toHaveProperty('value', '')
   }
 )
+
+it('marks a cleared box over an over-limit proposal purpose as the name marks a missing name', async () => {
+  vi.stubGlobal('api', {})
+  render(
+    <TooltipProvider>
+      <NewBotDialog
+        open
+        onOpenChange={() => {}}
+        proposal={{ name: 'Pebble', purpose: 'x'.repeat(1250) }}
+      />
+    </TooltipProvider>
+  )
+  const identity = await screen.findByRole('textbox', { name: 'Identity' })
+  fireEvent.change(identity, { target: { value: '' } })
+  fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } })
+  fireEvent.click(screen.getByRole('button', { name: /Create/ }))
+
+  const [name, tooLong] = await screen.findAllByRole('alert')
+  expect(tooLong.textContent).toBe('Too long · 1250/1000')
+  expect(identity.getAttribute('aria-invalid')).toBe('true')
+  expect(identity.getAttribute('aria-describedby')).toBe(tooLong.id)
+  // Reads as the name's own reason line.
+  expect(tooLong.className).toBe(name.className)
+})
+
+it('shows the count from 80% of the limit', () => {
+  const field = (value: string) =>
+    render(<NewBotPurposeField value={value} tooLong={false} sentLength={0} onChange={() => {}} />)
+  field('x'.repeat(799))
+  expect(screen.queryByText('799/1000')).toBeNull()
+  cleanup()
+  field('x'.repeat(800))
+  expect(screen.getByText('800/1000')).toBeTruthy()
+})

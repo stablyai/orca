@@ -1547,7 +1547,6 @@
       "statusBar": {
         "claudeToggleDescription": "Mostra o uso de tokens e custo do Claude para o espaço de trabalho ativo.",
         "codexToggleDescription": "Mostra o uso de tokens e custo do Codex para o espaço de trabalho ativo.",
-        "geminiToggleDescription": "Mostra o uso de tokens e custo do Gemini para o espaço de trabalho ativo.",
         "opencodeGoToggleDescription": "Mostra o uso de tokens e custo do OpenCode Go para o espaço de trabalho ativo.",
         "kimiToggleDescription": "Mostra o uso da assinatura do Kimi para o espaço de trabalho ativo.",
         "minimaxToggleDescription": "Mostra o uso da assinatura do MiniMax para o espaço de trabalho ativo.",
@@ -1836,8 +1835,7 @@
         "title": "Provedores",
         "searchAgents": "agentes",
         "searchCli": "CLI",
-        "searchTerminal": "terminal",
-        "antigravityAccount": "Conta"
+        "searchTerminal": "terminal"
       },
       "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
       "launch": {
@@ -2761,7 +2759,6 @@
         "cd50cec5d7": "Coordene vários agentes de código através do Orca.",
         "58a868e8e4": "Orquestração",
         "7c79d3b7bf": "Opcional",
-        "b1c2f8b0ac": "Alternância de conta opcional e configuração de uso para Claude, Codex, Gemini, OpenCode Go, MiniMax e Grok.",
         "f70ac54d38": "Contas de Provedores de IA",
         "4121f7a0a2": "Gerencie agentes de IA, defina um padrão e personalize comandos.",
         "b49abbd2f7": "Agentes",
@@ -2840,7 +2837,6 @@
           "8da11d876c": "Goose",
           "b32627f09b": "Aider",
           "691dd11789": "Antigravity",
-          "12e6baa4f7": "Gemini",
           "09973b4d84": "OMP",
           "302934c5d9": "Pi",
           "e7a4ca5103": "OpenCode",
@@ -3670,9 +3666,6 @@
             "runtime_last_close_reason": "Fechado: {{value0}}",
             "runtime_reconnect_attempt": "Tentativa {{value0}}",
             "runtime_workspace_window_closed": "Janela do espaço de trabalho fechada",
-            "connectedHostCount_one": "{{count}} host",
-            "connectedHostCount_other": "{{count}} hosts",
-            "connectedHostCount_many": "{{count}} hosts",
             "searchSshHosts": "Buscar hosts SSH…",
             "noMatchingSshHosts": "Nenhum host SSH encontrado.",
             "moreSshHostMatches_one": "Mais {{count}} resultado. Continue digitando para refinar a busca.",
@@ -3688,7 +3681,6 @@
             "24ac89df1a": "Hosts Remotos",
             "5e59007df4": "Uso do Kimi",
             "8c86cd77b0": "Uso do OpenCode Go",
-            "c1df0d67ec": "Uso do Gemini",
             "c0909c686e": "Uso do Codex",
             "3885eb74d8": "Uso do Claude",
             "c8857b40f7": "Atualizar dados de uso",
@@ -4675,12 +4667,6 @@
           "67e3c33670": "Cookie de sessão do OpenCode Go",
           "ea631977b5": "Configure as opções do provedor OpenCode Go.",
           "4ac10b4d08": "OpenCode Go",
-          "c2aee76420": "Extrai as credenciais OAuth da sua instalação local da Gemini CLI para autenticar com o Google em {{value0}}. Isso usa credenciais emitidas para o app Gemini CLI, não para o Orca. Pode deixar de funcionar se o Google atualizar a CLI. Use por sua conta e risco.",
-          "96f3649526": "Usar credenciais da Gemini CLI (experimental)",
-          "d676c41fc6": "Extrai as credenciais OAuth da sua instalação local da Gemini CLI para autenticar com o Google. Isso usa credenciais emitidas para o app Gemini CLI, não para o Orca. Pode deixar de funcionar se o Google atualizar a CLI. Use por sua conta e risco.",
-          "0c7f915b01": "Usar credenciais da Gemini CLI",
-          "973741a871": "Configure as opções do provedor Gemini.",
-          "0c64dc2a64": "Gemini",
           "db209ee572": "Remover",
           "8a0f870153": "Reautenticar",
           "3d245ef7d9": "O Codex informou que este login está desatualizado",
@@ -4896,8 +4882,6 @@
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Mostra o uso de tokens e custo do OpenCode Go na barra de status.",
             "51b0ccd6a2": "google",
-            "2804a920ad": "gemini",
-            "9660c5b2f1": "Mostra o uso de tokens e custo do Gemini na barra de status.",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Mostra o uso de tokens e custo do Codex na barra de status.",
@@ -4971,7 +4955,6 @@
             "1b404ee6ad": "Mostrar Botão do Orca Mobile",
             "183e6b8ef9": "Uso do ZCode",
             "d408ece868": "Minimizar para a Bandeja ao Fechar",
-            "585be839e9": "Uso do Gemini",
             "20e7d30150": "Uso do OpenCode Go",
             "ca64c95969": "Uso do Grok",
             "7f5d534f81": "Mostrar Botão de Automações",
@@ -6041,13 +6024,6 @@
             "38d22ff8d6": "Substituição opcional do ID do espaço de trabalho se a busca automática falhar.",
             "9c4e40cf6b": "sessão",
             "61f7d1fcbe": "cookie",
-            "b7c2cee442": "experimental",
-            "7118d2f908": "credenciais",
-            "933deaf732": "oauth",
-            "8630464352": "cli",
-            "e8e1ff3887": "gemini",
-            "bada4a3218": "Extrai as credenciais OAuth da sua instalação local da Gemini CLI para autenticar com o Google.",
-            "d819755b02": "Usar credenciais da Gemini CLI",
             "35b461d817": "entrar",
             "f2d666a886": "opcional",
             "8b06729e0f": "ativo",
@@ -10383,7 +10359,6 @@
             "windows": "porcentagem usada ou restante no período",
             "reset": "tempo até a redefinição, por exemplo, 3h 15m",
             "resetAt": "horário da redefinição, por exemplo, 20:50",
-            "buckets": "grupos de modelos Gemini",
             "optional": "omitido quando um marcador dentro do grupo está vazio"
           }
         },
@@ -14963,7 +14938,7 @@
           "preservedTitle": "Suas edições em {{value0}} foram salvas separadamente",
           "preservedDescription": "O Orca atualizou a skill e salvou suas edições em {{value0}}.",
           "uncertainTitle": "O Orca não conseguiu confirmar a atualização da skill em {{value0}}",
-          "uncertainDescription": "O Orca pode ter atualizado as skills em {{value0}}, mas não conseguiu confirmar o resultado. Se você editou uma skill durante a atualização, sua cópia está em {{value1}}."
+          "uncertainDescriptionKept": "O Orca pode ter atualizado as skills em {{value0}}, mas não conseguiu confirmar o resultado. Se você editou uma skill durante a atualização, sua cópia está em {{value1}} ou ainda na pasta de skills."
         },
         "SkillBackupPathLine": {
           "movedTo": "Cópia antiga movida para:",
@@ -22363,7 +22338,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Parado por você",
+        "stopped": "Parado",
         "finished": "Concluído",
         "failedCount": "{{count}} com falha",
         "needsYouCount": "{{count}} aguardando você",
@@ -23727,22 +23702,16 @@
       "description": "Os agentes lá usam as contas padrão do Claude e do Codex da distribuição até que o Orca no WSL seja atualizado."
     },
     "antigravity": {
-      "chatSignIn": "Entrar",
-      "chatChangeAccount": "Trocar conta",
-      "chatRetry": "Tentar entrar novamente",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar link de login",
       "chatCopyFailed": "Não foi possível copiar o link.",
       "chatStarting": "Iniciando login…",
-      "chatWaiting": "Conclua o login no navegador.",
       "chatOpenFailed": "Copie o link e abra-o no navegador.",
       "chatVerifying": "Concluindo login…",
-      "chatPasteHelp": "Se a última página após o login não carregar, copie o endereço completo do navegador e cole aqui.",
       "chatContinue": "Continuar",
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
       "retry": "Tentar novamente",
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",
@@ -23774,8 +23743,6 @@
       "enterpriseOption": "Licença da sua organização",
       "apiKeyGet": "Obter chave de API",
       "location": "Localização",
-      "enterpriseFieldsShort": "Informe um projeto e uma localização.",
-      "chatUseMethod": "Entre novamente para usar {{method}}",
       "loadFailed": "Não foi possível carregar as contas do agy",
       "loading": "Carregando contas…",
       "notSignedIn": "Não conectado",
@@ -23786,8 +23753,7 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "readAt": "Lido {{time}}",
-      "active": "Ativo",
-      "chatDescriptionKeyOnAgy": "Novos chats são executados no agy com o login abaixo, separado do agy no terminal."
+      "active": "Ativo"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
@@ -25850,8 +25816,12 @@
           "hostHint": "Para instalações autogerenciadas ou Dedicated. Deixe em branco para GitLab.com.",
           "hostLabel": "Endereço do GitLab (opcional)"
         },
+        "intercom": {
+          "siteLabel": "Região do Intercom"
+        },
         "hostInvalid": "Digite um nome de host, como {{example}}.",
         "place": {
+          "unitedStates": "Estados Unidos",
           "australia": "Austrália",
           "europe": "Europa",
           "japan": "Japão",
@@ -25878,7 +25848,13 @@
         "github": "Menções e eventos em issues e PRs",
         "slack": "Mensagens e menções",
         "linear": "Issues atribuídas e menções",
-        "google": "Gmail, Agenda e Drive, como você"
+        "google": "Gmail, Agenda e Drive, como você",
+        "clickup": "Gerencie tarefas, listas e documentos",
+        "airtable": "Consulte e edite bases, tabelas e registros",
+        "todoist": "Adicione, organize e conclua tarefas",
+        "zapier": "Execute ações nos apps que você configurou no Zapier",
+        "granola": "Pesquise notas e transcrições de reuniões",
+        "intercom": "Pesquise conversas, contatos e artigos"
       },
       "composioLine": {
         "outlook": "E-mail, agenda e contatos",
@@ -26071,7 +26047,8 @@
       "webhooksNotReaching": "O Orca Cloud não está chegando a {{name}}, então ainda não pode criar webhooks."
     },
     "errors": {
-      "unsavedDrafts": "A pasta dele tem alterações não salvas no editor. Salve ou feche os arquivos e tente excluir novamente."
+      "unsavedDrafts": "A pasta dele tem alterações não salvas no editor. Salve ou feche os arquivos e tente excluir novamente.",
+      "purposeTooLongForHost": "O Orca em {{host}} aceita até 200 caracteres para a finalidade. Encurte o texto ou atualize o Orca em {{host}}."
     },
     "groups": {
       "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar.",
