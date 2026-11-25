@@ -1,4 +1,7 @@
-import type { ProviderRelayAttachResult } from '../daemon/protocol/daemon-provider-relay-protocol'
+import {
+  RELAY_CUT_KEYS_OVERFLOW,
+  type ProviderRelayAttachResult
+} from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayAckFloor } from './relayed-provider-output'
 
 /**
@@ -36,7 +39,7 @@ export type ProviderRelayItemContinuation = {
  * without its start is re-keyed `relay:<relayId>:<first seq>` for the rest of its life. The first
  * replayed seq is where every later attach replays from, so the tag (and the row) is the same each
  * time. With `open`, lines are read only until all of that work has ended. With `cutKeys` (the
- * items the cut ack named), exactly those move; without, any item seen without its start does.
+ * items the cut ack named), exactly those move (all, after the overflow key); without, any item seen without its start does.
  */
 export class RelayedProviderContinuation {
   private readonly started = new Set<string>()
@@ -52,7 +55,7 @@ export class RelayedProviderContinuation {
     private readonly open: Set<string> | null = null,
     private readonly cutKeys: ReadonlySet<string> | null = null
   ) {
-    const awaits = (key: string) => hook.awaits?.(key) ?? true
+    const awaits = (key: string) => key !== RELAY_CUT_KEYS_OVERFLOW && (hook.awaits?.(key) ?? true)
     this.awaited = new Set(open ? [...(cutKeys ?? [])].filter(awaits) : [])
   }
 
@@ -99,7 +102,9 @@ export class RelayedProviderContinuation {
     }
     let tag = this.moved.get(item.key)
     if (tag === undefined) {
-      if (this.started.has(item.key) || (this.cutKeys && !this.cutKeys.has(item.key))) {
+      const keys = this.cutKeys
+      const named = !keys || keys.has(item.key) || keys.has(RELAY_CUT_KEYS_OVERFLOW)
+      if (this.started.has(item.key) || !named) {
         return [line]
       }
       tag = `relay:${this.relayId}:${seq}`

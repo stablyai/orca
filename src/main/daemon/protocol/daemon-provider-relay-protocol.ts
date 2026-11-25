@@ -290,6 +290,8 @@ export const RELAY_WRITE_CHUNK_CHARS = 2 * 1024 * 1024
 /** A cut names at most this many items, each key at most this long; a larger list is refused. */
 export const RELAY_CUT_KEYS_MAX = 32
 export const RELAY_CUT_KEY_MAX_CHARS = 256
+/** A cut key saying the cut split more items than it names: a reattach moves every item it meets. */
+export const RELAY_CUT_KEYS_OVERFLOW = '*'
 
 /** Opaque item keys a cut ack names; anything past the bounds is refused, not trimmed. */
 export function readProviderRelayCutKeys(value: unknown): string[] {
