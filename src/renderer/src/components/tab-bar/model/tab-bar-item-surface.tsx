@@ -104,7 +104,11 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
+  const unpinnedCount = items.filter((item) => !item.isPinned).length
+
   function renderRow(item: TabBarItem, index: number): React.ReactNode {
+    // "Close others" enables at tabCount > 1: count what it closes, pinned never.
+    const closableOthers = unpinnedCount - (item.isPinned ? 0 : 1)
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -137,7 +141,7 @@ export function renderTabBarItems({
         worktreeId={worktreeId}
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
-        tabCount={items.length}
+        tabCount={closableOthers + 1}
         hasTabsToLeft={index > 0}
         hasTabsToRight={index < items.length - 1}
         isActive={isActiveItem(item)}
