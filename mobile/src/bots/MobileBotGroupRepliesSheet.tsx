@@ -1,4 +1,7 @@
+import { AtSign, Users } from 'lucide-react-native'
 import { botFailureMessage } from './bot-failure-message'
+import { MobileBotAvatar } from './MobileBotAvatar'
+import { mobileBotAvatarSource } from './host-bot-row-facts'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { botGroupRoom, type BotGroup } from '../../../src/shared/bots/bot-group'
@@ -54,18 +57,21 @@ export function MobileBotGroupRepliesSheet({
           .filter((bot) => group.members.some((member) => member.botId === bot.id))
           .map((bot) => ({
             label: bot.name,
+            renderIcon: () => <MobileBotAvatar avatar={mobileBotAvatarSource(bot)} size={20} />,
             checked: defaultId === bot.id,
             onPress: () => void choose({ kind: 'bot', botId: bot.id }),
             skipAutoClose: true
           })),
         {
           label: t('bots.groups.allBots', 'All bots'),
+          icon: Users,
           checked: group.replyMode.kind === 'all',
           onPress: () => void choose({ kind: 'all' }),
           skipAutoClose: true
         },
         {
           label: t('bots.groups.onlyWhenMentioned', 'Only when mentioned'),
+          icon: AtSign,
           checked: group.replyMode.kind === 'mentions',
           onPress: () => void choose({ kind: 'mentions' }),
           skipAutoClose: true

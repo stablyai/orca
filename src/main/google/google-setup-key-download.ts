@@ -25,6 +25,9 @@ export type GoogleSetupKeyDownloadDeps = {
   keyRefused: (botId: string, reason: string) => Promise<unknown>
 }
 
+/** Where the person is told a claimed key download went, on every kind of page. */
+const GOOGLE_SETUP_DOWNLOAD_LABEL = 'Google setup in Orca'
+
 /** The bot's line when a download from its setup page isn't a key Orca can use. */
 export function googleSetupKeyRefusedLine(reason: string): string {
   return `The key download didn't reach Orca: ${reason}`
@@ -103,6 +106,7 @@ export function googleSetupKeyDownloadClaim(
     }
     return {
       savePath,
+      label: GOOGLE_SETUP_DOWNLOAD_LABEL,
       finish: (event) =>
         void takeKey(
           deps,
@@ -127,7 +131,7 @@ export function googleSetupClientDownloadClaimant(
     return {
       maxBytes: GOOGLE_CLIENT_FILE_MAX_BYTES,
       // The desktop shows where it went; the key itself is never saved in the workspace.
-      label: 'Google setup in Orca',
+      label: GOOGLE_SETUP_DOWNLOAD_LABEL,
       take: (download) => {
         const file: KeyFile = {
           read: async () => ('bytes' in download ? download.bytes.toString('utf8') : null),

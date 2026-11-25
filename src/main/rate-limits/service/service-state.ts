@@ -20,7 +20,6 @@ import {
   type ClaudeOAuthUsageEnabledResolver,
   type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
-  type GeminiCliOAuthEnabledResolver,
   DEFAULT_POLL_MS
 } from './service-types'
 import type { NormalizedCodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
@@ -33,7 +32,6 @@ export abstract class RateLimitServiceState {
   protected state: InternalRateLimitState = {
     claude: null,
     codex: null,
-    gemini: null,
     opencodeGo: null,
     kimi: null,
     antigravity: null,
@@ -54,7 +52,6 @@ export abstract class RateLimitServiceState {
   protected lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
-    gemini: 0,
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
@@ -68,7 +65,6 @@ export abstract class RateLimitServiceState {
   protected activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
-    gemini: 0,
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
@@ -132,7 +128,6 @@ export abstract class RateLimitServiceState {
   protected zcodePlanConfigResolver:
     | (() => ZcodePlanRateLimitConfig | Promise<ZcodePlanRateLimitConfig>)
     | null = null
-  protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected claudeOAuthUsageEnabledResolver: ClaudeOAuthUsageEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
   protected antigravityFetchTarget: LocalAccountRuntimeTarget = { runtime: 'host', wslDistro: null }

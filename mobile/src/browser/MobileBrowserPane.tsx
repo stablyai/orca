@@ -1,5 +1,5 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: mobile browser state mirrors a remote desktop screencast session and CDP dialogs, which are external systems that cannot be derived during render. */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState, type HostInstance } from 'react-native'
 import type { MobileBrowserTab } from '../session/tabs/mobile-session-tabs'
 import { translate } from '../i18n/mobile-i18n'
@@ -54,6 +54,8 @@ type MobileBrowserPaneProps = {
   keyboardLift: number
   bottomInset: number
   onToast: (message: string, durationMs?: number) => void
+  bare?: boolean
+  pageOverlay?: ReactNode
 }
 
 type PanGesture = {
@@ -73,7 +75,9 @@ export function MobileBrowserPane({
   hostSupport,
   keyboardLift,
   bottomInset,
-  onToast
+  onToast,
+  bare,
+  pageOverlay
 }: MobileBrowserPaneProps) {
   useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
@@ -370,6 +374,8 @@ export function MobileBrowserPane({
 
   return (
     <MobileBrowserPaneView
+      bare={bare}
+      pageOverlay={pageOverlay}
       addressFocused={addressFocused}
       addressValue={addressValue}
       bottomInset={bottomInset}

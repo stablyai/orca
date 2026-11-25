@@ -4,6 +4,7 @@ import { botLinearWorkspaces, type BotMember } from '../../../../src/shared/bot-
 import { composioAppName } from '../../../../src/shared/composio/composio-curated-apps'
 import type { BotUpdateParams } from '../../../../src/shared/rpc-contract/bots-params'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { answerMobileGoogleSetup } from '../../session/native-chat/transcript/bot-cards/mobile-google-setup-store'
 import type { MobileComposio } from '../../session/native-chat/transcript/bot-cards/mobile-composio-store'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PhoneBot } from '../host-bots-operations'
@@ -16,6 +17,7 @@ import { MobileBotGitHubPage } from './MobileBotGitHubPage'
 import { MobileBotGitHubSetup } from './MobileBotGitHubSetup'
 import { MobileBotGoogleConnect } from './MobileBotGoogleConnect'
 import { MobileBotGooglePage } from './MobileBotGooglePage'
+import { MobileBotGoogleSignIn } from './MobileBotGoogleSignIn'
 import { MobileBotLinearPage } from './MobileBotLinearPage'
 import { MobileBotLinearSetup } from './MobileBotLinearSetup'
 import type { useConnectorPeople } from './MobileConnectorAccountParts'
@@ -160,21 +162,63 @@ export function MobileBotConnectorAccountPage(
         <MobileBotGooglePage
           {...scope}
           google={props.google}
+          account={page.account}
           onBack={list}
           onConnect={() => setPage({ kind: 'google-connect', from: page })}
+          onSignIn={(ask, account) =>
+            setPage({ kind: 'google-sign-in', ask, from: { kind: 'google', account } })
+          }
+        />
+      )
+    case 'google-sign-in':
+      return (
+        <MobileBotGoogleSignIn
+          {...scope}
+          google={props.google}
+          ask={page.ask}
+          newApp={page.newApp === true}
+          page={page}
+          onClose={() => setPage(page.from)}
+          onSignedIn={() =>
+            setPage(
+              page.next
+                ? { kind: 'google-connect', from: page.from, signedIn: page.next }
+                : page.from
+            )
+          }
         />
       )
     case 'google-connect': {
       const askInChat = props.onAskInChat
+      // After the chat's setup signed in here: its step is answered once Google is on, or left off.
+      const answerSetup = (on: boolean) => {
+        if (page.signedIn === 'setup' && props.client) {
+          void answerMobileGoogleSetup(props.client, props.hostKey, bot.id, 'step', [
+            'done',
+            'connect',
+            ...(on ? [] : ['google-off'])
+          ]).catch(() => {})
+        }
+      }
       return (
         <MobileBotGoogleConnect
           {...scope}
           google={props.google}
-          onClose={() => setPage(page.from)}
+          onClose={() => {
+            answerSetup(false)
+            setPage(page.from)
+          }}
           onOn={() => {
+            answerSetup(true)
             props.showToast(t('bots.google.isOn', 'Google is on for {{name}}', { name: bot.name }))
             setPage({ kind: 'google' })
           }}
+          // Back from a sign-in that left Google signed out, the page says so instead of opening it again.
+          onSignIn={
+            page.signedIn
+              ? null
+              : (ask) => setPage({ kind: 'google-sign-in', ask, from: page.from, next: 'connect' })
+          }
           // An empty draft opens the bot's chat as it is, where the setup's cards carry on.
           onOpenChat={askInChat ? () => askInChat('') : null}
         />

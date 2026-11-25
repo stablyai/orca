@@ -116,6 +116,11 @@ export const ProviderSession = z
   })
   .strict()
 
+export const TerminalColorQueryReplyColorsParam = z.object({
+  foreground: z.string().max(128).optional(),
+  background: z.string().max(128).optional()
+})
+
 export const AutomaticEnsure = z
   .object({
     kind: z.literal('automatic'),
@@ -145,7 +150,10 @@ export const ExplicitEnsure = z
     placement: Placement.optional(),
     spawnIntent: SpawnIntentParam.optional(),
     /** Sent only to hosts advertising `agent-session.account-env.v1`; outside replay identity. */
-    accountEnv: AgentLaunchAccountEnv.optional()
+    accountEnv: AgentLaunchAccountEnv.optional(),
+    /** Sent only to hosts advertising `agent-session.theme-params.v1`; outside replay identity. */
+    terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
+    terminalViewAttributes: z.unknown().optional()
   })
   .strict()
   .superRefine((value, context) => {
@@ -197,7 +205,10 @@ export const CreateAgentSessionParams: z.ZodType<RuntimeCreateAgentSessionReques
     placement: Placement.optional(),
     viewMode: z.enum(['terminal', 'chat']).optional(),
     /** Sent only to hosts advertising `agent-session.account-env.v1`; outside the fingerprint. */
-    accountEnv: AgentLaunchAccountEnv.optional()
+    accountEnv: AgentLaunchAccountEnv.optional(),
+    /** Sent only to hosts advertising `agent-session.theme-params.v1`; outside the fingerprint. */
+    terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
+    terminalViewAttributes: z.unknown().optional()
   })
   .strict()
   .superRefine((value, context) => {
