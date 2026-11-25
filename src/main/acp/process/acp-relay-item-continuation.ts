@@ -69,13 +69,9 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     }
   }
 
-  /** The earlier app's prompts whose turn starts before a replay the daemon cut: the cursor may be
-   *  inside one of their messages, so the continuation reads until each is answered. A replay the
-   *  daemon didn't cut starts at each open item's first line (the ack floor keeps it), so none. */
+  /** The earlier app's prompts whose turn starts before the daemon's cut: the cursor may be inside
+   *  one of their messages, so the continuation reads until each is answered. */
   openAt(result: ProviderRelayAttachResult): string[] | null {
-    if (result.truncatedThrough === undefined) {
-      return null
-    }
     const cut = (result.outstanding ?? []).filter(
       (request) => request.method === PROMPT && !request.replayedWhole
     )
