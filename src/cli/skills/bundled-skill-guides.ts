@@ -5225,6 +5225,8 @@ const ORCHESTRATION_WORKER_TEARDOWN_REFERENCE_MARKDOWN = [
   "- `worker-abandon` fences and settles the assignment while retaining",
   "  possibly-live resources; it performs no process or filesystem action, refuses",
   "  a same-runtime in-flight stop, and can leave the Task blocked.",
+  "- `worker-acknowledge` clears a settled failure the dock still counts, when",
+  "  its outcome is already handled (the person said so, or a retry finished it).",
   "- The settled-worker sweep releases only on a proven process exit; a live or",
   "  unverifiable process keeps its terminal.",
   "",

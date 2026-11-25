@@ -242,3 +242,86 @@ it('stops a worker once for a double-clicked and then retried dock Stop', async 
   expect(retried).toMatchObject({ state: 'stopped', alreadySettled: true })
   expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stopped')
 })
+
+it('clears a settled failure for a coordinator or the CLI, which cannot Clear in Orca', async () => {
+  const db = new OrchestrationDb(':memory:')
+  databases.push(db)
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Report the failure' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.db
+    .prepare(
+      "UPDATE dispatch_contexts SET creator_orca_session_id = '11111111-1111-4111-8111-111111111111' WHERE id = ?"
+    )
+    .run(dispatch.id)
+  db.db
+    .prepare("UPDATE worker_dispatches SET state = 'failed' WHERE dispatch_id = ?")
+    .run(dispatch.id)
+  const acknowledged = () =>
+    db.db
+      .prepare('SELECT COUNT(*) AS n FROM worker_dock_acknowledgments WHERE dispatch_id = ?')
+      .get(dispatch.id) as { n: number }
+
+  for (const method of ORCHESTRATION_WORKER_DOCK_METHODS) {
+    if (method.name === 'orchestration.workerAcknowledge') {
+      const acknowledge = async (value: boolean) =>
+        method.handler(
+          { dispatch: dispatch.id, acknowledged: value },
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler needs only the DB.
+          { runtime: { getOrchestrationDb: () => db }, caller: { kind: 'local-cli' } } as RpcContext
+        )
+      await expect(acknowledge(true)).resolves.toEqual({
+        dispatchId: dispatch.id,
+        acknowledged: true
+      })
+      expect(acknowledged().n).toBe(1)
+      await acknowledge(false)
+      expect(acknowledged().n).toBe(0)
+      await acknowledge(true)
+      expect(acknowledged().n).toBe(1)
+      return
+    }
+  }
+  throw new Error('orchestration.workerAcknowledge is not registered')
+})
+
+it('refuses to clear a worker still on the dock, or one that never was', async () => {
+  const db = new OrchestrationDb(':memory:')
+  databases.push(db)
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Keep counting' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
+  })
+  db.db
+    .prepare(
+      "UPDATE dispatch_contexts SET creator_orca_session_id = '11111111-1111-4111-8111-111111111111' WHERE id = ?"
+    )
+    .run(dispatch.id)
+  db.db
+    .prepare("UPDATE worker_dispatches SET state = 'ready' WHERE dispatch_id = ?")
+    .run(dispatch.id)
+  const ctx = {
+    runtime: { getOrchestrationDb: () => db },
+    caller: { kind: 'local-cli' }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler needs only the DB.
+  } as RpcContext
+  for (const method of ORCHESTRATION_WORKER_DOCK_METHODS) {
+    if (method.name === 'orchestration.workerAcknowledge') {
+      await expect(async () =>
+        method.handler({ dispatch: dispatch.id, acknowledged: true }, ctx)
+      ).rejects.toMatchObject({ code: 'invalid_argument' })
+      await expect(async () =>
+        method.handler({ dispatch: 'ctx_unknown', acknowledged: true }, ctx)
+      ).rejects.toMatchObject({ code: 'dispatch_not_found' })
+      return
+    }
+  }
+  throw new Error('orchestration.workerAcknowledge is not registered')
+})

@@ -31,6 +31,7 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.workerDockStop',
   'orchestration.workerDockAcknowledge',
   'orchestration.workerAbandon',
+  'orchestration.workerAcknowledge',
   'orchestration.workerRelease',
   'orchestration.workerRetain',
   'orchestration.approvalAnswer',

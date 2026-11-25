@@ -139,6 +139,18 @@ export const ORCHESTRATION_WORKER_COMMAND_SPECS: CommandSpec[] = [
     notes: ['Retains all possibly-live resources and performs no process or filesystem action.']
   },
   {
+    path: ['orchestration', 'worker-acknowledge'],
+    summary: 'Clear a settled worker failure from the dock',
+    usage:
+      'orca orchestration worker-acknowledge --dispatch <dispatch_id> [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'dispatch', 'retry-request'],
+    notes: [
+      'The CLI and bot path of the dock\'s "Clear failed worker": records that the settled failure is handled, so it stops counting in the worker banner.',
+      'History is kept; this only marks the settlement acknowledged. Repeat calls are harmless.',
+      'Only a settled Dispatch can be cleared: acknowledge a failed, stopped or abandoned worker whose outcome a retry or person has already dealt with.'
+    ]
+  },
+  {
     path: ['orchestration', 'worker-release'],
     destructive: true,
     summary: 'Release the terminal of one settled supervised worker',

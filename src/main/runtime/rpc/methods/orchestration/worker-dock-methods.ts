@@ -5,6 +5,7 @@ import {
   WorkerDockResultRead,
   WorkerDockStop
 } from '../../../../../shared/orchestration/dock/worker-dock'
+import { WorkerAcknowledgeParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-acknowledge-params'
 import {
   defineOrchestrationMethod,
   defineOrchestrationStreamingMethod
@@ -23,6 +24,10 @@ import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-str
 import { stopWorkerAndHelpers } from './worker/worker-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { isPersonCaller } from './access/worker-approval-access'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { RpcContext } from '../../core'
 
 /** Clear and Stop are the person's: this computer's Orca window, or a paired window or phone that
@@ -64,6 +69,51 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     handler: (request, { runtime }) => {
       acknowledgeWorkerDock(runtime.getOrchestrationDb(), request)
       return { acknowledged: request.acknowledged }
+    }
+  }),
+  defineOrchestrationMethod({
+    // The coordinator's own Clear: the dock action above stays person-only, while a bot or the
+    // CLI clears the settled failure its Dispatch left behind by naming it alone.
+    name: 'orchestration.workerAcknowledge',
+    permission: 'workspace',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
+    params: WorkerAcknowledgeParams,
+    handler: ({ dispatch, acknowledged }, { runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      if (db.getFederatedDispatch(dispatch)) {
+        throw new OrchestrationError(
+          'remote_owner_actions_unsupported',
+          'Clear this from the computer it runs on.'
+        )
+      }
+      const fact = db.db
+        .prepare('SELECT source, settlement FROM worker_dock_facts WHERE dispatch_id = ?')
+        .get(dispatch)
+      if (!fact || typeof fact.source !== 'string') {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          `Dispatch ${dispatch} has no worker on a dock to clear.`
+        )
+      }
+      if (typeof fact.settlement !== 'string' || fact.settlement === '') {
+        throw new OrchestrationError(
+          'invalid_argument',
+          `Dispatch ${dispatch} is not settled; there is no failure to clear yet.`,
+          { effectsApplied: false }
+        )
+      }
+      if (!isOrcaSessionId(fact.source)) {
+        throw new OrchestrationError(
+          'dispatch_not_found',
+          'This worker is not part of a source session.'
+        )
+      }
+      acknowledgeWorkerDock(db, {
+        party: formatOrcaSessionAddress(fact.source),
+        settlements: [{ dispatchId: dispatch, settlement: fact.settlement }],
+        acknowledged
+      })
+      return { dispatchId: dispatch, acknowledged }
     }
   }),
   defineOrchestrationMethod({

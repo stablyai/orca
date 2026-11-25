@@ -131,6 +131,24 @@ export const ORCHESTRATION_WORKER_TERMINAL_HANDLERS: Record<string, CommandHandl
     )
   },
 
+  'orchestration worker-acknowledge': async ({ flags, client, json }) => {
+    const dispatch = getRequiredStringFlag(flags, 'dispatch')
+    const result = await callOrchestrationMutation<{
+      dispatchId: string
+      acknowledged: boolean
+    }>(client, flags, 'orchestration.workerAcknowledge', { dispatch })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, { fields: (value) => value })
+      return
+    }
+    printResult(
+      result,
+      json,
+      (value) =>
+        `Worker ${value.dispatchId} ${value.acknowledged ? 'cleared from the dock' : 'restored to the dock'}`
+    )
+  },
+
   'orchestration worker-release': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<WorkerReleaseReceipt>(
       client,
