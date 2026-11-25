@@ -6504,12 +6504,23 @@
           "preservedTitle": "你对 {{value0}} 的修改已单独保存",
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
           "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
-          "uncertainDescriptionKept": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}，或仍在技能文件夹中"
+          "uncertainDescriptionKept": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}，或仍在技能文件夹中",
+          "preservedBackupOnly": "Orca 已将你的修改保存到 {{value0}}"
         },
         "SkillBackupPathLine": {
           "movedTo": "旧副本已移动到：",
           "movedToOnHost": "旧副本已移动到 {{host}} 上的以下路径：",
           "showFolder": "显示文件夹"
+        },
+        "skillBackupRefusal": {
+          "copyFailed": "无法复制路径。",
+          "copyPathFor": "复制 {{value0}} 的路径",
+          "inPlaceReason": "无法备份：它在另一个驱动器上。",
+          "keepIt": "想保留它，请把它移出技能文件夹。",
+          "leftoverReason": "无法备份遗留的副本：它在另一个驱动器上。",
+          "movedAsideReason": "无法备份旧副本：它在另一个驱动器上。",
+          "noReminder": "请把它移出技能文件夹，Orca 不会再提醒你。",
+          "tryAgain": "把它移出技能文件夹后重试。"
         }
       },
       "sidebar": {
@@ -9278,7 +9289,9 @@
           "lucideDescription": "使用仓库颜色的{{label}}图标",
           "defaultIcon": "默认",
           "cc76342291": "使用 GitHub 头像",
-          "43bf3709dd": "仓库图标"
+          "43bf3709dd": "仓库图标",
+          "autoColor": "自动颜色（与其他项目区分开）",
+          "lettersDescription": "字母“{{text}}”"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析",
@@ -12674,7 +12687,8 @@
           },
           "decisionFailed": "无法保存权限决定，请重试",
           "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用你已保存的登录信息和 SSH 密钥、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
-          "uiWarning": "在 Orca 中运行发布者的代码来绘制其视图。Orca 会显示它能访问什么，并在启用前征求你的同意"
+          "uiWarning": "在 Orca 中运行发布者的代码来绘制其视图。Orca 会显示它能访问什么，并在启用前征求你的同意",
+          "mcpServersWarning": "把插件的 MCP 服务器交给你的智能体，这些服务器可以启动程序、替智能体执行操作"
         },
         "PluginConsentProvenance": {
           "official": "官方",
@@ -13970,7 +13984,8 @@
           "accessFailed": "无法读取其访问权限",
           "retry": "重试",
           "noAccessReach": "仅限其自身文件",
-          "customEditor": "编辑器"
+          "customEditor": "编辑器",
+          "mcpServer": "MCP 服务器"
         },
         "PluginManagerRows": {
           "requiredByTeam": "团队要求",
@@ -14050,7 +14065,8 @@
           "becomesDefaultEditor": "成为 {{value0}} 的默认编辑器",
           "needApproval": "需要你的批准",
           "readyToUpdate": "可以更新",
-          "movedRepository": "来自另一个仓库"
+          "movedRepository": "来自另一个仓库",
+          "newMcpServers": "MCP 服务器"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -14154,7 +14170,8 @@
           "fullAccess": "完全访问权限",
           "addsVmRecipes": "添加虚拟机配置",
           "opensAndEditsFiles": "打开并编辑文件",
-          "runsPluginCode": "运行插件代码"
+          "runsPluginCode": "运行插件代码",
+          "addsMcpServers": "添加 MCP 服务器"
         },
         "pluginTryAction": {
           "incompleteLanguage": "此语言包过于不完整，无法切换。"
@@ -14240,7 +14257,8 @@
             "windows": "时间窗口的已用或剩余百分比",
             "reset": "距重置的时间，例如 3h 15m",
             "resetAt": "重置时刻，例如 20:50",
-            "optional": "其中的占位符为空时省略该组"
+            "optional": "其中的占位符为空时省略该组",
+            "usagePools": "带名称的用量池，例如 Antigravity 模型"
           }
         },
         "editorTypography": {
