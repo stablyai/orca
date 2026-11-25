@@ -8125,7 +8125,13 @@
         "github": "Sorunlar ve PR’lardaki bahsetmeler ve olaylar",
         "slack": "Mesajlar ve bahsetmeler",
         "linear": "Atanan sorunlar ve bahsetmeler",
-        "google": "Sizin adınıza Gmail, Takvim ve Drive"
+        "google": "Sizin adınıza Gmail, Takvim ve Drive",
+        "clickup": "Görevleri, listeleri ve belgeleri yönet",
+        "airtable": "Tabanları, tabloları ve kayıtları sorgula ve düzenle",
+        "todoist": "Görev ekle, sırala ve tamamla",
+        "zapier": "Zapier'da kurduğun uygulamalarda eylem çalıştır",
+        "granola": "Toplantı notlarında ve dökümlerinde ara",
+        "intercom": "Konuşmalarda, kişilerde ve makalelerde ara"
       },
       "composioLine": {
         "outlook": "Posta, takvim ve kişiler",

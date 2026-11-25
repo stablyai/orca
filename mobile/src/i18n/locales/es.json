@@ -5232,7 +5232,13 @@
         "github": "Menciones y eventos en issues y PR",
         "slack": "Mensajes y menciones",
         "linear": "Issues asignados y menciones",
-        "google": "Gmail, Calendar y Drive, como tú"
+        "google": "Gmail, Calendar y Drive, como tú",
+        "clickup": "Gestiona tareas, listas y documentos",
+        "airtable": "Consulta y edita bases, tablas y registros",
+        "todoist": "Añade, ordena y completa tareas",
+        "zapier": "Ejecuta acciones en las apps que configuraste en Zapier",
+        "granola": "Busca notas y transcripciones de reuniones",
+        "intercom": "Busca conversaciones, contactos y artículos"
       },
       "composioLine": {
         "outlook": "Correo, calendario y contactos",

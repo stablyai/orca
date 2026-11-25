@@ -7463,7 +7463,13 @@
         "context7": "代码库的最新文档和示例",
         "atlassian": "Jira 议题和 Confluence 页面",
         "notion": "搜索、阅读和编辑页面",
-        "stripe": "查询付款、客户和订阅"
+        "stripe": "查询付款、客户和订阅",
+        "clickup": "管理任务、列表和文档",
+        "airtable": "查询和编辑 Base、数据表和记录",
+        "todoist": "添加、整理和完成任务",
+        "zapier": "在你于 Zapier 中设置的应用里执行操作",
+        "granola": "搜索会议笔记和转录",
+        "intercom": "搜索对话、联系人和文章"
       },
       "webhooks": {
         "line": "来自任意工具或脚本的事件"

@@ -24344,7 +24344,11 @@
           "hostLabel": "GitLab 位址（選填）",
           "hostHint": "適用於自主管理版本或 Dedicated。使用 GitLab.com 時請留空。"
         },
+        "intercom": {
+          "siteLabel": "Intercom 區域"
+        },
         "place": {
+          "unitedStates": "美國",
           "usEast": "美國東部",
           "usWest": "美國西部",
           "usCentral": "美國中部",
@@ -24374,7 +24378,13 @@
         "github": "議題和 PR 中的提及與事件",
         "slack": "訊息和提及",
         "linear": "指派的議題和提及",
-        "google": "以你的身分使用 Gmail、日曆和雲端硬碟"
+        "google": "以你的身分使用 Gmail、日曆和雲端硬碟",
+        "clickup": "管理任務、清單和文件",
+        "airtable": "查詢及編輯 Base、資料表和記錄",
+        "todoist": "新增、排序和完成任務",
+        "zapier": "在你於 Zapier 設定的應用程式中執行動作",
+        "granola": "搜尋會議筆記和逐字稿",
+        "intercom": "搜尋對話、聯絡人和文章"
       },
       "composioLine": {
         "outlook": "郵件、行事曆和聯絡人",
