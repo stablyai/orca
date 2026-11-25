@@ -39,6 +39,11 @@ const LOCALE_CONFIG = {
     targetLanguage: 'fr',
     displayName: 'French',
     cacheFile: '.fr-catalog-cache.json'
+  },
+  th: {
+    targetLanguage: 'th',
+    displayName: 'Thai',
+    cacheFile: '.th-catalog-cache.json'
   }
 }
 

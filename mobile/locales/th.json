@@ -1,0 +1,9 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "อนุญาตให้ Orca ใช้กล้องเพื่อสแกนคิวอาร์โค้ด",
+    "NSLocalNetworkUsageDescription": "Orca เชื่อมต่อกับแอปเดสก์ท็อปบนเครือข่ายแลน (LAN) ของคุณ",
+    "NSMicrophoneUsageDescription": "อนุญาตให้ Orca ใช้ไมโครโฟนของคุณเพื่อการพิมพ์ด้วยเสียง โดยถอดความเป็นข้อความบนโทรศัพท์นี้หรือบนคอมพิวเตอร์ที่จับคู่ไว้",
+    "NSPhotoLibraryAddUsageDescription": "อนุญาตให้ Orca บันทึกรูปภาพจากเซสชันของคุณไปยังแอปรูปภาพ",
+    "NSPhotoLibraryUsageDescription": "อนุญาตให้ Orca แนบรูปภาพจากคลังรูปภาพของคุณไปยังเซสชันเทอร์มินัลบนเดสก์ท็อปที่จับคู่ไว้"
+  }
+}

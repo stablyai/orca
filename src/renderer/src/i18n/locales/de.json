@@ -744,7 +744,8 @@
         "portuguese": "Português (Brasil)",
         "russian": "Русский",
         "turkish": "Türkçe",
-        "german": "Deutsch"
+        "german": "Deutsch",
+        "thai": "ไทย"
       },
       "statusBar": {
         "claudeToggleDescription": "Token-Verbrauch und Kosten von Claude für den aktiven Arbeitsbereich anzeigen.",
