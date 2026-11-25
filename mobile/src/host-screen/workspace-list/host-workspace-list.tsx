@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Animated, Platform, RefreshControl, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useRef, type ReactElement } from 'react'
+import { AccessibilityInfo, Animated, Platform, RefreshControl, View } from 'react-native'
 import { isBotsListRow, useMobileBotsListParts } from '../../bots/use-mobile-bots-list-parts'
-import { TransientToast, useTransientToast } from '../../components/feedback/TransientToast'
+import { TransientToast } from '../../components/feedback/TransientToast'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../../worktree/row-presentation/WorktreeListRow'
@@ -83,37 +83,26 @@ export function HostWorkspaceList({
   const hasRows = sections.length > 0 && !refused
   // Offline, the rows stay readable from the last read, quieter than live ones.
   const offline = isConnectionOutage(controller.connectionVerdict)
-  const toast = useTransientToast()
-  const { showToast } = toast
-  // Notices and action errors are one-line toasts, not banners stacked over the title.
-  // Taken at once, since a later refresh clears it; a sheet over the list would hide the toast, so
-  // it shows once the sheets close.
-  const [heldError, setHeldError] = useState('')
+  // Notices and action errors are one-line toasts, not banners stacked over the title. A sheet
+  // over the list would hide one, so it shows once the sheets close, then clears itself.
   const sheetOpen = state.showWorkspaceOptions || state.actionTarget !== null
+  const notice = sheetOpen ? null : state.actionError || state.serverNotice || routeNotice || null
   useEffect(() => {
-    if (state.actionError !== '') {
-      setHeldError(state.actionError)
-      state.setActionError('')
+    if (!notice) {
+      return
     }
-  }, [state])
-  useEffect(() => {
-    if (heldError !== '' && !sheetOpen) {
-      showToast(heldError)
-      setHeldError('')
-    }
-  }, [heldError, sheetOpen, showToast])
-  useEffect(() => {
-    if (state.serverNotice) {
-      showToast(state.serverNotice)
-      state.setServerNotice(null)
-    }
-  }, [state, showToast])
-  useEffect(() => {
-    if (routeNotice) {
-      showToast(routeNotice)
-      setDismissedNotice(noticeParam ?? null)
-    }
-  }, [routeNotice, noticeParam, setDismissedNotice, showToast])
+    AccessibilityInfo.announceForAccessibility(notice)
+    const timer = setTimeout(() => {
+      if (state.actionError) {
+        state.setActionError('')
+      } else if (state.serverNotice) {
+        state.setServerNotice(null)
+      } else {
+        setDismissedNotice(noticeParam ?? null)
+      }
+    }, NOTICE_TOAST_MS)
+    return () => clearTimeout(timer)
+  }, [notice, state, noticeParam, setDismissedNotice])
   const renameDrafts = useHostMutationDrafts()
   const resetTitle = pageTitle?.collapsing.reset
   useEffect(() => {
@@ -349,7 +338,7 @@ export function HostWorkspaceList({
         />
       )}
       {bots.sheets}
-      <TransientToast message={toast.message} bottomInset={bottomBarHeight} />
+      <TransientToast message={notice} bottomInset={bottomBarHeight} />
     </>
   )
 }
@@ -362,6 +351,9 @@ function swipeable(row: Worktree, view: WorkspaceListItem['view']): boolean {
     !view.botFacts
   )
 }
+
+// As long as the app's other transient toasts stay up.
+const NOTICE_TOAST_MS = 3_000
 
 // The row keeps its real name; a rename the desktop never took is shown under it.
 function unsavedRename(
