@@ -75,13 +75,12 @@ export function useReleasedLayoutInputs(
       enabled ? subscribeReleasedLayoutInputs(worktreeId, listener) : () => {},
     [enabled, worktreeId]
   )
-  const tabCount = useSyncExternalStore(
-    subscribe,
-    () => useAppStore.getState().unifiedTabsByWorktree[worktreeId]?.length ?? 0
+  // A closed gate reads constants: nothing notifies React, so a live read could tear.
+  const tabCount = useSyncExternalStore(subscribe, () =>
+    enabled ? (useAppStore.getState().unifiedTabsByWorktree[worktreeId]?.length ?? 0) : 0
   )
-  const groups = useSyncExternalStore(
-    subscribe,
-    () => useAppStore.getState().groupsByWorktree[worktreeId]
+  const groups = useSyncExternalStore(subscribe, () =>
+    enabled ? useAppStore.getState().groupsByWorktree[worktreeId] : undefined
   )
   return { tabCount, groups }
 }
