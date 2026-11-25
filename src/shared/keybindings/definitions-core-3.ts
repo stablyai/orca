@@ -136,7 +136,12 @@ export const KEYBINDING_DEFINITION_CORE_3: readonly KeybindingDefinition[] = [
     scope: 'editor',
     searchKeywords: ['shortcut', 'editor', 'markdown', 'note', 'comment', 'annotation', 'review'],
     // Why: Ctrl+Alt+letter is AltGr text input on Windows/Linux, so an editor default must not reserve chars like Polish `ń`.
-    defaultBindings: platformBindings(['Mod+Shift+A'])
+    // Shares Annotate Page Element's chords; Mod+Shift+A went to Search Tabs, Chrome's chord.
+    defaultBindings: {
+      darwin: ['Mod+Shift+C'],
+      linux: ['Alt+Shift+N'],
+      win32: ['Alt+Shift+N']
+    }
   },
   {
     id: 'sourceControl.sendReviewNotes',

@@ -1,6 +1,7 @@
 import { getKeybindingDefinition } from './definitions'
 import { isKeybindingAllowedInTerminal, isKeybindingPotentialTerminalConflict } from './effective'
 import { keybindingMatchesAction, matchKeybindingDigitIndex } from './matching'
+import { matchesTabSearchChord } from './tab-search-chord'
 import type {
   KeybindingActionId,
   KeybindingMatchOptions,
@@ -39,6 +40,7 @@ export type WindowShortcutAction =
   | { type: 'openTasks' }
   | { type: 'toggleAgentDashboard' }
   | { type: 'switchRecentTab' }
+  | { type: 'toggleTabSearch' }
   | { type: 'jumpToWorktreeIndex'; index: number }
   | { type: 'jumpToTabIndex'; index: number }
   | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
@@ -233,6 +235,10 @@ export function resolveWindowShortcutAction(
     return { type: 'switchRecentTab' }
   }
 
+  if (matchesTabSearchChord(input, platform, keybindings, options)) {
+    return { type: 'toggleTabSearch' }
+  }
+
   // Ranges have separate conflict scopes and may share a chord; workspace-first preserves deterministic historical precedence.
   const worktreeIndex = matchKeybindingDigitIndex(
     'workspace.selectByIndex',
@@ -298,6 +304,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'dashboard.toggle'
     case 'switchRecentTab':
       return 'tab.previousRecent'
+    case 'toggleTabSearch':
+      return 'tab.search'
     case 'worktreeHistoryNavigate':
       return action.direction === 'back' ? 'worktree.history.back' : 'worktree.history.forward'
     case 'dictationKeyDown':

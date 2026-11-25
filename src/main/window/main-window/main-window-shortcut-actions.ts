@@ -56,6 +56,9 @@ export function sendResolvedWindowShortcutAction(
     case 'switchRecentTab':
       mainWindow.webContents.send('ui:switchRecentTab')
       return
+    case 'toggleTabSearch':
+      mainWindow.webContents.send('ui:toggleTabSearch')
+      return
     case 'jumpToWorktreeIndex':
       mainWindow.webContents.send('ui:jumpToWorktreeIndex', action.index)
       return

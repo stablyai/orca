@@ -6,7 +6,7 @@ import { useAppStore } from '@/store/index'
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { useSettingsNavigationMetadata } from '@/components/settings/navigation/useSettingsNavigationMetadata'
-import { dedupePaletteWorktrees } from '@/lib/workspace/search/palette-repo-resolution'
+import { buildPaletteWorkspaces } from '@/lib/workspace/search/palette-workspaces'
 import {
   readHiddenVmCheckouts,
   subscribeHiddenVmCheckouts,
@@ -17,13 +17,11 @@ import {
   selectPaletteStatusInputs
 } from './worktree-jump-palette-status-inputs'
 import { selectWorktreePaletteCacheInputs } from '@/components/cmd-j/worktree-palette-cache-inputs'
-import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 export function useWorktreeJumpPaletteStoreState({
   visible,
@@ -53,22 +51,7 @@ export function useWorktreeJumpPaletteStoreState({
   const repos = useAppStore((state) => state.repos)
   const projectGroups = useAppStore((state) => state.projectGroups)
   const workspaces = useMemo(
-    () =>
-      dedupePaletteWorktrees([
-        ...Object.values(worktreesByRepo).flat(),
-        ...folderWorkspaces.map((folder) => {
-          const result = resolveQualifiedIndexedFolderWorkspace(
-            { folderWorkspaces, repos, projectGroups },
-            folder.id
-          )
-          return getFolderWorkspaceWorktree(
-            folder,
-            result.kind === 'selected' && result.value.workspace === folder
-              ? result.value
-              : undefined
-          )
-        })
-      ]),
+    () => buildPaletteWorkspaces({ worktreesByRepo, folderWorkspaces, repos, projectGroups }),
     [folderWorkspaces, projectGroups, repos, worktreesByRepo]
   )
   const projects = useAppStore((state) => state.projects)

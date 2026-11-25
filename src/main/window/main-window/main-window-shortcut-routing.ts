@@ -99,7 +99,11 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
-    if (action.type === 'toggleQuickCommandsMenu' && isAutoRepeat) {
+    // A held toggle chord would flicker its overlay open and shut.
+    if (
+      (action.type === 'toggleQuickCommandsMenu' || action.type === 'toggleTabSearch') &&
+      isAutoRepeat
+    ) {
       event.preventDefault()
       return true
     }

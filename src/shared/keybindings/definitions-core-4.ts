@@ -169,6 +169,19 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'tab.search',
+    title: 'Search tabs',
+    group: 'Tab Navigation',
+    scope: 'tabs',
+    // Why: main routes this chord too, so Settings must warn when it shadows global chords.
+    conflictGroup: 'global',
+    searchKeywords: ['shortcut', 'tab', 'search', 'find', 'switch', 'open tabs', 'chrome'],
+    // Chrome's Tab Search chord; Windows/Linux terminals keep Ctrl+Shift+A for Select All.
+    defaultBindings: platformBindings(['Mod+Shift+A']),
+    // Why: Mod+Shift+A was Add Review Note's default, so a saved claim on it keeps the chord.
+    implicitDefaultYields: true
+  },
+  {
     id: 'botItem.back',
     title: 'Back to Items',
     group: 'Bots',

@@ -123,6 +123,11 @@ export const uiStateAndMenuCommandsApi = {
     ipcRenderer.on('ui:toggleQuickCommandsMenu', listener)
     return () => ipcRenderer.removeListener('ui:toggleQuickCommandsMenu', listener)
   },
+  onToggleTabSearch: (callback: () => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent) => callback()
+    ipcRenderer.on('ui:toggleTabSearch', listener)
+    return () => ipcRenderer.removeListener('ui:toggleTabSearch', listener)
+  },
   onOpenNewWorkspace: (callback: () => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent) => callback()
     ipcRenderer.on('ui:openNewWorkspace', listener)
