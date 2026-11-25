@@ -5,7 +5,7 @@ description: Every agent Orca ships with out of the box.
 
 import { Callout } from '@/components/docs/prose'
 
-Orca works with **any CLI agent** — the agent combobox just launches a process in a terminal. The following ship preconfigured in the built-in agent picker with one-click launch/setup; deeper hooks, status, usage tracking, and account switching are noted where supported.
+Orca works with **any CLI agent** in a terminal and offers native Chat for some agents. The following ship preconfigured in the built-in agent picker with one-click launch/setup; deeper hooks, status, usage tracking, and account switching are noted where supported.
 
 <Callout title="Permission safety">
   The defaults below pass each agent's permission-bypass flag for new launches. A worktree is an
@@ -51,7 +51,7 @@ If an agent's CLI is installed outside `PATH`, expand its row in **Settings → 
 | Freebuff           | Auto-setup                                                                                                                 | [Freebuff](https://freebuff.com/cli)                                                              |
 | Command Code       | Auto-setup, status                                                                                                         | [Command Code](https://commandcode.ai/docs/quickstart)                                            |
 | Muse               | macOS/Linux; trusts the workspace at launch                                                                                | [Meta](https://dev.meta.ai/docs/muse-code)                                                        |
-| DeepSeek Harness   | Needs `@deepseek-ai/dsh` plus the community `@deepseek-harness-tui/dsh-tui`; hooks, status, questions, resume              | [dsh-TUI](https://github.com/ccch1mneyyy/dsh-TUI#quick-start)                                     |
+| DeepSeek Harness   | Native Chat over ACP. Terminal via `dsh-tui` supports hooks, status, questions, and resume.                                | [dsh-TUI](https://github.com/ccch1mneyyy/dsh-TUI#quick-start)                                     |
 | ZCode              | Deep integration; needs a `zcode` CLI that ships the TUI (see note below)                                                  | [Z.ai](https://zcode.z.ai/en/docs)                                                                |
 | Continue           | Auto-setup                                                                                                                 | [Continue](https://docs.continue.dev/cli/quickstart)                                              |
 | Cursor CLI         | Deep integration                                                                                                           | [Cursor](https://cursor.com/cli)                                                                  |
@@ -65,6 +65,10 @@ If an agent's CLI is installed outside `PATH`, expand its row in **Settings → 
 | Hermes             | Auto-setup                                                                                                                 | [Nous](https://hermes-agent.nousresearch.com/docs/)                                               |
 | OpenClaw           | Auto-setup                                                                                                                 | [OpenClaw](https://github.com/openclaw/openclaw)                                                  |
 | Trae               | Auto-setup via `traecli` (TRAE CN CLI)                                                                                     | [Trae](https://www.trae.ai/)                                                                      |
+
+## DeepSeek Harness Chat
+
+Install the official CLI on the workspace host with `npm install -g @deepseek-ai/dsh` and make sure `dsh` is on its `PATH`. Configure `DEEPSEEK_API_KEY` in the launch environment or in the Harness home's `.env` file. Choose **Chat** for DeepSeek Harness in **Settings → Agents**, then open it from the agent picker. Orca starts `dsh --profile acp` in the workspace and exposes the model and reasoning choices that the session reports. See the [DeepSeek Harness provider setup](https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/user/guide/providers.md).
 
 ## ZCode: pick a CLI that ships the TUI
 

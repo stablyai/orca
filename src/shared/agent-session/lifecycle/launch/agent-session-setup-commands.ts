@@ -5,7 +5,7 @@ import {
   type AgentStartupShell
 } from '../../../agent-launch/startup/tui-agent-startup-shell'
 
-/** How a chat host installs and signs in each agent. `installCommand` is a POSIX shell line; `windowsInstallScript` is the official PowerShell installer. */
+/** How a chat host installs and signs in each agent. `installCommand` is POSIX; `portableInstallCommand` also works on Windows. */
 export const AGENT_SESSION_SETUP_COMMANDS = [
   {
     agent: 'claude',
@@ -120,6 +120,11 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
+  {
+    agent: 'dsh',
+    loginCommand: [],
+    portableInstallCommand: 'npm install -g @deepseek-ai/dsh'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',
@@ -200,6 +205,9 @@ export function agentSessionInstallCommand(
   const entry = agentSessionSetupFor(agent)
   if (!hostPlatform || !entry) {
     return null
+  }
+  if ('portableInstallCommand' in entry) {
+    return entry.portableInstallCommand
   }
   if (hostPlatform === 'win32') {
     // Why powershell.exe: one line that runs the same from PowerShell, cmd and Git Bash terminals.
