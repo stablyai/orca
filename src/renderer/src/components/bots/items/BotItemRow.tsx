@@ -47,7 +47,7 @@ type BotItemRowProps = {
   face?: Bot | null
   /** Its chat's name, when the list shows chats beyond the one it is about. */
   place?: string | null
-  /** The teammate it is for, named before the age, when the list shows everyone's. */
+  /** The teammates it is for, named before the age, when the list shows everyone's. */
   person?: string | null
   /** In the Tab order: a long group keeps one row there and moves between rows with arrows. */
   tabbable?: boolean
@@ -84,7 +84,7 @@ const ITEM_FIELD_RULES: Record<keyof BotItem, ItemFieldEqual> = {
   status: (a, b) => a.status === b.status,
   chat: (a, b) => structuralValuesEqual(a.chat, b.chat),
   madeBy: (a, b) => structuralValuesEqual(a.madeBy, b.madeBy),
-  person: (a, b) => a.person?.name === b.person?.name,
+  people: (a, b) => structuralValuesEqual(a.people, b.people),
   // A question is one item event, which never changes once written; a host on another release reads it
   // with other fields (ask, or gist and decisions).
   question: (a, b) =>

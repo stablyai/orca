@@ -23,6 +23,7 @@ import {
   type BotItemGitHubCache
 } from './bot-items-link-join'
 import type { BotItemsRemote } from './bot-items-ops'
+import { botItemListScope, botItemsOfPeople } from './bot-item-access'
 import { eventViewOf } from './bot-items-rows'
 import type { BotItemMail, BotItemRecord, BotItemSource } from './bot-items-schema'
 import type { BotWorkRuntime } from './bot-work-runtime'
@@ -233,10 +234,13 @@ export class BotItemsHost {
     }
   }
 
-  /** Each bot's unstale Needs you items, counted at `now`; null when unreadable, never a false zero. */
+  /** Each bot's unstale Needs you items, counted at `now`; null when unreadable, never a false zero.
+   *  The owner's own only: a teammate's item asks that teammate, as the list's default shows. */
   async needsYouCounts(now: number): Promise<BotNeedsYouCounts | null> {
     const store = this.openedStore()
-    const rows = store ? await store.needsYou().catch(warn) : []
+    const rows = store
+      ? await store.needsYou(botItemListScope(botItemsOfPeople(null))).catch(warn)
+      : []
     return rows && { ...botItemsNeedingOwnerByBot(rows, this.deps.bots(), now), at: now }
   }
 

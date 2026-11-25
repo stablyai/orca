@@ -27238,7 +27238,7 @@
         "confirm": "設為等待中"
       },
       "empty": {
-        "person": "沒有來自 {{name}} 的項目。"
+        "person": "沒有來自 {{name}} 的事項。"
       }
     },
     "hover": {

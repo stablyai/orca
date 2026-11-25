@@ -42,6 +42,23 @@ const CLOSE_LOOKBACK_EVENTS = 200
 
 export type BotItemClose = { actor: BotItemActor; actsFor: readonly BotRequestAsker[] | null }
 
+/** The list's people part: the owner's own (null), any of these teammates', or everyone's (absent). */
+function peopleScope(query: Pick<BotItemListQuery, 'actsForAccounts'>): {
+  sql: string
+  args: string[]
+} {
+  const accounts = query.actsForAccounts
+  if (accounts === undefined) {
+    return { sql: '', args: [] }
+  }
+  return accounts === null
+    ? { sql: ' AND items.acts_for_accounts IS NULL', args: [] }
+    : {
+        sql: ' AND EXISTS (SELECT 1 FROM json_each(items.acts_for_accounts) WHERE value IN (SELECT value FROM json_each(?)))',
+        args: [JSON.stringify(accounts)]
+      }
+}
+
 export class BotItemsReads extends BotItemsTables {
   /** Links of a kind to any of these refs, across items. */
   linksTo(kind: BotItemLinkKind, refs: readonly string[]): BotItemLinkRecord[] {
@@ -103,17 +120,12 @@ export class BotItemsReads extends BotItemsTables {
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
-    const person =
-      query.actsForAccounts === undefined
-        ? ''
-        : query.actsForAccounts === null
-          ? ' AND items.acts_for_accounts IS NULL'
-          : ' AND EXISTS (SELECT 1 FROM json_each(items.acts_for_accounts) WHERE value IN (SELECT value FROM json_each(?)))'
-    const scope = `owner_bot_id = ?${chat}${person}${link}`
+    const person = peopleScope(query)
+    const scope = `owner_bot_id = ?${chat}${person.sql}${link}`
     const scopeArgs = [
       query.botId,
       ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
-      ...(query.actsForAccounts ? [JSON.stringify(query.actsForAccounts)] : []),
+      ...person.args,
       ...(query.link ? [query.link.kind, query.link.ref] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}
@@ -146,13 +158,18 @@ export class BotItemsReads extends BotItemsTables {
     return { items, counts }
   }
 
-  /** Every Needs you item's bot, last activity and snooze, so the bot list counts what needs the owner. */
-  needsYou(): { botId: string; lastActivityAt: number; snoozedUntil: number | null }[] {
+  /** Every Needs you item's bot, last activity and snooze in `people`'s scope (`botItemListScope`, as
+   *  the list reads it), so the bot list counts what needs the owner. */
+  needsYou(
+    people: Pick<BotItemListQuery, 'actsForAccounts'>
+  ): { botId: string; lastActivityAt: number; snoozedUntil: number | null }[] {
+    const person = peopleScope(people)
     return this.db
       .prepare(
-        `SELECT owner_bot_id, last_activity_at, snoozed_until FROM items WHERE status = 'needs_you'`
+        `SELECT owner_bot_id, last_activity_at, snoozed_until FROM items
+           WHERE status = 'needs_you'${person.sql}`
       )
-      .all()
+      .all(...person.args)
       .map((row) => ({
         botId: String(row.owner_bot_id),
         lastActivityAt: Number(row.last_activity_at),

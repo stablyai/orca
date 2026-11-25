@@ -4,6 +4,7 @@ import type { BotItem } from '../../../../shared/bots/bot-items'
 import type { BotItemBotActor } from '../../../bots/bot-items-input'
 import type { BotItemRecord } from '../../../bots/bot-items-schema'
 import { BotItemsStore } from '../../../bots/bot-items-store'
+import { botItemListScope, botItemsOfPeople } from '../../../bots/bot-item-access'
 import { BOT_ITEMS_OWNER_METHODS } from './bots-items-owner-methods'
 
 const AGENT: BotItemBotActor = { kind: 'bot', botId: 'bot-1', chatId: 'chat-1' }
@@ -27,7 +28,7 @@ function seeded(): BotItemsStore {
         ownerBotId: 'bot-1',
         chatId: 'chat-1',
         source: { kind: 'home', title: null },
-        actsForAccount,
+        actsForAccounts: actsForAccount === null ? null : [actsForAccount],
         title,
         status: 'working',
         links: []
@@ -63,7 +64,9 @@ async function list(
 }
 
 const rows = (read: { items: BotItem[] }): string[] =>
-  read.items.map((item) => (item.person ? `${item.title} · ${item.person.name}` : item.title))
+  read.items.map((item) =>
+    item.people ? `${item.title} · ${item.people.map((p) => p.name).join(', ')}` : item.title
+  )
 
 it("lists the owner's own items alone, counts included", async () => {
   const read = await list(seeded(), null)
@@ -87,4 +90,29 @@ it("lists a picked teammate's items alone, and none for one with no items", asyn
   expect(rows(alice).toSorted()).toEqual(['Alice closed · Alice Park', 'Alice open · Alice Park'])
   expect(alice.counts).toEqual({ working: 1, done: 1 })
   expect(await list(store, 'acct-d')).toMatchObject({ items: [], counts: {} })
+})
+
+it("counts only the owner's own Needs you for the badge, the same items the default list shows", async () => {
+  const store = seeded()
+  const ask = (title: string, accounts: string[] | null): void => {
+    const { uid } = store.add(
+      {
+        ownerBotId: 'bot-1',
+        chatId: 'chat-1',
+        source: { kind: 'home', title: null },
+        actsForAccounts: accounts,
+        title,
+        status: 'working',
+        links: []
+      },
+      AGENT
+    )
+    store.set(uid, { status: 'needs_you', comment: 'Which one?' }, AGENT)
+  }
+  ask('Mine to answer', null)
+  ask('Alice to answer', ['acct-a'])
+  const badge = store.needsYou(botItemListScope(botItemsOfPeople(null)))
+  expect(badge).toHaveLength(1)
+  expect((await list(store, null)).counts.needs_you).toBe(badge.length)
+  expect(store.needsYou(botItemListScope({ kind: 'everyone' }))).toHaveLength(2)
 })

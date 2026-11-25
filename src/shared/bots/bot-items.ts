@@ -239,8 +239,8 @@ export type BotItem = {
   /** `gone`: the host read its chats and this one's record is deleted, so its comments take no attachments. */
   chat: { id: string; kind: BotItemChatKind; title: string | null; gone?: true }
   madeBy: { botId: string; name: string | null; chatId: string } | null
-  /** The teammate it is for, on the owner's list; absent for the owner's own and from older hosts. */
-  person?: BotChatPerson
+  /** The teammates it is for, on the owner's list; absent for the owner's own and from older hosts. */
+  people?: BotChatPerson[]
   /** Needs you: the agent's comment asking the owner. `gist`: its body's first line; `decisions`: its
    *  question lines (`--ask`) and their quick replies (`--option`). */
   question: { eventId: string; text: string; gist?: string; decisions?: BotItemDecision[] } | null

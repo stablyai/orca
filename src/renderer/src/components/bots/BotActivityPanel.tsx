@@ -54,7 +54,7 @@ import { useBotItems } from './items/use-bot-items'
 import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemBackFocus } from './items/use-bot-item-back-focus'
-import { useBotItemsShownList } from './items/use-bot-items-shown-list'
+import { botItemsShownReadState, useBotItemsShownList } from './items/use-bot-items-shown-list'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
 
 /** Focus after the panel shows Activity again: the gear that opened settings. */
@@ -168,6 +168,8 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
     seenAtOpen ?? '',
     botPickAccount(pick)
   )
+  // Failures of the read the list shows: the person's or chats' own when scoped.
+  const shownRead = botItemsShownReadState(list, items)
   const walk = useBotItemWalk(list, botRefKey(bot))
   const openItem = (uid: string): void => {
     setReturnTo(null)
@@ -263,7 +265,9 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
         {read ? (
           <BotItemsFilterChips filter={filter} onFilter={setFilter} people={personPick} />
         ) : null}
-        {read && items.refreshFailed ? <BotItemsReadFailed stale onRetry={items.retry} /> : null}
+        {list.read && shownRead.refreshFailed ? (
+          <BotItemsReadFailed stale onRetry={shownRead.retry} />
+        ) : null}
         {/* Asks lead Needs you in every item-read state: loading, failed or empty. */}
         <BotItemsSection
           bot={bot}
@@ -274,7 +278,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
           now={clock}
           focusUid={returnTo}
           onOpen={(item) => openItem(item.uid)}
-          botRead={items}
+          botRead={shownRead}
           asks={asks}
           offline={offline}
           focusFallback={scroll}

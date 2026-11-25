@@ -180,7 +180,7 @@ const everyoneItems = [
     title: 'Check the crash reports for 1.4.231',
     status: 'needs_you',
     question: { eventId: 'e62', text: 'File it upstream?' },
-    person: alice,
+    people: [alice],
     lastActivityAt: now - 40 * min
   }),
   makeTestBotItem(61, {
@@ -195,12 +195,12 @@ const everyoneItems = [
   }),
   makeTestBotItem(57, {
     title: 'Draft the Windows installer FAQ',
-    person: alice,
+    people: [alice],
     lastActivityAt: now - hour
   }),
   makeTestBotItem(59, {
     title: 'Draft the onboarding checklist',
-    person: bo,
+    people: [bo],
     lastActivityAt: now - 4 * hour
   })
 ]

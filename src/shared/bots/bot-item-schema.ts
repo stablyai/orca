@@ -134,7 +134,10 @@ export const BotItemSchema: z.ZodType<BotItem, unknown> = z.looseObject({
   madeBy: z
     .looseObject({ botId: z.string(), name: z.string().nullable(), chatId: z.string() })
     .nullable(),
-  person: salvagedOptional('person', z.looseObject({ accountId: z.string(), name: z.string() })),
+  people: salvagedOptional(
+    'people',
+    z.array(z.looseObject({ accountId: z.string(), name: z.string() }))
+  ),
   question: z.looseObject({ eventId: z.string(), text: z.string() }).nullable(),
   closeNote: z.string().nullable(),
   // Hosts before Waiting send none.

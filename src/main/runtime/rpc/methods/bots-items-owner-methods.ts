@@ -28,7 +28,7 @@ import { ownerOnly } from './bots-caller-gates'
 import {
   BOT_ITEMS_EVERYONE,
   botItemListScope,
-  botItemsOfPerson
+  botItemsOfPeople
 } from '../../../bots/bot-item-access'
 import { parseCursor, resolveItem } from './bots-items-write-support'
 import { allOpenItems, ownerViews } from './bots-items-owner-reads'
@@ -61,7 +61,9 @@ const LIST = defineMethod({
     const chatIds = params.chatIds ?? (params.chatId !== undefined ? [params.chatId] : undefined)
     const chat = {
       ...(chatIds ? { chatIds } : {}),
-      ...(params.person !== undefined ? botItemListScope(botItemsOfPerson(params.person)) : {})
+      ...(params.person !== undefined
+        ? botItemListScope(botItemsOfPeople(params.person === null ? null : [params.person]))
+        : {})
     }
     // Read after the rows, so a mark another device moved meanwhile is the one sent.
     const seenEventId = (): string =>

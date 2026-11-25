@@ -89,7 +89,7 @@ const MemberReader = memo(function MemberReader({
   const state = items.refreshFailed && !items.landed ? 'failed' : items.state
   const { working } = botNow
   // The list's parts, not the object the hook builds each render, so a report goes up only on change.
-  const { read: listRead, items: listItems, shown, groups, staleDays } = list
+  const { read: listRead, scoped, items: listItems, shown, groups, staleDays } = list
   const { closedTotal, loadMoreClosed, closedEnded, closedEndAt } = list
   const {
     read: chatListRead,
@@ -105,6 +105,7 @@ const MemberReader = memo(function MemberReader({
       seenEventId,
       list: {
         read: listRead,
+        scoped,
         chatRead: {
           read: chatListRead,
           failed: chatFailed,
@@ -134,6 +135,7 @@ const MemberReader = memo(function MemberReader({
     retry,
     seenEventId,
     listRead,
+    scoped,
     chatListRead,
     chatFailed,
     chatRetry,

@@ -7,7 +7,7 @@ import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import { BOT_ITEM_LIMITS, BOT_ITEM_OPEN_STATUSES } from '../../../../shared/bots/bot-items'
 import type { RpcContext } from '../core'
 
-/** Each row as the panel shows it: a teammate's item names them. */
+/** Each row as the panel shows it: a teammates' item names them. */
 export async function ownerViews(
   context: RpcContext,
   botId: string,
@@ -17,8 +17,10 @@ export async function ownerViews(
   const views = await context.runtime.botItems.views(records, summary)
   const bot = context.runtime.bots.list().find((entry) => entry.id === botId)
   return views.map((view, index) => {
-    const account = records[index]?.actsForAccount
-    return account && bot ? { ...view, person: botChatPerson(bot, account) } : view
+    const accounts = records[index]?.actsForAccounts
+    return accounts?.length && bot
+      ? { ...view, people: accounts.map((account) => botChatPerson(bot, account)) }
+      : view
   })
 }
 
@@ -26,7 +28,7 @@ export async function ownerViews(
 export async function allOpenItems(
   store: BotItemsRemote,
   botId: string,
-  chat: Pick<BotItemListQuery, 'chatIds' | 'actsForAccount'>
+  chat: Pick<BotItemListQuery, 'chatIds' | 'actsForAccounts'>
 ): Promise<BotItemRecord[]> {
   const open: BotItemRecord[] = []
   let cursor: { at: number; number: number } | undefined

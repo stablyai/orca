@@ -12,6 +12,7 @@ import {
   type BotItemGroups
 } from '../../../../../shared/bots/bot-item-groups'
 import { botItemCursorPlace, botItemReaches } from '../../../../../shared/bots/bot-item-merge'
+import type { BotHostReadState } from '../use-bot-host-read'
 import {
   readMoreBotItems,
   useBotChatItems,
@@ -29,6 +30,8 @@ const isClosed = (item: BotItem): boolean => item.status === 'done' || item.stat
 export type BotItemsShownList = {
   /** The bot's read, or the filtered chats' or person's; null while that first read is out. */
   read: BotItemsRead | null
+  /** `read` is the chats' or person's own, not the bot's. */
+  scoped: boolean
   chatRead: ReturnType<typeof useBotChatItems>
   /** Every loaded item, before the filter. */
   items: readonly BotItem[]
@@ -88,6 +91,7 @@ export function useBotItemsShownList(
   )
   return {
     read,
+    scoped: filtered,
     chatRead,
     items,
     shown,
@@ -100,5 +104,30 @@ export function useBotItemsShownList(
     loadMoreClosed: filter.needsYou || !cursor ? null : loadMore,
     closedEnded: filter.needsYou || (read !== null && !cursor),
     closedEndAt: filter.needsYou ? null : (botItemCursorPlace(cursor)?.at ?? null)
+  }
+}
+
+/** How the list's own read stands, as the panel says it: the bot's read, or the scoped one's. */
+export type BotItemsShownReadState = {
+  state: BotHostReadState
+  /** The latest re-read failed; the list shows the last good one. */
+  refreshFailed: boolean
+  retry: () => void
+}
+
+export function botItemsShownReadState(
+  list: Pick<BotItemsShownList, 'scoped' | 'read'> & {
+    chatRead: Pick<BotItemsShownList['chatRead'], 'failed' | 'retry'>
+  },
+  bot: BotItemsShownReadState
+): BotItemsShownReadState {
+  if (!list.scoped) {
+    return bot
+  }
+  const { failed, retry } = list.chatRead
+  return {
+    state: list.read ? 'ready' : failed ? 'failed' : 'loading',
+    refreshFailed: failed && list.read !== null,
+    retry
   }
 }
