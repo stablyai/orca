@@ -57,29 +57,34 @@ export function NativeChatModelCombobox({
     choices.some((choice) => choice.value === currentValue && choice.legacy)
   )
   const matcher = useMemo(() => nativeChatModelSearchMatcher(query), [query])
-  // Each model's text is built once per listing; cmdk asks for every row on every keystroke.
+  // A query of only "/" or "-" filters nothing, so it browses rather than revealing search-only rows.
+  const searching = matcher !== null
+  // Built only while searching, then once per listing; cmdk asks for every row on every keystroke.
   const searchTexts = useMemo(
     () =>
-      new Map(
-        choices.map((choice) => [
-          choice.value,
-          nativeChatModelSearchText([
-            choice.value,
-            nativeChatSessionChoiceLabel(choice, say),
-            choice.description ?? ''
-          ])
-        ])
-      ),
-    [choices]
+      searching
+        ? new Map(
+            choices.map((choice) => [
+              choice.value,
+              nativeChatModelSearchText([
+                choice.value,
+                nativeChatSessionChoiceLabel(choice, say),
+                choice.description ?? ''
+              ])
+            ])
+          )
+        : null,
+    [choices, searching]
   )
   // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
   const modelChoiceFilter = (value: string, search: string, keywords?: string[]): number => {
     const matches = search === query ? matcher : nativeChatModelSearchMatcher(search)
-    const text = searchTexts.get(value) ?? nativeChatModelSearchText([value, ...(keywords ?? [])])
-    return !matches || matches(text) ? 1 : 0
+    if (!matches) {
+      return 1
+    }
+    const text = searchTexts?.get(value) ?? nativeChatModelSearchText([value, ...(keywords ?? [])])
+    return matches(text) ? 1 : 0
   }
-  // A query of only "/" or "-" filters nothing, so it browses rather than revealing search-only rows.
-  const searching = matcher !== null
   // Membership ignores the selection, so picking a model never moves rows in the open list.
   const folded = (choice: SessionOptionSelectChoice) => !searching && Boolean(choice.legacy)
   // The current value stays listed even while a pending pick still carries its hidden flag.
