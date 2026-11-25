@@ -18,7 +18,6 @@ import {
   withSavedBotToolHeaders
 } from '../bots/bot-tool-credentials'
 import {
-  botOwnTool,
   botOwnTools,
   botToolEntries,
   changeBotToolEntries,
@@ -36,7 +35,7 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 
 export type HostEntry = BotToolEntry & { id: string }
 
-export const gone = (): McpServersError =>
+const gone = (): McpServersError =>
   new McpServersError('mcp_server_gone', 'This server is no longer on this host.')
 export const nameTaken = (name: string): McpServersError =>
   new McpServersError('mcp_server_name_taken', `This host already has a server named ${name}.`)
@@ -108,10 +107,25 @@ export async function entryById(folder: string, id: string): Promise<HostEntry> 
   return entry
 }
 
-/** The server as the write stored it: its credential id and sign-in are the file's, not the input's. */
+/** The servers as the write stored them: credential ids and sign-ins are the file's, not the input's. */
+export async function storedViews(folder: string, ids: readonly string[]): Promise<McpServer[]> {
+  const byId = new Map((await readHostEntries(folder)).entries.map((entry) => [entry.id, entry]))
+  const entries = ids.map((id) => {
+    const entry = byId.get(id)
+    if (!entry) {
+      throw gone()
+    }
+    return entry
+  })
+  const tools = botOwnTools(
+    entries.map((entry) => entry.server),
+    folder
+  )
+  return entries.map((entry, i) => viewOf(entry, tools[i]!))
+}
+
 export async function storedView(folder: string, id: string): Promise<McpServer> {
-  const entry = await entryById(folder, id)
-  return viewOf(entry, botOwnTool(entry.server, folder))
+  return (await storedViews(folder, [id]))[0]!
 }
 
 /** The server's own settings and saved values, never its switches. */

@@ -3,13 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { freeBotToolName, type BotToolServer } from '../../shared/bot-tools'
 import type { McpServer, McpServerWorkspaces } from '../../shared/mcp-servers/mcp-servers'
 import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
-import {
-  changeHostEntries,
-  gone,
-  nameTaken,
-  readMcpHostList,
-  type HostEntry
-} from './mcp-host-list'
+import { changeHostEntries, nameTaken, storedViews, type HostEntry } from './mcp-host-list'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 
 /**
@@ -68,13 +62,5 @@ export async function addMcpServers(
   if (refused) {
     throw refused.error
   }
-  // The servers as the write stored them: their credential ids and sign-ins are the file's.
-  const byId = new Map((await readMcpHostList(folder)).servers.map((server) => [server.id, server]))
-  return ids.map((id) => {
-    const server = byId.get(id)
-    if (!server) {
-      throw gone()
-    }
-    return server
-  })
+  return storedViews(folder, ids)
 }

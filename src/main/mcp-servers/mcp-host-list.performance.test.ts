@@ -103,7 +103,7 @@ it('writes nothing for a switch already where it is set', async () => {
   expect(Object.fromEntries(writes)).toEqual({ 10: 0, 100: 0 })
 })
 
-// The write's read and sign-in check, and one read and sign-in for every server it answers.
+// The write's read and sign-in check, and the read of its answer, which opens no other row's sign-in.
 it('adds a paste of many servers in one write and one read back', async () => {
   const writes = new Map<number, number>()
   const paste = (count: number) => async (folder: string) => {
@@ -116,8 +116,8 @@ it('adds a paste of many servers in one write and one read back', async () => {
     expect(await addMcpServers(servers, { nameGiven: false }, folder)).toHaveLength(count)
     writes.set(count, botToolsEpoch(folder) - epoch)
   }
-  expect(await opensFor(10, paste(10))).toBe(40)
-  expect(await opensFor(100, paste(100))).toBe(400)
+  expect(await opensFor(10, paste(10))).toBe(30)
+  expect(await opensFor(100, paste(100))).toBe(300)
   expect(Object.fromEntries(writes)).toEqual({ 10: 1, 100: 1 })
 })
 

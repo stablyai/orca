@@ -54,9 +54,13 @@ import {
   moveAgentMcpServer
 } from './mcp-servers-import'
 
+/** The list's last epoch told to clients: concurrent calls that see the same write tell them once. */
+let announcedEpoch: number | null = null
+
 /**
  * Runs `work` with the switch on. A change (`true`) also tells every other client to re-read the
- * list; `'written'` does only when the list's file was written, even by work that then failed.
+ * list; `'written'` does only when the list was written since the call began and no other call has
+ * told them of that write yet, so work that wrote and then failed still tells them.
  */
 export async function onHost<T>(
   context: RpcContext,
@@ -72,7 +76,10 @@ export async function onHost<T>(
     done = true
     return result
   } finally {
-    if (changes === 'written' ? botToolsEpoch(folder) !== epoch : changes && done) {
+    const now = botToolsEpoch(folder)
+    const written = now !== epoch && now !== announcedEpoch
+    if (changes === 'written' ? written : changes && done) {
+      announcedEpoch = now
       context.runtime.notifyMcpServersChanged()
       // A shared server removed, unshared or edited stops now, not on its next request.
       void sharedMcpProcesses.reconcile(folder).catch(() => {})
