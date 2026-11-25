@@ -1912,15 +1912,6 @@
     "sheetHeader": {
       "close": "Kapat"
     },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "{{count}} alt ajanı gizle",
-      "hideChildAgents_other": "{{count}} alt ajanı gizle",
-      "showChildAgents_one": "{{count}} alt ajanı göster",
-      "showChildAgents_other": "{{count}} alt ajanı göster",
-      "hideIdleChildren": "Boştaki {{count}} alt ajanı gizle",
-      "showIdleChildren": "Boştaki {{count}} alt ajanı göster",
-      "idleChildCount": "{{count}} boşta"
-    },
     "diffReviewFilesSheet": {
       "title": "Dosyalar",
       "search": "Dosyaya git",

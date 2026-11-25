@@ -2024,19 +2024,6 @@
     "sheetHeader": {
       "close": "Закрыть"
     },
-    "worktreeAgentList": {
-      "hideChildAgents_one": "Скрыть {{count}} дочернего агента",
-      "hideChildAgents_other": "Скрыть {{count}} дочерних агента",
-      "hideChildAgents_few": "Скрыть {{count}} дочерних агента",
-      "hideChildAgents_many": "Скрыть {{count}} дочерних агентов",
-      "showChildAgents_one": "Показать {{count}} дочернего агента",
-      "showChildAgents_other": "Показать {{count}} дочерних агента",
-      "showChildAgents_few": "Показать {{count}} дочерних агента",
-      "showChildAgents_many": "Показать {{count}} дочерних агентов",
-      "hideIdleChildren": "Скрыть простаивающих дочерних агентов: {{count}}",
-      "showIdleChildren": "Показать простаивающих дочерних агентов: {{count}}",
-      "idleChildCount": "Простаивает: {{count}}"
-    },
     "diffReviewFilesSheet": {
       "title": "Файлы",
       "search": "Перейти к файлу",
