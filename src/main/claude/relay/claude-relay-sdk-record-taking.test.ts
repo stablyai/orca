@@ -31,13 +31,14 @@ describe('Claude relay acks through the SDK', () => {
     expect(consumption.upTo(4)).toBe(4)
   })
 
-  it("takes an idle chat's control answers at once, so they cannot pause its output", () => {
+  it("takes an idle chat's control answers once the relay counts them, so they cannot pause its output", async () => {
     const consumption = new RelayedProviderConsumption(() => {})
     const taking = claudeRelaySdkRecordTaking(consumption.taking)
     for (let seq = 1; seq <= 3; seq += 1) {
       consumption.pushed(true, seq)
       taking.observe(`{"type":"control_response","response":{"request_id":"r${seq}"}}\n`)
     }
+    await Promise.resolve()
     expect(consumption.upTo(3)).toBe(3)
   })
 

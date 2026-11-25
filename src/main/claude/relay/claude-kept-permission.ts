@@ -127,7 +127,12 @@ export function applyLive(
 ): NonNullable<Adapter['applyPermissionMode']> {
   return async ({ sessionId, fence, mode }) => {
     const session = keptSession(sessions, sessionId)
-    if (!session || session.fence !== fence || mode === 'own' || bypassRefused(session, mode)) {
+    if (!session || session.fence !== fence) {
+      return
+    }
+    // A newer pick replaces what the reattach owed the next message.
+    session.keptModeOwed = undefined
+    if (mode === 'own' || bypassRefused(session, mode)) {
       return
     }
     await applyBuildMode(session, claudePermissionModeFor(mode), timeoutMs())

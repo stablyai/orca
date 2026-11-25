@@ -64,10 +64,10 @@ export function claudeRelaySdkRecordTaking(records: ProviderRelayRecordTaking): 
         }
         if (!part.startsWith(CONTROL_ANSWER)) {
           ids.push(lineUuid(part))
-        } else if (head === ids.length) {
-          records.taken()
         } else {
           ids.push(TAKEN_ON_REACH)
+          // The relay counts a line only after handing it on, which reaches this read first.
+          queueMicrotask(takeReached)
         }
       }
     },
