@@ -23,7 +23,6 @@ import {
   loneFastTier,
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
-import { nativeChatModelSearchMatcher } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-model-search'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
@@ -137,17 +136,20 @@ export function SessionOptionSummaryRow({
   )
 }
 
-type DescriptorRowsProps = {
-  descriptor: SessionOptionDescriptor
+type MoreChoices = { shown: boolean; onToggle: () => void }
+
+type SelectRowProps = {
   disabled: boolean
   onSetOption: (value: SessionOptionValue) => void
-  onInvokeAction: () => void
   /** A leading mark per choice, as each permission mode has its icon. */
   choiceLeading?: (value: string) => ReactNode
   /** Whether search-only choices are revealed; without it they stay off the list. */
-  moreChoices?: { shown: boolean; onToggle: () => void }
-  /** The model list's search: every match, search-only and folded ones included. */
-  query?: string
+  moreChoices?: MoreChoices
+}
+
+type DescriptorRowsProps = SelectRowProps & {
+  descriptor: SessionOptionDescriptor
+  onInvokeAction: () => void
 }
 
 /** A Fast-only speed, which toggles on one row like Claude's Fast mode. */
@@ -172,8 +174,7 @@ export function descriptorRowElements(
     onSetOption,
     onInvokeAction,
     choiceLeading,
-    moreChoices,
-    query = ''
+    moreChoices
   }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
@@ -225,74 +226,79 @@ export function descriptorRowElements(
       />
     ]
   }
-  // A provider fallback is what runs, so the saved model stays pickable.
-  const currentValue = descriptor.fallbackModel ?? descriptor.kind.currentValue
-  // An unreported effort marks nothing, rather than reading as a confirmed choice.
-  const marked =
-    descriptor.category === 'thought_level' && descriptor.valueSource === 'unknown'
-      ? undefined
-      : currentValue
-  const choices =
-    descriptor.category === 'thought_level'
-      ? orderEffortLevels(descriptor.kind.choices)
-      : descriptor.kind.choices
-  const choiceRow = (choice: (typeof choices)[number]) => (
-    <ListRow
-      key={choice.value}
-      title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
-      subtitle={choice.description}
-      leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
-      selected={choice.value === marked}
-      disabled={locked}
-      onPress={() => onSetOption(choice.value)}
-    />
+  return browsedSelectItems(descriptor, moreChoices).map((item) =>
+    selectItemRow(descriptor, item, { disabled, onSetOption, choiceLeading, moreChoices }, t)
   )
-  const searched = searchedChoices(descriptor, query)
-  if (searched) {
-    return searched.map(choiceRow)
-  }
-  // Browsing, search-only rows stay out; folded ones follow a More models toggle.
-  const listed = choices.filter(
-    (choice) =>
-      !choice.hidden ||
-      choice.value === currentValue ||
-      choice.value === descriptor.kind.currentValue
-  )
-  const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
-  return [
-    ...listed.filter((choice) => !choice.legacy).map(choiceRow),
-    ...(more.length > 0 && moreChoices
-      ? [
-          ...(moreChoices.shown ? more.map(choiceRow) : []),
-          <ListRow
-            key="more-choices"
-            title={
-              moreChoices.shown
-                ? t('chat.sessionOptionRows.fewerModels', 'Fewer models')
-                : t('chat.sessionOptionRows.moreModels', 'More models')
-            }
-            onPress={moreChoices.onToggle}
-          />
-        ]
-      : [])
-  ]
 }
 
-/** A select's choices matching `query` by id, label or description, in the host's order; null for no search. */
-export function searchedChoices(
+const MORE_CHOICES = 'more-choices'
+/** A row of a select's list: one of its choices, or the More models toggle. */
+export type SelectListItem = SessionOptionSelectChoice | typeof MORE_CHOICES
+
+export function selectListItemKey(item: SelectListItem): string {
+  return item === MORE_CHOICES ? MORE_CHOICES : item.value
+}
+
+/** A select's list while browsing: search-only choices stay out; folded ones follow a More models toggle. */
+export function browsedSelectItems(
   descriptor: SessionOptionDescriptor,
-  query: string
-): SessionOptionSelectChoice[] | null {
-  const matches = nativeChatModelSearchMatcher(query)
-  if (!matches || descriptor.kind.type !== 'select') {
-    return null
+  moreChoices?: MoreChoices
+): SelectListItem[] {
+  const { kind } = descriptor
+  if (kind.type !== 'select') {
+    return []
   }
-  return descriptor.kind.choices.filter((choice) =>
-    matches([
-      choice.value,
-      nativeChatSessionChoiceLabel(choice, say, descriptor.id),
-      choice.description ?? ''
-    ])
+  // A provider fallback is what runs, so the saved model stays pickable.
+  const currentValue = descriptor.fallbackModel ?? kind.currentValue
+  const choices =
+    descriptor.category === 'thought_level' ? orderEffortLevels(kind.choices) : kind.choices
+  const listed = choices.filter(
+    (choice) =>
+      !choice.hidden || choice.value === currentValue || choice.value === kind.currentValue
+  )
+  const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
+  const folded: SelectListItem[] =
+    more.length > 0 && moreChoices ? [...(moreChoices.shown ? more : []), MORE_CHOICES] : []
+  return [...listed.filter((choice) => !choice.legacy), ...folded]
+}
+
+/** One row of a select's list: a choice, checked when it is the one running, or the More models toggle. */
+export function selectItemRow(
+  descriptor: SessionOptionDescriptor,
+  item: SelectListItem,
+  { disabled, onSetOption, choiceLeading, moreChoices }: SelectRowProps,
+  t: Translate
+): ReactElement {
+  if (item === MORE_CHOICES) {
+    return (
+      <ListRow
+        key={MORE_CHOICES}
+        title={
+          moreChoices?.shown
+            ? t('chat.sessionOptionRows.fewerModels', 'Fewer models')
+            : t('chat.sessionOptionRows.moreModels', 'More models')
+        }
+        onPress={moreChoices?.onToggle}
+      />
+    )
+  }
+  const { kind } = descriptor
+  // An unreported effort marks nothing, rather than reading as a confirmed choice.
+  const marked =
+    kind.type !== 'select' ||
+    (descriptor.category === 'thought_level' && descriptor.valueSource === 'unknown')
+      ? undefined
+      : (descriptor.fallbackModel ?? kind.currentValue)
+  return (
+    <ListRow
+      key={item.value}
+      title={nativeChatSessionChoiceLabel(item, say, descriptor.id)}
+      subtitle={item.description}
+      leading={choiceLeading ? (choiceLeading(item.value) ?? null) : undefined}
+      selected={item.value === marked}
+      disabled={disabled || !descriptor.settable}
+      onPress={() => onSetOption(item.value)}
+    />
   )
 }
 

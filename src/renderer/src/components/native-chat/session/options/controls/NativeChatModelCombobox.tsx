@@ -15,7 +15,10 @@ import type {
   SessionOptionSelectChoice
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
-import { nativeChatModelSearchMatcher } from '../../../../../../../shared/native-chat/input/session-options/native-chat-model-search'
+import {
+  nativeChatModelSearchMatcher,
+  nativeChatModelSearchText
+} from '../../../../../../../shared/native-chat/input/session-options/native-chat-model-search'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
@@ -40,7 +43,7 @@ type NativeChatModelComboboxProps = {
 // Why not cmdk's scorer: it matches scattered letters and reorders the host's list.
 function modelChoiceFilter(value: string, search: string, keywords?: string[]): number {
   const matches = nativeChatModelSearchMatcher(search)
-  return !matches || matches([value, ...(keywords ?? [])]) ? 1 : 0
+  return !matches || matches(nativeChatModelSearchText([value, ...(keywords ?? [])])) ? 1 : 0
 }
 
 export function NativeChatModelCombobox({
@@ -59,7 +62,8 @@ export function NativeChatModelCombobox({
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
     choices.some((choice) => choice.value === currentValue && choice.legacy)
   )
-  const searching = Boolean(query.trim())
+  // A query of only "/" or "-" filters nothing, so it browses rather than revealing search-only rows.
+  const searching = nativeChatModelSearchMatcher(query) !== null
   // Membership ignores the selection, so picking a model never moves rows in the open list.
   const folded = (choice: SessionOptionSelectChoice) => !searching && Boolean(choice.legacy)
   // The current value stays listed even while a pending pick still carries its hidden flag.

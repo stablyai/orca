@@ -1,4 +1,4 @@
-import { useState, type ReactElement } from 'react'
+import { useMemo, useState } from 'react'
 import { FlatList, Keyboard, StyleSheet, View } from 'react-native'
 import { MobileSearchField } from '../../../../components/controls/MobileSearchField'
 import { MobileNoMatchState } from '../../../../components/feedback/MobileStateView'
@@ -11,7 +11,18 @@ import type {
   SessionOptionDescriptor,
   SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
-import { descriptorRowElements, searchedChoices } from './MobileNativeChatSessionOptionRows'
+import { nativeChatSessionChoiceLabel } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
+import {
+  nativeChatModelSearchMatcher,
+  nativeChatModelSearchText
+} from '../../../../../../src/shared/native-chat/input/session-options/native-chat-model-search'
+import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
+import {
+  browsedSelectItems,
+  selectItemRow,
+  selectListItemKey,
+  type SelectListItem
+} from './MobileNativeChatSessionOptionRows'
 
 // More than fits one sheet gets a search field; more than two sheets opens on it.
 const SEARCH_FROM = 11
@@ -23,8 +34,9 @@ function browsableCount(model: SessionOptionDescriptor): number {
     : 0
 }
 
+/** An agent-picker model is one action row, not a list to search. */
 export function modelListNeedsSearch(model: SessionOptionDescriptor | undefined): boolean {
-  return model !== undefined && browsableCount(model) >= SEARCH_FROM
+  return model !== undefined && !model.action && browsableCount(model) >= SEARCH_FROM
 }
 
 /** The model page of a long catalog (an OpenRouter key lists hundreds): a pinned search over a virtualised list. */
@@ -42,39 +54,47 @@ export function MobileNativeChatModelSearchList({
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
   const [query, setQuery] = useState('')
+  // Decided on arrival, so a listing that grows mid-visit never raises the keyboard.
+  const [autoFocus] = useState(() => browsableCount(model) >= FOCUS_FROM)
+  const choices = model.kind.type === 'select' ? model.kind.choices : []
+  // Each model's text is built once per listing, not on every keystroke.
+  const texts = useMemo(
+    () =>
+      choices.map((choice) =>
+        nativeChatModelSearchText([
+          choice.value,
+          nativeChatSessionChoiceLabel(choice, say, model.id),
+          choice.description ?? ''
+        ])
+      ),
+    [choices, model.id]
+  )
+  const matches = nativeChatModelSearchMatcher(query)
+  // A search lists every match, search-only and folded models included, as desktop does.
+  const items: SelectListItem[] = matches
+    ? choices.filter((_, index) => matches(texts[index]!))
+    : browsedSelectItems(model, moreChoices)
   const pick = (value: SessionOptionValue): void => {
     Keyboard.dismiss()
     onSetOption(value)
   }
-  const rows = descriptorRowElements(
-    {
-      descriptor: model,
-      disabled,
-      onSetOption: pick,
-      onInvokeAction: () => {},
-      moreChoices,
-      query
-    },
-    t
-  )
-  const pickOnlyMatch = (): void => {
-    const matches = searchedChoices(model, query)
-    if (matches?.length === 1 && !disabled) {
-      pick(matches[0]!.value)
-    }
-  }
+  const only = matches && items.length === 1 ? items[0] : undefined
   return (
     <>
       <MobileSearchField
         value={query}
         onChangeText={setQuery}
         placeholder={t('chat.sessionOptionPickers.searchModels', 'Search models')}
-        autoFocus={browsableCount(model) >= FOCUS_FROM}
+        autoFocus={autoFocus}
         returnKeyType="done"
-        onSubmitEditing={pickOnlyMatch}
+        onSubmitEditing={() => {
+          if (only && typeof only !== 'string' && !disabled && model.settable) {
+            pick(only.value)
+          }
+        }}
         style={styles.search}
       />
-      {rows.length === 0 ? (
+      {items.length === 0 ? (
         <MobileNoMatchState
           message={t('chat.sessionOptionPickers.noModelsMatch', 'No models match “{{query}}”', {
             query: query.trim()
@@ -83,10 +103,13 @@ export function MobileNativeChatModelSearchList({
         />
       ) : (
         <FlatList
-          data={rows}
+          data={items}
           extraData={colorScheme}
-          keyExtractor={rowKey}
-          renderItem={renderRow}
+          keyExtractor={selectListItemKey}
+          // Rows are built as they scroll in, so a broad search over hundreds of models stays cheap.
+          renderItem={({ item }) =>
+            selectItemRow(model, item, { disabled, onSetOption: pick, moreChoices }, t)
+          }
           ItemSeparatorComponent={RowSeparator}
           style={styles.group}
           initialNumToRender={16}
@@ -98,9 +121,6 @@ export function MobileNativeChatModelSearchList({
     </>
   )
 }
-
-const rowKey = (row: ReactElement): string => String(row.key)
-const renderRow = ({ item }: { item: ReactElement }): ReactElement => item
 
 function RowSeparator(): React.JSX.Element {
   useMobileColorScheme()
