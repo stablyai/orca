@@ -19620,6 +19620,8 @@
               "searchProjects": "Buscar projetos...",
               "noMatches": "Nenhum projeto corresponde à sua busca.",
               "chooseSource": "Escolher origem da tarefa",
+              "only": "Somente",
+              "onlyProject": "Somente {{project}}",
               "hostCount_one": "{{count}} host",
               "hostCount_other": "{{count}} hosts",
               "hostCount_many": "{{count}} hosts"
