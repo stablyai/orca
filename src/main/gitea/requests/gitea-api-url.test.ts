@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { validateGiteaApiUrl } from './gitea-api-url'
+import { giteaApiBelongsToRepoHost, validateGiteaApiUrl } from './gitea-api-url'
 import { giteaGetJsonAtBase, resolveGiteaAuth } from './gitea-request'
 import { parseGiteaRepoRef } from '../repository-ref'
 
@@ -75,6 +75,30 @@ describe('Gitea credential destinations', () => {
       token: 'env-token'
     })
     await expect(resolveGiteaAuth(otherHost)).resolves.toMatchObject({ token: null })
+  })
+
+  it.each([
+    ['[::1]', 'http://[::1]:3000/api/v1', true],
+    ['[::1]:3000', 'http://[::1]:3000/api/v1', true],
+    ['[::1]:3001', 'http://[::1]:3000/api/v1', false],
+    ['[::2]', 'http://[::1]:3000/api/v1', false],
+    ['git.lan:3001', 'http://git.lan:3000/api/v1', false]
+  ])('matches repo host %s against %s: %s', (repoHost, apiBaseUrl, expected) => {
+    expect(giteaApiBelongsToRepoHost(apiBaseUrl, repoHost)).toBe(expected)
+  })
+
+  it('sends the environment token to its API for a port-less IPv6 SSH remote', async () => {
+    vi.stubEnv('ORCA_GITEA_TOKEN', 'env-token')
+    vi.stubEnv('ORCA_GITEA_API_BASE_URL', 'http://[::1]:3000')
+    serverForHost.mockResolvedValue(null)
+    const repo = parseGiteaRepoRef('ssh://git@[::1]/team/project.git')
+    if (!repo) {
+      throw new Error('Missing test repository')
+    }
+    await expect(resolveGiteaAuth(repo)).resolves.toEqual({
+      apiBaseUrl: 'http://[::1]:3000',
+      token: 'env-token'
+    })
   })
 
   it('matches a saved token to a non-default HTTPS port', async () => {

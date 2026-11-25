@@ -27,5 +27,12 @@ export function giteaApiBelongsToRepoHost(apiBaseUrl: string, repoHost: string):
     return false
   }
   const host = repoHost.toLowerCase()
-  return host.includes(':') ? api.host.toLowerCase() === host : api.hostname.toLowerCase() === host
+  return hasExplicitPort(host)
+    ? api.host.toLowerCase() === host
+    : api.hostname.toLowerCase() === host
+}
+
+// `git.lan:3000` and `[::1]:3000` name a port; a bracketed IPv6 host such as `[::1]` does not.
+function hasExplicitPort(host: string): boolean {
+  return /^(?:\[[^\]]+\]|[^:[\]]+):\d+$/.test(host)
 }
