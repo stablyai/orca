@@ -59,6 +59,7 @@ import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
 import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
+import { systemDefaultCandidates } from './scope/system-default-lanes'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
 import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
@@ -191,14 +192,17 @@ export function AccountsPane({
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
   // Unknown remote platforms hide WSL rows; check the full roster before marking System default active.
-  const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
-  const systemCodexActive = !(
-    ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
+  const systemCodexActive = !systemDefaultCandidates(
+    codexAccounts.accounts,
+    visibleCodexAccounts,
+    accountVisibilityOptions
   ).some((account) =>
     providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
   )
-  const systemClaudeActive = !(
-    ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
+  const systemClaudeActive = !systemDefaultCandidates(
+    claudeAccounts.accounts,
+    visibleClaudeAccounts,
+    accountVisibilityOptions
   ).some((account) =>
     providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
   )

@@ -19,8 +19,17 @@ export const EMPTY_WSL_DISTROS: string[] = []
 export function getCodexSystemDefaultSubtitle(
   identity: CodexSystemDefaultIdentity | undefined,
   runtimeSentenceLabel: string,
-  t: Translate = translate
+  t: Translate = translate,
+  includesWsl = false
 ): string {
+  // Say the click also resets the remote WSL lanes it clears.
+  if (includesWsl) {
+    return t(
+      'accounts.selection.codexSystemDefaultIncludingWsl',
+      'Use your current {{value0}} Codex login, including WSL.',
+      { value0: runtimeSentenceLabel }
+    )
+  }
   if (identity?.authKind === 'oauth' && identity.email) {
     return identity.email
   }

@@ -1,14 +1,11 @@
 import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import {
-  claudeRemoteWslDefaultUnavailableMessage,
-  selectClaudeProviderAccount
-} from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
+import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import {
   getSystemDefaultLanes,
-  runSystemDefaultSelect,
-  systemDefaultBlockedForClaude
+  lanesIncludeWsl,
+  systemDefaultCandidates
 } from '../scope/system-default-lanes'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -43,6 +40,7 @@ export function renderClaudeAccountsSection(
     accountRuntime,
     accountRuntimeSentenceLabel,
     accountRuntimeUnavailable,
+    accountVisibilityOptions,
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
@@ -56,15 +54,18 @@ export function renderClaudeAccountsSection(
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
-  const systemDefaultLanes = getSystemDefaultLanes(
-    accountRuntime,
-    visibleClaudeAccounts,
-    claudeAccounts,
-    isRemoteAccountScope
-  )
-  const systemDefaultBlocked = systemDefaultBlockedForClaude(
-    systemDefaultLanes,
-    isRemoteAccountScope
+  // Remote Claude has no targeted select, so System default resets only the shown lane and says so.
+  const skipsWslLanes = lanesIncludeWsl(
+    getSystemDefaultLanes(
+      accountRuntime,
+      systemDefaultCandidates(
+        claudeAccounts.accounts,
+        visibleClaudeAccounts,
+        accountVisibilityOptions
+      ),
+      claudeAccounts,
+      isRemoteAccountScope
+    )
   )
   // System default belongs to the host home, never a WSL distro.
   const systemDefaultEmail =
@@ -190,16 +191,15 @@ export function renderClaudeAccountsSection(
             <button
               type="button"
               onClick={() =>
-                void runSystemDefaultSelect(
-                  systemDefaultLanes,
-                  accountOwner,
-                  runClaudeAccountAction,
-                  selectClaudeProviderAccount
+                void runClaudeAccountAction('select:system', () =>
+                  selectClaudeProviderAccount(accountOwner, {
+                    accountId: null,
+                    runtime: accountRuntime.runtime,
+                    wslDistro: accountRuntime.wslDistro
+                  })
                 )
               }
-              disabled={
-                claudeAction !== 'idle' || accountRuntimeUnavailable || systemDefaultBlocked
-              }
+              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable}
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                 systemClaudeActive
                   ? 'border-foreground/20 bg-accent/15'
@@ -225,8 +225,11 @@ export function renderClaudeAccountsSection(
                   ) : null}
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {systemDefaultBlocked
-                    ? claudeRemoteWslDefaultUnavailableMessage()
+                  {skipsWslLanes
+                    ? t(
+                        'accounts.selection.claudeWslLanesNotReset',
+                        "WSL Claude accounts can't be reset from here yet."
+                      )
                     : t(
                         'auto.components.settings.AccountsPane.e05d0ff737',
                         'Use your current {{value0}} Claude login.',

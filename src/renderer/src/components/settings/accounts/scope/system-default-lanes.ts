@@ -1,30 +1,43 @@
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { CodexRateLimitAccountsState } from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { ProviderAccountSelection } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import {
   getProviderAccountRuntime,
   providerAccountIsActiveInView,
   type ProviderAccountRuntimeView
 } from '../../../provider-accounts/provider-account-visibility'
-import type { ProviderAccountAction } from '../accounts-pane-types'
+import type {
+  CodexAccountActionRunner,
+  ProviderAccountVisibilityOptions
+} from '../accounts-pane-types'
 
 type Account = Parameters<typeof getProviderAccountRuntime>[0]
 type Selection = Parameters<typeof providerAccountIsActiveInView>[1]
 type Lane = { runtime: 'host' | 'wsl'; wslDistro: string | null }
 
-/** Lanes the pane's single "System default" must clear for the shown view. */
+/** Accounts System default's Active badge and lanes judge; an unknown remote platform hides WSL rows. */
+export function systemDefaultCandidates<T extends Account>(
+  roster: readonly T[],
+  visibleAccounts: readonly T[],
+  options: ProviderAccountVisibilityOptions
+): readonly T[] {
+  return options.remoteOwner && options.ownerPlatform === null ? roster : visibleAccounts
+}
+
+/** Lanes the pane's single System default clears: active remote WSL lanes first, the shown lane last. */
 export function getSystemDefaultLanes(
   view: ProviderAccountRuntimeView,
-  visibleAccounts: readonly Account[],
+  candidates: readonly Account[],
   selection: Selection,
   remoteOwner: boolean
 ): Lane[] {
-  const lanes: Lane[] = [{ runtime: view.runtime, wslDistro: view.wslDistro ?? null }]
+  const shownLane: Lane = { runtime: view.runtime, wslDistro: view.wslDistro ?? null }
   if (!remoteOwner || view.runtime !== 'host') {
-    return lanes
+    return [shownLane]
   }
   // A remote Windows roster shows WSL rows beside host ones, so their active lanes must clear too.
   const wslDistros = new Set<string | null>()
-  for (const account of visibleAccounts) {
+  for (const account of candidates) {
     const lane = getProviderAccountRuntime(account)
     if (
       lane.runtime === 'wsl' &&
@@ -33,32 +46,39 @@ export function getSystemDefaultLanes(
       wslDistros.add(lane.wslDistro)
     }
   }
+  // Hidden WSL lanes go first so a failure leaves the lane the user sees untouched.
   return [
-    ...lanes,
-    ...Array.from(wslDistros, (wslDistro) => ({ runtime: 'wsl' as const, wslDistro }))
+    ...Array.from(wslDistros, (wslDistro) => ({ runtime: 'wsl' as const, wslDistro })),
+    shownLane
   ]
 }
 
-/** Remote Claude has no targeted select, so its WSL lanes cannot go back to System default. */
-export function systemDefaultBlockedForClaude(
-  lanes: readonly Lane[],
-  remoteOwner: boolean
-): boolean {
-  return remoteOwner && lanes.some((lane) => lane.runtime === 'wsl')
+export function lanesIncludeWsl(lanes: readonly Lane[]): boolean {
+  return lanes.some((lane) => lane.runtime === 'wsl')
 }
 
-/** Runs one System default select per lane, each through the pane's runner for its own restart diff. */
-export async function runSystemDefaultSelect<T>(
+/** One runner action for every lane: the button stays disabled throughout, and the first failure stops it with one toast. */
+export function runSystemDefaultSelect(
   lanes: readonly Lane[],
   owner: RuntimeClientTarget,
-  run: (
-    action: ProviderAccountAction,
-    operation: () => Promise<T>,
-    actionRuntime: ProviderAccountRuntimeView
-  ) => Promise<void>,
-  select: (owner: RuntimeClientTarget, selection: ProviderAccountSelection) => Promise<T>
+  run: CodexAccountActionRunner,
+  select: (
+    owner: RuntimeClientTarget,
+    selection: ProviderAccountSelection
+  ) => Promise<CodexRateLimitAccountsState>
 ): Promise<void> {
-  for (const lane of lanes) {
-    await run('select:system', () => select(owner, { accountId: null, ...lane }), lane)
-  }
+  return run(
+    'select:system',
+    async () => {
+      let next: CodexRateLimitAccountsState | null = null
+      for (const lane of lanes) {
+        next = await select(owner, { accountId: null, ...lane })
+      }
+      if (!next) {
+        throw new Error('No account lane to reset.')
+      }
+      return next
+    },
+    lanes
+  )
 }

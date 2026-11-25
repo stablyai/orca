@@ -77,21 +77,29 @@ export function createCodexAccountActionRunner(
 
   // Remote Windows combines host/WSL rows; compare the selected row’s runtime slot, not the forced host view.
   return async (action, operation, actionRuntime = accountRuntime): Promise<void> => {
-    const previousActiveAccountId = getProviderAccountActiveIdForView(codexAccounts, actionRuntime)
+    // A multi-lane System default diffs each lane it cleared.
+    const runtimes = Array.isArray(actionRuntime) ? actionRuntime : [actionRuntime]
+    const previousIds = runtimes.map((runtime) =>
+      getProviderAccountActiveIdForView(codexAccounts, runtime)
+    )
     setCodexAction(action)
     try {
       const next = await operation()
       await syncCodexAccounts(next)
       recordFeatureInteraction('codex-account-switching')
-      const nextActiveAccountId = getProviderAccountActiveIdForView(next, actionRuntime)
-      const shouldPromptRestart =
-        action === 'adding' ||
-        (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
-        (action.startsWith('reauth:') &&
-          nextActiveAccountId !== null &&
-          action === `reauth:${nextActiveAccountId}`) ||
-        (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
-      if (shouldPromptRestart) {
+      runtimes.forEach((runtime, index) => {
+        const previousActiveAccountId = previousIds[index]
+        const nextActiveAccountId = getProviderAccountActiveIdForView(next, runtime)
+        const shouldPromptRestart =
+          action === 'adding' ||
+          (action.startsWith('select:') && previousActiveAccountId !== nextActiveAccountId) ||
+          (action.startsWith('reauth:') &&
+            nextActiveAccountId !== null &&
+            action === `reauth:${nextActiveAccountId}`) ||
+          (action.startsWith('remove:') && previousActiveAccountId !== nextActiveAccountId)
+        if (!shouldPromptRestart) {
+          return
+        }
         // Find the newly created account’s concrete distro from the roster diff; the row may say WSL default and active-ID lookup becomes ambiguous across distro slots.
         const newAccounts =
           action === 'adding'
@@ -115,11 +123,11 @@ export function createCodexAccountActionRunner(
           nextAccountId: nextActiveAccountId ?? null,
           // Only this runtime slot changed; other lanes retain their launch accounts.
           owner: accountOwner,
-          target: addedAccount ? getProviderAccountRuntime(addedAccount) : actionRuntime,
+          target: addedAccount ? getProviderAccountRuntime(addedAccount) : runtime,
           // Clearing distro-less WSL resets every distro slot.
           clearsEveryWslDistro: action === 'select:system'
         })
-      }
+      })
     } catch (error) {
       // Explicit cancellation and superseding logins are user actions, not failures.
       if (isCodexAccountCancellation(error)) {

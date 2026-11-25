@@ -10,7 +10,12 @@ import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
-import { getSystemDefaultLanes, runSystemDefaultSelect } from '../scope/system-default-lanes'
+import {
+  getSystemDefaultLanes,
+  lanesIncludeWsl,
+  runSystemDefaultSelect,
+  systemDefaultCandidates
+} from '../scope/system-default-lanes'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
 import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
@@ -31,6 +36,7 @@ export function renderCodexAccountsSection(
     accountRuntime,
     accountRuntimeSentenceLabel,
     accountRuntimeUnavailable,
+    accountVisibilityOptions,
     activeCodexAccountId,
     activeCodexAuthWarning,
     codexAccounts,
@@ -48,6 +54,12 @@ export function renderCodexAccountsSection(
     visibleCodexAccounts,
     wslCapabilitiesLoading
   } = model
+  const systemDefaultLanes = getSystemDefaultLanes(
+    accountRuntime,
+    systemDefaultCandidates(codexAccounts.accounts, visibleCodexAccounts, accountVisibilityOptions),
+    codexAccounts,
+    isRemoteAccountScope
+  )
   return (
     <div key="codex-accounts" id={ACCOUNTS_SECTION_IDS.codex} className="scroll-mt-6">
       <SettingsGroup
@@ -228,12 +240,7 @@ export function renderCodexAccountsSection(
               type="button"
               onClick={() =>
                 void runSystemDefaultSelect(
-                  getSystemDefaultLanes(
-                    accountRuntime,
-                    visibleCodexAccounts,
-                    codexAccounts,
-                    isRemoteAccountScope
-                  ),
+                  systemDefaultLanes,
                   accountOwner,
                   runCodexAccountAction,
                   selectCodexProviderAccount
@@ -290,7 +297,8 @@ export function renderCodexAccountsSection(
                     : getCodexSystemDefaultSubtitle(
                         systemCodexIdentity,
                         accountRuntimeSentenceLabel,
-                        t
+                        t,
+                        lanesIncludeWsl(systemDefaultLanes)
                       )}
                 </span>
               </div>

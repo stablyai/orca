@@ -54,6 +54,7 @@ export async function selectCodexProviderAccount(
         'accounts.selectCodexForTarget',
         {
           accountId: selection.accountId,
+          // A blank distro becomes null, which the host treats as every WSL lane.
           target: { runtime: 'wsl', wslDistro: selection.wslDistro?.trim() || null }
         },
         { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
