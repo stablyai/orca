@@ -480,7 +480,7 @@
     },
     "worktreeNavigationActions": {
       "sourceControl": "Source Control",
-      "agentSessionHistory": "Agent Session History"
+      "agentSessionHistory": "Agent history"
     },
     "resume": {
       "hostConnectionChanged": "Host connection changed. Retry resume."
@@ -1040,7 +1040,7 @@
       "tasks": "Tasks",
       "terminal": "Terminal",
       "sourceControl": "Source Control",
-      "agentSessionHistory": "Agent Session History",
+      "agentSessionHistory": "Agent history",
       "changes": "Changes",
       "pullRequest": "Pull Request",
       "workspace": "Workspace",

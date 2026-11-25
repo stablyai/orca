@@ -47,7 +47,7 @@ export const HOST_STACK_SCREENS = [
   {
     name: '[hostId]/agent-history/[worktreeId]',
     get title() {
-      return translate('navigation.hostStackScreens.agentSessionHistory', 'Agent Session History')
+      return translate('navigation.hostStackScreens.agentSessionHistory', 'Agent history')
     }
   },
   {
