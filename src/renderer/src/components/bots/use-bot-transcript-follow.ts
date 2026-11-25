@@ -140,6 +140,7 @@ export function useBotTranscriptFollow({
     showJump: scroll.showJump,
     jumpToLatest: scroll.scrollToBottom,
     revealRow,
+    leaveEnd,
     forwardedGesture: reader.forwardedGesture,
     transcriptRef,
     scrollMessageToTop: scroll.scrollMessageToTop
