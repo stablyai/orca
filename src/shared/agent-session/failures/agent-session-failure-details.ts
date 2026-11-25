@@ -47,3 +47,20 @@ export function readAgentUpdate(value: unknown): value is string {
     typeof value === 'string' && value.length <= AGENT_UPDATE_MAX_LENGTH && isValidAppVersion(value)
   )
 }
+
+export type AgentSessionInstructionRecovery =
+  | 'timeout'
+  | 'pending'
+  | 'commit'
+  | 'unsupported'
+  | 'unknown'
+
+export function isInstructionRecovery(value: unknown): value is AgentSessionInstructionRecovery {
+  return (
+    value === 'timeout' ||
+    value === 'pending' ||
+    value === 'commit' ||
+    value === 'unsupported' ||
+    value === 'unknown'
+  )
+}

@@ -24,11 +24,16 @@ export type OpenedProvider = StructuredAgentSessionProviderOpenResult & {
 }
 
 /** Orca could not record or apply what the open answered; nothing about the agent says retry. */
-export function refusedStart(): AgentSessionStartFailure {
+export function refusedStart(instructionPolicy = false): AgentSessionStartFailure {
   return new AgentSessionStartFailure(
     new Error('Orca could not record what the agent answered at its start'),
     'never',
-    agentSessionFailureFact('hostStopped')
+    instructionPolicy
+      ? agentSessionFailureFact('startFailed', {
+          instructionRecovery: 'commit',
+          neverReachedAgent: true
+        })
+      : agentSessionFailureFact('hostStopped')
   )
 }
 
@@ -113,7 +118,13 @@ function rewindRecoveryFailed(
 
 /** Persist the opened handle before delivery so future starts can resume; false if no handle is proven. */
 export async function recordStartedHandle(
-  context: StructuredAgentSessionProviderStartedContext,
+  context: {
+    now: () => number
+    deps: Pick<
+      StructuredAgentSessionProviderStartedContext['deps'],
+      'store' | 'logger' | 'turnContext' | 'nameProviderConversation'
+    >
+  },
   event: OpenedProvider
 ): Promise<boolean> {
   const { store, logger } = context.deps
@@ -123,11 +134,41 @@ export async function recordStartedHandle(
     return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
   }
   try {
+    const policy = event.instructionPolicy
+    const instructionContext = event.instructionContext
+    const snapshot = policy && context.deps.turnContext?.instructionSnapshot?.(event.sessionId)
+    if (policy && (!instructionContext || !snapshot)) {
+      throw new Error('agent_session_checkpoint_stale')
+    }
     const committed = await store.updateRecord(event.sessionId, {
       kind: 'provider-handle',
       args: { fence: event.fence, link, now: context.now() },
-      launched: context.deps.turnContext?.launchedInstructions?.(event.sessionId) ?? null
+      launched: context.deps.turnContext?.launchedInstructions?.(event.sessionId) ?? null,
+      ...(policy && instructionContext && snapshot
+        ? {
+            instruction: {
+              policy,
+              context: instructionContext,
+              snapshot: {
+                botId: snapshot.botId,
+                standing: snapshot.standing,
+                digest: snapshot.digest,
+                baseline: snapshot.baseline
+              },
+              fence: event.fence,
+              generation: event.acquisitionGeneration
+            }
+          }
+        : {})
     })
+    if (instructionContext) {
+      context.deps.turnContext?.instructionsAccepted?.(
+        event.sessionId,
+        instructionContext.digest,
+        instructionContext.filesIncluded,
+        committed.instructionPolicy?.baseline
+      )
+    }
     // Inherit only a committed new context; a resumed CLI keeps its own later title.
     if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
       context.deps.nameProviderConversation?.(committed)

@@ -117,6 +117,7 @@ export function isJournalStopOrResumeRow(row: JournalRow): row is JournalStopOrR
 
 /** Persist before dispatch; the optimistic bubble gives provider echoes a slot without duplication. */
 export type JournalSubmissionRow = JournalRowBase & {
+  retryOfClientMessageId?: string
   kind: 'submission'
   inputOrderContext?: JournalInputContext
   clientMessageId: string

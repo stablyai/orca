@@ -117,6 +117,7 @@ export function botAutomationFacts(automation: BotAutomationFactsSource): BotAut
 }
 
 export type BotAutomationRow<A extends BotAutomationRowFacts = BotAutomationFacts> = {
+  latestFailure?: Pick<AutomationRun, 'errorCode' | 'errorParams'> & { error: string }
   key: string
   automation: A
   /** The last run failed, so the automation is listed first. */
@@ -144,7 +145,8 @@ export type BotAutomationRunFacts = Pick<
   | 'startedAt'
   | 'occurrenceCount'
   | 'lastOccurrenceAt'
->
+> &
+  Partial<Pick<AutomationRun, 'error' | 'errorCode' | 'errorParams'>>
 
 /** Failing first, then by next run; paused ones last, by name. */
 export function buildBotAutomationRows<A extends BotAutomationRowFacts>(
@@ -162,6 +164,23 @@ export function buildBotAutomationRows<A extends BotAutomationRowFacts>(
         key: automation.id,
         automation,
         failing,
+        ...(failing &&
+        latest?.error &&
+        [
+          'instructionTimeout',
+          'instructionPending',
+          'instructionCommit',
+          'instructionUnsupported',
+          'instructionUnknown'
+        ].includes(latest.errorCode ?? '')
+          ? {
+              latestFailure: {
+                error: latest.error,
+                errorCode: latest.errorCode,
+                errorParams: latest.errorParams
+              }
+            }
+          : {}),
         ...(needsSignIn ? { needsSignIn: true } : {}),
         ...(latest && (failing || needsSignIn) ? { latestRunId: latest.id } : {}),
         ...(newest

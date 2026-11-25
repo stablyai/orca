@@ -13,6 +13,7 @@ import {
 import { isAgentSessionLastTurn } from './agent-session-last-turn'
 import type { AgentSessionDeathEvidence } from '../leases/agent-session-death-evidence'
 import type { AgentSessionRecord } from '../agent-session-record'
+import { readAgentSessionInstructionPolicy } from '../../agent-session-instruction-policy'
 
 // Older builds accept only exit-observed, pid-absent and identity-mismatch and set aside any other
 // row, so a delivered kill is stored as the absent pid their restart probe would itself record.
@@ -55,9 +56,11 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
     sleptAt,
     lastTurn,
     instructionsKey,
+    instructionPolicy: storedPolicy,
     asyncQuestionsSkippedThrough: skipped,
     ...rest
   } = record
+  const instructionPolicy = readAgentSessionInstructionPolicy(storedPolicy)
   const validSleep = typeof sleptAt === 'number' && Number.isFinite(sleptAt) && sleptAt > 0
   const validKey =
     typeof instructionsKey === 'string' &&
@@ -67,6 +70,7 @@ export function decodePersistedAgentSessionRecord<L extends PersistedAgentSessio
   return {
     record: {
       ...rest,
+      ...(instructionPolicy ? { instructionPolicy } : {}),
       ...(validSleep ? { sleptAt } : {}),
       ...(validKey ? { instructionsKey } : {}),
       ...(isAgentSessionLastTurn(lastTurn) ? { lastTurn } : {}),

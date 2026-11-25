@@ -1,3 +1,5 @@
+import { useNativeChatRecoveryNotices } from './use-native-chat-recovery-notices'
+import { useNativeChatRecoveryFocus } from './messages/rows/use-native-chat-recovery-focus'
 import { useBotLinkPrompt } from '@/lib/agent-session/open/bot-link-item-target'
 import {
   NativeChatCrewContext,
@@ -65,14 +67,11 @@ import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
 import { NativeChatWorkerAutoCloseBanner } from '@/components/native-chat/worker-lifetime/NativeChatWorkerAutoCloseBanner'
 import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
-import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
-import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
 import { useNativeChatHostOutageNotice } from '@/components/native-chat/host-access/use-native-chat-host-outage-notice'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { BotServerOutageCard } from '@/components/bots/BotServerOutageCard'
 import { useNativeChatHostSendGate } from '@/components/native-chat/host-access/use-native-chat-host-send-gate'
-import { useStructuredAgentSessionStartFailureFacts } from '@/components/native-chat/messages/notices/use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 import { NativeChatHostSetupContext } from '@/components/native-chat/host-access/native-chat-host-setup'
 import type { NativeChatComposerHandle } from './composer/native-chat-composer-types'
@@ -131,21 +130,12 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   const submits = useSubmitReveal(controller, provisionalLaunch.retry, hostHeld, focusComposer)
   const workerApprovalParty = nativeChatWorkerApprovalParty(props)
   const promptResponse = useStructuredPromptResponseHold(submits.respond)
-  const needsFailureFacts =
-    submits.queuedMessages.cards.some((card) => card.state === 'returned') ||
-    controller.submissions.some(
-      (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-    )
-  const startFailures = useStructuredAgentSessionStartFailureFacts(
-    controller.journalItems,
-    needsFailureFacts || props.agent === 'claude'
-  )
-  const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    pending: controller.pending,
-    submissions: controller.submissions,
-    journalItems: controller.journalItems,
-    startFailures,
-    agentName: agentLabel
+  const { deliveryNotices, startFailures } = useNativeChatRecoveryNotices({
+    controller,
+    target: props.target,
+    cards: submits.queuedMessages.cards,
+    includeAllFailures: props.agent === 'claude',
+    agentLabel
   })
   // A lost contact is the host notice's to say; the read adds only a refusal the host sent.
   const readFailure =
@@ -205,6 +195,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     conversationShown: viewState.kind === 'ready',
     ...paneCommands
   })
+  const recoveryAnnouncement = useNativeChatRecoveryFocus(surface.rootRef, deliveryNotices)
   const forks = useNativeChatPaneFork(props, controller, ownerWorktreeId)
   const transport = useNativeChatStructuredComposerTransport({
     props,
@@ -262,6 +253,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             surface={surface}
             working={controller.isWorking}
             className="relative [container-type:size]"
+            announcementRef={recoveryAnnouncement}
+            data-native-chat-visible={props.isVisible ? 'true' : 'false'}
           >
             <NativeChatSubagentSheetLayer {...subagents.layer}>
               {paneHeader}

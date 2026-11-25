@@ -58,14 +58,16 @@ export async function writeBotTurnMemoryReceipt(
   },
   record: Pick<BotMemoryRecord, 'changedBesides'>,
   alone: () => Promise<boolean>,
-  writeNote: ((id: string, body: AgentJournalPlainStatusItem) => Promise<void>) | undefined
+  writeNote: ((id: string, body: AgentJournalPlainStatusItem) => Promise<void>) | undefined,
+  isCurrent: () => boolean
 ): Promise<void> {
   if (
     !writeNote ||
     !turn.before ||
     !turn.edited ||
     record.changedBesides(turn.botId, turn.sessionId, turn.before.version) ||
-    !(await alone())
+    !(await alone()) ||
+    !isCurrent()
   ) {
     return
   }

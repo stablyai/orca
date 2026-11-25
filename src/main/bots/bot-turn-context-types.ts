@@ -1,8 +1,10 @@
 import type { StructuredAgentSessionTurnContext } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { BotHomeFiles } from './bot-preamble'
 import type { BotLaunchedRules } from './bot-turn-rules-update'
+import type { createBotInstructionDelivery } from './bot-instruction-delivery'
 
 export type BotTurnContext = StructuredAgentSessionTurnContext & {
+  configureInstructions?: ReturnType<typeof createBotInstructionDelivery>['configure']
   /** The session's agent started; `delivered` when its instructions carried these files. */
   launched: (
     sessionId: string,

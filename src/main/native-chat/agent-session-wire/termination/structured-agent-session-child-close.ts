@@ -12,6 +12,10 @@ import { stopAgentSessionProviderRoot } from './structured-agent-session-provide
 import { releaseStoredStructuredAgentSessionOwnerAfterExit } from '../host/structured-agent-session-lease-release'
 import { isSurfaceReleasableAgentSessionRecord } from '../../../runtime/agent-session/ownership/agent-session-surface-release-transition'
 import type { StructuredAgentSessionAttachLock } from '../acquisition/structured-agent-session-attach-lock'
+import {
+  isProvenDeadProbe,
+  agentSessionLeaseOwnerVerdict
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 
 /** A writer without exit or delivered-kill evidence remains unverifiable. */
 export type StructuredAgentSessionChildCloseVerdict = 'exited' | 'unverifiable'
@@ -69,6 +73,51 @@ export async function joinClosingStructuredAgentSessionChild(
   const child = context.sessions.get(sessionId)?.child
   if (!child?.close) {
     return { ok: true }
+  }
+  const record = context.deps.store.getRecord(sessionId)
+  const knownDead =
+    record &&
+    !record.lease.unreconciled &&
+    agentSessionLeaseOwnerVerdict(record.lease) === 'exited' &&
+    record.lease.deathEvidence?.ownerFence === child.fence
+  if (
+    lock &&
+    record?.provider === 'codex' &&
+    context.deps.isBotHome?.(record.location.workspaceId) === true &&
+    (knownDead || record.lease.runtimeFence === child.fence)
+  ) {
+    const probe = knownDead
+      ? null
+      : await lock.wait(
+          context.deps.probeOwner?.(record) ??
+            Promise.resolve({ outcome: 'indeterminate' as const, reason: 'No owner probe' })
+        )
+    if (knownDead || (probe && isProvenDeadProbe(probe))) {
+      await lock.commit(async () => {
+        if (
+          context.sessions.get(sessionId)?.child !== child ||
+          context.deps.store.getRecord(sessionId)?.lease !== record.lease
+        ) {
+          throw new Error('agent_session_checkpoint_stale')
+        }
+        if (probe) {
+          await context.deps.store.evictProvenDeadOwner({
+            sessionId,
+            expectedFence: child.fence,
+            probe,
+            now: context.now()
+          })
+        }
+        await endClosedStructuredAgentSessionChild(
+          context,
+          sessionId,
+          child,
+          child.phase === 'starting',
+          true
+        )
+      })
+      return { ok: true }
+    }
   }
   const unanswered = child.phase === 'starting'
   const closing = closeProviderRoot(context, sessionId, child)

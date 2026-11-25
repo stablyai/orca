@@ -16,7 +16,10 @@ import {
   buildAgentTuiClearInputForText
 } from '../../../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
 
-import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalSubmission,
+  AgentJournalSkillRef
+} from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]
 
@@ -51,6 +54,7 @@ export type MobileNativeChatSendIntent = {
   /** A structured send's journal id, minted by the caller so it can be saved before the send leaves. */
   clientMessageId?: string
   onCreated?: (clientMessageId: string) => void
+  onRecorded?: (submission: AgentJournalSubmission) => void
   /** Runs when an unconfirmed send's text goes back to the composer, so its attachments can follow. */
   onHandBack?: () => void
   /** The chips this send carries, saved with it so a kill mid-send can return them. */

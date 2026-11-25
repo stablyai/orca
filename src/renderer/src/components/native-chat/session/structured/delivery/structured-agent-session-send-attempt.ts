@@ -140,6 +140,9 @@ export async function attemptStructuredAgentSessionSend(args: {
     sessionId: entry.sessionId,
     clientOperationId: entry.clientMessageId,
     expectedRuntimeFence: fence,
+    ...(entry.retryOfClientMessageId
+      ? { retryOfClientMessageId: entry.retryOfClientMessageId }
+      : {}),
     body,
     ...(entry.delivery ? { delivery: entry.delivery } : {}),
     ...(entry.options ? { options: entry.options } : {}),

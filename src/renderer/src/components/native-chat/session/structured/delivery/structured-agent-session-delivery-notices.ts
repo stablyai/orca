@@ -24,32 +24,85 @@ export function structuredAgentSessionDeliveryNotices(args: {
   submissions: readonly AgentJournalSubmission[]
   agentName: string
   startFailures: readonly AgentSessionFailureFact[]
+  onRetry?: (submission: AgentJournalSubmission, bodyClientMessageId: string) => void
+  itemIds?: ReadonlySet<string>
   commandItemIds?: ReadonlySet<string>
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
+  let byId: Map<string, AgentJournalSubmission> | undefined
+  let retried: Set<string> | undefined
+  let pendingRetries: Set<string> | undefined
+  let hasRejected = false
+  for (const submission of submissions) {
+    hasRejected ||= submission.dispatchState === 'rejected'
+    const original = submission.retryOfClientMessageId
+    if (!original) {
+      continue
+    }
+    if (submission.dispatchState === 'accepted') {
+      ;(retried ??= new Set()).add(original)
+    } else if (submission.dispatchState === 'pending' || submission.dispatchState === 'unknown') {
+      ;(pendingRetries ??= new Set()).add(original)
+    }
+  }
+  for (const entry of args.pending) {
+    if (entry.retryOfClientMessageId) {
+      ;(pendingRetries ??= new Set()).add(entry.retryOfClientMessageId)
+    }
+  }
   const notices = new Map<string, NativeChatDeliveryNotice>()
   // A row under the id is the host's to describe, before the sender settles from it.
-  const recorded = new Set(submissions.map((submission) => submission.clientMessageId))
+  const recorded = args.pending.length
+    ? new Set(submissions.map((submission) => submission.clientMessageId))
+    : null
   for (const entry of args.pending) {
-    if (entry.phase !== 'unconfirmed' && !recorded.has(entry.clientMessageId)) {
+    if (entry.phase !== 'unconfirmed' && !recorded?.has(entry.clientMessageId)) {
       notices.set(
-        agentJournalSubmissionKey(entry.clientMessageId),
+        agentJournalSubmissionKey(entry.retryOfClientMessageId ?? entry.clientMessageId),
         STRUCTURED_AGENT_SESSION_DELIVERY_SENDING
       )
     }
   }
-  const shown = submissions.some((submission) => submission.dispatchState === 'rejected')
+  const shown = hasRejected
     ? structuredAgentSessionRejectedShownInPlace(submissions, args.commandItemIds ?? NO_COMMANDS)
         .shown
     : new Set<string>()
   for (const submission of submissions) {
-    const id = agentJournalSubmissionKey(submission.clientMessageId)
+    if (submission.dispatchState === 'accepted' || submission.dispatchState === 'unknown') {
+      continue
+    }
+    const rootId = agentJournalSubmissionKey(
+      submission.retryOfClientMessageId ?? submission.clientMessageId
+    )
+    const id =
+      submission.retryOfClientMessageId && args.itemIds && !args.itemIds.has(rootId)
+        ? agentJournalSubmissionKey(submission.clientMessageId)
+        : rootId
+    const original = submission.retryOfClientMessageId
+      ? ((byId ??= new Map(submissions.map((entry) => [entry.clientMessageId, entry]))).get(
+          submission.retryOfClientMessageId
+        ) ?? {
+          ...submission,
+          clientMessageId: submission.retryOfClientMessageId
+        })
+      : submission
+    if (retried?.has(original.clientMessageId)) {
+      continue
+    }
     if (submission.dispatchState === 'pending') {
       notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
-    } else if (submission.dispatchState === 'rejected' && shown.has(id)) {
+    } else if (
+      submission.dispatchState === 'rejected' &&
+      (shown.has(id) ||
+        submission.keptAsQueuedMessageId ||
+        submission.queuedMessageId ||
+        (submission.retryOfClientMessageId && original))
+    ) {
       // A failed start's words, unless its row carries them; other sentences quote their own.
+      const cardId = submission.keptAsQueuedMessageId ?? submission.queuedMessageId
       const fact = readWholeAgentSessionFailureFact(submission.rejection)
-      const statedByRow = agentSessionFailureStatedByRow(fact, args.startFailures)
+      const statedByRow =
+        !fact?.instructionRecovery && agentSessionFailureStatedByRow(fact, args.startFailures)
       const detail =
         fact &&
         classifyDispatchRejection({ reason: null, rejection: fact }).category === 'startFailed' &&
@@ -66,7 +119,17 @@ export function structuredAgentSessionDeliveryNotices(args: {
             ? agentSessionWriteNotDoneParts('send')
             : structuredAgentSessionRejectionParts(submission.reason, 'send', fact, { agentName })
         ),
-        ...(detail ? { detail } : {})
+        ...(detail ? { detail } : {}),
+        ...(fact?.instructionRecovery &&
+        original.origin === 'client' &&
+        (cardId || (args.onRetry && !pendingRetries?.has(original.clientMessageId)))
+          ? {
+              ...(cardId
+                ? { recoveryCardId: cardId }
+                : { onSend: () => args.onRetry?.(original, submission.clientMessageId) }),
+              recoveryFocus: fact.instructionRecovery !== 'pending'
+            }
+          : {})
       })
     }
   }

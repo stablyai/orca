@@ -3110,7 +3110,12 @@
       "chooseClaudeAccount": "Choose or add one in Claude Accounts settings.",
       "chooseClaudeAccountThenRunCommand": "Choose or add one in Claude Accounts settings, then run /{{command}} again.",
       "chooseClaudeAccountThenSend": "Choose or add one in Claude Accounts settings, then send your message again.",
-      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent."
+      "unconfirmed": "Couldn't confirm whether this was sent. It hasn't been resent.",
+      "instructionNotSent": "Your message was not sent.",
+      "instructionPending": "Your message was not sent. The previous agent in this chat may still be running. Start a new chat to continue.",
+      "instructionCommit": "Orca couldn't save this to the chat's history. Your message was not sent.",
+      "instructionUpdate": "Your message was not sent. Update {{agent}} on the computer running this chat, then send it again.",
+      "instructionUnknown": "Your message was not sent. Orca couldn't prepare {{agent}} to start on the computer running this chat."
     },
     "writeNotice": {
       "notDoneReadHistory": "This chat's history couldn't be loaded.",
@@ -8158,7 +8163,10 @@
       "nextRunToday": "Next run today at {{time}}",
       "nextRunTomorrow": "Next run tomorrow at {{time}}",
       "nextRunWeekday": "Next run {{day}} at {{time}}",
-      "nextRunDate": "Next run {{date}}"
+      "nextRunDate": "Next run {{date}}",
+      "keepEditing": "Keep editing",
+      "lastRun": "Last run",
+      "failed": "Failed"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -8202,6 +8210,11 @@
         "error": "Project setup failed on the selected automation host.",
         "unsupported": "The selected automation host does not support this project."
       },
+      "instructionTimeout": "{{message}}.",
+      "instructionPending": "The previous agent in this chat may still be running.",
+      "instructionCommit": "Orca couldn't save this to the chat's history.",
+      "instructionUnsupported": "Update Codex on the computer running this chat.",
+      "instructionUnknown": "Orca couldn't prepare Codex to start on the computer running this chat.",
       "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
       "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
       "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",

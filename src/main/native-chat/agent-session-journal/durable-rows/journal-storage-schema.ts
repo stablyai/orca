@@ -67,7 +67,8 @@ export const storedFailureFact = AgentSessionFailureFactSchema.extend({
   usageLimit: z.object({ window: text, resetsAt: count }).optional(),
   neverReachedAgent: z.literal(true).optional(),
   backgroundStop: text,
-  requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional()
+  requestTimeout: z.object({ method: z.string(), timeoutMs: z.number() }).optional(),
+  instructionRecovery: z.enum(['timeout', 'pending', 'commit', 'unsupported', 'unknown']).optional()
 })
 
 // A sender's reader salvages any value of a known key, so only the keys are storage's to close.

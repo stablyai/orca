@@ -89,6 +89,7 @@ export const CreateSupportParams = z
 
 export const SendParams = z
   .object({
+    retryOfClientMessageId: Identifier('Invalid retry message id').optional(),
     envelope: MutationEnvelope,
     retryUnknown: z.literal(true).optional(),
     /** Host-held draft while active; gate strict payloads on agent-session.queued-messages.v2.

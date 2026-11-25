@@ -1,6 +1,12 @@
+import type { AgentSessionInstructionRecovery } from '../../agent-session/failures/agent-session-instruction-recovery-failure'
 // One English table for automation run skip/failure reasons: main persists `error`, the renderer translates by code.
 // Skip coalescing keys on exact `error` text, so wording changes here also split folded runs.
 export const AUTOMATION_RUN_FAILURE_COPY = {
+  instructionTimeout: 'Message not sent.',
+  instructionPending: 'The previous agent in this chat may still be running.',
+  instructionCommit: "Orca couldn't save this to the chat's history.",
+  instructionUnsupported: 'Update Codex on the computer running this chat.',
+  instructionUnknown: "Orca couldn't prepare Codex to start on the computer running this chat.",
   noDispatchHost: 'No Orca window was available to launch the automation.',
   unevaluableSchedule: 'Orca could not evaluate this automation and skipped the occurrence.',
   noRunnableHost: 'This automation has no host to run on.',
@@ -88,4 +94,19 @@ export function automationRunFailure(
         errorParams: params
       }
     : { error: template, errorCode }
+}
+
+const INSTRUCTION_FAILURE_CODE = {
+  timeout: 'instructionTimeout',
+  pending: 'instructionPending',
+  commit: 'instructionCommit',
+  unsupported: 'instructionUnsupported',
+  unknown: 'instructionUnknown'
+} as const
+
+export function automationInstructionRecoveryFailure(reason: AgentSessionInstructionRecovery) {
+  return {
+    status: 'dispatch_failed' as const,
+    ...automationRunFailure(INSTRUCTION_FAILURE_CODE[reason])
+  }
 }

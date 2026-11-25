@@ -54,7 +54,8 @@ export function createBotMemoryRecord(
   const after = async (
     botId: string,
     step: (text: string | null) => Promise<string | null | undefined>,
-    by?: string
+    by?: string,
+    isCurrent: () => boolean = () => true
   ): Promise<void> => {
     let entry = bots.get(botId)
     if (!entry) {
@@ -64,7 +65,7 @@ export function createBotMemoryRecord(
     const recorded = entry
     const run = recorded.settled.then(async () => {
       const text = await step(recorded.text)
-      if (text !== undefined && text !== recorded.text) {
+      if (text !== undefined && text !== recorded.text && isCurrent()) {
         recorded.text = text
         recorded.version += 1
         recorded.writers.set(by ?? '', recorded.version)
@@ -227,12 +228,13 @@ export async function tagBotMemoryFile(
   /** Read only when the file has a fact `before` lacks: the only line a label marks. */
   label: () => Promise<string | null>,
   /** Of the lines the file has that `before` lacks, those to take back out (see readdGuard). */
-  keepOut?: (added: string[]) => Promise<string[]>
+  keepOut?: (added: string[]) => Promise<string[]>,
+  isCurrent: () => boolean = () => true
 ): Promise<{ text: string; kept: BotMemoryChange } | null> {
   const path = join(folder, 'MEMORY.md')
   for (let attempt = 0; attempt < REWRITE_ATTEMPTS; attempt += 1) {
     const current = await fs.readText(path)
-    if (current === null) {
+    if (current === null || !isCurrent()) {
       return null
     }
     const lost = botMemoryChange(before, current).removed
@@ -249,6 +251,9 @@ export async function tagBotMemoryFile(
     })
     const added = fresh.length > out.length
     const tagged = tagBotMemoryChanges(before, kept, added ? await label() : null)
+    if (!isCurrent()) {
+      return null
+    }
     if (tagged === current || (await fs.replaceText(path, current, tagged))) {
       return { text: tagged, kept: botMemoryChange(current, kept) }
     }

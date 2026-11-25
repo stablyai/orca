@@ -6,6 +6,7 @@ import type { JournalSubmissionInput } from './journal-store-contracts'
 export type JournalContinuationLaunch = { runtimeFence: number; launchFence: number | undefined }
 
 export type JournalSendAdmission = {
+  instructionWriterUnresolved?: true
   input: JournalSubmissionInput
   fromPerson: boolean
   fromAgent: boolean

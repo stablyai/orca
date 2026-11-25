@@ -413,6 +413,7 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
 export type AgentJournalSubmission = {
+  retryOfClientMessageId?: string
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number
@@ -489,12 +490,7 @@ export type AgentJournalSnapshot = {
   submissions: AgentJournalSubmission[]
 }
 
-/** Every cursor-resume failure forces a clean client snapshot reload. */
-export const AGENT_JOURNAL_RESET_REASONS = [
-  'epoch_changed',
-  'cursor_ahead',
-  'cursor_compacted',
-  'journal_gap',
-  'schema_unreadable'
-] as const
-export type AgentJournalResetReason = (typeof AGENT_JOURNAL_RESET_REASONS)[number]
+export {
+  AGENT_JOURNAL_RESET_REASONS,
+  type AgentJournalResetReason
+} from './agent-session-journal-identity'

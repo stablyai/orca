@@ -190,10 +190,10 @@ function retireTabText(scope: string): boolean {
 }
 
 /** Puts an unconfirmed saved send back in its box, chips included, then forgets it. */
-export function returnMobileNativeChatInFlightSend(id: string): void {
+export function returnMobileNativeChatInFlightSend(id: string): string | null {
   const entry = readMobileNativeChatInFlightSend(id)
   if (!entry) {
-    return
+    return null
   }
   const destination = mobileNativeChatDraftDestination(entry.scope)
   const { send } = entry
@@ -207,6 +207,7 @@ export function returnMobileNativeChatInFlightSend(id: string): void {
     restoredFiles(send.files)
   )
   settleMobileNativeChatInFlightSend(id)
+  return entry.scope
 }
 
 function notifyDrafts(): void {

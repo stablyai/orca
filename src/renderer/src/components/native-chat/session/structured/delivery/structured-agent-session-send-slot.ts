@@ -19,6 +19,8 @@ export type StructuredAgentSessionAttachmentPreparation = (
 ) => Promise<{ text: string; attachments?: readonly StructuredAgentSessionAttachment[] }>
 
 export type StructuredAgentSessionSendInput = {
+  retryOfClientMessageId?: string
+  retainedBody?: ReturnType<typeof structuredAgentSessionSendBody>
   sessionId: string
   prepareAttachments?: StructuredAgentSessionAttachmentPreparation
   text: string
@@ -42,6 +44,8 @@ export type StructuredAgentSessionSendInput = {
 export type StructuredAgentSessionSendRequest = Pick<
   StructuredAgentSessionSendInput,
   | 'callerKeepsText'
+  | 'retryOfClientMessageId'
+  | 'retainedBody'
   | 'usageLimitContinuationOfTurnItemId'
   | 'skills'
   | 'onCreated'
@@ -63,7 +67,11 @@ export function takeStructuredAgentSessionSendSlot(
   const entry: StructuredAgentSessionPendingSend = {
     clientMessageId: createStructuredAgentSessionOperationId(createBrowserUuid),
     sessionId: input.sessionId,
-    body: structuredAgentSessionSendBody(input.text, attachments, input.skills),
+    body:
+      input.retainedBody ?? structuredAgentSessionSendBody(input.text, attachments, input.skills),
+    ...(input.retryOfClientMessageId
+      ? { retryOfClientMessageId: input.retryOfClientMessageId }
+      : {}),
     previewUris: attachments.map((attachment) => attachment.previewUri),
     queuedAt: input.now ?? Date.now(),
     ...(input.delivery ? { delivery: input.delivery } : {}),

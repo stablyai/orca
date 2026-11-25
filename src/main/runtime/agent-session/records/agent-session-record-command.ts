@@ -1,3 +1,13 @@
+import type {
+  AgentSessionInstructionBaseline,
+  AgentSessionInstructionPolicy
+} from '../../../../shared/agent-session/agent-session-instruction-policy'
+import { sameInstructionBaseline } from '../../../../shared/agent-session/agent-session-instruction-policy'
+import { agentSessionInstructionScope } from './agent-session-instruction-scope'
+import {
+  recordOpenedInstructionPolicy,
+  type OpenedInstructionPolicy
+} from './agent-session-opened-instruction-policy'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import { withAcquiredAgentSessionAccount } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
@@ -71,6 +81,18 @@ export type AgentSessionRecordCommand =
       args: WithoutRecord<typeof recordAgentSessionProviderHandle>
       /** The launch's instructions, recorded when the open confirms the agent was given them. */
       launched?: { key: string; rebuilt: boolean } | null
+      instruction?: OpenedInstructionPolicy
+    }
+  | {
+      kind: 'instruction-pending'
+      account: string
+      policy: AgentSessionInstructionPolicy
+      priorOperationId?: string
+    }
+  | {
+      kind: 'instruction-baseline'
+      expected: AgentSessionInstructionPolicy
+      baseline: AgentSessionInstructionBaseline
     }
   | { kind: 'instructions-key'; receipt: AgentSessionInstructionsReceipt }
   | { kind: 'resume-point'; args: WithoutRecord<typeof reviseAgentSessionProviderResumePoint> }
@@ -171,13 +193,45 @@ export function applyAgentSessionRecordCommand(
     case 'release-unproven':
       next = releaseUnprovenAgentSessionOwner({ ...command.args, record })
       break
-    case 'provider-handle':
+    case 'provider-handle': {
+      const started = recordAgentSessionProviderHandle({ ...command.args, record })
       next = withOpenedAgentSessionInstructionsKey(
-        recordAgentSessionProviderHandle({ ...command.args, record }),
+        command.instruction
+          ? recordOpenedInstructionPolicy(record, started, command.args.link, command.instruction)
+          : started,
         command.launched,
         command.args.link
       )
       break
+    }
+    case 'instruction-pending': {
+      const { account, policy, priorOperationId } = command
+      if (
+        record.lease.runtimeFence !== policy.fence ||
+        agentSessionInstructionScope(record, account) !== policy.scope ||
+        record.instructionPolicy?.operationId !== priorOperationId
+      ) {
+        throw new Error('agent_session_checkpoint_stale')
+      }
+      next = { ...record, instructionPolicy: { ...policy, state: 'pending' } }
+      break
+    }
+    case 'instruction-baseline': {
+      const { expected, baseline } = command
+      const current = record.instructionPolicy
+      next =
+        current?.state === 'delivered' &&
+        record.lease.runtimeFence === expected.fence &&
+        current.operationId === expected.operationId &&
+        current.generation === expected.generation &&
+        current.scope === expected.scope &&
+        current.fence === expected.fence &&
+        current.anchor === expected.anchor &&
+        !sameInstructionBaseline(current.baseline, baseline)
+          ? { ...record, instructionPolicy: { ...current, baseline } }
+          : record
+      break
+    }
     case 'instructions-key':
       next = recordAgentSessionInstructionsKey(record, command.receipt)
       break

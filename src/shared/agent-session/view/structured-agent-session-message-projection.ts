@@ -1,3 +1,4 @@
+import { structuredAgentSessionRejectedShownInPlace } from './structured-agent-session-rejected-projection'
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type {
   AgentJournalMessageItem,
@@ -6,10 +7,7 @@ import type {
 } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
-import {
-  agentJournalSubmissionReturnedToCard,
-  isQueuedAgentJournalSubmission
-} from '../requests/agent-session-queued-submission'
+import { isQueuedAgentJournalSubmission } from '../requests/agent-session-queued-submission'
 import { collapseProviderRetryRuns } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
@@ -31,13 +29,11 @@ import {
   withAutomationResultMarks
 } from '../../bots/bot-automation-result-marks'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
-import {
-  agentSessionContextSequenceFor,
-  isAgentSessionContextClear
-} from '../conversation-context/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../conversation-context/agent-session-context-clear'
 
 /** Client echo until host publication; an acknowledged read past recordedCursor supersedes it. */
 export type StructuredAgentSessionOptimisticMessage = {
+  retryOfClientMessageId?: string
   clientMessageId: string
   body: AgentJournalMessageItem
   /** Null when this client did not make the send and nothing dates it. */
@@ -61,53 +57,7 @@ export function structuredAgentSessionCommandItemIds(
   )
 }
 
-/** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
- * and commands carry rejection in their own reply. `resent`: rejected sends a later copy stands in for. */
-export function structuredAgentSessionRejectedShownInPlace(
-  submissions: readonly AgentJournalSubmission[],
-  commandItemIds: ReadonlySet<string>,
-  clearSequences: readonly number[] = []
-): { shown: Set<string>; resent: Set<string> } {
-  const latest = new Map<string, number>()
-  const later = Array.from<number | undefined>({ length: submissions.length })
-  const scopeKey = (submission: AgentJournalSubmission) =>
-    JSON.stringify([
-      agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
-      submission.payloadFingerprint
-    ])
-  for (let index = submissions.length - 1; index >= 0; index--) {
-    const submission = submissions[index]
-    const key = scopeKey(submission)
-    later[index] = latest.get(key)
-    if (!dispatchWasWithdrawn(submission)) {
-      latest.set(key, Math.max(latest.get(key) ?? -Infinity, submission.submittedAt))
-    }
-  }
-  const shown = new Set<string>()
-  const resent = new Set<string>()
-  for (const [index, submission] of submissions.entries()) {
-    const { resolvedAt } = submission
-    if (
-      submission.dispatchState !== 'rejected' ||
-      dispatchWasWithdrawn(submission) ||
-      // Persist card ownership on the send so editing/deleting the card cannot resurrect its row.
-      agentJournalSubmissionReturnedToCard(submission) ||
-      commandItemIds.has(agentJournalSubmissionKey(submission.clientMessageId))
-    ) {
-      continue
-    }
-    // Collapses resends of a rejected message: past Retries resent it under a new id, and the
-    // host re-delivers its own messages under new ids. Only a later copy sent once the rejection
-    // was known counts, so a repeat sent before it is kept.
-    const key = agentJournalSubmissionKey(submission.clientMessageId)
-    if (resolvedAt !== null && later[index] !== undefined && later[index] >= resolvedAt) {
-      resent.add(key)
-    } else {
-      shown.add(key)
-    }
-  }
-  return { shown, resent }
-}
+export { structuredAgentSessionRejectedShownInPlace }
 
 /** Start-failure rows answering these sends: after one, before the next send. The resend's own
  *  outcome replaces them, as its copy replaces the send. */
@@ -180,7 +130,31 @@ export function projectStructuredAgentSessionMessageRows(
   const replacedFailures = resent.size > 0 ? startFailureRowsAfter(items, resent) : resent
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
+  let itemIds: Set<string> | undefined
+  const hasOriginal = (id: string): boolean =>
+    (itemIds ??= new Set(items.map((item) => item.itemId))).has(agentJournalSubmissionKey(id))
+  const submissionsByItemId = new Map<string, AgentJournalSubmission>()
+  let hasUnsettledRetry = false
+  for (const submission of submissions) {
+    submissionsByItemId.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
+    hasUnsettledRetry ||=
+      submission.retryOfClientMessageId !== undefined &&
+      (submission.dispatchState === 'pending' || submission.dispatchState === 'rejected')
+  }
   for (const item of items) {
+    const retry = hasUnsettledRetry ? submissionsByItemId.get(item.itemId) : undefined
+    if (
+      retry?.retryOfClientMessageId &&
+      (retry.dispatchState === 'pending' || retry.dispatchState === 'rejected')
+    ) {
+      if (hasOriginal(retry.retryOfClientMessageId)) {
+        continue
+      }
+      if (retry.dispatchState === 'rejected') {
+        unsentItems.push(item)
+        continue
+      }
+    }
     if (inPlace.has(item.itemId)) {
       unsentItems.push(item)
     } else if (!rejected.has(item.itemId) && !replacedFailures.has(item.itemId)) {
@@ -188,12 +162,6 @@ export function projectStructuredAgentSessionMessageRows(
     }
   }
   const journalled = new Set(visibleItems.map((item) => item.itemId))
-  const submissionsByItemId = new Map(
-    submissions.map((submission) => [
-      agentJournalSubmissionKey(submission.clientMessageId),
-      submission
-    ])
-  )
   const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
   const held: NativeChatMessage[] = []
@@ -255,7 +223,13 @@ export function projectStructuredAgentSessionMessageRows(
     // Held cards follow the conversation outside its runs.
     ...held,
     // Host rows supersede client echoes under either client or provider IDs.
-    ...structuredAgentSessionEchoRows(optimistic, journalled, submissionsByItemId)
+    ...structuredAgentSessionEchoRows(
+      optimistic.filter(
+        (entry) => !entry.retryOfClientMessageId || !hasOriginal(entry.retryOfClientMessageId)
+      ),
+      journalled,
+      submissionsByItemId
+    )
   ]
   return {
     output,

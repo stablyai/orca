@@ -1,5 +1,6 @@
 // A bot automation run's result: when its turn ends, its last message goes to the bot's Chat, a channel, a Linear issue, or nowhere.
 import type { AgentMessageSource } from '../../shared/agent-session/journal/agent-session-message-source'
+import { automationInstructionRecoveryFailure } from '../../shared/automations/history/automation-run-failure-copy'
 import type {
   Automation,
   AutomationBotTarget
@@ -143,6 +144,9 @@ export async function deliverBotRunResult(
   result: BotRunResult
 ): Promise<BotRunCompletion> {
   const { automation, bot, target, ended } = result
+  if ('instructionRecovery' in ended && ended.instructionRecovery) {
+    return automationInstructionRecoveryFailure(ended.instructionRecovery)
+  }
   // result_unavailable: never another turn's answer in its place.
   if ('unavailable' in ended && ended.unavailable === 'shared') {
     // Its prompt was handled in that turn; only its own result post is skipped.

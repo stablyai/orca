@@ -33,7 +33,8 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   trackStart: <T>(start: Promise<T>) => Promise<T>
   startProviderChild: (
     sessionId: string,
-    startedFor: string
+    startedFor: string,
+    retireInstructionBinding?: true
   ) => Promise<StructuredAgentSessionStartClaim>
   /** Retire mismatched login/permission children under serialization. */
   retireOutgrownChild: (
@@ -47,6 +48,7 @@ export type StructuredAgentSessionDeliveryLoopDeps = {
   /** Orca changed this chat's tools since its child launched and it owes no work (see
    *  `launchToolsRefreshDue`): the input needs a child that has them. */
   launchToolsRefreshDue?: (sessionId: string, continuingId: string) => Promise<boolean>
+  instructionBindingNeedsAcquisition?: (sessionId: string) => boolean
   readiness: (
     sessionId: string,
     child: StructuredAgentSessionProviderChildIdentity
@@ -93,3 +95,15 @@ export function launchToolsRefreshDue(
     !(await owesWork(sessionId, continuingId)) &&
     (await launchTools.changed(sessionId))
 }
+
+export type StructuredAgentSessionDeliveryStep =
+  | 'stop'
+  | 'continue'
+  | { start: StructuredAgentSessionStartClaim }
+  | {
+      ok: true
+      awaited: StructuredAgentSessionProviderChildIdentity
+      clientMessageId: string
+      readiness: StructuredAgentSessionStartReadiness | null
+      before: Promise<void>
+    }

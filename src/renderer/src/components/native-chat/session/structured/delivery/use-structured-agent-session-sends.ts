@@ -3,7 +3,10 @@ import type {
   StructuredAgentSessionAttachment
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY,
+  AGENT_SESSION_SEND_RETRY_RUNTIME_CAPABILITY
+} from '../../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -68,6 +71,11 @@ export function useStructuredAgentSessionSends(args: {
       target,
       AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
     ) === 'supported'
+  const takesRetry =
+    useStructuredAgentSessionHostCapabilityState(
+      target,
+      AGENT_SESSION_SEND_RETRY_RUNTIME_CAPABILITY
+    ) === 'supported'
   const subscribe = useCallback(
     (listener: () => void) => subscribeToStructuredAgentSessionPendingSends(sessionId, listener),
     [sessionId]
@@ -113,10 +121,15 @@ export function useStructuredAgentSessionSends(args: {
       attachments: readonly StructuredAgentSessionAttachment[] = [],
       request?: StructuredAgentSessionSendRequest
     ): boolean | 'queued' => {
-      if (!text.trim() && attachments.length === 0) {
+      if (!text.trim() && attachments.length === 0 && !request?.retainedBody?.blocks.length) {
         return false
       }
-      const delivery = structuredAgentSessionQueueRequest(queue, request?.alternate)
+      if (request?.retryOfClientMessageId && !takesRetry) {
+        return false
+      }
+      const delivery = request?.retryOfClientMessageId
+        ? undefined
+        : structuredAgentSessionQueueRequest(queue, request?.alternate)
       const captured = sendSelection?.() ?? { options: sendOptions?.() }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
@@ -124,6 +137,10 @@ export function useStructuredAgentSessionSends(args: {
         onCreated: request?.onCreated,
         text,
         attachments,
+        ...(request?.retryOfClientMessageId
+          ? { retryOfClientMessageId: request.retryOfClientMessageId }
+          : {}),
+        ...(request?.retainedBody ? { retainedBody: request.retainedBody } : {}),
         ...(request?.prepareAttachments ? { prepareAttachments: request.prepareAttachments } : {}),
         ...(request?.callerKeepsText ? { callerKeepsText: request.callerKeepsText } : {}),
         ...(request?.usageLimitContinuationOfTurnItemId
@@ -158,6 +175,7 @@ export function useStructuredAgentSessionSends(args: {
       sessionId,
       stopping,
       takesSkills,
+      takesRetry,
       target
     ]
   )

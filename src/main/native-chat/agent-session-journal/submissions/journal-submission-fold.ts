@@ -44,6 +44,7 @@ export function journalSubmissionFromRow(
   const options = readAgentSessionExecutionOptions(row.options)
   return {
     clientMessageId: row.clientMessageId,
+    ...(row.retryOfClientMessageId ? { retryOfClientMessageId: row.retryOfClientMessageId } : {}),
     fence: row.fence,
     payloadFingerprint: row.payloadFingerprint,
     dispatchState: 'pending',

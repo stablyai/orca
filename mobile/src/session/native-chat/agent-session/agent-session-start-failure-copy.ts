@@ -1,4 +1,5 @@
 import { AGENT_SESSION_FAILURE_COPY } from '../../../../../src/shared/agent-session/failures/agent-session-failure-copy'
+import { INSTRUCTION_RECOVERY_COPY } from './agent-session-instruction-recovery-copy'
 import type {
   AgentSessionFailureCopyId,
   AgentSessionFailureCopyValues
@@ -6,6 +7,7 @@ import type {
 import { translate } from '../../../i18n/mobile-i18n'
 
 export const START_FAILURE_COPY = {
+  ...INSTRUCTION_RECOVERY_COPY,
   savedConversationMissing: (values) =>
     translate(
       'session.failure.savedConversationMissing',

@@ -110,14 +110,15 @@ export async function chat(clock: { now: number }) {
       turns: Record<string, unknown>[],
       options: Partial<Parameters<typeof catchUpCodexThread>[0]> = {}
     ) => {
-      await catchUpCodexThread({
+      const unchanged = await catchUpCodexThread({
         connection: codexWith(turns),
         threadId: THREAD,
         sessionId: SESSION,
         sink: deferred.sink,
         ...options
       })
-      return deferred.drained()
+      await deferred.drained()
+      return unchanged
     },
     /** Replace the live epoch with these saved items, as a retained cut or fork commits it. */
     replaceEpoch: async (

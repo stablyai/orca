@@ -1,3 +1,5 @@
+import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { AgentSessionInstructionBaseline } from '../../../shared/agent-session/agent-session-instruction-policy'
 // What the host adds ahead of a person's words in a turn, beside the conversation's own ride-along.
 
 import type { AgentJournalTurnOpenerRows } from '../../../shared/agent-session/journal/agent-session-journal-turn-opener'
@@ -8,8 +10,20 @@ import type {
 import type { AgentSessionTurnCompletion } from '../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import type { JournalSqlReads } from '../agent-session-journal/journal-sql-reads'
 import { readJournalTurnOpenerRows } from '../agent-session-journal/journal-turn-opener-rows'
+import type { StructuredAgentSessionHost } from './host/structured-agent-session-host'
+import { structuredAgentSessionConversationFence } from './host/structured-agent-session-provider-child'
+import { writeStructuredAgentSessionOrcaNote } from './structured-agent-session-orca-note'
+
+export type AgentSessionInstructionSnapshot = {
+  botId: string
+  standing: string
+  digest: string
+  text: string
+  baseline?: AgentSessionInstructionBaseline
+}
 
 export type StructuredAgentSessionTurnContextPlan = {
+  providerInstructions?: AgentSessionInstructionSnapshot
   /** Goes ahead of the person's words, before any automation results. */
   text: string
   /** A row for the turn, if any; written, like `given`, only once the agent took the turn. */
@@ -19,7 +33,7 @@ export type StructuredAgentSessionTurnContextPlan = {
   instructionsKey?: string
   /** The agent took the turn: what was sent is now what it has. `instructionsRecorded` says whether
    *  `instructionsKey`'s receipt was written; when not, the next turn sends them again. */
-  given: (receipt: { instructionsRecorded: boolean }) => void
+  given: (receipt: { instructionsRecorded: boolean }) => void | Promise<void>
 }
 
 /** The session record's instructions receipt when the turn was planned (null: none, after a reset
@@ -27,6 +41,15 @@ export type StructuredAgentSessionTurnContextPlan = {
 type HeldInstructions = string | null | undefined
 
 export type StructuredAgentSessionTurnContext = {
+  instructionsCurrent?: (record: AgentSessionRecord) => boolean
+  instructionSnapshot?: (sessionId: string) => AgentSessionInstructionSnapshot | null
+  instructionBaseline?: (sessionId: string) => AgentSessionInstructionBaseline | undefined
+  instructionsAccepted?: (
+    sessionId: string,
+    digest: string,
+    filesIncluded: boolean,
+    baseline?: AgentSessionInstructionBaseline
+  ) => void
   /** Read at handover of a person's message; null adds nothing. */
   plan: (
     sessionId: string,
@@ -59,10 +82,12 @@ export type StructuredAgentSessionTurnContext = {
     writeNote?: (clientMessageId: string, body: AgentJournalPlainStatusItem) => Promise<void>,
     /** How the turn ended, as its completion says. */
     ended?: TurnEndedVerdict
-  ) => void
+  ) => void | Promise<void>
 }
 
-export type TurnEndedVerdict = Pick<AgentSessionTurnCompletion, 'outcome'>
+export type TurnEndedVerdict = Pick<AgentSessionTurnCompletion, 'outcome'> & {
+  isCurrent?: () => boolean
+}
 
 /** A turn end's rows, and the journal's head when they were read (absent: their newest row's). */
 export type TurnEndedRows = AgentJournalTurnOpenerRows & { head?: number }
@@ -84,4 +109,31 @@ export async function readTurnEndedItems(
     ...(await readJournalTurnOpenerRows(reads, snapshot.items)),
     head: snapshot.cursor.sequence
   }
+}
+
+export function subscribeStructuredAgentSessionTurnContext(
+  host: StructuredAgentSessionHost
+): (() => void) | undefined {
+  const turnEnded = host.deps.turnContext?.turnEnded
+  if (!turnEnded) {
+    return
+  }
+  return host.subscribeTurnCompletions({
+    id: 'host-turn-context',
+    emit: (event) => {
+      if (event.type !== 'completion') {
+        return
+      }
+      const { sessionId, turnId, outcome } = event.completion
+      const currentFence = () => structuredAgentSessionConversationFence(host.deps.store, sessionId)
+      const fence = currentFence()
+      turnEnded(
+        sessionId,
+        turnId,
+        async (since) => readTurnEndedItems(await host.journalReads(sessionId), turnId, since),
+        (id, body) => writeStructuredAgentSessionOrcaNote(host, sessionId, id, body, fence),
+        { outcome, isCurrent: () => currentFence() === fence }
+      )
+    }
+  })
 }

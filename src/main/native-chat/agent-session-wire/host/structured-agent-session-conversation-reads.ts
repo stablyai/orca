@@ -21,11 +21,13 @@ import {
 } from '../publication/history/agent-read-journal-page'
 import {
   queuedSendAnswer,
-  structuredSendAnswer
+  structuredSendAnswer,
+  type StructuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
 import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
+import type { AgentSessionDeliveryFact } from '../../../../shared/agent-session/requests/structured-agent-session-send-settlement'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -177,13 +179,51 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       queuedSendAnswer(await journalOf(id), messageId),
     mailObservation: async (attempt: JournalMailAttempt) =>
       (await journalOf(attempt.session_id)).reads.mailObservation(attempt),
-    sendAnswer: async (id: string, messageId: string) =>
-      structuredSendAnswer(
-        await journalOf(id),
-        (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
-        id,
-        messageId
-      ),
+    sendAnswer: async (
+      id: string,
+      messageId: string,
+      includeSubmission = false
+    ): Promise<
+      StructuredSendAnswer & {
+        submission?: AgentSessionDeliveryFact
+        ownedByQueue?: true
+      }
+    > => {
+      const journal = await journalOf(id)
+      return journal.readInOrder(async () => {
+        const answer = await structuredSendAnswer(
+          journal,
+          (operationId) => context().deps.store.readCommandReceipt({ kind: 'global' }, operationId),
+          id,
+          messageId
+        )
+        if (!includeSubmission) {
+          return answer
+        }
+        const submission = await journal.reads.submission(messageId)
+        const queued =
+          (await journal.queuedMessages.get(messageId)) ||
+          submission?.queuedMessageId ||
+          submission?.keptAsQueuedMessageId ||
+          (!submission && (answer.kind === 'accepted' || answer.kind === 'withdrawn'))
+        return {
+          ...answer,
+          ...(submission
+            ? {
+                submission: {
+                  clientMessageId: submission.clientMessageId,
+                  dispatchState: submission.dispatchState,
+                  reason: submission.reason,
+                  rejection: submission.rejection,
+                  queuedMessageId: submission.queuedMessageId,
+                  keptAsQueuedMessageId: submission.keptAsQueuedMessageId
+                }
+              }
+            : {}),
+          ...(queued ? { ownedByQueue: true as const } : {})
+        }
+      })
+    },
     readCommands: (id: string, commandsOnRequest = false) =>
       context().readCommands(id, commandsOnRequest),
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>

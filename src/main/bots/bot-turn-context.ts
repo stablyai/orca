@@ -1,7 +1,9 @@
 // A running bot chat hears of outside memory changes and receipts its own committed writes.
+import { createBotTurnCompletion } from './bot-turn-completion'
+import { createBotInstructionDelivery } from './bot-instruction-delivery'
+import type { BotTurnContextState as Given } from './bot-turn-context-contract'
 import { join } from 'node:path'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { botMemoryChange, isEmptyBotMemoryChange } from '../../shared/bot-memory-lines'
 import {
   type BotMemoryTopics,
   botMemoryTopicsKey,
@@ -24,22 +26,12 @@ import {
 import type { BotTurnContext, BotFirstRun, Held } from './bot-turn-context-types'
 import type { StructuredAgentSessionTurnContextPlan as TurnPlan } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import { botLaunchedInstructions, withBotRulesUpdate } from './bot-turn-rules-update'
-import { type BotTurnGiven as Given, launchedBotTurnGiven } from './bot-turn-given'
-import { writesHomeFile } from './bot-turn-source'
-import {
-  besideTurn,
-  NO_BOT_CHAT_JOURNAL,
-  ownerOpened,
-  turnOpenedAt,
-  turnRows
-} from './bot-turn-rows'
+import { launchedBotTurnGiven } from './bot-turn-given'
+import { NO_BOT_CHAT_JOURNAL } from './bot-turn-rows'
 import { botContextNoteBody, type BotContextChange } from '../../shared/bots/bot-context-note'
 import { readBotHomeFiles } from './bot-preamble'
 import type { BotHomeFilesystem } from './bot-home'
-import { type BotMemoryRecord, createBotMemoryRecord, tagBotMemoryFile } from './bot-memory-record'
-import { readdGuard } from './bot-memory-readd-guard'
-
-import { writeBotTurnMemoryReceipt } from './bot-turn-memory-receipt'
+import { type BotMemoryRecord, createBotMemoryRecord } from './bot-memory-record'
 
 export { BOT_MEMORY_UPDATED_NOTE } from '../../shared/bots/bot-memory-updated-note'
 
@@ -77,18 +69,28 @@ export function createBotTurnContext(
   currentBotName: (botId: string) => string | null = () => null
 ): BotTurnContext {
   const readTopics = (folder: string): Promise<BotMemoryTopics> => readBotMemoryTopics(fs, folder)
-  // Per session, in memory: after a host restart, `launched` says what the relaunched agent read.
+  // Codex restores proven file digests from its receipt; the remaining turn state stays in memory.
   const given = new Map<string, Given>()
+  const launches = new Map<string, object>()
   const update = (sessionId: string, fields: Partial<Omit<Given, 'botId' | 'folder'>>): void => {
     const entry = given.get(sessionId)
     if (entry) {
       given.set(sessionId, { ...entry, ...fields })
     }
   }
+  const instructions = createBotInstructionDelivery(
+    (sessionId) => given.get(sessionId),
+    update,
+    fingerprint
+  )
   /** A project linked or unlinked since launch makes the list the agent should have now. */
-  const relinked = async (sessionId: string, entry: Given): Promise<Given> => {
+  const relinked = async (
+    sessionId: string,
+    entry: Given,
+    launch: object | undefined
+  ): Promise<Given> => {
     const next = await relinkedSkills(linkedSkills, sessionId, entry)
-    if (next) {
+    if (next && launches.get(sessionId) === launch) {
       update(sessionId, next)
     }
     return given.get(sessionId) ?? entry
@@ -99,11 +101,30 @@ export function createBotTurnContext(
     return withBotRulesUpdate(known, held, plan, (orcaRules) => update(sessionId, { orcaRules }))
   }
   return {
+    configureInstructions: instructions.configure,
+    instructionSnapshot: instructions.snapshot,
+    instructionsAccepted: instructions.accepted,
+    instructionBaseline: (sessionId) => {
+      if (instructions.snapshot(sessionId)) {
+        return undefined
+      }
+      const entry = given.get(sessionId)
+      if (!entry) {
+        return undefined
+      }
+      const { soul, memory, skills } = entry
+      return { soul, memory, skills }
+    },
     launched: (sessionId, botId, folder, files, delivered, orcaRules) => {
+      const launch = {}
+      launches.set(sessionId, launch)
+      const prior = given.get(sessionId)
+      const retained =
+        !delivered && prior?.botId === botId && prior.folder === folder ? prior : undefined
+      instructions.forget(sessionId)
       record.started(botId, files.memory)
-      given.set(
-        sessionId,
-        launchedBotTurnGiven({
+      given.set(sessionId, {
+        ...launchedBotTurnGiven({
           botId,
           folder,
           files,
@@ -111,11 +132,14 @@ export function createBotTurnContext(
           memoryRecord: record.version(botId),
           skillProjects: linkedProjectsKey(linkedSkills.launchScanned(sessionId)),
           orcaRules
-        })
-      )
+        }),
+        ...(retained
+          ? { soul: retained.soul, memory: retained.memory, memoryText: retained.memoryText }
+          : {})
+      })
       // What memory/ held at launch is what the agent can have read; a turn before this lands takes it.
       void readTopics(folder).then((topics) => {
-        if (given.get(sessionId)?.topics === null) {
+        if (launches.get(sessionId) === launch && given.get(sessionId)?.topics === null) {
           update(sessionId, { topics })
         }
       })
@@ -130,16 +154,20 @@ export function createBotTurnContext(
     },
     launchUpdate: async (sessionId, held) => {
       const stored = given.get(sessionId)
+      const launch = launches.get(sessionId)
       if (!stored) {
         return null
       }
       const receiptVersion = record.version(stored.botId)
       const [entry, memory, topics, unanswered] = await Promise.all([
-        relinked(sessionId, stored),
+        relinked(sessionId, stored, launch),
         fs.readText(join(stored.folder, 'MEMORY.md')),
         readTopics(stored.folder),
         unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
       ])
+      if (launches.get(sessionId) !== launch) {
+        return null
+      }
       update(sessionId, {
         memoryAtStart: fingerprint(memory),
         receiptAtStart: { memory, topics, version: receiptVersion },
@@ -148,27 +176,45 @@ export function createBotTurnContext(
       })
       const rules = firstRun.rules(stored.botId, sessionId)
       const skillsNow = skillsUpdate(entry)
+      const providerInstructions = instructions.snapshot(sessionId) ?? undefined
       const text = [rules, skillsNow?.text, unanswered?.text].filter(Boolean)
       const taken = withNoteGiven(unanswered, () =>
-        skillsNow ? update(sessionId, { skills: skillsNow.skills }) : undefined
+        skillsNow && launches.get(sessionId) === launch
+          ? update(sessionId, { skills: skillsNow.skills })
+          : undefined
       )
-      const plan = text.length === 0 ? null : { text: text.join('\n\n'), given: taken }
+      const plan =
+        text.length === 0 && !providerInstructions
+          ? null
+          : {
+              text: text.join('\n\n'),
+              ...(providerInstructions ? { providerInstructions } : {}),
+              given: () => {
+                if (launches.get(sessionId) === launch) {
+                  taken()
+                }
+              }
+            }
       return withOrcaRules(sessionId, entry, held, plan)
     },
     plan: async (sessionId, message, held) => {
       const stored = given.get(sessionId)
+      const launch = launches.get(sessionId)
       if (!stored) {
         return null
       }
       const receiptVersion = record.version(stored.botId)
       const [entry, files, work, topics, recent, unanswered] = await Promise.all([
-        relinked(sessionId, stored),
+        relinked(sessionId, stored, launch),
         readBotHomeFiles(fs, stored.folder),
         workNote(sessionId, message).catch(() => null),
         readTopics(stored.folder),
         recentChats(stored.botId, sessionId).catch(() => null),
         unansweredQuestionNote(sessionId, stored.botId).catch(() => null)
       ])
+      if (launches.get(sessionId) !== launch) {
+        return null
+      }
       const soul = fingerprint(files.soul)
       const memory = fingerprint(files.memory)
       const memoryRecord = record.version(entry.botId)
@@ -188,10 +234,20 @@ export function createBotTurnContext(
         ...(soul !== entry.soul ? ['soul' as const] : []),
         ...(memoryNow || topicsNow ? ['memory' as const] : [])
       ]
-      if (changed.length === 0 && !work && !skillsNow && !rules && !others && !unanswered) {
+      const providerInstructions = instructions.snapshot(sessionId) ?? undefined
+      if (
+        changed.length === 0 &&
+        !work &&
+        !skillsNow &&
+        !rules &&
+        !others &&
+        !unanswered &&
+        !providerInstructions
+      ) {
         return withOrcaRules(sessionId, entry, held, null)
       }
       return withOrcaRules(sessionId, entry, held, {
+        ...(providerInstructions ? { providerInstructions } : {}),
         text: [
           ...(rules ? [rules] : []),
           ...(soul !== entry.soul ? [botSoulUpdateText(files.soul)] : []),
@@ -205,17 +261,22 @@ export function createBotTurnContext(
         ...(changed.length > 0
           ? { note: botContextNoteBody({ botId: entry.botId, changed }) }
           : {}),
-        given: withNoteGiven(unanswered, () =>
-          update(sessionId, {
-            soul,
-            memory,
-            memoryText: botMemoryKnown(entry.memoryText, files.memory),
-            memoryRecord,
-            topics,
-            ...(recent ? { recentChats: recent.key } : {}),
-            ...(skillsNow ? { skills: skillsNow.skills } : {})
-          })
-        )
+        given: () => {
+          if (launches.get(sessionId) !== launch) {
+            return
+          }
+          withNoteGiven(unanswered, () =>
+            update(sessionId, {
+              soul,
+              memory,
+              memoryText: botMemoryKnown(entry.memoryText, files.memory),
+              memoryRecord,
+              topics,
+              ...(recent ? { recentChats: recent.key } : {}),
+              ...(skillsNow ? { skills: skillsNow.skills } : {})
+            })
+          )()
+        }
       })
     },
     handedOver: (sessionId) =>
@@ -226,115 +287,18 @@ export function createBotTurnContext(
     // chat's turn end, Settings, Forget, Undo, tidy-up) or a turn of another chat running beside it.
     // One made before the turn started is never its own. SOUL.md, which has no record, counts only
     // the turn's edit rows.
-    turnEnded: (sessionId, turnId, readItems, writeNote) => {
-      const entry = given.get(sessionId)
-      if (!entry) {
-        return
+    turnEnded: createBotTurnCompletion({
+      fs,
+      record,
+      given,
+      update,
+      firstRun,
+      chats,
+      readTopics,
+      capture: (sessionId) => {
+        const launch = launches.get(sessionId)
+        return () => launches.get(sessionId) === launch
       }
-      const { memoryAtStart, topicsAtStart, receiptAtStart } = entry
-      update(sessionId, { memoryAtStart: null, topicsAtStart: null, receiptAtStart: null })
-      void record
-        .after(
-          entry.botId,
-          async (recorded) => {
-            const soul = await fs.readText(join(entry.folder, 'SOUL.md'))
-            const since = given.get(sessionId)?.scannedThrough ?? entry.scannedThrough
-            const journal = await readItems(since)
-            const { items } = journal
-            const turn = since === null ? items : items.filter((item) => item.sequence > since)
-            // That turn's own opener: rows written since, such as a next turn's, are not this end's.
-            if (ownerOpened(journal, turnId)) {
-              firstRun.ownerTurnEnded(entry.botId, sessionId)
-            }
-            // The other conversations, read only when this end can take a fact into the shared
-            // baseline: their outside turns may have written it.
-            const own = { sessionId, scannedThrough: since, turn }
-            const { label, alone } = besideTurn(own, turnOpenedAt(items, turnId), chats, () =>
-              [...given]
-                .filter(([id, other]) => id !== sessionId && other.botId === entry.botId)
-                .map(([id, other]) => ({ sessionId: id, scannedThrough: other.scannedThrough }))
-            )
-            const edited = turnRows(journal, turnId, turn).some(
-              ({ body }) => body.kind === 'tool-call' || body.kind === 'diff'
-            )
-            const topics = edited ? await readTopics(entry.folder) : new Map()
-            // memory/ by the MEMORY.md rule, with no record: the turn's own when it ran alone, from
-            // the files the agent had at its start.
-            const hadTopics = given.get(sessionId)?.topics
-            if (edited && hadTopics && botMemoryTopicsKey(hadTopics) === topicsAtStart) {
-              if (botMemoryTopicsKey(topics) !== topicsAtStart && (await alone())) {
-                update(sessionId, { topics })
-              }
-            }
-            // Not known yet: everything in the file is new.
-            const before = recorded ?? ''
-            const keepOut = await readdGuard(fs, entry, record, turn)
-            const tagged = await tagBotMemoryFile(fs, entry.folder, before, label, keepOut)
-            await writeBotTurnMemoryReceipt(
-              {
-                botId: entry.botId,
-                sessionId,
-                turnId,
-                items,
-                before: receiptAtStart,
-                memory: tagged?.text,
-                topics,
-                edited
-              },
-              record,
-              alone,
-              writeNote
-            )
-            if (!tagged) {
-              return undefined
-            }
-            // Before the record knew the file, nothing it holds is this turn's; an empty change
-            // writes no history row, so its source is never read.
-            const change = recorded === null ? null : botMemoryChange(recorded, tagged.text)
-            const by = !change || isEmptyBotMemoryChange(change) ? null : await label()
-            // Read through the head: an empty window (a refused send's end names no turn row) must
-            // not leave the mark at 0, which would make the next end's window the whole chat.
-            const scanned =
-              journal.head ?? items.reduce((max, item) => Math.max(max, item.sequence), 0)
-            const botWrote = (name: 'SOUL.md' | 'MEMORY.md'): boolean =>
-              since !== null && turn.some((item) => writesHomeFile(item.body, name))
-            const memory = fingerprint(tagged.text)
-            // Only a file the turn changed has anything to take; an unchanged one is already had.
-            const changed =
-              memoryAtStart !== null &&
-              memory !== memoryAtStart &&
-              // Not when facts were put back or kept out: its next turn is sent them.
-              isEmptyBotMemoryChange(tagged.kept) &&
-              edited
-            const ranAlone = changed && (await alone())
-            const now = given.get(sessionId) ?? entry
-            const ownMemory =
-              ranAlone &&
-              now.memory !== null &&
-              // The file at the turn's start was what the agent had.
-              memoryAtStart === now.memory &&
-              // This chat's own record changes (its Forget, its turn ends) are not another writer's.
-              !record.changedBesides(entry.botId, sessionId, now.memoryRecord)
-            update(sessionId, {
-              scannedThrough: scanned,
-              ...(botWrote('SOUL.md') ? { soul: fingerprint(soul) } : {}),
-              ...(ownMemory
-                ? {
-                    memory,
-                    memoryText: botMemoryKnown(now.memoryText, tagged.text),
-                    memoryRecord: record.version(entry.botId)
-                  }
-                : {})
-            })
-            if (change) {
-              record.noted(entry.botId, { kind: 'chat', sessionId, source: by }, change)
-            }
-            record.noted(entry.botId, { kind: 'kept', sessionId }, tagged.kept)
-            return tagged.text
-          },
-          sessionId
-        )
-        .catch(() => {})
-    }
+    })
   }
 }

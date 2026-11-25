@@ -4,8 +4,8 @@ import type { CodexAppServerConnection } from './codex-app-server-connection-typ
 export async function initializeCodexAppServerConnection(
   connection: CodexAppServerConnection,
   timeoutMs: number | null
-): Promise<void> {
-  await connection.request(
+): Promise<{ userAgent?: string }> {
+  const result = await connection.request(
     'initialize',
     {
       clientInfo: { name: 'orca_desktop', title: 'Orca', version: '0.0.0' },
@@ -20,4 +20,10 @@ export async function initializeCodexAppServerConnection(
     { timeoutMs }
   )
   connection.notify('initialized')
+  return result &&
+    typeof result === 'object' &&
+    'userAgent' in result &&
+    typeof result.userAgent === 'string'
+    ? { userAgent: result.userAgent }
+    : {}
 }

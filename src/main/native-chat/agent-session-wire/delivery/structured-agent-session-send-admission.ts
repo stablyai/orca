@@ -18,6 +18,10 @@ import {
   agentSessionAdmissionWriteRefusal
 } from '../operations/structured-agent-session-turns'
 import { captureStructuredExecutionOptions } from '../options/structured-agent-session-execution-options'
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
+import { recordStructuredAgentSessionDeliveryFailure } from '../startup/structured-agent-session-start-failure-row'
+import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 
 export type StructuredSendAdmissionParams = {
   envelope: { clientOperationId: string }
@@ -30,6 +34,7 @@ export type StructuredSendAdmissionParams = {
   personsMessage?: true
   usageLimitContinuationOfTurnItemId?: string
   expectedContinuationLaunch?: JournalContinuationLaunch
+  retryOfClientMessageId?: string
 }
 
 type SendContext = Pick<
@@ -74,6 +79,14 @@ export async function admitStructuredAgentSessionSend(
       ? AGENT_MESSAGE_SOURCE
       : undefined
   try {
+    const id = params.envelope.clientOperationId
+    const record = context.deps.store.getRecord(ctx.sessionId)
+    const instructionWriterUnresolved =
+      !queueOnly &&
+      record?.instructionPolicy?.state === 'pending' &&
+      !context.startFlights.get(ctx.sessionId) &&
+      Boolean((await ctx.journal.reads.input({ kind: 'first-queued' })).submission) &&
+      !(await ctx.journal.reads.submission(id))
     const commit = await ctx.journal.write(
       {
         kind: 'send-admission',
@@ -83,6 +96,9 @@ export async function admitStructuredAgentSessionSend(
           payloadFingerprint: agentSessionSendBodyFingerprint(ctx.sessionId, params.body),
           fence: ctx.fence,
           handoverRecorded: true,
+          ...(params.retryOfClientMessageId
+            ? { retryOfClientMessageId: params.retryOfClientMessageId }
+            : {}),
           origin: params.userSend ? 'client' : 'host',
           ...(source ? { source } : {}),
           options: captured.options
@@ -90,6 +106,7 @@ export async function admitStructuredAgentSessionSend(
         fromPerson,
         fromAgent: !fromPerson && params.body.from !== undefined,
         deliveryMode: params.delivery === 'queue-if-active' ? 'queue' : 'steer',
+        ...(instructionWriterUnresolved ? { instructionWriterUnresolved: true as const } : {}),
         ...(queueOnly ? { queueOnly: true } : {}),
         ...(params.usageLimitContinuationOfTurnItemId !== undefined
           ? { continuationOfTurnItemId: params.usageLimitContinuationOfTurnItemId }
@@ -125,6 +142,30 @@ export async function admitStructuredAgentSessionSend(
     }
     if (result.kind !== 'admitted') {
       throw new Error('send admission left mail custody unanswered')
+    }
+    if (
+      instructionWriterUnresolved &&
+      'submission' in result.value &&
+      isQueuedAgentJournalSubmission(result.value.submission)
+    ) {
+      await recordStructuredAgentSessionDeliveryFailure(
+        ctx,
+        {
+          startKey: id,
+          cause: {
+            failure: agentSessionFailureFact('startFailed', {
+              instructionRecovery: 'pending',
+              neverReachedAgent: true
+            })
+          }
+        },
+        structuredAgentSessionFailureWordsContext(record),
+        id
+      )
+      const submission = await ctx.journal.reads.submission(id)
+      if (submission) {
+        return { ok: true as const, value: { clientMessageId: id, submission } }
+      }
     }
     return { ok: true as const, value: result.value }
   } catch (error) {

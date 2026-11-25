@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -13,7 +14,6 @@ import type {
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { sendTellingAdmitted } from './structured-agent-session-message-admitted'
 import type {
   AgentSessionThreadGoalChange,
@@ -63,11 +63,8 @@ import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-l
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: {
-    envelope: AgentSessionMutationEnvelope
-    body: AgentJournalMessageItem
+  params: StructuredAgentSessionSendMutation & {
     retryUnknown?: true
-    delivery?: 'queue-if-active'
     queuedImageCards?: boolean
     options?: Readonly<Record<string, string>>
     selection?: Readonly<Record<string, string>>

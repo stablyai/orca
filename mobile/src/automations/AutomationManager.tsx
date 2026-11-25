@@ -1,3 +1,4 @@
+import type { AutomationView } from './automation-manager-view'
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
 import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -21,7 +22,7 @@ import { leaveThrough, type AutomationLeaveSlot } from './AutomationEditorNaviga
 import { AutomationRecentRuns, AutomationRunsView } from './AutomationRunList'
 import { AutomationPageBotEditor } from './AutomationPageBotEditor'
 import { AutomationRunDetails } from './AutomationRunDetails'
-import type { MobileAutomationRow, MobileAutomationRun } from './automation-reply-schema'
+import type { MobileAutomationRow } from './automation-reply-schema'
 import {
   automationDeleteWrite,
   automationRunWrite,
@@ -35,11 +36,6 @@ import { automationEditorDraftKey, dropAutomationEditorDraft } from './automatio
 import { automationStyles as styles } from './automation-styles'
 import { useAutomationProjectNames } from './use-automation-project-names'
 
-type AutomationView =
-  | { kind: 'list' }
-  | { kind: 'detail'; row: MobileAutomationRow }
-  | { kind: 'editor'; row?: MobileAutomationRow; initialDraft?: AutomationDraft }
-  | { kind: 'run'; run: MobileAutomationRun; scope: AutomationRunScope }
 const ACTION_OPTIONS = { failWhenDisconnected: true }
 
 export function AutomationManager(props: {
@@ -338,6 +334,7 @@ export function AutomationManager(props: {
             <AutomationDetail
               row={row}
               onBack={allAutomations}
+              lastRun={history.runs.find((run) => run.automationId === row.automation.id)}
               client={props.client}
               disabled={disabled}
               projectName={projectName(row.automation)}

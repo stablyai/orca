@@ -1,7 +1,12 @@
 // A bot session's launch instructions, recorded in its turn context as what its agent was given.
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { Bot } from '../../shared/bot-types'
-import { botRulesBlock, botSessionPreamble } from './bot-preamble'
+import { botRulesBlock, botSessionPreamble, type BotHomeFiles } from './bot-preamble'
+import {
+  botCodexInstructionPolicy,
+  botInstructionDigest,
+  botCodexStandingFingerprint
+} from './bot-codex-instruction-policy'
 import { type BotHomeFilesystem, localBotHomeFilesystem } from './bot-home'
 import type { BotTurnContext } from './bot-turn-context'
 
@@ -30,7 +35,7 @@ type BotSessionLaunch = Pick<
 
 /** A bot session's preamble, read from the folder it runs in, recorded as what its agent has. */
 export async function botSessionInstructions(
-  context: Pick<BotTurnContext, 'launched' | 'linkedSkillsLaunched'>,
+  context: Pick<BotTurnContext, 'launched' | 'linkedSkillsLaunched' | 'configureInstructions'>,
   bots: readonly (Pick<Bot, 'id' | 'name' | 'agent' | 'folderWorkspaceId'> &
     Partial<Pick<Bot, 'skillProjects'>>)[],
   record: BotSessionLaunch,
@@ -40,6 +45,9 @@ export async function botSessionInstructions(
   fs: Pick<BotHomeFilesystem, 'readText'> = localBotHomeFilesystem
 ): Promise<string | null> {
   let neverLinked = false
+  const launchBot: { value: { id: string; name: string; files: BotHomeFiles } | null } = {
+    value: null
+  }
   const preamble = await botSessionPreamble(
     bots,
     {
@@ -52,6 +60,7 @@ export async function botSessionInstructions(
     (bot, files, agent) => {
       // Unlinking leaves an empty list, so a bot without one never had linked skills to replace.
       neverLinked = bot.skillProjects === undefined
+      launchBot.value = { id: bot.id, name: bot.name, files }
       context.launched(record.sessionId, bot.id, launchDirectory, files, startsFresh(record), {
         block: botRulesBlock(agent),
         name: bot.name,
@@ -69,5 +78,21 @@ export async function botSessionInstructions(
     linkedSkills,
     startsFresh(record) || (neverLinked && linkedSkills === null)
   )
-  return linkedSkills ? `${preamble}\n\n${linkedSkills}` : preamble
+  const full = linkedSkills ? `${preamble}\n\n${linkedSkills}` : preamble
+  const bot = launchBot.value
+  if (record.provider !== 'codex' || !bot) {
+    return full
+  }
+  const text = botCodexInstructionPolicy(bot.id, full)
+  context.configureInstructions?.(
+    record.sessionId,
+    {
+      botId: bot.id,
+      standing: botCodexStandingFingerprint(bot),
+      digest: botInstructionDigest(text),
+      text
+    },
+    bot.files
+  )
+  return text
 }

@@ -57,6 +57,7 @@ export type CodexJournalTranslatorDeps = {
 }
 
 export type CodexJournalTranslator = {
+  hideInstructionItem: (id: string) => void
   handle: (event: CodexStructuredSessionEvent) => CodexJournalTranslationAdmission
   /** The next primary turn carries this command and determines its end. */
   beginCommand: (command: StructuredAgentSessionCommandRun) => void

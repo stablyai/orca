@@ -1,4 +1,5 @@
 import * as usageLimit from '../recovery/structured-agent-session-host-background'
+import { withInstructionBaselineHost } from '../structured-agent-session-instruction-baseline'
 import { createStructuredAgentSessionConversationReads } from './structured-agent-session-conversation-reads'
 import { continuationContextReader as contextReader } from '../recovery/structured-agent-session-continuation-context'
 import { structuredAgentStartJournal } from '../acquisition/structured-agent-start-journal'
@@ -8,7 +9,7 @@ import { createStartupRecovery } from '../recovery/structured-agent-session-rest
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import { structuredAgentSessionEntryDelegates } from '../acquisition/structured-agent-session-entry-delegates'
-import { claimStructuredAgentSessionAgent as claimAgent } from '../startup/structured-agent-session-agent-start'
+import { claimStructuredAgentSessionAgent as claim } from '../startup/structured-agent-session-agent-start'
 import * as mutationWiring from './structured-agent-session-host-mutation-wiring'
 import * as lifetime from '../termination/structured-agent-session-conversation-lifetime'
 import { createStructuredAgentSessionTabSurface as createTabs } from './structured-agent-session-host-tabs'
@@ -23,7 +24,6 @@ import type { StructuredAgentSessionRestartResume } from '../recovery/structured
 import { structuredAgentSessionRestartResumeSurfaces } from '../recovery/structured-agent-session-restart-resume-wiring'
 import * as conversation from '../delivery/structured-agent-session-host-delivery'
 import { wireStructuredAgentSessionQueuedMessages as wireQueuedMessages } from '../delivery/structured-agent-session-queued-wiring'
-import * as sessionLogger from './structured-agent-session-logger'
 import { createStructuredAgentSessionWorkspaceSleeper } from '../termination/structured-agent-session-workspace-sleep'
 
 export class StructuredAgentSessionHost {
@@ -65,8 +65,7 @@ export class StructuredAgentSessionHost {
   readonly usageLimitContinue: ReturnType<typeof usageLimit.start>
 
   constructor(readonly deps: HostTypes.StructuredAgentSessionHostDeps) {
-    // Collaborators share a logger wrapper that cannot fail the operation it reports.
-    this.deps = deps = sessionLogger.withNeverThrowingLogger(deps)
+    this.deps = deps = withInstructionBaselineHost(deps, (work) => this.tasks.trackAttach(work))
     this.clientDelivery.watchAtRestCommands(deps.adapter)
     this.background = new Background(
       deps,
@@ -92,7 +91,7 @@ export class StructuredAgentSessionHost {
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       // Quit drains tracked starts before eviction so their children are stopped.
       trackStart: (start) => this.tasks.trackAttach(start),
-      startProviderChild: (id, startedFor) => claimAgent(this.attachContext(), id, startedFor),
+      startProviderChild: (id, key, retire) => claim(this.attachContext(), id, key, retire),
       deliveryOrder: this.runtimeState.deliveryOrder,
       startFlights: this.runtimeState.startFlights,
       readiness: (id, child) => this.runtimeState.startupAttempts.readiness(id, child),

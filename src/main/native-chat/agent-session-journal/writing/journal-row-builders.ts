@@ -291,6 +291,9 @@ export function buildJournalSubmissionRow(
 ): JournalSubmissionRow {
   return {
     kind: 'submission',
+    ...(input.retryOfClientMessageId
+      ? { retryOfClientMessageId: input.retryOfClientMessageId }
+      : {}),
     ...(input.inputOrderContext ? { inputOrderContext: input.inputOrderContext } : {}),
     clientMessageId: input.clientMessageId,
     payloadFingerprint: input.payloadFingerprint,

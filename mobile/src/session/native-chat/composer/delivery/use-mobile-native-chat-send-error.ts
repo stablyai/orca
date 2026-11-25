@@ -1,3 +1,4 @@
+import { useAccessibilityAnnouncer } from '../../../../platform/accessibility/accessibility-announcer'
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { StructuredAgentSessionCommandRefusalCause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { triggerError } from '../../../../platform/haptics/haptics'
@@ -5,6 +6,7 @@ import { triggerError } from '../../../../platform/haptics/haptics'
 // Keep command-refusal causes only while the chat still shows the work that caused them.
 export type MobileNativeChatSendErrorDetails = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
+  announceOnly?: true
 }
 
 export type MobileNativeChatSendErrorReporter = (
@@ -30,6 +32,7 @@ export function useMobileNativeChatSendError(args: {
   keepWhile: (causes: MobileNativeChatCommandRefusalCauses | null) => void
   bannerMountedRef: MutableRefObject<boolean>
 } {
+  const announce = useAccessibilityAnnouncer()
   const [error, setError] = useState<
     ({ scopeKey: string | null; message: string } & MobileNativeChatSendErrorDetails) | null
   >(null)
@@ -62,6 +65,10 @@ export function useMobileNativeChatSendError(args: {
     (next: string, details?: MobileNativeChatSendErrorDetails) => {
       // A refused or failed send buzzes (MobilePendingButton's rule), felt even when the banner is covered.
       triggerError()
+      if (details?.announceOnly) {
+        void announce(next)
+        return
+      }
       // Fall back to toast after leaving chat or changing tabs so late failures remain visible without misattribution.
       if (liveScopeRef.current !== scopeKey || !bannerMountedRef.current) {
         showToastRef.current(next, NATIVE_CHAT_SEND_ERROR_TOAST_MS)
@@ -74,7 +81,7 @@ export function useMobileNativeChatSendError(args: {
         setError(null)
       }, NATIVE_CHAT_SEND_ERROR_HOLD_MS)
     },
-    [clearTimer, scopeKey]
+    [announce, clearTimer, scopeKey]
   )
   useEffect(() => {
     clearTimer()

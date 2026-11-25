@@ -1,6 +1,6 @@
 // Deep-validate dispatch submissions with open string vocabularies, as in agent-session-journal-schemas.ts.
 
-import { z } from 'zod'
+import * as z from 'zod'
 import { AgentJournalAnsweredTurnSchema } from '../view/agent-session-answered-turn-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import type { AgentJournalSubmission } from './agent-session-journal-types'
@@ -8,6 +8,7 @@ import { AgentSessionExecutionOptionsSchema } from '../options/protocol/agent-se
 
 // Every persisted field is listed, or a parse strips it: this schema drops unknown keys.
 export const AgentJournalSubmissionSchema = z.object({
+  retryOfClientMessageId: z.string().min(1).optional(),
   clientMessageId: z.string().min(1),
   fence: z.number().int(),
   payloadFingerprint: z.string(),

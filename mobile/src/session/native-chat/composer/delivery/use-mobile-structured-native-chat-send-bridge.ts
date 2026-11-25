@@ -1,3 +1,5 @@
+import type { MobileNativeChatSendErrorReporter } from './use-mobile-native-chat-send-error'
+import { settleMobileInstructionRecovery } from '../mobile-native-chat-recovery-delivery'
 import { useCallback } from 'react'
 import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentId } from '../../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
@@ -15,6 +17,8 @@ import {
 } from '../drafts/mobile-native-chat-draft-store'
 import {
   beginMobileNativeChatInFlightSend,
+  readMobileNativeChatInFlightSend,
+  releaseMobileNativeChatInFlightSends,
   settleMobileNativeChatInFlightSend
 } from './mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
@@ -41,7 +45,7 @@ export function useMobileStructuredNativeChatSendBridge(args: {
     options?: { preserveConversationCommands?: boolean }
   ) => void
   holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
-  onSendError: (message: string) => void
+  onSendError: MobileNativeChatSendErrorReporter
 }): {
   send: (text: string, images?: string[]) => Promise<boolean>
   sendWithOutcome: (
@@ -90,10 +94,21 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         command: intent?.goal === true || isSlashCommandDraft(text),
         intent
       })
-      const created: { clientMessageId?: string } = {}
+      const created: { clientMessageId?: string; recorded?: boolean } = {}
       const outcome = await sendStructured(text, images, deadline, attachments, skills, {
         ...intent,
         clientMessageId,
+        onRecorded: (submission) => {
+          created.recorded = true
+          settleMobileInstructionRecovery(
+            inFlightId
+              ? (readMobileNativeChatInFlightSend(inFlightId)?.send.sessionId ?? null)
+              : null,
+            [submission],
+            onSendError
+          )
+          intent?.onRecorded?.(submission)
+        },
         onCreated: (id) => {
           created.clientMessageId = id
           intent?.onCreated?.(id)
@@ -124,6 +139,10 @@ export function useMobileStructuredNativeChatSendBridge(args: {
         } else {
           restoreRejectedDraft(origin, text, { preserveConversationCommands: true })
         }
+        return outcome
+      }
+      if (created.recorded && inFlightId && outcome === 'accepted') {
+        releaseMobileNativeChatInFlightSends([inFlightId])
         return outcome
       }
       settleMobileNativeChatInFlightSend(inFlightId, outcome === 'rejected' ? 'kept' : 'sent')

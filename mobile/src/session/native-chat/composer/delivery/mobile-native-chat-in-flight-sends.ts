@@ -1,3 +1,9 @@
+import {
+  structuredAgentSessionSettledSends,
+  type AgentSessionDeliveryFact
+} from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
+import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { useSyncExternalStore } from 'react'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import {
@@ -177,9 +183,10 @@ export function restoredFiles(
   return files.map((file) => ({ ...file, id: createUuidV4() }))
 }
 
-export function readMobileNativeChatInFlightSend(
-  id: string
-): { scope: string; send: MobileNativeChatInFlightSend } | null {
+export function readMobileNativeChatInFlightSend(id: string): {
+  scope: string
+  send: MobileNativeChatInFlightSend
+} | null {
   return inFlightSends.get(id) ?? null
 }
 
@@ -214,4 +221,45 @@ export function retireMobileNativeChatInFlightSends(scope: string): void {
       inFlightSends.delete(id)
     }
   }
+}
+
+export function settleRecordedMobileNativeChatInFlightSends(
+  ids: readonly string[],
+  submissions: readonly AgentSessionDeliveryFact[],
+  onlyAccepted = false,
+  ownedByQueue: readonly string[] = []
+): void {
+  const byId = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
+  const queued = ownedByQueue.length > 0 ? new Set(ownedByQueue) : undefined
+  for (const id of ids) {
+    const saved = readMobileNativeChatInFlightSend(id)?.send
+    const submission = saved?.clientMessageId ? byId.get(saved.clientMessageId) : undefined
+    const verdict = submission?.dispatchState
+    const transferred = saved?.clientMessageId !== undefined && queued?.has(saved.clientMessageId)
+    if (
+      !saved?.clientMessageId ||
+      transferred ||
+      verdict === 'accepted' ||
+      (!onlyAccepted &&
+        verdict === 'rejected' &&
+        !readWholeAgentSessionFailureFact(submission?.rejection)?.instructionRecovery)
+    ) {
+      settleMobileNativeChatInFlightSend(
+        id,
+        verdict === 'accepted' || transferred ? 'sent' : 'kept'
+      )
+    }
+  }
+}
+
+export function mobileNativeChatRecordedSendIds(
+  ids: readonly string[],
+  submissions: readonly AgentJournalSubmission[],
+  queuedMessages: readonly { messageId: string }[] | null
+): Set<string> {
+  const { cards, recorded } = structuredAgentSessionSettledSends(
+    submissions,
+    (queuedMessages ?? []).map((message) => message.messageId)
+  )
+  return new Set(ids.filter((id) => cards.has(id) || recorded.has(id)))
 }

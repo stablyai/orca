@@ -257,9 +257,12 @@ export function NativeChatQueuedMessageCard({
           {caption ? (
             <p
               className={cn(
-                'truncate text-xs',
+                returned ? 'line-clamp-2 text-xs' : 'truncate text-xs',
                 returned ? 'text-destructive' : 'text-muted-foreground',
-                failed && !card.waitsForAgent && 'can-hover:pointer-fine:@max-[400px]:sr-only'
+                failed &&
+                  !returned &&
+                  !card.waitsForAgent &&
+                  'can-hover:pointer-fine:@max-[400px]:sr-only'
               )}
             >
               {attention && drag?.grip ? (
@@ -328,6 +331,7 @@ export function NativeChatQueuedMessageCard({
                 <Button
                   type="button"
                   variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
+                  data-native-chat-retry
                   size="xs"
                   className="min-h-[24px] min-w-[24px]"
                   data-queued-message-send

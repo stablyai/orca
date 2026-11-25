@@ -12,11 +12,16 @@ export async function writeStructuredAgentSessionOrcaNote(
   host: Pick<StructuredAgentSessionHost, 'deps' | 'conversation'>,
   sessionId: string,
   clientMessageId: string,
-  body: AgentJournalPlainStatusItem
+  body: AgentJournalPlainStatusItem,
+  expectedFence?: number
 ): Promise<void> {
   const { journal } = await host.conversation(sessionId)
+  const fence = structuredAgentSessionConversationFence(host.deps.store, sessionId)
+  if (expectedFence !== undefined && fence !== expectedFence) {
+    return
+  }
   await journal.appendItem({ provider: 'orca', clientMessageId }, body, {
-    fence: structuredAgentSessionConversationFence(host.deps.store, sessionId),
+    fence: expectedFence ?? fence,
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
 }

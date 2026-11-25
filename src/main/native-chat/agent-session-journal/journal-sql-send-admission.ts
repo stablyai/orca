@@ -23,6 +23,8 @@ import {
 } from './queued-messages/queued-message-published-bytes'
 import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalSendAdmissionResult } from './journal-send-admission'
+import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
+import { readJournalDomainSubmissionAttempt } from './journal-domain-submission-records'
 
 /** Replay, queue eligibility, byte budget and acceptance share this writer position. */
 export function applyJournalSqlSendAdmission(
@@ -101,6 +103,36 @@ export function applyJournalSqlSendAdmission(
         })
       : empty({ kind: 'admitted', value: { clientMessageId: id, submission: existing } })
   }
+  const retryId = input.retryOfClientMessageId
+  if (retryId) {
+    const original = readJournalDomainSubmissionAttempt(db, target, retryId)
+    const originalBody = original?.admission.body
+    if (
+      input.origin !== 'client' ||
+      original?.submission.origin !== 'client' ||
+      original.submission.dispatchState !== 'rejected' ||
+      !readAgentSessionFailureFact(original.submission.rejection)?.instructionRecovery ||
+      original.submission.payloadFingerprint !== input.payloadFingerprint ||
+      originalBody?.role !== 'user' ||
+      originalBody.from ||
+      db
+        .prepare(
+          `SELECT 1 FROM journal_submission_attempts
+         WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state<>'rejected'
+           AND json_extract(payload_json, '$.retryOfClientMessageId')=? LIMIT 1`
+        )
+        .get(...scope.prefix, retryId)
+    ) {
+      return empty({
+        kind: 'refused',
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          { reason: 'messageIdReused' },
+          'This message has already been retried or has changed.'
+        )
+      })
+    }
+  }
   const eligibility = journalDomainInputEligibility(scope, facts.send)
   const superseded = () =>
     empty({
@@ -138,7 +170,11 @@ export function applyJournalSqlSendAdmission(
   const settleCarried = () =>
     settleJournalDomainCarriedCards(db, scope, id, carried, { fence: input.fence, savedAt })
   let queue = false
-  if (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts)) {
+  if (
+    !retryId &&
+    !operation.instructionWriterUnresolved &&
+    (operation.fromAgent || !pendingPromptsAllUnanswerableHere(eligibility.prompts))
+  ) {
     queue = eligibility.prompts.length > 0 || eligibility.work.working() || !!eligibility.pending
     if (!queue && operation.fromAgent) {
       queue = readJournalDomainQueuePauseContext(

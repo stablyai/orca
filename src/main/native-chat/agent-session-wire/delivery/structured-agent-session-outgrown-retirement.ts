@@ -9,6 +9,7 @@ import type {
 import { retireOutgrownStructuredAgentSessionChild } from '../recovery/structured-agent-session-outgrown-child'
 import { readJournalSqlWorkAnswerOnce } from '../../agent-session-journal/journal-sql-work-answer'
 import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import { deferBotInstructionRetirement } from '../startup/structured-agent-session-instruction-recovery'
 import {
   structuredAgentSessionLaunchPermission,
   structuredAgentSessionInputCompilerPermission
@@ -61,6 +62,9 @@ export function createStructuredAgentSessionOutgrownRetirement(input: {
             mode !== session?.child?.permissionMode),
       stopAgent: (sessionId, onlyIf) => {
         deps.store.requireWritableRecord(sessionId)
+        if (next && deferBotInstructionRetirement(deps, sessionId, session)) {
+          return Promise.resolve()
+        }
         return input.stopOutgrownAgent(sessionId, onlyIf)
       },
       launchAccountHome: async () => {

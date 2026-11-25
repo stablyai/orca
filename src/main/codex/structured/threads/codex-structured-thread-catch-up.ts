@@ -38,7 +38,8 @@ export async function catchUpCodexThread(input: {
     clientMessageId: string,
     providerIdentity: AgentJournalItemIdentity
   ) => void | Promise<void>
-}): Promise<void> {
+}): Promise<boolean> {
+  let unchanged = false
   let restoreHelpers: (() => void) | undefined
   let discardHelpers: (() => void) | undefined
   const outcome = await runHistoryCatchUp({
@@ -141,6 +142,10 @@ export async function catchUpCodexThread(input: {
       const missing = paginate
         ? await discoverCodexHistory(read, view)
         : { pages: [], order: [...seen], rewound: view.latest !== null && !seen.has(view.latest) }
+      unchanged =
+        !missing.rewound &&
+        !view.unresolvedOrigin &&
+        missing.order.every((id) => view.known.has(id) && view.terminal?.has(id))
       const staging = createCodexHistoryImportPlan({
         sessionId: input.sessionId,
         threadId: input.threadId,
@@ -207,4 +212,5 @@ export async function catchUpCodexThread(input: {
   } finally {
     discardHelpers?.()
   }
+  return unchanged && outcome !== 'skipped'
 }

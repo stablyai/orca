@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { cn } from '@/lib/class-names'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './appearance/native-chat-appearance-style'
@@ -15,6 +15,7 @@ export function NativeChatSurface({
   working,
   children,
   className,
+  announcementRef,
   ...dataAttributes
 }: {
   surface: NativeChatSurfaceState
@@ -22,6 +23,7 @@ export function NativeChatSurface({
   children: ReactNode
   /** Extra root classes, e.g. the size container a structured chat's worker dock measures. */
   className?: string
+  announcementRef?: RefObject<HTMLSpanElement | null>
 } & Record<`data-${string}`, string | undefined>): React.JSX.Element {
   return (
     <div
@@ -39,6 +41,15 @@ export function NativeChatSurface({
       style={surface.appearance}
       data-native-chat-scheme={surface.appearance.colorScheme}
     >
+      {announcementRef ? (
+        <span
+          ref={announcementRef}
+          className="sr-only"
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        />
+      ) : null}
       <NativeChatLinkClickContext value={surface.onLinkClick}>
         <NativeChatSessionHistoryScopeContext.Provider value={surface.sessionHistory}>
           <NativeChatFindQueryContext value={surface.find.isOpen ? surface.find.query : ''}>

@@ -34,6 +34,18 @@ const COPY: Record<
   AutomationRunFailureCode,
   (params: AutomationRun['errorParams']) => string | null
 > = {
+  instructionTimeout: () =>
+    translate('automations.runFailures.instructionTimeout', '{{message}}.', {
+      message: translate('components.native-chat.messageNotSent', 'Message not sent')
+    }),
+  instructionPending: () =>
+    translate('automations.runFailures.instructionPending', EN.instructionPending),
+  instructionCommit: () =>
+    translate('automations.runFailures.instructionCommit', EN.instructionCommit),
+  instructionUnsupported: () =>
+    translate('automations.runFailures.instructionUnsupported', EN.instructionUnsupported),
+  instructionUnknown: () =>
+    translate('automations.runFailures.instructionUnknown', EN.instructionUnknown),
   noDispatchHost: () => translate('automations.runFailures.noDispatchHost', EN.noDispatchHost),
   unevaluableSchedule: () =>
     translate('automations.runFailures.unevaluableSchedule', EN.unevaluableSchedule),

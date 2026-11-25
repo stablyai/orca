@@ -31,6 +31,7 @@ import { optionStyles } from './mobile-bot-option-styles'
 import { colors } from '../theme/mobile-theme'
 import type { PresentAutomationSheet } from '../automations/AutomationSheets'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { automationRunErrorText } from '../automations/automation-run-presentation'
 
 /** What an automation's ⋯ menu can do besides Run now and Delete; each is absent where it can't. */
 export type BotAutomationRowActions = {
@@ -41,7 +42,6 @@ export type BotAutomationRowActions = {
   /** Opens a confirm beside the drawer; null where none can open, which leaves out Delete. */
   present: PresentAutomationSheet | null
 }
-
 function AutomationRow(props: {
   row: BotAutomationRow<BotAutomationView>
   bot: SheetBot
@@ -56,6 +56,10 @@ function AutomationRow(props: {
   const [menuOpen, setMenuOpen] = useState(false)
   const { automation, failing } = props.row
   const { onEdit, onAskInChat, onViewRuns } = props.actions
+  const failureReason = props.row.latestFailure
+    ? automationRunErrorText(props.row.latestFailure)
+    : null
+  const failureLabel = `${t('automations.mobile.failed', 'Failed')} · ${failureReason ?? t('bots.automations.couldNotFinish', 'Couldn’t finish')}`
   const wontFire = automationWontFireNote(automation, props.bot)
   const Kind = hasAutomationSchedule(automation) ? Clock : Zap
   const menu: ActionSheetAction[][] = [
@@ -123,16 +127,24 @@ function AutomationRow(props: {
         subtitleNote={
           props.row.needsSignIn
             ? { text: t('bots.upcoming.needsSignIn', 'Needs sign-in'), color: colors.agentQuestion }
-            : failing
-              ? {
-                  text: t('bots.automations.couldNotFinish', 'Couldn’t finish'),
-                  color: colors.statusRed
-                }
-              : undefined
+            : undefined
         }
         leading={<Kind {...KIND_GLYPH} color={colors.textSecondary} />}
         onPress={() => setMenuOpen(true)}
-        detail={wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : undefined}
+        detail={
+          <>
+            {wontFire ? <Text style={optionStyles.optionRowDetail}>{wontFire}</Text> : null}
+            {failing && !props.row.needsSignIn ? (
+              <Text
+                style={[optionStyles.optionRowDetail, { color: colors.statusRed }]}
+                numberOfLines={1}
+                accessibilityLabel={failureLabel}
+              >
+                {failureLabel}
+              </Text>
+            ) : null}
+          </>
+        }
         accessory={
           <MobileSwitch
             value={automation.enabled}

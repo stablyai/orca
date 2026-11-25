@@ -9,7 +9,10 @@ import { structuredAgentSessionBlocksTooLarge } from '../../../../../src/shared/
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import type { MobileNativeChatSendOutcome } from '../composer/delivery/mobile-native-chat-send'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from '../composer/delivery/mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
   timeoutForDeadline
@@ -36,6 +39,7 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   deadline?: number
   clientMessageId: string
   onError: MobileNativeChatSendErrorReporter
+  onRecorded?: MobileNativeChatSendIntent['onRecorded']
   onAccepted?: (cursor: AgentJournalCursor | undefined) => void
 }): Promise<MobileNativeChatSendOutcome> {
   const timeoutMs = timeoutForDeadline(input.deadline)
@@ -68,6 +72,9 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     clientOperationId: input.clientMessageId,
     timeoutMs
   })
+  if (result.status === 'accepted' && 'submission' in result.value && result.value.submission) {
+    input.onRecorded?.(result.value.submission)
+  }
   const outcome = mobileStructuredSendDelivery(result)
   if (outcome.error !== null) {
     input.onError(outcome.error)

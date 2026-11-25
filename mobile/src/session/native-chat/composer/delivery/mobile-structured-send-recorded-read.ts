@@ -7,6 +7,28 @@ import {
 import { rpcResultVariant } from '../../../../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from '../../agent-session/mobile-structured-agent-session-host-support'
+import { AgentJournalSubmissionSchema } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-submission-schema'
+
+const sendRecordSchema = z.object({
+  recorded: z.boolean(),
+  submission: AgentJournalSubmissionSchema.pick({
+    clientMessageId: true,
+    dispatchState: true,
+    reason: true,
+    rejection: true,
+    queuedMessageId: true,
+    keptAsQueuedMessageId: true
+  })
+    .extend({
+      dispatchState: z.enum(['pending', 'accepted', 'rejected', 'unknown'])
+    })
+    .optional(),
+  ownedByQueue: z.literal(true).optional()
+})
+export type MobileStructuredSendRecord = z.infer<typeof sendRecordSchema>
+export type MobileStructuredSendConfirmation = (
+  id: string
+) => Promise<MobileStructuredSendRecord> | null
 
 const sendRecordedRead = bindDeferredRpcOperation(
   defineRpcOperation({
@@ -14,7 +36,7 @@ const sendRecordedRead = bindDeferredRpcOperation(
     method: 'agentSession.sendRecorded',
     acceptance: 'object-result-or-null',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant('structured-send-recorded', z.object({ recorded: z.boolean() }))
+    read: rpcResultVariant('structured-send-recorded', sendRecordSchema)
   })
 )
 
@@ -25,11 +47,11 @@ function readMobileStructuredSendRecorded(
   client: RpcClient,
   sessionId: string,
   clientMessageId: string
-): Promise<boolean> {
+): Promise<MobileStructuredSendRecord> {
   return sendRecordedRead
     .request(client, { sessionId, clientMessageId }, REQUEST_OPTIONS)
-    .then((reply) => sendRecordedRead.interpret(reply)?.recorded === true)
-    .catch(() => false)
+    .then((reply) => sendRecordedRead.interpret(reply) ?? { recorded: false })
+    .catch(() => ({ recorded: false }))
 }
 
 /** Bound to the chat when a send is held; support is read when its deadline fires, since a
@@ -38,7 +60,7 @@ export function useMobileStructuredSendRecorded(
   client: RpcClient | null,
   sessionId: string | null,
   hostSupport: StructuredAgentSessionHostSupport | null | undefined
-): ((clientMessageId: string) => Promise<boolean> | null) | null {
+): ((clientMessageId: string) => Promise<MobileStructuredSendRecord> | null) | null {
   const supportedRef = useRef(false)
   useLayoutEffect(() => {
     supportedRef.current = hostSupport?.sendRecorded === true

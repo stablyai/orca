@@ -257,6 +257,7 @@ export function useMobileStructuredSendWithOutcome(args: {
           : {}),
         deadline,
         clientMessageId: send.clientMessageId,
+        onRecorded: intent?.onRecorded,
         onAccepted: (cursor) => acknowledge(send.clientMessageId, cursor),
         onError: onSendError
       })

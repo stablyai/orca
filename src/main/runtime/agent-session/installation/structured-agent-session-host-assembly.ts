@@ -1,7 +1,6 @@
+import { subscribeStructuredAgentSessionTurnContext } from '../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 // Loaded on first host install: the host, router and every provider adapter stay out of startup.
 
-import { writeStructuredAgentSessionOrcaNote } from '../../../native-chat/agent-session-wire/structured-agent-session-orca-note'
-import { readTurnEndedItems } from '../../../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import { bindAtRestCommandContexts } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-router'
@@ -126,27 +125,7 @@ export async function installOnJournal(
       onState: delivery.reconcile
     })
   }
-  const turnEnded = deps.turnContext?.turnEnded
-  if (turnEnded) {
-    const installed = host
-    installed.subscribeTurnCompletions({
-      id: 'host-turn-context',
-      emit: (event) => {
-        if (event.type === 'completion') {
-          const { sessionId, turnId, outcome } = event.completion
-          turnEnded(
-            sessionId,
-            turnId,
-            async (since) =>
-              readTurnEndedItems(await installed.journalReads(sessionId), turnId, since),
-            (clientMessageId, body) =>
-              writeStructuredAgentSessionOrcaNote(installed, sessionId, clientMessageId, body),
-            { outcome }
-          )
-        }
-      }
-    })
-  }
+  subscribeStructuredAgentSessionTurnContext(host)
   let turnAttention:
     | ReturnType<NonNullable<StructuredAgentSessionRuntimeDeps['createTurnAttention']>>
     | undefined
