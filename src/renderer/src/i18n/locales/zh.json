@@ -7689,7 +7689,7 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "descriptionMoveFromSidebar": "git、文件和终端在 Linux 中原生运行。现有的 WSL 项目会留在 Windows 上，直到你从侧边栏移动它们。",
+          "descriptionMoveFromSidebar": "git、文件和终端在 Linux 中原生运行。现有的 WSL 项目会留在 Windows 上，直到你在其项目菜单中选择“移到 … 主机”。",
           "descriptionAutoMove": "git、文件和终端在 Linux 中原生运行。WSL 项目会在其终端空闲后移到这里。",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",

@@ -8521,7 +8521,7 @@
           "wsl1Reason": "WSL 1 bir Orca ana makinesi çalıştıramaz; {{command}} ile dönüştürün",
           "noWsl2Title": "WSL 2 dağıtımı bulunamadı",
           "noWsl2Install": "Bir Windows terminalinde {{command}} ile bir dağıtım yükleyin, ardından Yenile'yi seçin.",
-          "descriptionMoveFromSidebar": "Git, dosyalar ve terminaller Linux'ta yerel olarak çalışır. Mevcut WSL projeleriniz, kenar çubuğundan taşıyana kadar Windows'ta kalır.",
+          "descriptionMoveFromSidebar": "Git, dosyalar ve terminaller Linux'ta yerel olarak çalışır. Mevcut WSL projeleri, proje menüsünden … ana makinesine taşı seçeneğini seçene kadar Windows'ta kalır.",
           "descriptionAutoMove": "Git, dosyalar ve terminaller Linux'ta yerel olarak çalışır. WSL projeleriniz, terminalleri boşta kalınca buraya taşınır."
         },
         "wslHostRowStatus": {

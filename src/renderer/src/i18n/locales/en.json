@@ -8534,7 +8534,7 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "descriptionMoveFromSidebar": "Git, files and terminals run natively in Linux. Your existing WSL projects stay on Windows until you move them from the sidebar.",
+          "descriptionMoveFromSidebar": "Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.",
           "descriptionAutoMove": "Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",

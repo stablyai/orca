@@ -109,7 +109,7 @@ export function AddWslHostFormPanel({
               )
             : t(
                 'auto.components.sidebar.AddWslHostFormPanel.descriptionMoveFromSidebar',
-                'Git, files and terminals run natively in Linux. Your existing WSL projects stay on Windows until you move them from the sidebar.'
+                'Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.'
               )}
         </DialogDescription>
       </DialogHeader>
