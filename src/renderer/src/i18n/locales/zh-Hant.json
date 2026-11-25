@@ -909,7 +909,8 @@
           "location": "位置",
           "notifications": "通知",
           "clipboard": "剪貼簿",
-          "localNetwork": "區域網路"
+          "localNetwork": "區域網路",
+          "apps": "應用程式"
         }
       },
       "profileScope": {
@@ -957,6 +958,99 @@
           "added": "已新增 {{name}}",
           "browse": "Chrome Web Store",
           "openFailed": "請開啟工作區以瀏覽 Chrome Web Store。"
+        },
+        "enabledToggleLabel": "啟用或停用瀏覽器擴充功能"
+      },
+      "passwords": {
+        "searchKeywords": {
+          "passwords": "密碼",
+          "autofill": "自動填入",
+          "vault": "密碼庫",
+          "logins": "登入資訊",
+          "import": "匯入",
+          "csv": "csv",
+          "touchId": "touch id"
+        },
+        "authFailed": "無法確認你的身分",
+        "copied": "已複製密碼。Orca 會在 2 分鐘後將它從剪貼簿清除。",
+        "search": "搜尋 {{count}} 個密碼",
+        "add": "新增",
+        "noMatches": "沒有符合的已儲存密碼。",
+        "noUsername": "（無使用者名稱）",
+        "edit": "編輯",
+        "copy": "複製密碼",
+        "delete": "刪除…",
+        "neverHeading": "{{count}} 個網站設為永不儲存",
+        "removeNever": "移除",
+        "importFailed": "無法匯入密碼",
+        "importDuplicates": "{{count}} 個已儲存過",
+        "importConflicts": "{{count}} 個已存有不同的密碼，因此保留原有密碼",
+        "importInvalid": "{{count}} 列無法讀取",
+        "importUndecryptable": "{{count}} 個受該瀏覽器保護；請改從該瀏覽器匯出 CSV",
+        "imported": "已匯入 {{count}} 個密碼",
+        "deleteAllConfirmDescription": "{{profile}} 設定檔中所有已儲存的密碼都會被永久刪除。此操作無法復原。",
+        "deletedAll": "已刪除密碼資料",
+        "form": {
+          "invalidSite": "請輸入網站位址，例如 example.com。",
+          "invalidPassword": "請輸入密碼。",
+          "duplicate": "此網站已儲存這個使用者名稱的密碼。",
+          "unavailable": "無法儲存此密碼。",
+          "editTitle": "編輯密碼",
+          "addTitle": "新增密碼",
+          "site": "網站",
+          "sitePlaceholder": "example.com",
+          "username": "使用者名稱",
+          "password": "密碼",
+          "currentHint": "請儲存你目前在此網站使用的密碼。",
+          "note": "備註",
+          "cancel": "取消",
+          "save": "儲存",
+          "description": "當你在此網站的登入欄位下方選取它時，Orca 會將它填入。",
+          "usernamePlaceholder": "電子郵件或使用者名稱",
+          "addNote": "新增備註"
+        },
+        "hide": "隱藏密碼",
+        "show": "顯示密碼",
+        "offerToSave": "詢問是否儲存密碼",
+        "offerToSaveDescription": "在 Orca 瀏覽器中登入網站後，詢問是否儲存登入資訊。",
+        "fillReauth": "填入前要求 Touch ID 驗證",
+        "fillReauthDescription": "適用於共用電腦。顯示或複製密碼時本來就會要求驗證。",
+        "noReauth": "這台電腦無法使用 Touch ID 確認你的身分，因此顯示和填入密碼時不會經過驗證。",
+        "reauthUnavailable": "目前無法使用 Touch ID，因此 Orca 不會顯示、複製或填入需要 Touch ID 驗證的密碼。",
+        "import": "匯入",
+        "importCsv": "從 CSV 檔案…",
+        "deleteAllTitle": "刪除所有密碼資料",
+        "deleteAllDescription": "{{profile}} 設定檔中所有已儲存的密碼、備註，以及「永不儲存」清單中的網站。",
+        "empty": "你登入網站後，Orca 會詢問是否儲存登入資訊。你也可以從其他瀏覽器或 CSV 檔案匯入。",
+        "account": "{{site}} 上的 {{username}}",
+        "lastUsed": "上次使用：{{when}}",
+        "copyFor": "複製 {{account}} 的密碼",
+        "editFor": "編輯 {{account}}",
+        "moreActions": "{{account}} 的更多操作",
+        "accountCount": "{{count}} 個帳戶",
+        "deleteConfirmDescription": "Orca 將不再填入此密碼。此操作無法復原。",
+        "deleteConfirm": "刪除",
+        "profileDescription": "{{profile}} 設定檔的已儲存登入資訊。只有在你於登入欄位下方選取時，Orca 才會填入。",
+        "unavailableTitle": "這台電腦無法使用已儲存的密碼",
+        "emptyTitle": "尚無已儲存的密碼",
+        "searchLabel": "搜尋密碼",
+        "deleteAllAction": "刪除…",
+        "title": "密碼",
+        "description": "Orca 瀏覽器的已儲存登入資訊：可新增、匯入、編輯和刪除。",
+        "httpSuffix": " · http"
+      },
+      "memorySaver": {
+        "unviewedForLabel": "未檢視超過",
+        "unviewedForDescription": "分頁未被檢視多久後釋放其記憶體。",
+        "hoursSuffix": "小時",
+        "title": "記憶體節省模式",
+        "description": "釋放你未檢視之分頁所佔用的記憶體。開啟這些分頁時會重新載入。",
+        "searchKeywords": {
+          "memory": "記憶體",
+          "tabs": "分頁",
+          "idle": "閒置",
+          "sleep": "休眠",
+          "performance": "效能"
         }
       },
       "sessionHost": {
@@ -1174,6 +1268,19 @@
         "disconnected": "已中斷連線",
         "reconnecting": "正在重新連線…",
         "reconnection-failed": "重新連線失敗"
+      },
+      "errors": {
+        "authMethodsFailed": "所有已設定的驗證方式都失敗",
+        "badPassphrase": "無法解析私密金鑰：OpenSSH 金鑰完整性檢查失敗，可能是金鑰密碼錯誤？",
+        "connectionRefused": "連線遭拒",
+        "connectionTimedOut": "連線逾時",
+        "handshakeLost": "交握前連線中斷",
+        "handshakeTimeout": "等待交握時逾時",
+        "hostKeyVerificationFailed": "主機金鑰驗證失敗",
+        "hostNotFound": "找不到主機",
+        "passphraseRequired": "無法解析私密金鑰：偵測到加密的 OpenSSH 私密金鑰，但未提供金鑰密碼",
+        "permissionDenied": "權限遭拒",
+        "permissionDeniedPublickey": "權限遭拒（publickey）"
       }
     },
     "network": {
@@ -1423,6 +1530,143 @@
     },
     "artifacts": {
       "teamDisabled": "您的團隊已關閉成品分享。"
+    },
+    "mcpServers": {
+      "custom": {
+        "noneChecked": "請勾選要新增的伺服器。",
+        "addMany": "新增 {{count}} 個伺服器",
+        "found": "找到 {{count}} 個伺服器",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "指令 · {{line}}",
+        "title": "自訂伺服器",
+        "sourceLabel": "伺服器 URL、啟動指令或設定",
+        "sourceHint": "貼上伺服器 URL、啟動指令或設定，或自行輸入詳細資訊。",
+        "nameTaken": "已有名為 {{name}} 的伺服器。請選擇其他名稱。",
+        "line": "URL、啟動指令或設定",
+        "foundTaken": "已新增"
+      },
+      "empty": {
+        "copied": "已從 {{host}} 複製 {{count}} 個伺服器",
+        "title": "{{host}} 上沒有 MCP 伺服器",
+        "copyFrom": "從 {{host}} 複製"
+      },
+      "addServer": "新增伺服器",
+      "toast": {
+        "allOn": "已為所有代理程式開啟 {{name}}",
+        "allOff": "已為所有代理程式關閉 {{name}}",
+        "agentOn": "已為 {{agent}} 開啟 {{name}}",
+        "agentOff": "已為 {{agent}} 關閉 {{name}}",
+        "saved": "已儲存 {{name}}",
+        "sharedOn": "{{name}} 改為共用單一行程",
+        "sharedOff": "{{name}} 改為每個工作階段各自執行",
+        "signedOut": "已登出 {{name}}",
+        "removed": "已移除 {{name}}",
+        "workspaces": "{{name}}：{{workspaces}}",
+        "added": "已新增 {{name}}",
+        "newSessions": "將套用至新的工作階段",
+        "restart": "重新啟動 {{count}} 個工作階段",
+        "addedMany": "已新增 {{count}} 個伺服器",
+        "repoOn": "已在 {{repo}} 中開啟 {{name}}",
+        "repoOff": "已在 {{repo}} 中關閉 {{name}}"
+      },
+      "fileAgent": {
+        "title": "要讓 Orca 編輯 {{agent}} 的 MCP 檔案嗎？",
+        "line": "Orca 會將你的 MCP 伺服器保存在 {{agent}} 的設定檔（{{file}}）中。你自己的項目會維持原狀。",
+        "allow": "允許"
+      },
+      "agents": {
+        "title": "代理程式",
+        "allOff": "全部關閉",
+        "allOn": "全部開啟",
+        "all": "所有代理程式",
+        "someOff": "已對 {{count}} 個代理程式停用",
+        "none": "未對任何代理程式啟用",
+        "some": "{{total}} 個代理程式中的 {{on}} 個"
+      },
+      "stale": "此伺服器已在其他地方變更。目前顯示的是最新狀態。",
+      "launch": {
+        "title": "啟動",
+        "command": "指令",
+        "args": "引數",
+        "env": "環境"
+      },
+      "connection": {
+        "title": "連線",
+        "url": "URL",
+        "headers": "標頭"
+      },
+      "shared": {
+        "title": "讓代理程式共用單一行程",
+        "line": "使用較少記憶體。伺服器會在工作區資料夾之外執行。"
+      },
+      "status": {
+        "needsSignIn": "需要登入",
+        "signedIn": "已登入",
+        "commandFailed": "在 {{host}} 上找不到指令",
+        "unreachable": "無法連線至 {{host}}"
+      },
+      "signIn": "登入",
+      "signInActions": "登入操作",
+      "signInAgain": "重新登入",
+      "signOut": "登出",
+      "loading": "正在讀取 MCP 伺服器…",
+      "remove": {
+        "title": "要移除 {{name}} 嗎？",
+        "line": "{{host}} 上的新工作階段將無法使用它。它已儲存的值和登入資訊都會被刪除。",
+        "confirm": "移除",
+        "button": "移除伺服器"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · 僅限 {{projects}}",
+        "move": "移至 Orca",
+        "actions": "{{name}} 的操作",
+        "copy": "複製到 Orca",
+        "open": "開啟",
+        "copied": "已將 {{name}} 複製到 Orca",
+        "title": "在你的代理程式中",
+        "summary": "在 {{agents}} 中找到 {{count}} 個伺服器",
+        "moveAll": "全部移至 Orca"
+      },
+      "signedInToast": "已登入 {{name}}",
+      "pasteRefused": "該位址並非來自這次登入。",
+      "workspaces": {
+        "title": "工作區",
+        "later": "之後新增的工作區",
+        "all": "所有工作區",
+        "none": "未在任何工作區啟用",
+        "allBut": "{{names}} 以外的所有工作區",
+        "only": "僅限 {{names}}"
+      },
+      "catalog": {
+        "noMatch": "沒有符合「{{query}}」的伺服器。",
+        "search": "搜尋伺服器",
+        "caption": "伺服器"
+      },
+      "add": {
+        "title": "新增 MCP 伺服器"
+      },
+      "catalogLine": {
+        "github": "議題、PR 和程式碼搜尋",
+        "linear": "讀取和更新議題與專案"
+      },
+      "move": {
+        "title": "要將 {{name}} 移至 Orca 嗎？",
+        "allTitle": "要將 {{count}} 個伺服器移至 Orca 嗎？",
+        "line": "Orca 會將它從 {{agents}} 的設定中移除，並保留備份。",
+        "allLine": "Orca 會將它們從 {{agents}} 的設定中移除，並保留備份。",
+        "confirm": "移動"
+      },
+      "yours": "你的伺服器",
+      "fromPlugins": "來自外掛",
+      "unsupported": "{{host}} 上無法使用 MCP 伺服器。",
+      "title": "MCP 伺服器",
+      "description": "你的代理程式可使用的伺服器。變更會套用至新的工作階段。",
+      "repo": {
+        "on": "已在此存放庫中開啟",
+        "add": "為此存放庫新增伺服器",
+        "files": "來自此存放庫的檔案",
+        "open": "開啟 {{file}}"
+      }
     },
     "navigation": {
       "accounts": {
@@ -9603,6 +9847,8 @@
           "bulkProgress": "正在移除第 {{done}} 個，共 {{count}} 個…",
           "bulkConnectedSingular": "{{count}} 個主機已連線，其遠端終端機將會關閉。",
           "bulkConnectedPlural": "{{count}} 個主機已連線，其遠端終端機將會關閉。",
+          "remove": "移除",
+          "removing": "正在移除",
           "916f480036": "刪除 SSH 目標"
         },
         "SshTargetForm": {
@@ -12163,7 +12409,11 @@
           "deleteAnywayClicked": "已點選「仍然刪除」"
         },
         "EphemeralVmRecipeRow": {
-          "useInWorkspace": "在工作區中使用"
+          "useInWorkspace": "在工作區中使用",
+          "envLimited": "指令碼只會收到 passEnv 中列出的變數，以及 PATH、HOME 等基本變數。",
+          "envNamesMore": "{{names}} 及其他 {{count}} 個",
+          "envExposedAllowlist": "指令碼會在這台電腦上執行，並透過 passEnv 取得這些憑證：{{names}}。",
+          "envExposedAll": "指令碼會在這台電腦上執行，並取得你的完整環境變數，包括 {{names}}。請在環境範本上設定 passEnv，只傳入它需要的變數。"
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "清理失敗",
@@ -12186,6 +12436,10 @@
           "stopCleanup": "停止清理",
           "cleanupStopped": "清理已停止",
           "stopCleanupFailed": "無法停止雲端虛擬機器清理。",
+          "provisioning": "佈建中",
+          "untrackedRuntimeHint": "Orca 從未收到此虛擬機器的詳細資訊。清理時只會以執行個體 ID {{instanceId}} 執行 destroy；如果失敗，請在你的供應商刪除此虛擬機器，再將它從此清單移除。",
+          "removeFromList": "從清單中移除",
+          "removeFromListFailed": "無法將雲端虛擬機器執行環境從清單中移除。",
           "cca21fb369": "重新整理雲端虛擬機器"
         },
         "ephemeralVms": {
@@ -12215,7 +12469,10 @@
           "checking": "正在檢查環境範本...",
           "none": "還沒有找到環境範本。",
           "cloudVmSkillTitle": "雲端虛擬機器設定技能",
-          "cloudVmRefresh": "重新整理雲端虛擬機器環境範本"
+          "cloudVmRefresh": "重新整理雲端虛擬機器環境範本",
+          "setUpWithAgent": "透過代理程式設定",
+          "setUpWithAgentHint": "在 {{repo}} 中啟動你的預設代理程式。它會編輯 orca.yaml、反覆執行 doctor 檢查直到通過，然後建立 PR。",
+          "setUpWithAgentNoRepo": "請先新增專案。"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "顯示存放庫自帶隨需環境的設定控制項和工作區執行目標。",
@@ -13077,7 +13334,8 @@
             "updateOrcaOnHost": "更新此主機上的 Orca",
             "updateAnyway": "仍要更新",
             "notNow": "暫時不要",
-            "forceUpdate": "此主機上有終端機正在執行。更新期間會持續執行，Orca 伺服器重新啟動後，終端機窗格會重新連線。"
+            "forceUpdate": "此主機上有終端機正在執行。更新期間會持續執行，Orca 伺服器重新啟動後，終端機窗格會重新連線。",
+            "forceUpdateUncounted": "Orca 無法計算此主機上的終端機數量。只有在該處沒有執行終端機常駐程式時才會進行更新，且由 Orca 伺服器自行執行的終端機都會結束。"
           },
           "description": "Orca 會在空白的 SSH 主機上自行安裝，並自動保持最新版本。",
           "deploy": {
@@ -13180,6 +13438,9 @@
           "unsupportedUnknown": "此版本的 Orca 不支援此主機。如需繼續使用，請安裝舊版本的 Orca。",
           "tunnelUnsupported": "此版本的 Orca 不支援此主機：其 SSH 伺服器不允許連接埠轉送，Orca 也無法透過 SSH 工作階段連線到其伺服器。如需繼續使用，請安裝舊版本的 Orca。",
           "setupRetry": "Orca 無法在此主機上啟動其伺服器。請重新連線。",
+          "setupFreeHostSpace": "此主機的可用磁碟空間不足，Orca 無法在啟動伺服器時備份其伺服器資料。請釋放主機上的空間，再重新連線。",
+          "setupStopUnmanagedRuntime": "有一個不是由此應用程式啟動的 Orca 伺服器，似乎仍在使用此主機的 Orca 資料。請在主機上停止它，再重新連線。「設定 > SSH 主機」中此主機的「詳情」會列出它的行程。",
+          "setupSeeDetails": "Orca 無法在此主機上啟動其伺服器。原因請見「設定 > SSH 主機」中此主機的「詳情」。",
           "moveHeld": "Orca 無法確認伺服器上的副本，因此已暫停將此主機的專案遷移至其 Orca 伺服器。資料沒有遺失：專案仍保留在主機上，主機會保持鎖定，直到遷移完成。請重新連線以繼續。若伺服器無法恢復連線，請在「設定 > SSH 主機上的 Orca」中停止或忘記該伺服器。",
           "olderTerminalsBridged": "尚未在此主機上設定 Orca：由舊版 Orca 啟動的終端機仍在此主機的專案中執行，且仍可在這裡正常使用。請關閉這些終端機，或在主機上結束它們，再重新連線。",
           "olderTerminalsUncounted": "由舊版本 Orca 啟動的終端機仍在此主機上執行，且不會自行停止。請在該版本的 Orca 中關閉它們，或在主機上結束它們，然後重新連線。",
@@ -13206,7 +13467,9 @@
           "refusedLeaveBehind": "此主機的部分已儲存內容無法遷移至其 Orca 伺服器：{{items}}。選擇「仍要遷移」會連線至主機，並將這些內容保留在這臺電腦上。",
           "refusedLeaveBehindUnnamed": "此主機的部分已儲存內容無法遷移至其 Orca 伺服器。選擇「仍要遷移」會連線至主機，並將這些內容保留在這臺電腦上。",
           "windowsBuildUnsupported": "此主機的 Windows 版本早於 Windows 10 與 Windows Server 2016，因此無法執行 Orca 伺服器。請使用 Windows 版本較新的主機，或改用 Linux 或 macOS 主機。",
-          "windowsNoExtractor": "此 Windows 主機既沒有 tar.exe，也沒有 PowerShell 的 Expand-Archive，因此 Orca 無法在該處解壓縮伺服器。請在主機上安裝 Windows PowerShell 5.1，再重新連線。"
+          "windowsNoExtractor": "此 Windows 主機既沒有 tar.exe，也沒有 PowerShell 的 Expand-Archive，因此 Orca 無法在該處解壓縮伺服器。請在主機上安裝 Windows PowerShell 5.1，再重新連線。",
+          "linkedProjects": "此主機的 Orca 伺服器已有 {{paths}}，因此此桌面現在使用伺服器的副本。此桌面在那裡的分頁和 {{count}} 個自動化未被遷移，它在那裡建立的工作樹會顯示為外部工作樹。",
+          "olderTerminals": "由舊版本 Orca 啟動的 {{count}} 個終端機仍在此主機上執行，且不會自行停止。請在該版本的 Orca 中關閉它們，或在主機上結束它們，然後重新連線。"
         },
         "ZcodeCliSetupSection": {
           "title": "透過 ZCode 使用 GLM",
@@ -13304,6 +13567,7 @@
         "SettingsHostScopePicker": {
           "label": "主機",
           "unavailable": "{{value0}}（不可用）",
+          "loading": "正在載入主機…",
           "unavailableNotice": "此伺服器已不再被儲存，因此無法顯示它的任何內容。請在設定頂部選擇其他主機。"
         },
         "wslHostsExperimental": {
@@ -13322,7 +13586,15 @@
           "connect": "連線",
           "forceUpdate": "強制更新",
           "turnOn": "開啟實驗功能",
-          "chip": "WSL"
+          "chip": "WSL",
+          "notStartedAsWslHost": "此伺服器是由 SSH 主機啟動，因此無法將專案移到這裡。請以 WSL 主機身分重新啟動它來修正此問題。",
+          "restartAsWslHost": {
+            "button": "以 WSL 主機身分重新啟動",
+            "title": "要以 WSL 主機身分重新啟動嗎？",
+            "description": "結束 {{host}} 上的所有終端機和代理程式（包括 SSH 主機開啟的），然後以 WSL 主機身分重新啟動 Orca 的伺服器。",
+            "cancel": "取消",
+            "action": "結束終端機並重新啟動"
+          }
         },
         "restartServer": {
           "action": "重新啟動 Orca 伺服器…",
@@ -13485,6 +13757,7 @@
           "setUpOnSshHost": "在 SSH 主機上設定 Orca",
           "setUp": "設定",
           "overYourSsh": "透過 SSH 連線",
+          "newerThanApp": "比此應用程式（v{{version}}）新",
           "installViaSsh": "透過 SSH 安裝"
         },
         "sshBulkRemove": {
@@ -22465,6 +22738,10 @@
           "chatHistory": "刪除聊天記錄"
         }
       },
+      "hostScope": {
+        "updateHostToChange": "請更新 {{host}} 上的 Orca，才能在該處變更此設定。",
+        "updateFailed": "無法更新 {{host}} 上的設定。"
+      },
       "orcaAccount": {
         "server": {
           "sectionDescription": "{{host}} 執行時使用的 Orca 帳戶，供其機器人的 Slack、GitHub、Linear 和 webhook 使用。",
@@ -26281,10 +26558,10 @@
   },
   "perfNotices": {
     "hiddenTabs": {
-      "title": "節省閒置分頁佔用的記憶體",
-      "description_other": "你有 {{count}} 個分頁已超過 {{hours}} 小時未檢視。開啟「記憶體節省」即可釋放它們佔用的記憶體。",
-      "descriptionOneHour_other": "你有 {{count}} 個分頁已超過一小時未檢視。開啟「記憶體節省」即可釋放它們佔用的記憶體。",
-      "turnOnMemorySaver": "開啟記憶體節省"
+      "title": "釋放閒置分頁佔用的記憶體",
+      "description_other": "你有 {{count}} 個分頁超過 {{hours}} 小時沒有檢視。開啟「記憶體節省模式」即可釋放它們佔用的記憶體。",
+      "descriptionOneHour_other": "你有 {{count}} 個分頁超過一小時沒有檢視。開啟「記憶體節省模式」即可釋放它們佔用的記憶體。",
+      "turnOnMemorySaver": "開啟記憶體節省模式"
     },
     "disk": {
       "title": "磁碟空間即將用盡",
@@ -26305,5 +26582,14 @@
     "moveLeft": "左移",
     "moveRight": "右移",
     "reset": "重設分頁順序"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "請直接把值寫進 mcp add 指令：Orca 無法填入 $VARIABLES 或其他 shell 運算式。",
+      "unsupported": "Orca 無法照原樣新增此伺服器：它使用 SSE、自己的 OAuth 用戶端，或從環境讀取的值。",
+      "badAddCommand": "請檢查 mcp add 指令：需要名稱，以及 URL 或指令。",
+      "badJson": "請檢查貼上的 JSON：無法解析。",
+      "none": "Orca 找不到可新增的伺服器。不支援 SSE 伺服器、有自己的 OAuth 用戶端或工具篩選器的伺服器，以及從環境讀取的值（${VAR}）。"
+    }
   }
 }
