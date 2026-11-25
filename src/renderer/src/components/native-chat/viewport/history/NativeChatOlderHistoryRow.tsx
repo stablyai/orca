@@ -34,7 +34,8 @@ export function NativeChatOlderHistoryRow({
   // to a new Retry if that load fails again. Once the reader moves focus, nothing is moved.
   const control = useRef<HTMLButtonElement | null>(null)
   const focusedFrom = useRef<HTMLElement | null>(null)
-  const parkedOn = useRef<HTMLElement | null>(null)
+  // The scroller focus waits on for a pending load; it stops waiting the moment focus leaves it.
+  const parked = useRef<{ scroller: HTMLElement; unpark: () => void } | null>(null)
   useLayoutEffect(() => {
     const active = document.activeElement
     const lost = !active || active === document.body
@@ -45,26 +46,34 @@ export function NativeChatOlderHistoryRow({
         control.current.focus({ preventScroll: true })
       } else {
         scroller.focus({ preventScroll: true })
-        parkedOn.current = scroller
+        const leave = () => {
+          parked.current = null
+        }
+        scroller.addEventListener('focusout', leave, { once: true })
+        parked.current = {
+          scroller,
+          unpark: () => scroller.removeEventListener('focusout', leave)
+        }
       }
       return
     }
-    const parked = parkedOn.current
-    if (!parked) {
+    const waiting = parked.current
+    if (!waiting) {
       return
     }
-    if (active !== parked) {
-      parkedOn.current = null
-    } else if (shown === 'retry' && control.current) {
-      parkedOn.current = null
+    if (shown === 'retry' && control.current) {
+      waiting.unpark()
+      parked.current = null
       control.current.focus({ preventScroll: true })
     } else if (!loadingEarlier) {
-      parkedOn.current = null
+      waiting.unpark()
+      parked.current = null
     }
   }, [loadingEarlier, shown])
   // The row itself goes away once the history is complete; its focused control hands back too.
   useLayoutEffect(
     () => () => {
+      parked.current?.unpark()
       focusedFrom.current?.focus({ preventScroll: true })
     },
     []

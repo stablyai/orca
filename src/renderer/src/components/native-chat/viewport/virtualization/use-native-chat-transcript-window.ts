@@ -76,8 +76,8 @@ export function useNativeChatTranscriptWindow({
   const measuredScrollMargin = useRef(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const readerTakeoverFrameRef = useRef<number | null>(null)
-  // Shared with the content anchor: a landing page and the row whose in-row growth it corrects.
-  const [anchorState] = useState<NativeChatAnchorState>(() => ({ landing: false, row: null }))
+  // Shared with the content anchor: the row whose growth it corrects itself while it settles.
+  const [anchorState] = useState<NativeChatAnchorState>(() => ({ row: null }))
   const pinned = useMemo(
     () => nativeChatPinnedRowIndexes({ count: slots.length, revealIndex, newRowsMarkerIndex }),
     [slots.length, revealIndex, newRowsMarkerIndex]
@@ -204,8 +204,7 @@ export function useNativeChatTranscriptWindow({
     }
     const offset = instance.scrollOffset ?? 0
     const written = scrollRef.current?.scrollTop ?? offset
-    // While a page lands, the gap is the virtualizer's own pending write, which includes adjustments.
-    if (!anchorState.landing && Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
+    if (Math.abs(written - offset) > UNSEEN_SCROLL_PX) {
       return false
     }
     if (pinsEndGrowth(item.index, instance.measurementsCache)) {

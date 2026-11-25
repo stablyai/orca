@@ -1,10 +1,12 @@
-// Prepend anchoring by readable content. The virtualizer holds rows in place when an older page
-// lands above them; it cannot see content moving inside the row the reader is in, as when the page
-// grows an opened work run above the command being read. Readable content carries
-// `data-native-chat-content-anchor`; growth above it inside its row is handed to the virtualizer
-// as that row's size change, so one owner corrects the scroll position, in sync with its own.
+// Prepend anchoring by readable content. When an older page lands, the content the reader was
+// looking at (marked `data-native-chat-content-anchor`) returns to its offset in the viewport.
+// Every correction goes through the virtualizer's own adjustment path, so its offset stays in
+// step, and the unseen-write guard is never bypassed: rows first drawn in the landing commit are
+// measured after the virtualizer's own prepend write instead, and rows already drawn are
+// measured again before the content is reconciled, so no later observer corrects the same
+// growth a second time.
 
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { nativeChatFindGeometry } from '../find/native-chat-find-visibility'
 import type { NativeChatAlignEdge } from './use-native-chat-viewport-align'
@@ -13,15 +15,14 @@ import type { NativeChatAlignEdge } from './use-native-chat-viewport-align'
 const NATIVE_CHAT_ROW_KEY_ATTRIBUTE = 'data-native-chat-row-key'
 
 export type NativeChatContentSnapshot = {
-  /** Visible content from the reader's top down: its row and its offset from that row's top. */
-  anchors: { key: string; row: string; inset: number }[]
+  /** Visible content from the reader's top down: its row, its offset in that row, and its offset
+   *  from the viewport's top. */
+  anchors: { key: string; row: string; inset: number; top: number }[]
 }
 
-/** What the window's size rule needs from the anchor. `landing`: a page is being drawn in this
- *  commit, no jump is held, and the only pending scroll write is the virtualizer's own. `row`: the row whose
- *  in-row growth the anchor corrects; `correcting` admits that one handed-over change. */
+/** What the window's size rule needs from the anchor: the row whose growth the anchor corrects
+ *  itself while it settles; `correcting` admits only the anchor's own handed-over change. */
 export type NativeChatAnchorState = {
-  landing: boolean
   row: { key: string; correcting: boolean } | null
 }
 
@@ -30,22 +31,25 @@ export type NativeChatContentAnchor = {
   snapshotContent: () => NativeChatContentSnapshot | null
   /** Hold this snapshot until the next layout reconciles it. */
   preserveContent: (snapshot: NativeChatContentSnapshot) => void
-  /** Undo content movement inside the anchored row. */
+  /** Return the reader's content to its snapshot offset. */
   reconcileContent: () => void
 }
 
-/** Window callbacks that end the reader's claim on a held snapshot. */
+/** Window callbacks the anchor measures through, or that end its claim on the scroll. */
 type AnchoredWindowCallbacks = {
+  measureRow: (node: HTMLElement | null) => void
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   cancelAlign: () => void
   scrollToEnd: () => void
   reconcileReaderScroll: (isTakingOver: boolean) => void
+  consumeProgrammaticScroll: (event: Event) => boolean
 }
 
 const CONTENT_ANCHOR_SELECTOR = '[data-native-chat-content-anchor]'
 const ROW_SELECTOR = `[${NATIVE_CHAT_ROW_KEY_ATTRIBUTE}]`
+const WINDOW_ROW_SELECTOR = '[data-native-chat-window] > [data-index]'
 const SUBPIXEL_PX = 0.5
-/** Rows drawn by the page (and an opened run's member list) still measure for a few frames. */
+/** An opened run's member list can still measure for a few frames after the page lands. */
 const SETTLE_FRAMES = 8
 
 function placeInRow(element: HTMLElement): { row: string; inset: number } | null {
@@ -87,7 +91,9 @@ export function readNativeChatContentSnapshot(
   const anchors = candidates.slice(candidates.indexOf(first)).flatMap((element) => {
     const key = element.dataset.nativeChatContentAnchor
     const place = key ? placeInRow(element) : null
-    return key && place ? [{ key, ...place }] : []
+    return key && place
+      ? [{ key, ...place, top: element.getBoundingClientRect().top - top }]
+      : []
   })
   return anchors.length > 0 ? { anchors } : null
 }
@@ -111,6 +117,7 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
 ): Window & NativeChatContentAnchor {
   const contentSnapshot = useRef<NativeChatContentSnapshot | null>(null)
   const stopSettling = useRef<(() => void) | null>(null)
+  const firstMeasurements = useRef(new Set<HTMLElement>())
   // Any reader or jump intent ends both the held snapshot and a settling correction.
   const release = useCallback(() => {
     contentSnapshot.current = null
@@ -120,24 +127,70 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
   }, [anchorState])
   useEffect(() => release, [release])
 
+  // A row's ref attaches before the virtualizer's layout effect applies a landing page's scroll
+  // write; measured then, the unseen-write guard would rightly refuse to compensate it.
+  const measureRow = useCallback(
+    (node: HTMLElement | null) => {
+      if (node) {
+        firstMeasurements.current.add(node)
+      } else {
+        virtualizer.measureElement(null)
+      }
+    },
+    [virtualizer]
+  )
+  // Runs after the virtualizer's layout effect in every commit, in commit order. A landing commit
+  // also measures the rows already drawn, so their growth is compensated now, before the content
+  // is reconciled, rather than by a later observer delivery on top of the reconcile.
+  // oxlint-disable-next-line react-hooks/exhaustive-deps -- drains whatever this commit's refs queued.
+  useLayoutEffect(() => {
+    const queued = firstMeasurements.current
+    const landing = contentSnapshot.current !== null && scrollRef.current
+    const rows = landing
+      ? scrollRef.current.querySelectorAll<HTMLElement>(WINDOW_ROW_SELECTOR)
+      : []
+    if (queued.size === 0 && rows.length === 0) {
+      return
+    }
+    for (const node of [...queued, ...rows]) {
+      if (node.isConnected) {
+        virtualizer.measureElement(node)
+      }
+    }
+    queued.clear()
+  })
+
+  /** Moves the scroll by `delta` through the virtualizer's adjustment path, leaving the row's
+   *  cached size at its measured height whichever observer saw the row's growth first. */
+  const shift = useCallback(
+    (anchored: { key: string; correcting: boolean }, row: HTMLElement, delta: number) => {
+      const index = Number(row.dataset.index)
+      if (!Number.isInteger(index) || Math.abs(delta) <= SUBPIXEL_PX) {
+        return
+      }
+      const measured = virtualizer.options.measureElement(row, undefined, virtualizer)
+      virtualizer.resizeItem(index, measured)
+      anchored.correcting = true
+      virtualizer.resizeItem(index, measured + delta)
+      anchored.correcting = false
+      virtualizer.resizeItem(index, measured)
+    },
+    [virtualizer]
+  )
+
   const snapshotContent = useCallback((): NativeChatContentSnapshot | null => {
     const container = scrollRef.current
-    // Called before a page's rows mutate; the commit's reconcile ends the landing. A held jump
-    // (a rail or find reveal) may have its own write in flight, so it keeps the unseen-write guard.
-    const jumping = isAlignHeld()
-    anchorState.landing = !jumping
-    if (!container || !isVisible || jumping) {
+    if (!container || !isVisible || isAlignHeld()) {
       return null
     }
     return readNativeChatContentSnapshot(container)
-  }, [anchorState, isAlignHeld, isVisible, scrollRef])
+  }, [isAlignHeld, isVisible, scrollRef])
 
   const preserveContent = useCallback((snapshot: NativeChatContentSnapshot) => {
     contentSnapshot.current = snapshot
   }, [])
 
   const reconcileContent = useCallback(() => {
-    anchorState.landing = false
     const snapshot = contentSnapshot.current
     if (!snapshot) {
       return
@@ -164,31 +217,21 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
       }
       const anchored = { key: anchor.row, correcting: false }
       anchorState.row = anchored
-      let inset = anchor.inset
+      // The landing correction: whatever the page moved the content by, whole row or inside it.
+      const viewportTop = container.getBoundingClientRect().top
+      shift(anchored, row, node.getBoundingClientRect().top - viewportTop - anchor.top)
+      // Then only the row's own later growth above the content (an opened run's members
+      // measuring); any reader scroll ends this.
+      let inset = placeInRow(node)?.inset ?? anchor.inset
       const hold = () => {
         const place = node.isConnected ? placeInRow(node) : null
-        const index = Number(row.dataset.index)
-        if (!place || place.row !== anchor.row || !Number.isInteger(index)) {
+        if (!place || place.row !== anchor.row) {
           return
         }
         const delta = place.inset - inset
         inset = place.inset
-        if (Math.abs(delta) <= SUBPIXEL_PX) {
-          return
-        }
-        // The virtualizer's own adjustment moves the scroll in step with its offset; its row
-        // observer may already have cached the new height or not yet. Start from the measured
-        // height, shift by exactly the growth above the anchor, then leave the measured height
-        // cached, so the growth counts once in either order and the row keeps its real size.
-        const measured = virtualizer.options.measureElement(row, undefined, virtualizer)
-        virtualizer.resizeItem(index, measured)
-        anchored.correcting = true
-        virtualizer.resizeItem(index, measured + delta)
-        anchored.correcting = false
-        virtualizer.resizeItem(index, measured)
+        shift(anchored, row, delta)
       }
-      hold()
-      // Resize callbacks run before paint, so later growth inside the row is undone in its frame.
       if (typeof ResizeObserver !== 'undefined') {
         const observer = new ResizeObserver(hold)
         observer.observe(row)
@@ -209,9 +252,15 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
       }
       return
     }
-  }, [anchorState, isAlignHeld, isVisible, release, scrollRef, virtualizer])
+  }, [anchorState, isAlignHeld, isVisible, release, scrollRef, shift])
 
-  const { alignToViewportTop, cancelAlign, scrollToEnd, reconcileReaderScroll } = transcriptWindow
+  const {
+    alignToViewportTop,
+    cancelAlign,
+    scrollToEnd,
+    reconcileReaderScroll,
+    consumeProgrammaticScroll
+  } = transcriptWindow
   const alignReaderContent = useCallback(
     (element: HTMLElement, edge?: NativeChatAlignEdge) => {
       release()
@@ -236,13 +285,26 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
     },
     [reconcileReaderScroll, release]
   )
+  // A scroll this app did not write is the reader's (or the platform's): it owns the view now.
+  const consumeReaderScroll = useCallback(
+    (event: Event) => {
+      const programmatic = consumeProgrammaticScroll(event)
+      if (!programmatic) {
+        release()
+      }
+      return programmatic
+    },
+    [consumeProgrammaticScroll, release]
+  )
 
   return {
     ...transcriptWindow,
+    measureRow,
     alignToViewportTop: alignReaderContent,
     cancelAlign: cancelReaderAlign,
     scrollToEnd: scrollReaderToEnd,
     reconcileReaderScroll: reconcileReaderTakeover,
+    consumeProgrammaticScroll: consumeReaderScroll,
     snapshotContent,
     preserveContent,
     reconcileContent

@@ -17,6 +17,10 @@ import type { NativeChatSideChatForkPoint } from '../../messages/actions/native-
 import type { NativeChatTranscriptSlotsInput } from './native-chat-transcript-input'
 import { useNativeChatWorkers } from '../../native-chat-workers-context'
 import {
+  nativeChatTurnsHeldOpen,
+  type NativeChatTranscriptBuild
+} from './native-chat-held-open-turns'
+import {
   NO_LEAVING_TURNS,
   useNativeChatQuietTurnLeave
 } from '../turns/use-native-chat-quiet-turn-leave'
@@ -24,8 +28,11 @@ import {
 /** Choose slots/activity together so reasoning shown by the activity line never also gets a transcript row. */
 export function useNativeChatTranscriptSlots({
   line,
+  onTurnsHeldOpen,
   ...input
 }: Omit<NativeChatTranscriptSlotsInput, 'liveReasoningId' | 'workers'> & {
+  /** Turns kept open because an older page would fold work the reader was looking at. */
+  onTurnsHeldOpen?: (turnKeys: ReadonlySet<string>) => void
   line: {
     /** The row drawn under the transcript, if any. */
     tailRow: 'awaiting-input' | 'activity' | null
@@ -93,13 +100,15 @@ export function useNativeChatTranscriptSlots({
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
   const [leavingTurnKeys, setLeavingTurnKeys] = useState(NO_LEAVING_TURNS)
   const previousWorkRunOwners = useRef<ReadonlyMap<string, string>>(new Map())
+  const previousBuild = useRef<NativeChatTranscriptBuild | null>(null)
   const {
     slots,
     forkPoint,
     quietTurnKeys,
-    owners: workRunOwners
-  } = useMemo(
-    () =>
+    owners: workRunOwners,
+    heldOpen
+  } = useMemo(() => {
+    const build = (expanded: ReadonlySet<string>) =>
       buildNativeChatTranscript(
         {
           imageSources,
@@ -112,7 +121,7 @@ export function useNativeChatTranscriptSlots({
           turnStatuses,
           turnDiffs,
           openedPullRequests,
-          expandedTurnKeys,
+          expandedTurnKeys: expanded,
           isWorking,
           lifecycleWorking,
           subagentHeads,
@@ -123,28 +132,37 @@ export function useNativeChatTranscriptSlots({
         },
         undefined,
         previousWorkRunOwners.current
-      ),
-    [
-      leavingTurnKeys,
-      workers,
-      expandedTurnKeys,
-      imageSources,
-      forkOffer,
-      isWorking,
-      lifecycleWorking,
-      liveReasoningId,
-      liveTurnKey,
-      messages,
-      openedPullRequests,
-      receipts,
-      subagentHeads,
-      turnDiffs,
-      turnKeys,
-      turnStatuses,
-      typography,
-      unresolvedRowIds
-    ]
-  )
+      )
+    const built = build(expandedTurnKeys)
+    const held = nativeChatTurnsHeldOpen(
+      previousBuild.current,
+      { messages, turnKeys, slots: built.slots },
+      expandedTurnKeys
+    )
+    // Drawn open in this very render, so no frame ever shows the reader's work folded away.
+    return held.size === 0
+      ? { ...built, heldOpen: held }
+      : { ...build(new Set([...expandedTurnKeys, ...held])), heldOpen: held }
+  }, [
+    leavingTurnKeys,
+    workers,
+    expandedTurnKeys,
+    imageSources,
+    forkOffer,
+    isWorking,
+    lifecycleWorking,
+    liveReasoningId,
+    liveTurnKey,
+    messages,
+    openedPullRequests,
+    receipts,
+    subagentHeads,
+    turnDiffs,
+    turnKeys,
+    turnStatuses,
+    typography,
+    unresolvedRowIds
+  ])
   useNativeChatQuietTurnLeave({
     quietTurnKeys,
     liveTurnKey,
@@ -155,5 +173,11 @@ export function useNativeChatTranscriptSlots({
   useLayoutEffect(() => {
     previousWorkRunOwners.current = workRunOwners
   }, [workRunOwners])
+  useLayoutEffect(() => {
+    previousBuild.current = { messages, turnKeys, slots }
+    if (heldOpen.size > 0) {
+      onTurnsHeldOpen?.(heldOpen)
+    }
+  }, [heldOpen, messages, onTurnsHeldOpen, slots, turnKeys])
   return { slots, forkPoint, liveLine }
 }

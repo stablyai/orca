@@ -143,6 +143,10 @@ export function NativeChatMessageList({
   const toggleExpandedTurn = useCallback((turnKey: string) => {
     setExpandedTurnIds((current) => toggleNativeChatExpandedKey(current, turnKey))
   }, [])
+  // An older page would fold work the reader was looking at: that turn opens, as if they opened it.
+  const holdTurnsOpen = useCallback((turnKeys: ReadonlySet<string>) => {
+    setExpandedTurnIds((current) => new Set([...current, ...turnKeys]))
+  }, [])
 
   const { loadEarlier } = session
   const historyRetention = useNativeChatHistoryRetention({
@@ -218,6 +222,7 @@ export function NativeChatMessageList({
     turnDiffs,
     openedPullRequests: openedPullRequests.byTurn,
     expandedTurnKeys: expandedTurnIds,
+    onTurnsHeldOpen: holdTurnsOpen,
     isWorking: working,
     lifecycleWorking,
     subagentHeads: scope.heads,

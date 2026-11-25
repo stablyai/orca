@@ -116,12 +116,14 @@ export function nativeChatTranscriptWorkRuns(
       ...nativeChatMessageCallKeys(member)
     ])
     let key = slot.message.id
+    // A reserved owner key is still a slot of its own unless this run absorbed that message.
+    const memberIds = reserved.size > 0 ? new Set(messages.map((message) => message.id)) : null
     for (const identity of identities) {
       const previous = previousOwners.get(identity)
       if (
         previous !== undefined &&
         !claimed.has(previous) &&
-        (!reserved.has(previous) || messages.some((message) => message.id === previous))
+        (!reserved.has(previous) || memberIds?.has(previous) === true)
       ) {
         key = previous
         break

@@ -85,7 +85,7 @@ function transcript() {
 }
 
 function anchorWith(container: HTMLDivElement, rows: HTMLDivElement[]) {
-  const anchorState: NativeChatAnchorState = { landing: false, row: null }
+  const anchorState: NativeChatAnchorState = { row: null }
   const virtualizer = new Virtualizer<HTMLDivElement, Element>({
     count: rows.length,
     getScrollElement: () => container,
@@ -108,6 +108,9 @@ function anchorWith(container: HTMLDivElement, rows: HTMLDivElement[]) {
     virtualizer.measureElement(row)
   }
   const reconcileReaderScroll = vi.fn()
+  // Scroll events this app wrote are registered; anything else is the reader's.
+  let registered = true
+  const consumeProgrammaticScroll = () => registered
   const { result } = renderHook(() =>
     useNativeChatContentAnchor(
       {
@@ -118,10 +121,12 @@ function anchorWith(container: HTMLDivElement, rows: HTMLDivElement[]) {
         anchorState
       },
       {
+        measureRow: (node: HTMLElement | null) => virtualizer.measureElement(node),
         alignToViewportTop: vi.fn(),
         cancelAlign: vi.fn(),
         scrollToEnd: vi.fn(),
-        reconcileReaderScroll
+        reconcileReaderScroll,
+        consumeProgrammaticScroll
       }
     )
   )
@@ -129,7 +134,10 @@ function anchorWith(container: HTMLDivElement, rows: HTMLDivElement[]) {
   const snapshot = anchor.snapshotContent()
   expect(snapshot).not.toBeNull()
   anchor.preserveContent(snapshot!)
-  return { anchor, virtualizer, reconcileReaderScroll }
+  const readerScrolls = () => {
+    registered = false
+  }
+  return { anchor, virtualizer, reconcileReaderScroll, readerScrolls }
 }
 
 /** The anchor's own observer: the one created after the virtualizer's, watching the run row. */
@@ -180,16 +188,32 @@ it.each(['virtualizer first', 'anchor first'] as const)(
   }
 )
 
-it('leaves row movement to the virtualizer', () => {
+it('corrects a whole-row displacement left at the landing, not only growth inside the row', () => {
   const { container, rows, run, header, line } = transcript()
-  const { anchor } = anchorWith(container, rows)
+  const { anchor, virtualizer } = anchorWith(container, rows)
 
-  // The whole row moved (rows landed above it) but nothing moved inside it.
+  // The whole row ended 200px lower than the reader left it, with nothing moved inside it.
   place(run, -100, RUN_SIZE)
   place(header, 190, 120)
   place(line, 320, 80)
   anchor.reconcileContent()
 
+  expect(container.scrollTop).toBe(START_OFFSET + 200)
+  expect(virtualizer.itemSizeCache.get(`row-${RUN_INDEX}`)).toBe(RUN_SIZE)
+})
+
+it('stops settling once a scroll this app did not write arrives', () => {
+  const { container, rows, run } = transcript()
+  const { anchor, readerScrolls } = anchorWith(container, rows)
+  anchor.reconcileContent()
+  const watching = () => observers.filter((observer) => observer.targets.has(run)).length
+  const whileSettling = watching()
+
+  readerScrolls()
+  expect(anchor.consumeProgrammaticScroll(new Event('scroll'))).toBe(false)
+
+  // The anchor's own row observer is gone; only the virtualizer's measurement observer remains.
+  expect(watching()).toBe(whileSettling - 1)
   expect(container.scrollTop).toBe(START_OFFSET)
 })
 
