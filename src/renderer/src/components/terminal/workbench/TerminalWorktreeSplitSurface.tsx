@@ -1,5 +1,4 @@
 import React, { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ActivityTerminalPortalTarget } from '../../activity/terminal-portal/activity-terminal-portal'
 import {
@@ -11,7 +10,7 @@ import {
   shouldMountRetainedBrowserOverlay
 } from '../../browser-pane/host-guest/retention/browser-worktree-surface-paintability'
 import TabGroupSplitLayout from '../../tab-group/TabGroupSplitLayout'
-import { useAppStore } from '../../../store/index'
+import { useReleasedLayoutInputs } from './released-layout-inputs'
 import { layoutHoldsOnlyOverlayViews } from './released-layout-eligibility'
 import { useIsQuickCommandEditorOpen } from '../../tab-bar/quick-commands/quick-command-editor-presence'
 import { WorkspacePaneOverlayLayers } from './WorkspacePaneOverlayLayers'
@@ -52,14 +51,9 @@ export const WorktreeSplitSurface = React.memo(function WorktreeSplitSurface({
   const needsBrowserGuestPaint = useBrowserGuestPaintRetention(browserPageIds)
   // Allowlist: only views drawn outside the layout (terminals restore from parking snapshots, chats stay mounted).
   // Keyed on membership, not the tab array: title updates replace the array but never a tab's content type.
-  const { tabCount, groups } = useAppStore(
-    useShallow((state) => ({
-      tabCount: state.unifiedTabsByWorktree[worktreeId]?.length ?? 0,
-      groups: state.groupsByWorktree[worktreeId]
-    }))
-  )
   const releaseGateOpen =
     shouldColdParkTerminalPanes && !isForceParked && browserPageIds.length === 0
+  const { tabCount, groups } = useReleasedLayoutInputs(worktreeId, releaseGateOpen)
   // Closing the dialog must re-check release; the eligibility read itself is outside React.
   const quickCommandEditorOpen = useIsQuickCommandEditorOpen(worktreeId)
   const surfaceReleased = useMemo(
