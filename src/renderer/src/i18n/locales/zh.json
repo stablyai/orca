@@ -1259,7 +1259,10 @@
           "checkAgain": "重新检查",
           "executionContextOnHost": "{{agent}} · {{host}}",
           "commandWarningOnHost": "该命令会在 {{host}} 上该 bot 的主文件夹中运行。添加或保存时，原生检查可能会启动它。请只添加你信任的软件"
-        }
+        },
+        "hostMcp": "你的 MCP 服务器",
+        "hostMcpAndMore": "你的 MCP 服务器，{{rest}}",
+        "hostMcpNone": "这台主机上暂时没有"
       },
       "editPicture": "编辑 bot 头像",
       "retry": "重试",
@@ -1323,7 +1326,10 @@
       "soulEdit": "编辑",
       "soulStats": "{{lines}} 行 · {{words}} 个词",
       "soulDoubleClickHint": "双击以编辑",
-      "soulEmpty": "还没有指令。双击或选择“编辑”开始撰写"
+      "soulEmpty": "还没有指令。双击或选择“编辑”开始撰写",
+      "muteNotifications": "静音通知",
+      "muteNotificationsDescription": "停止发送系统通知。未读标记仍会显示。",
+      "teamDisabled": "团队已关闭 bot。"
     },
     "automaticUpdates": {
       "title": "自动更新",
@@ -27723,7 +27729,17 @@
         "setUpInFirstChat": "在首次聊天中设置"
       },
       "identityWatches": "关注{{what}}",
-      "identityReports": "汇报：{{what}}"
+      "identityReports": "汇报：{{what}}",
+      "hostSleeping": "休眠中 · 使用时唤醒",
+      "hostWaking": "正在唤醒…",
+      "wslNoAgent": {
+        "body": "Windows 上安装的智能体无法在 WSL 中运行。在发行版中安装一个并登录，它就会出现在这里。",
+        "checking": "正在重新检查…",
+        "copied": "已复制",
+        "copy": "复制",
+        "field": "{{distro}} 中没有智能体",
+        "title": "在 {{distro}} 中安装智能体"
+      }
     },
     "googleSetup": {
       "otherAccount": "切换账号",
