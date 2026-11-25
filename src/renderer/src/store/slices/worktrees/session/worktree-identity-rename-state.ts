@@ -29,6 +29,7 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'rightSidebarExplorerViewByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
+  'gitRebaseIndexObservationByWorktree',
   'gitStatusReadErrorByWorktree',
   'gitBranchLineTotalByWorktree',
   'gitIgnoredPathsByWorktree',

@@ -10,6 +10,7 @@ import {
 } from './setup-runner-command'
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
+import { setupCompletionMarkerPrefix } from './setup-completion-marker'
 
 export const SETUP_AGENT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_WAIT_MESSAGE = 'Waiting for setup to finish before starting agent...'
@@ -46,6 +47,8 @@ export function createSequencedSetupAgentCommands(args: {
   shell?: SetupRunnerShell
   nonce?: string
   waitTimeoutSeconds?: number
+  /** Setup also prints its completion line, so the runtime sees it finish (`isSetupTerminalRunning`). */
+  completionToken?: string
 }): SequencedSetupAgentCommands {
   const nonce = args.nonce ?? createSetupAgentSequenceNonce()
   const resolution = resolveSetupRunnerCommand(args.runnerScriptPath, args.platform, args.shell)
@@ -64,7 +67,8 @@ export function createSequencedSetupAgentCommands(args: {
       setupCommand: buildWindowsSetupCommand(
         resolution.runnerScriptPathForShell,
         markerPath,
-        nonce
+        nonce,
+        args.completionToken
       ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
@@ -86,7 +90,8 @@ export function createSequencedSetupAgentCommands(args: {
       [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: buildPosixSetupScript(
         resolution.command,
         markerPath,
-        nonce
+        nonce,
+        args.completionToken
       )
     },
     startupCommand: `bash -lc 'eval "$${SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV}"'`,
@@ -97,7 +102,12 @@ export function createSequencedSetupAgentCommands(args: {
   }
 }
 
-function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: string): string {
+function buildPosixSetupScript(
+  setupCommand: string,
+  markerPath: string,
+  nonce: string,
+  completionToken?: string
+): string {
   const marker = quotePosixShellUnlessPlainNoAt(markerPath)
   const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
@@ -108,6 +118,11 @@ function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: 
     'status=$?',
     `printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp}`,
     `mv -f ${tmp} ${marker}`,
+    ...(completionToken
+      ? [
+          `printf '\\n%s%s\\n' ${quotePosixShellUnlessPlainNoAt(setupCompletionMarkerPrefix(completionToken))} "$status"`
+        ]
+      : []),
     'exit "$status"'
   ].join('; ')
 }
@@ -196,7 +211,8 @@ function hasUnquotedPosixCommandSeparator(command: string): boolean {
 function buildWindowsSetupCommand(
   runnerScriptPath: string,
   markerPath: string,
-  nonce: string
+  nonce: string,
+  completionToken?: string
 ): string {
   // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
   const script = [
@@ -216,6 +232,11 @@ function buildWindowsSetupCommand(
     '$utf8 = [System.Text.UTF8Encoding]::new($false)',
     '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
     'Move-Item -LiteralPath $tmp -Destination $marker -Force',
+    ...(completionToken
+      ? [
+          `Write-Output (${quotePowerShellLiteral(setupCompletionMarkerPrefix(completionToken))} + $setupStatus)`
+        ]
+      : []),
     'exit $setupStatus'
   ].join('; ')
 

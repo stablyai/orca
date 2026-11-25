@@ -38,7 +38,6 @@ import { GOOSE_LAUNCH_SPEC } from '../../goose/goose-acp-launch-spec'
 import { AUGGIE_LAUNCH_SPEC } from '../../auggie/auggie-acp-launch-spec'
 import { KILO_LAUNCH_SPEC } from '../../kilo/kilo-acp-launch-spec'
 import { MIMO_LAUNCH_SPEC } from '../../mimo/mimo-acp-launch-spec'
-import { GEMINI_LAUNCH_SPEC } from '../../gemini/gemini-acp-launch-spec'
 import { DROID_LAUNCH_SPEC } from '../../droid/droid-acp-launch-spec'
 import { QWEN_CODE_LAUNCH_SPEC } from '../../qwen-code/qwen-code-acp-launch-spec'
 import { CLINE_LAUNCH_SPEC } from '../../cline/cline-acp-launch-spec'
@@ -183,7 +182,6 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   AUGGIE_LAUNCH_SPEC,
   KILO_LAUNCH_SPEC,
   MIMO_LAUNCH_SPEC,
-  GEMINI_LAUNCH_SPEC,
   DROID_LAUNCH_SPEC,
   QWEN_CODE_LAUNCH_SPEC,
   CLINE_LAUNCH_SPEC,

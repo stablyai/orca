@@ -26,7 +26,7 @@ import {
 export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
   stdin?: string
-  terminationBarrier?: boolean
+  terminationBarrier?: boolean | 'wait-for-posix-group'
   /** Normal close or proven termination; mutation fences wait for this. */
   onChildTerminated?: () => void
   /** The child's worker died before its end was proven: capacity such as Git admission may return, fences may not. */

@@ -324,7 +324,7 @@ export function SidebarBotsSection({
             data-bot-sidebar-list=""
             className={cn(
               'bot-sidebar-scrollbar relative flex min-h-0 flex-col overflow-y-auto overscroll-y-contain [overflow-anchor:none]',
-              entries.length > 0 && 'pb-1 pl-1',
+              entries.length > 0 && 'pb-1 px-1',
               collapsed && 'hidden'
             )}
           >
