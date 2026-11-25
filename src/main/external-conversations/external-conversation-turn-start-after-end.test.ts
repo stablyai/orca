@@ -27,6 +27,25 @@ const ENDED = 18_000
 
 type Row = { state: 'working' | 'done' | 'blocked'; stateStartedAt: number }
 
+// The chat's status row as its structured host publishes it.
+const statusRow = ({ state, stateStartedAt }: Row): AgentStatusIpcPayload => ({
+  paneKey,
+  state,
+  prompt: '',
+  connectionId: null,
+  receivedAt: stateStartedAt,
+  stateStartedAt,
+  structuredHost: 'owned'
+})
+// The message that opened the turn its host runs.
+const openerItem = (itemId: string): AgentJournalRenderItem => ({
+  itemId,
+  revision: 0,
+  sequence: 1,
+  observedAt: 1,
+  body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Go.' }] }
+})
+
 // The turn told at its send, then re-dated to its handover.
 const told = (_chats: ChatTurns, show: (next: Row) => void) => {
   show({ state: 'working', stateStartedAt: SENT })
@@ -55,7 +74,7 @@ function endedTurn(
     workerActivities: async () => null,
     linkedFor: () => ({ link, workspace: { worktreeId: 'wt', sshHostId: null } }),
     emit: (event) => events.push(event),
-    readHookRow: () => ({ ...row, structuredHost: true }) as unknown as AgentStatusIpcPayload,
+    readHookRow: () => statusRow(row),
     pendingPrompt: () => null,
     chatTurnOrigin: () => 'delivery',
     // Published turn state lags the host's feed: the delivery still reads as the chat's.
@@ -65,7 +84,7 @@ function endedTurn(
     runningTurnReported: () => false,
     workLinks: async () => [],
     promptsAudience: () => true,
-    turnOpener: () => (opener ? ({ itemId: opener } as unknown as AgentJournalRenderItem) : null),
+    turnOpener: () => (opener ? openerItem(opener) : null),
     keepAdoptedTurn: () => {},
     turnStartedAt: () => null
   })
@@ -146,12 +165,7 @@ describe('a chat turn’s status row after the turn ended', () => {
   it('snapshots the ended turn’s row as not working', () => {
     const { chats, show } = endedTurn()
     show({ state: 'working', stateStartedAt: HANDED_OVER })
-    const row = (at: number) =>
-      ({
-        state: 'working',
-        stateStartedAt: at,
-        structuredHost: true
-      }) as unknown as AgentStatusIpcPayload
+    const row = (at: number) => statusRow({ state: 'working', stateStartedAt: at })
     expect(chats.dates.leadWorking(paneKey, row(HANDED_OVER))).toBe(false)
     expect(chats.dates.leadWorking(paneKey, row(ENDED - 500))).toBe(true)
   })
@@ -180,11 +194,10 @@ describe('a chat turn’s status row after the turn ended', () => {
     // The end heard belongs to the turn before: the follow-up's row is still a running turn.
     show({ state: 'working', stateStartedAt: ENDED - 1_000 })
     expect(
-      chats.dates.leadWorking(paneKey, {
-        state: 'working',
-        stateStartedAt: ENDED - 1_000,
-        structuredHost: true
-      } as unknown as AgentStatusIpcPayload)
+      chats.dates.leadWorking(
+        paneKey,
+        statusRow({ state: 'working', stateStartedAt: ENDED - 1_000 })
+      )
     ).toBe(true)
     expect(chats.turnOf(paneKey)).toBe(ENDED - 1_000)
   })
