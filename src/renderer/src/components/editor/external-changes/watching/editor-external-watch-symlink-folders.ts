@@ -16,6 +16,7 @@ import {
 } from './editor-external-watch-targets'
 import {
   acquireWatchRoot,
+  isWatchRootFailed,
   releaseWatchRoot,
   retryFailedWatchRoot,
   type HeldWatchRoots,
@@ -76,8 +77,6 @@ type TabFolder = {
 
 type FolderWatch = {
   path: string
-  /** Set when the watch request failed, so it covers no folder that opens later. */
-  failed: boolean
   folders: Set<TabFolder>
   /** Workspaces this watch reports for, by target key, counted per covered folder. */
   targets: Map<string, { target: EditorExternalWatchTarget; folders: number }>
@@ -147,10 +146,12 @@ export class SymlinkedTabFolderWatches {
 
   // Why never swap a working watch for a new outer one: releasing it drops its queued events, and the new one may fail.
   private joinWatch(folder: TabFolder, link: string, heldWatchRoots: HeldWatchRoots): void {
-    const plan = this.planWatch(folder, link)
+    const plan = this.planWatch(folder, link, heldWatchRoots)
     // Why: only a folder's own-path watch is returned failed; joining it retries it, as a fresh request would.
-    if (plan.watch?.failed) {
-      this.retryWatch(plan.watch, folder.target, heldWatchRoots)
+    if (plan.watch && isWatchRootFailed(heldWatchRoots, toWatchRoot(plan.watch.path))) {
+      retryFailedWatchRoot(heldWatchRoots, toWatchRoot(plan.watch.path), (error) =>
+        this.onWatchError(folder.target, error)
+      )
     }
     const watch = plan.watch ?? this.startWatch(plan.startAt, folder.target, heldWatchRoots)
     folder.watch = watch
@@ -186,7 +187,11 @@ export class SymlinkedTabFolderWatches {
    * The outermost working watch that sees `folder`, else where to start one: at the outermost open tab folder
    * between the link and `folder`. That folder shares the link, so it joins the watch whenever its own probe answers.
    */
-  private planWatch(folder: TabFolder, link: string): { watch?: FolderWatch; startAt: string } {
+  private planWatch(
+    folder: TabFolder,
+    link: string,
+    heldWatchRoots: HeldWatchRoots
+  ): { watch?: FolderWatch; startAt: string } {
     const windowsSyntax = isWindowsAbsolutePathLike(folder.path)
     // Why by syntax: a backslash is a filename character on POSIX.
     const path = folder.path.replace(windowsSyntax ? /[\\/]+$/ : /\/+$/, '')
@@ -228,7 +233,8 @@ export class SymlinkedTabFolderWatches {
       const ancestor = ancestors[index]
       const watch = this.watches.get(normalizeRuntimePathForComparison(ancestor))
       // Why: a failed outer watch reports nothing, so a nested folder starts its own; the folder's own path is shared as-is.
-      if (watch && (!watch.failed || index === ancestors.length - 1)) {
+      const working = watch && !isWatchRootFailed(heldWatchRoots, toWatchRoot(watch.path))
+      if (watch && (working || index === ancestors.length - 1)) {
         return { watch, startAt: ancestor }
       }
       // Why not where a failed watch sits: starting there would orphan the folders that hold it.
@@ -245,25 +251,12 @@ export class SymlinkedTabFolderWatches {
     owner: EditorExternalWatchTarget,
     heldWatchRoots: HeldWatchRoots
   ): FolderWatch {
-    const watch: FolderWatch = { path, failed: false, folders: new Set(), targets: new Map() }
+    const watch: FolderWatch = { path, folders: new Set(), targets: new Map() }
     this.watches.set(normalizeRuntimePathForComparison(path), watch)
-    void acquireWatchRoot(heldWatchRoots, toWatchRoot(path), (error) => {
-      watch.failed = true
+    void acquireWatchRoot(heldWatchRoots, toWatchRoot(path), (error) =>
       this.onWatchError(owner, error)
-    })
+    )
     return watch
-  }
-
-  private retryWatch(
-    watch: FolderWatch,
-    owner: EditorExternalWatchTarget,
-    heldWatchRoots: HeldWatchRoots
-  ): void {
-    watch.failed = false
-    retryFailedWatchRoot(heldWatchRoots, toWatchRoot(watch.path), (error) => {
-      watch.failed = true
-      this.onWatchError(owner, error)
-    })
   }
 }
 

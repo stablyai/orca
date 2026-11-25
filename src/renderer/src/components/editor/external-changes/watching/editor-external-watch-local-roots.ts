@@ -44,6 +44,11 @@ export function acquireWatchRoot(
   return root.installed
 }
 
+/** Whether the root's latest watch request failed; a pending one counts as working. */
+export function isWatchRootFailed(roots: HeldWatchRoots, target: WatchRootArgs): boolean {
+  return roots.get(getWatchRootKey(target))?.failed === true
+}
+
 /** Re-requests a held root whose last request failed; one that is installed or pending is left alone. */
 export function retryFailedWatchRoot(
   roots: HeldWatchRoots,
