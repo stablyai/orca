@@ -4,10 +4,11 @@ import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 
-import '../../../orchestration/db/contract-constants'
+import { LEGACY_CONTRACT_VERSION } from '../../../orchestration/db/contract-constants'
 import '../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../orchestration/db/dispatch-row-writer'
 import '../../../orchestration/db/attempt-outcome-projection'
@@ -72,6 +73,9 @@ describe('worker_done retry after a possibly delivered timeout', () => {
 
   function setupWorker() {
     const { db, runtime, activeRunId } = harness.setup()
+    if (!activeRunId) {
+      throw new Error('expected a bound coordinator run')
+    }
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
       handle === 'term_worker'
         ? WORKER_PANE_KEY
@@ -118,6 +122,7 @@ describe('worker_done retry after a possibly delivered timeout', () => {
       db.getInbox(100).filter((message) => message.from_handle === 'term_worker')
     return {
       db,
+      runtime,
       activeRunId,
       taskId: task.id,
       dispatchId: started.dispatch.id,
@@ -231,12 +236,7 @@ describe('worker_done retry after a possibly delivered timeout', () => {
 
   it.each([
     ['an ordinary send', { type: 'status', to: 'term_coord' }, 'orchestration.send'],
-    ['a mailbox check', { terminal: 'term_worker' }, 'orchestration.check'],
-    [
-      'a question',
-      { from: 'term_worker', to: 'term_coord', question: 'Which?' },
-      'orchestration.ask'
-    ]
+    ['a mailbox check', { terminal: 'term_worker' }, 'orchestration.check']
   ])(
     'admits replay-only for a keyed worker_done only, refusing %s',
     async (_case, extra, method) => {
@@ -258,12 +258,75 @@ describe('worker_done retry after a possibly delivered timeout', () => {
     }
   )
 
-  it('refuses a replay-only request that carries no request id to replay', async () => {
-    const { workerDone, dispatcher, workerMessages } = setupWorker()
-    const { orchestrationRequestId: _omitted, ...unkeyed } = workerDone
+  it('rejects replay-only before a valid legacy ask can create mail or authority', async () => {
+    const { db, runtime, activeRunId, dispatchId, dispatcher, workerMessages } = setupWorker()
+    db.db
+      .prepare('UPDATE dispatch_contexts SET contract_version = ? WHERE id = ?')
+      .run(LEGACY_CONTRACT_VERSION, dispatchId)
+    db.db
+      .prepare(
+        'INSERT INTO legacy_adoptions (source_run_id, adopted_run_id, scheduler_state_lost) VALUES (?, ?, 1)'
+      )
+      .run(ORCHESTRATION_LEGACY_RUN_ID, activeRunId)
+    vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockReturnValue({
+      hostScope: { kind: 'local', hostId: 'local' },
+      paneKey: WORKER_PANE_KEY,
+      terminalHandle: 'term_worker',
+      processIncarnation: 'runtime_test:term_worker:1',
+      launchTokenHash: 'fixture-token-hash'
+    })
+    const ask = {
+      authToken: 'test-token',
+      method: 'orchestration.ask',
+      params: {
+        from: 'term_worker',
+        to: 'term_coord',
+        question: 'Which option?',
+        compatibilityWindowsCommand: 'orca'
+      },
+      orchestrationRequestId: 'mutation_legacy_ask'
+    }
+    const effects = () =>
+      db.db
+        .prepare(`SELECT
+      (SELECT count(*) FROM legacy_compatibility_principals) AS principals,
+      (SELECT count(*) FROM legacy_operation_receipts) AS operations,
+      (SELECT count(*) FROM question_threads) AS questions`)
+        .get()
 
     const refused = await dispatcher.dispatch({
-      ...unkeyed,
+      ...ask,
+      id: 'replay',
+      orchestrationContractVersion: 2
+    })
+
+    expect(refused).toMatchObject({
+      ok: false,
+      error: { code: 'orchestration_migration_required' }
+    })
+    expect(effects()).toEqual({ principals: 0, operations: 0, questions: 0 })
+    expect(workerMessages()).toHaveLength(0)
+
+    const original = await dispatcher.dispatch({
+      ...ask,
+      id: 'original',
+      orchestrationContractVersion: 1
+    })
+
+    expect(original).toMatchObject({
+      ok: true,
+      result: { legacyCompatibility: { resumeRequired: true } }
+    })
+    expect(effects()).toEqual({ principals: 1, operations: 1, questions: 1 })
+    expect(workerMessages()).toHaveLength(1)
+  })
+
+  it.each([undefined, ''])('refuses a replay-only request with key %j', async (key) => {
+    const { workerDone, dispatcher, workerMessages } = setupWorker()
+
+    const refused = await dispatcher.dispatch({
+      ...workerDone,
+      orchestrationRequestId: key,
       orchestrationContractVersion: ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
     })
 

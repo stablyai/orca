@@ -1,6 +1,6 @@
 import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { EventEmitter } from 'node:events'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { sendRequest } from './transport'
 
@@ -32,6 +32,10 @@ beforeEach(() => {
   createConnection.mockReturnValue(socket)
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 function frame(call: number): Record<string, unknown> {
   const written: unknown = JSON.parse(String(socket.write.mock.calls[call]?.[0]))
   return typeof written === 'object' && written !== null ? { ...written } : {}
@@ -39,20 +43,40 @@ function frame(call: number): Record<string, unknown> {
 
 describe('the status pre-request on the connection that carries a request', () => {
   it('carries none of the request’s orchestration fields', async () => {
+    vi.useFakeTimers()
+    const params = { type: 'worker_done', from: 'term_worker', subject: 'Done' }
+    const envelope = { orchestrationRequestId: 'mutation_1', orchestrationCapability: 'test-proof' }
+    const original = sendRequest(metadata, 'orchestration.send', params, 100, {
+      ...envelope,
+      orchestrationContractVersion: 1
+    }).catch((error: unknown) => error)
+    socket.emit('connect')
+    const firstRequest = frame(0)
+    expect(firstRequest).toMatchObject({
+      method: 'orchestration.send',
+      params,
+      ...envelope,
+      orchestrationContractVersion: 1
+    })
+    await vi.advanceTimersByTimeAsync(100)
+    expect(await original).toMatchObject({ code: 'runtime_timeout' })
+    socket = new TestSocket()
+    createConnection.mockReturnValue(socket)
     const pending = sendRequest(
       metadata,
       'orchestration.send',
-      { type: 'worker_done' },
+      params,
       30_000,
-      { orchestrationContractVersion: 2, orchestrationRequestId: 'mutation_1' },
+      { ...envelope, orchestrationContractVersion: 2 },
       undefined,
-      { requestSelection: { paramsForStatus: () => ({ type: 'worker_done' }) } }
+      { requestSelection: { paramsForStatus: () => params } }
     )
     socket.emit('connect')
     const status = frame(0)
     expect(status).toMatchObject({ method: 'status.get' })
     expect(status).not.toHaveProperty('orchestrationContractVersion')
     expect(status).not.toHaveProperty('orchestrationRequestId')
+    expect(status).not.toHaveProperty('orchestrationCapability')
 
     socket.emit(
       'data',
@@ -61,9 +85,11 @@ describe('the status pre-request on the connection that carries a request', () =
     const request = frame(1)
     expect(request).toMatchObject({
       method: 'orchestration.send',
-      orchestrationContractVersion: 2,
-      orchestrationRequestId: 'mutation_1'
+      params,
+      ...envelope,
+      orchestrationContractVersion: 2
     })
+    expect(new Set([firstRequest.id, status.id, request.id]).size).toBe(3)
     socket.emit(
       'data',
       `${JSON.stringify({ id: request.id, ok: true, result: { sent: true }, _meta: { runtimeId: 'runtime-1' } })}\n`

@@ -26,16 +26,17 @@ export async function callOrchestrationMutation<TResult>(
   let sentError: RuntimeClientError | undefined
   // A timeout after sending may have committed; until a reply settles it, it is the outcome to report.
   let sentTimeout: RuntimeClientError | undefined
-  // It gets exactly one replay: replay-only, and only to a runtime that proves it enforces that.
-  let replayed = false
+  // Once a chain holding a possibly delivered attempt meets a timeout, only a replay is safe:
+  // exactly one, replay-only, and only to a runtime that proves it enforces that.
+  let timedOut = false
   for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_RETRY_DELAY_MS)) {
+    const replayOnly = timedOut && sentError !== undefined
     try {
-      replayed = sentTimeout !== undefined
       return requestId
         ? await client.call<TResult>(method, params, {
             ...options,
             orchestrationRequestId: requestId,
-            ...(sentTimeout
+            ...(replayOnly
               ? {
                   orchestrationReplayOnly: true as const,
                   requestSelection: replayOnlyRecipientCheck(params)
@@ -47,7 +48,8 @@ export async function callOrchestrationMutation<TResult>(
           : await client.call<TResult>(method, params)
     } catch (error) {
       const retryable = error instanceof RuntimeClientError && KEYED_RETRY_CODES.has(error.code)
-      const sent = carriesRequestId(error) && !isRequestUnsent(error)
+      const sent = !replayOnly && carriesRequestId(error) && !isRequestUnsent(error)
+      timedOut ||= error instanceof RuntimeClientError && error.code === 'runtime_timeout'
       if (sent) {
         sentError = error
         if (error.code === 'runtime_timeout') {
@@ -55,7 +57,12 @@ export async function callOrchestrationMutation<TResult>(
         }
       }
       // Callers without a budget never retry, even if the wall clock steps backward.
-      if (retryable && retryBudgetMs > 0 && !replayed && performance.now() + delayMs <= deadline) {
+      if (
+        retryable &&
+        retryBudgetMs > 0 &&
+        !replayOnly &&
+        performance.now() + delayMs <= deadline
+      ) {
         await new Promise((resolve) => setTimeout(resolve, delayMs))
         // The budget bounds when a retry starts, even if the timer fired late.
         if (performance.now() <= deadline) {
@@ -67,7 +74,8 @@ export async function callOrchestrationMutation<TResult>(
         sentTimeout ?? (sent ? error : (sentError ?? error)),
         {
           // Only a fresh id that never got past the contract check is known not to have run.
-          unsent: !retryRequest && !sentError && isRequestUnsent(error)
+          unsent: !retryRequest && !sentError && isRequestUnsent(error),
+          flags
         }
       )
     }

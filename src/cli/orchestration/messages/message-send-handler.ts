@@ -139,7 +139,10 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
       // Workers report once before ending their turn; retry outages and timeouts so worker_done is not lost.
-      // The budget bounds when a retry may start; a timed-out report gets exactly one replay.
+      // The 120 s budget bounds retry starts: a backoff must fit inside it, and a retry starts only if
+      // it is still open after the backoff. Each attempt can then wait out the send's own inactivity
+      // timeout (110 s, refreshed by keepalives) plus connection setup, so the whole send can run past
+      // 120 s. After a timeout, a possibly delivered report gets exactly one replay, never a fresh send.
       type === 'worker_done' ? WORKER_DONE_RETRY_MS : 0
     )
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)

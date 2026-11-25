@@ -112,6 +112,14 @@ function sentUnavailable({ requestId }: SentAttempt): never {
   )
 }
 
+function unsentUnavailable({ requestId }: SentAttempt): never {
+  keyed(
+    new RuntimeClientError('runtime_unavailable', 'This terminal could not connect to Orca.'),
+    requestId,
+    true
+  )
+}
+
 function unsentPreflightTimeout({ requestId }: SentAttempt): never {
   keyed(
     new RuntimeClientError('runtime_timeout', 'Timed out waiting for the Orca runtime to respond.'),
@@ -165,7 +173,11 @@ function callerNotLive({ requestId }: SentAttempt): never {
   )
 }
 
-function send(call: ReturnType<typeof scriptedRuntime>['call'], type = 'worker_done') {
+function send(
+  call: ReturnType<typeof scriptedRuntime>['call'],
+  type = 'worker_done',
+  extraFlags: [string, string][] = []
+) {
   const target: [string, string][] =
     type === 'worker_done'
       ? [
@@ -178,7 +190,8 @@ function send(call: ReturnType<typeof scriptedRuntime>['call'], type = 'worker_d
     ['from', 'term_worker'],
     ['subject', 'done'],
     ['type', type],
-    ...target
+    ...target,
+    ...extraFlags
   ])
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the send handler only calls client.call, which the scripted runtime implements.
   const client = { call } as unknown as RuntimeClient
@@ -400,4 +413,54 @@ it('keeps the worker_done budget when the wall clock jumps forward', async () =>
   await expectSettles(send(runtime.call), 1_000)
 
   expect(runtime.attempts).toHaveLength(2)
+})
+
+it('replays only, once, when a timeout follows an attempt that may have been delivered', async () => {
+  // A quick close after the write may have committed; the later timeout never sent anything.
+  const runtime = scriptedRuntime([
+    sentUnavailable,
+    unsentPreflightTimeout,
+    ({ requestId }) => completedReceipt(requestId, true)
+  ])
+
+  await expectSettles(send(runtime.call), 30_000)
+
+  expect(runtime.attempts.map((attempt) => attempt.replayOnly)).toEqual([false, false, true])
+})
+
+it('keeps the earlier possible delivery as the outcome when that replay is refused', async () => {
+  const runtime = scriptedRuntime([sentUnavailable, unsentPreflightTimeout, notReplayable])
+
+  const error = await settleAfter(send(runtime.call), 30_000)
+
+  expect(runtime.attempts).toHaveLength(3)
+  expect(error).toMatchObject({
+    code: 'runtime_unavailable',
+    data: { recovery: { disposition: 'outcome_unknown' } }
+  })
+})
+
+it('retries as ordinary work when every earlier attempt is known not to have been sent', async () => {
+  const runtime = scriptedRuntime([
+    unsentUnavailable,
+    unsentPreflightTimeout,
+    ({ requestId }) => completedReceipt(requestId, false)
+  ])
+
+  await expectSettles(send(runtime.call), 30_000)
+
+  expect(runtime.attempts.map((attempt) => attempt.replayOnly)).toEqual([false, false, false])
+})
+
+it('keeps a pairing code out of the guidance and withholds the default-target query', async () => {
+  const runtime = scriptedRuntime([sentTimeout, notReplayable])
+
+  const error = await settleAfter(
+    send(runtime.call, 'worker_done', [['pairing-code', 'orca://pair?code=secret']]),
+    30_000
+  )
+
+  expect(error).toMatchObject({ code: 'runtime_timeout' })
+  expect(error).not.toHaveProperty('data.recovery.queryCommand')
+  expect(String(error)).not.toContain('secret')
 })
