@@ -67,6 +67,8 @@ export function renderClaudeAccountsSection(
       isRemoteAccountScope
     )
   )
+  // The shown lane itself is a remote WSL lane, which the host cannot reset at all.
+  const shownLaneBlocked = isRemoteAccountScope && accountRuntime.runtime === 'wsl'
   // System default belongs to the host home, never a WSL distro.
   const systemDefaultEmail =
     accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
@@ -199,7 +201,7 @@ export function renderClaudeAccountsSection(
                   })
                 )
               }
-              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable}
+              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable || shownLaneBlocked}
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                 systemClaudeActive
                   ? 'border-foreground/20 bg-accent/15'
@@ -225,7 +227,7 @@ export function renderClaudeAccountsSection(
                   ) : null}
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {skipsWslLanes
+                  {skipsWslLanes || shownLaneBlocked
                     ? t(
                         'accounts.selection.claudeWslLanesNotReset',
                         "WSL Claude accounts can't be reset from here yet."

@@ -111,14 +111,18 @@ export function createCodexAccountActionRunner(
         : []
     // Require exactly one addition; unloaded prior rosters make all accounts look new, so retain the existing row fallback when ambiguous.
     const addedAccount = newAccounts.length === 1 ? newAccounts[0] : undefined
+    // Lanes leaving different accounts share one prompt, so name each and claim no single launch ID.
+    const previousIds = Array.from(new Set(changed.map((lane) => lane.previousActiveAccountId)))
+    const mixedPrevious = previousIds.length > 1
     void markLiveCodexSessionsForRestart({
-      previousAccountLabel: resolveCodexRestartPromptAccountLabel(
-        codexAccounts.accounts,
-        previousActiveAccountId
-      ),
+      previousAccountLabel: Array.from(
+        new Set(
+          previousIds.map((id) => resolveCodexRestartPromptAccountLabel(codexAccounts.accounts, id))
+        )
+      ).join(', '),
       nextAccountLabel: resolveCodexRestartPromptAccountLabel(next.accounts, nextActiveAccountId),
       // Emails can repeat; use IDs to detect returning to the launch account.
-      previousAccountId: previousActiveAccountId ?? null,
+      ...(mixedPrevious ? {} : { previousAccountId: previousActiveAccountId ?? null }),
       nextAccountId: nextActiveAccountId ?? null,
       // Only this runtime slot changed; other lanes retain their launch accounts.
       owner: accountOwner,
@@ -136,7 +140,8 @@ export function createCodexAccountActionRunner(
     } catch (failure) {
       // Lanes that applied before a later one failed still need their roster and restart prompts.
       if (failure instanceof PartialAccountUpdateError) {
-        await applyCodexResult(action, failure.applied, failure.appliedLanes)
+        // The original failure still gets its toast if applying the partial result fails too.
+        await applyCodexResult(action, failure.applied, failure.appliedLanes).catch(() => {})
       }
       const error = failure instanceof PartialAccountUpdateError ? failure.cause : failure
       // Explicit cancellation and superseding logins are user actions, not failures.

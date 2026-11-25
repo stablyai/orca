@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({ toastError: vi.fn(), markRestart: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, info: vi.fn() } }))
 vi.mock('@/lib/agent-session/accounts/codex/codex-session-restart', () => ({
   markLiveCodexSessionsForRestart: mocks.markRestart,
-  resolveCodexRestartPromptAccountLabel: () => 'label'
+  resolveCodexRestartPromptAccountLabel: (_accounts: unknown, id?: string | null) =>
+    id ?? 'System default'
 }))
 
 const base = { email: 'a@example.com', createdAt: 1, updatedAt: 1, lastAuthenticatedAt: 1 }
@@ -173,7 +174,13 @@ describe('System default lanes', () => {
     await runSystemDefaultSelect([wslLane, hostLane], owner, pane.run, select)
 
     expect(mocks.markRestart).toHaveBeenCalledTimes(1)
-    expect(mocks.markRestart.mock.calls[0][0]).toMatchObject({ target: hostLane })
+    const prompt = mocks.markRestart.mock.calls[0][0]
+    expect(prompt).toMatchObject({
+      target: hostLane,
+      previousAccountLabel: 'wsl-account, host-account',
+      nextAccountLabel: 'System default'
+    })
+    expect(prompt).not.toHaveProperty('previousAccountId')
     expect(mocks.toastError).not.toHaveBeenCalled()
   })
 })
