@@ -127,9 +127,13 @@ export class ProviderRelayIdleStop {
 
   disarm(): void {
     // A takeover or a dropped stream hands on what the last app was handed and hasn't ended since.
-    this.carried = this.work?.keys(true) ?? (this.carried && (this.handed?.keys() ?? {}))
-    const handed = this.carried && Object.values(this.carried).some((keys) => keys.length > 0)
-    this.handed = handed && this.carried ? new ProviderRelayOpenWork(this.carried) : null
+    const prior = this.carried
+    const unread = prior && this.reader ? this.reader.endable(prior, false) : {}
+    this.carried = this.work?.keys(true) ?? (prior && { ...unread, ...this.handed?.keys() })
+    // Only work a marker can end is followed; the rest stays carried as it is.
+    const readable = this.carried && (this.reader?.endable(this.carried) ?? this.carried)
+    const handed = readable && Object.values(readable).some((keys) => keys.length > 0)
+    this.handed = handed && readable ? new ProviderRelayOpenWork(readable) : null
     // Ends are handed to one app: a window that tracked nothing (a dropped stream, a takeover)
     // passes none on, since that app may have acked them already.
     this.ended = this.work?.endedKeys() ?? null

@@ -139,6 +139,17 @@ export class ProviderRelayWorkReader {
     )
   }
 
+  /** Of `open`, the groups some marker can end or restate (`endable`), or the rest: work in
+   *  those never changes here, so reading lines for it is waste. */
+  endable(open: Record<string, string[][]>, endable = true): Record<string, string[][]> {
+    const groups = new Set(
+      this.markers.flatMap((marker) => (marker.effect === 'start' ? [] : [marker.group]))
+    )
+    return Object.fromEntries(
+      Object.entries(open).filter(([group]) => groups.has(group) === endable)
+    )
+  }
+
   read(line: string): ProviderRelayWorkChange[] {
     if (!this.mayMatch(line)) {
       return []
