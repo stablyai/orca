@@ -24845,7 +24845,9 @@
       "untitled": "Neuer Chat",
       "searchRetry": "Erneut versuchen",
       "loading": "Chats werden geladen…",
-      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden."
+      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden.",
+      "older": "{{count}} ältere anzeigen",
+      "hideOlder": "Ältere ausblenden"
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",
