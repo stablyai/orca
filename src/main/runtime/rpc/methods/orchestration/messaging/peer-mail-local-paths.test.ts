@@ -118,13 +118,24 @@ describe('local paths in mail to another computer', () => {
 
   describe('a path that a cap cuts', () => {
     /** The disk has only `exists`; every other path is missing. */
-    const onlyFile = (exists: string) => async (path: string) => {
-      if (path !== exists) {
-        throw new Error('ENOENT')
+    const onlyFile =
+      (...exists: string[]) =>
+      async (path: string) => {
+        if (!exists.includes(path)) {
+          throw new Error('ENOENT')
+        }
       }
+    const warned = async (body: string, ...exists: string[]) =>
+      (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(...exists)))?.message ?? null
+    /** A multi-folder path under this host's temp folder, in its own separators, exactly as long as
+     *  the line cap. Its lookups are stubbed, so it needn't exist (or fit the OS's path limit). */
+    const capLongPath = () => {
+      let path = dir
+      while (LOCAL_PATH_LINE_MAX - path.length > 16) {
+        path += `${sep}a`
+      }
+      return `${path}${sep}${'b'.repeat(LOCAL_PATH_LINE_MAX - path.length - 1)}`
     }
-    const warned = async (body: string, exists: string) =>
-      (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(exists)))?.message ?? null
 
     it('at the end of the scanned region, is read to where the body ends it', async () => {
       // This host's own paths under the temp folder, so the scan admits them on any OS.
@@ -143,19 +154,58 @@ describe('local paths in mail to another computer', () => {
     })
 
     it('at the line cap, is never read as the shorter path the cap leaves', async () => {
-      // A multi-folder path under this host's temp folder, in its own separators, exactly as long as
-      // the line cap. Its lookups are stubbed, so it needn't exist (or fit the OS's path limit).
-      let path = dir
-      while (LOCAL_PATH_LINE_MAX - path.length > 16) {
-        path += `${sep}a`
-      }
-      path += `${sep}${'b'.repeat(LOCAL_PATH_LINE_MAX - path.length - 1)}`
+      const path = capLongPath()
       expect(path).toHaveLength(LOCAL_PATH_LINE_MAX)
       expect(await warned(`${path}-archive`, path)).toBeNull()
       expect(await warned(path, path)).toContain(`names ${path} on`)
       for (const after of [' x', '\tx', '\nnext', '\r\nnext']) {
         expect(await warned(`${path}${after}`, path)).toContain(`names ${path} on`)
       }
+    })
+
+    it('reads a quote still open at the line cap as naming nothing', async () => {
+      const path = capLongPath()
+      // The quoted name runs on past the cap: a space or tab there ends no quote.
+      for (const gap of [' ', '\t']) {
+        expect(await warned(`"${path}${gap}extended.md".`, path)).toBeNull()
+      }
+      // Nor does a bare CR, which ends no line.
+      expect(await warned(`"${path}\rextended.md".`, path)).toBeNull()
+      // Unquoted, the same space or tab does end the word.
+      expect(await warned(`${path} extended.md`, path)).toContain(`names ${path} on`)
+      expect(await warned(`${path}\r\nnext`, path)).toContain(`names ${path} on`)
+      // A quote never closed before the line truly ends is no quoting.
+      const short = join(dir, 'report')
+      expect(await warned(`See "${short}`, short)).toContain(`names ${short} on`)
+      expect(await warned(`See "${short}\nnext"`, short)).toContain(`names ${short} on`)
+      expect(await warned(`See "${short}".`, short)).toContain(`names ${short} on`)
+    })
+  })
+
+  describe('a complete quoted path', () => {
+    const onlyFile =
+      (...exists: string[]) =>
+      async (path: string) => {
+        if (!exists.includes(path)) {
+          throw new Error('ENOENT')
+        }
+      }
+    const warned = async (body: string, ...exists: string[]) =>
+      (await localPathWarning(body, 'bot:Docs', 'm4', onlyFile(...exists)))?.message ?? null
+
+    it('owns its text: no path inside it is read on its own', async () => {
+      const inner = join(dir, 'report')
+      const quoted = `${join(dir, 'missing')} ${inner} notes.md`
+      const after = join(dir, 'after.md')
+      expect(await warned(`See "${quoted}".`, inner)).toBeNull()
+      expect(await warned(`See "${quoted}".`, quoted)).toContain(`names ${quoted} on`)
+      // Paths after the closing quote are still read, quoted or not.
+      expect(await warned(`See "${quoted}" and ${after}.`, inner, after)).toContain(
+        `names ${after} on`
+      )
+      expect(await warned(`See "${quoted}" and '${after}'.`, inner, after)).toContain(
+        `names ${after} on`
+      )
     })
   })
 })

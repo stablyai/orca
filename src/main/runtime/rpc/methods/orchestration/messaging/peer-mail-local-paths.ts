@@ -41,22 +41,38 @@ function candidates(body: string): string[][] {
   const roots = localRoots()
   const starts: string[][] = []
   let matches = 0
+  // A complete quoted path owns its text: no other path starts inside it.
+  let quotedUntil = 0
   for (const match of region.matchAll(PATH_START)) {
     if (++matches > MATCHES_MAX) {
       break
     }
     const from = match.index + match[0].length - match[1].length
+    if (from < quotedUntil) {
+      continue
+    }
     // The rest of this line, read one past LOCAL_PATH_LINE_MAX: that one tells a line ending there
     // from one running on.
     const rest = body.slice(from, from + LOCAL_PATH_LINE_MAX + 1)
     const newline = rest.indexOf('\n')
     const atEnd = from + rest.length === body.length && rest.length <= LOCAL_PATH_LINE_MAX
-    const ended = newline !== -1 || atEnd || /[ \t\r]/.test(rest.charAt(LOCAL_PATH_LINE_MAX))
+    // The line itself ends here (a newline or the body's end), or only its last word does (a space,
+    // tab or CR just past the cap): a quote still open at the cap may close later on the line.
+    const lineEnded = newline !== -1 || atEnd
+    const wordEnded = lineEnded || /[ \t\r]/.test(rest.charAt(LOCAL_PATH_LINE_MAX))
     // A CRLF body's line ends in "\r", which no file name does.
     const line = (
       newline !== -1 ? rest.slice(0, newline) : rest.slice(0, LOCAL_PATH_LINE_MAX)
     ).replace(/\r$/, '')
-    const readings = lineReadings(line, ended, match[0].charAt(0))
+    const { readings: raws, quoteClose } = lineReadings(
+      line,
+      { lineEnded, wordEnded },
+      match[0].charAt(0)
+    )
+    if (quoteClose !== null) {
+      quotedUntil = from + quoteClose
+    }
+    const readings = raws
       .map((raw) => raw.replace(TRAILING, '').replace(LINE_NUMBER, ''))
       .filter((raw) => raw.length > 1)
       .map((raw) => resolve(raw.startsWith('~') ? `${home}${raw.slice(1)}` : raw))
@@ -78,16 +94,22 @@ function candidates(body: string): string[][] {
 
 /** What the path starting `line` may be, shortest first, each cut from the line's own text (so a
  *  folder name keeps its spaces, "My  Project"): through its first word, then each word after it.
- *  A quoted path is only its whole quoted text. `ended`: the line truly ends where `line` does. */
-function lineReadings(line: string, ended: boolean, opener: string): string[] {
+ *  A quoted path is only its whole quoted text, and `quoteClose` is where its quote closes.
+ *  `lineEnded`: the line truly ends where `line` does; `wordEnded`: at least its last word does. */
+function lineReadings(
+  line: string,
+  { lineEnded, wordEnded }: { lineEnded: boolean; wordEnded: boolean },
+  opener: string
+): { readings: string[]; quoteClose: number | null } {
   if (QUOTES.includes(opener)) {
     const close = line.indexOf(opener)
     if (close !== -1) {
-      return [line.slice(0, close)]
+      return { readings: [line.slice(0, close)], quoteClose: close }
     }
-    // The quote closes past the cap: where the path ends is unknown.
-    if (!ended) {
-      return []
+    // The quote may close past the cap, so where the path ends is unknown. A quote never closed on
+    // its line is no quoting: read the path as if unquoted.
+    if (!lineEnded) {
+      return { readings: [], quoteClose: null }
     }
   }
   const ends: number[] = []
@@ -95,7 +117,7 @@ function lineReadings(line: string, ended: boolean, opener: string): string[] {
     const end = word.index + word[0].length
     // A line the cap cut may have cut its last word, so no reading ends on that word: it could name a
     // shorter file than the body does ("/tmp/report" of "/tmp/report-archive").
-    if (end === line.length && !ended) {
+    if (end === line.length && !wordEnded) {
       break
     }
     ends.push(end)
@@ -103,7 +125,7 @@ function lineReadings(line: string, ended: boolean, opener: string): string[] {
       break
     }
   }
-  return ends.map((end) => line.slice(0, end))
+  return { readings: ends.map((end) => line.slice(0, end)), quoteClose: null }
 }
 
 type PathStat = (path: string) => Promise<unknown>
