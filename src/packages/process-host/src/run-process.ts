@@ -1,9 +1,8 @@
 import type { ChildProcess } from 'node:child_process'
-import { spawnProcess } from './spawn-process'
+import { launchWithDefaultProcessLauncher, spawnProcess } from './spawn-process'
 import { createPosixGroupTermination, PROCESS_EXIT_GRACE_MS } from './posix-group-termination'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
-
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
 
@@ -29,7 +28,7 @@ export function runProcess(
     let child: ChildProcess
     let launched: LaunchedProcess | null = null
     try {
-      launched = spec.launch?.(spec) ?? null
+      launched = launchWithDefaultProcessLauncher(spec, outputCapture)
       child = launched?.child ?? spawnProcess(spec)
     } catch (error) {
       terminationReporter.report()
@@ -331,4 +330,4 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
 }
 
 export { runProcessSync } from './run-process-sync'
-export { spawnProcess } from './spawn-process'
+export { setDefaultProcessLauncher, spawnProcess } from './spawn-process'
