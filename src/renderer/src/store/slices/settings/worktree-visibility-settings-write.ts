@@ -14,6 +14,7 @@ export async function persistVisibilityAwareSettings(args: {
   sourceDefaultsSupportedRuntimeEnvironmentId?: string | null
   shouldPublish?: () => boolean
   onAcknowledged?: (settings: GlobalSettings) => void
+  onWillPublish?: (settings: GlobalSettings) => void
   set: (updater: (state: AppState) => Partial<AppState>) => void
 }): Promise<void> {
   const {
@@ -23,6 +24,7 @@ export async function persistVisibilityAwareSettings(args: {
     sourceDefaultsSupportedRuntimeEnvironmentId = null,
     shouldPublish = () => true,
     onAcknowledged,
+    onWillPublish,
     set
   } = args
   // Why: the write lands on the default scope host whose defaults the store mirrors.
@@ -90,6 +92,9 @@ export async function persistVisibilityAwareSettings(args: {
       const currentTarget = defaultScopeHost(state.settings)
       const stillFocused =
         currentTarget.kind === 'environment' && currentTarget.environmentId === target.environmentId
+      if (stillFocused && nextSettings && nextSettings !== state.settings) {
+        onWillPublish?.(nextSettings)
+      }
       return {
         settings: stillFocused ? nextSettings : state.settings,
         worktreeVisibilityDefaultsByHost:
@@ -110,8 +115,8 @@ export async function persistVisibilityAwareSettings(args: {
   if (!shouldPublish()) {
     return
   }
-  set((state) => ({
-    settings: (() => {
+  set((state) => {
+    const settings = (() => {
       const persisted = (nextSettings as GlobalSettings | undefined) ?? state.settings
       if (!persisted || target.kind !== 'environment') {
         return persisted
@@ -129,16 +134,22 @@ export async function persistVisibilityAwareSettings(args: {
       }
       const { worktreeVisibilityDefaults: _unsupported, ...settingsWithoutDefaults } = persisted
       return settingsWithoutDefaults as GlobalSettings
-    })(),
-    ...('worktreeVisibilityDefaults' in normalizedUpdates
-      ? {
-          worktreeVisibilityDefaultsByHost: {
-            ...state.worktreeVisibilityDefaultsByHost,
-            [LOCAL_EXECUTION_HOST_ID]: (nextSettings as GlobalSettings | undefined)
-              ?.worktreeVisibilityDefaults ??
-              normalizedUpdates.worktreeVisibilityDefaults ?? { external: 'hide' }
+    })()
+    if (settings && settings !== state.settings) {
+      onWillPublish?.(settings)
+    }
+    return {
+      settings,
+      ...('worktreeVisibilityDefaults' in normalizedUpdates
+        ? {
+            worktreeVisibilityDefaultsByHost: {
+              ...state.worktreeVisibilityDefaultsByHost,
+              [LOCAL_EXECUTION_HOST_ID]: (nextSettings as GlobalSettings | undefined)
+                ?.worktreeVisibilityDefaults ??
+                normalizedUpdates.worktreeVisibilityDefaults ?? { external: 'hide' }
+            }
           }
-        }
-      : {})
-  }))
+        : {})
+    }
+  })
 }

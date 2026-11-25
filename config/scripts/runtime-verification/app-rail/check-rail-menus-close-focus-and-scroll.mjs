@@ -1,6 +1,5 @@
 // Usage: node config/scripts/runtime-verification/app-rail/check-rail-menus-close-focus-and-scroll.mjs [--out dir]
 //          [--only focus|scroll]
-// Starts and tears down an invocation-owned fixture server and Chromium (see rail-proof-session.mjs).
 // Focus (RC-C1-03): keyboard-open the rail's "…" and More on a stable-capacity Workspaces rail, close them, and check
 //   where focus lands: a trusted click on a hit-tested blank point, root Escape, and More with Customize open all
 //   return focus to the exact trigger node; a click into an outside input, and an outside control that takes focus
@@ -11,7 +10,12 @@
 import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { paint, renderFixture, runRailProof } from './rail-proof-session.mjs'
+import { chromium } from 'playwright-core'
+import {
+  callFixtureServer,
+  ensureFixtureServer
+} from '../../component-fixtures/fixture-server-client.mjs'
+import { paint, renderFixture, servedSources } from './rail-fixture-evidence.mjs'
 
 const argValue = (flag) => {
   const index = process.argv.indexOf(flag)
@@ -28,12 +32,34 @@ const SOURCES = [
 ]
 const ROW_NAMES = ['Tasks', 'Automations', 'Artifacts', 'Skills', 'Orca Mobile']
 
-await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url, served }) => {
-  await mkdir(out, { recursive: true })
-  const before = await served(SOURCES)
-  for (const line of before.lines) {
-    console.log(`[served] ${line}`)
+await mkdir(out, { recursive: true })
+const server = await ensureFixtureServer({ preserveExisting: true })
+const { url } = server
+let browser
+try {
+  const health = await callFixtureServer(url, 'health')
+  console.log(
+    `[fixtures] ${url} PID ${health.pid} stamp ${health.codeStamp}; owned: ${server.started}`
+  )
+  browser = await chromium.launch({ headless: true })
+  console.log(`[browser] Chromium ${browser.version()}; Node ${process.version}`)
+  const page = await browser.newPage()
+  const before = await servedSources(url, SOURCES, 'before')
+  try {
+    await runChecks(page, url)
+  } finally {
+    const after = await servedSources(url, SOURCES, 'after')
+    assert.deepEqual(after, before, 'the served sources did not change during the run')
   }
+} finally {
+  try {
+    await browser?.close()
+  } finally {
+    await server.close?.()
+  }
+}
+
+async function runChecks(page, url) {
   const results = []
   const failures = []
   async function check(name, run) {
@@ -455,6 +481,12 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
             if (label.startsWith('More')) {
               assert.ok(rail.includes('more'), `More stays on the rail: ${rail}`)
             }
+            await page.screenshot({
+              path: path.join(
+                out,
+                `${label.startsWith('More') ? 'more-customize' : 'customize-menu'}-activation-${theme}.png`
+              )
+            })
             return `${first}; ${last}; rail ${rail}`
           }
         )
@@ -476,9 +508,7 @@ await runRailProof('check-rail-menus-close-focus-and-scroll', async ({ page, url
     }
   }
 
-  const after = await served(SOURCES)
-  assert.deepEqual(after.lines, before.lines, 'the served sources did not change during the run')
   console.log(results.join('\n'))
   console.log(`screenshots in ${path.relative(process.cwd(), out)}`)
   assert.deepEqual(failures, [], `${failures.length} check(s) failed`)
-})
+}

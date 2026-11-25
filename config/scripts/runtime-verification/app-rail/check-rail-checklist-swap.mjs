@@ -1,4 +1,4 @@
-// Usage: node config/scripts/runtime-verification/app-rail/check-rail-checklist-swap.mjs [--out dir] [--only c1-01|c1-02|carry]
+// Usage: node config/scripts/runtime-verification/app-rail/check-rail-checklist-swap.mjs [--out dir] [--only c1-01|c1-02|carry|hover|rapid|publish]
 // Runs against the `fullRail` fixture: Workspaces active, four slots, only Tasks shown, so one more page folds the rail.
 // RC-C1-01: a Customize toggle that swaps "…" and More (both ways) keeps the checklist open on the toggled row, and a
 //   second, different row changes without reopening: trusted mouse input along a real path, and Space on the row.
@@ -8,7 +8,13 @@
 import assert from 'node:assert/strict'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { paint, renderFixture, runRailProof } from './rail-proof-session.mjs'
+import { chromium } from 'playwright-core'
+import {
+  callFixtureServer,
+  ensureFixtureServer
+} from '../../component-fixtures/fixture-server-client.mjs'
+import { paint, renderFixture, servedSources } from './rail-fixture-evidence.mjs'
+import { checkChecklistWrites, hoverCarriedMoreSibling } from './rail-checklist-write-cases.mjs'
 
 const argValue = (flag) => {
   const index = process.argv.indexOf(flag)
@@ -16,23 +22,52 @@ const argValue = (flag) => {
 }
 const out = path.resolve(argValue('--out') ?? '.cache/app-rail-checklist-swap')
 const only = argValue('--only')
-if (process.argv.includes('--only') && !['c1-01', 'c1-02', 'carry'].includes(only)) {
-  throw new Error('--only must be c1-01, c1-02, or carry')
+if (
+  process.argv.includes('--only') &&
+  !['c1-01', 'c1-02', 'carry', 'hover', 'rapid', 'publish'].includes(only)
+) {
+  throw new Error('--only must be c1-01, c1-02, carry, hover, rapid, or publish')
 }
 const SOURCES = [
   'src/components/app-rail/AppRail.fixture.tsx',
   'src/components/app-rail/AppRail.tsx',
   'src/components/app-rail/AppRailCustomizeMenu.tsx',
   'src/components/app-rail/AppRailMoreMenu.tsx',
-  'src/components/app-rail/app-rail-destinations.ts'
+  'src/components/app-rail/app-rail-destinations.ts',
+  'src/components/ui/dropdown-menu.tsx',
+  'src/store/slices/settings/create-settings-slice.ts',
+  'src/store/slices/settings/settings-owner-hydration-publication.ts',
+  'src/store/slices/settings/worktree-visibility-settings-write.ts'
 ]
 
-await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) => {
-  await mkdir(out, { recursive: true })
-  const before = await served(SOURCES)
-  for (const line of before.lines) {
-    console.log(`[served] ${line}`)
+await mkdir(out, { recursive: true })
+const server = await ensureFixtureServer({ preserveExisting: true })
+const { url } = server
+let browser
+try {
+  const health = await callFixtureServer(url, 'health')
+  console.log(
+    `[fixtures] ${url} PID ${health.pid} stamp ${health.codeStamp}; owned: ${server.started}`
+  )
+  browser = await chromium.launch({ headless: true })
+  console.log(`[browser] Chromium ${browser.version()}; Node ${process.version}`)
+  const page = await browser.newPage()
+  const before = await servedSources(url, SOURCES, 'before')
+  try {
+    await runChecks(page, url)
+  } finally {
+    const after = await servedSources(url, SOURCES, 'after')
+    assert.deepEqual(after, before, 'the served sources did not change during the run')
   }
+} finally {
+  try {
+    await browser?.close()
+  } finally {
+    await server.close?.()
+  }
+}
+
+async function runChecks(page, url) {
   const results = []
   const railItems = () =>
     page.evaluate(() =>
@@ -187,16 +222,14 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
     }
   }
   try {
-    await runChecks()
+    await runScenarios()
   } finally {
     console.log(results.join('\n'))
   }
   assert.deepEqual(failures, [], `${failures.length} flow(s) failed`)
-  const after = await served(SOURCES)
-  assert.deepEqual(after.lines, before.lines, 'the served sources did not change during the run')
   console.log(`screenshots in ${path.relative(process.cwd(), out)}`)
 
-  async function runChecks() {
+  async function runScenarios() {
     const TALL = 'workspaces,tasks,customize,account'
     const FOLDED_AUTOMATIONS = 'workspaces,tasks,more,account'
     const TALL_AUTOMATIONS = 'workspaces,automations,customize,account'
@@ -269,28 +302,7 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
             }
 
             if (input === 'mouse') {
-              // The pointer that clicked the row now rests over More's own rows; crossing More's row for the folded
-              // page must not close the checklist before the pointer reaches it.
-              const sibling = await page
-                .locator('[data-slot="dropdown-menu-content"] [role=menuitem]', {
-                  hasText: 'Automations'
-                })
-                .boundingBox()
-              assert.ok(sibling, `${label}: More shows its row for the folded page`)
-              await page.mouse.move(sibling.x + sibling.width / 2, sibling.y + sibling.height / 2, {
-                steps: 6
-              })
-              await page.waitForTimeout(300)
-              await paint(page)
-              const stillOpen = await page.locator('[role=menuitemcheckbox]').count()
-              results.push(
-                `${label} hover More's Automations row after the fold: ${stillOpen} checklist rows`
-              )
-              assert.equal(
-                stillOpen,
-                5,
-                `${label}: hovering a More row keeps the reopened checklist`
-              )
+              await hoverCarriedMoreSibling(page, label, results)
             }
 
             // A second, different row from the reopened checklist. Fold → tall: Tasks leaves, More becomes "…".
@@ -339,126 +351,37 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
       }
     }
 
-    if (!only || only === 'carry') {
-      const setup = async (fiveSlots = false) => {
+    if (only === 'hover') {
+      await flow('light mouse carried checklist and More sibling arrival', async () => {
         await renderFixture(page, url, 'fullRail', 'light', { width: 800, height: 600 })
-        if (fiveSlots) {
-          await page.locator('[role="toolbar"]').evaluate((toolbar) => {
-            toolbar.closest('nav').parentElement.style.height = '202px'
-          })
-          await paint(page)
-          await paint(page)
-        }
-        await page.locator('[data-app-rail-item="customize"]').focus()
-        await page.keyboard.press('Enter')
+        await page.locator('[data-app-rail-item="customize"]').click()
         await page.getByRole('menuitemcheckbox', { name: 'Automations', exact: true }).waitFor()
         await paint(page)
-      }
-      const waitForClosedMore = async () => {
-        const trigger = page.locator('[data-app-rail-item="more"]')
-        await trigger.waitFor()
-        await paint(page)
-        assert.equal(await trigger.getAttribute('aria-expanded'), 'false', 'More stays collapsed')
-        assert.equal(
-          await page.locator('[data-slot="dropdown-menu-content"][data-state="open"]').count(),
-          0
-        )
-        assert.equal(
-          await page.getByRole('menuitemcheckbox').count(),
-          0,
-          'the swapped menu stays closed'
-        )
-      }
-      async function holdNextWrite() {
-        await page.evaluate(() => {
-          const original = window.api.settings.set
-          window.__checklistWrites = 0
-          window.api.settings.set = (updates) => {
-            window.__checklistWrites += 1
-            return new Promise((resolve) => {
-              window.__landChecklistWrite = async () => resolve(await original(updates))
-            })
-          }
+        await watchFrames()
+        await clickRowAlongPath('Automations')
+        await expectChecklistAfterSwap('light mouse fold', {
+          rail: FOLDED_AUTOMATIONS,
+          row: 'Automations',
+          checked: 'true',
+          surface: SUB
         })
-      }
-      await flow(
-        'carry: a second toggle during the write does not displace the first carry',
-        async () => {
-          await setup()
-          await holdNextWrite()
-          await clickRowAlongPath('Automations')
-          await page.waitForFunction(() => typeof window.__landChecklistWrite === 'function')
-          await clickRowAlongPath('Artifacts')
-          assert.equal(await page.evaluate(() => window.__checklistWrites), 1)
-          await watchFrames()
-          await page.evaluate(() => window.__landChecklistWrite())
-          await expectChecklistAfterSwap('pending write', {
-            rail: FOLDED_AUTOMATIONS,
-            row: 'Automations',
-            checked: 'true',
-            surface: SUB
-          })
-        }
-      )
-      await flow('carry: toggle in place, navigate to Artifacts, then resize', async () => {
-        await setup(true)
-        const rootMenu = page.locator('[data-slot="dropdown-menu-content"]')
-        // Measure the positioned wrapper. The menu inside it is still running its opening transform.
-        const menuTop = () =>
-          rootMenu.evaluate(
-            (menu) =>
-              menu.closest('[data-radix-popper-content-wrapper]').getBoundingClientRect().top
-          )
-        const openedTop = await menuTop()
-        await pressSpaceOn('Automations')
-        await page.locator('[data-app-rail-item="automations"]').waitFor()
-        assert.equal(await railItems(), 'workspaces,tasks,automations,customize,account')
-        await paint(page)
-        const toggledTop = await menuTop()
-        assert.ok(
-          Math.abs(toggledTop - openedTop) <= 1,
-          `the open menu held its position (${openedTop}px → ${toggledTop}px)`
-        )
-        await page.keyboard.press('ArrowDown')
-        await page
-          .getByRole('menuitemcheckbox', { name: 'Artifacts', exact: true })
-          .and(page.locator(':focus'))
-          .waitFor()
-        await page.locator('[role="toolbar"]').evaluate((toolbar) => {
-          toolbar.closest('nav').parentElement.style.height = '164px'
-        })
-        await waitForClosedMore()
+        await hoverCarriedMoreSibling(page, 'light mouse', results)
       })
-      await flow('carry: rejected write, then matching external publication', async () => {
-        await setup()
-        await page.evaluate(() => {
-          window.api.settings.set = async () => {
-            throw new Error('fixture intentionally rejected the write')
-          }
-        })
-        const rejected = page.waitForEvent('console', {
-          predicate: (message) =>
-            message.text().includes('fixture intentionally rejected the write')
-        })
-        await pressSpaceOn('Automations')
-        await rejected
-        await page.evaluate(async () => {
-          const { useAppStore } = await import('/src/store/index.ts')
-          useAppStore.setState((state) => ({
-            settings: { ...state.settings, showAutomationsButton: true }
-          }))
-        })
-        await waitForClosedMore()
-      })
-      await flow('carry: dismiss while write is pending, then acknowledge', async () => {
-        await setup()
-        await holdNextWrite()
-        await pressSpaceOn('Automations')
-        await page.waitForFunction(() => typeof window.__landChecklistWrite === 'function')
-        await page.keyboard.press('Escape')
-        await page.locator('[role="menu"]').waitFor({ state: 'hidden' })
-        await page.evaluate(() => window.__landChecklistWrite())
-        await waitForClosedMore()
+    }
+
+    if (!only || ['carry', 'rapid', 'publish'].includes(only)) {
+      await checkChecklistWrites({
+        page,
+        url,
+        only,
+        flow,
+        results,
+        railItems,
+        checklistFocus,
+        clickRowAlongPath,
+        pressSpaceOn,
+        watchFrames,
+        expectChecklistAfterSwap
       })
     }
 
@@ -637,4 +560,4 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
       }
     }
   }
-})
+}

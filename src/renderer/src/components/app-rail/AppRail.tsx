@@ -265,7 +265,7 @@ export function AppRail({
           : { id, byPointer, shownKey: nextShown.join(','), capacity, more: nextMore }
       pendingChecklistWrite.current = carry
       void setRailDestinationShown(id, shown, (settings) => {
-        // The acknowledgement runs immediately before the settings are published.
+        // Arm the carry before this write notifies the store subscribers.
         if (carry && pendingChecklistWrite.current === carry) {
           pendingChecklistWrite.current = null
           if (selectShownRailDestinationsKey({ settings }) === carry.shownKey) {
@@ -274,12 +274,12 @@ export function AppRail({
         }
       })
         .catch((error: unknown) => {
-          if (pendingChecklistWrite.current === carry) {
-            pendingChecklistWrite.current = null
-          }
           console.error('Failed to update settings:', error)
         })
         .finally(() => {
+          if (pendingChecklistWrite.current === carry) {
+            pendingChecklistWrite.current = null
+          }
           checklistWriteInFlight.current = false
         })
     }

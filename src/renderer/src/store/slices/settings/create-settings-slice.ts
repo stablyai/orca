@@ -50,7 +50,7 @@ export type SettingsSlice = SettingsSearchState & {
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   updateSettingsOrThrow: (
     updates: Partial<GlobalSettings>,
-    onAcknowledged?: (settings: GlobalSettings) => void
+    callbacks?: SettingsWriteCallbacks
   ) => Promise<void>
   setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
 }
@@ -132,6 +132,11 @@ function normalizeSettingsUpdates(
   return sanitizedUpdates
 }
 
+type SettingsWriteCallbacks = {
+  onAcknowledged?: (settings: GlobalSettings) => void
+  onWillPublish?: (settings: GlobalSettings) => void
+}
+
 async function persistSettingsUpdates(
   set: ownerHydration.SettingsStateSetter,
   updates: Partial<GlobalSettings>,
@@ -139,7 +144,7 @@ async function persistSettingsUpdates(
   supportedRuntimeEnvironmentId: string | null,
   sourceDefaultsSupportedRuntimeEnvironmentId: string | null,
   shouldPublish: () => boolean,
-  onAcknowledged?: (settings: GlobalSettings) => void
+  callbacks?: SettingsWriteCallbacks
 ): Promise<void> {
   const normalizedUpdates = normalizeSettingsUpdates(updates, currentSettings)
   await persistVisibilityAwareSettings({
@@ -148,7 +153,7 @@ async function persistSettingsUpdates(
     supportedRuntimeEnvironmentId,
     sourceDefaultsSupportedRuntimeEnvironmentId,
     shouldPublish,
-    onAcknowledged,
+    ...callbacks,
     set
   })
 }
@@ -232,7 +237,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
     }
   },
 
-  updateSettingsOrThrow: async (updates, onAcknowledged) => {
+  updateSettingsOrThrow: async (updates, callbacks) => {
     const shouldPublish = ownerHydration.createSettingsPublicationFence(
       'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
     )
@@ -244,7 +249,7 @@ export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> 
       get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
       get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
       shouldPublish,
-      onAcknowledged
+      callbacks
     )
     if ('worktreeVisibilityDefaults' in updates) {
       await get().fetchAllWorktrees({ visibilityOwnerHostId })

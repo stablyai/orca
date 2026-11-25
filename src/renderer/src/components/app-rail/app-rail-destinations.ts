@@ -46,11 +46,11 @@ const DESTINATION_SETTING: Record<
 export function setRailDestinationShown(
   id: AppRailDestinationId,
   shown: boolean,
-  onAcknowledged: (settings: NonNullable<AppState['settings']>) => void
+  onWillPublish: (settings: NonNullable<AppState['settings']>) => void
 ): Promise<void> {
   return useAppStore
     .getState()
-    .updateSettingsOrThrow({ [DESTINATION_SETTING[id]]: shown }, onAcknowledged)
+    .updateSettingsOrThrow({ [DESTINATION_SETTING[id]]: shown }, { onWillPublish })
 }
 
 const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> = {
