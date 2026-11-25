@@ -1,18 +1,15 @@
-import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
+import {
+  THIS_COMPUTER,
+  workerAgentNotInstalledMessage
+} from '../../../../../../orchestration/workers/launch/worker-agent-computer-words'
 import { resolveWorkerStartModeOnHost } from '../../../structured-workers/orchestration-worker-start-mode'
 
 export const WORKER_AGENT_UNAVAILABLE = 'worker_agent_unavailable'
-
-/** Names the computer: a paired server's refusal is reworded at home with the server's name. */
-export function workerAgentNotInstalledMessage(agent: TuiAgent, computer: string): string {
-  const name = TUI_AGENT_DISPLAY_NAMES[agent] ?? agent
-  return `${name} isn't installed on ${computer}, so no worker was started there. Install ${name} on ${computer}, or start the worker with another --agent.`
-}
 
 /** A paired server's not-installed refusal, naming the server as this Orca calls it. */
 export function nameRefusingComputer(error: unknown, computer: string): unknown {
@@ -86,7 +83,7 @@ export async function preflightWorkerAgentOnHost(args: {
   if (installed && !installed.includes(agent)) {
     throw new OrchestrationError(
       WORKER_AGENT_UNAVAILABLE,
-      workerAgentNotInstalledMessage(agent, 'this computer'),
+      workerAgentNotInstalledMessage(agent, THIS_COMPUTER),
       { effectsApplied: false, agent, reason: 'not_installed' }
     )
   }
