@@ -27,16 +27,42 @@ export function getRepositoryGitHubIssueSearchEntry(repo: Repo, t: Translate): S
   }
 }
 
+type UpdateIssueRepository = (
+  id: string,
+  updates: { defaultIssueRepository: IssueRepository | null }
+) => void | Promise<boolean>
+
+async function saveIssueRepository(
+  repo: Repo,
+  repository: IssueRepository | null,
+  updateRepo: UpdateIssueRepository
+): Promise<'save' | 'runtime' | null> {
+  try {
+    if ((await updateRepo(repo.id, { defaultIssueRepository: repository })) === false) {
+      return 'save'
+    }
+    const hostId = getRepoExecutionHostId(repo)
+    const echoed = useAppStore
+      .getState()
+      .repos.find(
+        (entry) => entry.id === repo.id && getRepoExecutionHostId(entry) === hostId
+      )?.defaultIssueRepository
+    if (echoed?.owner !== repository?.owner || echoed?.repo !== repository?.repo) {
+      return 'runtime'
+    }
+    return null
+  } catch {
+    return 'save'
+  }
+}
+
 export function RepositoryGitHubIssueSection({
   repo,
   updateRepo,
   forceVisible
 }: {
   repo: Repo
-  updateRepo: (
-    id: string,
-    updates: { defaultIssueRepository: IssueRepository | null }
-  ) => void | Promise<boolean>
+  updateRepo: UpdateIssueRepository
   forceVisible?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -63,27 +89,13 @@ export function RepositoryGitHubIssueSection({
     }
     setError(null)
     setSaving(true)
-    try {
-      if ((await updateRepo(repo.id, { defaultIssueRepository: repository })) === false) {
-        setError('save')
-        return
-      }
-      const hostId = getRepoExecutionHostId(repo)
-      const echoed = useAppStore
-        .getState()
-        .repos.find(
-          (entry) => entry.id === repo.id && getRepoExecutionHostId(entry) === hostId
-        )?.defaultIssueRepository
-      if (echoed?.owner !== repository?.owner || echoed?.repo !== repository?.repo) {
-        setError('runtime')
-        return
-      }
+    const saveError = await saveIssueRepository(repo, repository, updateRepo)
+    if (saveError) {
+      setError(saveError)
+    } else {
       setDraft(null)
-    } catch {
-      setError('save')
-    } finally {
-      setSaving(false)
     }
+    setSaving(false)
   }
 
   return (
