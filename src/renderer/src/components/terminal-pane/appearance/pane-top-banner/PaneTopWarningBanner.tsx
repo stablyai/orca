@@ -215,7 +215,7 @@ export function PaneTopBanner({
         {progress === undefined ? null : (
           <span
             aria-hidden="true"
-            className="absolute right-(--pane-padding-x,4px) -bottom-px left-(--pane-padding-x,4px) h-0.5 origin-left bg-theme-accent opacity-70 transition-transform duration-1000 ease-linear motion-reduce:transition-none"
+            className="absolute inset-x-0 -bottom-px h-0.5 origin-left bg-theme-accent opacity-70 transition-transform duration-1000 ease-linear motion-reduce:transition-none"
             style={{ transform: `scaleX(${Math.min(1, Math.max(0, progress))})` }}
           />
         )}
