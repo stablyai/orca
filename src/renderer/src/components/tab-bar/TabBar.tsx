@@ -91,9 +91,11 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
   // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
   const pinnedHomeId = useMemo(
     () =>
-      findPinnedHomeTabId(projectedItems.orderedItems, (hostId) =>
-        findBotByWorkspace(bots, worktreeId, hostId)
-      ),
+      bots.length === 0
+        ? null
+        : findPinnedHomeTabId(projectedItems.orderedItems, (hostId) =>
+            findBotByWorkspace(bots, worktreeId, hostId)
+          ),
     [projectedItems.orderedItems, bots, worktreeId]
   )
   // Why memoized: dnd-kit re-renders every tab in a context whose items array changes identity.
