@@ -127,7 +127,7 @@ function LoudRestartOverlay({
       }}
       className="@container absolute inset-0 z-50 flex items-center justify-center px-3 py-6 outline-none"
     >
-      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs @max-[360px]:px-5">
+      <div className="pointer-events-auto flex w-full max-w-[30rem] flex-col gap-3 rounded-lg border border-border bg-card p-6 pb-5 text-card-foreground shadow-xs @max-[360px]:px-3">
         <div className="flex items-start gap-3">
           <div className="flex size-10 shrink-0 items-center justify-center rounded-full border border-border bg-muted">
             <RefreshCw className="size-5 text-foreground" aria-hidden="true" />
