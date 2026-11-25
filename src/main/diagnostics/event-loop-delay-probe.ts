@@ -149,7 +149,7 @@ export function createEventLoopStallSummary(
         if (gap >= LONG_GAP_MS) {
           // Whatever blocked main ran after the previous tick, which reset the record.
           longGapSyncCall = options.syncCalls?.longest() ?? undefined
-          longGapStartedAtMs = longGapSyncCall?.startedAtMs ?? now - gap
+          longGapStartedAtMs = now - gap
         }
       }
       options.syncCalls?.reset()
@@ -202,6 +202,8 @@ export function createEventLoopStallSummary(
     },
     resume: (now, cpuMs) => {
       paused = false
+      // Calls before the suspend belong to no interval this tick will measure.
+      options.syncCalls?.reset()
       lastTick = now
       lastCpuMs = cpuMs ?? lastCpuMs
     }

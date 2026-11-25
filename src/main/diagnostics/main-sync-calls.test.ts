@@ -41,5 +41,6 @@ it('names the slowest SQLite statement main ran during a gap of a second or more
   expect(windows[0]!.maxGapMs).toBe(1_500)
   expect(windows[0]!.longGapSyncCall).toMatchObject({ source: ':memory:' })
   expect(windows[0]!.longGapSyncCall?.label).toMatch(/^WITH RECURSIVE/)
-  expect(windows[0]!.longGapStartedAtMs).toBeGreaterThanOrEqual(startedAt)
+  // The gap starts when the late tick was due, not when the named call began.
+  expect(windows[0]!.longGapStartedAtMs).toBe(startedAt + 500)
 })
