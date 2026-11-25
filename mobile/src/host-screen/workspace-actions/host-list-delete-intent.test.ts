@@ -33,7 +33,10 @@ describe('host list delete intent', () => {
   })
 
   it('resolves only the row on the same execution host', () => {
-    const row = (worktreeId: string, hostId?: string): Pick<Worktree, 'worktreeId' | 'hostId'> => ({
+    const row = (
+      worktreeId: string,
+      hostId?: Worktree['hostId']
+    ): Pick<Worktree, 'worktreeId' | 'hostId'> => ({
       worktreeId,
       hostId
     })
