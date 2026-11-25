@@ -1349,6 +1349,28 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "mcpServers": {
+      "loading": "正在读取 MCP 服务器…",
+      "pasteRefused": "这个地址不是这次登录返回的。",
+      "remove": {
+        "button": "移除服务器",
+        "confirm": "移除",
+        "line": "{{host}} 上的新会话将不再包含它，它保存的值和登录信息也会被删除。",
+        "title": "移除 {{name}}？"
+      },
+      "signIn": "登录",
+      "signInActions": "登录操作",
+      "signInAgain": "重新登录",
+      "signOut": "退出登录",
+      "signedInToast": "已登录 {{name}}",
+      "stale": "这个服务器在别处被修改过，这里显示的是当前状态。",
+      "status": {
+        "commandFailed": "在 {{host}} 上找不到命令",
+        "needsSignIn": "需要登录",
+        "signedIn": "已登录",
+        "unreachable": "无法连接到 {{host}}"
+      }
     }
   },
   "menu": {
