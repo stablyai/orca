@@ -126,6 +126,7 @@ export function MobileQueuedMessageComposer({
         onNeedSkills={context?.onNeedSkills}
         filePaths={context?.filePaths}
         onNeedFiles={context?.onNeedFiles}
+        fileReference={context?.fileReference}
         onPickSkill={(skill) =>
           updateMobileNativeChatDraftInputs(editor.scopeKey, (current) => ({
             ...current,

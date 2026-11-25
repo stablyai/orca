@@ -91,7 +91,10 @@ export function afterDesktopRelayProbe<
     return null
   }
   const once = probeDesktopRelays(api).then(retry)
-  return { localWrite: once.then((r) => r.localWrite), written: once.then((r) => r.written) }
+  const localWrite = once.then((r) => r.localWrite)
+  // Why: as on the direct path, a failed save surfaces once, through `written`.
+  localWrite.catch(() => {})
+  return { localWrite, written: once.then((r) => r.written) }
 }
 
 /** Hosts whose relay ids this window speaks for in full: local, its SSH repos' partitions, and runtime

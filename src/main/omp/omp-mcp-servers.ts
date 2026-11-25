@@ -30,21 +30,28 @@ function stringRecord(value: unknown): Record<string, string> {
   )
 }
 
-async function readObject(
-  paths: readonly string[],
-  parse: (text: string) => unknown
-): Promise<Record<string, unknown>> {
-  for (const path of paths) {
+async function readJsonObject(path: string): Promise<Record<string, unknown>> {
+  try {
+    return record(JSON.parse(await readFile(path, 'utf8')))
+  } catch {
+    // Missing or malformed: OMP skips it too.
+    return {}
+  }
+}
+
+/** Null when OMP itself would refuse to start: its settings file exists but can't be read or parsed. */
+async function readOmpSettings(agentDir: string): Promise<Record<string, unknown> | null> {
+  for (const name of ['config.yml', 'config.yaml']) {
     try {
-      return record(parse(await readFile(path, 'utf8')))
-    } catch {
-      // Missing or malformed: OMP skips it too.
+      return record(parseYaml(await readFile(join(agentDir, name), 'utf8')))
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        return null
+      }
     }
   }
   return {}
 }
-
-const readJsonObject = (path: string) => readObject([path], JSON.parse)
 
 /** OMP takes a named profile's folder, under its own home, over PI_CODING_AGENT_DIR. */
 function ompAgentDir(env: Readonly<Record<string, string>>): string | undefined {
@@ -129,13 +136,14 @@ export const readOmpMcpServers: AcpOwnMcpServersLoader = async ({ cwd, env, vers
     return []
   }
   const [settings, user, userDot, ...project] = await Promise.all([
-    readObject([join(agentDir, 'config.yml'), join(agentDir, 'config.yaml')], parseYaml),
+    readOmpSettings(agentDir),
     readJsonObject(join(agentDir, 'mcp.json')),
     readJsonObject(join(agentDir, '.mcp.json')),
     readJsonObject(join(cwd, '.omp', 'mcp.json')),
     readJsonObject(join(cwd, '.omp', '.mcp.json'))
   ])
-  if (strings(settings.disabledProviders).includes('native')) {
+  // Without the user's settings, an opt-out of project servers can't be honoured.
+  if (!settings || strings(settings.disabledProviders).includes('native')) {
     return []
   }
   const disabledExtensions = new Set(strings(settings.disabledExtensions))

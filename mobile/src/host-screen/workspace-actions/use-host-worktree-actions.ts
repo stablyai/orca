@@ -73,7 +73,8 @@ export function useHostWorktreeActions(args: {
 
   // Route server-workspace actions through the desktop to their owning server.
   const clientForRow = useCallback(
-    (item: Worktree) => client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
+    (item: Pick<Worktree, 'hostId'>) =>
+      client && rpcClientForExecutionHost(client, hostCapabilities, item.hostId),
     [client, hostCapabilities]
   )
 
@@ -259,7 +260,8 @@ export function useHostWorktreeActions(args: {
   )
 
   const openWorktreeSession = useCallback(
-    (item: Worktree, paneKey?: string) => {
+    // A row not listed yet (a bot's home just made) opens from these fields alone.
+    (item: Pick<Worktree, 'worktreeId' | 'hostId' | 'displayName' | 'repo'>, paneKey?: string) => {
       const server = serverWorkspaces.hosts.find((host) => host.hostId === item.hostId)
       if (server?.relay === 'update-needed') {
         setServerNotice(serverUpdateNeededNotice(server.label))

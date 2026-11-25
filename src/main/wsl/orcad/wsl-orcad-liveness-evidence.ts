@@ -1,7 +1,7 @@
 import type { WslRunningDistrosRead } from '../discovery/wsl-background-distro-gate'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import type { WslGuestIdentity } from '../execution/wsl-guest-process-identity'
-import type { Trigger } from './wsl-orcad-liveness-state'
+import type { Trigger, WslOrcadLivenessDependencies } from './wsl-orcad-liveness-state'
 import { nextWslLivenessProbe, type WslLivenessEvidence } from './wsl-orcad-liveness-verdict'
 import type { WslOrcadWatch } from './wsl-orcad-watch'
 
@@ -35,4 +35,13 @@ export async function gatherWslLivenessEvidence(
     }
   }
   return evidence
+}
+
+/** Visible work relaunches an exited orcad, unless it said it stopped idle: then it stays down
+ *  until the user needs it, or the open desktop would undo every idle stop (#46567). */
+export async function revives(
+  deps: Pick<WslOrcadLivenessDependencies, 'wasIdleStopped' | 'hasUserVisibleWork'>,
+  distro: string
+): Promise<boolean> {
+  return !deps.wasIdleStopped?.(distro) && (await deps.hasUserVisibleWork(distro))
 }

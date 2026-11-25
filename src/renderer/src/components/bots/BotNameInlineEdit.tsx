@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import { useBlurSaveOnUnmount } from '@/lib/text-input/focus/use-blur-save-on-unmount'
 import { BOT_NAME_MAX_LENGTH, type Bot } from '../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../shared/rpc-contract/bots-params'
 import { BOT_EDIT_HINT } from './bot-edit-hint'
@@ -41,6 +42,7 @@ export function BotNameInlineEdit({
     }
     setValue(null)
   }
+  useBlurSaveOnUnmount(() => value !== null && !cancelled.current, save)
 
   if (value === null) {
     return (

@@ -7,6 +7,7 @@ import { getConnectionExecutionHostId } from '../../../shared/execution-host/exe
 
 import { REMOTE_URL_PROBE_TIMEOUT_MS } from './remote-git-probe-timeout'
 import { isRemoteListedAbsent } from './remote-name-listing'
+import { readLocalGitConfigSignature } from '../../github/repositories/local-git-config-signature'
 
 export { REMOTE_URL_PROBE_TIMEOUT_MS }
 
@@ -17,7 +18,10 @@ export type RemoteUrlProbeContext = {
   admissionTier?: GitAdmissionTier
 }
 
-type SharedRemoteUrlReads = { open: boolean; reads: Map<string, Promise<string>> }
+/** A shared read and the repo config signature taken before its Git read; undefined when unsigned. */
+type SharedRemoteUrlRead = { configSignature: Promise<string | undefined>; url: Promise<string> }
+
+type SharedRemoteUrlReads = { open: boolean; reads: Map<string, SharedRemoteUrlRead> }
 
 const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
 
@@ -33,10 +37,13 @@ export async function withSharedRemoteUrlReads<T>(work: () => Promise<T>): Promi
   }
 }
 
-/** Reads a remote URL, or null for an SSH repo, which this process does not serve. */
+/** Reads a remote URL, or null for an SSH repo, which this process does not serve. Callers that cache
+ *  the answer pass the config signature they took just before, so a shared read from older config is
+ *  not reused under it. */
 export async function readRemoteUrl(
   context: RemoteUrlProbeContext,
-  remoteName: string
+  remoteName: string,
+  configSignature?: string
 ): Promise<string | null> {
   if (context.connectionId) {
     return null
@@ -52,11 +59,22 @@ export async function readRemoteUrl(
     remoteName
   ].join('\0')
   let read = scope.reads.get(key)
+  if (read && configSignature !== undefined && (await read.configSignature) !== configSignature) {
+    read = undefined
+  }
   if (!read) {
-    read = readUncachedRemoteUrl(context, remoteName)
+    // Unsigned callers sign the shared read too, so a later signed caller can trust it.
+    const readSignature =
+      configSignature !== undefined
+        ? Promise.resolve(configSignature)
+        : readLocalGitConfigSignature(context)
+    read = {
+      configSignature: readSignature,
+      url: readSignature.then(() => readUncachedRemoteUrl(context, remoteName))
+    }
     scope.reads.set(key, read)
   }
-  return read
+  return read.url
 }
 
 async function readUncachedRemoteUrl(

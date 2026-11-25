@@ -10,6 +10,7 @@ import {
 const FLAGS: Record<BotItemStatus, string> = {
   planned: 'planned',
   working: 'in-progress',
+  waiting: 'waiting',
   needs_you: 'needs-you',
   done: 'done',
   canceled: 'canceled'

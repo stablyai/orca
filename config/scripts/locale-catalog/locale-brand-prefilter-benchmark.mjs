@@ -7,15 +7,15 @@ import { build } from 'esbuild'
 
 // Pipe the baseline policy on stdin. Catalog repair mutates only fresh in-memory copies.
 const policyPath = path.resolve('config/scripts/locale-catalog/locale-translation-policy.mjs')
-const verifierPath = path.resolve(
-  'config/scripts/localization/catalog-validation/verify-localization-catalog.mjs'
+const checksPath = path.resolve(
+  'config/scripts/localization/catalog-validation/locale-glossary-checks.mjs'
 )
 const sources = [readFileSync(0, 'utf8'), readFileSync(policyPath, 'utf8')]
 assert(sources.every((source) => source.includes('function includesPreservedLatinTerm(')))
 const modules = await Promise.all(
   sources.map(async (source) => {
     const result = await build({
-      entryPoints: [verifierPath],
+      entryPoints: [checksPath],
       bundle: true,
       platform: 'node',
       format: 'esm',
@@ -38,9 +38,9 @@ const modules = await Promise.all(
               contents: `${source}\nexport { includesPreservedLatinTerm };`,
               resolveDir: path.dirname(policyPath)
             }))
-            builder.onLoad({ filter: /verify-localization-catalog\.mjs$/ }, () => ({
-              contents: `${readFileSync(verifierPath, 'utf8')}\nimport { collectStringLeaves, repairCacheMap, repairCatalog, includesPreservedLatinTerm } from '../../locale-catalog/locale-translation-policy.mjs';\nimport { BRAND_MISTRANSLATIONS } from '../../locale-catalog/locale-brand-mistranslations.mjs';\nexport { collectStringLeaves, repairCacheMap, repairCatalog, repairTranslatedValue, includesPreservedLatinTerm, BRAND_MISTRANSLATIONS };`,
-              resolveDir: path.dirname(verifierPath)
+            builder.onLoad({ filter: /locale-glossary-checks\.mjs$/ }, () => ({
+              contents: `${readFileSync(checksPath, 'utf8')}\nimport { collectStringLeaves, repairCacheMap, repairCatalog, includesPreservedLatinTerm } from '../../locale-catalog/locale-translation-policy.mjs';\nimport { BRAND_MISTRANSLATIONS } from '../../locale-catalog/locale-brand-mistranslations.mjs';\nexport { collectStringLeaves, repairCacheMap, repairCatalog, repairTranslatedValue, includesPreservedLatinTerm, BRAND_MISTRANSLATIONS };`,
+              resolveDir: path.dirname(checksPath)
             }))
           }
         }

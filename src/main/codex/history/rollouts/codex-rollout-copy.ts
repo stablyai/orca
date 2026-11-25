@@ -33,7 +33,18 @@ export function isHardLinkUnsupportedError(error: unknown): boolean {
 export async function linkStagedRollout(
   temporaryPath: string,
   targetPath: string
-): Promise<'copied' | 'existing'> {
+): Promise<'copied' | 'existing'>
+/** `stillWanted` is checked again before a retry, which follows an awaited flag clear: `refused` once it fails. */
+export async function linkStagedRollout(
+  temporaryPath: string,
+  targetPath: string,
+  stillWanted: () => boolean
+): Promise<'copied' | 'existing' | 'refused'>
+export async function linkStagedRollout(
+  temporaryPath: string,
+  targetPath: string,
+  stillWanted?: () => boolean
+): Promise<'copied' | 'existing' | 'refused'> {
   for (let attempt = 0; ; attempt += 1) {
     try {
       await link(temporaryPath, targetPath)
@@ -50,6 +61,9 @@ export async function linkStagedRollout(
         code === 'EPERM' &&
         (await clearDarwinFileFlags(temporaryPath))
       ) {
+        if (stillWanted && !stillWanted()) {
+          return 'refused'
+        }
         continue
       }
       // Node has no portable atomic rename-if-absent; refuse filesystems without hard links.

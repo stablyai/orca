@@ -76,7 +76,3 @@ export function clearWebSessionTerminalPlacementsForEnvironment(environmentId: s
     }
   }
 }
-
-export function resetWebSessionTerminalPlacementsForTests(): void {
-  groupByPendingHostTabId.clear()
-}

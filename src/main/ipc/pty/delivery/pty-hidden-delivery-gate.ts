@@ -1,5 +1,6 @@
 /** Drop hidden renderer delivery after model ingestion; reveal restores a snapshot, while sidecar interest keeps raw bytes flowing. */
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 import { _resetPtyEscapeBoundaryForTest, clearPtyEscapeBoundary } from './pty-escape-boundary'
 
 export type HiddenPtyDeliveryGateSettings = Pick<
@@ -26,7 +27,6 @@ const rendererRetainingGraphicsPtys = new Set<string>()
 const visibleReportUnhideEpisodes = new Map<string, number>()
 
 // Hidden bytes never reach the renderer, so its agent-exit watch learns about output only from this throttled notice.
-const HIDDEN_OUTPUT_ACTIVITY_NOTICE_INTERVAL_MS = 5_000
 const lastHiddenOutputActivityNoticeAt = new Map<string, number>()
 
 let droppedHiddenDeliveryChars = 0

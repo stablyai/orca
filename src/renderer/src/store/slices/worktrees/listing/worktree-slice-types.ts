@@ -52,6 +52,11 @@ export type AdmittedDetectedWorktreeRefresh = {
   }
 }
 
+export type WorktreeCatalogAuthority = Pick<
+  AdmittedDetectedWorktreeRefresh,
+  'executionHostId' | 'directSshAuthority' | 'runtimeAuthority'
+> & { pairingRevision?: number }
+
 export type DetectedWorktreeRefreshOutcome =
   | AdmittedDetectedWorktreeRefresh
   | {

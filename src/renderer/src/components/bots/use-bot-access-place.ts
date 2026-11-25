@@ -11,7 +11,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 
-type BotAccessPlaceWords = { computer: string; there: string }
+type BotAccessPlaceWords = { computer: string; there: string; local: boolean }
 
 /** The current host’s verified machine name, when available. */
 function serverName(
@@ -32,9 +32,10 @@ function serverName(
 function placeFor(hostId: ExecutionHostId, name: string | null, t: Translate): BotAccessPlaceWords {
   // A paired web window's local host is its server, not the computer showing the page.
   const here = hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow()
-  return botAccessPlace(here ? { kind: 'this-computer' } : { kind: 'unknown', name }, (id) =>
+  const place = botAccessPlace(here ? { kind: 'this-computer' } : { kind: 'unknown', name }, (id) =>
     t(`bots.access.${id}`, BOT_ACCESS_COPY[id])
   )
+  return { ...place, local: here }
 }
 
 export function useBotAccessPlace(hostId: ExecutionHostId): BotAccessPlaceWords {

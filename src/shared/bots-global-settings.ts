@@ -8,4 +8,6 @@ export type BotsGlobalSettings = {
   skipNewHomeChatConfirm?: boolean
   /** The agent the avatar Generate tab used last; it opens on that agent while it can still run. */
   avatarGenerationAgent?: AvatarImageAgent
+  /** The description that made a bot's saved picture, by `host|bot|avatar`; shown as its caption. */
+  generatedAvatarDescriptions?: Record<string, string>
 }

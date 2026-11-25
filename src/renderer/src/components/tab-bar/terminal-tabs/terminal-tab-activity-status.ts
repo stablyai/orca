@@ -341,11 +341,3 @@ export function hasUnreadAgentCompletionForTerminalTab(
     ? getUnreadAgentCompletionTabIds(unreadAgentCompletionPanes).has(tabId)
     : false
 }
-
-export function resetTerminalTabActivityFlagsCacheForTest(): void {
-  flagsCache = null
-}
-
-export function resetUnreadAgentCompletionTabIdsCacheForTest(): void {
-  unreadAgentCompletionTabIdsBySnapshot = new WeakMap()
-}

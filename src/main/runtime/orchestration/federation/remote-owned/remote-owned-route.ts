@@ -14,7 +14,8 @@ import type { OrchestrationDb } from '../../db/orchestration-db'
 import { runLifecycleWriteTransaction } from '../../db/lifecycle-write-transaction-runner'
 import {
   getRemoteDispatch,
-  getRemoteOwnedQuestion
+  getRemoteOwnedQuestion,
+  recordRemoteAskAnswered
 } from '../../db/remote-owned/remote-dispatch-records'
 import { adoptRemoteAttempt } from '../../db/remote-owned/remote-placements'
 import {
@@ -27,6 +28,8 @@ import { remoteForwardKey, type RemoteForwardKey } from './remote-forward-caller
 import { inServerTerms, serverNeverAnswered } from './remote-owned-answers'
 import { remoteWorkerShow, remoteServerName } from './remote-owned-reads'
 import { OrchestrationError } from '../../orchestration-error'
+import { nameRefusingComputer } from '../../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
+import { refuseReplayOnly } from '../../db/mutation-receipts/replay-only-request'
 import { latestRunLink, repairedListError } from './re-paired-run-list'
 import { explainRemoteServerFailure } from './remote-server-unreachable'
 import { serverOwnsPlacedWorkers, startRemoteOwnedWorker } from './remote-owned-start'
@@ -75,6 +78,8 @@ export async function routeRemoteOwnedCall(
     return on === undefined ? LOCAL : routeServerCall(runtime, request, access, values, ctx, on)
   }
   checkDeclaredOrchestrationAccess(access, params, ctx)
+  // The forward carries the ordinary contract, so the server would run a missing receipt anew.
+  refuseReplayOnly(request)
   const record = subject.dispatchId ? getRemoteDispatch(db, subject.dispatchId) : undefined
   if (request.method === 'orchestration.workerShow' && record) {
     // A status read is this Orca's record, never a call there: instant whatever the server is doing.
@@ -108,10 +113,12 @@ export async function routeRemoteOwnedCall(
       }
     }
   }
-  return {
-    handled: true,
-    result: await forwardToLink(runtime, subject, request.method, access, values, forward)
+  const result = await forwardToLink(runtime, subject, request.method, access, values, forward)
+  if (request.method === 'orchestration.reply' && subject.questionId) {
+    // The answer never runs this Orca's reply, so its question's ending is recorded here.
+    recordRemoteAskAnswered(db, subject.questionId)
   }
+  return { handled: true, result }
 }
 
 /** `--on <server>`: a start, a list, or a receipt lookup there; send and reply --on to anything else stay peer mail. */
@@ -123,8 +130,12 @@ async function routeServerCall(
   ctx: RpcContext,
   on: string
 ): Promise<Routed> {
-  // A chat named by its session ID is refused by the ordinary start before any server is asked.
-  if (!SERVER_CALLS.has(request.method) || isSessionAddress(values.terminal)) {
+  // A chat named by its session ID, or a bot item's start, is refused by the ordinary start before any server is asked.
+  if (
+    !SERVER_CALLS.has(request.method) ||
+    isSessionAddress(values.terminal) ||
+    stringField(values, 'origin') !== undefined
+  ) {
     return LOCAL
   }
   checkDeclaredOrchestrationAccess(access, values, ctx)
@@ -138,6 +149,7 @@ async function routeServerCall(
       // An older server: today's remote attachment, the one legacy branch for new work.
       return LOCAL
     }
+    refuseReplayOnly(request)
     return {
       handled: true,
       result: await startRemoteOwnedWorker(
@@ -208,7 +220,7 @@ async function routeServerCall(
   }
 }
 
-type RemoteSubject = { link: RemoteRunLinkRow; dispatchId?: string }
+type RemoteSubject = { link: RemoteRunLinkRow; dispatchId?: string; questionId?: string }
 
 /** The worker or question a call names, when a paired server owns it. Tasks stay in this Orca's graph. */
 function remoteSubject(
@@ -229,7 +241,7 @@ function remoteSubject(
     const conversationId = record?.conversation_id ?? question?.conversation_id
     const link = conversationId ? getRemoteRunLink(db, conversationId) : undefined
     if (link) {
-      return { link, dispatchId: record?.dispatch_id }
+      return { link, dispatchId: record?.dispatch_id, questionId: question?.message_id }
     }
   }
   return undefined
@@ -272,11 +284,8 @@ async function forwardToLink(
     seedNamedDispatches(db, link, answer)
     return inServerTerms(answer, { server, forward, link })
   } catch (error) {
-    throw inServerTerms(explainRemoteServerFailure(error, { server, method, params, dispatchId }), {
-      server,
-      forward,
-      link
-    })
+    const explained = explainRemoteServerFailure(error, { server, method, params, dispatchId })
+    throw nameRefusingComputer(inServerTerms(explained, { server, forward, link }), server)
   }
 }
 

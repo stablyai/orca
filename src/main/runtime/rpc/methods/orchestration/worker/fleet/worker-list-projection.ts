@@ -10,7 +10,10 @@ import {
 } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import { createSessionWorkerLivenessReader } from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
+import {
+  createSessionWorkerLivenessReader,
+  withSleptAgentWorkers
+} from '../../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import {
   applyFederatedFleetObservations,
   readFederatedFleetSnapshots
@@ -56,7 +59,15 @@ export function projectWorkerFleet(args: {
             autoReleaseAt: liveWorkerTerminalAutoReleaseAt(row.resource),
             updatedAt: row.resource.updated_at
           }
-        : null
+        : null,
+      handedOn: row.handedOn && {
+        toDispatchId: row.handedOn.toDispatchId,
+        resource: row.handedOn.resource && {
+          id: row.handedOn.resource.id,
+          ownerDispatchId: row.handedOn.resource.owner_dispatch_id,
+          releaseState: row.handedOn.resource.release_state
+        }
+      }
     }
   })
   const durable = new Map(workers.map((worker) => [worker.dispatchId, worker]))
@@ -114,7 +125,11 @@ export async function projectWorkerListFleet(
     limit: options.limit,
     now,
     completeProjection: options.completeProjection,
-    observeSession: createSessionWorkerLivenessReader(db, statuses)
+    observeSession: withSleptAgentWorkers(
+      createSessionWorkerLivenessReader(db, statuses),
+      statuses,
+      (paneKey) => runtime.sleptAgentHandleForPane(paneKey)
+    )
   })
   const federated = options.includeRemote
     ? await readFederatedFleetSnapshots({

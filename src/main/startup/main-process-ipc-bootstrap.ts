@@ -11,6 +11,7 @@ import {
 } from './main-window/main-window-actions'
 import { resolveOsOpenedDocuments } from './open-routing/os-opened-documents'
 import { openBotDeepLink } from '../bots/bot-deep-link-open'
+import { areHostBotsEnabled } from '../bots/bot-team-policy'
 import {
   onStructuredAgentSessionsHeldChanged,
   structuredAgentSessionsHeld
@@ -33,7 +34,7 @@ export function registerMainProcessIpcHandlers(): void {
       state.firstWindowStartupServicesReady,
       state.managedWslCliStartupBarrierReady
     ])
-    await state.runtime?.prepareStructuredAgentSessionStartupRestoration()
+    await state.core.runtime?.prepareStructuredAgentSessionStartupRestoration()
   })
   // Only hosts holding a saved/new structured chat have local rows for the renderer to mirror.
   ipcMain.handle('app:holdsStructuredAgentSessions', () => structuredAgentSessionsHeld())
@@ -57,12 +58,14 @@ export function registerMainProcessIpcHandlers(): void {
       localPtyProviderStartupReady: state.localPtyProviderStartupReady,
       reconcile: async () => {
         try {
-          await state.runtime?.refreshRestoredOrchestrationAuthority()
-          return await state.runtime?.reconcileLegacyWorkerTerminals({ materializeRenderer: true })
+          await state.core.runtime?.refreshRestoredOrchestrationAuthority()
+          return await state.core.runtime?.reconcileLegacyWorkerTerminals({
+            materializeRenderer: true
+          })
         } finally {
           // Main adopts unshown terminals after worker recovery attempts, even failures; the window no longer does.
           if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-            await placeUnshownLiveTerminalsBestEffort(state.runtime)
+            await placeUnshownLiveTerminalsBestEffort(state.core.runtime)
           }
         }
       },
@@ -72,8 +75,8 @@ export function registerMainProcessIpcHandlers(): void {
     }).finally(() => {
       // Only the pass after terminal reconnect leaves every restored worker terminal resolvable.
       if (options?.afterReconnect === true) {
-        state.runtime?.startupWorkerAuthority.finish()
-        void state.runtime?.reportWorkerStopsAcrossRestartOnce()
+        state.core.runtime?.startupWorkerAuthority.finish()
+        void state.core.runtime?.reportWorkerStopsAcrossRestartOnce()
       }
     })
   )
@@ -84,7 +87,7 @@ export function registerMainProcessIpcHandlers(): void {
   ipcMain.handle('ui:consumePendingSkillShare', () => state.deepLinks.consumeSkillShare())
   ipcMain.handle('ui:consumePendingBotLink', () => {
     // Bots off: the link only brings Orca forward.
-    if (state.store?.getSettings().botsEnabled === false) {
+    if (!areHostBotsEnabled(state.store?.getSettings())) {
       state.deepLinks.discardConnectorLinks()
       state.deepLinks.consumeBotLink()
       return null
@@ -108,7 +111,9 @@ export function registerMainProcessIpcHandlers(): void {
     }
     return state.store
       ? openBotDeepLink(state.store, link, async (sessionId) =>
-          state.runtime ? readSessionWorkers(state.runtime, sessionId, { connectorOnly: true }) : []
+          state.core.runtime
+            ? readSessionWorkers(state.core.runtime, sessionId, { connectorOnly: true })
+            : []
         )
       : { kind: 'missing' }
   })

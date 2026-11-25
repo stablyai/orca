@@ -1,12 +1,9 @@
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host/execution-host'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
-import { useHostBooleanSetting } from '../host-scope/use-host-boolean-setting'
+import { useHostSetting, useSettingsHostLabel } from '../host-scope/use-host-setting'
 
 /** The host that runs a chat continues it, so the switch reads and writes the host picked in Settings. */
 export function NativeChatUsageLimitContinueSetting({
@@ -22,17 +19,11 @@ export function NativeChatUsageLimitContinueSetting({
 }): React.JSX.Element {
   const t = useTranslate()
   const updateSettingsOrThrow = useAppStore((state) => state.updateSettingsOrThrow)
-  const environmentId = runtimeTargetEnvironmentId(hostScope.target)
-  const hostName = useAppStateValue((state) =>
-    environmentId
-      ? state.runtimeEnvironments.find((entry) => entry.id === environmentId)?.name
-      : null
-  )
-  const hostLabel = hostName ?? getLocalExecutionHostLabel()
-  const { setting, update } = useHostBooleanSetting({
+  const hostLabel = useSettingsHostLabel(hostScope.target)
+  const { setting, update } = useHostSetting({
     owner: hostScope.target,
     settingKey: 'nativeChatAutoContinueAfterUsageLimit',
-    localEnabled: settings.nativeChatAutoContinueAfterUsageLimit === true,
+    localSettings: settings,
     // The throwing variant, so a failed local save shows the toast instead of only logging.
     updateLocalSettings: updateSettingsOrThrow,
     updateFailedMessage: t(
@@ -41,7 +32,7 @@ export function NativeChatUsageLimitContinueSetting({
       { host: hostLabel }
     )
   })
-  const enabled = setting.state === 'ready' && setting.enabled
+  const enabled = setting.state === 'ready' && setting.value
   return (
     <SettingsSwitchRow
       label={label}

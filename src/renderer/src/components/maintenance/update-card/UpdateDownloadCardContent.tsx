@@ -110,10 +110,14 @@ export function UpdateDownloadingContent({
 
 export function UpdateReadyToInstallContent({
   version,
+  requiredByTeam,
+  requiredByOrca,
   onRestart,
   onClose
 }: {
   version: string
+  requiredByTeam?: boolean
+  requiredByOrca?: boolean
   onRestart: () => void
   onClose: () => void
 }): React.JSX.Element {
@@ -124,22 +128,36 @@ export function UpdateReadyToInstallContent({
         <h3 className="text-sm font-semibold">
           {t('auto.components.UpdateCard.17412483da', 'Ready to Install')}
         </h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
-          onClick={onClose}
-          aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
-        >
-          <Minus className="size-3.5" />
-        </Button>
+        {!requiredByTeam && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 shrink-0 min-w-[44px] min-h-[44px] -m-2"
+            onClick={onClose}
+            aria-label={t('auto.components.UpdateCard.8acbdd3961', 'Minimize to status bar')}
+          >
+            <Minus className="size-3.5" />
+          </Button>
+        )}
       </div>
       <p className="text-sm text-muted-foreground">
-        {t(
-          'auto.components.UpdateCard.6714206e5a',
-          "Orca v{{value0}} is downloaded. Restart when you're ready.",
-          { value0: version }
-        )}
+        {requiredByOrca
+          ? t(
+              'updates.emergencyRequired.summary',
+              'Orca {{version}} is required. Restart to update.',
+              { version }
+            )
+          : requiredByTeam
+            ? t(
+                'updates.teamRequired.summary',
+                'Your team requires Orca {{version}}. Restart to update.',
+                { version }
+              )
+            : t(
+                'auto.components.UpdateCard.6714206e5a',
+                "Orca v{{value0}} is downloaded. Restart when you're ready.",
+                { value0: version }
+              )}
       </p>
       <Button variant="default" size="sm" onClick={onRestart} className="w-full">
         {t('auto.components.UpdateCard.68b235d264', 'Restart to Update')}

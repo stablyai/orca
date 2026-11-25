@@ -28,6 +28,22 @@ const SOURCE_LABELS = {
   calendar: 'calendar'
 } as const satisfies Record<AutomationRunMessageEvent['source'], AutomationRunCopyKey>
 
+function isLabeledSource(source: string): source is keyof typeof SOURCE_LABELS {
+  return Object.hasOwn(SOURCE_LABELS, source)
+}
+
+type SourceOf = { source: string } | null | undefined
+
+/** An event run's trigger: the source that started it (older records name only their latest
+ *  event), or Event when this build can't name it. */
+export function automationRunEventSourceKey(run: {
+  triggeredBy?: SourceOf
+  event?: SourceOf
+}): AutomationRunCopyKey {
+  const source = (run.triggeredBy ?? run.event)?.source
+  return source !== undefined && isLabeledSource(source) ? SOURCE_LABELS[source] : 'what.other'
+}
+
 /** What fired: Wait over, Scheduled, Run now, or the event's source. */
 export function automationRunLabel(run: AutomationRunMessage, say: SayAutomationRun): string {
   if (run.wait) {
@@ -36,10 +52,7 @@ export function automationRunLabel(run: AutomationRunMessage, say: SayAutomation
   if (run.trigger === 'manual') {
     return say('runNow')
   }
-  if (run.trigger === 'scheduled' || !run.event) {
-    return say('scheduled')
-  }
-  return say(SOURCE_LABELS[run.event.source] ?? 'what.other')
+  return run.trigger === 'event' ? say(automationRunEventSourceKey(run)) : say('scheduled')
 }
 
 function whatKey(event: AutomationRunMessageEvent): string {
@@ -66,6 +79,16 @@ function eventWhat(event: AutomationRunMessageEvent, say: SayAutomationRun): str
   return say(isCopyKey(key) ? key : 'what.other')
 }
 
+// A reused event reads mid-sentence ("Reused comment on #41812"), so its word drops the capital;
+// the place keeps it, as some languages put it first ("ENG-123 の …").
+function eventWord(event: AutomationRunMessageEvent, say: SayAutomationRun): string {
+  const word =
+    event.source === 'webhook'
+      ? say(event.webhook?.sample ? 'sampleCall' : 'webhookCall')
+      : eventWhat(event, say)
+  return event.replayed ? lowerFirst(word) : word
+}
+
 /** "#41812" from "stablyai/orca#41812"; any other place as it is. */
 function shortPlace(place: string): string {
   return /#\d+$/.exec(place)?.[0] ?? place
@@ -77,11 +100,8 @@ function eventPhrase(
   say: SayAutomationRun,
   joined: 'reason' | 'facts'
 ): string {
-  if (event.source === 'webhook') {
-    return say(event.webhook?.sample ? 'sampleCall' : 'webhookCall')
-  }
-  const what = eventWhat(event, say)
-  if (!where) {
+  const what = eventWord(event, say)
+  if (event.source === 'webhook' || !where) {
     return what
   }
   if (event.source === 'slack') {
@@ -93,8 +113,9 @@ function eventPhrase(
   })
 }
 
+// Acronyms ("CI", "PR") and words next to a caseless script ("Issue 作成") keep their capitals.
 function lowerFirst(text: string): string {
-  return text.charAt(0).toLocaleLowerCase() + text.slice(1)
+  return /^\p{Lu}{2}|\p{Lo}/u.test(text) ? text : text.charAt(0).toLocaleLowerCase() + text.slice(1)
 }
 
 // A schedule more than a minute late (the computer slept) says when it was due.
@@ -139,7 +160,7 @@ export function automationRunReason(
       say,
       'reason'
     )
-    return run.event.replayed ? say('reused', { what: lowerFirst(phrase) }) : phrase
+    return run.event.replayed ? say('reused', { what: phrase }) : phrase
   }
   return ranLate(run, ranAt) ? say('due', { time: formatTime(run.scheduledFor) }) : schedule
 }
@@ -155,7 +176,7 @@ export function automationRunFacts(
     const phrase = eventPhrase(event, event.place, say, 'facts')
     const time = formatTime(event.occurredAt)
     return event.replayed
-      ? say('reusedFrom', { what: lowerFirst(phrase), time })
+      ? say('reusedFrom', { what: phrase, time })
       : say('factsAt', { facts: phrase, time })
   }
   if (run.wait?.kind === 'deadline') {

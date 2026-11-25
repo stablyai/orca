@@ -72,6 +72,7 @@ export function continueMainAgentStatus(
   next: {
     state: AgentStatusState
     outcome?: AgentMainAgentStatus['outcome']
+    failure?: AgentMainAgentStatus['failure']
     stopping?: true
     stateStartedAt?: number
   },
@@ -83,6 +84,9 @@ export function continueMainAgentStatus(
   return {
     state: next.state,
     ...(next.state === 'done' && next.outcome ? { outcome: next.outcome } : {}),
+    ...(next.state === 'done' && next.outcome === 'failure' && next.failure
+      ? { failure: next.failure }
+      : {}),
     ...(next.state === 'working' && next.stopping ? { stopping: true as const } : {}),
     stateStartedAt
   }

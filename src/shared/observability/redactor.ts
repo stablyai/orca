@@ -11,6 +11,7 @@ const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'anthropic-key', re: /sk-ant-[a-zA-Z0-9_-]{40,}/g },
   { tag: 'openai-key', re: /sk-(?:proj-)?[a-zA-Z0-9_-]{32,}/g },
   { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9]{36,}/g },
+  { tag: 'github-token', re: /github_pat_[A-Za-z0-9_]{22,}/g },
   { tag: 'aws-access-key-id', re: /AKIA[0-9A-Z]{16}/g },
   {
     tag: 'aws-secret-access-key',

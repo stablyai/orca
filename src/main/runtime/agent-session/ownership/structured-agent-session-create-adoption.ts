@@ -25,6 +25,7 @@ import {
   structuredAdoptionConflictError
 } from '../../../native-chat/conversation-adoption/structured-agent-session-history-adoption'
 import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
+import { resolveAdoptedTranscriptFolder } from '../../../native-chat/agent-session-journal/history-import/adopted-transcript-source'
 import {
   findStructuredAgentSessionAdoptionTranscript,
   type StructuredAgentSessionAdoptionInput
@@ -119,7 +120,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
   try {
     const { adoption, candidates } = await findStructuredAgentSessionAdoptionTranscript(input)
     // Title from where History found the transcript: Codex preparation may copy it to another home.
-    const [prepared, conversationName] = await Promise.all([
+    const [prepared, conversationName, folder] = await Promise.all([
       input.agent === 'codex'
         ? prepareCodexAdoption(
             adoption,
@@ -133,9 +134,15 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(
           agent: input.agent,
           providerSessionId: input.providerSessionId,
           transcriptPath: adoption.transcriptPath
-        })
+        }),
+      // A conversation saved in a sub-folder of the workspace resumes in that folder.
+      resolveAdoptedTranscriptFolder({
+        agent: input.agent,
+        filePath: adoption.transcriptPath,
+        source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
+      })
     ])
-    return { ...prepared, conversationName }
+    return { ...prepared, conversationName, folder }
   } catch (error) {
     if (isAgentSessionRefusalError(error)) {
       throw error

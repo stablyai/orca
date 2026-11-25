@@ -131,9 +131,14 @@ export const VERIFY_CHECKS = [
     ],
     inputs: [
       'src/renderer/src/',
+      'src/shared/bots/',
+      'src/shared/composio/',
+      'config/localization-coverage-allowlist.json',
       LOCALES,
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
@@ -154,6 +159,8 @@ export const VERIFY_CHECKS = [
       'src/shared/worktree/',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
       'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules',
       'config/startup-worktree-localization-allowlist.json'
     ]
   },
@@ -199,7 +206,9 @@ export const VERIFY_CHECKS = [
       'config/mobile-localization-coverage-allowlist.json',
       'config/scripts/audit-localization-coverage',
       'config/scripts/localization/source-extraction/audit-localization-coverage',
-      'config/scripts/localization/source-extraction/localization-visible-object-keys'
+      'config/scripts/localization/source-extraction/localization-visible-object-keys',
+      'config/scripts/localization/source-extraction/localization-ast-queries',
+      'config/scripts/localization/source-extraction/localization-coded-copy-rules'
     ]
   },
   {
@@ -274,6 +283,9 @@ export const VERIFY_CHECKS = [
 const TRANSLATION_USE = /\b(?:t|translate\w*)\(|useTranslation|i18n/
 // Mirrors KEY_LITERAL_RE in verify-localization-extraction.mjs: quoted dotted literals keep keys referenced.
 const KEY_LITERAL = /['"`]([A-Za-z][\w-]*(?:\.[\w-]+)+)['"`]/g
+// A plain exported string may be a namespace that an unchanged consumer passes to useTranslation.
+const EXPORTED_STRING_CONSTANT =
+  /\bexport\s+(?:const|default)\b[^;]*?['"`]|^\s*const\s+\w+\s*(?::[^=\n]+)?=\s*['"`]/m
 const SCRIPT_SOURCE = /\.[cm]?[jt]sx?$/
 
 function flattenCatalogKeys(value, prefix = '', keys = new Set()) {
@@ -311,7 +323,11 @@ function translationEvidence(readVersions) {
         return true
       }
       return readVersions(file).some(
-        (text) => text !== null && (TRANSLATION_USE.test(text) || namesCatalogKey(text))
+        (text) =>
+          text !== null &&
+          (TRANSLATION_USE.test(text) ||
+            EXPORTED_STRING_CONSTANT.test(text) ||
+            namesCatalogKey(text))
       )
     }
   }

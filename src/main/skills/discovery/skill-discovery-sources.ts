@@ -111,7 +111,8 @@ const PROJECT_SKILL_FOLDERS: readonly (readonly [AgentType, string, SkillProvide
   ['cursor', '.cursor', ['agent-skills']],
   ['copilot', '.github', ['agent-skills']],
   ['qoder', '.qoder', ['agent-skills']],
-  ['opencode', '.opencode', ['agent-skills']]
+  ['opencode', '.opencode', ['agent-skills']],
+  ['prime-agent', '.prime/agent', ['agent-skills']]
 ]
 
 export function buildSkillDiscoverySources(
@@ -230,6 +231,15 @@ export function buildSkillDiscoverySources(
       'bundled',
       ['agent-skills'],
       'cursor'
+    ),
+    // Why: agy reads `~/.gemini/skills` too (chat homes link it), so skills there stay manageable.
+    source(
+      'home-gemini',
+      'Antigravity home',
+      pathApi.join(home, '.gemini', 'skills'),
+      'home',
+      ['agent-skills'],
+      'antigravity'
     ),
     // Why: Antigravity also reads its CLI's skill folder beside the `config/skills` install root.
     source(

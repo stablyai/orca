@@ -8,6 +8,7 @@ import { loadWorkspaceLayout } from '../../../../shared/workspace-layout/persist
 import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { saveWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { randomUUID } from 'node:crypto'
 
 export type ServeBrowserPageState = {
@@ -165,6 +166,49 @@ export function withServeBrowserPageState(
       )
     }
   }
+}
+
+export type ServeBrowserPageProfile = {
+  worktreeId: string
+  pageId: string
+  profileId: string
+  sessionPartition: string
+}
+
+/** The layout command that keeps a saved tab's profile with its page's, or null when no saved tab shows it. */
+export function serveBrowserTabProfileCommand(
+  session: WorkspaceSessionState,
+  page: ServeBrowserPageProfile
+): Extract<LayoutCommand, { type: 'setBrowserTabProfile' }> | null {
+  const saved = findSavedBrowserPage(session, page.worktreeId, page.pageId)
+  return saved
+    ? {
+        type: 'setBrowserTabProfile',
+        workspace: page.worktreeId,
+        browserTabId: saved.tabId,
+        profileId: page.profileId,
+        sessionPartition: page.sessionPartition
+      }
+    : null
+}
+
+/** The partition with the saved tab in its page's new profile, or null when no saved tab shows it. */
+export function withServeBrowserTabProfile(
+  hostId: ExecutionHostId,
+  session: WorkspaceSessionState,
+  page: ServeBrowserPageProfile
+): WorkspaceSessionState | null {
+  const command = serveBrowserTabProfileCommand(session, page)
+  if (!command) {
+    return null
+  }
+  const loaded = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
+  const applied = applyLayoutCommand(loaded.layout, command, {
+    mintId: randomUUID,
+    mintLeafId: randomUUID,
+    now: Date.now
+  })
+  return applied.ok ? saveWorkspaceLayout({ ...loaded, layout: applied.model }) : null
 }
 
 /** The partition without the tab showing the page, or null when no saved tab shows it. */

@@ -8,11 +8,9 @@ for `launchAgent` / recognized startup commands, then repeats without that flag
 to represent OMP typed into a shell. This isolates termination policy; it does not
 exercise Agent button delivery or terminal-tab/handle routing.
 
-```sh
-ORCA_BACKGROUND_LAUNCH=1 ORCA_OMP_PROBE_BINARY=/absolute/path/to/omp \
-  node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts \
-  tests/tools/omp-close-lifecycle.test.mjs
-```
+The probe test (`tests/tools/omp-close-lifecycle.test.mjs`) was removed in the
+test-suite reduction. The rest of this note is kept as a historical record of what it
+exercised and observed; it can no longer be run from this checkout.
 
 The probe defaults to zsh on macOS and bash on other POSIX hosts. Set
 `ORCA_OMP_PROBE_SHELL` to the absolute path of either shell to override. Windows

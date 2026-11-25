@@ -86,7 +86,7 @@ export async function withOwnDirectMail(args: {
 
 function formatOne(db: OrchestrationDb, message: MailboxMessageReceipt): string {
   const row = db.getMessageById(message.id)
-  return row ? formatMessageBanner(row) : ''
+  return row ? formatMessageBanner(row, { peerMail: db }) : ''
 }
 
 function isAnswer(value: unknown): value is Answer {

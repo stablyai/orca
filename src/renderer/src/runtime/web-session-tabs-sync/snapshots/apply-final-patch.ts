@@ -48,6 +48,8 @@ export function buildWebSessionTabsFinalPatch(
     nextBrowserPagesByWorkspace,
     nextRemoteBrowserPageHandlesByPageId,
     nextBrowserCertificateFailuresByPageId,
+    nextBrowserAudiblePageIds,
+    nextBrowserAudioMutedTabIds,
     nextActiveTabIdByWorktree,
     nextActiveBrowserTabIdByWorktree,
     nextActiveFileIdByWorktree,
@@ -168,6 +170,12 @@ export function buildWebSessionTabsFinalPatch(
       : {}),
     ...(nextBrowserCertificateFailuresByPageId !== state.browserCertificateFailuresByPageId
       ? { browserCertificateFailuresByPageId: nextBrowserCertificateFailuresByPageId }
+      : {}),
+    ...(nextBrowserAudiblePageIds !== state.browserAudiblePageIds
+      ? { browserAudiblePageIds: nextBrowserAudiblePageIds }
+      : {}),
+    ...(nextBrowserAudioMutedTabIds !== state.browserAudioMutedTabIds
+      ? { browserAudioMutedTabIds: nextBrowserAudioMutedTabIds }
       : {}),
     ...(nextActiveTabIdByWorktree !== state.activeTabIdByWorktree
       ? { activeTabIdByWorktree: nextActiveTabIdByWorktree }

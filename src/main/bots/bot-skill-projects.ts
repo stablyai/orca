@@ -26,7 +26,7 @@ const SKILL_FOLDERS = ['.agents', '.claude'] as const
 const MAX_SKILL_FILE_BYTES = 256 * 1024
 
 /** An admitted skill, with the real folder its link in Orca's folder points to. */
-type ScannedSkill = LinkedProjectSkill & { folder: string }
+export type ScannedSkill = LinkedProjectSkill & { folder: string }
 
 type ScannedProject = { skillsDir: string; skills: ScannedSkill[] }
 
@@ -48,7 +48,7 @@ async function readCapped(path: string): Promise<string | null> {
 
 /** A skill folder (team setup scripts link them in) holding a real SKILL.md that declares its name
  *  and description. A SKILL.md that is itself a link could be any file, so it never counts. */
-async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
+export async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
   const entry = await lstat(skillFile).catch(() => null)
   if (!entry?.isFile()) {
     return null
@@ -68,8 +68,12 @@ async function admittedSkill(skillFile: string): Promise<ScannedSkill | null> {
   }
 }
 
-async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
-  const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'))
+export async function scanSkillsFolder(
+  skillsDir: string,
+  signal?: AbortSignal
+): Promise<ScannedSkill[]> {
+  const files = await findSkillFiles(skillsDir, skillDirectoryMaxDepth('repo'), signal)
+  signal?.throwIfAborted()
   const admitted = await Promise.all(files.map(admittedSkill))
   const byFolder = new Map<string, ScannedSkill>()
   for (const skill of admitted) {
@@ -81,10 +85,13 @@ async function scanSkillsFolder(skillsDir: string): Promise<ScannedSkill[]> {
 }
 
 /** The project's skills from .agents/skills, else .claude/skills; null when it has none. */
-export async function scanSkillProject(repoPath: string): Promise<ScannedProject | null> {
+export async function scanSkillProject(
+  repoPath: string,
+  signal?: AbortSignal
+): Promise<ScannedProject | null> {
   for (const folder of SKILL_FOLDERS) {
     const skillsDir = join(repoPath, folder, 'skills')
-    const skills = await scanSkillsFolder(skillsDir)
+    const skills = await scanSkillsFolder(skillsDir, signal)
     if (skills.length > 0) {
       return { skillsDir, skills }
     }
@@ -168,17 +175,21 @@ function isLocalRepo(repo: Repo): boolean {
   return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
 }
 
+/** These linked projects that are on this host, the only ones a bot loads skills from. */
+export function localSkillProjects(ids: readonly string[], repos: readonly Repo[]): Repo[] {
+  return ids.flatMap((id) => {
+    const repo = repos.find((entry) => entry.id === id)
+    return repo && isLocalRepo(repo) ? [repo] : []
+  })
+}
+
 /** These linked projects on this host that have skills, scanned in place. */
 async function scanLinkedProjects(
   ids: readonly string[],
   repos: readonly Repo[]
 ): Promise<{ repo: Repo; skills: ScannedSkill[] }[]> {
-  const linked = ids.flatMap((id) => {
-    const repo = repos.find((entry) => entry.id === id)
-    return repo && isLocalRepo(repo) ? [repo] : []
-  })
   const scanned = await Promise.all(
-    linked.map(async (repo) => {
+    localSkillProjects(ids, repos).map(async (repo) => {
       const project = await scanSkillProject(repo.path)
       return project ? [{ repo, skills: project.skills }] : []
     })

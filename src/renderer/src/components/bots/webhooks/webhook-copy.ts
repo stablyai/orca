@@ -1,7 +1,7 @@
 // Every word the card and the Webhooks row show about a hook. Host outcomes use the run history's own labels.
 import type { IntegrationCardStatusTone } from '@/components/integrations/presentation/integration-card-shell'
 import { translate } from '@/i18n/i18n'
-import { botResultsPlace } from '../../automations/authoring/automation-bot-results-to'
+import { botResultsPlace } from '../../../../../shared/automation-bot-target'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import type { WebhookAdapterId } from '../../../../../shared/connector-webhook-contract'
 import type { AutomationBotResultsTo } from '../../../../../shared/automations/automation-definition'
@@ -11,21 +11,12 @@ import { readOrcaCloudSignedOut } from '../orca-cloud-signed-out'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
+  webhookAdapterGeneratesSecret,
   webhookAdapterName,
   webhookHostReady,
   webhookStatusFact,
   type WebhookStatusFact
 } from '../../../../../shared/bots/webhook-card-view'
-
-/** Orca can make these secrets; for the others the owner pastes the sender's own. */
-export function webhookAdapterGeneratesSecret(adapter: WebhookAdapterId): boolean {
-  return adapter === 'standard' || adapter === 'github'
-}
-
-/** Every sender but GitHub can take a pasted secret; Standard Webhooks senders may make their own. */
-export function webhookAdapterTakesPastedSecret(adapter: WebhookAdapterId): boolean {
-  return adapter !== 'github'
-}
 
 /** "results to Chat": where the automation sends its results, never assumed. */
 export function webhookResultsTo(resultsTo: AutomationBotResultsTo): string {

@@ -1,4 +1,5 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { agentSessionRecordStoreHostServing } from '../../runtime/agent-session/records/agent-session-record-store-serving'
 import { isHostShuttingDown } from '../quit/host-shutdown-state'
 import { mainProcessState as state } from '../main-process-state'
 import { provideManagedAgentDetection } from '../../runtime/rpc/methods/host-management/managed-copy-detection'
@@ -41,9 +42,9 @@ export function chatJournalHostServing(): void {
   void windowFence
     .catch(() => {})
     .then(() => {
-      if (state.runtime) {
-        state.runtime.startPullRequestWatches({ admit: true })
-        reclaimManagedRuntimeReleasesAtLaunch(state.runtime)
+      if (state.core.runtime) {
+        agentSessionRecordStoreHostServing(state.core.runtime)
+        reclaimManagedRuntimeReleasesAtLaunch(state.core.runtime)
         startManagedRuntimeAutoUpdates()
       }
     })

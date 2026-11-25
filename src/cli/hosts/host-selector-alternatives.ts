@@ -108,13 +108,17 @@ export async function fetchSshTargetSummaries<T extends { id: string }>(
 }
 
 // Best-effort discovery avoids replacing selector errors with SSH enumeration failures.
-export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
+async function readSshTargetSummaries(client: RuntimeClient) {
   try {
-    const { targets, legacy } = await fetchSshTargetSummaries<SshTargetSummary>(client)
-    return legacy ? await enrichLegacySshTargetStates(client, targets) : targets
+    return await fetchSshTargetSummaries<SshTargetSummary>(client)
   } catch {
-    return []
+    return { targets: [], legacy: false }
   }
+}
+
+export async function listSshTargets(client: RuntimeClient): Promise<SshTargetSummary[]> {
+  const { targets, legacy } = await readSshTargetSummaries(client)
+  return legacy ? await enrichLegacySshTargetStates(client, targets) : targets
 }
 
 async function enrichLegacySshTargetStates(
@@ -148,17 +152,18 @@ async function enrichLegacySshTargetStates(
 export async function resolveSshHostTargetId(
   client: RuntimeClient,
   targetId: string,
-  environments: readonly EnvironmentSummary[],
+  readEnvironments: () => Promise<EnvironmentSummary[]>,
   flagSpelling = `--host ssh:${targetId}`,
   bareName = false
 ): Promise<string> {
-  const targets = await listSshTargets(client)
+  const { targets, legacy } = await readSshTargetSummaries(client)
   const matched = findSshTargetByName(targets, targetId)
   if (matched) {
     return matched.id
   }
   const { RuntimeClientError } = await import('../runtime/connection/types.js')
-  const ambiguous = ambiguousSshTargets(targets, targetId)
+  const diagnosticTargets = legacy ? await enrichLegacySshTargetStates(client, targets) : targets
+  const ambiguous = ambiguousSshTargets(diagnosticTargets, targetId)
   if (ambiguous.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -169,13 +174,14 @@ export async function resolveSshHostTargetId(
       }
     )
   }
+  const environments = await readEnvironments()
   throw new RuntimeClientError(
     'invalid_argument',
     bareName
       ? `Unknown host in ${flagSpelling}: it is not this machine or a paired Orca server the command can use, and the connected Orca host has no SSH target named ${targetId}. Run \`orca host list\` to see every name.`
       : `Unknown SSH target in ${flagSpelling}: this Orca host has no SSH target named or with id ${targetId}.`,
     {
-      knownSshTargets: targets,
+      knownSshTargets: diagnosticTargets,
       knownEnvironments: environments,
       nextSteps: [
         ...crossKindNextSteps(targetId, { sshTargets: targets, environments }, 'ssh'),

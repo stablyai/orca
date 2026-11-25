@@ -44,6 +44,8 @@ export function RightSidebarPanelContent({
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      // Bot panel rows open their hover cards outside this rect's left edge, covering nothing in it.
+      data-right-sidebar-panel=""
       // `orca plugin shot` captures exactly this rect.
       data-plugin-panel-surface={isPluginPanelTabKey(effectiveTab) ? effectiveTab : undefined}
     >

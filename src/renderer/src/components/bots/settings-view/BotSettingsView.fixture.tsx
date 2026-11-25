@@ -1,11 +1,19 @@
 // A bot's settings view with real-shaped data: the root and every subpage in the panel host, the root at page width.
+import { useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Copy } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { stampBotHost } from '@/lib/bot-catalog-snapshot'
 import { withBotConnectorRuntime } from '@/lib/bot-connector-host-calls.test-fixture'
 import { botPackageName } from '../../../../../shared/bots/bot-share-status'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { stubBots } from '../../../component-fixtures/fixture-bots'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmation-dialog'
 import type { Bot } from '../../../../../shared/bot-types'
+import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   type BotSettingsHost,
@@ -106,7 +114,23 @@ function stub(bot: Bot = builder): void {
         status: 'local',
         skillsDir: `/Users/owner/globex/${String(id)}/.agents/skills`,
         skills: [{ name: 'electron', description: 'Launch and validate Electron apps' }]
-      }))
+      })),
+      ...(params.botId
+        ? {
+            own: {
+              skillsDir: '/Users/owner/.orca/bots/release-notes/skills',
+              skills: [
+                {
+                  name: 'release-notes-style',
+                  description: 'House style for release notes',
+                  folder: '/Users/owner/.orca/bots/release-notes/skills/release-notes-style',
+                  loadedBy: ['claude', 'agents']
+                }
+              ],
+              agentOnly: []
+            }
+          }
+        : {})
     }),
     'bots.memory.history': () => ({ rows: [] }),
     'bots.list': () => ({ bots: [bot] }),
@@ -298,5 +322,91 @@ export const rootFromLinkLongName = at('panel', null, 260, {
   sharedFrom: fromLink.sharedFrom && {
     ...fromLink.sharedFrom,
     sharedBy: 'Alexandria Catherine Montgomery-Whitfield'
+  }
+})
+
+// The fixture frame adds 16px padding on each side of the panel.
+export const density280 = at('panel', null, 280 + 32)
+export const density353 = at('panel', null, 353 + 32)
+export const density480 = at('panel', null, 480 + 32)
+export const density240 = at('panel', null, 240 + 32)
+
+const studio: PublicKnownRuntimeEnvironment = {
+  id: 'studio',
+  name: 'Design studio Mac mini in the back office',
+  createdAt: 1,
+  updatedAt: 1,
+  lastUsedAt: null,
+  runtimeId: null,
+  endpoints: [],
+  preferredEndpointId: 'studio'
+}
+
+// Long values at the narrowest panel: a long bot name, server name, people list and project list.
+export const longValues240 = defineFixture({
+  ...at(
+    'panel',
+    null,
+    240 + 32,
+    stampBotHost('runtime:studio', {
+      ...withPeople,
+      name: 'Release notes and changelog builder'
+    }),
+    () => {
+      linkedLinear()
+      // The studio server answers as this computer's runtime does.
+      Reflect.set(window.api, 'runtimeEnvironments', {
+        ...window.api.runtimeEnvironments,
+        call: async (request: { method: string; params: Record<string, unknown> }) =>
+          request.method === 'status.get'
+            ? { ok: true, result: createCompatibleRuntimeStatusResponse('studio').result }
+            : window.api.runtime.call(request)
+      })
+    }
+  ),
+  store: { ...store, runtimeEnvironments: [studio] }
+})
+
+function HeaderWithDuplicate(): React.JSX.Element {
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null)
+  const actions = frame?.querySelector('[data-slot="bot-settings-actions"]')
+  return (
+    <div ref={setFrame}>
+      {density280.render()}
+      {actions &&
+        createPortal(
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="muted-field-icon"
+                size="icon-sm"
+                className="size-7"
+                aria-label="Duplicate"
+              >
+                <Copy className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Duplicate</TooltipContent>
+          </Tooltip>,
+          actions
+        )}
+    </div>
+  )
+}
+
+export const density280WithDuplicate = defineFixture({
+  ...density280,
+  render: () => <HeaderWithDuplicate />
+})
+
+/** Share's tooltip, on hover. */
+export const shareTooltip = defineFixture({
+  ...density280,
+  interact: async (frame) => {
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    frame
+      .querySelector('[data-slot="bot-settings-actions"] button')
+      ?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+    await new Promise((resolve) => setTimeout(resolve, 900))
   }
 })

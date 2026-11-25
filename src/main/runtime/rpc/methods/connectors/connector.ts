@@ -5,7 +5,10 @@ import {
   CONNECTOR_REPLIES_OUTBOX_FEATURE
 } from '../../../../../shared/connectors/connector-cloud-contract'
 import { botReplyRefusal } from '../../../../external-conversations/external-conversation-bots'
-import { ConnectorReply } from '../../../../../shared/rpc-contract/connectors/connector-params'
+import {
+  ConnectorReply,
+  CONNECTOR_REPLY_HTML_PAGE_AS_FILE
+} from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type { ExternalConversationSeam } from '../../../../external-conversations/external-conversation-seam'
 import { chatPaneKey } from '../../../../external-conversations/external-conversation-chat'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
@@ -13,7 +16,12 @@ import { defineMethod } from '../../core'
 import { botTurnFor } from '../../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { CONNECTOR_ACT_METHOD } from '../connector-act'
+import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
+import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
+import { splitHtmlDocumentFences } from '../../../../../shared/markdown/html-document-fences'
+import type { ConnectorCloudFeature } from '../../../../../shared/connector-cloud-features'
+import { botOfSession } from '../../../../bots/bot-session-tabs'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -33,9 +41,8 @@ export const CONNECTOR_METHODS = [
     params: ConnectorReply,
     handler: async (params, context) => {
       const { replyId, text, review } = params
-      const target = requireSeam(context.runtime).replyTarget(
-        'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
-      )
+      const paneKey = 'paneKey' in params ? params.paneKey : chatPaneKey(params.sessionId)
+      const target = requireSeam(context.runtime).replyTarget(paneKey)
       if (!target) {
         throw new Error('not_a_cloud_conversation')
       }
@@ -64,12 +71,28 @@ export const CONNECTOR_METHODS = [
           : // A terminal pane's reply names no chat whose turn Orca can read.
             'someone_else'
       const cloud = context.runtime.getConnectorCloud()
+      // Slack shows a whole page as an .html file; a caller that asked resends it with the page attached.
+      const features = cloud?.cloudFeatures()
+      if (
+        params.pagesAsFiles &&
+        conversation.source === 'slack' &&
+        'sessionId' in params &&
+        context.runtime.bots.enabled() &&
+        botOfSession(context.runtime.bots, params.sessionId) &&
+        (['actions', 'files.direct', 'reply.files'] satisfies ConnectorCloudFeature[]).every(
+          (feature) => features?.has(feature)
+        ) &&
+        splitHtmlDocumentFences(text).documents.length > 0
+      ) {
+        throw new Error(CONNECTOR_REPLY_HTML_PAGE_AS_FILE)
+      }
       // Under replies.outbox a reply naming its turn's request takes that request's answer key.
       const keyed =
         target.answerDeliveryId &&
         cloud?.cloudFeatures()?.has(CONNECTOR_REPLIES_OUTBOX_FEATURE) === true
           ? { answerDeliveryId: target.answerDeliveryId }
           : {}
+      const refused = connectorPostAttempts.attempted(paneKey, replyId, target.key.externalId)
       const sent = await cloud?.reply({
         replyId,
         conversation,
@@ -79,6 +102,13 @@ export const CONNECTOR_METHODS = [
         ...(review ? { review } : {}),
         ...keyed
       })
+      // Never sent, or refused outright: nothing reached the thread. A lost answer may have posted.
+      if (
+        !sent ||
+        (!sent.ok && sent.status !== null && sent.status < 500 && sent.error !== 'post_uncertain')
+      ) {
+        refused()
+      }
       if (!sent) {
         throw new Error('connector_not_connected')
       }
@@ -91,5 +121,6 @@ export const CONNECTOR_METHODS = [
     }
   }),
   CONNECTOR_ACT_METHOD,
-  CONNECTOR_REACT_METHOD
+  CONNECTOR_REACT_METHOD,
+  CONNECTOR_LEAVE_THREAD_METHOD
 ]

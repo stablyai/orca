@@ -90,10 +90,6 @@ export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountStat
   return count
 }
 
-export function resetFloatingVisibleTabCountSelectorCacheForTest(): void {
-  floatingVisibleTabCountCache = null
-}
-
 export function selectEmptyFloatingWorkspacePanelVisible(
   state: EmptyFloatingWorkspacePanelState
 ): boolean {

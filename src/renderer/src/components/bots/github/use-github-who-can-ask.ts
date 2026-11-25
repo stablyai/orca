@@ -5,6 +5,7 @@ import { useBotGitHubRead } from '@/lib/bot-github-state'
 import { botGitHubCalls } from '@/lib/bot-connector-host-calls'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { botMembersFrom, gitHubMembersOf } from '../../../../../shared/bot-types'
+import { gitHubLinkedAccounts } from '../../../../../shared/connector-bot-github-contract'
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { botGitHubErrorMessage } from './bot-github-copy'
@@ -19,9 +20,21 @@ export function useGitHubWhoCanAsk(
   const t = useTranslate()
   const hostName = useBotHostLabel(hostId)
   const view = useBotGitHubRead(hostId)
-  const account = view.status === 'ready' ? view.github.account : undefined
-  const ownerId = account?.userId ?? null
-  const ownerName = account?.login ?? null
+  const github = view.status === 'ready' ? view.github : null
+  // Each linked login is the owner; an org's row names the one that sees it.
+  const logins = github ? gitHubLinkedAccounts(github) : []
+  const shown =
+    (installationId && logins.find((entry) => entry.installations.includes(installationId))) ||
+    logins[0]
+  const ownerId = shown?.userId ?? null
+  const ownerName = shown?.login ?? null
+  const otherOwnerIds = useMemo(
+    () =>
+      (github ? gitHubLinkedAccounts(github) : [])
+        .filter((entry) => entry.userId !== ownerId)
+        .map((entry) => entry.userId),
+    [github, ownerId]
+  )
   return useMemo(
     (): BotWhoCanAskService => ({
       listed: (members) =>
@@ -48,6 +61,7 @@ export function useGitHubWhoCanAsk(
         detail: t('bots.github.whoCanAsk.exactOnly', 'GitHub finds people by their exact username.')
       },
       ownerId,
+      otherOwnerIds,
       ownerName,
       kind: 'github',
       connector: 'GitHub',
@@ -63,6 +77,6 @@ export function useGitHubWhoCanAsk(
         'Finish setup to link your GitHub account, then pick people here.'
       )
     }),
-    [hostId, hostName, linked, installationId, ownerId, ownerName, t]
+    [hostId, hostName, linked, installationId, ownerId, otherOwnerIds, ownerName, t]
   )
 }

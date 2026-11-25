@@ -1,6 +1,9 @@
 // Resolve bound credentials into child environments only; never mutate process-wide auth or log tokens.
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
-import type { GhCaptureLifetimeHooks } from '../../git/command-runner/hosted-cli/gh-capture-lifetime'
+import {
+  createGhLogicalLifetime,
+  type GhCaptureLifetimeHooks
+} from '../../git/command-runner/hosted-cli/gh-capture-lifetime'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import {
   ghTokenEnvVarForHost,
@@ -34,6 +37,11 @@ type TokenCacheEntry =
   | { kind: 'negative'; expiresAt: number }
 
 const tokenCache = new Map<string, TokenCacheEntry>()
+type TokenProbe = {
+  result: Promise<string>
+  lifetime: ReturnType<typeof createGhLogicalLifetime>
+}
+const tokenProbes = new Map<string, TokenProbe>()
 
 function tokenCacheKey(binding: GhAccountBinding, target: GhCapabilityTarget): string {
   return `${getGhExecutionHostKey(target)}\0${binding.host}\0${binding.user}`
@@ -137,6 +145,43 @@ export async function resolveGhAccountToken(
     throw createGhBoundAccountUnavailableError(binding)
   }
 
+  // A cold read still uses its own cwd for relative gh configuration and executable lookup.
+  const probeKey = `${normalizedTarget.cwd ?? ''}\0${key}`
+  const inFlight = tokenProbes.get(probeKey)
+  if (inFlight) {
+    hooks?.onTerminationPending(inFlight.lifetime.terminated)
+    return inFlight.result
+  }
+  const lifetime = createGhLogicalLifetime()
+  hooks?.onTerminationPending(lifetime.terminated)
+  const publish = (entry: TokenCacheEntry): void => {
+    if (tokenProbes.get(probeKey) === probe) {
+      tokenCache.set(key, entry)
+      pruneTokenCache(nowMs)
+    }
+  }
+  const probe: TokenProbe = {
+    lifetime,
+    result: Promise.resolve()
+      .then(() => readGhAccountToken(binding, normalizedTarget, nowMs, lifetime.hooks, publish))
+      .finally(() => {
+        lifetime.seal()
+        if (tokenProbes.get(probeKey) === probe) {
+          tokenProbes.delete(probeKey)
+        }
+      })
+  }
+  tokenProbes.set(probeKey, probe)
+  return probe.result
+}
+
+async function readGhAccountToken(
+  binding: GhAccountBinding,
+  target: GhCapabilityTarget,
+  nowMs: number,
+  hooks: GhCaptureLifetimeHooks,
+  publish: (entry: TokenCacheEntry) => void
+): Promise<string> {
   try {
     const resolveEnv = stripAmbientGhTokenEnv(process.env)
     resolveEnv.GH_PROMPT_DISABLED = resolveEnv.GH_PROMPT_DISABLED ?? '1'
@@ -144,8 +189,8 @@ export async function resolveGhAccountToken(
     const { stdout } = await ghExecFileAsync(
       ['auth', 'token', '--user', binding.user, '--hostname', binding.host],
       {
-        cwd: normalizedTarget.cwd,
-        wslDistro: normalizedTarget.wslDistro,
+        cwd: target.cwd,
+        wslDistro: target.wslDistro,
         timeout: TOKEN_RESOLVE_TIMEOUT_MS,
         env: resolveEnv
       },
@@ -154,12 +199,10 @@ export async function resolveGhAccountToken(
     const token = stdout.replace(/\r?\n/g, '').trim()
     if (!token) {
       // Cache stable empty-token misses to avoid hammering the keyring.
-      tokenCache.set(key, { kind: 'negative', expiresAt: nowMs + NEGATIVE_TTL_MS })
-      pruneTokenCache(nowMs)
+      publish({ kind: 'negative', expiresAt: nowMs + NEGATIVE_TTL_MS })
       throw createGhBoundAccountUnavailableError(binding)
     }
-    tokenCache.set(key, { kind: 'positive', token, expiresAt: nowMs + POSITIVE_TTL_MS })
-    pruneTokenCache(nowMs)
+    publish({ kind: 'positive', token, expiresAt: nowMs + POSITIVE_TTL_MS })
     return token
   } catch (error) {
     if (
@@ -186,8 +229,7 @@ export async function resolveGhAccountToken(
     }
     // Transient spawn and timeout failures must remain retryable.
     if (!isTransientTokenResolveFailure(error)) {
-      tokenCache.set(key, { kind: 'negative', expiresAt: nowMs + NEGATIVE_TTL_MS })
-      pruneTokenCache(nowMs)
+      publish({ kind: 'negative', expiresAt: nowMs + NEGATIVE_TTL_MS })
     }
     throw unavailable
   }
@@ -226,23 +268,18 @@ export function buildBoundGhChildEnv(args: {
 
 /** Drops cached tokens for one binding across every execution host; clears the whole cache when omitted. */
 export function invalidateGhAccountTokenCache(binding?: GhAccountBinding | null): void {
-  if (!binding) {
-    tokenCache.clear()
-    return
-  }
-  const normalized = normalizeGhAccountBinding(binding)
+  const normalized = binding ? normalizeGhAccountBinding(binding) : null
   if (!normalized) {
     tokenCache.clear()
+    tokenProbes.clear()
     return
   }
-  for (const key of tokenCache.keys()) {
-    if (key.endsWith(`\0${normalized.host}\0${normalized.user}`)) {
-      tokenCache.delete(key)
+  const suffix = `\0${normalized.host}\0${normalized.user}`
+  for (const entries of [tokenCache, tokenProbes]) {
+    for (const key of entries.keys()) {
+      if (key.endsWith(suffix)) {
+        entries.delete(key)
+      }
     }
   }
-}
-
-/** @internal — test-only */
-export function clearGhAccountTokenCacheForTests(): void {
-  tokenCache.clear()
 }

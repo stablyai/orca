@@ -1,6 +1,7 @@
 // `bots.github.*`: the host account's GitHub link and installs, as this host's own Orca account.
 import {
   BotGitHubDefaultBot,
+  BotGitHubUnlink,
   BotGitHubUsers
 } from '../../../../shared/rpc-contract/bots-connector-setup-params'
 import { defineMethod } from '../core'
@@ -32,15 +33,15 @@ export const BOT_GITHUB_METHODS = [
   defineMethod({
     name: 'bots.github.unlink',
     permission: 'accounts-admin',
-    params: null,
-    handler: async (_params, context) =>
-      withHostCloudClient(context, (client) => client.unlinkGitHub())
+    params: BotGitHubUnlink,
+    handler: async ({ userId }, context) =>
+      withHostCloudClient(context, (client) => client.unlinkGitHub(userId))
   }),
   defineMethod({
     name: 'bots.github.setDefaultBot',
     permission: 'accounts-admin',
     params: BotGitHubDefaultBot,
-    handler: async ({ botId }, context) =>
-      withHostCloudClient(context, (client) => client.setGitHubDefaultBot(botId))
+    handler: async ({ botId, userId }, context) =>
+      withHostCloudClient(context, (client) => client.setGitHubDefaultBot(botId, userId))
   })
 ]

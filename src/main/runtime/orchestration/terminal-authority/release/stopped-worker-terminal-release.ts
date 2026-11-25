@@ -1,7 +1,7 @@
 import type { WorkerTerminalReleaseRuntime } from './worker-terminal-release-runtime'
 import {
   isMintedPtyIncarnation,
-  type WorkerTerminalProcessIndex
+  type WorkerTerminalHostInventory
 } from './worker-terminal-process-liveness'
 import type { WorkerTerminalResourceRow } from './worker-terminal-ownership'
 import { archiveWorkerOutputBeforeStop } from '../../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
@@ -74,7 +74,7 @@ async function releaseExitedWorkerTerminals(
       return 0
     }
   }
-  const inventories = new Map<string, Promise<WorkerTerminalProcessIndex | null>>()
+  const inventories = new Map<string, Promise<WorkerTerminalHostInventory | null>>()
   let released = 0
   for (let start = 0; start < candidates.length; start += ROWS_PER_SLICE) {
     if (start > 0) {
@@ -98,13 +98,14 @@ async function releaseExitedSlice(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
   candidates: { resource: WorkerTerminalResourceRow; processIncarnation: string }[],
-  inventories: Map<string, Promise<WorkerTerminalProcessIndex | null>>,
+  inventories: Map<string, Promise<WorkerTerminalHostInventory | null>>,
   stopped: () => boolean
 ): Promise<number> {
   const exited: {
     requestingDispatchId: string
     resourceId: string
     processIncarnation: string
+    hostScope: string | null
     terminalHandle: string
     attachedAt: string
   }[] = []
@@ -126,6 +127,7 @@ async function releaseExitedSlice(
       requestingDispatchId: resource.owner_dispatch_id,
       resourceId: resource.id,
       processIncarnation,
+      hostScope: resource.host_scope,
       terminalHandle: resource.terminal_handle,
       attachedAt:
         db.getWorkerDispatch(resource.owner_dispatch_id)?.created_at ?? resource.created_at
@@ -141,7 +143,8 @@ async function releaseExitedSlice(
       db,
       dispatchId: release.requestingDispatchId,
       terminalHandle: release.terminalHandle,
-      attachedAt: release.attachedAt
+      attachedAt: release.attachedAt,
+      exitProven: true
     })
   }
   // One write per slice, so Crew readers wake once per slice; it re-checks owner, incarnation and archive.

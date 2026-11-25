@@ -76,12 +76,6 @@ export function isLocalWorktreeScanGenerationCurrent(repoId: string, generation:
   return getLocalWorktreeScanGeneration(repoId) === generation
 }
 
-export function resetLocalWorktreeScanGenerationsForTests(): void {
-  generationSequence += 1
-  mutationRevision += 1
-  generationByRepoId.clear()
-}
-
 export function _getLocalWorktreeScanGenerationCacheSize(): number {
   return generationByRepoId.size
 }

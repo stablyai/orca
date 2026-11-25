@@ -18,6 +18,7 @@ export function parseArgs(argv) {
     settleMs: 120_000,
     windowMs: 30_000,
     idleWindowMs: 60_000,
+    chatSettleMs: 120_000,
     scenarios: null,
     force: false,
     pathsOnly: false,
@@ -41,6 +42,7 @@ export function parseArgs(argv) {
       '--settle-ms': () => (options.settleMs = Number(value())),
       '--window-ms': () => (options.windowMs = Number(value())),
       '--idle-window-ms': () => (options.idleWindowMs = Number(value())),
+      '--chat-settle-ms': () => (options.chatSettleMs = Number(value())),
       '--scenarios': () => (options.scenarios = value().split(',').filter(Boolean)),
       '--out': () => (options.out = path.resolve(value())),
       '--force': () => (options.force = true),
@@ -57,7 +59,8 @@ export function parseArgs(argv) {
   for (const [flag, ms] of [
     ['--settle-ms', options.settleMs],
     ['--window-ms', options.windowMs],
-    ['--idle-window-ms', options.idleWindowMs]
+    ['--idle-window-ms', options.idleWindowMs],
+    ['--chat-settle-ms', options.chatSettleMs]
   ]) {
     if (!Number.isFinite(ms) || ms < 1_000 || ms > 3_600_000) {
       throw new Error(`${flag} must be between 1000 and 3600000 ms`)
@@ -70,9 +73,9 @@ export function parseArgs(argv) {
     throw new Error('--scenarios names no scenario')
   }
   for (const name of options.scenarios ?? []) {
-    if (!Object.hasOwn(SCENARIOS, name) && name !== 'burst') {
+    if (!Object.hasOwn(SCENARIOS, name) && name !== 'burst' && name !== 'chat-memory') {
       throw new Error(
-        `unknown scenario ${String(name)}; known: ${Object.keys(SCENARIOS).join(', ')}`
+        `unknown scenario ${String(name)}; known: ${[...Object.keys(SCENARIOS), 'burst', 'chat-memory'].join(', ')}`
       )
     }
   }

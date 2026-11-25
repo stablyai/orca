@@ -3,7 +3,6 @@ valid:
   - "callBotRpc(bot, 'bots.activity', { botId: bot.id })"
   - "const options = { kind: 'folder' }"
 invalid:
-  - "const LOCAL = { kind: 'local' } as const"
   - "callRuntimeRpc({ kind: 'local' }, 'bots.groups.list')"
   - 'const target: RuntimeClientTarget = { kind: "local", worktreeId }'
 ---

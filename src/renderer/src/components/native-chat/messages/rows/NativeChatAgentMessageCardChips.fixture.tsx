@@ -125,6 +125,33 @@ const chipStarted = projectStructuredAgentStartItem({
     }
   }
 })!
+// A start for an item, both names long: the owner's "Started <worker> for <item>" row.
+const longStarted = {
+  ...projectStructuredAgentStartItem({
+    itemId: 'long-started',
+    revision: 1,
+    sequence: 10,
+    observedAt: 1_800_000_000_000,
+    body: {
+      kind: 'agent-start',
+      dispatchId: 'chip-failed',
+      task: 'Review the share dialog change.',
+      worker: {
+        party: { address: 'term_long', terminalHandle: 'term_long', orcaSessionId: null },
+        name: longName,
+        agent: 'claude'
+      }
+    }
+  })!,
+  agentStartItems: [
+    {
+      uid: 'long-item',
+      number: 12,
+      title: 'Post-merge reviews of the five riskiest share dialog changes',
+      status: 'working' as const
+    }
+  ]
+}
 const chipMessages = [
   chipMail('chip-failed', [{ name: longName, address: 'term_long' }], {
     worker: true,
@@ -151,12 +178,15 @@ function chipRows() {
   return (
     <NativeChatWorkersContext.Provider value={chipWorkers}>
       <div className="space-y-1 bg-chat-pane p-4">
-        <MessageRow
-          message={chipStarted}
-          expandSignal={false}
-          onScrollMessageToTop={() => {}}
-          runtimeContext={runtimeContext}
-        />
+        {[chipStarted, longStarted].map((message) => (
+          <MessageRow
+            key={message.id}
+            message={message}
+            expandSignal={false}
+            onScrollMessageToTop={() => {}}
+            runtimeContext={runtimeContext}
+          />
+        ))}
         {chipMessages.map((message) => (
           <NativeChatAgentMessageCard
             key={message.id}
@@ -175,6 +205,7 @@ function chipRows() {
   )
 }
 export const wide = defineFixture({ width: 560, store, render: chipRows })
+export const extraWide = defineFixture({ width: 900, store, render: chipRows })
 export const narrow = defineFixture({ width: 300, store, render: chipRows })
 export const narrowFocused = defineFixture({
   width: 300,

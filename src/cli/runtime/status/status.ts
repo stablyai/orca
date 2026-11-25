@@ -21,7 +21,7 @@ import { runtimeAccessDeniedError } from '../connection/runtime-access-denied'
 export async function getCliStatus(
   userDataPath: string
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-  const metadata = tryReadMetadata(userDataPath)
+  const metadata = tryReadMetadata(userDataPath, { throwOnAccessDenied: true })
   const transport = metadata ? findTransport(metadata, 'unix', 'named-pipe') : null
   if (!transport || !metadata?.authToken) {
     return buildCliStatusResponse({

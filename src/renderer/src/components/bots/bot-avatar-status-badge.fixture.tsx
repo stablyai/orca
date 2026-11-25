@@ -28,7 +28,7 @@ export const statesOverview = defineFixture({
         <div key={name} className="flex items-center gap-2">
           <span className="relative shrink-0">
             <span
-              className="flex size-9 items-center justify-center rounded-md bg-muted text-sm text-muted-foreground"
+              className="flex size-8 items-center justify-center rounded-md bg-muted text-sm text-muted-foreground"
               style={botAvatarBadgeCutout(state)}
             >
               A

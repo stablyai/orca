@@ -30,7 +30,6 @@ on:
       - 'config/scripts/workspace-package-build/build-workspace-packages.mjs'
       - 'src/shared/node-runtime/node-runtime-pin.ts'
       - 'src/packages/process-host/**'
-      - '.github/actions/prepare-git-compatibility/**'
       - '.github/actions/prepare-linux-package-fixture/**'
       - 'config/docker/headless-serve-shutdown/**'
       - 'config/docker/cli-launch-contract/**'

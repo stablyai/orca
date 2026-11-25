@@ -1,9 +1,11 @@
-// Local Home pins reconcile after restore; paired hosts keep the existing Home placement behavior.
+// Local Home pins reconcile after restore; a paired server that keeps the Home rule owns its pages, older ones keep the existing placement.
 import { useEffect } from 'react'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store'
 import { readBots, readBotsEnabled, subscribeToBotChanges } from '@/lib/bot-catalog'
+import { botHomeRuleApplies } from '@/lib/bot-host-capability'
+import { runtimeStatusSubscriptionsFor } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   isBotHomeTab,
@@ -63,6 +65,13 @@ function placeBotHomeTabsOnce(store: StoreApi<AppState>): void {
   for (const bot of readBots()) {
     const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
     if (!bot.chatSessionId) {
+      continue
+    }
+    // Its host publishes Home's place and pin; moving it here too would fight that host's snapshots.
+    if (
+      bot.hostId !== LOCAL_EXECUTION_HOST_ID &&
+      botHomeRuleApplies(bot, runtimeStatusSubscriptionsFor(store).readStatuses())
+    ) {
       continue
     }
     // A focused duplicate hands focus to Home only after Home's final move, which keeps the destination's selection.

@@ -100,6 +100,6 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
         statusBarVisible: ui.statusBarVisible !== false
       }
     },
-    getKeybindings: () => state.keybindings?.getOverrides()
+    getKeybindings: () => state.core.keybindings?.getOverrides()
   })
 }

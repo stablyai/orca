@@ -8,10 +8,7 @@ import {
   type AvatarGenerationCapability,
   type AvatarGenerationResult
 } from '../../shared/avatar-generation/avatar-generation-contract'
-import {
-  avatarGenerationPrompt,
-  describesRealPerson
-} from '../../shared/avatar-generation/avatar-generation-prompt'
+import { avatarGenerationPrompt } from '../../shared/avatar-generation/avatar-generation-prompt'
 import {
   prepareLocalCommitMessageAgentEnv,
   type CommitMessageAgentEnvironmentResolvers
@@ -20,6 +17,7 @@ import {
   probeAvatarGenerationCapability,
   type AvatarAgentEnv
 } from './avatar-generation-capability'
+import { abortWhenOwnerDocumentEnds } from './avatar-run-owner-lifetime'
 import { runAvatarImageAgent } from './avatar-image-agent-run'
 
 const GenerateArgs = z.object({
@@ -65,21 +63,19 @@ export function registerAvatarGenerationHandlers(
   ipcMain.removeHandler('avatarGeneration:generate')
   ipcMain.handle(
     'avatarGeneration:generate',
-    async (_event, raw: unknown): Promise<AvatarGenerationResult> => {
+    async (event, raw: unknown): Promise<AvatarGenerationResult> => {
       const { requestId, description, agent } = GenerateArgs.parse(raw)
-      // The renderer checks too; this keeps any other caller from skipping it.
-      if (describesRealPerson(description)) {
-        return { ok: false, error: 'real-person' }
-      }
       // Registered before any await, so a cancel during the probe still lands.
       runs.get(requestId)?.abort()
       const controller = new AbortController()
       runs.set(requestId, controller)
+      const releaseOwner = abortWhenOwnerDocumentEnds(event.sender, controller)
       // The picker offers only agents the probe found; a stale pick is refused, not swapped.
       const found = (await capability().catch(() => null))?.agents.find(
         (entry) => entry.agent === agent
       )
       if (!found || found.status === 'signed-out') {
+        releaseOwner()
         if (runs.get(requestId) === controller) {
           runs.delete(requestId)
         }
@@ -116,6 +112,7 @@ export function registerAvatarGenerationHandlers(
         }
         return { ok: false, error: outcome.error, agent }
       } finally {
+        releaseOwner()
         if (runs.get(requestId) === controller) {
           runs.delete(requestId)
         }

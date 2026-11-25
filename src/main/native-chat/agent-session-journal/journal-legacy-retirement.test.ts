@@ -4,12 +4,16 @@ import Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
 import {
+  cleanup,
+  companions,
   continueInOlderOrca,
   fakeLease,
   olderOrcaChat,
-  profile
+  profile,
+  queue
 } from './journal-legacy-retirement.test-fixture'
 import { JournalLegacyIneligibleError } from './journal-legacy-retention-error'
+import { setLegacyJournalRetirementHost } from './journal-legacy-retirement-outcome'
 import { readLegacyProofSessions } from './journal-legacy-content-proof'
 
 function rename(filename: string, sessionId: string, name: string) {
@@ -21,29 +25,6 @@ function rename(filename: string, sessionId: string, name: string) {
   db.close()
 }
 
-function queue(filename: string, sessionId: string, text: string) {
-  const db = new Database(filename)
-  db.prepare(
-    `INSERT INTO queued_messages
-    (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
-    VALUES(?,?,?,?,?,?,?,?)`
-  ).run(
-    sessionId,
-    'queued-after-copy',
-    1,
-    JSON.stringify({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }]
-    }),
-    'fingerprint',
-    1000,
-    'older-host',
-    'waiting'
-  )
-  db.close()
-}
-
 /** Every original version kept here for a chat, oldest key first. */
 const originals = (db: Database.Database, sessionId: string) =>
   db
@@ -52,9 +33,6 @@ const originals = (db: Database.Database, sessionId: string) =>
     .map((row) => JSON.parse(String(row.value)))
 
 const original = (db: Database.Database, sessionId: string) => originals(db, sessionId)[0] ?? null
-
-const companions = (filename: string) =>
-  [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
 
 function tabsAndRecords(db: Database.Database) {
   return {
@@ -346,6 +324,13 @@ it('finishes removing the absorbed WAL a removal left behind its main file, and 
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(true)
   save(retiring(wal.ino))
+  // Finishing the removal deletes too, so a build that keeps the file keeps these, and says so.
+  const deferred: string[] = []
+  setLegacyJournalRetirementHost({ report: async (event) => deferred.push(event.defer) > 0 })
+  cleanup.push(() => setLegacyJournalRetirementHost(undefined))
+  await launch('1.0.1', true, undefined, undefined, false).run()
+  expect(existsSync(`${filename}-wal`)).toBe(true)
+  expect(deferred).toEqual(['leftover_files'])
   await launch().run()
   expect(existsSync(`${filename}-wal`)).toBe(false)
 })
@@ -380,11 +365,10 @@ it('backs off, with no durable commit, while the source readers stay busy', asyn
   }
   // 1, 2 and 4 minute waits: four tries in ten minutes, never one per tick.
   expect(recycle.mock.calls.length).toBeLessThanOrEqual(4)
-  expect(
-    db
-      .prepare("SELECT 1 FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
-      .get()
-  ).toBeUndefined()
+  const saved = db
+    .prepare("SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v2'")
+    .get()
+  expect(saved && JSON.parse(String(saved.value)).phase).not.toBe('retiring')
   expect(existsSync(filename)).toBe(true)
 })
 
@@ -685,4 +669,39 @@ it('keeps a chat deleted here from a journal written before some queue columns e
   expect(JSON.stringify(original(older.db, 'unopened').queued)).toContain(
     'queued in an older journal'
   )
+})
+
+it('converts nothing for the proof or its copies below the disk floor, and both with room', async () => {
+  const GB = 1024 ** 3
+  const low = async () => ({ freeBytes: 20 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB })
+  const room = async () => ({ freeBytes: 60 * GB, totalBytes: 100 * GB, remainingBytes: 20 * GB })
+  async function copied(storage: typeof low) {
+    const continued = await profile({ storage })
+    // An open converts below the floor; the older Orca's later turns then need a copy.
+    await continued.convert('unopened')
+    continueInOlderOrca(continued.filename, 'unopened')
+    await initializeJournalDomainDatabase(continued.root)
+    const copy = String(
+      continued.db
+        .prepare(
+          "SELECT key FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-copy-source:%'"
+        )
+        .get()!.key
+    ).slice('journal.legacy-copy-source:'.length)
+    await continued.launch().run()
+    return { ...continued, state: journalDomainImportState(continued.db, copy).state }
+  }
+  for (const storage of [low, room]) {
+    const chat = await profile({ storage })
+    await chat.launch().run()
+    const copy = await copied(storage)
+    const converted = storage === room
+    expect(journalDomainImportState(chat.db, 'unopened').state).toBe(
+      converted ? 'ready' : 'converting'
+    )
+    expect(companions(chat.filename).length > 0).toBe(!converted)
+    expect(copy.state).toBe(converted ? 'ready' : 'converting')
+    expect(companions(copy.filename).length > 0).toBe(!converted)
+    expect(String(copy.errors.at(-1) ?? '')).toContain(converted ? '' : 'deferred for storage')
+  }
 })

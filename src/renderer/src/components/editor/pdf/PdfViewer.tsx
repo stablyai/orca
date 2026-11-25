@@ -16,6 +16,7 @@ import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 import { useTranslate } from '@/i18n/use-translate'
 import { createPdfDocumentLoader, type PdfDocumentLoader } from './pdf-document-loader'
 import { createPdfViewerSession } from './pdf-viewer-session'
+import { useViewerPendingFocus, type ViewerFocusPane } from '../commands/use-viewer-pending-focus'
 import { usePdfFormEditing } from './use-pdf-form-editing'
 import {
   applyPdfScalePreference,
@@ -47,6 +48,8 @@ type PdfViewerProps = {
   scrollCacheKey?: string | null
   /** The writable tab whose form fields this viewer fills in; without it forms are read-only. */
   editFileId?: string | null
+  /** The editor pane this viewer fills; it takes the focus an open hands to that pane. */
+  focusPane?: ViewerFocusPane | null
 }
 
 export default function PdfViewer(props: PdfViewerProps): JSX.Element {
@@ -66,12 +69,14 @@ function PdfDocumentViewer({
   filePath,
   preferenceKey = null,
   scrollCacheKey = null,
-  editFileId = null
+  editFileId = null,
+  focusPane = null
 }: PdfViewerProps): JSX.Element {
   const t = useTranslate()
   const rootRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const viewerDivRef = useRef<HTMLDivElement>(null)
+  useViewerPendingFocus(focusPane, containerRef)
   const loaderRef = useRef<PdfDocumentLoader | null>(null)
   const {
     attach: attachFormEditing,
@@ -222,13 +227,15 @@ function PdfDocumentViewer({
         <div style={{ all: 'revert' }}>
           <div
             ref={containerRef}
+            // Why: explicit so an open can focus it for PageUp/PageDown; 0 keeps Chromium's scroller Tab stop.
+            tabIndex={0}
             style={{
               position: 'absolute',
               inset: '0',
               overflow: 'auto',
               background: 'var(--pdf-viewer-bg, #e4e4e7)'
             }}
-            className="scrollbar-editor dark:[--pdf-viewer-bg:#18181b]"
+            className="scrollbar-editor outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid dark:[--pdf-viewer-bg:#18181b]"
           >
             <div ref={viewerDivRef} className="pdfViewer" />
           </div>

@@ -1,5 +1,6 @@
 // The row Orca leaves in the owner's chat when its bot asks or hands work to another bot: who it went
 // to, which kind, and its answer or why it wasn't sent, read from Orca's record as that bot's chat changes.
+import { cn } from '@/lib/class-names'
 import { callBotRpc } from '@/lib/bot-hosts'
 import { useEffect, useState } from 'react'
 import { Send } from 'lucide-react'
@@ -22,6 +23,11 @@ import {
 } from '../../../../shared/bots/bot-request-card-view'
 import type { BotCardCopyValues } from '../../../../shared/native-chat/bot-cards/bot-card-copy'
 import { NativeChatEventRow } from './messages/events/NativeChatEventRow'
+import { NativeChatClientAskRequestCard } from './NativeChatClientAskRequestCard'
+import {
+  NATIVE_CHAT_INLINE_NAME,
+  NATIVE_CHAT_ROW_SHARE
+} from './messages/events/native-chat-inline-chip'
 
 const COPY = BOT_REQUEST_CARD_COPY
 const PIECES: Record<keyof typeof COPY, (values?: BotCardCopyValues) => string> = {
@@ -88,6 +94,17 @@ export function NativeChatBotRequestCard({
 }): React.JSX.Element {
   useTranslation()
   const bot = useBots().find((entry) => entry.id === card.toBotId)
+  // Asked of an agent on a computer paired to this chat's host: read from that host, not a bot's.
+  if (card.client) {
+    return (
+      <NativeChatClientAskRequestCard
+        card={card}
+        client={card.client}
+        cardId={cardId}
+        timestamp={timestamp}
+      />
+    )
+  }
   if (!bot) {
     return (
       <NativeChatEventRow
@@ -124,7 +141,7 @@ function KnownBotRequestCard({
   return (
     <NativeChatEventRow
       icon={REQUEST_ICON}
-      badge={!view.sent ? 'failed' : view.dot === 'working' ? 'running' : null}
+      badge={view.badge}
       label={[`${view.heading} ${bot.name}`, subject].filter(Boolean).join(' · ')}
       timestamp={timestamp}
       disclosureKey={cardId ? `bot-request:${cardId}` : undefined}
@@ -141,19 +158,29 @@ function KnownBotRequestCard({
         )
       }
     >
-      {view.heading}{' '}
+      <span className="shrink-0">{view.heading}</span>
       {view.sent ? (
         <button
           type="button"
           onClick={openChat}
-          className="rounded-sm text-chat-foreground underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          title={bot.name}
+          className={cn(
+            NATIVE_CHAT_INLINE_NAME,
+            'rounded-sm underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+          )}
         >
           {bot.name}
         </button>
       ) : (
-        <span className="text-chat-foreground">{bot.name}</span>
+        <span className={NATIVE_CHAT_INLINE_NAME} title={bot.name}>
+          {bot.name}
+        </span>
       )}
-      {subject ? ` · ${subject}` : null}
+      {subject ? (
+        <span className={NATIVE_CHAT_ROW_SHARE} title={subject}>
+          · {subject}
+        </span>
+      ) : null}
     </NativeChatEventRow>
   )
 }

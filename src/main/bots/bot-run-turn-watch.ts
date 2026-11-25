@@ -1,6 +1,10 @@
 // A bot automation run's turn: started before its prompt is sent, it ends when the run's own turn does.
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalTurnOutcome } from '../../shared/agent-status/lifecycle/agent-turn-outcome'
+import type {
+  AgentJournalSubmission,
+  AgentJournalTurnLifecycle
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionTurnAssistantMessage } from '../../shared/agent-session/requests/structured-agent-session-latest-request'
 import { structuredAgentSessionTurnFailureLine } from '../../shared/agent-session/requests/structured-agent-session-turn-failure'
 import { structuredAgentSessionSendTurn } from '../../shared/structured-agent-session-send-turn'
@@ -23,7 +27,13 @@ export type BotRunUnavailable =
   | 'unread'
 
 export type BotTurnEnd =
-  | { outcome: AgentJournalTurnOutcome; message: string; error?: string }
+  | {
+      outcome: AgentJournalTurnOutcome
+      message: string
+      error?: string
+      /** Why the agent refused the prompt before any turn, such as a failed start. */
+      refusal?: AgentJournalSubmission['rejection']
+    }
   | { unavailable: BotRunUnavailable }
 
 /** The message a run sent, which names the turn it started, and its body's fingerprint, which a
@@ -60,23 +70,35 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
   const { items, submissions } = (
     await (await host.journalReads(sessionId)).operationWindow({ operationIds: [clientMessageId] })
   ).snapshot
-  const sent = structuredAgentSessionSendTurn({ items, submissions }, send)
-  switch (sent.kind) {
+  const placed = structuredAgentSessionSendTurn({ items, submissions }, send)
+  let sent: { itemId: string; turn: AgentJournalTurnLifecycle }
+  switch (placed.kind) {
     case 'unsent':
       return queued ? null : unavailable('removed')
     case 'edited':
       return unavailable('edited')
     case 'shared':
-      return unavailable('shared')
+      // Its prompt is handled in that turn, so the run ends as it does; never with its answer.
+      if (!placed.turn) {
+        return unavailable('shared')
+      }
+      sent = placed.turn
+      break
     case 'pending':
       return null
     case 'refused':
-      return { outcome: 'failure', message: '' }
+      return {
+        outcome: 'failure',
+        message: '',
+        ...(placed.rejection ? { refusal: placed.rejection } : {})
+      }
     case 'none':
       return unavailable('unattributed')
     case 'turn':
+      sent = placed
       break
   }
+  const shared = placed.kind === 'shared'
   const outcome = readAgentJournalTurnOutcome(sent.turn)
   // A turn that stops on a question for the user has not finished yet; a failure still ends it. Only
   // the live agent's questions count: one left by an agent that has since stopped gets no answer.
@@ -92,10 +114,13 @@ async function readRunTurn(host: BotTurnHost, send: BotRunSend): Promise<BotTurn
   if (sent.turn.state === 'running' || (outcome === 'success' && asking)) {
     return null
   }
+  if (shared && outcome === 'success') {
+    return unavailable('shared')
+  }
   return outcome
     ? {
         outcome,
-        message: structuredAgentSessionTurnAssistantMessage(items, sent.itemId),
+        message: shared ? '' : structuredAgentSessionTurnAssistantMessage(items, sent.itemId),
         ...(outcome === 'failure'
           ? { error: structuredAgentSessionTurnFailureLine(items, sent.itemId) }
           : {})

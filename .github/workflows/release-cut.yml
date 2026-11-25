@@ -1071,20 +1071,29 @@ jobs:
         run: |
           set -euo pipefail
           required=(.github/actions/install-mobile-dependencies/action.yml)
+          # Why: the SignPath artifact wait must run the workflow's copy even when an older cut ref has one.
+          always_restore=()
           if [ "$PLATFORM" = win ] && [ "$GITHUB_RUN_ATTEMPT" = 1 ]; then
-            required+=(.github/actions/install-signpath-module/action.yml)
+            required+=(.github/actions/install-signpath-module/action.yml .github/actions/wait-for-run-artifact/action.yml)
+            always_restore+=(.github/actions/wait-for-run-artifact)
           fi
           missing=()
           for action_path in "${required[@]}"; do
             [ -f "$action_path" ] || missing+=("$action_path")
           done
-          if [ "${#missing[@]}" -eq 0 ]; then
+          if [ "${#missing[@]}" -eq 0 ] && [ "${#always_restore[@]}" -eq 0 ]; then
             echo "Composite actions already present at the cut ref."
             exit 0
           fi
-          echo "Cut ref predates ${missing[*]}; restoring from $WORKFLOW_SHA."
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- .github/actions
+          git cat-file -e "$WORKFLOW_SHA^{commit}" 2>/dev/null || git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "Cut ref predates ${missing[*]}; restoring from $WORKFLOW_SHA."
+            git checkout "$WORKFLOW_SHA" -- .github/actions
+          fi
+          if [ "${#always_restore[@]}" -gt 0 ]; then
+            echo "Restoring ${always_restore[*]} from $WORKFLOW_SHA."
+            git checkout "$WORKFLOW_SHA" -- "${always_restore[@]}"
+          fi
           for action_path in "${required[@]}"; do
             test -f "$action_path"
           done
@@ -1415,6 +1424,13 @@ jobs:
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
+      # Why: SignPath rejects an artifact GitHub has finalized but not listed yet (v1.4.267).
+      - name: Wait for unsigned inner binaries to be listed
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
+        uses: ./.github/actions/wait-for-run-artifact
+        with:
+          artifact-id: ${{ steps.upload-unsigned-inner.outputs.artifact-id }}
+
       - name: Submit inner binaries signing request
         id: submit-inner-signing
         if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-inner.outcome == 'success'
@@ -1629,6 +1645,13 @@ jobs:
           path: dist/orca-windows-setup.exe
           compression-level: 0
           if-no-files-found: error
+
+      - name: Wait for unsigned Windows installer to be listed
+        id: wait-installer-listed
+        if: matrix.platform == 'win' && github.run_attempt == 1 && steps.mac-signing-gate.outcome == 'success' && steps.upload-unsigned-windows-installer.outcome == 'success'
+        uses: ./.github/actions/wait-for-run-artifact
+        with:
+          artifact-id: ${{ steps.upload-unsigned-windows-installer.outputs.artifact-id }}
 
       # Why: SignPath Foundation production certificates require manual review,
       # so the release job waits while the signing request is approved in UI.
@@ -1953,12 +1976,13 @@ jobs:
           INNER_REQUEST_ID: ${{ steps.submit-inner-signing.outputs.signing-request-id }}
           INSTALLER_REQUEST_ID: ${{ steps.submit-signing-request.outputs.signing-request-id }}
           INSTALLER_SUBMISSION_OUTCOME: ${{ steps.submit-signing-request.outcome }}
+          INSTALLER_LISTING_OUTCOME: ${{ steps.wait-installer-listed.outcome }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:SLACK_WEBHOOK_URL)) {
             throw 'SLACK_WEBHOOK_URL is missing; cannot notify release approvers of the signing failure.'
           }
           $stage = 'inner-binary signing or installer rebuild'
-          if ($env:INSTALLER_SUBMISSION_OUTCOME -in @('success', 'failure')) {
+          if ($env:INSTALLER_SUBMISSION_OUTCOME -in @('success', 'failure') -or $env:INSTALLER_LISTING_OUTCOME -eq 'failure') {
             $stage = 'installer signing or final signature verification'
           }
           $message = "Orca Windows release ``$($env:TAG)`` failed during $stage (including approval timeouts). Publication is blocked.`n<$($env:GITHUB_RUN_URL)|Open failed GitHub Actions run>"

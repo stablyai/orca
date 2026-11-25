@@ -34,7 +34,11 @@ import {
   JOURNAL_DOMAIN_SUBMISSION_COLUMNS,
   journalDomainSubmissionColumns
 } from './journal-domain-submission-columns'
-import { recordJournalConnectorReplies } from './connector-replies/journal-connector-replies'
+import {
+  claimJournalConnectorReplies,
+  recordJournalConnectorReplies,
+  repointJournalConnectorClaim
+} from './connector-replies/journal-connector-replies'
 
 /** Accepted input, queue ownership and attachment claims precede provider dispatch atomically. */
 export function applyJournalDomainSubmission(
@@ -160,9 +164,14 @@ export function applyJournalDomainSubmission(
       familyId
     )
   }
-  // A queued card's rows were written with the card; a direct send's are written here.
+  // A queued card's rows were written with the card; a direct send's are written here. A card's
+  // claim moves to the send it was handed over as, and a send again after its claim was released
+  // claims again.
   if (familyId === undefined) {
     recordJournalConnectorReplies(db, target, input.clientMessageId, false, input.body)
+  } else {
+    repointJournalConnectorClaim(db, target, familyId, input.clientMessageId)
+    claimJournalConnectorReplies(db, target, input.clientMessageId, input.body)
   }
   const payload = JSON.stringify(submission)
   advanceJournalDomainSubmissionRevision(db, target, input.clientMessageId, payload)

@@ -186,7 +186,6 @@ const probeRoots = new Map([
   ['config/tsconfig.tc.web.json', 'src/renderer/src'],
   ['config/tsconfig.tc.cli.json', 'src/cli'],
   ['config/tsconfig.tc.bot-evals.json', 'src/cli/bot-orchestration-eval'],
-  ['config/tsconfig.test.pane-launch.json', 'src/shared'],
   ['src/packages/process-host/tsconfig.test.json', 'src/packages/process-host/src']
 ])
 for (const { config } of TYPECHECK_PROJECTS) {

@@ -17,10 +17,6 @@ type State = {
 // Module scope deduplicates breadcrumbs across file-keyed boundary remounts.
 const recordedLazyChunkCauses = new Set<string>()
 
-export function clearLazyChunkBreadcrumbDedupeForTest(): void {
-  recordedLazyChunkCauses.clear()
-}
-
 function describeLazyChunkCause(error: Error): string {
   const cause = (error as { cause?: unknown }).cause
   if (cause instanceof Error) {

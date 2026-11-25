@@ -44,7 +44,10 @@ export async function readDocPreviewGrantedFile(
     method,
     params,
     TIMEOUT_MS,
-    address.expectedEnvironmentPairingRevision
+    address.expectedEnvironmentPairingRevision,
+    undefined,
+    // Opening a preview is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
   )
   if (!response.ok) {
     throw new Error(response.error.message)
@@ -61,9 +64,6 @@ export async function readDocPreviewTerminalFile(
   absolutePath: string
 ): Promise<DocPreviewTerminalRead> {
   const owner = grant.owner
-  if (owner.kind !== 'runtime') {
-    throw new Error('Not found')
-  }
   const root = getRuntimeEnvironmentRegistryRoot()
   const environment = await resolveEnvironment(root, owner.environmentId)
   const revision = environment.pairingRevision ?? environment.createdAt
@@ -74,7 +74,9 @@ export async function readDocPreviewTerminalFile(
       method,
       params,
       TIMEOUT_MS,
-      revision
+      revision,
+      undefined,
+      { wake: true }
     )
     if (!response.ok) {
       throw new Error(response.error.message)

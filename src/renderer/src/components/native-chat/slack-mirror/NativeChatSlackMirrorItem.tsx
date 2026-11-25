@@ -21,6 +21,7 @@ import { openBotConnectorsTab } from '@/components/bots/bot-settings-open'
 import type { SlackMirrorStatus } from '../../../../../shared/connectors/connector-slack-mirror-contract'
 import {
   slackMirrorView,
+  slackPlaceOf,
   slackThreadUrl,
   type SlackMirrorCopy
 } from '../../../../../shared/connectors/slack-mirror-state'
@@ -111,7 +112,8 @@ export function NativeChatSlackMirrorItem(): React.JSX.Element | null {
             onSelect={() => {
               const bot = mirror.bot()
               if (bot) {
-                openBotConnectorsTab(bot)
+                const place = slackPlaceOf(mirror.link.externalId)
+                openBotConnectorsTab(bot, place ? `slack:${place.teamId}` : undefined)
               }
             }}
           >

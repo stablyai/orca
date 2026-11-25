@@ -32,7 +32,7 @@ function OpenHomeNewBotSheet(props: {
   onClose: () => void
   onAfterClose: () => void
 }) {
-  const openBotHome = useOpenBotHome()
+  const openBotHome = useOpenBotHome({ standalone: true })
   const { bots, clientOf } = props
   const computers = useMemo(() => homeNewBotComputers(bots), [bots])
   const byId = useMemo(
@@ -48,19 +48,26 @@ function OpenHomeNewBotSheet(props: {
     const paired = computer ? clientOf(computer.pairedHostId) : null
     return computer && paired ? botPlaceClient(paired, computer) : null
   }
-  const botNamesOn = (id: string) =>
-    bots.rows.flatMap((row) => (row.kind === 'bot' && row.computerKey === id ? [row.title] : []))
+  const botsOn = (id: string) =>
+    bots.rows.flatMap((row) => (row.kind === 'bot' && row.computerKey === id ? [row.bot] : []))
   const first = computers.find((computer) => computer.refusal === undefined) ?? null
   return (
     <MobileNewBotSheet
       visible={props.visible}
       computerId={first?.id ?? null}
       computers={computers}
-      botNamesOn={botNamesOn}
+      botsOn={botsOn}
       clientFor={clientFor}
       pairedClientFor={pairedClientFor}
       onClose={props.onClose}
       onAfterClose={props.onAfterClose}
+      onOpenBot={(bot, computer, homeDraft) => {
+        props.onClose()
+        const place = byId.get(computer.id)
+        if (place) {
+          openBotHome(place, bot, homeDraft)
+        }
+      }}
       onCreated={(bot, computer) => {
         props.onClose()
         const place = byId.get(computer.id)

@@ -93,6 +93,11 @@ export const BOT_HANDLER_GROUPS: HandlerGroup[] = [
     load: async () => (await import('../google/google.js')).GOOGLE_HANDLERS
   },
   {
+    name: 'google-default',
+    keys: ['google default'],
+    load: async () => (await import('../google/google-default-account.js')).GOOGLE_DEFAULT_HANDLERS
+  },
+  {
     name: 'google-read',
     keys: ['gmail search', 'gmail read', 'calendar list', 'calendar get', 'contacts find'],
     load: async () => (await import('../google/google-read.js')).GOOGLE_READ_HANDLERS

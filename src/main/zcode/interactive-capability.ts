@@ -24,11 +24,6 @@ const PROBE_TIMEOUT_MS = 6_000
 const cached = new Map<string, ZCodeInteractiveCapability>()
 const inFlight = new Map<string, Promise<ZCodeInteractiveCapability>>()
 
-export function _resetZCodeInteractiveCapabilityForTests(): void {
-  cached.clear()
-  inFlight.clear()
-}
-
 type ZCodeCommand = { program: string; prefixArgs: string[] }
 
 /** Resolve what a ZCode pane runs as chats do; null when nothing runnable exists, so no spawn can misreport it. */

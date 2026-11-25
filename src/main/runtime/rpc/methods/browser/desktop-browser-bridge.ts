@@ -7,6 +7,14 @@ import {
   DesktopBrowserBridgeResultParams
 } from '../../../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import {
+  DESKTOP_BROWSER_BRIDGE_DOWNLOAD_ABORT_METHOD,
+  DESKTOP_BROWSER_BRIDGE_DOWNLOAD_WRITE_METHOD,
+  DESKTOP_BROWSER_BRIDGE_FILE_READ_METHOD,
+  DesktopBrowserBridgeDownloadAbortParams,
+  DesktopBrowserBridgeDownloadWriteParams,
+  DesktopBrowserBridgeFileReadParams
+} from '../../../../../shared/browser/client-hosting/desktop-browser-bridge-file-transfer-protocol'
+import {
   getDesktopBrowserBridgeRegistry,
   isDesktopBrowserBridgeHostEnabled
 } from '../../../desktop-browser-bridge/desktop-browser-bridge-registry'
@@ -99,5 +107,38 @@ export const DESKTOP_BROWSER_BRIDGE_RPC_METHODS = [
       const caller = requireBridgeCaller(context)
       return { accepted: getDesktopBrowserBridgeRegistry(context.runtime).settle(caller, params) }
     }
+  }),
+  defineMethod({
+    name: DESKTOP_BROWSER_BRIDGE_FILE_READ_METHOD,
+    permission: 'workspace',
+    params: DesktopBrowserBridgeFileReadParams,
+    handler: (params, context) =>
+      getDesktopBrowserBridgeRegistry(context.runtime).readHostFile(
+        requireBridgeCaller(context),
+        params
+      )
+  }),
+  defineMethod({
+    name: DESKTOP_BROWSER_BRIDGE_DOWNLOAD_WRITE_METHOD,
+    permission: 'workspace',
+    params: DesktopBrowserBridgeDownloadWriteParams,
+    handler: async (params, context) => ({
+      accepted: true as const,
+      ...(await getDesktopBrowserBridgeRegistry(context.runtime).writeDownload(
+        requireBridgeCaller(context),
+        params
+      ))
+    })
+  }),
+  defineMethod({
+    name: DESKTOP_BROWSER_BRIDGE_DOWNLOAD_ABORT_METHOD,
+    permission: 'workspace',
+    params: DesktopBrowserBridgeDownloadAbortParams,
+    handler: (params, context) => ({
+      released: getDesktopBrowserBridgeRegistry(context.runtime).abortDownload(
+        requireBridgeCaller(context),
+        params
+      )
+    })
   })
 ]

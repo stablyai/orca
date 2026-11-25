@@ -121,20 +121,27 @@ describe('removeWorktreeSymlinks', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('unlinks configured symlinks while preserving regular files', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+  it('unlinks a configured directory link while preserving its target and regular files', async () => {
     mkdirSync(join(primary, 'node_modules'))
-    symlinkSync(join(primary, '.env'), join(worktree, '.env'), 'file')
-    symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'), 'dir')
+    symlinkSync(join(primary, 'node_modules'), join(worktree, 'node_modules'), 'junction')
     writeFileSync(join(worktree, 'notes.txt'), 'local notes\n')
 
-    await removeWorktreeSymlinks(worktree, ['.env', 'node_modules', 'notes.txt'])
+    await removeWorktreeSymlinks(worktree, ['node_modules', 'notes.txt'])
 
-    expect(existsSync(join(worktree, '.env'))).toBe(false)
     expect(existsSync(join(worktree, 'node_modules'))).toBe(false)
-    expect(statSync(join(primary, '.env')).isFile()).toBe(true)
     expect(statSync(join(primary, 'node_modules')).isDirectory()).toBe(true)
     expect(readFileSync(join(worktree, 'notes.txt'), 'utf8')).toBe('local notes\n')
+  })
+
+  // File symlinks need elevation or Developer Mode on Windows.
+  posixIt('unlinks a configured file symlink while preserving its target', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    symlinkSync(join(primary, '.env'), join(worktree, '.env'), 'file')
+
+    await removeWorktreeSymlinks(worktree, ['.env'])
+
+    expect(existsSync(join(worktree, '.env'))).toBe(false)
+    expect(statSync(join(primary, '.env')).isFile()).toBe(true)
   })
 
   it('rejects unsafe paths without touching the filesystem', async () => {

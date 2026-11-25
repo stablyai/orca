@@ -13,10 +13,9 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useNow } from '@/lib/window-activity/use-now'
 import { useTranslate } from '@/i18n/use-translate'
-import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
-  BOT_ITEM_STATUSES,
+  botItemPickerStatuses,
   formatBotItemNumber,
   isBotItemLive,
   isBotItemSnoozed,
@@ -28,9 +27,10 @@ import { BotItemLinkChips } from './BotItemLinkChips'
 import { BotItemStatusIcon } from './BotItemStatusIcon'
 import { BotItemSnoozeMenuItems, type BotItemSnoozing } from './BotItemSnooze'
 import { formatBotItemSnoozeTime } from './bot-item-snooze-time'
-import { botItemStatusName } from './bot-item-status-name'
-
-const WHEN = { weekday: 'short', hour: 'numeric', minute: '2-digit' } as const
+import { botItemPickName, botItemStatusName } from './bot-item-status-name'
+import { botHostTakes } from '../bot-host-capability'
+import { BOTS_ITEM_WAITING_CAPABILITY } from '../../../../../shared/bot-runtime-capabilities'
+import { NativeChatMessageTimestamp } from '../../native-chat/messages/rows/NativeChatMessageTimestamp'
 
 export function BotItemHeader({
   bot,
@@ -72,13 +72,27 @@ export function BotItemHeader({
           {item.title}
         </h2>
         <div className="flex min-w-0 items-center gap-2">
-          <StatusMenu item={item} disabled={deleted} onStatus={onStatus} snoozing={snoozing} />
-          <p className="min-w-0 truncate text-xs text-muted-foreground">
-            {t('bots.items.view.sub', 'Item {{number}} · {{chat}} · {{when}}', {
-              number: item.number,
-              chat: chatTitle,
-              when: uiDateTimeFormat(WHEN).format(item.createdAt)
-            })}
+          <StatusMenu
+            item={item}
+            waiting={botHostTakes(bot, BOTS_ITEM_WAITING_CAPABILITY)}
+            disabled={deleted}
+            onStatus={onStatus}
+            snoozing={snoozing}
+          />
+          {/* The date stays whole; the chat title truncates, and a narrow pane drops it (the title's
+              number and the Chat row already say both). */}
+          <p className="flex min-w-0 gap-1 text-xs text-muted-foreground">
+            <span className="min-w-0 truncate @max-[360px]:hidden">
+              {t('bots.items.view.subWhere', 'Item {{number}} · {{chat}}', {
+                number: item.number,
+                chat: chatTitle
+              })}
+              {Number.isNaN(new Date(item.createdAt).getTime()) ? null : ' ·'}
+            </span>
+            <NativeChatMessageTimestamp
+              timestamp={item.createdAt}
+              className="shrink-0 text-muted-foreground"
+            />
           </p>
         </div>
         {snoozed && item.snoozedUntil !== null ? (
@@ -134,11 +148,14 @@ function useScrollPaddingBelow(
 
 function StatusMenu({
   item,
+  waiting,
   disabled,
   onStatus,
   snoozing
 }: {
   item: BotItem
+  /** The item's host has Waiting. */
+  waiting: boolean
   disabled: boolean
   onStatus: (to: BotItemStatus) => void
   snoozing: BotItemSnoozing
@@ -154,20 +171,17 @@ function StatusMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {BOT_ITEM_STATUSES.map((status) => (
+        {botItemPickerStatuses(waiting).map((status) => (
           <DropdownMenuItem
             key={status}
-            disabled={status === item.status}
+            // Waiting again edits what it waits on.
+            disabled={status === item.status && status !== 'waiting'}
             onSelect={() => onStatus(status)}
           >
             <span className="flex w-4 justify-center">
               <BotItemStatusIcon status={status} />
             </span>
-            <span className="flex-1">
-              {status === 'canceled'
-                ? t('bots.items.menu.canceled', 'Canceled…')
-                : botItemStatusName(status, t)}
-            </span>
+            <span className="flex-1">{botItemPickName(status, t)}</span>
             {status === item.status ? <Check className="size-3" /> : null}
           </DropdownMenuItem>
         ))}

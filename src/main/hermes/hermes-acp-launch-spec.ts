@@ -15,6 +15,7 @@ import {
 } from './hermes-default-home'
 import { HERMES_TRANSCRIPT_IMPORT } from './hermes-transcript-import'
 import { deliverHermesInstructions } from '../acp/launch/acp-instructions'
+import { publishHermesSessionToolEnv } from './hermes-session-tool-env'
 
 // Chats and terminals share the profile's session store; `--resume` also takes a session title.
 const HERMES_SESSION_HISTORY: StructuredAgentSessionHistory = {
@@ -68,10 +69,16 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
     values: { ask: 'ask', 'accept-edits': 'workspace_session', 'full-access': 'session' },
     fullAccessAnswersRequests: true
   },
-  // Hermes cannot delete sessions, so a listing session would stay in the profile's store.
+  // Only a session lists models, and Hermes stores it at session/new without an ACP delete, so its
+  // own CLI deletes the listing session once the process exits.
   modelDiscovery: {
-    kind: 'unavailable',
-    reason: 'Hermes lists its models only inside a session it cannot delete'
+    kind: 'session',
+    listingNamesConfiguredModel: false,
+    inPrivateFolder: true,
+    listsOnDemand: true,
+    discardSession: async ({ sessionId, runAgent }) => {
+      await runAgent(['sessions', 'delete', '--yes', sessionId])
+    }
   },
   instructions: deliverHermesInstructions,
   instructionsInWorkspace: true,
@@ -81,5 +88,5 @@ export const HERMES_LAUNCH_SPEC: AcpLaunchSpec = {
   sessionHistory: HERMES_SESSION_HISTORY,
   keepsEverySession: true,
   // Tools run in the profile's gateway, which outlives the chat that started it and serves the rest.
-  sharedToolProcess: true
+  sharedToolProcess: { publishSessionEnv: publishHermesSessionToolEnv }
 }

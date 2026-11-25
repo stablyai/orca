@@ -4,6 +4,8 @@ import type { CommentMarkdownExtension } from '@/components/comment-markdown/Com
 import { botGroupMentionSegments } from '../../../../shared/bots/bot-group-mentions'
 import {
   BOT_CHAT_MENTION_PREFIX,
+  botChatIdLabel,
+  botMentionLabel,
   botMentionTokens
 } from '../../../../shared/bots/bot-mention-context'
 import { BOT_ADDRESS_PREFIX } from '../../../../shared/bot-roster'
@@ -37,11 +39,6 @@ export function withBoundBotMentions(
 export const NativeChatBotChatTitleContext = createContext<
   ((botId: string, chatId: string) => ReactNode) | null
 >(null)
-
-/** How a chat no title can be found for reads: by the start of its id, never dropped. */
-export function botChatIdLabel(chatId: string): string {
-  return `chat ${chatId.slice(0, 6)}`
-}
 
 /** The Slack people this chat knows; with them, Slack's `<@U…>` tokens in its text draw as names. */
 export const NativeChatSlackPeopleContext = createContext<SlackPeople | null>(null)
@@ -99,8 +96,8 @@ function pickedBot(node: MarkdownNode, source: string): MarkdownNode | null {
     return null
   }
   return token.chatId
-    ? mentionNode(`@${token.name} › ${botChatIdLabel(token.chatId)}`, `${token.id}/${token.chatId}`)
-    : mentionNode(`@${token.name}`)
+    ? mentionNode(botMentionLabel(token), `${token.id}/${token.chatId}`)
+    : mentionNode(botMentionLabel(token))
 }
 
 function plainText(node: MarkdownNode): string {

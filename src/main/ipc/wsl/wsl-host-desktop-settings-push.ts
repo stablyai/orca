@@ -1,7 +1,9 @@
-/** Desktop state a WSL host is given: the selected agent accounts, and the permission choice at Add. */
+/** Desktop state a WSL host is given: the selected agent accounts, chat naming, and the permission choice at Add. */
 import type { WslHostAddResult } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { Store } from '../../persistence/loading-store/store'
 import { pushWslOrcadHostAccountEnv } from '../../wsl/orcad/wsl-orcad-host-account-push'
+import { pushWslOrcadHostChatAutoName } from '../../wsl/orcad/wsl-orcad-host-chat-naming-push'
 import { seedWslHostAgentPermission } from '../../wsl/host-lifecycle/wsl-host-permission-seed'
 import { wslOrcadHostSupports } from '../../wsl/orcad/wsl-orcad-host-environments'
 import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
@@ -72,4 +74,31 @@ export function pushHostAccounts(
     hostSupports: (capability) =>
       wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
   })
+}
+
+// A hung call must not hold that host's push queue.
+const CHAT_AUTO_NAME_PUSH_TIMEOUT_MS = 15_000
+
+export function pushHostChatAutoName(
+  getUserDataPath: () => string,
+  environmentId: string,
+  store: Pick<Store, 'getSettings'>
+): void {
+  const call = (method: string, params: unknown) =>
+    callRuntimeEnvironment(
+      getUserDataPath(),
+      environmentId,
+      method,
+      params,
+      CHAT_AUTO_NAME_PUSH_TIMEOUT_MS
+    )
+  void pushWslOrcadHostChatAutoName(
+    {
+      environmentId,
+      call,
+      hostSupports: (capability) =>
+        wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
+    },
+    () => store.getSettings().nativeChatAutoName !== false
+  )
 }

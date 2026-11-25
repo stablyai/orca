@@ -4,6 +4,7 @@ import type {
 } from '../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../shared/automations/history/automation-run'
 import { automationRunMemoryLabel } from '../bots/bot-turn-source'
+import { automationRunOperationId } from './launch/automation-run-operation'
 import { LINEAR_ISSUE_KEY_PATTERN } from '../../shared/connector-bot-linear-contract'
 import type { LinkableChat } from '../external-conversations/external-conversation-chat-delivery'
 import type { ConversationKey } from '../external-conversations/external-conversation-types'
@@ -21,6 +22,7 @@ import {
 import { captureAutomationRunMessage } from './automation-run-message-capture'
 import type { BotRunFields } from '../bots/bot-chat-session'
 import type { AgentJournalAutomationRunNotStartedItem } from '../../shared/agent-journal-orca-card-items'
+import { BotSessionRefusedError } from '../bots/bot-session-refused-error'
 
 /** Where a bot run's prompt goes; each resolves to the structured session and message that took it. */
 export type BotAutomationSessions = {
@@ -179,7 +181,8 @@ export function createBotAutomationDispatcher(
     const fields: BotRunFields = {
       memorySource: automationRunMemoryLabel(automation.name, run.event),
       ...(run.triggeredBy ? { triggeredBy: run.triggeredBy } : {}),
-      ...(automationRun ? { automationRun } : {})
+      ...(automationRun ? { automationRun } : {}),
+      messageId: automationRunOperationId(run, 'run-message')
     }
     const { runsIn } = target
     const chosenChat = automation.bot?.chat?.sessionId
@@ -230,6 +233,7 @@ export function createBotAutomationDispatcher(
             run: automationRun,
             actsFor: [...OWNER_ACTS_FOR],
             error: notStartedError(error),
+            ...(error instanceof BotSessionRefusedError ? { refusal: error.data.refusal } : {}),
             text,
             at: Date.now()
           }

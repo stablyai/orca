@@ -1,6 +1,9 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { Bot } from '../../../../../shared/bot-types'
-import type { BotSkillProjectView } from '../../../../../shared/bots/bot-skill-projects'
+import type {
+  BotOwnSkillsView,
+  BotSkillProjectView
+} from '../../../../../shared/bots/bot-skill-projects'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { BotSkillsSection } from './BotSkillsSection'
@@ -33,6 +36,27 @@ const REPOS = [
   repo('api', { connectionId: 'gpu-box' }),
   repo('notes', { kind: 'folder' })
 ]
+
+/** A template bot's own skill, and one an older version left in Claude's folder. */
+const OWN: BotOwnSkillsView = {
+  skillsDir: '/Users/owner/.orca/bots/pr-review/skills',
+  skills: [
+    {
+      name: 'pr-review-checklist',
+      description: 'What to check on every pull request',
+      folder: '/Users/owner/.orca/bots/pr-review/skills/pr-review-checklist',
+      loadedBy: ['claude', 'agents']
+    }
+  ],
+  agentOnly: [
+    {
+      name: 'house-style',
+      description: 'Our review tone',
+      folder: '/Users/owner/.orca/bots/pr-review/.claude/skills/house-style',
+      loadedBy: ['claude']
+    }
+  ]
+}
 
 const VIEWS: Record<string, BotSkillProjectView> = {
   orca: {
@@ -82,9 +106,25 @@ function atlas(extra: Partial<Bot> = {}): Bot {
   }
 }
 
-function stubRuntime(): void {
+const HOST_SERVERS = ['linear', 'sentry', 'postgres', 'context7'].map((name, index) => ({
+  id: `server-0000000${index}`,
+  name,
+  detail: `https://mcp.${name}.dev/mcp`,
+  transport: 'http',
+  remote: false,
+  agentsOff: [],
+  workspaces: { later: true, on: [], off: [] },
+  sharedProcess: false
+}))
+
+function stubRuntime(hostMcpServers?: boolean): void {
   const answers: Record<string, (params: Record<string, unknown>) => unknown> = {
+    'mcpServers.list': () => ({
+      servers: HOST_SERVERS,
+      agentFiles: { grok: false, cursor: false, droid: false }
+    }),
     'bots.tools.list': () => ({
+      ...(hostMcpServers === undefined ? {} : { hostMcpServers }),
       agent: 'claude',
       own: [
         { name: 'sentry', detail: 'https://mcp.sentry.dev/mcp', remote: true },
@@ -96,7 +136,8 @@ function stubRuntime(): void {
     'bots.tools.problems': () => ({ problems: {} }),
     'bots.list': () => ({ bots: [] }),
     'bots.skillProjects.scan': (params) => ({
-      projects: Array.isArray(params.repoIds) ? params.repoIds.map((id) => VIEWS[String(id)]) : []
+      projects: Array.isArray(params.repoIds) ? params.repoIds.map((id) => VIEWS[String(id)]) : [],
+      ...(params.botId ? { own: OWN } : {})
     })
   }
   Reflect.set(window.api, 'runtime', {
@@ -128,14 +169,22 @@ const linked = atlas({ skillProjects: ['orca', 'api', 'website'] })
 export const before = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
+  render: () => <Page bot={linked} skills={false} />
+})
+
+/** A host that serves MCP servers: the bot can take them with one switch (d13). */
+export const hostMcpServersOn = defineFixture({
+  width: 720,
+  store: { repos: REPOS },
+  setup: () => stubRuntime(true),
   render: () => <Page bot={linked} skills={false} />
 })
 
 export const projectsLinked = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={linked} skills />,
   interact: async (frame) => {
     await new Promise((resolve) => setTimeout(resolve, 100))
@@ -147,7 +196,7 @@ export const projectsLinked = defineFixture({
 export const linkPicker = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={atlas({ skillProjects: ['orca'] })} skills />,
   interact: async (frame) => {
     const link = Array.from(frame.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -161,13 +210,13 @@ export const linkPicker = defineFixture({
 export const listedForGrok = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={atlas({ agent: 'grok', skillProjects: ['orca'] })} skills />
 })
 
 export const noneLinked = defineFixture({
   width: 720,
   store: { repos: REPOS },
-  setup: stubRuntime,
+  setup: () => stubRuntime(),
   render: () => <Page bot={atlas()} skills />
 })

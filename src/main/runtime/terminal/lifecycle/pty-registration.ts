@@ -222,6 +222,8 @@ export abstract class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithDaemonLa
         this.registerPreAllocatedHandleForPty(ptyId, replacementHandle)
       }
       this.ensurePtyBackedMobileSurfaceForRendererTab(worktreeId, binding.tabId)
+      // A restarted pane's new process: its resumed agent may have reported before it registered.
+      this.terminalWorkerRestartResume.recheckHeldPanes()
     }
   }
 

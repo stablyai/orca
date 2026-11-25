@@ -167,7 +167,8 @@ export function readJournalDomainEntity(
         body: readJournalDomainSubmissionBody(
           db,
           { sessionId: scope.sessionId, epoch: scope.epoch },
-          operation.clientMessageId
+          operation.clientMessageId,
+          operation.family
         )
       }
     case 'acceptance': {

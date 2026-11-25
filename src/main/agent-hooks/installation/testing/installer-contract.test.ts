@@ -21,6 +21,9 @@ import type { HooksConfig } from '../configuration/hook-config-schema'
 import '../scripts/hook-post-command'
 import { wrapRuntimeHomeHookCommand } from '../commands/runtime-home-hook-command'
 
+// Windows file symlinks need elevation, and a junction can only link a directory.
+const itFileLinks = it.skipIf(process.platform === 'win32')
+
 let tmpDir: string
 let configPath: string
 
@@ -38,7 +41,7 @@ describe('writeHooksJson', () => {
     hooks: { Stop: [{ hooks: [{ type: 'command', command }] }] }
   })
 
-  it('updates a symlink target without replacing the hook config link', () => {
+  itFileLinks('updates a symlink target without replacing the hook config link', () => {
     const targetPath = join(tmpDir, 'dotfiles-hooks.json')
     writeFileSync(targetPath, '{"hooks":{}}\n')
     symlinkSync(targetPath, configPath)
@@ -64,7 +67,7 @@ describe('writeHooksJson', () => {
     }
   )
 
-  it('does not follow an existing .bak symlink', () => {
+  itFileLinks('does not follow an existing .bak symlink', () => {
     const original = '{"hooks":{}}\n'
     const backupTarget = join(tmpDir, 'dotfiles-backup.json')
     writeFileSync(configPath, original, 'utf-8')

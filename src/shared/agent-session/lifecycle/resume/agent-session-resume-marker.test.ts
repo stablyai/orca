@@ -18,17 +18,12 @@ const marker: AgentSessionResumeMarker = {
 }
 
 describe('exitUnproven resume marker storage', () => {
-  it('is stored blocked on a person so a rolled-back build never continues it alone', () => {
+  it('blocks automatic resume on older builds and restores the original activity', () => {
     const stored = storedAgentSessionResumeMarker(marker)
 
     expect(stored.trigger).toBe('quit')
     expect(restartActivityWaitsOnPerson(stored.activity)).toBe(true)
-  })
-
-  it('reads back the activity it was written with', () => {
-    const read = parseAgentSessionResumeMarker(storedAgentSessionResumeMarker(marker))
-
-    expect(read).toEqual(marker)
+    expect(parseAgentSessionResumeMarker(stored)).toEqual(marker)
   })
 })
 

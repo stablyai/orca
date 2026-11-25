@@ -6,7 +6,11 @@ export const CONNECTOR_ACTIONS_PATH = '/v1/connector/actions'
 
 /** Connector calls that post as a bot chat and say whom its turn acts for: the CLI sends its session
  *  and the host verifies it, so a chat can only speak for its own turn. */
-export const CONNECTOR_POST_METHOD_NAMES = ['connector.act', 'connector.reply'] as const
+export const CONNECTOR_POST_METHOD_NAMES = [
+  'connector.act',
+  'connector.reply',
+  'connector.leaveThread'
+] as const
 
 // A cloud without edit, delete or attach refuses them itself, as unsupported; set goes only to a cloud listing `set`.
 export const CONNECTOR_ACTION_VERBS = [
@@ -39,6 +43,9 @@ export const isConnectorWorkspaceRef = (value: string): boolean => WORKSPACE_REF
 
 // The most files one `orca bot reply` posts with its words.
 export const CONNECTOR_REPLY_MAX_FILES = 10
+// The most buttons one `orca bot reply` offers, and the longest label each takes (Slack's own cap).
+export const CONNECTOR_REPLY_MAX_CHOICES = 10
+export const CONNECTOR_REPLY_CHOICE_MAX_CHARS = 75
 
 // A file the CLI uploads itself: its name and exact size, which the source's upload slot is cut for.
 // No Orca cap; the source's own limits apply.
@@ -100,6 +107,12 @@ export const ConnectorActionArgs = z
     stage: z.literal(true).optional(),
     // reply and attach: the postIds of files staged for it, posted with its text as one post.
     files: z.array(z.string().min(1).max(128)).min(1).max(CONNECTOR_REPLY_MAX_FILES).optional(),
+    // reply: a button for each under its text (Slack); sent only to a cloud listing `reply.choices`.
+    choices: z
+      .array(z.string().trim().min(1).max(CONNECTOR_REPLY_CHOICE_MAX_CHARS))
+      .min(1)
+      .max(CONNECTOR_REPLY_MAX_CHOICES)
+      .optional(),
     // read, with download: answer a link the CLI streams the bytes from. Sent only to a cloud listing
     // `files.direct`.
     stream: z.literal(true).optional(),
@@ -124,7 +137,9 @@ export const ConnectorActionResponse = z.discriminatedUnion('ok', [
   z.object({
     ok: z.literal(false),
     refusal: z.string().min(1),
-    message: z.string()
+    message: z.string(),
+    reason: z.string().optional(),
+    scope: z.string().optional()
   })
 ])
 export type ConnectorActionResponse = z.infer<typeof ConnectorActionResponse>
@@ -144,6 +159,8 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   'cloud_lacks_reply_files',
   // A file to attach or download, to a cloud that can't hand the bytes straight to this machine.
   'cloud_lacks_direct_files',
+  // `bot reply --choice`, to a cloud that can't put buttons on a reply.
+  'cloud_lacks_reply_choices',
   // A post whose answer was lost after every retry: it may have posted.
   'connector_post_unknown',
   // A set whose answer was lost: it may have changed the issue.
@@ -155,6 +172,15 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   // A look-around run asked for something other than a read.
   'look_around_reads_only',
   // `bot reply --react` in a run no message woke, or where reactions aren't available.
-  'no_waking_message'
+  'no_waking_message',
+  // `bot reply --leave-thread` outside a Slack thread the bot follows, from a turn not running or not
+  // a person's, or whose leave couldn't be saved.
+  'not_a_thread',
+  'leave_refused_stale',
+  'leave_refused_mixed',
+  'leave_unavailable',
+  'thread_mute_not_saved',
+  // A leave whose save's outcome is unknown: it may have taken.
+  'leave_unconfirmed'
 ] as const
 export type ConnectorActErrorCode = (typeof CONNECTOR_ACT_ERROR_CODES)[number]

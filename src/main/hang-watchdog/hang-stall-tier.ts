@@ -6,14 +6,8 @@ import {
 } from './hang-observation-schema'
 import type { HangWatchdogToMainMessage } from './hang-watchdog-worker-protocol'
 
-/** A stall profiles JS only; the native sample waits until the same episode reaches the hang timeout. */
-export const JS_ONLY = { js: true, native: false }
-const NATIVE_ONLY = { js: false, native: true }
-const BOTH = { js: true, native: true }
-
 export type ObserveOptions = {
   tier?: HangObservation['tier']
-  capture?: { js: boolean; native: boolean }
   /** Heartbeats already resumed; no resolution snapshot, since detection is the recovery. */
   recovered?: boolean
 }
@@ -45,11 +39,6 @@ export function escalationFields(
     tier: 'hang',
     escalatedAt: stall.detectedAt + Math.max(0, unresponsiveMs - stall.durationMs)
   }
-}
-
-/** A stall profile that never captured stacks gets the hang's fresh JS attempt. */
-export function escalationCaptureParts(stall: HangObservation): { js: boolean; native: boolean } {
-  return stall.mainJs?.stacks.length ? NATIVE_ONLY : BOTH
 }
 
 /** A suspend inside the silence means the machine slept, not that main stalled. */

@@ -61,6 +61,7 @@ import type {
 
 import type { WorktreeRefreshAllOptions } from './listing/worktree-refresh-options'
 import type { WorktreeRefreshResult } from './listing/worktree-refresh-result'
+import type { WorktreeCatalogAuthority } from './listing/worktree-slice-types'
 
 import type { WorktreePurgeTargets } from './teardown/worktree-purge-target'
 
@@ -76,6 +77,8 @@ export type WorktreeSlice = {
   detectedWorktreesByRepo: Record<string, DetectedWorktreeListResult>
   /** Newest catalog version applied per repo and host; an older publication is never applied. */
   worktreeCatalogVersionByRepoHost: Record<string, WorktreeCatalogVersion>
+  /** Host-qualified evidence from admitted Git listings, including empty results. */
+  worktreeCatalogAuthorityByRepoHost: Partial<Record<string, WorktreeCatalogAuthority>>
   worktreeLineageById: Readonly<Record<string, WorktreeLineage>>
   workspaceLineageByChildKey: Readonly<Record<WorkspaceKey, WorkspaceLineage>>
   /** Each store's saved cross-store parents as it keeps them, by lineage store key (OWN_LINEAGE_STORE_KEY or a paired environment id). */

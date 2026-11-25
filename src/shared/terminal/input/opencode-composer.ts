@@ -11,6 +11,12 @@ const OPENCODE_PLACEHOLDER = /^(?:Ask anything\u2026|Run a command\u2026)(?: "[^
 /** Whether OpenCode's composer shows a typed draft, so mail must wait. False when the cursor is not
  *  in a box laid out as OpenCode's. Callers check that OpenCode is the pane's agent. */
 export function openCodeComposerHoldsDraft(context: TerminalCursorContext): boolean {
+  return readOpenCodeComposerDraft(context) !== null
+}
+
+/** The draft OpenCode's composer shows, its rows joined by spaces; null for an empty box, its
+ *  placeholder, or a cursor outside a box laid out as OpenCode's. */
+export function readOpenCodeComposerDraft(context: TerminalCursorContext): string | null {
   const cursorIndex = context.rows.length - 1
   const column = (context.rows[cursorIndex] ?? '').indexOf(OPENCODE_BOX_GUTTER)
   const inBox = (row: string | undefined): boolean =>
@@ -19,7 +25,7 @@ export function openCodeComposerHoldsDraft(context: TerminalCursorContext): bool
     row.startsWith(OPENCODE_BOX_GUTTER, column) &&
     !row.slice(0, column).trim()
   if (context.cursorHidden || !inBox(context.rows[cursorIndex])) {
-    return false
+    return null
   }
   let top = cursorIndex
   while (inBox(context.rows[top - 1])) {
@@ -38,7 +44,7 @@ export function openCodeComposerHoldsDraft(context: TerminalCursorContext): bool
   const spacer = rows.findLastIndex((row) => !row)
   // Not a padding row, textarea, spacer and footer around the cursor: read as any other prompt.
   if (cursorLine === 0 || rows[0] || spacer <= cursorLine || spacer === rows.length - 1) {
-    return false
+    return null
   }
   const textarea = rows.slice(1, spacer)
   // The placeholder wraps onto more rows in a narrow box.
@@ -48,5 +54,5 @@ export function openCodeComposerHoldsDraft(context: TerminalCursorContext): bool
     textarea.every(Boolean) &&
     !context.beforeCursor.slice(column + OPENCODE_BOX_GUTTER.length).trim() &&
     OPENCODE_PLACEHOLDER.test(shown)
-  return !!shown && !placeholder
+  return shown && !placeholder ? shown : null
 }
