@@ -31086,7 +31086,9 @@
     "workspaces": "Workspaces",
     "more": "More",
     "customize": "Customize",
-    "pageRegion": "Page"
+    "pageRegion": "Page",
+    "account": "Account",
+    "signIn": "Sign in"
   },
   "chats": {
     "delete": {

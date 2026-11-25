@@ -16,8 +16,7 @@ const APP_RAIL_ITEM_IDS = [
   'mobile',
   'customize',
   'more',
-  'help',
-  'settings'
+  'account'
 ] as const
 export type AppRailItemId = (typeof APP_RAIL_ITEM_IDS)[number]
 

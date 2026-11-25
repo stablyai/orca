@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef, useState } from 'react'
-import { CircleHelp, Ellipsis, Settings, SlidersHorizontal } from 'lucide-react'
+import { Ellipsis, SlidersHorizontal } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
@@ -12,7 +12,6 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import type { HelpMenuController } from '@/components/sidebar/chrome/help-menu-controller'
 import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from './AppRailButton'
 import { appRailSlotCapacity } from './app-rail-overflow'
 import {
@@ -24,24 +23,14 @@ import {
 } from './AppRailCustomizeMenu'
 
 /**
- * What doesn't fit on a short rail: folded pages, Customize (the "…" this button replaced), Help (as a submenu sharing
- * the rail's one Help controller), then Settings.
+ * What doesn't fit on a short rail: folded pages, then Customize (the "…" this button replaced). The account button
+ * never folds in here.
  */
 export function AppRailMoreMenu({
-  help,
-  includeHelp,
-  includeSettings,
-  settingsActive,
-  onOpenSettings,
   tabStop,
   destinations,
   customizeRows
 }: {
-  help: HelpMenuController
-  includeHelp: boolean
-  includeSettings: boolean
-  settingsActive: boolean
-  onOpenSettings: () => void
   tabStop: boolean
   /** Folded destinations, in rail order: plain rows that open their page. */
   destinations: readonly {
@@ -66,13 +55,9 @@ export function AppRailMoreMenu({
   const [customizeOpen, setCustomizeOpen] = useState(false)
   // Toggling a page on while folded adds a row above Customize; keep its submenu put.
   const customizeHeldInPlace = useMenuHeldInPlace(customizeOpen, customizeTriggerRef, customizeRows)
-  const settingsLabel = t('auto.components.sidebar.SidebarSettingsHelpMenu.a428c25998', 'Settings')
-  const current =
-    destinations.find((destination) => destination.current)?.label ??
-    (includeSettings && settingsActive ? settingsLabel : undefined)
+  const current = destinations.find((destination) => destination.current)?.label
   return (
-    // Only a More that holds Help warms Help's feedback dialog.
-    <DropdownMenu modal={false} onOpenChange={includeHelp ? help.handleMenuOpenChange : undefined}>
+    <DropdownMenu modal={false}>
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
@@ -133,27 +118,6 @@ export function AppRailMoreMenu({
             <AppRailCustomizeRows rows={customizeRows} />
           </DropdownMenuSubContent>
         </DropdownMenuSub>
-        {includeHelp ? (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <CircleHelp className="size-3.5" aria-hidden />
-              {t('auto.components.sidebar.SidebarSettingsHelpMenu.2991a0106c', 'Help')}
-            </DropdownMenuSubTrigger>
-            {/* Help folds in only when the window is short, so its rows must scroll within the window. */}
-            <DropdownMenuSubContent scrollable className="w-52">
-              {help.items}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        ) : null}
-        {includeSettings ? (
-          <DropdownMenuItem
-            onSelect={onOpenSettings}
-            aria-current={settingsActive ? 'page' : undefined}
-          >
-            <Settings className="size-3.5" aria-hidden />
-            {settingsLabel}
-          </DropdownMenuItem>
-        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
