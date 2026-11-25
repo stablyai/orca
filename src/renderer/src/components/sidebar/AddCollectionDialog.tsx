@@ -18,6 +18,8 @@ import type { Collection } from '../../../../shared/collection-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runThenSettle } from './run-then-settle'
 
 type AddCollectionDialogProps = {
   open: boolean
@@ -55,6 +57,7 @@ export function AddCollectionDialog({
   onOpenChange,
   collection = null
 }: AddCollectionDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const repos = useAppStore((s) => s.repos)
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
   const createCollection = useAppStore((s) => s.createCollection)
@@ -167,31 +170,34 @@ export function AddCollectionDialog({
         return
       }
       setSubmitting(true)
-      try {
-        if (isAddMode && collection) {
-          await fileMembership(collection.id, collection.name)
-        } else {
-          const created = await createCollection(trimmedName)
-          if (!created) {
-            // Why: null means transport failure; closing would swallow it silently.
-            toast.error(
-              translate(
-                'auto.components.sidebar.AddCollectionDialog.createFailed',
-                'Could not create the collection'
+      await runThenSettle(
+        async () => {
+          if (isAddMode && collection) {
+            await fileMembership(collection.id, collection.name)
+          } else {
+            const created = await createCollection(trimmedName)
+            if (!created) {
+              // Why: null means transport failure; closing would swallow it silently.
+              toast.error(
+                translate(
+                  'auto.components.sidebar.AddCollectionDialog.createFailed',
+                  'Could not create the collection'
+                )
               )
-            )
-            return
+              return
+            }
+            await fileMembership(created.id, created.name)
           }
-          await fileMembership(created.id, created.name)
+          if (mountedRef.current) {
+            onOpenChange(false)
+          }
+        },
+        () => {
+          if (mountedRef.current) {
+            setSubmitting(false)
+          }
         }
-        if (mountedRef.current) {
-          onOpenChange(false)
-        }
-      } finally {
-        if (mountedRef.current) {
-          setSubmitting(false)
-        }
-      }
+      )
     },
     [canSubmit, isAddMode, collection, fileMembership, createCollection, trimmedName, onOpenChange]
   )
@@ -206,20 +212,20 @@ export function AddCollectionDialog({
         <DialogHeader>
           <DialogTitle>
             {isAddMode
-              ? translate(
+              ? t(
                   'auto.components.sidebar.AddCollectionDialog.addTitle',
                   'Add worktrees to “{{value0}}”',
                   { value0: collection?.name ?? '' }
                 )
-              : translate('auto.components.sidebar.AddCollectionDialog.title', 'Add Collection')}
+              : t('auto.components.sidebar.AddCollectionDialog.title', 'Add Collection')}
           </DialogTitle>
           <DialogDescription>
             {isAddMode
-              ? translate(
+              ? t(
                   'auto.components.sidebar.AddCollectionDialog.addDescription',
                   'Start new worktrees or pick existing ones.'
                 )
-              : translate(
+              : t(
                   'auto.components.sidebar.AddCollectionDialog.description',
                   'Pick the projects this workstream spans — start a fresh worktree in each, or pick existing ones.'
                 )}
@@ -229,13 +235,13 @@ export function AddCollectionDialog({
           {!isAddMode ? (
             <div className="space-y-1.5">
               <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                {translate('auto.components.sidebar.AddCollectionDialog.nameLabel', 'Name')}
+                {t('auto.components.sidebar.AddCollectionDialog.nameLabel', 'Name')}
               </p>
               <Input
                 autoFocus
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.sidebar.AddCollectionDialog.namePlaceholder',
                   'Collection name'
                 )}
@@ -244,12 +250,12 @@ export function AddCollectionDialog({
           ) : null}
           <div className="space-y-1.5">
             <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-              {translate('auto.components.sidebar.AddCollectionDialog.projectsLabel', 'Projects')}
+              {t('auto.components.sidebar.AddCollectionDialog.projectsLabel', 'Projects')}
             </p>
             <div className="scrollbar-sleek max-h-80 overflow-y-auto overflow-x-hidden rounded-md border border-input bg-background">
               {repoGroups.length === 0 ? (
                 <div className="px-3 py-3 text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.sidebar.AddCollectionDialog.noProjects',
                     'No projects yet — add one first.'
                   )}
@@ -278,7 +284,7 @@ export function AddCollectionDialog({
                       />
                       <span className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                         <Plus className="size-3.5" />
-                        {translate(
+                        {t(
                           'auto.components.sidebar.AddCollectionDialog.newWorktree',
                           'New worktree'
                         )}
@@ -298,7 +304,7 @@ export function AddCollectionDialog({
                         <span className="min-w-0 truncate text-[13px]">{worktree.displayName}</span>
                         {worktree.isMainWorktree ? (
                           <span className="shrink-0 rounded border border-border/80 px-1 text-[10px] leading-4 text-muted-foreground">
-                            {translate(
+                            {t(
                               'auto.components.sidebar.AddCollectionDialog.primaryBadge',
                               'primary'
                             )}
@@ -318,17 +324,14 @@ export function AddCollectionDialog({
               disabled={submitting}
               onClick={() => handleOpenChange(false)}
             >
-              {translate('auto.components.sidebar.AddCollectionDialog.cancel', 'Cancel')}
+              {t('auto.components.sidebar.AddCollectionDialog.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
               {submitting && newWorktreeRepoIds.size > 0
-                ? translate(
-                    'auto.components.sidebar.AddCollectionDialog.creating',
-                    'Creating worktrees…'
-                  )
+                ? t('auto.components.sidebar.AddCollectionDialog.creating', 'Creating worktrees…')
                 : isAddMode
-                  ? translate('auto.components.sidebar.AddCollectionDialog.add', 'Add')
-                  : translate('auto.components.sidebar.AddCollectionDialog.create', 'Create')}
+                  ? t('auto.components.sidebar.AddCollectionDialog.add', 'Add')
+                  : t('auto.components.sidebar.AddCollectionDialog.create', 'Create')}
             </Button>
           </DialogFooter>
         </form>

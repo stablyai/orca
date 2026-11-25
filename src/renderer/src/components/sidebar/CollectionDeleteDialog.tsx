@@ -8,7 +8,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { runThenSettle } from './run-then-settle'
 
 type CollectionDeleteDialogProps = {
   open: boolean
@@ -24,6 +25,7 @@ export function CollectionDeleteDialog({
   onOpenChange,
   onConfirm
 }: CollectionDeleteDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const [deleting, setDeleting] = useState(false)
   const [wasOpen, setWasOpen] = useState(open)
   const mountedRef = useRef(true)
@@ -45,16 +47,19 @@ export function CollectionDeleteDialog({
       return
     }
     setDeleting(true)
-    try {
-      const deleted = await onConfirm()
-      if (deleted && mountedRef.current) {
-        onOpenChange(false)
+    await runThenSettle(
+      async () => {
+        const deleted = await onConfirm()
+        if (deleted && mountedRef.current) {
+          onOpenChange(false)
+        }
+      },
+      () => {
+        if (mountedRef.current) {
+          setDeleting(false)
+        }
       }
-    } finally {
-      if (mountedRef.current) {
-        setDeleting(false)
-      }
-    }
+    )
   }, [deleting, onConfirm, onOpenChange])
 
   return (
@@ -62,14 +67,12 @@ export function CollectionDeleteDialog({
       <DialogContent ref={handleDialogContentRef} className="max-w-sm sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.sidebar.CollectionDeleteDialog.title',
-              'Delete “{{value0}}”?',
-              { value0: collectionName }
-            )}
+            {t('auto.components.sidebar.CollectionDeleteDialog.title', 'Delete “{{value0}}”?', {
+              value0: collectionName
+            })}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.CollectionDeleteDialog.description',
               'The collection disappears from the sidebar. Worktrees are not affected and stay in their projects.'
             )}
@@ -82,7 +85,7 @@ export function CollectionDeleteDialog({
             disabled={deleting}
             onClick={() => onOpenChange(false)}
           >
-            {translate('auto.components.sidebar.CollectionDeleteDialog.cancel', 'Cancel')}
+            {t('auto.components.sidebar.CollectionDeleteDialog.cancel', 'Cancel')}
           </Button>
           <Button
             type="button"
@@ -90,7 +93,7 @@ export function CollectionDeleteDialog({
             disabled={deleting}
             onClick={() => void handleConfirm()}
           >
-            {translate('auto.components.sidebar.CollectionDeleteDialog.delete', 'Delete')}
+            {t('auto.components.sidebar.CollectionDeleteDialog.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -6,7 +6,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { useWorktreeCollectionActions } from './use-worktree-collection-actions'
 
 export function WorktreeCollectionMenuItems({
@@ -16,6 +16,7 @@ export function WorktreeCollectionMenuItems({
   actions: ReturnType<typeof useWorktreeCollectionActions>
   isDeleting: boolean
 }) {
+  const t = useTranslate()
   const {
     addableCollections,
     exclusiveCollectionMembership,
@@ -32,14 +33,11 @@ export function WorktreeCollectionMenuItems({
         <DropdownMenuSubTrigger disabled={isDeleting}>
           <Layers className="size-3.5" />
           {exclusiveCollectionMembership && memberCollections.length > 0
-            ? translate(
+            ? t(
                 'auto.components.sidebar.WorktreeContextMenu.moveToCollection',
                 'Move to Collection'
               )
-            : translate(
-                'auto.components.sidebar.WorktreeContextMenu.addToCollection',
-                'Add to Collection'
-              )}
+            : t('auto.components.sidebar.WorktreeContextMenu.addToCollection', 'Add to Collection')}
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent className="w-48">
           {addableCollections.map((collection) => (
@@ -53,10 +51,7 @@ export function WorktreeCollectionMenuItems({
           {addableCollections.length > 0 ? <DropdownMenuSeparator /> : null}
           <DropdownMenuItem onSelect={() => setCreateCollectionDialogOpen(true)}>
             <Plus className="size-3.5" />
-            {translate(
-              'auto.components.sidebar.WorktreeContextMenu.newCollection',
-              'New Collection…'
-            )}
+            {t('auto.components.sidebar.WorktreeContextMenu.newCollection', 'New Collection…')}
           </DropdownMenuItem>
         </DropdownMenuSubContent>
       </DropdownMenuSub>
@@ -64,7 +59,7 @@ export function WorktreeCollectionMenuItems({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger disabled={isDeleting}>
             <CircleX className="size-3.5" />
-            {translate(
+            {t(
               'auto.components.sidebar.WorktreeContextMenu.removeFromCollection',
               'Remove from Collection'
             )}
