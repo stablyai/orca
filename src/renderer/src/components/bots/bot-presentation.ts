@@ -101,5 +101,9 @@ export function botErrorMessage(error: unknown): string {
       host && structuredAgentSessionTargetPlace(useAppStore.getState(), host, translate)
     )
   }
+  // The host's own reason beats a generic retry, which would fail the same way.
+  if (error instanceof RuntimeRpcCallError && error.code === 'invalid_argument') {
+    return error.message
+  }
   return translate('bots.errors.generic', 'Something went wrong. Try again.')
 }

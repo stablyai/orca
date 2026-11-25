@@ -53,8 +53,13 @@ export function shownTemplateIdentity(
   return `${text}${finalSentenceStop(text)}`
 }
 
+// Why: a prefilled purpose skips the box's maxLength, so it is cut the same way typing would be.
 export const draftOf = (proposal: BotProposal | undefined, purpose?: string): NewBotDraft => ({
-  purpose: templateIdentity(proposal) ?? proposal?.purpose ?? purpose ?? '',
+  purpose:
+    templateIdentity(proposal) ??
+    proposal?.purpose ??
+    purpose?.slice(0, BOT_PURPOSE_MAX_LENGTH) ??
+    '',
   watches: proposal?.watches,
   does: proposal?.does,
   reports: proposal?.reports
@@ -118,17 +123,14 @@ export function identityUntouched(
   )
 }
 
-/** An edited template identity becomes the bot's purpose, so it keeps the purpose's limit. */
-export function templateIdentityTooLong(
+/** The identity box becomes the bot's purpose, so it keeps the purpose's limit, unless it still
+ *  holds a template's own lines. */
+export function identityTooLong(
   proposal: BotProposal | undefined,
   purpose: string,
   t: Translate
 ): boolean {
-  return (
-    templateIdentity(proposal) !== undefined &&
-    !identityUntouched(proposal, purpose, t) &&
-    purpose.trim().length > BOT_PURPOSE_MAX_LENGTH
-  )
+  return !identityUntouched(proposal, purpose, t) && purpose.trim().length > BOT_PURPOSE_MAX_LENGTH
 }
 
 // An emptied field drops out of the new bot's SOUL.md.

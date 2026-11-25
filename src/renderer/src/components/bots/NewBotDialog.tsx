@@ -56,7 +56,7 @@ import {
   canonicalDraft,
   draftOf,
   editedProposal,
-  templateIdentityTooLong,
+  identityTooLong,
   shownDraft,
   shownTemplateIdentity
 } from './new-bot-draft'
@@ -154,7 +154,7 @@ export function NewBotDialog({
   )
   const { intake, face } = useNewBotDialogPicture(picture, creating)
   const shownIdentity = shownTemplateIdentity(proposal, t)
-  const identityTooLong = templateIdentityTooLong(proposal, draft.purpose, t)
+  const purposeTooLong = identityTooLong(proposal, draft.purpose, t)
   const nameInvalid = submitted && !trimmedName
   // From Bot templates itself (Blank bot), the row would only lead back to it.
   const fromTemplates = useAppStore((state) => state.activeModal === 'bot-templates')
@@ -194,7 +194,7 @@ export function NewBotDialog({
     if (createInFlight.current) {
       return
     }
-    if (!trimmedName || identityTooLong || blocked || !choices.length || intake.reading) {
+    if (!trimmedName || purposeTooLong || blocked || !choices.length || intake.reading) {
       flushSync(() => setSubmitted(true))
       formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus()
       return
@@ -362,7 +362,7 @@ export function NewBotDialog({
                 <NewBotPurposeField
                   value={shown.purpose}
                   prefilled={shownIdentity}
-                  tooLong={submitted && identityTooLong}
+                  tooLong={submitted && purposeTooLong}
                   onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
