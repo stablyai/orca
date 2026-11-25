@@ -25,7 +25,8 @@ import { agentCliUpdateDefinition, type AgentCliUpdatePlan } from './agent-cli-u
 import { checkThroughGate, updateThroughGate } from './agent-cli-update-gate'
 import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
 
-const UPDATE_TIMEOUT_MS = 10 * 60_000
+// An updater that waits on input or leaves a child holding its output never exits; past this it is stopped and fails.
+const UPDATE_TIMEOUT_MS = 2 * 60_000
 const UPDATE_OUTPUT_BYTES = 64 * 1024
 // An unread version (e.g. a slow first start) is asked again after this, not on every check.
 const UNREAD_RETRY_MS = 10 * 60_000
@@ -238,7 +239,11 @@ async function updateAgentCli(
   versions.delete(cli.program)
   versions.delete(updated.program)
   const after = await installedVersion(agent, updated)
-  const output = [result.stdout, result.stderr]
+  const output = [
+    result.stdout,
+    result.stderr,
+    result.timedOut ? `Stopped after ${UPDATE_TIMEOUT_MS / 60_000} minutes without finishing.` : ''
+  ]
     .map((text) => text.trim())
     .filter(Boolean)
     .join('\n')

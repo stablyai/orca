@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Card } from '@/components/ui/card'
 import { usePrefersReducedMotion } from '@/hooks/theme/usePrefersReducedMotion'
-import { useTranslate } from '@/i18n/use-translate'
 import {
   agentCliUpdateStartable,
-  runAgentCliUpdateRow
+  runAgentCliUpdateRow,
+  type AgentCliUpdateRow
 } from '../status-bar/updates/AgentCliUpdateList'
 import {
   agentCliUpdateCardWait,
@@ -14,8 +13,9 @@ import {
   type AgentCliUpdateCardMemory
 } from './agent-cli-update-card-offer'
 import { rowFor, targetPhase, type RunTarget } from './agent-cli-update-card-run'
-import { AgentCliUpdateCardOffer } from './AgentCliUpdateCardOffer'
-import { AgentCliUpdateCardStrip } from './AgentCliUpdateCardStrip'
+import { AgentCliUpdateToast } from './AgentCliUpdateToast'
+import type { AgentCliUpdateToastItem } from './AgentCliUpdateToastList'
+import { openAgentCliUpdateFailure } from './agent-cli-update-failure-modal'
 import { useAgentCliUpdateGroups } from './use-agent-cli-update-groups'
 
 // Same pause as Orca's "you're up to date" card before it leaves on its own.
@@ -25,9 +25,8 @@ const EXIT_MS = 150
 /** An Update all run, with the releases its offer showed; only those count as seen when it closes. */
 type RunSession = { targets: readonly RunTarget[]; shownKeys: readonly string[] }
 
-/** Bottom-right offer to update the user's own agent CLIs; Update all collapses it to a progress strip. */
+/** Bottom-right toast offering the user's own agent CLI updates, then following the run it starts. */
 export function AgentCliUpdateCard(): React.JSX.Element | null {
-  const t = useTranslate()
   const groups = useAgentCliUpdateGroups()
   const prefersReducedMotion = usePrefersReducedMotion()
   const rows = useMemo(() => groups.flatMap((group) => group.rows), [groups])
@@ -129,17 +128,56 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
           : []
       )
     })
-    setDetailsOpen(false)
     startable.forEach(runAgentCliUpdateRow)
   }
-  const retryFailed = (): void => {
+  const retry = (target: RunTarget): void => {
+    const row = rowFor(target, rows)
+    if (row) {
+      runAgentCliUpdateRow(row)
+    }
+  }
+  const retryFailed = (): void =>
     targets.forEach((target, index) => {
-      const row = rowFor(target, rows)
-      if (phases[index] === 'failed' && row) {
-        runAgentCliUpdateRow(row)
+      if (phases[index] === 'failed') {
+        retry(target)
       }
     })
-  }
+  const failure =
+    (hostKey: string, agent: AgentCliUpdateRow['agent'], tryAgain: () => void) => () =>
+      openAgentCliUpdateFailure({ hostKey, agent, tryAgain })
+  const items: AgentCliUpdateToastItem[] =
+    view === 'offer'
+      ? offerRows.flatMap((row) =>
+          row.update
+            ? [
+                {
+                  key: `${row.hostKey}\n${row.agent}`,
+                  hostLabel: hostLabels.get(row.hostKey) ?? null,
+                  agent: row.agent,
+                  from: row.update.installedVersion,
+                  to: row.update.latestVersion,
+                  status:
+                    row.run?.phase === 'running'
+                      ? 'running'
+                      : row.run?.phase === 'failed'
+                        ? 'failed'
+                        : 'idle',
+                  manualCommand: row.update.runnable ? null : row.update.command,
+                  onOpenFailure: failure(row.hostKey, row.agent, () => runAgentCliUpdateRow(row))
+                }
+              ]
+            : []
+        )
+      : targets.map((target, index) => ({
+          key: `${target.hostKey}\n${target.agent}`,
+          hostLabel: target.hostLabel,
+          agent: target.agent,
+          from: target.from,
+          to: target.to,
+          status: phases[index] ?? 'done',
+          manualCommand: null,
+          onOpenFailure: failure(target.hostKey, target.agent, () => retry(target))
+        }))
   const closeShown = (): void => close(session?.shownKeys ?? offerKeys)
   // Scoped to the card like Orca's update card: a global Escape would also fire for terminals and chats.
   const onKeyDown = (event: React.KeyboardEvent): void => {
@@ -147,11 +185,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
       return
     }
     event.preventDefault()
-    if (view === 'updating') {
-      setDetailsOpen(false)
-    } else {
-      closeShown()
-    }
+    closeShown()
   }
 
   return (
@@ -166,36 +200,20 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
             : 'animate-update-card-enter'
       }
     >
-      <Card
-        size="notice"
-        role="complementary"
-        aria-label={t('agentCliUpdate.cardLabel', 'Agent CLI updates')}
+      <AgentCliUpdateToast
+        view={view}
+        total={view === 'offer' ? startable.length || offerRows.length : targets.length}
+        settled={phases.filter((phase) => phase !== 'running').length}
+        failed={phases.filter((phase) => phase === 'failed').length}
+        canUpdate={startable.length > 0}
+        items={items}
+        listOpen={detailsOpen}
+        onToggleList={() => setDetailsOpen((open) => !open)}
+        onClose={closeShown}
+        onUpdate={startAll}
+        onRetry={retryFailed}
         onKeyDown={onKeyDown}
-        className="overflow-hidden"
-      >
-        {view === 'offer' ? (
-          <AgentCliUpdateCardOffer
-            groups={groups}
-            offerRows={offerRows}
-            startable={startable}
-            detailsOpen={detailsOpen}
-            onToggleDetails={() => setDetailsOpen((open) => !open)}
-            onUpdate={startAll}
-            onClose={closeShown}
-          />
-        ) : (
-          <AgentCliUpdateCardStrip
-            view={view}
-            targets={targets}
-            phases={phases}
-            rows={rows}
-            detailsOpen={detailsOpen || view === 'failed'}
-            onToggleDetails={() => setDetailsOpen((open) => !open)}
-            onRetry={retryFailed}
-            onClose={closeShown}
-          />
-        )}
-      </Card>
+      />
     </div>
   )
 }

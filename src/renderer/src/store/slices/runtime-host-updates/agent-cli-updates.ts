@@ -10,11 +10,12 @@ import {
 } from '../../../../../shared/agent-launch/installation/agent-cli-update'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 
-// Above the host's ten-minute updater limit plus its waits before and after, so its answer always arrives.
-const RUN_TIMEOUT_MS = 12 * 60_000
+// Above the host's two-minute updater limit plus its waits before and after, so its answer normally arrives.
+const RUN_TIMEOUT_MS = 3 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
 // Opening the update list checks sooner; a CLI updated in a terminal sends no finish event.
@@ -216,17 +217,24 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
         return false
       }
       writeRun(key, agent, { phase: 'running' })
-      let result: AgentCliUpdateRunResult
-      try {
-        result = await callRuntimeRpc<AgentCliUpdateRunResult>(
+      const timedOut: AgentCliUpdateRunResult = {
+        ok: false,
+        output: `The update did not finish within ${RUN_TIMEOUT_MS / 60_000} minutes.`
+      }
+      // Local calls ignore timeoutMs, so an updater that never exits would leave the row running for good.
+      const result = await withTimeout(
+        callRuntimeRpc<AgentCliUpdateRunResult>(
           target,
           'agentCliUpdate.run',
           { agent },
           { timeoutMs: RUN_TIMEOUT_MS }
-        )
-      } catch (error) {
-        result = { ok: false, output: error instanceof Error ? error.message : String(error) }
-      }
+        ).catch((error: unknown): AgentCliUpdateRunResult => ({
+          ok: false,
+          output: error instanceof Error ? error.message : String(error)
+        })),
+        RUN_TIMEOUT_MS,
+        timedOut
+      )
       if (!result.ok) {
         writeRun(key, agent, {
           phase: 'failed',

@@ -55,10 +55,17 @@ export function runAgentCliUpdateRow(row: AgentCliUpdateRow): void {
 }
 
 /** For a CLI Orca can't update itself: the user runs its command in a terminal. Resolves whether it copied. */
-export function copyAgentCliUpdateCommand(command: string, t: Translate): Promise<boolean> {
+export function copyAgentCliUpdateCommand(
+  command: string,
+  t: Translate,
+  // Off when the button itself shows that it copied.
+  { announce = true }: { announce?: boolean } = {}
+): Promise<boolean> {
   return window.api.ui.writeClipboardText(command).then(
     () => {
-      toast.success(t('agentCliUpdate.commandCopied', 'Command copied'))
+      if (announce) {
+        toast.success(t('agentCliUpdate.commandCopied', 'Command copied'))
+      }
       return true
     },
     () => {

@@ -160,3 +160,23 @@ describe('forgetAgentCliUpdateHosts', () => {
     expect(store.getState().agentCliUpdates.has('peer')).toBe(false)
   })
 })
+
+describe('runAgentCliUpdate', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it('fails a run the host never answers, so the update is not left running', async () => {
+    vi.useFakeTimers()
+    callRuntimeRpc.mockReset()
+    // Local calls carry no timeout of their own: an updater that never exits never answers.
+    callRuntimeRpc.mockReturnValue(new Promise(() => {}))
+    const store = createTestStore()
+    store.setState({ agentCliUpdates: new Map([['', listed]]) })
+    const run = store.getState().runAgentCliUpdate(LOCAL, 'claude')
+    expect(store.getState().agentCliUpdates.get('')?.runs.claude?.phase).toBe('running')
+
+    await vi.advanceTimersByTimeAsync(3 * 60_000)
+
+    expect(await run).toBe(false)
+    expect(store.getState().agentCliUpdates.get('')?.runs.claude?.phase).toBe('failed')
+  })
+})
