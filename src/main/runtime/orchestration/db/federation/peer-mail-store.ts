@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { NOT_CLIENT_ENVIRONMENT_SQL } from '../../federation/client-asks/client-ask-environment'
+import { GROUP_POST_RELAY_KIND } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type PeerMailConversationRow = {
   conversation_id: string
@@ -82,18 +83,22 @@ export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
 export function listPeerConversationIdsWithPendingReplies(
   this: OrchestrationDb,
   peerFingerprint: string,
-  clientEnvironmentId: string | null = null
+  clientEnvironmentId: string | null = null,
+  includeGroupPosts = true
 ): string[] {
   const statement = this.db.prepare(
     `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
      JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
      WHERE i.acked_at IS NULL AND c.peer_fingerprint = ?1
+       AND (?3 OR i.kind <> '${GROUP_POST_RELAY_KIND}')
        AND ((i.direction = 'to_home' AND c.role = 'peer' AND c.environment_id IS NULL)
          OR (?2 IS NOT NULL AND i.direction = 'to_worker' AND c.role = 'home' AND c.environment_id = ?2))
      ORDER BY c.conversation_id`
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT over this table returns exactly these columns.
-  const rows = statement.all(peerFingerprint, clientEnvironmentId) as { conversation_id: string }[]
+  const rows = statement.all(peerFingerprint, clientEnvironmentId, Number(includeGroupPosts)) as {
+    conversation_id: string
+  }[]
   return rows.map((row) => row.conversation_id)
 }
 

@@ -56,10 +56,15 @@ function pendingReplies(
   db: OrchestrationDb,
   peerFingerprint: string,
   holdBack: ReadonlySet<string>,
-  clientEnvironment: string | null
+  clientEnvironment: string | null,
+  includeGroupPosts: boolean
 ): FederationRelayItemRow[] {
   const pending = db
-    .listPeerConversationIdsWithPendingReplies(peerFingerprint, clientEnvironment)
+    .listPeerConversationIdsWithPendingReplies(
+      peerFingerprint,
+      clientEnvironment,
+      includeGroupPosts
+    )
     .filter((id) => !holdBack.has(id))
   const share = Math.max(1, Math.floor(PULL_PAGE_SIZE / pending.length))
   const pullRotation = pullRotations.get(db.db) ?? new Map<string, number>()
@@ -68,7 +73,9 @@ function pendingReplies(
   pullRotation.set(peerFingerprint, (start + PULL_PAGE_SIZE) % Math.max(1, pending.length))
   return [...pending.slice(start), ...pending.slice(0, start)]
     .slice(0, PULL_PAGE_SIZE)
-    .flatMap((id) => db.listPendingFederationRelay(id, relayDirectionOf(db, id), share))
+    .flatMap((id) =>
+      db.listPendingFederationRelay(id, relayDirectionOf(db, id), share, includeGroupPosts)
+    )
     .slice(0, PULL_PAGE_SIZE)
 }
 
@@ -196,10 +203,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
             takenByWaiter
           )
       )
-      if (landed) {
-        return landed
-      }
-      return { message: { id: params.messageId, to: params.to } }
+      return landed ?? { message: { id: params.messageId, to: params.to } }
     }
   }),
   defineOrchestrationMethod({
@@ -238,17 +242,24 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       try {
         const db = ctx.runtime.getOrchestrationDb()
         const holdBack = new Set(params.holdBack)
-        let items = pendingReplies(db, peerFingerprint, holdBack, clientEnvironment)
+        const includeGroupPosts = params.groupPosts === true
+        let items = pendingReplies(
+          db,
+          peerFingerprint,
+          holdBack,
+          clientEnvironment,
+          includeGroupPosts
+        )
         const waitMs = Math.min(Math.max(params.waitMs ?? 0, 0), MAX_PULL_WAIT_MS)
         const deadline = Date.now() + waitMs
-        // A wake is any queued change on this Orca, so one that queued nothing for this peer waits on.
         while (items.length === 0 && Date.now() < deadline && !ctx.signal?.aborted) {
           await waitForPeerMail(db.db, deadline - Date.now(), ctx.signal)
           items = pendingReplies(
             ctx.runtime.getOrchestrationDb(),
             peerFingerprint,
             holdBack,
-            clientEnvironment
+            clientEnvironment,
+            includeGroupPosts
           )
         }
         return {
@@ -285,17 +296,19 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
         if (!conversation || conversation.peer_fingerprint !== peerFingerprint) {
           continue
         }
-        // Asks it took from this Orca's conversation with it, or replies it took home.
         const asks =
           conversation.role === 'home' && isClientEnvironment(conversation.environment_id)
         if (conversation.role !== 'peer' && !asks) {
           continue
         }
-        db.acknowledgeFederationRelay({
-          dispatchId: ack.conversationId,
-          direction: asks ? 'to_worker' : 'to_home',
-          throughSequence: ack.throughSequence
-        })
+        db.acknowledgeFederationRelay(
+          {
+            dispatchId: ack.conversationId,
+            direction: asks ? 'to_worker' : 'to_home',
+            throughSequence: ack.throughSequence
+          },
+          params.groupPosts === true
+        )
       }
       return { acknowledged: params.acknowledgments.length }
     }

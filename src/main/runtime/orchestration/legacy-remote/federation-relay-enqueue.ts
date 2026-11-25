@@ -12,6 +12,7 @@ import {
   isWorkerStateIn,
   SETTLEABLE_WORKER_STATES
 } from '../workers/reports/worker-report-admission'
+import { GROUP_POST_RELAY_KIND } from '../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export function enqueueFederationRelay(
   this: OrchestrationDb,
@@ -32,7 +33,9 @@ export function enqueueFederationRelay(
   if (byteCount > 64 * 1024) {
     throw new OrchestrationError(
       'relay_quota_exceeded',
-      'A federated orchestration message cannot exceed 64 KiB.'
+      params.kind === GROUP_POST_RELAY_KIND
+        ? 'A group post and its mail metadata cannot exceed 64 KiB when serialized as UTF-8. Shorten --body or --body-file; no post was queued.'
+        : 'A federated orchestration message cannot exceed 64 KiB.'
     )
   }
   // Nests as a savepoint, so a caller can commit its own record of the report with it.

@@ -9,11 +9,13 @@ import {
   isOrcaSessionId
 } from '../../shared/agent-session/identity/orca-session-address'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
-import { GROUP_FOLLOW_UP_MAX } from '../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { peerMailPairing } from '../runtime/orchestration/federation/peer-mail/peer-mail-delivery'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import { deliverGroupLines, routeSpeech } from './bot-group-speech-routing'
+
+const SAVED_ANSWER_MAX = 64_000
+
 /** A returned room item has no authority until it joins the pinned ask and paired conversation. */
 export function groupRemoteSpeech(
   groups: BotGroupRuntime,
@@ -58,10 +60,7 @@ export async function routeRemoteGroupMail(
         !conversation ||
         !mail ||
         !groupRemoteSpeech(groups, post, ask, mail) ||
-        (isPost &&
-          (ask.reply?.kind !== 'answer' ||
-            !mail.body.trim() ||
-            mail.body.length > GROUP_FOLLOW_UP_MAX))
+        (isPost && (ask.reply?.kind !== 'answer' || !mail.body.trim()))
       ) {
         groups.store.routes.routedMail(mailId)
         continue
@@ -89,7 +88,10 @@ export async function routeRemoteGroupMail(
         ...(await routeSpeech(groups, post, {
           triggerId: mailId,
           speaker: { kind: 'remote', member, requestId, conversationId: ask.conversationId },
-          reply: { full: mail.body, saved: mail.body.slice(-GROUP_FOLLOW_UP_MAX) },
+          reply: {
+            full: mail.body,
+            saved: isPost ? mail.body : mail.body.slice(-SAVED_ANSWER_MAX)
+          },
           newPost: isPost,
           commit: () => groups.store.routes.routedMail(mailId)
         }))

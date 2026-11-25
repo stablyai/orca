@@ -133,6 +133,33 @@ describe('a rollback to a build that predates these fields', () => {
     groups.store.put({ ...group, remoteMembers: undefined })
     expect(groups.store.get(group.id).remoteMembers).toBeUndefined()
   })
+
+  it('keeps nested route pins when an old writer still knows the roster and question arrays', () => {
+    const { db, groups, group, posted } = room()
+    const [ask] = posted.remoteAsks!
+    const pinned = { ...ATLAS, pairing: 'fp-s' }
+    const pinnedAsk = {
+      ...ask,
+      pairing: 'fp-s',
+      conversationId: 'peerconv_kept',
+      interactive: true as const
+    }
+    groups.store.put({ ...group, remoteMembers: [pinned] })
+    groups.store.update({ ...groups.store.message(posted.id)!, remoteAsks: [pinnedAsk] })
+    db.prepare(
+      `UPDATE bot_groups SET record = json_remove(record, '$.remoteMembers[0].pairing') WHERE id = ?`
+    ).run(group.id)
+    db.prepare(
+      `UPDATE bot_group_messages SET record = json_remove(record,
+        '$.remoteAsks[0].pairing', '$.remoteAsks[0].conversationId', '$.remoteAsks[0].interactive')
+       WHERE id = ?`
+    ).run(posted.id)
+    expect(groups.store.get(group.id).remoteMembers).toEqual([pinned])
+    expect(groups.store.message(posted.id)?.remoteAsks).toEqual([pinnedAsk])
+    const replacement = { ...ATLAS, chatSessionId: '77777777-7777-4777-8777-777777777777' }
+    groups.store.put({ ...group, remoteMembers: [replacement] })
+    expect(groups.store.get(group.id).remoteMembers).toEqual([replacement])
+  })
 })
 
 describe('a remote answer arriving', () => {

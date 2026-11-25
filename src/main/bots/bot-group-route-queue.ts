@@ -49,7 +49,7 @@ export class BotGroupRouteQueue {
     })
   }
 
-  claimRemoteDelivery(id: string): boolean {
-    return this.store.delivered([`${DELIVERY}${id}`]) > 0
+  settleRemoteDelivery(id: string): void {
+    this.store.delivered([`${DELIVERY}${id}`])
   }
 }

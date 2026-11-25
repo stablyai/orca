@@ -131,6 +131,10 @@ class SyncDatabase {
     return this.db.isTransaction
   }
 
+  get isOpen(): boolean {
+    return this.db.isOpen
+  }
+
   /** Keep the source open until completion. */
   async backup(path: string, options?: BackupOptions): Promise<void> {
     if (this.db.isTransaction) {

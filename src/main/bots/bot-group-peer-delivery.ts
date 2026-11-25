@@ -1,5 +1,4 @@
-import { BotFailureError } from '../../shared/bots/bot-failure-copy'
-import { RemoteComputerRefusal, refusedAsk } from './bot-group-remote-refusal'
+import { refusedAsk, retryGroupDelivery } from './bot-group-remote-refusal'
 import type { BotGroupMessage, BotGroupRemoteAsk } from '../../shared/bots/bot-group'
 import {
   formatOrcaSessionAddress,
@@ -23,6 +22,7 @@ import type { BotGroupRuntime } from './bot-group-runtime'
 import type { PendingGroupRemoteDelivery } from './bot-group-route-queue'
 import { remoteQuestionSummary } from './bot-group-remote-question'
 import { requireRemoteComputer } from './bot-group-remote'
+import { federationRelayRetryDelayMs } from '../runtime/orchestration/federation/relay/federation-relay-scheduler'
 
 /** Asks whose mail is being handed to their computer now, by request id. */
 const sending = new Set<string>()
@@ -33,19 +33,11 @@ export function isRemoteAskInFlight(requestId: string): boolean {
   return sending.has(requestId)
 }
 
-// Refusals the other computer sends before it takes a request in. Its routing refusals reach this
-// computer as a generic runtime error, which could also follow admission, so those read as unknown.
-const REFUSED_BEFORE_ADMISSION = new Set([
-  'bot_not_found',
-  'bot_chat_not_found',
-  'invalid_argument',
-  'request_mismatch'
-])
-
-/** The reservation is durable until claimed; after a claim, a lost acknowledgement is unknown. */
+/** The in-flight claim is process-local; the journal survives until delivery settles. */
 export async function deliverRemoteAsks(
   groups: BotGroupRuntime,
-  message: BotGroupMessage
+  message: BotGroupMessage,
+  attempt = 1
 ): Promise<void> {
   const queued = groups.store.routes
     .pendingRemoteDeliveries(message.groupId, message.id)
@@ -59,18 +51,33 @@ export async function deliverRemoteAsks(
     computers.set(environmentId, server)
     return server
   }
-  await Promise.all(
+  const results = await Promise.all(
     queued.map(async (delivery) => {
       try {
-        await deliverRoomMail(groups, message, delivery, serverFor)
+        return await deliverRoomMail(groups, message, delivery, serverFor)
       } catch (error) {
         console.warn('[bot-groups] could not finish remote group mail', error)
+        return true
       } finally {
         sending.delete(delivery.id)
         groups.changed(message.groupId)
       }
     })
   )
+  if (results.some(Boolean)) {
+    const db = groups.runtime.getOrchestrationDb()
+    setTimeout(() => {
+      if (
+        db.db.isOpen &&
+        groups.runtime.getOrchestrationDb() === db &&
+        groups.runtime.bots.enabled()
+      ) {
+        void deliverRemoteAsks(groups, message, attempt + 1).catch((error: unknown) => {
+          console.warn('[bot-groups] could not retry remote group mail', error)
+        })
+      }
+    }, federationRelayRetryDelayMs(attempt)).unref()
+  }
 }
 
 async function deliverRoomMail(
@@ -78,17 +85,18 @@ async function deliverRoomMail(
   message: BotGroupMessage,
   { id, body, isAnswer }: PendingGroupRemoteDelivery,
   serverFor: (environmentId: string) => Promise<PeerMailServer>
-): Promise<void> {
+): Promise<boolean> {
   const asker = message.groupRequest?.from
   const ask = isAnswer
     ? undefined
     : message.remoteAsks?.find((candidate) => candidate.requestId === id)
   const target = isAnswer ? (asker?.kind === 'remote' ? asker.member : undefined) : ask
   if (!target) {
-    groups.store.routes.claimRemoteDelivery(id)
-    return
+    groups.store.routes.settleRemoteDelivery(id)
+    return false
   }
   const { environmentId } = target
+  let onWire = false
   try {
     const server = await serverFor(environmentId)
     const db = groups.runtime.getOrchestrationDb()
@@ -96,7 +104,7 @@ async function deliverRoomMail(
     const machine = groups.runtime.readMachineName()
     const pending = await runKeyedSerializedOperation(groups.queues, message.groupId, async () => {
       const current = groups.store.message(message.id)
-      if (!current || !groups.store.routes.claimRemoteDelivery(id)) {
+      if (!current) {
         return {}
       }
       const root = groupRouteRoot(groups, current)
@@ -106,7 +114,7 @@ async function deliverRoomMail(
         !activeGroupRemoteMember(room, root, target) ||
         (asker && !activeGroupSpeaker(groups, room, root, asker))
       ) {
-        return { stopped: true }
+        return {}
       }
       if (target.pairing && target.pairing !== pairing) {
         throw new OrchestrationError(
@@ -115,7 +123,11 @@ async function deliverRoomMail(
           { effectsApplied: false }
         )
       }
-      if (asker && !server.takesGroupConversation) {
+      const pinnedAsk = current.remoteAsks?.find((candidate) => candidate.requestId === id)
+      const interactive = pinnedAsk?.conversationId
+        ? pinnedAsk.interactive === true
+        : server.takesGroupConversation
+      if ((asker || interactive) && !server.takesGroupConversation) {
         throw new OrchestrationError(
           'server_mail_unsupported',
           'Update Orca on this group member’s computer for bot-to-bot group conversations.',
@@ -149,6 +161,7 @@ async function deliverRoomMail(
         ) {
           return {}
         }
+        onWire = true
         return {
           sent: deliverPeerMail(groups.runtime, server, conversation, {
             id,
@@ -162,27 +175,41 @@ async function deliverRoomMail(
           })
         }
       }
-      if (!ask) {
+      if (!ask || !pinnedAsk) {
         return {}
       }
-      const conversation = db.openHomePeerMailConversation({
-        environmentId,
-        peerFingerprint: pairing,
-        localParty: roomAddress,
-        localPaneKey: null
-      })
-      groups.store.update({
-        ...current,
-        remoteAsks: current.remoteAsks?.map((candidate) =>
-          candidate.requestId === id
-            ? {
-                ...candidate,
-                conversationId: conversation.conversation_id,
-                ...(server.takesGroupConversation ? { interactive: true as const } : {})
-              }
-            : candidate
-        )
-      })
+      const conversation = pinnedAsk.conversationId
+        ? db.getPeerMailConversation(pinnedAsk.conversationId)
+        : db.openHomePeerMailConversation({
+            environmentId,
+            peerFingerprint: pairing,
+            localParty: roomAddress,
+            localPaneKey: null
+          })
+      if (
+        !conversation ||
+        conversation.role !== 'home' ||
+        conversation.environment_id !== environmentId ||
+        conversation.peer_fingerprint !== pairing ||
+        conversation.local_party !== roomAddress
+      ) {
+        return {}
+      }
+      if (!pinnedAsk.conversationId) {
+        groups.store.update({
+          ...current,
+          remoteAsks: current.remoteAsks?.map((candidate) =>
+            candidate.requestId === id
+              ? {
+                  ...candidate,
+                  pairing,
+                  conversationId: conversation.conversation_id,
+                  ...(interactive ? { interactive: true as const } : {})
+                }
+              : candidate
+          )
+        })
+      }
       const sourceName = asker ? groupSpeakerLabel(asker).name : groupName
       const sourceBot = asker
         ? {
@@ -191,6 +218,7 @@ async function deliverRoomMail(
             avatar: null
           }
         : undefined
+      onWire = true
       return {
         sent: deliverPeerMail(groups.runtime, server, conversation, {
           id,
@@ -198,11 +226,11 @@ async function deliverRoomMail(
           chat: ask.chatSessionId,
           senderLabel: `${asker ? `${sourceName} in ` : ''}${groupName} on ${machine}`,
           subject: `In ${groupName}: ${remoteQuestionSummary(current)}`,
-          body: server.takesGroupConversation
+          body: interactive
             ? `${body}\n\nAnswer this question once with \`orca orchestration reply --id ${id} --body <text>\`. An explicit @Name in the answer asks that group member to take a turn. To post something new after your answer, use \`orca orchestration group-post --id ${id} --body <text>\`; the group host will route any @Name on that post.`
             : body,
           type: 'question',
-          ...(server.takesGroupConversation
+          ...(interactive
             ? {
                 group: {
                   kind: 'question' as const,
@@ -218,42 +246,33 @@ async function deliverRoomMail(
       }
     })
     if (pending.sent) {
-      groups.runtime.ensureOrchestrationPeerMailRelay(environmentId)
       await pending.sent
+      groups.runtime.ensureOrchestrationPeerMailRelay(environmentId)
       if (ask) {
         await settleAsk(groups, message, id, { state: 'sent' })
       }
-    } else if (ask && pending.stopped) {
+    } else if (ask) {
       await settleAsk(groups, message, id, { state: 'failed' })
     }
+    groups.store.routes.settleRemoteDelivery(id)
+    return false
   } catch (error) {
-    groups.store.routes.claimRemoteDelivery(id)
-    if (ask) {
+    const retry = retryGroupDelivery(error)
+    if (ask && (!retry || onWire)) {
       await settleAsk(groups, message, id, {
-        state:
-          refusedBeforeAdmission(error) ||
-          error instanceof RemoteComputerRefusal ||
-          error instanceof BotFailureError
-            ? 'failed'
-            : 'unknown',
-        ...refusedAsk(error)
+        state: retry ? 'unknown' : 'failed',
+        ...(retry ? {} : refusedAsk(error))
       })
-    } else {
-      console.warn('[bot-groups] group answer could not be delivered', error)
     }
-  }
-}
-
-function refusedBeforeAdmission(error: unknown): boolean {
-  if (!(error instanceof OrchestrationError)) {
+    if (retry) {
+      return true
+    }
+    groups.store.routes.settleRemoteDelivery(id)
+    if (!ask) {
+      console.warn('[bot-groups] group answer was refused', error)
+    }
     return false
   }
-  const data: unknown = error.data
-  const effectsApplied =
-    typeof data === 'object' && data !== null && 'effectsApplied' in data
-      ? data.effectsApplied
-      : undefined
-  return effectsApplied === false || REFUSED_BEFORE_ADMISSION.has(error.code)
 }
 
 /** Writes one ask's delivery outcome on the current post, in the room's queue. It never replaces
@@ -272,19 +291,16 @@ async function settleAsk(
     groups.store.update({
       ...current,
       remoteAsks: current.remoteAsks.map((ask) =>
-        ask.requestId === requestId && !ask.reply
-          ? { ...(outcome.error ? newError(ask, outcome) : ask), state: outcome.state }
-          : ask
+        ask.requestId === requestId && !ask.reply ? newOutcome(ask, outcome) : ask
       )
     })
   })
 }
 
-/** An ask with the outcome's error in place of its own, and the code only that error has. */
-function newError(
+function newOutcome(
   ask: BotGroupRemoteAsk,
-  { error, failure }: Pick<BotGroupRemoteAsk, 'error' | 'failure'>
+  { state, error, failure }: Pick<BotGroupRemoteAsk, 'state' | 'error' | 'failure'>
 ): BotGroupRemoteAsk {
-  const { failure: _previous, ...rest } = ask
-  return { ...rest, error, ...(failure ? { failure } : {}) }
+  const { failure: _failure, error: _error, ...rest } = ask
+  return { ...rest, state, ...(error ? { error } : {}), ...(failure ? { failure } : {}) }
 }

@@ -28,6 +28,41 @@ function keepFieldTrigger(table: string, field: string): string {
     END;`
 }
 
+/** A rolled-back writer still knows the arrays, but strips the route fields on each entry. */
+function keepRouteFields(
+  table: string,
+  array: string,
+  identity: readonly string[],
+  fields: readonly string[]
+): string {
+  const path = `'$.${array}'`
+  const sameEntry = identity
+    .map((key) => `saved.value ->> '$.${key}' = incoming.value ->> '$.${key}'`)
+    .join(' AND ')
+  const dropped = fields
+    .map(
+      (key) => `(saved.value -> '$.${key}' IS NOT NULL AND incoming.value -> '$.${key}' IS NULL)`
+    )
+    .join(' OR ')
+  const pinned = fields.reduce(
+    (value, key) =>
+      `CASE WHEN incoming.value -> '$.${key}' IS NULL AND saved.value -> '$.${key}' IS NOT NULL
+        THEN json_set(${value}, '$.${key}', saved.value -> '$.${key}') ELSE ${value} END`,
+    'incoming.value'
+  )
+  const entries = `json_each(NEW.record, ${path}) incoming
+    LEFT JOIN json_each(OLD.record, ${path}) saved ON ${sameEntry}`
+  return `CREATE TRIGGER IF NOT EXISTS ${table}_keep_${array}_route AFTER UPDATE OF record ON ${table}
+    WHEN EXISTS (SELECT 1 FROM ${entries} WHERE ${dropped})
+    BEGIN
+      UPDATE ${table} SET record = json_set(record, ${path}, json((
+        SELECT json_group_array(json(value)) FROM (
+          SELECT ${pinned} AS value FROM ${entries} ORDER BY incoming.key
+        )
+      ))) WHERE rowid = NEW.rowid;
+    END;`
+}
+
 /** `put` stores no remote members as an empty list; it reads as none. */
 export function withoutClearedRoster(group: BotGroup): BotGroup {
   if (group.remoteMembers?.length !== 0) {
@@ -99,7 +134,19 @@ export function createBotGroupTables(db: Database): boolean {
     -- The post each remote question went with, so its answer's mail finds it without reading rooms.
     CREATE TABLE IF NOT EXISTS bot_group_remote_asks (request_id TEXT PRIMARY KEY, message_id TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS bot_group_remote_asks_message ON bot_group_remote_asks(message_id);
-    CREATE TABLE IF NOT EXISTS bot_group_remote_asks_scanned (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL);`)
+    CREATE TABLE IF NOT EXISTS bot_group_remote_asks_scanned (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL);
+    ${keepRouteFields(
+      'bot_groups',
+      'remoteMembers',
+      ['environmentId', 'botId', 'chatSessionId', 'joinedAfter'],
+      ['pairing']
+    )}
+    ${keepRouteFields(
+      'bot_group_messages',
+      'remoteAsks',
+      ['requestId'],
+      ['pairing', 'conversationId', 'interactive']
+    )}`)
   for (const [table, field] of KEPT_FIELDS) {
     db.exec(keepFieldTrigger(table, field))
   }

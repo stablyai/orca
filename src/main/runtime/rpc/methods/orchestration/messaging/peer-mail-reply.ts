@@ -23,7 +23,10 @@ import {
 } from '../../../../orchestration/federation/client-asks/client-ask-environment'
 import { listenerForClientEnvironment } from '../../../../orchestration/federation/client-asks/client-ask-listeners'
 import { queueClientItem } from '../../../../orchestration/federation/client-asks/client-ask-queue'
-import type { ClientReplyPayload } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  GROUP_ANSWER_CONTEXT_PAYLOAD,
+  type ClientReplyPayload
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type { z } from 'zod'
 
 const NOTHING_SENT = { effectsApplied: false } as const
@@ -63,7 +66,7 @@ export async function replyOverPeerMail(args: {
   }
 
   if (conversation.role === 'peer') {
-    if (original.payload === '{"groupContinuation":true}') {
+    if (original.payload === GROUP_ANSWER_CONTEXT_PAYLOAD) {
       throw new OrchestrationError(
         'invalid_argument',
         'This group answer is for context, not a new question.',
@@ -96,15 +99,16 @@ export async function replyOverPeerMail(args: {
         db.markAsRead([original.id], { kind: 'reply' })
       })
     } catch (error) {
-      if (!(error instanceof OrchestrationError) || error.code !== 'already_answered') {
+      if (
+        !route.group_question ||
+        !(error instanceof OrchestrationError) ||
+        error.code !== 'already_answered'
+      ) {
         throw error
       }
-      const next = route.group_question
-        ? `Post a separate follow-up with \`orca orchestration group-post --id ${original.id} --body <text>\`.`
-        : 'Group follow-ups require a new group question from updated Orca on both computers.'
       throw new OrchestrationError(
         'already_answered',
-        `You already answered that request. ${next}`,
+        `You already answered that request. Post a separate follow-up with \`orca orchestration group-post --id ${original.id} --body <text>\`.`,
         NOTHING_SENT
       )
     }

@@ -116,6 +116,10 @@ To post again in the same group and thread, use
 Use the original incoming question ID, not the reply ID or the room's display name.
 The receipt says **queued** until the host places the post; check the group for publication.
 After an uncertain CLI result, retry with the command's `--retry-request` value, not a new invocation.
+The post, including its metadata and escaped body, must fit in 64 KiB of serialized UTF-8.
+If only the room host rolls back to an older Orca, new posts wait on the updated sending
+computer until a host that supports them pulls them. Ordinary first replies can still arrive
+during that time. Don't downgrade a sending computer while it has queued group posts.
 
 A bot's reply or new post can ask a current member by writing `@Name` outside quoted text and code.
 No mention means the new post is for reference only. An answer to a bot's request appears in the

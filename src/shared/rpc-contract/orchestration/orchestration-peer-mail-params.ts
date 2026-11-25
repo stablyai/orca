@@ -34,7 +34,8 @@ export const PeerGroupMail = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('answer'), requestId: LINE })
 ])
 
-export const GROUP_FOLLOW_UP_MAX = 64_000
+export const GROUP_POST_RELAY_KIND = 'group_post'
+export const GROUP_ANSWER_CONTEXT_PAYLOAD = '{"groupContinuation":true}'
 
 /** Agent mail one Orca carries to an agent on a paired Orca, inside a conversation the sender's Orca opened. */
 export const PeerMailDeliverParams = z.object({
@@ -75,7 +76,9 @@ export const PeerMailPullParams = z.object({
   waitMs: OptionalFiniteNumber,
   /** Conversations it could not read and is waiting to retry: their items neither return nor end the wait. */
   holdBack: z.array(z.string()).max(50).optional(),
-  clientAsks: PeerMailClientAsksPull.optional()
+  clientAsks: PeerMailClientAsksPull.optional(),
+  /** This pull's caller can import bot-authored posts, not just replies and notices. */
+  groupPosts: z.literal(true).optional()
 })
 
 /** One queued item on the wire, pulled from or returned to a paired Orca. */
@@ -93,6 +96,7 @@ export const PeerMailReturnParams = z.object({
 })
 
 export const PeerMailAckParams = z.object({
+  groupPosts: z.literal(true).optional(),
   acknowledgments: z
     .array(
       z.object({

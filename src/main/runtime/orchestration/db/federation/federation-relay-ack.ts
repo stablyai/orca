@@ -1,25 +1,35 @@
 import type { FederationRelayDirection, FederationRelayItemRow } from '../orchestration-records'
 import type { FederationRelayAcknowledgment } from '../../legacy-remote/federation-relay-report-acknowledgment'
 import type { OrchestrationDb } from '../orchestration-db'
+import { GROUP_POST_RELAY_KIND } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export function listPendingFederationRelay(
   this: OrchestrationDb,
   dispatchId: string,
   direction: FederationRelayDirection,
-  limit = 50
+  limit = 50,
+  includeGroupPosts = true
 ): FederationRelayItemRow[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * returns precisely the relay row.
   return this.db
     .prepare(
       `SELECT * FROM federation_relay_items
        WHERE dispatch_id = ? AND direction = ? AND acked_at IS NULL
+         AND (? OR kind <> '${GROUP_POST_RELAY_KIND}')
        ORDER BY sequence LIMIT ?`
     )
-    .all(dispatchId, direction, Math.min(Math.max(limit, 1), 50)) as FederationRelayItemRow[]
+    .all(
+      dispatchId,
+      direction,
+      Number(includeGroupPosts),
+      Math.min(Math.max(limit, 1), 50)
+    ) as FederationRelayItemRow[]
 }
 
 export function acknowledgeFederationRelay(
   this: OrchestrationDb,
-  params: FederationRelayAcknowledgment
+  params: FederationRelayAcknowledgment,
+  includeGroupPosts = true
 ): void {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -27,9 +37,10 @@ export function acknowledgeFederationRelay(
     this.db
       .prepare(
         `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
-         WHERE dispatch_id = ? AND direction = ? AND sequence <= ?`
+         WHERE dispatch_id = ? AND direction = ? AND sequence <= ?
+           AND (? OR kind <> '${GROUP_POST_RELAY_KIND}')`
       )
-      .run(params.dispatchId, params.direction, params.throughSequence)
+      .run(params.dispatchId, params.direction, params.throughSequence, Number(includeGroupPosts))
     this.db.exec('COMMIT')
   } catch (error) {
     this.db.exec('ROLLBACK')

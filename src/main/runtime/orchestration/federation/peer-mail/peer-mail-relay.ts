@@ -187,6 +187,7 @@ export class PeerMailRelay {
         'orchestration.peerMailPull',
         {
           waitMs,
+          groupPosts: true,
           ...(holdBack.length > 0 ? { holdBack } : {}),
           ...asksLoop.pairedServerPullParams(loop.asks)
         },
@@ -255,6 +256,7 @@ export class PeerMailRelay {
         environmentId,
         'orchestration.peerMailAck',
         {
+          groupPosts: true,
           acknowledgments: [...through].map(([conversationId, throughSequence]) => ({
             conversationId,
             throughSequence

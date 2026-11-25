@@ -132,6 +132,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Run from the receiving bot’s Home Chat after its first orchestration reply. Use the ID of the incoming group question, not the reply ID.',
       'The group host and that bot’s computer must both support group conversations. Queued does not mean the host posted it.',
+      'The serialized post, including its metadata and escaped text, must fit in 64 KiB of UTF-8.',
       'Use @Name to ask a current group member; a post without a mention does not wake another bot.'
     ]
   },

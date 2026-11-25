@@ -29,6 +29,10 @@ import type { RpcContext } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
 import { ORCHESTRATION_REPLY_METHOD } from '../messaging/reply-method'
 import { ORCHESTRATION_GROUP_POST_METHOD } from '../messaging/group-post-method'
+import { PeerMailDeliverParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import { GroupPostParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
+import { formatMessageBannerWithContent } from '../../../../orchestration/mailbox/formatting/message-formatting'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 
 vi.mock(
   '../../../../orchestration/federation/relay/federation-relay-scheduler',
@@ -130,6 +134,13 @@ it('keeps two remote Homes and the local member in the same group request withou
   const docsHost = hosts.get('docs')!
   let loseAck = false
   let legacyDocs = false
+  let legacyRoom = false
+  let interruptAnswer = false
+  let probeFailed = false
+  let blockProbe = false
+  let loseAnswerReceipt = false
+  let interruptedId: string | undefined
+  let lostReceiptId: string | undefined
   const transport: OrchestrationEnvironmentTransport = {
     resolve: (selector) => ({
       environmentId: selector,
@@ -140,6 +151,10 @@ it('keeps two remote Homes and the local member in the same group request withou
     call: async (selector, method, params) => {
       const host = hosts.get(selector)!
       if (method === 'status.get') {
+        if (blockProbe && selector === 'atlas') {
+          probeFailed = true
+          throw new OrchestrationError('remote_runtime_unavailable', 'test: no capability response')
+        }
         const status = host.runtime.getStatus()
         return {
           id: method,
@@ -162,12 +177,30 @@ it('keeps two remote Homes and the local member in the same group request withou
         loseAck = false
         throw new Error('ack was lost')
       }
+      const delivery =
+        method === 'orchestration.peerMailDeliver' ? PeerMailDeliverParams.parse(params) : undefined
+      const answerId = delivery?.group?.kind === 'answer' ? delivery.messageId : undefined
+      if (answerId && (interruptAnswer || answerId === lostReceiptId)) {
+        interruptedId ??= answerId
+        throw new OrchestrationError('runtime_timeout', 'test: no delivery response')
+      }
+      let wireParams = params
+      if (
+        legacyRoom &&
+        (method === 'orchestration.peerMailPull' || method === 'orchestration.peerMailAck') &&
+        params &&
+        typeof params === 'object' &&
+        'groupPosts' in params
+      ) {
+        const { groupPosts: _groupPosts, ...legacy } = params
+        wireParams = legacy
+      }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the in-process transport carries the real dispatcher response.
-      return (await host.dispatcher.dispatch(
+      const response = (await host.dispatcher.dispatch(
         {
           id: method,
           method,
-          params,
+          params: wireParams,
           authToken: 'room',
           orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION
         },
@@ -177,6 +210,12 @@ it('keeps two remote Homes and the local member in the same group request withou
           clientKind: 'runtime'
         }
       )) as RuntimeRpcResponse<unknown>
+      if (answerId && loseAnswerReceipt && response.ok) {
+        loseAnswerReceipt = false
+        lostReceiptId = answerId
+        throw new OrchestrationError('runtime_timeout', 'test: response lost after peer commit')
+      }
+      return response
     }
   }
   vi.spyOn(atlasHost.runtime.bots, 'list').mockReturnValue([atlas])
@@ -235,6 +274,15 @@ it('keeps two remote Homes and the local member in the same group request withou
     })
   const answer = (id: string, body: string, ctx: RpcContext) =>
     ORCHESTRATION_REPLY_METHOD.handler({ id, body }, ctx)
+  const restartRoom = () => {
+    host.runtime.stopOrchestrationFederationRelay()
+    host.db.close()
+    host = start(join(directory, 'room.db'), transport)
+    groups = roomRuntime()
+    settleStoredRoomMail(groups)
+    groups.resumePending()
+    host.runtime.ensureOrchestrationFederationRelay()
+  }
   try {
     groups.store.put(group)
     const root = await post('@Atlas @Scout Test only: verify the room relay.')
@@ -256,12 +304,28 @@ it('keeps two remote Homes and the local member in the same group request withou
     await vi.waitFor(() =>
       expect(deliveredLocally.get(localAsk.turns[0]!.operationId)).toContain('verify step 1')
     )
+    interruptAnswer = true
+    blockProbe = true
     await handOffGroupMentions(groups, localAsk, localAsk.turns[0]!, {
       full: '@Atlas step 1 passed.',
       saved: '@Atlas step 1 passed.'
     })
+    await vi.waitFor(() => expect(probeFailed).toBe(true))
+    const [waiting] = groups.store.routes.pendingRemoteDeliveries(group.id)
+    expect(waiting).toMatchObject({ isAnswer: true, messageId: localAsk.id })
+    expect(atlasHost.db.getMessageById(waiting!.id)).toBeUndefined()
+    blockProbe = false
+    await vi.waitFor(() => expect(interruptedId).toBe(waiting!.id))
+    expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toContainEqual(
+      expect.objectContaining({ id: interruptedId, isAnswer: true })
+    )
+    expect(atlasHost.db.getMessageById(interruptedId!)).toBeUndefined()
+    interruptAnswer = false
+    restartRoom()
     await vi.waitFor(() =>
-      expect(aMail().find((row) => row.thread_id === first)?.body).toContain('step 1 passed')
+      expect(aMail().filter((row) => row.thread_id === first)).toMatchObject([
+        { id: interruptedId, body: expect.stringContaining('step 1 passed') }
+      ])
     )
     expect(bMail()).toEqual([])
 
@@ -272,9 +336,33 @@ it('keeps two remote Homes and the local member in the same group request withou
     expect(() => groupPost(botContext(atlasHost.runtime, docs.chatSessionId!))).toThrow(
       expect.objectContaining({ code: 'request_mismatch' })
     )
-    loseAck = true
-    expect(groupPost(postContext)).toMatchObject({ status: 'queued' })
+    legacyRoom = true
+    restartRoom()
+    const queued = groupPost(postContext)
+    expect(queued).toMatchObject({ status: 'queued' })
     groupPost(postContext)
+    const originalConversation = atlasHost.db.getPeerMailMessage(first)!.conversation_id
+    const ordinary = await post('@Atlas Legacy host still takes first replies.')
+    await vi.waitFor(() => expect(aMail()[0]?.body).toContain('still takes first replies'))
+    const ordinaryId = aMail()[0]!.id
+    await answer(ordinaryId, 'Normal reply through the rolled-back host.', aContext)
+    await vi.waitFor(() =>
+      expect(groups.store.message(ordinary.id)?.remoteAsks?.[0]?.reply).toMatchObject({
+        text: 'Normal reply through the rolled-back host.'
+      })
+    )
+    await vi.waitFor(() =>
+      expect(
+        atlasHost.db
+          .listPendingFederationRelay(originalConversation, 'to_home')
+          .map((relay) => relay.message_id)
+      ).toEqual([queued.messageId])
+    )
+    expect(rows().some((row) => row.text === body)).toBe(false)
+    expect(bMail()).toEqual([])
+    loseAck = true
+    legacyRoom = false
+    restartRoom()
     await vi.waitFor(() => expect(bMail()[0]?.body).toContain('check the signature'))
     const docsAsk = bMail()[0]!.id
     expect(rows().filter((row) => row.text === body)).toMatchObject([
@@ -284,12 +372,30 @@ it('keeps two remote Homes and the local member in the same group request withou
       rows().find((row) => row.remoteAsks?.some((ask) => ask.requestId === docsAsk))?.requester
         ?.name
     ).toBe('Atlas')
+    loseAnswerReceipt = true
     await answer(docsAsk, '@Atlas Signature verified.', bContext)
-    await vi.waitFor(() =>
-      expect(aMail().filter((mail) => mail.body.includes('Signature verified.'))).toMatchObject([
-        { thread_id: first, payload: '{"groupContinuation":true}' }
-      ])
+    await vi.waitFor(() => expect(lostReceiptId).toBeDefined())
+    expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toContainEqual(
+      expect.objectContaining({ id: lostReceiptId, isAnswer: true })
     )
+    const continuation = atlasHost.db.getMessageById(lostReceiptId!)!
+    expect(continuation).toMatchObject({ thread_id: first, payload: '{"groupContinuation":true}' })
+    const banner = formatMessageBannerWithContent(continuation).text
+    expect(banner).toContain('Signature verified.')
+    expect(banner).toContain('context only')
+    expect(banner).not.toContain('orchestration reply')
+    await expect(answer(continuation.id, 'Not a request.', aContext)).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    const receivedId = lostReceiptId
+    lostReceiptId = undefined
+    restartRoom()
+    await vi.waitFor(() =>
+      expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toEqual([])
+    )
+    expect(aMail().filter((mail) => mail.body.includes('Signature verified.'))).toMatchObject([
+      { id: receivedId, thread_id: first }
+    ])
     expect(
       rows()
         .flatMap((row) => row.remoteAsks ?? [])
@@ -324,6 +430,20 @@ it('keeps two remote Homes and the local member in the same group request withou
         ?.rootRequestId
     ).toBe(separately.id)
 
+    const oversized = GroupPostParams.parse({ id: first, body: '한'.repeat(22_000) })
+    expect(() => ORCHESTRATION_GROUP_POST_METHOD.handler(oversized, aContext)).toThrow(
+      expect.objectContaining({
+        code: 'relay_quota_exceeded',
+        message: expect.stringContaining('64 KiB when serialized as UTF-8')
+      })
+    )
+    const fits = GroupPostParams.parse({ id: first, body: 'x'.repeat(64_001) })
+    const largePost = ORCHESTRATION_GROUP_POST_METHOD.handler(fits, aContext)
+    expect(largePost).toMatchObject({ status: 'queued' })
+    await vi.waitFor(() =>
+      expect(groups.store.message(`group-post:${largePost.messageId}`)?.text).toBe(fits.body)
+    )
+
     const stopped = await post('@Atlas Older question still in progress.')
     await vi.waitFor(() => expect(aMail()[0]?.body).toContain('Older question'))
     const stoppedAsk = aMail()[0]!.id
@@ -339,13 +459,7 @@ it('keeps two remote Homes and the local member in the same group request withou
     )
     await vi.waitFor(() => expect(groups.store.routes.pendingMailRoutes(group.id)).toEqual([]))
 
-    host.runtime.stopOrchestrationFederationRelay()
-    host.db.close()
-    host = start(join(directory, 'room.db'), transport)
-    groups = roomRuntime()
-    settleStoredRoomMail(groups)
-    groups.resumePending()
-    host.runtime.ensureOrchestrationFederationRelay()
+    restartRoom()
     expect(
       groups.store.roomMessages(group.id, threadId, 100).filter((row) => row.text === body)
     ).toHaveLength(1)
@@ -356,6 +470,10 @@ it('keeps two remote Homes and the local member in the same group request withou
     await vi.waitFor(() => expect(bMail()[0]?.body).toContain('Legacy question'))
     const legacyId = bMail()[0]!.id
     await answer(legacyId, 'Legacy answer.', bContext)
+    await expect(answer(legacyId, 'Second legacy answer.', bContext)).rejects.toMatchObject({
+      code: 'already_answered',
+      message: "You already answered that request, so send new mail if there's more to say."
+    })
     expect(() => ORCHESTRATION_GROUP_POST_METHOD.handler({ id: legacyId, body }, bContext)).toThrow(
       expect.objectContaining({ code: 'request_mismatch' })
     )

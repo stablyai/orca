@@ -1,6 +1,9 @@
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { PeerMailDeliverParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  GROUP_ANSWER_CONTEXT_PAYLOAD,
+  type PeerMailDeliverParams
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { resolveBareOrchestrationRecipient } from '../messaging/recipient-routing'
 import { prepareSessionRecipient } from '../messaging/session-recipient'
@@ -90,7 +93,7 @@ export async function storePeerMailForAgent<R>(
       threadId: params.threadId,
       runId: recipient.runId,
       answerSenderSnapshot: params.senderSnapshot,
-      ...(params.groupContinuation ? { payload: '{"groupContinuation":true}' } : {})
+      ...(params.groupContinuation ? { payload: GROUP_ANSWER_CONTEXT_PAYLOAD } : {})
     }
   })
   if (!stored.duplicate) {

@@ -1,6 +1,40 @@
 // How a remote ask refused before sending reads: the English the ask stores, and its code when a
 // client can say it in its reader's language.
 import { BotFailureError, botFailure, type BotFailure } from '../../shared/bots/bot-failure-copy'
+import { OrchestrationError } from '../runtime/orchestration/orchestration-error'
+import { isRemoteServerUnreachable } from '../runtime/orchestration/federation/remote-owned/remote-server-unreachable'
+
+const REFUSED_BEFORE_ADMISSION = new Set([
+  'bot_not_found',
+  'bot_chat_not_found',
+  'invalid_argument',
+  'request_mismatch'
+])
+
+export function retryGroupDelivery(error: unknown): boolean {
+  if (error instanceof BotFailureError) {
+    return error.data.botFailure.code === 'groupPeerTooOld'
+  }
+  if (error instanceof RemoteComputerRefusal) {
+    return error.unreachable
+  }
+  if (!(error instanceof OrchestrationError)) {
+    return true
+  }
+  if (isRemoteServerUnreachable(error) || error.code === 'server_mail_unsupported') {
+    return true
+  }
+  const data: unknown = error.data
+  return (
+    !REFUSED_BEFORE_ADMISSION.has(error.code) &&
+    !(
+      typeof data === 'object' &&
+      data !== null &&
+      'effectsApplied' in data &&
+      data.effectsApplied === false
+    )
+  )
+}
 
 /** The paired computer couldn't be reached. `unreachable`: it gave no answer (off, asleep or off
  *  the network), so posting again may reach it, unlike any other refusal. */
