@@ -355,7 +355,9 @@ export function BotItemBody({
                             <dt className="leading-[18px] text-muted-foreground">
                               {t('bots.items.field.doneMeans', 'Done means')}
                             </dt>
-                            <dd className="leading-[18px] text-foreground">{item.doneMeans}</dd>
+                            <dd className="leading-[18px] text-foreground [overflow-wrap:anywhere]">
+                              {item.doneMeans}
+                            </dd>
                           </>
                         ) : null}
                       </dl>

@@ -1,4 +1,3 @@
-import { EventEmitter } from 'node:events'
 import type { Worker } from 'node:worker_threads'
 import { assertWslNotLatchedAbsent } from '@orca/process-host/wsl-not-installed-latch'
 import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
@@ -9,16 +8,18 @@ import {
   resolveWorkerThreadEntryPath
 } from '../worker-threads/worker-thread-entry-path'
 import type {
-  WorkerThreadChildErrorPayload,
   WorkerThreadChildEvent,
   WorkerThreadChildRequest,
-  WorkerThreadChildSpec
+  WorkerThreadChildSpec,
+  WorkerThreadProviderOwnerSpec
 } from './worker-thread-child-process-protocol'
 import {
+  isWorkerChildStdinWriteError,
   toWorkerChildError,
-  WorkerThreadChildStdin,
-  type SendWorkerChildRequest
+  WorkerThreadChildProcess
 } from './worker-thread-child-stdin'
+
+export { isWorkerChildStdinWriteError, WorkerThreadChildProcess }
 
 // #27362: Windows code-integrity hashing can block CreateProcessW for seconds on the calling loop. Spawn in a worker and fail closed if unavailable (#11161).
 
@@ -26,136 +27,25 @@ import {
 export const IDLE_TEARDOWN_MS = 2 * 60_000
 
 const WORKER_ENTRY_FILENAME = 'worker-thread-child-process-entry.js'
-// Node reports a negative errno as the exit code of a child that never started.
-const SPAWN_FAILED_EXIT_CODE = -1
 
 /** Error code for a child whose worker died: its pipes closed with the worker, but no close event will arrive. */
 export const WORKER_CHILD_ABANDONED_CODE = 'ERR_ORCA_WORKER_CHILD_ABANDONED'
 
 export function isAbandonedWorkerChildError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === WORKER_CHILD_ABANDONED_CODE
-  )
-}
-
-/** The worker forwards stdin pipe failures as child errors; a capture leaves those to the exit status, as main's stdin end does. */
-export function isWorkerChildStdinWriteError(error: unknown): boolean {
-  return (
-    typeof error === 'object' && error !== null && 'syscall' in error && error.syscall === 'write'
-  )
-}
-
-/** Main-thread stand-in for a piped ChildProcess whose real process lives on the worker. */
-export class WorkerThreadChildProcess extends EventEmitter {
-  ownedGroupStopping = false
-  ownedGroupTerminated = false
-  ownedGroupStopUnverified = false
-  closed = false
-  pid: number | undefined = undefined
-  exitCode: number | null = null
-  signalCode: NodeJS.Signals | null = null
-  readonly stdin: WorkerThreadChildStdin
-  readonly stdout = new EventEmitter()
-  readonly stderr = new EventEmitter()
-
-  constructor(
-    readonly id: number,
-    private readonly send: SendWorkerChildRequest
-  ) {
-    super()
-    this.stdin = new WorkerThreadChildStdin(id, send)
-  }
-
-  kill(signal?: NodeJS.Signals): boolean {
-    if (this.closed) {
-      return false
-    }
-    const exited = this.exitCode !== null || this.signalCode !== null
-    // After exit the worker still retires pipes a descendant may hold, as execFile's kill does.
-    return this.send({ type: 'kill', id: this.id, signal }) && !exited
-  }
-
-  /** The reader is done with one stream, or both; later output stays on the worker instead of crossing to this thread. */
-  discardOutput(stream?: 'stdout' | 'stderr'): void {
-    if (!this.closed) {
-      this.send({ type: 'discard-output', id: this.id, ...(stream ? { stream } : {}) })
-    }
-  }
-
-  /** Withdraws a launch the worker has not started yet; no effect once it has. */
-  cancelPendingSpawn(): void {
-    if (!this.closed && this.pid === undefined) {
-      this.send({ type: 'cancel-spawn', id: this.id })
-    }
-  }
-
-  stopOwnedGroup(): boolean {
-    this.ownedGroupStopping = true
-    return this.send({ type: 'stop-owned-group', id: this.id })
-  }
-
-  receive(event: Exclude<WorkerThreadChildEvent, { type: 'ready' }>): void {
-    switch (event.type) {
-      case 'group-terminated':
-        this.ownedGroupTerminated = true
-        this.emit('group-terminated')
-        return
-      case 'group-stop-unverified':
-        this.ownedGroupStopUnverified = true
-        return void this.emit('group-stop-unverified')
-      case 'spawn':
-        this.pid = event.pid
-        this.emit('spawn')
-        return
-      case 'stdout':
-      case 'stderr':
-        try {
-          this[event.type].emit(
-            'data',
-            Buffer.from(event.chunk.buffer, event.chunk.byteOffset, event.chunk.byteLength)
-          )
-        } finally {
-          this.send({ type: 'output-consumed', id: this.id, bytes: event.chunk.byteLength })
-        }
-        return
-      case 'error':
-        if (isWorkerChildStdinWriteError(event.error) && this.stdin.listenerCount('error') > 0) {
-          this.stdin.emit('error', toWorkerChildError(event.error))
-          return
-        }
-        this.emitErrorIfObserved(event.error)
-        return
-      case 'spawn-error':
-        this.emit('group-terminated')
-        this.emitErrorIfObserved(event.error)
-        this.receive({ type: 'exit', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
-        this.receive({ type: 'close', id: this.id, code: SPAWN_FAILED_EXIT_CODE, signal: null })
-        return
-      case 'exit':
-        this.exitCode = event.code
-        this.signalCode = event.signal
-        this.emit('exit', event.code, event.signal)
-        return
-      case 'close':
-        this.closed = true
-        this.emit('close', event.code, event.signal)
-    }
-  }
-
-  // Ignore unobserved late errors after caller detach or EventEmitter would throw fatally into main.
-  private emitErrorIfObserved(payload: WorkerThreadChildErrorPayload): void {
-    if (this.listenerCount('error') > 0) {
-      this.emit('error', toWorkerChildError(payload))
-    }
-  }
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? error.code === WORKER_CHILD_ABANDONED_CODE
+    : false
 }
 
 export class WorkerThreadChildProcessHost {
   private readonly host: LazyWorkerThreadHost<WorkerThreadChildEvent>
   private readonly children = new Map<number, WorkerThreadChildProcess>()
+  private readonly providerOwners = new Map<
+    number,
+    { resolve: (result: { pid: number }) => void; reject: (error: Error) => void }
+  >()
+  // Detached provider owners whose uv_process_t lives on this worker; keep the worker alive until they exit so they are reaped.
+  private readonly liveProviderOwners = new Set<number>()
   private nextId = 1
   private workerAnswered = false
   private workerError: string | null = null
@@ -179,7 +69,10 @@ export class WorkerThreadChildProcessHost {
             ? `Child process worker exited with code ${code}`
             : `Child process worker failed: ${this.workerError}`
         ),
-      isIdle: () => this.children.size === 0,
+      isIdle: () =>
+        this.children.size === 0 &&
+        this.providerOwners.size === 0 &&
+        this.liveProviderOwners.size === 0,
       onUnavailable: (error) =>
         console.warn(
           `[worker-thread-child-process] worker unavailable. ${error instanceof Error ? error.message : String(error)}`
@@ -240,6 +133,38 @@ export class WorkerThreadChildProcessHost {
     return child
   }
 
+  spawnProviderOwner(spec: WorkerThreadProviderOwnerSpec): Promise<{ pid: number }> {
+    const id = this.nextId++
+    if (!this.ensureWorker()) {
+      return Promise.reject(new Error('Child process worker is unavailable'))
+    }
+    this.host.clearIdleTimer()
+    return new Promise<{ pid: number }>((resolve, reject) => {
+      this.providerOwners.set(id, { resolve, reject })
+      const worker = this.host.current
+      try {
+        if (!worker) {
+          throw new Error('Child process worker is unavailable')
+        }
+        worker.postMessage({ type: 'spawn-provider-owner', id, spec })
+      } catch (error) {
+        this.providerOwners.delete(id)
+        this.scheduleIdleIfEmpty()
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+  }
+
+  private scheduleIdleIfEmpty(): void {
+    if (
+      this.children.size === 0 &&
+      this.providerOwners.size === 0 &&
+      this.liveProviderOwners.size === 0
+    ) {
+      this.host.scheduleIdleTeardown()
+    }
+  }
+
   private post(request: WorkerThreadChildRequest): boolean {
     const worker = this.host.current
     if (!worker || !this.children.has(request.id)) {
@@ -258,8 +183,27 @@ export class WorkerThreadChildProcessHost {
     if (event.type === 'ready') {
       this.ready?.settle(true)
       // Every launch that started this worker may have been cancelled while it loaded.
-      if (this.children.size === 0) {
-        this.host.scheduleIdleTeardown()
+      this.scheduleIdleIfEmpty()
+      return
+    }
+    if (event.type === 'provider-owner-exit') {
+      this.liveProviderOwners.delete(event.id)
+      this.scheduleIdleIfEmpty()
+      return
+    }
+    if (event.type === 'provider-owner-spawned' || event.type === 'provider-owner-error') {
+      const pending = this.providerOwners.get(event.id)
+      this.providerOwners.delete(event.id)
+      if (event.type === 'provider-owner-spawned') {
+        this.liveProviderOwners.add(event.id)
+      }
+      this.scheduleIdleIfEmpty()
+      if (pending) {
+        if (event.type === 'provider-owner-spawned') {
+          pending.resolve({ pid: event.pid })
+        } else {
+          pending.reject(toWorkerChildError(event.error))
+        }
       }
       return
     }
@@ -282,9 +226,7 @@ export class WorkerThreadChildProcessHost {
 
   private forget(id: number): void {
     this.children.delete(id)
-    if (this.children.size === 0) {
-      this.host.scheduleIdleTeardown()
-    }
+    this.scheduleIdleIfEmpty()
   }
 
   // Worker death closes stdin for graceful stop but proves no child exit; omit close so drain windows/home locks still expire normally.
@@ -298,7 +240,13 @@ export class WorkerThreadChildProcessHost {
     this.workerError = null
     const abandoned = [...this.children.values()]
     this.children.clear()
+    const abandonedOwners = [...this.providerOwners.values()]
+    this.providerOwners.clear()
+    this.liveProviderOwners.clear()
     this.host.destroy()
+    for (const owner of abandonedOwners) {
+      owner.reject(Object.assign(new Error(message), { code: WORKER_CHILD_ABANDONED_CODE }))
+    }
     // The worker posts a pid in the turn it creates the process and its messages arrive before 'exit',
     // so a child without one was never created (queued, or the worker was not ready): it fails to start.
     for (const child of abandoned) {
@@ -339,6 +287,12 @@ export function whenSpawnWorkerReady(): Promise<boolean> {
 /** Never waits: false while the worker boots (the boot starts), so the caller spawns locally meanwhile. */
 export function spawnWorkerReadyNow(): boolean {
   return !workerDisabled() && shared().isReady()
+}
+
+export function spawnProviderOwnerOnWorkerThread(
+  spec: WorkerThreadProviderOwnerSpec
+): Promise<{ pid: number }> {
+  return shared().spawnProviderOwner(spec)
 }
 
 /** True when a spawn now would reach a live worker; callers that must not fail can spawn locally instead. */
