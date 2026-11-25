@@ -81,6 +81,7 @@ export function mergeHostWebUIState(
     showAgentModels: local.showAgentModels !== false,
     agentsVisibleHostIds: local.agentsVisibleHostIds,
     agentsFilterRepoIds: local.agentsFilterRepoIds,
+    agentsFilterAgentTypes: local.agentsFilterAgentTypes,
     agentsHideWorkspacesFromOtherDevices: local.agentsHideWorkspacesFromOtherDevices === true,
     agentsHideAutomationGeneratedWorkspaces: local.agentsHideAutomationGeneratedWorkspaces === true,
     agentsHideCliCreatedWorkspaces: local.agentsHideCliCreatedWorkspaces === true,

@@ -1,3 +1,7 @@
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
+import { ALL_TUI_AGENTS } from '../../agent-launch/catalog/tui-agent-display-names'
+
 /** Derive types, client enums and normalizers from menu-order values so additions cannot drift. */
 export const THREAD_READ_FILTER_VALUES = ['all', 'unread'] as const
 export const ACTIVITY_GROUP_BY_VALUES = ['none', 'status', 'project', 'worktree', 'agent'] as const
@@ -14,6 +18,11 @@ export function normalizeThreadReadFilter(value: unknown): ThreadReadFilter {
 
 export function normalizeActivityGroupBy(value: unknown): ActivityGroupBy {
   return isMember(ACTIVITY_GROUP_BY_VALUES, value) ? value : DEFAULT_AGENTS_GROUP_BY
+}
+
+export function normalizeActivityAgentTypes(value: unknown): TuiAgent[] {
+  const selected = Array.isArray(value) ? [...new Set(value.filter(isTuiAgent))] : []
+  return selected.length === ALL_TUI_AGENTS.length ? [] : selected
 }
 
 function isMember<T extends string>(catalog: readonly T[], value: unknown): value is T {
