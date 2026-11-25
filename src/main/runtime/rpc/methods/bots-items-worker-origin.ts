@@ -4,6 +4,7 @@
 import { isOpenBotItemStatus } from '../../../../shared/bots/bot-items'
 import { BotItemError } from '../../../bots/bot-item-error'
 import { assertBotItemLinkRoom } from '../../../bots/bot-items-input'
+import { lineageAncestors } from '../../../bots/bot-item-dispatch-facts'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { itemsWriter } from './bots-items-caller'
@@ -17,7 +18,9 @@ export type LinkedBotItem = { number: number; title: string; chatTitle: string |
 /** The checked origin to record, `bot-item:<uid>`, and the item it links; refused for anything else. */
 export async function checkedWorkerOrigin(
   origin: string,
-  context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>
+  context: Pick<RpcContext, 'runtime' | 'orchestrationCaller'>,
+  /** A follow-up's Dispatch: a chain the item links already adds no link. */
+  followUpOf?: string
 ): Promise<{ origin: string; itemUid: string; linkedItem: LinkedBotItem }> {
   if (!origin.startsWith(BOT_ITEM_ORIGIN_PREFIX)) {
     throw new BotItemError('invalid_argument', 'A worker origin is set by `worker-start --item`.')
@@ -38,7 +41,13 @@ export async function checkedWorkerOrigin(
     )
   }
   // Refused before the worker starts: a full item would leave it running unlinked.
-  assertBotItemLinkRoom((await store.links(item.uid)).length)
+  const links = await store.links(item.uid)
+  const continues = followUpOf
+    ? lineageAncestors(context.runtime.getOrchestrationDb(), followUpOf)
+    : []
+  if (!links.some((link) => link.kind === 'dispatch' && continues.includes(link.ref))) {
+    assertBotItemLinkRoom(links.length)
+  }
   return {
     origin: `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`,
     itemUid: item.uid,

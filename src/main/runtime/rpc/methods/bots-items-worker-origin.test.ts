@@ -35,6 +35,12 @@ describe('worker-start --item', () => {
       orchestrationCaller: { sessionId: 'helper' },
       runtime: {
         bots: { assertEnabled: () => {} },
+        // ctx_second follows up ctx_first.
+        getOrchestrationDb: () => ({
+          getDispatchContextById: (id: string) => ({
+            follow_up_of_dispatch_id: id === 'ctx_second' ? 'ctx_first' : null
+          })
+        }),
         botItems: { store: () => remote, owningChat: () => ({ title: null }) }
       }
     } as unknown as Parameters<typeof checkedWorkerOrigin>[1]
@@ -43,9 +49,16 @@ describe('worker-start --item', () => {
     })
     await expect(checkedWorkerOrigin('bot-item:2', context)).rejects.toThrow(/is done/)
     // A full item refuses before the worker starts, as `item link` does.
-    const refs = Array.from({ length: 1000 }, (_, i) => ({ kind: 'url', ref: `u:${i}` }) as const)
-    store.link(open, refs, actor)
+    const refs = Array.from({ length: 999 }, (_, i) => ({ kind: 'url', ref: `u:${i}` }) as const)
+    store.link(open, [...refs, { kind: 'dispatch', ref: 'ctx_first' }], actor)
     await expect(checkedWorkerOrigin('bot-item:1', context)).rejects.toThrow(
+      'An item takes up to 1000 links.'
+    )
+    // A follow-up of a worker the item links adds no link, so a full item still takes it.
+    await expect(checkedWorkerOrigin('bot-item:1', context, 'ctx_second')).resolves.toMatchObject({
+      origin: `bot-item:${open}`
+    })
+    await expect(checkedWorkerOrigin('bot-item:1', context, 'ctx_other')).rejects.toThrow(
       'An item takes up to 1000 links.'
     )
     store.dispose()
