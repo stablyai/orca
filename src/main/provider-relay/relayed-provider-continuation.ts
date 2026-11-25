@@ -65,16 +65,17 @@ export class RelayedProviderContinuation {
 
   /**
    * Nothing is left to move: past the replay with no item moved and none named still to come (a
-   * cut item paused by a call may resume later), or once every open work the attach carried has
-   * ended (no item outlives it).
+   * cut item paused by a call may resume later; after the overflow key, any may), or once every
+   * open work the attach carried has ended (no item outlives it).
    */
   get done(): boolean {
-    return (
-      (this.lastSeq >= this.replayThrough &&
-        this.moved.size === this.whole.size &&
-        this.awaited.size === 0) ||
-      (this.open !== null && this.open.size === 0)
-    )
+    const replayed =
+      this.lastSeq >= this.replayThrough &&
+      this.moved.size === this.whole.size &&
+      this.awaited.size === 0
+    // Past what a cut names, an unnamed item may resume later, until its open work ends.
+    const unnamed = this.open !== null && this.cutKeys?.has(RELAY_CUT_KEYS_OVERFLOW) === true
+    return (replayed && !unnamed) || (this.open !== null && this.open.size === 0)
   }
 
   /** The lines to hand on for this one: itself, re-keyed, or a moved item's finishing lines. */

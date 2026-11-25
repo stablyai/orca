@@ -66,7 +66,8 @@ export class ProviderRelayCarriedWork {
       floor: (through, released) => floor?.floor(through, released) ?? null,
       tookCut: () => floor?.tookCut?.() === true,
       released: (seq) => floor?.released?.(seq),
-      ...(floor?.cutKeys ? { cutKeys: (through?: number) => floor.cutKeys?.(through) ?? [] } : {})
+      ...(floor?.cutKeys ? { cutKeys: (through?: number) => floor.cutKeys?.(through) ?? [] } : {}),
+      ...(floor?.wake ? { wake: (ack: () => void) => floor.wake?.(ack) } : {})
     }
   }
 }
