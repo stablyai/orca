@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import type { FeishuMessage, FeishuProfile } from './feishu-cli'
@@ -12,8 +12,16 @@ export class FeishuInbox {
       CREATE TABLE IF NOT EXISTS bindings(account TEXT PRIMARY KEY, scope TEXT NOT NULL,bot TEXT NOT NULL,profile TEXT NOT NULL,app TEXT NOT NULL UNIQUE,owner TEXT,chat TEXT,pairedAt INTEGER,UNIQUE(scope,bot));
       CREATE TABLE IF NOT EXISTS inbox(account TEXT NOT NULL REFERENCES bindings(account) ON DELETE CASCADE,mid TEXT NOT NULL,event TEXT NOT NULL,body TEXT,first_post INTEGER,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),UNIQUE(account,event));
       CREATE INDEX IF NOT EXISTS pending_feishu_messages ON inbox(account) WHERE body IS NOT NULL AND review=0;
-      CREATE TABLE IF NOT EXISTS reply_files(account TEXT NOT NULL,mid TEXT NOT NULL,name TEXT NOT NULL,bytes BLOB,file_key TEXT,posted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
+      CREATE TABLE IF NOT EXISTS reply_files(account TEXT NOT NULL,mid TEXT NOT NULL,name TEXT NOT NULL,bytes BLOB,sha256 TEXT,file_key TEXT,posted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
+    if (
+      !this.db
+        .prepare('PRAGMA table_info(reply_files)')
+        .all()
+        .some((c) => c.name === 'sha256')
+    ) {
+      this.db.exec('ALTER TABLE reply_files ADD COLUMN sha256 TEXT')
+    }
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
     if (!columns.some((c) => c.name === 'progress')) {
       this.db.exec('ALTER TABLE inbox ADD COLUMN progress INTEGER NOT NULL DEFAULT 0')
@@ -112,15 +120,17 @@ export class FeishuInbox {
   }
   stageFile(account: string, mid: string, name: string, bytes: Uint8Array): void {
     const row = this.db
-      .prepare('SELECT name,bytes FROM reply_files WHERE account=? AND mid=?')
+      .prepare('SELECT name,bytes,sha256 FROM reply_files WHERE account=? AND mid=?')
       .get(account, mid)
-    if (
-      row &&
-      row.name === name &&
-      row.bytes instanceof Uint8Array &&
-      Buffer.from(row.bytes).equals(bytes)
-    ) {
-      return
+    if (row) {
+      const sameBytes =
+        row.bytes instanceof Uint8Array
+          ? Buffer.from(row.bytes).equals(bytes)
+          : row.sha256 === createHash('sha256').update(bytes).digest('hex')
+      if (row.name === name && sameBytes) {
+        return
+      }
+      throw new Error('A different or unverifiable file is already staged for this delivery')
     }
     this.db
       .prepare('INSERT INTO reply_files(account,mid,name,bytes) VALUES(?,?,?,?)')
@@ -145,9 +155,17 @@ export class FeishuInbox {
     )
   }
   uploaded(account: string, mid: string, key: string): void {
-    this.db
-      .prepare('UPDATE reply_files SET file_key=?,bytes=NULL WHERE account=? AND mid=?')
-      .run(key, account, mid)
+    const row = this.db
+      .prepare('SELECT bytes FROM reply_files WHERE account=? AND mid=?')
+      .get(account, mid)
+    if (row?.bytes instanceof Uint8Array) {
+      const digest = createHash('sha256').update(row.bytes).digest('hex')
+      this.db
+        .prepare(
+          'UPDATE reply_files SET file_key=?,sha256=?,bytes=NULL WHERE account=? AND mid=? AND file_key IS NULL'
+        )
+        .run(key, digest, account, mid)
+    }
   }
   filePosted(account: string, mid: string): void {
     this.db.prepare('UPDATE reply_files SET posted=1 WHERE account=? AND mid=?').run(account, mid)
@@ -164,8 +182,10 @@ export class FeishuInbox {
       .prepare('UPDATE inbox SET body=NULL,stored_path=NULL WHERE account=? AND mid=?')
       .run(account, mid)
   }
-  review(account: string, mid: string): void {
-    this.db.prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=?').run(account, mid)
+  review(account: string, mid: string): boolean {
+    return !!this.db
+      .prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=? AND review=0')
+      .run(account, mid).changes
   }
   needsReview(account: string): boolean {
     return Boolean(
@@ -173,19 +193,13 @@ export class FeishuInbox {
     )
   }
   /** A reply whose outcome was lost must only be retried within Feishu's one-hour UUID window. */
-  mayPost(account: string, mid: string, now: number): boolean {
+  postWindowStart(account: string, mid: string, now: number): number | null {
     this.db
       .prepare('UPDATE inbox SET first_post=? WHERE account=? AND mid=? AND first_post IS NULL')
       .run(now, account, mid)
     const row = this.db
       .prepare('SELECT first_post,review FROM inbox WHERE account=? AND mid=?')
       .get(account, mid)
-    return (
-      !!row &&
-      !row.review &&
-      typeof row.first_post === 'number' &&
-      now >= row.first_post &&
-      now - row.first_post < 55 * 60_000
-    )
+    return row && !row.review && typeof row.first_post === 'number' ? row.first_post : null
   }
 }

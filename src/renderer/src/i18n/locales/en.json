@@ -27654,6 +27654,7 @@
       "settings": "Connection settings",
       "title": "Feishu on this host",
       "cliMissing": "Install lark-cli on the computer running this bot, then refresh profiles.",
+      "installReconnect": "Install lark-cli on the computer running this bot. Orca will retry the connection automatically.",
       "permission": "Grant the app permission to receive private messages and publish the updated app version. Orca will retry.",
       "subscription": "Subscribe to Receive message (im.message.receive_v1) using a long connection and publish the updated app version. Orca will retry.",
       "profileChanged": "The selected CLI profile no longer resolves to the paired app. Restore it or disconnect to choose another profile.",

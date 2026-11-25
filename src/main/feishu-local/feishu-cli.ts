@@ -36,6 +36,9 @@ export function readFeishuMessage(line: string): FeishuMessage | null {
   }
 }
 
+/** A recalled original or a missing topic cannot accept another reply. */
+export class FeishuReplyTargetGone extends Error {}
+
 export async function feishuCommand(
   args: string[],
   signal?: AbortSignal,
@@ -51,6 +54,20 @@ export async function feishuCommand(
     timeoutMs: 20_000
   })
   if (result.code !== 0 || result.outputTruncated || signal?.aborted) {
+    if (!signal?.aborted && !result.outputTruncated && result.code !== 0) {
+      let diagnostic: unknown
+      try {
+        diagnostic = JSON.parse(result.stderr)
+      } catch {
+        // Unstructured CLI failures stay retryable.
+      }
+      const code = z
+        .object({ ok: z.literal(false), error: z.object({ code: z.number() }) })
+        .safeParse(diagnostic).data?.error.code
+      if (code === 230011 || code === 230019 || code === 230110) {
+        throw new FeishuReplyTargetGone('The Feishu reply target is unavailable')
+      }
+    }
     throw new Error('Feishu CLI command failed')
   }
   try {

@@ -88,6 +88,12 @@ export function BotFeishuSetup({
           'Choose a Feishu CLI profile on the computer that runs this bot.'
         )
       case 'cli-missing':
+        if (!off) {
+          return t(
+            'bots.feishu.installReconnect',
+            'Install lark-cli on the computer running this bot. Orca will retry the connection automatically.'
+          )
+        }
         return t(
           'bots.feishu.cliMissing',
           'Install lark-cli on the computer running this bot, then refresh profiles.'

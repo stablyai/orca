@@ -228,16 +228,19 @@ export class FeishuConnection {
   private async drain(): Promise<void> {
     const b = this.binding
     const seam = this.runtime.getExternalConversationSeam()
-    const bot = this.bot()
-    if (!b.owner || !b.chat || !seam || !bot) {
+    if (!b.owner || !b.chat || !seam || !this.bot()) {
       return
     }
     const host = runtimeConversationHost(this.runtime)
     const key = dmKey(b)
     let row = await this.inbox.next(b.account)
-    while (row && !this.signal.aborted && this.bot()) {
+    while (row && !this.signal.aborted) {
       if (row.kind !== 'text') {
         await this.checkProfile()
+      }
+      const bot = this.bot()
+      if (!bot) {
+        return
       }
       const { prompt, storedImages } = await feishuInput(this.inbox, b, row, bot.agent, this.signal)
       const { initial } = await seam.start(host, key, row.mid, {

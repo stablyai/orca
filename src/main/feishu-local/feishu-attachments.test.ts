@@ -91,6 +91,11 @@ it('keeps identically named original messages and generated uploads separate acr
     expect(db.takeProgress(first.account, mid)).toBe(false)
     expect(db.takeProgress(second.account, mid)).toBe(true)
     db.uploaded(first.account, mid, 'file_example')
+    db.stageFile(first.account, mid, 'receipt.txt', bytes)
+    expect(() =>
+      db.stageFile(first.account, mid, 'receipt.txt', Buffer.from('replacement'))
+    ).toThrow()
+    expect(() => db.stageFile(first.account, mid, 'other.txt', bytes)).toThrow()
     expect(db.artifact(first.account, mid)).toMatchObject({
       bytes: null,
       key: 'file_example',

@@ -27063,6 +27063,7 @@
       "settings": "连接设置",
       "title": "本机飞书",
       "cliMissing": "请在运行此 bot 的电脑上安装 lark-cli，然后刷新配置。",
+      "installReconnect": "请在运行此 bot 的电脑上安装 lark-cli。Orca 会自动重试连接。",
       "permission": "请授予应用接收私聊消息的权限并发布新版本。Orca 会自动重试。",
       "subscription": "请使用长连接订阅「接收消息」事件（im.message.receive_v1），然后发布新版本。Orca 会自动重试。",
       "profileChanged": "所选 CLI 配置已无法找到配对的应用。请恢复原配置，或断开连接后重新选择。",

@@ -1,4 +1,4 @@
-import { mkdtemp, open, rm, stat, watch } from 'node:fs/promises'
+import { mkdtemp, open, readdir, rm, stat, watch } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -108,16 +108,16 @@ async function storeFeishuResource(
   const monitor = (async () => {
     try {
       for await (const event of watch(dir, { signal: stop })) {
-        if (!event.filename) {
-          continue
-        }
-        const size = await stat(join(dir, event.filename)).then(
-          (s) => s.size,
-          () => 0
-        )
-        if (size > limit) {
-          controller.abort()
-          return
+        const names = event.filename ? [event.filename] : await readdir(dir)
+        for (const name of names) {
+          const size = await stat(join(dir, name)).then(
+            (s) => s.size,
+            () => 0
+          )
+          if (size > limit) {
+            controller.abort()
+            return
+          }
         }
       }
     } catch {

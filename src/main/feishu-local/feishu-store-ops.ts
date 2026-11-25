@@ -16,7 +16,7 @@ const OPS = [
   'admitted',
   'review',
   'needsReview',
-  'mayPost'
+  'postWindowStart'
 ] as const satisfies readonly (keyof FeishuInbox)[]
 type Op = (typeof OPS)[number]
 export const isFeishuOp = (op: string): op is Op => OPS.some((allowed) => allowed === op)

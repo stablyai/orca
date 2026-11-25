@@ -714,6 +714,7 @@
     "bots.feishu.error",
     "bots.feishu.expired",
     "bots.feishu.hostError",
+    "bots.feishu.installReconnect",
     "bots.feishu.listening",
     "bots.feishu.loading",
     "bots.feishu.noProfiles",
