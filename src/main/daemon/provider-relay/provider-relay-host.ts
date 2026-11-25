@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readdir, unlink } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
-import type {
-  ProviderRelayAttachResult,
-  ProviderRelayListResult,
-  ProviderRelaySpawnResult,
-  ProviderRelaySpawnSpec
+import {
+  RELAY_CUT_KEY_MAX_CHARS,
+  RELAY_CUT_KEYS_MAX,
+  type ProviderRelayAttachResult,
+  type ProviderRelayListResult,
+  type ProviderRelaySpawnResult,
+  type ProviderRelaySpawnSpec
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelay } from './provider-relay'
 import type { ProviderRelayStream } from './provider-relay-attachment'
@@ -178,13 +180,17 @@ export class ProviderRelayHost {
     relayId: unknown,
     seq: unknown,
     keepFrom?: unknown,
-    flags?: { cut?: unknown; held?: unknown }
+    flags?: { cut?: unknown; held?: unknown; cutKeys?: unknown }
   ): number {
     const relay = this.requireAttached(clientId, relayId)
     const ackedThrough = relay.ack(
       typeof seq === 'number' ? seq : 0,
       typeof keepFrom === 'number' ? keepFrom : undefined,
-      { cut: flags?.cut === true, held: flags?.held === true }
+      {
+        cut: flags?.cut === true,
+        held: flags?.held === true,
+        cutKeys: flags?.cutKeys === undefined ? undefined : relayCutKeys(flags.cutKeys)
+      }
     )
     this.removeIfFinished(relay)
     return ackedThrough
@@ -326,4 +332,16 @@ export class ProviderRelayHost {
       }
     }
   }
+}
+
+/** Opaque item keys a cut ack names; anything past the bounds is refused, not trimmed. */
+function relayCutKeys(value: unknown): string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > RELAY_CUT_KEYS_MAX ||
+    !value.every((key) => typeof key === 'string' && key.length <= RELAY_CUT_KEY_MAX_CHARS)
+  ) {
+    throw new Error('Invalid relay cut keys')
+  }
+  return value
 }

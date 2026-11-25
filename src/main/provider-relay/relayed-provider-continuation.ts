@@ -27,7 +27,8 @@ export type ProviderRelayItemContinuation = {
  * The items open at an attach that replays from `cutThrough`: each one first seen past that point
  * without its start is re-keyed `relay:<relayId>:<first seq>` for the rest of its life. The first
  * replayed seq is where every later attach replays from, so the tag (and the row) is the same each
- * time. With `open`, lines are read only until all of that work has ended.
+ * time. With `open`, lines are read only until all of that work has ended. With `cutKeys` (the
+ * items the cut ack named), exactly those move; without, any item seen without its start does.
  */
 export class RelayedProviderContinuation {
   private readonly started = new Set<string>()
@@ -38,7 +39,8 @@ export class RelayedProviderContinuation {
     private readonly relayId: string,
     private readonly cutThrough: number,
     private readonly replayThrough: number,
-    private readonly open: Set<string> | null = null
+    private readonly open: Set<string> | null = null,
+    private readonly cutKeys: ReadonlySet<string> | null = null
   ) {}
 
   private lastSeq = 0
@@ -73,7 +75,7 @@ export class RelayedProviderContinuation {
     }
     let tag = this.moved.get(item.key)
     if (tag === undefined) {
-      if (this.started.has(item.key)) {
+      if (this.started.has(item.key) || (this.cutKeys && !this.cutKeys.has(item.key))) {
         return [line]
       }
       tag = `relay:${this.relayId}:${seq}`
@@ -111,6 +113,7 @@ export function attachContinuation(
     relayId,
     result.truncatedThrough ?? fromSeq,
     result.replayThroughSeq,
-    open && new Set(open.map((key) => JSON.stringify(key)))
+    open && new Set(open.map((key) => JSON.stringify(key))),
+    result.cutKeys ? new Set(result.cutKeys) : null
   )
 }

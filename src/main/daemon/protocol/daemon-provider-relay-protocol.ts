@@ -51,11 +51,20 @@ export type ProviderRelayRequest =
    * from a later line), so a later attach reports `truncatedThrough`. `held` marks the kept lines as
    * a replay the client holds unsaved: past the memory cap they go to the file. The reply's
    * `ackedThrough` is how far the daemon released, which passes `keepFrom` after a file-cap release.
+   * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
+   * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
    */
   | {
       id: string
       type: 'relayAck'
-      payload: { relayId: string; seq: number; keepFrom?: number; cut?: true; held?: true }
+      payload: {
+        relayId: string
+        seq: number
+        keepFrom?: number
+        cut?: true
+        held?: true
+        cutKeys?: string[]
+      }
     }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
@@ -156,6 +165,8 @@ export type ProviderRelayAttachResult = {
    * keep. Older clients ignore it.
    */
   truncatedThrough?: number
+  /** The items the client said its last cut split, when that cut is the one `truncatedThrough` names. */
+  cutKeys?: string[]
 }
 
 export type ProviderRelayInfo = {
@@ -212,3 +223,7 @@ export type ProviderRelayExitEvent = {
  * control socket's 16 MiB line limit, so a large write in such chunks always arrives.
  */
 export const RELAY_WRITE_CHUNK_CHARS = 2 * 1024 * 1024
+
+/** A cut names at most this many items, each key at most this long; a larger list is refused. */
+export const RELAY_CUT_KEYS_MAX = 32
+export const RELAY_CUT_KEY_MAX_CHARS = 256

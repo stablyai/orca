@@ -8,6 +8,7 @@ import type {
   ProviderRelayRecord
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
+import { ProviderRelayCut, type ProviderRelayAckOptions } from './provider-relay-cut'
 import { ProviderRelaySpool } from './provider-relay-spool'
 import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
@@ -29,7 +30,7 @@ export class ProviderRelay {
   private exitStatus: ProviderRelayExit | null = null
   private idleStopped = false
   /** The client's own acks that gave up an open kept span (the daemon's ask at its file cap). */
-  private cutThrough = 0
+  private readonly cut = new ProviderRelayCut()
   private stdoutEnded = false
   private exitAnnounced = false
   private spoolPaused = false
@@ -150,8 +151,8 @@ export class ProviderRelay {
     const cursor = Math.min(fromSeq, this.spool.nextSeq - 1)
     this.idleStop.disarm()
     // Read before the replay: lines released later through this client's own acks reached it.
-    const truncatedThrough = Math.max(this.spool.truncatedThrough, this.cutThrough)
-    this.options.log?.('relay-attached', { relayId: this.relayId, cursor, truncatedThrough })
+    const cut = this.cut.report(this.spool.truncatedThrough, cursor)
+    this.options.log?.('relay-attached', { relayId: this.relayId, cursor, ...cut })
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
     this.spool.suspend()
@@ -197,9 +198,7 @@ export class ProviderRelay {
       initializeResultSent: initializeResult !== null,
       stderrTail: this.options.managed.stderrTail(),
       exit: this.exitStatus,
-      // Lines the client already had before its cursor were never missing from its replay.
-      // A cut at the cursor counts too: the kept lines it gave up were the ones a replay needed.
-      ...(truncatedThrough > 0 && truncatedThrough >= cursor ? { truncatedThrough } : {}),
+      ...cut,
       ...this.idleStop.carriedWork()
     }
   }
@@ -234,11 +233,9 @@ export class ProviderRelay {
   }
 
   /** How far the spool released; past `keepFrom` once its file cap let a held replay go. */
-  ack(seq: number, keepFrom?: number, { cut = false, held = false } = {}): number {
-    // Kept from `keepFrom` on, the cut is before it: a replay from there starts inside the item.
-    const cutAt = keepFrom === undefined ? seq : keepFrom - 1
-    this.cutThrough = cut ? Math.max(this.cutThrough, cutAt) : this.cutThrough
-    return this.spool.ack(seq, keepFrom, held)
+  ack(seq: number, keepFrom?: number, options: ProviderRelayAckOptions = {}): number {
+    this.cut.record(seq, keepFrom, options)
+    return this.spool.ack(seq, keepFrom, options.held === true)
   }
 
   stopIdle(): Promise<unknown> {
