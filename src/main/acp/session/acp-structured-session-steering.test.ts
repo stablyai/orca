@@ -300,3 +300,94 @@ describe('ACP orchestration mail steering', () => {
     }
   })
 })
+
+describe('OMP human steering', () => {
+  it('joins the running turn and still allows explicit Stop to cancel it', async () => {
+    const chat = await openChat(STEERING)
+    const result = await chat.rig.send('Add this without stopping.').result
+    expect(result.ok).toBe(true)
+    const steer = await chat.request(EXTENSION)
+    chat.agent.reply(steer, { outcome: 'injected', queue: 'steering' })
+    if (!result.ok || !('queued' in result.value)) {
+      throw new Error('Expected an active-turn Steer card')
+    }
+    const draft = result.value.queued.messageId
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([
+        { dispatchState: 'accepted', answeredInTurn: { via: 'steer' } }
+      ])
+    })
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION])
+    const stopped = chat.rig.stop()
+    await chat.request(CANCEL)
+    await chat.finish('cancelled')
+    expect(await stopped).toMatchObject({ ok: true })
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION, CANCEL])
+  })
+
+  it('falls back to cancelling the original prompt when a human steer is rejected', async () => {
+    const chat = await openChat(STEERING)
+    const text = 'Use the previous Steer behavior if needed.'
+    const result = await chat.rig.send(text).result
+    if (!result.ok || !('queued' in result.value)) {
+      throw new Error('Expected an active-turn Steer card')
+    }
+    chat.agent.reply(await chat.request(EXTENSION), { outcome: 'failed' })
+    await chat.request(CANCEL)
+    await chat.finish('cancelled')
+
+    const prompt = await chat.request(PROMPT, 1)
+    expect(prompt.params).toEqual({ sessionId: SESSION, prompt: [{ type: 'text', text }] })
+    chat.agent.reply(prompt, { stopReason: 'end_turn' })
+    const draft = result.value.queued.messageId
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION, CANCEL, PROMPT])
+  })
+
+  it('prompts a Send-now card exactly once if OMP needs a fresh prompt', async () => {
+    const chat = await openChat(STEERING)
+    const text = 'Take this queued instruction now.'
+    const result = await chat.rig.send(text, 'queue-if-active').result
+    if (!result.ok || !('queued' in result.value)) {
+      throw new Error('Expected a waiting Queue card')
+    }
+    const draft = result.value.queued.messageId
+    expect(await chat.rig.sendNow(draft)).toMatchObject({ ok: true })
+    const steer = await chat.request(EXTENSION)
+    chat.agent.reply(steer, { outcome: 'promptRequired', queue: 'steering' })
+    await chat.finish()
+    const prompt = await chat.request(PROMPT, 1)
+    expect(prompt.params).toEqual({ sessionId: SESSION, prompt: [{ type: 'text', text }] })
+    chat.agent.reply(prompt, { stopReason: 'end_turn' })
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION, PROMPT])
+  })
+
+  it('holds a Steer behind mail already joining the turn, then joins it too', async () => {
+    const chat = await openChat(STEERING)
+    await chat.mail()
+    const mail = await chat.request(EXTENSION)
+    const text = 'Steer after the mail.'
+    const result = await chat.rig.send(text).result
+    if (!result.ok || !('queued' in result.value)) {
+      throw new Error('Expected an active-turn Steer card')
+    }
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION])
+    chat.agent.reply(mail, { outcome: 'injected', queue: 'steering' })
+    const steer = await chat.request(EXTENSION, 1)
+    expect(steer.params).toEqual({ sessionId: SESSION, prompt: [{ type: 'text', text }] })
+    chat.agent.reply(steer, { outcome: 'injected', queue: 'steering' })
+    const draft = result.value.queued.messageId
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([
+        { dispatchState: 'accepted', answeredInTurn: { via: 'steer' } }
+      ])
+    })
+    await chat.finish()
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION, EXTENSION])
+  })
+})

@@ -24,7 +24,7 @@ export class AcpStructuredTurns {
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: AcpPendingSteers
-  /** Mail joins a running prompt through the steering extension instead of cancelling it. */
+  /** Mail and a person's Steer join a running prompt through the steering extension instead of cancelling it. */
   readonly steersMail: boolean
   private readonly idleWaiters = new AcpTurnIdleWaiters()
   private ended = false
