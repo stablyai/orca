@@ -125,6 +125,7 @@ it.each([750, 7500])(
     const rows = tabs(count, FOLDER)
     const view = render(strip(rows, FOLDER))
     expect.soft(finder).toHaveBeenCalledTimes(0)
+    expect(view.container.querySelector('[data-pinned-home-slot]')).toBeNull()
     view.rerender(strip([...rows], FOLDER, true))
     expect.soft(finder).toHaveBeenCalledTimes(0)
     view.rerender(strip([...rows], FOLDER))
