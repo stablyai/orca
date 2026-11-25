@@ -370,7 +370,6 @@
       },
       "providers": {
         "title": "Fournisseurs",
-        "antigravityAccount": "Compte",
         "searchTerminal": "Terminal",
         "searchAgents": "agents",
         "searchCli": "CLI"
@@ -23079,22 +23078,16 @@
       "cancel": "Annuler"
     },
     "antigravity": {
-      "chatSignIn": "Se connecter",
-      "chatChangeAccount": "Changer de compte",
-      "chatRetry": "Réessayer la connexion",
       "chatCancel": "Annuler",
       "chatCopyLink": "Copier le lien de connexion",
       "chatCopyFailed": "Impossible de copier le lien.",
       "chatStarting": "Démarrage de la connexion…",
-      "chatWaiting": "Terminez la connexion dans votre navigateur.",
       "chatOpenFailed": "Copiez le lien et ouvrez-le dans votre navigateur.",
       "chatVerifying": "Finalisation de la connexion…",
-      "chatPasteHelp": "Si la dernière page après la connexion ne se charge pas, copiez son adresse complète depuis votre navigateur et collez-la ici.",
       "chatContinue": "Continuer",
       "chatCancelled": "Connexion annulée.",
       "chatExpired": "La connexion a expiré. Réessayez.",
       "chatFailed": "La connexion a échoué. Réessayez.",
-      "chatOtherClient": "Une connexion est en cours dans un autre client.",
       "chatReadFailed": "Impossible de vérifier la connexion sur {{host}}.",
       "retry": "Réessayer",
       "changed": "Le compte natif a changé. Sélectionnez à nouveau un compte enregistré avant de lancer agy.",
@@ -23125,8 +23118,6 @@
       "enterpriseOption": "La licence de votre organisation",
       "apiKeyGet": "Obtenir la clé API",
       "location": "Emplacement",
-      "enterpriseFieldsShort": "Saisissez un projet et un emplacement.",
-      "chatUseMethod": "Reconnectez-vous pour utiliser {{method}}",
       "loadFailed": "Impossible de charger les comptes agy",
       "loading": "Chargement des comptes…",
       "notSignedIn": "Non connecté",
@@ -23137,8 +23128,7 @@
       "noEmailNotSaved": "agy n’a pas indiqué d’adresse e-mail · non enregistrée",
       "saveShort": "Enregistrer",
       "readAt": "Relevé {{time}}",
-      "active": "Actif",
-      "chatDescriptionKeyOnAgy": "Les nouveaux chats s’exécutent sur agy avec la connexion ci-dessous, distincte de celle d’agy dans le terminal."
+      "active": "Actif"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",
