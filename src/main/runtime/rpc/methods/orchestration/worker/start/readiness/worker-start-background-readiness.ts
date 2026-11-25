@@ -19,10 +19,13 @@ import {
 } from '../../../../../../terminal/wait/launched-agent-composer-readiness'
 import type { WorkerSetupReceipt } from '../placement/worker-placement-topology'
 import type { SetupEndWatch } from './worker-setup-end-watch'
+import { watchStructuredSetup, type StructuredSetupWait } from './structured-setup-background-wait'
 import { registerWorkerStartWait } from './worker-start-waits'
+import { TUI_IDLE_QUIESCENCE_MS } from '../../../../../../terminal/wait/terminal-idle-policy'
 import { WORKER_AWAITING_AGENT_STAGE } from '../../../../../../orchestration/db/worker-dispatch/worker-awaiting-agent-stage'
 
 const READY_DEADLINE_MS = 10 * 60_000
+const QUIET_READ_MARGIN_MS = 500
 
 /** How long after launch (after Setup) an agent may take to become ready before its start fails. */
 export function workerStartReadyDeadlineMs(): number {
@@ -82,8 +85,13 @@ export type AwaitingWorkerStart = {
   /** A wait-for-setup launch's watch for Setup's end, kept from launch; the wait owns it from here. */
   setupEnd?: SetupEndWatch | null
   blockedReason?: RuntimeTerminalWaitBlockedReason
-  /** Types the brief and settles the start, as a start ready in time does. */
-  handOver: (ready: RuntimeTerminalWait) => Promise<void>
+  /** A structured worker has no agent screen to wait on: only its wait-for-setup Setup holds the brief. */
+  waitForStructuredSetup?: StructuredSetupWait
+  /** Settles the start from the wait's verdict as a start ready in time does: types the brief, or
+   *  fails on a Setup that did not succeed or could not be watched. */
+  handOver: (ready: RuntimeTerminalWait | Awaited<ReturnType<StructuredSetupWait>>) => Promise<void>
+  /** Records the terminal as this worker's own, as a hand-over does first. */
+  bindTerminal: () => void
   /** Fails the start as the caller's own failure would. */
   fail: (error: unknown, failedStage: string) => Promise<void>
 }
@@ -125,6 +133,10 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, clock: Rea
       worker.stage === WORKER_AWAITING_AGENT_STAGE
     )
   }
+  if (start.waitForStructuredSetup) {
+    await watchStructuredSetup(start, start.waitForStructuredSetup, signal, clock, awaiting)
+    return
+  }
   const ptyId = () => workerPanePtyId(runtime, terminalHandle, start.readiness)
   // The clock ran out, or Setup failed and no agent will start: either way the start ends here.
   const expire = async () => {
@@ -148,21 +160,32 @@ async function watch(start: AwaitingWorkerStart, signal: AbortSignal, clock: Rea
       if (blocked) {
         // A screen only a person answers changes only when they do: each repaint gets one tail read,
         // and the full wait starts again only once that screen is gone. Armed before each check, so
-        // a repaint during the check (or the report before it) is not missed.
+        // a repaint during the check (or the report before it) is not missed. An answered screen
+        // reads as gone only once the pane is quiet, so the last repaint (or one during the report
+        // above) is read once more then.
+        let quietReadOwed = true
         while (awaiting() && !clock.expired.aborted) {
           const checked = new AbortController()
+          const quiet = new AbortController()
+          const quietTimer = quietReadOwed
+            ? setTimeout(() => quiet.abort(), TUI_IDLE_QUIESCENCE_MS + QUIET_READ_MARGIN_MS)
+            : undefined
           const repaint = nextOutput(
             runtime,
             terminalHandle,
             ptyId(),
-            AbortSignal.any([signal, checked.signal, clock.expired])
+            AbortSignal.any([signal, checked.signal, clock.expired, quiet.signal])
           )
-          if (!(await stillBlocked(start))) {
+          const gone = !(await stillBlocked(start))
+          if (gone) {
             checked.abort()
-            await repaint
-            break
           }
           await repaint
+          clearTimeout(quietTimer)
+          if (gone) {
+            break
+          }
+          quietReadOwed = !quiet.signal.aborted
         }
       }
       if (!awaiting()) {
@@ -273,6 +296,12 @@ async function failNeverReady(start: AwaitingWorkerStart): Promise<void> {
   const worker = db.getWorkerDispatch(dispatchId)
   if (worker?.state !== 'starting' || worker.stage !== WORKER_AWAITING_AGENT_STAGE) {
     return
+  }
+  // The terminal stays open, so worker-release must find it as this worker's to close it.
+  try {
+    start.bindTerminal()
+  } catch (error) {
+    console.warn('[orchestration] could not bind a never-ready worker terminal', dispatchId, error)
   }
   const failed = db.failWorkerStart(
     dispatchId,

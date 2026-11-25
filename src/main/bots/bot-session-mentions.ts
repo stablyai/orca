@@ -6,6 +6,7 @@ import {
   botMentionContext,
   botMentionTokens,
   mentionedBots,
+  mentionedClientBots,
   mentionedServerBots,
   type BotMentionChat
 } from '../../shared/bots/bot-mention-context'
@@ -34,6 +35,8 @@ export function createBotSessionMentions(deps: {
   botById: (botId: string) => Bot | undefined
   botChats?: (bot: Bot, sessionId: string) => Promise<readonly BotChatRow[]>
   pairedBotRosters?: (servers: ReadonlySet<string>) => Promise<readonly KnownPairedBotRoster[]>
+  /** A paired computer's name while it is connected; null otherwise. */
+  clientName?: (installationId: string) => string | null
 }): (sessionId: string, message: AgentJournalMessageItem) => Promise<string | null> {
   const serverBotLines = async (words: string) => {
     const picks = mentionedServerBots(words)
@@ -66,9 +69,9 @@ export function createBotSessionMentions(deps: {
   return async (sessionId, message) => {
     const words = messageWords(message)
     const tokens = botMentionTokens(words)
-    const localBots = tokens.some((token) => !token.server)
+    const localBots = tokens.some((token) => !token.server && !token.client)
       ? tokens.flatMap((token) => {
-          if (token.server) {
+          if (token.server || token.client) {
             return []
           }
           const bot = deps.botById(token.id)
@@ -101,7 +104,16 @@ export function createBotSessionMentions(deps: {
           }
         })
       )),
-      ...(await remote)
+      ...(await remote),
+      ...mentionedClientBots(words).map((pick) => ({
+        id: pick.id,
+        name: pick.name,
+        purpose: null,
+        client: {
+          installationId: pick.client,
+          name: deps.clientName?.(pick.client) ?? null
+        }
+      }))
     ])
   }
 }

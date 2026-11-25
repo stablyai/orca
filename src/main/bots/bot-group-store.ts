@@ -25,7 +25,7 @@ export class BotGroupStore {
   /** False when this open couldn't index older posts' questions, so their mail must wait. */
   readonly remoteAsksIndexed: boolean
 
-  constructor(private readonly db: Database) {
+  constructor(readonly db: Database) {
     this.remoteAsksIndexed = createBotGroupTables(db)
   }
 
@@ -265,7 +265,7 @@ export class BotGroupStore {
     }
     // The dead id keeps its link: it names no turn of the line, so nothing resolves through it.
     this.transaction(() => {
-      const { error: _error, ...turn } = message.turns[0]
+      const { error: _error, failure: _failure, ...turn } = message.turns[0]
       this.update({ ...message, turns: [{ ...turn, operationId }] })
       this.link(operationId, messageId)
     })

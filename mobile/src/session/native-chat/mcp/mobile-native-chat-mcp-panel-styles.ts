@@ -50,6 +50,21 @@ export const mcpPanelStyles = themedStyleSheet(() => ({
   listContent: {
     paddingBottom: spacing.xs
   },
+  footer: {
+    minHeight: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.composerBorder
+  },
+  footerText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontWeight: '500'
+  },
   groupLabel: {
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm

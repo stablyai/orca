@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { botRoster } from './bot-group-operations'
 
-/** What each bot is for (by bot id), from its SOUL.md; empty until the host answers. */
+/** What each bot is for (by bot id), from its SOUL.md; empty until the host answers. Read again
+ *  whenever `client` arrives, so a caller passes null while it can't ask. */
 export function useBotPurposes(client: RpcClient | null): ReadonlyMap<string, string> {
   const [purposes, setPurposes] = useState<ReadonlyMap<string, string>>(() => new Map())
   useEffect(() => {
@@ -11,7 +12,7 @@ export function useBotPurposes(client: RpcClient | null): ReadonlyMap<string, st
     }
     let live = true
     botRoster
-      .request(client, {})
+      .request(client, { withoutChats: true })
       .then((outcome) => {
         const { bots: roster } = botRoster.interpret(outcome)
         if (live) {

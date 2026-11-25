@@ -1,7 +1,7 @@
 // Compose shared admission, cwd, environment, visuals and child sealing; agent parts add only agent-specific inputs and never set cwd/sealed env.
 
 import type { ReadOnlySessionMode } from '../../../bots/bot-look-around-policy'
-import { BotLaunchTools } from '../../../bots/bot-launch-tools'
+import { SessionMcpTools } from '../../../mcp-servers/session-mcp-tools'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -42,7 +42,9 @@ export type StructuredAgentLaunchSources = {
     record: AgentSessionRecord,
     launchDirectory: string,
     /** How to use the linked projects' skills, as `linkedSkillsSection` writes it; null for none. */
-    linkedSkills: string | null
+    linkedSkills: string | null,
+    /** See `StructuredAgentDefinition.instructionsEachStart`. */
+    eachStart: boolean
   ) => Promise<string | null>
   /** Rereads the base environment after a lookup that started at `askedAt` found no program in
    *  it; absent never retries. */
@@ -51,11 +53,11 @@ export type StructuredAgentLaunchSources = {
   readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null
   /** Work every launch of this session waits for, read-only ones too; a rejection stops the launch. */
   prepareLaunch?: (record: AgentSessionRecord, launchDirectory: string) => Promise<void>
-  /** A bot's own tools for a session in its home folder; absent or empty adds none. */
+  /** The MCP servers Orca adds to the session: a bot's own, and the host's list; absent adds none. */
   resolveToolServers?: (
     record: AgentSessionRecord,
     launchDirectory: string
-  ) => Promise<BotLaunchTools>
+  ) => Promise<SessionMcpTools>
   /** A bot's linked-skills folder and the projects in it, scanned for this launch; absent: none. */
   resolveLinkedSkills?: (record: AgentSessionRecord) => Promise<LinkedSkills>
   /** The agent loaded fewer linked skills than its instructions said; this section replaces it. */
@@ -76,8 +78,8 @@ export type StructuredAgentLaunchBasis = {
   visuals(): Promise<NativeChatVisualsLaunch | null>
   /** Null when there are none. A resumed conversation keeps the ones it started with, in both agents. */
   instructions(linkedSkills?: string | null): Promise<string | null>
-  /** A bot's own tools (MCP servers), for agents that take them per thread; empty for any other chat. */
-  toolServers(): Promise<BotLaunchTools>
+  /** The MCP servers Orca adds (a bot's own and the host's list); none for a read-only session. */
+  toolServers(): Promise<SessionMcpTools>
   /** The bot's linked-skills folder the chat loads beside the agent's own; none for any other chat. */
   linkedSkills(): Promise<LinkedSkills>
   /** After launch, when the agent turned the linked skill roots down. */
@@ -204,13 +206,18 @@ async function composedPart<L>(
       return (linkedSkills: string | null = null) =>
         (read ??= (async () =>
           sources.resolveInstructions
-            ? sources.resolveInstructions(record, await launchDirectory(), linkedSkills)
+            ? sources.resolveInstructions(
+                record,
+                await launchDirectory(),
+                linkedSkills,
+                definition.instructionsEachStart
+              )
             : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.
     toolServers: once(async () =>
       readOnly || !sources.resolveToolServers
-        ? BotLaunchTools.none
+        ? SessionMcpTools.none
         : sources.resolveToolServers(record, await launchDirectory())
     ),
     linkedSkills: once(

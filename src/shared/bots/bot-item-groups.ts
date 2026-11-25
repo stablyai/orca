@@ -1,7 +1,7 @@
-// How a bot's Items tab groups its items: Needs you, In progress, Planned, Snoozed, Stale and Closed. Rows
-// changed since the owner last opened the tab come first, then the latest change; Snoozed, soonest back first.
+// How a bot's Items tab groups its items: Needs you, In progress, Waiting, Planned, Snoozed, Stale and
+// Closed. Rows changed since the owner last opened the tab come first, then the latest change; Snoozed,
+// soonest back first.
 import type { BotItemsStale } from '../bot-types'
-import type { BotNeed } from './bot-now'
 import {
   BOT_ITEM_DEFAULT_STALE_DAYS,
   botItemActivityAt,
@@ -18,6 +18,7 @@ export const BOT_ITEM_GROUP_ROWS = 5
 export const BOT_ITEM_GROUP_IDS = [
   'needs_you',
   'working',
+  'waiting',
   'planned',
   'snoozed',
   'stale',
@@ -35,8 +36,7 @@ export const BOT_ITEM_GROUPS_FOLDED_BY_DEFAULT: ReadonlySet<BotItemGroupId> = ne
 
 export type BotItemGroups = Record<BotItemGroupId, BotItem[]>
 
-/** The tab's filter: these chats' items and these bots' (null: all), and only what needs the owner. A
- *  bot's page sets only Needs you; a group's page picks its rooms' member sessions and some members. */
+/** The tab's filter: chats and bots (null: all), and only what needs the owner. */
 export type BotItemFilter = {
   chatIds: readonly string[] | null
   botIds: readonly string[] | null
@@ -103,49 +103,6 @@ export function botItemsByDispatch(items: readonly BotItem[]): Map<string, BotIt
   return byDispatch
 }
 
-/** The chat an ask belongs to, as the filter names chats: its own, or for a worker its item's chat,
- *  else Home Chat's when Home Chat started it. Null for a sign-in or access request. */
-export function botNeedChat(
-  need: BotNeed<unknown, unknown>,
-  homeChatId: string | null,
-  itemOf: (dispatchId: string) => Pick<BotItem, 'chat'> | null
-): string | null {
-  switch (need.kind) {
-    case 'chat':
-      return homeChatId
-    case 'side-chat':
-      return need.sessionId
-    case 'session': {
-      const { row } = need
-      if (row.kind !== 'worker') {
-        return row.sessionId
-      }
-      const item = row.dispatchId ? itemOf(row.dispatchId) : null
-      return item?.chat.id ?? (row.origin.kind === 'chat' ? homeChatId : null)
-    }
-    case 'connector':
-    case 'access':
-      return null
-  }
-}
-
-/** One bot's asks a filter shows beside its items: a chat's own ask and its workers' asks. A sign-in or
- *  an access request is no chat's (`chatOf` null), so only a list of every chat has it. */
-export function filterBotNeeds<N>(
-  needs: readonly N[],
-  filter: BotItemFilter,
-  chatOf: (need: N) => string | null
-): readonly N[] {
-  const { chatIds } = filter
-  if (chatIds === null) {
-    return needs
-  }
-  return needs.filter((need) => {
-    const chat = chatOf(need)
-    return chat !== null && chatIds.includes(chat)
-  })
-}
-
 export function groupBotItems(
   items: readonly BotItem[],
   staleDays: number | null,
@@ -164,6 +121,7 @@ export function groupBotsItems(
   const groups: BotItemGroups = {
     needs_you: [],
     working: [],
+    waiting: [],
     planned: [],
     snoozed: [],
     stale: [],

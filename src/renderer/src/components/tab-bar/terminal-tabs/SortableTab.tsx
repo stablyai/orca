@@ -284,6 +284,7 @@ export default function SortableTab({
       )}
       {tab.color && !isEditing && (
         <span
+          data-tab-color-dot=""
           className="mr-1.5 size-2 rounded-full shrink-0"
           style={{ backgroundColor: tab.color }}
         />

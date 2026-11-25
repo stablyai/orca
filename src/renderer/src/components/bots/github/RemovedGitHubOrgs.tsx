@@ -1,13 +1,14 @@
 import React from 'react'
 import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { updateBot } from '@/lib/bot-catalog'
 import { useBotGitHub } from '@/lib/bot-github-state'
 import type { Bot } from '../../../../../shared/bot-types'
 import { botErrorMessage } from '../bot-presentation'
+import { BotAppRowButton } from '../apps/BotAppRow'
 
-/** Orgs taken off the bot that still have Orca installed: Add back puts the bot there again, no GitHub trip. */
+/** Orgs taken off the bot that still have Orca installed: Add back puts the bot there again, no GitHub trip.
+ *  Each spans Add apps' grid, under GitHub's name. */
 export function RemovedGitHubOrgs({ bot }: { bot: Bot }): React.JSX.Element | null {
   const t = useTranslate()
   const view = useBotGitHub(bot.hostId)
@@ -24,12 +25,11 @@ export function RemovedGitHubOrgs({ bot }: { bot: Bot }): React.JSX.Element | nu
       {orgs.map((org) => (
         <li
           key={org.installationId}
-          className="flex items-center gap-3 rounded-md py-1.5 pr-3 pl-14 text-foreground"
+          data-github-recovery
+          className="col-span-full flex items-center gap-3 rounded-md py-1.5 pr-2 pl-15 text-foreground"
         >
           <span className="min-w-0 flex-1 truncate text-sm">{org.accountLogin}</span>
-          <Button
-            size="sm"
-            variant="secondary"
+          <BotAppRowButton
             aria-label={t('bots.connectors.addBackNamed', 'Add {{name}} back', {
               name: org.accountLogin
             })}
@@ -42,7 +42,7 @@ export function RemovedGitHubOrgs({ bot }: { bot: Bot }): React.JSX.Element | nu
             }
           >
             {t('bots.connectors.addBack', 'Add back')}
-          </Button>
+          </BotAppRowButton>
         </li>
       ))}
     </>

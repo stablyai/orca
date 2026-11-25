@@ -17,14 +17,16 @@ import {
   type ManagedRuntime
 } from './managed-runtime-release'
 import { installFailureText, installRuntimeRelease } from './managed-runtime-release-install'
+import { ManagedRuntimeAutoUpdater, type AutomaticRunFlags } from './managed-runtime-auto-updater'
 
 const DEADLINE_MS = 45 * 60_000
-const AUTO_UPDATE_RETRY_MS = 60 * 60_000
 
 export type ManagedRuntimeInstallationDeps = {
   dataDirectory: string
   program: ManagedRuntimeProgram
   findExternal: () => Promise<boolean>
+  /** Whether this host has a build to download, known without asking the release server. */
+  hostHasBuild?: () => boolean
   /** Told the release launches resolve to each time this reads the disk; null when none is whole. */
   onRelease?: (folder: string | null) => void
   /** False while Orca shouldn't keep this copy current; absent means it should. */
@@ -32,11 +34,13 @@ export type ManagedRuntimeInstallationDeps = {
   /** Reject unless no host workload uses this runtime. */
   fence: (work: () => Promise<void>) => Promise<void>
   fetcher?: MainHttpClient['fetch']
+  /** Told when automatic updates are turned off while an automatic install runs; returns an unsubscribe. */
+  watchUpdatesEnabled?: (onDisabled: () => void) => () => void
   /** Shared with the agent's other installation, so a stream switching between them stays ordered. */
   revisions?: RevisionClock
 }
 
-type Run = { id: string; controller: AbortController; committed: boolean }
+type Run = { id: string; controller: AbortController; committed: boolean } & AutomaticRunFlags
 
 let releasesRevision = 0
 /** Rises whenever an install or removal settles, so answers that read Orca's copies retire. */
@@ -63,8 +67,7 @@ export class ManagedRuntimeInstallation {
   private running: Run | null = null
   private mutation: Promise<void>
   private facts: { phase: string; read: Promise<InstalledFacts> } | null = null
-  /** One attempt per release per hour, so a failing update isn't redownloaded on every use. */
-  private lastAutoUpdate: { version: string; at: number } | null = null
+  private readonly autoUpdater: ManagedRuntimeAutoUpdater
 
   constructor(
     private readonly agent: string,
@@ -73,6 +76,17 @@ export class ManagedRuntimeInstallation {
   ) {
     this.state = new RevisionedState<ManagedRuntimeOperation | null>(null, deps.revisions)
     this.root = runtime.root(deps.dataDirectory)
+    this.autoUpdater = new ManagedRuntimeAutoUpdater(runtime, this.root, {
+      enabled: () => this.deps.updatesEnabled?.() !== false,
+      busy: () => this.running !== null,
+      status: () => this.status(),
+      install: (options) => this.install(options),
+      ...(deps.watchUpdatesEnabled && { watchEnabled: deps.watchUpdatesEnabled }),
+      changed: () => {
+        this.facts = null
+        this.state.set(this.state.get().value)
+      }
+    })
     this.mutation = this.reclaim()
   }
 
@@ -81,7 +95,9 @@ export class ManagedRuntimeInstallation {
     const { value: operation, revision } = this.state.get()
     const phase = `${operation?.id}:${operation?.phase}`
     let facts = this.facts
-    if (fresh && this.runtime.refreshPin) {
+    // Why: a status read must not contact the release server for an agent nobody installed;
+    // Install looks the release up itself.
+    if (fresh && this.runtime.refreshPin && (await runtimeReleaseMayBePublished(this.root))) {
       await this.runtime.refreshPin().catch((error: unknown) => {
         console.warn(`[managed-runtime] ${this.agent} latest release unknown:`, error)
       })
@@ -90,9 +106,7 @@ export class ManagedRuntimeInstallation {
       const read = this.readInstalledFacts()
       facts = { phase, read }
       this.facts = facts
-      read.catch(() => {
-        this.facts = this.facts?.read === read ? null : this.facts
-      })
+      read.catch(() => (this.facts = this.facts?.read === read ? null : this.facts))
     }
     return {
       agent: this.agent,
@@ -118,53 +132,41 @@ export class ManagedRuntimeInstallation {
       throw new Error(`Couldn't read the installed ${this.runtime.label} files on this host.`)
     }
     const source = (await this.deps.findExternal()) ? 'external' : release ? 'managed' : null
+    const installed = {
+      installedVersion: release?.version ?? null,
+      installedCurrent: release?.current ?? false
+    }
+    // A pinned update this process will still run needs no Update; otherwise it does.
+    const pinPending = await this.autoUpdater.pending({ source, ...installed })
     return {
-      available: pin !== null,
+      // A runtime that follows its latest release has no pin until something installed asks.
+      available:
+        pin !== null ||
+        (this.runtime.refreshPin !== undefined && this.deps.hostHasBuild?.() !== false),
       version: pin?.version ?? null,
       ...(pin && { downloadBytes: pin.archiveBytes }),
-      installedVersion: release?.version ?? null,
-      installedCurrent: release?.current ?? false,
+      ...installed,
       ...(pin && !release?.current && broken.includes(pin.version) && { damaged: true }),
       canRemove: release !== null || broken.length > 0,
       source,
       // A copy Orca isn't keeping current offers its own Update.
-      ...(this.runtime.refreshPin &&
-        this.deps.updatesEnabled?.() !== false && { updatesAutomatically: true as const })
+      ...(((this.runtime.refreshPin && this.deps.updatesEnabled?.() !== false) || pinPending) && {
+        updatesAutomatically: true as const
+      })
     }
   }
 
-  /** Bring Orca's own copy to the latest release; never installs one nobody asked for or touches a user's own. */
-  async updateIfBehind(): Promise<void> {
-    if (!this.runtime.refreshPin || this.running || this.deps.updatesEnabled?.() === false) {
-      return
-    }
-    // Nothing installed has nothing to update, so the latest release isn't looked up.
-    if (!(await runtimeReleaseMayBePublished(this.root))) {
-      return
-    }
-    const state = await this.status()
-    if (
-      state.source === 'managed' &&
-      state.installedVersion !== null &&
-      state.available &&
-      state.version !== null &&
-      !state.installedCurrent &&
-      !this.running
-    ) {
-      const { lastAutoUpdate } = this
-      if (
-        lastAutoUpdate?.version === state.version &&
-        Date.now() - lastAutoUpdate.at < AUTO_UPDATE_RETRY_MS
-      ) {
-        return
-      }
-      this.lastAutoUpdate = { version: state.version, at: Date.now() }
-      this.install()
-    }
+  updateIfBehind(): Promise<void> {
+    return this.autoUpdater.updateIfBehind(() => runtimeReleaseMayBePublished(this.root))
+  }
+
+  /** Turned off mid-download: stop the automatic install before it publishes, without declining it. */
+  stopAutoUpdate(): void {
+    this.autoUpdater.stop(this.running)
   }
 
   /** Join installs; canceled work must finish cleanup before another begins. */
-  install(): ManagedRuntimeOperation {
+  install(options?: { automatic: true }): ManagedRuntimeOperation {
     const { label } = this.runtime
     const pin = this.runtime.pin()
     // A runtime that follows its latest release looks it up when the install runs.
@@ -177,9 +179,11 @@ export class ManagedRuntimeInstallation {
       throw new Error(`${label} is being removed. Try again after it finishes.`)
     }
     if (current && current.id === running?.id && !running.controller.signal.aborted) {
+      this.autoUpdater.joined(running, options)
       return current
     }
     const run: Run = { id: randomUUID(), controller: new AbortController(), committed: false }
+    this.autoUpdater.adopt(run, options, () => this.stopAutoUpdate())
     const operation: ManagedRuntimeOperation = {
       id: run.id,
       kind: 'install',
@@ -256,9 +260,15 @@ export class ManagedRuntimeInstallation {
     const deadline = AbortSignal.timeout(DEADLINE_MS)
     const signal = AbortSignal.any([run.controller.signal, deadline])
     // The release chats ran before this install; they may still be running it.
-    const previous = this.runtime.refreshPin
-      ? ((await this.facts?.read.catch(() => null))?.installedVersion ?? null)
-      : null
+    const before = (await this.facts?.read.catch(() => null)) ?? null
+    const previous = this.runtime.refreshPin ? (before?.installedVersion ?? null) : null
+    // Recorded before it is published, and even when another install replaced this one's operation.
+    const finish = (
+      patch: Partial<ManagedRuntimeOperation> & Pick<ManagedRuntimeOperation, 'phase'>
+    ) => {
+      void this.autoUpdater.ended(run, 'install', patch.phase)
+      this.publish(run, patch)
+    }
     try {
       await this.runtime.refreshPin?.(signal)
       const pin = this.runtime.pin()
@@ -272,6 +282,7 @@ export class ManagedRuntimeInstallation {
         root: this.root,
         pin,
         fetcher: this.deps.fetcher,
+        ...this.autoUpdater.installOptions(run),
         signal,
         publish: (patch) => this.publish(run, patch),
         commit: () => {
@@ -281,20 +292,20 @@ export class ManagedRuntimeInstallation {
       if (this.runtime.refreshPin) {
         await this.reclaimOlderThan(pin.version, previous)
       }
-      this.publish(run, { phase: 'succeeded' })
+      finish({ phase: 'succeeded' })
     } catch (error) {
       if (run.committed) {
         console.warn(`[managed-runtime] ${this.agent} installed; staging not removed:`, error)
-        this.publish(run, { phase: 'succeeded' })
+        finish({ phase: 'succeeded' })
       } else if (run.controller.signal.aborted) {
-        this.publish(run, { phase: 'cancelled' })
+        finish({ phase: 'cancelled' })
       } else {
-        this.publish(run, {
-          phase: 'failed',
-          error: installFailureText(this.runtime.label, error, deadline)
-        })
+        this.autoUpdater.failed(run, error)
+        const text = installFailureText(this.runtime.label, error, deadline)
+        finish({ phase: 'failed', error: this.autoUpdater.failureText(text, before) })
       }
     } finally {
+      run.unwatch?.()
       this.running = this.running === run ? null : this.running
     }
   }
@@ -302,6 +313,7 @@ export class ManagedRuntimeInstallation {
   private async runRemove(run: Run): Promise<void> {
     try {
       await this.deps.fence(() => rm(this.root, { recursive: true, force: true }))
+      await this.autoUpdater.forget().catch(() => undefined)
       this.publish(run, { phase: 'succeeded' })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)

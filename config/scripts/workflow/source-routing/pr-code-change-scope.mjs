@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { XTERM_PREFIXES } from './pr-xterm-patch-prefixes.mjs'
+import { prAddsPackageImport } from './pr-added-package-imports.mjs'
 import {
   isCloudTestRunnerInput,
   isWindowsBoundaryPath,
@@ -49,6 +50,7 @@ const GLOBAL_FORCE_PREFIXES = [
   'config/scripts/pr-code-change-scope',
   'config/scripts/workflow/source-routing/pr-code-change-scope',
   'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs',
+  'config/scripts/workflow/source-routing/pr-added-package-imports',
   'config/scripts/pr-package-test-paths',
   'config/scripts/workflow/source-routing/pr-package-test-paths'
 ]
@@ -80,10 +82,10 @@ const DEPENDENCY_ISOLATION_PREFIXES = [
 const MOBILE_WEB_APP_PREFIXES = [
   '.github/scripts/prepare-ubuntu-apt.sh',
   'config/scripts/build-mobile-web-app',
-  'config/scripts/build/mobile-web-app/build-mobile-web-app',
+  // Every file here feeds the page build (its plugins, chunking, manifest, verifier), so all of it.
+  'config/scripts/build/mobile-web-app/',
   'src/packages/process-host/',
   'config/scripts/verify-mobile-web-app-bundle',
-  'config/scripts/build/mobile-web-app/verify-mobile-web-app-bundle',
   'config/scripts/mobile-web-app-',
   'config/scripts/mobile-web-app/',
   'config/scripts/mobile-web-app/shell/',
@@ -92,11 +94,9 @@ const MOBILE_WEB_APP_PREFIXES = [
   'config/scripts/mobile-web-app/terminal/',
   'config/scripts/mobile-web-app/workspace/',
   'config/scripts/mobile-web-bundle-',
-  'config/scripts/build/mobile-web-app/mobile-web-bundle-',
   'config/scripts/verify-packaged-mobile-web-bundle',
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle',
   'config/scripts/mobile-web-source-line-endings',
-  'config/scripts/build/mobile-web-app/mobile-web-source-line-endings',
   'config/scripts/script-entry-detection',
   'config/scripts/tool-invocation/script-entry-detection',
   'mobile/web-entry/',
@@ -380,7 +380,10 @@ export function isDaemonInitTestSupportChange(files, modifiedOnly = false) {
   )
 }
 
-export function classifyPrJobs(changedFiles, { allowDaemonInitTestSupport = false } = {}) {
+export function classifyPrJobs(
+  changedFiles,
+  { allowDaemonInitTestSupport = false, addedPackageImport = false } = {}
+) {
   const emptyDiff = changedFiles.length === 0
   const shouldRun = shouldRunPrChecks(changedFiles)
   const forceAll = emptyDiff || changedFiles.some(isGlobalForcePath)
@@ -393,6 +396,7 @@ export function classifyPrJobs(changedFiles, { allowDaemonInitTestSupport = fals
       shouldRun &&
         (forceAll ||
           ALWAYS_ON_CODE_JOBS.has(job) ||
+          (addedPackageImport && ['package', 'package_windows'].includes(job)) ||
           jobDetector(job)(
             ['package', 'package_windows'].includes(job) ? bundleFiles : changedFiles
           ))
@@ -513,8 +517,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   for await (const chunk of process.stdin) {
     input += chunk
   }
+  const diffBaseIndex = process.argv.indexOf('--diff-base')
+  const diffBase = diffBaseIndex === -1 ? null : process.argv[diffBaseIndex + 1]
   const classification = classifyPrJobs(input.split(/\r?\n/).filter(Boolean), {
-    allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support')
+    allowDaemonInitTestSupport: process.argv.includes('--daemon-init-test-support'),
+    addedPackageImport: diffBase !== null && prAddsPackageImport(diffBase, isTestFile)
   })
   for (const [name, value] of Object.entries(classification)) {
     process.stdout.write(`${name}=${value ? 'true' : 'false'}\n`)

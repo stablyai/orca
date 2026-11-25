@@ -1,6 +1,5 @@
 import type { DocPreviewGrantRequest } from '../../../../../preload/api/document-preview/doc-preview-api'
 import { basename, dirname, getRelativePathInsideRoot } from '@/lib/path'
-import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
@@ -27,18 +26,11 @@ export function buildDocPreviewGrantRequest(
   const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
   const worktreeRelativePath = getRelativePathInsideRoot(filePath, worktreeRoot)
   const root = dirname(filePath)
-  const requestBase = worktreeRoot && worktreeRelativePath ? worktreeRoot : root
-  const entryRelativePath = worktreeRelativePath ?? basename(filePath)
-  if (!requestBase || !root || !entryRelativePath) {
+  // Why: only a server reads remote files; a twin or a bare SSH host names none, so gets no grant.
+  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+  if (!root || !environmentId) {
     return null
   }
-  const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
-  if (connectionId) {
-    // Outside workspaces, resolve only within the document directory and initially grant only its entry file; broader roots may expose home-directory secrets.
-    return { owner: { kind: 'ssh', connectionId }, requestBase, root, entryRelativePath }
-  }
-  // Why: a twin names no server to mint against, so it gets no grant.
-  const environmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   // Outside the workspace, a chat's scratch folder stands in for it: its host serves it as a root.
   const base =
     worktreeRoot && worktreeRelativePath
@@ -48,9 +40,6 @@ export function buildDocPreviewGrantRequest(
           relativePath: worktreeRelativePath
         }
       : chatScratchFileAddress(filePath)
-  if (!environmentId) {
-    return null
-  }
   if (!base) {
     if (!worktreeRoot) {
       return null
