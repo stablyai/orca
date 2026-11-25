@@ -317,4 +317,48 @@ it('coalesces repeated selected retries of the acknowledged identity into one ex
   h.exact[1].resolve({ kind: 'run', run: run('ack', 1, 'completed') })
   await flush()
   expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
+  expect(h.controller.getSnapshot().acknowledgedRun).toBeNull()
+  expect(h.controller.getSnapshot().runs.value.find((run) => run.id === 'ack')?.status).toBe(
+    'completed'
+  )
+})
+
+it('keeps a newer page session link when an older exact acknowledgement read settles later', async () => {
+  const h = setup()
+  h.controller.acknowledgeRun(run('ack', 1, 'dispatched'))
+  h.pages[0].resolve(page([], null))
+  await flush()
+  expect(h.exact).toHaveLength(1)
+  h.controller.reload()
+  h.pages[1].resolve({
+    runs: [{ ...run('ack', 1, 'dispatched'), sessionKind: 'chat', chatSessionId: 'new-session' }],
+    nextCursor: null
+  })
+  await flush()
+  h.exact[0].resolve({ kind: 'run', run: run('ack', 1, 'dispatched') })
+  await flush()
+  expect(h.controller.getSnapshot().runs.value.find((run) => run.id === 'ack')?.chatSessionId).toBe(
+    'new-session'
+  )
+})
+
+it('retains the selected acknowledgement outcome through a later displacement and held authority refresh', async () => {
+  const h = setup('ack')
+  h.controller.acknowledgeRun(run('ack', 1, 'dispatched'))
+  h.pages[0].resolve({ runs: [run('ack', 1, 'dispatched')], nextCursor: null })
+  await flush()
+  h.controller.reload()
+  h.pages[1].resolve(page(['10'], null))
+  await flush()
+  h.exact[0].resolve({ kind: 'run', run: run('ack', 1, 'completed') })
+  await flush()
+  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
+  h.controller.reload()
+  h.pages[2].resolve(page(['11'], null))
+  await flush()
+  expect(h.exact).toHaveLength(2)
+  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
+  h.exact[1].resolve({ kind: 'error', error: new Error('offline') })
+  await flush()
+  expect(h.controller.getSnapshot().selected?.run?.status).toBe('completed')
 })

@@ -11,7 +11,6 @@ import { useAutomationDetails } from '../automations/details/use-automation-deta
 import { useAutomationDetailKeys } from '../automations/details/use-automation-detail-keys'
 import { BotAutomationScreenBody } from './BotAutomationScreenBody'
 import type { BotAutomationPlace } from './bot-automation-place'
-import { openBotAutomation } from './bot-automation-open'
 
 export const BOT_AUTOMATION_RECENT_RUNS = 5
 
@@ -89,15 +88,11 @@ export function BotAutomationPanel({
           variant="link"
           size="inlineText"
           className="mx-2 self-start"
-          onClick={() =>
-            openBotAutomation({
-              bot,
-              owner,
-              automationId: place.automationId,
-              runId: place.runId,
-              intent: 'page'
-            })
-          }
+          onClick={() => {
+            const state = useAppStore.getState()
+            state.setPendingAutomationRunNavigation(null)
+            state.openAutomationsPage()
+          }}
         >
           {t('bots.automationPanel.openOnPage', 'Open in Automations')}{' '}
           <span aria-hidden="true">↗</span>

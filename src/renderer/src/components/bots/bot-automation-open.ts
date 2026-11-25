@@ -39,6 +39,7 @@ function openPage(open: BotAutomationOpen): void {
   const hostId = open.hostId ?? open.bot?.hostId ?? null
   state.setPendingAutomationRunNavigation({
     automationId: open.automationId,
+    owner: open.owner ?? undefined,
     runId: open.runId,
     ...(hostId ? { hostId } : {})
   })

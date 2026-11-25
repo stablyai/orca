@@ -1,3 +1,4 @@
+import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { AutomationOwnerRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationRunRead } from '../hosts/automation-owner-reads'
 import { AutomationExactRunReader } from './automation-exact-run-reader'
@@ -64,6 +65,7 @@ export abstract class AutomationDetailsSelection {
 
   abstract recheckOwner(): AutomationDetailsContinuity
   protected abstract readDefinition(): void
+  protected abstract acceptSelectedRun(run: AutomationRun): void
 
   /** Pins another run; null unpins. */
   selectRun(runId: string | null): void {
@@ -134,6 +136,10 @@ export abstract class AutomationDetailsSelection {
     }
     switch (result.kind) {
       case 'run':
+        this.acceptSelectedRun(result.run)
+        if (read !== this.selectedRead || this.snapshot.selected?.runId !== runId) {
+          return
+        }
         this.update({ selected: { runId, status: 'ready', run: result.run } })
         return
       case 'run-missing':

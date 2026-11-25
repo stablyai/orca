@@ -116,3 +116,12 @@ export function useAutomationsPageStoreState() {
 }
 
 export type AutomationsPageStoreState = ReturnType<typeof useAutomationsPageStoreState>
+
+export type AutomationRunPageStoreState = Pick<
+  AutomationsPageStoreState,
+  | 'pendingAutomationRunNavigation'
+  | 'setPendingAutomationRunNavigation'
+  | 'runtimeEnvironments'
+  | 'selectedId'
+  | 'setSelectedId'
+>

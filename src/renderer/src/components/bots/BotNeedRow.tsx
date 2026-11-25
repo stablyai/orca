@@ -194,7 +194,7 @@ export const StoppedForSignInRow = memo(function StoppedForSignInRow({
 }): React.JSX.Element {
   const t = useTranslate()
   const { automation, latestRunId, hostId } = row
-  const owner = bot ? botAutomationRowOwner(automation, bot) : null
+  const owner = botAutomationRowOwner(automation)
   return (
     <NeedRow
       kind="stopped"

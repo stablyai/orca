@@ -382,3 +382,18 @@ it('keeps the newest-history retry visible beside a successfully pinned older ru
   fireEvent.click(retry)
   expect(await screen.findByRole('button', { name: /Retained result/ })).toBeTruthy()
 })
+
+it('opens the general Automations page from unknown-origin recovery without forwarding stale IDs', async () => {
+  const { useAppStore } = await import('@/store')
+  useAppStore
+    .getState()
+    .setPendingAutomationRunNavigation({ automationId: 'stale', runId: 'stale' })
+  render(
+    <TooltipProvider>
+      <BotAutomationPanel bot={bot} place={{ ...place, owner: undefined }} onBack={() => {}} />
+    </TooltipProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Open in Automations' }))
+  expect(useAppStore.getState().pendingAutomationRunNavigation).toBeNull()
+  expect(useAppStore.getState().activeView).toBe('automations')
+})

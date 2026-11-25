@@ -41,10 +41,18 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
         ])
       }
     }
-    return this.update({
+    const admitted = this.update({
       runs: { ...runs, value, capacityError: null },
-      acknowledgedRun: seen && isFinalAutomationRunStatus(seen.status) ? null : ack
+      acknowledgedRun: seen && isFinalAutomationRunStatus(seen.status) ? null : ack,
+      selected:
+        seen && this.snapshot.selected?.runId === seen.id
+          ? { ...this.snapshot.selected, status: 'in-window', run: seen }
+          : this.snapshot.selected
     })
+    if (admitted && seen) {
+      this.acknowledgedRead += 1
+    }
+    return admitted
   }
 
   protected readRuns(): void {
@@ -123,6 +131,20 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
     this.runWaiters.clear()
   }
 
+  protected override acceptSelectedRun(run: AutomationRun): void {
+    if (this.snapshot.acknowledgedRun?.id === run.id) {
+      this.publishExactRun(run)
+    }
+  }
+
+  private publishExactRun(run: AutomationRun): boolean {
+    const value = newestFirst([
+      run,
+      ...this.snapshot.runs.value.filter((old) => old.id !== run.id)
+    ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
+    return this.publishRuns({ ...this.snapshot.runs, value }, [run])
+  }
+
   private readAcknowledged(): void {
     const ack = this.snapshot.acknowledgedRun
     if (!ack) {
@@ -141,11 +163,7 @@ export abstract class AutomationDetailsRuns extends AutomationDetailsSelection {
         return
       }
       if (result.kind === 'run') {
-        const value = newestFirst([
-          result.run,
-          ...this.snapshot.runs.value.filter((run) => run.id !== ack.id)
-        ]).slice(0, AUTOMATION_DETAILS_MAX_RUNS)
-        this.publishRuns({ ...this.snapshot.runs, value }, [result.run])
+        this.publishExactRun(result.run)
       }
     })
   }

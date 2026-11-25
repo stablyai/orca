@@ -8,7 +8,7 @@ import { publishBots, setBotHostListing } from '@/lib/bot-catalog-snapshot'
 import { readBotHostDefault } from './bot-host-read-default'
 import { reuseEqualJson } from '../../../../shared/reuse-equal-json'
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotChatTreeChat, BotChatTreeWorker } from '../../../../shared/bots/bot-chat-tree'
@@ -123,6 +123,7 @@ beforeEach(() => {
   host.home.mockReturnValue(true)
   revision(4)
   setBotAutomationPlace(null)
+  useAppStore.getState().setPendingAutomationRunNavigation(null)
 })
 afterEach(() => {
   cleanup()
@@ -317,4 +318,84 @@ it('qualifies actual host-read publications before structural sharing without re
     runId: null
   })
   expect(readBotAutomationPlace()?.owner?.authority).toMatchObject({ pairingRevision: 5 })
+})
+
+it('carries the admitted owner through the real page handoff and rejects replacement IDs at consumption', async () => {
+  const { openBotAutomation } = await import('./bot-automation-open')
+  const { admitAutomationNavigation } =
+    await import('../automations/hosts/automation-navigation-owner')
+  const owner = captureNativeChatVisualOwner(
+    { kind: 'environment', environmentId: 'e' },
+    'chat',
+    'folder:same'
+  ).automationOwner
+  openBotAutomation({ bot, owner: owner ?? null, automationId: 'a', runId: 'r', intent: 'page' })
+  const navigation = useAppStore.getState().pendingAutomationRunNavigation
+  expect(navigation?.owner).toEqual(owner)
+  expect(navigation).not.toBeNull()
+  revision(5)
+  expect(navigation && admitAutomationNavigation(navigation)).toBe(false)
+  expect(useAppStore.getState().pendingAutomationRunNavigation).toBeNull()
+})
+
+it('keeps qualified bot-less sign-in rows navigable without inferring a new owner', async () => {
+  const { StoppedForSignInRow } = await import('./BotNeedRow')
+  const qualify = captureBotRecordOwner(bot)
+  render(
+    <TooltipProvider>
+      <StoppedForSignInRow
+        bot={null}
+        row={{
+          key: 'stopped',
+          automation: qualify(definition),
+          failing: true,
+          latestRunId: 'r',
+          hostId: 'runtime:e'
+        }}
+      />
+    </TooltipProvider>
+  )
+  fireEvent.click(screen.getByRole('button', { name: /Open run/ }))
+  expect(useAppStore.getState().pendingAutomationRunNavigation).toMatchObject({
+    automationId: 'a',
+    runId: 'r',
+    hostId: 'runtime:e',
+    owner: { authority: { pairingRevision: 4 } }
+  })
+})
+
+it('holds a page handoff while checking, then admits a proven same-computer continuation', async () => {
+  const { openBotAutomation } = await import('./bot-automation-open')
+  const { admitAutomationNavigation, useAutomationNavigationRevision } =
+    await import('../automations/hosts/automation-navigation-owner')
+  const owner = captureNativeChatVisualOwner(
+    { kind: 'environment', environmentId: 'e' },
+    'chat',
+    'folder:same'
+  ).automationOwner
+  openBotAutomation({ bot, owner: owner ?? null, automationId: 'a', runId: 'r', intent: 'page' })
+  const navigation = useAppStore.getState().pendingAutomationRunNavigation
+  if (!navigation) {
+    throw new Error('Missing fixture navigation')
+  }
+  await act(async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'e', createdAt: 1, pairingRevision: 5 }], {
+      retired: [],
+      sameHost: [],
+      pending: [{ id: 'e', fromRevision: 4 }]
+    })
+    useAppStore.setState({ runtimeEnvironments: [automationOwnerEnvironment('e', 5)] })
+  })
+  const proof = renderHook(() => useAutomationNavigationRevision(navigation))
+  expect(admitAutomationNavigation(navigation)).toBe(false)
+  expect(useAppStore.getState().pendingAutomationRunNavigation).toBe(navigation)
+  expect(proof.result.current).toContain('checking')
+  await act(async () => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'e', createdAt: 1, pairingRevision: 5 }], {
+      retired: [],
+      sameHost: [{ id: 'e', fromRevision: 4, toRevision: 5 }]
+    })
+  })
+  expect(proof.result.current).toContain('continued')
+  expect(admitAutomationNavigation(navigation)).toBe(true)
 })

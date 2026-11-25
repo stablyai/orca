@@ -1,3 +1,8 @@
+import {
+  admitAutomationNavigation,
+  automationNavigationContinuity,
+  useAutomationNavigationRevision
+} from './hosts/automation-navigation-owner'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -66,6 +71,7 @@ export function useAutomationsPageRefresh({
     setRelativeNow,
     runHistoryReloadToken
   } = local
+  const navigationRevision = useAutomationNavigationRevision(pendingAutomationRunNavigation)
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
@@ -80,8 +86,12 @@ export function useAutomationsPageRefresh({
       awaitExternalManagers?: boolean
       forPendingNavigation?: boolean
     }): Promise<void> => {
-      setIsLoading(true)
       const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
+      if (pendingNavigation && !admitAutomationNavigation(pendingNavigation)) {
+        setIsLoading(false)
+        return
+      }
+      setIsLoading(true)
       // Until navigation names a host, only the desktop’s legacy unscoped arm can be addressed without guessing.
       const target = pendingNavigation
         ? getAutomationListedTargetFromHostId(pendingNavigation.hostId, useAppStore.getState())
@@ -94,6 +104,13 @@ export function useAutomationsPageRefresh({
       const managersSettled = reloadExternalManagers().catch(() => undefined)
       try {
         const nextAutomations = await listAutomationsForTarget(target)
+        if (
+          pendingNavigation?.owner &&
+          (useAppStore.getState().pendingAutomationRunNavigation !== pendingNavigation ||
+            !admitAutomationNavigation(pendingNavigation))
+        ) {
+          return
+        }
         // A bot's waits are listed in its sidebar, never with automations.
         setAutomations(nextAutomations.filter((automation) => !automation.once))
         setAutomationHostTargetKey(getAutomationHostTargetKey(target))
@@ -132,6 +149,26 @@ export function useAutomationsPageRefresh({
       setIsLoading
     ]
   )
+
+  const previousNavigationProof = useRef({
+    navigation: pendingAutomationRunNavigation,
+    revision: navigationRevision
+  })
+  useEffect(() => {
+    const previous = previousNavigationProof.current
+    previousNavigationProof.current = {
+      navigation: pendingAutomationRunNavigation,
+      revision: navigationRevision
+    }
+    if (
+      pendingAutomationRunNavigation?.owner &&
+      previous.navigation === pendingAutomationRunNavigation &&
+      previous.revision !== navigationRevision &&
+      automationNavigationContinuity(pendingAutomationRunNavigation) === 'same'
+    ) {
+      void refresh({ forPendingNavigation: true })
+    }
+  }, [pendingAutomationRunNavigation, navigationRevision, refresh])
 
   const hydratePersistedUIState = useCallback(async (): Promise<void> => {
     useAppStore.getState().hydratePersistedUI(await window.api.ui.get(), 'sync')
@@ -195,6 +232,7 @@ export function useAutomationsPageRefresh({
     automationHostTargetKey,
     isLoading,
     pendingAutomationRunNavigation,
+    navigationRevision,
     pendingListingFailures,
     refresh,
     runtimeEnvironments,

@@ -1,5 +1,17 @@
-import { captureBotRecordOwner } from '../automations/hosts/bot-automation-row-owner'
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { automationOwnerForHostId } from '../automations/hosts/automation-host-owner'
+import {
+  captureBotRecordOwner,
+  botAutomationRowOwner,
+  actOnBotAutomationRow
+} from '../automations/hosts/bot-automation-row-owner'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from 'react'
 import { BOT_WORK_KINDS } from '../../../../shared/bots/bot-change-scope'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -206,8 +218,22 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
     useShallow((s) => turnPanes.map((paneKey) => s.acknowledgedAgentsByPaneKey[paneKey] ?? 0))
   )
   const botKey = bot ? botRefKey(bot) : ''
-  const [pages, setPages] = useState<LoadedPages>({ botKey, byChat: {} })
-  const byChat = pages.botKey === botKey ? pages.byChat : NO_PAGES
+  const receiverKey = useAppStore((state) =>
+    JSON.stringify([botKey, bot ? automationOwnerForHostId(bot.hostId, state) : null])
+  )
+  const [pages, setPages] = useState<LoadedPages>({ botKey: receiverKey, byChat: {} })
+  const activeReceiver = useRef(receiverKey)
+  useLayoutEffect(() => {
+    const changed = activeReceiver.current !== receiverKey
+    activeReceiver.current = receiverKey
+    if (changed) {
+      setPages({ botKey: receiverKey, byChat: {} })
+      if (bot) {
+        chatTreeRead.request(bot)
+      }
+    }
+  }, [receiverKey, bot])
+  const byChat = pages.botKey === receiverKey ? pages.byChat : NO_PAGES
 
   const chats = useMemo(() => {
     const ackOf = new Map(turnPanes.map((paneKey, index) => [paneKey, acks[index] ?? 0]))
@@ -238,35 +264,50 @@ export function useBotChatTree(bot: Bot | null): BotChatTree {
   const botId = bot?.id ?? null
   const loadMore = useCallback(
     (chatId: string) => {
-      if (!hostId || !botId || loading.current.has(chatId)) {
+      const requestKey = JSON.stringify([receiverKey, chatId])
+      if (!hostId || !botId || loading.current.has(requestKey)) {
         return
       }
-      const shown = chats.find((chat) => chat.chatId === chatId)?.finished ?? []
+      const chat = chats.find((chat) => chat.chatId === chatId)
+      if (!chat) {
+        return
+      }
+      const shown = chat.finished
       const last = shown.at(-1)
-      loading.current.add(chatId)
+      loading.current.add(requestKey)
       const qualify = captureBotRecordOwner({ hostId, id: botId })
-      void callBotRpc<BotChatTreeRead>({ hostId }, 'bots.chatTree', {
-        botId,
-        chatId,
-        ...(last ? { finishedAfter: botChatTreeCursor(last) } : {})
-      })
+      void actOnBotAutomationRow(
+        botAutomationRowOwner(chat),
+        async () =>
+          callBotRpc<BotChatTreeRead>({ hostId }, 'bots.chatTree', {
+            botId,
+            chatId,
+            ...(last ? { finishedAfter: botChatTreeCursor(last) } : {})
+          }),
+        { hostId, id: botId }
+      )
         .then(({ chats: [page] }) => {
-          if (!page) {
+          if (
+            !page ||
+            activeReceiver.current !== receiverKey ||
+            JSON.stringify([botKey, automationOwnerForHostId(hostId, useAppStore.getState())]) !==
+              receiverKey
+          ) {
             return
           }
           setPages((current) => {
-            const base = current.botKey === botKey ? current.byChat : {}
+            const base = current.botKey === receiverKey ? current.byChat : {}
             // What was on screen stays, so a worker finishing between pages never drops one.
             return {
-              botKey,
+              botKey: receiverKey,
               byChat: { ...base, [chatId]: [...shown, ...page.finished.map(qualify)] }
             }
           })
         })
         .catch((error: unknown) => console.error('Failed to read more of a bot chat:', error))
-        .finally(() => loading.current.delete(chatId))
+        .finally(() => loading.current.delete(requestKey))
     },
-    [hostId, botId, botKey, chats]
+    [hostId, botId, botKey, receiverKey, chats]
   )
 
   return {

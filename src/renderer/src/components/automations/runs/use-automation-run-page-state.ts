@@ -1,3 +1,8 @@
+import {
+  admitAutomationNavigation,
+  automationNavigationContinuity,
+  useAutomationNavigationRevision
+} from '../hosts/automation-navigation-owner'
 import { useEffect } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -13,7 +18,7 @@ import { getAutomationRunDetailsWorkspaceName } from './automation-run-workspace
 import type { AutomationsPageListState } from '../listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from '../use-automations-page-local-state'
 import type { AutomationsPageSetupState } from '../authoring/use-automations-page-setup-state'
-import type { AutomationsPageStoreState } from '../use-automations-page-store-state'
+import type { AutomationRunPageStoreState } from '../use-automations-page-store-state'
 
 /** Navigation and terminal affordances for the selected automation run. */
 export function useAutomationRunPageState({
@@ -22,14 +27,7 @@ export function useAutomationRunPageState({
   list,
   setup
 }: {
-  store: Pick<
-    AutomationsPageStoreState,
-    | 'pendingAutomationRunNavigation'
-    | 'setPendingAutomationRunNavigation'
-    | 'runtimeEnvironments'
-    | 'selectedId'
-    | 'setSelectedId'
-  >
+  store: AutomationRunPageStoreState
   local: Pick<
     AutomationsPageLocalState,
     | 'isLoading'
@@ -54,6 +52,7 @@ export function useAutomationRunPageState({
   >
 }) {
   const t = useTranslate()
+  const navigationRevision = useAutomationNavigationRevision(store.pendingAutomationRunNavigation)
   const {
     pendingAutomationRunNavigation,
     setPendingAutomationRunNavigation,
@@ -131,6 +130,17 @@ export function useAutomationRunPageState({
       return
     }
     const pending = pendingAutomationRunNavigation
+    if (!admitAutomationNavigation(pending)) {
+      if (
+        !useAppStore.getState().pendingAutomationRunNavigation &&
+        automationNavigationContinuity(pending) !== 'checking'
+      ) {
+        setSelectedAutomationRunPageId(null)
+        setIsDetailOpen(false)
+        setPageView('automations')
+      }
+      return
+    }
     // Why: a new request replaces any earlier missing-run result; it is resolved from scratch.
     setRunNotFound(null)
     if (pending.runId) {
@@ -233,6 +243,7 @@ export function useAutomationRunPageState({
     selectAutomationRow,
     visibleRows,
     pendingAutomationRunNavigation,
+    navigationRevision,
     pageView,
     runtimeEnvironments,
     selectExternalKey,
