@@ -18,3 +18,12 @@ export async function runGiteaMutation(
     return false
   }
 }
+
+/** Re-reads after an accepted write; a failed read is reported without undoing that write. */
+export function refreshAfterGiteaWrite<T>(
+  read: () => Promise<T>,
+  apply: (value: T) => void,
+  refreshFailedMessage: string
+): void {
+  void read().then(apply, () => toast.error(refreshFailedMessage))
+}

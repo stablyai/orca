@@ -3,7 +3,6 @@ import type {
   GiteaMergeMethod,
   GiteaMutationResult,
   GiteaPRCheck,
-  GiteaPRFile,
   GiteaPRFileContents,
   GiteaPRFileStatus,
   GiteaPRReviewComment,
@@ -22,6 +21,7 @@ type RawGiteaPullDetail = RawGiteaPullRequest & {
   body?: string | null
   user?: RawGiteaUser | null
   base?: { ref?: string | null; sha?: string | null } | null
+  merge_base?: string | null
   merged?: boolean | null
   mergeable?: boolean | null
   additions?: number
@@ -29,14 +29,6 @@ type RawGiteaPullDetail = RawGiteaPullRequest & {
   changed_files?: number
   comments?: number
   created_at?: string | null
-}
-
-type RawGiteaPullFile = {
-  filename?: string | null
-  previous_filename?: string | null
-  status?: string | null
-  additions?: number
-  deletions?: number
 }
 
 type RawGiteaStatusEntry = {
@@ -49,21 +41,6 @@ type RawGiteaStatusEntry = {
 
 type RawGiteaCombinedStatusDetail = {
   statuses?: RawGiteaStatusEntry[] | null
-}
-
-function mapFileStatus(status: string | null | undefined): GiteaPRFileStatus {
-  switch (status) {
-    case 'added':
-    case 'modified':
-    case 'deleted':
-    case 'renamed':
-    case 'copied':
-      return status
-    case null:
-    case undefined:
-    default:
-      return 'changed'
-  }
 }
 
 function mapCheckState(value: string | null | undefined): GiteaPRCheck['state'] {
@@ -115,14 +92,15 @@ export async function getGiteaPullRequestDetail(
   return {
     number: raw.number,
     title: raw.title ?? '',
-    body: raw.body?.trim() || undefined,
+    body: raw.body?.trim() ? raw.body : undefined,
     state: mapGiteaPullRequestState(raw),
     url: raw.html_url,
     author: mapGiteaUser(raw.user),
     headBranch: raw.head?.ref ?? '',
     baseBranch: raw.base?.ref ?? '',
     headSha: raw.head?.sha ?? '',
-    baseSha: raw.base?.sha ?? '',
+    // File diffs start at the merge base, not the target tip, so target-only edits stay out of them.
+    baseSha: raw.merge_base?.trim() || raw.base?.sha || '',
     mergeable: raw.mergeable === true,
     merged: raw.merged === true,
     additions: typeof raw.additions === 'number' ? raw.additions : undefined,
@@ -132,34 +110,6 @@ export async function getGiteaPullRequestDetail(
     updatedAt: raw.updated_at ?? '',
     createdAt: raw.created_at ?? ''
   }
-}
-
-export async function listGiteaPullRequestFiles(
-  target: GiteaRepoTarget,
-  prNumber: number
-): Promise<GiteaPRFile[]> {
-  const repo = await resolveGiteaRepoTarget(target)
-  if (!repo) {
-    return []
-  }
-  const raw = await giteaRepoGet<RawGiteaPullFile[]>(
-    repo,
-    `/repos/${encodedRepoPath(repo)}/pulls/${encodeURIComponent(String(prNumber))}/files`,
-    { searchParams: { limit: 100, page: 1 } },
-    true
-  )
-  if (!Array.isArray(raw)) {
-    return []
-  }
-  return raw
-    .filter((entry): entry is RawGiteaPullFile & { filename: string } => Boolean(entry.filename))
-    .map((entry) => ({
-      path: entry.filename,
-      oldPath: entry.previous_filename?.trim() || undefined,
-      status: mapFileStatus(entry.status),
-      additions: typeof entry.additions === 'number' ? entry.additions : 0,
-      deletions: typeof entry.deletions === 'number' ? entry.deletions : 0
-    }))
 }
 
 // Fetches the file's content at the base and head commits so the renderer can

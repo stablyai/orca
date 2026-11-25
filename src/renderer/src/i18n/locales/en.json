@@ -4659,7 +4659,8 @@
         "giteaTypePr": "PR",
         "startWorkspaceFromPr": "Start workspace from PR {{number}}",
         "openInGitea": "Open in Gitea",
-        "giteaLoadFailed": "Could not load Gitea work items. Refresh to try again."
+        "giteaLoadFailed": "Could not load Gitea work items. Refresh to try again.",
+        "giteaCreateIssueFailed": "Failed to create issue."
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -15312,7 +15313,8 @@
               "d0b31b4845": "Disconnect {{value0}}",
               "f47924e554": "Each server stores one token locally, encrypted when runtime storage supports it."
             }
-          }
+          },
+          "disconnectFailed": "Could not disconnect this server."
         }
       },
       "right": {
@@ -21088,7 +21090,8 @@
         "c29b657be3": "Copy URL",
         "ca242eaf5d": "No description provided.",
         "0fee3f06ff": "Add a comment...",
-        "d3e0033e0f": "Comment"
+        "d3e0033e0f": "Comment",
+        "commentRefreshFailed": "Comment added. Refresh to see it."
       },
       "GiteaPullRequestWorkspace": {
         "f5cf34ed40": "Failed to add comment.",
@@ -21105,7 +21108,8 @@
         "9813b44d73": "Open in Gitea",
         "ddc99ed766": "Add a comment...",
         "d646ddef48": "Comment",
-        "c2d3e4f5a6": "Failed to load PR checks."
+        "c2d3e4f5a6": "Failed to load PR checks.",
+        "commentRefreshFailed": "Comment added. Refresh to see it."
       },
       "gitea": {
         "issue": {
@@ -21128,7 +21132,8 @@
         "pr": {
           "checks": {
             "bed82a55cd": "No status checks reported for this PR.",
-            "448c6113a4": "Open check details"
+            "448c6113a4": "Open check details",
+            "loading": "Loading status checks…"
           },
           "file": {
             "diff": {

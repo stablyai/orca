@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import type { GiteaWorkItem } from '../../../../../shared/gitea/gitea-types'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
@@ -25,7 +26,11 @@ export function TaskPageGiteaContent({
   } = model
 
   const repoForRow = useCallback(
-    (item: GiteaTaskRow): Repo | undefined => selectedRepos.find((repo) => repo.id === item.repoId),
+    // Repo ids can repeat across hosts; the row is stamped with the host that answered.
+    (item: GiteaTaskRow): Repo | undefined =>
+      selectedRepos.find(
+        (repo) => repo.id === item.repoId && getRepoExecutionHostId(repo) === item.repoHostId
+      ),
     [selectedRepos]
   )
   const openDetail = useCallback(

@@ -35,6 +35,14 @@ export function GiteaIssueMetaControls({
 }: GiteaIssueMetaControlsProps): React.JSX.Element {
   const t = useTranslate()
   const [titleDraft, setTitleDraft] = useState(title)
+  // The list title arrives first and the detail title later; follow it unless the user edited the draft.
+  const [syncedTitle, setSyncedTitle] = useState(title)
+  if (title !== syncedTitle) {
+    setSyncedTitle(title)
+    if (titleDraft === syncedTitle) {
+      setTitleDraft(title)
+    }
+  }
   const [pending, setPending] = useState<string | null>(null)
 
   const save = async (field: string, updates: GiteaIssueUpdate): Promise<void> => {

@@ -19,8 +19,15 @@ function stateIcon(state: GiteaPRCheck['state']): React.JSX.Element {
   }
 }
 
-export function GiteaPrChecks({ checks }: { checks: GiteaPRCheck[] }): React.JSX.Element {
+export function GiteaPrChecks({ checks }: { checks: GiteaPRCheck[] | null }): React.JSX.Element {
   const t = useTranslate()
+  if (checks === null) {
+    return (
+      <p className="px-4 py-6 text-sm text-muted-foreground">
+        {t('auto.components.gitea.pr.checks.loading', 'Loading status checks…')}
+      </p>
+    )
+  }
   if (checks.length === 0) {
     return (
       <p className="px-4 py-6 text-sm text-muted-foreground">

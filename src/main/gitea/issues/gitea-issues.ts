@@ -47,7 +47,8 @@ const MAX_SEARCH_PAGES = 10
 async function collectAssignedOrCreated(
   repo: GiteaRepoRef,
   filter: 'assigned' | 'created',
-  max: number
+  max: number,
+  kind: GiteaWorkItemKind | undefined
 ): Promise<RawGiteaIssue[]> {
   const fullName = `${repo.owner}/${repo.repo}`.toLowerCase()
   const matches: RawGiteaIssue[] = []
@@ -61,7 +62,8 @@ async function collectAssignedOrCreated(
           state: 'open',
           owner: repo.owner,
           limit: max,
-          page
+          page,
+          ...(kind ? { type: kind } : {})
         }
       },
       true
@@ -76,10 +78,6 @@ async function collectAssignedOrCreated(
           break
         }
       }
-    }
-    // A short page means there are no further results to page through.
-    if (raw.length < max) {
-      break
     }
   }
   return matches.slice(0, max)
@@ -104,10 +102,14 @@ async function issueContext(repo: GiteaRepoRef): Promise<GiteaIssueContext> {
 // username, which needs the read:user scope). Search hits are scoped back to
 // the selected repo by owner + full_name. "Open"/"Closed" use the repo-level
 // endpoint, which is naturally scoped and cheaper.
+/** Issues only, pull requests only, or both when omitted. */
+export type GiteaWorkItemKind = 'issues' | 'pulls'
+
 export async function listGiteaWorkItems(
   target: GiteaRepoTarget,
   filter?: GiteaWorkItemFilter,
-  limit?: number
+  limit?: number,
+  kind?: GiteaWorkItemKind
 ): Promise<GiteaWorkItem[]> {
   const repo = await resolveGiteaRepoTarget(target)
   if (!repo) {
@@ -117,7 +119,7 @@ export async function listGiteaWorkItems(
   const max = clampLimit(limit)
 
   if (filter === 'assigned' || filter === 'created') {
-    const matches = await collectAssignedOrCreated(repo, filter, max)
+    const matches = await collectAssignedOrCreated(repo, filter, max, kind)
     return matches
       .map((entry) => mapGiteaWorkItem(entry, context))
       .filter((item): item is GiteaWorkItem => item !== null)
@@ -127,7 +129,12 @@ export async function listGiteaWorkItems(
     repo,
     `/repos/${encodedRepoPath(repo)}/issues`,
     {
-      searchParams: { state: filter === 'closed' ? 'closed' : 'open', limit: max, page: 1 }
+      searchParams: {
+        state: filter === 'closed' ? 'closed' : 'open',
+        limit: max,
+        page: 1,
+        ...(kind ? { type: kind } : {})
+      }
     },
     true
   )

@@ -1,6 +1,6 @@
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useCallback, useState } from 'react'
-import { runGiteaMutation } from './gitea-mutation'
+import { refreshAfterGiteaWrite, runGiteaMutation } from './gitea-mutation'
 import { ArrowRight, ExternalLink, GitPullRequest, LoaderCircle, Send, X } from 'lucide-react'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { toast } from 'sonner'
@@ -74,21 +74,21 @@ function GiteaPullRequestWorkspaceContent({
       return
     }
     setSubmitting(true)
-    await runGiteaMutation(
-      async () => {
-        const result = await giteaApiFor(scope).addIssueComment(
-          scoped(scope, { number: item.number, body })
-        )
-        if (result.ok) {
-          setCommentDraft('')
-          setComments(
-            await giteaApiFor(scope).issueComments(scoped(scope, { number: item.number }))
-          )
-        }
-        return result
-      },
+    const added = await runGiteaMutation(
+      () => giteaApiFor(scope).addIssueComment(scoped(scope, { number: item.number, body })),
       translate('auto.components.GiteaPullRequestWorkspace.f5cf34ed40', 'Failed to add comment.')
     )
+    if (added) {
+      setCommentDraft('')
+      refreshAfterGiteaWrite(
+        () => giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })),
+        setComments,
+        translate(
+          'auto.components.GiteaPullRequestWorkspace.commentRefreshFailed',
+          'Comment added. Refresh to see it.'
+        )
+      )
+    }
     setSubmitting(false)
   }, [commentDraft, item, scope, submitting, setComments])
 
@@ -118,23 +118,28 @@ function GiteaPullRequestWorkspaceContent({
       if (!scope || !item) {
         return false
       }
-      return runGiteaMutation(
-        async () => {
-          const result = await giteaApiFor(scope).prAddReviewComment(
+      // Once Gitea accepts the review, a failed refresh must not report it failed: a retry would post it twice.
+      const added = await runGiteaMutation(
+        () =>
+          giteaApiFor(scope).prAddReviewComment(
             scoped(scope, { number: item.number, path, line, body })
-          )
-          if (result.ok) {
-            setReviewComments(
-              await giteaApiFor(scope).prReviewComments(scoped(scope, { number: item.number }))
-            )
-          }
-          return result
-        },
+          ),
         translate(
           'auto.components.GiteaPullRequestWorkspace.c7c84081fc',
           'Failed to add review comment.'
         )
       )
+      if (added) {
+        refreshAfterGiteaWrite(
+          () => giteaApiFor(scope).prReviewComments(scoped(scope, { number: item.number })),
+          setReviewComments,
+          translate(
+            'auto.components.GiteaPullRequestWorkspace.commentRefreshFailed',
+            'Comment added. Refresh to see it.'
+          )
+        )
+      }
+      return added
     },
     [item, scope, setReviewComments]
   )
@@ -154,7 +159,7 @@ function GiteaPullRequestWorkspaceContent({
     {
       id: 'checks',
       label: t('auto.components.GiteaPullRequestWorkspace.95a6c97ba6', 'Checks'),
-      count: checks.length
+      count: checks?.length ?? 0
     }
   ]
 

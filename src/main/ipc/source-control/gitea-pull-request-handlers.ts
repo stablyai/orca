@@ -1,10 +1,10 @@
 import { ipcMain } from 'electron'
+import { listGiteaPullRequestFiles } from '../../gitea/pull-request-files'
 import {
   addGiteaPullRequestReviewComment,
   getGiteaPullRequestChecks,
   getGiteaPullRequestDetail,
   getGiteaPullRequestFileContents,
-  listGiteaPullRequestFiles,
   listGiteaPullRequestReviewComments,
   mergeGiteaPullRequest
 } from '../../gitea/pull-request-review-operations'

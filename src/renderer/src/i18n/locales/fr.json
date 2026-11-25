@@ -21082,7 +21082,7 @@
         "bf66fad935": "Tous",
         "65a3bffe7a": "Tickets",
         "9b21aab4c9": "PRs",
-        "9986e0e679": "Fusionnés",
+        "9986e0e679": "Fusionné",
         "747423c0f8": "Brouillon",
         "980519b0c8": "Ouvert",
         "5997067bee": "Nouveau ticket",
@@ -31686,7 +31686,7 @@
   },
   "gitea": {
     "status": {
-      "added": "Ajoutée",
+      "added": "Ajouté",
       "modified": "Modifié",
       "deleted": "Supprimé",
       "renamed": "Renommé",
@@ -31694,7 +31694,7 @@
       "changed": "Modifié",
       "open": "Ouvert",
       "closed": "Fermé",
-      "merged": "Fusionnés",
+      "merged": "Fusionné",
       "draft": "Brouillon",
       "pending": "En attente",
       "success": "Réussite",

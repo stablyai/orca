@@ -17,7 +17,7 @@ type GiteaPrTabBodyProps = {
   body?: string
   comments: GiteaComment[]
   files: GiteaPRFile[]
-  checks: GiteaPRCheck[]
+  checks: GiteaPRCheck[] | null
   scope: GiteaIssueScope
   baseSha: string
   headSha: string

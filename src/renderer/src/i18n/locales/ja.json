@@ -30802,11 +30802,11 @@
   },
   "gitea": {
     "status": {
-      "added": "追加した",
+      "added": "追加済み",
       "modified": "修正済み",
       "deleted": "削除済み",
       "renamed": "名前変更済み",
-      "copied": "コピーしました",
+      "copied": "コピー済み",
       "changed": "変更済み",
       "open": "オープン",
       "closed": "クローズ",

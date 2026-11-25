@@ -1,6 +1,6 @@
 import { getServerForHost, normalizeGiteaApiBaseUrl } from '../servers/gitea-server-store'
 import type { GiteaRepoRef } from '../repository-ref'
-import { validateGiteaApiUrl } from './gitea-api-url'
+import { giteaApiBelongsToRepoHost, validateGiteaApiUrl } from './gitea-api-url'
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
@@ -43,14 +43,6 @@ export function getEnvGiteaAuth(): { apiBaseUrl: string | null; token: string | 
   }
 }
 
-function sameHost(apiBaseUrl: string, repoHost: string): boolean {
-  try {
-    return new URL(apiBaseUrl).host.toLowerCase() === repoHost.toLowerCase()
-  } catch {
-    return false
-  }
-}
-
 export async function resolveGiteaAuth(repo: GiteaRepoRef): Promise<GiteaResolvedAuth> {
   const env = getEnvGiteaAuth()
   if (env.token) {
@@ -58,7 +50,7 @@ export async function resolveGiteaAuth(repo: GiteaRepoRef): Promise<GiteaResolve
     // global token can't leak to a different server. Without one, fall back to the
     // repo's own host — the documented env-var back-compat that hosted review uses.
     if (env.apiBaseUrl) {
-      if (sameHost(env.apiBaseUrl, repo.host)) {
+      if (giteaApiBelongsToRepoHost(env.apiBaseUrl, repo.host)) {
         return { apiBaseUrl: env.apiBaseUrl, token: env.token }
       }
     } else {
@@ -69,7 +61,10 @@ export async function resolveGiteaAuth(repo: GiteaRepoRef): Promise<GiteaResolve
   if (stored) {
     return { apiBaseUrl: stored.server.apiBaseUrl, token: stored.token }
   }
-  return { apiBaseUrl: repo.apiBaseUrl, token: null }
+  // Anonymous reads still honor ORCA_GITEA_API_BASE_URL for its own host, like the hosted-review client did.
+  const envBaseForRepo =
+    env.apiBaseUrl && giteaApiBelongsToRepoHost(env.apiBaseUrl, repo.host) ? env.apiBaseUrl : null
+  return { apiBaseUrl: envBaseForRepo ?? repo.apiBaseUrl, token: null }
 }
 
 // A token never follows a redirect; anonymous reads keep following them like before.
@@ -221,12 +216,13 @@ export async function giteaRepoWrite<T>(
     if (!response.ok) {
       return { ok: false, error: await readGiteaError(response), status: response.status }
     }
-    if (response.status === 204) {
-      await cancelUnreadResponseBody(response)
+    // Some mutations (merge) answer 200 with an empty body, which is still a success.
+    const text = response.status === 204 ? '' : await response.text()
+    if (!text.trim()) {
       return { ok: true, data: null }
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The caller names the mutation endpoint's wire shape and checks required identifiers before using the response.
-    return { ok: true, data: (await response.json()) as T }
+    return { ok: true, data: JSON.parse(text) as T }
   } catch {
     return { ok: false, error: 'Could not reach the Gitea server.', status: null }
   } finally {

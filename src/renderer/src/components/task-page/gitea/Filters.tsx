@@ -114,7 +114,13 @@ export function TaskPageGiteaFilters({
             const result = await createGiteaIssue(giteaTaskRepoScope(primaryRepo), {
               title,
               body
-            })
+            }).catch((error: unknown) => ({
+              ok: false as const,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : t('auto.components.TaskPage.giteaCreateIssueFailed', 'Failed to create issue.')
+            }))
             if (!result.ok) {
               toast.error(result.error)
               return false

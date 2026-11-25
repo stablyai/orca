@@ -18,7 +18,8 @@ export function useGiteaPrResources(selection: GiteaWorkspaceSelection | null) {
   const scope = selection?.scope ?? null
   const [detail, setDetail] = useState<GiteaPullRequestDetail | null>(null)
   const [files, setFiles] = useState<GiteaPRFile[]>([])
-  const [checks, setChecks] = useState<GiteaPRCheck[]>([])
+  // null until the checks read settles, so an empty list means "none reported", not "still loading".
+  const [checks, setChecks] = useState<GiteaPRCheck[] | null>(null)
   const [comments, setComments] = useState<GiteaComment[]>([])
   const [reviewComments, setReviewComments] = useState<GiteaPRReviewComment[]>([])
   const [loading, setLoading] = useState(false)
@@ -31,7 +32,7 @@ export function useGiteaPrResources(selection: GiteaWorkspaceSelection | null) {
     const requestId = requestRef.current
     setDetail(null)
     setFiles([])
-    setChecks([])
+    setChecks(null)
     setComments([])
     setReviewComments([])
     setLoading(true)
@@ -65,7 +66,9 @@ export function useGiteaPrResources(selection: GiteaWorkspaceSelection | null) {
             translate('gitea.errors.loadPullRequest', 'Some pull request data could not be loaded.')
           )
         }
-        if (prDetail?.headSha) {
+        if (!prDetail?.headSha) {
+          setChecks([])
+        } else {
           void giteaApiFor(scope)
             .prChecks(scoped(scope, { headSha: prDetail.headSha }))
             .then((result) => {

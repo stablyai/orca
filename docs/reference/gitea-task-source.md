@@ -3,7 +3,8 @@
 Gitea Tasks extends the existing hosted pull-request integration with issue and
 pull-request browsing for the selected repositories. It does not replace GitHub
 or GitLab Tasks. Existing profiles keep their chosen task sources: enable Gitea
-in Settings → Tasks, then connect a server in Settings → Integrations.
+in Settings → Tasks, then connect a server from the Gitea card in Settings →
+Integrations.
 
 ## Connect a server
 
@@ -14,17 +15,29 @@ issue permission covers issue creation, edits, labels, assignees, and comments.
 Restrict the token to the repositories you need when the server supports that
 choice. The server's normal repository and merge permissions still apply.
 
-Enter the server's web URL and token in Orca. HTTPS is required except for
-loopback HTTP used by local development instances. Non-default HTTPS ports are
-part of the credential destination. Redirects are rejected so authentication
-cannot move to a different server. Tokens use Orca's existing encrypted
-credential store; a token that cannot be decrypted is reported in Settings.
+Enter the server's web URL and token in Orca. Orca accepts HTTP and HTTPS server
+URLs, so a LAN server such as `http://gitea:3000` works; URLs with embedded
+credentials, query strings or fragments are rejected. Tokens use Orca's
+encrypted credential store, and a token that cannot be decrypted is reported on
+the card.
 
-Add the repository to Orca and select it in Tasks. Credentials are matched to
-its remote host. A plain folder without a matching Git remote has no
-repository-scoped Gitea tasks. For SSH-hosted workspaces, repository discovery
-uses the existing connection-aware repository resolver; API calls use the
-desktop integration credentials, so the server must be reachable from Orca.
+`ORCA_GITEA_TOKEN` and `ORCA_GITEA_API_BASE_URL` keep working and take
+precedence over saved servers. With `ORCA_GITEA_API_BASE_URL` set, the
+environment token only goes to that API's host.
+
+## Where credentials apply
+
+A token is only sent to the server it belongs to: a saved server matches a
+repository by its remote host (an SSH remote, which names no port, matches the
+saved server on the same hostname). Requests that carry a token never follow
+redirects. Pull request reads and creation use the same credentials as Tasks.
+
+Repository calls run on the machine that owns the repository: the desktop for
+local and SSH-hosted repositories, or the paired Orca server for repositories
+it hosts. Credentials must exist on that machine. The Settings card manages the
+servers of the runtime the client runs on (the desktop app, or the server a web
+client is paired to); a paired server can also use the environment variables.
+A plain folder without a Gitea remote has no Gitea tasks.
 
 Gitea documents the token scopes in its
 [API authentication guide](https://docs.gitea.com/development/oauth2-provider/).
@@ -33,18 +46,13 @@ version. No administrator token is required.
 
 ## Review the workflow
 
-1. Open Tasks, select Gitea and a repository, and open an issue.
-2. Change its title, label, or assignee. Labels outside the first repository
-   label page are preserved by their numeric IDs.
-3. Post a comment and check that the returned author appears.
-4. Start a workspace and check that its linked task uses the saved title.
-5. Open a pull request and inspect its description, comments, files, and checks.
+1. Open Tasks, select Gitea and one or more repositories, and switch between
+   All, Issues and PRs and the Open, Assigned to me, Created and Closed filters.
+2. Open an issue, change its title, label, or assignee, and post a comment.
+3. Start a workspace from the issue and check that it keeps the linked issue.
+4. Open a pull request and inspect its description, comments, files, and checks.
    A failed resource displays an error without discarding successful resources.
-6. Replace or disconnect the server credentials and reload Tasks. Cached task
-   data and requests from the previous credentials cannot repopulate the cache.
+5. Disconnect the server in Settings and reload Tasks.
 
-`tests/e2e/gitea-tasks.spec.ts` exercises issue editing and comments in a hidden
-Electron renderer with deterministic IPC fixtures. It does not substitute for
-testing an actual Gitea or Forgejo deployment. Backend tests cover API mapping,
-credential destinations, connection status, and mutations; renderer tests cover
-cache invalidation, label preservation, and partial pull-request loading.
+The Gitea phone views are not available yet, so the mobile app hides the Gitea
+source.

@@ -10,7 +10,7 @@ import {
 } from '../../credentials/integration-credential-file'
 import { createIntegrationStateFileCache } from '../../credentials/integration-state-file-cache'
 import { createIntegrationTokenFileCache } from '../../credentials/integration-token-file-cache'
-import { validateGiteaApiUrl } from '../requests/gitea-api-url'
+import { giteaApiBelongsToRepoHost, validateGiteaApiUrl } from '../requests/gitea-api-url'
 import type { GiteaServer } from '../../../shared/gitea/gitea-types'
 
 // Server metadata in one JSON file and one encrypted token per server, like Jira sites.
@@ -177,7 +177,10 @@ export async function getServerForHost(
   }
   const normalizedHost = host.toLowerCase()
   const file = await getServerFile()
-  const server = file.servers.find((entry) => giteaServerHost(entry) === normalizedHost)
+  // An exact authority wins; a port-less (SSH) remote falls back to the server on the same hostname.
+  const server =
+    file.servers.find((entry) => giteaServerHost(entry) === normalizedHost) ??
+    file.servers.find((entry) => giteaApiBelongsToRepoHost(entry.apiBaseUrl, normalizedHost))
   if (!server) {
     return null
   }

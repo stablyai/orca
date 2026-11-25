@@ -135,8 +135,6 @@ function GiteaPrFileDiffContent({
             original={contents?.original ?? ''}
             modified={contents?.modified ?? ''}
             theme={isDark ? 'vs-dark' : 'vs'}
-            keepCurrentOriginalModel
-            keepCurrentModifiedModel
             options={{
               readOnly: true,
               originalEditable: false,

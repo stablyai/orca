@@ -66,7 +66,7 @@ export function registerGiteaHandlers(store: Store): void {
     'gitea:listWorkItems',
     async (_event, args: RepoScoped<typeof GiteaWorkItemsList>) => {
       const { target, params } = parseGiteaRepoArgs(GiteaWorkItemsList, args, store)
-      return listGiteaWorkItems(target, params.filter, params.limit)
+      return listGiteaWorkItems(target, params.filter, params.limit, params.kind)
     }
   )
 

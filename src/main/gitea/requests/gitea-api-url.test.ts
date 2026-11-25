@@ -61,6 +61,22 @@ describe('Gitea credential destinations', () => {
     await expect(resolveGiteaAuth(repo)).resolves.toMatchObject({ token: null })
   })
 
+  it('sends the environment token to its API on another port for an SSH remote of that host', async () => {
+    vi.stubEnv('ORCA_GITEA_TOKEN', 'env-token')
+    vi.stubEnv('ORCA_GITEA_API_BASE_URL', 'http://git.lan:3000')
+    serverForHost.mockResolvedValue(null)
+    const sameHost = parseGiteaRepoRef('git@git.lan:team/project.git')
+    const otherHost = parseGiteaRepoRef('git@git.other:team/project.git')
+    if (!sameHost || !otherHost) {
+      throw new Error('Missing test repository')
+    }
+    await expect(resolveGiteaAuth(sameHost)).resolves.toEqual({
+      apiBaseUrl: 'http://git.lan:3000',
+      token: 'env-token'
+    })
+    await expect(resolveGiteaAuth(otherHost)).resolves.toMatchObject({ token: null })
+  })
+
   it('matches a saved token to a non-default HTTPS port', async () => {
     vi.stubEnv('ORCA_GITEA_TOKEN', '')
     vi.stubEnv('ORCA_GITEA_API_BASE_URL', '')

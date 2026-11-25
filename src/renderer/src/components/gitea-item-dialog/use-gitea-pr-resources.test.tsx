@@ -53,7 +53,7 @@ describe('Gitea PR resource loading', () => {
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(result.current.detail?.body).toBe('Description')
     expect(result.current.comments[0]?.user?.login).toBe('author')
-    expect(result.current.checks[0]?.context).toBe('test')
+    await waitFor(() => expect(result.current.checks?.[0]?.context).toBe('test'))
     expect(result.current.files).toEqual([])
     expect(mocks.error).toHaveBeenCalled()
   })

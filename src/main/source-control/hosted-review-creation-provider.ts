@@ -129,7 +129,8 @@ export async function isProviderAuthenticated(
   if (provider === 'gitea') {
     return (await import('../gitea/pull-request-creation')).isGiteaReviewCreationAuthenticated(
       repoPath,
-      hostedReviewSshConnectionId(executionHostId)
+      hostedReviewSshConnectionId(executionHostId),
+      getHostedReviewLocalGitOptions(options)
     )
   }
   if (provider === 'bitbucket') {

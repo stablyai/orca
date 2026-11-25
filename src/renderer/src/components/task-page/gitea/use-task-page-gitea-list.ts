@@ -59,7 +59,9 @@ export function useTaskPageGiteaList<Model extends GiteaListInput>(model: Model)
   const [giteaRefreshNonce, setGiteaRefreshNonce] = useState(0)
   // The open issue or PR detail; the list chrome hides while it is shown.
   const [giteaSelection, setGiteaSelection] = useState<GiteaWorkspaceSelection | null>(null)
-  const currentListQueryKey = JSON.stringify([giteaFilter, selectedReposKey])
+  // Issues and PRs are read separately so many newer issues cannot crowd PRs out of a page.
+  const giteaKind = giteaView === 'issues' ? 'issues' : giteaView === 'prs' ? 'pulls' : undefined
+  const currentListQueryKey = JSON.stringify([giteaFilter, giteaKind ?? 'all', selectedReposKey])
   // A nonce bump for the same query is a user Refresh, which rechecks unreachable hosts too.
   const lastRefreshRef = useRef({ nonce: giteaRefreshNonce, query: '' })
 
@@ -76,7 +78,12 @@ export function useTaskPageGiteaList<Model extends GiteaListInput>(model: Model)
     setGiteaError(null)
     recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
     const filter = giteaFilter === 'all' ? undefined : giteaFilter
-    void loadGiteaTaskRows(selectedRepos, filter, unreachableTaskSourceHostIds, isStale)
+    void loadGiteaTaskRows(
+      selectedRepos,
+      { filter, kind: giteaKind },
+      unreachableTaskSourceHostIds,
+      isStale
+    )
       .then(({ rows, error }) => {
         if (isStale()) {
           return
@@ -140,10 +147,10 @@ export type TaskPageGiteaListModel = ReturnType<
   typeof useTaskPageGiteaList<TaskPageProviderMetadataModel>
 >
 
-/** Reads every repo on its owning host; a fetch error surfaces only when no repo listed anything. */
+/** Reads every repo on its owning host and names the first project that failed, beside any rows. */
 async function loadGiteaTaskRows(
   repos: readonly Repo[],
-  filter: GiteaWorkItemFilter | undefined,
+  query: { filter: GiteaWorkItemFilter | undefined; kind: 'issues' | 'pulls' | undefined },
   unreachableHostIds: ReadonlySet<TaskSourceContext['hostId']>,
   isStale: () => boolean
 ): Promise<{ rows: GiteaTaskRow[]; error: string | null }> {
@@ -162,7 +169,8 @@ async function loadGiteaTaskRows(
       const scope = giteaTaskRepoScope(repo)
       const items = await giteaApiFor(scope).listWorkItems({
         ...scope,
-        filter,
+        filter: query.filter,
+        kind: query.kind,
         limit: GITEA_TASK_LIST_LIMIT
       })
       return { repo, items }
@@ -170,15 +178,15 @@ async function loadGiteaTaskRows(
   )
   const rows: GiteaTaskRow[] = []
   const errors: string[] = []
-  for (const result of results) {
+  for (const [index, result] of results.entries()) {
     if (result.status !== 'fulfilled') {
-      errors.push(
+      const detail =
         readIpcErrorDetail(result.reason) ??
-          translate(
-            'auto.components.TaskPage.giteaLoadFailed',
-            'Could not load Gitea work items. Refresh to try again.'
-          )
-      )
+        translate(
+          'auto.components.TaskPage.giteaLoadFailed',
+          'Could not load Gitea work items. Refresh to try again.'
+        )
+      errors.push(`${repos[index]?.displayName ?? ''}: ${detail}`)
       continue
     }
     const repoHostId = getRepoExecutionHostId(result.value.repo)
@@ -187,6 +195,5 @@ async function loadGiteaTaskRows(
     }
   }
   rows.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-  // Non-Gitea repos in a mixed selection list nothing, so only an empty result surfaces errors.
-  return { rows, error: errors.length > 0 && rows.length === 0 ? errors[0] : null }
+  return { rows, error: errors[0] ?? null }
 }

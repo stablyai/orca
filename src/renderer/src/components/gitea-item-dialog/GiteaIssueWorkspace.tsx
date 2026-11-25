@@ -1,6 +1,6 @@
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useAppStore } from '@/store'
-import { runGiteaMutation } from './gitea-mutation'
+import { refreshAfterGiteaWrite, runGiteaMutation } from './gitea-mutation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 import { scoped } from './gitea-pr-request-scope'
@@ -156,7 +156,7 @@ export function GiteaIssueWorkspace({
   }, [scope, item])
 
   const handleToggleState = useCallback(async (): Promise<void> => {
-    if (!scope || !item || statePending) {
+    if (!scope || !item || statePending || loading) {
       return
     }
     const nextState = closed ? 'open' : 'closed'
@@ -169,7 +169,7 @@ export function GiteaIssueWorkspace({
     if (updated) {
       setClosed(nextState === 'closed')
     }
-  }, [closed, item, scope, statePending])
+  }, [closed, item, loading, scope, statePending])
 
   const handleSubmitComment = useCallback(async (): Promise<void> => {
     if (!scope || !item || submitting) {
@@ -180,21 +180,21 @@ export function GiteaIssueWorkspace({
       return
     }
     setSubmitting(true)
-    await runGiteaMutation(
-      async () => {
-        const result = await giteaApiFor(scope).addIssueComment(
-          scoped(scope, { number: item.number, body })
-        )
-        if (result.ok) {
-          setCommentDraft('')
-          setComments(
-            await giteaApiFor(scope).issueComments(scoped(scope, { number: item.number }))
-          )
-        }
-        return result
-      },
+    const added = await runGiteaMutation(
+      () => giteaApiFor(scope).addIssueComment(scoped(scope, { number: item.number, body })),
       translate('auto.components.GiteaIssueWorkspace.565680a39b', 'Failed to add comment.')
     )
+    if (added) {
+      setCommentDraft('')
+      refreshAfterGiteaWrite(
+        () => giteaApiFor(scope).issueComments(scoped(scope, { number: item.number })),
+        setComments,
+        translate(
+          'auto.components.GiteaIssueWorkspace.commentRefreshFailed',
+          'Comment added. Refresh to see it.'
+        )
+      )
+    }
     setSubmitting(false)
   }, [commentDraft, item, scope, submitting])
 
@@ -282,7 +282,7 @@ export function GiteaIssueWorkspace({
                     variant="outline"
                     size="xs"
                     onClick={() => void handleToggleState()}
-                    disabled={statePending}
+                    disabled={statePending || loading}
                   >
                     {statePending ? <LoaderCircle className="size-3 animate-spin" /> : null}
                     {closed

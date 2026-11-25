@@ -25,11 +25,20 @@ export function GiteaConnectedServers({
   const servers = giteaStatus?.servers ?? []
 
   const handleDisconnect = async (serverId: string): Promise<void> => {
-    // A rejected disconnect still clears stale test results.
-    await giteaDisconnect(serverId).catch(() => {})
+    // A failed disconnect stays listed and says why; a successful one clears stale results.
+    const failure = await giteaDisconnect(serverId).then(
+      () => null,
+      (error: unknown) =>
+        error instanceof Error
+          ? error.message
+          : t(
+              'auto.components.settings.gitea.disconnectFailed',
+              'Could not disconnect this server.'
+            )
+    )
     onChanged()
     if (mountedRef.current) {
-      setTestResultByServer({})
+      setTestResultByServer(failure ? { [serverId]: { state: 'error', error: failure } } : {})
     }
   }
 

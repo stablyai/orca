@@ -8,7 +8,8 @@ import type {
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { giteaApiFor } from '@/runtime/repository-gitea/gitea-owner-api'
 
-// Repo calls go to the host that owns the repo; server connections belong to this client's runtime.
+// Repo calls go to the host that owns the repo. Server connections belong to this client's own
+// runtime (the desktop, or the server a web client is paired to), so a host switch never stales them.
 
 export type GiteaIssueScope = {
   repoPath: string

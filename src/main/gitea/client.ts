@@ -54,16 +54,13 @@ async function requestJson<T>(
   )
 }
 
-function configuredApiBaseUrl(repo: GiteaRepoRef): string {
-  return getEnvGiteaAuth().apiBaseUrl ?? repo.apiBaseUrl
-}
-
 function encodedRepoPath(repo: GiteaRepoRef): string {
   return `${encodeURIComponent(repo.owner)}/${encodeURIComponent(repo.repo)}`
 }
 
+// Keyed by the remote's own host, so same-named repos on two servers never share a scan.
 function giteaPullRequestScanKey(repo: GiteaRepoRef): string {
-  return `${configuredApiBaseUrl(repo)}/${encodedRepoPath(repo)}`
+  return `${repo.host}/${encodedRepoPath(repo)}`
 }
 
 /** Invalidate after creation so card refreshes cannot reuse a cached miss. */

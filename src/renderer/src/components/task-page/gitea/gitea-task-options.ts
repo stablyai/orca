@@ -27,7 +27,7 @@ export function giteaItemStateLabel(item: GiteaWorkItem): string {
   if (item.type === 'pull' && item.state === 'merged') {
     return translate('auto.components.GiteaTaskList.9986e0e679', 'Merged')
   }
-  if (item.type === 'pull' && item.draft) {
+  if (item.type === 'pull' && item.draft && item.state === 'open') {
     return translate('auto.components.GiteaTaskList.747423c0f8', 'Draft')
   }
   return item.state === 'closed'

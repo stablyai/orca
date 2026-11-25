@@ -14,3 +14,18 @@ export function validateGiteaApiUrl(value: string): string {
   }
   return url.toString().replace(/\/+$/, '')
 }
+
+/**
+ * Whether a configured or saved API base belongs to a repo's Git host. A remote that names a port
+ * must match it; SSH and default-port remotes carry no port, so the hostname decides.
+ */
+export function giteaApiBelongsToRepoHost(apiBaseUrl: string, repoHost: string): boolean {
+  let api: URL
+  try {
+    api = new URL(apiBaseUrl)
+  } catch {
+    return false
+  }
+  const host = repoHost.toLowerCase()
+  return host.includes(':') ? api.host.toLowerCase() === host : api.hostname.toLowerCase() === host
+}

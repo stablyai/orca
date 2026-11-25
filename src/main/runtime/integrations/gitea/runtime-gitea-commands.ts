@@ -1,5 +1,6 @@
 import type { z } from 'zod'
 import type { Repo } from '../../../../shared/repository/repo-types'
+import { listGiteaPullRequestFiles } from '../../../gitea/pull-request-files'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type {
   GiteaAddIssueComment,
@@ -27,7 +28,6 @@ import {
   getGiteaPullRequestChecks,
   getGiteaPullRequestDetail,
   getGiteaPullRequestFileContents,
-  listGiteaPullRequestFiles,
   listGiteaPullRequestReviewComments,
   mergeGiteaPullRequest
 } from '../../../gitea/pull-request-review-operations'
@@ -54,7 +54,12 @@ export class RuntimeGiteaCommands {
   }
 
   async listGiteaRepoWorkItems(params: z.infer<typeof GiteaWorkItemsList>) {
-    return listGiteaWorkItems(await this.target(params.repo), params.filter, params.limit)
+    return listGiteaWorkItems(
+      await this.target(params.repo),
+      params.filter,
+      params.limit,
+      params.kind
+    )
   }
 
   async getGiteaRepoIssue(params: z.infer<typeof GiteaIssueByNumber>) {

@@ -10197,7 +10197,7 @@
           "connectGiteaDescription": "Añade un servidor Gitea o Forgejo con un token de acceso personal.",
           "manageGitea": "Gestionar servidores",
           "addGitea": "Añadir servidor Gitea",
-          "giteaLabel": "casa rural",
+          "giteaLabel": "Gitea",
           "giteaDescription": "Conecta un servidor Gitea o Forgejo y muestra sus incidencias y pull requests en Tareas."
         },
         "TerminalAppearanceSection": {
@@ -31696,11 +31696,11 @@
   },
   "gitea": {
     "status": {
-      "added": "Añadida",
+      "added": "Añadido",
       "modified": "Modificado",
       "deleted": "Eliminado",
       "renamed": "Renombrado",
-      "copied": "copiado",
+      "copied": "Copiado",
       "changed": "Cambiado",
       "open": "Abierto",
       "closed": "Cerrado",

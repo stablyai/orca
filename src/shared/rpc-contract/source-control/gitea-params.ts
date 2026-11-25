@@ -19,6 +19,7 @@ export const GiteaConnectParams = z.object({
 
 export const GiteaWorkItemsList = GiteaRepoSelector.extend({
   filter: z.enum(['assigned', 'created', 'all', 'closed']).optional(),
+  kind: z.enum(['issues', 'pulls']).optional(),
   limit: z
     .number()
     .int()

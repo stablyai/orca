@@ -15,7 +15,7 @@ import {
 import { readHostedPullRequestTemplate } from '../source-control/pull-request-template'
 import { getGiteaPullRequestForBranch, invalidateGiteaPullRequestScanForRepo } from './client'
 import { mapGiteaPullRequest, type RawGiteaPullRequest } from './pull-request-mappers'
-import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
+import { getGiteaRepoRef, type GiteaLocalGitOptions, type GiteaRepoRef } from './repository-ref'
 import { getEnvGiteaAuth, giteaApiUrl, resolveGiteaAuth } from './requests/gitea-request'
 
 const CREATE_REQUEST_TIMEOUT_MS = 60_000
@@ -23,12 +23,13 @@ const CREATE_REQUEST_TIMEOUT_MS = 60_000
 /** True when this repo's Gitea host has a token: ORCA_GITEA_TOKEN or a server saved in Settings. */
 export async function isGiteaReviewCreationAuthenticated(
   repoPath: string,
-  connectionId?: string | null
+  connectionId?: string | null,
+  localGitOptions: GiteaLocalGitOptions = {}
 ): Promise<boolean> {
   if (getEnvGiteaAuth().token) {
     return true
   }
-  const repo = await getGiteaRepoRef(repoPath, connectionId)
+  const repo = await getGiteaRepoRef(repoPath, connectionId, localGitOptions)
   return repo ? (await resolveGiteaAuth(repo)).token !== null : false
 }
 
@@ -179,6 +180,8 @@ export async function createGiteaPullRequest(
           'Content-Type': 'application/json',
           ...(auth.token ? { Authorization: `token ${auth.token}` } : {})
         },
+        // A token never follows a redirect, like every other Gitea request.
+        redirect: auth.token ? 'error' : 'follow',
         body: JSON.stringify(requestBody)
       },
       CREATE_REQUEST_TIMEOUT_MS

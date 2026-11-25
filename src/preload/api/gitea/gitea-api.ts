@@ -36,6 +36,7 @@ export type GiteaApi = {
     sourceContext?: TaskSourceContext | null
     filter?: GiteaWorkItemFilter
     limit?: number
+    kind?: 'issues' | 'pulls'
   }) => Promise<GiteaWorkItem[]>
   issue: (args: {
     repoPath: string
