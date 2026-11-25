@@ -18,7 +18,7 @@ import {
 import { getWslHostsPausedShortLabel } from '@/components/sidebar/host-admission/wsl/wsl-host-row-status'
 import { WslDistroSubmenuRow } from './WslDistroSubmenuRow'
 import { stepSubmenuOptionFocus } from './submenu-option-focus'
-import { useDelayedSubmenuClose } from './use-delayed-submenu-close'
+import { pointerHeadsFor, useDelayedSubmenuClose } from './use-delayed-submenu-close'
 
 /** How long a pointer may cross other Add host rows on its way into the WSL list. */
 const WSL_CLOSE_DELAY_MS = 200
@@ -141,8 +141,22 @@ export function AddHostSubmenuRow({
     closeWsl,
     WSL_CLOSE_DELAY_MS
   )
+  // While the pointer keeps closing in on the open list, its close waits (a light safe triangle).
+  const lastPointer = React.useRef<{ x: number; y: number } | null>(null)
+  const headingForWsl = React.useRef(false)
+  const trackPointer = (event: React.MouseEvent): void => {
+    const to = { x: event.clientX, y: event.clientY }
+    const list = document.querySelector('[data-wsl-distro-menu]')?.getBoundingClientRect()
+    headingForWsl.current = Boolean(
+      list && lastPointer.current && pointerHeadsFor(list, lastPointer.current, to)
+    )
+    lastPointer.current = to
+  }
   const armOther = (key: string): void => {
     setHoveredKey(key)
+    if (headingForWsl.current) {
+      keepWslOpen()
+    }
     scheduleWslClose()
   }
   React.useEffect(() => {
@@ -207,6 +221,7 @@ export function AddHostSubmenuRow({
           role="listbox"
           aria-label={addHostLabel}
           onMouseLeave={() => setHoveredKey(null)}
+          onMouseMoveCapture={trackPointer}
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft') {
               event.preventDefault()
