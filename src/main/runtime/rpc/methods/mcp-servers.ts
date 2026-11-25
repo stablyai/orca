@@ -37,7 +37,6 @@ import {
   setMcpServerWorkspaces,
   updateMcpServer
 } from '../../../mcp-servers/mcp-host-list'
-import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
@@ -79,12 +78,6 @@ function problemsClient(context: RpcContext): string {
     context.connectionId ??
     (context.caller ? rpcCallerOperationKey(context.caller) : 'unidentified')
   )
-}
-
-/** A method later hosts fill in; this one refuses it in words a client can tell apart. */
-async function notYet(method: string): Promise<never> {
-  assertMcpServersFeatureEnabled()
-  throw new McpServersError('mcp_servers_not_yet', `${method} isn’t available on this host yet.`)
 }
 
 export const MCP_SERVER_METHODS = [
@@ -299,12 +292,12 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.sessions.stale',
     permission: 'workspace',
     params: McpServerSessions,
-    handler: () => notYet('mcpServers.sessions.stale')
+    handler: (_params, context) => onHost(context, () => context.runtime.countMcpStaleTerminals())
   }),
   defineMethod({
     name: 'mcpServers.sessions.restart',
     permission: 'workspace',
     params: McpServerSessions,
-    handler: () => notYet('mcpServers.sessions.restart')
+    handler: (_params, context) => onHost(context, () => context.runtime.restartMcpStaleTerminals())
   })
 ]

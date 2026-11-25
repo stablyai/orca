@@ -34,6 +34,9 @@ const buttonVariants = cva(
         'theme-accent':
           'bg-theme-accent-fill text-theme-accent-foreground hover:bg-theme-accent-fill-hover',
         ghost: 'hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
+        // A quiet secondary action under a title, such as a toast's "Show list": muted until hovered.
+        'ghost-muted':
+          'text-muted-foreground hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50',
         // A row action over its hovered row's accent fill, where ghost's accent hover would not show.
         'ghost-on-accent': `text-accent-foreground hover:bg-foreground/10 ${disabledOnAccentButtonClasses}`,
         // `ghost-on-accent` at a clipped list's edge, where an outset ring would lose a side.
