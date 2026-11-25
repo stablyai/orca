@@ -66,9 +66,19 @@ export function WslDistroSubmenuRow({
   const enabledCount = rows.filter((row) => !row.disabled).length
   // Distros arrive after the list opens, so focus waits for the first enabled one to render.
   React.useEffect(() => {
-    if (open && focusOnOpen && !loading && enabledCount > 0) {
-      focusFirstSubmenuOption(listRef.current)
+    if (!open || !focusOnOpen || loading || enabledCount === 0) {
+      return
     }
+    // The portaled list can mount a frame after the open state; retry briefly until it is there.
+    let frame = 0
+    let tries = 0
+    const attempt = (): void => {
+      if (!focusFirstSubmenuOption(listRef.current) && tries++ < 10) {
+        frame = requestAnimationFrame(attempt)
+      }
+    }
+    attempt()
+    return () => cancelAnimationFrame(frame)
   }, [open, focusOnOpen, loading, enabledCount])
   const back = (): void => {
     onOpenChange(false)
