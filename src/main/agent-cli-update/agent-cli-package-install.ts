@@ -86,7 +86,10 @@ function upgradeCommand(install: AgentCliPackageInstall): string {
       return `brew upgrade ${install.cask ? '--cask ' : ''}${install.name}`
     case 'winget':
       return `winget upgrade ${install.name}`
-    default:
+    case 'npm':
+    case 'pnpm':
+    case 'yarn':
+    case 'bun':
       return `${NODE_GLOBAL_UPGRADE[install.manager]} ${install.name}@latest`
   }
 }
@@ -97,7 +100,10 @@ function isAgentPackage(install: AgentCliPackageInstall, packages: AgentCliPacka
       return packages.homebrew?.includes(install.name) ?? false
     case 'winget':
       return packages.winget?.toLowerCase() === install.name.toLowerCase()
-    default:
+    case 'npm':
+    case 'pnpm':
+    case 'yarn':
+    case 'bun':
       return packages.nodeGlobal === install.name
   }
 }
