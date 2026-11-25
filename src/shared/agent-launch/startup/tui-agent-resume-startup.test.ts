@@ -27,3 +27,26 @@ it('resumes a slept Claude agent on the model it was launched with, once, beside
   expect(command.match(/--effort/g)).toHaveLength(1)
   expect(command).toMatch(/'?--resume'? '?conversation-1'?$/)
 })
+
+it('resumes a slept Claude agent on the model it last reported, replacing its launch model', () => {
+  const launched = buildAgentStartupPlan({
+    agent: 'claude',
+    prompt: 'Coordinate',
+    cmdOverrides: {},
+    platform: 'linux',
+    shell: 'posix',
+    sessionOptions: { model: 'claude-opus-5-5[1m]' }
+  })
+  const resumed = buildAgentResumeStartupPlan({
+    agent: 'claude',
+    providerSession: { key: 'session_id', id: 'conversation-1', model: 'claude-sonnet-5-5' },
+    cmdOverrides: {},
+    platform: 'linux',
+    shell: 'posix',
+    ...launched!.launchConfig
+  })
+  const command = resumed!.launchCommand
+  expect(command.match(/--model/g)).toHaveLength(1)
+  expect(command).toContain('claude-sonnet-5-5')
+  expect(command).not.toContain('opus')
+})

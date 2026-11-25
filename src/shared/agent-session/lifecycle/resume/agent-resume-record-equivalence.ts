@@ -65,6 +65,7 @@ export function recoveryRecordMatches(
     // Why: effort and permission mode are not session identity, but a stale value would resume wrong.
     existing.providerSession.effort === next.providerSession.effort &&
     existing.providerSession.permissionMode === next.providerSession.permissionMode &&
+    existing.providerSession.model === next.providerSession.model &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
   )
 }

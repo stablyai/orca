@@ -105,6 +105,8 @@ export function buildClaudeResumeLaunchCommand(
       }
     }
   }
+  // The session's observed model replaces the recorded launch model rather than racing it.
+  const replacesModel = resumeArgs.includes('--model')
   const cuts: { start: number; end: number }[] = []
   let terminatorStart: number | null = null
   for (let i = claudeIndex + 1; i < tokens.length; i += 1) {
@@ -114,7 +116,8 @@ export function buildClaudeResumeLaunchCommand(
       terminatorStart = spans[i].start
       break
     }
-    if (!isClaudeResumeSelector(token)) {
+    const isRecordedModel = replacesModel && (token === '--model' || token.startsWith('--model='))
+    if (!isClaudeResumeSelector(token) && !isRecordedModel) {
       continue
     }
     // Absorb preceding whitespace without touching the prior token's possibly escaped final space.
@@ -124,7 +127,11 @@ export function buildClaudeResumeLaunchCommand(
     }
     let end = spans[i].end
     const next = tokens[i + 1]
-    if ((token === '--resume' || token === '-r') && next !== undefined && !next.startsWith('-')) {
+    if (
+      (token === '--resume' || token === '-r' || token === '--model') &&
+      next !== undefined &&
+      !next.startsWith('-')
+    ) {
       // A stale session locator rides along with its selector.
       end = spans[i + 1].end
       i += 1
