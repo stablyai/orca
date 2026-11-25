@@ -151,6 +151,8 @@ async function resolve(request: Request, ctx: DirectorContext): Promise<Response
   } catch {
     return fail(503, 'assignment_temporarily_unavailable', RETRY_AFTER_S)
   }
+  // not_here (frozen mid-move or placed elsewhere) is no verdict on the credential; phones treat 401 as a refusal.
+  if (answer.outcome === 'not_here') { return fail(503, 'assignment_temporarily_unavailable', RETRY_AFTER_S) }
   if (answer.outcome !== 'verified') { return fail(401, 'invalid_credential') }
   return Response.json({
     v: 1,

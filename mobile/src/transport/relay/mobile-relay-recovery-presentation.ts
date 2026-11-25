@@ -1,6 +1,6 @@
 import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
-import { relayDialCandidates } from './mobile-relay-credential-rotation'
+import { relayDialCandidates } from './mobile-relay-credential-selection'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { ConnectionState } from '../connection/connection-state'
 
@@ -14,7 +14,7 @@ export function onActiveFailure(
     controller.needsRecovery(state) &&
     logical.getActivePath() === 'relay' &&
     bundle &&
-    controller.hasDialableCredential(...relayDialCandidates(bundle))
+    controller.hasDialableCredential(...relayDialCandidates(bundle, controller))
   ) {
     logical.setRecoveryPath('relay')
   }

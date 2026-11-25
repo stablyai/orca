@@ -114,13 +114,6 @@ export function pendingRelayCredentialLease(
   }
 }
 
-// Dial order: the pending install is tried only after the relay refuses current and grace.
-export function relayDialCandidates(
-  bundle: MobileRelayCredentialBundle
-): (MobileRelayCredentialBundle['current'] | null | undefined)[] {
-  return [bundle.current, bundle.grace, pendingRelayCredentialLease(bundle)]
-}
-
 export function applyResumeConfirmation(
   bundle: MobileRelayCredentialBundle,
   usedCredentialVersion: number,
