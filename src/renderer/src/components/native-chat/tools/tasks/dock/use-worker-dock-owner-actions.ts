@@ -10,11 +10,14 @@ import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { createNonSecureContextUuid } from '../../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { WorkerDockRowView } from './WorkerDockRow'
 import type { WorkerDockStopBlock } from './worker-dock-stop-check'
+import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 
 /** A strip failure and the retry of the request that failed; no retry when none applies. */
 export type WorkerDockFailure = { message: string; retry?: () => void }
 export type WorkerDockResultDialogState = {
   token: number
+  /** The host and party that produced the result; the card closes when the dock reads another. */
+  owner: string
   row: WorkerDockRowView
   opener: HTMLElement
   result: WorkerDockResult | null
@@ -37,7 +40,9 @@ export function useWorkerDockOwnerActions(
   const t = useTranslate()
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set())
   const [failure, setFailure] = useState<WorkerDockFailure | null>(null)
-  const [dialog, setDialog] = useState<WorkerDockResultDialogState | null>(null)
+  const [opened, setDialog] = useState<WorkerDockResultDialogState | null>(null)
+  const owner = `${getRuntimeTargetHostId(target)}\0${party ?? ''}`
+  const dialog = opened?.owner === owner ? opened : null
   // Each open owns one token; a read or Restore that settles after close or another open is dropped.
   const dialogToken = useRef(0)
   const updateDialog = useCallback(
@@ -55,7 +60,7 @@ export function useWorkerDockOwnerActions(
         return
       }
       const token = ++dialogToken.current
-      setDialog({ token, row, opener, result: null, error: null })
+      setDialog({ token, owner, row, opener, result: null, error: null })
       void callRuntimeRpc(target, 'orchestration.workerDockResult', {
         party,
         dispatch: row.dispatchId
@@ -72,7 +77,7 @@ export function useWorkerDockOwnerActions(
         (value) => updateDialog(token, { error: message(value) })
       )
     },
-    [party, target, workerOpen, updateDialog]
+    [owner, party, target, workerOpen, updateDialog]
   )
   const close = useCallback(() => {
     dialogToken.current++
