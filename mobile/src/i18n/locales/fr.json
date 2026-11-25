@@ -2099,7 +2099,6 @@
       "fileTitle": "Fichier",
       "loadingTerminal": "Chargement du terminal",
       "noTabs": "Aucun onglet dans cette session",
-      "retryLoadingTerminal": "Réessayer de charger le terminal",
       "terminalTakingLonger": "Le chargement du terminal prend plus de temps que prévu"
     },
     "agentChildRow": {
@@ -2892,14 +2891,9 @@
     "terminalLayoutSheet": {
       "title": "Disposition du terminal",
       "oneTerminal": "Un terminal",
-      "selected": "Sélectionné",
       "auto": "Automatique",
-      "autoHint": "Diviser selon l’espace disponible",
       "sideBySide": "Côte à côte",
-      "sideBySideHint": "Deux colonnes, même lorsque la barre latérale est ouverte",
-      "stacked": "Empilés",
-      "stackedHint": "Deux rangées quelle que soit l’orientation",
-      "selectedHint": "Sélectionné · {{hint}}"
+      "stacked": "Empilés"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Impossible d’enregistrer la disposition",
@@ -2923,8 +2917,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, actif",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, touchez pour activer",
-      "inputPane": "{{title}} · Saisie"
+      "tapToFocusPane": "{{title}}, touchez pour activer"
     },
     "structuredOpen": {
       "worktreeDeleted": "Le worktree a été supprimé.",
@@ -4153,7 +4146,6 @@
     },
     "webviewEngineErrorState": {
       "code": "code {{code}}",
-      "reload": "Recharger",
       "rendererCrashed": "le moteur de rendu a planté",
       "status": "statut {{statusCode}}",
       "title": "Échec du chargement du terminal"
@@ -4566,7 +4558,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

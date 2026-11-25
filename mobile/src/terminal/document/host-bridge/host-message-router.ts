@@ -6,7 +6,7 @@ import { emitKeyboardAvoidanceMetrics } from '../viewport/keyboard-avoidance-met
 import { emitModesIfChanged } from '../engine/mode-mirroring'
 import { reflow } from '../viewport/reflow'
 import { resumeTerminalDataReplyAuthority } from '../engine/query-reply'
-import { repositionOverlay } from '../selection/selection-overlay'
+import { applyChromeColors, repositionOverlay } from '../selection/selection-overlay'
 import { cancelSelect } from '../selection/selection-mode'
 import { resetEvictionCounter } from '../selection/selection-state-and-eviction'
 import { applyTerminalTheme } from '../engine/terminal-theme'
@@ -35,6 +35,7 @@ export type TerminalHostMessage = {
   data?: string
   onParsed?: () => void
   frame?: { width: number; height: number } | null
+  chrome?: unknown
 }
 
 function hostFrameOf(msg: TerminalHostMessage) {
@@ -147,6 +148,8 @@ export function handleMsg(scope: TerminalDocumentScope, msg: TerminalHostMessage
     }
   } else if (msg.type === 'set-theme') {
     applyTerminalTheme(scope, msg.terminalTheme)
+  } else if (msg.type === 'set-chrome') {
+    applyChromeColors(scope, msg.chrome)
   } else if (msg.type === 'set-host-settings') {
     applyTerminalHostSettings(scope, msg.scrollbackRows, msg.wordSeparator)
   } else if (msg.type === 'cancel-select') {

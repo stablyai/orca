@@ -2035,7 +2035,6 @@
       "fileTitle": "檔案",
       "loadingTerminal": "正在載入終端機",
       "noTabs": "此工作階段中沒有分頁",
-      "retryLoadingTerminal": "重試載入終端機",
       "terminalTakingLonger": "終端機載入時間超出預期"
     },
     "agentChildRow": {
@@ -2810,14 +2809,9 @@
     "terminalLayoutSheet": {
       "title": "終端機版面配置",
       "oneTerminal": "一個終端機",
-      "selected": "已選取",
       "auto": "自動",
-      "autoHint": "依可用空間分割",
       "sideBySide": "並排",
-      "sideBySideHint": "即使側邊欄開啟也顯示為兩欄",
-      "stacked": "上下排列",
-      "stackedHint": "任何螢幕方向皆顯示為兩列",
-      "selectedHint": "已選取 · {{hint}}"
+      "stacked": "上下排列"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "無法儲存版面配置",
@@ -2841,8 +2835,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}，已聚焦",
       "terminal": "終端機",
-      "tapToFocusPane": "{{title}}，點一下以聚焦",
-      "inputPane": "{{title}} · 輸入"
+      "tapToFocusPane": "{{title}}，點一下以聚焦"
     },
     "structuredOpen": {
       "worktreeDeleted": "工作樹已刪除。",
@@ -4044,7 +4037,6 @@
     },
     "webviewEngineErrorState": {
       "code": "錯誤碼 {{code}}",
-      "reload": "重新載入",
       "rendererCrashed": "算繪器已當機",
       "status": "狀態碼 {{statusCode}}",
       "title": "終端機載入失敗"
@@ -4454,7 +4446,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

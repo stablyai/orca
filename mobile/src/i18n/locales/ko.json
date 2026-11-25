@@ -2143,7 +2143,6 @@
       "fileTitle": "파일",
       "loadingTerminal": "터미널 로드 중",
       "noTabs": "이 세션에는 탭이 없습니다.",
-      "retryLoadingTerminal": "터미널 로드 재시도",
       "terminalTakingLonger": "터미널 준비가 예상보다 오래 걸리고 있습니다."
     },
     "agentChildRow": {
@@ -2918,14 +2917,9 @@
     "terminalLayoutSheet": {
       "title": "터미널 레이아웃",
       "oneTerminal": "터미널 하나",
-      "selected": "선택됨",
       "auto": "자동",
-      "autoHint": "사용 가능한 공간에 맞게 분할",
       "sideBySide": "나란히",
-      "sideBySideHint": "사이드바를 열어도 두 열로 표시",
-      "stacked": "위아래로",
-      "stackedHint": "화면 방향에 관계없이 두 행으로 표시",
-      "selectedHint": "선택됨 · {{hint}}"
+      "stacked": "위아래로"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "레이아웃을 저장할 수 없습니다",
@@ -2949,8 +2943,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, 포커스됨",
       "terminal": "터미널",
-      "tapToFocusPane": "{{title}}, 탭하여 포커스",
-      "inputPane": "{{title}} · 입력"
+      "tapToFocusPane": "{{title}}, 탭하여 포커스"
     },
     "structuredOpen": {
       "worktreeDeleted": "워크트리가 삭제되었습니다.",
@@ -4152,7 +4145,6 @@
     },
     "webviewEngineErrorState": {
       "code": "코드 {{code}}",
-      "reload": "새로고침",
       "rendererCrashed": "렌더러 비정상 종료",
       "status": "상태 {{statusCode}}",
       "title": "터미널 로드 실패"
@@ -4562,7 +4554,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",

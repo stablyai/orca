@@ -78,17 +78,26 @@ export function withReplacedTerminalHandles(
     : pair
 }
 
+const SPLIT_ROW_MIN_WIDTH = 600
+
+/** A window this narrow (a phone held upright) only splits into rows; columns of it are too narrow to read. */
+export function windowFitsSideBySide(windowWidth: number): boolean {
+  return windowWidth >= SPLIT_ROW_MIN_WIDTH
+}
+
 export function terminalPaneDirection(
   frame: TerminalFrame,
-  layout: TerminalSplitLayout = 'auto'
+  layout: TerminalSplitLayout = 'auto',
+  windowWidth = frame.width
 ): 'row' | 'column' {
+  // Side by side keeps columns beside an open sidebar, but not in a window too narrow to offer it.
   if (layout === 'side-by-side') {
-    return 'row'
+    return windowFitsSideBySide(windowWidth) ? 'row' : 'column'
   }
   if (layout === 'stacked') {
     return 'column'
   }
-  return frame.width >= 600 && frame.width > frame.height ? 'row' : 'column'
+  return frame.width >= SPLIT_ROW_MIN_WIDTH && frame.width > frame.height ? 'row' : 'column'
 }
 
 export function keepsTerminalPaneVisible(handle: string, visible: readonly string[] = []): boolean {

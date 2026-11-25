@@ -2037,7 +2037,6 @@
       "fileTitle": "ファイル",
       "loadingTerminal": "ターミナルを読み込み中…",
       "noTabs": "このセッションにはタブがありません。",
-      "retryLoadingTerminal": "ターミナルの読み込みを再試行",
       "terminalTakingLonger": "ターミナルの読み込みに予想以上の時間がかかっています。"
     },
     "agentChildRow": {
@@ -2812,14 +2811,9 @@
     "terminalLayoutSheet": {
       "title": "ターミナルのレイアウト",
       "oneTerminal": "ターミナル1つ",
-      "selected": "選択中",
       "auto": "自動",
-      "autoHint": "利用可能なスペースに合わせて分割",
       "sideBySide": "左右に並べる",
-      "sideBySideHint": "サイドバーを開いていても2列で表示",
-      "stacked": "上下に並べる",
-      "stackedHint": "画面の向きに関係なく2行で表示",
-      "selectedHint": "選択中 · {{hint}}"
+      "stacked": "上下に並べる"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "レイアウトを保存できませんでした",
@@ -2843,8 +2837,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}、フォーカス中",
       "terminal": "ターミナル",
-      "tapToFocusPane": "{{title}}、タップしてフォーカス",
-      "inputPane": "{{title}} · 入力"
+      "tapToFocusPane": "{{title}}、タップしてフォーカス"
     },
     "structuredOpen": {
       "worktreeDeleted": "ワークツリーは削除されました。",
@@ -4047,7 +4040,6 @@
     },
     "webviewEngineErrorState": {
       "code": "コード {{code}}",
-      "reload": "再読み込み",
       "rendererCrashed": "レンダラーがクラッシュしました",
       "status": "ステータス {{statusCode}}",
       "title": "ターミナルの読み込みに失敗しました"
@@ -4541,7 +4533,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",

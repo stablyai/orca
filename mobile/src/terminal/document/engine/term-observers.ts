@@ -1,6 +1,6 @@
 import { afterWritesDrained, disposeTermObservers } from './write-queue'
 import { paintBottomRowBackdrop } from '../viewport/bottom-row-backdrop'
-import { updateScrollIndicator } from '../viewport/viewport-transform'
+import { reportScrolledUp, updateScrollIndicator } from '../viewport/viewport-transform'
 import type { TerminalDocumentScope } from '../document-scope'
 import { logFeedAndEvict } from '../selection/selection-state-and-eviction'
 import { emitKeyboardAvoidanceMetrics } from '../viewport/keyboard-avoidance-metrics'
@@ -33,6 +33,8 @@ export function attachTermObservers(scope: TerminalDocumentScope) {
       scope.termObserverDisposables.push(
         scope.term.onWriteParsed(function () {
           emitModesIfChanged(scope)
+          // Mouse modes decide whether scrollback is the reader's, and output can switch them without a scroll.
+          reportScrolledUp(scope)
           emitKeyboardAvoidanceMetrics(scope)
           paintBottomRowBackdrop(scope)
         })

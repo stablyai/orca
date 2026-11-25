@@ -2443,7 +2443,6 @@
       "fileTitle": "Arquivo",
       "loadingTerminal": "Carregando terminal",
       "noTabs": "Nenhuma aba nesta sessão",
-      "retryLoadingTerminal": "Tentar carregar o terminal novamente",
       "terminalTakingLonger": "O terminal está demorando mais que o esperado"
     },
     "agentChildRow": {
@@ -3256,14 +3255,9 @@
     "terminalLayoutSheet": {
       "title": "Layout do terminal",
       "oneTerminal": "Um terminal",
-      "selected": "Selecionado",
       "auto": "Automático",
-      "autoHint": "Dividir conforme o espaço disponível",
       "sideBySide": "Lado a lado",
-      "sideBySideHint": "Duas colunas, mesmo com a barra lateral aberta",
-      "stacked": "Empilhados",
-      "stackedHint": "Duas linhas em qualquer orientação",
-      "selectedHint": "Selecionado · {{hint}}"
+      "stacked": "Empilhados"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Não foi possível salvar o layout",
@@ -3287,8 +3281,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, em foco",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, toque para focar",
-      "inputPane": "{{title}} · Entrada"
+      "tapToFocusPane": "{{title}}, toque para focar"
     },
     "structuredOpen": {
       "worktreeDeleted": "A worktree foi excluída.",
@@ -4720,7 +4713,6 @@
     },
     "webviewEngineErrorState": {
       "code": "código {{code}}",
-      "reload": "Recarregar",
       "rendererCrashed": "o renderizador parou inesperadamente",
       "status": "status {{statusCode}}",
       "title": "Falha ao carregar o terminal"
@@ -5140,7 +5132,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

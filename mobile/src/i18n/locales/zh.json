@@ -2937,7 +2937,6 @@
       "fileTitle": "文件",
       "loadingTerminal": "正在加载终端",
       "noTabs": "此会话中没有标签页",
-      "retryLoadingTerminal": "重试加载终端",
       "terminalTakingLonger": "终端加载时间超出预期"
     },
     "agentChildRow": {
@@ -3744,14 +3743,9 @@
     "terminalLayoutSheet": {
       "title": "终端布局",
       "oneTerminal": "一个终端",
-      "selected": "已选择",
       "auto": "自动",
-      "autoHint": "根据可用空间分割",
       "sideBySide": "并排",
-      "sideBySideHint": "即使侧边栏打开也显示为两列",
-      "stacked": "上下排列",
-      "stackedHint": "任意屏幕方向下均显示为两行",
-      "selectedHint": "已选择 · {{hint}}"
+      "stacked": "上下排列"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "无法保存布局",
@@ -3775,8 +3769,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}，已聚焦",
       "terminal": "终端",
-      "tapToFocusPane": "{{title}}，点按以聚焦",
-      "inputPane": "{{title}} · 输入"
+      "tapToFocusPane": "{{title}}，点按以聚焦"
     },
     "structuredOpen": {
       "goneGeneric": "智能体的聊天已不在此主机上，因此无法在这里重新打开",
@@ -5292,7 +5285,6 @@
     },
     "webviewEngineErrorState": {
       "code": "错误码 {{code}}",
-      "reload": "重新加载",
       "rendererCrashed": "渲染进程已崩溃",
       "status": "状态码 {{statusCode}}",
       "title": "终端加载失败"

@@ -3242,7 +3242,6 @@
       "fileTitle": "Файл",
       "loadingTerminal": "Загрузка терминала",
       "noTabs": "В этой сессии нет вкладок",
-      "retryLoadingTerminal": "Повторить загрузку терминала",
       "terminalTakingLonger": "Загрузка терминала занимает больше времени, чем ожидалось"
     },
     "agentChildRow": {
@@ -4092,14 +4091,9 @@
     "terminalLayoutSheet": {
       "title": "Расположение терминалов",
       "oneTerminal": "Один терминал",
-      "selected": "Выбрано",
       "auto": "Авто",
-      "autoHint": "Разделить с учётом доступного места",
       "sideBySide": "Рядом",
-      "sideBySideHint": "Два столбца, даже при открытой боковой панели",
-      "stacked": "Друг над другом",
-      "stackedHint": "Две строки при любой ориентации",
-      "selectedHint": "Выбрано · {{hint}}"
+      "stacked": "Друг над другом"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Не удалось сохранить расположение",
@@ -4123,8 +4117,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, в фокусе",
       "terminal": "Терминал",
-      "tapToFocusPane": "{{title}}, нажмите для фокусировки",
-      "inputPane": "{{title}} · Ввод"
+      "tapToFocusPane": "{{title}}, нажмите для фокусировки"
     },
     "structuredOpen": {
       "worktreeDeleted": "Рабочее дерево удалено.",
@@ -5721,7 +5714,6 @@
     },
     "webviewEngineErrorState": {
       "code": "код {{code}}",
-      "reload": "Перезагрузить",
       "rendererCrashed": "сбой процесса отрисовки",
       "status": "статус {{statusCode}}",
       "title": "Не удалось загрузить терминал"

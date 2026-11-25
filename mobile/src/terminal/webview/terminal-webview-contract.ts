@@ -85,6 +85,8 @@ export type TerminalSelectionEvents = {
   // Persist snapped text-size presets so Settings and other panes follow terminal pinches.
   onTextScaleChange?: (scale: number) => void
   onCellBoxChange?: () => void
+  // The reader scrolled back from the newest output, or returned to it.
+  onScrolledUpChange?: (scrolledUp: boolean) => void
 }
 
 export type TerminalWebViewProps = {

@@ -3066,7 +3066,6 @@
       "fileTitle": "Dosya",
       "loadingTerminal": "Terminal yükleniyor",
       "noTabs": "Bu oturumda sekme yok",
-      "retryLoadingTerminal": "Terminali yüklemeyi yeniden dene",
       "terminalTakingLonger": "Terminalin yüklenmesi beklenenden uzun sürüyor"
     },
     "agentChildRow": {
@@ -3876,14 +3875,9 @@
     "terminalLayoutSheet": {
       "title": "Terminal düzeni",
       "oneTerminal": "Tek terminal",
-      "selected": "Seçili",
       "auto": "Otomatik",
-      "autoHint": "Kullanılabilir alana sığacak şekilde böl",
       "sideBySide": "Yan yana",
-      "sideBySideHint": "Kenar çubuğu açıkken bile iki sütun",
-      "stacked": "Alt alta",
-      "stackedHint": "Her yönlendirmede iki satır",
-      "selectedHint": "Seçili · {{hint}}"
+      "stacked": "Alt alta"
     },
     "terminalSplitLayout": {
       "saveFailedTitle": "Düzen kaydedilemedi",
@@ -3907,8 +3901,7 @@
     "terminalPaneView": {
       "focusedPane": "{{title}}, odakta",
       "terminal": "Terminal",
-      "tapToFocusPane": "{{title}}, odaklamak için dokunun",
-      "inputPane": "{{title}} · Girdi"
+      "tapToFocusPane": "{{title}}, odaklamak için dokunun"
     },
     "structuredOpen": {
       "worktreeDeleted": "Çalışma ağacı silindi.",
@@ -5429,7 +5422,6 @@
     },
     "webviewEngineErrorState": {
       "code": "kod {{code}}",
-      "reload": "Yeniden yükle",
       "rendererCrashed": "görüntüleyici çöktü",
       "status": "durum {{statusCode}}",
       "title": "Terminal yüklenemedi"
