@@ -22299,7 +22299,6 @@
         "you": "You"
       },
       "automationSaved": {
-        "webhookHint": "Point your service at this URL",
         "gettingUrl": "Getting the URL…",
         "editDraft": "Change “{{name}}” so that ",
         "resultsInEachRun": "In each run",
@@ -22972,17 +22971,6 @@
         "unread": "Workers couldn’t load",
         "unreadDetail": "Workers will show here once they load",
         "chipLabel": "{{label}}, latest: {{title}}"
-      },
-      "webhookSetup": {
-        "heading": "Set up a webhook",
-        "keyAndSecret": "Key and signing secret",
-        "copiedReceipt": "✓ URL copied",
-        "signingSecret": "Signing secret",
-        "addSecret": "Add…",
-        "noSecret": "None",
-        "sampleCall": "Sample call",
-        "sampleNote": "Starts a real run",
-        "send": "Send"
       }
     },
     "tab": {

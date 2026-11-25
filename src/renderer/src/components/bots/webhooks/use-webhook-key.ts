@@ -5,13 +5,9 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WebhookKey, WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
-import {
-  callWebhookHost,
-  webhookErrorCode,
-  webhookHostKey,
-  type WebhookHostTarget
-} from './webhook-host-client'
+import { callWebhookHost, webhookErrorCode } from './webhook-host-client'
 import { webhookErrorMessage } from './webhook-copy'
 import { copyWebhookSecret } from './webhook-secret-copy'
 
@@ -27,23 +23,18 @@ export type WebhookKeyControls = {
 }
 
 /** Everything a shown key belongs to; the key fields remount, dropping it, when this changes. */
-export function useWebhookKeyScope(target: WebhookHostTarget, summary: WebhookSummary): string {
+export function useWebhookKeyScope(target: RuntimeClientTarget, summary: WebhookSummary): string {
   const account = useAppStore((s) =>
     s.orcaProfileAuthStatus
       ? `${s.orcaProfileAuthStatus.activeProfileId}:${s.orcaProfileAuthStatus.state}`
       : 'signed-out'
   )
-  return [
-    webhookHostKey(target),
-    summary.hookId,
-    summary.state,
-    summary.keyGeneration,
-    account
-  ].join('|')
+  const host = target.kind === 'local' ? 'local' : `env:${target.environmentId}`
+  return [host, summary.hookId, summary.state, summary.keyGeneration, account].join('|')
 }
 
 /** The hook a copy reads its key from: its execution host, and the bot named in errors. */
-export type WebhookKeySource = { target: WebhookHostTarget; hookId: string; botName: string }
+export type WebhookKeySource = { target: RuntimeClientTarget; hookId: string; botName: string }
 
 /** The hook's key and key-bearing URL from its host; a failure toasts unless `wanted` says it's stale. */
 async function revealWebhookKey(

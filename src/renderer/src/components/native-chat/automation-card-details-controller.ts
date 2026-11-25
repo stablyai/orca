@@ -2,9 +2,6 @@ import type { Automation } from '../../../../shared/automations/automation-defin
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { AutomationReceiptRead } from '../../../../shared/automations/automation-receipt-read'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
-import type { WebhookKey } from '../../../../shared/rpc-contract/webhooks-params'
-import { automationWebhookTrigger } from '../../../../shared/automation-event-triggers'
-import { hookIdOfRule } from '../../../../shared/connector-webhook-contract'
 import {
   automationReceiptSourceCurrent,
   readAutomationReceipt,
@@ -14,7 +11,6 @@ import {
 import {
   deleteReceiptAutomation,
   readReceiptRuns,
-  readReceiptWebhookKey,
   runReceiptAutomation,
   updateReceiptAutomation
 } from './automation-receipt-actions'
@@ -43,7 +39,6 @@ type Transport = {
   ) => Promise<Automation>
   remove: (automation: Automation, owner: AutomationOwnerPrecondition) => Promise<boolean>
   run: (automation: Automation, owner: AutomationOwnerPrecondition) => Promise<void>
-  webhookKey?: (hookId: string) => Promise<WebhookKey>
 }
 
 export function receiptDetailsTransport(source: AutomationReceiptSource): Transport {
@@ -55,15 +50,16 @@ export function receiptDetailsTransport(source: AutomationReceiptSource): Transp
     update: (automation, owner, enabled) =>
       updateReceiptAutomation(source, automation, owner, enabled),
     remove: (automation, owner) => deleteReceiptAutomation(source, automation, owner),
-    run: (automation, owner) => runReceiptAutomation(source, automation, owner),
-    webhookKey: (hookId) => readReceiptWebhookKey(source, hookId)
+    run: (automation, owner) => runReceiptAutomation(source, automation, owner)
   }
 }
 
-/** How long after an acknowledged write the host's notice of that same write is still expected. */
-const WRITE_NOTICE_WINDOW_MS = 5_000
-
-/** One intentional disclosure's lifetime. Mutation acknowledgements fence every earlier read. */
+/**
+ * One intentional disclosure's lifetime. It reads current settings when opened (reopening makes a
+ * new controller) and once more after its own Pause, Resume, Remove or Run settles. Changes made
+ * elsewhere show on the next open: nothing re-reads in the background while it is open.
+ * Mutation acknowledgements fence every earlier read.
+ */
 export class AutomationCardDetailsController {
   private state: AutomationCardDetails = { status: 'loading' }
   private listeners = new Set<() => void>()
@@ -75,8 +71,6 @@ export class AutomationCardDetailsController {
   private mutating = false
   private acknowledgement: 'deleted' | undefined
   private unwatch: (() => void) | null = null
-  /** Until when the host's notice of this card's own acknowledged write may still arrive. */
-  private ownNoticeUntil: number | null = null
 
   constructor(private readonly transport: Transport | null) {}
 
@@ -167,36 +161,6 @@ export class AutomationCardDetailsController {
     }
   }
 
-  changed = (): void => {
-    this.mutationGeneration++
-    if (!this.mutating) {
-      void this.reload()
-    }
-  }
-
-  /**
-   * A host's automation notice. The first definition notice after this card's own write is that
-   * write's echo: its post-ack read already starts after the host published it, so a second read
-   * would only race the first. Any other notice is an independent change and reads again.
-   */
-  hostChanged = (reason: 'definition' | 'run' | undefined): void => {
-    const until = this.ownNoticeUntil
-    if (reason === 'definition' && until !== null && Date.now() <= until) {
-      this.ownNoticeUntil = null
-      if (this.mutating) {
-        this.mutationGeneration++
-      }
-      return
-    }
-    this.changed()
-  }
-
-  /** An echo already taken while the write was in flight is not expected again. */
-  private settleOwnNotice(acknowledged: boolean): void {
-    this.ownNoticeUntil =
-      acknowledged && this.ownNoticeUntil !== null ? Date.now() + WRITE_NOTICE_WINDOW_MS : null
-  }
-
   private ready(): Extract<AutomationCardDetails, { status: 'ready' }> {
     if (
       this.disposed ||
@@ -214,14 +178,11 @@ export class AutomationCardDetailsController {
     const { automation, owner } = this.ready()
     const binding = this.bindingGeneration
     this.mutating = true
-    this.ownNoticeUntil = Number.POSITIVE_INFINITY
-    let acknowledged = false
     try {
       await this.transport!.update(automation, owner, enabled)
       if (binding !== this.bindingGeneration || !this.transport!.current()) {
         return
       }
-      acknowledged = true
       this.mutationGeneration++
       this.readGeneration++
       this.publish({ status: 'loading' })
@@ -231,7 +192,7 @@ export class AutomationCardDetailsController {
         throw error
       }
     } finally {
-      this.settleMutation(binding, acknowledged)
+      this.settleMutation(binding)
     }
   }
 
@@ -239,8 +200,6 @@ export class AutomationCardDetailsController {
     const { automation, owner } = this.ready()
     const binding = this.bindingGeneration
     this.mutating = true
-    this.ownNoticeUntil = Number.POSITIVE_INFINITY
-    let acknowledged = false
     try {
       const removed = await this.transport!.remove(automation, owner)
       if (binding !== this.bindingGeneration || !this.transport!.current()) {
@@ -252,7 +211,6 @@ export class AutomationCardDetailsController {
         }
         throw new Error('Automation was not removed. Reopen the receipt to check its state.')
       }
-      acknowledged = true
       this.mutationGeneration++
       this.readGeneration++
       // Definition removal does not establish the outcome of an already admitted run.
@@ -263,13 +221,12 @@ export class AutomationCardDetailsController {
         throw error
       }
     } finally {
-      this.settleMutation(binding, acknowledged)
+      this.settleMutation(binding)
     }
   }
 
-  private settleMutation(binding: number, acknowledged: boolean): void {
+  private settleMutation(binding: number): void {
     this.mutating = false
-    this.settleOwnNotice(acknowledged)
     this.releaseHostWatch()
     if (!this.disposed && binding === this.bindingGeneration && this.transport!.current()) {
       void this.reload()
@@ -296,27 +253,5 @@ export class AutomationCardDetailsController {
     this.readGeneration++
     this.listeners.clear()
     this.releaseHostWatch()
-  }
-
-  copyWebhookUrl = async (copy: (url: string) => void): Promise<void> => {
-    const { automation } = this.ready()
-    const trigger = automationWebhookTrigger(automation)
-    const hookId = trigger && hookIdOfRule(trigger.id)
-    if (!hookId || !this.transport?.webhookKey) {
-      return
-    }
-    const binding = this.bindingGeneration
-    const mutation = this.mutationGeneration
-    const read = this.readGeneration
-    const key = await this.transport.webhookKey(hookId)
-    if (
-      !this.disposed &&
-      binding === this.bindingGeneration &&
-      mutation === this.mutationGeneration &&
-      read === this.readGeneration &&
-      this.transport.current()
-    ) {
-      copy(key.url)
-    }
   }
 }

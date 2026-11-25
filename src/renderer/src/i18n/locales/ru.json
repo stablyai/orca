@@ -21499,7 +21499,6 @@
         "chipLabel": "{{label}}, последний: {{title}}"
       },
       "automationSaved": {
-        "webhookHint": "Укажите этот URL в вашем сервисе",
         "gettingUrl": "Получение URL…",
         "editDraft": "Измените «{{name}}» так, чтобы ",
         "resultsInEachRun": "В каждом запуске",

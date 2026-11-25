@@ -3,15 +3,11 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
 import { notifyWebhooksChanged } from './use-webhook-data'
 import { webhookErrorMessage } from './webhook-copy'
-import {
-  callWebhookHost,
-  newWebhookOperationId,
-  webhookErrorCode,
-  type WebhookHostTarget
-} from './webhook-host-client'
+import { callWebhookHost, newWebhookOperationId, webhookErrorCode } from './webhook-host-client'
 
 export type WebhookActions = {
   busy: boolean
@@ -21,7 +17,7 @@ export type WebhookActions = {
 }
 
 export function useWebhookActions(
-  target: WebhookHostTarget,
+  target: RuntimeClientTarget,
   summary: WebhookSummary,
   botName: string
 ): WebhookActions {

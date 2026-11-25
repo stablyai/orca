@@ -24,6 +24,7 @@ import {
   WEBHOOK_ADAPTERS,
   type WebhookAdapterId
 } from '../../../../../shared/connector-webhook-contract'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
 import { notifyWebhooksChanged } from './use-webhook-data'
 import { webhookErrorMessage } from './webhook-copy'
@@ -32,12 +33,7 @@ import {
   webhookAdapterName,
   webhookAdapterTakesPastedSecret
 } from '../../../../../shared/bots/webhook-card-view'
-import {
-  callWebhookHost,
-  newWebhookOperationId,
-  webhookErrorCode,
-  type WebhookHostTarget
-} from './webhook-host-client'
+import { callWebhookHost, newWebhookOperationId, webhookErrorCode } from './webhook-host-client'
 import { copyWebhookSecret } from './webhook-secret-copy'
 
 /** Add signing secret / Change…: pick the sender, then paste its secret or have Orca make one. */
@@ -48,7 +44,7 @@ export function WebhookSecretDialog({
   open,
   onOpenChange
 }: {
-  target: WebhookHostTarget
+  target: RuntimeClientTarget
   summary: WebhookSummary
   botName: string
   open: boolean
@@ -77,7 +73,7 @@ function SecretForm({
   botName,
   onDone
 }: {
-  target: WebhookHostTarget
+  target: RuntimeClientTarget
   summary: WebhookSummary
   botName: string
   onDone: () => void

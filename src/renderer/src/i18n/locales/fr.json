@@ -20817,7 +20817,6 @@
         "chipLabel": "{{label}}, le plus récent : {{title}}"
       },
       "automationSaved": {
-        "webhookHint": "Faites pointer votre service vers cette URL",
         "gettingUrl": "Récupération de l’URL…",
         "editDraft": "Modifiez « {{name}} » pour que ",
         "resultsInEachRun": "Dans chaque exécution",

@@ -22385,7 +22385,6 @@
         "chipLabel": "{{label}}, mais recente: {{title}}"
       },
       "automationSaved": {
-        "webhookHint": "Aponte seu serviço para esta URL",
         "gettingUrl": "Obtendo a URL…",
         "editDraft": "Altere “{{name}}” para que ",
         "resultsInEachRun": "Em cada execução",

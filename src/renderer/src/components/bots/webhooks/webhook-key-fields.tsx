@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WebhookSummary } from '../../../../../shared/rpc-contract/webhooks-params'
-import type { WebhookHostTarget } from './webhook-host-client'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useWebhookKey } from './use-webhook-key'
 
 const MASK = '••••••••'
@@ -55,7 +55,7 @@ export function WebhookKeyFields({
   url = true,
   disabled
 }: {
-  target: WebhookHostTarget
+  target: RuntimeClientTarget
   summary: WebhookSummary
   botName: string
   canReveal: boolean

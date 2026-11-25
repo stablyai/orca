@@ -20999,7 +20999,6 @@
         "failed": "失敗"
       },
       "automationSaved": {
-        "webhookHint": "サービスの送信先をこの URL に設定してください",
         "gettingUrl": "URL を取得中…",
         "editDraft": "「{{name}}」を次のように変更してください: ",
         "resultsInEachRun": "各実行内",

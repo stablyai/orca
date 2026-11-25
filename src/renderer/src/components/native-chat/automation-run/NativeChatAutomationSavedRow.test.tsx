@@ -8,7 +8,6 @@ import {
   useNativeChatDisclosures
 } from '../messages/disclosure/native-chat-disclosure-store'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
-import type { VerifiedReceiptWebhook } from './use-verified-receipt-webhook'
 
 // A folded Open's reply is only honored while it is still the newest card intent, and a pane
 // hidden by <Activity> must not keep the Open disabled after a successful navigation.
@@ -17,7 +16,6 @@ type Harness = {
   replies: PromiseWithResolvers<'opened' | 'unavailable' | 'stale'>[]
   toasts: unknown[]
   owner: null | { worktreeId: string; target: { kind: 'local' } }
-  verified: VerifiedReceiptWebhook | null
   bots: Map<string, { id: string; name: string }[]>
   botReads: string[]
   botListeners: Set<() => void>
@@ -27,7 +25,6 @@ const harness = vi.hoisted((): Harness => ({
   replies: [],
   toasts: [],
   owner: null,
-  verified: null,
   bots: new Map(),
   botReads: [],
   botListeners: new Set(),
@@ -36,7 +33,7 @@ const harness = vi.hoisted((): Harness => ({
 vi.mock('../media/visuals/native-chat-visual-owner', () => ({
   useNativeChatVisualOwner: () => harness.owner
 }))
-// The card's caption reads the catalog as already loaded; nothing here may start a catalog refresh.
+// A receipt reads no bot catalog: nothing here may start a catalog read or refresh.
 vi.mock('@/lib/bot-catalog-snapshot', () => ({
   readHostBots: (hostId: string) => {
     harness.botReads.push(hostId)
@@ -53,30 +50,6 @@ vi.mock('@/components/bots/bot-workspace', () => ({
     harness.workspaceBotReads.push(worktreeId)
     return null
   }
-}))
-vi.mock('./use-verified-receipt-webhook', () => ({
-  useVerifiedReceiptWebhook: () => harness.verified
-}))
-vi.mock('./NativeChatWebhookSetupCard', () => ({
-  NativeChatWebhookSetupCard: ({
-    hookId,
-    botName,
-    target
-  }: {
-    hookId: string
-    botName: string
-    target: VerifiedReceiptWebhook['target']
-  }) => (
-    <div data-testid="webhook-card">
-      <span data-hook>{hookId}</span>
-      <span data-bot>{botName}</span>
-      <span data-target>
-        {target.kind === 'environment' && target.binding
-          ? `${target.environmentId}@${target.binding.pairingRevision}:${target.binding.runtimeId}`
-          : target.kind}
-      </span>
-    </div>
-  )
 }))
 vi.mock('../automation-receipt-client', () => ({
   openCardAutomation: () => {
@@ -124,7 +97,6 @@ afterEach(() => {
   harness.replies.length = 0
   harness.toasts.length = 0
   harness.owner = null
-  harness.verified = null
   harness.bots.clear()
   harness.botReads.length = 0
   harness.botListeners.clear()
@@ -260,50 +232,16 @@ function renderWebhookReceipt(): void {
   )
 }
 
-const boundTarget = {
-  kind: 'environment' as const,
-  environmentId: 'E',
-  binding: { pairingRevision: 7, runtimeId: 'W', current: () => true }
-}
-const card = (part: 'hook' | 'bot' | 'target'): string | null | undefined =>
-  container.querySelector(`[data-testid="webhook-card"] [data-${part}]`)?.textContent
-
-it('draws a host-verified webhook receipt as its setup card, bound to the confirming host', () => {
-  harness.verified = { hookId: 'wh_abcdefgh12345678', target: boundTarget, botId: 'bot-R' }
-  harness.bots.set('runtime:E', [{ id: 'bot-R', name: 'Receipt bot' }])
+it('draws a webhook receipt as the folded saved row, with no setup card or host read', () => {
   renderWebhookReceipt()
-  expect(card('hook')).toBe('wh_abcdefgh12345678')
-  // Every Setup control gets the host as confirmed: its pairing and runtime, not just its id.
-  expect(card('target')).toBe('E@7:W')
-  expect(container.querySelector('button[aria-expanded]')).toBeNull()
-})
-
-it('captions Setup with the receipt’s own bot on the confirming host, not the workspace’s', () => {
-  harness.verified = { hookId: 'wh_abcdefgh12345678', target: boundTarget, botId: 'bot-R' }
-  // The containing workspace's bot and a same-id bot on another host must not name it.
-  harness.bots.set('local', [{ id: 'bot-R', name: 'Local namesake' }])
-  harness.bots.set('runtime:E', [{ id: 'bot-W', name: 'Workspace bot' }])
-  renderWebhookReceipt()
-  expect(card('bot')).toBe('the bot')
-  // The catalog loads the receipt's bot later; its change notice renames the card.
-  harness.bots.set('runtime:E', [
-    { id: 'bot-W', name: 'Workspace bot' },
-    { id: 'bot-R', name: 'Receipt bot' }
-  ])
-  act(() => harness.botListeners.forEach((listener) => listener()))
-  expect(card('bot')).toBe('Receipt bot')
-  expect(new Set(harness.botReads)).toEqual(new Set(['runtime:E']))
-  // One change listener for the card; no shared catalog subscription or refresh.
-  expect(harness.botListeners.size).toBe(1)
-  expect(harness.workspaceBotReads).toEqual([])
-})
-
-it('keeps an unverified webhook receipt a saved row with no live setup controls', () => {
-  renderWebhookReceipt()
-  expect(container.querySelector('[data-testid="webhook-card"]')).toBeNull()
   expect(container.querySelector('button[aria-expanded]')).not.toBeNull()
+  expect(container.textContent).not.toContain('Copy URL')
+  expect(container.textContent).not.toContain('Set up')
+  // Folded: no receipt read, no webhook read, no bot catalog.
+  expect(harness.replies).toHaveLength(0)
   expect(harness.botReads).toEqual([])
   expect(harness.botListeners.size).toBe(0)
+  expect(harness.workspaceBotReads).toEqual([])
 })
 
 it('acquires no bot catalog for folded receipts, on first mount or with several rows', () => {

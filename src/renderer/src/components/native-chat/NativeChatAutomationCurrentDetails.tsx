@@ -22,11 +22,7 @@ import type { AutomationOwnerPrecondition } from '../../../../shared/automations
 import type { AutomationCardDetailsController } from './automation-card-details-controller'
 import { receiptInstant } from './automation-receipt-copy'
 import { NativeChatCardFact } from './NativeChatCardFact'
-import {
-  automationWebhookTrigger,
-  hasAutomationSchedule
-} from '../../../../shared/automation-event-triggers'
-import { copyWebhookSecret } from '@/components/bots/webhooks/webhook-secret-copy'
+import { hasAutomationSchedule } from '../../../../shared/automation-event-triggers'
 
 function whenLines(automation: Automation, effectiveZone?: string): string[] {
   const lines = botAutomationWhenParts(automation).map((part) =>
@@ -142,7 +138,6 @@ export function NativeChatAutomationCurrentDetails({
   const t = useTranslate()
   const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
-  const [copying, setCopying] = useState(false)
   const setEnabled = (enabled: boolean): void => {
     setSaving(true)
     void controller
@@ -230,25 +225,6 @@ export function NativeChatAutomationCurrentDetails({
         {onEditInChat ? (
           <Button type="button" variant="outline" size="xs" onClick={onEditInChat}>
             {t('automations.botEvents.editInChat', 'Edit in chat')}
-          </Button>
-        ) : null}
-        {automationWebhookTrigger(automation) ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            disabled={copying}
-            onClick={() => {
-              setCopying(true)
-              void controller
-                .copyWebhookUrl((url) =>
-                  copyWebhookSecret(url, t('bots.webhooks.copiedUrl', 'URL copied'))
-                )
-                .catch((error: unknown) => toast.error(botErrorMessage(error)))
-                .finally(() => setCopying(false))
-            }}
-          >
-            {t('bots.webhooks.copyUrl', 'Copy URL')}
           </Button>
         ) : null}
         {automation.once ? (

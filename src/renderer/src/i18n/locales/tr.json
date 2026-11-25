@@ -22800,22 +22800,10 @@
         "unreadDetail": "Çalışanlar yüklendiğinde burada görünecek",
         "chipLabel": "{{label}}, en son: {{title}}"
       },
-      "webhookSetup": {
-        "heading": "Webhook kur",
-        "keyAndSecret": "Anahtar ve imzalama sırrı",
-        "copiedReceipt": "✓ URL kopyalandı",
-        "signingSecret": "İmzalama sırrı",
-        "addSecret": "Ekle…",
-        "noSecret": "Yok",
-        "sampleCall": "Örnek çağrı",
-        "sampleNote": "Gerçek bir çalıştırma başlatır",
-        "send": "Gönder"
-      },
       "dock": {
         "label": "Mesaj kutusu ve istemler"
       },
       "automationSaved": {
-        "webhookHint": "Hizmetinizi bu URL'ye yönlendirin",
         "gettingUrl": "URL alınıyor…",
         "editDraft": "“{{name}}” otomasyonunu şu şekilde değiştir: ",
         "resultsInEachRun": "Her çalıştırmada",

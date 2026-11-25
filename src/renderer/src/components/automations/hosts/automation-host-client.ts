@@ -1,5 +1,4 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { acknowledgeAutomationDefinition } from '../events/automation-definition-acknowledgements'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
 import type { BotReadAuthority } from '@/components/bots/bot-read-authority'
@@ -206,7 +205,6 @@ export async function updateAutomationForTarget(
     { id: automation.id, updates: toRuntimeAutomationUpdateInput(prepared) },
     { timeoutMs: 15_000 }
   )
-  acknowledgeAutomationDefinition(target, automation.id)
   return result.automation
 }
 
@@ -216,7 +214,6 @@ export async function deleteAutomationForTarget(
 ): Promise<void> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
   await callRuntimeRpc(target, 'automation.delete', { id: automation.id }, { timeoutMs: 15_000 })
-  acknowledgeAutomationDefinition(target, automation.id)
 }
 
 /** Where a bot automation's delete may go: only the incarnation that listed it, never a recapture. */

@@ -1,11 +1,8 @@
-import { afterEach, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { makeAutomation, makeRun } from '@/components/automations/automations-page-fixtures'
 import type { AutomationReceiptRead } from '../../../../shared/automations/automation-receipt-read'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
-import type { WebhookKey } from '../../../../shared/rpc-contract/webhooks-params'
 import { AutomationCardDetailsController } from './automation-card-details-controller'
-import { deleteAutomationForTarget } from '@/components/automations/hosts/automation-host-client'
-import { subscribeAutomationDefinitionAcknowledgements } from '@/components/automations/events/automation-definition-acknowledgements'
 
 vi.mock('@/components/automations/hosts/automation-capability-probe', () => ({
   prepareAutomationLaunchSetup: () => {}
@@ -14,7 +11,6 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: () => ({ runtimeStatusByEnvironmentId: new Map() }) }
 }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: async () => ({}) }))
-afterEach(() => vi.useRealTimers())
 
 const automation = makeAutomation({
   id: 'a',
@@ -35,18 +31,13 @@ function rig() {
   let runs: () => Promise<AutomationRun[]> = async () => []
   let remove: () => Promise<boolean> = async () => true
   let current = true
-  let key: () => Promise<WebhookKey> = async () => ({
-    key: 'secret',
-    url: 'https://hooks.test/current'
-  })
   const controller = new AutomationCardDetailsController({
     current: () => current,
     read: () => read(),
     runs: () => runs(),
     remove: () => remove(),
     update: async (_automation, _owner, enabled) => ({ ...automation, enabled }),
-    run: async () => {},
-    webhookKey: () => key()
+    run: async () => {}
   })
   return {
     controller,
@@ -62,9 +53,6 @@ function rig() {
     retire: () => {
       current = false
       controller.invalidate()
-    },
-    key: (next: typeof key) => {
-      key = next
     }
   }
 }
@@ -94,25 +82,6 @@ it('keeps a successful definition when only history reports not-found', async ()
     automation: { id: 'a' },
     runs: null
   })
-})
-
-it('copies only under the binding and mutation generation that requested the webhook key', async () => {
-  const { controller, key, retire } = rig()
-  await controller.reload()
-  let clipboard = ''
-  await controller.copyWebhookUrl((url) => {
-    clipboard = url
-  })
-  expect(clipboard).toBe('https://hooks.test/current')
-  const old = deferred<WebhookKey>()
-  key(() => old.promise)
-  const copying = controller.copyWebhookUrl((url) => {
-    clipboard = url
-  })
-  retire()
-  old.resolve({ key: 'old-secret', url: 'https://hooks.test/obsolete' })
-  await copying
-  expect(clipboard).toBe('https://hooks.test/current')
 })
 
 it('accepts only the latest definition read within the same mutation generation', async () => {
@@ -182,41 +151,6 @@ it('rejects an in-flight acknowledgement after its owner binding is retired', as
   expect(controller.getSnapshot()).toEqual({ status: 'unverified' })
 })
 
-it('fences pre-ack reads through the shared delete caller, independent of a wall-clock rollback', async () => {
-  const { controller, read } = rig()
-  read(async () => ({ ...present, automation: { ...automation, enabled: false } }))
-  await controller.reload()
-  const old = deferred<AutomationReceiptRead>()
-  const reconcile = deferred<AutomationReceiptRead>()
-  read(() => old.promise)
-  const r0 = controller.reload()
-  read(() => reconcile.promise)
-  const unsubscribe = subscribeAutomationDefinitionAcknowledgements(({ automationId }) => {
-    if (automationId === 'a') {
-      controller.changed()
-    }
-  })
-  try {
-    vi.useFakeTimers()
-    vi.setSystemTime(1000)
-    await deleteAutomationForTarget({ id: 'a', runContext: null }, { kind: 'local' })
-    vi.setSystemTime(0)
-    old.resolve(present)
-    await r0
-    expect(controller.getSnapshot()).toMatchObject({
-      status: 'ready',
-      automation: { enabled: false }
-    })
-    const missing = settled(controller, 'missing')
-    reconcile.resolve({ status: 'missing' })
-    await missing
-    expect(controller.getSnapshot()).toEqual({ status: 'missing' })
-  } finally {
-    unsubscribe()
-    controller.dispose()
-  }
-})
-
 it('does not acknowledge removal when the host reports that no definition was removed', async () => {
   const { controller, remove } = rig()
   await controller.reload()
@@ -241,15 +175,13 @@ it.each([false, true])(
 const flush = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 it.each([
-  ['update', 'while hidden', 'none'],
-  ['remove', 'while hidden', 'none'],
-  ['update', 'after reconnect', 'none'],
-  ['remove', 'after reconnect', 'none'],
-  ['update', 'after reconnect', 'host notice first'],
-  ['remove', 'after reconnect', 'host notice first']
+  ['update', 'while hidden'],
+  ['remove', 'while hidden'],
+  ['update', 'after reconnect'],
+  ['remove', 'after reconnect']
 ] as const)(
-  'gives a retained pane one fresh post-ack read when its %s is acknowledged %s (%s)',
-  async (mutation, when, notice) => {
+  'gives a retained pane one fresh post-ack read when its %s is acknowledged %s',
+  async (mutation, when) => {
     let reads = 0
     let effects = 0
     let read: () => Promise<AutomationReceiptRead> = async () => present
@@ -297,9 +229,6 @@ it.each([
       const resumed = deferred<AutomationReceiptRead>()
       read = () => resumed.promise
       controller.start()
-      if (notice === 'host notice first') {
-        controller.hostChanged('definition')
-      }
       const reconcile = deferred<AutomationReceiptRead>()
       read = () => reconcile.promise
       const before = reads
@@ -400,69 +329,32 @@ it('keeps the host watch only while a hidden write is in flight, and drops it on
   expect(reads()).toBe(before)
 })
 
-it.each(['while its reconcile read is in flight', 'after it settles'] as const)(
-  'reads once for its own write when the host’s notice of it lands %s, and again for a later change',
-  async (when) => {
-    const { controller, updated, reads, read } = heldRig()
-    controller.start()
-    await settled(controller, 'ready')
-    const writing = controller.setEnabled(false)
-    const reconcile = deferred<AutomationReceiptRead>()
-    read(() => reconcile.promise)
-    updated.resolve({ ...automation, enabled: false })
-    await writing
-    expect(reads()).toBe(2)
-    const paused = { ...present, automation: { ...automation, enabled: false } }
-    if (when === 'after it settles') {
-      reconcile.resolve(paused)
-      await flush()
-    }
-    controller.hostChanged('definition')
-    if (when === 'while its reconcile read is in flight') {
-      reconcile.resolve(paused)
-      await flush()
-    }
-    // The echo neither reads again nor displaces the reconcile's observation.
-    expect(reads()).toBe(2)
-    expect(controller.getSnapshot()).toEqual({ ...paused, runs: [] })
-    read(async () => present)
-    controller.hostChanged('definition')
-    await flush()
-    expect(reads()).toBe(3)
-    expect(controller.getSnapshot()).toEqual({ ...present, runs: [] })
-  }
-)
-
-it.each([
-  ['a run notice', 'run', 0],
-  ['a definition notice past the window', 'definition', 5_001]
-] as const)('still reads for %s after its own write', async (_case, reason, later) => {
+it('reads on open and once after its own Pause, and never in the background while open', async () => {
   const { controller, updated, reads } = heldRig()
   controller.start()
   await settled(controller, 'ready')
+  expect(reads()).toBe(1)
   const writing = controller.setEnabled(false)
-  updated.resolve({ ...automation, enabled: false })
-  await writing
-  await flush()
-  const now = Date.now()
-  vi.spyOn(Date, 'now').mockReturnValue(now + later)
-  controller.hostChanged(reason)
-  await flush()
-  vi.restoreAllMocks()
-  expect(reads()).toBe(3)
-})
-
-it('takes a notice that lands before its own reply as the echo, so the next one reads', async () => {
-  const { controller, updated, reads } = heldRig()
-  controller.start()
-  await settled(controller, 'ready')
-  const writing = controller.setEnabled(false)
-  controller.hostChanged('definition')
   updated.resolve({ ...automation, enabled: false })
   await writing
   await flush()
   expect(reads()).toBe(2)
-  controller.hostChanged('definition')
-  await flush()
-  expect(reads()).toBe(3)
+  // Nothing else re-reads: a change made elsewhere shows the next time the card opens.
+  await new Promise<void>((resolve) => setTimeout(resolve, 20))
+  expect(reads()).toBe(2)
+})
+
+it('re-reads current settings when the card is opened again', async () => {
+  const first = heldRig()
+  first.controller.start()
+  await settled(first.controller, 'ready')
+  first.controller.dispose()
+  // Closing unmounts Details; opening again makes a new controller, which reads what is current now.
+  const reopened = heldRig()
+  const paused = { ...present, automation: { ...automation, enabled: false } }
+  reopened.read(async () => paused)
+  reopened.controller.start()
+  await settled(reopened.controller, 'ready')
+  expect(reopened.reads()).toBe(1)
+  expect(reopened.controller.getSnapshot()).toEqual({ ...paused, runs: [] })
 })

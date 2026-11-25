@@ -33,86 +33,23 @@ type WebhookMethods = {
 
 export type WebhookMethod = keyof WebhookMethods
 
-/** The one host incarnation a caller confirmed: its pairing and runtime, and whether both still hold. */
-export type WebhookHostBinding = {
-  pairingRevision: number
-  runtimeId: string
-  current: () => boolean
-}
-
-/** A hook's host. With `binding`, every call goes only to that incarnation and a reply that lands
- *  after it changed is refused, so controls confirmed against one host never act on another. */
-export type WebhookHostTarget =
-  | { kind: 'local' }
-  | { kind: 'environment'; environmentId: string; binding?: WebhookHostBinding }
-
 type Transport = <M extends WebhookMethod>(
   target: RuntimeClientTarget,
   method: M,
-  params: WebhookMethods[M][0],
-  binding?: Pick<WebhookHostBinding, 'pairingRevision' | 'runtimeId'>
+  params: WebhookMethods[M][0]
 ) => Promise<WebhookMethods[M][1]>
 
-const runtimeTransport: Transport = (target, method, params, binding) =>
-  callRuntimeRpc(
-    target,
-    method,
-    params,
-    binding
-      ? {
-          expectedEnvironmentPairingRevision: binding.pairingRevision,
-          expectedEnvironmentRuntimeId: binding.runtimeId
-        }
-      : {}
-  )
+const runtimeTransport: Transport = (target, method, params) =>
+  callRuntimeRpc(target, method, params)
 
 let transport: Transport = runtimeTransport
 
-/** The bound host changed before or while a call was in flight; the reply, if any, is not used. */
-export class WebhookHostChangedError extends Error {
-  constructor() {
-    super('The chat’s host changed. Reopen the chat to set up this webhook.')
-    this.name = 'WebhookHostChangedError'
-  }
-}
-
-export async function callWebhookHost<M extends WebhookMethod>(
-  target: WebhookHostTarget,
+export function callWebhookHost<M extends WebhookMethod>(
+  target: RuntimeClientTarget,
   method: M,
   params: WebhookMethods[M][0]
 ): Promise<WebhookMethods[M][1]> {
-  if (target.kind === 'local' || !target.binding) {
-    return await transport(hostOnly(target), method, params)
-  }
-  const { binding } = target
-  if (!binding.current()) {
-    throw new WebhookHostChangedError()
-  }
-  const result = await transport(hostOnly(target), method, params, {
-    pairingRevision: binding.pairingRevision,
-    runtimeId: binding.runtimeId
-  })
-  if (!binding.current()) {
-    throw new WebhookHostChangedError()
-  }
-  return result
-}
-
-function hostOnly(target: WebhookHostTarget): RuntimeClientTarget {
-  return target.kind === 'local'
-    ? target
-    : { kind: 'environment', environmentId: target.environmentId }
-}
-
-/** A cache key for the host: a bound target's reads are its own incarnation's, never shared. */
-export function webhookHostKey(target: WebhookHostTarget): string {
-  if (target.kind === 'local') {
-    return 'local'
-  }
-  const { binding } = target
-  return binding
-    ? `env:${target.environmentId}@${binding.pairingRevision}:${binding.runtimeId}`
-    : `env:${target.environmentId}`
+  return transport(target, method, params)
 }
 
 /** Tests and fixture screenshots answer in place of the host; null restores it. */

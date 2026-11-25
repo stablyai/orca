@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CalendarClock, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
@@ -7,10 +7,6 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { botErrorMessage } from '@/components/bots/bot-presentation'
-import { webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
-import type { WebhookHostTarget } from '@/components/bots/webhooks/webhook-host-client'
-import { readHostBots, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
-import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { hasAutomationSchedule } from '../../../../../shared/automation-event-triggers'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatCardAvatar, NativeChatCardFrame } from '../NativeChatCardFrame'
@@ -26,11 +22,6 @@ import { structuredAgentSessionTabId } from '../../../../../shared/agent-session
 import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-composer-focus-intent'
 import { automationReceiptSummary } from '../automation-receipt-copy'
 import { openCardAutomation } from '../automation-receipt-client'
-import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
-import {
-  useVerifiedReceiptWebhook,
-  type VerifiedReceiptWebhook
-} from './use-verified-receipt-webhook'
 
 const AUTOMATION_CARD_DISCLOSURE = 'automation-card:'
 type AutomationSaved = NonNullable<NativeChatMessage['automationSaved']>
@@ -52,34 +43,6 @@ function draftChangeInChat(owner: NativeChatVisualOwner, name: string): void {
       { name }
     )
   })
-}
-
-/** The receipt's own bot, by id on the confirming host, from the catalog as already read: a change
- *  listener only, never the all-host refresh a catalog subscriber starts. Unknown reads as "the bot". */
-function useReceiptBotName(target: WebhookHostTarget, botId: string | undefined): string {
-  const hostId = getRuntimeTargetHostId(target)
-  const name = useSyncExternalStore(subscribeToBotChanges, () =>
-    botId ? readHostBots(hostId).find((bot) => bot.id === botId)?.name : undefined
-  )
-  return name ?? webhookUnknownBotName()
-}
-
-function ReceiptWebhookSetupCard({
-  webhook,
-  name
-}: {
-  webhook: VerifiedReceiptWebhook
-  name: string
-}): React.JSX.Element {
-  const botName = useReceiptBotName(webhook.target, webhook.botId)
-  return (
-    <NativeChatWebhookSetupCard
-      target={webhook.target}
-      hookId={webhook.hookId}
-      botName={botName}
-      name={name}
-    />
-  )
 }
 
 /** A saved receipt. Only an intentional disclosure or Open acquires current data. */
@@ -116,7 +79,6 @@ export function NativeChatAutomationSavedRow({
     },
     []
   )
-  const webhook = useVerifiedReceiptWebhook(owner, disclosureId, saved, shortened)
   const Icon = hasAutomationSchedule(automation) ? CalendarClock : Zap
   const Chevron = open ? ChevronUp : ChevronDown
   const choose = (next: boolean): void => {
@@ -163,11 +125,6 @@ export function NativeChatAutomationSavedRow({
           setOpening(false)
         }
       })
-  }
-  if (webhook) {
-    // Its URL is what the user needs next, so a verified webhook automation is a card, not a
-    // folded row. Until verified, Details offers the receipt-bound Copy URL instead.
-    return <ReceiptWebhookSetupCard webhook={webhook} name={automation.name} />
   }
   return (
     <div

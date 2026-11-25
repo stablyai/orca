@@ -21870,19 +21870,7 @@
         "unreadDetail": "워커를 불러오면 여기에 표시됩니다",
         "chipLabel": "{{label}}, 최근: {{title}}"
       },
-      "webhookSetup": {
-        "heading": "웹훅 설정",
-        "keyAndSecret": "키와 서명 시크릿",
-        "copiedReceipt": "✓ URL 복사됨",
-        "signingSecret": "서명 시크릿",
-        "addSecret": "추가…",
-        "noSecret": "없음",
-        "sampleCall": "샘플 호출",
-        "sampleNote": "실제 실행이 시작됩니다",
-        "send": "보내기"
-      },
       "automationSaved": {
-        "webhookHint": "서비스가 이 URL을 호출하도록 설정하세요",
         "gettingUrl": "URL 가져오는 중…",
         "editDraft": "“{{name}}”을(를) 다음과 같이 바꿔 주세요: ",
         "resultsInEachRun": "실행할 때마다",

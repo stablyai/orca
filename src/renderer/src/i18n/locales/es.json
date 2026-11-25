@@ -20490,7 +20490,6 @@
         "chipLabel": "{{label}}, el más reciente: {{title}}"
       },
       "automationSaved": {
-        "webhookHint": "Dirige tu servicio a esta URL",
         "gettingUrl": "Obteniendo la URL…",
         "editDraft": "Cambia «{{name}}» para que ",
         "resultsInEachRun": "En cada ejecución",

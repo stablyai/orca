@@ -20491,7 +20491,6 @@
         "chipLabel": "{{label}}，最新：{{title}}"
       },
       "automationSaved": {
-        "webhookHint": "請將你的服務指向此 URL",
         "gettingUrl": "正在取得 URL…",
         "editDraft": "請修改「{{name}}」，讓它",
         "resultsInEachRun": "每次執行中",

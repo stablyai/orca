@@ -1,7 +1,6 @@
 /** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { acknowledgeAutomationDefinition } from '../events/automation-definition-acknowledgements'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   Automation,
@@ -235,7 +234,6 @@ async function updateFenced(
     expectedOwner,
     destination
   })
-  acknowledgeAutomationDefinition(runtimeTarget(authority), id)
   return result.automation
 }
 
@@ -246,7 +244,6 @@ async function deleteFenced(
 ): Promise<void> {
   await assertOwnerFencingSupported(authority)
   await callAuthority(authority, 'automation.delete', { id, expectedOwner })
-  acknowledgeAutomationDefinition(runtimeTarget(authority), id)
 }
 
 export async function updateAutomationForOwner(

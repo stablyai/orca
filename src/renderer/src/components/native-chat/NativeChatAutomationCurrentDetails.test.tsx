@@ -71,6 +71,16 @@ it.each([
   expect(resultsRow(automation)).toBe(expected)
 })
 
+it('offers no webhook setup or URL copy for a webhook automation', () => {
+  resultsRow(
+    makeAutomation({
+      on: [{ id: 'wh-wh_7Kx2pQ9mZbV4tL1r', source: 'webhook', event: 'call', rev: 1 }]
+    })
+  )
+  expect(container.textContent).not.toContain('Copy URL')
+  expect(container.textContent).toContain('Run now')
+})
+
 const flush = (): Promise<void> => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)))
 
 it.each([

@@ -20803,7 +20803,6 @@
         "chipLabel": "{{label}}, zuletzt: {{title}}"
       },
       "automationSaved": {
-        "webhookHint": "Diese URL in deinem Dienst als Ziel eintragen",
         "gettingUrl": "URL wird abgerufen…",
         "editDraft": "Ändere „{{name}}“ so, dass ",
         "resultsInEachRun": "In jeder Ausführung",

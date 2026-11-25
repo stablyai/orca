@@ -1,11 +1,7 @@
-import { app, powerMonitor } from 'electron'
+import { powerMonitor } from 'electron'
 import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
-import {
-  SYNTHETIC_WEBHOOKS_ENV,
-  syntheticWebhookRoutes
-} from '../../webhooks/webhook-synthetic-routes'
 import { registerGoogleSetupHandlers } from '../../ipc/google-setup'
 import { registerSlackHandOffHandlers } from '../../ipc/slack-hand-off'
 import { registerAvatarGenerationHandlers } from '../../avatar-generation/avatar-generation-ipc'
@@ -29,11 +25,7 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     store: state.store,
     userDataPath,
     kind: serve ? 'serve' : 'desktop',
-    isFenced: () => state.isQuitting,
-    // A development build may stand in for Orca Cloud's webhooks; a packaged app never does.
-    ...(!app.isPackaged && process.env[SYNTHETIC_WEBHOOKS_ENV] === '1'
-      ? { webhookRoutes: syntheticWebhookRoutes() }
-      : {})
+    isFenced: () => state.isQuitting
   })
   // `orca serve` runs agents too, with its own offscreen browser or a paired desktop's.
   installGoogleSetupHostWatch(runtime, {

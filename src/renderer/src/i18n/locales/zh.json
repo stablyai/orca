@@ -21723,7 +21723,6 @@
         "runsOn": "运行于：{{program}}"
       },
       "automationSaved": {
-        "webhookHint": "将你的服务指向此 URL",
         "gettingUrl": "正在获取 URL…",
         "editDraft": "修改“{{name}}”，让它 ",
         "resultsInEachRun": "在每次运行中",
