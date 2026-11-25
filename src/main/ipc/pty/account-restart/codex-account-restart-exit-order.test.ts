@@ -18,6 +18,7 @@ type HoistedState = {
   syntheticExit: boolean
   selectedAccount: string
   homeRoute: string
+  transcriptPath: string
   providerStartup: Promise<void> | undefined
 }
 
@@ -30,6 +31,7 @@ const h = vi.hoisted((): HoistedState => ({
   syntheticExit: false,
   selectedAccount: 'new',
   homeRoute: 'account-home',
+  transcriptPath: '/old/sessions/2026/11/01/rollout-thread-1.jsonl',
   providerStartup: undefined
 }))
 
@@ -88,7 +90,7 @@ vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
         providerSession: {
           key: 'session_id',
           id: 'thread-1',
-          transcriptPath: '/old/sessions/2026/11/01/rollout-thread-1.jsonl'
+          transcriptPath: h.transcriptPath
         }
       }
     ]
@@ -160,7 +162,8 @@ function setup() {
     rememberSyntheticKillExit: vi.fn(),
     sendPtyExitToRenderer,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
-    getSettings: () => ({}) as never,
+    getSettings: () =>
+      ({ codexManagedAccounts: [{ id: 'old', managedHomePath: '/old' }] }) as never,
     isRendererLive: () => h.rendererLive
   })
   const pane = nextPane()
@@ -208,6 +211,7 @@ describe('account restart exits arriving out of order', () => {
     h.syntheticExit = false
     h.selectedAccount = 'new'
     h.homeRoute = 'account-home'
+    h.transcriptPath = '/old/sessions/2026/11/01/rollout-thread-1.jsonl'
     h.providerStartup = undefined
   })
 
@@ -367,7 +371,8 @@ describe('account restart exits arriving out of order', () => {
       rememberSyntheticKillExit: vi.fn(),
       sendPtyExitToRenderer: nextWindowSend,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
-      getSettings: () => ({}) as never
+      getSettings: () =>
+        ({ codexManagedAccounts: [{ id: 'old', managedHomePath: '/old' }] }) as never
     })
     t.release({ outcome: 'ended', writersExited: true })
     await result
@@ -521,6 +526,17 @@ describe('account restart exits arriving out of order', () => {
   it('keeps a pane launched in an unowned shared home manual, with zero stops', async () => {
     const t = setup()
     h.homeRoute = 'shared-home'
+    await expect(t.request()).resolves.toMatchObject({
+      outcome: 'not-started',
+      reason: 'resume-unavailable'
+    })
+    expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('stops nothing when the child wrote its transcript outside the home main attributed', async () => {
+    // A CODEX_HOME a retained terminal service passed down, not the planned home, carried this launch.
+    const t = setup()
+    h.transcriptPath = '/custom/codex/sessions/2026/11/01/rollout-thread-1.jsonl'
     await expect(t.request()).resolves.toMatchObject({
       outcome: 'not-started',
       reason: 'resume-unavailable'

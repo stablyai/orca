@@ -12,6 +12,11 @@ import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { getSelectedCodexAccountIdForTarget } from '../../../codex-accounts/account-management/runtime-selection'
 import { getCodexSelectionEpoch } from '../../../codex-accounts/account-management/codex-selection-epoch'
 import { peekLoadedCodexPaneAccount } from '../../../codex/configuration/homes/codex-pane-account-registry'
+import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
+import {
+  attributedCodexHome,
+  transcriptIsUnderCodexHome
+} from './codex-account-restart-launch-route'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { getPtyIpc } from '../pty-host-bindings'
 import { resolvePersistedStablePaneOwner } from '../pane/stable-owner'
@@ -122,6 +127,11 @@ export function resolveCodexRestartOccupant(
   if (!session?.id || !transcriptPath) {
     // Without the verified thread and its transcript, the resume could not prove the same conversation.
     return 'no-session'
+  }
+  const codexHome = attributedCodexHome(account, settings, getSystemCodexHomePath())
+  if (!codexHome || !transcriptIsUnderCodexHome(transcriptPath, codexHome)) {
+    // The child's effective home is not the one main attributed: stop nothing, the user restarts it.
+    return 'resume-unavailable'
   }
   return {
     ptyId,
