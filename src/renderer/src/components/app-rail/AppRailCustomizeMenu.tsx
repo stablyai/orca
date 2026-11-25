@@ -63,7 +63,6 @@ export function AppRailCustomizeRows({
           key={row.id}
           role="menuitemcheckbox"
           aria-checked={row.shown}
-          className="h-7 gap-2 px-2 py-0"
           onSelect={(event) => {
             event.preventDefault()
             row.onToggle()
@@ -117,13 +116,7 @@ export function AppRailCustomizeMenu({
           {label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent
-        side="right"
-        align="start"
-        sideOffset={8}
-        {...heldInPlace}
-        className="p-1"
-      >
+      <DropdownMenuContent side="right" align="start" sideOffset={8} {...heldInPlace}>
         <AppRailCustomizeRows rows={rows} />
       </DropdownMenuContent>
     </DropdownMenu>

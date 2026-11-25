@@ -124,7 +124,7 @@ export function AppRailMoreMenu({
             <SlidersHorizontal className="size-3.5" aria-hidden />
             {customizeLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="p-1" {...customizeHeldInPlace}>
+          <DropdownMenuSubContent {...customizeHeldInPlace}>
             <AppRailCustomizeRows rows={customizeRows} />
           </DropdownMenuSubContent>
         </DropdownMenuSub>

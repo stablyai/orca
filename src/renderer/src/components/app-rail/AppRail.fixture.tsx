@@ -20,12 +20,17 @@ function RailFrame({ height }: { height: number }): React.JSX.Element {
 // The web bridge has no runtime here; echo writes back so toggles land in the store as they do in the app.
 function echoSettingsWrites(overrides: Partial<GlobalSettings> = {}): void {
   useAppStore.setState((state) =>
-    state.settings ? { settings: { ...state.settings, experimentalAppRail: true, ...overrides } } : {}
+    state.settings
+      ? { settings: { ...state.settings, experimentalAppRail: true, ...overrides } }
+      : {}
   )
-  window.api.settings.set = (async (updates: Partial<GlobalSettings>) => ({
-    ...useAppStore.getState().settings,
-    ...updates
-  })) as typeof window.api.settings.set
+  window.api.settings.set = async (updates) => {
+    const current = useAppStore.getState().settings
+    if (!current) {
+      throw new Error('The fixture store has no settings to update.')
+    }
+    return { ...current, ...updates }
+  }
 }
 
 function click(selector: string): void {
