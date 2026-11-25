@@ -38,24 +38,27 @@ it('an earlier pairing cannot absorb or retire a replacement click', async () =>
   await second
 })
 
-it('only deliberate focus confirms a pane reached by hover during a pending link', async () => {
-  const held = holdOpen()
-  let signal!: AbortSignal
-  const open = runBotThreadOpen('linked thread', (openSignal) => {
-    signal = openSignal
-    return held.promise
-  })
-  try {
-    noteBotThreadPaneActivation('terminal', 'left', 'user', false)
-    expect(signal.aborted).toBe(false)
+it.each([true, false])(
+  'only deliberate focus confirms a pane reached by hover while a link is pending (pane changes: %s)',
+  async (paneChanged) => {
+    const held = holdOpen()
+    let signal!: AbortSignal
+    const open = runBotThreadOpen('linked thread', (openSignal) => {
+      signal = openSignal
+      return held.promise
+    })
+    try {
+      noteBotThreadPaneActivation('terminal', 'left', 'user', false)
+      expect(signal.aborted).toBe(false)
 
-    noteBotThreadPaneActivation('terminal', 'right', 'hover', true)
-    expect(signal.aborted).toBe(false)
+      noteBotThreadPaneActivation('terminal', 'right', 'hover', paneChanged)
+      expect(signal.aborted).toBe(false)
 
-    noteBotThreadPaneActivation('terminal', 'right', 'user', false)
-    expect(signal.aborted).toBe(true)
-  } finally {
-    held.finish()
-    await open
+      noteBotThreadPaneActivation('terminal', 'right', 'user', false)
+      expect(signal.aborted).toBe(true)
+    } finally {
+      held.finish()
+      await open
+    }
   }
-})
+)

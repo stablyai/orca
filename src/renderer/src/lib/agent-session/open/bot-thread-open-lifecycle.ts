@@ -10,6 +10,7 @@ let pending:
       chat?: ThreadChat
       currentHost?: () => boolean
       hoveredPane?: { tabId: string; leafId: string }
+      focusingByHover?: boolean
     }
   | undefined
 
@@ -36,11 +37,29 @@ export function noteBotThreadPaneActivation(
     (changed || (hovered?.tabId === tabId && hovered.leafId === leafId))
   ) {
     cancelPendingBotThreadOpen()
-  } else if (interaction === 'hover' && changed) {
+  } else if (interaction === 'hover') {
     pending.hoveredPane = { tabId, leafId }
   } else if (changed && hovered?.tabId === tabId) {
     pending.hoveredPane = undefined
   }
+}
+
+export function withBotThreadPaneHover(focus: () => void): void {
+  const open = pending
+  if (!open || open.focusingByHover) {
+    focus()
+    return
+  }
+  open.focusingByHover = true
+  try {
+    focus()
+  } finally {
+    open.focusingByHover = false
+  }
+}
+
+export function botThreadPaneHoverIsFocusing(): boolean {
+  return pending?.focusingByHover === true
 }
 
 export function bindPendingBotThreadChat(signal: AbortSignal, chat: ThreadChat): void {

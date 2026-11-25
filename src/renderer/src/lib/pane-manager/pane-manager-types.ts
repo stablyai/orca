@@ -68,6 +68,7 @@ export type PaneManagerOptions = {
     interaction: PaneActivationOptions['interaction'],
     changed: boolean
   ) => void
+  withHoverFocus?: (focus: () => void) => void
   onLayoutChanged?: () => void
   // Temporarily bypass Electron webview pointers during pane drags or webviews steal the stream.
   onPaneDragActiveChange?: (active: boolean) => void

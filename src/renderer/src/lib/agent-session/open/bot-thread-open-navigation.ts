@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
+import { botThreadPaneHoverIsFocusing, cancelPendingBotThreadOpen } from './bot-thread-open-lifecycle'
 
 export type BotThreadNavigate = <T>(action: () => T) => T
 
@@ -30,14 +30,14 @@ function changedSelection(state: AppState, previous: AppState, groupTabId: Group
   const currentGroup = state.activeGroupIdByWorktree[workspace]
   const groups = state.groupsByWorktree[workspace]
   const previousGroups = previous.groupsByWorktree[workspace]
-  // Focusing an existing split changes its group selection without rebuilding its tabs.
+  // Hover bubbles through the same split focus handler as an explicit selection.
   if (
     previousGroup &&
     currentGroup &&
     previousGroup !== currentGroup &&
     groups === previousGroups
   ) {
-    return true
+    return !botThreadPaneHoverIsFocusing()
   }
   const previousId = groupTabId(previousGroups, previousGroup)
   const currentId = groupTabId(groups, currentGroup)

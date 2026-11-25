@@ -32,7 +32,11 @@ export function activateManagedPane(
   applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions())
 
   if (opts?.focus !== false) {
-    focusPanePreservingOverlays(pane)
+    if (opts?.interaction === 'hover' && host.options.withHoverFocus) {
+      host.options.withHoverFocus(() => focusPanePreservingOverlays(pane))
+    } else {
+      focusPanePreservingOverlays(pane)
+    }
   }
 
   if (changed) {
@@ -40,7 +44,10 @@ export function activateManagedPane(
   }
   if (
     host.options.onPaneActivation &&
-    (changed || opts?.interaction === 'user') &&
+    (changed ||
+      opts?.interaction === 'user' ||
+      (opts?.interaction === 'hover' &&
+        pane.container.contains(pane.container.ownerDocument.activeElement))) &&
     host.getActivePaneId() === pane.id
   ) {
     host.options.onPaneActivation(pane.leafId, opts?.interaction, changed)
