@@ -89,9 +89,11 @@ export function MobileSharedAgentPage() {
     open(sessionId)
   }
   // Their Home row before its first open has no chat yet: the host starts it, then it opens. Away, the
-  // host can't start one.
+  // host can't start one, so the row shows disabled.
+  const unmadeHome = (chat: BotChatTreeChat) => chat.origin === 'home' && !chat.chatId
+  const opens = (chat: BotChatTreeChat) => !unmadeHome(chat) || agent?.live === true
   const openChat = (chat: BotChatTreeChat) => {
-    if (chat.origin !== 'home' || chat.chatId) {
+    if (!unmadeHome(chat)) {
       open(chat.chatId, chat.title)
       return
     }
@@ -141,7 +143,7 @@ export function MobileSharedAgentPage() {
               chats={chats}
               loadMore={tree.kind === 'tree' ? tree.loadMore : () => {}}
               search={tree.kind === 'tree' ? tree.search : NO_SEARCH}
-              actions={{ openChat, openWorker: () => {} }}
+              actions={{ openChat, opens, openWorker: () => {} }}
               heading={t('bots.shared.yourChats', 'Your chats')}
               note={note}
             />

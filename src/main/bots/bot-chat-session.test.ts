@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../shared/bot-types'
-import { botHome, withBotHome, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import {
+  botHome,
+  botHomeOfSession,
+  withBotHome,
+  type BotHomeOf
+} from '../../shared/bots/bot-home-of'
+import { isBotHomeTab } from '../../shared/bots/bot-home-tab'
+import { botShareListedBots } from './team-share/bot-share-access'
 import type { BotAccountShare } from '../../shared/bots/bot-team-shares'
 import {
   createQueuedMessageTestRig,
@@ -137,6 +144,24 @@ describe('a Home Chat for each person', () => {
     expect(showTab).toHaveBeenCalledTimes(1)
   })
 
+  it('opens the very id the share projects as their Home, so their tab is the Home tab', async () => {
+    const { chats, bot } = await setup()
+    // The ids bots.chat.open hands the teammate's tab: on a first open, and after a reset.
+    const isTheirHomeTab = (opened: string) => {
+      const [projected] = botShareListedBots([bot()], {
+        botId: 'bot-1',
+        accountId: ALICE.accountId
+      })
+      expect(projected.chatSessionId).toBe(opened)
+      // The tab opened for it is keyed by that id: the pin, accent and banner read it so.
+      const tab = { contentType: 'agent-session' as const, entityId: opened }
+      expect(isBotHomeTab(tab, projected)).toBe(true)
+      expect(botHomeOfSession(projected, opened)).toBe('owner')
+    }
+    isTheirHomeTab(await chats.withChat('bot-1', ALICE, (sessionId) => sessionId))
+    isTheirHomeTab(await chats.reset('bot-1', ALICE))
+  })
+
   it('makes no chat for a removed teammate', async () => {
     const { chats, created, remove } = await setup()
     remove(ALICE.accountId)
@@ -147,11 +172,11 @@ describe('a Home Chat for each person', () => {
 })
 
 describe('whose Home New Home Chat resets', () => {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the choice reads only these fields.
   const bot = {
     id: 'bot-1',
     chatSessionId: 'owner-home',
     shares: [share(ALICE.accountId, 'Alice', 'alice-home'), share(BO.accountId, 'Bo', 'bo-home')]
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the choice reads only these fields.
   } as Bot
   // `alice-home-2` is her Home continued by /clear; its root is the pointer.
   const rootOf = (id: string) => (id === 'alice-home-2' ? 'alice-home' : id)

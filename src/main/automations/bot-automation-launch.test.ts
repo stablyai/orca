@@ -51,14 +51,15 @@ const ACTS_FOR: Record<string, BotRequestAsker[]> = {
   'alice-chat': [alice],
   'owner-chat': OWNER
 }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stamping reads only this record.
+const db = {
+  getBotConversationActsFor: (root: string) =>
+    ACTS_FOR[root] ? { actsFor: ACTS_FOR[root] } : undefined
+} as unknown as OrchestrationDb
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: stamping reads the agent list and these records.
 const runtime = {
   bots: { list: () => [bot] },
-  getOrchestrationDb: () =>
-    ({
-      getBotConversationActsFor: (root: string) =>
-        ACTS_FOR[root] ? { actsFor: ACTS_FOR[root] } : undefined
-    }) as unknown as OrchestrationDb,
+  getOrchestrationDb: () => db,
   listAutomationRuns: () => [],
   showAutomation: () => {
     throw new Error('gone')
@@ -154,6 +155,9 @@ function runMessage(run: AutomationRunMessage, itemId = 'm1'): AgentJournalRende
   }
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a run message's card reads only these.
+const FACTS = { id: 'a-1', name: 'Morning check' } as AutomationRunMessage['automation']
+
 const lookups = (conversationActsFor: readonly BotRequestAsker[]) => ({
   isBotRequest: () => false,
   botRequestActsFor: () => null,
@@ -196,7 +200,7 @@ describe('a teammate’s automation acts for the teammate', () => {
   it('keeps the teammate through a send-again, as the run message is read back', () => {
     const run: AutomationRunMessage = {
       runId: 'r-1',
-      automation: { id: 'a-1', name: 'Morning check' } as AutomationRunMessage['automation'],
+      automation: FACTS,
       trigger: 'manual',
       instructionsLength: 5,
       home: ALICE_ID
@@ -209,7 +213,7 @@ describe('a teammate’s automation acts for the teammate', () => {
   it('holds a turn two runs opened to both people, and reads a chat Alice’s run opened as hers', () => {
     const base = {
       runId: 'r-1',
-      automation: { id: 'a-1', name: 'Morning check' } as AutomationRunMessage['automation'],
+      automation: FACTS,
       trigger: 'manual' as const,
       instructionsLength: 5
     }
@@ -260,6 +264,7 @@ describe('a teammate’s automation results land in their Home', () => {
       },
       notify: () => {}
     } as unknown as BotRunDeliveryDependencies
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a chat result reads only these.
     const completion = await deliverBotRunResult(deps, {
       automation: {
         id: 'a-1',
