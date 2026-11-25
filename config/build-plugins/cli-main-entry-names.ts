@@ -34,5 +34,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'persistence/profile-state/legacy-json/profile-state-recovery',
   'startup/network-compatibility/http1-compatibility-marker',
   // The CLI's own app environment, so main-process hook removers can resolve profile paths.
-  'backend/node-service-environment'
+  'backend/node-service-environment',
+  // `orca mcp connect` gets the MCP SDK (a devDependency) bundled in; the packaged CLI can't resolve it.
+  'mcp-servers/agent-files/mcp-connect-bridge'
 ] as const

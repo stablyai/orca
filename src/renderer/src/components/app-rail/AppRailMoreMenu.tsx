@@ -17,6 +17,7 @@ import { APP_RAIL_ICON_SIZE, APP_RAIL_ICON_STROKE_WIDTH, AppRailButton } from '.
 import { appRailSlotCapacity } from './app-rail-overflow'
 import {
   AppRailCustomizeRows,
+  refocusTriggerIfFocusLost,
   useAppRailCustomizeLabel,
   useMenuHeldInPlace,
   type AppRailCustomizeRow
@@ -59,6 +60,7 @@ export function AppRailMoreMenu({
   // load) the page's own focus; yielding makes the page's focus win every time.
   const yieldCloseFocusRef = useRef(false)
   const label = t('appRail.more', 'More')
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const customizeLabel = useAppRailCustomizeLabel()
   const customizeTriggerRef = useRef<HTMLDivElement>(null)
   const [customizeOpen, setCustomizeOpen] = useState(false)
@@ -75,6 +77,7 @@ export function AppRailMoreMenu({
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
             <AppRailButton
+              ref={triggerRef}
               itemId="more"
               label={current ? `${label}, ${current}` : label}
               active={current !== undefined}
@@ -102,6 +105,8 @@ export function AppRailMoreMenu({
           if (yieldCloseFocusRef.current) {
             yieldCloseFocusRef.current = false
             event.preventDefault()
+          } else {
+            refocusTriggerIfFocusLost(triggerRef.current)
           }
         }}
       >
@@ -124,7 +129,7 @@ export function AppRailMoreMenu({
             <SlidersHorizontal className="size-3.5" aria-hidden />
             {customizeLabel}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent {...customizeHeldInPlace}>
+          <DropdownMenuSubContent scrollable {...customizeHeldInPlace}>
             <AppRailCustomizeRows rows={customizeRows} />
           </DropdownMenuSubContent>
         </DropdownMenuSub>

@@ -14,7 +14,7 @@ import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connectio
 import { isLaunchedByAnotherRuntime } from '../runtime/connection/runtime-source-fence'
 import { resolveCurrentWorktreeSelection } from '../workspace-selection/workspace-selector'
 import { readOrcaCliVersion } from '../cli-version'
-import { bridgeMcpServer } from './mcp-connect-bridge'
+import { bridgeMcpServer } from '../../main/mcp-servers/agent-files/mcp-connect-bridge'
 
 /**
  * The session's workspace: the Orca pane's own (WSL forwards it), else the one holding cwd; null
