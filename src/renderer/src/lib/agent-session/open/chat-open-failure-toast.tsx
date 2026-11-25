@@ -22,6 +22,8 @@ const replacedFailureCard = {
   unstyled: undefined
 }
 
+const replacedStartingNotice = { type: undefined, icon: undefined }
+
 export const chatOpenUnavailableText = {
   stillStarting: () =>
     translate(
@@ -88,7 +90,14 @@ export function showChatOpenUnavailable(context: ChatOpenUnavailable = {}, agent
           onResize={onResize}
         />
       ),
-      { ...toastOptions, duration: Number.POSITIVE_INFINITY, closeButton: false, unstyled: true }
+      {
+        ...toastOptions,
+        // The same merge would keep a still-starting notice's info icon beside the card.
+        ...replacedStartingNotice,
+        duration: Number.POSITIVE_INFINITY,
+        closeButton: false,
+        unstyled: true
+      }
     )
   }
   show()

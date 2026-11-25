@@ -72,4 +72,15 @@ describe('chat open failure toast', () => {
     settle()
     expect(screen.queryByText('This chat is still starting. Try again in a moment.')).toBeNull()
   })
+
+  it('replaces a still-starting notice without keeping its icon', () => {
+    act(() => showChatOpenUnavailable({ starting: true }))
+    act(() => vi.advanceTimersByTime(0))
+    act(() => showChatOpenUnavailable({ detail: DETAIL, retry: () => undefined }))
+    act(() => vi.advanceTimersByTime(0))
+    expect(screen.queryByText('This chat is still starting. Try again in a moment.')).toBeNull()
+    const card = screen.getByText("Couldn't open chat").closest('[data-sonner-toast]')
+    expect(card?.getAttribute('data-type')).not.toBe('info')
+    expect(card?.querySelector('[data-icon]')).toBeNull()
+  })
 })
