@@ -166,6 +166,10 @@ describe('relayed provider output', () => {
     // Kept from the first line still kept, never from below what the daemon already released.
     await output.settle(true)
     expect(acks).toEqual(['12 keep 11 held', '13 keep 13 held'])
+    // Handed on and taken, with nothing left to keep: the plain ack still reaches the daemon.
+    await output.release()
+    await output.settle()
+    expect(acks).toEqual(['12 keep 11 held', '13 keep 13 held', '13 keep undefined'])
   })
 
   it('keeps a cut the ack floor reported until an ack carrying it succeeds', async () => {
