@@ -61,7 +61,10 @@ vi.mock('./ai-vault/scanning/ai-vault-session-refresh', () => ({
     }
   }
 }))
-vi.mock('./ai-vault/scope/use-persisted-ai-vault-view-options', () => ({
+vi.mock('./ai-vault/scope/use-persisted-ai-vault-view-options', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('./ai-vault/scope/use-persisted-ai-vault-view-options')
+  >()),
   usePersistedAiVaultViewOptions: () => ({
     agents: [],
     sort: 'updated',
