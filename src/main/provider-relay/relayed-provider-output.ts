@@ -36,6 +36,8 @@ export type ProviderRelayAckFloor = {
   cutKeys?: (through?: number) => string[]
   /** Given once a way to ask for an ack, for a floor that drops without a new line. */
   wake?: (ack: () => void) => void
+  /** Every ack names what a replay would split (`cutKeys`), not only a cut's. */
+  namesEveryAck?: boolean
 }
 
 export type ProviderRelayAckFlags = { cut?: true; held?: true; cutKeys?: string[] }
@@ -274,10 +276,9 @@ export class RelayedProviderOutput {
     // The floor reads each line as it is handed on: acks only ever cover what was.
     if (line && seq !== null) {
       const lines = this.continuation?.lines(seq, line, this.options.ackFloor) ?? [line]
-      if (this.continuation?.done) {
-        this.continuation = null
-      }
-      line = lines.pop() ?? line
+      this.continuation = this.continuation?.done ? null : this.continuation
+      // None: a line the journal saved already, so only the cursor moves.
+      line = lines.pop() ?? null
       // Lines a continuation adds before this one go out ahead of it, under its seq.
       for (const added of lines) {
         this.options.ackFloor?.observe(seq, added)
@@ -285,7 +286,9 @@ export class RelayedProviderOutput {
         this.consumption.pushed(true, this.pushedSeq)
         this.options.stdout.push(`${added}\n`)
       }
-      this.options.ackFloor?.observe(seq, line)
+      if (line !== null) {
+        this.options.ackFloor?.observe(seq, line)
+      }
     }
     if (seq !== null && seq > this.pushedSeq) {
       this.pushedSeq = seq
@@ -363,15 +366,16 @@ export class RelayedProviderOutput {
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
         // Named on each try: a retry after a failed ack may carry a different cut.
-        const cutKeys = cut
-          ? boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined)
-          : null
+        const cutKeys =
+          cut || this.options.ackFloor?.namesEveryAck === true
+            ? boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined)
+            : null
         const flags = {
           ...(cut ? { cut: true as const } : {}),
           ...(heldFrom !== null ? { held: true as const } : {}),
           ...(cutKeys ? { cutKeys } : {})
         }
-        const reply = await (keepFrom === null && !cut
+        const reply = await (keepFrom === null && !cut && !cutKeys
           ? this.options.ack(target)
           : this.options.ack(target, keepFrom ?? undefined, flags))
         this.ackedSeq = Math.max(this.ackedSeq, target)

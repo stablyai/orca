@@ -61,8 +61,9 @@ export type ProviderRelayRequest =
    * `ackedThrough` is how far the daemon released, which passes `keepFrom` after a file-cap release.
    * `truncatedThrough` is how far the spool let kept lines go on its own (at its memory or file cap,
    * on an ack or an append), so the client records each such release as a cut. Older daemons omit it.
-   * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
-   * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
+   * `cutKeys` (opaque to the daemon) name the items the cut split, or, without `cut`, the items a
+   * replay from `keepFrom` would show without their start; each ack carrying them replaces them, and
+   * a later attach reports them with `savedThrough`. Older daemons keep them only with `cut`.
    */
   | { id: string; type: 'relayAck'; payload: ProviderRelayAckPayload }
   /** Several relays' acks in one request; `results` answers each in order, `{ error }` for a refused one. */
@@ -227,6 +228,8 @@ export type ProviderRelayAttachResult = {
   outstanding?: ProviderRelayOutstandingRequest[]
   /** The items the client said its last cut split, when that cut is the one `truncatedThrough` names. */
   cutKeys?: string[]
+  /** With `cutKeys`: the client's last ack. A named item's lines through it are saved already. */
+  savedThrough?: number
   /** The keep spec's `note`, from the app that spawned this agent. */
   launchNote?: string
 }
