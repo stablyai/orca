@@ -1,6 +1,7 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import { unlistedModelLabel } from '../../../agent-session/options/model-catalog/model-id-label'
 import { classifyAgentModels } from '../../../agent-session/options/model-catalog/legacy-agent-models'
+import { piModelDisplayLabel } from '../../../agent-session/options/catalog-providers/agent-session-option-catalog-pi'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -236,7 +237,7 @@ export function nativeChatSessionOptionDescriptors(args: {
   const { legacy, hidden } = classifyAgentModels(agent, args.legacyInventory ?? models)
   const modelChoices = models.map(({ id, label, description }) => ({
     value: id,
-    label,
+    label: agent === 'pi' ? piModelDisplayLabel(id, label) : label,
     ...(description ? { description } : {}),
     ...(legacy.has(id) ? { legacy: true as const } : {}),
     ...(hidden.has(id) && id !== model.currentId ? { hidden: true as const } : {})
