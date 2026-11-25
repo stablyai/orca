@@ -30,6 +30,8 @@ export type ClaudeKeptAgentRelay = {
   /** Background tasks open when the last app let go, and those that ended since: this app never
    *  saw them start, so each is restated and the replayed end settles one that ended. */
   taskIds: readonly string[]
+  /** False when no app handed the daemon its open work (a crash): the saved rows are the record. */
+  workCarried: boolean
   /** Claude's last reported mode as the daemon kept it, when it kept one. */
   confirmedMode: string | null | undefined
 }
@@ -304,6 +306,7 @@ export async function openKeptClaudeAgentConnection(
     kept: {
       releaseOutput: () => child.releaseOutput(),
       taskIds: claudeRelayAttachTaskIds(child.attachResult),
+      workCarried: child.attachResult?.openWork !== undefined,
       confirmedMode
     },
     exited: exited.promise,

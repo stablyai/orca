@@ -116,15 +116,20 @@ async function openStartingClaudeSession(
     history.covered = true
     const items = (await events?.journalHistory?.()?.reads.generation())?.items ?? []
     const keptTurn = keptClaudeTurn(items, session.providerSessionId)
+    const backgroundTasks = keptClaudeBackgroundTasks(items)
     session.translator?.adoptKept({
       turn: keptTurn?.kind === 'turn' ? keptTurn.turn : null,
       tools: keptClaudeToolCalls(items),
-      backgroundTasks: keptClaudeBackgroundTasks(items)
+      backgroundTasks
     })
     if (keptTurn?.kind === 'command') {
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
     }
-    restateKeptClaudeBackgroundTasks(session, kept.taskIds, keptTurn !== null)
+    // After a crash nothing told the daemon what was running, so the saved running rows stay live.
+    const taskIds = kept.workCarried
+      ? kept.taskIds
+      : [...new Set([...kept.taskIds, ...backgroundTasks.map((row) => row.block.taskId)])]
+    restateKeptClaudeBackgroundTasks(session, taskIds, keptTurn !== null)
     // Claude's own last word on its mode (Plan included) outranks what its launch reported.
     if (kept.confirmedMode !== undefined) {
       session.reportedOptions.reportedPermissionMode = kept.confirmedMode

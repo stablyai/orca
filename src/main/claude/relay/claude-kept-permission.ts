@@ -154,6 +154,10 @@ export async function sendKeptPickMadeLeavingPlan(
       latest === 'bypassPermissions' ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
     if (ask) {
       await ask
+      // A newer pick while Claude answered goes out next, not this one again.
+      if (session.launchIntent?.permissionMode !== latest) {
+        continue
+      }
     }
     mode = await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
   }
