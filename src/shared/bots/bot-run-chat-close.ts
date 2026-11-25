@@ -38,7 +38,9 @@ export const RUN_CHAT_QUIET_MS = 10 * 60_000
 const OPEN_RUN_STATUSES: readonly AutomationRunStatus[] = ['pending', 'dispatching', 'dispatched']
 
 /** History keeps only the newest runs per automation and drops only finished ones, so a run no
- *  longer in it ended long ago. */
+ *  longer in it ended long ago, or its automation was deleted, which drops unfinished runs too. A
+ *  chat's run is open only until its turn there ends, and a turn running or waiting keeps the chat
+ *  as `working`, so either way a missing run counts as ended. */
 export function runChatRunEnded(status: AutomationRunStatus | undefined): boolean {
   return status === undefined || !OPEN_RUN_STATUSES.includes(status)
 }

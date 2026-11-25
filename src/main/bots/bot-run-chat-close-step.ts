@@ -108,11 +108,15 @@ export function closeRunChatUnderLock(
 ): Promise<RunChatCloseOutcome> {
   return chats.underChatLock(botId, async (host, bot, chat) => {
     // The bot as it is now: the owner may have turned the setting off while this waited.
-    if (bot.closeEndedRuns !== true || sessionId === bot.chatSessionId || !(await ended())) {
+    if (bot.closeEndedRuns !== true || sessionId === bot.chatSessionId) {
       return 'kept'
     }
-    // Opened first, so a Home Chat that cannot open leaves the run chat open for the next look.
+    // Opened first, so a Home Chat that cannot open leaves the run chat open for the next look, and
+    // the recheck after it is the last read before the stop: an item write takes no bot lock.
     const home = await chat()
+    if (!(await ended())) {
+      return 'kept'
+    }
     // Recorded before the close, so a crash between the close and the moves still leaves it.
     steps.owed.add(botId, sessionId)
     const closed = await steps.close(sessionId)
@@ -132,7 +136,11 @@ export function closeRunChatUnderLock(
       return 'stopping'
     }
     if (!closed.stopped) {
-      forget(steps, sessionId)
+      // An earlier look's stop that still waits for the agent's start goes on, and its moves need
+      // the record.
+      if (!steps.stopping.has(sessionId)) {
+        forget(steps, sessionId)
+      }
       return closed.tabInFront ? 'tab-in-front' : 'failed'
     }
     await finishClose(steps, host, bot, sessionId, home)
@@ -141,7 +149,9 @@ export function closeRunChatUnderLock(
 }
 
 /** The bot's chats now, by the session running each: a record is finished only for a chat that is
- *  closed, and one whose chat is open again, or never closed, is dropped. */
+ *  closed, and one whose chat is open again, or never closed, is dropped. `closed` holds only chats
+ *  mail finds ended, which proves the stop; one refused as run elsewhere or unverifiable is in
+ *  neither, and its record waits. */
 export type RunChatSessionsNow = { closed: ReadonlySet<string>; open: ReadonlySet<string> }
 
 /** Each close a failed move left unfinished is finished again, under the lock. */

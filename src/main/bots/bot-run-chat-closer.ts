@@ -113,14 +113,15 @@ async function readRunChat(
     'unread-mail':
       isOrcaSessionId(sessionId) &&
       db.getUnreadMessages(formatOrcaSessionAddress(sessionId)).length > 0,
-    'open-item': await ownsOpenItem(context.runtime, context.bot.id, row.id),
     'automation-target': context.targeted.has(row.id) || context.targeted.has(sessionId),
     thread: Boolean(
       context.runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))?.key
     ),
     'live-run': coordinatesLiveRun(db, sessionId),
     'tab-in-front': runChatTabInFront(context.runtime, host, sessionId),
-    'person-spoke': await personSpoke(host, sessions.all)
+    'person-spoke': await personSpoke(host, sessions.all),
+    // Read last, nearest the stop: an item write takes no bot lock.
+    'open-item': await ownsOpenItem(context.runtime, context.bot.id, row.id)
   }
   return {
     chatId: row.id,
@@ -140,11 +141,13 @@ type RunChatsRead = {
   itemsCut: boolean
 }
 
-/** The bot's open chats, and the verdict on each a run opened (all, or just `only`). */
+/** The bot's open chats, and the verdict on each a run opened (all, or just `only`); `withItems`
+ *  lists the items each owns, which only the preview shows. */
 async function readRunChats(
   runtime: OrcaRuntimeService,
   bot: Bot,
-  only?: string
+  only?: string,
+  withItems = false
 ): Promise<RunChatsRead> {
   const context = await readContext(runtime, bot)
   const open = await readBotChats(runtime, bot, null)
@@ -155,17 +158,19 @@ async function readRunChats(
       !isBotGroupMemberSession(row.id) &&
       (only === undefined || row.id === only)
   )
-  // What the preview lists; whether a chat owns an open item is counted per chat.
-  const owned = await runtime.botItems.store().list({
-    botId: bot.id,
-    statuses: BOT_ITEM_STATUSES,
-    chatIds: rows.map((row) => row.id),
-    limit: 1000
-  })
+  // Whether a chat owns an open item is counted per chat, so a close never waits on this list.
+  const owned = withItems
+    ? await runtime.botItems.store().list({
+        botId: bot.id,
+        statuses: BOT_ITEM_STATUSES,
+        chatIds: rows.map((row) => row.id),
+        limit: 1000
+      })
+    : null
   const runChats: RunChatRead[] = []
   let unreadable = 0
   for (const row of rows) {
-    const items = owned.items
+    const items = (owned?.items ?? [])
       .filter((item) => item.chatId === row.id)
       .map((item) => ({ number: item.number, status: item.status }))
     // One unreadable chat stays open; the rest are still judged.
@@ -178,8 +183,10 @@ async function readRunChats(
       runChats.push(read)
     }
   }
-  const listed = Object.values(owned.counts).reduce((sum, count) => sum + (count ?? 0), 0)
-  return { open, runChats, unreadable, itemsCut: listed > owned.items.length }
+  const listed = owned
+    ? Object.values(owned.counts).reduce((sum, count) => sum + (count ?? 0), 0)
+    : 0
+  return { open, runChats, unreadable, itemsCut: owned !== null && listed > owned.items.length }
 }
 
 /** `orca bot run-chats`: what a check would close now; reads only. */
@@ -187,7 +194,7 @@ export async function previewRunChats(
   runtime: OrcaRuntimeService,
   bot: Bot
 ): Promise<BotRunChatsPreview> {
-  const { open, runChats, unreadable, itemsCut } = await readRunChats(runtime, bot)
+  const { open, runChats, unreadable, itemsCut } = await readRunChats(runtime, bot, undefined, true)
   const row = ({ chatId, title, lastActivityAt, items }: RunChatRead): BotRunChatPreviewRow => ({
     chatId,
     title,
@@ -221,9 +228,13 @@ async function settleClosedRunChats(
     return
   }
   const rows = (await readBotChats(runtime, bot, null, true)).filter((row) => !row.home)
-  const sessions = (closed: boolean) =>
-    new Set(rows.filter((row) => row.closed === closed).map((row) => liveSessionOf(row.id)))
-  await settle(bot.id, { closed: sessions(true), open: sessions(false) })
+  const sessions = (which: (row: BotChatRow) => boolean) =>
+    new Set(rows.filter(which).map((row) => liveSessionOf(row.id)))
+  // Only a chat mail finds ended was stopped; one refused as run elsewhere or unverifiable may run.
+  await settle(bot.id, {
+    closed: sessions((row) => row.reason === 'ended'),
+    open: sessions((row) => !row.closed)
+  })
 }
 
 export type RunChatCloseResult = {
