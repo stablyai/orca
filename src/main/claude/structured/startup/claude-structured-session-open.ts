@@ -1,4 +1,5 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
+import { claudePermissionPickedWhileStarting } from '../permissions/claude-permission-picks'
 import { usableJournalHistoryOrigin } from '../../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import type {
   StructuredAgentSessionProviderOpenInput,
@@ -179,7 +180,7 @@ async function openStartingClaudeSession(
   // auto-approves, ahead of the waiting requests the release hands on.
   const picked = request.permissionMode?.()
   if (kept && picked != null && picked !== 'full-access') {
-    session.liveFullAccess?.pickedWhileStarting(false)
+    claudePermissionPickedWhileStarting(session, false)
   }
   kept?.releaseOutput()
   return { ...result, link: session.link, newConversation: !resumesTranscript }

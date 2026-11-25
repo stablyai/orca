@@ -167,8 +167,8 @@ export type ClaudeSession = {
   savedPlan?: boolean
   /** A kept agent's mode for its next message: picked since it launched, or never written yet. */
   keptModeOwed?: string
-  /** Counts a kept agent's live picks, so an older pick's late answer records nothing. */
-  keptModeTurn?: number
+  /** The number of the chat's latest live pick (`claude-permission-picks`); none before one. */
+  permissionPick?: number
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
@@ -192,7 +192,7 @@ export type ClaudeSession = {
   autoUnsettled?: ClaudeAutoUnsettled
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
-  /** A kept agent launched without Full access: the policy a live Full access pick grants. */
+  /** This process's auto-approval, told each live pick. */
   liveFullAccess?: ClaudeLiveFullAccess
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean

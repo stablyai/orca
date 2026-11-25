@@ -2,6 +2,10 @@ import { setTimeout as delay } from 'node:timers/promises'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import { claudeBuildPermissionMode } from '../permissions/claude-plan-approval-mode'
 import {
+  claudePermissionPickHolds,
+  recordClaudeBuildMode
+} from '../permissions/claude-permission-picks'
+import {
   claudeBypassRefused,
   claudeInPlan,
   claudeOwesFullAccessFallback
@@ -127,27 +131,25 @@ export async function applyClaudeMessageOptions(
         await waitForPromiseWithSignal(asked, signal)
       }
       const refused = claudeBypassRefused(session)
-      const requested = claudeBuildPermissionMode(session)
       // A live pick during this write goes out behind it and records its own mode.
-      const turn = session.keptModeTurn
-      const current = (): boolean => session.keptModeTurn === turn
+      const holds = claudePermissionPickHolds(session)
       // A refused Full access chat already running its fallback needs no write.
       const written =
         !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
           ? null
           : await waitForPromiseWithSignal(
-              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused, current),
+              writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused, holds),
               signal
             )
-      const mode = leavingPlan
+      const sent = leavingPlan
         ? await waitForPromiseWithSignal(
-            sendKeptPickMadeLeavingPlan(session, requested, written, timeoutMs),
+            sendKeptPickMadeLeavingPlan(session, written, holds, timeoutMs),
             signal
           )
-        : written
+        : { mode: written, holds }
       session.appliedInputOptions.set('interactionMode', options.interactionMode)
-      if (mode !== null && (leavingPlan || current())) {
-        session.appliedInputOptions.set('buildPermissionMode', mode)
+      if (sent.mode !== null) {
+        recordClaudeBuildMode(session, sent.holds, sent.mode)
       }
     }
   } else {
@@ -165,7 +167,7 @@ function writeClaudeBuildMode(
   session: ClaudeSession,
   timeoutMs: number | undefined,
   tolerate: boolean,
-  current: () => boolean
+  holds: () => boolean
 ): Promise<PermissionMode | null> {
   return setClaudeAllowedPermissionMode(session, claudeBuildPermissionMode(session), {
     timeoutMs
@@ -173,9 +175,7 @@ function writeClaudeBuildMode(
     if (!tolerate && !(error instanceof ClaudePermissionModeUnsettled)) {
       throw error
     }
-    if (current()) {
-      session.appliedInputOptions.delete('buildPermissionMode')
-    }
+    recordClaudeBuildMode(session, holds, null)
     return null
   })
 }
@@ -213,14 +213,13 @@ export async function applyClaudeFullAccessFallback(
   if (!claudeOwesFullAccessFallback(session)) {
     return
   }
-  const turn = session.keptModeTurn
-  const current = (): boolean => session.keptModeTurn === turn
+  const holds = claudePermissionPickHolds(session)
   const mode = await waitForPromiseWithSignal(
-    writeClaudeBuildMode(session, timeoutMs, true, current),
+    writeClaudeBuildMode(session, timeoutMs, true, holds),
     signal
   )
-  if (mode !== null && current()) {
-    session.appliedInputOptions.set('buildPermissionMode', mode)
+  if (mode !== null) {
+    recordClaudeBuildMode(session, holds, mode)
   }
 }
 

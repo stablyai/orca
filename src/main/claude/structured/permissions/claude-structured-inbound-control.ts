@@ -10,13 +10,8 @@ import {
 } from './claude-full-access-policy'
 
 export type ClaudeLiveFullAccess = {
-  /** Watches stdout from here on; Claude's report of Full access grants auto-approval. */
-  picked: () => void
-  /** Another mode was picked: auto-approval stops now. */
-  unpicked: () => void
-  /** A pick while the agent reattaches is only recorded, so Full access picked back undoes the
-   *  withdrawal of an Ask picked meanwhile: Claude never left the mode it ran. */
-  pickedWhileStarting: (fullAccess: boolean) => void
+  /** The chat's latest pick (from its pick sequencer); Full access watches stdout from here on. */
+  picked: (fullAccess: boolean) => void
 }
 import {
   claudePermissionPresentation,
@@ -137,7 +132,6 @@ export function claudeLaunchPermissions(
     : null
   let kept = false
   let live: ClaudeFullAccessPolicy | null = null
-  let undoStartingPick: (() => void) | undefined
   const callbacks = buildClaudePermissionCallbacks({
     ...deps,
     fullAccessAt: (requestId) => (policy ?? live)?.allows(requestId) ?? false
@@ -162,24 +156,11 @@ export function claudeLaunchPermissions(
       onExit(error, exit)
     },
     liveFullAccess: {
-      picked: () => {
-        undoStartingPick = undefined
-        if (!policy && kept) {
+      picked: (fullAccess) => {
+        if (fullAccess && !policy && kept) {
           live ??= createClaudeFullAccessPolicy(launch.providerSessionId, true)
         }
-        ;(policy ?? live)?.arm()
-      },
-      unpicked: () => {
-        undoStartingPick = undefined
-        ;(policy ?? live)?.revoke()
-      },
-      pickedWhileStarting: (fullAccess) => {
-        if (!fullAccess) {
-          undoStartingPick ??= (policy ?? live)?.revoke()
-        } else {
-          undoStartingPick?.()
-          undoStartingPick = undefined
-        }
+        ;(policy ?? live)?.picked(fullAccess)
       }
     }
   }

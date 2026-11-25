@@ -2,6 +2,7 @@
 // me, and records what Claude accepted or refused for its process.
 
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
+import { claudePermissionPickHolds, recordClaudeBuildMode } from './claude-permission-picks'
 import type {
   ClaudeAutoUnsettled,
   ClaudeBypassRefusal,
@@ -260,12 +261,9 @@ export function observeClaudeRootInit(
   if (!claudeBypassRefused(session) || !claudeOwesFullAccessFallback(session)) {
     return
   }
+  const holds = claudePermissionPickHolds(session)
   setClaudeAllowedPermissionMode(session, 'bypassPermissions').then(
-    (mode) => {
-      session.appliedInputOptions.set('buildPermissionMode', mode)
-    },
-    () => {
-      session.appliedInputOptions.delete('buildPermissionMode')
-    }
+    (mode) => recordClaudeBuildMode(session, holds, mode),
+    () => recordClaudeBuildMode(session, holds, null)
   )
 }

@@ -6,53 +6,55 @@ const status = (mode: string): string =>
 const request = (id: string): string =>
   `${JSON.stringify({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } })}\n`
 
+const EVENTS = ['pick-ask', 'pick-full', 'report-ask', 'report-full', 'request'] as const
+type Event = (typeof EVENTS)[number]
+
+function* interleavings(length: number): Generator<Event[]> {
+  if (length === 0) {
+    yield []
+    return
+  }
+  for (const rest of interleavings(length - 1)) {
+    for (const event of EVENTS) {
+      yield [...rest, event]
+    }
+  }
+}
+
 describe('live Full access policy', () => {
-  it('auto-allows only from Claude reporting a picked Full access, until Ask is picked', () => {
-    const live = createClaudeFullAccessPolicy('s1', true)
-    live.observe(status('bypassPermissions'))
-    live.observe(request('unpicked'))
-    expect(live.allows('unpicked')).toBe(false)
-    live.arm()
-    live.observe(request('before-report'))
-    live.observe(status('bypassPermissions'))
-    live.observe(request('in-full-access'))
-    live.observe(status('default'))
-    live.observe(request('after-ask-report'))
-    expect(live.allows('before-report')).toBe(false)
-    expect(live.allows('in-full-access')).toBe(true)
-    expect(live.allows('after-ask-report')).toBe(false)
-    live.observe(status('bypassPermissions'))
-    live.observe(request('ask-picked'))
-    live.revoke()
-    expect(live.allows('ask-picked')).toBe(false)
-  })
-
-  it("revokes a Full access launch's grant at a live Ask pick until Full access is picked and reported", () => {
-    const launched = createClaudeFullAccessPolicy('s1')
-    launched.observe(status('bypassPermissions'))
-    launched.observe(request('launched'))
-    launched.revoke()
-    launched.observe(request('ask-picked'))
-    launched.observe(status('bypassPermissions'))
-    launched.observe(request('stale-report'))
-    launched.arm()
-    launched.observe(status('bypassPermissions'))
-    launched.observe(request('repicked'))
-    expect(launched.allows('launched')).toBe(false)
-    expect(launched.allows('ask-picked')).toBe(false)
-    expect(launched.allows('stale-report')).toBe(false)
-    expect(launched.allows('repicked')).toBe(true)
-  })
-
-  it('restores the grant when Full access is picked back before the Ask pick reached Claude', () => {
-    const launched = createClaudeFullAccessPolicy('s1')
-    launched.observe(status('bypassPermissions'))
-    const undo = launched.revoke()
-    launched.observe(request('while-ask'))
-    undo()
-    launched.observe(request('picked-back'))
-    expect(launched.allows('while-ask')).toBe(false)
-    expect(launched.allows('picked-back')).toBe(true)
+  it('auto-approves only where the latest pick is Full access and Claude confirmed it, in any interleaving', () => {
+    for (const live of [false, true]) {
+      for (const events of interleavings(6)) {
+        const policy = createClaudeFullAccessPolicy('s1', live)
+        // A Full access launch is that pick, and its process runs Full access until it reports;
+        // a live policy starts at a kept agent's pick, before which Claude's mode is unknown.
+        let pickedFull = !live
+        let claudeFull = !live
+        const stamped = new Map<string, boolean>()
+        events.forEach((event, index) => {
+          if (event === 'pick-ask' || event === 'pick-full') {
+            pickedFull = event === 'pick-full'
+            policy.picked(pickedFull)
+            if (!pickedFull) {
+              stamped.forEach((_, id) => stamped.set(id, false))
+            }
+          } else if (event === 'request') {
+            stamped.set(`r${index}`, pickedFull && claudeFull)
+            policy.observe(request(`r${index}`))
+          } else {
+            claudeFull = event === 'report-full'
+            policy.observe(status(claudeFull ? 'bypassPermissions' : 'default'))
+          }
+        })
+        policy.observe(request('after'))
+        stamped.set('after', pickedFull && claudeFull)
+        for (const [id, allowed] of stamped) {
+          expect(policy.allows(id), `${live ? 'live' : 'launch'} ${events.join(',')} ${id}`).toBe(
+            pickedFull && allowed
+          )
+        }
+      }
+    }
   })
 
   it("reads a reattached agent's waiting request under the mode Claude last confirmed", () => {

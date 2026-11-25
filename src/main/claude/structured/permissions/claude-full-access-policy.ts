@@ -14,11 +14,9 @@ export type ClaudeFullAccessPolicy = {
   mode: () => string | null | undefined
   /** An agent kept from before this app: its mode since its launch is unknown until it reports. */
   reattached: () => void
-  /** The user picked Full access live, so Claude's next report of it grants. */
-  arm: () => void
-  /** The user picked another mode live; nothing auto-approves until a new pick is reported.
-   *  Returns the undo for a pick taken back before anything reached Claude. */
-  revoke: () => () => void
+  /** The chat's latest permission pick, from its pick sequencer: only Full access lets Claude's
+   *  reports of it auto-approve, and another pick stops it at once, waiting requests included. */
+  picked: (fullAccess: boolean) => void
   close: () => void
   retained: () => { partialChars: number; requests: number }
 }
@@ -27,9 +25,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
-/** Granted by a Full access launch, or on a kept agent by Claude's report of the user's live Full
- *  access pick (`live`: watching from that pick); another live pick revokes it at once. Otherwise
- *  Claude's mode reports can suspend it, never create it.
+/** Auto-approves exactly where the chat's latest pick is Full access and Claude, in wire order,
+ *  runs Full access: a Full access launch is that pick, or a kept agent's live pick (`live`:
+ *  watching from that pick, so Claude's mode is unknown until it reports).
  *  The SDK answers permission requests straight from its reader while ordinary frames queue
  *  behind Orca's pausable consumer, and a stdout chunk is read ahead of the requests in it,
  *  so each request keeps the mode in effect at its own position in the stream. */
@@ -38,8 +36,7 @@ export function createClaudeFullAccessPolicy(
   live = false
 ): ClaudeFullAccessPolicy {
   const decoder = new StringDecoder('utf8')
-  let granted = !live
-  let armed = false
+  let picked = !live
   // Kept until the SDK hands the request to canUseTool or the process ends; a cancel still
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = new Map<string, boolean>()
@@ -62,7 +59,7 @@ export function createClaudeFullAccessPolicy(
     if (requestId && !modeAtRequest.has(requestId)) {
       modeAtRequest.set(
         requestId,
-        granted && (mode === undefined ? !reattached : mode === 'full-access')
+        picked && (mode === undefined ? !reattached : mode === 'full-access')
       )
     }
   }
@@ -102,9 +99,8 @@ export function createClaudeFullAccessPolicy(
     // Absent keeps the last report; plan, ask, dontAsk and unknown modes all suspend Full access.
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
-      mode = reported
       // In wire order, ahead of any request Claude sends in that mode.
-      granted ||= armed && reported === 'full-access'
+      mode = reported
     }
   }
 
@@ -127,26 +123,19 @@ export function createClaudeFullAccessPolicy(
       const atRequest = modeAtRequest.get(requestId)
       modeAtRequest.delete(requestId)
       // A request Orca never saw on the wire has no position, so it never inherits a later mode.
-      return granted && (atRequest ?? false)
+      return picked && (atRequest ?? false)
     },
     mode: () => mode,
     reattached: () => {
       reattached = true
     },
-    arm: () => {
-      armed = true
-    },
-    revoke: () => {
-      const before = { granted, armed }
-      granted = false
-      armed = false
-      // Requests already waiting were stamped under the grant the pick just took back.
-      for (const requestId of modeAtRequest.keys()) {
-        modeAtRequest.set(requestId, false)
-      }
-      return () => {
-        granted ||= before.granted
-        armed ||= before.armed
+    picked: (fullAccess) => {
+      picked = fullAccess
+      if (!fullAccess) {
+        // Requests already waiting were stamped under the pick just replaced.
+        for (const requestId of modeAtRequest.keys()) {
+          modeAtRequest.set(requestId, false)
+        }
       }
     },
     close: () => {

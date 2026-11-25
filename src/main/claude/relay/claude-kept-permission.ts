@@ -11,6 +11,12 @@ import {
   setClaudeAllowedPermissionMode
 } from '../structured/permissions/claude-permission-mode-ladder'
 import { keptClaudeAgentRelay } from './claude-kept-agent-connection'
+import {
+  claudePermissionPickedWhileStarting,
+  claudePermissionPickHolds,
+  pickClaudePermissionMode,
+  recordClaudeBuildMode
+} from '../structured/permissions/claude-permission-picks'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { ClaudeControlRequestError } from '../sdk-transport/claude-agent-sdk-control-requests'
 
@@ -61,19 +67,18 @@ async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefin
   }
 }
 
-/** Writes a Build mode. The pick is recorded before its write, so a message sent before Claude
- *  answers writes the same mode behind it; each write goes out at the pick, so Claude answers
- *  picks in order and the last one wins. A pick a newer one replaced records nothing after its
- *  answer; a failed switch leaves Ask owed to the next message. */
-async function applyBuildMode(
+/** A live pick, numbered by the chat's pick sequencer and recorded before its write, so a message
+ *  sent before Claude answers writes the same mode behind it; each write goes out at the pick, so
+ *  Claude answers picks in order and the last one wins. A pick a newer one replaced records
+ *  nothing after its answer; a failed switch leaves Ask owed to the next message. */
+async function applyPick(
   session: ClaudeSession,
   mode: PermissionMode,
-  timeoutMs: number | undefined,
-  current: () => boolean = () => true
+  timeoutMs: number | undefined
 ): Promise<void> {
-  // The chat now wants this mode from this process: messages, leaving Plan, a refused Full access
-  // and the next reattach all read it, not the mode the agent was launched in.
-  session.launchIntent = { ...session.launchIntent, permissionMode: mode }
+  // Messages, leaving Plan, a refused Full access and the next reattach all read the pick now.
+  pickClaudePermissionMode(session, mode)
+  const holds = claudePermissionPickHolds(session)
   session.appliedInputOptions.set('buildPermissionMode', mode)
   if (claudeInPlan(session) && !claudeLeavingPlanOnApproval(session)) {
     // Plan stays until the user leaves it; leaving it writes this mode. An approved plan's exit
@@ -85,38 +90,22 @@ async function applyBuildMode(
       await askKeptBypass(session, timeoutMs)
       return
     }
-    const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
-    if (current()) {
-      session.appliedInputOptions.set('buildPermissionMode', applied)
-    }
+    recordClaudeBuildMode(
+      session,
+      holds,
+      await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
+    )
   } catch (error) {
-    if (current() && mode === 'bypassPermissions') {
+    if (holds() && mode === 'bypassPermissions') {
       // Unknown or refused: the next message asks again (a refusal takes the fallback).
       session.appliedInputOptions.delete('buildPermissionMode')
-    } else if (current()) {
+    } else if (holds()) {
       // Never back to an older, looser mode: Ask until the next message has it written.
       session.appliedInputOptions.set('buildPermissionMode', 'default')
       session.keptModeOwed = 'default'
     }
     throw error
   }
-}
-
-/** A live pick: auto-approval follows it at once (Claude's report of Full access grants it), and
- *  its write goes out now, ahead of any later pick's. */
-function applyPick(
-  session: ClaudeSession,
-  mode: PermissionMode,
-  timeoutMs: number | undefined
-): Promise<void> {
-  if (mode === 'bypassPermissions') {
-    session.liveFullAccess?.picked()
-  } else {
-    session.liveFullAccess?.unpicked()
-  }
-  const turn = (session.keptModeTurn ?? 0) + 1
-  session.keptModeTurn = turn
-  return applyBuildMode(session, mode, timeoutMs, () => session.keptModeTurn === turn)
 }
 
 /** Full access picked in Plan wasn't asked of Claude (asking leaves Plan), so leaving Plan asks it
@@ -135,31 +124,31 @@ export function askKeptBypassLeavingPlan(
 }
 
 /** A kept agent's picks made while a message took it out of Plan were only recorded (the chat
- *  still looked in Plan), so the latest goes out now, again until no newer pick arrived. */
+ *  still looked in Plan), so the latest goes out now, again until no newer pick arrived. Returns
+ *  Claude's last answer with the check that its pick is still the latest. */
 export async function sendKeptPickMadeLeavingPlan(
   session: ClaudeSession,
-  requested: PermissionMode,
   written: PermissionMode | null,
+  holds: () => boolean,
   timeoutMs: number | undefined
-): Promise<PermissionMode | null> {
-  let sent: string = requested
+): Promise<{ mode: PermissionMode | null; holds: () => boolean }> {
   let mode = written
+  let current = holds
   for (;;) {
     const latest = session.launchIntent?.permissionMode
-    if (!keptClaudeAgentRelay(session.connection) || !isBuildMode(latest) || latest === sent) {
-      return mode
+    if (current() || !keptClaudeAgentRelay(session.connection) || !isBuildMode(latest)) {
+      return { mode, holds: current }
     }
-    sent = latest
+    current = claudePermissionPickHolds(session)
     const ask =
       latest === 'bypassPermissions' ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
     if (ask) {
       await ask
-      // A newer pick while Claude answered goes out next, not this one again.
-      if (session.launchIntent?.permissionMode !== latest) {
-        continue
-      }
     }
-    mode = await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
+    // A newer pick while Claude answered goes out next, not this one again.
+    if (current()) {
+      mode = await setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
+    }
   }
 }
 
@@ -201,7 +190,7 @@ export function requiresAcquisition(
     }
     // Claude's own settings have no mode to send: after a live pick only a fresh agent has them.
     if (mode === 'own') {
-      return session.keptModeTurn !== undefined ? true : undefined
+      return session.permissionPick !== undefined ? true : undefined
     }
     return bypassRefused(session, mode)
   }
@@ -213,7 +202,10 @@ export function pickedWhileStarting(
   sessions: Sessions
 ): NonNullable<Adapter['permissionPickedWhileStarting']> {
   return ({ sessionId, mode }) =>
-    keptSession(sessions, sessionId)?.liveFullAccess?.pickedWhileStarting(mode === 'full-access')
+    claudePermissionPickedWhileStarting(
+      keptSession(sessions, sessionId) ?? {},
+      mode === 'full-access'
+    )
 }
 
 const CHOICE_OF_MODE: Readonly<Record<string, AgentChatPermissionChoice>> = {
