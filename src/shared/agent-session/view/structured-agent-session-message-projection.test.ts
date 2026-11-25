@@ -161,6 +161,47 @@ it('keeps an uncertain retry visible without calling that attempt unsent', () =>
   expect(messages[1].unsent).not.toBe(true)
 })
 
+it('keeps the current rejection visible when an earlier local retry is still unconfirmed', () => {
+  const rejection = agentSessionFailureFact('startFailed', {
+    instructionRecovery: 'timeout',
+    neverReachedAgent: true
+  })
+  const original = rejected({ rejection })
+  const local = userItem('retry-b', 'the kept words', 3)
+  const newer = rejected({
+    clientMessageId: 'retry-c',
+    retryOfClientMessageId: KEPT_ID,
+    submittedAt: 4,
+    resolvedAt: 5,
+    rejection
+  })
+  const newerRow = userItem('retry-c', 'the kept words', 4)
+  const originalRow = userItem(KEPT_ID, 'the kept words', 1)
+  const optimistic = [
+    {
+      body: local.body as Extract<AgentJournalRenderItem['body'], { kind: 'message' }>,
+      clientMessageId: 'retry-b',
+      retryOfClientMessageId: KEPT_ID,
+      queuedAt: 3,
+      phase: 'unconfirmed' as const
+    }
+  ]
+  const messages = (items: AgentJournalRenderItem[], submissions: AgentJournalSubmission[]) =>
+    projectStructuredAgentSessionMessages(items, optimistic, submissions)
+  expect(messages([newerRow], [original, newer])).toEqual([
+    expect.objectContaining({ id: newerRow.itemId, unsent: true })
+  ])
+  expect(messages([originalRow, newerRow], [original, newer])).toEqual([
+    expect.objectContaining({ id: originalRow.itemId, unsent: true })
+  ])
+  expect(messages([originalRow], [original])).toEqual([
+    expect.objectContaining({ id: local.itemId, deliveryState: 'unknown' })
+  ])
+  expect(messages([newerRow], [original, { ...newer, submittedAt: 2 }])).toEqual([
+    expect.objectContaining({ id: local.itemId, deliveryState: 'unknown' })
+  ])
+})
+
 it('shows the rejected retry when the loaded original is owned by a card', () => {
   const rejection = agentSessionFailureFact('startFailed', {
     instructionRecovery: 'timeout',

@@ -58,6 +58,13 @@ function isFresherRetry(
   return entry.dispatchState === 'accepted' || previous.dispatchState === 'pending'
 }
 
+export function structuredAgentSessionNewerRejection(
+  retry: AgentJournalRetryLineage | undefined,
+  queuedAt: number | null
+): boolean {
+  return retry?.dispatchState === 'rejected' && (queuedAt === null || retry.submittedAt >= queuedAt)
+}
+
 export function structuredAgentSessionRetryRow(
   root: string,
   retry: AgentJournalRetryLineage,

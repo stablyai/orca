@@ -18,6 +18,7 @@ import {
 } from './use-mobile-native-chat-unconfirmed-sends'
 import { createUnconfirmedSendDeadlines } from './unconfirmed-send-deadlines'
 import { returnMobileNativeChatInFlightSend } from '../drafts/mobile-native-chat-draft-store'
+import { reportDeferredMobileNativeChatRecoveryNotices } from './mobile-native-chat-deferred-recovery-notices'
 import {
   claimMobileNativeChatInFlightSends,
   mobileNativeChatInFlightClaim,
@@ -249,6 +250,11 @@ export function useMobileStructuredSends(
   ])
 
   useEffect(() => {
+    if (draftScope && sessionId) {
+      reportDeferredMobileNativeChatRecoveryNotices(draftScope, sessionId, (message) =>
+        onSendError(message, { announceOnly: true })
+      )
+    }
     reconcileMobileStructuredSendDelivery(
       sends,
       cursor,
@@ -261,6 +267,7 @@ export function useMobileStructuredSends(
     )
   }, [
     cursor,
+    draftScope,
     forget,
     holds,
     onSendError,

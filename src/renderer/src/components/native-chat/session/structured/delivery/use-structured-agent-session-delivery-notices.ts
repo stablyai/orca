@@ -1,5 +1,5 @@
 import { useLatestHandler } from '@/lib/use-latest-handler'
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
@@ -118,35 +118,36 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
       onRetry
     ]
   )
-  // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
-  const previousRef = useRef(notices)
-  const stable = sameNoticesKept(previousRef.current, notices)
-  useEffect(() => {
-    previousRef.current = stable
-  }, [stable])
+  const sendFromCurrentNotice = useLatestHandler((id: string) => notices.get(id)?.onSend?.())
+  const [previous, setPrevious] = useState(NO_NOTICES)
+  const stable = sameNoticesKept(previous, notices, sendFromCurrentNotice)
+  if (stable !== previous) {
+    setPrevious(stable)
+  }
   return stable
 }
 
 const NO_ITEMS: ReadonlySet<string> = new Set()
+const NO_NOTICES: ReadonlyMap<string, NativeChatDeliveryNotice> = new Map()
 
 /** Item-only streaming commits need no new notices when relevant membership is unchanged. */
 function useStableItemIds(ids: ReadonlySet<string>): ReadonlySet<string> {
-  const previousRef = useRef(ids)
-  const previous = previousRef.current
-  const stable =
-    previous === ids || (previous.size === ids.size && [...ids].every((id) => previous.has(id)))
-      ? previous
-      : ids
-  useEffect(() => {
-    previousRef.current = stable
-  }, [stable])
-  return stable
+  const [previous, setPrevious] = useState(ids)
+  if (
+    previous !== ids &&
+    (previous.size !== ids.size || [...ids].some((id) => !previous.has(id)))
+  ) {
+    setPrevious(ids)
+    return ids
+  }
+  return previous
 }
 
 /** Reuse equivalent prior notices and the whole prior map when every entry matches. */
 function sameNoticesKept(
   previous: ReadonlyMap<string, NativeChatDeliveryNotice>,
-  next: ReadonlyMap<string, NativeChatDeliveryNotice>
+  next: ReadonlyMap<string, NativeChatDeliveryNotice>,
+  sendFromCurrentNotice: (id: string) => void
 ): ReadonlyMap<string, NativeChatDeliveryNotice> {
   if (previous === next) {
     return next
@@ -158,15 +159,23 @@ function sameNoticesKept(
     const same =
       before !== undefined &&
       before.text === notice.text &&
+      before.detail === notice.detail &&
       before.failureKind === notice.failureKind &&
       before.signIn?.agentName === notice.signIn?.agentName &&
       before.signIn?.account === notice.signIn?.account &&
-      before.onSend === notice.onSend &&
+      (before.onSend === undefined) === (notice.onSend === undefined) &&
       before.recoveryFocus === notice.recoveryFocus &&
       before.recoveryCardId === notice.recoveryCardId &&
       (before.onDismiss === undefined) === (notice.onDismiss === undefined)
     allKept &&= same
-    kept.set(id, same ? before : notice)
+    kept.set(
+      id,
+      same
+        ? before
+        : notice.onSend
+          ? { ...notice, onSend: () => sendFromCurrentNotice(id) }
+          : notice
+    )
   }
   return allKept ? previous : kept
 }

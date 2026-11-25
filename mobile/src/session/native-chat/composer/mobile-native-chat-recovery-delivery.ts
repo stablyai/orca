@@ -13,13 +13,14 @@ import { handedOffQueuedMessageIds } from '../../../../../src/shared/agent-sessi
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../../src/shared/agent-session/requests/structured-agent-session-send-evidence'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import type { UnconfirmedSendDeadlines } from './delivery/unconfirmed-send-deadlines'
-import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { structuredAgentSessionRejectionParts } from '../../../../../src/shared/agent-session/failures/structured-agent-session-rejection-words'
 import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'
+import { deferMobileNativeChatRecoveryNotice } from './delivery/mobile-native-chat-deferred-recovery-notices'
 import {
   readMobileNativeChatInFlightStructuredSession,
   markMobileNativeChatInFlightUnconfirmed,
   mobileNativeChatInFlightClaim,
+  notifyMobileNativeChatInFlightChange,
   readMobileNativeChatInFlightSend,
   releaseMobileNativeChatInFlightSends,
   settleRecordedMobileNativeChatInFlightSends
@@ -40,22 +41,22 @@ export function settleMobileInstructionRecovery(
   if (!sends.length) {
     return
   }
-  const settled = settleRecordedMobileNativeChatInFlightSends(sends, submissions, queuedMessageIds)
-  for (const submission of submissions) {
-    if (submission.dispatchState !== 'rejected' || !settled.has(submission.clientMessageId)) {
-      continue
-    }
-    const fact = readWholeAgentSessionFailureFact(submission.rejection)
-    if (fact?.instructionRecovery) {
+  return settleRecordedMobileNativeChatInFlightSends(
+    sends,
+    submissions,
+    queuedMessageIds,
+    (scope, fact, reason) => {
       const message = mobileAgentSessionWriteNoticeText(
-        structuredAgentSessionRejectionParts(submission.reason, 'send', fact, {
+        structuredAgentSessionRejectionParts(reason, 'send', fact, {
           agentName: 'Codex'
         })
       )
-      onSendError(message, { announceOnly: true })
+      if (onSendError(message, { announceOnly: true }) === false) {
+        deferMobileNativeChatRecoveryNotice(scope, sessionId, message)
+        notifyMobileNativeChatInFlightChange()
+      }
     }
-  }
-  return settled
+  )
 }
 
 export function confirmMobileRecordedRecovery({

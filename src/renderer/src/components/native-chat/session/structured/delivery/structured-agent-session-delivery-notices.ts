@@ -17,6 +17,7 @@ import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-ses
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import {
+  structuredAgentSessionNewerRejection,
   structuredAgentSessionRetryLineages,
   structuredAgentSessionRetryRow
 } from '../../../../../../../shared/agent-session/view/structured-agent-session-retry-lineage'
@@ -52,8 +53,26 @@ export function structuredAgentSessionDeliveryNotices(args: {
     hasRejected ||= submission.dispatchState === 'rejected'
   }
   for (const entry of args.pending) {
-    if (entry.retryOfClientMessageId) {
-      ;(pendingRetries ??= new Set()).add(entry.retryOfClientMessageId)
+    const root = entry.retryOfClientMessageId
+    if (root) {
+      const retry = lineages.get(root)
+      if (
+        entry.phase === 'unconfirmed' &&
+        retry &&
+        structuredAgentSessionNewerRejection(retry, entry.queuedAt) &&
+        hasItem(
+          structuredAgentSessionRetryRow(
+            root,
+            retry,
+            hasItem,
+            findSubmission(root),
+            retryWasWithdrawn(retry.clientMessageId)
+          )
+        )
+      ) {
+        continue
+      }
+      ;(pendingRetries ??= new Set()).add(root)
     }
   }
   const notices = new Map<string, NativeChatDeliveryNotice>()

@@ -34,6 +34,7 @@ import {
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import { isAgentSessionContextClear } from '../conversation-context/agent-session-context-clear'
 import {
+  structuredAgentSessionNewerRejection,
   structuredAgentSessionRetryLineages,
   structuredAgentSessionRetryRow
 } from './structured-agent-session-retry-lineage'
@@ -252,14 +253,17 @@ export function projectStructuredAgentSessionMessageRows(
         return true
       }
       const retry = lineages.get(root)
-      if (entry.phase === 'unconfirmed') {
-        return retry?.dispatchState !== 'accepted' && retry?.dispatchState !== 'pending'
+      if (retry?.dispatchState === 'accepted') {
+        return false
       }
-      return (
-        retry?.dispatchState !== 'accepted' &&
-        !hasItem(agentJournalSubmissionKey(root)) &&
-        (!retry || !journalled.has(agentJournalSubmissionKey(retry.clientMessageId)))
-      )
+      const rootItem = agentJournalSubmissionKey(root)
+      const retryIsVisible =
+        retry !== undefined && journalled.has(agentJournalSubmissionKey(retry.clientMessageId))
+      return entry.phase === 'unconfirmed'
+        ? retry?.dispatchState !== 'pending' &&
+            (!(retryIsVisible || journalled.has(rootItem)) ||
+              !structuredAgentSessionNewerRejection(retry, entry.queuedAt))
+        : !hasItem(rootItem) && !retryIsVisible
     }),
     journalled,
     submissionsByItemId,

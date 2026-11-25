@@ -1,6 +1,9 @@
 import type { AgentSessionDeliveryFact } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-settlement'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-evidence'
-import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { useSyncExternalStore } from 'react'
 import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import {
@@ -17,6 +20,7 @@ import type {
   MobileNativeChatSavedImage
 } from '../drafts/mobile-native-chat-saved-drafts'
 import type { PendingNativeChatImage } from '../attachments/mobile-native-chat-image-attachment'
+import { discardMobileNativeChatRecoveryNotices } from './mobile-native-chat-deferred-recovery-notices'
 
 // Sends cleared from the box before their outcome was known. `held` marks one a live hold is waiting on;
 // the rest came back with the page and wait for their chat to open.
@@ -25,7 +29,6 @@ type InFlightEntry = {
   send: MobileNativeChatInFlightSend
   held: boolean
   recorded?: true
-  noticePending?: boolean
   // Chip ids this send took; a sent send drops them in the same write that forgets it.
   carriedIds?: ReadonlySet<string>
 }
@@ -41,7 +44,7 @@ function subscribeSavedInFlight(listener: () => void): () => void {
   }
 }
 
-function notifyClaimable(): void {
+export function notifyMobileNativeChatInFlightChange(): void {
   savedInFlightVersion += 1
   savedInFlightListeners.forEach((listener) => listener())
 }
@@ -125,7 +128,7 @@ export function settleMobileNativeChatInFlightSend(
   }
   saveMobileNativeChatDraft(scope, 'immediate')
   if (send.deliveryUnconfirmed) {
-    notifyClaimable()
+    notifyMobileNativeChatInFlightChange()
   }
 }
 
@@ -139,14 +142,15 @@ export function markMobileNativeChatInFlightUnconfirmed(
     if (entry?.send.kind !== 'structured') {
       continue
     }
-    const newlyUnconfirmed = !entry.send.deliveryUnconfirmed
-    if (newlyUnconfirmed) {
-      entry.send = { ...entry.send, deliveryUnconfirmed: true }
-      saveMobileNativeChatDraft(entry.scope, 'immediate')
-    }
-    if (notify && (newlyUnconfirmed || entry.noticePending)) {
+    const { send } = entry
+    let pending = send.unconfirmedNoticePending
+    if (notify && (!send.deliveryUnconfirmed || pending)) {
       noticePending ??= notify() === false
-      entry.noticePending = noticePending
+      pending = noticePending ? true : undefined
+    }
+    if (!send.deliveryUnconfirmed || pending !== send.unconfirmedNoticePending) {
+      entry.send = { ...send, deliveryUnconfirmed: true, unconfirmedNoticePending: pending }
+      saveMobileNativeChatDraft(entry.scope, 'immediate')
     }
   }
 }
@@ -176,7 +180,7 @@ export function releaseMobileNativeChatInFlightSends(ids: Iterable<string>): voi
   }
   // An open chat claims it now rather than at its next mount.
   if (released) {
-    notifyClaimable()
+    notifyMobileNativeChatInFlightChange()
   }
 }
 
@@ -262,11 +266,12 @@ export function registerSavedMobileNativeChatInFlightSends(
     inFlightSends.set(send.id, { scope, send, held: false })
   }
   if (returned.length > 0) {
-    notifyClaimable()
+    notifyMobileNativeChatInFlightChange()
   }
 }
 
 export function retireMobileNativeChatInFlightSends(scope: string): void {
+  discardMobileNativeChatRecoveryNotices(scope)
   for (const [id, entry] of inFlightSends) {
     if (entry.scope === scope) {
       inFlightSends.delete(id)
@@ -277,7 +282,8 @@ export function retireMobileNativeChatInFlightSends(scope: string): void {
 export function settleRecordedMobileNativeChatInFlightSends(
   ids: readonly string[],
   submissions: readonly AgentSessionDeliveryFact[],
-  ownedByQueue: readonly string[] = []
+  ownedByQueue: readonly string[] = [],
+  onReturned?: (scope: string, fact: AgentSessionFailureFact, reason: string | null) => void
 ): Set<string> {
   const settled = new Set<string>()
   const byId = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
@@ -291,19 +297,24 @@ export function settleRecordedMobileNativeChatInFlightSends(
     const submission = byId.get(clientMessageId)
     const verdict = submission?.dispatchState
     const card = submission?.keptAsQueuedMessageId ?? submission?.queuedMessageId
+    const failure =
+      verdict === 'rejected' ? readWholeAgentSessionFailureFact(submission?.rejection) : null
     const transferred =
       queued?.has(id) || queued?.has(clientMessageId) || (card !== undefined && queued?.has(card))
     if (
       transferred ||
       verdict === 'accepted' ||
-      (verdict === 'rejected' &&
-        !readWholeAgentSessionFailureFact(submission?.rejection)?.instructionRecovery)
+      (verdict === 'rejected' && !failure?.instructionRecovery)
     ) {
+      const firstSettlement = !settled.has(clientMessageId)
       settled.add(clientMessageId)
       settleMobileNativeChatInFlightSend(
         id,
         verdict === 'accepted' || transferred ? 'sent' : 'kept'
       )
+      if (firstSettlement && submission && failure?.instructionRecovery) {
+        onReturned?.(entry.scope, failure, submission.reason)
+      }
     } else if (submission && submission.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING) {
       entry.recorded = true
     }
