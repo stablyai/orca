@@ -20642,13 +20642,27 @@
         "oneComment": "コメント 1 件",
         "comments": "コメント {{count}} 件",
         "unavailable": "プレビューは利用できません。",
-        "retry": "再試行"
+        "retry": "再試行",
+        "retryKeyHint": "プレビューは利用できません。{{key}} を押して再試行してください。"
       },
       "webPeek": {
         "unavailable": "このページのプレビューはありません。"
       },
       "workers": {
         "stopUnconfirmed": "Orca はワーカーの停止を確認できませんでした。"
+      },
+      "connectorAsker": {
+        "anApp": "アプリ",
+        "directMessage": "{{source}} DM",
+        "earlierMessages": "スレッド内の以前のメッセージ {{count}} 件",
+        "earlierMessages_other": "スレッド内の以前のメッセージ {{count}} 件",
+        "groupMessage": "{{source}} グループ DM",
+        "label": "{{place}} の {{name}}",
+        "noAccess": "アクセス不可",
+        "open": "{{source}} で開く",
+        "someone": "誰か",
+        "via": "{{bot}} 経由の {{name}}",
+        "you": "あなた"
       },
       "usageLimitActions": {
         "switchAccount": "アカウントを切り替え",
@@ -20772,6 +20786,12 @@
       "dock": {
         "label": "メッセージ欄とプロンプト"
       },
+      "googleOffer": {
+        "useAccount": "Google に {{email}} を使用します。",
+        "reconnect": "{{email}} を再接続",
+        "use": "{{email}} を使用",
+        "staysDefault": "{{email}} が引き続き既定です"
+      },
       "workerDock": {
         "commandOutputPending": "コマンドの出力はまだありません。",
         "notNow": "後で",
@@ -20832,6 +20852,17 @@
         "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます",
         "chipLabel": "{{label}}、最新: {{title}}"
       },
+      "webhookSetup": {
+        "heading": "Webhook を設定",
+        "keyAndSecret": "キーと署名シークレット",
+        "copiedReceipt": "✓ URL をコピーしました",
+        "signingSecret": "署名シークレット",
+        "addSecret": "追加…",
+        "noSecret": "なし",
+        "sampleCall": "サンプル呼び出し",
+        "sampleNote": "実際の実行が始まります",
+        "send": "送信"
+      },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
         "argumentHint": "<question>",
@@ -20845,6 +20876,20 @@
         "questionNotSentDetail": "質問はこのチャットに残っています。再試行するには、もう一度 /btw を送信してください。",
         "questionUnconfirmed": "{{agent}} のサイドチャットに質問が届いたか確認できませんでした",
         "questionUnconfirmedDetail": "もう一度質問する前に、サイドチャットを確認してください。質問はこのチャットに残っています。"
+      },
+      "urlRequest": {
+        "title": "サインインのリクエスト",
+        "open": "サインインページを開く",
+        "decline": "拒否",
+        "opened": "ブラウザでサインインページを開きました。",
+        "openAgain": "もう一度開く",
+        "finished": "サインインが完了しました",
+        "finishedWith": "サインインが完了しました · {{message}}"
+      },
+      "offerCard": {
+        "notNow": "今はしない",
+        "dismiss": "閉じる",
+        "notSent": "bot に送信できませんでした。もう一度お試しください。"
       },
       "memoryUpdated": {
         "added": "追加",
@@ -20969,6 +21014,44 @@
         "waiting": "待機中",
         "waitsFor": "待機対象"
       },
+      "slackMirror": {
+        "ownDm": "{{bot}} とのあなたの DM にも投稿します",
+        "theirDm": "{{name}} さんの {{bot}} との DM にも投稿します",
+        "someonesDm": "{{bot}} との DM にも投稿します",
+        "channel": "{{channel}} のスレッドにも投稿します",
+        "thread": "Slack スレッドにも投稿します",
+        "offUnavailable": "Orca のみ · スレッドを利用できません",
+        "offNotInChannel": "Orca のみ · チャンネルに参加していません",
+        "off": "Orca のみ",
+        "shortDm": "Slack DM",
+        "shortChannel": "{{channel}} のスレッド",
+        "shortThread": "Slack スレッド",
+        "headingDm": "Slack DM",
+        "headingChannel": "{{channel}} の Slack スレッド",
+        "headingThread": "Slack スレッド",
+        "detailUnavailable": "この Slack スレッドは削除されたか、チャンネルがアーカイブされました。",
+        "detailRemovedFrom": "{{bot}} は {{channel}} から削除されました。",
+        "detailRemoved": "{{bot}} はチャンネルから削除されました。",
+        "detailFallback": "あなたの名前を添えて {{bot}} として投稿します。あなたの名前で投稿するには Slack で更新してください。",
+        "detailOwnDm": "あなたのメッセージと {{bot}} の返信です。この DM が見えるのはあなただけです。ツール呼び出しとワーカーは Orca 内にとどまります。",
+        "detailTheirDm": "あなたのメッセージと {{bot}} の返信です。{{name}} さんの DM に表示されます。ツール呼び出しとワーカーは Orca 内にとどまります。",
+        "detailSomeonesDm": "あなたのメッセージと {{bot}} の返信です。この DM の相手に表示されます。ツール呼び出しとワーカーは Orca 内にとどまります。",
+        "detailThread": "あなたのメッセージと {{bot}} の返信です。チャンネルの全員が見られます。ツール呼び出しとワーカーは Orca 内にとどまります。",
+        "detailExternal": "あなたのメッセージと {{bot}} の返信です。ワークスペース外の人を含め、{{channel}} の全員が見られます。ツール呼び出しとワーカーは Orca 内にとどまります。",
+        "detailChannel": "あなたのメッセージと {{bot}} の返信です。{{channel}} の全員が見られます。ツール呼び出しとワーカーは Orca 内にとどまります。",
+        "posting": "Slack に投稿しています…",
+        "failedFile": "Slack に投稿されませんでした · ファイルが大きすぎます",
+        "failedEmpty": "Slack に投稿されませんでした · 投稿する内容がありません",
+        "failedTooLong": "Slack に投稿されませんでした · メッセージが長すぎます",
+        "failed": "Slack に投稿されませんでした",
+        "delete": "Slack から削除",
+        "postedFrom": "Orca から {{place}} に投稿しました",
+        "retry": "再試行",
+        "rewindStays": "Slack にすでにあるメッセージはそのまま残ります。",
+        "switch": "このチャットを Slack に投稿",
+        "tooltipOff": "あなたのメッセージは Orca 内にとどまります",
+        "tooltipOn": "あなたのメッセージと {{bot}} の返信がこの Slack スレッドにも投稿されます"
+      },
       "typedBy": {
         "anotherComputer": "別のコンピュータ",
         "fromVia": "送信者: {{name}}（{{computer}} 経由）",
@@ -20979,6 +21062,75 @@
         "showMore": "さらに表示",
         "running": "実行中",
         "failed": "失敗"
+      },
+      "signInNotice": {
+        "signedIn": "サインインしました。もう一度送信してください。",
+        "notSent": "送信されませんでした: {{agent}} にサインインしていません。",
+        "notSignedIn": "{{agent}} にサインインしていません。",
+        "opensAntigravitySettings": "設定 → アカウント → Antigravity を開きます",
+        "signIn": "サインイン",
+        "signsInClaudeAccount": "この Claude アカウントにサインインします",
+        "runsCommand": "ターミナルで {{command}} を実行します",
+        "thenSlashCommand": "サインインしてから {{slashCommand}} を入力してください。",
+        "signsInAgy": "ブラウザで Google を使って agy にサインインします"
+      },
+      "antigravityAuth": {
+        "chipLabel": "Antigravity のサインイン方法: {{method}}。変更",
+        "chipTitle": "Antigravity のサインイン方法: {{method}}",
+        "menuTitle": "Antigravity のサインイン方法",
+        "detected": "検出済み",
+        "settings": "サインイン設定…",
+        "switched": "Antigravity は {{method}} を使用するようになりました。",
+        "switchFailed": "Orca は Antigravity のサインイン方法を変更できませんでした。もう一度お試しください。",
+        "confirmTitle": "{{method}} に切り替えますか?",
+        "confirmBody": "このホストで実行中の Antigravity チャットが再起動します。進行中の返信は停止しますが、会話は残ります。",
+        "cancel": "キャンセル",
+        "confirm": "切り替え",
+        "otherWays": "API キーまたは gcloud でサインインすることもできます。",
+        "moreOptions": "その他のオプション…",
+        "useApiKey": "Gemini API キーを使用",
+        "useGoogle": "Google サインインを使用",
+        "apiKeySaved": "Orca に保存済み",
+        "googleFound": "以前このホストで Google にサインインしています",
+        "askApiKeyEnvironment": "代わりに、環境で見つかった Gemini API キーを使用しますか?",
+        "askApiKeySaved": "代わりに、Orca に保存された Gemini API キーを使用しますか?",
+        "askGcloud": "代わりに gcloud ログイン (プロジェクト {{project}}) を使用しますか?",
+        "askGoogle": "代わりに Google サインインを使用しますか?",
+        "noSubscription": "この Google アカウントには Antigravity のサブスクリプションがありません。",
+        "ineligible": "この Google アカウントでは Antigravity を使用できません。",
+        "signedOut": "Antigravity にサインインしていません。",
+        "refused": "Google がこのチャットの認証情報を拒否しました。",
+        "usageLimit": "このサインインは使用量の上限に達しました。",
+        "signInGoogle": "Google でサインイン",
+        "yourAgy": "お使いの agy",
+        "yourAgyVersion": "お使いの agy · v{{version}}",
+        "orcasAgy": "Orca の agy",
+        "orcasAgyVersion": "Orca の agy · v{{version}}",
+        "runsOn": "実行元: {{program}}",
+        "keepsOwnLogin": "このチャットは agy 独自の Google ログインを使い続けます。新規チャットでは {{method}} を使用します。",
+        "apiKeyEnvironment": "環境から取得",
+        "foundGcloud": "gcloud ログインも使用できます。",
+        "foundKey": "Gemini API キーも使用できます。",
+        "foundKeyAndGcloud": "Gemini API キーと gcloud ログインも使用できます。",
+        "gcloudProject": "プロジェクト {{project}}",
+        "otherWaysMenu": "その他のサインイン方法…",
+        "useGcloudLogin": "gcloud ログインを使用",
+        "otherWaysLabel": "その他のサインイン方法"
+      },
+      "pairedServerAsk": {
+        "always": "{{server}} を常に許可",
+        "deny": "拒否",
+        "once": "1 回だけ許可",
+        "thisServer": "このサーバー",
+        "title": "{{from}} がこのコンピュータ上の {{to}} にメッセージを送ろうとしています",
+        "titlePills": "<from>{{from}}</from> がこのコンピュータ上の <to>{{to}}</to> にメッセージを送ろうとしています"
+      },
+      "clientAsk": {
+        "declined": "拒否しました",
+        "notConnected": "接続されていませんでした",
+        "pairedComputer": "ペアリング済みのコンピュータ",
+        "waitingForYou": "あなたの操作待ち",
+        "waitingOn": "{{computer}} での承認を待っています"
       },
       "automationSaved": {
         "resultsInRuns": "結果は各実行内",
@@ -20999,6 +21151,22 @@
         "loadFailed": "このオートメーションを読み込めませんでした",
         "openFullPage": "ページを開く",
         "onAgent": "{{name}} で実行"
+      },
+      "connectorOffer": {
+        "heading": "サービスに接続",
+        "connectService": "{{service}} に接続",
+        "connected": "接続済み",
+        "connectedIn": "接続済み: {{places}}",
+        "pausedStatus": "一時停止中",
+        "addOrg": "組織を追加",
+        "addWorkspace": "ワークスペースを追加",
+        "githubAsYou": "gh ログインを通じて、あなたとして GitHub で作業することもできます。",
+        "linearAsYou": "Orca での Linear サインインを通じて、あなたとして Linear で作業することもできます。"
+      },
+      "toolAdded": {
+        "removed": "削除しました",
+        "remove": "削除",
+        "added": "追加しました"
       },
       "mcp": {
         "status": {
@@ -21022,8 +21190,10 @@
           "finish": "完了",
           "openAgain": "もう一度開く",
           "addressLabel": "サインインページのアドレス",
-          "unfinished": "サインインはまだ完了していません。開いたページで完了させてから「完了」を押してください。"
+          "unfinished": "サインインはまだ完了していません。開いたページで完了させてから「完了」を押してください。",
+          "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "MCP サーバーを管理",
         "title": "MCP サーバー",
         "close": "閉じる",
         "loading": "読み込み中…",
