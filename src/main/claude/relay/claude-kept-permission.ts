@@ -39,11 +39,8 @@ const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice):
  *  the ladder (which reads an Ask launch's first init as a refusal). A refusal makes the next send
  *  start a flagged agent; acceptance proves Full access for this process. */
 async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefined): Promise<void> {
-  // Watching starts before the write, so Claude's report of the switch keeps its wire position.
-  const live = session.liveFullAccess?.() ?? null
   try {
     await session.connection.setPermissionMode('bypassPermissions', { timeoutMs })
-    live?.grant()
     session.bypassAccepted = true
     session.bypassDisabled = false
     session.bypassRefusal = undefined
@@ -62,10 +59,14 @@ async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefin
 async function applyBuildMode(
   session: ClaudeSession,
   mode: PermissionMode,
-  timeoutMs: number | undefined
+  timeoutMs: number | undefined,
+  current: () => boolean = () => true
 ): Promise<void> {
   if (mode === 'bypassPermissions' && !claudeInPlan(session)) {
     await askKeptBypass(session, timeoutMs)
+    if (!current()) {
+      return
+    }
   }
   // The chat now wants this mode from this process: leaving Plan, a refused Full access and the
   // next reattach all read it, not the mode the agent was launched in.
@@ -91,13 +92,18 @@ function applyInOrder(
   mode: PermissionMode,
   timeoutMs: number | undefined
 ): Promise<void> {
+  // Auto-approval follows the pick at once; Claude's report of Full access grants it.
+  if (mode === 'bypassPermissions') {
+    session.liveFullAccess?.picked()
+  } else {
+    session.liveFullAccess?.unpicked()
+  }
   const before = session.keptModeWrites
   const turn = (before?.turn ?? 0) + 1
+  const current = (): boolean => session.keptModeWrites?.turn === turn
   const done = (before?.done ?? Promise.resolve())
     .catch(() => {})
-    .then(() =>
-      session.keptModeWrites?.turn === turn ? applyBuildMode(session, mode, timeoutMs) : undefined
-    )
+    .then(() => (current() ? applyBuildMode(session, mode, timeoutMs, current) : undefined))
   session.keptModeWrites = { turn, done }
   return done
 }

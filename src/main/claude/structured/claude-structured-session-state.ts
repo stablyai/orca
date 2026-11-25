@@ -14,7 +14,7 @@ import type {
   openClaudeStreamJsonConnection
 } from '../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
-import type { ClaudeFullAccessPolicy } from './permissions/claude-full-access-policy'
+import type { ClaudeLiveFullAccess } from './permissions/claude-structured-inbound-control'
 import type { StructuredLaunchRequest } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
@@ -193,7 +193,7 @@ export type ClaudeSession = {
   /** Full access processes only: Claude's mode in wire order, ahead of `reportedOptions`. */
   orderedPermissionMode?: (() => string | null | undefined) | null
   /** A kept agent launched without Full access: the policy a live Full access pick grants. */
-  liveFullAccess?: () => ClaudeFullAccessPolicy | null
+  liveFullAccess?: ClaudeLiveFullAccess
   /** Fast was omitted from launch settings and must be applied before message input. */
   fastModeAtStart: boolean
   /** Rechecks this child's CLI support; absent where the launch had no flag support to ask. */

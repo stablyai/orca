@@ -7,19 +7,23 @@ const request = (id: string): string =>
   `${JSON.stringify({ type: 'control_request', request_id: id, request: { subtype: 'can_use_tool' } })}\n`
 
 describe('live Full access policy', () => {
-  it('auto-allows only after Claude accepted the pick, and only where it ran in Full access', () => {
+  it('auto-allows only from Claude reporting a picked Full access, until Ask is picked', () => {
     const live = createClaudeFullAccessPolicy('s1', true)
+    live.observe(status('bypassPermissions'))
+    live.observe(request('unpicked'))
+    expect(live.allows('unpicked')).toBe(false)
+    live.arm()
     live.observe(request('before-report'))
     live.observe(status('bypassPermissions'))
     live.observe(request('in-full-access'))
     live.observe(status('default'))
-    live.observe(request('after-ask'))
-    live.observe(status('bypassPermissions'))
-    live.observe(request('ungranted'))
-    expect(live.allows('ungranted')).toBe(false)
-    live.grant()
+    live.observe(request('after-ask-report'))
     expect(live.allows('before-report')).toBe(false)
     expect(live.allows('in-full-access')).toBe(true)
-    expect(live.allows('after-ask')).toBe(false)
+    expect(live.allows('after-ask-report')).toBe(false)
+    live.observe(status('bypassPermissions'))
+    live.observe(request('ask-picked'))
+    live.revoke()
+    expect(live.allows('ask-picked')).toBe(false)
   })
 })

@@ -26,6 +26,8 @@ import {
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
+import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import {
   applyKeptClaudeModeOwed,
   askKeptBypassLeavingPlan
@@ -68,7 +70,9 @@ export async function applyClaudeMessageOptions(
   const effort = takesFlagSettings ? options.effort : undefined
   if (effort && session.appliedInputOptions.get('effort') !== effort) {
     await waitForPromiseWithSignal(
-      setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs),
+      setClaudeStructuredOption(session, { key: 'effort', value: effort }, timeoutMs).catch(
+        (error: unknown) => keptCliRefusedFlagSettings(session, error)
+      ),
       signal
     )
   }
@@ -77,7 +81,9 @@ export async function applyClaudeMessageOptions(
   const fastMode = takesFlagSettings ? options.fastMode : undefined
   if (fastMode !== undefined && session.appliedInputOptions.get('fastMode') !== fastMode) {
     await waitForPromiseWithSignal(
-      setClaudeStructuredOption(session, { key: 'fastMode', value: fastMode }, timeoutMs),
+      setClaudeStructuredOption(session, { key: 'fastMode', value: fastMode }, timeoutMs).catch(
+        (error: unknown) => keptCliRefusedFlagSettings(session, error)
+      ),
       signal
     )
   }
@@ -120,6 +126,19 @@ export async function applyClaudeMessageOptions(
     await applyClaudeFullAccessFallback(session, timeoutMs, signal)
   }
   throwIfSignalAborted(signal)
+}
+
+/** A kept agent may run an older CLI than the installed one the capability check read: once it
+ *  refuses the flag-settings control, it runs on its own choices and the message still goes. */
+function keptCliRefusedFlagSettings(session: ClaudeSession, error: unknown): void {
+  if (
+    !(error instanceof AgentSessionOptionRejectedError) ||
+    !(error.cause instanceof ClaudeControlRequestError) ||
+    !keptClaudeAgentRelay(session.connection)
+  ) {
+    throw error
+  }
+  session.flagSettingsControl = 'unsupported'
 }
 
 const CLAUDE_STARTUP_SETTINGS_WAIT_MS = 5_000

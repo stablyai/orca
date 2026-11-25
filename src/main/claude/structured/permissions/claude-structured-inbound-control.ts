@@ -8,6 +8,13 @@ import {
   createClaudeFullAccessPolicy,
   type ClaudeFullAccessPolicy
 } from './claude-full-access-policy'
+
+export type ClaudeLiveFullAccess = {
+  /** Watches stdout from here on; Claude's report of Full access grants auto-approval. */
+  picked: () => void
+  /** Another mode was picked: auto-approval stops now. */
+  unpicked: () => void
+}
 import {
   claudePermissionPresentation,
   claudePermissionSubject
@@ -119,8 +126,8 @@ export function claudeLaunchPermissions(
   orderedMode: (() => string | null | undefined) | null
   /** Wraps the connection's exit handler: this process's permission state ends first. */
   closeThen: (onExit: ClaudeExitHandler) => ClaudeExitHandler
-  /** A kept agent launched without Full access: starts watching for a live pick, else null. */
-  liveFullAccess: () => ClaudeFullAccessPolicy | null
+  /** A kept agent launched without Full access takes a Full access pick live. */
+  liveFullAccess: ClaudeLiveFullAccess
 } {
   const policy = claudeLaunchSkipsPermissions(launch.options)
     ? createClaudeFullAccessPolicy(launch.providerSessionId)
@@ -150,12 +157,14 @@ export function claudeLaunchPermissions(
       live?.close()
       onExit(error, exit)
     },
-    liveFullAccess: () => {
-      if (policy || !kept) {
-        return null
-      }
-      live ??= createClaudeFullAccessPolicy(launch.providerSessionId, true)
-      return live
+    liveFullAccess: {
+      picked: () => {
+        if (!policy && kept) {
+          live ??= createClaudeFullAccessPolicy(launch.providerSessionId, true)
+          live.arm()
+        }
+      },
+      unpicked: () => live?.revoke()
     }
   }
 }

@@ -14,8 +14,10 @@ export type ClaudeFullAccessPolicy = {
   mode: () => string | null | undefined
   /** An agent kept from before this app: its mode since its launch is unknown until it reports. */
   reattached: () => void
-  /** A live policy's grant: Claude accepted this app's own Full access pick. */
-  grant: () => void
+  /** Live only: the user picked Full access, so Claude's next report of it grants. */
+  arm: () => void
+  /** Live only: the user picked another mode; nothing auto-approves until a new pick is reported. */
+  revoke: () => void
   close: () => void
   retained: () => { partialChars: number; requests: number }
 }
@@ -25,8 +27,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Granted only by a Full access launch, or for a kept agent once Claude accepts Orca's own Full
- *  access pick (`live`: watching from that write, granting on its acceptance); Claude's mode
- *  reports can suspend it, never create it.
+ *  access pick (`live`: watching from that write, granting at Claude's report of it); otherwise
+ *  Claude's mode reports can suspend it, never create it.
  *  The SDK answers permission requests straight from its reader while ordinary frames queue
  *  behind Orca's pausable consumer, and a stdout chunk is read ahead of the requests in it,
  *  so each request keeps the mode in effect at its own position in the stream. */
@@ -36,6 +38,7 @@ export function createClaudeFullAccessPolicy(
 ): ClaudeFullAccessPolicy {
   const decoder = new StringDecoder('utf8')
   let granted = !live
+  let armed = false
   // Kept until the SDK hands the request to canUseTool or the process ends; a cancel still
   // reaches the callback as an abort, so dropping its entry early would apply a later mode.
   const modeAtRequest = new Map<string, boolean>()
@@ -56,7 +59,10 @@ export function createClaudeFullAccessPolicy(
     const requestId = readClaudeFrameString(request, 'request_id')
     // A redelivered id keeps its first position.
     if (requestId && !modeAtRequest.has(requestId)) {
-      modeAtRequest.set(requestId, mode === undefined ? !reattached : mode === 'full-access')
+      modeAtRequest.set(
+        requestId,
+        granted && (mode === undefined ? !reattached : mode === 'full-access')
+      )
     }
   }
 
@@ -96,6 +102,8 @@ export function createClaudeFullAccessPolicy(
     const reported = readClaudeReportedPermissionMode(frame)
     if (reported !== undefined) {
       mode = reported
+      // In wire order, ahead of any request Claude sends in that mode.
+      granted ||= armed && reported === 'full-access'
     }
   }
 
@@ -124,8 +132,12 @@ export function createClaudeFullAccessPolicy(
     reattached: () => {
       reattached = true
     },
-    grant: () => {
-      granted = true
+    arm: () => {
+      armed = live
+    },
+    revoke: () => {
+      granted = !live
+      armed = false
     },
     close: () => {
       closed = true
