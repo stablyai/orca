@@ -54,6 +54,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     forgetLastSessionTab,
     closedTabTombstonesRef,
     closingTerminalTabsRef,
+    terminalRowHandlesRef,
     setActiveHandle,
     setActiveSessionTabId,
     activeSessionTabIdRef,
@@ -149,7 +150,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
       return
     }
     const closingTerminal =
-      tab.type === 'terminal' ? createClosingTerminalTab(tab, sessionTabsRef.current) : null
+      tab.type === 'terminal' ? createClosingTerminalTab(tab, terminalRowHandlesRef.current) : null
     if (closingTerminal) {
       closingTerminalTabsRef.current.add(closingTerminal)
     }
