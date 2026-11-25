@@ -11,6 +11,8 @@ import { isHeaderRewriteSiteHost } from '../shared/browser/identity/browser-site
 import { BROWSER_GUEST_SUBFRAME_UNLOADED_CHANNEL } from '../shared/browser/identity/browser-subframe-unload'
 import { installBrowserGuestPageVisibilityReport } from './browser/visibility/browser-guest-page-visibility-report'
 import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../shared/browser/guest-lifecycle/browser-guest-page-visibility'
+import { installBrowserGuestLinkChordClickReport } from './browser/links/browser-guest-link-chord-click-report'
+import { BROWSER_GUEST_LINK_CHORD_CLICK_CHANNEL } from '../shared/browser/guest-lifecycle/browser-guest-link-chord-click'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {
@@ -45,6 +47,10 @@ if (!process.isMainFrame) {
 // Electron's visibilityState override runs in every frame of the guest.
 installBrowserGuestPageVisibilityReport((state) =>
   ipcRenderer.send(BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL, state)
+)
+// Every frame's links can open popups, so every frame reports chord clicks.
+installBrowserGuestLinkChordClickReport((click) =>
+  ipcRenderer.send(BROWSER_GUEST_LINK_CHORD_CLICK_CHANNEL, click)
 )
 // Every frame this preload runs in also got Electron's throwing prompt.
 contextBridge.executeInMainWorld({ func: installBrowserWindowPrompt, args: [] })

@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import { isAgentInjectingInput } from '../../cdp/input/agent-input-injection'
+import { BROWSER_GUEST_LINK_CHORD_CLICK_CHANNEL } from '../../../../shared/browser/guest-lifecycle/browser-guest-link-chord-click'
 
 // Window-open details lack user activation; track browser-process input instead of page events.
 const ACTIVATING_MOUSE_TYPES: ReadonlySet<string> = new Set(['mouseDown', 'mouseUp'])
@@ -22,31 +23,21 @@ export function isRecentBrowserGuestInput(observedAt: number, now: number): bool
   return elapsed >= 0 && elapsed <= BROWSER_GUEST_INPUT_GESTURE_WINDOW_MS
 }
 
-/** Shift+Cmd (Shift+Ctrl off macOS) on a click sends the link to the system browser, as elsewhere in Orca. */
-export function isSystemBrowserLinkChord(
-  modifiers: readonly string[],
-  platform: NodeJS.Platform = process.platform
-): boolean {
-  return (
-    modifiers.includes('shift') && modifiers.includes(platform === 'darwin' ? 'meta' : 'control')
-  )
-}
-
-/** Calls `listener` for each click in any of the page's frames, and each key press or tap in its main frame; clicks pass their modifiers. */
+/** Calls `listener` for each click in any of the page's frames, and each key press or tap in its main frame. */
 export function onActivatingBrowserGuestInput(
   contents: WebContents,
-  listener: (mouseModifiers: readonly string[] | null) => void
+  listener: () => void
 ): () => void {
   // Why: input-event only sees the main frame's widget, so clicks in out-of-process (cross-site
   // or sandboxed) frames reach before-mouse-event alone.
   const onMouse = (_event: Electron.Event, mouse: Electron.MouseInputEvent): void => {
     if (ACTIVATING_MOUSE_TYPES.has(mouse.type)) {
-      listener(mouse.modifiers ?? [])
+      listener()
     }
   }
   const onInput = (_event: Electron.Event, input: Electron.InputEvent): void => {
     if (ACTIVATING_OTHER_INPUT_TYPES.has(input.type)) {
-      listener(null)
+      listener()
     }
   }
   contents.on('before-mouse-event', onMouse)
@@ -59,6 +50,15 @@ export function onActivatingBrowserGuestInput(
       // Contents may already be destroyed.
     }
   }
+}
+
+/** Shift+Cmd (Shift+Ctrl off macOS) on a click sends the link to the system browser, as elsewhere in Orca. */
+export function isSystemBrowserLinkChord(
+  payload: unknown,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  const key = platform === 'darwin' ? 'metaKey' : 'ctrlKey'
+  return typeof payload === 'object' && payload !== null && key in payload && payload[key] === true
 }
 
 export type LastBrowserGuestInput = { at: number; byAgent: boolean; guestWebContentsId: number }
@@ -91,7 +91,7 @@ export type ObservedBrowserGuestGesture = {
   byAgent: boolean
   /** Its sender works with this desktop's windows: the user, or an agent's command on a page shown here, not a paired viewer. */
   fromThisDesktop: boolean
-  /** The click held the system-browser chord (see isSystemBrowserLinkChord). */
+  /** The page reported the system-browser chord for the click main observed. */
   systemBrowserChord: boolean
 }
 
@@ -128,10 +128,9 @@ export function trackBrowserGuestInputGesture(
   let lastGestureDomActivations = 0
   let unsubscribe: (() => void) | null = null
   try {
-    unsubscribe = onActivatingBrowserGuestInput(guest, (mouseModifiers) => {
+    unsubscribe = onActivatingBrowserGuestInput(guest, () => {
       lastGestureAt = now()
-      lastGestureSystemBrowserChord =
-        mouseModifiers !== null && isSystemBrowserLinkChord(mouseModifiers)
+      lastGestureSystemBrowserChord = false
       lastGestureDomActivations = domActivationsByGuest.get(guest) ?? 0
       lastGestureByAgent = isAgentInjectingInput(guest)
       lastGestureFromThisDesktop =
@@ -139,6 +138,22 @@ export function trackBrowserGuestInputGesture(
       noteSessionInput(guest, lastGestureAt, lastGestureByAgent)
       onActivatingInput?.(lastGestureByAgent)
     })
+    // The page's click report follows main's mouseUp, so it can only qualify input main already saw.
+    const onChordClick = (_event: Electron.Event, channel: string, payload: unknown): void => {
+      if (channel === BROWSER_GUEST_LINK_CHORD_CLICK_CHANNEL && lastGestureAt !== null) {
+        lastGestureSystemBrowserChord = isSystemBrowserLinkChord(payload)
+      }
+    }
+    guest.on('ipc-message', onChordClick)
+    const stopInput = unsubscribe
+    unsubscribe = () => {
+      stopInput()
+      try {
+        guest.off('ipc-message', onChordClick)
+      } catch {
+        // Contents may already be destroyed.
+      }
+    }
   } catch {
     // Fail closed: an unobservable input stream never counts as a gesture.
   }
