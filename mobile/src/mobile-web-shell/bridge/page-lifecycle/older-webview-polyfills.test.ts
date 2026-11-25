@@ -32,6 +32,17 @@ describe('older WebView polyfills match the built-ins', () => {
     expect(() => arrayPolyfills.with.call(source, 5, 9)).toThrow(RangeError)
     expect(() => arrayPolyfills.with.call(source, -6, 9)).toThrow(RangeError)
     expect(source).toEqual([3, 1, 2, 5, 4])
+    // eslint-disable-next-line no-sparse-arrays -- holes are the case under test.
+    const sparse = [, , 5]
+    expect(Object.keys(arrayPolyfills.toSorted.call(sparse))).toEqual(
+      Object.keys(sparse.toSorted())
+    )
+    expect(Object.keys(arrayPolyfills.toReversed.call(sparse))).toEqual(
+      Object.keys(sparse.toReversed())
+    )
+    expect(Object.keys(arrayPolyfills.with.call(sparse, 2, 1))).toEqual(
+      Object.keys(sparse.with(2, 1))
+    )
   })
 
   it('combines sets like the native set methods', () => {
@@ -40,6 +51,11 @@ describe('older WebView polyfills match the built-ins', () => {
     for (const name of ['union', 'intersection', 'difference', 'symmetricDifference'] as const) {
       expect([...setPolyfills[name].call(left, right)]).toEqual([...left[name](right)])
     }
+    const larger = new Set([3, 2, 1])
+    const smaller = new Set([1, 2])
+    expect([...setPolyfills.intersection.call(larger, smaller)]).toEqual([
+      ...larger.intersection(smaller)
+    ])
     for (const name of ['isSubsetOf', 'isSupersetOf', 'isDisjointFrom'] as const) {
       for (const other of [right, new Set([1, 2]), new Set([1, 2, 3, 4]), new Set([9])]) {
         expect(setPolyfills[name].call(left, other)).toBe(left[name](other))

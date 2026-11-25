@@ -25,9 +25,10 @@ function relativeIndex(length: number, index: number): number {
   return integer < 0 ? Math.max(length + integer, 0) : Math.min(integer, length)
 }
 
+// Array.from, not slice: the built-ins fill holes with undefined instead of keeping them.
 export const arrayPolyfills = {
   toSorted<T>(this: T[], compare?: (a: T, b: T) => number): T[] {
-    return Array.prototype.slice.call(this).sort(compare)
+    return Array.from(this).sort(compare)
   },
   toReversed<T>(this: T[]): T[] {
     const copy: T[] = []
@@ -37,7 +38,7 @@ export const arrayPolyfills = {
     return copy
   },
   toSpliced<T>(this: T[], start?: number, deleteCount?: number, ...items: T[]): T[] {
-    const copy: T[] = Array.prototype.slice.call(this)
+    const copy: T[] = Array.from(this)
     if (arguments.length === 0) {
       return copy
     }
@@ -50,7 +51,7 @@ export const arrayPolyfills = {
     return copy
   },
   with<T>(this: T[], index: number, value: T): T[] {
-    const copy: T[] = Array.prototype.slice.call(this)
+    const copy: T[] = Array.from(this)
     const integer = Math.trunc(Number(index)) || 0
     const at = integer < 0 ? copy.length + integer : integer
     if (at < 0 || at >= copy.length) {
@@ -82,9 +83,12 @@ export const setPolyfills = {
     return result
   },
   intersection<T>(this: Set<T>, other: SetLike<T>): Set<T> {
+    // Like the built-in, walk the smaller side, so the result keeps that side's order.
     const result = new Set<T>()
-    for (const value of this) {
-      if (other.has(value)) {
+    const values = this.size <= other.size ? [...this] : keysOf(other)
+    const lookup = this.size <= other.size ? other : this
+    for (const value of values) {
+      if (lookup.has(value)) {
         result.add(value)
       }
     }
