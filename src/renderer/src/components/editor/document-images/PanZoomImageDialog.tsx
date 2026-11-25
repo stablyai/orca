@@ -1,5 +1,14 @@
 import React, { useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Copy, Maximize, X, ZoomIn, ZoomOut } from 'lucide-react'
+import {
+  ChevronLeft,
+  ChevronRight,
+  Copy,
+  Download,
+  Maximize,
+  X,
+  ZoomIn,
+  ZoomOut
+} from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -14,6 +23,7 @@ import {
 } from '@/lib/clipboard/images/clipboard-image-copy'
 import { IMAGE_VIEWER_ZOOM_STEP } from '../viewer-viewport/image-viewer-zoom'
 import { imageClipboardPngDataUrl } from './image-png-export'
+import { downloadImage } from './pan-zoom-image-download'
 import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoom-view'
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from '../viewer-viewport/use-pan-zoom-viewport'
@@ -358,6 +368,13 @@ function PanZoomImageCanvas({
               }
             >
               <Copy />
+            </ToolbarButton>
+            <ToolbarButton
+              label={t('auto.components.editor.PanZoomImageDialog.download', 'Download')}
+              disabled={!imageSrc}
+              onClick={() => imageSrc && void downloadImage(imageSrc, title)}
+            >
+              <Download />
             </ToolbarButton>
             {toolbarActions}
             <ToolbarButton

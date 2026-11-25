@@ -16604,7 +16604,9 @@
           "close": "Fermer",
           "copyPng": "Copier en PNG",
           "copiedPng": "Copié en PNG",
-          "copyPngFailed": "Impossible de copier l’image"
+          "copyPngFailed": "Impossible de copier l’image",
+          "download": "Télécharger",
+          "downloadFailed": "Impossible de télécharger l’image"
         },
         "MermaidBlock": {
           "dcc132e691": "Erreur de diagramme :",

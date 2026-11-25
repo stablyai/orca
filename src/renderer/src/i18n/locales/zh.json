@@ -17322,7 +17322,9 @@
           "previous": "上一张图片",
           "next": "下一张图片",
           "copiedPng": "已复制为 PNG",
-          "copyPngFailed": "无法复制图片"
+          "copyPngFailed": "无法复制图片",
+          "download": "下载",
+          "downloadFailed": "无法下载图片"
         },
         "MermaidBlock": {
           "dcc132e691": "图表错误：",
