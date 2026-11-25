@@ -299,8 +299,11 @@ export async function createLocalWatcher(
         : new Error(`Watcher for ${rootKey} errored during subscribe`)
     }
   } catch (err) {
-    // Surface synchronous subscription failures through the caller rather than crashing main.
-    console.error(`[filesystem-watcher] failed to subscribe ${rootKey}:`, err)
+    // Surface synchronous subscription failures through the caller rather than crashing main. A
+    // subscriber that left mid-setup (its workspace removed) cancelled it: nothing failed.
+    if (!signal?.aborted) {
+      console.error(`[filesystem-watcher] failed to subscribe ${rootKey}:`, err)
+    }
     throw err
   }
 
