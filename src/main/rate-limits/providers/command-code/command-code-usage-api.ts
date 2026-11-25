@@ -75,6 +75,21 @@ async function getJson(path: string, apiKey: string, signal?: AbortSignal): Prom
   }
 }
 
+function describeShape(read: JsonRead): string {
+  if (read.kind === 'failed') {
+    return read.status === undefined ? read.failureKind : `HTTP ${read.status}`
+  }
+  const value = read.value
+  const record = Array.isArray(value) ? value[0] : value
+  if (typeof record !== 'object' || record === null) {
+    return typeof value
+  }
+  const keys = Object.keys(record).slice(0, 20)
+  return Array.isArray(value)
+    ? `array[${value.length}] of {${keys.join(', ')}}`
+    : `{${keys.join(', ')}}`
+}
+
 /** Reads both billing routes with the saved key; a rejected key fails without any fallback source. */
 export async function fetchCommandCodeRateLimits(input: {
   apiKey: string
@@ -107,7 +122,12 @@ export async function fetchCommandCodeRateLimits(input: {
     now: Date.now()
   })
   if (!normalized.monthly && !normalized.extraUsage) {
-    return failed('Could not read Command Code usage from the response', 'parse')
+    // Key names only, never values: enough to see the real schema without leaking balances or identity.
+    const shape = [
+      `credits: ${describeShape(credits)}`,
+      `subscriptions: ${describeShape(subscriptions)}`
+    ].join('; ')
+    return failed(`Could not read Command Code usage from the response (${shape})`, 'parse')
   }
   return {
     provider: 'command-code',
