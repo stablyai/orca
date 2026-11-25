@@ -2,15 +2,15 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import { forEachVisibleInternalPane, isElementInVisiblePaneManager } from '../pane-manager-registry'
 import { isManagedPaneDisplayNone } from '../terminal-fit/pane-display-visibility'
+import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
 import { presentPaneViewport } from './pane-viewport-present'
 import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
 
 /**
  * xterm shares one glyph atlas per font/colour config and never rechecks the page pixels behind a cache
- * entry, and reveal keeps the atlas. If a page loses its pixels (unconfirmed hypothesis behind STA-17523),
- * every renderer that uploads it draws blanks. Sample glyph rects that must hold ink and evict the atlas
- * when one reads blank. Detection only covers that case; it does not detect glyphs cached empty or stale
- * per-renderer GPU textures.
+ * entry, and reveal keeps the atlas. If a page loses its pixels (an unconfirmed hypothesis for STA-17523),
+ * every renderer that uploads it draws blanks. Sample glyph rects that provably held ink and evict the atlas
+ * when one reads blank. This does not detect glyphs cached empty or stale per-renderer GPU textures.
  */
 
 export type GlyphRect = { x: number; y: number; width: number; height: number }
@@ -28,7 +28,10 @@ type AtlasPageLike = {
   glyphs?: readonly AtlasGlyph[]
 }
 
-export type GlyphAtlasLike = { readonly pages: readonly AtlasPageLike[] }
+export type GlyphAtlasLike = {
+  readonly pages: readonly AtlasPageLike[]
+  readonly pageLayoutVersion?: number
+}
 
 export type InkRead = 'ink' | 'blank' | 'unreadable'
 export type GlyphInkReader = (canvas: AtlasCanvas, rect: GlyphRect) => InkRead
@@ -40,26 +43,22 @@ export type AtlasCheckResult =
   | { outcome: 'healthy' | 'inconclusive'; reads: number }
 
 const MAX_RECT_SIZE = 256
-const MAX_GLYPHS_SCANNED_PER_PAGE = 64
-const MAX_GLYPHS_SCANNED_PER_CHECK = 1024
-// xterm's TMP_CANVAS_GLYPH_PADDING: offset.y = padding - top + (non-negative adjustment).
-const GLYPH_PADDING = 2
+const MAX_VISITS_PER_PAGE = 64
+const MAX_VISITS_PER_ATTEMPT = 1024
 
 /**
- * offset.y <= padding - 1 means the top scan found ink at row top >= 1, and that pixel lies inside the
- * packed crop, so an intact page shows ink there. Anything else is not evidence either way.
+ * xterm sets offset.y = padding - top + adj (padding 4, or 0 for restricted glyphs; adj >= 0), and a missed
+ * top scan leaves top = 0. So offset.y <= -1 means the scan found an inked pixel, which lies inside the crop
+ * xterm packs; an intact page therefore shows ink in this rect. Other glyphs are not evidence either way.
  */
-function admittedRect(glyph: AtlasGlyph, canvas: AtlasCanvas): GlyphRect | null {
-  const position = glyph.texturePosition
-  const size = glyph.size
-  const offset = glyph.offset
-  if (!position || !size || !offset || !(offset.y <= GLYPH_PADDING - 1)) {
+export function admittedRect(glyph: AtlasGlyph, canvas: AtlasCanvas): GlyphRect | null {
+  const { texturePosition: position, size, offset } = glyph
+  if (!position || !size || !offset || !(offset.y <= -1)) {
     return null
   }
   const rect = { x: position.x, y: position.y, width: size.x, height: size.y }
-  const integral = [rect.x, rect.y, rect.width, rect.height].every(Number.isInteger)
   if (
-    !integral ||
+    ![rect.x, rect.y, rect.width, rect.height].every(Number.isInteger) ||
     rect.x < 0 ||
     rect.y < 0 ||
     rect.width < 1 ||
@@ -74,51 +73,46 @@ function admittedRect(glyph: AtlasGlyph, canvas: AtlasCanvas): GlyphRect | null 
   return rect
 }
 
-/** The k-th admitted glyph of each page quadrant, so successive checks cover neighbours and merged sources. */
-function pageSamples(
-  canvas: AtlasCanvas,
-  glyphs: readonly AtlasGlyph[],
-  round: number,
-  scanBudget: { left: number }
-): GlyphRect[] {
-  const seen = [0, 0, 0, 0]
-  const firsts: (GlyphRect | undefined)[] = []
-  const picks: (GlyphRect | undefined)[] = []
-  const limit = Math.min(glyphs.length, MAX_GLYPHS_SCANNED_PER_PAGE)
-  for (let i = 0; i < limit && scanBudget.left > 0; i++) {
-    scanBudget.left--
-    const rect = admittedRect(glyphs[i], canvas)
-    if (!rect) {
-      continue
-    }
-    const quadrant = (rect.x >= canvas.width / 2 ? 1 : 0) + (rect.y >= canvas.height / 2 ? 2 : 0)
-    firsts[quadrant] ??= rect
-    if (seen[quadrant]++ === round % MAX_GLYPHS_SCANNED_PER_PAGE) {
-      picks[quadrant] = rect
-    }
-  }
-  // Wrap to the first admitted rect when a quadrant has fewer than k+1.
-  return [0, 1, 2, 3].map((q) => picks[q] ?? firsts[q]).filter((rect): rect is GlyphRect => !!rect)
-}
+/** Per atlas and page: where the next visit starts, so every glyph is reached across attempts. */
+type Traversal = { layoutVersion: number | undefined; cursors: number[]; startPage: number }
 
 export function checkAtlasIntegrity(
   atlas: GlyphAtlasLike,
   read: GlyphInkReader,
-  options: { startPage: number; round: number; maxReads: number }
+  traversal: Traversal,
+  maxReads: number
 ): AtlasCheckResult {
+  if (traversal.layoutVersion !== atlas.pageLayoutVersion) {
+    traversal.layoutVersion = atlas.pageLayoutVersion
+    traversal.cursors = []
+  }
   let reads = 0
   let inked = 0
-  const scanBudget = { left: MAX_GLYPHS_SCANNED_PER_CHECK }
+  let visitsLeft = MAX_VISITS_PER_ATTEMPT
   const pageCount = atlas.pages.length
-  for (let step = 0; step < pageCount && reads < options.maxReads && scanBudget.left > 0; step++) {
-    const page = (options.startPage + step) % pageCount
+  const firstPage = pageCount ? traversal.startPage % pageCount : 0
+  traversal.startPage = firstPage + 1
+  for (let step = 0; step < pageCount && visitsLeft > 0; step++) {
+    const page = (firstPage + step) % pageCount
     const { canvas, glyphs } = atlas.pages[page]
     if (!canvas?.width || !canvas.height || !glyphs?.length) {
       continue
     }
-    for (const rect of pageSamples(canvas, glyphs, options.round, scanBudget)) {
-      if (reads >= options.maxReads) {
-        break
+    const visits = Math.min(glyphs.length, MAX_VISITS_PER_PAGE, visitsLeft)
+    const start = (traversal.cursors[page] ?? 0) % glyphs.length
+    traversal.cursors[page] = start + visits
+    visitsLeft -= visits
+    const quadrants: (GlyphRect | undefined)[] = []
+    for (let i = 0; i < visits; i++) {
+      const rect = admittedRect(glyphs[(start + i) % glyphs.length], canvas)
+      if (rect) {
+        const quadrant = (rect.x >= canvas.width / 2 ? 1 : 0) + (rect.y >= canvas.height / 2 ? 2 : 0)
+        quadrants[quadrant] ??= rect
+      }
+    }
+    for (const rect of quadrants) {
+      if (!rect || reads >= maxReads) {
+        continue
       }
       reads++
       let result: InkRead
@@ -139,54 +133,47 @@ export function checkAtlasIntegrity(
       }
     }
   }
-  return { outcome: inked > 0 ? 'healthy' : 'inconclusive', reads }
+  return { outcome: inked > 0 && inked === reads ? 'healthy' : 'inconclusive', reads }
 }
 
-const SCRATCH_WIDTH = MAX_RECT_SIZE + 1
-let scratch: CanvasRenderingContext2D | null | undefined
-let sourceControl: HTMLCanvasElement | null = null
+const SCRATCH_WIDTH = MAX_RECT_SIZE + 2
+const DESTINATION_CONTROL_X = MAX_RECT_SIZE
+const SOURCE_CONTROL_X = MAX_RECT_SIZE + 1
 
-function scratchContext(): CanvasRenderingContext2D | null {
-  if (scratch === undefined) {
-    scratch = null
-    if (typeof document !== 'undefined') {
-      const element = document.createElement('canvas')
-      element.width = SCRATCH_WIDTH
-      element.height = MAX_RECT_SIZE
-      scratch = element.getContext('2d', { alpha: true, willReadFrequently: true })
-      const control = document.createElement('canvas')
-      control.width = 1
-      control.height = 1
-      const controlContext = control.getContext('2d')
-      if (controlContext) {
-        controlContext.fillStyle = '#000'
-        controlContext.fillRect(0, 0, 1, 1)
-        sourceControl = control
-      }
-    }
+type ReadKit = { ctx: CanvasRenderingContext2D; control: HTMLCanvasElement }
+
+function createKit(): ReadKit | null {
+  if (typeof document === 'undefined') {
+    return null
   }
-  return scratch
+  const element = document.createElement('canvas')
+  element.width = SCRATCH_WIDTH
+  element.height = MAX_RECT_SIZE
+  const ctx = element.getContext('2d', { alpha: true, willReadFrequently: true })
+  const control = document.createElement('canvas')
+  control.width = 1
+  control.height = 1
+  const controlContext = control.getContext('2d')
+  if (!ctx || !controlContext) {
+    return null
+  }
+  controlContext.fillStyle = '#000'
+  controlContext.fillRect(0, 0, 1, 1)
+  return { ctx, control }
 }
 
-function usable(ctx: CanvasRenderingContext2D): boolean {
+function isUsable(ctx: CanvasRenderingContext2D): boolean {
   return ctx.getContextAttributes?.().alpha !== false && ctx.isContextLost?.() !== true
 }
 
-/** Blank only when both controls read back opaque; residual: they cannot prove this source's transfer. */
-export function readGlyphInk(canvas: AtlasCanvas, rect: GlyphRect): InkRead {
-  const ctx = scratchContext()
-  if (!ctx || !sourceControl || !usable(ctx)) {
-    return 'unreadable'
+function readOnce(current: ReadKit, canvas: AtlasCanvas, rect: GlyphRect): InkRead | 'control-failed' {
+  const { ctx, control } = current
+  if (!isUsable(ctx)) {
+    return 'control-failed'
   }
-  ctx.save()
-  ctx.globalCompositeOperation = 'copy'
-  ctx.clearRect(0, 0, SCRATCH_WIDTH, rect.height)
-  ctx.restore()
-  ctx.fillStyle = '#000'
-  ctx.fillRect(MAX_RECT_SIZE, 0, 1, 1)
-  ctx.drawImage(sourceControl, MAX_RECT_SIZE, 1)
-  ctx.save()
-  ctx.globalCompositeOperation = 'copy'
+  const height = Math.max(1, rect.height)
+  ctx.clearRect(0, 0, SCRATCH_WIDTH, height)
+  // Source-over onto transparent pixels reproduces the source's alpha.
   ctx.drawImage(
     canvas as unknown as CanvasImageSource,
     rect.x,
@@ -198,16 +185,11 @@ export function readGlyphInk(canvas: AtlasCanvas, rect: GlyphRect): InkRead {
     rect.width,
     rect.height
   )
-  ctx.restore()
-  const pixels = ctx.getImageData(0, 0, SCRATCH_WIDTH, Math.max(2, rect.height)).data
-  if (!usable(ctx)) {
-    return 'unreadable'
-  }
+  ctx.fillStyle = '#000'
+  ctx.fillRect(DESTINATION_CONTROL_X, 0, 1, 1)
+  ctx.drawImage(control, SOURCE_CONTROL_X, 0)
+  const pixels = ctx.getImageData(0, 0, SCRATCH_WIDTH, height).data
   const rowStride = SCRATCH_WIDTH * 4
-  const controlAlpha = MAX_RECT_SIZE * 4 + 3
-  if (pixels[controlAlpha] !== 255 || pixels[rowStride + controlAlpha] !== 255) {
-    return 'unreadable'
-  }
   for (let y = 0; y < rect.height; y++) {
     for (let x = 0; x < rect.width; x++) {
       if (pixels[y * rowStride + x * 4 + 3] > 0) {
@@ -215,7 +197,31 @@ export function readGlyphInk(canvas: AtlasCanvas, rect: GlyphRect): InkRead {
       }
     }
   }
-  return 'blank'
+  const controlsPassed =
+    pixels[DESTINATION_CONTROL_X * 4 + 3] === 255 && pixels[SOURCE_CONTROL_X * 4 + 3] === 255
+  return controlsPassed && isUsable(ctx) ? 'blank' : 'control-failed'
+}
+
+/**
+ * Blank only when both fresh controls drawn after the copy read back opaque. Residual: the controls prove
+ * the scratch and a canvas copy work, not the transfer from this particular page canvas.
+ */
+export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit): GlyphInkReader {
+  let kit: ReadKit | null = null
+  return (canvas, rect) => {
+    for (let tries = 0; tries < 2; tries++) {
+      kit ??= makeKit()
+      if (!kit) {
+        return 'unreadable'
+      }
+      const result = readOnce(kit, canvas, rect)
+      if (result !== 'control-failed') {
+        return result
+      }
+      kit = null
+    }
+    return 'unreadable'
+  }
 }
 
 type WebglInternals = {
@@ -233,15 +239,25 @@ export function atlasOfPane(pane: ManagedPaneInternal): GlyphAtlasLike | undefin
   }
 }
 
+function isWindowPresented(): boolean {
+  return (
+    getWindowParkVisible() &&
+    (typeof document === 'undefined' || document.visibilityState !== 'hidden')
+  )
+}
+
 function isEligibleOwner(pane: ManagedPaneInternal, atlas: GlyphAtlasLike): boolean {
   try {
     const renderer = (pane.webglAddon as unknown as WebglInternals | null)?._renderer
+    const terminalElement = (pane.terminal as { element?: { isConnected?: boolean } }).element
     return (
       !!pane.webglAddon &&
       !pane.webglDisabledAfterContextLoss &&
-      renderer?._gl?.isContextLost?.() !== true &&
+      typeof renderer?._gl?.isContextLost === 'function' &&
+      renderer._gl.isContextLost() === false &&
       atlasOfPane(pane) === atlas &&
       pane.container.isConnected &&
+      terminalElement?.isConnected === true &&
       isElementInVisiblePaneManager(pane.container) &&
       !isManagedPaneDisplayNone(pane) &&
       !paneIsCoveredByNativeChat(pane)
@@ -257,105 +273,95 @@ export type AtlasIntegrityDeps = {
   now: () => number
   read: GlyphInkReader
   setTimer: (callback: () => void, ms: number) => unknown
-  session: { resets: number }
+  isWindowPresented: () => boolean
+  state: AtlasIntegrityState
+}
+
+type AtlasState = {
+  completedAt: number
+  traversal: Traversal
+  resetAt: number
+  resets: number
+}
+
+export type AtlasIntegrityState = {
+  atlases: WeakMap<GlyphAtlasLike, AtlasState>
+  pending: Map<WeakRef<GlyphAtlasLike>, number>
+  timerArmed: boolean
+  readTimes: number[]
+  lastAttemptAt: number
+  resets: number
+}
+
+export function createAtlasIntegrityState(): AtlasIntegrityState {
+  return {
+    atlases: new WeakMap(),
+    pending: new Map(),
+    timerArmed: false,
+    readTimes: [],
+    lastAttemptAt: Number.NEGATIVE_INFINITY,
+    resets: 0
+  }
 }
 
 const defaultDeps: AtlasIntegrityDeps = {
   now: () => performance.now(),
-  read: readGlyphInk,
+  read: createGlyphInkReader(),
   setTimer: (callback, ms) => setTimeout(callback, ms),
-  session: { resets: 0 }
+  isWindowPresented,
+  state: createAtlasIntegrityState()
 }
 
 const ATLAS_COOLDOWN_MS = 10_000
 const GLOBAL_SPACING_MS = 50
 const READ_WINDOW_MS = 1_000
 const MAX_READS_PER_WINDOW = 16
+const PENDING_EXPIRY_MS = 30_000
 const RESET_INTERVAL_MS = 60_000
 const MAX_RESETS_PER_ATLAS = 3
 const MAX_RESETS_PER_SESSION = 10
 
-type AtlasState = {
-  completedAt: number
-  startPage: number
-  round: number
-  resetAt: number
-  resets: number
-  timerArmed: boolean
-}
-
-const atlasStates = new WeakMap<GlyphAtlasLike, AtlasState>()
-const readTimes: number[] = []
-let lastAttemptAt = Number.NEGATIVE_INFINITY
-
-function stateOf(atlas: GlyphAtlasLike): AtlasState {
-  let state = atlasStates.get(atlas)
+function stateOf(deps: AtlasIntegrityDeps, atlas: GlyphAtlasLike): AtlasState {
+  let state = deps.state.atlases.get(atlas)
   if (!state) {
     state = {
       completedAt: Number.NEGATIVE_INFINITY,
-      startPage: 0,
-      round: 0,
+      traversal: { layoutVersion: undefined, cursors: [], startPage: 0 },
       resetAt: Number.NEGATIVE_INFINITY,
-      resets: 0,
-      timerArmed: false
+      resets: 0
     }
-    atlasStates.set(atlas, state)
+    deps.state.atlases.set(atlas, state)
   }
   return state
 }
 
-function readsLeft(now: number): number {
-  while (readTimes.length && now - readTimes[0] >= READ_WINDOW_MS) {
-    readTimes.shift()
+function readsLeft(deps: AtlasIntegrityDeps, now: number): number {
+  const times = deps.state.readTimes
+  while (times.length && now - times[0] >= READ_WINDOW_MS) {
+    times.shift()
   }
-  return MAX_READS_PER_WINDOW - readTimes.length
+  return MAX_READS_PER_WINDOW - times.length
 }
 
-function readyAt(state: AtlasState, now: number): number {
-  const budgetAt = readsLeft(now) > 0 ? now : readTimes[0] + READ_WINDOW_MS
-  return Math.max(state.completedAt + ATLAS_COOLDOWN_MS, lastAttemptAt + GLOBAL_SPACING_MS, budgetAt)
+/** Renderer-wide gates, checked before any discovery or traversal. */
+function globalReadyAt(deps: AtlasIntegrityDeps, now: number): number {
+  const budgetAt = readsLeft(deps, now) > 0 ? now : deps.state.readTimes[0] + READ_WINDOW_MS
+  return Math.max(deps.state.lastAttemptAt + GLOBAL_SPACING_MS, budgetAt)
 }
 
-function isEvicted(atlas: GlyphAtlasLike): boolean {
-  return atlas.pages.length === 1 && (atlas.pages[0].glyphs?.length ?? 0) === 0
-}
-
-function reset(
-  owner: ManagedPaneInternal,
-  atlas: GlyphAtlasLike,
-  state: AtlasState,
-  finding: AtlasPoisonFinding,
-  trigger: AtlasCheckTrigger,
-  now: number,
-  session: AtlasIntegrityDeps['session']
-): void {
-  const allowed =
-    session.resets < MAX_RESETS_PER_SESSION &&
-    state.resets < MAX_RESETS_PER_ATLAS &&
-    now - state.resetAt >= RESET_INTERVAL_MS
-  let outcome: 'reset' | 'reset-failed' | 'refused' = 'refused'
-  if (allowed) {
-    state.resets++
-    state.resetAt = now
-    session.resets++
+function trace(entry: { trigger: AtlasCheckTrigger; outcome: string; reads: number; page?: number }): void {
+  const hook = (globalThis as { __orcaAtlasIntegrityTrace?: (entry: object) => void })
+    .__orcaAtlasIntegrityTrace
+  if (typeof hook === 'function') {
     try {
-      // Evicts the shared atlas; every owner rebuilds its model from the new layout generation.
-      owner.webglAddon?.clearTextureAtlas()
-      outcome = isEvicted(atlas) ? 'reset' : 'reset-failed'
+      hook(entry)
     } catch {
-      outcome = 'reset-failed'
+      // Dev observation only.
     }
   }
-  recordTerminalWebglDiagnostic('webgl-atlas-poisoned', {
-    ...finding,
-    outcome,
-    trigger,
-    pages: atlas.pages.length
-  })
-  if (outcome === 'refused') {
-    return
-  }
-  console.warn('[terminal] WebGL glyph atlas page lost its pixels; evicted the atlas', finding, outcome)
+}
+
+function presentEligibleOwners(atlas: GlyphAtlasLike): void {
   forEachVisibleInternalPane((pane) => {
     if (isEligibleOwner(pane, atlas)) {
       try {
@@ -367,76 +373,168 @@ function reset(
   })
 }
 
+function reset(
+  owner: ManagedPaneInternal,
+  atlas: GlyphAtlasLike,
+  state: AtlasState,
+  finding: AtlasPoisonFinding,
+  trigger: AtlasCheckTrigger,
+  now: number,
+  deps: AtlasIntegrityDeps
+): string {
+  const allowed =
+    deps.state.resets < MAX_RESETS_PER_SESSION &&
+    state.resets < MAX_RESETS_PER_ATLAS &&
+    now - state.resetAt >= RESET_INTERVAL_MS
+  let outcome: 'reset' | 'reset-failed' | 'refused' = 'refused'
+  if (allowed) {
+    state.resets++
+    state.resetAt = now
+    deps.state.resets++
+    const before = atlas.pageLayoutVersion
+    try {
+      owner.webglAddon?.clearTextureAtlas()
+    } catch {
+      // Read below: eviction may have committed before the throw.
+    }
+    // Same object, before any presentation can rasterize into it again.
+    const evicted =
+      atlas.pageLayoutVersion !== before &&
+      atlas.pages.length === 1 &&
+      (atlas.pages[0].glyphs?.length ?? 0) === 0
+    outcome = evicted ? 'reset' : 'reset-failed'
+  }
+  recordTerminalWebglDiagnostic('webgl-atlas-poisoned', {
+    ...finding,
+    outcome,
+    trigger,
+    pages: atlas.pages.length
+  })
+  if (outcome !== 'refused') {
+    console.warn('[terminal] WebGL glyph atlas page lost its pixels; evicted the atlas', outcome)
+    presentEligibleOwners(atlas)
+  }
+  return outcome
+}
+
 function attempt(
   owner: ManagedPaneInternal,
   atlas: GlyphAtlasLike,
   trigger: AtlasCheckTrigger,
   deps: AtlasIntegrityDeps
 ): void {
-  const state = stateOf(atlas)
   const now = deps.now()
-  const at = readyAt(state, now)
-  if (now < at) {
-    defer(atlas, state, at - now, deps)
-    return
-  }
-  lastAttemptAt = now
-  const result = checkAtlasIntegrity(atlas, deps.read, {
-    startPage: state.startPage,
-    round: state.round,
-    maxReads: readsLeft(now)
-  })
+  const state = stateOf(deps, atlas)
+  deps.state.lastAttemptAt = now
+  const result = checkAtlasIntegrity(atlas, deps.read, state.traversal, readsLeft(deps, now))
   for (let i = 0; i < result.reads; i++) {
-    readTimes.push(now)
+    deps.state.readTimes.push(now)
   }
-  if (result.reads === 0) {
-    // No atlas content to sample yet; a later reveal, attach or atlas change may.
-    return
+  if (result.reads > 0) {
+    state.completedAt = now
   }
-  state.completedAt = now
-  state.startPage = atlas.pages.length ? (state.startPage + 1) % atlas.pages.length : 0
-  state.round++
-  if (result.outcome === 'poisoned') {
-    reset(owner, atlas, state, result.finding, trigger, now, deps.session)
-  }
+  const outcome =
+    result.outcome === 'poisoned'
+      ? reset(owner, atlas, state, result.finding, trigger, now, deps)
+      : result.outcome
+  trace({
+    trigger,
+    outcome,
+    reads: result.reads,
+    ...(result.outcome === 'poisoned' ? { page: result.finding.page } : {})
+  })
 }
 
-function defer(atlas: GlyphAtlasLike, state: AtlasState, ms: number, deps: AtlasIntegrityDeps): void {
-  if (state.timerArmed) {
+function armService(deps: AtlasIntegrityDeps, now: number): void {
+  if (deps.state.timerArmed || deps.state.pending.size === 0) {
     return
   }
-  state.timerArmed = true
-  const atlasRef = new WeakRef(atlas)
-  deps.setTimer(() => {
-    const pending = atlasRef.deref()
-    if (!pending) {
+  deps.state.timerArmed = true
+  deps.setTimer(() => service(deps), Math.max(0, globalReadyAt(deps, now) - now))
+}
+
+function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): void {
+  for (const ref of deps.state.pending.keys()) {
+    if (ref.deref() === atlas) {
+      armService(deps, now)
       return
     }
-    stateOf(pending).timerArmed = false
-    // The requester may be gone; any still-eligible owner of the atlas can carry the check.
-    let owner: ManagedPaneInternal | undefined
-    forEachVisibleInternalPane((pane) => {
-      if (isEligibleOwner(pane, pending)) {
-        owner = pane
-        return true
-      }
-      return false
-    })
-    if (owner) {
-      attempt(owner, pending, 'deferred', deps)
-    }
-  }, ms)
+  }
+  deps.state.pending.set(new WeakRef(atlas), Date.now())
+  armService(deps, now)
 }
 
-/** Checks the pane's shared atlas now or when allowed; never throws into reveal, attach or render. */
+/** One renderer-wide service: gates first, then at most one discovery scan and one attempt per firing. */
+function service(deps: AtlasIntegrityDeps): void {
+  try {
+    deps.state.timerArmed = false
+    const now = deps.now()
+    if (now < globalReadyAt(deps, now)) {
+      armService(deps, now)
+      return
+    }
+    const wallNow = Date.now()
+    let chosen: GlyphAtlasLike | undefined
+    let soonest = Number.POSITIVE_INFINITY
+    for (const [ref, queuedAt] of deps.state.pending) {
+      const atlas = ref.deref()
+      if (!atlas || wallNow - queuedAt > PENDING_EXPIRY_MS) {
+        deps.state.pending.delete(ref)
+        continue
+      }
+      const readyAt = stateOf(deps, atlas).completedAt + ATLAS_COOLDOWN_MS
+      if (readyAt <= now) {
+        deps.state.pending.delete(ref)
+        chosen = atlas
+        break
+      }
+      soonest = Math.min(soonest, readyAt)
+    }
+    if (!chosen) {
+      if (deps.state.pending.size > 0) {
+        deps.state.timerArmed = true
+        deps.setTimer(() => service(deps), Math.max(0, soonest - now))
+      }
+      return
+    }
+    deps.state.lastAttemptAt = now
+    let owner: ManagedPaneInternal | undefined
+    if (deps.isWindowPresented()) {
+      forEachVisibleInternalPane((pane) => {
+        if (isEligibleOwner(pane, chosen)) {
+          owner = pane
+          return true
+        }
+        return false
+      })
+    }
+    if (owner) {
+      attempt(owner, chosen, 'deferred', deps)
+    }
+    armService(deps, now)
+  } catch {
+    // Diagnostics-only path.
+  }
+}
+
+/** Checks the pane's shared atlas now or later; never throws into reveal, attach or xterm's events. */
 export function verifyPaneWebglAtlasIntegrity(
   pane: ManagedPaneInternal,
   trigger: AtlasCheckTrigger,
   deps: AtlasIntegrityDeps = defaultDeps
 ): void {
   try {
+    const now = deps.now()
     const atlas = atlasOfPane(pane)
-    if (atlas && isEligibleOwner(pane, atlas)) {
+    if (!atlas || !deps.isWindowPresented()) {
+      return
+    }
+    const cooldownAt = stateOf(deps, atlas).completedAt + ATLAS_COOLDOWN_MS
+    if (now < Math.max(globalReadyAt(deps, now), cooldownAt)) {
+      enqueue(atlas, deps, now)
+      return
+    }
+    if (isEligibleOwner(pane, atlas)) {
       attempt(pane, atlas, trigger, deps)
     }
   } catch {
@@ -444,7 +542,7 @@ export function verifyPaneWebglAtlasIntegrity(
   }
 }
 
-/** xterm reports an atlas change before installing it, so look on the next task. */
+/** xterm reports an atlas change before assigning it, so resolve it on the next task. */
 export function requestAtlasChangeIntegrityCheck(
   pane: ManagedPaneInternal,
   deps: AtlasIntegrityDeps = defaultDeps
