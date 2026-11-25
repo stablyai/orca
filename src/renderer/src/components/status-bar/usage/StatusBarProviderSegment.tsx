@@ -297,9 +297,9 @@ export function ProviderSegment({
   )
 
   const compactBar = barMode === 'compact'
-  // Why muted color, not opacity: monochrome icons go quiet while brand colors keep 3:1 contrast.
+  // Why: muted color quiets monochrome SVGs; image icons ignore it, so they dim just enough to stay at 3:1.
   const icon = compactBar ? (
-    <span className="inline-flex text-muted-foreground">
+    <span className="inline-flex text-muted-foreground [&>img]:opacity-85 dark:[&>img]:opacity-75">
       <ProviderIcon provider={provider} />
     </span>
   ) : (
