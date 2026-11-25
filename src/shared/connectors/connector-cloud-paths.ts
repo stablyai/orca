@@ -32,3 +32,8 @@ export const CONNECTOR_PATHS = {
   // GET `${shares}/mine`; POST `…/<share id>/accept`; POST and GET `…/<share id>/messages` (share-messages.ts).
   shares: '/v1/shares'
 } as const
+
+/** The services a person connects in one browser trip, each at `${CONNECTOR_PATHS[source]}/connect`
+ *  (connect-messages.ts in the cloud contract; connector-mirrored-constants.test.ts keeps them equal). */
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
+export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]

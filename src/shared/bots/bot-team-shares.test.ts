@@ -59,6 +59,34 @@ describe('bot share list', () => {
     ])
   })
 
+  it('keeps the services a resolve names; an old entry reads none, an unknown one drops, not the share', () => {
+    const linked = withBotShareResolved([invite], {
+      ...resolved,
+      linkedSources: ['slack', 'linear']
+    })!
+    expect(linked[0]).toMatchObject({ kind: 'account', linkedSources: ['slack', 'linear'] })
+    const [account] = withBotShareResolved([invite], resolved)!
+    expect(BotSharesSchema.parse([account])[0]).not.toHaveProperty('linkedSources')
+    const fromNewer = { ...account, linkedSources: ['discord', 'slack', 'github', 'slack'] }
+    expect(BotSharesSchema.parse([fromNewer])).toEqual([
+      { ...account, linkedSources: ['github', 'slack'] }
+    ])
+  })
+
+  it("updates an account's linked sources from a resolve without email, only when they changed", () => {
+    const once = withBotShareResolved([invite], { ...resolved, linkedSources: ['slack'] })!
+    const later = { shareId: 'a', accountId: 'acct-alice' }
+    expect(withBotShareResolved(once, { ...later, linkedSources: ['slack'] })).toBe(once)
+    const relinked = withBotShareResolved(once, { ...later, linkedSources: ['github', 'slack'] })!
+    expect(relinked[0]).toMatchObject({ linkedSources: ['github', 'slack'] })
+    expect(withBotShareResolved(relinked, { ...later, linkedSources: [] })![0]).not.toHaveProperty(
+      'linkedSources'
+    )
+    expect(withBotShareResolved(once, { ...later, accountId: 'acct-eve' })).toBeNull()
+    // An invite resolves only by its email.
+    expect(withBotShareResolved([invite], later)).toBeNull()
+  })
+
   it('reads a saved list entry by entry, and a list that is not one as unset, never losing the bot', () => {
     expect(BotSharesSchema.parse([invite, { kind: 'team', shareId: 'c' }])).toEqual([invite])
     expect(BotSchema.shape.shares.parse(null)).toBeUndefined()

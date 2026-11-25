@@ -1,6 +1,10 @@
 // The Orca accounts and invited emails a bot is shared with (Bot.shares). The host owns the list and
 // publishes it in its hello; Orca Cloud mirrors it, resolves invites and relays teammates' accepts.
 import * as z from 'zod'
+import {
+  CONNECTOR_CONNECT_SOURCES,
+  type ConnectorConnectSource
+} from '../connectors/connector-cloud-paths'
 
 /** One bot's hello lists at most this many, as the connector contract's maxBotShares caps them. */
 export const BOT_MAX_SHARES = 50
@@ -18,6 +22,13 @@ export const BotShareEmailSchema = z
   .max(MAX_SHARE_EMAIL_LENGTH)
   .refine((email) => email === normalizeShareEmail(email))
 
+/** The services a teammate linked to their own Orca account, by name only. A source this Orca doesn't
+ *  know (a newer cloud's) is dropped, never the share; the list comes back in one order, once each. */
+export const BotShareLinkedSourcesSchema = z
+  .array(z.unknown())
+  .max(16)
+  .transform((sources) => CONNECTOR_CONNECT_SOURCES.filter((source) => sources.includes(source)))
+
 // shareId is minted on Add and kept when the invite resolves, so the cloud's row and a teammate's
 // accept name the same share throughout.
 export const BotShareSchema = z.discriminatedUnion('kind', [
@@ -27,7 +38,9 @@ export const BotShareSchema = z.discriminatedUnion('kind', [
     accountId: z.string().min(1).max(128),
     name: z.string().min(1).optional(),
     email: BotShareEmailSchema,
-    addedAt: z.number()
+    addedAt: z.number(),
+    /** Absent from an older cloud's resolve: none shown. */
+    linkedSources: BotShareLinkedSourcesSchema.optional()
   }),
   z.object({
     kind: z.literal('invite'),
@@ -80,21 +93,51 @@ export function withBotSharesEmailed(
   )
 }
 
+/** The account share with these linked sources; none drops the field. */
+function withLinkedSources(
+  share: BotAccountShare,
+  sources: readonly ConnectorConnectSource[]
+): BotAccountShare {
+  const { linkedSources: _, ...rest } = share
+  return sources.length > 0 ? { ...rest, linkedSources: [...sources] } : rest
+}
+
 /**
- * An invite signed in as an Orca account, applied to the list as the host has it now: null when
- * the share is gone or no longer that email's (removed while the cloud resolved it). An account
- * already on the list keeps its own share, and the invite goes. The same list back: nothing to write.
+ * An invite signed in as an Orca account, or that account's linked sources changing (no email),
+ * applied to the list as the host has it now: null when the share is gone or no longer that
+ * email's or account's (removed while the cloud resolved it). An account already on the list keeps
+ * its own share, and the invite goes. The same list back: nothing to write.
  */
 export function withBotShareResolved(
   shares: readonly BotShare[],
-  resolved: { shareId: string; email: string; accountId: string; name?: string }
+  resolved: {
+    shareId: string
+    email?: string
+    accountId: string
+    name?: string
+    linkedSources?: readonly ConnectorConnectSource[]
+  }
 ): readonly BotShare[] | null {
   const share = shares.find((entry) => entry.shareId === resolved.shareId)
-  if (!share || share.email !== normalizeShareEmail(resolved.email)) {
+  if (
+    !share ||
+    (resolved.email !== undefined && share.email !== normalizeShareEmail(resolved.email))
+  ) {
     return null
   }
   if (share.kind === 'account') {
-    return share.accountId === resolved.accountId ? shares : null
+    if (share.accountId !== resolved.accountId) {
+      return null
+    }
+    const { linkedSources } = resolved
+    const same = (share.linkedSources ?? []).join() === (linkedSources ?? []).join()
+    return linkedSources === undefined || same
+      ? shares
+      : shares.map((entry) => (entry === share ? withLinkedSources(share, linkedSources) : entry))
+  }
+  // An invite resolves only by its email.
+  if (resolved.email === undefined) {
+    return null
   }
   if (shares.some((entry) => entry.kind === 'account' && entry.accountId === resolved.accountId)) {
     return shares.filter((entry) => entry.shareId !== share.shareId)
@@ -107,7 +150,9 @@ export function withBotShareResolved(
     email: share.email,
     addedAt: share.addedAt
   }
-  return shares.map((entry) => (entry === share ? account : entry))
+  return shares.map((entry) =>
+    entry === share ? withLinkedSources(account, resolved.linkedSources ?? []) : entry
+  )
 }
 
 /** The share an accept names, while it is still that account's. */
