@@ -2005,7 +2005,8 @@
         "projectRemoved": "專案已從 Orca 移除。",
         "folderWorkspaceRemoved": "資料夾工作區已移除。",
         "chatStillStarting": "此聊天仍在啟動中。請稍後再試。",
-        "chatOpenFailed": "無法開啟此聊天。",
+        "chatOpenFailed": "無法開啟此聊天",
+        "chatOpenDismiss": "忽略",
         "chatOpenRetry": "重試",
         "chatOpenShowDetails": "顯示詳細資料",
         "chatOpenHideDetails": "隱藏詳細資料"

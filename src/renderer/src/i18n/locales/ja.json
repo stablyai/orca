@@ -1777,7 +1777,8 @@
         "projectRemoved": "プロジェクトは Orca から削除されました。",
         "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。",
         "chatStillStarting": "チャットは起動中です。後でもう一度お試しください。",
-        "chatOpenFailed": "このチャットを開けませんでした。",
+        "chatOpenFailed": "このチャットを開けませんでした",
+        "chatOpenDismiss": "非表示",
         "chatOpenRetry": "再試行",
         "chatOpenShowDetails": "詳細を表示",
         "chatOpenHideDetails": "詳細を非表示"

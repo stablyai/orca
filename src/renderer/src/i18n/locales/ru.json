@@ -2103,7 +2103,8 @@
         "projectRemoved": "Проект удалён из Orca.",
         "folderWorkspaceRemoved": "Рабочее пространство папки удалено.",
         "chatStillStarting": "Чат ещё запускается. Повторите чуть позже.",
-        "chatOpenFailed": "Не удалось открыть чат.",
+        "chatOpenFailed": "Не удалось открыть чат",
+        "chatOpenDismiss": "Скрыть",
         "chatOpenRetry": "Повторить",
         "chatOpenShowDetails": "Показать подробности",
         "chatOpenHideDetails": "Скрыть подробности"

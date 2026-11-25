@@ -1942,7 +1942,8 @@
         "projectRemoved": "프로젝트가 Orca에서 제거되었습니다.",
         "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다.",
         "chatStillStarting": "채팅이 시작 중입니다. 잠시 후 다시 시도하세요.",
-        "chatOpenFailed": "이 채팅을 열 수 없습니다.",
+        "chatOpenFailed": "이 채팅을 열 수 없습니다",
+        "chatOpenDismiss": "무시",
         "chatOpenRetry": "다시 시도",
         "chatOpenShowDetails": "세부 정보 표시",
         "chatOpenHideDetails": "세부 정보 숨기기"
