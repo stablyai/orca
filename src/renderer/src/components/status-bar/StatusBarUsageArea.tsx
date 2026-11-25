@@ -149,8 +149,12 @@ export function StatusBarUsageArea({
                 onCloseAutoFocus={usageMenuFocusHandoff.onCloseAutoFocus}
               >
                 <UsageRosterPanel
-                  actionsAvailable={remoteOwner === null || remoteOwner.environmentId !== null}
-                  unavailableReason={remoteOwner?.unavailableReason}
+                  // Why: a WSL distro's accounts are managed on this device, so its rows stay actionable.
+                  actionsAvailable={
+                    remoteOwner === null ||
+                    remoteOwner.environmentId !== null ||
+                    remoteOwner.wslDistro !== undefined
+                  }
                   providers={rosterProviders}
                   display={usagePercentageDisplay}
                   statusBarUsageMode={statusBarUsageMode}

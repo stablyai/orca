@@ -156,8 +156,6 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
       return 'C'
-    case 'gemini':
-      return 'G'
     case 'opencode-go':
       return 'O'
     case 'kimi':
@@ -287,7 +285,7 @@ export function ProviderSegment({
       ? []
       : template && p
         ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
-        : showLabels
+        : mode === 'verbose'
           ? groupedBuckets
               .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_WARNING_PERCENT)
               .map((bucket) => bucket.resetsAt)
@@ -363,9 +361,11 @@ export function ProviderSegment({
             {index > 0 ? <span className="text-muted-foreground">·</span> : null}
             <WindowLabel
               w={section.window}
-              label={formatStatusBarSectionLabel(p, section, now, t)}
+              label={
+                mode === 'compact' ? section.label : formatStatusBarSectionLabel(p, section, now, t)
+              }
               display={display}
-              showLabel={showLabels}
+              showLabel={showLabels && section.label !== ''}
               labelFirst={section.labelFirst}
             />
           </React.Fragment>

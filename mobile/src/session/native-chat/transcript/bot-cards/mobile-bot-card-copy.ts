@@ -56,6 +56,7 @@ const OFFER_PIECES: Pieces<keyof typeof OFFER> = {
   edit: (t) => t('chat.botCards.offer.edit', OFFER.edit),
   create: (t) => t('chat.botCards.offer.create', OFFER.create),
   open: (t) => t('chat.botCards.offer.open', OFFER.open),
+  openBot: (t, values) => t('chat.botCards.offer.openBot', OFFER.openBot, values),
   origin: (t, values) => t('chat.botCards.offer.origin', OFFER.origin, values),
   originTemplate: (t, values) =>
     t('chat.botCards.offer.originTemplate', OFFER.originTemplate, values),

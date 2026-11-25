@@ -1,4 +1,4 @@
-// Brings an Activity comment card into view, centred in the Activity's scroller. A quote's
+// Brings an Activity comment card into view: centred, so the sticky header never covers it. A quote's
 // jump focuses the card; the comment box's "Replying to" only lights it, so typing stays in the box.
 
 /** Marks a card so a jump can find it. */
