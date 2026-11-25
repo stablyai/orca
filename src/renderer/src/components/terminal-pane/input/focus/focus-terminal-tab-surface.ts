@@ -78,7 +78,10 @@ export function focusTerminalTabSurface(
             requestNativeChatComposerFocus(tabId, { onlyIfFocusUnclaimed: true })
             return
           }
-          requestNativeChatComposerFocus(tabId)
+          requestNativeChatComposerFocus(
+            tabId,
+            options.shouldFocus ? { stillWanted: options.shouldFocus } : {}
+          )
         }
         return
       }

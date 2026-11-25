@@ -24,6 +24,8 @@ const revealedComposerReclaims = new Map<
 type PendingComposerFocusRequest = {
   tabId: string | null
   text?: ComposerFocusText
+  /** Re-checked when the composer is finally reached: the user may have moved on by then. */
+  stillWanted?: () => boolean
   cancel: () => void
   deliver: () => void
 }
@@ -31,7 +33,7 @@ let pendingFocusRequest: PendingComposerFocusRequest | null = null
 let focusRequestGeneration = 0
 
 export type NativeChatComposerFocusIntent = {
-  request: (tabId: string, text?: ComposerFocusText) => void
+  request: (tabId: string, text?: ComposerFocusText, stillWanted?: () => boolean) => void
   cancel: () => void
 }
 
@@ -103,7 +105,9 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
     }
     if (destination) {
       cancel()
-      destination.reclaim(false, sources, pending.text)
+      if (pending.stillWanted?.() !== false) {
+        destination.reclaim(false, sources, pending.text)
+      }
     }
   }
   const pending: PendingComposerFocusRequest = { tabId: null, cancel, deliver }
@@ -113,12 +117,13 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
   document.addEventListener('pointerdown', cancel, true)
   document.addEventListener('keydown', cancelForNavigation, true)
   return {
-    request: (tabId, text) => {
+    request: (tabId, text, stillWanted) => {
       if (pendingFocusRequest !== pending) {
         return
       }
       pending.tabId = tabId
       pending.text = text
+      pending.stillWanted = stillWanted
       deliver()
     },
     cancel
@@ -128,7 +133,13 @@ export function captureNativeChatComposerFocusIntent(): NativeChatComposerFocusI
 /** Re-clicking a chat's active tab claims its composer again, as a terminal tab refocuses xterm. */
 export function requestNativeChatComposerFocus(
   tabId: string,
-  options: { onlyIfFocusUnclaimed?: boolean; append?: string; revealDraft?: boolean } = {}
+  options: {
+    onlyIfFocusUnclaimed?: boolean
+    append?: string
+    revealDraft?: boolean
+    /** Checked again if the composer mounts later than this request. */
+    stillWanted?: () => boolean
+  } = {}
 ): void {
   if (options.onlyIfFocusUnclaimed) {
     // A rename return is one-shot, not an activation to replay after a hidden composer reveals.
@@ -141,5 +152,5 @@ export function requestNativeChatComposerFocus(
       : options.revealDraft
         ? { revealDraft: true }
         : undefined
-  captureNativeChatComposerFocusIntent().request(tabId, text)
+  captureNativeChatComposerFocusIntent().request(tabId, text, options.stillWanted)
 }

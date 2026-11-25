@@ -5,6 +5,7 @@ import {
   spawnSurfaceClaimSequence
 } from '../../terminal/surface/pty-recorded-surface-topology'
 import { withSelectedTabs } from './headless-tab-group-selection'
+import { insertUnpinnedTab } from './moved-pane-tab-order'
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
@@ -122,16 +123,22 @@ export abstract class OrcaRuntimeWithHeadlessPaneMoveToNewTab extends OrcaRuntim
       }
     })
     const index = target.id === placement?.targetGroupId ? placement.index : undefined
+    // Pins as they are at this write: a tab pinned while the commit was in flight still comes first.
+    const pinnedTabIds = new Set(
+      snapshot.tabs
+        .filter((tab) => tab.isPinned)
+        .map((tab) => (tab.type === 'terminal' ? tab.parentTabId : tab.id))
+    )
     const groups = withSelectedTabs(
       groupsBefore,
-      ordered.map((group) => {
-        if (group.id !== target.id) {
-          return group
-        }
-        const tabOrder = [...group.tabOrder]
-        tabOrder.splice(Math.max(0, Math.min(index ?? tabOrder.length, tabOrder.length)), 0, tabId)
-        return { id: group.id, tabOrder }
-      }),
+      ordered.map((group) =>
+        group.id === target.id
+          ? {
+              id: group.id,
+              tabOrder: insertUnpinnedTab(group.tabOrder, tabId, index, pinnedTabIds)
+            }
+          : group
+      ),
       tabId
     )
     const layout =

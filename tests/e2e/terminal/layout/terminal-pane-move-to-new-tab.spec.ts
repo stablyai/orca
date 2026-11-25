@@ -6,6 +6,10 @@
  *   name, and work without a drag too
  */
 
+import { randomUUID } from 'node:crypto'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
@@ -14,9 +18,12 @@ import { waitForActiveTerminalManager, waitForPaneCount } from './terminal-pane-
 import { dragPaneOutToTabStrip } from '../../layout/publication/terminal-layout-journeys'
 import { getTerminalContentForPtyId } from '../lifecycle/terminal-pty-readiness'
 import {
+  claudeTranscriptLines,
   enableNativeChatSetting,
+  seedClaudeProviderSession,
   toggleTerminalTabToChatView
 } from '../../agents/session-fixtures/native-chat-transcript-fixture'
+import { waitForActivePaneHookDescriptor } from '../input/terminal-active-pane'
 import {
   ensureTerminalVisible,
   waitForActiveWorktree,
@@ -113,6 +120,81 @@ async function expectMovedToOwnTab(
   await page.keyboard.type(`echo ${typed}\r`)
   await waitForTerminalOutputForPtyId(page, moved.ptyId, typed, 10_000)
   return home!.tabId
+}
+
+/**
+ * Splits, then opens a real conversation on the new split leaf in chat view, so the chat view's
+ * own pane menu and composer mount. The caller removes the transcript folder.
+ */
+async function openChatOnSplit(page: Page) {
+  const moved = await splitWithMarker(page)
+  const before = await readTabs(page)
+  const sourceTabId = before.activeTabId!
+  const descriptor = await waitForActivePaneHookDescriptor(page)
+  expect(descriptor.paneKey).toBe(`${sourceTabId}:${moved.leafId}`)
+  const sessionId = `e2e-move-chat-${randomUUID()}`
+  const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-move-chat-'))
+  const transcriptPath = path.join(scratchDir, `${sessionId}.jsonl`)
+  const reply = `MOVE_CHAT_REPLY_${Date.now()}`
+  writeFileSync(
+    transcriptPath,
+    claudeTranscriptLines({ sessionId, userText: 'Is the build done?', assistantText: reply })
+  )
+  await enableNativeChatSetting(page)
+  await seedClaudeProviderSession(page, { ...descriptor, sessionId, transcriptPath })
+  await toggleTerminalTabToChatView(page, { tabId: sourceTabId, worktreeId: before.worktreeId })
+  const sourceTab = page.locator(`[data-terminal-tab-id="${sourceTabId}"]`)
+  const sourceReply = sourceTab.locator('[data-native-chat-window]').getByText(reply)
+  await expect(sourceReply).toBeVisible({ timeout: 30_000 })
+  const composer = sourceTab.locator('[data-native-chat-composer-scope]')
+  await expect(composer).toBeVisible()
+  expect(
+    await page.evaluate(
+      (tabId) => window.__store!.getState().terminalLayoutsByTabId[tabId]?.chatLeafId ?? null,
+      sourceTabId
+    )
+  ).toBe(moved.leafId)
+  const sibling = await page.evaluate(
+    ({ tabId, leafId }) =>
+      Object.entries(
+        window.__store!.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+      ).find(([id]) => id !== leafId) ?? null,
+    { tabId: sourceTabId, leafId: moved.leafId }
+  )
+  expect(sibling).not.toBeNull()
+  return { moved, before, sourceTabId, reply, sourceReply, composer, sibling: sibling!, scratchDir }
+}
+
+/** The pane left with its shell and conversation for a new tab in chat view; its sibling stayed. */
+async function expectChatMovedToOwnTab(
+  page: Page,
+  chat: Awaited<ReturnType<typeof openChatOnSplit>>
+) {
+  await expect
+    .poll(async () => (await readLeafHome(page, chat.moved.leafId))?.tabId ?? null)
+    .not.toBe(chat.sourceTabId)
+  const home = await readLeafHome(page, chat.moved.leafId)
+  expect(home).toEqual({ tabId: expect.any(String), ptyId: chat.moved.ptyId, leafCount: 1 })
+  expect(await readLeafHome(page, chat.sibling[0])).toEqual({
+    tabId: chat.sourceTabId,
+    ptyId: chat.sibling[1],
+    leafCount: 1
+  })
+  expect(
+    await page.evaluate(
+      ({ tabId, worktreeId }) =>
+        window
+          .__store!.getState()
+          .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === tabId)?.viewMode,
+      { tabId: home!.tabId, worktreeId: chat.before.worktreeId }
+    )
+  ).toBe('chat')
+  await expect(
+    page
+      .locator(`[data-terminal-tab-id="${home!.tabId}"] [data-native-chat-window]`)
+      .getByText(chat.reply)
+  ).toBeVisible({ timeout: 30_000 })
+  await waitForTerminalOutputForPtyId(page, chat.moved.ptyId, chat.moved.marker, 10_000)
 }
 
 // Why: keep the suite serial so headful pane tests never open multiple Electron windows at once.
@@ -277,36 +359,37 @@ test.describe('Move a terminal pane to a new tab', () => {
   test('the chat view pane menu moves a pane into a new tab that opens in chat view', async ({
     orcaPage
   }) => {
-    await enableNativeChatSetting(orcaPage)
-    const moved = await splitWithMarker(orcaPage)
-    const before = await readTabs(orcaPage)
-    await toggleTerminalTabToChatView(orcaPage, {
-      tabId: before.activeTabId!,
-      worktreeId: before.worktreeId
-    })
-    const chatLeafId = await orcaPage.evaluate(
-      (tabId) => window.__store!.getState().terminalLayoutsByTabId[tabId]?.chatLeafId ?? null,
-      before.activeTabId!
+    const chat = await openChatOnSplit(orcaPage)
+    try {
+      // The transcript is not editable, so this is the chat view's own pane menu.
+      await chat.sourceReply.click({ button: 'right' })
+      const chatMenu = orcaPage.locator('[data-native-chat-context-menu]')
+      await expect(chatMenu).toBeVisible()
+      await chatMenu.getByRole('menuitem', { name: 'Move to New Tab' }).click()
+
+      await expectChatMovedToOwnTab(orcaPage, chat)
+    } finally {
+      rmSync(chat.scratchDir, { recursive: true, force: true })
+    }
+  })
+
+  test('a bound shortcut moves the pane from its chat composer', async ({ orcaPage }) => {
+    await orcaPage.evaluate(
+      (binding) =>
+        window.__store!.getState().setKeybindingOverride('terminal.movePaneToNewTab', [binding]),
+      MOVE_PANE_BINDING
     )
-    expect(chatLeafId).toBe(moved.leafId)
+    const chat = await openChatOnSplit(orcaPage)
+    try {
+      await chat.composer.locator('textarea, [contenteditable="true"]').first().click()
+      await orcaPage.keyboard.press(MOVE_PANE_CHORD)
 
-    await orcaPage.locator(`.pane[data-leaf-id="${moved.leafId}"]`).click({ button: 'right' })
-    await orcaPage.getByRole('menuitem', { name: 'Move to New Tab' }).click()
-
-    await expect
-      .poll(async () => (await readLeafHome(orcaPage, moved.leafId))?.tabId ?? null)
-      .not.toBe(before.activeTabId)
-    const home = await readLeafHome(orcaPage, moved.leafId)
-    expect(home).toEqual({ tabId: expect.any(String), ptyId: moved.ptyId, leafCount: 1 })
-    expect(
-      await orcaPage.evaluate(
-        ({ tabId, worktreeId }) =>
-          window
-            .__store!.getState()
-            .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === tabId)?.viewMode,
-        { tabId: home!.tabId, worktreeId: before.worktreeId }
+      await expectChatMovedToOwnTab(orcaPage, chat)
+    } finally {
+      rmSync(chat.scratchDir, { recursive: true, force: true })
+      await orcaPage.evaluate(() =>
+        window.__store!.getState().resetKeybindingOverride('terminal.movePaneToNewTab')
       )
-    ).toBe('chat')
-    await waitForTerminalOutputForPtyId(orcaPage, moved.ptyId, moved.marker, 10_000)
+    }
   })
 })

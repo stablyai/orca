@@ -102,9 +102,14 @@ function moveLeafInPartition(
     existingTabCount: tabs.length,
     ...(sourceTab.startupCwd ? { startupCwd: sourceTab.startupCwd } : {})
   })
+  const movedTitle = sourceLayout.titlesByLeafId?.[leafId]
+  // Why: the committer names the tab in the same write that creates it, so every reader (window,
+  // host snapshot, a paired client) sees it named and no later rename can race a user's edit.
+  const paneTitle = movedTitle?.trim()
   const targetTab = {
     ...row,
     ptyId,
+    ...(paneTitle ? { customTitle: paneTitle } : {}),
     ...(sourceTab.shellOverride ? { shellOverride: sourceTab.shellOverride } : {})
   }
   const nextTabs = tabs.map((tab) =>
@@ -112,7 +117,6 @@ function moveLeafInPartition(
       ? { ...tab, ptyId: remainingPtyIds[0] ?? null }
       : tab
   )
-  const movedTitle = sourceLayout.titlesByLeafId?.[leafId]
   const terminalLayoutsByTabId = {
     ...session.terminalLayoutsByTabId,
     [targetTabId]: {

@@ -65,35 +65,29 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
     [getPaneMoveReadiness, worktreeId, managerRef]
   )
   const detachPaneToNewTab = useCallback(
-    (sourcePaneId: number, target: TerminalPaneNewTabTarget) => {
-      // Re-read at every step of the move: its pane id can change, and a reconnect can rebind it.
-      const readSource = (leafId: string) => {
-        const manager = managerRef.current
-        const paneId = manager?.getPanes().find((pane) => manager.getLeafId(pane.id) === leafId)?.id
-        if (paneId === undefined) {
-          return null
-        }
-        const transport = paneTransportsRef.current.get(paneId)
-        const sourcePaneCwd = paneCwdRef.current.get(paneId)
-        return {
-          livePtyId: transport?.getPtyId() ?? null,
-          ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
-          connectPending: transport?.isConnectPending?.() ?? false
-        }
-      }
-      return detachTerminalPaneToTab({
-        readSource,
+    (sourcePaneId: number, target: TerminalPaneNewTabTarget) =>
+      detachTerminalPaneToTab({
         getStore: useAppStore.getState,
-        manager: managerRef.current,
+        // Read at every step of the move: a remount replaces the manager, a reconnect rebinds the pane.
+        getManager: () => managerRef.current,
+        readPane: (paneId) => {
+          const transport = paneTransportsRef.current.get(paneId)
+          const sourcePaneCwd = paneCwdRef.current.get(paneId)
+          return {
+            livePtyId: transport?.getPtyId() ?? null,
+            ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
+            connectPending: transport?.isConnectPending?.() ?? false
+          }
+        },
         persistLayoutSnapshot,
         sourcePaneId,
         sourceTabId: tabId,
         targetGroupId: target.groupId,
-        targetIndex: target.index,
+        ...(target.index !== undefined ? { targetIndex: target.index } : {}),
+        ...(target.afterTabId ? { afterTabId: target.afterTabId } : {}),
         ...(target.targetTabId ? { targetTabId: target.targetTabId } : {}),
         worktreeId
-      })
-    },
+      }),
     [persistLayoutSnapshot, tabId, worktreeId, managerRef, paneCwdRef, paneTransportsRef]
   )
   const handleExternalPaneDrop = useCallback(
@@ -105,11 +99,11 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
         groupId: target.groupId,
         index: target.insertionIndex
       })
-        .then((moved) => moved && focusMovedPane(tabId, moved))
+        .then((moved) => moved && focusMovedPane(useAppStore.getState, worktreeId, tabId, moved))
         .catch((error) => console.warn('[terminal-pane-detach] move failed', error))
       return true
     },
-    [detachPaneToNewTab, tabId]
+    [detachPaneToNewTab, tabId, worktreeId]
   )
   /** Moves a pane to a new tab right after this one: the menu, shortcut and palette path. */
   const movePaneToNewTab = useCallback(
@@ -119,7 +113,7 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
         return
       }
       void detachPaneToNewTab(sourcePaneId, target)
-        .then((moved) => moved && focusMovedPane(tabId, moved))
+        .then((moved) => moved && focusMovedPane(useAppStore.getState, worktreeId, tabId, moved))
         .catch((error) => console.warn('[terminal-pane-detach] move failed', error))
     },
     [detachPaneToNewTab, tabId, worktreeId]

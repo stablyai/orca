@@ -23,6 +23,6 @@ describe('where a pane moved without a drop goes', () => {
   it('opens its tab right after the source tab', () => {
     expect(
       newTabTargetBesideSource(state(['a', 'unified-source', 'b']), WT, 'terminal-source')
-    ).toEqual({ groupId: 'group-1', index: 2 })
+    ).toEqual({ groupId: 'group-1', index: 2, afterTabId: 'unified-source' })
   })
 })

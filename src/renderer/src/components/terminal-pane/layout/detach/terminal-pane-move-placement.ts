@@ -1,4 +1,9 @@
 import { focusTerminalTabSurface } from '../../input/focus/focus-terminal-tab-surface'
+import {
+  isFocusUnclaimed,
+  isTerminalTabShown,
+  type TerminalTabShownState
+} from './terminal-tab-shown'
 import type {
   DetachedTerminalPaneTab,
   TerminalPaneNewTabTarget
@@ -29,27 +34,30 @@ export function newTabTargetBesideSource(
   if (!sourceTab || !group) {
     return null
   }
+  // Anchored to the source tab, so a reorder while the move is in flight still lands it beside it.
   const sourceIndex = (group.tabOrder ?? []).indexOf(sourceTab.id)
-  return sourceIndex === -1 ? { groupId: group.id } : { groupId: group.id, index: sourceIndex + 1 }
-}
-
-function focusStayedWithSource(sourceTabId: string): boolean {
-  const active = document.activeElement
-  if (!active || active === document.body || !active.isConnected) {
-    return true
-  }
-  return active.closest(`[data-terminal-tab-id="${CSS.escape(sourceTabId)}"]`) !== null
+  return sourceIndex === -1
+    ? { groupId: group.id }
+    : { groupId: group.id, index: sourceIndex + 1, afterTabId: sourceTab.id }
 }
 
 /**
- * The user's moved pane takes focus in its new tab, unless they put focus somewhere else while
- * the move was settling (a remote host can take a moment).
+ * The user's moved pane takes focus in its new tab, unless by the time focus is delivered (two
+ * frames, or later for a chat composer that mounts late) they have moved on: another tab or view,
+ * or focus in something other than the source or the new tab.
  */
-export function focusMovedPane(sourceTabId: string, moved: DetachedTerminalPaneTab): void {
+export function focusMovedPane(
+  getState: () => TerminalTabShownState,
+  worktreeId: string,
+  sourceTabId: string,
+  moved: DetachedTerminalPaneTab
+): void {
   if (!moved.followed) {
     return
   }
   focusTerminalTabSurface(moved.tab.id, moved.leafId, {
-    shouldFocus: () => focusStayedWithSource(sourceTabId)
+    shouldFocus: () =>
+      isTerminalTabShown(getState(), worktreeId, moved.tab.id) &&
+      isFocusUnclaimed(sourceTabId, moved.tab.id)
   })
 }

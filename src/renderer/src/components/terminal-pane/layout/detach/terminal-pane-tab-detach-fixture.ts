@@ -29,14 +29,16 @@ function createTerminalTab(id: string, ptyId: string | null): TerminalTab {
 /** A store whose createTab appends the new tab to the target group, as the real slice does. */
 export function createStore(layout: TerminalLayoutSnapshot): TerminalPaneTabDetachStore {
   const store: TerminalPaneTabDetachStore = {
+    activeView: 'terminal',
+    activeGroupIdByWorktree: {},
     activeTabId: SOURCE_TAB_ID,
     activeTabType: 'terminal',
     activeWorktreeId: WORKTREE_ID,
     closeTab: vi.fn(),
-    createTab: vi.fn<AppState['createTab']>((_worktreeId, _targetGroupId, _shell, options) => {
+    createTab: vi.fn<AppState['createTab']>((_worktreeId, targetGroupId, _shell, options) => {
       const tab = createTerminalTab(options?.id ?? 'tab-detached', options?.initialPtyId ?? null)
       const group = store.groupsByWorktree[WORKTREE_ID]?.find(
-        (candidate) => candidate.id === TARGET_GROUP_ID
+        (candidate) => candidate.id === targetGroupId
       )
       if (group && !group.tabOrder.includes(tab.id)) {
         group.tabOrder = [...group.tabOrder, tab.id]

@@ -210,13 +210,17 @@ function teardownManagedPane(
   const closedLeafId = pane.leafId
   const successor =
     args.activePaneId === args.paneId ? findClosedPaneSuccessor(pane.container, args.panes) : null
+  // Why: a pane moved out to another tab may go while the user works elsewhere (another group, a
+  // browser, an editor); its sibling only inherits focus the moved pane actually held.
+  const replacementTakesFocus =
+    reason !== 'detach' || pane.container.contains(pane.container.ownerDocument.activeElement)
   args.releasePaneIdentity(args.paneId)
   removePaneContainer(args, pane)
   if (reason === 'close') {
     // Closed UUID leaves never recur; detach/retire transfers ownership and must preserve scroll intent.
     releaseTerminalScrollIntentKey(closedLeafId)
   }
-  const nextActivePaneId = activateReplacementPane(args, successor)
+  const nextActivePaneId = activateReplacementPane(args, successor, replacementTakesFocus)
   applyPaneOpacity(args.panes.values(), nextActivePaneId, args.styleOptions)
   for (const p of args.panes.values()) {
     safeFit(p)
@@ -271,7 +275,8 @@ function removePaneContainer(args: CloseManagedPaneArgs, pane: ManagedPaneIntern
 
 function activateReplacementPane(
   args: CloseManagedPaneArgs,
-  successor: ManagedPaneInternal | null
+  successor: ManagedPaneInternal | null,
+  takeFocus: boolean
 ): number | null {
   if (args.activePaneId !== args.paneId) {
     return args.activePaneId
@@ -280,6 +285,8 @@ function activateReplacementPane(
     successor && args.panes.has(successor.id) ? successor : args.panes.values().next().value
   const nextActivePaneId = next?.id ?? null
   args.setActivePaneId(nextActivePaneId)
-  next?.terminal.focus()
+  if (takeFocus) {
+    next?.terminal.focus()
+  }
   return nextActivePaneId
 }
