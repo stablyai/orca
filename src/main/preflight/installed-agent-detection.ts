@@ -135,6 +135,9 @@ async function detectAgentsWithManagedCopies(
   // A terminal can't run by name a CLI found only in its installer's folder, so launches name its path.
   const outsidePath: ManagedAgentCommands = {}
   for (const id of runtime === 'wsl' ? [] : detected.filter(isTuiAgent)) {
+    if (id === 'claude') {
+      continue
+    }
     const [program] = getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[id], process.platform).split(' ')
     const path = foundOutsidePath.get(program)
     if (path) {
@@ -146,7 +149,7 @@ async function detectAgentsWithManagedCopies(
   if (managedOnly) {
     const enabled = new Set(commands.map((command) => command.id))
     for (const id of await readInstalledManagedAgents()) {
-      if (isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
+      if (id !== 'claude' && isTuiAgent(id) && enabled.has(id) && !detected.includes(id)) {
         detected.push(id)
         managedOnly.push(id)
       }

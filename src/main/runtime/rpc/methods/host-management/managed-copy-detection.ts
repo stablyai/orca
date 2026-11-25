@@ -278,11 +278,16 @@ export async function readHostManagedAgentCommands(
     pathEnv?: string
     shell?: AgentStartupShell
     forDelivery?: boolean
+    /** Native chat's system sign-in is the only terminal launch that may resolve Claude here. */
+    claudeSystemSignIn?: boolean
     /** A bare executable name with an explicit Windows extension. */
     explicitExecutable?: string
   } = {}
 ): Promise<ManagedAgentCommands> {
   const selections = agents.flatMap((agent) => {
+    if (agent === 'claude' && !options.claudeSystemSignIn) {
+      return []
+    }
     const program = stockLaunchProgram(agent, process.platform)
     const override = settings.agentCmdOverrides?.[agent]?.trim()
     return options.forDelivery ||

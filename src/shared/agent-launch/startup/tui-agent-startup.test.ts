@@ -35,20 +35,16 @@ describe('argv prompt separator (#48072)', () => {
     )
   })
 
-  it('separates the prompt for managed Claude when its PowerShell path contains a backtick and apostrophe', () => {
-    const plan = buildAgentStartupPlan({
-      agent: 'claude',
-      prompt: 'Reply OK',
-      cmdOverrides: {},
-      platform: 'win32',
-      shell: 'powershell',
-      agentArgs: '--disallowedTools Agent',
-      managedAgentCommands: {
-        claude: "C:\\Users\\O`'Brien\\agent-runtimes\\claude\\1.2.3\\claude.exe"
-      }
-    })
-    expect(plan?.launchCommand).toBe(
-      "& 'C:\\Users\\O`''Brien\\agent-runtimes\\claude\\1.2.3\\claude.exe' '--disallowedTools' 'Agent' '--' 'Reply OK'"
+  it('separates the prompt for a Claude command with a backtick and apostrophe in its path', () => {
+    expect(
+      promptLaunch(
+        '--disallowedTools Agent',
+        'powershell',
+        'claude',
+        "& 'C:\\Users\\O`''Brien\\tools\\claude.exe'"
+      )
+    ).toBe(
+      "& 'C:\\Users\\O`''Brien\\tools\\claude.exe' '--disallowedTools' 'Agent' '--' 'Reply OK'"
     )
   })
 

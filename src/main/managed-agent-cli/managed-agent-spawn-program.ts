@@ -226,7 +226,7 @@ export async function alignManagedAgentLaunchAtSpawn(
     command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR') &&
     command === agentSessionSignInCommand('claude', { account: 'system', remote: false, shell })
   ) {
-    const invocation = await resolveLaunchExecutable(spawn, shell, 'claude')
+    const invocation = await resolveLaunchExecutable(spawn, shell, 'claude', true)
     const program = readLaunchPosition(invocation, shell)?.executable
     return program && program !== 'claude'
       ? (agentSessionSignInCommand('claude', {
@@ -243,7 +243,8 @@ export async function alignManagedAgentLaunchAtSpawn(
 async function resolveLaunchExecutable(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
-  command: string
+  command: string,
+  claudeSystemSignIn = false
 ): Promise<string> {
   const scanned = command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS)
   const prefix = process.platform === 'win32' ? scanned.toLowerCase() : scanned
@@ -293,6 +294,10 @@ async function resolveLaunchExecutable(
     return render(launch.executable)
   }
   const stock = stockLaunchProgram(agent, process.platform)
+  if (agent === 'claude' && !claudeSystemSignIn) {
+    // Leave resolution to the pane's shell, including launches queued with an old managed path.
+    return render(managedAgent ? stock : launch.executable)
+  }
   const usesExplicitProgram =
     !managedAgent && process.platform === 'win32' && name.toLowerCase() !== programKey
   const pathEnv = await effectiveSearchPath(spawn, shell, launch)
@@ -300,6 +305,7 @@ async function resolveLaunchExecutable(
     pathEnv,
     shell,
     forDelivery: true,
+    ...(claudeSystemSignIn ? { claudeSystemSignIn } : {}),
     ...(usesExplicitProgram ? { explicitExecutable: name } : {})
   })
   return render(paths[agent] ?? (usesExplicitProgram ? launch.executable : stock))

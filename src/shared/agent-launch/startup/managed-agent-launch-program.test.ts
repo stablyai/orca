@@ -3,8 +3,8 @@ import { buildAgentStartupPlan } from './tui-agent-startup'
 import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 import { agentSessionSignInCommand } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
 
-const MAC_CLAUDE = '/Users/a b/Library/Application Support/orca/claude/bin/claude'
-const WIN_CLAUDE = 'C:\\Users\\a b\\AppData\\Roaming\\orca\\claude\\claude.exe'
+const MAC_OPENCODE = '/Users/a b/Library/Application Support/orca/opencode/bin/opencode'
+const WIN_OPENCODE = 'C:\\Users\\a b\\AppData\\Roaming\\orca\\opencode\\opencode.exe'
 
 function launch(args: {
   platform: NodeJS.Platform
@@ -13,79 +13,80 @@ function launch(args: {
   override?: string
 }) {
   return buildAgentStartupPlan({
-    agent: 'claude',
+    agent: 'opencode',
     prompt: '',
     allowEmptyPromptLaunch: true,
-    cmdOverrides: args.override ? { claude: args.override } : {},
+    cmdOverrides: args.override ? { opencode: args.override } : {},
     platform: args.platform,
     shell: args.shell,
-    managedAgentCommands: args.managed ? { claude: args.managed } : undefined
+    managedAgentCommands: args.managed ? { opencode: args.managed } : undefined
   })
 }
 
 describe("launching Orca's copy of an agent", () => {
   it('runs it by full path, quoted for each shell', () => {
-    expect(launch({ platform: 'darwin', managed: MAC_CLAUDE })?.launchCommand).toBe(
-      "'/Users/a b/Library/Application Support/orca/claude/bin/claude'"
+    expect(launch({ platform: 'darwin', managed: MAC_OPENCODE })?.launchCommand).toBe(
+      "'/Users/a b/Library/Application Support/orca/opencode/bin/opencode'"
     )
     expect(
-      launch({ platform: 'win32', shell: 'powershell', managed: WIN_CLAUDE })?.launchCommand
-    ).toBe("& 'C:\\Users\\a b\\AppData\\Roaming\\orca\\claude\\claude.exe'")
-    expect(launch({ platform: 'win32', shell: 'cmd', managed: WIN_CLAUDE })?.launchCommand).toBe(
-      '"C:\\Users\\a b\\AppData\\Roaming\\orca\\claude\\claude.exe"'
+      launch({ platform: 'win32', shell: 'powershell', managed: WIN_OPENCODE })?.launchCommand
+    ).toBe("& 'C:\\Users\\a b\\AppData\\Roaming\\orca\\opencode\\opencode.exe'")
+    expect(launch({ platform: 'win32', shell: 'cmd', managed: WIN_OPENCODE })?.launchCommand).toBe(
+      '"C:\\Users\\a b\\AppData\\Roaming\\orca\\opencode\\opencode.exe"'
     )
   })
 
   it("keeps the user's own CLI and a Command setting naming another program", () => {
-    expect(launch({ platform: 'darwin' })?.launchCommand).toBe('claude')
+    expect(launch({ platform: 'darwin' })?.launchCommand).toBe('opencode')
     expect(
-      launch({ platform: 'darwin', managed: MAC_CLAUDE, override: '~/bin/claude' })?.launchCommand
-    ).toBe('~/bin/claude')
-    expect(
-      launch({ platform: 'darwin', managed: MAC_CLAUDE, override: 'claude --verbose' })
+      launch({ platform: 'darwin', managed: MAC_OPENCODE, override: '~/bin/opencode' })
         ?.launchCommand
-    ).toBe("'/Users/a b/Library/Application Support/orca/claude/bin/claude' --verbose")
+    ).toBe('~/bin/opencode')
+    expect(
+      launch({ platform: 'darwin', managed: MAC_OPENCODE, override: 'opencode --verbose' })
+        ?.launchCommand
+    ).toBe("'/Users/a b/Library/Application Support/orca/opencode/bin/opencode' --verbose")
   })
 
   it('uses the same program replacement for stock settings with launch environment prefixes', () => {
     expect(
       launch({
         platform: 'darwin',
-        managed: MAC_CLAUDE,
-        override: "env -u TRACE DEBUG=1 claude   '--verbose'"
+        managed: MAC_OPENCODE,
+        override: "env -u TRACE DEBUG=1 opencode   '--verbose'"
       })?.launchCommand
     ).toBe(
-      "env -u TRACE DEBUG=1 '/Users/a b/Library/Application Support/orca/claude/bin/claude'   '--verbose'"
+      "env -u TRACE DEBUG=1 '/Users/a b/Library/Application Support/orca/opencode/bin/opencode'   '--verbose'"
     )
     expect(
       launch({
         platform: 'darwin',
-        managed: MAC_CLAUDE,
-        override: 'DEBUG=1 claude --verbose'
+        managed: MAC_OPENCODE,
+        override: 'DEBUG=1 opencode --verbose'
       })?.launchCommand
-    ).toBe("DEBUG=1 '/Users/a b/Library/Application Support/orca/claude/bin/claude' --verbose")
+    ).toBe("DEBUG=1 '/Users/a b/Library/Application Support/orca/opencode/bin/opencode' --verbose")
     expect(
       launch({
         platform: 'darwin',
-        managed: MAC_CLAUDE,
-        override: "/bin/sh -c 'claude --verbose'"
+        managed: MAC_OPENCODE,
+        override: "/bin/sh -c 'opencode --verbose'"
       })?.launchCommand
-    ).toBe("/bin/sh -c 'claude --verbose'")
+    ).toBe("/bin/sh -c 'opencode --verbose'")
   })
 
   it('records the stock name, so a resume finds the copy the host has then', () => {
-    expect(launch({ platform: 'darwin', managed: MAC_CLAUDE })?.launchConfig.agentCommand).toBe(
-      'claude'
+    expect(launch({ platform: 'darwin', managed: MAC_OPENCODE })?.launchConfig.agentCommand).toBe(
+      'opencode'
     )
     const resumed = buildAgentResumeStartupPlan({
-      agent: 'claude',
+      agent: 'opencode',
       providerSession: { key: 'session_id', id: 'abc' },
       cmdOverrides: {},
-      agentCommand: 'claude --model opus',
+      agentCommand: 'opencode --model opus',
       platform: 'darwin',
-      managedAgentCommands: { claude: '/opt/orca/claude' }
+      managedAgentCommands: { opencode: '/opt/orca/opencode' }
     })
-    expect(resumed?.launchCommand).toBe("'/opt/orca/claude' --model opus '--resume' 'abc'")
+    expect(resumed?.launchCommand).toBe("'/opt/orca/opencode' --model opus '--session' 'abc'")
   })
 
   it('signs in through it by full path', () => {

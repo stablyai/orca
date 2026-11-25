@@ -18,7 +18,11 @@ function agentOptionTokens(
   if (agent === 'claude') {
     // Why: a wrapper that is not literally claude (Happy) can append its own flags after the
     // forwarded args, and a `--` before them would turn those flags into the prompt.
-    const launch = tokenizeStartupCommand(launchCommand, shell)
+    const launch = tokenizeStartupCommand(
+      launchCommand,
+      shell,
+      shell === 'powershell' ? 'preserve-expansions' : false
+    )
     if (!launch.ok) {
       return null
     }

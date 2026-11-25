@@ -3,7 +3,6 @@ import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-fea
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
-import { readHostManagedAgentCommands } from '../host-management/managed-copy-detection'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
@@ -293,13 +292,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         baseEnv: params.env,
         prepareAuth: params.prepareAuth
       })
-      const { claude: command } =
-        process.platform === 'win32' // A Windows host's Agent Teams pane runs in WSL.
-          ? { claude: undefined }
-          : await readHostManagedAgentCommands(runtime.requireStore().getSettings(), ['claude'], {
-              pathEnv: params.env?.PATH
-            })
-      return { launch: command ? { ...launch, command } : launch }
+      return { launch }
     }
   })
 ]

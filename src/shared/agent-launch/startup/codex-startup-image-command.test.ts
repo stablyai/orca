@@ -211,18 +211,13 @@ it.each(['codex', 'claude'])('keeps a PowerShell array splat active for %s', (ag
 })
 
 it('ends PowerShell Claude account routing before the next statement', () => {
-  const invocation = withManagedAgentProgram('claude --verbose; Write-Host done', {
-    agent: 'claude',
-    platform: 'win32',
-    shell: 'powershell',
-    managedAgentCommands: { claude: 'C:\\managed\\claude.exe' }
-  })
+  const invocation = "& 'C:\\tools\\claude.exe' --verbose; Write-Host done"
   const command = prepareShellNativeAgentLaunch(invocation, 'powershell', false)
   expect(command).toContain('$env:CLAUDE_CONFIG_DIR = $orcaClaudeHome')
   expect(command).toContain('finally { foreach ($name in $names)')
   expect(command.endsWith(' } -- --verbose; Write-Host done')).toBe(true)
   expect(unwrapDirectAgentLaunchCommand(command)).toBe(
-    "'C:\\managed\\claude.exe' --verbose; Write-Host done"
+    "'C:\\tools\\claude.exe' --verbose; Write-Host done"
   )
   expect(recognizeAgentProcessFromCommandLine(command)?.agent).toBe('claude')
 })

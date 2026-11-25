@@ -95,7 +95,7 @@ export function withManagedAgentProgram(
   }
 ): string {
   const path = args.managedAgentCommands?.[args.agent]
-  if (!path) {
+  if (!path || args.agent === 'claude') {
     return command
   }
   const launch = readLaunchPosition(command, args.shell)
