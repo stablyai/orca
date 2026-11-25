@@ -129,6 +129,15 @@ describe('ACP relay ack floor', () => {
     expect(cuts).toEqual([2, 3, 4, 5])
   })
 
+  it('never holds a cut message that resumes after a call, so a replay never repeats its saved text', async () => {
+    const { output, acks, send, prompt } = rig()
+    prompt()
+    await send(chunk('a', 'm1'))
+    await output.settle(true)
+    await send(update('plan', { entries: [] }), chunk('b', 'm1'))
+    expect(acks.at(-1)).toBe(3)
+  })
+
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {
     // Streamed text is saved only on a forced flush; a plain settle can't ack past it.
     const { output, acks, send } = rig(async (force) => force)
