@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { PanZoomImageDialog } from '@/components/editor/document-images/PanZoomImageDialog'
 import {
@@ -285,7 +286,10 @@ export function NativeChatImageGalleryDialog({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={4}>
-                {annotateLabel} (C)
+                <span className="flex items-center gap-2">
+                  {annotateLabel}
+                  <ShortcutKeyCombo size="compact" keys={['C']} />
+                </span>
               </TooltipContent>
             </Tooltip>
           ) : null}
