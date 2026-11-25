@@ -33,14 +33,13 @@ const isLocal = (executionHostId: string | null | undefined): boolean =>
   executionHostId == null || parseExecutionHostId(executionHostId)?.kind === 'local'
 
 /** This host's repos, their worktrees and folder workspaces: what a Claude project path maps to. */
-export async function agentMcpImportHost(runtime: OrcaRuntimeService): Promise<AgentMcpImportHost> {
-  const store = runtime.requireStore()
-  const repos = store.getRepos().filter(isRepoOnCatalogHost)
-  const local = new Set(repos.map((repo) => repo.id))
-  const { worktrees } = await runtime.listManagedWorktrees(undefined, Number.MAX_SAFE_INTEGER)
-  return localAgentMcpImportHost(
-    getAppEnvironment().getPath('userData'),
-    workspaceForPathIn({
+export function agentMcpImportHost(runtime: OrcaRuntimeService): AgentMcpImportHost {
+  return localAgentMcpImportHost(getAppEnvironment().getPath('userData'), async () => {
+    const store = runtime.requireStore()
+    const repos = store.getRepos().filter(isRepoOnCatalogHost)
+    const local = new Set(repos.map((repo) => repo.id))
+    const { worktrees } = await runtime.listManagedWorktrees(undefined, Number.MAX_SAFE_INTEGER)
+    return workspaceForPathIn({
       repos,
       worktrees: worktrees.filter(
         (worktree) => local.has(worktree.repoId) && isLocal(worktree.hostId)
@@ -49,7 +48,7 @@ export async function agentMcpImportHost(runtime: OrcaRuntimeService): Promise<A
         (folder) => !folder.connectionId && isLocal(folder.executionHostId)
       )
     })
-  )
+  })
 }
 
 function editFailure(error: AgentMcpConfigEditError): string {
@@ -96,7 +95,7 @@ export async function importAgentMcpServer(
     return saved
   }
   try {
-    return { server: await importer(await agentMcpImportHost(context.runtime), key, add) }
+    return { server: await importer(agentMcpImportHost(context.runtime), key, add) }
   } catch (error) {
     if (error instanceof AgentMcpServerImportError) {
       throw error.reason === 'gone' ? new McpServersError('mcp_server_gone', error.message) : error

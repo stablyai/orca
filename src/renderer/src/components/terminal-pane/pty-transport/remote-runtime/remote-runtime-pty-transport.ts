@@ -635,7 +635,10 @@ export function createRemoteRuntimePtyTransport(
   const terminalCreateMutationId = createBrowserUuid()
   // Replay one stable host operation after lost responses so reconnect cannot launch a second agent.
   const agentCreateOperation = createAgentSessionCreateOperation()
-  const agentSessionLaunchOptions = createAgentSessionLaunchOptions(terminalKittyKeyboardProtocol)
+  const agentSessionLaunchOptions = createAgentSessionLaunchOptions(
+    terminalKittyKeyboardProtocol,
+    terminalColorQueryReplies
+  )
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,

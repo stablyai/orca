@@ -1,6 +1,7 @@
 import { buildLegacyAgentCreateTerminalParams } from './web-runtime-legacy-agent-create-params'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionLaunchOptions } from './agent-launch/agent-session-launch-options'
+import { publishedTerminalColorQueryReplyColors } from '../../../components/terminal-pane/appearance/terminal-view-attributes-publisher'
 import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -94,7 +95,10 @@ export async function createWebRuntimeSessionTerminalResult(
     if (agent) {
       // Paired panes retain the default keyboard advertisement, including on Windows clients.
       const keyboardProtocol = buildDefaultTerminalOptions().vtExtensions?.kittyKeyboard
-      const launchOptions = createAgentSessionLaunchOptions(keyboardProtocol)
+      const launchOptions = createAgentSessionLaunchOptions(
+        keyboardProtocol,
+        publishedTerminalColorQueryReplyColors()
+      )
       const launchAccount = args.claudeAccountId ? args : args.launchConfig
       const trustOptions = createAgentSessionTrustWorktreeOptions(args.trustWorktreeId)
       let legacyAlreadyPlacedInGroup = false

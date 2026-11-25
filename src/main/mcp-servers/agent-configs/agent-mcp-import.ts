@@ -10,7 +10,10 @@ import type {
   McpServerWorkspaces
 } from '../../../shared/mcp-servers/mcp-servers'
 import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-entry'
-import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
+import {
+  isPathInsideOrEqual,
+  normalizeRuntimePathForComparison
+} from '../../../shared/file-access/cross-platform-path'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
 import { getOrcaUserDataPath } from '../../codex/configuration/homes/codex-home-paths'
@@ -57,14 +60,15 @@ export type AgentMcpImportHost = {
   context: AgentMcpConfigContext
   /** Orca's data folder, which holds the managed Claude account profiles. */
   userDataPath: string
-  workspaceFor: WorkspaceForPath
+  /** Read only when a server is limited to project folders: it lists every workspace on the host. */
+  workspaceFor: () => Promise<WorkspaceForPath>
   /** Claude projects Orca made itself (bots' sign-in folders), never the user's. */
   isOrcaProject: (projectPath: string) => boolean
 }
 
 export function localAgentMcpImportHost(
   userDataPath: string,
-  workspaceFor: WorkspaceForPath
+  workspaceFor: () => Promise<WorkspaceForPath>
 ): AgentMcpImportHost {
   return {
     context: { homeDir: homedir(), env: process.env, platform: process.platform },
@@ -87,24 +91,28 @@ type ImportRow = {
   scope: ImportedMcpServerScope
 }
 
-function importRow(found: DiscoveredAgentMcpServer, workspaceFor: WorkspaceForPath): ImportRow {
+/** The project folders a server is limited to, or null when it reaches every workspace. */
+function limitedTo(found: DiscoveredAgentMcpServer): string[] | null {
   // The copies that were on decide where the server reaches; when every copy was off, all of them.
   const enabled = found.sources.filter((source) => !source.disabled)
   const reach = enabled.length > 0 ? enabled : found.sources
   // One unscoped copy means every workspace already gets it.
-  const limited = reach.every((source) => source.projectPath !== undefined)
-  const mapped = limited
-    ? reach.map((source) => ({
-        path: source.projectPath!,
-        workspace: workspaceFor(source.projectPath!)
-      }))
-    : []
-  const keys = [...new Set(mapped.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))]
+  if (reach.some((source) => source.projectPath === undefined)) {
+    return null
+  }
+  return reach.flatMap((source) => (source.projectPath === undefined ? [] : [source.projectPath]))
+}
+
+type MappedPath = { path: string; workspace: ReturnType<WorkspaceForPath> }
+
+function importRow(found: DiscoveredAgentMcpServer, mapped: MappedPath[] | null): ImportRow {
+  const paths = mapped ?? []
+  const keys = [...new Set(paths.flatMap(({ workspace }) => (workspace ? [workspace.key] : [])))]
   const agents = [...new Set(found.sources.map((source) => source.agent))]
   return {
     found,
     scope: {
-      workspaces: limited ? { later: false, on: keys, off: [] } : null,
+      workspaces: mapped ? { later: false, on: keys, off: [] } : null,
       agentsOff: agents.filter((agent) =>
         found.sources.every((source) => source.agent !== agent || source.disabled)
       )
@@ -117,22 +125,34 @@ function importRow(found: DiscoveredAgentMcpServer, workspaceFor: WorkspaceForPa
       agents,
       files: [...new Set(found.sources.map((source) => source.path))],
       projectNames: [
-        ...new Set(mapped.map(({ path, workspace }) => workspace?.name ?? basename(path)))
+        ...new Set(paths.map(({ path, workspace }) => workspace?.name ?? basename(path)))
       ],
       movable:
         found.sources.every((source) => source.scope === 'user') &&
-        mapped.every(({ workspace }) => workspace !== null)
+        paths.every(({ workspace }) => workspace !== null)
     }
   }
 }
 
-async function importRows(host: AgentMcpImportHost): Promise<ImportRow[]> {
-  const found = await discoverAgentMcpServers(host.context, host.isOrcaProject)
-  return found.map((server) => importRow(server, host.workspaceFor))
+async function importRows(
+  host: AgentMcpImportHost,
+  found: readonly DiscoveredAgentMcpServer[]
+): Promise<ImportRow[]> {
+  const limits = found.map(limitedTo)
+  const workspaceFor = limits.some((paths) => paths !== null) ? await host.workspaceFor() : null
+  return found.map((server, index) =>
+    importRow(
+      server,
+      limits[index]?.map((path) => ({ path, workspace: workspaceFor?.(path) ?? null })) ?? null
+    )
+  )
 }
 
+const discover = (host: AgentMcpImportHost): Promise<DiscoveredAgentMcpServer[]> =>
+  discoverAgentMcpServers(host.context, host.isOrcaProject)
+
 export async function listAgentMcpServers(host: AgentMcpImportHost): Promise<AgentMcpServerRow[]> {
-  return (await importRows(host)).map(({ row }) => row)
+  return (await importRows(host, await discover(host))).map(({ row }) => row)
 }
 
 const importQueue = new Map<string, Promise<void>>()
@@ -143,10 +163,11 @@ const oneImportAtATime = <T>(run: () => Promise<T>): Promise<T> =>
   runKeyedSerializedOperation(importQueue, 'import', run)
 
 async function movableRow(host: AgentMcpImportHost, key: string): Promise<ImportRow> {
-  const found = (await importRows(host)).find(({ row }) => row.key === key)
-  if (!found) {
+  const server = (await discover(host)).find((candidate) => candidate.key === key)
+  if (!server) {
     throw new AgentMcpServerImportError('gone')
   }
+  const [found] = await importRows(host, [server])
   if (!found.row.movable) {
     throw new AgentMcpServerImportError('not-movable')
   }
@@ -216,6 +237,19 @@ export type HostWorkspaceFolders = {
   folderWorkspaces: readonly { id: string; name: string; folderPath: string }[]
 }
 
+/** `path` (a comparison key) and each folder above it, deepest first, as comparison keys too. */
+function* comparisonKeyAndParents(path: string): Generator<string> {
+  yield path
+  for (let cut = path.lastIndexOf('/'); cut >= 0; cut = path.lastIndexOf('/', cut - 1)) {
+    const parent = path.slice(0, cut)
+    // A filesystem root keeps its slash, as the comparison key of `/` or `C:/` does.
+    yield parent === '' ? '/' : /^[a-z]:$/i.test(parent) ? `${parent}/` : parent
+    if (cut === 0) {
+      return
+    }
+  }
+}
+
 /** The deepest repo, worktree or folder workspace holding `projectPath`, as a workspace key. */
 export function workspaceForPathIn(folders: HostWorkspaceFolders): WorkspaceForPath {
   const repoName = new Map(folders.repos.map((repo) => [repo.id, repo.displayName]))
@@ -231,9 +265,21 @@ export function workspaceForPathIn(folders: HostWorkspaceFolders): WorkspaceForP
       name: folder.name
     }))
   ]
-  return (projectPath) =>
-    candidates
-      .filter((candidate) => isPathInsideOrEqual(candidate.path, projectPath))
-      .sort((left, right) => right.path.length - left.path.length)
-      .map(({ key, name }) => ({ key, name }))[0] ?? null
+  // Why an index: a server can be limited to many projects, and the host can hold 1000s of folders.
+  const byFolder = new Map<string, { key: string; name: string }>()
+  for (const { path, key, name } of candidates) {
+    const folder = normalizeRuntimePathForComparison(path)
+    if (!byFolder.has(folder)) {
+      byFolder.set(folder, { key, name })
+    }
+  }
+  return (projectPath) => {
+    for (const folder of comparisonKeyAndParents(normalizeRuntimePathForComparison(projectPath))) {
+      const workspace = byFolder.get(folder)
+      if (workspace) {
+        return workspace
+      }
+    }
+    return null
+  }
 }

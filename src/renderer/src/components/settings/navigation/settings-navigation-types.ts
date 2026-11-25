@@ -44,6 +44,7 @@ const SETTINGS_NAV_TARGETS = [
   'experimental',
   'plugins',
   'agents',
+  'mcp-servers',
   'orchestration',
   'artifacts',
   'session-history',
@@ -89,7 +90,7 @@ export type SettingsNavigationTarget = {
   hostId?: ExecutionHostId
   /** Host to select in the page-level Host picker; the project-host `hostId` does not move it. */
   hostScope?: RuntimeClientTarget
-  /** With pane `bots`, the bot whose page opens. */
+  /** With pane `bots`, the bot whose page opens; with `mcp-servers`, the server's. */
   sectionId?: string
   intent?: (typeof SETTINGS_NAV_INTENTS)[number]
   /** Move keyboard focus to the subsection's first control once it is revealed. */

@@ -96,9 +96,9 @@ async function userFiles(agent: McpConfigAgent, context: AgentMcpConfigContext):
     case 'grok':
       return [join(envDir(env, 'GROK_HOME') ?? join(homeDir, '.grok'), 'config.toml')]
     case 'cursor':
-      return [join(homeDir, '.cursor', 'mcp.json')]
+      return [join(envDir(env, 'CURSOR_CONFIG_DIR') ?? join(homeDir, '.cursor'), 'mcp.json')]
     case 'droid':
-      return [join(homeDir, '.factory', 'mcp.json')]
+      return [join(envDir(env, 'FACTORY_HOME_OVERRIDE') ?? homeDir, '.factory', 'mcp.json')]
     case 'amp':
       return [join(xdgConfigHome(context), 'amp', 'settings.json')]
   }
@@ -188,10 +188,11 @@ export function agentMcpServerBlocks(
       if (location.scope === 'project') {
         return [user]
       }
-      const projects = Object.keys(record(parsed.projects) ?? {})
+      const projects = record(parsed.projects) ?? {}
+      const blocks = Object.keys(projects)
         .filter((projectPath) => !skipProject(projectPath))
         .map((projectPath) => {
-          const project = record(record(parsed.projects)?.[projectPath])
+          const project = record(projects[projectPath])
           return {
             path: ['projects', projectPath, 'mcpServers'],
             dialect: 'mcp-json' as const,
@@ -199,7 +200,7 @@ export function agentMcpServerBlocks(
             disabledNames: nameSet(project?.disabledMcpServers)
           }
         })
-      return [user, ...projects]
+      return [user, ...blocks]
     }
     case 'codex':
       return [{ path: ['mcp_servers'], dialect: 'codex-toml' }]

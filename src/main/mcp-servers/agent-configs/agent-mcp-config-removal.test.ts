@@ -132,7 +132,7 @@ describe('agent MCP config discovery and move', () => {
     const host: AgentMcpImportHost = {
       context: context(),
       userDataPath: join(home, 'orca-data'),
-      workspaceFor: (path) =>
+      workspaceFor: async () => (path) =>
         ({
           '/work/orca': { key: 'repo-1', name: 'orca' },
           '/work/docs': { key: 'repo-2', name: 'docs' }

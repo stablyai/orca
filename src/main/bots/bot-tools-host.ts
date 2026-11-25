@@ -30,7 +30,7 @@ import {
   readCodexStdioToolNames
 } from './bot-tools-codex'
 import {
-  botOwnTool,
+  botOwnTools,
   readBotToolServers,
   changeBotToolServers,
   type BotToolNewCredential
@@ -39,9 +39,10 @@ import { resolveBotToolInput } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { redactBotToolProblems } from './bot-tool-redaction'
-import { cliWithLaunchTools, withRelayProblems, type BotLaunchTools } from './bot-launch-tools'
+import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import type { BotAgent } from '../../shared/bot-types'
-import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
+import { botToolCredentialsReader, withSavedBotToolHeaders } from './bot-tool-credentials'
 
 export type BotToolsFolder = {
   /** The relay grant's owner: the bot, or the host list's reserved owner. */
@@ -51,6 +52,8 @@ export type BotToolsFolder = {
   signInFolder: string
   /** The home folders of this host's other bots on the same agent, which may share a sign-in. */
   otherBotFolders: readonly string[]
+  /** The bot takes the host's MCP list too, so its token keeps reaching it; absent for the list's own. */
+  hostMcpServers?: boolean
 }
 
 /** The agent CLI a Claude Code or Codex bot's turns run, as the host would launch it now. */
@@ -116,7 +119,7 @@ export function codexSession<T>(
 export async function codexThread(
   rpc: Parameters<Parameters<typeof runCodexAppServerSession>[1]>[0],
   cli: BotToolsCli,
-  tools: BotLaunchTools,
+  tools: SessionMcpTools,
   ownerStdioNames: readonly string[]
 ): Promise<string> {
   const started = await rpc.request('thread/start', {
@@ -155,7 +158,7 @@ export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
   ])
   return {
     agent: cli.agent,
-    own: servers.map((server) => botOwnTool(server, cli.folder)),
+    own: botOwnTools(servers, cli.folder),
     inherited
   }
 }
@@ -218,10 +221,11 @@ export async function botToolProblems(
   const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : []
   const taken = codexTakenToolProblems(scoped, ownerStdioNames)
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
+  const readOAuth = botToolCredentialsReader(cli.folder).oauth
   const servers = scoped.filter(
     (server) =>
       !Object.hasOwn(taken, server.name) &&
-      !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))
+      !('url' in server && server.credential && readOAuth(server.credential))
   )
   // Another agent has no CLI check, so its rows show no problem, as a Claude or Codex row it confirmed.
   if (servers.length === 0 || !hasBotToolsCli(cli)) {

@@ -208,6 +208,8 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
             ? { launchClaudeAccountId: request.claudeAccountId }
             : {}),
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
+          terminalColorQueryReplies: request.terminalColorQueryReplies,
+          terminalViewAttributes: request.terminalViewAttributes,
           cwd: startupCwd,
           ...(request.trustWorktreeId ? { trustWorktreeId: request.trustWorktreeId } : {}),
           presentation: request.presentation ?? 'background',
