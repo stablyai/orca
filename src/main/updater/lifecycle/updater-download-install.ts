@@ -3,6 +3,8 @@ import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
   isMacInstallRequested,
+  resumeHeldMacQuit,
+  retireMacInstallIntentAfterStagingFailure,
   setMacInstallPreflightInProgress
 } from '../mac-install/updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
@@ -121,18 +123,26 @@ export abstract class UpdaterDownloadInstall extends UpdaterRequiredRestart {
     }, MAC_INTERACTIVE_STAGING_TIMEOUT_MS)
   }
 
-  /** Squirrel's native error ends staging; the JS updater ignores it once the timeout card shows, so replace that card here. */
+  /** Squirrel's native error ends interactive staging; the JS updater ignores it once the timeout card shows, so replace that card here. */
   protected failNativeMacStaging(error: unknown): void {
     const version = this.finishMacStaging()
-    const status = this.currentStatus
-    if (version !== null && isMacStagingStillRunning(status) && status.version === version) {
-      const cause = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
-      this.sendStatus({
-        state: 'error',
-        failurePhase: 'download',
-        version,
-        message: cause || 'Unknown error'
-      })
+    if (version !== null) {
+      // Retire a saved Restart and its fallback before the failure card re-enables Check, Switch and Retry.
+      const resumeQuit = retireMacInstallIntentAfterStagingFailure()
+      const status = this.currentStatus
+      if (isMacStagingStillRunning(status) && status.version === version) {
+        const cause =
+          error instanceof Error ? error.message : typeof error === 'string' ? error : ''
+        this.sendStatus({
+          state: 'error',
+          failurePhase: 'download',
+          version,
+          message: cause || 'Unknown error'
+        })
+      }
+      if (resumeQuit) {
+        resumeHeldMacQuit()
+      }
     }
     this.failMacStaging(error)
   }

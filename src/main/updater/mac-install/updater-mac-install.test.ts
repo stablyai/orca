@@ -1,12 +1,16 @@
 import { EventEmitter } from 'node:events'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { app, autoUpdater, powerMonitor } from 'electron'
 import { UpdaterSetup } from '../lifecycle/updater-setup'
 import {
   MAC_DEFERRED_STAGING_TIMEOUT_MS,
   MAC_INTERACTIVE_STAGING_TIMEOUT_MS
 } from '../lifecycle/updater-state'
-import { beginMacUpdateDownload, isMacInstallerReady } from './updater-mac-install'
+import {
+  beginMacUpdateDownload,
+  isMacInstallerReady,
+  isMacInstallRequested
+} from './updater-mac-install'
 
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
@@ -35,12 +39,14 @@ const jsUpdater = Object.assign(new EventEmitter(), {
     jsUpdater.emit('checking-for-update')
     jsUpdater.emit('update-available', { version })
   },
-  downloadUpdate: async () => []
+  downloadUpdate: async () => [],
+  quitAndInstall: vi.fn()
 })
 
 afterEach(() => {
   vi.mocked(app.quit).mockClear()
   jsUpdater.setFeedURL.mockClear()
+  jsUpdater.quitAndInstall.mockClear()
   vi.clearAllTimers()
   vi.useRealTimers()
   autoUpdater.removeAllListeners()
@@ -174,25 +180,113 @@ it.runIf(process.platform === 'darwin')(
   }
 )
 
+function requestQuit(): { preventDefault: ReturnType<typeof vi.fn>; defaultPrevented: boolean } {
+  const quitEvent = { preventDefault: vi.fn(), defaultPrevented: false }
+  app.emit('before-quit', quitEvent)
+  return quitEvent
+}
+
+const pinnedFeedCalls = (): unknown[] =>
+  jsUpdater.setFeedURL.mock.calls.filter(([options]) => options.url?.includes('v1.4.274'))
+
 it.runIf(process.platform === 'darwin')(
-  'still quits once when macOS staging fails after the user asked to quit',
+  'shows the ready update when native readiness ends a held Quit that a window then vetoes',
   async () => {
     const updater = await startStaging()
-    vi.advanceTimersByTime(3 * 60 * 1000)
-    const quitEvent = { preventDefault: vi.fn(), defaultPrevented: false }
-    app.emit('before-quit', quitEvent)
-    expect(quitEvent.preventDefault).toHaveBeenCalledOnce()
-    expect(app.quit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(899_000)
+    expect(requestQuit().preventDefault).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(1_000)
+    expect(updater.getUpdateStatus()).toMatchObject({ messageCode: 'macStagingTimeout' })
 
-    vi.advanceTimersByTime(5_000)
-    failNativeStaging('Could not locate update bundle')
+    vi.advanceTimersByTime(1_000)
+    autoUpdater.emit('update-downloaded')
+    // The mocked app.quit stands in for a Quit whose window close was vetoed: the app keeps running.
     expect(app.quit).toHaveBeenCalledOnce()
-    expect(updater.getUpdateStatus().state).toBe('error')
+    expect(updater.getUpdateStatus()).toEqual({
+      state: 'downloaded',
+      version,
+      releaseUrl: undefined,
+      installOnQuit: true
+    })
+    expect(requestQuit().preventDefault).not.toHaveBeenCalled()
 
-    const resumedQuit = { preventDefault: vi.fn(), defaultPrevented: false }
-    app.emit('before-quit', resumedQuit)
-    expect(resumedQuit.preventDefault).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(60_000)
+    expect(app.quit).toHaveBeenCalledOnce()
+    expect(jsUpdater.quitAndInstall).not.toHaveBeenCalled()
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pinnedFeedCalls()).toHaveLength(1)
+  }
+)
+
+it.runIf(process.platform === 'darwin')(
+  'retires a saved Restart when macOS staging fails after the deadline',
+  async () => {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(899_000)
+    updater.quitAndInstall()
+    expect(isMacInstallRequested()).toBe(true)
+    vi.advanceTimersByTime(2_000)
+
+    failNativeStaging('Could not locate update bundle')
+    expect(isMacInstallRequested()).toBe(false)
+    expect(updater.getUpdateStatus()).toEqual({
+      state: 'error',
+      failurePhase: 'download',
+      version,
+      message: 'Could not locate update bundle'
+    })
+
+    vi.advanceTimersByTime(60_000)
+    expect(app.quit).not.toHaveBeenCalled()
+    expect(jsUpdater.quitAndInstall).not.toHaveBeenCalled()
+    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(pinnedFeedCalls()).toHaveLength(1)
+  }
+)
+
+// A held ordinary Quit ends only on a native result or its 15 s fallback, on both sides of the guidance deadline.
+describe.runIf(process.platform === 'darwin').each([
+  { when: 'before the deadline', quitAt: 3 * 60_000 },
+  { when: 'across the deadline', quitAt: 899_000 }
+])('a Quit held $when', ({ quitAt }) => {
+  async function holdQuit(): Promise<UpdaterSetup> {
+    const updater = await startStaging()
+    vi.advanceTimersByTime(quitAt)
+    expect(requestQuit().preventDefault).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(2_000)
+    return updater
+  }
+
+  function expectOneUpdaterContinuation(): void {
+    expect(app.quit).toHaveBeenCalledOnce()
+    expect(requestQuit().preventDefault).not.toHaveBeenCalled()
     vi.advanceTimersByTime(60_000)
     expect(app.quit).toHaveBeenCalledOnce()
   }
-)
+
+  it('resumes once when Squirrel reports a staging failure', async () => {
+    await holdQuit()
+    failNativeStaging('Could not locate update bundle')
+    expectOneUpdaterContinuation()
+  })
+
+  it('stays held through a JS-only error until its fallback', async () => {
+    await holdQuit()
+    jsUpdater.emit('error', new Error('ZIP read failed'))
+    expect(app.quit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(12_999)
+    expect(app.quit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expectOneUpdaterContinuation()
+  })
+
+  it('falls back once after 15 s of native silence', async () => {
+    await holdQuit()
+    vi.advanceTimersByTime(12_999)
+    expect(app.quit).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(1)
+    expectOneUpdaterContinuation()
+  })
+})

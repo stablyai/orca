@@ -120,18 +120,32 @@ function clearPendingInstallTimeout(): void {
 }
 
 export function resetMacInstallState(): void {
-  const quitWasDeferred = requestedActionAfterSquirrelReady === 'quit'
   macInstallPreflightInProgress = false
-  requestedActionAfterSquirrelReady = null
   quitAndInstallInFlight = false
   bypassMacInstallGuardUntilNextAttempt = false
-  clearPendingInstallTimeout()
-  if (quitWasDeferred) {
-    // Staging ended without readiness; the Quit the user already asked for must still happen, once.
-    recordUpdaterLifecycle('macos_deferred_quit_resumed')
-    bypassMacInstallGuardUntilNextAttempt = true
-    app.quit()
+  // A held ordinary Quit ends only on a native staging result or its bounded fallback; JS-side events cannot know Squirrel is done.
+  if (requestedActionAfterSquirrelReady !== 'quit') {
+    requestedActionAfterSquirrelReady = null
+    clearPendingInstallTimeout()
   }
+}
+
+/** Squirrel failed staging, so no readiness is coming: retire the held request and its fallback. Returns whether a held ordinary Quit must resume. */
+export function retireMacInstallIntentAfterStagingFailure(): boolean {
+  const quitWasHeld = requestedActionAfterSquirrelReady === 'quit'
+  if (requestedActionAfterSquirrelReady === 'install') {
+    recordUpdaterLifecycle('macos_deferred_install_retired')
+  }
+  requestedActionAfterSquirrelReady = null
+  clearPendingInstallTimeout()
+  return quitWasHeld
+}
+
+/** Re-enter normal quit handling once for the Quit the user already asked for; other quit vetoes still run. */
+export function resumeHeldMacQuit(): void {
+  recordUpdaterLifecycle('macos_deferred_quit_resumed')
+  bypassMacInstallGuardUntilNextAttempt = true
+  app.quit()
 }
 
 export function beginMacUpdateDownload(): void {
@@ -238,6 +252,10 @@ function handleMacInstallerReady(
 
   if (requestedActionAfterSquirrelReady === 'quit') {
     requestedActionAfterSquirrelReady = null
+    // A window can still veto this Quit; the surviving window must show the ready update, not the staging card.
+    if (hasNewerDownloadedVersion) {
+      onReadyToReportDownloaded()
+    }
     app.quit()
     return
   }
