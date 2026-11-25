@@ -61,6 +61,20 @@ export const longPurpose = defineFixture({
   )
 })
 
+// Over the limit, as a value set past the box's maxLength arrives: Create shows Too long and sends nothing.
+export const tooLongPurpose = defineFixture({
+  ...newBotFixture(480),
+  interact: async () => {
+    await typeInto('input[autocomplete="off"]', 'Pulse')()
+    await typeInto(
+      'textarea',
+      'Watch app startup time and catch regressions on every platform. '.repeat(17)
+    )()
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
 export const proposal = defineFixture({
   width: 1100,
   setup: () => stubBots([]),

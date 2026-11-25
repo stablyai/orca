@@ -23,7 +23,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { createBot, useHostBots } from '@/lib/bot-catalog'
 import { handleScreenFormSubmitKey } from '@/lib/keyboard/screen-submit-shortcut'
 import { BOT_NAME_MAX_LENGTH, type Bot, type BotAgent } from '../../../../shared/bot-types'
-import { botErrorMessage } from './bot-presentation'
+import { botCreateErrorMessage } from './bot-presentation'
 import { BotRunsOnPicker } from './BotRunsOnPicker'
 import { BotImportNudge } from './BotImportNudge'
 import { openCreatedBot } from './bot-create-open'
@@ -202,6 +202,7 @@ export function NewBotDialog({
     createInFlight.current = true
     setCreating(true)
     const follow = followedByPicture(face, { hostId, name: trimmedName })
+    const made = fromShare ? null : editedProposal(proposal, draft, trimmedName, t)
     let bot: Bot | null
     try {
       if (fromShare) {
@@ -210,7 +211,6 @@ export function NewBotDialog({
           createNewBotFromShare(fromShare, hostId, { name: trimmedName, setup, intent }, picture)
         )
       } else {
-        const made = editedProposal(proposal, draft, trimmedName, t)
         const offerHere = hostId === (offerHostId ?? LOCAL_EXECUTION_HOST_ID)
         bot = await follow(
           createBot(hostId, {
@@ -237,7 +237,9 @@ export function NewBotDialog({
     } catch (error) {
       createInFlight.current = false
       setCreating(false)
-      toast.error(fromShare ? botShareErrorMessage(error) : botErrorMessage(error))
+      toast.error(
+        fromShare ? botShareErrorMessage(error) : botCreateErrorMessage(error, made?.purpose)
+      )
       return
     }
     createInFlight.current = false

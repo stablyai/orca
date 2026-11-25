@@ -6,6 +6,7 @@ import {
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
+import { refusedForOlderHostPurposeLimit } from '../../../../shared/bots/bot-proposal'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../../shared/worktree/removal/removal'
 import {
   agentSessionRefusalFailure,
@@ -74,6 +75,17 @@ function hostSentenceOf(error: unknown): string | null {
   // A paired server's words call itself "this computer", which here would mean the Mac.
   const remote = error.target?.kind === 'environment' && /this computer/i.test(text)
   return HOST_SENTENCE.test(text) && !CODE_TOKEN.test(text) && !remote ? text : null
+}
+
+/** A create's refusal; an older host that checks the earlier purpose limit says so. */
+export function botCreateErrorMessage(error: unknown, purpose: string | undefined): string {
+  return error instanceof RuntimeRpcCallError &&
+    refusedForOlderHostPurposeLimit(error.code, error.message, purpose)
+    ? translate(
+        'bots.errors.purposeTooLongForHost',
+        "Orca on that computer takes up to 200 characters for what it's for. Shorten it, or update Orca there."
+      )
+    : botErrorMessage(error)
 }
 
 export function botErrorMessage(error: unknown): string {

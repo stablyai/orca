@@ -27622,6 +27622,7 @@
     },
     "errors": {
       "nameTaken": "Another bot already has that name.",
+      "purposeTooLongForHost": "Orca on that computer takes up to 200 characters for what it's for. Shorten it, or update Orca there.",
       "generic": "Something went wrong. Try again.",
       "avatarHomeUnreadable": "Couldn't read the saved picture. Choose it again.",
       "folderNotOwned": "Couldn't verify this bot's folder.",
