@@ -151,6 +151,7 @@ export function createRepoUpdateActions(
                     { timeoutMs: 15_000 }
                   )
                 ).repo
+          // Without a returned row the local merge below would fake the settings echo check.
           if (!updatedRepo && sanitizedUpdates.defaultGitHubIssueRepository !== undefined) {
             return false
           }

@@ -61,9 +61,6 @@ export function parseGitHubIssueReference(input: string): IssueReference | null 
 }
 
 function parseIssueUrl(value: string): IssueUrl | null {
-  if (!/^https?:\/\//i.test(value)) {
-    return null
-  }
   const issue = parseGitHubIssueOrPRLink(value)
   if (
     issue?.type !== 'issue' ||

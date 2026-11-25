@@ -31,14 +31,12 @@ it('resolves shorthand to the named issue on the workspace host', () => {
 })
 
 it('only resolves a bare issue number to a URL when there is a default issue repository', () => {
-  expect(resolveGitHubIssueReference(parseGitHubIssueReference('42'), {})).toEqual({
-    kind: 'bare',
-    number: 42
-  })
-  expect(resolveGitHubIssueReference(parseGitHubIssueReference('#42'), {})).toEqual({
-    kind: 'bare',
-    number: 42
-  })
+  for (const input of ['42', '#42']) {
+    expect(resolveGitHubIssueReference(parseGitHubIssueReference(input), {})).toEqual({
+      kind: 'bare',
+      number: 42
+    })
+  }
   expect(
     resolveGitHubIssueReference(parseGitHubIssueReference('#42'), {
       host: 'github.acme.example',
@@ -85,7 +83,8 @@ it('rejects invalid issue numbers, malformed repositories, and embedded referenc
     'acme/bad repo#42',
     'https://github.com/acme/planning#42',
     'https://github.com/acme/bad%2Frepo/issues/42',
-    'https://github.com/acme/planning/pull/42'
+    'https://github.com/acme/planning/pull/42',
+    'https://user:token@github.com/acme/planning/issues/42'
   ]
-  expect(inputs.map(parseGitHubIssueReference)).toEqual(Array(12).fill(null))
+  expect(inputs.filter((input) => parseGitHubIssueReference(input) !== null)).toEqual([])
 })
