@@ -15,6 +15,13 @@ import type { StructuredAgentSessionTaskQueue } from '../host/structured-agent-s
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 import type { StructuredAgentSessionConversationDelivery } from '../delivery/structured-agent-session-host-delivery'
 import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-agent-session-host-runtime-state'
+import type { StructuredAgentSessionCloseWork } from './structured-agent-session-close-work'
+
+/** A caller's last word on stopping one of the workspace's chats, given in that chat's session lane. */
+export type WorkspaceChatStopAdmission = (
+  sessionId: string,
+  work: StructuredAgentSessionCloseWork
+) => boolean
 
 type WorkspaceSleepHost = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'hasOpenDispatch' | 'now'>
@@ -36,7 +43,7 @@ export function createStructuredAgentSessionWorkspaceSleeper(
     runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
   }
 ) {
-  return (workspaceId: string, markAsleep?: boolean) => {
+  const sleep = (workspaceId: string, markAsleep?: boolean, admit?: WorkspaceChatStopAdmission) => {
     const host = readHost()
     return sleepStructuredAgentSessionWorkspace(
       {
@@ -51,9 +58,14 @@ export function createStructuredAgentSessionWorkspaceSleeper(
         publishRecordNotes: host.clientDelivery.publishRecordNotes
       },
       workspaceId,
-      markAsleep
+      markAsleep,
+      admit
     )
   }
+  /** Chats still being created in a local workspace, which this Sleep would stop too. */
+  const pendingChats = (workspaceId: string): string[] =>
+    readHost().tasks.pendingMembers(workspaceId, LOCAL_EXECUTION_HOST_ID)
+  return Object.assign(sleep, { pendingChats })
 }
 
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
@@ -62,7 +74,8 @@ type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number
 export async function sleepStructuredAgentSessionWorkspace(
   host: WorkspaceSleepHost,
   workspaceId: string,
-  markAsleep = false
+  markAsleep = false,
+  admit?: WorkspaceChatStopAdmission
 ): Promise<AgentSessionWorkspaceSleepResult> {
   let records: ReturnType<StructuredAgentSessionHostDeps['store']['listConversations']>
   try {
@@ -88,7 +101,8 @@ export async function sleepStructuredAgentSessionWorkspace(
       const stop = await host.lifetime.closeForWorkspaceSleep(
         sessionId,
         workspaceId,
-        LOCAL_EXECUTION_HOST_ID
+        LOCAL_EXECUTION_HOST_ID,
+        admit && ((work) => admit(sessionId, work))
       )
       return host.tasks.serialize(sessionId, async () => {
         const record = host.deps.store.getConversation(sessionId)

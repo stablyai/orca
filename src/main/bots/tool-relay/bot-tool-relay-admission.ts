@@ -2,18 +2,26 @@
 // the open calls a removed tool or deleted bot cuts. Streams, calls and session cleanup each have
 // their own slots, so idle event streams can never starve tool calls or DELETE.
 
-type Pool = 'stream' | 'call' | 'cleanup'
+type Pool = 'stream' | 'call' | 'cleanup' | 'process-stream'
 
 /** 16 MiB bodies × 64 calls is already ~1 GiB a bot; raise these only with that in mind. */
 const LIMITS: Record<Pool, { perBot: number; perHost: number }> = {
   /** GET event streams stay open for a session's life. */
   stream: { perBot: 16, perHost: 256 },
   call: { perBot: 64, perHost: 512 },
-  cleanup: { perBot: 8, perHost: 64 }
+  cleanup: { perBot: 8, perHost: 64 },
+  /** A shared server's event stream: one per agent session using it, for that session's life. */
+  'process-stream': { perBot: 256, perHost: 1024 }
 }
 
-const poolOf = (method: string): Pool =>
-  method === 'GET' ? 'stream' : method === 'DELETE' ? 'cleanup' : 'call'
+const poolOf = (method: string, process: boolean): Pool =>
+  method === 'GET'
+    ? process
+      ? 'process-stream'
+      : 'stream'
+    : method === 'DELETE'
+      ? 'cleanup'
+      : 'call'
 
 /** One admitted call: aborting it cuts its wait, its upstream request and its stream. */
 export type RelayCall = {
@@ -28,13 +36,23 @@ export class RelayAdmission {
   private readonly perHost = new Map<Pool, number>()
   private readonly open = new Set<RelayCall>()
 
-  /** The call's slot, or null when the bot or this computer has too many of its kind open. */
-  admit(botId: string, method: string, credentialKey: string): RelayCall | null {
-    const pool = poolOf(method)
+  /**
+   * The call's slot, or null when the bot or this computer has too many of its kind open. A token
+   * many sessions share (`perBotLimit` false) is bound by this computer's limit alone.
+   */
+  admit(
+    botId: string,
+    method: string,
+    credentialKey: string,
+    perBotLimit = true,
+    /** A shared server's: its event streams have their own pool. */
+    process = false
+  ): RelayCall | null {
+    const pool = poolOf(method, process)
     const botKey = `${pool}\0${botId}`
     const forBot = this.perBot.get(botKey) ?? 0
     const forHost = this.perHost.get(pool) ?? 0
-    if (forBot >= LIMITS[pool].perBot || forHost >= LIMITS[pool].perHost) {
+    if ((perBotLimit && forBot >= LIMITS[pool].perBot) || forHost >= LIMITS[pool].perHost) {
       return null
     }
     this.perBot.set(botKey, forBot + 1)

@@ -39,9 +39,6 @@ export function createAgentCompletionTitleObserver({
     if (/\bclaude\b/.test(normalized)) {
       return 'claude'
     }
-    if (/\bgemini\b/.test(normalized)) {
-      return 'gemini'
-    }
     if (/\bcursor(?: agent)?\b/.test(normalized)) {
       return 'cursor'
     }

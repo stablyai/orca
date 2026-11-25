@@ -8,7 +8,7 @@ export function BotItemCloseNote({ item }: { item: BotItem }): React.JSX.Element
     return null
   }
   return (
-    <p className="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">
+    <p className="rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground [overflow-wrap:anywhere]">
       {item.status === 'canceled'
         ? t('bots.items.view.canceledNote', 'Canceled:')
         : t('bots.items.view.doneNote', 'Done:')}{' '}

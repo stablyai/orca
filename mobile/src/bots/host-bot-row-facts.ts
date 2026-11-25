@@ -10,6 +10,7 @@ import type {
   BotChatTreeChat
 } from '../../../src/shared/bots/bot-chat-tree'
 import type { BotRowLineInput } from '../../../src/shared/bots/bot-row-line'
+import type { BotSearchRange } from '../../../src/shared/bots/bot-sidebar-search'
 import type { BotSidebarLineNote } from '../../../src/shared/bots/bot-sidebar-chat-groups'
 import type {
   BotSidebarChatTrailing,
@@ -30,8 +31,8 @@ export type MobileBotAvatarSource =
 /** What a bot's row draws over its home folder's row. */
 export type MobileBotRowFacts = {
   botId: string
-  /** Its chats list under it, so it folds even with no workspace. */
-  foldsChats?: true
+  /** Its chats were read: only its live and unread ones list under it, so it has no fold of its own. */
+  listsChats?: true
   avatar: MobileBotAvatarSource
   /** Rolled up with its workspaces, for the bot's own screen. */
   status: BotRowStatus
@@ -48,8 +49,9 @@ export type MobileBotRowFacts = {
   /** The first person asking for access, whom the Needs you line names. */
   askedForAccess?: string
   statusLine: string
-  /** What it's for, cut to show the match, when a search found it by that and not its name. */
-  searchPurpose?: string
+  /** What it's for, cut to show the match and its matched words, when a search found it by that
+   *  and not its name. */
+  searchPurpose?: { text: string; ranges: readonly BotSearchRange[] }
   paused: boolean
   /** A server's bot: its computer, and that computer's word while it is down. */
   host?: { id: ExecutionHostId; label: string; word?: string }

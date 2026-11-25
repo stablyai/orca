@@ -12,6 +12,7 @@ import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { readReplyNotes } from './bot-reply-notes'
 import { readReplyChoices } from './bot-reply-choices'
+import { leaveThread } from './bot-reply-leave-thread'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   localFile,
@@ -222,6 +223,9 @@ function refuseFlags(flags: HandlerContext['flags']): void {
 
 export const BOT_REPLY_HANDLERS: Record<string, CommandHandler> = {
   'bot reply': async ({ flags, client, json, cwd }) => {
+    if (flags.has('leave-thread')) {
+      return leaveThread({ client, flags, json })
+    }
     const choices = readReplyChoices(flags)
     refuseFlags(flags)
     const caller = replyCaller()

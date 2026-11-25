@@ -1,5 +1,5 @@
-import React from 'react'
-import { BookMarked, Check, ExternalLink, Loader2 } from 'lucide-react'
+import React, { useId } from 'react'
+import { BookMarked, Check, ExternalLink, Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useGitHubAwait } from '@/lib/bot-github-state'
@@ -10,14 +10,10 @@ import {
   tripToGitHubInstall
 } from '@/lib/bot-github-install-record'
 import type { ConnectorGitHubInstallation } from '../../../../../shared/connector-bot-github-contract'
-import {
-  ConnectWaiting,
-  ConnectorMoreLink,
-  ConnectorSetupList,
-  ConnectorSetupSection
-} from '../connector-connect-parts'
+import { ConnectWaiting } from '../connector-connect-parts'
 import { gitHubInstallationLabel, gitHubInstallationsSummary } from './bot-github-copy'
 import { openGitHubInstallPage } from './github-install-page'
+import { GitHubRepositoryGroups } from './github-repository-groups'
 
 /** What a trip to GitHub added to installs the owner already had: new installs, and repositories. */
 export function addedFromGitHub(
@@ -105,11 +101,11 @@ export function GitHubFinishInBrowser({
   const t = useTranslate()
   return (
     <ConnectWaiting
-      label={t('bots.github.setup.finishInBrowser', 'Finish on GitHub in your browser…')}
+      label={t('bots.github.setup.finishInYourBrowser', 'Finish in your browser…')}
       action={
-        <Button size="sm" variant="ghost" onClick={() => trip.open(url, undefined)}>
+        <Button size="xs" variant="ghost" onClick={() => trip.open(url, undefined)}>
           {t('bots.github.setup.openAgain', 'Open again')}
-          <ExternalLink className="size-3.5" />
+          <ExternalLink />
         </Button>
       }
     />
@@ -133,6 +129,7 @@ export function GitHubInstalledRepositories({
   const githubAwait = useGitHubAwait(trip.hostId)
   const added = addedFromGitHub(trip.before ?? [], installations)
   const openInstallPage = (): void => trip.open(installUrl, installations)
+  const headingId = useId()
   return (
     <div className="space-y-1">
       {compact ? (
@@ -150,26 +147,25 @@ export function GitHubInstalledRepositories({
           </Button>
         </div>
       ) : (
-        <>
-          <ConnectorSetupSection label={t('bots.github.setup.repositories', 'Repositories')}>
-            <ConnectorSetupList
-              items={installations.map((installation) => ({
-                key: installation.installationId,
-                icon: <BookMarked className="size-4" />,
-                label: gitHubInstallationLabel(installation),
-                tag: added.newInstalls.has(installation.installationId)
-                  ? t('bots.github.setup.new', 'New')
-                  : undefined
-              }))}
-            />
-          </ConnectorSetupSection>
-          <ConnectorMoreLink
-            more={{
-              label: t('bots.github.setup.addMore', 'Add repositories or an organization'),
-              onClick: openInstallPage
-            }}
-          />
-        </>
+        <section aria-labelledby={headingId} className="space-y-1.5">
+          <div className="flex h-5.5 items-center justify-between gap-2">
+            <h3 id={headingId} className="text-xs font-medium text-muted-foreground">
+              {t('bots.github.setup.repositories', 'Repositories')}
+            </h3>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="-mr-1.5"
+              aria-label={t('bots.github.setup.addMore', 'Add repositories or an organization')}
+              onClick={openInstallPage}
+            >
+              <Plus />
+              {t('bots.github.setup.addShort', 'Add')}
+              <ExternalLink />
+            </Button>
+          </div>
+          <GitHubRepositoryGroups installations={installations} newInstalls={added.newInstalls} />
+        </section>
       )}
       {trip.inSystemBrowser ? (
         <GitHubFinishInBrowser trip={trip} url={installUrl} />

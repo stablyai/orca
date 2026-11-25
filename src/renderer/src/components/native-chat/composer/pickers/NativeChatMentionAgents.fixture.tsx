@@ -26,7 +26,7 @@ const { mentions: agents } = crewAgentMentions(
           partyKey: 'w3',
           role: 'worker',
           label: 'perf-audit',
-          agentKind: 'gemini',
+          agentKind: 'antigravity',
           status: 'waiting',
           task: { title: 'Profile token refresh under load', state: 'dispatched' },
           sendAddress: 'term_w3'

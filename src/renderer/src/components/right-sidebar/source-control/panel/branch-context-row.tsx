@@ -17,14 +17,28 @@ import {
   type SourceControlBranchContextStat
 } from './branch-context-stats'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import {
+  BaseRebaseTrailing,
+  RebasePausedStrip,
+  type BaseRebaseActions
+} from './base-rebase-control'
 
-function ContextStat({ stat }: { stat: SourceControlBranchContextStat }): React.JSX.Element {
+function ContextStat({
+  stat,
+  warning = false
+}: {
+  stat: SourceControlBranchContextStat
+  warning?: boolean
+}): React.JSX.Element {
   // Make stats focusable so screen readers announce their base and keyboard users can open the tooltip.
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="shrink-0 rounded-sm tabular-nums text-muted-foreground/70 outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className={cn(
+            'shrink-0 rounded-sm tabular-nums outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            warning ? 'text-status-warning-text' : 'text-muted-foreground/70'
+          )}
           tabIndex={0}
           aria-label={stat.title}
         >
@@ -104,6 +118,7 @@ export function SourceControlBranchContextRow({
   manualReviewUrl,
   branchLineTotal,
   reviewControl,
+  rebase,
   onChangeBaseRef,
   onRetry
 }: {
@@ -114,23 +129,39 @@ export function SourceControlBranchContextRow({
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
   reviewControl?: React.ReactNode
+  rebase?: BaseRebaseActions | null
   onChangeBaseRef: () => void
   onRetry: () => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const displayedBaseRef = resolveSourceControlDisplayedBaseRef(summary, compareBaseRef)
+  // A paused rebase owns the base line whatever the compare summary says; HEAD is detached mid-rebase.
+  const pausedStrip =
+    rebase?.state.kind === 'rebase_paused' ? (
+      <RebasePausedStrip
+        actions={rebase}
+        unresolvedCount={rebase.state.unresolvedCount}
+        continueState={rebase.state.continueState}
+        inspectFailureMessage={rebase.state.inspectFailureMessage}
+      />
+    ) : null
 
   // Retain head/detached identity without a compare base, replacing the separate identity row (#10215).
   if (!displayedBaseRef) {
     if (!headDisplay) {
-      return null
+      return pausedStrip ? (
+        <div className="min-w-0 text-[11px] text-muted-foreground">{pausedStrip}</div>
+      ) : null
     }
     return (
-      <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-        <span className="min-w-0 flex-1">
-          {headControl ?? <HeadIdentity display={headDisplay} />}
-        </span>
-        {reviewControl}
+      <div className="flex min-w-0 flex-col gap-0.5 text-[11px] text-muted-foreground">
+        <div className="flex min-w-0 items-center gap-1.5">
+          <span className="min-w-0 flex-1">
+            {headControl ?? <HeadIdentity display={headDisplay} />}
+          </span>
+          {reviewControl}
+        </div>
+        {pausedStrip}
       </div>
     )
   }
@@ -148,6 +179,23 @@ export function SourceControlBranchContextRow({
           value1: baseLabel
         })
       : undefined
+
+  if (pausedStrip) {
+    return (
+      <CompareFlowGroup flowLabel={flowLabel} className="min-w-0 text-[11px] text-muted-foreground">
+        <StackedCompareFlow
+          headDisplay={headDisplay}
+          headControl={headControl}
+          baseRef={displayedBaseRef}
+          baseLabel={baseLabel}
+          onChangeBaseRef={onChangeBaseRef}
+          changeBaseTitle={changeBaseTitle}
+          baseLineOverride={pausedStrip}
+          headTrailing={reviewControl}
+        />
+      </CompareFlowGroup>
+    )
+  }
 
   if (!summary || summary.status === 'loading') {
     return (
@@ -218,8 +266,15 @@ export function SourceControlBranchContextRow({
     )
   }
 
+  const isBehindRebaseBase = rebase?.state.kind === 'behind'
   const compareStatNodes = buildSourceControlCompareBaseStats(summary, displayedBaseRef, t).map(
-    (stat) => <ContextStat key={stat.key} stat={stat} />
+    (stat) => (
+      <ContextStat
+        key={stat.key}
+        stat={stat}
+        warning={isBehindRebaseBase && stat.key === 'compare-behind'}
+      />
+    )
   )
 
   return (
@@ -231,11 +286,13 @@ export function SourceControlBranchContextRow({
         baseLabel={baseLabel}
         onChangeBaseRef={onChangeBaseRef}
         changeBaseTitle={changeBaseTitle}
+        baseTone={isBehindRebaseBase ? 'warning' : undefined}
         trailing={
           <>
             {compareStatNodes}
             <ManualReviewLinkButton url={manualReviewUrl} />
             {reviewControl}
+            {rebase ? <BaseRebaseTrailing actions={rebase} /> : null}
           </>
         }
         headTrailing={<SourceControlBranchLineTotalChip branchLineTotal={branchLineTotal} />}

@@ -45,7 +45,7 @@ export async function execFileCaptureToTermination(
   let guestForce: Promise<boolean> | undefined
   const barrier = termination
     ? { ...termination, force: (child: ChildProcess) => (guestForce ??= termination.force(child)) }
-    : true
+    : (options.terminationBarrier ?? true)
   const pending = runProcess({
     program,
     args,
