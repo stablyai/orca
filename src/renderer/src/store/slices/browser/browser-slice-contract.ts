@@ -280,6 +280,11 @@ export type BrowserSlice = {
     hostId?: ExecutionHostId
   ) => Promise<BrowserSessionProfile | null>
   deleteBrowserSessionProfile: (profileId: string) => Promise<boolean>
+  /** Renames a profile's label only; its id, partition and cookies stay. Null when the rename failed. */
+  renameBrowserSessionProfile: (
+    profileId: string,
+    label: string
+  ) => Promise<BrowserSessionProfile | null>
   /** A repo's or workspace's own local profile, at once; a placeholder until main first creates it. */
   ensureManagedBrowserSessionProfile: (
     owner: ManagedBrowserProfileOwner,

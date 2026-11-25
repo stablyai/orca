@@ -13,6 +13,8 @@ export type PendingBrowserCookieImport =
 // Retain per-profile userAgentMode for rollback and migration notices.
 export type BrowserSessionMeta = {
   defaultSource: BrowserSessionProfile['source']
+  /** A renamed built-in profile's label; null keeps the UI-language "Default". */
+  defaultLabel: string | null
   pendingCookieDbPath: string | null
   pendingCookieImports: Record<string, PendingBrowserCookieImport>
   profiles: BrowserSessionProfile[]
@@ -79,6 +81,7 @@ export function loadBrowserSessionMeta(
     }
     const meta: BrowserSessionMeta = {
       defaultSource: data?.defaultSource ?? null,
+      defaultLabel: typeof data?.defaultLabel === 'string' ? data.defaultLabel : null,
       pendingCookieDbPath: legacyPendingCookieDbPath,
       pendingCookieImports,
       profiles: Array.isArray(data?.profiles) ? data.profiles : [],
@@ -104,6 +107,7 @@ export function loadBrowserSessionMeta(
     }
     return {
       defaultSource: null,
+      defaultLabel: null,
       pendingCookieDbPath: null,
       pendingCookieImports: {},
       profiles: [],

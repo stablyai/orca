@@ -7,7 +7,8 @@ export function browserSessionProfileLabel(
   if (!label?.trim() && profileId && profileId !== 'default') {
     return profileId
   }
-  if (profileId === 'default' || !label?.trim() || (profileId == null && label === 'Default')) {
+  // A renamed default keeps its own label; the built-in name still follows the UI language.
+  if (!label?.trim() || ((profileId === 'default' || profileId == null) && label === 'Default')) {
     return defaultLabel
   }
   return label

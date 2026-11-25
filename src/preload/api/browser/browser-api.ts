@@ -83,6 +83,9 @@ import type {
   BrowserClientPageRendererRequest
 } from '../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
+type BrowserProfileLabelArgs = { profileId: string; label: string }
+type BrowserProfileCreateArgs = { scope: BrowserSessionProfileScope; label: string }
+
 export type BrowserApi = {
   /** Absent on clients that host no browser guests, including web clients. */
   readClientHostId?: () => string | null
@@ -232,10 +235,8 @@ export type BrowserApi = {
     browserProfileId?: string
     skipProbe?: boolean
   }) => Promise<{ partition: string }>
-  sessionCreateProfile: (args: {
-    scope: BrowserSessionProfileScope
-    label: string
-  }) => Promise<BrowserSessionProfile | null>
+  sessionCreateProfile: (args: BrowserProfileCreateArgs) => Promise<BrowserSessionProfile | null>
+  sessionRenameProfile: (args: BrowserProfileLabelArgs) => Promise<BrowserSessionProfile | null>
   sessionEnsureManagedProfile: (args: {
     owner: ManagedBrowserProfileOwner
     label: string

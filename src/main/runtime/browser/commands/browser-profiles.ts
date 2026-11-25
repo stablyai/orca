@@ -6,6 +6,7 @@ import type {
   BrowserProfileCreateResult,
   BrowserProfileDeleteResult,
   BrowserProfileListResult,
+  BrowserProfileRenameResult,
   BrowserTabProfileCloneResult,
   BrowserTabProfileShowResult,
   BrowserTabSetProfileResult,
@@ -13,7 +14,6 @@ import type {
   BrowserProfileImportFromBrowserResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
-import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { browserManager } from '../../../browser/guest-lifecycle/manager/browser-manager'
 import { getRuntimeDesktopSurface } from '../../construction/runtime-desktop-surface'
@@ -35,20 +35,16 @@ import type { RuntimeBrowserScreencasts } from '../screencast/browser-screencast
 import type { BrowserClientPageOpeningHost } from '../client-pages/browser-client-page-opening'
 import { cloneBrowserTabToProfile } from './browser-tab-profile-clone'
 import {
+  createRuntimeBrowserProfile,
+  detectRuntimeBrowserProfiles,
+  renameRuntimeBrowserProfile,
+  requireBrowserProfile
+} from './browser-profile-metadata-commands'
+import {
   closeServerPagesInDeletedProfile,
   closeServerPagesOfMissingProfiles
 } from './deleted-profile-server-pages'
 import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
-
-function requireBrowserProfile(profileId: string): BrowserSessionProfile {
-  const profile =
-    browserSessionRegistry.getProfile(profileId) ??
-    (profileId === 'default' ? browserSessionRegistry.getDefaultProfile() : null)
-  if (!profile) {
-    throw new BrowserError('invalid_argument', `Browser profile ${profileId} was not found`)
-  }
-  return profile
-}
 
 export class RuntimeBrowserProfiles {
   constructor(
@@ -235,9 +231,14 @@ export class RuntimeBrowserProfiles {
     label: string
     scope: 'isolated' | 'imported'
   }): Promise<BrowserProfileCreateResult> {
-    return {
-      profile: await browserSessionRegistry.createProfile(params.scope, params.label)
-    }
+    return createRuntimeBrowserProfile(params.scope, params.label)
+  }
+
+  async browserProfileRename(params: {
+    profileId: string
+    label: string
+  }): Promise<BrowserProfileRenameResult> {
+    return renameRuntimeBrowserProfile(params.profileId, params.label)
   }
 
   async browserProfileDelete(params: { profileId: string }): Promise<BrowserProfileDeleteResult> {
@@ -259,15 +260,7 @@ export class RuntimeBrowserProfiles {
   }
 
   async browserProfileDetectBrowsers(): Promise<BrowserDetectProfilesResult> {
-    return {
-      // Expose display metadata only; retain paths/keychain identifiers on the server.
-      browsers: detectInstalledBrowsers().map((browser) => ({
-        family: browser.family,
-        label: browser.label,
-        profiles: browser.profiles,
-        selectedProfile: browser.selectedProfile
-      }))
-    }
+    return detectRuntimeBrowserProfiles()
   }
 
   async browserProfileImportFromBrowser(params: {

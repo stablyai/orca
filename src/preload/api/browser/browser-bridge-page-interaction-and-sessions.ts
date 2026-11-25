@@ -192,6 +192,8 @@ export const browserPageInteractionAndSessionsApi = {
     ipcRenderer.invoke('browser:prepareSshWorkspacePartition', args),
   sessionCreateProfile: (args: { scope: 'default' | 'isolated' | 'imported'; label: string }) =>
     ipcRenderer.invoke('browser:session:createProfile', args),
+  sessionRenameProfile: (args: { profileId: string; label: string }) =>
+    ipcRenderer.invoke('browser:session:renameProfile', args),
   sessionEnsureManagedProfile: (args: { owner: ManagedBrowserProfileOwner; label: string }) =>
     ipcRenderer.invoke('browser:session:ensureManagedProfile', args),
   identityGet: () => ipcRenderer.invoke('browser:identity:get'),

@@ -95,6 +95,7 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
     prepareSshWorkspacePartition: () =>
       Promise.reject(new Error('browser_local_route_unavailable')),
     sessionCreateProfile: () => Promise.resolve(null),
+    sessionRenameProfile: () => Promise.resolve(null),
     sessionDeleteProfile: () => Promise.resolve(false),
     sessionImportCookies: () =>
       Promise.resolve({

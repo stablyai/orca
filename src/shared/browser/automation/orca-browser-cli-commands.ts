@@ -59,6 +59,7 @@ export const ORCA_BROWSER_CLI_COMMAND_KEYS = {
   'browser-profile': [
     'tab profile list',
     'tab profile create',
+    'tab profile rename',
     'tab profile delete',
     'tab profile set',
     'tab profile show',

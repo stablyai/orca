@@ -41,6 +41,7 @@ import {
 export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:listProfiles')
   ipcMain.removeHandler('browser:session:createProfile')
+  ipcMain.removeHandler('browser:session:renameProfile')
   ipcMain.removeHandler('browser:session:deleteProfile')
   ipcMain.removeHandler('browser:session:ensureManagedProfile')
   ipcMain.removeHandler('browser:identity:get')
@@ -95,6 +96,16 @@ export function registerBrowserSessionProfileHandlers(): void {
     }
     return setBrowserIdentityMode(mode)
   })
+
+  ipcMain.handle(
+    'browser:session:renameProfile',
+    (event, args: { profileId: string; label: string }): BrowserSessionProfile | null => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return null
+      }
+      return browserSessionRegistry.renameProfile(args.profileId, args.label)
+    }
+  )
 
   ipcMain.handle(
     'browser:session:deleteProfile',
