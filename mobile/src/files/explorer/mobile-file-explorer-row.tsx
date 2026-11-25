@@ -78,7 +78,7 @@ export function MobileFileExplorerRow(props: Props) {
         <View style={styles.chevronSpacer} />
         <ActivityIndicator size="small" color={colors.textSecondary} />
         <Text style={styles.inlineStatusText}>
-          {t('files.fileExplorerRow.loadingFolder', 'Loading…')}
+          {t('files.fileExplorerRow.loading', 'Loading…')}
         </Text>
       </View>
     )
@@ -174,7 +174,7 @@ function FolderPagingRow(props: {
       {busy ? <ActivityIndicator size="small" color={colors.textSecondary} /> : null}
       <Text style={[styles.rowTextBlock, styles.showMoreText]} numberOfLines={1}>
         {busy
-          ? t('files.fileExplorerRow.loadingFolder', 'Loading…')
+          ? t('files.fileExplorerRow.loading', 'Loading…')
           : t('files.fileExplorerRow.showMore', 'Show {{rows}} more', {
               rows: formatCount(Math.min(DIRECTORY_PAGE_SIZE, item.total - item.loaded))
             })}

@@ -1465,6 +1465,7 @@
       "fileUnavailable": "모바일에서 {{name}} 사용 불가",
       "loadFolderFailed": "폴더를 불러올 수 없습니다.",
       "loadedOfTotal": "{{total}}개 중 {{loaded}}개",
+      "loading": "로드 중…",
       "openFolder": "{{name}} 폴더 열기",
       "previewFile": "{{name}} 파일 미리보기",
       "retryLoading": "{{path}} 다시 불러오기",

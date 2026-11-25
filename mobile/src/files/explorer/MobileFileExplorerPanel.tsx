@@ -53,8 +53,10 @@ import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 const ROOT = { relativePath: '' }
-// A screenful of results; the search ranks the best first.
-const SEARCH_RESULT_LIMIT = 50
+// The most the host's search returns, best first.
+const SEARCH_RESULT_LIMIT = 32
+// As long as the host keeps its own file list, so files an agent just made turn up.
+const SEARCH_MAX_AGE_MS = 30_000
 const NO_FOLDERS: ReadonlySet<string> = new Set()
 
 type FolderRead = Pick<UseQueryResult<DirectoryRead>, 'data' | 'error' | 'isFetching'>
@@ -229,7 +231,12 @@ export function MobileFileExplorerPanel(props: {
     // listingsVersion marks cache writes that getQueriesData reads but nothing here observes.
   }, [connState, folderReads, folders, listingsKey, listingsVersion, queryClient, rootRead])
 
-  const search = useMobileNativeChatFileSearch({ client, worktreeId, limit: SEARCH_RESULT_LIMIT })
+  const search = useMobileNativeChatFileSearch({
+    client,
+    worktreeId,
+    limit: SEARCH_RESULT_LIMIT,
+    maxAgeMs: SEARCH_MAX_AGE_MS
+  })
   const { filter, setFilter, filtering, rows, searchPending, onToggleDirectory } =
     useMobileFileExplorerRows({
       scope,

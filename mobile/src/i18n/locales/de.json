@@ -1471,6 +1471,7 @@
       "fileUnavailable": "{{name}} auf Mobilgeräten nicht verfügbar",
       "loadFolderFailed": "Ordner konnte nicht geladen werden",
       "loadedOfTotal": "{{loaded}} von {{total}}",
+      "loading": "Wird geladen…",
       "openFolder": "Ordner {{name}} öffnen",
       "previewFile": "Vorschau der Datei {{name}} anzeigen",
       "retryLoading": "{{path}} erneut laden",

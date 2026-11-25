@@ -2320,6 +2320,7 @@
       "open": "Open PDF"
     },
     "fileExplorerRow": {
+      "loading": "Loading…",
       "loadFolderFailed": "Unable to load folder",
       "retryLoading": "Retry loading {{path}}",
       "openFolder": "Open folder {{name}}",
@@ -2327,8 +2328,7 @@
       "previewFile": "Preview file {{name}}",
       "showMore": "Show {{rows}} more",
       "loadedOfTotal": "{{loaded}} of {{total}}",
-      "ignored": "Ignored by .gitignore",
-      "loadingFolder": "Loading…"
+      "ignored": "Ignored by .gitignore"
     },
     "fileExplorerRowActions": {
       "copyName": "Copy Name",

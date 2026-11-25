@@ -1468,6 +1468,7 @@
       "fileUnavailable": "{{name}} 無法在行動版使用",
       "loadFolderFailed": "無法載入資料夾",
       "loadedOfTotal": "{{loaded}} / {{total}}",
+      "loading": "載入中…",
       "openFolder": "開啟資料夾 {{name}}",
       "previewFile": "預覽檔案 {{name}}",
       "retryLoading": "重新嘗試載入 {{path}}",

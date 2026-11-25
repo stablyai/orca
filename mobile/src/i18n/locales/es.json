@@ -1516,6 +1516,7 @@
       "fileUnavailable": "{{name}} no disponible en el móvil",
       "loadFolderFailed": "No se pudo cargar la carpeta",
       "loadedOfTotal": "{{loaded}} de {{total}}",
+      "loading": "Cargando…",
       "openFolder": "Abrir la carpeta {{name}}",
       "previewFile": "Previsualizar el archivo {{name}}",
       "retryLoading": "Reintentar cargar {{path}}",

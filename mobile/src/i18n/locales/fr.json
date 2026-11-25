@@ -1516,6 +1516,7 @@
       "fileUnavailable": "{{name}} indisponible sur mobile",
       "loadFolderFailed": "Impossible de charger le dossier",
       "loadedOfTotal": "{{loaded}} sur {{total}}",
+      "loading": "Chargement…",
       "openFolder": "Ouvrir le dossier {{name}}",
       "previewFile": "Afficher l'aperçu du fichier {{name}}",
       "retryLoading": "Réessayer de charger {{path}}",

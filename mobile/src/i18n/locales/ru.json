@@ -2340,13 +2340,14 @@
     },
     "fileExplorerRow": {
       "fileUnavailable": "Файл {{name}} недоступен на мобильном устройстве",
+      "ignored": "Игнорируется в .gitignore",
       "loadFolderFailed": "Не удалось загрузить папку",
       "loadedOfTotal": "{{loaded}} из {{total}}",
+      "loading": "Загрузка…",
       "openFolder": "Открыть папку {{name}}",
       "previewFile": "Открыть предпросмотр файла {{name}}",
       "retryLoading": "Повторить загрузку {{path}}",
-      "showMore": "Показать ещё {{rows}}",
-      "ignored": "Игнорируется в .gitignore"
+      "showMore": "Показать ещё {{rows}}"
     },
     "fileExplorerRowActions": {
       "copyName": "Копировать имя",

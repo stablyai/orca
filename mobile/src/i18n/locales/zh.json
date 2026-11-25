@@ -2101,12 +2101,13 @@
     },
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
+      "ignored": "被 .gitignore 忽略",
       "loadFolderFailed": "无法加载文件夹",
       "loadedOfTotal": "{{loaded}} / {{total}}",
+      "loading": "加载中…",
       "openFolder": "打开文件夹 {{name}}",
       "previewFile": "预览文件 {{name}}",
       "retryLoading": "重试加载 {{path}}",
-      "ignored": "被 .gitignore 忽略",
       "showMore": "再显示 {{rows}} 项"
     },
     "fileExplorerRowActions": {
