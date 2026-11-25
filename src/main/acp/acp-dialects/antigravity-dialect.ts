@@ -8,6 +8,7 @@ import {
 } from '../requests/acp-form-elicitation'
 import { acpPermissionPresentation } from '../requests/acp-timeline-requests'
 import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
 import { pendingAcpResolution, type AcpDialect, type AcpRequestPresentation } from './acp-dialect'
 import { acpReplyNoticeFailure } from './acp-reply-notice-failure'
 import { antigravityExecutorErrorWords } from './antigravity-executor-error'
@@ -197,6 +198,22 @@ export function antigravityModelChoices(
   return [...choices].map(([id, label]) => ({ id, label }))
 }
 
+/** A level id as the family row and level a chat lists in its place; null when the listing names
+ *  the id itself or the family does not offer that level and the requested effort. */
+export const antigravityListedFamilySelection: StructuredAgentListedSelection = (
+  options,
+  listed
+) => {
+  const [, family, level] = ANTIGRAVITY_LEVEL_SUFFIX.exec(options.model ?? '') ?? []
+  const offered = listed.find((model) => model.id === family)?.efforts.map(({ value }) => value)
+  const effort = options.effort ?? level
+  return offered?.includes(level) &&
+    offered.includes(effort) &&
+    !listed.some((model) => model.id === options.model)
+    ? { ...options, model: family, effort }
+    : null
+}
+
 export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   // With forms, ask_question carries a write-in field per question; permissions cannot carry text.
   clientCapabilities: { elicitation: { form: {} } },
@@ -231,16 +248,16 @@ export const ANTIGRAVITY_ACP_DIALECT: AcpDialect = {
   toolName: (update) => (update.kind === 'execute' ? 'execute' : undefined),
   // Logout would clear the account shared by every Antigravity chat on this host.
   withheldCommands: ['logout'],
-  familyEfforts
+  familyEfforts,
+  listedSelection: antigravityListedFamilySelection
 }
 
-// agy answers "Authentication required" alone; on Orca's home that is a key it rejects, so the
-// notice names the fix. Only key chats run there: the home refuses any other method at start, and
-// changing the method stops every Antigravity chat.
+// agy answers "Authentication required" alone; on Orca's home it couldn't use the saved method
+// (a key, gcloud, or agy's Google login for Enterprise), so the notice points where that is set.
 const ORCA_HOME_SIGN_IN =
-  "agy couldn't sign in with this chat's Gemini API key. Check the key under Settings → Accounts → Antigravity."
+  "agy couldn't sign in with this chat's sign-in method. Check it under Settings → Accounts → Antigravity."
 
-/** agy running a Gemini API key chat on Orca's home: Sign in opens Settings. */
+/** agy running on Orca's home (any method but a Google account): Sign in opens Settings. */
 export const ANTIGRAVITY_AGY_ORCA_HOME_DIALECT: AcpDialect = {
   ...ANTIGRAVITY_ACP_DIALECT,
   signInAccount: 'managed',

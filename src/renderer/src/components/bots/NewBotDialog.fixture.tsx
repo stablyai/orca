@@ -4,6 +4,7 @@ import { BOT_TEMPLATES } from '../../../../shared/bots/bot-templates'
 import { templateProposal, type BotProposal } from '../../../../shared/bots/bot-proposal'
 import type { BotShareReview } from '../../../../shared/bots/bot-share-received'
 import { NewBotDialog } from './NewBotDialog'
+import { refreshAvatarCapability } from './avatar-generation-capability-store'
 import {
   LONG_FIXTURE_COMPUTER,
   NewBotFixtureStage,
@@ -58,6 +59,20 @@ export const longPurpose = defineFixture({
   interact: typed(
     'Watch app startup time on macOS, Windows and Linux, compare each new PR against main, and tell me in #perf when cold start gets more than 5% slower. Post a short summary there every Friday.'
   )
+})
+
+// Over the limit, as a value set past the box's maxLength arrives: Create shows Too long and sends nothing.
+export const tooLongPurpose = defineFixture({
+  ...newBotFixture(480),
+  interact: async () => {
+    await typeInto('input[autocomplete="off"]', 'Pulse')()
+    await typeInto(
+      'textarea',
+      'Watch app startup time and catch regressions on every platform. '.repeat(17)
+    )()
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click()
+    await new Promise(requestAnimationFrame)
+  }
 })
 
 export const proposal = defineFixture({
@@ -165,8 +180,49 @@ export const longest480 = defineFixture({
   ...newBotFixture(480, LONG_FIXTURE_COMPUTER),
   interact: LONGEST
 })
-export const picker340 = defineFixture({ ...newBotFixture(340), interact: openPicker })
-export const picker480 = defineFixture({ ...newBotFixture(480), interact: openPicker })
+const pictureReview = (width: 340 | 480) => ({
+  width: width + 32,
+  setup: () => {
+    seedNewBotFixture('Demo computer')()
+    const avatarGeneration: typeof window.api.avatarGeneration = {
+      ...window.api.avatarGeneration,
+      capability: async () => ({ agents: [{ agent: 'codex', status: 'ready' }] })
+    }
+    Reflect.set(window.api, 'avatarGeneration', avatarGeneration)
+    refreshAvatarCapability()
+  },
+  render: () => (
+    <NewBotFixtureStage
+      width={width}
+      proposal={{ name: 'Pebble', purpose: 'Sort invented notes for the demo.', mascot: 'B1' }}
+    />
+  )
+})
+
+export const picker340 = defineFixture({ ...pictureReview(340), interact: openPicker })
+export const picker480 = defineFixture({ ...pictureReview(480), interact: openPicker })
+
+const reopenDraft = async (): Promise<void> => {
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+  await typeInto('textarea[aria-label="Picture description"]', 'a tiny violet robot gardener')()
+  const popover = document.querySelector<HTMLElement>('[data-slot="popover-content"]')
+  popover?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  await openPicker()
+  document.querySelector<HTMLButtonElement>('button[aria-label="Previous picture"]')?.click()
+  await new Promise((resolve) => setTimeout(resolve, 400))
+}
+
+export const pictureDraft340 = defineFixture({
+  ...pictureReview(340),
+  interact: reopenDraft
+})
+export const pictureDraft480 = defineFixture({
+  ...pictureReview(480),
+  interact: reopenDraft
+})
 export const computerMenu340 = defineFixture({
   ...newBotFixture(340, LONG_FIXTURE_COMPUTER),
   interact: openComputerMenu

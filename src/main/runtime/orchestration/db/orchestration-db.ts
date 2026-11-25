@@ -40,6 +40,10 @@ class OrchestrationDbCore {
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
+  /** Told which mailboxes mail was read from, after the consuming write commits. */
+  mailReadListener: ((mailboxes: string[]) => void) | undefined
+  /** Whether that listener wants reads now; false skips reading which mailboxes they came from. */
+  mailReadWanted: () => boolean = () => true
   /** The runtime's auto-release timer, re-armed whenever a deadline moves. */
   workerTerminalAutoReleaseListener: (() => void) | undefined
   /** Told, with its id, of every change to what places or shows a Dispatch (see worker-status-notice),

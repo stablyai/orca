@@ -26,7 +26,7 @@ import { readWorkerDockActivity, workerDockActivityRevision } from './worker-doc
 
 const stateSql = `CASE f.state
   WHEN 'ready' THEN 'unavailable' WHEN 'succeeded' THEN CASE WHEN f.result_lost_at IS NOT NULL THEN 'unavailable' ELSE 'saving' END
-  WHEN 'stopped' THEN 'unexpected' WHEN 'abandoned' THEN 'unexpected'
+  WHEN 'abandoned' THEN 'unexpected'
   WHEN 'start_unknown' THEN 'unavailable' WHEN 'stop_unknown' THEN 'unavailable'
   ELSE f.state END`
 const identitySql = `json_array(f.home, f.source, 'worker', f.dispatch_id)`
@@ -229,14 +229,14 @@ export function readWorkerDockResult(
   const row = db.db
     .prepare(`SELECT f.dispatch_id, f.report_id, f.settlement, f.changed_at, f.state, w.last_error, d.last_failure,
     NOT EXISTS(SELECT 1 FROM federated_dispatches remote WHERE remote.dispatch_id = f.dispatch_id) AS owner_actions_available,
-    COALESCE(t.task_title, t.spec) AS title, t.display_name, w.start_options, m.body, m.payload, accepted.payload AS accepted_payload, s.receipt,
+    COALESCE(t.task_title, t.spec) AS title, t.display_name,
+    COALESCE(w.worktree_id, (SELECT r.worktree_id FROM worker_terminal_resources r WHERE r.owner_dispatch_id = f.dispatch_id LIMIT 1)) AS workspace_id, w.start_options, m.body, m.payload, accepted.payload AS accepted_payload,
     EXISTS(SELECT 1 FROM worker_dock_acknowledgments a WHERE a.source = f.source
       AND a.dispatch_id = f.dispatch_id AND a.settlement = f.settlement) AS acknowledged
     FROM worker_dock_facts f JOIN dispatch_contexts d ON d.id = f.dispatch_id
     JOIN tasks t ON t.id = d.task_id JOIN worker_dispatches w ON w.dispatch_id = f.dispatch_id
     LEFT JOIN messages m ON m.id = f.report_id
     LEFT JOIN attempt_observation_facts accepted ON accepted.id = 'worker_report:' || f.report_id
-    LEFT JOIN worker_dock_owner_stops s ON s.dispatch_id = f.dispatch_id AND s.confirmed = 1 AND s.settlement = f.settlement
     WHERE f.source = ? AND f.dispatch_id = ?`)
     .get(workerDockSession(party), dispatchId)
   if (!row) {
@@ -251,22 +251,21 @@ export function readWorkerDockResult(
       : typeof row.last_failure === 'string'
         ? row.last_failure
         : null
-  const failure = row.state === 'failed' || row.state === 'stopped' || row.state === 'abandoned'
-  if (typeof row.body !== 'string' && !row.receipt && !(failure && failureReason)) {
+  // Only a requested stop reaches 'stopped'; a crash or lost terminal settles failed or abandoned.
+  const stopped = row.state === 'stopped'
+  const failure = row.state === 'failed' || row.state === 'abandoned'
+  if (typeof row.body !== 'string' && !stopped && !(failure && failureReason)) {
     return null
   }
-  const outcome = row.receipt
-    ? 'stopped'
-    : (reportOutcome(row.accepted_payload) ??
-      reportOutcome(row.payload) ??
-      (failure ? (row.state === 'failed' ? 'failed' : 'unexpected') : null))
+  const outcome =
+    reportOutcome(row.accepted_payload) ??
+    reportOutcome(row.payload) ??
+    (stopped ? 'stopped' : failure ? (row.state === 'failed' ? 'failed' : 'unexpected') : null)
   if (!outcome) {
     return null
   }
   return WorkerDockResult.parse({
-    id:
-      row.report_id ??
-      (row.receipt ? `owner_stop:${dispatchId}` : `settlement:${String(row.settlement)}`),
+    id: row.report_id ?? `settlement:${String(row.settlement)}`,
     dispatchId,
     name:
       row.display_name ??
@@ -275,11 +274,13 @@ export function readWorkerDockResult(
       'Worker',
     title: row.title,
     outcome,
-    body: row.body ?? (row.receipt ? 'Stopped by you.' : failureReason),
+    body: row.body ?? (stopped ? '' : failureReason),
+    report: typeof row.body === 'string',
     at: epoch(row.changed_at),
     settlement: row.settlement ?? `worker_report:${String(row.report_id)}`,
     acknowledged: row.acknowledged === 1,
-    ownerActionsAvailable: row.owner_actions_available === 1
+    ownerActionsAvailable: row.owner_actions_available === 1,
+    ...(typeof row.workspace_id === 'string' ? { workspaceId: row.workspace_id } : {})
   })
 }
 function reportOutcome(payload: unknown): 'succeeded' | 'failed' | null {

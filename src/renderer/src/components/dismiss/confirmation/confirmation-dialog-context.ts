@@ -26,6 +26,8 @@ export type ConfirmationDialogOptions = {
   cancelLabel?: string
   confirmVariant?: 'default' | 'destructive'
   surface?: 'security'
+  /** Asked while a menu stays open under it, e.g. a picker that commits on a tab, so it sits above menus. */
+  aboveMenus?: boolean
   /** A notice, not a question: only the confirm button shows, and it settles true. */
   acknowledgeOnly?: boolean
   /** Focus starts on Cancel (or the first field); `confirm` starts on the verb instead. */

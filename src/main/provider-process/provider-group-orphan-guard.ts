@@ -119,49 +119,6 @@ export async function sweepOrphanedProviderGroup(
   return 'refused'
 }
 
-/** Only retire the separate watcher after the provider group is gone, preserving descendant grace. */
-export async function retireProviderWatcher(
-  identity: ProviderGroupIdentity,
-  deps: ProviderGroupGuardDeps = {}
-): Promise<ProviderGroupSweepVerdict> {
-  const signal = deps.signalGroup ?? ((pgid, value) => process.kill(-pgid, value))
-  try {
-    signal(identity.pgid, 0)
-    return 'refused'
-  } catch (error) {
-    if (!isNoProcess(error)) {
-      return 'refused'
-    }
-  }
-  if (identity.watcher.pgid !== identity.watcher.pid || deps.signal?.aborted) {
-    return 'refused'
-  }
-  try {
-    signal(identity.watcher.pgid, 0)
-  } catch (error) {
-    return isNoProcess(error) ? 'absent' : 'refused'
-  }
-  const actual = await (deps.readProcessRow ?? readPosixProcessRow)(
-    identity.watcher.pid,
-    identity.watcher.startResolution
-  )
-  if (deps.signal?.aborted || actual === 'unverifiable') {
-    return 'refused'
-  }
-  if (!actual) {
-    return 'absent'
-  }
-  if (!sameProviderProcess(identity.watcher, actual)) {
-    return 'refused'
-  }
-  try {
-    signal(identity.watcher.pgid, 'SIGKILL')
-    return 'killed'
-  } catch (error) {
-    return isNoProcess(error) ? 'absent' : 'refused'
-  }
-}
-
 export function providerOwnershipAbsent(identity: ProviderGroupIdentity): boolean {
   return providerGroupAbsent(identity.pgid) && providerGroupAbsent(identity.watcher.pgid)
 }

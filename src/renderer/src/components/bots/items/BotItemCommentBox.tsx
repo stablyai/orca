@@ -3,15 +3,7 @@
 // "Replying to" names it and the text opens on its own row, four lines tall. Enter sends, Shift+Enter
 // adds a line; images paste, drop or attach as thumbnails with an "Image #N" pill at the caret, other
 // files as `@path` pills. Uploads go to the item's chat on the bot's host, which then holds them as its own.
-import {
-  useCallback,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Ref
-} from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type Ref } from 'react'
 import { ArrowUp } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useLatestHandler } from '@/lib/use-latest-handler'
@@ -30,7 +22,6 @@ import type { NativeChatComposerInput } from '../../native-chat/composer/editor/
 import { useNativeChatComposerHandle } from '../../native-chat/composer/editor/use-native-chat-composer-handle'
 import { useNativeChatDraftEvents } from '../../native-chat/composer/editor/use-native-chat-draft-events'
 import type { NativeChatComposerHandle } from '../../native-chat/composer/native-chat-composer-types'
-import { composerQuoteTarget } from '../../native-chat/selection-quotes/NativeChatSelectionQuote'
 import { NativeChatImageAttachmentPreview } from '../../native-chat/attachments/chips/NativeChatImageAttachmentPreview'
 import { useNativeChatComposerAttachments } from '../../native-chat/attachments/chips/use-native-chat-composer-attachments'
 import { useNativeChatFileDrops } from '../../native-chat/attachments/intake/use-native-chat-file-drops'
@@ -45,6 +36,13 @@ import {
   projectNativeChatPastedText
 } from '../../native-chat/paste/native-chat-composer-pasted-text-references'
 import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
+import { botItemHeldAnswersLimitNotice } from './bot-item-held-answers'
+import {
+  useBotItemCommentBoxHandle,
+  type BotItemCommentBoxHandle
+} from './use-bot-item-comment-box-handle'
+
+export type { BotItemCommentBoxHandle }
 import type { Bot } from '../../../../../shared/bot-types'
 import { BOT_ITEM_LIMITS, type BotItem } from '../../../../../shared/bots/bot-items'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
@@ -63,19 +61,6 @@ import {
   useBotItemCommentAttachments,
   type BotItemCommentAttachTarget
 } from './use-bot-item-comment-attachments'
-
-export type BotItemCommentBoxHandle = ReturnType<typeof composerQuoteTarget> & {
-  focus: () => void
-  /** Focus the box with the caret after its text, as when coming back to a draft. */
-  focusEnd: () => void
-  /** Focus the box and type `text` at its caret. */
-  type: (text: string) => void
-  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
-  fill: (text: string, plain?: boolean) => void
-  /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
-  answer: () => void
-}
 
 const NO_TARGET = () => null
 
@@ -225,30 +210,13 @@ function BotItemCommentField({
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
   // Replying to a question, the text has its own row and room for an answer from the start.
   const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
-  const caretToEnd = (): void => {
-    const node = input.current
-    node?.focus()
-    node?.setSelectionRange(node.value.length, node.value.length)
-  }
-  useImperativeHandle(ref, () => ({
-    focus: () => input.current?.focus(),
-    focusEnd: caretToEnd,
-    ...composerQuoteTarget(composer),
-    type: (typed) => void composer.current?.insertTypedText(typed),
-    answer: () => {
-      reply.show()
-      composer.current?.focus({ caretAtEnd: true, glow: true })
-    },
-    fill: (text, plain) => {
-      const mark = plain ? reply.hide : reply.show
-      mark()
-      setDraft(`${text} `)
-      if (input.current) {
-        input.current.value = `${text} `
-      }
-      caretToEnd()
-    }
-  }))
+  const caretToEnd = useBotItemCommentBoxHandle(ref, {
+    scopeKey,
+    input: () => input.current,
+    composer,
+    reply,
+    setDraft
+  })
   const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
@@ -273,11 +241,16 @@ function BotItemCommentField({
     if (!skills) {
       return
     }
+    // Refused, the comment stays in the box, saying why.
+    const limit = onSend(text, paths, reply.quote?.id ?? null, skills)
+    if (limit) {
+      setNotice(botItemHeldAnswersLimitNotice(t, limit))
+      return
+    }
     if (clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)) {
       attachments.clearImageAttachments()
     }
     setNotice(null)
-    onSend(text, paths, reply.quote?.id ?? null, skills)
   }
   // Stable identities let the memoized editor skip the per-keystroke render, as in chat.
   const editorChange = useLatestHandler((node: NativeChatComposerInput) => {

@@ -66,6 +66,24 @@ export function resumeRunInFlight(run: ResumeRun | null): boolean {
   return run?.inFlight ?? false
 }
 
+export function isResumeRunPendingPhase(
+  phase: NonNullable<ResumeRunHostStatus['restartResume']>['phase'] | undefined
+): boolean {
+  return phase === undefined || phase === 'queued' || phase === 'starting'
+}
+
+export function isResumeRunSessionStarting(run: ResumeRun | null, sessionId: string): boolean {
+  if (!run?.inFlight) {
+    return false
+  }
+  const entry = run.entries.find(({ candidate }) => candidate.sessionId === sessionId)
+  return (
+    entry !== undefined &&
+    entry.candidate.surface !== 'terminal' &&
+    isResumeRunPendingPhase(entry.observedStatus?.restartResume?.phase)
+  )
+}
+
 export function beginResumeRun(
   candidates: readonly ResumeCandidate[],
   now: number,

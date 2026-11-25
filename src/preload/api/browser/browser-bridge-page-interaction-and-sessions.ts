@@ -1,5 +1,6 @@
 import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
+import type { BrowserServerDownloadCopyArgs } from '../../../shared/browser/downloads/browser-server-download-copy'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
@@ -133,6 +134,10 @@ export const browserPageInteractionAndSessionsApi = {
   },
   cancelDownload: (args: { downloadId: string }): Promise<boolean> =>
     ipcRenderer.invoke('browser:cancelDownload', args),
+  copyServerDownload: (args: BrowserServerDownloadCopyArgs): Promise<{ destinationPath: string }> =>
+    ipcRenderer.invoke('browser:copyServerDownload', args),
+  cancelServerDownloadCopy: (args: { copyId: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:cancelServerDownloadCopy', args),
   setGrabMode: (args: { browserPageId: string; enabled: boolean }) =>
     ipcRenderer.invoke('browser:setGrabMode', args),
   awaitGrabSelection: (args: { browserPageId: string; opId: string }) =>

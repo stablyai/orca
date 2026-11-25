@@ -1,3 +1,4 @@
+import type { LiveTextReaders } from '../../journal-ingress/structured-agent-session-event-sink'
 import type { HostUsageLimitCut } from '../../recovery/structured-agent-session-usage-limit-chain'
 import { readForkMarker } from '../history/agent-session-fork-marker'
 import { StructuredAgentSessionJournalObservers } from '../../observations/structured-agent-session-journal-observers'
@@ -34,6 +35,7 @@ import type { StructuredAgentSessionStatusSubscriber as StatusSubscriber } from 
 import type { CapturedChildWorkStops } from '../../observations/structured-agent-session-status-ownership'
 import { createStructuredAgentSessionHostStatusFeed } from '../../observations/structured-agent-session-host-status-feed'
 import type { StructuredAgentSessionChildWorkProducer } from '../../observations/structured-agent-session-subagent-rows'
+import { noteAgentSessionViewerLeft } from './agent-session-viewer-left'
 import {
   StructuredAgentSessionTurnCompletionFeed,
   type StructuredAgentSessionTurnCompletionSubscriber as TurnCompletionSubscriber
@@ -79,7 +81,7 @@ export class StructuredAgentSessionClientDelivery {
       id: string,
       cut: HostUsageLimitCut | null
     ) => AgentSessionStatusSummary['usageLimitContinue'],
-    readLiveText?: (id: string) => readonly AgentJournalRenderItem[]
+    readLiveText?: (id: string, readers?: LiveTextReaders) => readonly AgentJournalRenderItem[]
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)
     this.savedStatus = new StructuredAgentSessionSavedStatus(deps)
@@ -110,6 +112,7 @@ export class StructuredAgentSessionClientDelivery {
     this.subscribers = new AgentSessionSubscribers({
       ...(readLiveText ? { readLiveText } : {}),
       readForkJournal: (id) => this.sessions.get(id)?.journal,
+      readSessionJournal: (id) => this.sessions.get(id)?.journal,
       readForkMarker: (sessionId) => readForkMarker(this.deps().store, sessionId),
       readCommands: (sessionId, commandsOnRequest) =>
         this.readCommands(sessionId, commandsOnRequest),
@@ -125,7 +128,8 @@ export class StructuredAgentSessionClientDelivery {
       readWorkFrame: (sessionId, journal, rows) =>
         this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
       onPromptSuggestionInterest: (sessionId, wanted) =>
-        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted)
+        this.deps().adapter.promptSuggestionInterestChanged?.(sessionId, wanted),
+      onLastViewerLeft: noteAgentSessionViewerLeft
     })
   }
 

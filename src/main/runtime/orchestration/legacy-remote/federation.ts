@@ -32,6 +32,7 @@ import { assertWorkerStartTaskSpecWithinPromptBudget } from '../../rpc/methods/o
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../rpc/callers/workspace-creator-context'
 import { claimTerminalForRemoteAttach } from '../db/worker-dispatch/worker-terminal-claim'
+import { refuseUninstalledWorkerAgent } from '../../rpc/methods/orchestration/worker/start/launch/worker-agent-host-preflight'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineOrchestrationMethod({
@@ -83,6 +84,15 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           })
         )
       }
+      // The same installed-agent check as every start, before anything is created here.
+      await refuseUninstalledWorkerAgent(runtime, {
+        agent,
+        terminal: params.terminal,
+        repoSelector: createsWorktree
+          ? params.repo
+          : (await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => undefined))
+              ?.repoId
+      })
 
       const db = runtime.getOrchestrationDb()
       // Synchronous through the insert, so a racing start on the same terminal is refused before any wait.

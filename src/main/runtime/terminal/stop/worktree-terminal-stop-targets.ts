@@ -18,6 +18,7 @@ const POST_STOP_LIVENESS_RETRY_DELAY_MS = 100
 
 export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaRuntimeWithTerminalSleepSnapshot {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string
+  abstract assertAgentSleepAdmitted(ptyId: string): void
 
   async stopExactTerminalsForWorktree(
     worktreeSelector: string,
@@ -60,6 +61,11 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
       throw new Error('terminal_exact_stop_unavailable')
     }
 
+    if (opts.keepHistory) {
+      for (const ptyId of expected) {
+        this.assertAgentSleepAdmitted(ptyId)
+      }
+    }
     const stoppedPtyIds: string[] = []
     for (const ptyId of [...expected].sort()) {
       // Why: exact-stop is the sleep transaction boundary; its exit must leave the sleeping surface for wake.

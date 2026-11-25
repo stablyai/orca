@@ -124,7 +124,7 @@ export function recordPRHeadObservation(
     }
     const prior = readPRCheckContexts(db, prKey, headSha)
     const evaluation = evaluatePRCheckOccurrence(read.rollup, true, prior)
-    replacePRCheckContexts(db, prKey, headSha, evaluation.contexts)
+    replacePRCheckContexts(db, prKey, headSha, evaluation.contexts, prior)
     if (evaluation.final) {
       deletePRPendingHead(db, prKey, headSha)
     } else if (isCurrentHead) {
