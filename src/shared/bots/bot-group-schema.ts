@@ -143,6 +143,7 @@ const BotGroupTurnSchema = z.object({
   replyMessageId: z.string().optional(),
   /** Its answer to another member's request: sent as mail, so its own chat shows only the call. */
   answer: z.string().optional(),
+  answerAt: z.number().optional(),
   /** The members its reply named, saved as their hand-offs were reserved: a replay wakes none. */
   handedOff: z.array(z.string()).optional(),
   /** The members it sent peer requests to: its @mentions of them wake no second turn. */

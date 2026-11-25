@@ -134,6 +134,15 @@ export function useBotGroupReplyJump({
         )
       : undefined
   const targetSession = targetTurn ? sessions.get(targetTurn.sessionId) : undefined
+  const replyId = targetTurn
+    ? (selectedReply?.replyMessageId ??
+      botGroupCompletedReply(
+        targetTurn.frozenItems ??
+          targetSession?.groupTurnItems(targetTurn.operationId, targetTurn.workerDispatchIds) ??
+          []
+      )?.messageId ??
+      (targetTurn.answer ? `${targetTurn.operationId}:answer` : undefined))
+    : undefined
   useEffect(() => {
     if (!replyReveal || !visible) {
       return
@@ -184,18 +193,10 @@ export function useBotGroupReplyJump({
     }
     const operationId = targetTurn.operationId
     openNativeChatSubagent(`bot-group-turn:${operationId}`, null)
-    const replyId =
-      selectedReply.replyMessageId ??
-      botGroupCompletedReply(
-        targetTurn.frozenItems ??
-          targetSession?.groupTurnItems(operationId, targetTurn.workerDispatchIds) ??
-          []
-      )?.messageId ??
-      (targetTurn.answer ? `${operationId}:answer` : undefined)
     const frame = requestAnimationFrame(() => {
       const row = replyId
         ? contentRef.current?.querySelector<HTMLElement>(
-            `[data-group-turn="${CSS.escape(operationId)}"] [data-native-chat-message-id="${CSS.escape(replyId)}"]`
+            `[data-group-turn="${CSS.escape(operationId)}"] [data-native-chat-assistant-message-id="${CSS.escape(replyId)}"]`
           )
         : null
       if (row) {
@@ -219,6 +220,7 @@ export function useBotGroupReplyJump({
     visible,
     loadEarlierPage,
     readForReveal,
+    replyId,
     replyReveal,
     revealRow,
     selectedReply,
@@ -227,5 +229,10 @@ export function useBotGroupReplyJump({
     targetSession,
     targetTurn
   ])
-  return { missingReply, clearMissingReply: () => setMissingReply(false) }
+  return {
+    missingReply,
+    clearMissingReply: () => setMissingReply(false),
+    revealReplyId: visible && readForReveal === replyReveal ? replyId : undefined,
+    revealOperationId: targetTurn?.operationId
+  }
 }

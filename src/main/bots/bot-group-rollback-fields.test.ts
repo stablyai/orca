@@ -8,6 +8,7 @@ import {
   settleStoredRoomMail
 } from './bot-group-remote-answers'
 import type { BotGroupRuntime } from './bot-group-runtime'
+import { saveGroupPeerAnswer } from './bot-group-peer-answer'
 import { BotGroupStore } from './bot-group-store'
 
 // What keeps a group's paired roster, remote answers and image refs through a rollback, and how a
@@ -191,6 +192,36 @@ describe('a remote answer arriving', () => {
     ])
     expect(unread().map(({ id }) => id)).toEqual([message!.id])
     expect(reply(post.id)).toEqual(answer)
+  })
+
+  it('ranks a tool-only room answer by the sent mail time', async () => {
+    const { groups, group, arrive } = room()
+    const { message } = arrive('q-1', 'The build is green.')
+    expect(message).toBeDefined()
+    const at = Date.parse(message!.created_at)
+    const turn = {
+      botId: 'scout',
+      botName: 'Scout',
+      sessionId: 'scout-room',
+      agent: 'claude',
+      avatar: null,
+      operationId: 'ordinary-reply',
+      reply: 'The build is running.',
+      replyAt: at - 1000
+    } as const
+    const post = { groupId: group.id, createdAt: at - 2000, author: { kind: 'owner' as const } }
+    groups.store.append({ ...post, id: 'older-answer', text: 'How is the build?', turns: [turn] })
+    groups.store.append({
+      ...post,
+      id: 'mailed-answer',
+      text: 'Is the build ready?',
+      turns: [{ ...turn, operationId: 'mailed-reply', reply: null, replyAt: undefined }]
+    })
+    saveGroupPeerAnswer(groups, 'mailed-reply', message!)
+
+    expect((await groups.store.listing(true))[0].replyPreviews).toMatchObject([
+      { at, messageId: 'mailed-answer', replyMessageId: 'mailed-reply:answer', text: message!.body }
+    ])
   })
 
   it('indexes questions asked before the index existed, past damaged posts', () => {

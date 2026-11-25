@@ -147,10 +147,13 @@ function keepLatestReplies(previews: Map<string, Preview>, message: BotGroupMess
     keepPreview(previews, {
       ...anchor,
       text: reply ?? '',
-      at: turn.replyAt ?? frozen?.completedAt ?? null,
+      at: turn.replyAt ?? frozen?.completedAt ?? turn.answerAt ?? null,
       botId: turn.botId,
       operationId: turn.operationId,
-      replyMessageId: turn.replyMessageId ?? frozen?.messageId
+      replyMessageId:
+        turn.replyMessageId ??
+        frozen?.messageId ??
+        (turn.answer ? `${turn.operationId}:answer` : undefined)
     })
   }
   for (const ask of message.remoteAsks ?? []) {

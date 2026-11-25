@@ -191,7 +191,7 @@ export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
     })
     // Written only now, so a reply refused above (a second answer) never shows in the room.
     if (answerTurn) {
-      runtimeBotGroups(runtime).saveAnswer(answerTurn, params.body)
+      runtimeBotGroups(runtime).saveAnswer(answerTurn, reply)
     }
 
     const receipt = {

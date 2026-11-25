@@ -178,15 +178,16 @@ export function BotGroupChat({
     isWorking: working,
     isVisible
   })
-  const { missingReply, clearMissingReply } = useBotGroupReplyJump({
-    tabId,
-    replyReveal,
-    transcript,
-    follow,
-    sessions,
-    error,
-    visible: isVisible && isFocusedGroup
-  })
+  const { missingReply, clearMissingReply, revealReplyId, revealOperationId } =
+    useBotGroupReplyJump({
+      tabId,
+      replyReveal,
+      transcript,
+      follow,
+      sessions,
+      error,
+      visible: isVisible && isFocusedGroup
+    })
   const roomLinkContext = roomContext?.fileLinkContext ?? null
   const linkContextFor = useBotGroupLinkContextFor(fileContexts, roomLinkContext)
   const surface = useNativeChatSurface({
@@ -340,6 +341,9 @@ export function BotGroupChat({
                           roomLinks={roomLinks}
                           roomRows={rows}
                           session={sessions.get(turn.sessionId)}
+                          revealReplyId={
+                            turn.operationId === revealOperationId ? revealReplyId : undefined
+                          }
                           onStop={stop}
                           onReply={reply}
                           scrollMessageToTop={follow.scrollMessageToTop}
