@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { once } from 'node:events'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer, type Server, type Socket } from 'node:net'
+import { createServer, Socket, type Server } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -20,6 +20,7 @@ import {
   MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY,
   MANAGED_SERVER_RUNTIME_CAPABILITY
 } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../shared/remote-runtime/rpc/local-runtime-rpc-limits'
 import { RuntimeClient } from '../runtime/client'
 import { MANAGED_SERVER_HANDLERS } from './managed-server'
 
@@ -77,6 +78,7 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllEnvs()
   for (const socket of sockets) {
@@ -102,8 +104,8 @@ type RuntimeOptions = {
     | { hold: (reply: () => void) => void }
   /** Holds the update reply until the returned release is called. */
   holdUpdate?: (release: () => void) => void
-  /** Closes the connection, never answers, or answers as a desktop without the update method. */
-  update?: 'close' | 'silent' | 'unknown-method'
+  /** Stays silent or answers as a desktop without the update method. */
+  update?: 'silent' | 'unknown-method'
 }
 
 /** A local desktop runtime on a real socket that records every request frame it reads. */
@@ -170,10 +172,6 @@ async function startRuntime(
         write({ ok: true, result: ROLLED_BACK })
         return
       }
-      if (update === 'close') {
-        socket.destroy()
-        return
-      }
       if (update === 'unknown-method') {
         write({ ok: false, error: { code: 'method_not_found', message: 'Synthetic.' } })
         return
@@ -201,12 +199,13 @@ function routes(): [string, number, string][] {
   return frames.map(({ runtime, connection, method }) => [runtime, connection, method])
 }
 
-function run(command: string, flags: Record<string, boolean>): Promise<void> {
+function run(
+  command: string,
+  flags: Record<string, boolean>,
+  selector = 'build-box'
+): Promise<void> {
   return MANAGED_SERVER_HANDLERS[command]!({
-    flags: new Map<string, string | boolean>([
-      ['environment', 'build-box'],
-      ...Object.entries(flags)
-    ]),
+    flags: new Map<string, string | boolean>([['environment', selector], ...Object.entries(flags)]),
     client: new RuntimeClient(root, 5_000, null, null, 'orca'),
     cwd: root,
     json: true
@@ -332,6 +331,17 @@ describe('orca environment update --force', () => {
     expect(frames).toEqual([])
   })
 
+  it('refuses an oversized update after accepting status without attempting a write', async () => {
+    select(await startRuntime('current', CURRENT))
+    const writes = vi.spyOn(Socket.prototype, 'write')
+
+    await expect(
+      run('environment update', { force: true }, 'x'.repeat(MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES))
+    ).rejects.toMatchObject({ code: 'invalid_argument', data: { requestSent: false } })
+    expect(writes.mock.calls.some(([chunk]) => isUpdateWrite(chunk))).toBe(false)
+    expect(methods()).toEqual(['status.get'])
+  })
+
   it.each([
     ['cannot reach the desktop', 'close', 'runtime_unavailable'],
     ['times out', 'silent', 'runtime_timeout']
@@ -350,15 +360,27 @@ describe('orca environment update --force', () => {
     expect(methods()).toEqual(['status.get'])
   })
 
-  it('reports from status once a written update loses its connection, without resending it', async () => {
+  it('checks status after an attempted write loses its connection before delivery, without resending', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    select(await startRuntime('current', CURRENT, { update: 'close' }))
+    select(await startRuntime('current', CURRENT))
+    const closed = Promise.withResolvers<void>()
+    const write = Socket.prototype.write
+    const writes = vi.spyOn(Socket.prototype, 'write').mockImplementation(function (
+      this: Socket,
+      ...args: Parameters<Socket['write']>
+    ) {
+      if (isUpdateWrite(args[0])) {
+        this.once('close', closed.resolve)
+        this.destroy()
+        return false
+      }
+      return write.apply(this, args)
+    })
 
-    const reported = update({ force: true })
-    await vi.waitFor(() => expect(methods()).toContain('managedServer.update'))
-    await vi.advanceTimersByTimeAsync(2_000)
-    await expect(reported).resolves.toBeUndefined()
-    expect(methods()).toEqual(['status.get', 'managedServer.update', 'managedServer.status'])
+    const reported = expect(update({ force: true })).resolves.toBeUndefined()
+    await Promise.all([reported, closed.promise.then(() => vi.advanceTimersByTimeAsync(2_000))])
+    expect(writes.mock.calls.filter(([chunk]) => isUpdateWrite(chunk))).toHaveLength(1)
+    expect(methods()).toEqual(['status.get', 'managedServer.status'])
   })
 
   it('gives the status a short budget and never sends after a late status', async () => {
@@ -409,3 +431,7 @@ describe('orca environment update --force', () => {
     expect(methods()).toEqual(['status.get', 'managedServer.update'])
   })
 })
+
+function isUpdateWrite(chunk: unknown): boolean {
+  return typeof chunk === 'string' && chunk.includes('"method":"managedServer.update"')
+}

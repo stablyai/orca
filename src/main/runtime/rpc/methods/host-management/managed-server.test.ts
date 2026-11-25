@@ -1,27 +1,60 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { addManagedOrcadEnvironment } from '../../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-operations'
 import type { OrcadTerminalCensus } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
+import { encodePairingOffer } from '../../../../../shared/remote-runtime/pairing/pairing'
 import {
   MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY,
   MANAGED_SERVER_RUNTIME_CAPABILITY
 } from '../../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
-import type { RemovedServerStore } from '../../../../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { createManagedOrcadActions } from '../../../../ipc/runtime-environments/managed-orcad/managed-orcad-actions'
 import { emptyOrcadActivationRecord } from '../../../../managed-server/activation/orcad-activation-record'
 import { CURRENT_ORCAD_DAEMON_PROTOCOL } from '../../../../managed-server/activation/orcad-daemon-protocol-crossing'
 import { planOrcadUpdate } from '../../../../managed-server/activation/orcad-update-plan'
-import { managedOrcadUpdateForce } from '../../../../managed-server/lifecycle/orcad-managed-update-decision'
-import { updateManagedOrcadEnvironment } from '../../../../managed-server/lifecycle/orcad-runtime-maintenance'
+import type { OrcadDeployOptions } from '../../../../managed-server/install/orcad-remote-deploy'
+import * as managedRuntimeContext from '../../../../managed-server/lifecycle/orcad-managed-runtime-context'
+import { clearManagedOrcadUpdateDeferral } from '../../../../managed-server/lifecycle/orcad-managed-update-deferrals'
+import { getRemoteHostPlatform } from '../../../../ssh/remote-host/ssh-remote-platform'
 import { registerManagedServerActions } from '../../../hosts/management/managed-server-actions-registry'
 import { OrcaRuntimeService } from '../../../orca-runtime'
-import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../core'
-import '../rpc-method-registry'
 import { MANAGED_SERVER_METHODS } from './managed-server'
 
-vi.mock('../../../../managed-server/lifecycle/orcad-runtime-maintenance', () => ({
-  updateManagedOrcadEnvironment: vi.fn(async () => ({ outcome: 'deferred' }))
+vi.mock('../../../../managed-server/lifecycle/orcad-terminal-census-client', () => ({
+  collectManagedTerminalCensus: async () => UNCOUNTED
+}))
+
+vi.mock('../../../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
+  materializeOrcadArtifact: async () => '/bundle'
+}))
+
+vi.mock('../../../../managed-server/lifecycle/orcad-managed-version-gc', () => ({
+  pruneSupersededOrcadCandidates: async () => {}
+}))
+
+vi.mock('../../../../managed-server/install/orcad-remote-deploy', () => ({
+  deployOrcad: async ({ census, censusRecord, force }: OrcadDeployOptions) => {
+    if (!censusRecord) {
+      throw new Error('Missing incumbent activation record')
+    }
+    const plan = planOrcadUpdate({
+      record: censusRecord,
+      candidateVersion: 'v2',
+      census,
+      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
+      hostDaemonProtocols: [],
+      force
+    })
+    if (plan.action === 'defer') {
+      return { ...plan, outcome: 'installed-not-activated', fullVersion: 'v2' }
+    }
+    if (plan.action === 'proceed') {
+      // Stop the fixture before it would replace the incumbent on a real host.
+      throw ACTIVATION_AUTHORIZED
+    }
+    throw new Error('The fixture needs a newer candidate')
+  }
 }))
 
 // What a released orcad answers when its daemon never started: no session or in-process count.
@@ -33,68 +66,114 @@ const UNCOUNTED: OrcadTerminalCensus = {
 }
 
 const MARKERS = [MANAGED_SERVER_RUNTIME_CAPABILITY, MANAGED_SERVER_LIMITED_FORCE_RUNTIME_CAPABILITY]
+const ACTIVATION_AUTHORIZED = new Error('Authorized activation over an uncounted census')
+const ENVIRONMENT_ID = 'managed-force-test'
 
-let userDataPath: string | null = null
-
-afterEach(() => {
-  registerManagedServerActions(null)
-  if (userDataPath) {
-    rmSync(userDataPath, { recursive: true, force: true })
-    userDataPath = null
-  }
-})
-
-function updateMethod() {
-  const method = eraseRpcMethods(MANAGED_SERVER_METHODS).find(
-    (candidate) => candidate.name === 'managedServer.update'
-  )
-  if (!method || isStreamingMethod(method)) {
-    throw new Error('Missing managedServer.update')
-  }
-  return method
+async function unexpectedRemoteOperation(): Promise<never> {
+  throw new Error('The fixture must never execute commands or write files on the host')
 }
 
 describe('managedServer.update limited force', () => {
-  it('advertises limited force only where bare force reaches the planner as limited force', async () => {
-    const runtime = new OrcaRuntimeService()
-    for (const marker of MARKERS) {
-      expect(runtime.getStatus().capabilities).not.toContain(marker)
-    }
+  let userDataPath: string
+  let runtime: OrcaRuntimeService
 
-    const root = mkdtempSync(join(tmpdir(), 'orca-managed-'))
-    userDataPath = root
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-managed-'))
+    runtime = new OrcaRuntimeService()
+    const target = {
+      id: 'ssh-target',
+      label: 'Build box',
+      host: 'build-box.test',
+      port: 22,
+      username: 'orca'
+    }
+    vi.spyOn(managedRuntimeContext, 'resolveLinkedOrcadContext').mockResolvedValue({
+      target,
+      activationRecord: { ...emptyOrcadActivationRecord(), active: 'v1' },
+      serverTarget: 'linux-x64-glibc',
+      host: getRemoteHostPlatform('linux-x64'),
+      remoteHome: '/home/orca',
+      userDataDir: '/home/orca/.orca',
+      connection: {
+        getTarget: () => target,
+        usesSystemSshTransport: () => false,
+        getConnectGeneration: () => 1,
+        exec: unexpectedRemoteOperation,
+        uploadDirectory: unexpectedRemoteOperation,
+        writeFile: unexpectedRemoteOperation
+      }
+    })
+    addManagedOrcadEnvironment(userDataPath, {
+      id: ENVIRONMENT_ID,
+      name: 'build-box',
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:41000/runtime',
+        publicKeyB64: Buffer.alloc(32, 1).toString('base64'),
+        deviceToken: 'fixture-token'
+      }),
+      orcadDeployment: {
+        sshTargetId: target.id,
+        sshTargetGeneration: 1,
+        localPort: 41000,
+        remotePort: 6768
+      }
+    })
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+    registerManagedServerActions(null)
+    clearManagedOrcadUpdateDeferral(ENVIRONMENT_ID)
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function registerDesktop() {
     registerManagedServerActions(
       createManagedOrcadActions({
-        getUserDataPath: () => root,
+        getUserDataPath: () => userDataPath,
         getActiveEnvironmentId: () => null,
         invalidateTransport: () => {},
         clearHostServerNotes: () => {},
         clearHostServerStatus: () => {},
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: update never retires a server, so it never reads the store.
-        store: {} as RemovedServerStore
+        store: {
+          getRemoteLayoutSnapshotWorkspace: () => undefined,
+          setRemoteLayoutSnapshotWorkspace: () => {},
+          setRemoteLayoutSnapshot: () => {},
+          setHostRepoCatalogSnapshot: () => {},
+          removeWorkspaceSessionHost: () => {}
+        }
       })
     )
+  }
+
+  function update(params: unknown) {
+    const method = MANAGED_SERVER_METHODS.find(({ name }) => name === 'managedServer.update')
+    if (!method) {
+      throw new Error('Missing managedServer.update')
+    }
+    return method.handler(method.params.parse(params), { runtime, clientKind: 'runtime' })
+  }
+
+  it('advertises limited force and defers bare force over an uncounted census', async () => {
+    for (const marker of MARKERS) {
+      expect(runtime.getStatus().capabilities).not.toContain(marker)
+    }
+    registerDesktop()
     expect(runtime.getStatus().capabilities).toEqual(expect.arrayContaining(MARKERS))
 
-    // The exact frame a current CLI sends for bare --force, through the real RPC and desktop adapter.
-    const method = updateMethod()
-    const context: RpcContext = { runtime, clientKind: 'runtime' }
-    await method.handler(method.params?.parse({ selector: 'build-box', force: true }), context)
-    expect(vi.mocked(updateManagedOrcadEnvironment)).toHaveBeenCalledWith(root, {
-      selector: 'build-box',
-      force: true
+    await expect(update({ selector: 'build-box', force: true })).resolves.toMatchObject({
+      outcome: 'deferred',
+      code: 'orcad_update_daemon_protocol_unverifiable',
+      forceable: true
     })
+  })
 
-    const [, args] = vi.mocked(updateManagedOrcadEnvironment).mock.calls[0]!
-    const plan = planOrcadUpdate({
-      record: { ...emptyOrcadActivationRecord(), active: 'v1' },
-      candidateVersion: 'v2',
-      census: UNCOUNTED,
-      candidateDaemonProtocol: CURRENT_ORCAD_DAEMON_PROTOCOL,
-      // No daemon alive: full force here would end every terminal orcad runs itself.
-      hostDaemonProtocols: [],
-      force: managedOrcadUpdateForce(args)
-    })
-    expect(plan).toMatchObject({ action: 'defer', forceable: true })
+  it('authorizes activation over the same uncounted census when force includes confirmation', async () => {
+    registerDesktop()
+
+    await expect(
+      update({ selector: 'build-box', force: true, endInProcessTerminals: true })
+    ).rejects.toBe(ACTIVATION_AUTHORIZED)
   })
 })
