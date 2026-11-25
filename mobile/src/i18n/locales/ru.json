@@ -1279,7 +1279,9 @@
     "native-chat": {
       "composer": {
         "planMode": "План",
-        "exitPlanMode": "Выйти из режима планирования"
+        "exitPlanMode": "Выйти из режима планирования",
+        "permissionReadOnly": "Только чтение",
+        "permissionReadOnlyDescription": "Использует песочницу агента только для чтения без повышения разрешений"
       },
       "goal": {
         "sentAsGoal": "Отправлено как цель"

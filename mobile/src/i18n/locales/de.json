@@ -1193,7 +1193,9 @@
     "native-chat": {
       "composer": {
         "planMode": "Planen",
-        "exitPlanMode": "Planungsmodus verlassen"
+        "exitPlanMode": "Planungsmodus verlassen",
+        "permissionReadOnly": "Nur lesen",
+        "permissionReadOnlyDescription": "Verwendet die schreibgeschützte Sandbox des Agenten ohne Rechteausweitung"
       },
       "goal": {
         "sentAsGoal": "Als Ziel gesendet"

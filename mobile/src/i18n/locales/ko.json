@@ -1187,7 +1187,9 @@
     "native-chat": {
       "composer": {
         "planMode": "계획",
-        "exitPlanMode": "계획 모드 종료"
+        "exitPlanMode": "계획 모드 종료",
+        "permissionReadOnly": "읽기 전용",
+        "permissionReadOnlyDescription": "권한 상승 없이 에이전트의 읽기 전용 샌드박스 사용"
       },
       "goal": {
         "sentAsGoal": "목표로 보냄"

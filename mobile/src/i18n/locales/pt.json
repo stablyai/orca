@@ -1317,7 +1317,9 @@
     "native-chat": {
       "composer": {
         "planMode": "Plano",
-        "exitPlanMode": "Sair do modo de planejamento"
+        "exitPlanMode": "Sair do modo de planejamento",
+        "permissionReadOnly": "Somente leitura",
+        "permissionReadOnlyDescription": "Usa o ambiente de leitura do agente sem elevar permissões"
       },
       "turnDiff": {
         "changedFiles_one": "{{count}} arquivo alterado",

@@ -1236,7 +1236,9 @@
     "native-chat": {
       "composer": {
         "planMode": "Planificar",
-        "exitPlanMode": "Salir del modo de planificación"
+        "exitPlanMode": "Salir del modo de planificación",
+        "permissionReadOnly": "Solo lectura",
+        "permissionReadOnlyDescription": "Usa el entorno de solo lectura del agente sin elevar permisos"
       },
       "goal": {
         "sentAsGoal": "Enviado como objetivo"

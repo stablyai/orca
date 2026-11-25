@@ -1193,7 +1193,9 @@
     "native-chat": {
       "composer": {
         "planMode": "Plan",
-        "exitPlanMode": "Plan modundan çık"
+        "exitPlanMode": "Plan modundan çık",
+        "permissionReadOnly": "Salt okunur",
+        "permissionReadOnlyDescription": "İzin yükseltmeden ajanın salt okunur korumalı alanını kullanır"
       },
       "goal": {
         "sentAsGoal": "Hedef olarak gönderildi"

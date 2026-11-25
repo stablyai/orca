@@ -1187,7 +1187,9 @@
     "native-chat": {
       "composer": {
         "planMode": "プラン",
-        "exitPlanMode": "プランモードを終了"
+        "exitPlanMode": "プランモードを終了",
+        "permissionReadOnly": "読み取り専用",
+        "permissionReadOnlyDescription": "権限昇格を許可せず Agent の読み取り専用サンドボックスを使用"
       },
       "goal": {
         "sentAsGoal": "ゴールとして送信されました"

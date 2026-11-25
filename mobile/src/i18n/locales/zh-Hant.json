@@ -1190,7 +1190,9 @@
     "native-chat": {
       "composer": {
         "planMode": "計畫",
-        "exitPlanMode": "結束計畫模式"
+        "exitPlanMode": "結束計畫模式",
+        "permissionReadOnly": "唯讀",
+        "permissionReadOnlyDescription": "使用代理的唯讀沙箱，不允許提權"
       },
       "goal": {
         "sentAsGoal": "作為目標傳送"
