@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
-import { PALETTE_EDGE_INSET_PX } from './use-palette-horizontal-drag'
+import { PALETTE_EDGE_INSET_PX } from './palette-placement'
 
 const MAX_FIT_LEVEL = 3
 

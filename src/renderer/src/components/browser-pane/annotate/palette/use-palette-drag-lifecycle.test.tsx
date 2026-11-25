@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { isWebviewDragPassthroughActive } from '../../host-guest/drag/webview-drag-passthrough'
-import { usePaletteHorizontalDrag } from './use-palette-horizontal-drag'
+import { usePaletteDrag } from './use-palette-drag'
 
 // One observer per test: the hook observes the bounds and the palette with it.
 let notifyResize: (() => void) | null = null
@@ -15,13 +15,19 @@ class FakeResizeObserver {
   disconnect(): void {}
 }
 
-const sizes = { bounds: 600, palette: 200 }
+const sizes = { bounds: 600, palette: 200, boundsHeight: 400, paletteHeight: 38 }
 
 function Harness(): React.JSX.Element {
   const [bounds, setBounds] = useState<HTMLDivElement | null>(null)
   const paletteRef = useRef<HTMLDivElement | null>(null)
-  const [ratio, setRatio] = useState(0.5)
-  const drag = usePaletteHorizontalDrag({ bounds, paletteRef, ratio, onRatioChange: setRatio })
+  const [position, setPosition] = useState({ x: 0.5, y: 0 })
+  const drag = usePaletteDrag({
+    bounds,
+    paletteRef,
+    position,
+    minTop: 8,
+    onPositionChange: setPosition
+  })
   return (
     <div ref={setBounds}>
       <div ref={paletteRef} data-testid="palette" data-dragging={drag.dragging}>
@@ -41,12 +47,22 @@ beforeEach(() => {
     configurable: true,
     get: () => sizes.palette
   })
+  Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+    configurable: true,
+    get: () => sizes.boundsHeight
+  })
+  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', {
+    configurable: true,
+    get: () => sizes.paletteHeight
+  })
   Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
     configurable: true,
     value: () => {}
   })
   sizes.bounds = 600
   sizes.palette = 200
+  sizes.boundsHeight = 400
+  sizes.paletteHeight = 38
 })
 
 afterEach(() => {
@@ -58,9 +74,9 @@ function startDrag(): { palette: HTMLElement; grip: HTMLElement } {
   const view = render(<Harness />)
   const palette = view.getByTestId('palette')
   const grip = view.getByTestId('grip')
-  fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 300 })
+  fireEvent.pointerDown(grip, { button: 0, pointerId: 1, clientX: 300, clientY: 20 })
   expect(isWebviewDragPassthroughActive()).toBe(true)
-  fireEvent.pointerMove(grip, { pointerId: 1, clientX: 250, buttons: 1 })
+  fireEvent.pointerMove(grip, { pointerId: 1, clientX: 250, clientY: 120, buttons: 1 })
   return { palette, grip }
 }
 
@@ -79,6 +95,15 @@ describe('annotate palette drag lifecycle', () => {
     startDrag()
 
     sizes.bounds = 480
+    act(() => notifyResize?.())
+
+    expect(isWebviewDragPassthroughActive()).toBe(false)
+  })
+
+  it('ends the drag when the page area gets shorter mid-drag', () => {
+    startDrag()
+
+    sizes.boundsHeight = 200
     act(() => notifyResize?.())
 
     expect(isWebviewDragPassthroughActive()).toBe(false)

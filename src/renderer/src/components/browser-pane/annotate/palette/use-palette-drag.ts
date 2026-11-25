@@ -1,0 +1,325 @@
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { acquireWebviewsDragPassthrough } from '../../host-guest/drag/webview-drag-passthrough'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import {
+  DEFAULT_ANNOTATE_PALETTE_POSITION,
+  type AnnotatePalettePosition
+} from './annotate-palette-position-store'
+import {
+  PALETTE_EDGE_INSET_PX,
+  clampPaletteOffset,
+  paletteKeyMove,
+  paletteOffsetForRatio,
+  paletteRatioForOffset,
+  snapPaletteRatio
+} from './palette-placement'
+
+const SNAP_ANIMATION_MS = 180
+
+type Layout = {
+  boundsWidth: number
+  boundsHeight: number
+  paletteWidth: number
+  paletteHeight: number
+  left: number
+  top: number
+  /** The saved position and top limit this layout was derived for. */
+  x: number
+  y: number
+  topMin: number
+}
+
+/**
+ * Placement and drag for a palette inside a bounds element, on both axes.
+ * Why the edges are anchored: switching tools changes the palette's size, and a palette that slides on every
+ * switch is hard to aim at. Only drags, saved-position changes and bounds resizes re-derive them from the position.
+ */
+export function usePaletteDrag({
+  bounds,
+  paletteRef,
+  position,
+  minTop,
+  onPositionChange
+}: {
+  /** The page area; null until it is attached. */
+  bounds: HTMLElement | null
+  paletteRef: RefObject<HTMLElement | null>
+  position: AnnotatePalettePosition
+  /** Highest the palette may sit (below an overlapping find bar); never above the edge inset. */
+  minTop: number
+  onPositionChange: (position: AnnotatePalettePosition) => void
+}): {
+  left: number | null
+  top: number
+  /** False when the palette fills the bounds both ways; the grip hides then. */
+  canMove: boolean
+  dragging: boolean
+  snapping: boolean
+  /** Fractions the palette shows at now (its anchored edges can differ from the saved position). */
+  shownPosition: AnnotatePalettePosition
+  /** Px between the palette's bottom and the page's; the hint flips above when it's short. */
+  spaceBelow: number
+  gripProps: Pick<
+    React.HTMLAttributes<HTMLElement>,
+    'onPointerDown' | 'onDoubleClick' | 'onKeyDown'
+  >
+} {
+  const { x, y } = position
+  const topMin = Math.max(PALETTE_EDGE_INSET_PX, minTop)
+  const [layout, setLayout] = useState<Layout | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const [snapping, setSnapping] = useState(false)
+  const snapTimerRef = useRef<number | undefined>(undefined)
+  // A drag in progress reads the latest limit, so moving under the find bar mid-drag still clears it.
+  const topMinRef = useRef(topMin)
+  // The drag in progress and the sizes its clamp was computed for.
+  const dragRef = useRef<{
+    end: (commit: boolean) => void
+    boundsWidth: number
+    boundsHeight: number
+    paletteWidth: number
+    paletteHeight: number
+  } | null>(null)
+
+  useLayoutEffect(() => {
+    topMinRef.current = topMin
+  }, [topMin])
+
+  useLayoutEffect(() => {
+    const palette = paletteRef.current
+    if (!bounds || !palette) {
+      return
+    }
+    const measure = (): void => {
+      const boundsWidth = bounds.clientWidth
+      const boundsHeight = bounds.clientHeight
+      const paletteWidth = palette.offsetWidth
+      const paletteHeight = palette.offsetHeight
+      // A hidden pane measures zero; keep the last layout so the saved position isn't recomputed from nothing.
+      if (boundsWidth === 0) {
+        // Hidden mid-drag: end it so the pages get pointer input back.
+        dragRef.current?.end(false)
+        return
+      }
+      // The drag's clamp was computed for the old sizes (a resize, or a tool switch or capability change that
+      // reshaped the palette); give up the drag rather than move out of bounds or past where it can travel.
+      const drag = dragRef.current
+      if (drag) {
+        if (
+          boundsWidth !== drag.boundsWidth ||
+          boundsHeight !== drag.boundsHeight ||
+          paletteWidth !== drag.paletteWidth ||
+          paletteHeight !== drag.paletteHeight
+        ) {
+          drag.end(false)
+        } else {
+          // The drag owns the position until it ends; a re-render now would put the palette back mid-drag.
+          return
+        }
+      }
+      setLayout((prev) => {
+        // Bounds resize, a new saved position or a new top limit: re-derive that axis. Content-only size
+        // change: keep the edge.
+        const keepLeft = prev !== null && prev.boundsWidth === boundsWidth && prev.x === x
+        const left = clampPaletteOffset(
+          keepLeft ? prev.left : paletteOffsetForRatio(x, boundsWidth, paletteWidth),
+          boundsWidth,
+          paletteWidth
+        )
+        const keepTop =
+          prev !== null &&
+          prev.boundsHeight === boundsHeight &&
+          prev.y === y &&
+          prev.topMin === topMin
+        const top = clampPaletteOffset(
+          keepTop ? prev.top : paletteOffsetForRatio(y, boundsHeight, paletteHeight),
+          boundsHeight,
+          paletteHeight,
+          topMin
+        )
+        const next = {
+          boundsWidth,
+          boundsHeight,
+          paletteWidth,
+          paletteHeight,
+          left,
+          top,
+          x,
+          y,
+          topMin
+        }
+        return prev && (Object.keys(next) as (keyof Layout)[]).every((k) => prev[k] === next[k])
+          ? prev
+          : next
+      })
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(bounds)
+    observer.observe(palette)
+    return () => observer.disconnect()
+  }, [bounds, paletteRef, x, y, topMin])
+
+  // Unmount mid-drag (Done, Esc, navigation) must still give pointer input back to the page.
+  useEffect(
+    () => () => {
+      dragRef.current?.end(false)
+      window.clearTimeout(snapTimerRef.current)
+    },
+    []
+  )
+
+  const canMoveX =
+    layout !== null && layout.boundsWidth - layout.paletteWidth - PALETTE_EDGE_INSET_PX * 2 > 0
+  const canMoveY =
+    layout !== null &&
+    layout.boundsHeight - layout.paletteHeight - PALETTE_EDGE_INSET_PX - layout.topMin > 0
+  const canMove = canMoveX || canMoveY
+  const shownPosition = layout
+    ? {
+        x: paletteRatioForOffset(layout.left, layout.boundsWidth, layout.paletteWidth, 0.5),
+        y: paletteRatioForOffset(layout.top, layout.boundsHeight, layout.paletteHeight, 0)
+      }
+    : position
+
+  const commitPosition = (next: AnnotatePalettePosition, animate: boolean): void => {
+    if (animate) {
+      setSnapping(true)
+      window.clearTimeout(snapTimerRef.current)
+      snapTimerRef.current = window.setTimeout(() => setSnapping(false), SNAP_ANIMATION_MS)
+    }
+    const clamped = { x: Math.min(1, Math.max(0, next.x)), y: Math.min(1, Math.max(0, next.y)) }
+    if (clamped.x === x && clamped.y === y && layout) {
+      // Same saved value: re-anchor to it anyway (the edges may have drifted with content changes).
+      setLayout({
+        ...layout,
+        left: paletteOffsetForRatio(clamped.x, layout.boundsWidth, layout.paletteWidth),
+        top: clampPaletteOffset(
+          paletteOffsetForRatio(clamped.y, layout.boundsHeight, layout.paletteHeight),
+          layout.boundsHeight,
+          layout.paletteHeight,
+          layout.topMin
+        )
+      })
+    }
+    onPositionChange(clamped)
+  }
+
+  return {
+    left: layout?.left ?? null,
+    top: layout?.top ?? topMin,
+    canMove,
+    dragging,
+    snapping,
+    shownPosition,
+    spaceBelow: layout
+      ? layout.boundsHeight - layout.top - layout.paletteHeight
+      : Number.POSITIVE_INFINITY,
+    gripProps: {
+      onPointerDown: (event) => {
+        const palette = paletteRef.current
+        if (event.button !== 0 || !layout || !canMove || !palette || dragRef.current) {
+          return
+        }
+        event.preventDefault()
+        const grip = event.currentTarget
+        const pointerId = event.pointerId
+        // Focus the grip so Esc reaches the drag (and not a focused page, which would exit the mode).
+        // focusVisible:false: a mouse drag shouldn't leave a keyboard focus ring on the grip.
+        grip.focus({ preventScroll: true, focusVisible: false })
+        grip.setPointerCapture?.(pointerId)
+        // Pages would swallow the pointer once it crosses them; let the drag see every move.
+        const releasePassthrough = acquireWebviewsDragPassthrough()
+        const { boundsWidth, boundsHeight, paletteWidth, paletteHeight } = layout
+        const startX = event.clientX
+        const startY = event.clientY
+        const startLeft = layout.left
+        const startTop = layout.top
+        let currentLeft = startLeft
+        let currentTop = startTop
+        setDragging(true)
+
+        const onMove = (moveEvent: PointerEvent): void => {
+          if (moveEvent.pointerId !== pointerId) {
+            return
+          }
+          if (moveEvent.buttons === 0) {
+            endDrag(true)
+            return
+          }
+          currentLeft = clampPaletteOffset(
+            startLeft + moveEvent.clientX - startX,
+            boundsWidth,
+            paletteWidth
+          )
+          currentTop = clampPaletteOffset(
+            startTop + moveEvent.clientY - startY,
+            boundsHeight,
+            paletteHeight,
+            topMinRef.current
+          )
+          // Why straight to the style: one state write per drag, not one render per pointer move.
+          palette.style.left = `${currentLeft}px`
+          palette.style.top = `${currentTop}px`
+        }
+        const onUp = (upEvent: PointerEvent): void => {
+          if (upEvent.pointerId === pointerId) {
+            endDrag(true)
+          }
+        }
+        const onCancel = (): void => endDrag(false)
+        const onKeyDown = (keyEvent: KeyboardEvent): void => {
+          if (keyEvent.key !== 'Escape') {
+            return
+          }
+          // Esc mid-drag puts the palette back and must not also exit the mode: registered first on the app key router,
+          // ahead of the picker's and the mode's Esc owners.
+          keyEvent.preventDefault()
+          keyEvent.stopImmediatePropagation()
+          endDrag(false)
+        }
+        const endDrag = (commit: boolean): void => {
+          grip.removeEventListener('pointermove', onMove)
+          grip.removeEventListener('pointerup', onUp)
+          grip.removeEventListener('pointercancel', onCancel)
+          grip.removeEventListener('lostpointercapture', onCancel)
+          window.removeEventListener('blur', onCancel)
+          removeAppKeyListener('keydown', onKeyDown)
+          releasePassthrough()
+          dragRef.current = null
+          if (!commit) {
+            palette.style.left = `${startLeft}px`
+            palette.style.top = `${startTop}px`
+            setDragging(false)
+            return
+          }
+          const rawX = paletteRatioForOffset(currentLeft, boundsWidth, paletteWidth, 0.5)
+          const snappedX = snapPaletteRatio(rawX)
+          const nextY = paletteRatioForOffset(currentTop, boundsHeight, paletteHeight, 0)
+          setLayout((prev) => (prev ? { ...prev, left: currentLeft, top: currentTop } : prev))
+          setDragging(false)
+          commitPosition({ x: snappedX, y: nextY }, snappedX !== rawX)
+        }
+        grip.addEventListener('pointermove', onMove)
+        grip.addEventListener('pointerup', onUp)
+        grip.addEventListener('pointercancel', onCancel)
+        grip.addEventListener('lostpointercapture', onCancel)
+        window.addEventListener('blur', onCancel)
+        addAppKeyListener('keydown', onKeyDown, { first: true })
+        dragRef.current = { end: endDrag, boundsWidth, boundsHeight, paletteWidth, paletteHeight }
+      },
+      onDoubleClick: () => commitPosition(DEFAULT_ANNOTATE_PALETTE_POSITION, true),
+      onKeyDown: (event) => {
+        const next = paletteKeyMove(event.key, event.shiftKey, shownPosition, canMoveX, canMoveY)
+        if (next === null) {
+          return
+        }
+        event.preventDefault()
+        commitPosition(next, false)
+      }
+    }
+  }
+}

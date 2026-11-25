@@ -9,12 +9,16 @@ import { cn } from '@/lib/class-names'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 import {
   PALETTE_EDGE_INSET_PX,
-  paletteRatioPercent,
-  usePaletteHorizontalDrag
-} from './use-palette-horizontal-drag'
+  paletteHintPlacement,
+  paletteRatioPercent
+} from './palette-placement'
+import { usePaletteDrag } from './use-palette-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
 import type { MarkupPaletteDensity } from './MarkupPaletteTools'
-import { setAnnotatePaletteRatio, useAnnotatePaletteRatio } from './annotate-palette-position-store'
+import {
+  setAnnotatePalettePosition,
+  useAnnotatePalettePosition
+} from './annotate-palette-position-store'
 import { PaletteGrabActions, PaletteGrip } from './palette-controls'
 import { usePaletteTopOffset } from './use-palette-top-offset'
 import { useHoldAltSeeThrough } from './use-hold-alt-see-through'
@@ -123,15 +127,18 @@ export function BrowserAnnotateToolPalette({
     return () => cancelAnimationFrame(frame)
   }, [boundsRef])
   // Read here, not by the always-mounted overlays, so no page subscribes while its palette is closed.
-  const ratio = useAnnotatePaletteRatio()
-  const { left, canMove, dragging, snapping, shownRatio, gripProps } = usePaletteHorizontalDrag({
-    bounds,
-    paletteRef,
-    ratio,
-    onRatioChange: setAnnotatePaletteRatio
-  })
+  const position = useAnnotatePalettePosition()
+  const [findBarMinTop, setFindBarMinTop] = useState(PALETTE_EDGE_INSET_PX)
+  const { left, top, canMove, dragging, snapping, shownPosition, spaceBelow, gripProps } =
+    usePaletteDrag({
+      bounds,
+      paletteRef,
+      position,
+      minTop: findBarMinTop,
+      onPositionChange: setAnnotatePalettePosition
+    })
   const seeThrough = useHoldAltSeeThrough(pageId)
-  const top = usePaletteTopOffset(bounds, paletteRef, labelProbeRef, left)
+  usePaletteTopOffset(bounds, paletteRef, labelProbeRef, left, setFindBarMinTop)
 
   const options: ToolOption[] = [
     {
@@ -227,7 +234,8 @@ export function BrowserAnnotateToolPalette({
     toolRefs.current.get(next.tool)?.focus()
   }
 
-  const percent = paletteRatioPercent(shownRatio)
+  const percent = paletteRatioPercent(shownPosition.x)
+  const verticalPercent = paletteRatioPercent(shownPosition.y)
   return (
     <>
       <div
@@ -240,7 +248,7 @@ export function BrowserAnnotateToolPalette({
           'absolute z-40 flex w-max items-center gap-1 rounded-lg border border-border bg-popover/95 p-1 text-xs text-popover-foreground backdrop-blur transition-opacity duration-100',
           seeThrough ? 'pointer-events-none opacity-15' : 'pointer-events-auto',
           'shadow-floating',
-          snapping && 'transition-[left] duration-150 ease-out',
+          snapping && 'transition-[left,top] duration-150 ease-out',
           left === null && 'invisible'
         )}
         style={{
@@ -396,7 +404,12 @@ export function BrowserAnnotateToolPalette({
         {/* Last in DOM so keyboard users reach the tools first; shown first visually. */}
         {/* Kept while dragging, so a resize that removes the room can't detach the grip mid-drag. */}
         {canMove || dragging ? (
-          <PaletteGrip percent={percent} dragging={dragging} gripProps={gripProps} />
+          <PaletteGrip
+            percent={percent}
+            verticalPercent={verticalPercent}
+            dragging={dragging}
+            gripProps={gripProps}
+          />
         ) : null}
       </div>
       {showHint ? (
@@ -408,7 +421,7 @@ export function BrowserAnnotateToolPalette({
             seeThrough && 'opacity-15',
             hintIsError ? 'text-destructive' : 'text-muted-foreground'
           )}
-          style={{ left: left ?? 0, top: top + 38 + 8 }}
+          style={paletteHintPlacement(left ?? 0, top, spaceBelow)}
         >
           {hint}
         </div>

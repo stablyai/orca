@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
-import { PALETTE_EDGE_INSET_PX } from './use-palette-horizontal-drag'
+import { PALETTE_EDGE_INSET_PX } from './palette-placement'
 
 /** Marks the toolbar button that opens the palette, so exiting can hand focus back to it. */
 export const BROWSER_ANNOTATE_BUTTON_ATTRIBUTE = 'data-browser-annotate-button'

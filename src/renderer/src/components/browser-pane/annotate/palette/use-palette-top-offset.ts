@@ -1,5 +1,5 @@
 import { widestPaletteWidth } from './palette-focus-and-fit'
-import { useLayoutEffect, useState, type RefObject } from 'react'
+import { useLayoutEffect, type RefObject } from 'react'
 
 export const BROWSER_FIND_BAR_ATTRIBUTE = 'data-browser-find-bar'
 const PALETTE_TOP_PX = 8
@@ -55,21 +55,23 @@ function observePaletteFindGeometry(
   }
 }
 
-/** Keep the palette below an overlapping find bar as either surface moves or resizes. */
+/**
+ * Reports the highest the palette may sit: below an overlapping find bar as either surface moves or resizes,
+ * else the edge inset. Why a callback: the drag hook clamps to it, and this hook needs that hook's `left`.
+ */
 export function usePaletteTopOffset(
   bounds: HTMLElement | null,
   paletteRef: RefObject<HTMLElement | null>,
   labelProbeRef: RefObject<HTMLElement | null>,
-  left: number | null
-): number {
-  const [top, setTop] = useState(PALETTE_TOP_PX)
+  left: number | null,
+  onMinTopChange: (top: number) => void
+): void {
   useLayoutEffect(() => {
     const palette = paletteRef.current
     const labelProbe = labelProbeRef.current
     if (!bounds || !palette || !labelProbe) {
       return
     }
-    return observePaletteFindGeometry(bounds, palette, labelProbe, setTop)
-  }, [bounds, left, paletteRef, labelProbeRef])
-  return top
+    return observePaletteFindGeometry(bounds, palette, labelProbe, onMinTopChange)
+  }, [bounds, left, paletteRef, labelProbeRef, onMinTopChange])
 }

@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import type { usePaletteHorizontalDrag } from './use-palette-horizontal-drag'
+import type { usePaletteDrag } from './use-palette-drag'
 
 /** Grab's Copy and Screenshot; both act on the picked element (C and S keys still act on the hovered one). */
 export function PaletteGrabActions({
@@ -76,15 +76,20 @@ export function PaletteGrabActions({
   )
 }
 
-/** The palette's move handle: drag sideways, or use the arrow keys as a slider. */
+/**
+ * The palette's move handle: drag it anywhere, or use the arrow keys. A slider for the horizontal value (as it
+ * was before the palette moved vertically), with the vertical place spoken in its value text.
+ */
 export function PaletteGrip({
   percent,
+  verticalPercent,
   dragging,
   gripProps
 }: {
   percent: number
+  verticalPercent: number
   dragging: boolean
-  gripProps: ReturnType<typeof usePaletteHorizontalDrag>['gripProps']
+  gripProps: ReturnType<typeof usePaletteDrag>['gripProps']
 }): React.JSX.Element {
   const t = useTranslate()
   const altKeyLabel = getShortcutPlatform() === 'darwin' ? '⌥' : 'Alt'
@@ -94,6 +99,12 @@ export function PaletteGrip({
       : percent > 66
         ? t('browser.annotatePalette.positionRight', 'Right')
         : t('browser.annotatePalette.positionCentre', 'Centre')
+  const vertical =
+    verticalPercent < 34
+      ? t('browser.annotatePalette.positionTop', 'Top')
+      : verticalPercent > 66
+        ? t('browser.annotatePalette.positionBottom', 'Bottom')
+        : t('browser.annotatePalette.positionMiddle', 'Middle')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -105,10 +116,11 @@ export function PaletteGrip({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={percent}
-          aria-valuetext={t('browser.annotatePalette.positionValue', '{{side}}, {{percent}}%', {
-            side,
-            percent
-          })}
+          aria-valuetext={t(
+            'browser.annotatePalette.positionValueBothAxes',
+            '{{side}} {{percent}}%, {{vertical}} {{verticalPercent}}%',
+            { side, percent, vertical, verticalPercent }
+          )}
           className={cn(
             'order-0 flex h-7 w-4 shrink-0 touch-none items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none',
             dragging ? 'cursor-grabbing' : 'cursor-grab'
@@ -120,8 +132,8 @@ export function PaletteGrip({
       </TooltipTrigger>
       <TooltipContent side="bottom" sideOffset={6}>
         {t(
-          'browser.annotatePalette.moveTooltipSeeThrough',
-          'Drag or use ← → to move · hold {{key}} to see under',
+          'browser.annotatePalette.moveAnywhereTooltip',
+          'Drag or use arrow keys to move · hold {{key}} to see under',
           { key: altKeyLabel }
         )}
       </TooltipContent>

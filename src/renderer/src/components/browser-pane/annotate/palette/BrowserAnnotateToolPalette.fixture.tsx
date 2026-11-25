@@ -5,7 +5,7 @@ import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { MarkupPaletteTools, type MarkupPaletteDensity } from './MarkupPaletteTools'
 import { BrowserAnnotatePaletteNotes } from './browser-annotate-palette-send'
 import { BrowserAnnotateToolPalette } from './BrowserAnnotateToolPalette'
-import { setAnnotatePaletteRatio } from './annotate-palette-position-store'
+import { setAnnotatePalettePosition } from './annotate-palette-position-store'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 import BrowserFind from '../../assemble-chrome/find/BrowserFind'
 
@@ -17,6 +17,7 @@ function PalettePage({
   notes = 0,
   picked = false,
   ratio = 0.5,
+  y = 0,
   hint = 'Click an element to add feedback for the agent.',
   waiting = false,
   findOpen = false
@@ -25,6 +26,8 @@ function PalettePage({
   notes?: number
   picked?: boolean
   ratio?: number
+  /** Vertical place as a fraction of the free travel (0 = top). */
+  y?: number
   hint?: string
   waiting?: boolean
   findOpen?: boolean
@@ -33,7 +36,7 @@ function PalettePage({
   const webviewRef = useRef<Electron.WebviewTag | null>(null)
   const [tool, setTool] = useState(initialTool)
   // The palette reads the app-wide saved position; seed it before the palette mounts.
-  useState(() => setAnnotatePaletteRatio(ratio))
+  useState(() => setAnnotatePalettePosition({ x: ratio, y }))
   const [drawSlot, setDrawSlot] = useState<HTMLElement | null>(null)
   const [drawDensity, setDrawDensity] = useState<MarkupPaletteDensity>('full')
   return (
@@ -152,6 +155,11 @@ export const draw = defineFixture({
 export const movedLeft = defineFixture({
   width: 900,
   render: () => <PalettePage initialTool="annotate" ratio={0} />
+})
+
+export const movedDown = defineFixture({
+  width: 900,
+  render: () => <PalettePage initialTool="copy" picked ratio={0.3} y={1} />
 })
 
 export const narrow = defineFixture({

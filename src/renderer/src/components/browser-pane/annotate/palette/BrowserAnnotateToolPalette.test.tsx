@@ -4,11 +4,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { BrowserAnnotateToolPalette } from './BrowserAnnotateToolPalette'
-import { setAnnotatePaletteRatio } from './annotate-palette-position-store'
+import { setAnnotatePalettePosition } from './annotate-palette-position-store'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
 
 beforeEach(() => {
-  setAnnotatePaletteRatio(0.5)
+  setAnnotatePalettePosition({ x: 0.5, y: 0 })
 })
 
 afterEach(() => {
