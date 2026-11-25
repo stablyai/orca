@@ -22411,6 +22411,7 @@
         "template": "Şablon",
         "nameTaken": "Zaten {{name}} adlı bir botunuz var.",
         "open": "Aç",
+        "openBot": "{{name}} botunu aç",
         "edit": "Düzenle",
         "rename": "Yeniden adlandır",
         "create": "Bot oluştur",

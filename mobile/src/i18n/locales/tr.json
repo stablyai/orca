@@ -976,6 +976,7 @@
         "edit": "Düzenle",
         "create": "Bot oluştur",
         "open": "Aç",
+        "openBot": "{{name}} botunu aç",
         "origin": "Öneren: {{bot}}",
         "originTemplate": "Kaynak: {{template}} · Öneren: {{bot}}",
         "watches": "İzler",
