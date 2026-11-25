@@ -6,6 +6,7 @@ import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-att
 import { cn } from '@/lib/class-names'
 import { LinearPriorityIcon } from '@/components/task-page/linear/issues/linear-priority-icon'
 import { LinearStateCell } from './task-page-linear-state-cell'
+import { LinearProjectCell } from './task-page-linear-project-cell'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { formatRelativeTime } from '../../task-page-source-context'
@@ -137,6 +138,13 @@ export function TaskPageLinearIssueTable({
                       t('auto.components.TaskPage.42a9160321', 'Unassigned')}
                   </span>
                 ) : null}
+                {effectiveLinearDisplayProperties.has('project') ? (
+                  <LinearProjectCell
+                    issue={issue}
+                    className="text-[11px]"
+                    sourceContext={linearTaskSourceContext}
+                  />
+                ) : null}
                 {effectiveLinearDisplayProperties.has('team') ? (
                   <span className="min-w-0 truncate text-[11px] text-muted-foreground">
                     {teamLabel}
@@ -166,6 +174,12 @@ export function TaskPageLinearIssueTable({
                     +{issue.labels.length - labels.length}
                   </span>
                 ) : null}
+              </div>
+            ) : null}
+
+            {effectiveLinearDisplayProperties.has('project') ? (
+              <div className="flex min-w-0 max-lg:!hidden">
+                <LinearProjectCell issue={issue} sourceContext={linearTaskSourceContext} />
               </div>
             ) : null}
 

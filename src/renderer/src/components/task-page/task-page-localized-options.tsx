@@ -217,6 +217,7 @@ export const getLinearDisplayProperties = createLocalizedCatalog(
       priority: translate('auto.components.TaskPage.c8d5bec5f7', 'Priority'),
       assignee: translate('auto.components.TaskPage.d2a876ca53', 'Assignee'),
       team: translate('auto.components.TaskPage.a98cbe7664', 'Team'),
+      project: translate('auto.components.LinearIssueWorkspace.b51276c8d6', 'Project'),
       labels: translate('auto.components.TaskPage.d0ca4aa1d0', 'Labels'),
       updated: translate('auto.components.TaskPage.f362667d55', 'Updated')
     }

@@ -19,6 +19,7 @@ export const LINEAR_DISPLAY_PROPERTIES = [
   'priority',
   'assignee',
   'team',
+  'project',
   'labels',
   'updated'
 ] as const

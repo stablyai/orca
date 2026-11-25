@@ -44,6 +44,9 @@ export function TaskPageLinearIssueList({
           {effectiveLinearDisplayProperties.has('labels') ? (
             <span>{t('auto.components.TaskPage.d0ca4aa1d0', 'Labels')}</span>
           ) : null}
+          {effectiveLinearDisplayProperties.has('project') ? (
+            <span>{t('auto.components.LinearIssueWorkspace.b51276c8d6', 'Project')}</span>
+          ) : null}
           {effectiveLinearDisplayProperties.has('team') ? (
             <span>{t('auto.components.TaskPage.a98cbe7664', 'Team')}</span>
           ) : null}

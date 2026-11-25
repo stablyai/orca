@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
 import { LinearStateCell } from './task-page-linear-state-cell'
+import { LinearProjectCell } from './task-page-linear-project-cell'
 import { formatRelativeTime } from '../../task-page-source-context'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearIssueBoardColumns({
@@ -187,6 +188,13 @@ export function TaskPageLinearIssueBoardColumns({
                         {issue.assignee?.displayName ??
                           t('auto.components.TaskPage.42a9160321', 'Unassigned')}
                       </span>
+                    ) : null}
+                    {effectiveLinearDisplayProperties.has('project') ? (
+                      <LinearProjectCell
+                        issue={issue}
+                        className="text-[11px]"
+                        sourceContext={linearTaskSourceContext}
+                      />
                     ) : null}
                     {effectiveLinearDisplayProperties.has('team') ? (
                       <span className="truncate">{teamLabel}</span>
