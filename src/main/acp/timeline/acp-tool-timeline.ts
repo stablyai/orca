@@ -253,12 +253,15 @@ export class AcpToolTimeline {
     } else {
       this.tools.delete(update.toolCallId)
     }
+    // An update for a call this run never saw start: a cut replay (its row is saved) or none.
+    const unseen = !previous && 'sessionUpdate' in raw && raw.sessionUpdate === 'tool_call_update'
     const events: ProviderTimelineEvent[] = [
       {
         type: state === 'running' ? (previous ? 'item.update' : 'item.open') : 'item.close',
         item: `tool:${update.toolCallId}`,
         body,
-        join
+        join,
+        ...(unseen ? { keepsSavedCall: true as const } : {})
       }
     ]
     for (const content of update.content ?? []) {

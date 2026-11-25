@@ -46,6 +46,7 @@ export function decideItem(
           identity: row.identity,
           body: event.body,
           change,
+          ...(event.keepsSavedCall ? { keepsSavedCall: true as const } : {}),
           scopeItemIds: providerTimelineScopeItemIds(context, event.join)
         },
         onResolved: (outcome) => {
