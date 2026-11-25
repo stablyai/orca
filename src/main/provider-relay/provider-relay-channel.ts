@@ -20,7 +20,7 @@ export type ProviderRelaySink = {
   line: (event: ProviderRelayDataEvent['event'], seq: number, line: string) => void
   exit: (exit: ProviderRelayExit) => void
   /** The daemon holds a lot of unacked output: ack everything received now. */
-  ackWanted: () => void
+  ackWanted: (seq: number) => void
   /** The stream to the daemon dropped; the daemon detached this relay. */
   disconnected: () => void
 }
@@ -163,7 +163,8 @@ export class ProviderRelayChannel {
       return
     }
     if (event.event === 'relayAckWanted') {
-      sink.ackWanted()
+      const seq = jsonProperty(event.payload, 'seq')
+      sink.ackWanted(typeof seq === 'number' ? seq : 0)
       return
     }
     const { seq, line, more } = event.payload
