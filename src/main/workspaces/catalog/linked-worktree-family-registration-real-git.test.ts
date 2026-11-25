@@ -11,7 +11,7 @@ import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child
 import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 
 const metadataGates = vi.hoisted(() => new Map<string, Promise<void>>())
-const metadataArrivals = vi.hoisted(() => [] as string[])
+const metadataArrivals = vi.hoisted((): string[] => [])
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoLocalMetadata: async ({ repoPath }: { repoPath: string }) => {
     metadataArrivals.push(repoPath)
@@ -61,13 +61,20 @@ function createStore() {
   return { repos, store }
 }
 
-type Registrar = (store: ReturnType<typeof createStore>['store'], path: string) => Promise<Repo>
+type FakeStore = ReturnType<typeof createStore>['store']
+
+function asStore<T extends Store | RuntimeStore>(store: FakeStore): T {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration and nested import call only the repo and project-group methods this fake implements.
+  return store as unknown as T
+}
+
+type Registrar = (store: FakeStore, path: string) => Promise<Repo>
 
 const registrars: [string, Registrar][] = [
   [
     'local',
     async (store, path) => {
-      const result = await addLocalRepoFromPath(store as unknown as Store, path)
+      const result = await addLocalRepoFromPath(asStore<Store>(store), path)
       if ('error' in result) {
         throw new Error(result.error)
       }
@@ -78,7 +85,7 @@ const registrars: [string, Registrar][] = [
     'runtime',
     (store, path) =>
       new RuntimeRepositoryRegistrationController({
-        getStore: () => store as unknown as RuntimeStore,
+        getStore: () => asStore<RuntimeStore>(store),
         invalidateResolvedWorktrees: () => undefined,
         invalidateWorktreeScan: () => undefined,
         notifyReposChanged: () => undefined
@@ -167,7 +174,7 @@ describe('runtime nested import of a linked worktree family', () => {
     const { repos, store } = createStore()
     const direct = await registrars[1][1](store, siblingB)
     const result = await new RuntimeNestedRepoImport({
-      getStore: () => store as unknown as RuntimeStore,
+      getStore: () => asStore<RuntimeStore>(store),
       invalidateResolvedWorktrees: () => undefined,
       invalidateWorktreeScan: () => undefined,
       notifyReposChanged: () => undefined
