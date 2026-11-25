@@ -1,6 +1,6 @@
-// `bots.agentChoices`: the agents this host's New bot offers, and those its + menu offers for a new
-// chat, for a client that can't read this host's agent menu itself (a phone, a teammate's Orca). Same
-// rows and filters as the desktop's, from this host's own facts.
+// `bots.agentChoices`: the agents this host's New bot offers and the one it picks first, and those its
+// + menu offers for a new chat, for a client that can't read this host's agent menu itself (a phone, a
+// teammate's Orca). Same rows, filters and pick as the desktop's, from this host's own facts.
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import {
   buildNewTabAgentMenuRows,
@@ -10,6 +10,8 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import {
   botAgentChoices,
   hostNewChatAgents,
+  newBotAgent,
+  readyBotDefaultAgent,
   type BotNewChatAgent
 } from '../../../../shared/bots/bot-agent-choices'
 import type { BotAgent } from '../../../../shared/bot-types'
@@ -53,7 +55,11 @@ function availabilitySnapshot(
   })
 }
 
-export type HostBotAgentChoices = { agents: BotAgent[]; newChatAgents: BotNewChatAgent[] }
+export type HostBotAgentChoices = {
+  agents: BotAgent[]
+  defaultAgent: BotAgent | undefined
+  newChatAgents: BotNewChatAgent[]
+}
 
 export async function hostBotAgentChoices(
   runtime: OrcaRuntimeService
@@ -96,8 +102,13 @@ export async function hostBotAgentChoices(
     offerAgentSetup: true,
     hostPlatform: process.platform
   })
-  const model = { state: 'settled', rows, detection: { detectedIds } } as const
-  return { agents: botAgentChoices(model), newChatAgents: hostNewChatAgents(model) }
+  const model = { state: 'settled' as const, rows, detection: { detectedIds } }
+  const agents = botAgentChoices(model)
+  return {
+    agents,
+    defaultAgent: newBotAgent(agents, readyBotDefaultAgent(model, settings.defaultTuiAgent)),
+    newChatAgents: hostNewChatAgents(model)
+  }
 }
 
 /** Whether this host's + menu offers a new chat on `agent` that can start: the one list a teammate's

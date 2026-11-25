@@ -13,7 +13,12 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { BotChangeKind, BotChangeScope } from '../../../../shared/bots/bot-change-scope'
 import type { BotHostRead } from './bot-host-read-store'
 
-export { createBotHostRead, type BotHostRead, type BotHostReadState } from './bot-host-read-store'
+export {
+  createBotHostRead,
+  type BotHostRead,
+  type BotHostReadState,
+  type BotReadSettled
+} from './bot-host-read-store'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { structuredAgentSessionStatusPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 
@@ -22,8 +27,13 @@ const NO_SUBSCRIPTION = (): (() => void) => () => {}
 const CHAT_KINDS: readonly BotChangeKind[] = ['chats', 'status', 'threads']
 
 /** The read's latest value for the bot, re-read whenever its chats, threads, Home chat or work change;
- *  null until the first read lands, or with no bot. */
-export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | null {
+ *  null until the first read lands, or with no bot. `select` (stable) picks what the caller observes,
+ *  so a change outside it renders nothing. */
+export function useBotHostRead<T, S = T>(
+  read: BotHostRead<T>,
+  bot: Bot | null,
+  select?: (value: T) => S
+): S | null {
   const botId = bot?.id ?? null
   const hostId = bot?.hostId ?? null
   const key = bot ? botRefKey(bot) : null
@@ -60,7 +70,14 @@ export function useBotHostRead<T>(read: BotHostRead<T>, bot: Bot | null): T | nu
       botId && hostId ? read.subscribe({ hostId, id: botId }, listener) : NO_SUBSCRIPTION(),
     [read, botId, hostId]
   )
-  const getSnapshot = useCallback(() => (key ? read.snapshot(key) : null), [read, key])
+  const getSnapshot = useCallback((): S | null => {
+    const value = key ? read.snapshot(key) : null
+    if (value === null) {
+      return null
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: with no `select`, S is T.
+    return select ? select(value) : (value as unknown as S)
+  }, [read, key, select])
   const value = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   useEffect(() => {

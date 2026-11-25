@@ -18,7 +18,18 @@ import type { PhoneBot } from '../../bots/host-bots-operations'
 import { translate } from '../../i18n/mobile-i18n'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import type { HomeBotRow } from './home-bot-row-views'
+import type { HomeBotRow, HomeRowBase } from './home-bot-row-views'
+import type { BotRowStatus } from '../../../../src/shared/bots/bot-row-status'
+import type { MobileBotAvatarSource } from '../../bots/host-bot-row-facts'
+
+export type HomeSharedAgentRow = HomeRowBase & {
+  /** An agent shared with the computer's account, reached over this phone's own link. */
+  kind: 'shared'
+  environmentId: string
+  avatar: MobileBotAvatarSource
+  /** Grey while its owner's computer is away; none while it is reached. */
+  dot: BotRowStatus | null
+}
 
 type Host = { hostId: string; client: RpcClient | null }
 
@@ -27,12 +38,14 @@ export function homeSharedAgentRow(
   pairedHostId: string,
   view: SharedBotHostView,
   bot: PhoneBot | undefined
-): Extract<HomeBotRow, { kind: 'shared' }> {
+): HomeSharedAgentRow {
   const executionHost: ExecutionHostId = toRuntimeExecutionHostId(view.environmentId)
   const offline = view.link !== 'live'
   return {
     kind: 'shared',
     key: `shared:${pairedHostId}:${view.environmentId}`,
+    // Its owner's computer, named by its owner: grouped apart from this account's own computers.
+    placeKey: `shared:${view.environmentId}`,
     computerKey: hostBotsKey(pairedHostId, executionHost),
     pairedHostId,
     executionHost,

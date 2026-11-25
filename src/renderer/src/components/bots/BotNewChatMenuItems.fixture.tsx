@@ -66,7 +66,7 @@ const model: NewTabAgentMenuModel = {
   state: 'settled',
   rows,
   detection: {
-    detectedIds: ['claude', 'codex', 'cursor', 'opencode', 'gemini'],
+    detectedIds: ['claude', 'codex', 'cursor', 'opencode', 'antigravity'],
     isLoading: false,
     detectionFailed: false,
     isRefreshing: false,

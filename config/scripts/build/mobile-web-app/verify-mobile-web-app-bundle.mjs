@@ -30,8 +30,10 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
-export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
+// A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
+// reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
+// read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
+export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
@@ -40,8 +42,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
 // budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
-// Eager: main's own fence. 10.96875 MiB for the teammate shared-agent screens, about 12.4 KB (2026-11-24).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 10.96875 * 1024 * 1024
+// Eager: main's own fence. 11.03125 MiB: main's 11 MiB plus the teammate shared-agent screens, at
+// 11,549,600 bytes (2026-11-25).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11.03125 * 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
 export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
 
@@ -124,19 +127,20 @@ export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
   ['./h/[hostId]/automations.tsx', 12],
   ['./h/[hostId]/edit.tsx', 13],
-  ['./h/[hostId]/files/[worktreeId].tsx', 17],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 23],
+  ['./h/[hostId]/files/[worktreeId].tsx', 16],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 22],
   ['./h/[hostId]/group/[groupId].tsx', 30],
   ['./h/[hostId]/history/[worktreeId].tsx', 31],
-  ['./h/[hostId]/index.tsx', 40],
-  ['./h/[hostId]/new-workspace.tsx', 48],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 49],
-  ['./h/[hostId]/review/[worktreeId].tsx', 59],
-  ['./h/[hostId]/session/[worktreeId].tsx', 81],
-  ['./h/[hostId]/shared/[environmentId]/[sessionId].tsx', 90],
-  ['./h/[hostId]/shared/[environmentId]/index.tsx', 87],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 89],
-  ['./h/[hostId]/tasks.tsx', 94],
+  ['./h/[hostId]/index.tsx', 39],
+  ['./h/[hostId]/mcp.tsx', 45],
+  ['./h/[hostId]/new-workspace.tsx', 51],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 52],
+  ['./h/[hostId]/review/[worktreeId].tsx', 61],
+  ['./h/[hostId]/session/[worktreeId].tsx', 82],
+  ['./h/[hostId]/shared/[environmentId]/[sessionId].tsx', 92],
+  ['./h/[hostId]/shared/[environmentId]/index.tsx', 90],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 92],
+  ['./h/[hostId]/tasks.tsx', 95],
   ['./h/_layout.tsx', 98]
 ]
 
@@ -257,7 +261,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (oversized) {
     fail(
       `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
-        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
+        `host catalog budget of ${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)}`
     )
   }
   const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))

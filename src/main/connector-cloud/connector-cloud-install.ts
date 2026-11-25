@@ -1,4 +1,5 @@
 import { ConnectorBotPurposes } from './connector-bot-purposes'
+import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
@@ -27,12 +28,17 @@ import { BotPrWaker } from '../bots/bot-pr-events'
 import { cancelConnectorConnectsForAccountChange } from './connector-connect'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readDispatchWorkers } from '../runtime/rpc/methods/orchestration/worker/session-workers-method'
+import { handleThreadMute, type ThreadMuteDeps } from './connector-thread-mute'
+import { threadMuteSaves, threadMuteSaving } from './connector-thread-mute-saves'
+import { readThreadMute } from '../external-conversations/external-conversation-link-writes'
+import type { ExternalConversationLinkStore } from '../external-conversations/external-conversation-links'
 
 // A slow GitHub read holds the first hello only this long; a later answer still says a new one.
 const FIRST_GITHUB_ANSWER_WAIT_MS = 3_000
 
 export type ConnectorCloudStore = ConnectorPlacesStore &
-  Pick<RuntimeStore, 'getSettings' | 'onSettingsChanged'> &
+  ExternalConversationLinkStore &
+  Pick<RuntimeStore, 'getSettings' | 'onSettingsChanged' | 'flushPendingOrThrowAsync'> &
   Required<Pick<RuntimeStore, 'listAutomations' | 'listAutomationRuns'>>
 
 export type ConnectorCloudHost = {
@@ -108,6 +114,7 @@ export function createConnectorCloud({
   })
   // Batches held when Orca last quit go out when due.
   prWaker.resume()
+  const muteDeps = threadMuteDeps(runtime, store)
   return new ConnectorCloud({
     userDataPath,
     origin: resolveConnectorOrigin(process.env, environment.isPackaged()),
@@ -161,6 +168,11 @@ export function createConnectorCloud({
             takingAutomation(store, id, event) !== null && !eventRun(store, id, event),
           run: (id, event, inTurn) => runtime.runAutomationForEvent(id, event, inTurn)
         }),
+      // Connectors off: no seam, so no bot thread to mute.
+      threadMute: (delivery, record, carriedBefore) =>
+        runtime.getExternalConversationSeam()
+          ? handleThreadMute(muteDeps, delivery, record, carriedBefore)
+          : null,
       webhookNotice: async (delivery) => webhooks.notice(delivery),
       prEvent: (delivery) => prWaker.handle(delivery.deliveryId, delivery.event),
       shareResolved: (delivery) => resolveBotShareInvite(runtime.bots, delivery),
@@ -222,4 +234,20 @@ export function createConnectorCloud({
       }
     }
   })
+}
+
+/** A bot thread's mute as its link keeps it. */
+function threadMuteDeps(runtime: OrcaRuntimeService, store: ConnectorCloudStore): ThreadMuteDeps {
+  return {
+    waiting: new Map(),
+    read: (key) => readThreadMute(store, key),
+    write: threadMuteSaves(store),
+    saving: threadMuteSaving,
+    // Not known yet (no client runs): keep muting; only a cloud known to lack it lets replies on.
+    mentionsKnown: () =>
+      runtime.getConnectorCloud()?.cloudFeatures()?.has(CONNECTOR_CLOUD_MENTIONED_FEATURE) ?? true,
+    queued: (key, work) =>
+      runtime.getExternalConversationSeam()?.queued(key, work) ??
+      Promise.resolve(work?.()).then(() => undefined)
+  }
 }

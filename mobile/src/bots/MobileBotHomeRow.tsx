@@ -2,6 +2,8 @@ import type React from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight, Gauge, Lightbulb } from 'lucide-react-native'
 import { botGroupRowLine } from '../../../src/shared/bots/bot-sidebar-entries'
+import type { BotSearchRange } from '../../../src/shared/bots/bot-sidebar-search'
+import { BoldMatches } from './MobileBotPreviewMatches'
 import type { Worktree, WorktreeRowView } from '../worktree/workspace-list/workspace-list-types'
 import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import {
@@ -58,9 +60,10 @@ export function MobileBotHomeRow({
   // A server's sessions aren't on its paired computer's feed; a search's purpose line keeps its place.
   const feedHost = down || bot.host || bot.searchPurpose ? null : pairedHostId
   const stop = useMobileBotUsageLimitStop(feedHost, bot.workspaceIds, now)
-  const limitText = mobileBotRowLimitText(stop, line, { ...bot.line, dot: bot.dot })
+  const limitText = mobileBotRowLimitText(stop, line, { ...bot.line, dot: bot.dot }, now)
   const lineText =
-    limitText ?? (line ? mobileBotRowLineText(line, now) : (bot.searchPurpose ?? bot.statusLine))
+    limitText ??
+    (line ? mobileBotRowLineText(line, now) : (bot.searchPurpose?.text ?? bot.statusLine))
   // The line names who waits on an access answer, since nothing else on the row says it.
   const preview = down
     ? ''
@@ -68,7 +71,9 @@ export function MobileBotHomeRow({
       ? `${lineText} · ${t('bots.needs.access', '{{person}} asked for access', { person: bot.askedForAccess })}`
       : lineText
   const age =
-    !down && line?.kind === 'activity' && line.at !== null ? formatTimeAgo(line.at, now) : null
+    !down && !limitText && line?.kind === 'activity' && line.at !== null
+      ? formatTimeAgo(line.at, now)
+      : null
   // The desktop's mark before a thread's label, which leads an activity line.
   const placeSource =
     !down && !limitText && line?.kind === 'activity' ? (line.place?.source ?? null) : null
@@ -86,6 +91,7 @@ export function MobileBotHomeRow({
       title={item.displayName}
       unread={item.unread}
       preview={preview}
+      previewBold={down ? undefined : bot.searchPurpose?.ranges}
       asking={asking}
       previewLeading={
         <>
@@ -108,11 +114,14 @@ export function MobileBotHomeRow({
       onLongPress={onLongPress}
       titleTrailing={
         <>
-          {needsYou > 0 ? <MobileBotNeedsYouCount count={needsYou} /> : null}
+          {/* The line already says "N need you": the count once. */}
+          {needsYou > 0 && !(asking && limitText === null) ? (
+            <MobileBotNeedsYouCount count={needsYou} />
+          ) : null}
           {bot.upNext ? <MobileBotUpNextCount count={bot.upNext} /> : null}
-          {/* A folded bot always keeps its chevron, so it can unfold before its chats are read; a
-              down host's bot is its row alone. */}
-          {!down && (count > 0 || bot.foldsChats || view.lineageCollapsed) && onToggle ? (
+          {/* Its live chats list under it unfolded, so only a folded bot, or one whose chats this host
+              can't list, keeps a chevron; a down host's bot is its row alone. */}
+          {!down && (view.lineageCollapsed || (!bot.listsChats && count > 0)) && onToggle ? (
             <Pressable
               onPress={(event) => {
                 event.stopPropagation()
@@ -271,6 +280,7 @@ export function MobileBotRowView({
   title,
   unread,
   preview,
+  previewBold,
   asking = false,
   previewLeading = null,
   age,
@@ -287,6 +297,8 @@ export function MobileBotRowView({
   title: string
   unread: boolean
   preview: string
+  /** Search's matched words in the preview, drawn bold. */
+  previewBold?: readonly BotSearchRange[]
   /** The line says what waits on the owner, in the asking colour. */
   asking?: boolean
   /** Drawn before the preview, e.g. a server bot's computer. */
@@ -346,7 +358,7 @@ export function MobileBotRowView({
             numberOfLines={1}
             style={[styles.preview, unread && styles.previewUnread, asking && styles.previewAsking]}
           >
-            {preview}
+            {previewBold ? <BoldMatches text={preview} ranges={previewBold} /> : preview}
           </Text>
           {age ? <Text style={styles.age}>{age}</Text> : null}
         </View>
@@ -355,6 +367,7 @@ export function MobileBotRowView({
   )
 }
 
+/** A search's matched words drawn bold within the line, keyed by where each starts. */
 const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
@@ -384,10 +397,10 @@ const styles = themedStyleSheet(() => ({
   },
   main: { flex: 1, minWidth: 0 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  title: { flex: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
+  title: { flex: 1, fontSize: 15, color: colors.textPrimary, fontWeight: '500' },
   titleMarked: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' },
   fill: { flex: 1 },
-  unread: { color: colors.textPrimary, fontWeight: '700' },
+  unread: { fontWeight: '700' },
   fold: {
     minWidth: 44,
     minHeight: 44,

@@ -275,6 +275,22 @@ export function newestTurnsOnly(anchors: JournalOperationWindowAnchors): boolean
   )
 }
 
+/** Thrown by an `indexedOnly` read that would otherwise take every send in the conversation. */
+export class JournalWindowNotIndexed extends Error {
+  constructor() {
+    super('journal window needs the whole conversation')
+    this.name = 'JournalWindowNotIndexed'
+  }
+}
+
+/** Every current send, which the newest-turns path falls back to; never for an `indexedOnly` read. */
+export function wholeSends(scope: JournalSqlScope, anchors: JournalOperationWindowAnchors): Send[] {
+  if (anchors.indexedOnly) {
+    throw new JournalWindowNotIndexed()
+  }
+  return sendHeads(scope)
+}
+
 /** The sends a window starts from: the anchored operations' through anchored turns, the unsettled
  *  ones for the newest turns alone (null past the cap: the whole read answers), else every send. */
 export function seedSends(

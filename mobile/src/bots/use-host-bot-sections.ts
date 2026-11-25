@@ -30,10 +30,12 @@ export function useHostBotSections(args: {
   collapsedGroups: ReadonlySet<string>
   repoHostIdByRepoId: ReadonlyMap<string, ExecutionHostId>
   search: string
+  showPaused: boolean
   lastVisited: LastVisitedWorktreeOnHost | null
   lineageStores: MobileLineageStores
 }): HostBotSections {
-  const { listings, rows, collapsedGroups, repoHostIdByRepoId, search, lastVisited } = args
+  const { listings, rows, collapsedGroups, repoHostIdByRepoId, search, showPaused, lastVisited } =
+    args
   const chatInputs = useHostBotChatListInputs({
     client: args.client,
     pairedHostId: args.hostId,
@@ -60,6 +62,7 @@ export function useHostBotSections(args: {
         collapsedGroups,
         repoHostIdByRepoId,
         search,
+        showPaused,
         purposes,
         drawRow: drawBotRow(lastVisited),
         lineageStores: args.lineageStores,
@@ -71,6 +74,7 @@ export function useHostBotSections(args: {
       collapsedGroups,
       repoHostIdByRepoId,
       search,
+      showPaused,
       purposes,
       lastVisited,
       args.lineageStores,

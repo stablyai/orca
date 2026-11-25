@@ -3,7 +3,14 @@ import {
   buildNewTabAgentMenuRows,
   type NewTabAgentMenuRow
 } from '../agent-launch/picker/agent-launch-picker-rows'
-import { botHomeOffers, botNewChatAgents, type BotAgentMenuModel } from './bot-agent-choices'
+import {
+  botAgentChoices,
+  botHomeOffers,
+  botNewChatAgents,
+  newBotAgent,
+  readyBotDefaultAgent,
+  type BotAgentMenuModel
+} from './bot-agent-choices'
 
 const settled = (
   rows: NewTabAgentMenuRow[],
@@ -15,16 +22,16 @@ describe('botNewChatAgents', () => {
     const model = settled(
       [
         { kind: 'chat', agent: 'claude' },
-        { kind: 'cli', agent: 'gemini', chat: true },
+        { kind: 'cli', agent: 'droid', chat: true },
         { kind: 'chat-unavailable', agent: 'cursor', reason: 'not-on-host' },
         // Offers to install the agent first: not one the user has.
         { kind: 'chat', agent: 'grok', setup: true },
         { kind: 'chat', agent: 'kimi', setup: true }
       ],
-      ['claude', 'gemini', 'cursor']
+      ['claude', 'droid', 'cursor']
     )
-    expect(botNewChatAgents({ agent: 'gemini' }, model)).toEqual([
-      { agent: 'gemini' },
+    expect(botNewChatAgents({ agent: 'droid' }, model)).toEqual([
+      { agent: 'droid' },
       { agent: 'claude' },
       { agent: 'cursor', unavailable: 'not-on-host' }
     ])
@@ -68,4 +75,40 @@ it('offers a shared agent its owner’s agents, its own first, and no terminal o
   expect(botHomeOffers({ agent: 'codex' }, here, { ownerAgents: null }).agents).toEqual([
     { agent: 'codex' }
   ])
+})
+
+describe('botAgentChoices', () => {
+  it('never offers an agent the host lacks as the first choice when installed agents are required', () => {
+    // A WSL distro without Linux agents: only chats that would install one first.
+    const setupOnly = settled(
+      [
+        { kind: 'chat', agent: 'grok', setup: true },
+        { kind: 'chat', agent: 'claude', setup: true }
+      ],
+      []
+    )
+    expect(botAgentChoices(setupOnly, undefined, true)).toEqual([])
+    const mixed = settled([
+      { kind: 'chat', agent: 'claude', setup: true },
+      { kind: 'cli', agent: 'codex', chat: true }
+    ])
+    expect(botAgentChoices(mixed, undefined, true)).toEqual(['codex'])
+  })
+})
+
+describe('readyBotDefaultAgent', () => {
+  it('keeps a ready default, not one whose chat installs it first', () => {
+    const model = settled([
+      { kind: 'chat', agent: 'claude' },
+      { kind: 'chat', agent: 'codex', setup: true }
+    ])
+    const choices = botAgentChoices(model)
+    expect(newBotAgent(choices, readyBotDefaultAgent(model, 'codex'))).toBe('claude')
+    expect(newBotAgent(choices, readyBotDefaultAgent(model, 'claude'))).toBe('claude')
+    const ready = settled([
+      { kind: 'chat', agent: 'claude' },
+      { kind: 'cli', agent: 'codex', chat: true }
+    ])
+    expect(newBotAgent(botAgentChoices(ready), readyBotDefaultAgent(ready, 'codex'))).toBe('codex')
+  })
 })

@@ -11,7 +11,7 @@ import { makeTestBot } from '../../../bots/bot.test-fixture'
 // This computer has Claude, Codex and Gemini; its owner turned Gemini off.
 vi.mock('../../../preflight/workspace-agent-detection', async (original) => ({
   ...(await original<Record<string, unknown>>()),
-  detectAgentsOnHost: vi.fn(async () => ['claude', 'codex', 'gemini'])
+  detectAgentsOnHost: vi.fn(async () => ['claude', 'codex', 'grok'])
 }))
 
 const SCOPE: BotShareCallerScope = {
@@ -32,11 +32,11 @@ beforeEach(() => {
   vi.spyOn(runtime, 'requireStore').mockReturnValue(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the agent menu reads only the disabled agents.
     {
-      getSettings: () => ({ disabledTuiAgents: ['gemini'] })
+      getSettings: () => ({ disabledTuiAgents: ['grok'] })
     } as never
   )
   vi.spyOn(runtime, 'subscribeStructuredAgentAvailability').mockImplementation((read) => {
-    read(['claude', 'codex', 'gemini'].map((agent) => ({ agent, state: 'available' as const })))
+    read(['claude', 'codex', 'grok'].map((agent) => ({ agent, state: 'available' as const })))
     return () => {}
   })
   dispatcher = new RpcDispatcher({
@@ -67,7 +67,7 @@ it('answers a teammate only the agents the owner’s + menu offers for a new cha
 })
 
 it('refuses a teammate’s new chat on an agent the owner’s + menu doesn’t offer', async () => {
-  const refused = await asTeammate('bots.session.start', { botId: 'bot-shared', agent: 'gemini' })
+  const refused = await asTeammate('bots.session.start', { botId: 'bot-shared', agent: 'grok' })
   expect(refused.ok).toBe(false)
   expect(JSON.stringify(refused)).toContain('agent_not_offered')
 })

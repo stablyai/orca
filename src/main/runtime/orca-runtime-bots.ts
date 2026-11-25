@@ -116,6 +116,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       }),
     leaveBotGroups: (botId) => this.leaveBotGroups(botId),
     botsRoot: () => botsRootFolder(),
+    slackIconsRoot: () => join(getProfileUserDataPath(), 'bot-slack-icons'),
     filesystem: localBotHomeFilesystem,
     accountUserId: () =>
       this.servedOrcaProfileId
@@ -129,6 +130,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
       void this.botWork.forgetBot(botId)
       this.bots.memory.removed(botId)
       await revokeDeletedBotShareDevices(this.botShareDevices, botId)
+      void this.bots.slackIcons.forget(botId).catch(() => undefined)
     }
   })
 
@@ -352,9 +354,7 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
 
   /** The agents shared with this computer's account changed. Sent with no bots of its own too: a
    *  phone listing those agents reads the notice. */
-  notifySharedBotsChanged(): void {
-    this.emitBotsChanged({ kinds: ['bot'] })
-  }
+  readonly notifySharedBotsChanged = (): void => this.emitBotsChanged({ kinds: ['bot'] })
 
   private emitBotsChanged(scope: BotChangeScope): void {
     this.notifier?.botsChanged?.(scope)

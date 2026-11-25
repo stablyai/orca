@@ -29,7 +29,7 @@ export const GOOGLE_WRITE_METHODS = [
     share: 'not-shared',
     params: GmailDraftParams,
     handler: async (params, context) => {
-      const api = await googleApiForCaller(params, context)
+      const api = await googleApiForCaller(params, context, [params.replyTo, params.forward])
       const body = await attributedGoogleText(params.body, params, context)
       return saveGmailDraft(api, { ...params, ...(body === undefined ? {} : { body }) })
     }
@@ -48,7 +48,7 @@ export const GOOGLE_WRITE_METHODS = [
     share: 'not-shared',
     params: GmailModifyParams,
     handler: async (params, context) =>
-      modifyGmail(await googleApiForCaller(params, context), params)
+      modifyGmail(await googleApiForCaller(params, context, params.refs), params)
   }),
   defineMethod({
     name: 'google.calendar.create',

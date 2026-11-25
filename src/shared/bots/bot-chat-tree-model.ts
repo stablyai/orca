@@ -18,6 +18,7 @@ import {
   type BotChatHostTree
 } from './bot-chat-tree-homes'
 import { CHAT_TREE_CAPS, type BotChatTreeChat, type BotChatTreeWorker } from './bot-chat-tree'
+import { botWorkspaceChats } from './bot-workspace-chats'
 
 /** A chat's own facts, before its workers are placed. */
 export type BotChatFacts = Omit<
@@ -42,6 +43,9 @@ export type BotChatTreeDispatch = {
   failed: boolean
   /** Settled: when; else when it started. */
   at: number
+  /** Settled with no completion time on record (an early failure writer left it out): `at` is then
+   *  when it was created, which orders it but dates nothing. */
+  undated?: true
   worktreeId: string | null
   /** Its Task's title, for search; absent when the host read none. */
   title?: string
@@ -212,6 +216,8 @@ export function botChatTreeDispatchWorker(
       state: dispatch.settled ? (dispatch.failed ? 'failed' : 'done') : 'running',
       startedAt: dispatch.at,
       ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
+      ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
+      ...(dispatch.worktreeId ? { placedWorktreeId: dispatch.worktreeId } : {}),
       ...(note ? { note } : {}),
       dispatchId: dispatch.id
     }
@@ -225,6 +231,7 @@ export function botChatTreeDispatchWorker(
     startedAt: worker.startedAt,
     // The list's own order and cursor read this time.
     ...(dispatch.settled ? { settledAt: dispatch.at } : {}),
+    ...(dispatch.settled && dispatch.undated ? { settledUndated: true as const } : {}),
     ...(worker.worktreeId ? { worktreeId: worker.worktreeId } : {}),
     ...(worker.paneKey ? { paneKey: worker.paneKey } : {}),
     ...(note ? { note } : {}),
@@ -298,38 +305,4 @@ export function buildBotChatTree(input: {
     chats,
     workspaceChats: botWorkspaceChats(input.placed, extras, home, input.homeWorkspaceIds)
   }
-}
-
-/** Each workspace under the chat of its newest Dispatch; one no Dispatch ran in sits under Home. */
-function botWorkspaceChats(
-  placed: readonly BotChatTreePlaced[],
-  extras: readonly BotChatTreeExtra[],
-  home: string,
-  homeWorkspaceIds: readonly string[] = []
-): Record<string, string> {
-  const newest = new Map<string, { chatId: string; at: number }>()
-  const consider = (worktreeId: string | null | undefined, chatId: string, at: number): void => {
-    const current = worktreeId ? newest.get(worktreeId) : undefined
-    if (worktreeId && (!current || current.at < at)) {
-      newest.set(worktreeId, { chatId, at })
-    }
-  }
-  for (const { dispatch, chatId } of placed) {
-    consider(dispatch.worktreeId, chatId, dispatch.at)
-  }
-  // A workspace a Dispatch ran in stays with that Dispatch's chat, whatever else works there later.
-  const placedWorktrees = new Set(newest.keys())
-  for (const extra of extras) {
-    if (!placedWorktrees.has(extra.worker.worktreeId ?? '')) {
-      consider(extra.worker.worktreeId, home, extra.at)
-    }
-  }
-  const map: Record<string, string> = {}
-  for (const worktreeId of homeWorkspaceIds) {
-    map[worktreeId] = home
-  }
-  for (const [worktreeId, { chatId }] of newest) {
-    map[worktreeId] = chatId
-  }
-  return map
 }
