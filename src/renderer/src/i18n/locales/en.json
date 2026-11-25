@@ -22903,18 +22903,8 @@
         "workflow": "Workflow",
         "monitor": "Monitor",
         "task": "Task",
-        "taskCount_one": "{{count}} task",
-        "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "commandCount_one": "{{count}} command",
-        "commandCount_other": "{{count}} commands",
-        "workflowCount_one": "{{count}} workflow",
-        "workflowCount_other": "{{count}} workflows",
-        "monitorCount_one": "{{count}} monitor",
-        "monitorCount_other": "{{count}} monitors",
-        "agentCount_one": "{{count}} agent",
-        "agentCount_other": "{{count}} agents",
         "stoppedByYou": "Stopped by you",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
@@ -22937,8 +22927,7 @@
         "unlistedDetail": "Some background work isn’t listed here",
         "unlisted": "Background work running",
         "unread": "Workers couldn’t load",
-        "unreadDetail": "Workers will show here once they load",
-        "ordinal": "{{kind}} {{number}}"
+        "unreadDetail": "Workers will show here once they load"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",

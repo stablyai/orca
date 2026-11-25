@@ -6,7 +6,7 @@ import { workerDockClearable } from '../../../../../../../shared/orchestration/d
 import { WorkerDockRow, workerDockRowTitle, type WorkerDockRowView } from './WorkerDockRow'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { cn } from '@/lib/class-names'
-import { workerDockSummary } from './worker-dock-summary'
+import { workerDockChipLabel, workerDockSummary } from './worker-dock-summary'
 import { workerDockEmptyCopy } from './worker-dock-labels'
 import { compareWorkerDockCardRows, workerDockGlyph } from './worker-dock-card-order'
 import {
@@ -98,7 +98,7 @@ export function WorkerDockRoster(props: {
     (row) => workerDockClearable(row) && props.pending.has(row.id)
   )
   const clearable = props.identities.filter(workerDockClearable).length
-  const { mixed, total, count, label } = workerDockSummary(
+  const { mixed, total, count, label, failures } = workerDockSummary(
     props.countIdentities ?? props.identities,
     props.rows,
     t
@@ -224,6 +224,11 @@ export function WorkerDockRoster(props: {
   if (!shown) {
     return null
   }
+  const chipLabel = workerDockChipLabel(t, {
+    summary: { total, failures, label },
+    rows: items.length,
+    empty: top ? null : workerDockEmptyCopy(t, unlisted).title
+  })
   return (
     <div
       ref={root}
@@ -244,18 +249,18 @@ export function WorkerDockRoster(props: {
         ref={card}
         data-worker-dock-card={props.expanded ? '' : undefined}
         className={cn(
-          'absolute bottom-0 left-3 flex flex-col sm:left-4 [[data-native-chat-dock-fit~=dock]_&]:static',
+          'absolute bottom-0 left-0 flex flex-col [[data-native-chat-dock-fit~=dock]_&]:static',
           props.expanded
-            ? cn(
-                WORKER_DOCK_SURFACE_CLASS,
-                'right-3 gap-1 rounded-[10px] p-1 shadow-floating sm:right-4'
-              )
-            : 'pointer-events-none max-w-[calc(100%-24px)] sm:max-w-[calc(100%-32px)]'
+            ? cn(WORKER_DOCK_SURFACE_CLASS, 'right-0 gap-1 rounded-[10px] p-1 shadow-floating')
+            : 'pointer-events-none max-w-full self-start'
         )}
-        onPointerEnter={hold}
+        onPointerEnter={props.expanded ? hold : undefined}
         onPointerLeave={release}
         onFocusCapture={(event) => {
-          hold()
+          // Only the open panel holds its order; the folded chip has none to keep still.
+          if (props.expanded) {
+            hold()
+          }
           const row =
             event.target instanceof Element
               ? event.target.closest<HTMLElement>('[data-worker-dock-row]')
@@ -291,7 +296,7 @@ export function WorkerDockRoster(props: {
                 ? 'running'
                 : 'queued'
           }
-          label={top ? label : workerDockEmptyCopy(t, unlisted).title}
+          label={chipLabel}
           latest={topRow ? workerDockRowTitle(topRow) : count}
           total={total}
           expanded={props.expanded}
@@ -372,7 +377,6 @@ export function WorkerDockRoster(props: {
                       {/* One component either way, so focus on a loading row survives its details arriving. */}
                       <WorkerDockRow
                         id={identity.id}
-                        ordinal={item.index + 1}
                         row={row}
                         mixed={mixed}
                         visible={props.visible}
@@ -402,7 +406,7 @@ export function WorkerDockRoster(props: {
         ) : null}
       </div>
       <span className="sr-only" role="status" aria-live="polite">
-        {count}
+        {count || chipLabel}
       </span>
     </div>
   )

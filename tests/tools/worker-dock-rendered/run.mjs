@@ -183,7 +183,7 @@ for (const [width, sceneName] of [
       () =>
         scene(sceneName, { width, height }, async (page) => {
           const first = await scrollState(page)
-          assert(first.client <= 6 * 44 + 1, `list is ${first.client}px, more than six rows`)
+          assert(first.client <= 6 * 40 + 1, `list is ${first.client}px, more than six rows`)
           assert(first.height > first.client, `nothing to scroll: ${JSON.stringify(first)}`)
           const box = await region(page).boundingBox()
           await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
@@ -319,10 +319,15 @@ await check('the open panel replaces the chip, spans the message box, and titles
     const header = await toggle(page).boundingBox()
     assert(header.y >= box.y && header.y + header.height <= box.y + 40, 'header is not on top')
     await page.mouse.move(1, 1)
+    // Every title shows whole: none is clamped short of its own height or narrower than its row.
     const cut = await page.evaluate(() =>
-      [...document.querySelectorAll('[data-worker-dock-open] .line-clamp-3')].some(
-        (title) => title.scrollWidth > title.clientWidth + 1
-      )
+      [...document.querySelectorAll('[data-worker-dock-open] .line-clamp-3')].some((title) => {
+        const row = title.closest('[data-worker-dock-row]').getBoundingClientRect()
+        return (
+          title.scrollHeight > title.clientHeight + 1 ||
+          title.getBoundingClientRect().width < row.width / 2
+        )
+      })
     )
     assert(!cut, 'a title is cut')
   })
@@ -504,13 +509,15 @@ await check('Show in dock again restores the acknowledged failure', () =>
 
 await runLoadingAndLayerChecks({ check, scene, assert, shot })
 
-await check('Jump to latest stacks 8px above the pill and never overlaps it', () =>
+await check('Jump to latest rests in the transcript, clear above the chip row', () =>
   scene('jumpFolded720', {}, async (page) => {
     const jump = page.getByRole('button', { name: 'Jump to latest' })
     await jump.waitFor()
     const [a, b] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
     const gap = b.y - (a.y + a.height)
-    assert(Math.abs(gap - 8) <= 1, `Jump to latest sits ${gap}px above the pill`)
+    assert(gap >= 8, `Jump to latest sits ${gap}px above the pill`)
+    const transcript = await page.locator('[data-fixture-transcript]').boundingBox()
+    assert(b.y >= transcript.y + transcript.height, 'the chip is drawn over the transcript')
     await shot(page, 'jump-stacked')
   })
 )

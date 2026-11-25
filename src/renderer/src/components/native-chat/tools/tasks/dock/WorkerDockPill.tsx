@@ -8,20 +8,17 @@ import {
 } from 'react'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { cn } from '@/lib/class-names'
-import { ChevronDown } from 'lucide-react'
+import { ChevronUp } from 'lucide-react'
 import { WorkerDockGlyph } from './WorkerDockGlyph'
 import type { WorkerDockGlyph as Glyph } from './worker-dock-card-order'
 
-/** The chip's height (26px) plus 8px: the room the transcript keeps clear at its end, and where Jump
- *  to latest rests so it stacks 8px above the chip. The chip sits on the dock's top edge, which the
- *  next box (message box, question, queue) already pads by 8px. */
-const PILL_ROOM = '34px'
-
-// Where Jump to latest rests: over the chip, or over the open panel, never under either.
+// Where Jump to latest rests while the open panel rises over the transcript: 8px above it.
 const JUMP_LIFT = '--native-chat-worker-jump-lift'
 
+// The chip's own row at the dock's top, so it never covers transcript text; the open panel rises
+// from it over the transcript.
 export const WORKER_DOCK_FLOAT_CLASS =
-  'pointer-events-none absolute inset-x-0 bottom-full z-20 h-0 [[data-native-chat-dock-fit~=dock]_&]:static [[data-native-chat-dock-fit~=dock]_&]:flex [[data-native-chat-dock-fit~=dock]_&]:h-auto [[data-native-chat-dock-fit~=dock]_&]:flex-col [[data-native-chat-dock-fit~=dock]_&]:pt-2'
+  'pointer-events-none relative z-20 flex h-[26px] shrink-0 flex-col [&:not(:last-child)]:mb-2 [[data-native-chat-dock-fit~=dock]_&]:h-auto'
 // Raised over the transcript, opaque even when the chat's message-box surface is translucent.
 export const WORKER_DOCK_SURFACE_CLASS =
   'pointer-events-auto border border-border bg-chat-canvas bg-[linear-gradient(var(--color-chat-composer-surface),var(--color-chat-composer-surface))] text-foreground [[data-native-chat-dock-fit~=dock]_&]:static'
@@ -54,19 +51,6 @@ export function WorkerDockPill({
   onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void
 }) {
   const t = useTranslate()
-  // Only while the chip shows does the transcript reserve its room and Jump to latest lift over it.
-  useLayoutEffect(() => {
-    const pane = pill.current?.closest<HTMLElement>('[data-native-chat-root]')
-    if (!pane) {
-      return
-    }
-    pane.style.setProperty('--native-chat-worker-pill-room', PILL_ROOM)
-    pane.style.setProperty(JUMP_LIFT, PILL_ROOM)
-    return () => {
-      pane.style.removeProperty('--native-chat-worker-pill-room')
-      pane.style.removeProperty(JUMP_LIFT)
-    }
-  }, [pill])
   // One wrapper either way, so the button keeps its place (and focus) as the chip becomes the header.
   return (
     <div
@@ -99,7 +83,7 @@ export function WorkerDockPill({
             ? 'h-full min-w-0 flex-1 rounded-md px-2.5 hover:bg-accent'
             : cn(
                 WORKER_DOCK_SURFACE_CLASS,
-                'h-[26px] max-w-full rounded-full px-2.5 shadow-sm hover:bg-accent'
+                'h-[26px] w-fit max-w-full self-start rounded-full px-2.5 shadow-sm hover:bg-accent'
               )
         )}
         onClick={onToggle}
@@ -111,7 +95,7 @@ export function WorkerDockPill({
               {t('components.native-chat.workerDock.workersRegion', 'Workers')}
             </span>
             {total > 0 ? <span className="tabular-nums text-muted-foreground">{total}</span> : null}
-            <ChevronDown aria-hidden="true" className="ml-auto size-3.5 text-muted-foreground" />
+            <ChevronUp aria-hidden="true" className="size-3 shrink-0 text-muted-foreground" />
           </>
         ) : (
           <>
@@ -168,19 +152,22 @@ export function useWorkerDockJumpLift(card: RefObject<HTMLElement | null>, open:
   useLayoutEffect(() => {
     const element = card.current
     const pane = element?.closest<HTMLElement>('[data-native-chat-root]')
-    if (!open || !element || !pane || typeof ResizeObserver === 'undefined') {
+    const dock = element?.closest<HTMLElement>('[data-native-chat-dock]')
+    if (!open || !element || !pane || !dock || typeof ResizeObserver === 'undefined') {
       return
     }
-    const lift = () => pane.style.setProperty(JUMP_LIFT, `${element.offsetHeight + 8}px`)
+    // The transcript, where Jump rests, ends at the dock's top; the panel rises past it.
+    const lift = () =>
+      pane.style.setProperty(
+        JUMP_LIFT,
+        `${dock.getBoundingClientRect().top - element.getBoundingClientRect().top + 8}px`
+      )
     const observer = new ResizeObserver(lift)
     observer.observe(element)
     lift()
     return () => {
       observer.disconnect()
-      // Back over the chip, unless the chip already left and cleared both.
-      if (pane.style.getPropertyValue('--native-chat-worker-pill-room')) {
-        pane.style.setProperty(JUMP_LIFT, PILL_ROOM)
-      }
+      pane.style.removeProperty(JUMP_LIFT)
     }
   }, [card, open])
 }

@@ -14,7 +14,7 @@ const titles = [
   'Fix app rail spacing',
   'Review PR #47379 and summarize what still blocks it'
 ]
-const rows: WorkerDockRowView[] = titles.map((title, index) => ({
+const running: WorkerDockRowView[] = titles.map((title, index) => ({
   kind: 'worker',
   id: `stack:${index}`,
   dispatchId: `ctx_stack_${index}`,
@@ -32,7 +32,24 @@ const rows: WorkerDockRowView[] = titles.map((title, index) => ({
   ownerActionsAvailable: true
 }))
 
-function Tray({ open }: { open: boolean }) {
+const fail = (row: WorkerDockRowView, index: number): WorkerDockRowView => ({
+  ...row,
+  id: `stack:failed:${index}`,
+  dispatchId: `ctx_stack_failed_${index}`,
+  state: 'failed',
+  reason: 'Typecheck failed',
+  settlement: `settled:${index}`,
+  resultId: `result:${index}`,
+  stoppable: false
+})
+const failedOnly = running.slice(0, 2).map(fail)
+const mixed = [...running, ...failedOnly]
+const many = Array.from({ length: 20 }, (_, index) => {
+  const row = { ...running[index % 3], id: `stack:${index}`, dispatchId: `ctx_stack_${index}` }
+  return index < 3 ? fail(row, index) : row
+})
+
+function Tray({ open, rows }: { open: boolean; rows: readonly WorkerDockRowView[] }) {
   return (
     <NativeChatBackgroundTasksStatus
       sessionId={SOURCE}
@@ -104,11 +121,11 @@ const scrollAway = async () => {
   await new Promise((resolve) => setTimeout(resolve, 300))
 }
 
-function stack(width: number, open: boolean, prompt = false) {
+function stack(width: number, open: boolean, prompt = false, rows = running) {
   return defineFixture({
     width,
     render: () =>
-      workerDockFixturePane(<Tray open={open} />, prompt ? 'both' : 'queue', {
+      workerDockFixturePane(<Tray open={open} rows={rows} />, prompt ? 'both' : 'queue', {
         goal,
         find: <FindBar />,
         queued: 2,
@@ -125,3 +142,9 @@ export const promptOpen320 = stack(320, true, true)
 export const folded720 = stack(720, false)
 export const open720 = stack(720, true)
 export const open1000 = stack(1000, true)
+export const failedFolded320 = stack(320, false, false, failedOnly)
+export const failedOpen320 = stack(320, true, false, failedOnly)
+export const mixedFolded320 = stack(320, false, false, mixed)
+export const mixedOpen320 = stack(320, true, false, mixed)
+export const manyFolded390 = stack(390, false, false, many)
+export const manyOpen390 = stack(390, true, false, many)

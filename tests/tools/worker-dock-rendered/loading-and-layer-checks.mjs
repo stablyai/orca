@@ -18,6 +18,25 @@ const loaded = (page, id) =>
   }, rowOf(id))
 
 export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
+  for (const fit of ['', 'dock']) {
+    await check(`the folded chip hugs its label${fit ? ` (dock fit ${fit})` : ''}`, () =>
+      scene('threeFolded720', {}, async (page) => {
+        if (fit) {
+          await page
+            .locator('[data-native-chat-root]')
+            .evaluate((root, value) => root.setAttribute('data-native-chat-dock-fit', value), fit)
+          await page.waitForTimeout(100)
+        }
+        const width = await toggle(page).evaluate((chip) => {
+          const label = chip.querySelector('[data-worker-dock-pill-title]')
+          return chip.getBoundingClientRect().width - label.getBoundingClientRect().width
+        })
+        // Glyph, gap, padding and border only.
+        assert(width <= 44, `the chip is ${width}px wider than its label`)
+      })
+    )
+  }
+
   await check('incomplete monitoring with no listed rows keeps the pill and Stop all', () =>
     scene('unlistedOpen720', {}, async (page) => {
       const title = await toggle(page).getAttribute('aria-label')
@@ -129,7 +148,7 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         await toggle(page).click()
         await page.waitForTimeout(200)
         const [b, p] = await Promise.all([jump.boundingBox(), toggle(page).boundingBox()])
-        assert(Math.abs(p.y - (b.y + b.height) - 8) <= 1, 'Jump did not settle back over the pill')
+        assert(p.y - (b.y + b.height) >= 8, 'Jump did not settle back clear of the chip')
         await jump.click()
         await page.waitForTimeout(200)
         const atEnd = await page.evaluate(() => {
@@ -215,12 +234,6 @@ export async function runLoadingAndLayerChecks({ check, scene, assert, shot }) {
         await card(page).waitFor()
         await page.waitForTimeout(200)
         const jump = page.getByRole('button', { name: 'Jump to latest' })
-        // A pane too short for the panel and Jump both: Jump steps aside until the panel folds.
-        if (!(await jump.isVisible())) {
-          await toggle(page).click()
-          await card(page).waitFor({ state: 'detached' })
-          await page.waitForTimeout(200)
-        }
         const box = await jump.boundingBox()
         assert(box.y >= 0, `Jump to latest is off the pane at y=${box.y}`)
         await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2)

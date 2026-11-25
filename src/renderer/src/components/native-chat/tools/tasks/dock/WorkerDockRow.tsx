@@ -36,13 +36,12 @@ function Age({ at, visible }: { at: number | null; visible: boolean }) {
   )
 }
 
-/** One panel row: status mark, "Worker N" and the full title, then model and time; on hover or
+/** One panel row: status mark and the full title, then model and time; on hover or
  *  focus Stop or Clear cover the row's end.
  *  The open button stretches over the whole row, so a press anywhere but the action opens it. A row
  *  whose details have not arrived yet keeps the same button, so focus on it survives their arrival. */
 export const WorkerDockRow = memo(function WorkerDockRow({
   id,
-  ordinal,
   row,
   mixed,
   visible,
@@ -52,8 +51,6 @@ export const WorkerDockRow = memo(function WorkerDockRow({
 }: {
   /** The identity's id, for a row whose details are still loading. */
   id?: string
-  /** The row's place in the panel, 1-based: "Worker 3". */
-  ordinal?: number
   row: WorkerDockRowView | undefined
   mixed: boolean
   visible: boolean
@@ -107,7 +104,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
         aria-label={label}
         aria-disabled={row ? undefined : true}
         title={tooltip}
-        className="flex min-w-0 flex-1 items-start gap-2 py-1 pl-2 text-left text-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
+        className="flex min-w-0 flex-1 items-start gap-2 py-0.5 pl-2 text-left text-sm after:absolute after:inset-0 after:rounded-md focus-visible:outline-none focus-visible:after:ring-2 focus-visible:after:ring-inset focus-visible:after:ring-ring aria-disabled:text-muted-foreground"
         onClick={(event) => {
           if (row) {
             onOpen(row, event.currentTarget)
@@ -118,17 +115,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           <WorkerDockGlyph glyph={row ? workerDockGlyph(row) : 'queued'} />
         </span>
         <span className="flex min-w-0 flex-1 flex-col">
-          <span className="line-clamp-3 break-words">
-            {ordinal ? (
-              <span className="text-muted-foreground">
-                {t('components.native-chat.workerDock.ordinal', '{{kind}} {{number}}', {
-                  kind: workerDockKindLabel(t, row?.kind ?? 'worker'),
-                  number: ordinal
-                })}{' '}
-              </span>
-            ) : null}
-            {title}
-          </span>
+          <span className="line-clamp-3 break-words">{title}</span>
           {row && (row.model || row.changedAt !== null) ? (
             <span className="truncate text-xs text-muted-foreground">
               {row.model}

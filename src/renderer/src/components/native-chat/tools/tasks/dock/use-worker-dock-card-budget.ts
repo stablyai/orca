@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState, type RefObject } from 'react'
 
 // A row's resting height: a one-line title over its model and age.
-export const WORKER_DOCK_ROW = 44
+export const WORKER_DOCK_ROW = 40
 const MAX_ROWS = 6
 // Jump to latest (32px) and its 8px gap ride above the open panel, so the panel leaves them room.
 const JUMP_ROOM = 40
@@ -38,7 +38,9 @@ export function useWorkerDockCardBudget({
         return
       }
       // Besides the list: the panel's header, padding, gaps and border, then Jump to latest's room and 8px of air.
-      const room = bottom - paneTop - header - 14 - (footer?.offsetHeight ?? 0) - JUMP_ROOM - 8
+      // The footer brings the panel's 4px gap and its own 4px top margin.
+      const room =
+        bottom - paneTop - header - 14 - (footer ? footer.offsetHeight + 8 : 0) - JUMP_ROOM - 8
       setBudget(Math.max(WORKER_DOCK_ROW, Math.min(WORKER_DOCK_ROW * MAX_ROWS, room)))
       // Too short for one row and Jump to latest even without the air: Jump steps aside while the card is open
       // (hidden, so nothing half off the pane can be pressed) and returns when it folds.
