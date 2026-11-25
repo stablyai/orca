@@ -13,7 +13,7 @@ import {
 } from '../../../../shared/repository/appearance/repo-badge-color'
 import { RepoIconGlyph } from './repo-icon'
 
-type RepoMarkRepo = Pick<
+export type RepoMarkRepo = Pick<
   Repo,
   'id' | 'badgeColor' | 'repoIcon' | 'addedAt' | 'executionHostId' | 'connectionId' | 'displayName'
 >
@@ -72,8 +72,8 @@ function glyphTileStyle(color: string): React.CSSProperties {
 
 const MARK_SIZES = {
   // Why: emoji glyphs scale with font size (0.9em), so the text size pins them to the icon box.
-  sm: { box: 'size-[18px] rounded-[4px] text-xs', icon: 'size-3.5' },
-  md: { box: 'size-[18px] rounded-[4px] text-[13px]', icon: 'size-4' }
+  sm: { box: 'size-4 rounded-[4px] text-xs', icon: 'size-3.5' },
+  md: { box: 'size-4 rounded-[4px] text-xs', icon: 'size-3.5' }
 } as const
 
 export function RepoMarkView({

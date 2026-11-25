@@ -11,6 +11,9 @@ import {
 } from './worker-terminal-resource-presentation'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
+import { sleepChatWorkerForRelease } from './chat-worker-release-sleep'
+import { releaseStructuredWorkerSession } from '../../structured-workers/orchestration-structured-worker-session'
+import type { StructuredAgentSessionCloseWork } from '../../../../../../native-chat/agent-session-wire/termination/structured-agent-session-close-work'
 
 /** Use host settlement to prove structured close; unproven closes remain release_unknown. Retry with a fresh request id because replay returns the old receipt. */
 export async function stopStructuredWorkerForRelease(args: {
@@ -24,36 +27,18 @@ export async function stopStructuredWorkerForRelease(args: {
 }): Promise<WorkerReleaseReceipt> {
   const { structured, dispatchId, resource, runtime, db } = args
   // Only an automatic release can be refused; an explicit one keeps cutting through a hung start.
-  const stop = await stopStructuredWorker(
-    structured,
-    runtime,
-    resource.auto_release_at
-      ? (work) => {
-          const current = db.getWorkerTerminalResource(resource.id)
-          if (
-            current?.owner_dispatch_id !== resource.owner_dispatch_id ||
-            current.terminal_handle !== structured.handle ||
-            current.pane_key !== structured.paneKey ||
-            current.process_incarnation !== structured.processIncarnation
-          ) {
-            return false
-          }
-          const sameSubject = (() => {
-            try {
-              return requireRunningStructuredWorker(structured).sessionId === work.sessionId
-            } catch {
-              return false
-            }
-          })()
-          const admitted = db.admitWorkerChatReleaseClose(
-            resource.id,
-            () => !sameSubject || work.state !== 'idle',
-            !sameSubject || work.state === 'unknown'
-          )
-          return sameSubject && admitted
-        }
-      : undefined
-  )
+  const admitClose = resource.auto_release_at ? automaticReleaseAdmission(args) : undefined
+  const slept = await sleepChatWorkerForRelease({ ...args, admitClose })
+  if (slept === 'slept') {
+    // Sleep's receipt proves the stop; the chat stays, so only the binding and parked mail go.
+    releaseStructuredWorkerSession(structured.sessionId, runtime)
+    return settleStructuredRelease(args)
+  }
+  // Once Sleep has judged the admission, it is spent: a close now would skip the turn check.
+  const stop =
+    slept === 'not_applicable'
+      ? await stopStructuredWorker(structured, runtime, admitClose)
+      : { stopped: false, closeAttempted: slept === 'unproven' }
   if (!stop.stopped) {
     const current = db.getWorkerTerminalResource(resource.id)
     if (current?.owner_dispatch_id !== dispatchId || current.release_state !== 'releasing') {
@@ -77,6 +62,49 @@ export async function stopStructuredWorkerForRelease(args: {
       recovery: releaseUnknownRecovery(dispatchId)
     }
   }
+  return settleStructuredRelease(args)
+}
+
+/** An automatic release's last word in the session lane: still this worker's row and chat, and resting. */
+function automaticReleaseAdmission(args: {
+  structured: StructuredWorkerIdentity
+  resource: WorkerTerminalResourceRow
+  db: OrchestrationDb
+}): (work: StructuredAgentSessionCloseWork) => boolean {
+  const { structured, resource, db } = args
+  return (work) => {
+    const current = db.getWorkerTerminalResource(resource.id)
+    if (
+      current?.owner_dispatch_id !== resource.owner_dispatch_id ||
+      current.terminal_handle !== structured.handle ||
+      current.pane_key !== structured.paneKey ||
+      current.process_incarnation !== structured.processIncarnation
+    ) {
+      return false
+    }
+    const sameSubject = (() => {
+      try {
+        return requireRunningStructuredWorker(structured).sessionId === work.sessionId
+      } catch {
+        return false
+      }
+    })()
+    const admitted = db.admitWorkerChatReleaseClose(
+      resource.id,
+      () => !sameSubject || work.state !== 'idle',
+      !sameSubject || work.state === 'unknown'
+    )
+    return sameSubject && admitted
+  }
+}
+
+function settleStructuredRelease(args: {
+  dispatchId: string
+  resource: WorkerTerminalResourceRow
+  runtime: WorkerTerminalReleaseRuntime
+  db: OrchestrationDb
+}): WorkerReleaseReceipt {
+  const { dispatchId, resource, runtime, db } = args
   const settled = db.settleWorkerTerminalRelease(resource.id, dispatchId)
   if (settled.owner_dispatch_id !== dispatchId || settled.release_state !== 'released') {
     return receiptForUnchangedRelease(dispatchId, settled, 'closed_agent_terminal')

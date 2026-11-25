@@ -16,6 +16,11 @@ import {
   reorderTabInGroup
 } from '../../../runtime/workspace-layout/commands/tab-group-layout-owner-commands'
 import { moveTabToGroup } from '../../tab-bar/pane-actions/tab-move-to-pane-column'
+import { displayedTabOrder } from '../../bots/bot-home-tab-order'
+import {
+  reorderWithinDisplayedOrder,
+  storedIndexForDisplayedDrop
+} from './tab-drop-displayed-order'
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -115,16 +120,23 @@ export function commitTabDragDrop({
       return
     }
 
-    const overIndex = targetGroup.tabOrder.indexOf(overData.unifiedTabId)
-    const rawInsertIndex = overIndex + (insertion.side === 'right' ? 1 : 0)
+    // The bar draws a bot's Home first wherever it is stored, so the drop index follows what is drawn.
+    const displayedOrder = displayedTabOrder(
+      targetGroup.tabOrder,
+      (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
+        (tab) => tab.groupId === targetGroup.id
+      ),
+      worktreeId
+    )
 
     if (activeData.groupId === overData.groupId) {
-      const oldIndex = targetGroup.tabOrder.indexOf(activeData.unifiedTabId)
-      // Adjust forward insertion after removing the source tab so the target slot does not shift left.
-      const nextIndex = oldIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex
-      if (oldIndex !== -1 && oldIndex !== nextIndex) {
-        const nextOrder = targetGroup.tabOrder.filter((id) => id !== activeData.unifiedTabId)
-        nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
+      const nextOrder = reorderWithinDisplayedOrder(
+        displayedOrder,
+        activeData.unifiedTabId,
+        overData.unifiedTabId,
+        insertion.side
+      )
+      if (nextOrder) {
         if (
           reorderTabInGroup(worktreeId, {
             kind: 'reorder',
@@ -143,7 +155,12 @@ export function commitTabDragDrop({
           worktreeId,
           unifiedTabId: activeData.unifiedTabId,
           groupId: overData.groupId,
-          index: overIndex === -1 ? targetGroup.tabOrder.length : rawInsertIndex
+          index: storedIndexForDisplayedDrop(
+            targetGroup.tabOrder,
+            displayedOrder,
+            overData.unifiedTabId,
+            insertion.side
+          )
         },
         dropUnifiedTab
       )

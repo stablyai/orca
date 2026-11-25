@@ -203,6 +203,8 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
           accountEnv: request.accountEnv,
           terminalImageViewerSupported: caller.terminalImageViewerSupported,
           terminalKittyKeyboardProtocol: request.terminalKittyKeyboardProtocol,
+          terminalColorQueryReplies: request.terminalColorQueryReplies,
+          terminalViewAttributes: request.terminalViewAttributes,
           cwd: startupCwd,
           ...(request.trustWorktreeId ? { trustWorktreeId: request.trustWorktreeId } : {}),
           presentation: request.presentation ?? 'background',

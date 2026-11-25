@@ -20,11 +20,15 @@ const mocks = vi.hoisted(() => {
     distro: string | null
     watchers: Watcher[]
     callRuntimeRpc: Mock
+    readUsageForRuntimeTarget: Mock
+    settings: unknown
   } = {
     owner: { kind: 'local' },
     distro: null,
     watchers: [],
-    callRuntimeRpc: vi.fn()
+    callRuntimeRpc: vi.fn(),
+    readUsageForRuntimeTarget: vi.fn(),
+    settings: null
   }
   return state
 })
@@ -47,9 +51,12 @@ vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-clie
     }
   }
 }))
+vi.mock('@/attention/orca-window-foreground-focus', () => ({
+  isOrcaWindowForegroundFocused: () => true
+}))
 vi.mock('../../../store/index', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
-    selector({ settings: null, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
+    selector({ settings: mocks.settings, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
 }))
 
 const { useOwnerUsageRateLimits } = await import('./use-owner-usage-rate-limits')
@@ -82,6 +89,11 @@ describe('useOwnerUsageRateLimits', () => {
     mocks.distro = null
     mocks.watchers.length = 0
     mocks.callRuntimeRpc.mockReset()
+    mocks.readUsageForRuntimeTarget.mockReset().mockReturnValue(new Promise(() => {}))
+    mocks.settings = null
+    Object.assign(window, {
+      api: { rateLimits: { readUsageForRuntimeTarget: mocks.readUsageForRuntimeTarget } }
+    })
   })
   afterEach(() => cleanup())
 
@@ -159,32 +171,6 @@ describe('useOwnerUsageRateLimits', () => {
     expect(result.current.rateLimits.claude?.session).toBeNull()
     expect(result.current.remoteOwner?.environmentId).toBeNull()
     await result.current.refreshRemote?.()
-    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
-    expect(mocks.watchers).toEqual([])
-  })
-
-  it('withholds every WSL quota across refreshes, settings updates and owner changes', async () => {
-    mocks.owner = { kind: 'local' }
-    const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
-    expect(result.current.rateLimits).toBe(local)
-    mocks.distro = 'Ubuntu'
-    rerender()
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-    expect(result.current.rateLimits.codex?.session).toBeNull()
-    expect(result.current.rateLimits.inactiveClaudeAccounts).toEqual([])
-    expect(result.current.rateLimits.inactiveCodexAccounts).toEqual([])
-    await act(async () => {
-      await result.current.refreshRemote?.()
-    })
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-    rerender()
-    expect(result.current.rateLimits.claude?.session).toBeNull()
-    mocks.distro = 'Debian'
-    rerender()
-    expect(result.current.rateLimits.codex?.session).toBeNull()
-    mocks.distro = null
-    rerender()
-    expect(result.current.rateLimits).toBe(local)
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
     expect(mocks.watchers).toEqual([])
   })

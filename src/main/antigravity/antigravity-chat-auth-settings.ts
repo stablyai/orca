@@ -63,7 +63,8 @@ export function applyAntigravityChatAuthConfig(
         }
         throw error
       }
-      antigravityChatSignIn.set({ auth: 'unknown', flow: null })
+      // agy's login and any sign-in under way are agy's, not the method's; surfaces just re-read.
+      antigravityChatSignIn.set({ ...antigravityChatSignIn.get().value })
       agentModelCatalogStore.expireAgent('antigravity')
       return next
     })
