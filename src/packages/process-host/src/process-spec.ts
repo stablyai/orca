@@ -44,6 +44,12 @@ export type ProcessSpec = {
 export type LaunchedProcess = {
   child: ChildProcess
   withdrawPendingLaunch: () => void
+  /** When the launcher owns a POSIX process group on another thread, runProcess delegates stop/close here. */
+  ownedGroup?: {
+    stop: () => Promise<boolean>
+    close: () => void
+    onTerminated: (listener: () => void) => void
+  }
 }
 
 export type PipedProcessSpec = Omit<ProcessSpec, 'stdio'> & {

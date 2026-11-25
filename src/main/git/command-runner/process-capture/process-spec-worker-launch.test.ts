@@ -11,9 +11,11 @@ import { launchPlainProcessSpecOnPosixWorker } from './process-spec-worker-launc
 const workerMock: {
   readyNow: boolean
   host: WorkerThreadChildProcessHost | null
+  lastChild: { exitCode: number | null } | null
 } = vi.hoisted(() => ({
   readyNow: false,
-  host: null
+  host: null,
+  lastChild: null
 }))
 
 vi.mock(
@@ -29,7 +31,8 @@ vi.mock(
         if (!workerMock.host) {
           throw new Error('Test worker host not initialized')
         }
-        return workerMock.host.spawn(spec)
+        workerMock.lastChild = workerMock.host.spawn(spec)
+        return workerMock.lastChild
       }
     }
   }
@@ -89,7 +92,16 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
     expect(
       launchPlainProcessSpecOnPosixWorker({
         program: process.execPath,
-        terminationBarrier: true
+        terminationBarrier: 'wait-for-posix-group'
+      })
+    ).toBeNull()
+    expect(
+      launchPlainProcessSpecOnPosixWorker({
+        program: process.execPath,
+        terminationBarrier: {
+          signal: async () => true,
+          force: async () => true
+        }
       })
     ).toBeNull()
     expect(
@@ -104,6 +116,61 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
         detached: true
       })
     ).toBeNull()
+  })
+
+  it('runs terminationBarrier: true on the worker and kills its POSIX process group on abort', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    const abort = new AbortController()
+    let stderrBuf = ''
+    const result = await runProcess({
+      program: process.execPath,
+      args: [
+        '-e',
+        'const { spawn } = require("node:child_process"); const g = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" }); process.stderr.write(g.pid + "\\n"); setInterval(() => {}, 1000)'
+      ],
+      terminationBarrier: true,
+      signal: abort.signal,
+      onStderr: (chunk) => {
+        stderrBuf += chunk.toString()
+        if (stderrBuf.includes('\n')) {
+          abort.abort()
+        }
+      },
+      timeoutMs: 10_000
+    })
+
+    const grandchildPid = Number(stderrBuf.trim())
+    expect(Number.isInteger(grandchildPid) && grandchildPid > 1).toBe(true)
+    expect(result.timedOut).toBe(false)
+    // The worker's POSIX process-group stop must have killed the grandchild too.
+    expect(() => process.kill(grandchildPid, 0)).toThrow()
+  })
+
+  it('stops an overflowing terminationBarrier: true probe on the worker (readAgentCliVersion shape)', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    const result = await runProcess({
+      program: process.execPath,
+      args: ['-e', 'process.stdout.write("x".repeat(8192)); setInterval(() => {}, 1000)'],
+      terminationBarrier: true,
+      maxOutputBytes: 64,
+      killOnOutputLimit: true,
+      timeoutMs: 5_000
+    })
+
+    expect(result).toMatchObject({ outputTruncated: true, timedOut: false })
+    expect(result.stdout.length).toBe(64)
   })
 
   it('preserves tail capture past maxOutputBytes on the worker', async () => {
@@ -177,6 +244,47 @@ describe.skipIf(process.platform === 'win32')('launchPlainProcessSpecOnPosixWork
     await expect(run).rejects.toMatchObject({ code: 'ERR_ORCA_WORKER_CHILD_ABANDONED' })
     expect(pid).toBeGreaterThan(1)
     await vi.waitFor(() => expect(() => process.kill(pid, 0)).toThrow(), { timeout: 5_000 })
+  })
+
+  it('leaves the group of an already-exited barrier root alone when its worker is lost', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
+    let pids: number[] = []
+    const run = runProcess({
+      program: process.execPath,
+      // The root exits at once; the helper it leaves behind keeps the output pipes open, so no close follows.
+      args: [
+        '-e',
+        'const helper = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "inherit" }); process.stderr.write(process.pid + " " + helper.pid); process.exit(0)'
+      ],
+      terminationBarrier: true,
+      onStderr: (chunk) => {
+        pids = chunk.toString().split(' ').map(Number)
+      },
+      timeoutMs: 30_000
+    })
+    const settled = run.then(
+      () => 'resolved',
+      (error: NodeJS.ErrnoException) => error.code
+    )
+    await vi.waitFor(() => expect(pids).toHaveLength(2), { timeout: 5_000 })
+    const [rootPid, helperPid] = pids
+    const kill = vi.spyOn(process, 'kill')
+    try {
+      await vi.waitFor(() => expect(workerMock.lastChild?.exitCode).toBe(0), { timeout: 5_000 })
+      setup.loseWorker()
+
+      expect(await settled).toBe('ERR_ORCA_WORKER_CHILD_ABANDONED')
+      expect(kill).not.toHaveBeenCalledWith(-rootPid, 'SIGKILL')
+    } finally {
+      kill.mockRestore()
+      process.kill(helperPid, 'SIGKILL')
+    }
   })
 
   it('gives spec.launch precedence over the default launcher even when it returns null', async () => {

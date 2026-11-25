@@ -47,3 +47,12 @@ export function launchWithDefaultProcessLauncher(
     ? spec.launch(spec, outputCapture)
     : (defaultLauncher?.(spec, outputCapture) ?? null)
 }
+
+/** Best-effort root termination; tree termination is handled separately. */
+export function terminateChild(child: ChildProcess, signal?: NodeJS.Signals): void {
+  try {
+    child.kill(signal)
+  } catch {
+    /* already gone */
+  }
+}
