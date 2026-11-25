@@ -2,6 +2,7 @@ import { emitAutomationsChangedWindowEvent } from '@/components/automations/even
 import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import type { RuntimeClientEvent } from '../../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
+import { emitMcpServersChangedWindowEvent } from '@/lib/mcp-servers-changed-window-event'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** Re-emits a server's events that renderer pages listen for as window events; true when handled. */
@@ -20,6 +21,10 @@ export function emitRuntimeClientWindowEvent(
   }
   if (event.type === 'peerMailReturned') {
     emitPeerMailReturnedWindowEvent(toRuntimeExecutionHostId(environmentId))
+    return true
+  }
+  if (event.type === 'mcpServersChanged') {
+    emitMcpServersChangedWindowEvent(toRuntimeExecutionHostId(environmentId))
     return true
   }
   if (event.type === 'workspaceCleanupRunFinished') {

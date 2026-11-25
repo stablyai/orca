@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
 export const WorkerDockSource = z.object({ party: CrewParty })

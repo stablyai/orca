@@ -27,6 +27,7 @@ import {
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { getActiveTabIdForHandle } from './terminal-tab-selection'
+import { rememberClosingTerminalHandles } from './closing-terminal-tab-handles'
 import { resolveActiveSessionTab } from './active-session-tab'
 import {
   activateMobileSessionTab,
@@ -55,6 +56,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     appliedSnapshotMarkerRef,
     appliedSessionTabsRevisionRef,
     closedTabTombstonesRef,
+    closingTerminalTabsRef,
     setTerminalsLoaded,
     setActiveHandle,
     setActiveSessionTabId,
@@ -152,6 +154,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
       initialSessionAutoCreateRef.current.sawSessionTabs ||= nextTabs.length > 0
       const terminalRows = followTerminalRows(terminalRowHandlesRef.current, nextTabs)
       terminalRowHandlesRef.current = terminalRows.handles
+      rememberClosingTerminalHandles(closingTerminalTabsRef.current, terminalRows.handles)
       if (terminalRows.replaced.size > 0) {
         setSplitTerminalHandles((pair) => withReplacedTerminalHandles(pair, terminalRows.replaced))
       }
@@ -288,9 +291,7 @@ export function useMobileSessionTabApplication(scope: MobileSessionTerminalListM
     },
     [hostId, worktreeId, subscribeToTerminal, unsubscribeTerminal, setSplitTerminalHandles]
   )
-  return {
-    applySessionTabs
-  }
+  return { applySessionTabs }
 }
 
 export type MobileSessionTabApplicationModel = MobileSessionTerminalListModel &

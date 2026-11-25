@@ -3,7 +3,7 @@ import {
   getDaemonHistoryDir as getHistoryDir,
   probeDaemonSocket as probeSocket
 } from '../../launch/daemon-launch-paths'
-import { legacyDaemonProcessMayBeAlive } from '../../launch/daemon-legacy-process-liveness'
+import { legacyDaemonMayStillRun } from '../../launch/daemon-legacy-process-liveness'
 import { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import {
   getDaemonPidPath,
@@ -23,7 +23,8 @@ export async function createLegacyDaemonAdapters(
     const tokenPath = getDaemonTokenPath(runtimeDir, protocolVersion)
     if (!(await probeSocket(socketPath))) {
       // Keep records when the PID probe succeeds: a transient socket failure must not orphan live sessions.
-      if (!legacyDaemonProcessMayBeAlive(runtimeDir, protocolVersion)) {
+      // Keep unreadable ones too: they are exit proof's only sign that this generation may still run.
+      if (!(await legacyDaemonMayStillRun(runtimeDir, protocolVersion))) {
         for (const stalePath of [
           getDaemonPidPath(runtimeDir, protocolVersion),
           getDaemonTokenPath(runtimeDir, protocolVersion)

@@ -16,6 +16,15 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
   if (!server) {
     throw new BotFailureError('toolGone')
   }
+  return botToolDetailsOf(folder, server, version)
+}
+
+/** `server` for the editor, its saved values masked; `folder` holds its credential. */
+export function botToolDetailsOf(
+  folder: string,
+  server: BotToolServer,
+  version: string
+): BotToolDetails {
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
   return {

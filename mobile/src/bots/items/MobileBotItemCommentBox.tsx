@@ -4,15 +4,7 @@
 // question waits, "Replying to" names it, as on the desktop; its × sends the comment as one of its own.
 // The chat's field and mic: the session's dictation lands here while the box is its target. Photos
 // attach with the chat's + and thumbnails, each named [Image #N] in the words.
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-  useState,
-  type Ref
-} from 'react'
+import { useCallback, useContext, useEffect, useRef, useState, type RefObject } from 'react'
 import { Pressable, Text, View, type HostInstance, type TextInputInstance } from 'react-native'
 import { WifiOff, X } from 'lucide-react-native'
 import type { BotItem, BotItemCommentSkill } from '../../../../src/shared/bots/bot-items'
@@ -50,6 +42,7 @@ import { useBotDraftImages } from '../use-bot-draft-images'
 import {
   botItemCommentDraftKey,
   botItemCommentDrafts as drafts,
+  writeBotItemCommentDraft,
   shownBotItemCommentDrafts as shownDrafts
 } from './bot-item-comment-drafts'
 
@@ -57,14 +50,6 @@ import {
 const pickedSkills = new Map<string, readonly BotItemCommentSkill[]>()
 const NO_SKILLS: readonly BotItemCommentSkill[] = []
 const NO_FILES: readonly never[] = []
-
-export type BotItemCommentBoxHandle = {
-  /** Put `text` in the box in place of its words, to add to before sending; `plain`: as a comment
-   *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
-  fill: (text: string, plain?: boolean) => void
-  /** Focus the box to answer the waiting question in your own words, naming it. */
-  answer: () => void
-}
 
 /** The agent's question the item waits on, and who asked it. */
 export type BotItemWaitingQuestion = BotItemWaitingLine & { asker: string }
@@ -80,7 +65,7 @@ export function MobileBotItemCommentBox({
   attachTo,
   onSend,
   showToast,
-  ref
+  fieldRef: input
 }: {
   client: RpcClient | null
   hostId: string
@@ -102,7 +87,8 @@ export function MobileBotItemCommentBox({
   showToast: (message: string) => void
   /** The agent's question waiting on the owner (what is sent is the reply). */
   question?: BotItemWaitingQuestion | null
-  ref?: Ref<BotItemCommentBoxHandle>
+  /** The field, which the page focuses for a quote. */
+  fieldRef: RefObject<TextInputInstance | null>
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -113,18 +99,13 @@ export function MobileBotItemCommentBox({
   const [unmarked, setUnmarked] = useState<string | null>(null)
   const quote = question && unmarked !== question.id ? question : null
   const [error, setError] = useState<string | null>(null)
-  const input = useRef<TextInputInstance>(null)
   const cancelRef = useRef<HostInstance>(null)
   const { uid } = item
   const setText = useCallback(
     (next: string) => {
       setTextState(next)
       setError(null)
-      if (next) {
-        drafts.set(key, next)
-      } else {
-        drafts.delete(key)
-      }
+      writeBotItemCommentDraft(key, next)
     },
     [key]
   )
@@ -235,17 +216,6 @@ export function MobileBotItemCommentBox({
       photos.clearSent(photos.images.map((image) => image.id))
     }
   }
-  useImperativeHandle(ref, () => ({
-    fill: (words, plain) => {
-      setUnmarked(plain ? (question?.id ?? null) : null)
-      setText(`${words} `)
-      input.current?.focus()
-    },
-    answer: () => {
-      setUnmarked(null)
-      input.current?.focus()
-    }
-  }))
   const notice = !online
     ? t(
         'bots.items.comment.offline',

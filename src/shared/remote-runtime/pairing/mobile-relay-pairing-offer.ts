@@ -42,17 +42,20 @@ function isCanonicalBase64Key(value: string): boolean {
   }
 }
 
+// A relay offer's fields but its expiry, which a pairing checks on read and a share offer when it connects.
+export const PAIRING_RELAY_OFFER_FIELDS = {
+  v: z.literal(1),
+  directorUrl: z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin'),
+  cellUrl: z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin'),
+  assignmentEpoch: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
+  relayHostId: z.string().regex(BASE64URL_16_PATTERN),
+  inviteToken: z.string().regex(BASE64URL_43_PATTERN),
+  e2eeFraming: z.literal(2)
+}
+
 export function createPairingOfferSchema(now: () => number = () => Date.now()) {
   const relaySchema = z.object({
-    v: z.literal(1),
-    directorUrl: z
-      .string()
-      .min(1)
-      .refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin'),
-    cellUrl: z.string().min(1).refine(isCanonicalHttpsOrigin, 'Expected canonical HTTPS origin'),
-    assignmentEpoch: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
-    relayHostId: z.string().regex(BASE64URL_16_PATTERN),
-    inviteToken: z.string().regex(BASE64URL_43_PATTERN),
+    ...PAIRING_RELAY_OFFER_FIELDS,
     inviteExpiresAt: z
       .number()
       .int()
@@ -62,8 +65,7 @@ export function createPairingOfferSchema(now: () => number = () => Date.now()) {
           value > currentTime &&
           value <= currentTime + MAX_INVITE_TTL_MS + INVITE_EXPIRY_CLOCK_SKEW_MS
         )
-      }, 'Expected a future invite expiry no more than 10 minutes away'),
-    e2eeFraming: z.literal(2)
+      }, 'Expected a future invite expiry no more than 10 minutes away')
   })
 
   return z

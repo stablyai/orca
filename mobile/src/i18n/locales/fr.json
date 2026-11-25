@@ -211,8 +211,7 @@
       "next": "Suivant",
       "other": "Autre…",
       "skip": "Ignorer",
-      "step": "Étape {{step}}",
-      "submit": "Valider"
+      "step": "Étape {{step}}"
     },
     "askRow": {
       "asked": "Questions posées :",
@@ -384,14 +383,6 @@
     },
     "promptStrip": {
       "expand": "Développer"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Ou saisissez une réponse…",
-      "replyPlaceholder": "Saisissez votre réponse…",
-      "sendReply": "Envoyer la réponse",
-      "submit": "Valider",
-      "submitCount": "Valider ({{count}})",
-      "submitSelectedOptions": "Valider les options sélectionnées"
     },
     "queuedMessages": {
       "deleteAll": "Tout supprimer",
@@ -1268,7 +1259,7 @@
       "pairingInvalid": "Appairage invalide — refaites l'appairage avec votre ordinateur",
       "rePairDetail": "Refaites l'appairage avec votre ordinateur",
       "reconnecting": "Reconnexion…",
-      "relayAccessExpired": "L'accès à Relay a expiré pour {{host}}",
+      "relayAccessRefused": "Relay a refusé l'accès pour {{host}}",
       "relayConnectFailed": "Connexion impossible via Relay",
       "relayUnreachable": "Impossible de joindre Relay",
       "signInDetail": "Connectez-vous à Orca sur votre ordinateur pour rétablir la connexion",
@@ -4258,7 +4249,6 @@
       "empty": "Aucun espace de travail",
       "loadFailed": "Impossible de charger les espaces de travail de cet hôte",
       "noFilterMatches": "Aucun espace de travail ne correspond aux filtres",
-      "noMatches": "Aucun espace de travail correspondant",
       "reopen": "Rouvrir pour mettre à jour",
       "reopenDetail": "Cet hôte fournit une liste d'espaces de travail dans un format que cette page ne reconnaît pas encore."
     },
@@ -4603,10 +4593,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Défiler vers la gauche · {{amount}} masqués",
-      "scrollRight": "Défiler vers la droite · {{amount}} masqués"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",
@@ -4645,7 +4632,6 @@
       "access": "Accès",
       "whoCanAsk": "Qui peut demander",
       "deleteBot": "Supprimer le bot…",
-      "agentDetail": "Utilisé pour les conversations et automatisations des bots. Un nouveau modèle s’applique aux nouvelles conversations ; le chat principal garde le sien.",
       "accountChecking": "Vérification…",
       "signedOut": "Déconnecté d’Orca",
       "orcaAccount": "Compte Orca",
@@ -4660,7 +4646,6 @@
       "onlyYou": "Vous seul",
       "model": "Modèle",
       "effort": "Effort",
-      "chatDefaultNote": "Utilise votre réglage par défaut du chat. Les exécutions en arrière-plan utilisent votre réglage Agents.",
       "modelDefault": "Par défaut",
       "signInChanged": "La connexion Orca a changé",
       "sameAsChatsDetail": "Utilise votre réglage d’autorisation des chats.",
@@ -4687,7 +4672,6 @@
     "lookAround": {
       "looking": "Recherche…",
       "save": "Enregistrer",
-      "detail": "Lit les apps et projets connectés pour suggérer les prochaines étapes. Lecture seule. Chaque tour d’horizon utilise votre forfait d’agent, et Orca doit être en cours d’exécution sur l’hôte.",
       "lookNow": "Lancer un tour d’horizon",
       "notYet": "Pas encore",
       "backToLookAround": "Retour au tour d’horizon"
@@ -4702,7 +4686,6 @@
     "groups": {
       "group": "Groupe",
       "peerTold": "{{from}} a informé {{to}}",
-      "startAConversationWithThisGroupMentionBots": "Lancez une conversation avec ce groupe. Mentionnez des bots avec @Nom ou @everyone.",
       "items": {
         "emptyTitle": "Aucun élément de ce groupe pour l’instant",
         "needsYouCount_one": "{{count}} a besoin de vous",
@@ -4743,8 +4726,6 @@
     "tidyUp": {
       "title": "Entretien de la mémoire",
       "never": "Pas encore",
-      "footer": "Modifie uniquement les fichiers de mémoire. Utilise votre forfait d’agent, comme un court chat. Orca doit être en cours d’exécution sur votre ordinateur.",
-      "undoNote": "Annuler restaure MEMORY.md tel qu’il était avant ce rangement, en une seule fois. L’historique complet et la modification de la mémoire sont disponibles sur votre ordinateur, dans Paramètres → Mémoire.",
       "backToTidyUp": "Retour à l’entretien de la mémoire"
     },
     "items": {
@@ -4765,8 +4746,7 @@
         "title": "Élément",
         "placeOf": "{{index}} sur {{total}}",
         "previous": "Élément précédent",
-        "next": "Élément suivant",
-        "subWhere": "Élément {{number}} · {{chat}}"
+        "next": "Élément suivant"
       },
       "write": {
         "offline": "{{host}} est hors ligne."
@@ -4775,7 +4755,6 @@
       "readFailedClosedPage": "Impossible de lire davantage d’éléments fermés.",
       "skillLimit": "Message non envoyé. Sélectionnez au plus {{limit}} fichiers de compétences et réessayez.",
       "ask": {
-        "notSentYet": "pas encore envoyée",
         "replaced": "L’agent a posé une nouvelle question. Lisez-la, puis répondez.",
         "replacedByNewer": "Remplacée par une question plus récente",
         "skipped": "Ignorées"
@@ -4814,7 +4793,6 @@
       },
       "rotate": {
         "open": "Renouveler la clé…",
-        "title": "Renouveler la clé de « {{automation}} » ?",
         "confirm": "Renouveler la clé",
         "note": "L’URL reçoit une nouvelle clé. Mettez à jour chaque expéditeur avec celle-ci.",
         "overlap": "Garder l’ancienne clé valide pendant 24 heures",
@@ -4830,19 +4808,15 @@
         "add": "Ajouter un secret de signature…",
         "generatedTitle": "Secret de signature prêt",
         "done": "Terminé",
-        "generatedNote": "Copiez-le dans les paramètres de webhook de {{sender}}. Désormais, les appels doivent porter sa signature.",
         "copy": "Copier le secret",
         "copied": "Secret copié",
         "changeTitle": "Modifier le secret de signature",
         "addTitle": "Ajouter un secret de signature",
-        "note": "Orca n’accepte alors que les appels signés avec ce secret, une URL divulguée ne suffit donc pas à lancer « {{automation}} ».",
         "sender": "Expéditeur",
         "modeGenerate": "Orca en crée un",
         "modePaste": "Coller celui de l’expéditeur",
         "generateNote": "Orca crée ce secret. Vous le copiez ensuite dans {{sender}}.",
         "paste": "Secret {{sender}}",
-        "pasteNote": "Utilisez ceci quand l’expéditeur vous donne son propre secret.",
-        "generate": "Générer un secret",
         "save": "Enregistrer",
         "saved": "Secret de signature enregistré",
         "changeOpen": "Modifier le secret de signature…",
@@ -4876,7 +4850,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Ajouter dans le chat",
       "setUpDraft": "Configure un webhook qui ",
       "resumed": "Webhook repris",
@@ -4943,7 +4916,6 @@
         "unverifiableDetail": "L’ordinateur de {{bot}} est injoignable"
       },
       "back": "Retour aux Webhooks",
-      "howToCallShort": "N’importe quel outil ou script peut envoyer un POST à l’URL d’un hook. Chaque hook lance une automatisation.",
       "hookCount_many": "{{count}} hooks"
     },
     "errors": {
@@ -5010,7 +4982,6 @@
       "colorInk": "Encre",
       "title": "Nom et image",
       "mascot": "Mascotte",
-      "background": "Couleur de fond",
       "choosePhoto": "Choisir dans Photos",
       "slackToo": "Modifie aussi l’image de votre bot dans Slack."
     },
@@ -5027,9 +4998,7 @@
       "addButton": "Ajouter",
       "sourceLabel": "URL du serveur ou commande de démarrage",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Seul {{name}} le reçoit, en plus de vos propres outils.",
       "details": "Détails",
-      "commandWarning": "La commande s’exécute dans le dossier personnel de ce bot sur {{host}}. L’ajout ou l’enregistrement peut la lancer pendant la vérification native. N’ajoutez que des logiciels de confiance.",
       "serverType": "Type de serveur",
       "urlMode": "Se connecter à une URL",
       "commandMode": "Exécuter une commande",
@@ -5037,7 +5006,6 @@
       "removeTitle": "Retirer {{app}} ?",
       "removeNote": "{{bot}} ne peut plus utiliser {{app}}. Vous pouvez la rajouter à tout moment.",
       "remove": "Supprimer",
-      "signInOrca": "Fonctionne avec Claude et Codex",
       "signInMissing": "{{agent}} n’est pas connecté",
       "signInHeld": "Gérée par {{agent}}",
       "wontStart": "Ne démarre pas",
@@ -5099,7 +5067,17 @@
         "denied": "L’accès n’a pas été autorisé.",
         "expired": "La connexion a expiré. Réessayez.",
         "couldNotSignIn": "Connexion impossible. Réessayez."
-      }
+      },
+      "trust": "N’ajoutez que des logiciels de confiance.",
+      "argument": "Argument",
+      "removeArgument": "Supprimer l’argument",
+      "header": "En-tête",
+      "variable": "Variable",
+      "removeHeaderRow": "Supprimer l’en-tête",
+      "removeVariableRow": "Supprimer la variable",
+      "emptyArgument": "Vide",
+      "valueNew": "Nouvelle valeur",
+      "valueSaved": "Enregistré"
     },
     "handToBot": {
       "menu": "Transmettre à un bot…",
@@ -5132,7 +5110,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "Importer",
       "otherApp": "Une autre app…",
-      "otherAppNote": "Votre ancien bot copie ses fichiers pour vous",
       "noneFoundNote": "Aucun bot trouvé dans OpenClaw (~/.openclaw), Hermes (~/.hermes) ou OpenBot.",
       "sendStep": "Envoyez ce message à votre ancien bot",
       "copyMessage": "Copier le message",
@@ -5143,18 +5120,13 @@
       "replyLabel": "Sa réponse",
       "title": "Importer depuis une autre app",
       "newBot": "Nouveau bot",
-      "exportDescription": "Demandez à votre ancien bot une copie de lui-même, puis donnez cette copie à votre nouveau bot.",
-      "description": "Votre nouveau bot lit l’ancien et se configure tout seul.",
       "nameAnother": "Nommer un nouveau bot",
-      "importedBefore": "{{bot}} vient de ce bot",
       "keysStay": "Les clés et identifiants restent sur place",
       "chooseFolderTitle": "Choisir un dossier",
       "loadingFolders": "Chargement des dossiers…",
       "lookingOn": "Recherche sur {{host}}…",
       "foundOn": "Bots trouvés sur {{host}} : {{count}}",
-      "copiedNote": "Copié. Collez-le dans votre conversation avec votre ancien bot, où que vous discutiez avec lui.",
       "copyAgain": "Copier à nouveau",
-      "addStepNote": "Il enregistre un dossier dont le nom se termine par -export dans le dossier Downloads sur {{host}}.",
       "folderItems_one": "{{count}} élément",
       "folderItems_other": "{{count}} éléments",
       "chooseAnother": "Choisir un autre dossier…",
@@ -5317,6 +5289,9 @@
       },
       "webhooks": {
         "line": "Événements de n’importe quel outil ou script"
+      },
+      "composio": {
+        "keyOnHost": "Stockée sur {{host}} ; les bots ne la voient jamais."
       }
     },
     "share": {
@@ -5331,6 +5306,7 @@
     },
     "usageLimit": {
       "continuesAt": "Reprend à {{time}}",
+      "continues": "Reprend à {{time}}",
       "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
     }
   },
