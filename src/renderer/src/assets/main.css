@@ -1437,21 +1437,31 @@ html.native-shell .app-layout {
   zoom: var(--sidebar-zoom-ratio, 1);
 }
 
-/* Radix measures in the positioner's units; the content reads dimensions in its own pixels. */
-[data-radix-popper-content-wrapper]:has(> [data-sidebar-zoom]) {
-  --sidebar-popper-width: calc(var(--radix-popper-available-width) / var(--sidebar-zoom-ratio, 1));
-  --sidebar-popper-height: calc(
-    var(--radix-popper-available-height) / var(--sidebar-zoom-ratio, 1)
-  );
-  --sidebar-anchor-width: calc(var(--radix-popper-anchor-width) / var(--sidebar-zoom-ratio, 1));
-  --sidebar-anchor-height: calc(var(--radix-popper-anchor-height) / var(--sidebar-zoom-ratio, 1));
+/* Body portals receive viewport coordinates from Radix even when the web document is zoomed. */
+[data-radix-popper-content-wrapper] {
+  --popper-panel-zoom: 1;
+  --popper-content-zoom: var(--popper-panel-zoom);
+  --popper-logical-width: calc(var(--radix-popper-available-width) / var(--popper-content-zoom));
+  --popper-logical-height: calc(var(--radix-popper-available-height) / var(--popper-content-zoom));
+  --popper-anchor-width: calc(var(--radix-popper-anchor-width) / var(--popper-content-zoom));
+  --popper-anchor-height: calc(var(--radix-popper-anchor-height) / var(--popper-content-zoom));
 }
 
-[data-radix-popper-content-wrapper] > [data-sidebar-zoom]:not([data-sidebar-zoom] *) {
-  --radix-popper-available-width: var(--sidebar-popper-width);
-  --radix-popper-available-height: var(--sidebar-popper-height);
-  --radix-popper-anchor-width: var(--sidebar-anchor-width);
-  --radix-popper-anchor-height: var(--sidebar-anchor-height);
+:is(body, [data-activity-portal-container]) > [data-radix-popper-content-wrapper] {
+  --popper-panel-zoom: var(--web-panel-zoom, 1);
+  zoom: calc(1 / var(--popper-panel-zoom));
+}
+
+[data-radix-popper-content-wrapper]:not([data-sidebar-zoom] *):has(> [data-sidebar-zoom]) {
+  --popper-content-zoom: calc(var(--popper-panel-zoom) * var(--sidebar-zoom-ratio, 1));
+}
+
+[data-radix-popper-content-wrapper] > :first-child {
+  zoom: var(--popper-content-zoom);
+  --radix-popper-available-width: var(--popper-logical-width);
+  --radix-popper-available-height: var(--popper-logical-height);
+  --radix-popper-anchor-width: var(--popper-anchor-width);
+  --radix-popper-anchor-height: var(--popper-anchor-height);
 }
 
 /* Body drag overlays receive viewport coordinates; their copies retain the source row's size. */

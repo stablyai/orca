@@ -1,4 +1,5 @@
 import type React from 'react'
+import { clientPointInElement } from '@/lib/dom/client-point-in-element'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { type PanZoomGeometry, settleView, usePanZoomWheel } from './use-pan-zoom-wheel'
 import {
@@ -262,7 +263,8 @@ export function usePanZoomViewport({
         }
         const last = gesture.last
         gesture.last = { x: event.clientX, y: event.clientY }
-        const delta = { x: event.clientX - last.x, y: event.clientY - last.y }
+        const zoom = event.currentTarget.currentCSSZoom || 1
+        const delta = { x: (event.clientX - last.x) / zoom, y: (event.clientY - last.y) / zoom }
         // Compose every pointer move even when several arrive before React renders.
         setManualView((current) => {
           const from = current
@@ -290,8 +292,7 @@ export function usePanZoomViewport({
         if (gesture.moved || moved >= CLICK_SLOP) {
           return
         }
-        const rect = event.currentTarget.getBoundingClientRect()
-        const point = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+        const point = clientPointInElement(event.currentTarget, event)
         const onContent =
           geometry && offset && isPointOnPanZoomContent(point, offset, geometry.content, scale)
         if (onClickOutsideContent && !onContent) {

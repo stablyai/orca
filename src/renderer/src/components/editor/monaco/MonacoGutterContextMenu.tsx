@@ -1,13 +1,9 @@
+import { ViewportDropdownMenuTrigger } from '@/components/ui/viewport-dropdown-menu-trigger'
 import React from 'react'
 import type { IRange } from 'monaco-editor'
 import { getRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-runtime-target'
 import { Copy, ExternalLink } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
@@ -45,14 +41,7 @@ export function MonacoGutterContextMenu({
   const t = useTranslate()
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
-      <DropdownMenuTrigger asChild>
-        <button
-          aria-hidden
-          tabIndex={-1}
-          className="pointer-events-none fixed size-px opacity-0"
-          style={{ left: point.x, top: point.y }}
-        />
-      </DropdownMenuTrigger>
+      <ViewportDropdownMenuTrigger point={point} />
       <DropdownMenuContent sideOffset={0} align="start">
         <DropdownMenuItem
           onSelect={() => {

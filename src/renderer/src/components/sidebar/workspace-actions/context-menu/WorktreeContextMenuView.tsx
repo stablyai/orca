@@ -1,11 +1,11 @@
+import { ViewportDropdownMenuTrigger } from '@/components/ui/viewport-dropdown-menu-trigger'
 import { useId, useState } from 'react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/class-names'
@@ -104,8 +104,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     setContextWorktrees(
       fromPortal ? [worktree] : (onContextMenuSelect?.(event) ?? effectiveSelectedWorktrees)
     )
-    const bounds = event.currentTarget.getBoundingClientRect()
-    setMenuPoint({ x: event.clientX - bounds.left, y: event.clientY - bounds.top })
+    setMenuPoint({ x: event.clientX, y: event.clientY })
     setMenuOpenState(true)
   }
   return (
@@ -141,14 +140,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         {children}
       </WorktreeContextMenuPortalScope.Provider>
       <DropdownMenu open={menuOpen} onOpenChange={setMenuOpenState} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none absolute size-px opacity-0"
-            style={{ left: menuPoint.x, top: menuPoint.y }}
-          />
-        </DropdownMenuTrigger>
+        {menuOpen ? <ViewportDropdownMenuTrigger point={menuPoint} /> : null}
         <DropdownMenuContent
           className={cn('min-w-52', contentClassName)}
           sideOffset={0}

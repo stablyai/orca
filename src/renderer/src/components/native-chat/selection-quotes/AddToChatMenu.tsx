@@ -1,3 +1,4 @@
+import { ViewportDropdownMenuTrigger } from '@/components/ui/viewport-dropdown-menu-trigger'
 import { useSyncExternalStore } from 'react'
 import { Quote } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -7,8 +8,7 @@ import {
   DropdownMenuContent,
   DropdownMenuSub,
   DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
-  DropdownMenuTrigger
+  DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { ReviewNotesSendMenuContent } from '@/components/editor/review-note-delivery/ReviewNotesSendMenuContent'
 import { preventAgentSendTargetOutsideDismiss } from '@/components/browser-pane/annotate/delivery/prevent-agent-send-target-outside-dismiss'
@@ -69,14 +69,7 @@ export function AddToChatPointMenuHost(): React.JSX.Element | null {
       }}
       modal={false}
     >
-      <DropdownMenuTrigger asChild>
-        <button
-          aria-hidden
-          tabIndex={-1}
-          className="pointer-events-none fixed size-px opacity-0"
-          style={{ left: menu.x, top: menu.y }}
-        />
-      </DropdownMenuTrigger>
+      <ViewportDropdownMenuTrigger point={menu} />
       <DropdownMenuContent
         align="start"
         sideOffset={4}

@@ -1,3 +1,4 @@
+import { ViewportDropdownMenuTrigger } from '@/components/ui/viewport-dropdown-menu-trigger'
 import {
   useCallback,
   useRef,
@@ -18,8 +19,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
+  DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -251,14 +251,7 @@ export function useNativeChatContextMenu({
           composerRef={composerRef}
           enabled={enabled && !(state.open && hasItems)}
         />
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: state.point.x, top: state.point.y }}
-          />
-        </DropdownMenuTrigger>
+        <ViewportDropdownMenuTrigger point={state.point} />
         <DropdownMenuContent
           data-native-chat-context-menu=""
           className="min-w-56"

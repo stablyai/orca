@@ -1,3 +1,4 @@
+import { ViewportDropdownMenuTrigger } from '@/components/ui/viewport-dropdown-menu-trigger'
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import { useEffect, useRef, useState } from 'react'
 import { Eye, Pencil } from 'lucide-react'
@@ -6,8 +7,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
+  DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
 import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
@@ -129,14 +129,7 @@ export function EditorPanelHeaderPath({
         )}
       </div>
       <DropdownMenu open={pathMenuOpen} onOpenChange={setPathMenuOpen} modal={false}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none fixed size-px opacity-0"
-            style={{ left: pathMenuPoint.x, top: pathMenuPoint.y }}
-          />
-        </DropdownMenuTrigger>
+        <ViewportDropdownMenuTrigger point={pathMenuPoint} />
         <DropdownMenuContent
           className="min-w-56"
           sideOffset={0}
