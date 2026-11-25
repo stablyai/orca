@@ -55,33 +55,29 @@ describe('what bots.list says of the Slack intro switch', () => {
     stop()
   })
 
-  it('stops offering it, and says so, once the cloud stops the connection until sign-in', async () => {
-    h.fake.features = [CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE]
-    const { cloud, onStatusChanged, stop } = connector()
-    await settle()
-    expect(cloud.botListFacts().slackChannelHello).toBe(true)
-
-    onStatusChanged.mockClear()
-    h.fake.answerPoll({ status: 403, body: { error: 'recent_sign_in_required' } })
-    await settle(30_000)
-    expect(cloud.liveCloudFeatures()).toBeNull()
-    expect(cloud.botListFacts().slackChannelHello).toBe(false)
-    expect(onStatusChanged).toHaveBeenCalled()
-    stop()
-  })
-
-  it('stops offering it while the cloud can’t be reached, though its last answer stays cached', async () => {
+  it('keeps showing the saved switch while Orca Cloud is out of reach, but says it isn’t applied', async () => {
     h.fake.features = [CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE]
     const { cloud, stop } = connector()
     await settle()
-    expect(cloud.botListFacts().slackChannelHello).toBe(true)
+    expect(cloud.liveCloudFeatures()?.has(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE)).toBe(true)
 
     h.fake.online = false
     h.fake.answerPoll({ status: 503, body: {} })
     await settle(30_000)
     expect(cloud.status()).toBe('unreachable')
-    expect(cloud.cloudFeatures()?.has(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE)).toBe(true)
-    expect(cloud.botListFacts().slackChannelHello).toBe(false)
+    // The owner can still see and change it; the next hello carries it.
+    expect(cloud.botListFacts().slackChannelHello).toBe(true)
+    expect(cloud.liveCloudFeatures()).toBeNull()
+    stop()
+  })
+
+  it('says it isn’t applied once the cloud stops the connection until sign-in', async () => {
+    h.fake.features = [CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE]
+    const { cloud, stop } = connector()
+    await settle()
+    h.fake.answerPoll({ status: 403, body: { error: 'recent_sign_in_required' } })
+    await settle(30_000)
+    expect(cloud.liveCloudFeatures()).toBeNull()
     stop()
   })
 })

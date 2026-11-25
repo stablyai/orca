@@ -156,8 +156,7 @@ export class ConnectorCloud {
       needsSignIn: this.needsSignIn(),
       refusal: this.reach.refusal,
       threadReplies: this.takesThreadReplies(),
-      features: this.cloudFeatures(),
-      live: this.liveCloudFeatures()
+      features: this.cloudFeatures()
     })
   }
 
@@ -281,10 +280,8 @@ export class ConnectorCloud {
         },
         onHalt: (reason) => {
           if (this.client === client) {
-            // What it took stops counting with it, so bots.list stops offering what it applies.
-            const told = this.needsSignIn() || this.liveCloudFeatures() !== null
             this.clientStop = reason
-            if (told || this.needsSignIn()) {
+            if (this.needsSignIn()) {
               this.options.onStatusChanged?.()
             }
           }
@@ -322,9 +319,7 @@ export class ConnectorCloud {
   /** The same, only while a change said now reaches the cloud: none while the cloud stopped this
    *  client, refuses its sign-in or can't be reached, though the last answer stays cached. */
   liveCloudFeatures(): ReadonlySet<string> | null {
-    return this.clientStop === null && this.client && this.status() === 'ok'
-      ? this.cloudFeatures()
-      : null
+    return this.clientStop === null && this.status() === 'ok' ? this.cloudFeatures() : null
   }
 
   /** The signed-in Orca account's name, as a mirrored Slack post names its author. */

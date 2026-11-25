@@ -6,11 +6,7 @@ import {
   type ConnectorCloudFeature
 } from '../../shared/connector-cloud-features'
 
-export function connectorCloudFeatureFacts(
-  features: ReadonlySet<string> | null,
-  /** Only while a change reaches the cloud now: a setting it applies is offered only then. */
-  live: ReadonlySet<string> | null
-): {
+export function connectorCloudFeatureFacts(features: ReadonlySet<string> | null): {
   githubEvents2: boolean
   githubWorkflows: boolean
   githubCiFinished: boolean
@@ -25,7 +21,9 @@ export function connectorCloudFeatureFacts(
     // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
     githubCiFinished: has('triggers.ci_finished' satisfies ConnectorCloudFeature),
     // Whether it reads a bot's channelHello, so the Slack intro switch is offered only where it does.
-    slackChannelHello: live?.has(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE) === true
+    // From the last answer, so the owner can still see and change it while the cloud is out of reach:
+    // the next hello carries it.
+    slackChannelHello: has(CONNECTOR_CLOUD_SLACK_CHANNEL_HELLO_FEATURE)
   }
 }
 
@@ -43,12 +41,11 @@ export function connectorBotListFacts(link: {
   refusal: string | null | undefined
   threadReplies: boolean
   features: ReadonlySet<string> | null
-  live: ReadonlySet<string> | null
 }): ConnectorBotListFacts {
   const { status } = link
   return {
     threadReplies: link.threadReplies,
-    ...connectorCloudFeatureFacts(link.features, link.live),
+    ...connectorCloudFeatureFacts(link.features),
     connectorStatus: status,
     ...((status === 'refused' || status === 'needs-sign-in') && link.refusal
       ? { connectorMessage: link.refusal }
