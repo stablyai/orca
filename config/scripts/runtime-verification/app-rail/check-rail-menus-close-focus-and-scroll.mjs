@@ -91,9 +91,9 @@ try {
       ['tall', 'customize'],
       ['shortFolded', 'more']
     ]) {
-      for (const [target, point] of [
-        ['blank sidebar', (frame) => ({ x: frame.x + 200, y: frame.y + 40 })],
-        ['blank page', () => ({ x: 780, y: 580 })]
+      for (const { target, point } of [
+        { target: 'blank sidebar', point: (frame) => ({ x: frame.x + 200, y: frame.y + 40 }) },
+        { target: 'blank page', point: () => ({ x: 780, y: 580 }) }
       ]) {
         await render(fixture, theme, { width: 800, height: 600 })
         await keyboardOpen(item)
