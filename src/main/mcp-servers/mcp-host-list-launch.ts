@@ -86,24 +86,44 @@ export async function mcpServersWithDigestsForLaunch(
 ): Promise<McpLaunchServers & { digests: Record<string, string> }> {
   const entries = await launchEntries(agent, workspace, folder, read)
   const { servers, sharedProcesses } = launchServersIn(entries)
-  // The snapshot's own read of the credential store, as the tools revision counts each credential.
-  const saved = entries.credentials
+  const known = digestsOf(entries.snapshot)
   const digests = Object.fromEntries(
-    servers.map((server) => [
-      server.name,
-      createHash('sha256')
-        .update(JSON.stringify(server))
-        .update(
-          'url' in server && server.credential
-            ? JSON.stringify(saved.get(server.credential) ?? null)
-            : ''
-        )
-        // Sharing switched on or off changes where its sessions reach it.
-        .update(sharedProcesses.has(server.name) ? 'shared' : '')
-        .digest('hex')
-    ])
+    servers.map((server) => {
+      const digest = known.get(server.name) ?? digestOf(server, entries.snapshot, sharedProcesses)
+      known.set(server.name, digest)
+      return [server.name, digest]
+    })
   )
   return { servers, sharedProcesses, digests }
+}
+
+// A server's digest depends on the list alone, so chats comparing against one shared read hash it once.
+const digestsBySnapshot = new WeakMap<BotToolsSnapshot, Map<string, string>>()
+
+function digestsOf(snapshot: BotToolsSnapshot): Map<string, string> {
+  const known = digestsBySnapshot.get(snapshot) ?? new Map<string, string>()
+  digestsBySnapshot.set(snapshot, known)
+  return known
+}
+
+function digestOf(
+  server: BotToolServer,
+  snapshot: BotToolsSnapshot,
+  sharedProcesses: ReadonlyMap<string, string>
+): string {
+  return (
+    createHash('sha256')
+      .update(JSON.stringify(server))
+      // The snapshot's own read of the credential store, as the tools revision counts each credential.
+      .update(
+        'url' in server && server.credential
+          ? JSON.stringify(snapshot.credentials.get(server.credential) ?? null)
+          : ''
+      )
+      // Sharing switched on or off changes where its sessions reach it.
+      .update(sharedProcesses.has(server.name) ? 'shared' : '')
+      .digest('hex')
+  )
 }
 
 /** The server with `id` as a session of `agent` in `workspace` gets it; null when it's off there or gone. */
@@ -119,11 +139,7 @@ export async function mcpServerForLaunch(
   return entry?.server ?? null
 }
 
-type LaunchEntries = {
-  all: BotToolEntry[]
-  on: BotToolEntry[]
-  credentials: BotToolsSnapshot['credentials']
-}
+type LaunchEntries = { snapshot: BotToolsSnapshot; all: BotToolEntry[]; on: BotToolEntry[] }
 
 /** The whole list, and the entries on for this launch. */
 async function launchEntries(
@@ -135,11 +151,7 @@ async function launchEntries(
   // Read only: a launch never writes the list, even to give an entry edited outside Orca its id.
   const snapshot = await read(folder)
   const all = botToolEntries(snapshot)
-  return {
-    all,
-    on: all.filter(({ extras }) => isOnForLaunch(extras, agent, workspace)),
-    credentials: snapshot.credentials
-  }
+  return { snapshot, all, on: all.filter(({ extras }) => isOnForLaunch(extras, agent, workspace)) }
 }
 
 /** A server a launch gets, with its id (null for an entry edited outside Orca that has none yet). */
