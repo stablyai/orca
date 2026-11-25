@@ -53,7 +53,7 @@ describe('the GitHub picker’s reading of a search', () => {
   it('calls an exact match outside only after a whole, uncut read of everything connected', () => {
     expect(value(answer(read(), found)).members).toEqual([
       { id: '2', name: 'brennanb2025', handle: 'Brennan Benson', group: 'scoped' },
-      { id: '9', name: 'brennan', group: 'outside' }
+      { id: '9', name: 'brennan', group: 'outside', live: true }
     ])
     for (const partial of [
       read({ complete: false }),
@@ -63,7 +63,8 @@ describe('the GitHub picker’s reading of a search', () => {
       expect(value(answer(partial, found)).members.at(-1)).toEqual({
         id: '9',
         name: 'brennan',
-        tag: 'Not all people loaded'
+        tag: 'Not all people loaded',
+        live: true
       })
     }
   })
@@ -123,7 +124,7 @@ describe('the GitHub picker’s reading of a search', () => {
     })
     // A useful exact match shows now, tagged as not yet checked against the repos.
     expect(value(answer(loading, found)).members).toEqual([
-      { id: '9', name: 'brennan', tag: 'Repos still loading' }
+      { id: '9', name: 'brennan', tag: 'Repos still loading', live: true }
     ])
     // A failed exact lookup waits for the roster rather than failing the whole search.
     // No list yet, so no dated line: one sentence per line.
@@ -247,7 +248,8 @@ describe('the GitHub picker’s reading of a search', () => {
       expect(found_?.members.at(-1), label).toEqual({
         id: '9',
         name: 'brennan',
-        tag: 'Not in the earlier list'
+        tag: 'Not in the earlier list',
+        live: true
       })
       // Recent and matched, yet it still says when the list is from.
       expect(found_?.note, label).toMatch(/^Repo list from 2:05\s?PM\. Restart Orca to refresh\.$/)
@@ -261,12 +263,12 @@ describe('the GitHub picker’s reading of a search', () => {
     const renamed = read({ people: [{ id: '9', login: 'old-name', name: null }] })
     // In the list under an old login that doesn't match: shown by its current login.
     expect(value(answer(renamed, found)).members).toEqual([
-      { id: '9', name: 'brennan', group: 'scoped' }
+      { id: '9', name: 'brennan', group: 'scoped', live: true }
     ])
     // Already shown: one row, with the current login.
     const shown = read({ people: [{ id: '9', login: 'brennan-old', name: 'Brennan' }] })
     expect(value(answer(shown, found, 'brennan')).members).toEqual([
-      { id: '9', name: 'brennan', handle: 'Brennan', group: 'scoped' }
+      { id: '9', name: 'brennan', handle: 'Brennan', group: 'scoped', live: true }
     ])
     // Past the shown cap: still shown, once.
     const many = Array.from({ length: 40 }, (_, index) => ({
@@ -277,7 +279,7 @@ describe('the GitHub picker’s reading of a search', () => {
     const capped = read({ people: [...many, { id: '9', login: 'brennanz', name: null }] })
     const members = value(answer(capped, found, 'brennan')).members
     expect(members.filter((member) => member.id === '9')).toEqual([
-      { id: '9', name: 'brennan', group: 'scoped' }
+      { id: '9', name: 'brennan', group: 'scoped', live: true }
     ])
   })
 

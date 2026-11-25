@@ -118,7 +118,11 @@ export function BotWhoCanAskPicker({
     )
   }
 
-  const found = search.status === 'ready' ? search.found.members : []
+  // A login a live answer confirmed this open outranks a list's older one, wherever the row shows.
+  const found = (search.status === 'ready' ? search.found.members : []).map((person) => {
+    const name = identities.names[person.id]
+    return name && name !== person.name ? { ...person, name } : person
+  })
   const handles = new Map(found.map((person) => [person.id, person.handle]))
   const addable = found.filter(
     (person) => !added.has(person.id) && !isOwner(person.id) && !identities.retired.has(person.id)

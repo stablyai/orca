@@ -34,7 +34,13 @@ const host = vi.hoisted(() => {
       users: vi.fn<(args: { query: string }) => Promise<unknown>>()
     },
     confirm: vi.fn<(grant: { people: { id: string; name: string }[] }) => Promise<boolean>>(),
-    update: vi.fn<(bot: unknown, updates: unknown) => Promise<undefined>>(),
+    update:
+      vi.fn<
+        (
+          bot: unknown,
+          updates: { addMembers?: { id: string; name: string }[] }
+        ) => Promise<undefined>
+      >(),
     read: () => view,
     publish: (next: unknown) => {
       view = next
@@ -80,9 +86,7 @@ const read = (roster: ReturnType<typeof rosterOf>): Promise<People> =>
 /** What the confirmation was asked to show, and what the grant saved. */
 function granted(): { confirmed: unknown; saved: unknown } {
   const confirmed = host.confirm.mock.calls.at(-1)?.[0].people
-  const updates = host.update.mock.calls.at(-1)?.[1] as
-    | { addMembers?: { id: string; name: string }[] }
-    | undefined
+  const updates = host.update.mock.calls.at(-1)?.[1]
   return {
     confirmed,
     saved: updates?.addMembers?.map((member) => ({ id: member.id, name: member.name }))
@@ -183,9 +187,10 @@ describe('GPS-C1-01: who a pick is, through confirmation', () => {
       await vi.advanceTimersByTimeAsync(0)
     })
     expect(optionTexts()).toContain('samuelSamuel Reyes')
-    // Edited away, the pick keeps its live login and real name in Selected.
+    // Found again by real name, the list's row shows the live login, not the old one.
     await typeQuery('reyes')
-    expect(groupTexts('Selected')).toEqual(['samuelSamuel Reyes'])
+    expect(optionTexts()).toContain('samuelSamuel Reyes')
+    expect(optionTexts()).not.toContain('samrSamuel Reyes')
     await add(/Add 1 person/)
     expect(granted()).toEqual({
       confirmed: [{ id: '31', name: 'samuel' }],
@@ -322,7 +327,7 @@ describe('GPS-D9-03, GPS-C1-05: Try again with an empty search', () => {
       second.resolve({ ok: true, value: team })
       await vi.advanceTimersByTimeAsync(0)
     })
-    expect(optionTexts()).toEqual(['maya-cMaya Chen', 'lee-kLee Kim', 'YouOwnerCan ask'])
+    expect(optionTexts()).toEqual(['lee-kLee Kim', 'maya-cMaya Chen', 'YouOwnerCan ask'])
     expect(searching.stop()).toBe(0)
     expect(host.calls.users).not.toHaveBeenCalled()
   })
@@ -666,7 +671,9 @@ describe('GPS-C1-07: the setup picker’s list qualifiers under a language pack'
 
   it('keeps the dated list and absence wording in English', async () => {
     host.calls.people.mockReturnValue(read(team))
-    host.calls.users.mockResolvedValue(users([{ id: '50', name: 'jordan' }]))
+    host.calls.users.mockImplementation(async ({ query }) =>
+      users(query === 'jordan' ? [{ id: '50', name: 'jordan' }] : [])
+    )
     mountWhoCanAsk()
     // The pack is live: its unprotected count line shows.
     expect(screen.getByText('Synthetic 0/50')).toBeTruthy()

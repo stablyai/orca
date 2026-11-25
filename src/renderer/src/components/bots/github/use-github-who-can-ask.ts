@@ -43,10 +43,6 @@ export function useGitHubWhoCanAsk(
     .filter((entry) => entry.userId !== ownerId)
     .map((entry) => entry.userId)
     .join('\n')
-  const otherOwnerIds = useMemo(
-    () => (otherOwnersKey === '' ? [] : otherOwnersKey.split('\n')),
-    [otherOwnersKey]
-  )
   // One list is read for every row, so it is keyed by the first linked login, not this row's.
   const rosterOwner = logins[0]?.login ?? null
   const linkedKey = logins.map((entry) => entry.login).join('\n')
@@ -123,7 +119,7 @@ export function useGitHubWhoCanAsk(
         detail: t('bots.github.whoCanAsk.findHow', 'Teammates by name, others by exact username.')
       },
       ownerId,
-      otherOwnerIds,
+      otherOwnerIds: otherOwnersKey === '' ? [] : otherOwnersKey.split('\n'),
       ownerName,
       kind: 'github',
       connector: 'GitHub',
@@ -144,7 +140,7 @@ export function useGitHubWhoCanAsk(
     linked,
     installationId,
     ownerId,
-    otherOwnerIds,
+    otherOwnersKey,
     ownerName,
     session,
     search,

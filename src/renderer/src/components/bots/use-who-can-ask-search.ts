@@ -39,6 +39,40 @@ function learned(known: WhoCanAskIdentities, found: BotWhoCanAskFound): WhoCanAs
   }
 }
 
+type Paint = {
+  generation: { current: number }
+  order: { current: { asked: number; shown: number } }
+  setIdentities: (update: (known: WhoCanAskIdentities) => WhoCanAskIdentities) => void
+  setSearch: (search: WhoCanAskSearch) => void
+  errorMessage: (code: string) => string
+}
+
+/** Asks `active` for `query` and paints the answer only if it is still the current query's
+ *  (`gen`) and nothing asked later has painted; `onAnswer` runs just before it paints. */
+function ask(
+  active: BotWhoCanAskSession,
+  query: string,
+  paint: Paint,
+  gen: number,
+  onAnswer?: () => void
+): void {
+  paint.order.current.asked += 1
+  const asked = paint.order.current.asked
+  void active.search(query.trim()).then((result: BotSlackResult<BotWhoCanAskFound>) => {
+    if (paint.generation.current !== gen || asked < paint.order.current.shown) {
+      return
+    }
+    onAnswer?.()
+    paint.order.current.shown = asked
+    if (result.ok) {
+      paint.setIdentities((known) => learned(known, result.value))
+      paint.setSearch({ status: 'ready', found: result.value })
+    } else {
+      paint.setSearch({ status: 'failed', error: paint.errorMessage(result.error) })
+    }
+  })
+}
+
 export function useWhoCanAskSearch(
   service: BotWhoCanAskService,
   query: string
@@ -72,22 +106,6 @@ export function useWhoCanAskSearch(
   // moves on: a second Try again meanwhile starts nothing.
   const retryOwner = useRef<number | null>(null)
 
-  const ask = (asked: number, gen: number, onAnswer?: () => void): void => {
-    void active.search(query.trim()).then((result: BotSlackResult<BotWhoCanAskFound>) => {
-      if (generation.current !== gen || asked < order.current.shown) {
-        return
-      }
-      onAnswer?.()
-      order.current.shown = asked
-      if (result.ok) {
-        setIdentities((known) => learned(known, result.value))
-        setSearch({ status: 'ready', found: result.value })
-      } else {
-        setSearch({ status: 'failed', error: errorMessage(result.error) })
-      }
-    })
-  }
-
   useEffect(() => {
     generation.current += 1
     const gen = generation.current
@@ -101,19 +119,18 @@ export function useWhoCanAskSearch(
     const stopWatching =
       active.onUpdate?.(() => {
         if (issued && retryOwner.current === null && generation.current === gen) {
-          ask((order.current.asked += 1), gen)
+          ask(active, query, { generation, order, setIdentities, setSearch, errorMessage }, gen)
         }
       }) ?? (() => {})
     const timer = setTimeout(() => {
       issued = true
-      ask((order.current.asked += 1), gen)
+      ask(active, query, { generation, order, setIdentities, setSearch, errorMessage }, gen)
     }, SEARCH_DEBOUNCE_MS)
     return () => {
       generation.current += 1
       clearTimeout(timer)
       stopWatching()
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- ask reads this render's active/query/errorMessage, all listed.
   }, [active, errorMessage, query])
 
   return {
@@ -131,7 +148,7 @@ export function useWhoCanAskSearch(
       retryOwner.current = gen
       setRetrying(true)
       active.retry?.()
-      ask((order.current.asked += 1), gen, () => {
+      ask(active, query, { generation, order, setIdentities, setSearch, errorMessage }, gen, () => {
         retryOwner.current = null
         setRetrying(false)
       })
