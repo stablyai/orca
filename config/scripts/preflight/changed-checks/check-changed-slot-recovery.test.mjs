@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { formatAge, settleChangedCheckSlotCleanup } from './check-changed-slot.mjs'
 import {
   createQueue,
@@ -92,19 +92,45 @@ await next()`)
     await within(waiter.promise, 'waiter')
   }, 240_000)
 
-  it('leaves the holder unnamed when no live, heartbeating ticket holds the slot', async () => {
-    await createQueue()
-    const other = outsider()
-    expect(other.tryLock()).toBe(true)
-    insertTicket({ pid: await exitedPid(), heldAt: Date.now() })
-    insertTicket({ pid: process.pid, heldAt: Date.now() - 60_000, seenAt: Date.now() - 60_000 })
-    const messages = []
-    const waiter = observe(run({ staleMs: 30_000, log: (message) => messages.push(message) }))
-    await until(() => messages.length > 0, 'wait message')
-    expect(messages).toEqual([`${WAITING} Position 1 of 1. ${UNNAMED}`])
-    other.close()
-    await within(waiter.promise, 'waiter')
-    expect(queueRows().filter((row) => row.held_at !== null)).toHaveLength(1)
+  for (const kind of ['fresh dead', 'stale live']) {
+    it(`leaves a ${kind} holder unnamed`, async () => {
+      await createQueue()
+      const other = outsider()
+      expect(other.tryLock()).toBe(true)
+      const dead = kind === 'fresh dead'
+      insertTicket({
+        pid: dead ? await exitedPid() : process.pid,
+        heldAt: Date.now() - 60_000,
+        seenAt: Date.now() - (dead ? 0 : 60_000)
+      })
+      const messages = []
+      const acquire = dead ? runWithFreshHolder : run
+      const waiter = observe(acquire({ log: (message) => messages.push(message) }))
+      await until(() => messages.length > 0, 'wait message')
+      expect(messages).toEqual([`${WAITING} Position 1 of 1. ${UNNAMED}`])
+      other.close()
+      await within(waiter.promise, 'waiter')
+      expect(queueRows().filter((row) => row.held_at !== null)).toHaveLength(1)
+    }, 180_000)
+  }
+
+  it('bounds release grace by elapsed time when the wall clock steps backward', async () => {
+    const release = await run({ staleMs: 1000 })
+    const writer = await queueWriter()
+    const now = Date.now()
+    const clock = vi
+      .spyOn(Date, 'now')
+      .mockReturnValueOnce(now)
+      .mockReturnValue(now - 300_000)
+    try {
+      await within(release(), 'release despite a backward wall-clock step', 10_000)
+      const other = outsider()
+      expect(other.tryLock()).toBe(true)
+      other.close()
+    } finally {
+      clock.mockRestore()
+      await writer.kill()
+    }
   }, 180_000)
 
   it('never re-creates its held ticket after the row is lost, and still releases', async () => {

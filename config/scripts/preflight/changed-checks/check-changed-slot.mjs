@@ -166,7 +166,14 @@ class Waiter {
     // Committed state, adopted only after a decision's transaction commits.
     this.id = undefined
     this.lastBeat = 0
-    this.view = { place: undefined, blocker: undefined, holder: undefined, lane: NORMAL, at: 0 }
+    this.view = {
+      place: undefined,
+      blocker: undefined,
+      holder: undefined,
+      lane: NORMAL,
+      capped: false,
+      at: 0
+    }
   }
 
   /** One coherent decision under the queue's write lock; true once the slot is held. */
@@ -296,6 +303,7 @@ class Waiter {
     let at = previous.at
     if (
       place === undefined ||
+      (previous.capped && !capped) ||
       blockerId !== previous.blocker ||
       holder?.id !== previous.holder ||
       this.lane !== previous.lane ||
@@ -323,7 +331,7 @@ class Waiter {
       held: false,
       first: blocker === undefined,
       holder,
-      view: { place, blocker: blockerId, holder: holder?.id, lane: this.lane, at }
+      view: { place, blocker: blockerId, holder: holder?.id, lane: this.lane, capped, at }
     }
   }
 
@@ -381,9 +389,8 @@ function holdSlot(lock, queue, id, token, timing) {
 
   function release(resolve) {
     clearInterval(timer)
-    // No heartbeat is written after this point, so from startedAt + holderFreshMs on, no waiter
-    // shows this holder, whatever its ticket says, as long as the wall clock does not step back.
-    const startedAt = Date.now()
+    // With a steady wall clock, this deadline also outlasts the last heartbeat's naming window.
+    const deadline = performance.now() + timing.holderFreshMs
     const unlock = () => {
       closeQuietly(lock)
     }
@@ -401,19 +408,19 @@ function holdSlot(lock, queue, id, token, timing) {
         resolve()
         return
       }
-      if (removed === undefined && Date.now() - startedAt < timing.holderFreshMs) {
+      if (removed === undefined && performance.now() < deadline) {
         // Keeps the process alive for at most holderFreshMs.
         setTimeout(step, Math.min(100, timing.holderFreshMs))
         return
       }
-      // The queue is busy or failing: unlock only once this holder can no longer be named.
+      // Wait out the normal naming window without letting a wall-clock step extend ownership.
       setTimeout(
         () => {
           unlock()
           queue.removeEventually(id, token)
           resolve()
         },
-        Math.max(0, startedAt + timing.holderFreshMs - Date.now())
+        Math.max(0, deadline - performance.now())
       )
     }
     step()

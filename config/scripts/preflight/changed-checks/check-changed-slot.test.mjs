@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { setTimeout as delay } from 'node:timers/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { queueFileFor } from './check-changed-slot.mjs'
 import {
   createQueue,
@@ -11,6 +11,7 @@ import {
   insertTicket,
   observe,
   openQueue,
+  outsider,
   queueRows,
   root,
   run,
@@ -18,6 +19,7 @@ import {
   until,
   registerSlotHarness,
   WAITING,
+  UNNAMED,
   within
 } from './check-changed-slot.test-harness.mjs'
 
@@ -218,10 +220,46 @@ process.exit(0)`)
     let recounts = 0
     const waiter = observe(run({ staleMs, onRecount: () => (recounts += 1) }))
     await until(() => !queueRows().some((row) => row.pid === dead), 'backlog cleared')
-    // Ten batches of 16: one recount when the waiter first counts, and none per batch.
-    expect(recounts).toBe(1)
+    // Ten batches of 16: recount initially and when the capped walk finishes, not per batch.
+    expect(recounts).toBe(2)
     await holder()
     await within(waiter.promise, 'waiter')
+  }, 180_000)
+
+  it('corrects its position immediately when a capped walk reaches the front', async () => {
+    await createQueue()
+    const other = outsider()
+    expect(other.tryLock()).toBe(true)
+    const dead = await exitedPid()
+    for (let index = 0; index < 17; index++) {
+      insertTicket({ pid: dead })
+    }
+    const messages = []
+    let secondLine
+    const reported = new Promise((resolve) => (secondLine = resolve))
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now())
+    let waiter
+    try {
+      waiter = observe(
+        run({
+          staleMs: 60_000,
+          log: (message) => {
+            messages.push(message)
+            if (messages.length === 2) {
+              secondLine()
+            }
+          }
+        })
+      )
+      expect(messages[0]).toBe(`${WAITING} Position 2 of 2.`)
+      await within(reported, 'second decision without a timed recount')
+      expect(messages[1]).toBe(`${WAITING} Position 1 of 1. ${UNNAMED}`)
+      expect(waiter.settled).toBe(false)
+    } finally {
+      clock.mockRestore()
+    }
+    other.close()
+    await within(waiter.promise, 'waiter after the older checkout leaves')
   }, 180_000)
 
   for (const { ahead, line } of [
@@ -414,7 +452,9 @@ process.exit(0)`)
     { yields: true, label: 'a normal ticket while the waiter yields' }
   ]) {
     it(`decides only on committed queue state: ${label} checks in mid-decision`, async () => {
-      const holder = await run()
+      await createQueue()
+      const holder = outsider()
+      expect(holder.tryLock()).toBe(true)
       const ancestors = yields ? [await exitedPid()] : []
       // The peer's ticket is queued silent (stale, not yet expired) and ahead of the waiter, which
       // moves it aside.
@@ -443,12 +483,14 @@ await next()`)
       // The peer checks in again inside an open transaction while the slot frees up.
       peer.send('refresh')
       await peer.waitFor('refreshing')
-      const released = holder()
+      holder.close()
+      const probe = outsider()
+      expect(probe.tryLock()).toBe(true)
+      probe.close()
       await delay(300)
       expect(waiter.settled).toBe(false)
       peer.send('commit')
       await peer.waitFor('committed')
-      await within(released, 'holder release')
       await delay(300)
       // The committed check-in puts the peer ahead again, so the free slot still waits for it.
       expect(waiter.error).toBeUndefined()
