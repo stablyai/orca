@@ -147,6 +147,17 @@ describe('background wake of a pane whose PTY the host still holds', () => {
     expect(Object.keys(useAppStore.getState().automaticAgentResumeClaimsByTabId)).toEqual([])
   })
 
+  it('drops a wake mark from an earlier activation once the host claims the session', async () => {
+    useAppStore.setState(unmountedLivePaneState())
+    const record = useAppStore.getState().sleepingAgentSessionsByPaneKey[PANE_KEY]!
+    markSleepingAgentWakeRequest(record)
+    listedSessions = [{ id: LIVE_PTY_ID, cwd: '/repo', title: 'claude', agentOwnership: 'present' }]
+
+    await wakeAndSettle()
+
+    expect(hasSleepingAgentWakeRequest(record)).toBe(false)
+  })
+
   it('declines the resume and keeps the record when the host inventory cannot be read', async () => {
     useAppStore.setState(unmountedLivePaneState())
     listSessions.mockRejectedValue(new Error('daemon unreachable'))

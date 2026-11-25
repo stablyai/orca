@@ -11,7 +11,8 @@ import {
 } from './sleeping-agent-pane-ownership'
 import {
   getSleepingRecordTabId,
-  requestSleepingAgentWakeOnMount
+  requestSleepingAgentWakeOnMount,
+  takeSleepingAgentWakeRequest
 } from './sleeping-agent-wake-requests'
 
 /**
@@ -33,13 +34,17 @@ export function requestInPlaceResumeMounts(
     state.sleepingAgentSessionsByPaneKey,
     worktreeId
   )) {
+    // A mark from an earlier activation would let this pane start a second writer on connect (STA-3859).
+    if (hostClaimedKeys.has(getProviderSessionClaimKey(record))) {
+      takeSleepingAgentWakeRequest(record)
+      continue
+    }
     if (
       record.worktreeId !== worktreeId ||
       // Explicit sleep waits for its own tab open (#11598); finished history is display-only, and main owns workspace sleep.
       activationTreatsNoteAsFinished(record) ||
       record.restoreOnTabOpenOnly === true ||
       isWorkspaceSleepRecord(record) ||
-      hostClaimedKeys.has(getProviderSessionClaimKey(record)) ||
       !recordPaneCanColdRestoreInPlace(record, state)
     ) {
       continue
@@ -47,7 +52,12 @@ export function requestInPlaceResumeMounts(
     const tabId = getSleepingRecordTabId(record)
     // Why skip mounted tabs: their pane already ran its connect (or holds the record itself), so a
     // mark nothing would consume would only strand the record behind the sweep's ownership check.
-    if (tabId !== null && !hasRegisteredRuntimeTerminalTab(tabId, worktreeId)) {
+    // A pending startup command wins the pane's start over the cold restore, so leave that tab to the sweep too.
+    if (
+      tabId !== null &&
+      !hasRegisteredRuntimeTerminalTab(tabId, worktreeId) &&
+      !state.pendingStartupByTabId[tabId]
+    ) {
       tabIds.add(tabId)
     }
   }
