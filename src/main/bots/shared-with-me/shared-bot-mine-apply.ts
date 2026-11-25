@@ -1,6 +1,7 @@
 // The cloud's list of shares, applied to what this computer keeps. A share offered to this account
 // waits for its Accept: until then nothing of it is kept here (no entry, no device keys), so nothing
 // pairs. A share this account declined is kept as declined and never offered again.
+import { botShareUsable } from '../../../shared/bots/bot-team-shares'
 import type { SharedBotRequestView } from '../../../shared/bots/shared-bot-hosts'
 import type { SharedBotHeldSends } from './shared-bot-held-sends'
 import {
@@ -11,12 +12,17 @@ import {
 } from './shared-bot-host-store'
 import { pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
 
-/** Whether this computer keeps (and pairs) a listed share: accepted here before, or by this account
- *  on another of its devices (the cloud says one reaches it). */
+/** Whether this account hasn't declined the share here (`botShareUsable`, as the owner's host asks). */
+export function usableHere(store: SharedBotHostStore, shareId: string): boolean {
+  return botShareUsable(store.answer(shareId))
+}
+
+/** Whether this computer keeps (and pairs) a listed share: never once declined; else accepted here
+ *  before, or by this account on another of its devices (the cloud says one reaches it). */
 function kept(store: SharedBotHostStore, share: MineShare): boolean {
   return (
-    store.get(share.shareId) !== undefined ||
-    (share.state === 'ready' && !store.declined(share.shareId))
+    usableHere(store, share.shareId) &&
+    (store.get(share.shareId) !== undefined || share.state === 'ready')
   )
 }
 
@@ -26,7 +32,7 @@ export function sharedBotRequests(
   shares: ReadonlyMap<string, MineShare> | null
 ): SharedBotRequestView[] {
   return [...(shares?.values() ?? [])]
-    .filter((share) => !kept(store, share) && !store.declined(share.shareId))
+    .filter((share) => !kept(store, share) && usableHere(store, share.shareId))
     .map(({ shareId, botId, botName, ownerName, botPurpose, avatarUrl }) => ({
       shareId,
       botId,

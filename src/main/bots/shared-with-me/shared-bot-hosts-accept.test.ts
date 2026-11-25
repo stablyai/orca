@@ -93,12 +93,16 @@ describe('a share offered to this account', () => {
     await service.refresh()
     expect(await service.decline('share-1')).toBe(true)
     await service.refresh()
+    // Still listed (an older cloud never drops it): an Accept now, as from a phone that hasn't synced,
+    // keeps and pairs nothing.
+    expect(await service.accept('share-1')).toBe(false)
     service.stop()
     await service.flushed()
     expect(declines).toEqual(['share-1'])
     expect(service.state().requests).toEqual([])
     const again = hosts(dir)
     await again.service.refresh()
+    expect(await again.service.accept('share-1')).toBe(false)
     again.service.stop()
     expect([...accepts, ...again.accepts]).toEqual([])
     expect(again.service.store.list()).toEqual([])

@@ -18,7 +18,7 @@ import {
 } from '../../shared/bot-types'
 import { GITHUB_ID_PATTERN } from '../../shared/connector-bot-github-contract'
 import type { ExternalConversationBot } from '../../shared/connectors/external-conversation-link'
-import { BOT_MAX_SHARES, type BotShare } from '../../shared/bots/bot-team-shares'
+import { BOT_MAX_SHARES, botShareUsable, type BotShare } from '../../shared/bots/bot-team-shares'
 import {
   ConnectorBotShareSchema,
   type ConnectorBotShare
@@ -64,6 +64,8 @@ export const BOT_HELLO_BUDGET_BYTES = Math.floor(
 // Absent when there are none, which the cloud reads as not shared.
 function sharedWith(shares: readonly BotShare[] | undefined): { sharedWith?: ConnectorBotShare[] } {
   const people = (shares ?? [])
+    // A declined share is not shared: the cloud hears nothing of it.
+    .filter((share) => share.kind !== 'account' || botShareUsable(share))
     .map((share) =>
       share.kind === 'account'
         ? { shareId: share.shareId, accountId: share.accountId }

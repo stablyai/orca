@@ -2,7 +2,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { BotShare } from '../../shared/bots/bot-team-shares'
+import { withBotShareAnswer, type BotShare } from '../../shared/bots/bot-team-shares'
 import {
   openBotTeamShareOffer,
   type BotTeamShareOffer
@@ -15,6 +15,8 @@ import {
 } from './bot-team-share-deliveries'
 import { botSharedWithAccount } from './team-share/bot-share-access'
 import { BotShareDeviceStore } from '../runtime/rpc/server/pairing/bot-share-device-store'
+import { connectorBots } from '../connector-cloud/connector-places'
+import { makeTestBot } from './bot.test-fixture'
 
 const primitives = NODE_PAIRED_E2EE_PRIMITIVES
 const device = primitives.generateKeyPair()
@@ -145,6 +147,42 @@ describe('share accept on the host', () => {
     await expect(acceptBotShare(value, accept('share-alice', 'acct-alice'))).rejects.toThrow(
       'unknown_share'
     )
+  })
+})
+
+describe('a share its teammate declined', () => {
+  const declined: BotShare[] = [
+    {
+      kind: 'account',
+      shareId: 'share-alice',
+      accountId: 'acct-alice',
+      name: 'Alice',
+      email: 'alice@example.com',
+      addedAt: 1,
+      declinedAt: 5
+    },
+    shares[1]!
+  ]
+
+  it('grants nothing: no offer, no device signs in, no later answer, and the hello omits it', async () => {
+    const { value, mintOffer, putOffer } = deps({ ok: true })
+    const bots = { list: () => [{ id: 'bot-1', shares: declined }] }
+    await expect(
+      acceptBotShare({ ...value, bots }, accept('share-alice', 'acct-alice'))
+    ).resolves.toBe(false)
+    expect(mintOffer).not.toHaveBeenCalled()
+    expect(putOffer).not.toHaveBeenCalled()
+
+    expect(botSharedWithAccount(bots.list(), { botId: 'bot-1', accountId: 'acct-alice' })).toBe(
+      false
+    )
+    const answer = { shareId: 'share-alice', accountId: 'acct-alice', answer: 'accepted' as const }
+    expect(withBotShareAnswer(declined, answer, 9)).toBe(declined)
+
+    const hello = connectorBots({
+      getBots: () => [makeTestBot({ id: 'bot-1', shares: declined })]
+    })
+    expect(hello[0]?.sharedWith).toEqual([{ shareId: 'share-bob', email: 'bob@example.com' }])
   })
 })
 

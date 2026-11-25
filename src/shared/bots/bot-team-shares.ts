@@ -114,20 +114,31 @@ export function withBotShareResolved(
   return shares.map((entry) => (entry === share ? account : entry))
 }
 
-/** The share an accept names, while it is still that account's. */
+/** A share's teammate answer, as the owner's list and the teammate's computer each keep it. */
+export type BotShareAnswered = { declinedAt?: number }
+
+/** Whether a share grants anything. A declined one never does: no access or offer on the owner's host,
+ *  no keys or pairing on the teammate's computer. */
+export function botShareUsable(share: BotShareAnswered): boolean {
+  return share.declinedAt === undefined
+}
+
+/** The share an accept names, while it is still that account's and usable. */
 export function botAccountShare(
   shares: readonly BotShare[] | undefined,
   shareId: string,
   accountId: string
 ): BotAccountShare | null {
   const share = shares?.find((entry) => entry.shareId === shareId)
-  return share?.kind === 'account' && share.accountId === accountId ? share : null
+  return share?.kind === 'account' && share.accountId === accountId && botShareUsable(share)
+    ? share
+    : null
 }
 
 export type BotShareAnswer = { shareId: string; accountId: string; answer: 'accepted' | 'declined' }
 
-/** The list with that account's share marked accepted or declined at `at`; the same list when it
- *  already says so, or the share isn't that account's (removed, or shared again under a new id). */
+/** The list with that account's share marked accepted or declined at `at`; the same list once it is
+ *  answered, or the share isn't that account's (removed, or shared again under a new id). */
 export function withBotShareAnswer(
   shares: readonly BotShare[],
   answer: BotShareAnswer,
@@ -135,7 +146,8 @@ export function withBotShareAnswer(
 ): readonly BotShare[] {
   const share = botAccountShare(shares, answer.shareId, answer.accountId)
   const field = answer.answer === 'accepted' ? 'acceptedAt' : 'declinedAt'
-  if (!share || share[field] !== undefined) {
+  // The first answer stands.
+  if (!share || share.acceptedAt !== undefined) {
     return shares
   }
   return shares.map((entry) => (entry === share ? { ...share, [field]: at } : entry))

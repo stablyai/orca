@@ -36,13 +36,13 @@ export function useSharedAgentRequests(hostIds: readonly string[]): readonly Hos
       )
     return () => stops.forEach((stop) => stop())
   }, [key])
-  return useMemo(
-    () =>
-      [...byHost].flatMap(([pairedHostId, requests]) =>
-        requests.map((request) => ({ pairedHostId, request }))
-      ),
-    [byHost]
-  )
+  // A computer unpaired since keeps no rows: its requests could no longer be answered.
+  return useMemo(() => {
+    const paired = new Set(key.split('\n'))
+    return [...byHost]
+      .filter(([pairedHostId]) => paired.has(pairedHostId))
+      .flatMap(([pairedHostId, requests]) => requests.map((request) => ({ pairedHostId, request })))
+  }, [byHost, key])
 }
 
 /** The name a request calls its owner by: their first name. */

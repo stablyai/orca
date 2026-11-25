@@ -1,7 +1,7 @@
 // What the host's share list changes for teammates' access: who is removed loses their devices, and a
 // teammate reads the shared bot without the list of whom else it is shared with.
 import type { Bot } from '../../../shared/bot-types'
-import type { BotShare } from '../../../shared/bots/bot-team-shares'
+import { botShareUsable, type BotShare } from '../../../shared/bots/bot-team-shares'
 import type {
   BotShareProvisionedPhone,
   BotShareProvisionPhoneParams
@@ -42,8 +42,10 @@ export function botSharedWithAccount(
 ): boolean {
   const bot = bots.find((entry) => entry.id === grant.botId)
   return (
-    bot?.shares?.some((share) => share.kind === 'account' && share.accountId === grant.accountId) ??
-    false
+    bot?.shares?.some(
+      (share) =>
+        share.kind === 'account' && share.accountId === grant.accountId && botShareUsable(share)
+    ) ?? false
   )
 }
 

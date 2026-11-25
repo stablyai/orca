@@ -15,7 +15,7 @@ import {
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
-import { applySharedBotMine, sharedBotRequests } from './shared-bot-mine-apply'
+import { applySharedBotMine, sharedBotRequests, usableHere } from './shared-bot-mine-apply'
 import {
   namesSharedBotNewChat,
   SharedBotHeldSends,
@@ -265,7 +265,8 @@ export class SharedBotHosts {
   async accept(shareId: string): Promise<boolean> {
     await this.ready()
     const share = this.shares?.get(shareId)
-    if (!share) {
+    // Declined here, it stays declined: the cloud may list it until it hears, or never (an older cloud).
+    if (!share || !usableHere(this.store, shareId)) {
       return false
     }
     this.store.put(this.store.get(shareId) ?? newSharedBotHostEntry(share))
@@ -279,7 +280,7 @@ export class SharedBotHosts {
     if (!this.shares?.has(shareId) || this.store.get(shareId)) {
       return false
     }
-    this.store.decline(shareId)
+    this.store.decline(shareId, this.now())
     this.publish()
     await this.deps.cloud()?.decline(shareId)
     return true
