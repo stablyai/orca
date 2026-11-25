@@ -48,8 +48,10 @@ describe("Draw's capture after the picker turns off", () => {
       pickedKinds: ['selected', 'selected'],
       recovery: {
         loadingObserved: true,
-        slowLoadFinished: true,
-        contendedLoadFinished: true,
+        slowTeardownWaitedForLoad: true,
+        contendedTeardownWaitedForLoad: true,
+        sameDocument: true,
+        paintedTeardown: true,
         cancelledLoad: null,
         obsoleteCodeAbsent: true,
         processLoss: null,
