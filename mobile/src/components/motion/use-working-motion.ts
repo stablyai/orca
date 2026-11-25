@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Easing, type LayoutChangeEvent } from 'react-native'
+import { useWorkingMotionActive } from './working-motion-pause'
 
 // The page runs these as compositor animations instead (use-working-motion.web.ts).
 export type WorkingMotion<Style> = { ref: (node: unknown) => void; style: Style | undefined }
@@ -7,8 +8,9 @@ export type WorkingMotion<Style> = { ref: (node: unknown) => void; style: Style 
 function noRef(): void {}
 
 export function useWorkingRingRotation(
-  active: boolean
+  shown: boolean
 ): WorkingMotion<{ transform: { rotate: Animated.AnimatedInterpolation<string> }[] }> {
+  const active = useWorkingMotionActive(shown)
   const spin = useRef(new Animated.Value(0)).current
   useEffect(() => {
     if (!active) {
@@ -33,7 +35,8 @@ export function useWorkingRingRotation(
 }
 
 /** Live-work text breathing between full and half opacity on desktop's animate-pulse curve. */
-export function useWorkingPulse(active: boolean): WorkingMotion<{ opacity: Animated.Value }> {
+export function useWorkingPulse(shown: boolean): WorkingMotion<{ opacity: Animated.Value }> {
+  const active = useWorkingMotionActive(shown)
   const opacity = useRef(new Animated.Value(1)).current
   useEffect(() => {
     if (!active) {
@@ -59,10 +62,11 @@ export function useWorkingPulse(active: boolean): WorkingMotion<{ opacity: Anima
 const SWEEP_END = 3.6
 
 /** A busy line's segment sweeping across its track; transforms can't animate percents natively, so it measures itself. */
-export function useWorkingSweep(active: boolean): WorkingMotion<{
+export function useWorkingSweep(shown: boolean): WorkingMotion<{
   opacity: number
   transform: { translateX: Animated.AnimatedInterpolation<number> }[]
 }> & { onLayout: ((event: LayoutChangeEvent) => void) | undefined } {
+  const active = useWorkingMotionActive(shown)
   const progress = useRef(new Animated.Value(0)).current
   const [segmentWidth, setSegmentWidth] = useState(0)
   useEffect(() => {

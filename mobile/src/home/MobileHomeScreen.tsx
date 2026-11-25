@@ -10,6 +10,7 @@ import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
+import { WorkingMotionPaused } from '../components/motion/working-motion-pause'
 import { useAgentListRowActions } from '../agents/use-agent-list-row-actions'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
@@ -215,53 +216,55 @@ export function MobileHomeScreen() {
           {HOME_TABS.map((id) =>
             visitedTabs.has(id) ? (
               <View key={id} style={id === tab ? styles.fill : styles.hidden}>
-                {id === 'feed' ? (
-                  <MobileHomeFeedTab
-                    data={data}
-                    bottomInset={contentBottom}
-                    agentHandlers={agentActions.handlers}
-                    onSeeAllAgents={seeAllAgents}
-                    onOpenBot={openBot}
-                    onSeeAllBots={seeAllBots}
-                    onOpenHost={openHost}
-                    onOpenHostActions={openHostActions}
-                    onPairDesktop={pairDesktop}
-                    onOpenTasks={openTasks}
-                    onOpenSettings={openSettings}
-                  />
-                ) : id === 'bots' ? (
-                  <MobileHomeBotsTab
-                    data={data}
-                    bottomInset={contentBottom}
-                    onNewBot={canCreateBot ? openNewBot : undefined}
-                    onOpenBot={openBot}
-                  />
-                ) : id === 'agents' ? (
-                  <MobileHomeAgentsTab
-                    data={data}
-                    bottomInset={contentBottom}
-                    handlers={agentActions.handlers}
-                  />
-                ) : id === 'usage' ? (
-                  <MobileHomeUsageTab
-                    hosts={data.sortedHosts}
-                    connectedHosts={data.connectedHosts}
-                    hostStates={data.hostStates}
-                    accountsByHost={data.accountsByHost}
-                    stats={data.stats}
-                    bottomInset={contentBottom}
-                    onOpenAccounts={openMobileAccounts}
-                  />
-                ) : (
-                  <MobileHomeAutomationsTab
-                    hosts={data.sortedHosts}
-                    connectedHosts={data.connectedHosts}
-                    hostStates={data.hostStates}
-                    bottomInset={contentBottom}
-                    onOpenAutomations={(hostId) => openMobileAutomations(hostId)}
-                    onHostChange={setAutomationsHostId}
-                  />
-                )}
+                <WorkingMotionPaused.Provider value={id !== tab}>
+                  {id === 'feed' ? (
+                    <MobileHomeFeedTab
+                      data={data}
+                      bottomInset={contentBottom}
+                      agentHandlers={agentActions.handlers}
+                      onSeeAllAgents={seeAllAgents}
+                      onOpenBot={openBot}
+                      onSeeAllBots={seeAllBots}
+                      onOpenHost={openHost}
+                      onOpenHostActions={openHostActions}
+                      onPairDesktop={pairDesktop}
+                      onOpenTasks={openTasks}
+                      onOpenSettings={openSettings}
+                    />
+                  ) : id === 'bots' ? (
+                    <MobileHomeBotsTab
+                      data={data}
+                      bottomInset={contentBottom}
+                      onNewBot={canCreateBot ? openNewBot : undefined}
+                      onOpenBot={openBot}
+                    />
+                  ) : id === 'agents' ? (
+                    <MobileHomeAgentsTab
+                      data={data}
+                      bottomInset={contentBottom}
+                      handlers={agentActions.handlers}
+                    />
+                  ) : id === 'usage' ? (
+                    <MobileHomeUsageTab
+                      hosts={data.sortedHosts}
+                      connectedHosts={data.connectedHosts}
+                      hostStates={data.hostStates}
+                      accountsByHost={data.accountsByHost}
+                      stats={data.stats}
+                      bottomInset={contentBottom}
+                      onOpenAccounts={openMobileAccounts}
+                    />
+                  ) : (
+                    <MobileHomeAutomationsTab
+                      hosts={data.sortedHosts}
+                      connectedHosts={data.connectedHosts}
+                      hostStates={data.hostStates}
+                      bottomInset={contentBottom}
+                      onOpenAutomations={(hostId) => openMobileAutomations(hostId)}
+                      onHostChange={setAutomationsHostId}
+                    />
+                  )}
+                </WorkingMotionPaused.Provider>
               </View>
             ) : null
           )}
