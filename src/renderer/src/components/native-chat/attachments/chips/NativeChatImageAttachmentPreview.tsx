@@ -43,7 +43,9 @@ type Props = {
   hostEnvironmentId?: string
   /** The draft holding this chip, whose marked images keep their notes. */
   notesScopeKey?: string
-  onRemove: (id: string) => void
+  /** Absent where the image only shows, as an answer held to send later does: then it is view-only,
+   *  with no Remove and no notes to add. */
+  onRemove?: (id: string) => void
 }
 
 export function NativeChatImageAttachmentPreview({
@@ -122,7 +124,7 @@ function NativeChatUnavailableImageChip({
   id: string
   name: string
   number?: number
-  onRemove: (id: string) => void
+  onRemove?: (id: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const pasted = isNativeChatPastedImagePath(name)
@@ -155,7 +157,7 @@ function NativeChatUnavailableImageChip({
         </div>
         <ImageNumberBadge number={number} />
       </div>
-      <RemoveAttachmentButton onRemove={() => onRemove(id)} />
+      {onRemove ? <RemoveAttachmentButton onRemove={() => onRemove(id)} /> : null}
     </div>
   )
 }
@@ -269,7 +271,7 @@ function NativeChatImageThumbnail({
   }, [attachment.id, editing, notesScopeKey])
   const remove = (): void => {
     if (!notes || !notesScopeKey) {
-      onRemove(attachment.id)
+      onRemove?.(attachment.id)
       return
     }
     // Its words stay saved until the draft without it is, so a restart never finds it without them.
@@ -334,7 +336,7 @@ function NativeChatImageThumbnail({
             {editing ? t('components.native-chat.notes.editing', 'Editing…') : notesLabel}
           </span>
         ) : null}
-        <RemoveAttachmentButton onRemove={remove} />
+        {onRemove ? <RemoveAttachmentButton onRemove={remove} /> : null}
       </div>
       <NativeChatMediaViewer
         open={isOpen && (!notes || Boolean(original.src) || original.failed)}
@@ -348,16 +350,16 @@ function NativeChatImageThumbnail({
         // Numbering goes on from the copy these notes were first drawn on.
         offset={notes?.offset}
         // Without its clean original a marked image can only be viewed: new marks would land on old ones.
-        annotatable={!notes || Boolean(original.src)}
+        annotatable={Boolean(onRemove) && (!notes || Boolean(original.src))}
         replacesAttachmentId={attachment.id}
         // The marked image takes this chip's place; Undo puts this chip and its notes back.
         onAttached={
-          notesScopeKey
+          notesScopeKey && onRemove
             ? () => replaceNativeChatNotedImage(notesScopeKey, attachment.id)
             : undefined
         }
         onCleared={
-          notes && notesScopeKey
+          notes && notesScopeKey && onRemove
             ? () => restoreNativeChatCleanImage(notesScopeKey, attachment.id, notes)
             : undefined
         }

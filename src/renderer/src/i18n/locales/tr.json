@@ -1572,6 +1572,7 @@
           "claude": "Claude",
           "gsd": "GSD",
           "tabs": "sekmeler",
+          "tab_characters": "sekme karakterleri",
           "command_line": "komut satırı",
           "about": "hakkında",
           "update": "güncelleme",
@@ -28320,7 +28321,9 @@
         "sending": "Gönderiliyor…",
         "sendSome": "{{count}}/{{total}} gönder",
         "sendSomeLabel": "{{total}} yanıttan {{count}} tanesini gönder",
-        "changeAnswer": "{{question}}: {{answer}}. Yanıtı değiştir"
+        "changeAnswer": "{{question}}: {{answer}}. Yanıtı değiştir",
+        "heldImagesLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} görsel alır. Önce şimdiye kadar bekleyen yanıtları gönder ya da birkaçını kaldır.",
+        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Önce şimdiye kadar bekleyen yanıtları gönder ya da birkaçını kaldır."
       },
       "chat": {
         "moreItems": "+{{count}} tane daha",

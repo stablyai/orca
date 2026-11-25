@@ -16,6 +16,7 @@ import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotItem, BotItemStatus } from '../../../../../shared/bots/bot-items'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
+import type { BotItemHeldAnswer } from '../../../../../shared/bots/bot-item-held-answers'
 import { NativeChatJumpToLatest } from '../../native-chat/viewport/scroll/NativeChatJumpToLatest'
 import { NativeChatPaneFileDropSurface } from '../../native-chat/attachments/intake/NativeChatPaneFileDropSurface'
 import {
@@ -260,10 +261,11 @@ export function BotItemBody({
               answerWaiting()
               comment.current?.fill(text)
             },
-            recover: (text: string) => {
-              // A comment of its own: it answers no line, whatever the box names next.
-              answerNone()
-              comment.current?.fill(text, true)
+            restore: (answer: BotItemHeldAnswer, plain?: boolean) => {
+              // A comment of its own answers no line, whatever the box names next.
+              const bind = plain ? answerNone : answerWaiting
+              bind()
+              return comment.current?.restore(answer, plain) ?? false
             },
             type: () => {
               answerWaiting()

@@ -12,7 +12,8 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { parse } from 'jsonc-parser'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { addMcpServer, setMcpAgentFileAllowed } from '../mcp-host-list'
+import { setMcpAgentFileAllowed } from '../mcp-host-list'
+import { addMcpServers } from '../mcp-host-list-add'
 import { mcpAgentFileHeldPath } from './mcp-agent-file-entry'
 import { McpAgentFileLedger } from './mcp-agent-file-ledger'
 import { syncMcpAgentFiles, type McpAgentFileSyncDeps } from './mcp-agent-file-sync'
@@ -95,7 +96,7 @@ async function setUp() {
   writeFileSync(paths.grok, GROK_BEFORE)
   writeFileSync(paths.cursor, CURSOR_BEFORE)
   const add = (name: string) =>
-    addMcpServer({ name, command: 'npx', args: ['-y', name] }, { nameGiven: true }, folder)
+    addMcpServers([{ name, command: 'npx', args: ['-y', name] }], { nameGiven: true }, folder)
   await add('postgres')
   await add('context7')
   return { homeDir, folder, paths }
@@ -124,8 +125,8 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
 
     // Another profile, whose folder is also called `orca`, keeps its own same-named server beside.
     const other = instance(tempDir('mcp-agent-files-other-'), homeDir, join(homeDir, 'two', 'orca'))
-    await addMcpServer(
-      { name: 'postgres', command: 'npx', args: ['-y', 'postgres'] },
+    await addMcpServers(
+      [{ name: 'postgres', command: 'npx', args: ['-y', 'postgres'] }],
       { nameGiven: true },
       other.folder
     )

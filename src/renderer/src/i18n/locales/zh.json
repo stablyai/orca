@@ -922,6 +922,7 @@
           "spaces": "空格",
           "link": "链接",
           "tabs": "标签页",
+          "tab_characters": "制表符",
           "trim": "去除",
           "root": "根目录",
           "word_wrap": "自动换行",
@@ -28659,7 +28660,9 @@
         "sending": "正在发送…",
         "sendSome": "发送 {{count}}/{{total}}",
         "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
-        "changeAnswer": "{{question}}：{{answer}}。更改回答"
+        "changeAnswer": "{{question}}：{{answer}}。更改回答",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张图片。请先发送目前保留的回答，或移除一些。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请先发送目前保留的回答，或移除一些。"
       },
       "readMoreClosedFailed": "无法读取更多已关闭的条目",
       "wait": {
