@@ -9052,13 +9052,14 @@
             },
             "checking": "Checking…",
             "unavailable": "Status unavailable",
-            "monthly": "Monthly plan: {{percent}}% used",
             "credits": "Credits remaining: {{credits}}",
             "plan": "Plan: {{plan}}",
             "clearFailed": "Could not clear the Command Code key",
             "clearFailedDescription": "The saved key is unchanged. Try again.",
             "saveFailed": "Could not save the Command Code key",
-            "saveFailedDescription": "Check the key and try again."
+            "saveFailedDescription": "Check the key and try again.",
+            "session": "5-hour window: {{percent}}% used",
+            "weekly": "Weekly window: {{percent}}% used"
           }
         },
         "AdvancedPane": {

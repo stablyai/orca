@@ -3,15 +3,12 @@ import type {
   RateLimitWindow
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
-const MONTH_WINDOW_MINUTES = 30 * 24 * 60
-const BALANCE_KEYS = ['balance', 'credits', 'availableCredits', 'remainingCredits', 'remaining']
-const USED_KEYS = ['used', 'usage', 'consumed', 'current']
-const LIMIT_KEYS = ['limit', 'total', 'quota', 'max']
-const RESET_KEYS = ['resetsAt', 'resetAt', 'periodEnd', 'currentPeriodEnd', 'renewsAt']
-const PLAN_KEYS = ['planType', 'plan', 'tier']
+const SESSION_WINDOW_MINUTES = 5 * 60
+const WEEK_WINDOW_MINUTES = 7 * 24 * 60
 
 export type CommandCodeUsageNormalized = {
-  monthly: RateLimitWindow | null
+  session: RateLimitWindow | null
+  weekly: RateLimitWindow | null
   extraUsage: ExtraUsageBalance | null
   planType: string | null
 }
@@ -29,91 +26,110 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
 
-function firstNumber(record: Record<string, unknown>, keys: readonly string[]): number | null {
-  for (const key of keys) {
-    const value = finiteNumber(record[key])
-    if (value !== null) {
-      return value
+/** Reset timestamps are epoch ms in the live shape; seconds and ISO strings are tolerated. */
+function readResetMs(value: unknown, now: number): number | null {
+  let ms: number | null = null
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Date.parse(value)
+    ms = Number.isNaN(parsed) ? null : parsed
+  } else {
+    const numeric = finiteNumber(value)
+    if (numeric !== null && numeric > 0) {
+      ms = numeric < 1e12 ? numeric * 1000 : numeric
     }
   }
-  return null
+  return ms !== null && ms >= now - 60_000 ? ms : null
 }
 
-/** Timestamps may arrive as ms, seconds, or ISO strings; only future-or-current values are kept. */
-function readResetMs(record: Record<string, unknown>, now: number): number | null {
-  for (const key of RESET_KEYS) {
-    const raw = record[key]
-    let ms: number | null = null
-    if (typeof raw === 'string' && raw.trim() !== '') {
-      const parsed = Date.parse(raw)
-      ms = Number.isNaN(parsed) ? null : parsed
-    } else {
-      const numeric = finiteNumber(raw)
-      if (numeric !== null && numeric > 0) {
-        ms = numeric < 1e12 ? numeric * 1000 : numeric
-      }
-    }
-    if (ms !== null && ms >= now - 60_000) {
-      return ms
-    }
-  }
-  return null
-}
-
-function readPlanType(payload: unknown): string | null {
-  const record = unwrap(payload)
-  const subscription = Array.isArray(record) ? record[0] : record
-  if (!isRecord(subscription)) {
-    return null
-  }
-  for (const key of PLAN_KEYS) {
-    const value = subscription[key]
-    if (typeof value === 'string' && value.trim() !== '') {
-      return value.trim()
-    }
-  }
-  return null
-}
-
-function readBalance(payload: unknown): number | null {
-  const record = unwrap(payload)
-  if (typeof record === 'number') {
-    return finiteNumber(record)
-  }
-  return isRecord(record) ? firstNumber(record, BALANCE_KEYS) : null
-}
-
-/** Subscription usage becomes the monthly window only when both used and limit are reported. */
-function readMonthlyWindow(payload: unknown, now: number): RateLimitWindow | null {
-  const record = unwrap(payload)
-  const subscription = Array.isArray(record)
-    ? record.find((entry) => isRecord(entry) && firstNumber(entry, LIMIT_KEYS) !== null)
-    : record
-  if (!isRecord(subscription)) {
-    return null
-  }
-  const limit = firstNumber(subscription, LIMIT_KEYS)
-  const used = firstNumber(subscription, USED_KEYS)
-  if (limit === null || used === null || limit <= 0) {
+function readWindow(
+  record: Record<string, unknown>,
+  windowMinutes: number,
+  now: number
+): RateLimitWindow | null {
+  const used = finiteNumber(record.used)
+  const cap = finiteNumber(record.cap)
+  if (used === null || cap === null || cap <= 0) {
     return null
   }
   return {
-    usedPercent: Math.min(100, Math.max(0, (used / limit) * 100)),
-    windowMinutes: MONTH_WINDOW_MINUTES,
-    resetsAt: readResetMs(subscription, now),
+    usedPercent: Math.min(100, Math.max(0, (used / cap) * 100)),
+    windowMinutes,
+    resetsAt: readResetMs(record.resetAt, now),
     resetDescription: null
   }
 }
 
-/** Command Code's usage routes are not publicly documented, so unknown shapes map to nulls rather than guesses. */
+/** `windowLimits.fiveHour` -> session, `windowLimits.weekly` -> weekly; weekly may omit resetAt. */
+function readWindowLimits(
+  payload: unknown,
+  now: number
+): { session: RateLimitWindow | null; weekly: RateLimitWindow | null } {
+  const record = unwrap(payload)
+  if (!isRecord(record) || !isRecord(record.windowLimits)) {
+    return { session: null, weekly: null }
+  }
+  const limits = record.windowLimits
+  return {
+    session: isRecord(limits.fiveHour)
+      ? readWindow(limits.fiveHour, SESSION_WINDOW_MINUTES, now)
+      : null,
+    weekly: isRecord(limits.weekly) ? readWindow(limits.weekly, WEEK_WINDOW_MINUTES, now) : null
+  }
+}
+
+/** Balance is the sum of the monthly, purchased, and free credit pools. */
+function readCreditBalance(payload: unknown): number | null {
+  const record = unwrap(payload)
+  if (!isRecord(record) || !isRecord(record.credits)) {
+    return null
+  }
+  const credits = record.credits
+  const parts = [
+    finiteNumber(credits.monthlyCredits),
+    finiteNumber(credits.purchasedCredits),
+    finiteNumber(credits.freeCredits)
+  ]
+  if (parts.every((part) => part === null)) {
+    return null
+  }
+  return parts.reduce<number>((sum, part) => sum + (part ?? 0), 0)
+}
+
+/** Plan label: `data.plan?.name`, `data.planName`, `data.metadata.plan`, then the subscription status. */
+function readPlanType(payload: unknown): string | null {
+  const data = unwrap(payload)
+  if (!isRecord(data)) {
+    return null
+  }
+  const candidates: unknown[] = []
+  if (isRecord(data.plan)) {
+    candidates.push(data.plan.name)
+  } else if (typeof data.plan === 'string') {
+    candidates.push(data.plan)
+  }
+  candidates.push(data.planName)
+  if (isRecord(data.metadata)) {
+    candidates.push(data.metadata.plan)
+  }
+  candidates.push(data.status)
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim() !== '') {
+      return candidate.trim()
+    }
+  }
+  return null
+}
+
 export function normalizeCommandCodeUsage(input: {
   credits: unknown
   subscriptions: unknown
   now: number
 }): CommandCodeUsageNormalized {
-  const balance = readBalance(input.credits)
+  const { session, weekly } = readWindowLimits(input.credits, input.now)
+  const balance = readCreditBalance(input.credits)
   return {
-    monthly: readMonthlyWindow(input.subscriptions, input.now),
+    session,
+    weekly,
     planType: readPlanType(input.subscriptions),
     extraUsage:
       balance === null

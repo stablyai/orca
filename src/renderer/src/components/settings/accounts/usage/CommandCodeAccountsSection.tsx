@@ -152,7 +152,8 @@ export function CommandCodeAccountsSection({
     host.owner
   )
   const configured = status?.apiKeyConfigured === true
-  const monthlyPercent = usage?.monthly ? Math.round(usage.monthly.usedPercent) : null
+  const sessionPercent = usage?.session ? Math.round(usage.session.usedPercent) : null
+  const weeklyPercent = usage?.weekly ? Math.round(usage.weekly.usedPercent) : null
   const balance = usage?.extraUsage?.unit === 'credits' ? usage.extraUsage.balance : null
   const accessNotice = usageCredentialAccessNotice(host, access, t)
 
@@ -235,12 +236,21 @@ export function CommandCodeAccountsSection({
               })}
             </p>
           )}
-          {monthlyPercent !== null && (
+          {sessionPercent !== null && (
             <p>
               {t(
-                'auto.components.settings.AccountsPane.commandCode.monthly',
-                'Monthly plan: {{percent}}% used',
-                { percent: monthlyPercent }
+                'auto.components.settings.AccountsPane.commandCode.session',
+                '5-hour window: {{percent}}% used',
+                { percent: sessionPercent }
+              )}
+            </p>
+          )}
+          {weeklyPercent !== null && (
+            <p>
+              {t(
+                'auto.components.settings.AccountsPane.commandCode.weekly',
+                'Weekly window: {{percent}}% used',
+                { percent: weeklyPercent }
               )}
             </p>
           )}

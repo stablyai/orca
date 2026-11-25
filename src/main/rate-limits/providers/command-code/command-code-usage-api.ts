@@ -9,8 +9,7 @@ import type {
   UsageRateLimitFailureKind
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
-// UNVERIFIED: these routes come from the community-reported `cmd` CLI behavior, not public docs.
-// Keep every assumption here so a wrong path is a one-line fix.
+// VERIFIED: routes and response shapes confirmed against live Command Code responses.
 export const COMMAND_CODE_API_BASE_URL = 'https://api.commandcode.ai'
 export const COMMAND_CODE_CREDITS_PATH = '/alpha/billing/credits'
 export const COMMAND_CODE_SUBSCRIPTIONS_PATH = '/alpha/billing/subscriptions'
@@ -101,11 +100,16 @@ export async function fetchCommandCodeRateLimits(input: {
     getJson(COMMAND_CODE_SUBSCRIPTIONS_PATH, input.apiKey, input.signal)
   ])
   // Either route rejecting the key settles it; a 404 on the other route does not hide that verdict.
-  const rejected = [credits, subscriptions].some(
-    (read) => read.kind === 'failed' && read.failureKind === 'missing-credentials'
-  )
+  const rejected = [
+    { label: 'credits', read: credits },
+    { label: 'subscriptions', read: subscriptions }
+  ].find(({ read }) => read.kind === 'failed' && read.failureKind === 'missing-credentials')
   if (rejected) {
-    return failed('Command Code rejected the saved API key', 'missing-credentials')
+    const status = rejected.read.kind === 'failed' ? rejected.read.status : undefined
+    return failed(
+      `Command Code rejected the saved API key (${rejected.label} returned HTTP ${status ?? 401})`,
+      'missing-credentials'
+    )
   }
   const entitlement = [credits, subscriptions].some(
     (read) => read.kind === 'failed' && read.failureKind === 'no-subscription'
@@ -121,7 +125,7 @@ export async function fetchCommandCodeRateLimits(input: {
     subscriptions: subscriptions.kind === 'ok' ? subscriptions.value : null,
     now: Date.now()
   })
-  if (!normalized.monthly && !normalized.extraUsage) {
+  if (!normalized.session && !normalized.weekly && !normalized.extraUsage) {
     // Key names only, never values: enough to see the real schema without leaking balances or identity.
     const shape = [
       `credits: ${describeShape(credits)}`,
@@ -131,9 +135,8 @@ export async function fetchCommandCodeRateLimits(input: {
   }
   return {
     provider: 'command-code',
-    session: null,
-    weekly: null,
-    monthly: normalized.monthly,
+    session: normalized.session,
+    weekly: normalized.weekly,
     extraUsage: normalized.extraUsage,
     planType: normalized.planType,
     updatedAt: Date.now(),
