@@ -6170,7 +6170,7 @@
           "preservedTitle": "{{value0}}의 수정 내용을 별도로 저장했습니다",
           "preservedDescription": "Orca가 스킬을 업데이트하고 수정 내용을 {{value0}}에 저장했습니다.",
           "uncertainTitle": "Orca가 {{value0}}의 스킬 업데이트를 확인하지 못했습니다",
-          "uncertainDescription": "Orca가 {{value0}}의 스킬을 업데이트했을 수 있지만 결과를 확인하지 못했습니다. 업데이트 중에 스킬을 수정했다면 사본이 {{value1}}에 있습니다."
+          "uncertainDescriptionKept": "Orca가 {{value0}}의 스킬을 업데이트했을 수 있지만 결과를 확인하지 못했습니다. 업데이트 중에 스킬을 수정했다면 사본이 {{value1}}에 있거나 스킬 폴더에 그대로 남아 있습니다."
         },
         "SkillBackupPathLine": {
           "movedTo": "이전 사본을 옮긴 위치:",
