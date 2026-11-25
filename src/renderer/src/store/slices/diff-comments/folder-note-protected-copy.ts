@@ -10,6 +10,7 @@ import {
   recordFolderNotesFence
 } from './folder-note-fence'
 import { projectFolderNoteVerdict } from './folder-note-receipt'
+import { diffCommentVersion } from '../../../../../shared/file-review/folder-diff-comment-merge'
 import {
   NOTHING_SATISFIED,
   overlayFolderNotes,
@@ -38,6 +39,9 @@ export type ProtectedCopy = {
   enqueueRead: EnqueueFolderNoteRead
   failed: boolean
   lastRunAcknowledged: boolean
+  // Catalog generation claimed when the last run was acknowledged; a quiet fetch claimed after it
+  // shows the host after that write, so it can end protection.
+  ackGeneration: number | undefined
   // Undefined while idle: the next event takes the list state shows as a provisional base.
   authoritative: DiffComment[] | undefined
   // The display rests on an observation or floor, not on a host-issued list after the last write.
@@ -87,25 +91,40 @@ export function recordConfirmed(
   verdict: FolderDiffCommentVerdict
 ): ReadonlySet<string> {
   const { satisfied, held } = projectFolderNoteVerdict(action, verdict)
-  const generation = peekHostCatalogGeneration(
-    get,
-    'folder-workspaces',
-    catalogTargetOf(copy.owner)
-  )
+  const generation = catalogGenerationOf(copy, get)
   for (const [id, entry] of held) {
     const prior = copy.confirmed.get(id)
-    copy.confirmed.delete(id)
     if (!entry.known) {
       // Another version won and this client has no copy of it: show the base until a host list.
+      copy.confirmed.delete(id)
       copy.dirty = true
       continue
     }
-    const wasAbsent = prior
-      ? prior.note === undefined || prior.relocated
-      : action.before.get(id) === undefined
-    copy.confirmed.set(id, { note: entry.note, relocated: !!entry.note && wasAbsent, generation })
+    if (entry.note && prior?.note) {
+      // An edit keeps the note where it is, as the host does; Map.set keeps the entry's place.
+      copy.confirmed.set(id, { note: entry.note, relocated: prior.relocated, generation })
+      continue
+    }
+    // Only a note added (or re-added after a delete) goes last, behind every earlier confirmation.
+    const added = !!entry.note && (prior ? true : action.before.get(id) === undefined)
+    copy.confirmed.delete(id)
+    copy.confirmed.set(id, { note: entry.note, relocated: added, generation })
   }
   return satisfied
+}
+
+/** The newest folder catalog fetch claimed for this copy's host so far. */
+export function catalogGenerationOf(copy: ProtectedCopy, get: () => AppState): number {
+  return peekHostCatalogGeneration(get, 'folder-workspaces', catalogTargetOf(copy.owner))
+}
+
+/** The version of `id` the host is known to hold, from the accepted base and confirmations. */
+export function acceptedVersion(copy: ProtectedCopy, id: string): string {
+  const confirmed = copy.confirmed.get(id)
+  if (confirmed) {
+    return diffCommentVersion(confirmed.note)
+  }
+  return diffCommentVersion(copy.authoritative?.find((note) => note.id === id))
 }
 
 /** The owned row is gone, recreated or served by another pairing: this copy's notes are not its. */

@@ -22,8 +22,10 @@ export type FolderNoteAction = {
   // Ids in the action's scope that look done only because an earlier queued action changed them:
   // id → that latest earlier action. The action took effect only if those did too.
   borrowed: Map<string, FolderNoteAction>
-  /** Resolves once with the ids whose intended version the host holds (empty: not saved). */
+  /** Resolves once with the ids whose intended version the host holds (empty: unconfirmed). */
   outcome: Promise<ReadonlySet<string>>
+  // The same ids, readable without waiting once the action settled.
+  satisfied?: ReadonlySet<string>
   resolveOutcome: (satisfied: ReadonlySet<string>) => void
   // Settled without ever being sent (backlog bound, or its folder row was replaced): why.
   refusedUnsent?: string
@@ -55,33 +57,32 @@ function touches(action: FolderNoteAction, id: string, scope: FolderNoteScope): 
   )
 }
 
-/** For each id `scope` selects among queued actions, the latest queued action that changed it. */
+/**
+ * For each id `scope` selects among queued actions, the latest queued action that changed it. With
+ * `shown` (the list the user acted on), only ids that list shows as that action left them: an id a
+ * refresh already shows otherwise is not that action's doing.
+ */
 export function latestQueuedActionsTouching(
   copyKey: string,
   scope: FolderNoteScope,
-  except?: ReadonlySet<string>
+  options: { except?: ReadonlySet<string>; shown?: ReadonlyMap<string, DiffComment> } = {}
 ): Map<string, FolderNoteAction> {
   const latest = new Map<string, FolderNoteAction>()
   for (const action of unsettledByCopy.get(copyKey) ?? []) {
     for (const id of action.delta.keys()) {
-      if (!except?.has(id) && touches(action, id, scope)) {
+      if (!options.except?.has(id) && touches(action, id, scope)) {
         latest.set(id, action)
       }
     }
   }
-  return latest
-}
-
-/** Whether every borrowed id ended as its latest queued action meant it to (they settle first). */
-export async function borrowedTookEffect(
-  borrowed: ReadonlyMap<string, FolderNoteAction>
-): Promise<boolean> {
-  for (const [id, action] of borrowed) {
-    if (!(await action.outcome).has(id)) {
-      return false
+  if (options.shown) {
+    for (const [id, action] of latest) {
+      if (versionsDiffer(options.shown.get(id), action.delta.get(id))) {
+        latest.delete(id)
+      }
     }
   }
-  return true
+  return latest
 }
 
 /** Builds an action from the lists the user acted on; its delta is fixed from now on. */
@@ -119,7 +120,10 @@ export function createFolderNoteAction(args: {
       ? getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId)
       : undefined,
     borrowed: scope
-      ? latestQueuedActionsTouching(copyKey, scope, new Set(delta.keys()))
+      ? latestQueuedActionsTouching(copyKey, scope, {
+          except: new Set(delta.keys()),
+          shown: beforeById
+        })
       : new Map(),
     outcome,
     resolveOutcome
@@ -144,6 +148,7 @@ export function settleFolderNoteAction(
   } else {
     unsettledByCopy.set(copyKey, remaining)
   }
+  action.satisfied = satisfied
   action.resolveOutcome(satisfied)
 }
 

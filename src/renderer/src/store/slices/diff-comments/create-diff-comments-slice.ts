@@ -153,7 +153,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
       return false
     }
     const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
-    const inScope = (id: string) => snapshotsById.has(id)
+    // Only a note still as delivered is in scope; an edited one is a fresh note this clear keeps.
+    const inScope = (id: string, note: DiffComment | undefined) => {
+      const snapshot = snapshotsById.get(id)
+      return !!snapshot && !!note && deliverySnapshotMatches(note, snapshot)
+    }
     const result = mutateDiffComments(
       set,
       owner,

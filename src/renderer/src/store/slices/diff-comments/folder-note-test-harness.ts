@@ -1,18 +1,11 @@
 // @orca-isolated-worker: stubs `window` at load and shares its mock objects with every importer.
 import { vi } from 'vitest'
+import { createModelHost, type HostKind, type OrdinaryUpdates } from './folder-note-test-model-host'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import {
-  applyDiffCommentWrite,
-  type DiffCommentBaseMutation
-} from '../../../../../shared/file-review/diff-comment-mutation'
-import type {
-  FolderDiffCommentMergeRequest,
-  FolderDiffCommentReceipt
-} from '../../../../../shared/file-review/folder-diff-comment-merge'
-import { mergeFolderDiffCommentsOnHost } from '../../../../../shared/file-review/folder-diff-comment-merge-operation'
+import type { FolderDiffCommentMergeRequest } from '../../../../../shared/file-review/folder-diff-comment-merge'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -24,10 +17,9 @@ import { resetFolderNoteProtectionForTests } from './folder-note-protection'
 import { resetFolderNotesFenceForTests } from './folder-note-fence'
 import { createFolderWorkspaceCatalogActions } from '../../folder-workspaces/folder-workspace-catalog-actions'
 import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
-import {
-  makeFolderWorkspace,
-  makeProjectGroup
-} from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+import { makeProjectGroup } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
+
+export { createModelHost, type HostKind, type ModelHost } from './folder-note-test-model-host'
 
 export const WORKSPACE_KEY = folderWorkspaceKey('folder-1')
 
@@ -50,117 +42,6 @@ export function note(id: string, body: string, lineNumber = 1): DiffComment {
     createdAt: 1
   }
 }
-
-export type HostKind = 'local' | 'paired' | 'paired-older'
-
-type OrdinaryUpdates = { diffComments?: DiffComment[] } & DiffCommentBaseMutation
-
-/** One host's folder row and how it answers each kind of note write. */
-export function createModelHost(kind: HostKind, saved: DiffComment[]) {
-  const host = {
-    row: makeFolderWorkspace({
-      id: 'folder-1',
-      folderPath: '/workspace',
-      ...(kind === 'local' ? { executionHostId: 'local' as const } : {}),
-      diffComments: saved,
-      createdAt: 7
-    }),
-    // An older paired server has no merge method and replaces the list on every update.
-    supportsMerge: kind !== 'paired-older',
-    clock: 1000,
-    effects: { ordinary: 0, merges: 0, reads: 0 },
-    /** Next ordinary update: 'refuse' never reaches the host; 'drop-ack' lands, reply lost. */
-    nextOrdinary: 'ok' as 'ok' | 'refuse' | 'drop-ack',
-    /** An ordinary update waits here before it reaches the host. */
-    ordinaryGate: undefined as Promise<void> | undefined,
-    /** Next merge-method calls, consumed in order. */
-    nextMerges: [] as ('ok' | 'drop-ack' | 'refuse')[],
-    mergeGate: undefined as Promise<void> | undefined,
-    /** A read samples the row first, then waits here before its reply is delivered. */
-    readGate: undefined as Promise<void> | undefined,
-    /** Next reads, consumed in order: 'fail' never reaches the host. */
-    nextReads: [] as ('ok' | 'fail')[],
-    requests: [] as FolderDiffCommentMergeRequest[],
-    ordinary(updates: OrdinaryUpdates): FolderWorkspace {
-      const mode = host.nextOrdinary
-      host.nextOrdinary = 'ok'
-      if (mode === 'refuse') {
-        throw new Error('host unreachable')
-      }
-      host.effects.ordinary += 1
-      host.row = {
-        ...host.row,
-        updatedAt: host.clock--,
-        diffComments:
-          kind === 'paired-older'
-            ? updates.diffComments
-            : applyDiffCommentWrite(host.row.diffComments, updates)
-      }
-      if (mode === 'drop-ack') {
-        throw new Error('connection lost')
-      }
-      return host.row
-    },
-    async merge(request: FolderDiffCommentMergeRequest): Promise<FolderDiffCommentReceipt> {
-      host.requests.push(request)
-      if (request.mode === 'read' && host.nextReads.shift() === 'fail') {
-        throw new Error('host unreachable')
-      }
-      if (request.mode === 'merge') {
-        await host.mergeGate
-      }
-      const mode = request.mode === 'read' ? 'ok' : (host.nextMerges.shift() ?? 'ok')
-      const receipt = mergeFolderDiffCommentsOnHost(
-        {
-          rows: () => [host.row],
-          visibleRows: () => [host.row],
-          assertWritable: () => {
-            if (mode === 'refuse') {
-              throw new Error('fenced')
-            }
-          },
-          update: (_id, updates) => {
-            host.effects.merges += 1
-            host.row = {
-              ...host.row,
-              updatedAt: host.clock--,
-              diffComments: applyDiffCommentWrite(host.row.diffComments, updates)
-            }
-            return host.row
-          },
-          notify: () => {}
-        },
-        request
-      )
-      if (request.mode === 'read') {
-        host.effects.reads += 1
-        await host.readGate
-      }
-      if (mode === 'drop-ack') {
-        throw new Error('connection lost')
-      }
-      return receipt
-    },
-    /** Another device's save, merged on the host. */
-    peer(edit: (notes: DiffComment[]) => DiffComment[]): void {
-      const current = host.row.diffComments ?? []
-      host.row = {
-        ...host.row,
-        updatedAt: host.clock--,
-        diffComments: applyDiffCommentWrite(current, {
-          diffComments: edit(current),
-          diffCommentsBase: current
-        })
-      }
-    },
-    notes(): string[] {
-      return (host.row.diffComments ?? []).map((entry) => `${entry.id}=${entry.body}`)
-    }
-  }
-  return host
-}
-
-export type ModelHost = ReturnType<typeof createModelHost>
 
 export const folderWorkspacesApi = {
   update: vi.fn(),
@@ -208,6 +89,7 @@ function createTestStore() {
       projectGroups: [],
       repos: [],
       runtimeEnvironments: [],
+      removedRuntimeEnvironmentIds: new Set<string>(),
       restoredRuntimeHostIdByWorkspaceSessionKey: {},
       worktreesByRepo: {}
     } as unknown as AppState
@@ -230,6 +112,11 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
       if (args.method === 'folderWorkspace.update') {
         const updates = (args.params as { updates?: OrdinaryUpdates } | undefined)?.updates ?? {}
         return reply({ folderWorkspace: host.ordinary(updates) })
+      }
+      if (args.method === 'folderWorkspace.list') {
+        const list = host.pairedLists.shift()
+        await list?.gate
+        return reply({ folderWorkspaces: [list?.sampled ?? structuredClone(host.row)] })
       }
       if (args.method === 'folderWorkspace.mergeDiffComments') {
         if (!host.supportsMerge) {
@@ -304,11 +191,20 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
         release = resolve
       })
       const sampled = structuredClone(sample)
-      folderWorkspacesApi.list.mockImplementationOnce(async () => {
-        await gate
-        return [sampled]
+      if (kind === 'local') {
+        folderWorkspacesApi.list.mockImplementationOnce(async () => {
+          await gate
+          return [sampled]
+        })
+      } else {
+        host.pairedLists.push({ gate, sampled })
+      }
+      // The catalog of the host that owns the folder: local, or the paired server's list.
+      const owning = owner()
+      const done = store.getState().fetchFolderWorkspaces({
+        runtimeEnvironmentId:
+          owning.kind === 'folder' ? (owning.runtimeEnvironmentId ?? null) : null
       })
-      const done = store.getState().fetchFolderWorkspaces({ runtimeEnvironmentId: null })
       return {
         deliver: async () => {
           release()

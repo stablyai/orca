@@ -8,7 +8,6 @@ import {
 } from './folder-note-merge-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
-  borrowedTookEffect,
   createFolderNoteAction,
   latestQueuedActionsTouching,
   NOTHING_SATISFIED,
@@ -20,13 +19,16 @@ import {
   type FolderNoteScope,
   type FolderOwner
 } from './folder-note-actions'
+import { diffCommentVersion } from '../../../../../shared/file-review/folder-diff-comment-merge'
 import {
   checkFolderNoteReceipt,
   folderNoteRequest,
   isDefinitiveRefusalReply
 } from './folder-note-receipt'
 import {
+  acceptedVersion,
   adoptHostList,
+  catalogGenerationOf,
   isCurrentCopy,
   MAX_PENDING_FOLDER_NOTE_ACTIONS,
   noticeOutsideReplacement,
@@ -96,6 +98,24 @@ export function settleOrdinaryFolderNoteAction(copyKey: string, action: FolderNo
 }
 
 /**
+ * Ids an action rests on that did not end as it needs: the latest earlier action changing the id
+ * was not confirmed, and the accepted host state does not already hold that version either (a peer
+ * may have made the same change). Reads settled results only, so it never yields.
+ */
+function unmetDependencies(
+  copy: ProtectedCopy,
+  borrowed: ReadonlyMap<string, FolderNoteAction>
+): string[] {
+  return [...borrowed]
+    .filter(
+      ([id, earlier]) =>
+        !earlier.satisfied?.has(id) &&
+        acceptedVersion(copy, id) !== diffCommentVersion(earlier.delta.get(id))
+    )
+    .map(([id]) => id)
+}
+
+/**
  * For a protected copy, whether the queued actions that make a no-op look like one took effect,
  * judged per id by the latest queued action that changed it; true at once for an empty scope.
  */
@@ -104,10 +124,14 @@ export async function awaitProtectedFolderNoteDependency(
   scope: FolderNoteScope
 ): Promise<boolean> {
   const copyKey = diffCommentOwnerKey(owner)
-  if (owner.kind !== 'folder' || !protectedCopies.has(copyKey)) {
+  const copy = protectedCopies.get(copyKey)
+  if (owner.kind !== 'folder' || !copy) {
     return true
   }
-  return borrowedTookEffect(latestQueuedActionsTouching(copyKey, scope))
+  const shown = new Map((copy.shown ?? []).map((note) => [note.id, note]))
+  const borrowed = latestQueuedActionsTouching(copyKey, scope, { shown })
+  await Promise.all([...borrowed.values()].map((action) => action.outcome))
+  return !isCurrentCopy(copy) || unmetDependencies(copy, borrowed).length === 0
 }
 
 /** After a new action on a protected copy, shows the derived list (it differs from the optimistic one after a refresh). */
@@ -137,20 +161,36 @@ export function enterFolderNoteProtection(args: {
   set: Set
   enqueueRead: EnqueueFolderNoteRead
 }): void {
-  const { copyKey, owner, get, set } = args
-  settleFolderNoteAction(copyKey, args.failed, NOTHING_SATISFIED)
+  const { copyKey, owner, get, set, failed } = args
+  settleFolderNoteAction(copyKey, failed, NOTHING_SATISFIED)
   const row = ownedFolderRow(get(), owner)
-  const queued = unsettledFolderNoteActions(copyKey)
+  // Bound to the row and pairing the failed save was made on; work made on a successor is its own.
+  const sameRow = (action: FolderNoteAction) =>
+    action.expectedCreatedAt === failed.expectedCreatedAt &&
+    action.pairingRevision === failed.pairingRevision
+  const queued = unsettledFolderNoteActions(copyKey).filter(sameRow)
+  const replaced =
+    failed.expectedCreatedAt === undefined ||
+    row?.createdAt !== failed.expectedCreatedAt ||
+    (!!owner.runtimeEnvironmentId &&
+      getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId) !== failed.pairingRevision)
+  if (replaced) {
+    // The failed save's row is already gone: its queued work is refused unsent, the successor shows none of it.
+    for (const action of queued) {
+      action.refusedUnsent = 'host changed'
+      settleFolderNoteAction(copyKey, action, NOTHING_SATISFIED)
+    }
+    return
+  }
   const copy: ProtectedCopy = {
     key: copyKey,
     owner,
-    createdAt: row?.createdAt,
-    pairingRevision: owner.runtimeEnvironmentId
-      ? getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId)
-      : undefined,
+    createdAt: failed.expectedCreatedAt,
+    pairingRevision: failed.pairingRevision,
     enqueueRead: args.enqueueRead,
     failed: true,
     lastRunAcknowledged: false,
+    ackGeneration: undefined,
     authoritative: [...args.floor],
     provisional: true,
     pending: queued.slice(0, MAX_PENDING_FOLDER_NOTE_ACTIONS),
@@ -188,6 +228,7 @@ function failRun(
 ): never {
   copy.failed = true
   copy.lastRunAcknowledged = false
+  copy.ackGeneration = undefined
   copy.dirty ||= unverifiable
   copy.readAttempts = 0
   settle(copy, action, NOTHING_SATISFIED)
@@ -205,15 +246,21 @@ export async function runProtectedFolderNoteAction(args: {
 }): Promise<void> {
   const { copyKey, action, get, set } = args
   const copy = protectedCopies.get(copyKey)
-  if (!copy || !copy.pending.includes(action) || !noticeOutsideReplacement(copy, get)) {
+  // Why no await before the send: a copy retired while this yielded could otherwise still send.
+  if (
+    !copy ||
+    action.refusedUnsent ||
+    !copy.pending.includes(action) ||
+    !noticeOutsideReplacement(copy, get)
+  ) {
     // Retired with its copy (the row was replaced) or past the backlog bound: never sent.
     settleFolderNoteAction(copyKey, action, NOTHING_SATISFIED)
     throw new FolderNoteNotSavedError(action.refusedUnsent ?? 'host changed')
   }
   const fail = (reason: string, unverifiable: boolean): never =>
     failRun(copy, action, get, set, reason, unverifiable)
-  // Ids it rests on settled before it ran; it only took effect if they did.
-  if (!(await borrowedTookEffect(action.borrowed))) {
+  // Ids it rests on settled before it ran (the queue is serial); it took effect only if they hold.
+  if (unmetDependencies(copy, action.borrowed).length > 0) {
     return fail('unconfirmed', false)
   }
   if (action.delta.size === 0) {
@@ -251,6 +298,7 @@ export async function runProtectedFolderNoteAction(args: {
   const satisfied = recordConfirmed(copy, get, action, receipt.verdict)
   if (showing) {
     copy.lastRunAcknowledged = true
+    copy.ackGeneration = catalogGenerationOf(copy, get)
     if (receipt.snapshot && copy.observationGeneration === generationAtSend) {
       // Committed after the send, so newer than every observation made before it.
       adoptHostList(copy, get, receipt.snapshot)

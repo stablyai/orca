@@ -160,11 +160,7 @@ export function observeFolderCatalogInput(args: {
   let merged = args.merged
   for (const copy of protectedCopies.values()) {
     const folderWorkspaceId = folderWorkspaceIdOf(copy.owner)
-    if (
-      !folderWorkspaceId ||
-      folderCatalogHostIdOf(copy.owner) !== args.catalogHostId ||
-      isFolderNotesFenceHolding(copy.owner.executionHostId, folderWorkspaceId, args.fetchGeneration)
-    ) {
+    if (!folderWorkspaceId || folderCatalogHostIdOf(copy.owner) !== args.catalogHostId) {
       continue
     }
     const index = merged.findIndex(
@@ -181,6 +177,12 @@ export function observeFolderCatalogInput(args: {
       retireProtectedCopy(copy, 'host changed')
       continue
     }
+    // Why after the row check: the fence only guards note contents, never a replaced or removed row.
+    if (
+      isFolderNotesFenceHolding(copy.owner.executionHostId, folderWorkspaceId, args.fetchGeneration)
+    ) {
+      continue
+    }
     // A fetch claimed after a confirmation sampled the host after it: the row itself says it now.
     for (const [id, entry] of copy.confirmed) {
       if (args.fetchGeneration > entry.generation) {
@@ -191,6 +193,19 @@ export function observeFolderCatalogInput(args: {
     const unreconciled = copy.dirty || copy.provisional
     copy.authoritative = [...(row.diffComments ?? [])]
     copy.observationGeneration += 1
+    if (
+      !overlapping &&
+      copy.lastRunAcknowledged &&
+      copy.ackGeneration !== undefined &&
+      args.fetchGeneration > copy.ackGeneration
+    ) {
+      // Quiet, claimed after the acknowledged tail: the host's list after that write. It is the
+      // base now, which ends protection at this tail (a refused or lost tail never gets here).
+      copy.provisional = false
+      copy.dirty = false
+      observed.push(copy)
+      continue
+    }
     if (overlapping || unreconciled) {
       copy.provisional = true
       copy.dirty = true
