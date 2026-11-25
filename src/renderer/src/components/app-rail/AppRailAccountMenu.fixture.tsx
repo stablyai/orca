@@ -5,6 +5,7 @@ import { useHelpMenuController, type SetupMilestones } from '../sidebar/chrome/h
 import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import { AppRailAccountMenu } from './AppRailAccountMenu'
 import { AppRail } from './AppRail'
+import { useAppStore } from '@/store'
 
 const SIGNED_OUT: OrcaProfileAuthStatus = {
   activeProfileId: 'fixture',
@@ -137,4 +138,39 @@ export const railShort = defineFixture({
   width: 300,
   store: { orcaProfileAuthStatus: SIGNED_OUT },
   render: () => <FullRail height={170} />
+})
+
+const SettingsPage = React.lazy(() => import('../settings/Settings'))
+
+/** The rail next to the page area, mounting the real Settings page the way the app shell does. */
+function RailWithPage(): React.JSX.Element {
+  const activeView = useAppStore((s) => s.activeView)
+  return (
+    <div className="flex" style={{ height: 640 }}>
+      <div className="flex w-10 shrink-0 flex-col">
+        <AppRail listVisible />
+      </div>
+      <div data-fixture-active-view={activeView} className="flex min-w-0 flex-1 flex-col">
+        {activeView === 'settings' ? (
+          <React.Suspense fallback={null}>
+            <SettingsPage />
+          </React.Suspense>
+        ) : (
+          <div className="p-4 text-sm text-muted-foreground">Workspaces</div>
+        )}
+      </div>
+    </div>
+  )
+}
+/** Signed in; Sign out's IPC is stubbed to sign the window out, the only thing faked here. */
+export const railWithPage = defineFixture({
+  width: 900,
+  store: {
+    orcaProfileAuthStatus: ALEX,
+    signOutCurrentOrcaProfile: async () => {
+      useAppStore.setState({ orcaProfileAuthStatus: SIGNED_OUT })
+      return { status: 'signed-out', auth: SIGNED_OUT, activeProfileId: 'fixture', profiles: [] }
+    }
+  },
+  render: () => <RailWithPage />
 })

@@ -93,6 +93,7 @@ export function AppRailAccountMenu({
   const setupDescriptionId = useId()
   // The sign-out dialog opens from a menu row, so it has no trigger of its own to hand focus back to.
   const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const viewAtOpenRef = useRef<string | null>(null)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -119,7 +120,15 @@ export function AppRailAccountMenu({
 
   return (
     <>
-      <DropdownMenu modal={false} onOpenChange={help.handleMenuOpenChange}>
+      <DropdownMenu
+        modal={false}
+        onOpenChange={(open) => {
+          if (open) {
+            viewAtOpenRef.current = useAppStore.getState().activeView
+          }
+          help.handleMenuOpenChange(open)
+        }}
+      >
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
@@ -145,7 +154,23 @@ export function AppRailAccountMenu({
             </span>
           </TooltipContent>
         </Tooltip>
-        <DropdownMenuContent side="right" align="end" sideOffset={8} className="w-52">
+        <DropdownMenuContent
+          side="right"
+          align="end"
+          sideOffset={8}
+          className="w-52"
+          onCloseAutoFocus={(event) => {
+            // Why: Settings and Keyboard Shortcuts open the settings page, which focuses its search (or the deep-linked
+            // pane). Radix refocuses the trigger in a timeout after closing, which could land after the page's own
+            // focus; yielding lets the page keep it.
+            if (
+              useAppStore.getState().activeView === 'settings' &&
+              viewAtOpenRef.current !== 'settings'
+            ) {
+              event.preventDefault()
+            }
+          }}
+        >
           {account ? (
             <div className="flex min-w-0 items-center gap-2 px-1.5 py-1.5">
               <AccountInitial initial={account.initial} className="size-5 text-[10px]" />
