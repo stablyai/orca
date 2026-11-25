@@ -236,6 +236,8 @@ export abstract class BrowserManagerGrab extends BrowserManagerViewport {
           !(await recoverBrowserInputGuard(guest)) ||
           !(await keys.setEnabled(!isAgentInjectingKeyboard(guest)))
         ) {
+          // Don't leave the picker drawn with no key session if the renderer's follow-up cancel never lands.
+          retireGrabOverlay(scope)
           keys.stop()
           if (this.nativeKeysByTabId.get(browserTabId) === keys) {
             this.nativeKeysByTabId.delete(browserTabId)

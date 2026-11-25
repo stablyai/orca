@@ -172,7 +172,8 @@ export function BrowserAnnotateToolPalette({
   const fitLevel = usePaletteFitLevel(
     paletteRef,
     bounds,
-    `${activeTool}|${showToolLabels}|${annotateActions ? 1 : 0}`
+    // Draw's action row comes and goes with its screenshot; losing it may let fuller labels fit again.
+    `${activeTool}|${showToolLabels}|${annotateActions ? 1 : 0}|${activeTool === 'draw' && drawHasActions ? 1 : 0}`
   )
   const shortActions = fitLevel >= FIT_LEVEL_SHORT_ACTIONS
   const wrapActions = fitLevel >= FIT_LEVEL_WRAP

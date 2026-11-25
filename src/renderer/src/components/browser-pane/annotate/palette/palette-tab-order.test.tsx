@@ -51,6 +51,8 @@ describe('the palette in the Tab order', () => {
     // The selected tool is the group's one Tab stop (arrows move within it), and Done follows it.
     const draw = view.getByRole('button', { name: 'Draw' })
     expect(draw.tabIndex).toBe(0)
+    expect(view.getByRole('button', { name: 'Annotate' }).tabIndex).toBe(-1)
+    expect(view.getByRole('button', { name: 'Grab' }).tabIndex).toBe(-1)
     expect(draw.closest('[inert]')).toBeNull()
     const done = view.getByRole('button', { name: /Done/ })
     expect(done.tabIndex).toBe(0)

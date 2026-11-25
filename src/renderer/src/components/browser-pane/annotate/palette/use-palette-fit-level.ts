@@ -65,8 +65,13 @@ export function usePaletteFitLevel(
     observer.observe(bounds)
     // Content that arrives later (Draw's tools render through a portal) changes the palette, not the bounds.
     observer.observe(palette)
+    // A palette already at its width cap doesn't resize when that content arrives; only its scrollWidth grows.
+    const contentObserver =
+      typeof MutationObserver === 'undefined' ? null : new MutationObserver(check)
+    contentObserver?.observe(palette, { childList: true, subtree: true })
     return () => {
       observer.disconnect()
+      contentObserver?.disconnect()
       cancelAnimationFrame(settleFrame)
     }
   }, [bounds, contentKey, level, paletteRef])

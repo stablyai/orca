@@ -11,35 +11,12 @@ import {
   paletteKeyMove,
   paletteOffsetForRatio,
   paletteRatioForOffset,
-  snapPaletteRatio
+  samePaletteLayout,
+  snapPaletteRatio,
+  type PaletteLayout
 } from './palette-placement'
 
 const SNAP_ANIMATION_MS = 180
-
-type Layout = {
-  boundsWidth: number
-  boundsHeight: number
-  paletteWidth: number
-  paletteHeight: number
-  left: number
-  top: number
-  /** The saved position and top limit this layout was derived for. */
-  x: number
-  y: number
-  topMin: number
-}
-
-const LAYOUT_KEYS: readonly (keyof Layout)[] = [
-  'boundsWidth',
-  'boundsHeight',
-  'paletteWidth',
-  'paletteHeight',
-  'left',
-  'top',
-  'x',
-  'y',
-  'topMin'
-]
 
 /**
  * Placement and drag for a palette inside a bounds element, on both axes.
@@ -78,7 +55,7 @@ export function usePaletteDrag({
 } {
   const { x, y } = position
   const topMin = Math.max(PALETTE_EDGE_INSET_PX, minTop)
-  const [layout, setLayout] = useState<Layout | null>(null)
+  const [layout, setLayout] = useState<PaletteLayout | null>(null)
   const [dragging, setDragging] = useState(false)
   const [snapping, setSnapping] = useState(false)
   const snapTimerRef = useRef<number | undefined>(undefined)
@@ -149,7 +126,7 @@ export function usePaletteDrag({
           paletteHeight,
           topMin
         )
-        const next: Layout = {
+        const next: PaletteLayout = {
           boundsWidth,
           boundsHeight,
           paletteWidth,
@@ -160,7 +137,7 @@ export function usePaletteDrag({
           y,
           topMin
         }
-        return prev && LAYOUT_KEYS.every((k) => prev[k] === next[k]) ? prev : next
+        return prev && samePaletteLayout(prev, next) ? prev : next
       })
     }
     measure()
@@ -211,8 +188,9 @@ export function usePaletteDrag({
           paletteOffsetForRatio(clamped.y, layout.boundsHeight, layout.paletteHeight),
           layout.boundsHeight,
           layout.paletteHeight,
-          layout.topMin
-        )
+          topMinRef.current
+        ),
+        topMin: topMinRef.current
       })
     }
     onPositionChange(clamped)
@@ -300,16 +278,32 @@ export function usePaletteDrag({
           removeAppKeyListener('keydown', onKeyDown)
           releasePassthrough()
           dragRef.current = null
+          // A top limit raised mid-drag (the find bar opened) applies where the palette comes to rest too: the
+          // measure effect skipped it while the drag owned the position.
+          const restTopMin = topMinRef.current
           if (!commit) {
+            const restTop = clampPaletteOffset(startTop, boundsHeight, paletteHeight, restTopMin)
             palette.style.left = `${startLeft}px`
-            palette.style.top = `${startTop}px`
+            palette.style.top = `${restTop}px`
+            setLayout((prev) => (prev ? { ...prev, top: restTop, topMin: restTopMin } : prev))
             setDragging(false)
             return
           }
           const rawX = paletteRatioForOffset(currentLeft, boundsWidth, paletteWidth, 0.5)
           const snappedX = snapPaletteRatio(rawX)
-          const nextY = paletteRatioForOffset(currentTop, boundsHeight, paletteHeight, 0)
-          setLayout((prev) => (prev ? { ...prev, left: currentLeft, top: currentTop } : prev))
+          const restLeft =
+            snappedX === rawX
+              ? currentLeft
+              : paletteOffsetForRatio(snappedX, boundsWidth, paletteWidth)
+          const restTop = clampPaletteOffset(currentTop, boundsHeight, paletteHeight, restTopMin)
+          const nextY = paletteRatioForOffset(restTop, boundsHeight, paletteHeight, 0)
+          setLayout((prev) =>
+            prev ? { ...prev, left: restLeft, top: restTop, topMin: restTopMin } : prev
+          )
+          // The drag wrote the style directly, and React skips a value equal to its last render (a snap back to
+          // where the drag started): write the resting place too.
+          palette.style.left = `${restLeft}px`
+          palette.style.top = `${restTop}px`
           setDragging(false)
           commitPosition({ x: snappedX, y: nextY }, snappedX !== rawX)
         }
@@ -323,7 +317,14 @@ export function usePaletteDrag({
       },
       onDoubleClick: () => commitPosition(DEFAULT_ANNOTATE_PALETTE_POSITION, true),
       onKeyDown: (event) => {
-        const next = paletteKeyMove(event.key, event.shiftKey, shownPosition, canMoveX, canMoveY)
+        const next = paletteKeyMove(
+          event.key,
+          event.shiftKey,
+          shownPosition,
+          position,
+          canMoveX,
+          canMoveY
+        )
         if (next === null) {
           return
         }

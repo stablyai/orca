@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampPaletteOffset,
+  paletteKeyMove,
   paletteOffsetForRatio,
   paletteRatioForOffset,
   snapPaletteRatio
@@ -39,6 +40,18 @@ describe('annotate palette placement', () => {
     expect(paletteRatioForOffset(8, 200, 200, 0.5)).toBe(0.5)
     expect(paletteRatioForOffset(8, 40, 38, 0)).toBe(0)
     expect(paletteOffsetForRatio(0.9, 200, 200)).toBe(8)
+  })
+
+  it('keeps the saved place on the axis a grip key does not move', () => {
+    // A find bar has pushed the shown top below the saved one; a sideways key must not save the pushed top.
+    const shown = { x: 0.5, y: 0.2 }
+    const saved = { x: 0.5, y: 0 }
+    expect(paletteKeyMove('ArrowRight', false, shown, saved, true, true)).toEqual({ x: 0.55, y: 0 })
+    expect(paletteKeyMove('End', false, shown, saved, true, true)).toEqual({ x: 1, y: 0 })
+    expect(paletteKeyMove('ArrowDown', false, { x: 0.3, y: 0.2 }, saved, true, true)).toEqual({
+      x: 0.5,
+      y: 0.25
+    })
   })
 
   it('snaps a release near the horizontal centre back to the centre', () => {

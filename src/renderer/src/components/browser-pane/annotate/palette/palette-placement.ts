@@ -2,6 +2,34 @@
 import type { CSSProperties } from 'react'
 import type { AnnotatePalettePosition } from './annotate-palette-position-store'
 
+/** Where the palette sits, and the sizes and inputs that placement was derived for. */
+export type PaletteLayout = {
+  boundsWidth: number
+  boundsHeight: number
+  paletteWidth: number
+  paletteHeight: number
+  left: number
+  top: number
+  /** The saved position and top limit this layout was derived for. */
+  x: number
+  y: number
+  topMin: number
+}
+
+export function samePaletteLayout(a: PaletteLayout, b: PaletteLayout): boolean {
+  return (
+    a.boundsWidth === b.boundsWidth &&
+    a.boundsHeight === b.boundsHeight &&
+    a.paletteWidth === b.paletteWidth &&
+    a.paletteHeight === b.paletteHeight &&
+    a.left === b.left &&
+    a.top === b.top &&
+    a.x === b.x &&
+    a.y === b.y &&
+    a.topMin === b.topMin
+  )
+}
+
 /** Gap kept between the palette and every edge of the page. */
 export const PALETTE_EDGE_INSET_PX = 8
 const KEY_STEP = 0.05
@@ -69,24 +97,28 @@ export function paletteHintPlacement(left: number, top: number, spaceBelow: numb
     : { left, top: top + 38 + HINT_GAP_PX }
 }
 
-/** Where a grip key moves the palette from where it shows now; null for keys that don't move it that way. */
+/**
+ * Where a grip key moves the palette: the moved axis steps from where it shows now, the other keeps its saved
+ * value (a find bar can push the shown top below the saved one; a sideways key must not save that). Null for keys
+ * that don't move it that way.
+ */
 export function paletteKeyMove(
   key: string,
   large: boolean,
   shown: AnnotatePalettePosition,
+  saved: AnnotatePalettePosition,
   canMoveX: boolean,
   canMoveY: boolean
 ): AnnotatePalettePosition | null {
   const step = large ? KEY_STEP_LARGE : KEY_STEP
-  const { x, y } = shown
   if (canMoveX && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-    return { x: key === 'ArrowLeft' ? x - step : x + step, y }
+    return { x: key === 'ArrowLeft' ? shown.x - step : shown.x + step, y: saved.y }
   }
   if (canMoveY && (key === 'ArrowUp' || key === 'ArrowDown')) {
-    return { x, y: key === 'ArrowUp' ? y - step : y + step }
+    return { x: saved.x, y: key === 'ArrowUp' ? shown.y - step : shown.y + step }
   }
   if (canMoveX && (key === 'Home' || key === 'End')) {
-    return { x: key === 'Home' ? 0 : 1, y }
+    return { x: key === 'Home' ? 0 : 1, y: saved.y }
   }
   return null
 }
