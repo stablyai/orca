@@ -68,6 +68,8 @@ export type PtySpawnOptions = {
   launchAgent?: TuiAgent
   /** Workspace identity also scopes local shell history. */
   worktreeId?: string
+  /** Main-resolved root of that workspace: the only filesystem root an agent may start in. */
+  workspaceRoot?: string
   /** Stable pane metadata for remote routing even when it cannot be exported into the shell env. */
   paneKey?: string
   /** Coarser attach guard when pane identity is unavailable. */

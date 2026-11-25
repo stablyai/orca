@@ -4,6 +4,7 @@ import { resolveLocalWindowsAgentStartupShell } from '../../../../shared/shell/l
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { resolveTerminalWorkspacePath } from '../../../../shared/shell/launch/terminal-startup-cwd'
 import { withCodexTerminalServerIsolationEnv } from '../../../../shared/agent-launch/startup/codex-terminal-server-isolation'
 import { withCodexStartupImageCommand } from '../../../../shared/agent-launch/startup/codex-startup-image-command'
 import { getLegacyOpenCodeEnvKeysToDelete } from '../../../opencode/status-hooks/legacy-shared-config-dir'
@@ -243,6 +244,16 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
   }
   if (input.sessionId !== undefined) {
     spawnOptions.sessionId = input.sessionId
+  }
+  if (!connectionId && command !== undefined) {
+    // From main's own records, so a root cwd passes the agent guard only when it is the workspace itself.
+    const workspaceRoot = resolveTerminalWorkspacePath(
+      args.worktreeId,
+      (folderWorkspaceId) => input.store?.getFolderWorkspace(folderWorkspaceId)?.folderPath
+    )
+    if (workspaceRoot) {
+      spawnOptions.workspaceRoot = workspaceRoot
+    }
   }
   if (!connectionId) {
     // Daemon spawns must honor saved Windows shell preference too.

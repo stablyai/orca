@@ -54,6 +54,8 @@ export type CreateOrAttachRequest = {
     terminalWindowsWslDistro?: string | null
     /** Preserve the selected PowerShell implementation so daemon and local spawns resolve the same executable. */
     terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
+    /** Main-resolved workspace root an agent may start in even when it is a filesystem root; older daemons ignore it. */
+    workspaceRoot?: string
     shellReadySupported?: boolean
     shellReadyTimeoutMs?: number
     /** Server-side fence that prevents a client timeout from publishing an orphan PTY. */
