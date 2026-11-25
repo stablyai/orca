@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -15,20 +14,14 @@ export function NativeChatPluginComposerItem({
   onInvoke?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [running, setRunning] = useState(false)
   const tooltip = item.tooltip || item.pluginName
-  const { command, popover } = item
+  const { command, popover, running } = item
   const showPopover = popover && (popover.title || popover.rows?.length || popover.actions?.length)
 
-  const run = (id: string): Promise<void> => {
-    setRunning(true)
-    return item
-      .runCommand(id)
-      .catch(() => {
-        toast.error(t('auto.App.pluginCommandFailed', 'Could not run the plugin command.'))
-      })
-      .finally(() => setRunning(false))
-  }
+  const run = (id: string): Promise<void> =>
+    item.runCommand(id).catch(() => {
+      toast.error(t('auto.App.pluginCommandFailed', 'Could not run the plugin command.'))
+    })
 
   const content = (
     <span

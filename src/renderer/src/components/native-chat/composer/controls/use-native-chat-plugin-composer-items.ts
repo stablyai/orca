@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
 import type { SessionOptionDescriptor } from '../../../../../../shared/native-chat/input/native-chat-session-options'
@@ -32,6 +32,7 @@ type Item = PluginComposerItemContribution & {
 type Display = NonNullable<ReturnType<typeof pluginComposerItemResultSchema.parse>>
 export type NativeChatPluginComposerItem = Omit<Item & Display, 'popover'> & {
   popover?: PluginComposerItemPopover
+  running: boolean
   runCommand: (commandId: string) => Promise<void>
 }
 
@@ -45,7 +46,7 @@ export function nativeChatSessionModel(
   )
 }
 
-function invokeComposerItemCommand(
+async function invokeComposerItemCommand(
   item: Item,
   commandId: string,
   chat: ChatContext
@@ -121,7 +122,14 @@ export function useNativeChatPluginComposerItems(
     items: Item[]
     resolve: (item: Item) => Promise<void>
   }>(null)
+  const openedSession = useRef<string | null>(null)
+  const pendingCommands = useRef(new Set<string>())
+  const [running, setRunning] = useState<ReadonlySet<string>>(() => new Set())
+
   useEffect(() => {
+    if (openedSession.current !== chat?.sessionId) {
+      openedSession.current = null
+    }
     if (!chat) {
       return
     }
@@ -154,16 +162,45 @@ export function useNativeChatPluginComposerItems(
       }
     }
     resolver.current = { chat, items, resolve }
-    if (!isWorking) {
-      for (const item of items) {
-        void resolve(item)
+    // Defer the initial call so effect replay cannot consume the chat's first resolution.
+    queueMicrotask(() => {
+      if (!active || (isWorking && openedSession.current === chat.sessionId)) {
+        return
       }
-    }
+      if (items.some((item) => item.resolve)) {
+        openedSession.current = chat.sessionId
+        for (const item of items) {
+          void resolve(item)
+        }
+      }
+    })
     return () => {
       active = false
       resolver.current = null
     }
   }, [chat, isWorking, items])
+
+  const runItemCommand = useCallback(
+    async (item: Item, commandId: string, commandKey: string) => {
+      if (!chat || pendingCommands.current.has(commandKey)) {
+        return
+      }
+      pendingCommands.current.add(commandKey)
+      setRunning(new Set(pendingCommands.current))
+      return invokeComposerItemCommand(item, commandId, chat)
+        .then(async () => {
+          const current = resolver.current
+          if (current?.chat === chat && current.items === items) {
+            await current.resolve(item)
+          }
+        })
+        .finally(() => {
+          pendingCommands.current.delete(commandKey)
+          setRunning(new Set(pendingCommands.current))
+        })
+    },
+    [chat, items]
+  )
 
   return useMemo(() => {
     if (!chat || items.length === 0) {
@@ -181,19 +218,15 @@ export function useNativeChatPluginComposerItems(
       }
       const popover =
         configuredPopover && details !== null ? { ...configuredPopover, ...details } : undefined
+      const commandKey = JSON.stringify([chat.sessionId, chat.agent, chat.runtime, item.key])
       return [
         {
           ...display,
           popover,
-          runCommand: async (commandId: string) => {
-            await invokeComposerItemCommand(item, commandId, chat)
-            const current = resolver.current
-            if (current?.chat === chat && current.items === items) {
-              await current.resolve(item)
-            }
-          }
+          running: running.has(commandKey),
+          runCommand: (commandId: string) => runItemCommand(item, commandId, commandKey)
         }
       ]
     })
-  }, [chat, items, resolved])
+  }, [chat, items, resolved, running, runItemCommand])
 }
