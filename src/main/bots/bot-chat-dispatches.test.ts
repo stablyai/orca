@@ -57,9 +57,11 @@ describe('botDispatches: settle times', () => {
     const legacy = failedDispatch(db, 'legacy')
     // As the first failure writer left a row: failed, with no completion time.
     db.db.prepare('UPDATE dispatch_contexts SET completed_at = NULL WHERE id = ?').run(legacy)
-    const created = db.db
+    const row: unknown = db.db
       .prepare("SELECT strftime('%s', created_at) * 1000 AS ms FROM dispatch_contexts WHERE id = ?")
-      .get(legacy) as { ms: number }
+      .get(legacy)
+    const createdMs = typeof row === 'object' && row !== null && 'ms' in row ? row.ms : null
+    expect(typeof createdMs).toBe('number')
 
     const byId = new Map(placed(db).map((dispatch) => [dispatch.id, dispatch]))
     // Still a failure: only its time is uncertain.
@@ -67,7 +69,7 @@ describe('botDispatches: settle times', () => {
       settled: true,
       failed: true,
       undated: true,
-      at: created.ms
+      at: createdMs
     })
     expect(byId.get(dated)?.settled).toBe(true)
     expect(byId.get(dated)?.undated).toBeUndefined()
