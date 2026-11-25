@@ -6,7 +6,7 @@ import type { WorkerShowResult } from './worker-view-results'
 // worker-show for a settled predecessor whose terminal row its follow-up now owns and runs.
 const handedOn: WorkerShowResult = {
   dispatch: { id: 'ctx_pred', taskId: 'task_1', status: 'completed', followUpOf: null },
-  worker: { state: 'succeeded', stage: 'process_exited', agentTerminalHandle: null },
+  worker: { state: 'succeeded', stage: 'process_exited', agentTerminalHandle: 'term_shared' },
   terminalResource: { releaseState: 'not_requested', terminalHandle: 'term_shared' },
   handedOnTo: 'ctx_next'
 }

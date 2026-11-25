@@ -50,7 +50,10 @@ export const WORKER_SHOW_VIEW: OrchestrationAgentView<WorkerShowResult, WorkerSh
       liveness: livenessField(value.projection),
       activity: knownActivity(value.projection),
       lastActivity: lastActivity(value.projection),
-      terminal: value.worker.agentTerminalHandle ?? ownTerminal?.terminalHandle ?? undefined,
+      // Handoff keeps the predecessor's recorded handle; that terminal is the follow-up's now.
+      terminal: value.handedOnTo
+        ? undefined
+        : (value.worker.agentTerminalHandle ?? value.terminalResource?.terminalHandle ?? undefined),
       // The projection's accounting state matches worker-list; releaseState is the raw column.
       terminalState:
         value.projection?.resource?.terminalState ?? ownTerminal?.releaseState ?? undefined,
