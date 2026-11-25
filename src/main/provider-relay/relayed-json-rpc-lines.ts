@@ -12,9 +12,6 @@ export function isJsonRpcAnswerAbove(line: string, floor: number): boolean {
 
 /** The id a JSON-RPC answer line carries, read from its envelope; null for any other line. */
 export function jsonRpcAnswerId(line: string): number | string | null {
-  if (!line.includes('"id"') || (!line.includes('"result"') && !line.includes('"error"'))) {
-    return null
-  }
   const { properties, complete } = leadingJsonEnvelope(line.slice(0, ENVELOPE_SCAN_CHARS), {
     stopAtContainer: true,
     maxFields: ENVELOPE_MAX_FIELDS
@@ -23,6 +20,13 @@ export function jsonRpcAnswerId(line: string): number | string | null {
   if (complete && keys.size === properties.length) {
     const id = properties.find((property) => property.key === 'id')?.value
     return !keys.has('method') && (keys.has('result') || keys.has('error')) ? answerId(id) : null
+  }
+  // A request or notification names its method first; only an answer cut off is scanned whole.
+  if (keys.has('method')) {
+    return null
+  }
+  if (!line.includes('"id"') || (!line.includes('"result"') && !line.includes('"error"'))) {
+    return null
   }
   // Cut off or with a repeated key: only a full parse reads it as the connection will.
   try {

@@ -91,18 +91,12 @@ export async function settleAcpPermissionTransition(
   if (acpRunningPermission(session) === input.mode) {
     return true
   }
-  // A kept agent runs the mode it had when the last app let go: it takes the chat's mode live, and
-  // its turn (one the earlier app sent, or the queued message's) is never cancelled to change it.
+  // A kept agent runs the mode it had when the last app let go: it takes the chat's mode live where it can.
   if (session.connection.kept && !session.connection.kept.agentExited) {
     await applyAcpLivePermissionMode(session, input.mode, { timeoutMs: graceMs }).catch(() => {})
     if (acpRunningPermission(session) === input.mode) {
       return true
     }
-  }
-  // The earlier app's prompt runs to its end (Stop still cuts it short); then the agent restarts.
-  const { adopted } = session.turns
-  if (adopted && session.turns.capturePendingSend(adopted.clientMessageId)()) {
-    await session.turns.whenIdle(input.signal)
   }
   session.turns.interruptForPermissionTransition()
   await awaitAcpTurnEnd(session, Date.now(), graceMs, input.signal)

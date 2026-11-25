@@ -21,12 +21,11 @@ import type { ContentBlock, PromptResponse } from '../generated/acp-protocol.gen
 import { AcpTurnIdleWaiters } from './acp-turn-idle-waiters'
 import type { AcpPromptOpening } from '../timeline/acp-prompt-turns'
 
-type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+// `adopted`: an earlier app's prompt, whose acceptance no replay settles.
+type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number; adopted?: true }
 
 export class AcpStructuredTurns {
   private active: Send | null = null
-  /** The earlier app's prompt this kept agent still runs: a permission change waits for it. */
-  adopted: Send | null = null
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: Send[] = []
@@ -208,8 +207,7 @@ export class AcpStructuredTurns {
     this.idleWaiters.wake()
   }
 
-  /** The prompt an earlier app sent a kept agent: its answer ends the chat's open turn as usual.
-   *  Not `adopted` (no turn saved yet), it opens as usual and its send is settled here. */
+  /** An earlier app's prompt to a kept agent: its answer ends the open turn; its send settles here. */
   adoptEarlier(
     clientMessageId: string,
     answered: () => Promise<PromptResponse>,
@@ -217,11 +215,10 @@ export class AcpStructuredTurns {
   ): void {
     if (!this.active && !this.ended) {
       const at = this.deps.now()
-      const { lane } = this.deps
-      const opened = lane.translator.openPrompt(clientMessageId, at, ...opening)
-      lane.apply(opened.events)
+      const opened = this.deps.lane.translator.openPrompt(clientMessageId, at, ...opening)
+      this.deps.lane.apply(opened.events)
       this.unsettled.add(clientMessageId)
-      this.active = this.adopted = { clientMessageId, prompt: [], requestedAt: at }
+      this.active = { clientMessageId, prompt: [], requestedAt: at, adopted: true }
       this.run(this.active, opened.promptId, answered())
     }
   }
@@ -293,6 +290,9 @@ export class AcpStructuredTurns {
       this.reject(send.clientMessageId, acpPromptRejection(refusal, signedOut, noModel))
     } else {
       lane.apply(lane.translator.promptFailed(send.clientMessageId, error, this.deps.now()))
+      if (send.adopted) {
+        this.accept(send.clientMessageId)
+      }
     }
     this.finishAndRetireIfLost(send, lane.translator.sessionLost(error) ? error : undefined)
   }

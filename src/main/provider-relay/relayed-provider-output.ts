@@ -343,7 +343,10 @@ export class RelayedProviderOutput {
       // Held lines the journal hasn't saved are never let go; the daemon spools them instead.
       const releasing = force && this.keptFrom !== null && heldFrom === null
       const keepFrom = keepAt !== null && !releasing ? keepAt : null
-      if ((target <= this.ackedSeq && keepFrom === this.keptFrom) || this.stopped) {
+      if (
+        (target <= this.ackedSeq && keepFrom === this.keptFrom && !this.pendingCut) ||
+        this.stopped
+      ) {
         return
       }
       // Wait one turn so records just parsed reach the journal before its barrier is taken.
@@ -382,6 +385,8 @@ export class RelayedProviderOutput {
           // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
           this.releasedThrough = Math.max(this.releasedThrough, ackedThrough)
           this.options.ackFloor?.released?.(ackedThrough)
+          // The next ack records it as a cut naming exactly what it split, maybe nothing.
+          this.pendingCut = true
         }
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.

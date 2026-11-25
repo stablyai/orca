@@ -106,7 +106,7 @@ export async function carryOnKeptAcpAgent<Opened>(
     // Output is acked only past an open message's or call's start, so the replay rewrites each row
     // whole; a turn whose first lines were acked anyway (the daemon's cap) numbers rows anew.
     const renumber = journaled && !kept.promptReplayedWhole ? kept.replayKey : undefined
-    const answered = () => kept.earlierPrompt()
+    const answered = () => child.connection.earlierPrompt?.() ?? kept.earlierPrompt()
     child.turns.adoptEarlier(clientMessageId, answered, command?.turnId, journaled, renumber)
   } else {
     // A turn the agent began itself, which this run's translator doesn't know: it ends as the open
