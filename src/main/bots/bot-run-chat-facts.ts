@@ -31,9 +31,18 @@ export async function chatRunId(host: JournalHost, chatId: string): Promise<stri
 }
 
 /** A person typed in it. Read as the newest prompt that is neither an agent's mail nor Orca's own
- *  (the run's first message is Orca's), so mail that came after the person does not hide them. */
-export async function personSpoke(host: JournalHost, chatId: string): Promise<boolean> {
-  return (await (await host.journalReads(chatId)).promptItem('last-person')) !== null
+ *  (the run's first message is Orca's), so mail that came after the person does not hide them. Each
+ *  /clear starts a session with its own journal, so every session the chat ran in is read. */
+export async function personSpoke(
+  host: JournalHost,
+  sessions: readonly string[]
+): Promise<boolean> {
+  for (const sessionId of sessions) {
+    if ((await (await host.journalReads(sessionId)).promptItem('last-person')) !== null) {
+      return true
+    }
+  }
+  return false
 }
 
 /** It owns an item not done or canceled, by the exact counts per status, which no page limit cuts. */

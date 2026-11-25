@@ -23,8 +23,8 @@ import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wi
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import {
-  lineageLiveSession,
-  readAgentSessionRecordStore
+  readAgentSessionRecordStore,
+  resolveLineageRunningSession
 } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
 import { readBotChats } from '../runtime/rpc/methods/bots-chats'
 import { chatIsIdle, chatPaneKey } from '../external-conversations/external-conversation-chat'
@@ -66,10 +66,25 @@ async function readContext(runtime: OrcaRuntimeService, bot: Bot): Promise<Conte
   }
 }
 
-/** The session running a chat now; a /clear moves it on from the row's root. */
-function liveSessionOf(chatId: string): string {
+/** The sessions a chat ran in, from the row's root, and the one running it now: a /clear moves it on.
+ *  A chain that cannot be proved names the root as live, as mail to it does. */
+function chatSessionsOf(chatId: string): {
+  live: string
+  all: readonly string[]
+} {
   const store = readAgentSessionRecordStore()
-  return (store && lineageLiveSession(store, chatId)?.sessionId) ?? chatId
+  const running = store ? resolveLineageRunningSession(store, chatId) : null
+  if (!running) {
+    return { live: chatId, all: [chatId] }
+  }
+  return {
+    live: running.kind === 'unverifiable' ? chatId : running.sessionId,
+    all: running.lineage
+  }
+}
+
+function liveSessionOf(chatId: string): string {
+  return chatSessionsOf(chatId).live
 }
 
 /** One open chat's verdict; null when no run opened it. */
@@ -84,7 +99,8 @@ async function readRunChat(
   if (runId === null) {
     return null
   }
-  const sessionId = liveSessionOf(row.id)
+  const sessions = chatSessionsOf(row.id)
+  const sessionId = sessions.live
   const facts: RunChatFacts = {
     'run-not-ended': !runChatRunEnded(context.runStatus.get(runId)),
     recent: now - row.lastActivityAt < RUN_CHAT_QUIET_MS,
@@ -99,7 +115,7 @@ async function readRunChat(
     ),
     'live-run': coordinatesLiveRun(db, sessionId),
     'tab-open': host.getSessionTabId(sessionId) !== null,
-    'person-spoke': await personSpoke(host, row.id)
+    'person-spoke': await personSpoke(host, sessions.all)
   }
   return {
     chatId: row.id,
@@ -229,7 +245,8 @@ export async function closeEndedRunChats(
       const outcome = await closer
         .close(bot.id, chat.sessionId, async () => {
           const again = await readRunChats(runtime, bot, chat.chatId)
-          const verdict = again.runChats[0]
+          // A /clear since the first read moved the chat on: the session now live is judged next look.
+          const verdict = again.runChats.find((read) => read.sessionId === chat.sessionId)
           if (verdict) {
             keep(verdict.keep)
           }

@@ -1,22 +1,34 @@
 // One ended run chat's close, under the bot's lock so mail into it waits: judged again there, closed
 // only while idle, then what was queued or coordinated there goes on to the Home Chat. A move that
-// fails after the close is tried again on the bot's next look.
+// fails after the close is tried again on the bot's next look, after a restart too.
 import type { Bot } from '../../shared/bot-types'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { closeStructuredAgentSessionChild } from '../runtime/agent-session/lifecycle/structured-agent-session-close'
 import { handOverCoordinatorChatRuns } from '../runtime/orchestration/db/runs/run-coordinator-handover'
+import {
+  forgetOwedRunChatCards,
+  oweRunChatCards,
+  owedRunChatCards
+} from '../runtime/orchestration/db/bot-requests/bot-run-chat-owed-cards-store'
 import { runtimeBotChats, type BotChatHost, type botChatSessions } from './bot-chat-session'
 import { carryQueuedMessages } from './bot-chat-queued-carry'
 import { dropReplacedChatMail } from './bot-chat-replacement'
 
 export type RunChatCloseSteps = {
   close: (sessionId: string) => Promise<{ stopped: boolean }>
-  carry: (host: BotChatHost, from: string, to: string) => Promise<void>
+  /** False when a card that moves stayed behind. */
+  carry: (host: BotChatHost, from: string, to: string) => Promise<boolean>
   handOver: (from: string, to: string) => void
   /** Mail admitted just before the close: its senders hear, as for a replaced Chat. */
   dropUnreadMail: (bot: Bot, from: string) => Promise<void>
+  /** Closed run chats whose queued cards have yet to move, kept across restarts. */
+  owed: {
+    add: (botId: string, sessionId: string) => void
+    forget: (sessionId: string) => void
+    list: (botId: string) => readonly string[]
+  }
 }
 
 export type RunChatCloseOutcome = 'kept' | 'failed' | 'closed'
@@ -26,28 +38,22 @@ type ChatLock = Pick<ReturnType<typeof botChatSessions>, 'underChatLock'>
 /** A closed run chat of the bot: its id in `orca bot chats`, and the session that was closed. */
 export type ClosedRunChat = { chatId: string; sessionId: string }
 
-/** Closed run chats whose queued cards did not move, by bot. Kept in this process only; the close
- *  paused that queue, so the cards wait there, running nowhere, until a later look moves them. */
-const owingCards = new Map<string, Set<string>>()
-
-/** Both moves are tried, so one failing does not skip the other. A Run that did not move stays bound
- *  to the closed chat, which is how the next look finds it, after a restart too. */
+/** Both moves are tried, so one failing does not hold up the other. Cards that stayed keep their
+ *  record and a Run that did not move stays bound to the closed chat: either way the next look finds
+ *  it. The close paused that chat's queue, so the cards wait there, running nowhere. */
 async function moveToHome(
   steps: RunChatCloseSteps,
   host: BotChatHost,
-  botId: string,
   from: string,
   home: string
 ): Promise<void> {
-  const owing = owingCards.get(botId) ?? new Set<string>()
-  owingCards.set(botId, owing)
-  await steps.carry(host, from, home).then(
-    () => owing.delete(from),
-    (error: unknown) => {
-      owing.add(from)
-      console.warn('[bots] could not move the queued messages of a closed run chat', error)
-    }
-  )
+  const moved = await steps.carry(host, from, home).catch((error: unknown) => {
+    console.warn('[bots] could not move the queued messages of a closed run chat', error)
+    return false
+  })
+  if (moved) {
+    steps.owed.forget(from)
+  }
   try {
     steps.handOver(from, home)
   } catch (error) {
@@ -69,18 +75,21 @@ export function closeRunChatUnderLock(
     }
     // Opened first, so a Home Chat that cannot open leaves the run chat open for the next look.
     const home = await chat()
+    // Owed before the close, so a crash between the close and the move still leaves the record.
+    steps.owed.add(botId, sessionId)
     const closed = await steps.close(sessionId)
     if (!closed.stopped) {
+      steps.owed.forget(sessionId)
       return 'failed'
     }
-    await moveToHome(steps, host, botId, sessionId, home)
+    await moveToHome(steps, host, sessionId, home)
     await steps.dropUnreadMail(bot, sessionId)
     return 'closed'
   })
 }
 
-/** Closed run chats a failed move left something on, each moved again under the lock: those still
- *  coordinating a Run, read from the Runs so a restart keeps them, and those whose cards stayed. */
+/** Closed run chats a failed move left something on, each moved again under the lock: those whose
+ *  cards are owed and those still coordinating a Run, both read from the database. */
 export async function settleClosedRunChats(
   chats: ChatLock,
   steps: RunChatCloseSteps,
@@ -89,7 +98,7 @@ export async function settleClosedRunChats(
   closed: readonly ClosedRunChat[],
   isRunChat: (chatId: string) => Promise<boolean>
 ): Promise<void> {
-  const owing = owingCards.get(botId)
+  const owed = new Set(steps.owed.list(botId))
   // One read narrows the bot's closed chats to those any Run names before each is checked.
   const named = new Set(
     db.db
@@ -104,12 +113,18 @@ export async function settleClosedRunChats(
     named.has(id) &&
     isOrcaSessionId(id) &&
     db.runsBoundToCoordinator({ orcaSessionId: id, paneKey: null, terminalHandle: null }).length > 0
-  for (const { chatId, sessionId } of closed) {
-    if ((owing?.has(sessionId) || coordinates(sessionId)) && (await isRunChat(chatId))) {
+  const settle = async ({ chatId, sessionId }: ClosedRunChat): Promise<void> => {
+    if ((owed.has(sessionId) || coordinates(sessionId)) && (await isRunChat(chatId))) {
       await chats.underChatLock(botId, async (host, _bot, chat) =>
-        moveToHome(steps, host, botId, sessionId, await chat())
+        moveToHome(steps, host, sessionId, await chat())
       )
     }
+  }
+  for (const chat of closed) {
+    // One chat that cannot be read or moved now is tried again on the next look; the rest go on.
+    await settle(chat).catch((error: unknown) =>
+      console.warn('[bots] could not move what a closed run chat left', error)
+    )
   }
 }
 
@@ -127,7 +142,12 @@ export function runtimeRunChatClose(runtime: OrcaRuntimeService) {
         handOverCoordinatorChatRuns(runtime.getOrchestrationDb(), from, to)
       }
     },
-    dropUnreadMail: (bot, from) => dropReplacedChatMail(runtime, bot.id, from)
+    dropUnreadMail: (bot, from) => dropReplacedChatMail(runtime, bot.id, from),
+    owed: {
+      add: (botId, sessionId) => oweRunChatCards(runtime.getOrchestrationDb(), botId, sessionId),
+      forget: (sessionId) => forgetOwedRunChatCards(runtime.getOrchestrationDb(), sessionId),
+      list: (botId) => owedRunChatCards(runtime.getOrchestrationDb(), botId)
+    }
   }
   const chats = runtimeBotChats(runtime)
   return {

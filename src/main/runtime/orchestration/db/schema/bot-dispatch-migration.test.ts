@@ -33,7 +33,8 @@ const BOT_TABLES = [
   'bot_requests',
   'bot_request_outcomes',
   'bot_conversation_acts_for',
-  'bot_run_resends'
+  'bot_run_resends',
+  'bot_run_chat_owed_cards'
 ]
 
 describe('v47-v48 bot dispatch migrations', () => {

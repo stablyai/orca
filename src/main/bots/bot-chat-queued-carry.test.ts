@@ -18,6 +18,7 @@ import {
 import { QUEUED_MESSAGE_HELD_DELIVERY_UNCONFIRMED } from '../native-chat/agent-session-journal/queued-messages/queued-message-table'
 import { outcomeSentence, replyEventsOf } from '../connector-cloud/connector-reply-outbox'
 import { botChatSessions } from './bot-chat-session'
+import { carryQueuedMessages } from './bot-chat-queued-carry'
 import { eventually } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { NO_STRUCTURED_AGENTS } from '../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentRegistry } from '../native-chat/agent-session-wire/providers/structured-agent-registry'
@@ -188,6 +189,17 @@ describe('replacing a chat carries its unsent queued messages', () => {
     expect(bodies[2].blocks).toContainEqual(IMAGE)
     // Orchestration mail stays with the old chat's mailbox; a card being edited stays with its editor.
     expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual(['mail', 'editing'])
+  })
+
+  it('says a card stayed while it is being edited, and moves it once the edit ends', async () => {
+    const { chats } = await setup()
+    const next = await chats.reset('bot-1')
+    const { queuedMessages } = (await rig!.host.conversation(HOST_TEST_SESSION)).journal
+    await expect(carryQueuedMessages(rig!.host, HOST_TEST_SESSION, next)).resolves.toBe(false)
+    queuedMessages.editLeases.release({ callerKey: 'phone', editId: 'edit-1' }, 'editing')
+    await expect(carryQueuedMessages(rig!.host, HOST_TEST_SESSION, next)).resolves.toBe(true)
+    expect((await queuedTexts(next)).map(textOf)).toContain('editing')
+    expect((await queuedTexts(HOST_TEST_SESSION)).map(textOf)).toEqual(['mail'])
   })
 
   it('tells a queued direct message it stopped instead of moving it', async () => {
