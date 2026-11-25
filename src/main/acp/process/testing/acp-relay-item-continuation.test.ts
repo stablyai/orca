@@ -14,7 +14,8 @@ const chunk = (messageId: string, text: string) =>
 const idOf = (line: string): unknown => JSON.parse(line).params.update.messageId
 
 const attach = (
-  outstanding: ProviderRelayAttachResult['outstanding']
+  outstanding: ProviderRelayAttachResult['outstanding'],
+  truncatedThrough?: number
 ): ProviderRelayAttachResult => ({
   replayThroughSeq: 16,
   pending: [],
@@ -22,11 +23,12 @@ const attach = (
   initializeResultSent: true,
   stderrTail: '',
   exit: null,
-  ...(outstanding ? { outstanding } : {})
+  ...(outstanding ? { outstanding } : {}),
+  ...(truncatedThrough === undefined ? {} : { truncatedThrough })
 })
 
 describe('ACP relay item continuation', () => {
-  it('moves only the message a cap-released cursor starts inside, the same way on every attach, until the prompt is answered', () => {
+  it('moves only the message a cut replay starts inside, the same way on every attach, until the prompt is answered', () => {
     const hook = new AcpRelayItemContinuation()
     const replay = [
       chunk('m1', 'tail'),
@@ -38,8 +40,13 @@ describe('ACP relay item continuation', () => {
     ]
     const run = () => {
       hook.reset()
-      // The cursor (10) is past the prompt's start: no daemon cut, but its turn isn't replayed whole.
-      const cut = attachContinuation(hook, 'r1', 10, attach([{ id: 7, method: 'session/prompt' }]))
+      // The daemon dropped kept lines through 10, past the prompt's start.
+      const cut = attachContinuation(
+        hook,
+        'r1',
+        10,
+        attach([{ id: 7, method: 'session/prompt' }], 10)
+      )
       return replay.map((line, at) => {
         const [out = ''] = cut?.lines(11 + at, line, undefined) ?? [line]
         return out.includes('session/update') ? idOf(out) : 'answer'
@@ -48,7 +55,9 @@ describe('ACP relay item continuation', () => {
     const first = run()
     expect(first).toEqual(['relay:r1:11:m1', 'relay:r1:11:m1', undefined, 'm2', 'answer', 'm3'])
     expect(run()).toEqual(first)
-    const whole = [{ id: 7, method: 'session/prompt', replayedWhole: true as const }]
-    expect(attachContinuation(hook, 'r1', 10, attach(whole))).toBeNull()
+    // A replay the daemon didn't cut starts at each open item's first line: nothing moves.
+    expect(
+      attachContinuation(hook, 'r1', 10, attach([{ id: 7, method: 'session/prompt' }]))
+    ).toBeNull()
   })
 })

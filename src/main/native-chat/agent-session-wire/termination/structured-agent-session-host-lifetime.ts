@@ -28,7 +28,8 @@ import {
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import {
   detachProviderRelayForQuit,
-  hasAttachedProviderRelay
+  hasAttachedProviderRelay,
+  providerRelayReattached
 } from '../../../provider-relay/app-provider-relays'
 
 import {
@@ -275,14 +276,16 @@ async function detachKeptAgentUnderSerialize(
 ): Promise<boolean> {
   const session = context.sessions.get(sessionId)
   const child = session?.child
-  if (!session || !child || child.phase === 'starting' || child.close) {
+  // A kept agent still reopening goes back to the daemon too; with its work unknown, never idle-stopped.
+  const reopening = child?.phase === 'starting' && providerRelayReattached(sessionId)
+  if (!session || !child || (child.phase === 'starting' && !reopening) || child.close) {
     return false
   }
   if (!hasAttachedProviderRelay(sessionId)) {
     return false
   }
-  const working = (await runningRootTurnItemId(session.journal)) !== null
-  const open = context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null
+  const working = !reopening && (await runningRootTurnItemId(session.journal)) !== null
+  const open = reopening ? null : (context.deps.adapter.relayOpenWork?.(sessionId, working) ?? null)
   if (!(await detachProviderRelayForQuit(sessionId, open))) {
     return false
   }

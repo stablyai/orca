@@ -69,8 +69,8 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     }
   }
 
-  /** The earlier app's prompts whose turn starts before this replay: a cap release may have left
-   *  the cursor inside one of their messages, so the continuation reads until each is answered. */
+  /** The earlier app's prompts whose turn starts before the daemon's cut: the cursor may be inside
+   *  one of their messages, so the continuation reads until each is answered. */
   openAt(result: ProviderRelayAttachResult): string[] | null {
     const cut = (result.outstanding ?? []).filter(
       (request) => request.method === PROMPT && !request.replayedWhole

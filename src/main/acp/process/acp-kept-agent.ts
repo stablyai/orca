@@ -47,8 +47,7 @@ const ACP_RELAY_KEEP: ProviderRelayKeepSpec = {
 export const keptAcpStartTime =
   (relayed: AcpRelayedProcess | null, read = readProcessStartTimeMs) =>
   async (pid: number): Promise<number | null> =>
-    (await read(pid)) ??
-    (relayed && (relayed.child.exited ?? relayed.child.attachResult?.exit) ? 0 : null)
+    relayed && (relayed.child.exited ?? relayed.child.attachResult?.exit) ? 0 : await read(pid)
 
 /** A kept state change, replayed as the `session/update` the agent sent or implied. */
 export type AcpKeptUpdate = { sessionId: string | undefined; update: Record<string, unknown> }

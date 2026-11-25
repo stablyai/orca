@@ -26,7 +26,7 @@ type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: numb
 export class AcpStructuredTurns {
   private active: Send | null = null
   /** The earlier app's prompt this kept agent still runs: a send waits for it, never cancels it. */
-  private adopted: Send | null = null
+  adopted: Send | null = null
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: Send[] = []

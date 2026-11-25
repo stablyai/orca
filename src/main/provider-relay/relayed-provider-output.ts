@@ -23,6 +23,9 @@ const RELEASE_SLICE_CHARS = 64 * 1024
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
   floor: () => number | null
+  /** A forced ack (the daemon's file cap) released everything through `seq`: items it held that
+   *  started there can't be kept whole any more, so they hold nothing from now on. */
+  released?: (seq: number) => void
 }
 
 type OutputOptions = {
@@ -36,7 +39,7 @@ type OutputOptions = {
    */
   durable?: (force: boolean) => Promise<boolean>
   /** `keepFrom`: the daemon keeps lines from it on for a later attach, though `seq` is received. */
-  ack: (seq: number, keepFrom?: number) => Promise<unknown>
+  ack: (seq: number, keepFrom?: number, cut?: true) => Promise<unknown>
 }
 
 /**
@@ -258,13 +261,11 @@ export class RelayedProviderOutput {
       // Lines a continuation adds before this one go out ahead of it, under its seq.
       for (const added of lines) {
         this.options.ackFloor?.observe(seq, added)
-        this.options.stdout.push(`${added}\n`)
+        // Counted before it is handed on: a flowing reader takes it inside push.
         this.consumption.pushed(true, this.pushedSeq)
+        this.options.stdout.push(`${added}\n`)
       }
       this.options.ackFloor?.observe(seq, line)
-    }
-    if (line) {
-      this.options.stdout.push(`${line}\n`)
     }
     if (seq !== null && seq > this.pushedSeq) {
       this.pushedSeq = seq
@@ -272,6 +273,21 @@ export class RelayedProviderOutput {
     }
     // The reader makes no record of a blank line, so it counts as the cursor alone.
     this.consumption.pushed(line !== null && /\S/.test(line), this.pushedSeq)
+    if (line) {
+      this.options.stdout.push(`${line}\n`)
+    }
+  }
+
+  /** The first spool line still held, not yet handed on to the chat. */
+  private heldFrom(): number | null {
+    const held = this.held ?? []
+    for (let at = this.releasedTo; at < held.length; at++) {
+      const { seq } = held[at]!
+      if (seq !== null && seq > this.releasedThrough) {
+        return seq
+      }
+    }
+    return null
   }
 
   private scheduleAck(): void {
@@ -295,13 +311,20 @@ export class RelayedProviderOutput {
   private ack(force = false): Promise<void> {
     this.acking = this.acking.then(async () => {
       // Only what the chat's reader took: a paused reader's lines are replayed after a crash.
-      const target = this.consumption.upTo(this.pushedSeq)
+      // Held for an opening chat, lines are received but not taken; the open waits on the agent,
+      // which the daemon pauses at its cap until an ack, so its ask is answered by keeping them.
+      const heldFrom = force ? this.heldFrom() : null
+      const target = Math.max(
+        this.consumption.upTo(this.pushedSeq),
+        heldFrom === null ? 0 : this.deliveredSeq
+      )
       // Lines from the floor on (a streamed item still open) stay kept, so a reattach rewrites the
       // item whole. The daemon's ask while keeping (its file cap) releases them, and the forced
       // save keeps the text; an ask before any keep (its memory cap) starts keeping instead.
       const floor = this.options.ackFloor?.floor() ?? null
       const usable = floor !== null && floor > this.releasedThrough && floor <= target
-      const keepFrom = usable && !(force && this.keptFrom !== null) ? floor : null
+      const keepAt = usable ? Math.min(floor, heldFrom ?? floor) : heldFrom
+      const keepFrom = keepAt !== null && !(force && this.keptFrom !== null) ? keepAt : null
       if ((target <= this.ackedSeq && keepFrom === this.keptFrom) || this.stopped) {
         return
       }
@@ -312,11 +335,18 @@ export class RelayedProviderOutput {
         if ((await this.options.durable?.(force)) === false && keepFrom === null) {
           return
         }
-        await (keepFrom === null ? this.options.ack(target) : this.options.ack(target, keepFrom))
+        // Giving up an open kept span: the next attach must know its replay starts inside an item.
+        const cut = force && keepFrom === null && this.keptFrom !== null
+        await (keepFrom !== null
+          ? this.options.ack(target, keepFrom)
+          : cut
+            ? this.options.ack(target, undefined, true)
+            : this.options.ack(target))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)
+          this.options.ackFloor?.released?.(target)
         }
       } catch {
         // Unacked output is replayed on the next attach; a later ack covers it.

@@ -99,6 +99,11 @@ export async function settleAcpPermissionTransition(
       return true
     }
   }
+  // The earlier app's prompt runs to its end (Stop still cuts it short); then the agent restarts.
+  const { adopted } = session.turns
+  if (adopted && session.turns.capturePendingSend(adopted.clientMessageId)()) {
+    await session.turns.whenIdle(input.signal)
+  }
   session.turns.interruptForPermissionTransition()
   await awaitAcpTurnEnd(session, Date.now(), graceMs, input.signal)
   return (
