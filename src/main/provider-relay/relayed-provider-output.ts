@@ -225,7 +225,8 @@ export class RelayedProviderOutput {
     this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
     this.clearAckTimer()
     await this.ack(false)
-    // A release that ack learned of is recorded now: the hand-off stops acks after this.
+    // A release that ack learned of is recorded now (lines since are saved first): acks stop next.
+    this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
     return this.pendingCut ? this.ack(false) : undefined
   }
 
