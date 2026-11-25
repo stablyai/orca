@@ -21,6 +21,7 @@ import type {
 import type {
   CodexRateLimitResetResult,
   RateLimitRuntimeTarget,
+  RateLimitRuntimeUsageHolds,
   RateLimitState
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
@@ -74,6 +75,9 @@ export type RateLimitsApi = {
   fetchInactiveClaudeAccounts: () => Promise<void>
   fetchInactiveCodexAccounts: () => Promise<void>
   refreshGrok: () => Promise<RateLimitState>
-  readUsageForRuntimeTarget: (target: RateLimitRuntimeTarget) => Promise<RateLimitState>
+  readUsageForRuntimeTarget: (
+    target: RateLimitRuntimeTarget,
+    holds?: RateLimitRuntimeUsageHolds
+  ) => Promise<RateLimitState>
   onUpdate: (callback: (state: RateLimitState) => void) => () => void
 }

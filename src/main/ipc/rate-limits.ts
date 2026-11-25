@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
-import type { RateLimitRuntimeTarget } from '../../shared/agent-usage/rate-limits/rate-limit-types'
+import type {
+  RateLimitRuntimeTarget,
+  RateLimitRuntimeUsageHolds
+} from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { CodexAccountService } from '../codex-accounts/service'
 
 export function registerRateLimitHandlers(
@@ -28,7 +31,9 @@ export function registerRateLimitHandlers(
   )
   ipcMain.handle('rateLimits:refreshGrok', () => rateLimits.refreshGrok())
   // Why: a focused WSL host's distro usage is read without switching the desktop's own target.
-  ipcMain.handle('rateLimits:readUsageForRuntimeTarget', (_event, target: RateLimitRuntimeTarget) =>
-    rateLimits.readUsageForRuntimeTarget(target)
+  ipcMain.handle(
+    'rateLimits:readUsageForRuntimeTarget',
+    (_event, target: RateLimitRuntimeTarget, holds?: RateLimitRuntimeUsageHolds) =>
+      rateLimits.readUsageForRuntimeTarget(target, holds)
   )
 }

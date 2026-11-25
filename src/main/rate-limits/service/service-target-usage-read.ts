@@ -13,6 +13,7 @@ import {
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
+  RateLimitRuntimeUsageHolds,
   RateLimitState
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { RateLimitServiceAccountRefresh } from './service-account-refresh'
@@ -24,16 +25,19 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
   /** One runtime target's selected Claude and Codex readings, for a focused WSL host's distro.
    *  The read never switches this desktop's own fetch target or publishes state, so the host
    *  runtime's numbers stay untouched (#42644 follow-up). */
-  async readUsageForRuntimeTarget(target: RateLimitRuntimeTarget): Promise<RateLimitState> {
+  async readUsageForRuntimeTarget(
+    target: RateLimitRuntimeTarget,
+    holds?: RateLimitRuntimeUsageHolds
+  ): Promise<RateLimitState> {
     const claudeTarget = normalizeClaudeAccountSelectionTarget(target)
     const codexTarget = normalizeCodexAccountSelectionTarget(target)
     const signal = AbortSignal.timeout(TARGET_USAGE_READ_TIMEOUT_MS)
     // Each provider fails alone: one resolver's rejection must not discard the other's reading.
     const [claude, codex] = await Promise.all([
-      this.readClaudeUsageForTarget(claudeTarget, signal).catch((error): ProviderRateLimits =>
-        usageReadError('claude', error)
+      this.readClaudeUsageForTarget(claudeTarget, signal, holds).catch(
+        (error): ProviderRateLimits => usageReadError('claude', error)
       ),
-      this.readCodexUsageForTarget(codexTarget, signal).catch((error): ProviderRateLimits =>
+      this.readCodexUsageForTarget(codexTarget, signal, holds).catch((error): ProviderRateLimits =>
         usageReadError('codex', error)
       )
     ])
@@ -42,7 +46,8 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
 
   private async readClaudeUsageForTarget(
     target: NormalizedClaudeAccountSelectionTarget,
-    signal: AbortSignal
+    signal: AbortSignal,
+    holds?: RateLimitRuntimeUsageHolds
   ): Promise<ProviderRateLimits | null> {
     // The poller already owns this exact target's settled reading; reuse it rather than double-fetch.
     const current = this.state.claude
@@ -52,6 +57,10 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
       this.isSameClaudeTarget(target, this.claudeFetchTarget)
     ) {
       return current
+    }
+    // Why null: the caller holds this provider's earlier reading until its 429 window passes.
+    if (holds?.claudeRetryAtMs !== undefined && holds.claudeRetryAtMs > Date.now()) {
+      return null
     }
     // Why null: live statusline data belongs to the desktop's own fetch target, not this read's.
     if (!this.isClaudeOAuthUsageEnabled()) {
@@ -69,7 +78,8 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
 
   private async readCodexUsageForTarget(
     target: NormalizedCodexAccountSelectionTarget,
-    signal: AbortSignal
+    signal: AbortSignal,
+    holds?: RateLimitRuntimeUsageHolds
   ): Promise<ProviderRateLimits | null> {
     // The poller already owns this exact target's settled reading; reuse it rather than double-fetch.
     const current = this.state.codex
@@ -79,6 +89,10 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
       this.isSameCodexTarget(target, this.codexFetchTarget)
     ) {
       return current
+    }
+    // Why null: the caller holds this provider's earlier reading until its 429 window passes.
+    if (holds?.codexRetryAtMs !== undefined && holds.codexRetryAtMs > Date.now()) {
+      return null
     }
     // The deadline must cover the WSL probes, not just the fetch: raceDeadline rejects a hung one.
     const home = await raceDeadline(this.resolveCodexHome(target), signal)

@@ -52,21 +52,32 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('holds a Retry-After read even against a forced refresh, and a settled one for the poll cadence', async () => {
-  readUsageForRuntimeTarget.mockResolvedValue(
-    createEmptyRateLimitState({ claude: claude(Date.now() + 30 * 60 * 1000) })
+it('passes a pending Retry-After to the read and keeps the held provider’s reading', async () => {
+  let codexPercent = 10
+  readUsageForRuntimeTarget.mockImplementation(
+    async (_target: unknown, holds?: { claudeRetryAtMs?: number }) =>
+      createEmptyRateLimitState({
+        claude: holds?.claudeRetryAtMs ? null : claude(Date.now() + 30 * 60 * 1000),
+        codex: codex(codexPercent)
+      })
   )
   await refreshWslOwnerUsage('Ubuntu')
-  vi.advanceTimersByTime(61_000)
-  await refreshWslOwnerUsage('Ubuntu')
-  await refreshWslOwnerUsage('Ubuntu', true)
-  expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(1)
-  vi.advanceTimersByTime(29 * 60 * 1000)
-  await refreshWslOwnerUsage('Ubuntu')
-  expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+  const firstRetryAt = readWslOwnerUsage('Ubuntu')?.rateLimits.claude?.usageMetadata?.retryAtMs
+  expect(firstRetryAt ?? 0).toBeGreaterThan(Date.now())
 
+  codexPercent = 20
+  vi.advanceTimersByTime(61_000)
+  await refreshWslOwnerUsage('Ubuntu', true)
+  expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+  expect(readUsageForRuntimeTarget.mock.calls[1][1]).toEqual({ claudeRetryAtMs: firstRetryAt })
+  const cached = readWslOwnerUsage('Ubuntu')
+  // Claude was held at the source (null) and keeps its 429 reading; Codex still refreshed.
+  expect(cached?.rateLimits.claude?.usageMetadata?.retryAtMs).toBe(firstRetryAt)
+  expect(cached?.rateLimits.codex?.session?.usedPercent).toBe(20)
+
+  // A settled read still waits the poll cadence.
   clearWslOwnerUsageReads()
-  readUsageForRuntimeTarget.mockClear()
+  readUsageForRuntimeTarget.mockReset()
   readUsageForRuntimeTarget.mockResolvedValue(createEmptyRateLimitState({ claude: claude() }))
   await refreshWslOwnerUsage('Ubuntu')
   vi.advanceTimersByTime(61_000)
@@ -145,16 +156,36 @@ it('retries a provider error on the short cadence even when retained windows are
   expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
 })
 
-it('drops a cached reading when the selected account changes', async () => {
-  readUsageForRuntimeTarget.mockResolvedValue(createEmptyRateLimitState({ claude: claude() }))
+it('drops only the switched provider’s reading when its account changes', async () => {
+  readUsageForRuntimeTarget.mockResolvedValue(
+    createEmptyRateLimitState({ claude: claude(), codex: codex(10) })
+  )
   await refreshWslOwnerUsage('Ubuntu')
-  expect(readWslOwnerUsage('Ubuntu')?.rateLimits.claude?.session?.usedPercent).toBe(40)
 
-  invalidateWslOwnerUsage('Ubuntu')
-  expect(readWslOwnerUsage('Ubuntu')).toBeNull()
-  // The invalidated read is not satisfied by its freshness: the new account must be read.
-  await refreshWslOwnerUsage('Ubuntu')
+  invalidateWslOwnerUsage('Ubuntu', 'codex')
+  const cached = readWslOwnerUsage('Ubuntu')
+  expect(cached?.rateLimits.codex).toBeNull()
+  // The unchanged provider's reading and backoff stay put.
+  expect(cached?.rateLimits.claude?.session?.usedPercent).toBe(40)
+
+  // The switched provider is read again even though the entry is fresh.
+  await refreshWslOwnerUsage('Ubuntu', true)
   expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+})
+
+it('discards a read that started before an account switch', async () => {
+  let settle: (state: RateLimitState) => void = () => {}
+  readUsageForRuntimeTarget.mockReturnValueOnce(
+    new Promise<RateLimitState>((resolve) => {
+      settle = resolve
+    })
+  )
+  const pending = refreshWslOwnerUsage('Ubuntu')
+  invalidateWslOwnerUsage('Ubuntu', 'claude')
+  settle(createEmptyRateLimitState({ claude: claude() }))
+  await pending
+  // The outgoing account's numbers never land under the new account.
+  expect(readWslOwnerUsage('Ubuntu')).toBeNull()
 })
 
 it('exposes a retry delay only while a reading is abnormal', async () => {

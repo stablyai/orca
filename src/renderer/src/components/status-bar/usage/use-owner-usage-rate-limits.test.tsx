@@ -183,10 +183,10 @@ describe('useOwnerUsageRateLimits', () => {
     const { result, rerender } = renderHook(() => useOwnerUsageRateLimits(local))
     // The read is pending: no host-runtime number may stand in for the distro's.
     expect(result.current.rateLimits.claude?.session).toBeNull()
-    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Ubuntu'
-    })
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenCalledWith(
+      { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      {}
+    )
     expect(result.current.remoteOwner?.label).toBe('WSL Ubuntu')
     await act(async () => {
       resolveRead(createEmptyRateLimitState({ claude: provider('claude', 77) }))
@@ -199,10 +199,10 @@ describe('useOwnerUsageRateLimits', () => {
     mocks.distro = 'Debian'
     rerender()
     expect(result.current.rateLimits.claude?.session).toBeNull()
-    expect(mocks.readUsageForRuntimeTarget).toHaveBeenLastCalledWith({
-      runtime: 'wsl',
-      wslDistro: 'Debian'
-    })
+    expect(mocks.readUsageForRuntimeTarget).toHaveBeenLastCalledWith(
+      { runtime: 'wsl', wslDistro: 'Debian' },
+      {}
+    )
     // Back to a local owner: the desktop's own numbers return untouched.
     mocks.distro = null
     rerender()

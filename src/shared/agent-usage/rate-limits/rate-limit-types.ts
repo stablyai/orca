@@ -158,6 +158,12 @@ export type RateLimitRuntimeTarget = {
   wslDistro: string | null
 }
 
+/** Provider reads whose HTTP Retry-After window has not passed; a targeted read skips them. */
+export type RateLimitRuntimeUsageHolds = {
+  claudeRetryAtMs?: number
+  codexRetryAtMs?: number
+}
+
 export type InactiveAccountUsage = {
   accountId: string
   rateLimits: ProviderRateLimits | null

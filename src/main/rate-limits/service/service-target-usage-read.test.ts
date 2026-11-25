@@ -151,3 +151,22 @@ it('reads a target whose poller entry is still fetching instead of reusing the p
   settlePoller(ok('claude', 7))
   await poller
 })
+
+it('skips a provider the caller holds inside its Retry-After window', async () => {
+  claudeFetch.mockReset()
+  codexFetch.mockReset()
+  codexFetch.mockResolvedValue(ok('codex', 24))
+  const service = new RateLimitService()
+  service.setClaudeAuthPreparationResolver(
+    async () => undefined as unknown as ClaudeRuntimeAuthPreparation
+  )
+  service.setCodexHomePathResolver(async () => ({ kind: 'ready', codexHomePath: '/home/u/.codex' }))
+
+  const read = await service.readUsageForRuntimeTarget(
+    { runtime: 'wsl', wslDistro: 'Ubuntu' },
+    { claudeRetryAtMs: Date.now() + 60_000 }
+  )
+  expect(read.claude).toBeNull()
+  expect(read.codex?.session?.usedPercent).toBe(24)
+  expect(claudeFetch).not.toHaveBeenCalled()
+})

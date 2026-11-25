@@ -70,7 +70,7 @@ export type OwnerUsageRateLimits = {
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
   /** Forces the owning host to re-read usage; null when this device owns it. */
-  refreshRemote: ((options?: { invalidate?: boolean }) => Promise<void>) | null
+  refreshRemote: ((options?: { invalidate?: 'claude' | 'codex' }) => Promise<void>) | null
 }
 
 /** Read provider usage from the focused workspace’s account owner, including that host’s own remote snapshot. */
@@ -129,8 +129,12 @@ export function useAccountOwnerUsage(
     if (!wslDistro) {
       return
     }
+    let disposed = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
     const readDistro = (force: boolean): void => {
+      if (disposed) {
+        return
+      }
       if (retryTimer) {
         clearTimeout(retryTimer)
         retryTimer = null
@@ -139,7 +143,7 @@ export function useAccountOwnerUsage(
         .then(() => {
           // Why: updating wslUsage does not re-run this effect, so an abnormal reading needs
           // its own retry scheduled from the store's due time.
-          const delay = wslOwnerUsageRetryDelayMs(wslDistro)
+          const delay = disposed ? null : wslOwnerUsageRetryDelayMs(wslDistro)
           if (delay !== null) {
             retryTimer = setTimeout(() => readDistro(false), delay)
           }
@@ -151,6 +155,7 @@ export function useAccountOwnerUsage(
     // and stretch the cadence to ten minutes.
     const timer = setInterval(() => readDistro(true), WSL_OWNER_USAGE_REFRESH_MS)
     return () => {
+      disposed = true
       clearInterval(timer)
       if (retryTimer) {
         clearTimeout(retryTimer)
@@ -159,11 +164,11 @@ export function useAccountOwnerUsage(
   }, [wslDistro])
 
   const refreshRemote = useCallback(
-    async (options?: { invalidate?: boolean }) => {
+    async (options?: { invalidate?: 'claude' | 'codex' }) => {
       if (wslDistro) {
         // A switched account's fresh read must not fall back to the previous account's windows.
         if (options?.invalidate) {
-          invalidateWslOwnerUsage(wslDistro)
+          invalidateWslOwnerUsage(wslDistro, options.invalidate)
         }
         await refreshWslOwnerUsage(wslDistro, true)
         return
