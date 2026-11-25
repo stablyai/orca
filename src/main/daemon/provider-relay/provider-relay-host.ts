@@ -153,6 +153,7 @@ export class ProviderRelayHost {
       }
     }
     this.options.log('relay-spawned', { relayId, pid })
+    this.cap.spawned(relay)
     return { relayId, pid }
   }
 

@@ -99,8 +99,15 @@ export function isCodexAnswerAbove(line: string, floor: number): boolean {
   }
 }
 
-/** The kept agent's answer to the first app's `initialize`; callers only need it to resolve. */
-export function keptInitializeResult(line: string | null): unknown {
+/** The kept agent's answer to the first app's `initialize`; null when no app ever initialized it
+ *  (its spawn reply was lost), so this app initializes it as a new one. */
+export function keptInitializeResult(
+  child: Pick<RelayedProviderChild, 'attachResult' | 'initializeLine'>
+): unknown {
+  if (child.attachResult?.initializeResultSent !== true) {
+    return null
+  }
+  const line = child.initializeLine
   if (line === null) {
     return {}
   }

@@ -5,6 +5,7 @@ import {
   providerRelayStopFlags,
   ProviderRelayDetachedCap,
   RELAY_DETACHED_CAP_MS,
+  RELAY_UNCLAIMED_MS,
   type CappableRelay
 } from '../provider-relay-detached-cap'
 import { CODEX_RELAY_WORK_MARKERS } from '../../../codex/app-server/codex-app-server-relay'
@@ -119,6 +120,24 @@ describe('a detached agent with output no app took', () => {
     await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS)
     expect(providerRelayStopFlags(done.stoppedBy)).toEqual({ idleStopped: true, capStopped: true })
     expect(providerRelayStopFlags(working.stoppedBy)).toEqual({ capStopped: true })
+    cap.stop()
+  })
+
+  it('ends a spawned agent no app attached soon after, its spawn reply lost', async () => {
+    let now = 0
+    const cap = new ProviderRelayDetachedCap(
+      () => {},
+      () => now
+    )
+    const lost = relay('lost', { tracking: false, unread: false })
+    const claimed = relay('claimed', { tracking: false, unread: false })
+    cap.spawned(lost)
+    cap.spawned(claimed)
+    cap.forget(claimed)
+    now = RELAY_UNCLAIMED_MS
+    await vi.advanceTimersByTimeAsync(RELAY_UNCLAIMED_MS)
+    expect(lost.close).toHaveBeenCalledTimes(1)
+    expect(claimed.close).not.toHaveBeenCalled()
     cap.stop()
   })
 })

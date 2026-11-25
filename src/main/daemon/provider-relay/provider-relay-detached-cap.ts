@@ -15,6 +15,8 @@ export function providerRelayStopFlags(
 
 /** A detached agent held only by output no app took, or by work the idle stop can't see, ends after this. */
 export const RELAY_DETACHED_CAP_MS = 24 * 60 * 60 * 1000
+/** A spawned agent no app attached this soon was lost with its spawn reply: nothing will claim it. */
+export const RELAY_UNCLAIMED_MS = 60_000
 
 export type CappableRelay = {
   readonly relayId: string
@@ -56,6 +58,13 @@ export class ProviderRelayDetachedCap {
       }
       this.update()
     }
+  }
+
+  /** Just spawned: its first attach forgets it, or it ends as unclaimed. */
+  spawned(relay: CappableRelay): void {
+    this.detachedAt.set(relay, this.now() - RELAY_DETACHED_CAP_MS + RELAY_UNCLAIMED_MS)
+    this.counted.add(relay)
+    this.update()
   }
 
   /** The idle stop found it idle but for unread output. */
