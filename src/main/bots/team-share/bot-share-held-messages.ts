@@ -2,6 +2,7 @@
 // sealed box names its sender, but only this host's share device rows say who that is: the message
 // then runs as that device's own calls (bots.session.start, uploads, agentSession.send), so the share
 // allowlist, the chat guard and the share stamp are the live connection's, never a second copy.
+import { reportAgentShareFailure } from '../../telemetry/agent-share-failure'
 import { z } from 'zod'
 import type { Bot } from '../../../shared/bot-types'
 import { botAccountShare } from '../../../shared/bots/bot-team-shares'
@@ -53,7 +54,21 @@ const SendReply = z.union([
 
 type DeviceCall = <T>(method: string, params: unknown, reply: z.ZodType<T>) => Promise<T>
 
-const refused = (reason: string): ConnectorDeliveryResult => ({ outcome: 'refused', reason })
+const HELD_DELIVERY_REFUSALS = [
+  'host_key_unavailable',
+  'bad_signature',
+  'unknown_share',
+  'unknown_device',
+  'session_not_found'
+] as const
+
+const refused = (reason: string): ConnectorDeliveryResult => {
+  reportAgentShareFailure({
+    stage: 'held_delivery_refused',
+    reason: HELD_DELIVERY_REFUSALS.find((known) => known === reason) ?? 'other'
+  })
+  return { outcome: 'refused', reason }
+}
 const ACCEPTED: ConnectorDeliveryResult = { outcome: 'accepted' }
 
 /**

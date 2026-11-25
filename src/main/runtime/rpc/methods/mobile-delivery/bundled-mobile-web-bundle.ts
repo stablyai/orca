@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { reportAgentShareFailure } from '../../../../telemetry/agent-share-failure'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -80,6 +81,7 @@ function parseBundledMobileWebBundle(
     parsed = JSON.parse(raw)
   } catch (error) {
     console.warn(`[mobile-web-bundle] ${manifestPath} is not valid JSON:`, error)
+    reportAgentShareFailure({ stage: 'phone_bundle_refused', reason: 'invalid_json' })
     return null
   }
   const manifest = InstalledMobileWebBundleManifestSchema.safeParse(parsed)
@@ -88,6 +90,7 @@ function parseBundledMobileWebBundle(
     console.warn(`[mobile-web-bundle] ${manifestPath} does not match the manifest contract:`, {
       issues: manifest.error.issues
     })
+    reportAgentShareFailure({ stage: 'phone_bundle_refused', reason: 'manifest_contract' })
     return null
   }
   return { root, manifest: manifest.data }

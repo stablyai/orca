@@ -9,6 +9,10 @@ import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import { SharedBotHosts } from '../bots/shared-with-me/shared-bot-hosts'
 import { sharedBotsCloud } from '../bots/shared-with-me/shared-bots-cloud'
 import {
+  reportingSharedBotsCloud,
+  SharedBotHostFailures
+} from '../bots/shared-with-me/shared-bot-host-failures'
+import {
   routeSharedHostsThrough,
   sharedHostsChanged
 } from './runtime-environments/requests/runtime-environment-shared-hosts'
@@ -25,14 +29,16 @@ export function registerSharedBotHostsHandlers(args: {
   cloud: () => ConnectorCloud | null
   homes: Omit<SharedBotHomeDeps, 'userDataPath'>
 }): SharedBotHosts {
+  const failures = new SharedBotHostFailures()
   const hosts = new SharedBotHosts({
     userDataPath: args.userDataPath,
     homes: new SharedBotHomes({ ...args.homes, userDataPath: args.userDataPath }),
     platform: NODE_RELAY_CLIENT_PLATFORM,
     cloud: () => {
       const cloud = args.cloud()
-      return cloud ? sharedBotsCloud(cloud) : null
+      return cloud ? reportingSharedBotsCloud(sharedBotsCloud(cloud), failures) : null
     },
+    failures,
     account: () => args.cloud()?.signedInAccount() ?? null,
     connectorOrigin: () => args.cloud()?.origin() ?? null,
     publish: (state: SharedBotHostsState) => {

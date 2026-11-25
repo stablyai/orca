@@ -1,5 +1,6 @@
 // The agents shared with this Orca account: found on Orca Cloud, paired over Orca Relay, and reached by
 // the window as hosts of their own. A message to a host that is away is held in Orca Cloud.
+import type { SharedBotHostFailures } from './shared-bot-host-failures'
 import {
   SHARED_BOT_HOST_ERRORS,
   SHARED_HOSTS_HOLD_WHILE_AWAY,
@@ -7,7 +8,6 @@ import {
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { relayStreamError } from '../../../shared/remote-runtime/relay/client/relay-rpc-streams'
 import { sharedBotHostLink, type SharedBotHostLink } from './shared-bot-host-link'
 import {
@@ -19,6 +19,7 @@ import {
 import {
   namesSharedBotNewChat,
   SharedBotHeldSends,
+  sharedBotAnswer,
   sharedBotFailure as failure,
   sharedBotOffline
 } from './shared-bot-held-sends'
@@ -41,6 +42,7 @@ export type SharedBotHostsDeps = {
   connectorOrigin?: () => string | null
   publish: (state: SharedBotHostsState) => void
   homes: SharedBotHomes
+  failures?: SharedBotHostFailures
   now?: () => number
 }
 
@@ -213,7 +215,7 @@ export class SharedBotHosts {
           ? await this.held.sendWithKept(params, (sent, args) => link.request(sent, args))
           : await link.request(method, params)
       this.held.noteAnswer(entry, method, params, response)
-      return this.withMeta(entry, response)
+      return sharedBotAnswer(entry, response)
     } catch {
       // The link closed or timed out under the request: an answer the window can read.
       return sharedBotOffline(entry, method)
@@ -300,7 +302,8 @@ export class SharedBotHosts {
         this.store.put({ ...(this.store.get(entry.shareId) ?? entry), acceptedAt: this.now() })
       }
     } else if (step.kind === 'connect' && (step.credential.kind === 'invite' || share.hostOnline)) {
-      await this.linkFor(entry).connect(step.credential)
+      const link = await this.linkFor(entry).connect(step.credential)
+      this.deps.failures?.linked(entry.shareId, link, share.hostOnline)
       await this.phones.endRemoved(entry.shareId)
     }
   }
@@ -311,12 +314,6 @@ export class SharedBotHosts {
     const share = this.shares?.get(entry.shareId)
     const step = share ? nextPairingStep(entry, share, this.now()) : null
     return step?.kind === 'connect' ? link.connect(step.credential) : link.settled()
-  }
-
-  private withMeta(entry: SharedBotHostEntry, response: RpcResponse): RuntimeRpcResponse<unknown> {
-    return response.ok
-      ? { ...response, _meta: { runtimeId: response._meta?.runtimeId ?? entry.environmentId } }
-      : response
   }
 
   /** Whether `environmentId` names one of these hosts; read once `ready` has settled. */

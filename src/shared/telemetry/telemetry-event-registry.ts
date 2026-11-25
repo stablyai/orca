@@ -1,3 +1,4 @@
+import { agentShareFailedSchema } from './schemas/telemetry-agent-share-event-schemas'
 import { codexHistoryMoveStatusSchema } from './schemas/telemetry-codex-history-move-event-schemas'
 import {
   onboardingLanguagePickerOpenedSchema,
@@ -256,6 +257,7 @@ export const eventSchemas = {
   ssh_host_server_decided: sshHostServerDecidedSchema,
   ssh_host_server_conversion: sshHostServerConversionSchema,
   ssh_host_server_deploy_failed: sshHostServerDeployFailedSchema,
+  agent_share_failed: agentShareFailedSchema,
   ssh_host_server_move: sshHostServerMoveSchema,
   ssh_host_server_legacy_relay_bridge: sshHostServerLegacyRelayBridgeSchema,
 

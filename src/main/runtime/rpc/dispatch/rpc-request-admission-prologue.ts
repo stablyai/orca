@@ -6,6 +6,7 @@ import type {
   RpcResponse,
   RpcStreamingMethod
 } from '../core'
+import { reportAgentShareFailure } from '../../../telemetry/agent-share-failure'
 import { errorResponse } from '../responses/rpc-response'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { orchestrationMigrationFence } from '../orchestration/compatibility/orchestration-contract-fence'
@@ -51,6 +52,9 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
     method?.share
   )
   if (denial) {
+    if (callerScope.kind === 'bot-share') {
+      reportAgentShareFailure({ stage: 'admission_refused', reason: 'method_not_found' })
+    }
     return reject(errorResponse(rawRequest.id, meta, 'forbidden', denial))
   }
   if (!method) {
@@ -94,8 +98,13 @@ export function admitRpcRequest<M extends RpcMethod | RpcStreamingMethod>(
       return admitted
     }
     return refuseBotShareCall(runtime, callerScope, method.share, admitted.params).then(
-      (refusal) =>
-        refusal ? reject(errorResponse(request.id, meta, 'not_found', refusal)) : admitted,
+      (refusal) => {
+        if (!refusal) {
+          return admitted
+        }
+        reportAgentShareFailure({ stage: 'admission_refused', reason: refusal })
+        return reject(errorResponse(request.id, meta, 'not_found', refusal))
+      },
       (error) => reject(mapDispatcherError(request, meta, error))
     )
   }

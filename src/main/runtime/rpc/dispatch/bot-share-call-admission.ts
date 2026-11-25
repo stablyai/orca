@@ -6,12 +6,14 @@ import type { RpcMethodShare } from '../../../../shared/bots/bot-share-rpc-metho
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
 import { botShareOwnsSession } from '../../../bots/team-share/bot-share-chats'
 
+export type BotShareRefusal = 'bot_not_found' | 'session_not_found' | 'method_not_found'
+
 export async function refuseBotShareCall(
   runtime: OrcaRuntimeService,
   scope: BotShareCallerScope,
   share: RpcMethodShare,
   params: unknown
-): Promise<string | null> {
+): Promise<BotShareRefusal | null> {
   const access = share === 'not-shared' ? undefined : share
   switch (access?.kind) {
     case 'scoped':

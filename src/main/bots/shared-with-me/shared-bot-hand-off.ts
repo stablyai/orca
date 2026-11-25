@@ -1,5 +1,6 @@
 // A teammate's message to a shared agent whose host can't be reached: sealed to the host's key and
 // signed by this device, then held in Orca Cloud until the host is back.
+import type { ConnectorFailure } from '../../connector-cloud/connector-cloud-request'
 import nacl from 'tweetnacl'
 import { MAX_HELD_MESSAGE_CHARS } from '../../../shared/connector-share-contract'
 import { sealBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
@@ -11,7 +12,7 @@ export type HandOffResult =
   | { kind: 'held'; held: SharedBotHeldMessage }
   // Past the cloud's 1 MiB for one held message, attachments included.
   | { kind: 'too-large' }
-  | { kind: 'failed'; error: string | null }
+  | { kind: 'failed'; failure: Pick<ConnectorFailure, 'status' | 'error'> }
 
 /** Holds one message for `entry`'s host, sealed to `hostKey` (see `sharedBotHostKey`). */
 export async function handOffSharedBotMessage(
@@ -52,7 +53,7 @@ export async function handOffSharedBotMessage(
     sealed
   })
   if (!answer.ok) {
-    return { kind: 'failed', error: answer.error }
+    return { kind: 'failed', failure: { status: answer.status, error: answer.error } }
   }
   return {
     kind: 'held',
