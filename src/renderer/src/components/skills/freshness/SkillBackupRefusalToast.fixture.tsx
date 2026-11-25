@@ -30,7 +30,8 @@ function Toasts({ show }: { show: () => void }): React.JSX.Element {
   }, [show])
   return (
     <>
-      <div className="h-[260px]" />
+      {/* Sonner pins toasts to the viewport's corner; fill the viewport so the capture holds them. */}
+      <div className="h-[900px]" />
       <Toaster toastOptions={{ className: 'font-sans text-sm' }} />
     </>
   )
@@ -76,30 +77,47 @@ const backups = result({
   }
 })
 
+// Toasts mount and animate in after the first paint; capture once they have.
+async function toastsMounted(): Promise<void> {
+  const deadline = performance.now() + 3000
+  while (!document.querySelector('[data-sonner-toast][data-mounted="true"]')) {
+    if (performance.now() > deadline) {
+      throw new Error('Timed out waiting for the toast')
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
+  await new Promise((resolve) => setTimeout(resolve, 500))
+}
+
 const LOCAL: BundledSkillTarget = { kind: 'local' }
 const REMOTE: BundledSkillTarget = { kind: 'ssh', targetId: 'build-box' }
 
 export const refusedMovedAside = defineFixture({
   render: () => <Toasts show={() => reportPreservedEdits(movedAside)} />,
-  width: 420
+  width: 1280,
+  interact: toastsMounted
 })
 export const refusedPutBack = defineFixture({
   render: () => <Toasts show={() => reportPreservedEdits(putBack)} />,
-  width: 420
+  width: 1280,
+  interact: toastsMounted
 })
 export const backupOnlyAndUpdated = defineFixture({
   render: () => <Toasts show={() => reportPreservedEdits(backups)} />,
-  width: 420
+  width: 1280,
+  interact: toastsMounted
 })
 export const uncertainLocal = defineFixture({
   render: () => (
     <Toasts show={() => reportUncertainOutcome(LOCAL, { homeDirectory: '/Users/sam' })} />
   ),
-  width: 420
+  width: 1280,
+  interact: toastsMounted
 })
 export const uncertainRemote = defineFixture({
   render: () => (
     <Toasts show={() => reportUncertainOutcome(REMOTE, { homeDirectory: '/home/sam' })} />
   ),
-  width: 420
+  width: 1280,
+  interact: toastsMounted
 })

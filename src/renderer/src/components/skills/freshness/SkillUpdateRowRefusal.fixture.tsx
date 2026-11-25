@@ -59,97 +59,121 @@ const linked = (name: string): BundledSkillOpOutcome => ({
   status: 'done'
 })
 
-function Rows({ backup }: { backup: SkillBackupLocation }): React.JSX.Element {
+const NARROW_ROWS: ReadonlySet<string> = new Set(['orca-cli', 'electron', 'orca-review', LONG])
+
+function Rows({
+  backup,
+  only
+}: {
+  backup: SkillBackupLocation
+  only?: ReadonlySet<string>
+}): React.JSX.Element {
+  const show = (name: string): boolean => !only || only.has(name)
   return (
     <div className="bg-background px-4">
-      {row(
-        'orca-cli',
-        [refused('orca-cli', 'in-place', '/Volumes/Work/project/.agents/skills/orca-cli')],
-        backup
-      )}
-      {row(
-        'orchestration',
-        [refused('orchestration', 'in-place', `${SKILLS}/orchestration`), linked('orchestration')],
-        backup
-      )}
-      {row(
-        'orca-linear',
-        [
-          refused('orca-linear', 'leftover', `${SKILLS}/.orca-linear.orca-old-3f2a9c1e`, {
-            kind: 'keep',
-            currentConfirmed: true
-          }),
-          linked('orca-linear')
-        ],
-        backup
-      )}
-      {row(
-        'orca-plan',
-        [
-          refused('orca-plan', 'moved-aside', `${SKILLS}/.orca-planner.orca-old-5c09b7d2`, {
-            kind: 'keep',
-            currentConfirmed: true
-          })
-        ],
-        backup
-      )}
-      {row(
-        'gemini-former',
-        [
-          refused('gemini-former', 'in-place', '/Users/sam/.gemini/skills/gemini-former', {
-            kind: 'write',
-            contentApplied: true,
-            backupRefusal: {
-              path: '/Users/sam/.gemini/skills/gemini-former',
-              source: 'in-place',
-              onlyNotice: true
-            }
-          })
-        ],
-        backup
-      )}
-      {row(
-        'electron',
-        [
-          refused('electron', 'moved-aside', `${SKILLS}/.electron.orca-old-7b1d44e0`, {
-            kind: 'update',
-            contentApplied: true,
-            strandedPath: `${SKILLS}/.electron.orca-old-7b1d44e0`
-          })
-        ],
-        backup
-      )}
-      {row(
-        'orca-review',
-        [
-          refused('orca-review', 'moved-aside', `${SKILLS}/.orca-review.orca-old-2e8f`, {
-            kind: 'update',
-            contentApplied: true,
-            backupPath: REVIEW_BACKUP,
-            backupPaths: [REVIEW_BACKUP]
-          })
-        ],
-        backup
-      )}
-      {row(
-        LONG,
-        [
-          {
-            path: `${SKILLS}/${LONG}`,
-            kind: 'write',
-            status: 'failed',
-            error: 'EXDEV',
-            contentApplied: true,
-            backupRefusal: { path: FORMER_ROOT_COPY, source: 'moved-aside', onlyNotice: true }
-          },
-          linked(LONG)
-        ],
-        backup
-      )}
+      {show('orca-cli') &&
+        row(
+          'orca-cli',
+          [refused('orca-cli', 'in-place', '/Volumes/Work/project/.agents/skills/orca-cli')],
+          backup
+        )}
+      {show('orchestration') &&
+        row(
+          'orchestration',
+          [
+            refused('orchestration', 'in-place', `${SKILLS}/orchestration`),
+            linked('orchestration')
+          ],
+          backup
+        )}
+      {show('orca-linear') &&
+        row(
+          'orca-linear',
+          [
+            refused('orca-linear', 'leftover', `${SKILLS}/.orca-linear.orca-old-3f2a9c1e`, {
+              kind: 'keep',
+              currentConfirmed: true
+            }),
+            linked('orca-linear')
+          ],
+          backup
+        )}
+      {show('orca-plan') &&
+        row(
+          'orca-plan',
+          [
+            refused('orca-plan', 'moved-aside', `${SKILLS}/.orca-planner.orca-old-5c09b7d2`, {
+              kind: 'keep',
+              currentConfirmed: true
+            })
+          ],
+          backup
+        )}
+      {show('gemini-former') &&
+        row(
+          'gemini-former',
+          [
+            refused('gemini-former', 'in-place', '/Users/sam/.gemini/skills/gemini-former', {
+              kind: 'write',
+              contentApplied: true,
+              backupRefusal: {
+                path: '/Users/sam/.gemini/skills/gemini-former',
+                source: 'in-place',
+                onlyNotice: true
+              }
+            })
+          ],
+          backup
+        )}
+      {show('electron') &&
+        row(
+          'electron',
+          [
+            refused('electron', 'moved-aside', `${SKILLS}/.electron.orca-old-7b1d44e0`, {
+              kind: 'update',
+              contentApplied: true,
+              strandedPath: `${SKILLS}/.electron.orca-old-7b1d44e0`
+            })
+          ],
+          backup
+        )}
+      {show('orca-review') &&
+        row(
+          'orca-review',
+          [
+            refused('orca-review', 'moved-aside', `${SKILLS}/.orca-review.orca-old-2e8f`, {
+              kind: 'update',
+              contentApplied: true,
+              backupPath: REVIEW_BACKUP,
+              backupPaths: [REVIEW_BACKUP]
+            })
+          ],
+          backup
+        )}
+      {show(LONG) &&
+        row(
+          LONG,
+          [
+            {
+              path: `${SKILLS}/${LONG}`,
+              kind: 'write',
+              status: 'failed',
+              error: 'EXDEV',
+              contentApplied: true,
+              backupRefusal: { path: FORMER_ROOT_COPY, source: 'moved-aside', onlyNotice: true }
+            },
+            linked(LONG)
+          ],
+          backup
+        )}
     </div>
   )
 }
 
 export const states = defineFixture({ render: () => <Rows backup={LOCAL} />, width: 640 })
-export const narrow = defineFixture({ render: () => <Rows backup={LOCAL} />, width: 420 })
+// Narrow shows only the longest paths so the capture fits the 900 px viewport.
+export const narrow = defineFixture({
+  render: () => <Rows backup={LOCAL} only={NARROW_ROWS} />,
+  width: 420
+})
 export const remote = defineFixture({ render: () => <Rows backup={REMOTE} />, width: 640 })

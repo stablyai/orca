@@ -17,6 +17,7 @@ const volume = process.env.ORCA_EXDEV_VOLUME
 describe.skipIf(!volume)('cross-volume Replace (real second volume)', () => {
   afterEach(removeSkillHomes)
 
+  // Opt-in real-disk run: writing 400 files and hashing them for consent outlast the default timeout.
   it('leaves all bytes in place and does no backup work after the rejected rename', async () => {
     const home = await makeSkillHome()
     const project = await mkdtemp(join(volume!, 'orca-exdev-'))
