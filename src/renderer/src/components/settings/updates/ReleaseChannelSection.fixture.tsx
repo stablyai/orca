@@ -1,7 +1,9 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { ReleaseBuild } from '../../../../../shared/updater/release-channel'
 import type { UpdateStatus } from '../../../../../shared/updater/update-status-types'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import { useAppStore } from '../../../store/index'
+import { GeneralUpdateSettingsSection } from './GeneralUpdateSettingsSection'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 
 const RUNNING_VERSION = '1.4.272'
@@ -67,4 +69,16 @@ export const stagingFailedLate = fixtureWith({
   failurePhase: 'download',
   version: '1.4.273',
   message: 'Could not locate update bundle'
+})
+
+// The Settings parent: its Check button plus the Alt-revealed switcher, driven by main's status sequence.
+export const settingsParent = defineFixture({
+  width: 640,
+  store: {
+    settings: getDefaultSettings('/home/fixture'),
+    releaseChannelOverride: null,
+    updateStatus: { state: 'downloading', percent: 100, version: '1.4.273' }
+  },
+  setup: stubUpdater,
+  render: () => <GeneralUpdateSettingsSection />
 })
