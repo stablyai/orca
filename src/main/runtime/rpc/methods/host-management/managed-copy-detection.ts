@@ -19,7 +19,10 @@ import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storag
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
+import { runCliFsReadsAsync } from '../../../../../shared/shell/command-resolution/cli-fs-reads'
 import {
+  cliPathLookup,
+  getExecutableNames,
   normalizePathEntry,
   stripWindowsPathQuotes
 } from '../../../../../shared/shell/command-resolution/node-cli-command-resolution'
@@ -262,26 +265,29 @@ export async function readHostManagedAgentCommands(
   }
   const env = options.pathEnv === undefined ? await resolveLoginShellEnvironment() : undefined
   const pathEnv = options.pathEnv ?? env?.PATH ?? env?.Path ?? ''
-  const lookupPath =
+  const preferUnquotedPath =
     process.platform === 'win32' && options.forDelivery && !acceptsQuotedPathEntries(options.shell)
-      ? pathEnv
-          .split(delimiter)
-          .filter((entry) => !isQuotedWindowsPathEntry(entry))
-          .join(delimiter)
-      : pathEnv
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
-        let own = await lookUpOwnProgram(
-          program,
-          withoutManagedDirectories(agent, lookupPath, options.forDelivery)
-        )
-        if (own === program && lookupPath !== pathEnv) {
-          own = await lookUpOwnProgram(
-            program,
-            withoutManagedDirectories(agent, pathEnv, options.forDelivery)
-          )
+        const ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
+        if (preferUnquotedPath) {
+          const entries = ownPath.split(delimiter)
+          const unquotedEntries = entries.filter((entry) => !isQuotedWindowsPathEntry(entry))
+          if (unquotedEntries.length !== entries.length) {
+            const onUnquotedPath = await runCliFsReadsAsync(
+              cliPathLookup(
+                'win32',
+                unquotedEntries.join(delimiter),
+                getExecutableNames('win32', program)
+              )
+            )
+            if (onUnquotedPath !== null) {
+              return
+            }
+          }
         }
+        const own = await lookUpOwnProgram(program, ownPath)
         if (own === program) {
           const managed = await managedCopyFor(agent, program, settings)
           if (managed) {

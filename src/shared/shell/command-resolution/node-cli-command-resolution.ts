@@ -187,6 +187,14 @@ function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): 
   return runCliFsReadsSync(cliInstallDirectories(platform, homePath))
 }
 
+export function cliPathLookup(
+  platform: NodeJS.Platform,
+  pathEnv: string | null,
+  executableNames: string[]
+): CliFsReads<string | null> {
+  return firstRunnable(platform, splitPath(pathEnv, platform), executableNames)
+}
+
 /** PATH entries first; install dirs are listed only once PATH misses. Run with cli-fs-reads. */
 export function* cliCommandLookup(
   commandName: string,
@@ -196,7 +204,7 @@ export function* cliCommandLookup(
   const names = getExecutableNames(platform, commandName)
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   return (
-    (yield* firstRunnable(platform, splitPath(pathEnv, platform), names)) ??
+    (yield* cliPathLookup(platform, pathEnv, names)) ??
     (yield* firstRunnable(
       platform,
       yield* cliInstallDirectories(platform, options.homePath ?? homedir()),
