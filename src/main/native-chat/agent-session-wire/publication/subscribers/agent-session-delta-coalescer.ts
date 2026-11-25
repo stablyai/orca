@@ -111,9 +111,12 @@ export function createAgentSessionDeltaCoalescer(
   }
 
   type Stream = NonNullable<ReturnType<typeof streams.get>>
-  // Keep the joined text so rereading an unchanged stream copies nothing.
+  // Keep the joined text so rereading an unchanged stream copies nothing. New text is appended to
+  // it rather than copied with it: every window reads every stream, and copying a long reply each
+  // time is garbage at the window rate; whoever needs it flat (a save, a shown reply) flattens once.
   const joined = (stream: Stream): string => {
-    const text = stream.chunks.length === 1 ? stream.chunks[0] : stream.chunks.join('')
+    const [head = '', ...added] = stream.chunks
+    const text = added.length === 0 ? head : head + added.join('')
     stream.chunks = text ? [text] : []
     return text
   }
