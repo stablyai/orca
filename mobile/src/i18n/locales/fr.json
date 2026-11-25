@@ -1259,7 +1259,7 @@
       "pairingInvalid": "Appairage invalide — refaites l'appairage avec votre ordinateur",
       "rePairDetail": "Refaites l'appairage avec votre ordinateur",
       "reconnecting": "Reconnexion…",
-      "relayAccessExpired": "L'accès à Relay a expiré pour {{host}}",
+      "relayAccessRefused": "Relay a refusé l'accès pour {{host}}",
       "relayConnectFailed": "Connexion impossible via Relay",
       "relayUnreachable": "Impossible de joindre Relay",
       "signInDetail": "Connectez-vous à Orca sur votre ordinateur pour rétablir la connexion",

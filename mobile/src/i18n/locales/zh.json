@@ -1847,7 +1847,7 @@
       "pairingInvalid": "配对无效，请重新与桌面配对",
       "rePairDetail": "请重新与桌面配对",
       "reconnecting": "正在重新连接…",
-      "relayAccessExpired": "{{host}} 的 Relay 访问权限已过期",
+      "relayAccessRefused": "Relay 拒绝了对 {{host}} 的访问",
       "relayConnectFailed": "无法通过 Relay 连接",
       "relayUnreachable": "无法访问 Relay",
       "signInDetail": "请在桌面上登录 Orca 以重新连接",

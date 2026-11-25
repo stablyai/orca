@@ -1210,7 +1210,7 @@
       "pairingInvalid": "페어링이 유효하지 않습니다. 데스크톱과 다시 페어링하세요.",
       "rePairDetail": "데스크톱과 다시 페어링하세요.",
       "reconnecting": "다시 연결 중…",
-      "relayAccessExpired": "{{host}}의 Relay 접근 권한 만료",
+      "relayAccessRefused": "Relay가 {{host}}에 대한 액세스를 거부했습니다",
       "relayConnectFailed": "Relay를 통해 연결할 수 없음",
       "relayUnreachable": "Relay에 연결할 수 없음",
       "signInDetail": "다시 연결하려면 데스크톱에서 Orca에 로그인하세요.",
