@@ -81,13 +81,12 @@ export function readCodexRegistrationEntries(config: string): Map<string, CodexR
 }
 
 /**
- * Roots a config defines other than through `[root.name]` headers: an inline table, dotted keys,
- * keys under a bare `[root]`, or `[[root]]`. A `[root.name]` table appended there could redefine a key.
+ * Roots and registration keys a config defines other than through `[root.name]` headers. A root
+ * defined inline, by dotted keys or as `[[root]]` takes no appended table; a bare `[root]` blocks only
+ * the names it defines. A `[root.name]` table appended there could redefine a key.
  */
-export function readCodexRegistrationRootsDefinedOutsideTables(
-  config: string
-): Set<CodexRegistrationRoot> {
-  const roots = new Set<CodexRegistrationRoot>()
+export function readCodexRegistrationRootsDefinedOutsideTables(config: string): Set<string> {
+  const roots = new Set<string>()
   let table: string[] = []
   let state = createTomlLineScanState()
   for (const line of config.split('\n')) {
@@ -113,7 +112,7 @@ export function readCodexRegistrationRootsDefinedOutsideTables(
     const path = [...table, ...key.segments]
     const root = path[0]
     if (table.length < 2 && isCodexRegistrationRoot(root)) {
-      roots.add(root)
+      roots.add(table.length === 1 ? getCodexRegistrationKey(root, path[1]!) : root)
     }
   }
   return roots
