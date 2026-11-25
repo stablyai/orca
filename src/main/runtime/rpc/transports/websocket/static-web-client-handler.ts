@@ -1,11 +1,21 @@
 import { createReadStream } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import type { IncomingMessage, RequestListener, ServerResponse } from 'node:http'
 import { basename, extname, isAbsolute, posix, relative, resolve } from 'node:path'
 import { readBundledWebClientFiles } from '../../../../../shared/web-client/bundled-web-client-manifest'
+import {
+  InstalledMobileWebBundleManifestSchema,
+  MOBILE_WEB_BUNDLE_ENTRYPOINT
+} from '../../../../../shared/mobile-web-bundle/manifest-contract'
+import {
+  MOBILE_WEB_BROWSER_MANIFEST_PATH,
+  MOBILE_WEB_BROWSER_PATH
+} from '../../../../../shared/mobile-web-bundle/mobile-web-browser-path'
 
 const STATIC_WEB_ALLOWED_PATHS = new Set(['/web-index.html'])
 const STATIC_WEB_ALLOWED_PREFIXES = ['/assets/', '/cmaps/', '/standard_fonts/', '/wasm/']
+// The page writes its route into the address bar, so a reload asks for it by that route.
+const MOBILE_WEB_ROUTE_PREFIX = '/h/'
 const STATIC_WEB_CONTENT_TYPES = new Map([
   ['.css', 'text/css; charset=utf-8'],
   ['.html', 'text/html; charset=utf-8'],
@@ -23,27 +33,66 @@ export const answerWithoutWebClient: RequestListener = (_request, response) => {
   writeHttpStatus(response, 404)
 }
 
-export function createStaticWebClientHandler(staticRoot: string): RequestListener {
-  const resolvedRoot = resolve(staticRoot)
-  let files: ReadonlySet<string> | undefined
-  try {
-    files = readBundledWebClientFiles(resolvedRoot)
-  } catch (error) {
-    // Damaged web installs must not disable the runtime server.
-    console.warn(`[ws-transport] browser client disabled: ${String(error)}`)
-    return answerWithoutWebClient
+type StaticTree = { root: string; files: ReadonlySet<string> | undefined }
+type MobileWebTree = { root: string; files: ReadonlySet<string> }
+type StaticFile = { root: string; file: string }
+
+export function createStaticWebClientHandler(
+  staticRoot: string | undefined,
+  findMobileWebRoot?: () => Promise<string | undefined>
+): RequestListener {
+  let web: StaticTree | undefined
+  if (staticRoot !== undefined) {
+    const root = resolve(staticRoot)
+    try {
+      const files = readBundledWebClientFiles(root)
+      web = basename(root) === 'renderer' && !files ? undefined : { root, files }
+    } catch (error) {
+      // Damaged web installs must not disable the runtime server.
+      console.warn(`[ws-transport] browser client disabled: ${String(error)}`)
+    }
   }
-  if (basename(resolvedRoot) === 'renderer' && !files) {
+  const mobile = findMobileWebRoot ? readMobileWebTree(findMobileWebRoot) : undefined
+  if (!web && !mobile) {
     return answerWithoutWebClient
   }
   return (request, response) => {
-    void handleStaticRequest(resolvedRoot, files, request, response)
+    void handleStaticRequest(web, mobile, request, response)
+  }
+}
+
+// Found on first request and kept until restart, which every update does; a dev build may produce the bundle after startup.
+function readMobileWebTree(
+  findRoot: () => Promise<string | undefined>
+): () => Promise<MobileWebTree | null> {
+  let found: Promise<MobileWebTree | null> | undefined
+  const load = async (): Promise<MobileWebTree | null> => {
+    const root = await findRoot()
+    if (root === undefined) {
+      return null
+    }
+    try {
+      const raw = await readFile(resolve(root, 'manifest.json'), 'utf8')
+      const manifest = InstalledMobileWebBundleManifestSchema.parse(JSON.parse(raw))
+      return { root: resolve(root), files: new Set(manifest.assets.map((asset) => asset.path)) }
+    } catch (error) {
+      console.warn(`[ws-transport] mobile web page disabled: ${String(error)}`)
+      return null
+    }
+  }
+  return async () => {
+    found ??= load()
+    const tree = await found
+    if (tree === null) {
+      found = undefined
+    }
+    return tree
   }
 }
 
 async function handleStaticRequest(
-  staticRoot: string,
-  files: ReadonlySet<string> | undefined,
+  web: StaticTree | undefined,
+  mobile: (() => Promise<MobileWebTree | null>) | undefined,
   request: IncomingMessage,
   response: ServerResponse
 ): Promise<void> {
@@ -61,13 +110,14 @@ async function handleStaticRequest(
     writeHttpStatus(response, 400)
     return
   }
-  if (!isAllowedStaticWebPath(pathname) || (files && !files.has(pathname.slice(1)))) {
+  const served = await resolveStaticFile(pathname, web, mobile)
+  if (!served) {
     writeHttpStatus(response, 404)
     return
   }
 
-  const absolutePath = resolve(staticRoot, pathname.slice(1))
-  const relativePath = relative(staticRoot, absolutePath)
+  const absolutePath = resolve(served.root, served.file)
+  const relativePath = relative(served.root, absolutePath)
   if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
     writeHttpStatus(response, 404)
     return
@@ -126,6 +176,37 @@ async function handleStaticRequest(
     response.destroy()
   })
   stream.pipe(response)
+}
+
+// Content-hashed names cannot collide, so an asset the desktop client lacks is looked up in the page's manifest.
+async function resolveStaticFile(
+  pathname: string,
+  web: StaticTree | undefined,
+  readMobile: (() => Promise<MobileWebTree | null>) | undefined
+): Promise<StaticFile | null> {
+  const webServes = web !== undefined && isAllowedStaticWebPath(pathname)
+  if (webServes && web.files?.has(pathname.slice(1))) {
+    return { root: web.root, file: pathname.slice(1) }
+  }
+  const mobile = readMobile ? await readMobile() : null
+  // A desktop tree without a file list claims every allowed path, so only after the page's list.
+  const unlistedWeb = webServes && !web.files ? { root: web.root, file: pathname.slice(1) } : null
+  if (!mobile) {
+    return unlistedWeb
+  }
+  if (
+    pathname === MOBILE_WEB_BROWSER_PATH ||
+    pathname === `${MOBILE_WEB_BROWSER_PATH}/` ||
+    pathname.startsWith(MOBILE_WEB_ROUTE_PREFIX)
+  ) {
+    return { root: mobile.root, file: MOBILE_WEB_BUNDLE_ENTRYPOINT }
+  }
+  if (pathname === MOBILE_WEB_BROWSER_MANIFEST_PATH) {
+    return { root: mobile.root, file: 'manifest.json' }
+  }
+  return pathname.startsWith('/assets/') && mobile.files.has(pathname.slice(1))
+    ? { root: mobile.root, file: pathname.slice(1) }
+    : unlistedWeb
 }
 
 function parseStaticPathname(rawUrl: string | undefined): string | null {

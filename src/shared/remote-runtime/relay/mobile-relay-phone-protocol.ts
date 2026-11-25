@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 const EpochMsSchema = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 

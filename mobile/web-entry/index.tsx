@@ -60,6 +60,8 @@ import {
 // Body replaced at build time: esbuild has no require.context, so the builder synthesizes one.
 import routeContext from './route-manifest'
 import { preloadBootRoutes } from './boot-route-preload'
+import { readOrcaBridgePageChannel } from '../src/mobile-web-shell/bridge/page-lifecycle/orca-bridge-page-channel'
+import { hasBrowserShellPairing } from '../src/mobile-web-shell/browser-shell/browser-shell-presence'
 
 // The h/ tree omits the native root provider, so supply ExpoRoot’s wrapper after init gives us a client.
 // Router suspense handles pending chunks; rejected chunks belong to the outer fault boundary.
@@ -156,6 +158,21 @@ subscribeMobileUiLanguage(() => {
   target.lang = getUiIntlLocale()
 })
 stampPageMountState(target, 'started')
+
+// A plain browser opened from `orca serve`'s mobile link has no app around it, so it brings its own shell.
+async function installBrowserShellIfOpenedFromLink(): Promise<void> {
+  if (readOrcaBridgePageChannel() !== null || !hasBrowserShellPairing()) {
+    return
+  }
+  const { installBrowserShell } =
+    await import('../src/mobile-web-shell/browser-shell/browser-shell')
+  await installBrowserShell()
+}
+
+// Await so the page reads the bridge only after the browser shell, if any, has installed it.
+await installBrowserShellIfOpenedFromLink().catch((error: unknown) => {
+  console.error('[orca-mobile-web-app] browser shell failed to start', error)
+})
 
 bootstrapShellPage({
   target,

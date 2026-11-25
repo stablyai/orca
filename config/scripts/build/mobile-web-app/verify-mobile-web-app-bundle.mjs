@@ -47,7 +47,9 @@ export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 // names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
 // update (shellDownloadedAssets), so this budget also bounds that download.
 // Eager: main's own fence. 8 MiB since the diagram engine left it, at about 8,280,000 bytes (2026-11-24).
-export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 8 * 1024 * 1024
+// 8.1875 MiB for the browser shell's chunk, which a phone downloads but never loads
+// (https://github.com/stablyai/orca/issues/48291).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 8.1875 * 1024 * 1024
 // The diagram engine: shells that serve deferred code fetch it from the desktop when a page first draws a
 // diagram, and older shells download it with the rest. Never loaded to open a page.
 export const MOBILE_WEB_APP_BUNDLE_MAX_DEFERRED_BYTES = 3.5 * 1024 * 1024

@@ -11,6 +11,8 @@ export type ServePairingReadiness =
       endpoint: string
       deviceId: string
       webClientUrl: string | null
+      // The phone page in a browser; only mobile-scoped pairings open it.
+      mobileWebUrl?: string | null
       scope: 'runtime' | 'mobile'
       qr: string | null
     }
@@ -112,6 +114,9 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
   if (readiness.pairing.available) {
     if (readiness.pairing.webClientUrl) {
       lines.push(`Web client URL: ${readiness.pairing.webClientUrl}`)
+    }
+    if (readiness.pairing.mobileWebUrl) {
+      lines.push(`Mobile web URL: ${readiness.pairing.mobileWebUrl}`)
     }
     if (readiness.pairing.scope === 'mobile' && readiness.pairing.qr) {
       lines.push(`Mobile pairing QR:\n${readiness.pairing.qr}`)

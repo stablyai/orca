@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   getAppEnvironment,
@@ -27,19 +27,40 @@ export function getBundledMobileWebBundleRoot(): string | undefined {
   if (probedRoot?.appPath === appPath) {
     return probedRoot.root
   }
-  // Electron reads app.asar paths through the header it parsed at launch, which misses files an in-place update wrote.
-  const filesPath = appPath.endsWith('.asar') ? `${appPath}.unpacked` : appPath
-  const roots = [
-    join(filesPath, 'out', 'mobile-web'),
-    // Unpacked electron-vite sets appPath to out/main.
-    join(filesPath, '..', 'mobile-web')
-  ]
-  const root = roots.find((candidate) => existsSync(join(candidate, MANIFEST_FILENAME)))
+  const root = bundleRootCandidates(appPath).find((candidate) =>
+    existsSync(join(candidate, MANIFEST_FILENAME))
+  )
   // An install keeps its layout, so only a miss is probed again (a dev build may produce the bundle later).
   if (root) {
     probedRoot = { appPath, root }
   }
   return root
+}
+
+/** The same probe without blocking, for the server's event-loop paths. */
+export async function findBundledMobileWebBundleRoot(): Promise<string | undefined> {
+  if (!hasAppEnvironment()) {
+    return undefined
+  }
+  for (const candidate of bundleRootCandidates(getAppEnvironment().getAppPath())) {
+    try {
+      await access(join(candidate, MANIFEST_FILENAME))
+      return candidate
+    } catch {
+      // Not this layout.
+    }
+  }
+  return undefined
+}
+
+function bundleRootCandidates(appPath: string): string[] {
+  // Electron reads app.asar paths through the header it parsed at launch, which misses files an in-place update wrote.
+  const filesPath = appPath.endsWith('.asar') ? `${appPath}.unpacked` : appPath
+  return [
+    join(filesPath, 'out', 'mobile-web'),
+    // Unpacked electron-vite sets appPath to out/main.
+    join(filesPath, '..', 'mobile-web')
+  ]
 }
 
 let probedRoot: { appPath: string; root: string } | undefined
