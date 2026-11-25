@@ -9,7 +9,10 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
   'image/gif': 'gif',
   'image/webp': 'webp',
   'image/svg+xml': 'svg',
-  'image/avif': 'avif'
+  'image/avif': 'avif',
+  'image/bmp': 'bmp',
+  'image/x-icon': 'ico',
+  'image/vnd.microsoft.icon': 'ico'
 }
 const IMAGE_EXTENSION = /\.(png|jpe?g|gif|webp|svg|avif|bmp|ico|tiff?)$/i
 
