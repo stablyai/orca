@@ -63,6 +63,8 @@ export function AutomationManager(props: {
   )
   const [editorOpen, setEditorOpen] = useState(props.startInEditor === true)
   function openEditor(request: Omit<AutomationEditorRequest, 'key'>) {
+    // The sheet shows the page's last failure, so an older one shouldn't greet it.
+    catalog.setError(null)
     setEditor((current) => ({ ...request, key: (current?.key ?? 0) + 1 }))
     setEditorOpen(true)
   }

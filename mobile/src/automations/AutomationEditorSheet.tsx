@@ -3,6 +3,8 @@
 import type { ReactNode } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
+import { describeLoadError } from '../components/feedback/load-error-description'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import type { AutomationDraft } from './automation-draft'
@@ -28,7 +30,13 @@ export function AutomationEditorSheet(props: {
   client: RpcClient | null
   hostId: string
   executionHost?: ExecutionHostId
-  catalog: { connected: boolean; busy: boolean; loaded: boolean; capabilities: readonly string[] }
+  catalog: {
+    connected: boolean
+    busy: boolean
+    loaded: boolean
+    capabilities: readonly string[]
+    error: string | null
+  }
   leaveGuard?: AutomationLeaveSlot
   onDraftChange: (draft: AutomationDraft) => void
   onClose: () => void
@@ -38,6 +46,7 @@ export function AutomationEditorSheet(props: {
   /** Drawers a save may raise over the editor, e.g. the setup trust prompt. */
   children?: ReactNode
 }) {
+  const t = useMobileTranslation()
   const { present, host: sheets } = useAutomationSheet()
   const { request, catalog } = props
   return (
@@ -70,6 +79,7 @@ export function AutomationEditorSheet(props: {
           leaveGuard={props.leaveGuard}
           capabilities={catalog.capabilities}
           busy={catalog.busy}
+          saveError={catalog.error && describeLoadError(catalog.error, t).message}
           connected={catalog.connected}
           present={present}
           onClose={props.onClose}
