@@ -87,6 +87,11 @@ export type CommitMessageAgentSpec = {
         /** Listed over the CLI's app-server `model/list`; main owns the app-server arguments. */
         listing: 'codex-app-server'
       }
+    | {
+        binary: string
+        /** Read from the dima daemon already running; main never starts one. */
+        listing: 'dima-app-server'
+      }
   models: CommitMessageModel[]
   defaultModelId: string
 }

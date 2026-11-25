@@ -92,7 +92,10 @@ export function planModelDiscovery(
   strictMcp = true
 ): { ok: true; plan: CommitMessagePlan } | { ok: false; error: string } {
   const modelDiscovery = spec.modelDiscovery
-  if (!modelDiscovery) {
+  if (
+    !modelDiscovery ||
+    ('listing' in modelDiscovery && modelDiscovery.listing !== 'codex-app-server')
+  ) {
     return { ok: false, error: `${spec.label} does not support dynamic model discovery.` }
   }
   const command = planAgentBinary(modelDiscovery.binary, agentCommandOverride, backslash)

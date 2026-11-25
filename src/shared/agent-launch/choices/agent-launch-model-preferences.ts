@@ -7,6 +7,7 @@ import {
   getAgentSessionOptionLaunchCatalog
 } from '../../agent-session/options/agent-session-option-catalog'
 import { isPiModelOptionId } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-pi'
+import { parseDimaModelSelector } from '../../agent-session/options/model-catalog/dima-model-list-probe'
 import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
 
@@ -65,6 +66,13 @@ export function checkAgentLaunchModelPreferences(args: {
     return refuse(
       'invalid_argument',
       `Agent pi needs a provider/id model, such as anthropic/claude-sonnet-4-5; got ${args.model}.`
+    )
+  }
+  // A bare id would run on whichever provider dima resolves; the picker always names one.
+  if (args.agent === 'dima' && !parseDimaModelSelector(args.model)) {
+    return refuse(
+      'invalid_argument',
+      `Agent dima needs a provider/model selector, such as openai-codex/gpt-5.5; got ${args.model}.`
     )
   }
 

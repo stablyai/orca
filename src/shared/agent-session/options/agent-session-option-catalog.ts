@@ -7,6 +7,7 @@ import {
   CODEX_SESSION_OPTION_CATALOG
 } from './catalog-providers/agent-session-option-catalog-claude-codex'
 import { CURSOR_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-cursor'
+import { DIMA_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-dima'
 import { GROK_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-grok'
 import { MUSE_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-muse'
 import { OMP_SESSION_OPTION_CATALOG } from './catalog-providers/agent-session-option-catalog-omp'
@@ -25,6 +26,7 @@ const CATALOGS: AgentSessionOptionCatalogMap = {
   codebuddy: CODEBUDDY_SESSION_OPTION_CATALOG,
   codex: CODEX_SESSION_OPTION_CATALOG,
   cursor: CURSOR_SESSION_OPTION_CATALOG,
+  dima: DIMA_SESSION_OPTION_CATALOG,
   grok: GROK_SESSION_OPTION_CATALOG,
   muse: MUSE_SESSION_OPTION_CATALOG,
   omp: OMP_SESSION_OPTION_CATALOG

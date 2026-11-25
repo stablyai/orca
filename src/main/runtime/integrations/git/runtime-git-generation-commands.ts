@@ -252,9 +252,10 @@ export class RuntimeGitGenerationCommands {
   ): Promise<DiscoverCommitMessageModelsResult> {
     const target = await this.host.resolveRuntimeGitTarget(worktreeSelector)
     const typedAgentId = agentId as TuiAgent
+    const settings = this.host.getRuntimeSettings()
     const agentCommandOverride =
       settingsOverride?.agentCmdOverrides?.[typedAgentId] ??
-      this.host.getRuntimeSettings().agentCmdOverrides?.[typedAgentId]
+      settings.agentCmdOverrides?.[typedAgentId]
     const route = runtimeGitRouteForTarget(target)
     if (route.kind === 'ssh') {
       return {
@@ -275,7 +276,16 @@ export class RuntimeGitGenerationCommands {
       typedAgentId,
       localEnv.env,
       agentCommandOverride,
-      wslDistro ? { cwd: target.worktree.path, wslDistro } : undefined
+      typedAgentId === 'dima'
+        ? {
+            cwd: target.worktree.path,
+            wslDistro,
+            dimaArgs: settings.agentDefaultArgs?.dima,
+            dimaEnv: settings.agentDefaultEnv?.dima
+          }
+        : wslDistro
+          ? { cwd: target.worktree.path, wslDistro }
+          : undefined
     )
   }
 }

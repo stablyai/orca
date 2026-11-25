@@ -32,7 +32,9 @@ export function agentPickerModelCatalogReads(
       relist = false
     ) =>
       cliDiscoveryRuntime && agentPickerListsCliModels(entry)
-        ? readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
+        ? entry.agent === 'dima' && !relist
+          ? { origin: 'unknown' as const }
+          : readAgentPickerCliModelCatalog(entry.agent, cliDiscoveryRuntime)
         : !target
           ? undefined
           : entry.agent === 'antigravity'

@@ -3,6 +3,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitPushTarget, GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { GitRuntimeOptions } from '../../../git/command-runner/git-runtime-options'
@@ -34,7 +35,8 @@ export type RuntimeGitTarget = {
 
 export type RuntimeGitCommandHost = {
   resolveRuntimeGitTarget(selector: string): Promise<RuntimeGitTarget>
-  getRuntimeSettings(): SourceControlAiSettingsInput
+  getRuntimeSettings(): SourceControlAiSettingsInput &
+    Pick<GlobalSettings, 'agentDefaultArgs' | 'agentDefaultEnv'>
   getCommitMessageAgentEnvironment?(): CommitMessageAgentEnvironmentResolvers | undefined
   /** `undefined` keeps cached metadata; `null` is the authoritative unlinked answer. */
   getWorktreeLinkedIssue?(worktreeId: string): number | null | undefined
