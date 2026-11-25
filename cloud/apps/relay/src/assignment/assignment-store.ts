@@ -1168,7 +1168,7 @@ export class RelayAssignmentStore {
           identity,
           existing,
           now,
-          pinnedAdmission?.state
+          pinnedAdmission
         )
       ) {
         return null
@@ -1272,7 +1272,7 @@ export class RelayAssignmentStore {
     existing: SqlRow,
     now: number,
     // Read by the caller when it needs the same row for another question.
-    admissionState?: CellAdmissionState
+    pinnedAdmission?: PinnedCellAdmission
   ): Promise<boolean> {
     const lastActivityAt = integer(existing, 'last_activity_at')
     if (
@@ -1281,11 +1281,10 @@ export class RelayAssignmentStore {
     ) {
       return false
     }
-    const state =
-      admissionState ??
-      (await this.pinnedCellAdmission(transaction, text(existing, 'cell_id')))?.state
+    const pinned =
+      pinnedAdmission ?? (await this.pinnedCellAdmission(transaction, text(existing, 'cell_id')))
     // Unknown or missing admission fails safe: the pin stays.
-    if (state !== 'existing-only') {
+    if (!pinned || !servesNoNewAttaches(pinned, now)) {
       return false
     }
     // A reserve cell keeps no activity rows and its ledger stamps last_activity_at, so zero
@@ -8173,7 +8172,7 @@ export class RelayAssignmentStore {
   ): Promise<boolean> {
     const cellId = text(existing, 'cell_id')
     const pinned = await this.pinnedCellAdmission(database, cellId)
-    if (await this.assignmentStrandedOnUnservedCell(database, identity, existing, now, pinned?.state)) {
+    if (await this.assignmentStrandedOnUnservedCell(database, identity, existing, now, pinned)) {
       return false
     }
     if (
@@ -9183,6 +9182,22 @@ function rollIsolationIsCurrent(admission: PinnedCellAdmission | undefined, now:
     admission?.state === ROLL_ISOLATED_ADMISSION &&
     admission.rollIsolatedAt !== undefined &&
     now - admission.rollIsolatedAt < ROLL_ISOLATION_STAMP_MAX_AGE_MS
+  )
+}
+
+// Cells whose hosts may be proven stranded (granted, then no live lease): existing-only (#225),
+// and a migration-only cell a same-cap roll or retire isolated whose stamp is past the bound: the
+// roll machinery (re-placement, drain return, dead-cell refusal) owns a current stamp, and a failed
+// retire leaves its cell draining with an old one. Unstamped migration-only cells (evacuation, Asia
+// rollback, new cells) keep the pin.
+function servesNoNewAttaches(admission: PinnedCellAdmission, now: number): boolean {
+  if (admission.state === 'existing-only') {
+    return true
+  }
+  return (
+    admission.state === ROLL_ISOLATED_ADMISSION &&
+    admission.rollIsolatedAt !== undefined &&
+    !rollIsolationIsCurrent(admission, now)
   )
 }
 
