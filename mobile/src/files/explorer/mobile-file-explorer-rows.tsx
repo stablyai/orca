@@ -10,6 +10,7 @@ import type { useMobileNativeChatFileSearch } from '../../session/native-chat/co
 import {
   flattenDirectoryCache,
   getDirectoryCacheState,
+  listedPathMatches,
   searchResultRows,
   type DirectoryCache,
   type FileExplorerRow
@@ -19,6 +20,9 @@ type WorkspaceFileSearch = Pick<
   ReturnType<typeof useMobileNativeChatFileSearch>,
   'nativeChatFilePaths' | 'nativeChatFilesQuery' | 'loadNativeChatFiles'
 >
+
+// Opened folders add at most this many matches the host's search did not return.
+const LISTED_MATCH_LIMIT = 32
 
 // As the search hook keys its answers.
 function normalizedSearch(text: string): string {
@@ -63,14 +67,24 @@ export function useMobileFileExplorerRows({
     setHeld({ scope, query: nativeChatFilesQuery, paths: nativeChatFilePaths })
   }
   const answer = held?.scope === scope ? held : null
-  const searchPaths = filtering && answer ? answer.paths : null
   const searchPending = filtering && answer?.query !== normalizedSearch(filter)
+  const searchPaths = useMemo(() => {
+    if (!filtering) {
+      return []
+    }
+    const found = answer?.paths ?? []
+    const seen = new Set(found)
+    return [
+      ...found,
+      ...listedPathMatches(directoryCache, filter, LISTED_MATCH_LIMIT).filter(
+        (path) => !seen.has(path)
+      )
+    ]
+  }, [answer, directoryCache, filter, filtering])
 
   const rows = useMemo<FileExplorerRow[]>(
     () =>
-      filtering
-        ? searchResultRows(searchPaths ?? [])
-        : flattenDirectoryCache(directoryCache, expanded),
+      filtering ? searchResultRows(searchPaths) : flattenDirectoryCache(directoryCache, expanded),
     [directoryCache, expanded, filtering, searchPaths]
   )
 

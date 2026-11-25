@@ -25,7 +25,13 @@ function rankWithFolders(paths: readonly string[], query: string, limit: number)
   )
 }
 
-const NO_ANSWER: { query: string | null; paths: string[] } = { query: null, paths: [] }
+type SearchAnswer = {
+  query: string | null
+  paths: string[]
+  client: RpcClient | null
+  worktreeId: string | null
+}
+const NO_ANSWER: SearchAnswer = { query: null, paths: [], client: null, worktreeId: null }
 
 /** The legacy inventory is the whole workspace, so its request carries no further parameters. */
 type WorkspaceInventoryParameters = Readonly<Record<string, never>>
@@ -34,29 +40,34 @@ const WHOLE_WORKSPACE: WorkspaceInventoryParameters = {}
 export function useMobileNativeChatFileSearch(args: {
   client: RpcClient | null
   worktreeId: string
-  /** How many paths to rank; the `@` menu shows a few, the Files search a screenful. */
+  /** How many paths to rank (the host takes at most 32); the `@` menu shows a few, Files more. */
   limit?: number
+  /** How long a query's answer is reused; the `@` menu keeps it while it is open. */
+  maxAgeMs?: number
 }): {
   nativeChatFilePaths: string[]
   /** The normalized query the paths answer; null while a newer one is pending. */
   nativeChatFilesQuery: string | null
   loadNativeChatFiles: (query: string) => void
 } {
-  const { client, worktreeId, limit = FILE_SEARCH_RESULT_LIMIT } = args
-  const [answer, setAnswer] = useState<{ query: string | null; paths: string[] }>(NO_ANSWER)
+  const { client, worktreeId, limit = FILE_SEARCH_RESULT_LIMIT, maxAgeMs = Infinity } = args
+  // The answer names the workspace it is for: until the reset below runs, it can still be another's.
+  const [answer, setAnswer] = useState<SearchAnswer>(NO_ANSWER)
   const setNativeChatFilePaths = useCallback(
-    (paths: string[], query: string | null = null) => setAnswer({ query, paths }),
-    []
+    (paths: string[], query: string | null = null) =>
+      setAnswer({ query, paths, client, worktreeId }),
+    [client, worktreeId]
   )
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sequenceRef = useRef(0)
-  const queryCacheRef = useRef(new Map<string, string[]>())
+  const queryCacheRef = useRef(new Map<string, { paths: string[]; at: number }>())
   const queryCacheGenerationRef = useRef<number | null>(null)
   const searchSupportedRef = useRef<boolean | null>(null)
   const inventory = useRef(
     new GenerationScopedRequestOwner<WorkspaceInventoryParameters, string[]>()
   ).current
 
+  const loadRef = useRef<(query: string) => void>(() => {})
   const mountedRef = useRef(true)
   useEffect(() => {
     mountedRef.current = true
@@ -84,6 +95,8 @@ export function useMobileNativeChatFileSearch(args: {
   const loadNativeChatFiles = useCallback(
     (query: string) => {
       if (!client) {
+        // Nothing to ask, so the query is answered with nothing rather than left waiting.
+        setNativeChatFilePaths([], query.trim().toLowerCase().slice(0, 256))
         return
       }
       const generation = client.getGeneration?.() ?? 0
@@ -94,7 +107,9 @@ export function useMobileNativeChatFileSearch(args: {
         inventory.reset()
       }
       const normalizedQuery = query.trim().toLowerCase().slice(0, 256)
-      const cached = queryCacheRef.current.get(normalizedQuery)
+      const cachedEntry = queryCacheRef.current.get(normalizedQuery)
+      const cached =
+        cachedEntry && Date.now() - cachedEntry.at < maxAgeMs ? cachedEntry.paths : undefined
       if (cached) {
         // Cancel and stale pending debounce work before cached results display so late queries cannot overwrite them.
         if (timerRef.current) {
@@ -120,7 +135,8 @@ export function useMobileNativeChatFileSearch(args: {
           if (!isCurrentRequest()) {
             return
           }
-          queryCacheRef.current.set(normalizedQuery, paths)
+          queryCacheRef.current.delete(normalizedQuery)
+          queryCacheRef.current.set(normalizedQuery, { paths, at: Date.now() })
           while (queryCacheRef.current.size > FILE_SEARCH_QUERY_CACHE_LIMIT) {
             const oldest = queryCacheRef.current.keys().next().value
             if (oldest === undefined) {
@@ -160,6 +176,7 @@ export function useMobileNativeChatFileSearch(args: {
             inventory.commit(loaded.lease, loaded.value) !== 'committed' ||
             !isCurrentRequest()
           ) {
+            answerNothing()
             return
           }
           applyPaths(rankWithFolders(loaded.value, normalizedQuery, limit))
@@ -193,15 +210,28 @@ export function useMobileNativeChatFileSearch(args: {
             return
           }
           answerNothing()
-        })().catch(answerNothing)
+        })()
+          .catch(answerNothing)
+          .finally(() => {
+            // A connection cutover retired this read; the query still on screen asks again.
+            if (
+              mountedRef.current &&
+              sequenceRef.current === sequence &&
+              (client.getGeneration?.() ?? 0) !== generation
+            ) {
+              loadRef.current(query)
+            }
+          })
       }, FILE_SEARCH_DEBOUNCE_MS)
     },
-    [client, inventory, limit, setNativeChatFilePaths, worktreeId]
+    [client, inventory, limit, maxAgeMs, setNativeChatFilePaths, worktreeId]
   )
+  loadRef.current = loadNativeChatFiles
 
   return {
     nativeChatFilePaths: answer.paths,
-    nativeChatFilesQuery: answer.query,
+    nativeChatFilesQuery:
+      answer.client === client && answer.worktreeId === worktreeId ? answer.query : null,
     loadNativeChatFiles
   }
 }

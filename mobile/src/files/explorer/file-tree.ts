@@ -149,6 +149,34 @@ function folderPagingNode(
   }
 }
 
+/**
+ * Paths in folders already listed whose name contains `query`, as the search reports them (folders as `dir/`).
+ * The host's search sees no SSH workspace and none offline; what was opened still answers.
+ */
+export function listedPathMatches(cache: DirectoryCache, query: string, limit: number): string[] {
+  const needle = query.trim().toLowerCase()
+  const found: string[] = []
+  const visit = (relativePath: string): void => {
+    const entries = getDirectoryCacheState(cache, relativePath)?.entries ?? []
+    for (const entry of [...entries].sort(compareDirectoryEntries)) {
+      if (found.length >= limit || !shouldIncludeMobileFileExplorerEntry(entry)) {
+        continue
+      }
+      const childPath = joinRelativePath(relativePath, entry.name)
+      if (entry.name.toLowerCase().includes(needle)) {
+        found.push(entry.isDirectory ? `${childPath}/` : childPath)
+      }
+      if (entry.isDirectory) {
+        visit(childPath)
+      }
+    }
+  }
+  if (needle !== '') {
+    visit('')
+  }
+  return found
+}
+
 /** A workspace search's paths as rows, each naming its folder; `dir/` paths are folders. */
 export function searchResultRows(paths: readonly string[]): TreeNode[] {
   return paths.flatMap((path) => {
