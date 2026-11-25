@@ -142,6 +142,34 @@ export async function readAgentMcpServers(
   return read.flat()
 }
 
+/**
+ * Every server name one agent's config holds, whether or not Orca could carry the entry: a name the
+ * agent already uses is taken even when its entry has fields Orca can't read.
+ */
+export async function readAgentMcpServerNames(
+  agent: McpConfigAgent,
+  context: AgentMcpConfigContext,
+  options: { projectPath?: string } = {}
+): Promise<{ name: string; projectPath?: string }[]> {
+  const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
+  const read = await Promise.all(
+    locations.map(async (location) => {
+      const text = await readFile(location.path, 'utf8').catch(() => null)
+      const parsed = text === null ? null : parseAgentMcpConfigText(text, location.format)
+      if (!parsed) {
+        return []
+      }
+      return agentMcpServerBlocks(location, parsed, () => false).flatMap((block) =>
+        Object.keys(record(valueAtKeyPath(parsed, block.path)) ?? {}).map((name) => ({
+          name,
+          ...(block.projectPath ? { projectPath: block.projectPath } : {})
+        }))
+      )
+    })
+  )
+  return read.flat()
+}
+
 export type DiscoveredAgentMcpServer = {
   /** Opaque and stable while the agents' entries keep their name and URL or command. */
   key: string

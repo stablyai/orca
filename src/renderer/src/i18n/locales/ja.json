@@ -1777,7 +1777,8 @@
         "projectRemoved": "プロジェクトは Orca から削除されました。",
         "folderWorkspaceRemoved": "フォルダーワークスペースは削除されました。",
         "chatStillStarting": "チャットは起動中です。後でもう一度お試しください。",
-        "chatOpenFailed": "このチャットを開けませんでした。",
+        "chatOpenFailed": "このチャットを開けませんでした",
+        "chatOpenDismiss": "非表示",
         "chatOpenRetry": "再試行",
         "chatOpenShowDetails": "詳細を表示",
         "chatOpenHideDetails": "詳細を非表示"
@@ -4904,6 +4905,12 @@
               "waiting": {
                 "label": "Claude の実行時に更新",
                 "message": "Claude の使用状況は、次に Claude を実行したときに更新されます。"
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Codex の実行時に更新",
+                "message": "Codex の使用状況は、次に Codex を実行したときに更新されます。"
               }
             },
             "remoteOwnerNotConfigured": "{{server}} では未構成",
@@ -20278,11 +20285,9 @@
         "unnamed": "サブ Agent",
         "started_other": "{{count}} 個のサブ Agent を起動しました",
         "ran_other": "{{count}} 個のサブ Agent を実行しました",
-        "backToMain": "メイン Agent に戻る",
         "mainAgent": "メイン Agent",
-        "promptFromMain": "メイン Agent からのプロンプト",
-        "backTo": "{{value0}} に戻る",
         "path": "サブ Agent の階層",
+        "backTo": "{{value0}} に戻る",
         "stateHeading": {
           "completed": "完了",
           "working": "実行中",
@@ -20294,7 +20299,14 @@
         "noSteps": "まだステップはありません",
         "beforeClear": "このサブ Agent はチャットがクリアされる前に実行されました",
         "stoppedBeforeReply": "返信する前に停止しました",
-        "noReply": "返信なしで終了しました"
+        "noReply": "返信なしで終了しました",
+        "prompt": "プロンプト",
+        "result": "結果",
+        "close": "閉じる",
+        "needsYou": "対応が必要",
+        "agentNeedsYou": "{{name}} が対応を待っています",
+        "mainNeedsYou": "メイン Agent が対応を待っています",
+        "show": "表示"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",
@@ -21974,9 +21986,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "開いたままにする",
-        "bannerRunning": "オーケストレーションワーカー · 完了の2分後に閉じます",
-        "bannerFinished": "オーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
-        "bannerFinishedStatus": "オーケストレーションワーカーが完了 · まもなく閉じます",
+        "bannerRunning": "完了の{{minutes}}分後に閉じます",
+        "bannerFinished": "完了 · {{countdown}}後に閉じます",
+        "bannerFinishedStatus": "ワーカーが完了 · まもなく閉じます",
         "boundRunning": "{{worker}} と一緒に閉じます",
         "boundFinished": "{{worker}} が完了しました · {{countdown}} 後に閉じます",
         "boundFallbackName": "そのワーカー"
@@ -26102,7 +26114,9 @@
       "untitled": "新しいチャット",
       "searchRetry": "再試行",
       "loading": "チャットを読み込み中…",
-      "readFailed": "このボットのチャットを読み取れませんでした。"
+      "readFailed": "このボットのチャットを読み取れませんでした。",
+      "older": "古い{{count}}件を表示",
+      "hideOlder": "古い項目を隠す"
     },
     "needs": {
       "chat": "{{name}} とのチャット",

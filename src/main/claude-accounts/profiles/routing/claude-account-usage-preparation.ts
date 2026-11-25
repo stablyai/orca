@@ -1,6 +1,6 @@
 import type { ClaudeProfileRouter } from './claude-profile-router'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
-import { CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID } from '../../../../shared/agent-accounts/claude/claude-system-default-usage'
+import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../../shared/agent-accounts/host-system-default-usage'
 
 /** Usage reads use the same login route as account launches. */
 export function claudeAccountUsagePreparation(
@@ -8,7 +8,7 @@ export function claudeAccountUsagePreparation(
   accountId: string
 ): ClaudeRuntimeAuthPreparation {
   if (
-    accountId === CLAUDE_HOST_SYSTEM_DEFAULT_USAGE_ID ||
+    accountId === HOST_SYSTEM_DEFAULT_USAGE_IDS.claude ||
     router.coveredBySystemDefault(accountId)
   ) {
     // Setting CLAUDE_CONFIG_DIR for System default changes its Keychain identity.

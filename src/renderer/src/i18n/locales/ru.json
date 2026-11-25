@@ -2103,7 +2103,8 @@
         "projectRemoved": "Проект удалён из Orca.",
         "folderWorkspaceRemoved": "Рабочее пространство папки удалено.",
         "chatStillStarting": "Чат ещё запускается. Повторите чуть позже.",
-        "chatOpenFailed": "Не удалось открыть чат.",
+        "chatOpenFailed": "Не удалось открыть чат",
+        "chatOpenDismiss": "Скрыть",
         "chatOpenRetry": "Повторить",
         "chatOpenShowDetails": "Показать подробности",
         "chatOpenHideDetails": "Скрыть подробности"
@@ -5204,6 +5205,12 @@
               "waiting": {
                 "label": "Обновится при запуске Claude",
                 "message": "Данные об использовании Claude обновятся при следующем запуске Claude."
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Обновится при запуске Codex",
+                "message": "Данные об использовании Codex обновятся при следующем запуске Codex."
               }
             },
             "justNow": "только что",
@@ -20811,11 +20818,9 @@
         "started_other": "Запущено {{count}} дочернего агента",
         "ran_one": "Работал {{count}} дочерний агент",
         "ran_other": "Работало {{count}} дочернего агента",
-        "backToMain": "Назад к основному агенту",
         "mainAgent": "Основной агент",
-        "promptFromMain": "Запрос от основного агента",
-        "backTo": "Назад: {{value0}}",
         "path": "Путь дочернего агента",
+        "backTo": "Назад: {{value0}}",
         "stateHeading": {
           "completed": "Завершён",
           "working": "Работает",
@@ -20831,7 +20836,14 @@
         "started_few": "Запущено {{count}} дочерних агента",
         "started_many": "Запущено {{count}} дочерних агентов",
         "ran_few": "Работали {{count}} дочерних агента",
-        "ran_many": "Работали {{count}} дочерних агентов"
+        "ran_many": "Работали {{count}} дочерних агентов",
+        "prompt": "Промпт",
+        "result": "Результат",
+        "close": "Закрыть",
+        "needsYou": "Нужен ваш ответ",
+        "agentNeedsYou": "{{name}} ждёт вашего ответа",
+        "mainNeedsYou": "Основной агент ждёт вашего ответа",
+        "show": "Показать"
       },
       "rewind": {
         "unsupported": "В этом чате нельзя вернуться к предыдущему сообщению.",
@@ -22398,9 +22410,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Оставить открытым",
-        "bannerRunning": "Воркер оркестрации · Закроется через 2 минуты после завершения",
-        "bannerFinished": "Воркер оркестрации завершён · Закроется через {{countdown}}",
-        "bannerFinishedStatus": "Воркер оркестрации завершён · Скоро закроется",
+        "bannerRunning": "Закроется через {{minutes}} мин после завершения",
+        "bannerFinished": "Завершён · закроется через {{countdown}}",
+        "bannerFinishedStatus": "Воркер завершён · скоро закроется",
         "boundRunning": "Закроется вместе с: {{worker}}",
         "boundFinished": "{{worker}} завершён · Закроется через {{countdown}}",
         "boundFallbackName": "воркер"
@@ -25638,7 +25650,9 @@
       "untitled": "Новый чат",
       "loading": "Загрузка чатов…",
       "readFailed": "Не удалось прочитать чаты этого бота.",
-      "searchRetry": "Повторить попытку"
+      "searchRetry": "Повторить попытку",
+      "older": "Показать старые: {{count}}",
+      "hideOlder": "Скрыть старые"
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",

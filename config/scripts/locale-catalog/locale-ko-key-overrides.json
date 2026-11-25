@@ -1641,7 +1641,22 @@
     "ko": "라이트"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef": {
-    "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+    "ko": " 대신 작업을 요약하는 짧은 이름으로). Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+  },
+  "auto.components.settings.BaseRefPicker.a5c16712c1": {
+    "ko": "여러 개의 원격이 감지되었습니다. 결과를 좁히려면 원격 이름(예:"
+  },
+  "auto.components.settings.BaseRefPicker.80f7c82303": {
+    "ko": ")이나 전체 참조(예:"
+  },
+  "auto.components.settings.BaseRefPicker.ade9a5bb03": {
+    "ko": ")를 입력하세요."
+  },
+  "auto.components.settings.ManageSessionKillDialog.8401328fed": {
+    "ko": "세션"
+  },
+  "auto.components.settings.ManageSessionKillDialog.ad9832aa26": {
+    "ko": "을(를) 강제 종료합니다. 해당 창에서 저장되지 않은 작업은 모두 손실됩니다. 이 작업은 되돌릴 수 없습니다."
   },
   "auto.components.settings.BaseRefPicker.915ad97875": {
     "ko": "upstream"

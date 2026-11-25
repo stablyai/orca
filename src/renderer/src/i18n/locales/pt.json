@@ -3240,7 +3240,8 @@
         "projectRemoved": "O projeto foi removido do Orca.",
         "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido.",
         "chatStillStarting": "O chat ainda está iniciando. Tente em breve.",
-        "chatOpenFailed": "Não foi possível abrir este chat.",
+        "chatOpenFailed": "Não foi possível abrir este chat",
+        "chatOpenDismiss": "Descartar",
         "chatOpenRetry": "Tentar novamente",
         "chatOpenShowDetails": "Mostrar detalhes",
         "chatOpenHideDetails": "Ocultar detalhes"
@@ -3944,6 +3945,12 @@
               "waiting": {
                 "label": "Atualiza quando o Claude é executado",
                 "message": "O uso do Claude será atualizado na próxima vez que ele for executado."
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Atualiza quando o Codex é executado",
+                "message": "O uso do Codex será atualizado na próxima vez que ele for executado."
               }
             },
             "justNow": "agora mesmo",
@@ -21424,11 +21431,9 @@
         "ran_one": "Executou {{count}} subagente",
         "ran_other": "Executou {{count}} subagentes",
         "ran_many": "Executou {{count}} subagentes",
-        "backToMain": "Voltar ao agente principal",
         "mainAgent": "Agente principal",
-        "promptFromMain": "Prompt do agente principal",
-        "backTo": "Voltar para {{value0}}",
         "path": "Caminho do subagente",
+        "backTo": "Voltar para {{value0}}",
         "stateHeading": {
           "completed": "Concluído",
           "working": "Trabalhando",
@@ -21440,7 +21445,14 @@
         "noSteps": "Nenhuma etapa ainda",
         "beforeClear": "Este subagente foi executado antes de o chat ser limpo",
         "stoppedBeforeReply": "Interrompido antes de responder",
-        "noReply": "Encerrado sem resposta"
+        "noReply": "Encerrado sem resposta",
+        "prompt": "Prompt",
+        "result": "Resultado",
+        "close": "Fechar",
+        "needsYou": "Precisa de você",
+        "agentNeedsYou": "{{name}} precisa de você",
+        "mainNeedsYou": "O agente principal precisa de você",
+        "show": "Mostrar"
       },
       "drop": {
         "title": "Solte para anexar a este chat",
@@ -23293,9 +23305,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Manter aberto",
-        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
-        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
-        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve",
+        "bannerRunning": "Fecha {{minutes}} min após terminar",
+        "bannerFinished": "Concluído · fecha em {{countdown}}",
+        "bannerFinishedStatus": "Worker concluído · fecha em breve",
         "boundRunning": "Fecha com {{worker}}",
         "boundFinished": "{{worker}} concluído · Fecha em {{countdown}}",
         "boundFallbackName": "seu worker"
@@ -25953,7 +25965,9 @@
       "untitled": "Novo chat",
       "loading": "Carregando chats…",
       "readFailed": "Não foi possível ler os chats deste bot.",
-      "searchRetry": "Tentar novamente"
+      "searchRetry": "Tentar novamente",
+      "older": "Mostrar {{count}} mais antigos",
+      "hideOlder": "Ocultar mais antigos"
     },
     "needs": {
       "chat": "Seu chat com {{name}}",

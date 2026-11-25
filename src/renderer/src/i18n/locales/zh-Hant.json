@@ -2005,7 +2005,8 @@
         "projectRemoved": "專案已從 Orca 移除。",
         "folderWorkspaceRemoved": "資料夾工作區已移除。",
         "chatStillStarting": "此聊天仍在啟動中。請稍後再試。",
-        "chatOpenFailed": "無法開啟此聊天。",
+        "chatOpenFailed": "無法開啟此聊天",
+        "chatOpenDismiss": "忽略",
         "chatOpenRetry": "重試",
         "chatOpenShowDetails": "顯示詳細資料",
         "chatOpenHideDetails": "隱藏詳細資料"
@@ -4982,6 +4983,12 @@
               "waiting": {
                 "label": "執行 Claude 時更新",
                 "message": "Claude 用量將在下次執行 Claude 時更新。"
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "執行 Codex 時更新",
+                "message": "Codex 用量將在下次執行 Codex 時更新。"
               }
             },
             "justNow": "剛剛",
@@ -19828,11 +19835,9 @@
         "unnamed": "子代理程式",
         "started_other": "已啟動 {{count}} 個子代理程式",
         "ran_other": "已執行 {{count}} 個子代理程式",
-        "backToMain": "返回主代理程式",
         "mainAgent": "主代理程式",
-        "promptFromMain": "來自主代理程式的提示詞",
-        "backTo": "返回 {{value0}}",
         "path": "子代理程式路徑",
+        "backTo": "返回 {{value0}}",
         "stateHeading": {
           "completed": "已完成",
           "working": "工作中",
@@ -19844,7 +19849,14 @@
         "noSteps": "尚無步驟",
         "beforeClear": "此子代理程式在聊天清除前執行",
         "stoppedBeforeReply": "回覆前已停止",
-        "noReply": "已結束，未回覆"
+        "noReply": "已結束，未回覆",
+        "prompt": "提示詞",
+        "result": "結果",
+        "close": "關閉",
+        "needsYou": "需要你處理",
+        "agentNeedsYou": "{{name}} 需要你處理",
+        "mainNeedsYou": "主代理程式需要你處理",
+        "show": "查看"
       },
       "rewind": {
         "unsupported": "此聊天無法返回到更早的訊息。",
@@ -21348,9 +21360,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "保持開啟",
-        "bannerRunning": "協作工作者 · 完成後 2 分鐘關閉",
-        "bannerFinished": "協作工作者已完成 · {{countdown}}後關閉",
-        "bannerFinishedStatus": "協作工作者已完成 · 即將關閉",
+        "bannerRunning": "完成後 {{minutes}} 分鐘關閉",
+        "bannerFinished": "已完成 · {{countdown}}後關閉",
+        "bannerFinishedStatus": "工作者已完成 · 即將關閉",
         "boundRunning": "會隨 {{worker}} 一併關閉",
         "boundFinished": "{{worker}} 已完成 · {{countdown}}後關閉",
         "boundFallbackName": "其工作者"
@@ -24494,7 +24506,9 @@
       "untitled": "新對話",
       "searchRetry": "重試",
       "loading": "正在載入聊天…",
-      "readFailed": "無法讀取此機器人的聊天。"
+      "readFailed": "無法讀取此機器人的聊天。",
+      "older": "顯示 {{count}} 個較早的",
+      "hideOlder": "隱藏較早的"
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",

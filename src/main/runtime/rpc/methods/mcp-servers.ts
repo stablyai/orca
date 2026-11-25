@@ -37,7 +37,6 @@ import {
   setMcpServerWorkspaces,
   updateMcpServer
 } from '../../../mcp-servers/mcp-host-list'
-import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
 import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
@@ -45,7 +44,8 @@ import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
 import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { sharedMcpProcesses } from '../../../mcp-servers/shared-process/shared-mcp-processes'
 import { defineMethod, type RpcContext } from '../core'
-import { botToolServerOf, toolsHomeFor } from './bots-tools'
+import { toolsHomeFor } from './bots-tools'
+import { mcpServersOfPaste } from '../../../mcp-servers/mcp-server-paste'
 import {
   agentMcpImportHost,
   copyAgentMcpServer,
@@ -80,12 +80,6 @@ function problemsClient(context: RpcContext): string {
   )
 }
 
-/** A method later hosts fill in; this one refuses it in words a client can tell apart. */
-async function notYet(method: string): Promise<never> {
-  assertMcpServersFeatureEnabled()
-  throw new McpServersError('mcp_servers_not_yet', `${method} isn’t available on this host yet.`)
-}
-
 export const MCP_SERVER_METHODS = [
   defineMethod({
     name: 'mcpServers.list',
@@ -104,10 +98,24 @@ export const MCP_SERVER_METHODS = [
         async () => {
           const given =
             'config' in params
-              ? resolveBotToolInput(params.config)
-              : botToolServerOf(params.source, params.name)
-          const nameGiven = 'config' in params || params.name !== undefined
-          return changed(await addMcpServer(given, { nameGiven, signal: context.signal }))
+              ? [resolveBotToolInput(params.config)]
+              : mcpServersOfPaste(params.source, params.name)
+          // A name the user gave is refused when taken; a paste's own names move to a free one.
+          const nameGiven = 'config' in params || (params.name !== undefined && given.length === 1)
+          // Each in turn: a later one refused leaves the earlier ones added, as separate adds would.
+          const servers: McpServer[] = []
+          try {
+            for (const server of given) {
+              servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+            }
+          } catch (error) {
+            // The ones added before the refusal are on the list: other clients re-read it.
+            if (servers.length > 0) {
+              context.runtime.notifyMcpServersChanged()
+            }
+            throw error
+          }
+          return { ...changed(servers[0]), servers }
         },
         true
       )
@@ -284,12 +292,12 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.sessions.stale',
     permission: 'workspace',
     params: McpServerSessions,
-    handler: () => notYet('mcpServers.sessions.stale')
+    handler: (_params, context) => onHost(context, () => context.runtime.countMcpStaleTerminals())
   }),
   defineMethod({
     name: 'mcpServers.sessions.restart',
     permission: 'workspace',
     params: McpServerSessions,
-    handler: () => notYet('mcpServers.sessions.restart')
+    handler: (_params, context) => onHost(context, () => context.runtime.restartMcpStaleTerminals())
   })
 ]

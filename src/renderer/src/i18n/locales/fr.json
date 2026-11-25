@@ -1770,7 +1770,8 @@
         "projectRemoved": "Le projet a été retiré d’Orca.",
         "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré.",
         "chatStillStarting": "Le chat démarre encore. Réessayez bientôt.",
-        "chatOpenFailed": "Impossible d'ouvrir ce chat.",
+        "chatOpenFailed": "Impossible d'ouvrir ce chat",
+        "chatOpenDismiss": "Ignorer",
         "chatOpenRetry": "Réessayer",
         "chatOpenShowDetails": "Afficher les détails",
         "chatOpenHideDetails": "Masquer les détails"
@@ -4812,6 +4813,12 @@
               "waiting": {
                 "label": "Se met à jour quand Claude s'exécute",
                 "message": "L'utilisation de Claude se met à jour la prochaine fois que Claude s'exécute."
+              }
+            },
+            "codex": {
+              "waiting": {
+                "label": "Se met à jour quand Codex s'exécute",
+                "message": "L'utilisation de Codex se met à jour la prochaine fois que Codex s'exécute."
               }
             },
             "remoteOwnerNotConfigured": "Non configuré sur {{server}}",
@@ -20143,11 +20150,9 @@
         "ran_one": "A exécuté {{count}} sous-agent",
         "ran_other": "A exécuté {{count}} sous-agents",
         "ran_many": "A exécuté {{count}} sous-agents",
-        "backToMain": "Retour à l’agent principal",
         "mainAgent": "Agent principal",
-        "promptFromMain": "Demande de l’agent principal",
-        "backTo": "Retour à {{value0}}",
         "path": "Chemin du sous-agent",
+        "backTo": "Retour à {{value0}}",
         "stateHeading": {
           "completed": "Terminé",
           "working": "En cours",
@@ -20159,7 +20164,14 @@
         "noSteps": "Aucune étape pour l’instant",
         "beforeClear": "Ce sous-agent s’est exécuté avant l’effacement du chat",
         "stoppedBeforeReply": "Arrêté avant de répondre",
-        "noReply": "Terminé sans réponse"
+        "noReply": "Terminé sans réponse",
+        "prompt": "Prompt",
+        "result": "Résultat",
+        "close": "Fermer",
+        "needsYou": "Vous attend",
+        "agentNeedsYou": "{{name}} vous attend",
+        "mainNeedsYou": "L’agent principal vous attend",
+        "show": "Afficher"
       },
       "drop": {
         "messageTitle": "Déposez pour joindre à ce message",
@@ -21771,9 +21783,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Garder ouvert",
-        "bannerRunning": "Worker d’orchestration · Se ferme 2 minutes après sa fin",
-        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}",
-        "bannerFinishedStatus": "Worker d’orchestration terminé · Fermeture prochaine",
+        "bannerRunning": "Se ferme {{minutes}} min après la fin",
+        "bannerFinished": "Terminé · fermeture dans {{countdown}}",
+        "bannerFinishedStatus": "Worker terminé · fermeture prochaine",
         "boundRunning": "Se ferme avec {{worker}}",
         "boundFinished": "{{worker}} terminé · Fermeture dans {{countdown}}",
         "boundFallbackName": "son worker"
@@ -25434,7 +25446,9 @@
       "untitled": "Nouveau chat",
       "searchRetry": "Réessayer",
       "loading": "Chargement des chats…",
-      "readFailed": "Impossible de lire les chats de ce bot."
+      "readFailed": "Impossible de lire les chats de ce bot.",
+      "older": "Afficher {{count}} plus anciens",
+      "hideOlder": "Masquer les plus anciens"
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",

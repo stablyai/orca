@@ -2882,7 +2882,8 @@
         "notLocatedNamed": "Orca, {{agent}} ajanının nerede çalıştığını bulamadığı için ajanı açamıyor.",
         "notLocated": "Orca, bu ajanın nerede çalıştığını bulamadığı için ajanı açamıyor.",
         "chatStillStarting": "Sohbet hâlâ başlatılıyor. Birazdan tekrar deneyin.",
-        "chatOpenFailed": "Bu sohbet açılamadı.",
+        "chatOpenFailed": "Bu sohbet açılamadı",
+        "chatOpenDismiss": "Kaldır",
         "chatOpenRetry": "Tekrar dene",
         "chatOpenShowDetails": "Ayrıntıları göster",
         "chatOpenHideDetails": "Ayrıntıları gizle"
@@ -6087,6 +6088,12 @@
                 "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex çalıştığında güncellenir",
+                "message": "Codex kullanım bilgisi, Codex bir sonraki çalıştığında güncellenir."
+              }
+            },
             "justNow": "az önce",
             "minutesAgo": "{{minutes}} dk önce",
             "hoursAgo": "{{hours}} sa önce",
@@ -8520,8 +8527,8 @@
           "wsl1Reason": "WSL 1 bir Orca ana makinesi çalıştıramaz; {{command}} ile dönüştürün",
           "noWsl2Title": "WSL 2 dağıtımı bulunamadı",
           "noWsl2Install": "Bir Windows terminalinde {{command}} ile bir dağıtım yükleyin, ardından Yenile'yi seçin.",
-          "descriptionMoveFromSidebar": "Orca sunucusunu dağıtımın içinde çalıştırır. Böylece Git, dosya işlemleri ve terminaller doğrudan Linux üzerinde çalışır. Bu dağıtımda \\\\wsl.localhost üzerinden açtığınız projeler, kenar çubuğu menüsünden taşıyana kadar bu bilgisayarda kalır. Windows sürücüsündeki (/mnt/…) projeler de burada kalır. Taşınmış bir projeyi kenar çubuğundan geri getirebilirsiniz.",
-          "descriptionAutoMove": "Orca sunucusunu dağıtımın içinde çalıştırır. Böylece Git, dosya işlemleri ve terminaller doğrudan Linux üzerinde çalışır. Bu dağıtımda \\\\wsl.localhost üzerinden açtığınız projeler, terminalleri boşta kalınca otomatik olarak bu cihaza taşınır. Windows sürücüsündeki (/mnt/…) projeler bu bilgisayarda kalır. Taşınmış bir projeyi kenar çubuğundan geri getirebilirsiniz."
+          "descriptionMoveFromSidebar": "Git, dosyalar ve terminaller Linux'ta yerel olarak çalışır. Mevcut WSL projeleri, proje menüsünden … ana makinesine taşı seçeneğini seçene kadar Windows'ta kalır.",
+          "descriptionAutoMove": "Git, dosyalar ve terminaller Linux'ta yerel olarak çalışır. WSL projeleriniz, terminalleri boşta kalınca buraya taşınır."
         },
         "wslHostRowStatus": {
           "connecting": "Başlatılıyor",
@@ -14207,7 +14214,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "WSL dağıtımlarını ana makine olarak kullanmayı aç/kapat",
           "title": "WSL dağıtımlarını ana makine olarak kullan",
-          "description": "Bir WSL 2 dağıtımını ana makine olarak ekleyin. Orca sunucusunu dağıtımın içinde çalıştırır; böylece oradaki yeni projelerde git, dosyalar ve terminaller doğrudan Linux'ta çalışır.",
+          "description": "Orca sunucusunu bir WSL 2 dağıtımının içinde çalıştırır; Git, dosyalar ve terminaller Linux'ta yerel olarak çalışır.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "dağıtım"
@@ -14215,17 +14222,17 @@
         "wslHosts": {
           "title": "WSL ana makineleri",
           "experimental": "Deneysel",
-          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Bir proje açmak durdurulmuş bir dağıtımı asla başlatmaz: Başlat’a tıklayın, yeni bir terminal açın veya buradan bağlanın.",
+          "description": "Orca her dağıtımın içinde bir sunucu çalıştırır. Durdurulmuş bir dağıtımı başlatmak için Başlat'a tıklayın, bir terminal açın veya buradan bağlanın.",
           "add": "WSL dağıtımı ekle",
           "connect": "Bağlan",
           "forceUpdate": "Güncellemeyi zorla",
           "turnOn": "Deneysel ayarları aç",
           "chip": "WSL",
-          "notStartedAsWslHost": "Bu sunucu WSL cihazı olarak değil, SSH üzerinden başlatıldığı için projeler buraya taşınamıyor. Sorunu gidermek için WSL cihazı olarak yeniden başlatın.",
+          "notStartedAsWslHost": "Bu sunucuyu bir SSH cihazı başlattığı için projeler buraya taşınamaz. Düzeltmek için WSL cihazı olarak yeniden başlatın.",
           "restartAsWslHost": {
             "button": "WSL cihazı olarak yeniden başlat",
             "title": "WSL cihazı olarak yeniden başlatılsın mı?",
-            "description": "Bu işlem, SSH üzerinden açılanlar dahil {{host}} üzerindeki tüm terminalleri ve ajanları durdurur. Orca daha sonra sunucuyu WSL cihazı olarak yeniden başlatır, böylece projeler buraya taşınabilir.",
+            "description": "{{host}} üzerindeki tüm terminalleri ve ajanları (SSH cihazının açtıkları dahil) sonlandırır, ardından Orca sunucusunu WSL cihazı olarak yeniden başlatır.",
             "cancel": "İptal",
             "action": "Terminalleri kapat ve yeniden başlat"
           }
@@ -16644,8 +16651,6 @@
           "noRemote": "Yerel Git repository’si · remote yok",
           "openUpstream": "{{value0}} adresini tarayıcıda aç",
           "forkOf": "{{value0}} fork’u",
-          "openSettingsPage": "Ayarlar sayfasını aç",
-          "done": "Bitti",
           "resetDone": "Simge ve renk sıfırlandı",
           "undo": "Geri al",
           "styleLetters": "Harfler",
@@ -21835,11 +21840,9 @@
         "started_other": "{{count}} alt ajan başlatıldı",
         "ran_one": "{{count}} alt ajan çalıştırıldı",
         "ran_other": "{{count}} alt ajan çalıştırıldı",
-        "backToMain": "Ana ajana dön",
         "mainAgent": "Ana ajan",
-        "promptFromMain": "Ana ajandan gelen istem",
-        "backTo": "Geri dön: {{value0}}",
         "path": "Alt ajan yolu",
+        "backTo": "Geri dön: {{value0}}",
         "stateHeading": {
           "completed": "Tamamlandı",
           "working": "Çalışıyor",
@@ -21851,7 +21854,14 @@
         "noSteps": "Henüz adım yok",
         "beforeClear": "Bu alt ajan, sohbet temizlenmeden önce çalıştı",
         "stoppedBeforeReply": "Yanıt vermeden önce durduruldu",
-        "noReply": "Yanıt vermeden sona erdi"
+        "noReply": "Yanıt vermeden sona erdi",
+        "prompt": "İstem",
+        "result": "Sonuç",
+        "close": "Kapat",
+        "needsYou": "Yanıtınız gerekiyor",
+        "agentNeedsYou": "{{name}} yanıtınızı bekliyor",
+        "mainNeedsYou": "Ana ajan yanıtınızı bekliyor",
+        "show": "Göster"
       },
       "rewind": {
         "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",
@@ -24066,9 +24076,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Açık tut",
-        "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır",
+        "bannerRunning": "Tamamlandıktan {{minutes}} dk sonra kapanır",
+        "bannerFinished": "Tamamlandı · {{countdown}} içinde kapanır",
+        "bannerFinishedStatus": "Çalışan tamamlandı · yakında kapanır",
         "boundRunning": "{{worker}} ile birlikte kapanır",
         "boundFinished": "{{worker}} tamamlandı · {{countdown}} içinde kapanır",
         "boundFallbackName": "ilgili çalışan"
@@ -28439,7 +28449,8 @@
       "delete": "Sohbeti sil",
       "open": "Aç",
       "actions": "Sohbet işlemleri",
-      "needsYouCount": "{{count}} sizi bekliyor"
+      "needsYouCount": "{{count}} sizi bekliyor",
+      "hideOlder": "Eski kayıtları gizle"
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",

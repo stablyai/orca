@@ -14,12 +14,16 @@ const ServerName = z
 
 export const McpServersList = z.object({})
 
+// A server's URL or start command, an mcpServers block, or `claude/codex mcp add` lines.
+const PasteSource = z
+  .string()
+  .trim()
+  .min(1, 'Paste a URL or the command that starts the server')
+  .max(4096)
+
 export const McpServerAdd = z.union([
-  z.strictObject({
-    // An MCP server's URL, or the command line that starts it.
-    source: z.string().trim().min(1, 'Paste a URL or the command that starts the server').max(4096),
-    name: ServerName.optional()
-  }),
+  // `name` renames a paste that names one server; a paste naming several adds each.
+  z.strictObject({ source: PasteSource, name: ServerName.optional() }),
   z.strictObject({ config: BotToolInputSchema })
 ])
 
@@ -52,6 +56,8 @@ export const McpServerSignInFinish = z.object({
   ...SignInFlow,
   query: z.string().trim().min(1).max(8_192)
 })
+
+export const McpServerPreviewPaste = z.strictObject({ source: PasteSource })
 
 export const McpServerDiscover = z.object({})
 

@@ -239,6 +239,7 @@
 5 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
 14 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 1 src/main/cli/launchers/orca-cli-child-path.ts
+1 src/main/cli/launchers/this-app-orca-cli-launcher.ts # resolves this app's CLI launcher once per data folder per run (the Linux packaged shim check), for the MCP agent-file and terminal entries
 1 src/main/cli/wsl/wsl-cli-installer.ts
 1 src/main/cli/wsl/wsl-cli-registration-reconciliation.ts
 6 src/main/cli/wsl/wsl-cli-registration-registry.ts
@@ -290,9 +291,9 @@
 27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
-3 src/main/codex/configuration/settings/config-settings-baseline.ts # same one sync write, now temp file plus rename so a cut-off write keeps the old baseline
-2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedAncestor: realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable, so a host ~/.codex linked into a WSL distro is never written (#45247)
-9 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247)
+1 src/main/codex/configuration/settings/codex-native-source-check.ts # retireCodexNativeSourceMark, only after the background ~/.codex check finds it now leads into a WSL distro (never on clean passes)
+5 src/main/codex/configuration/settings/config-settings-baseline.ts # same one sync write, now temp file plus rename so a cut-off write keeps the old baseline; +2 retireCodexNativeSourceMark: one baseline read plus a compare-and-swap write, only after a background check finds a trusted native ~/.codex now leads into a WSL distro
+10 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247); +1 recoverInterruptedGuardedFileOperation of the baseline, only when it reads absent (fresh home, or a quit while retiring the native mark)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
@@ -753,12 +754,14 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
-1 src/main/mcp-servers/agent-files/mcp-agent-file-sync.ts # resolves this app's CLI launcher once when the sync starts (the Linux packaged shim check)
 3 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect; +2 the saved-values digests, read at launch and after Orca writes the list
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
 3 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file, its revision check (moved from bot-structured-session-wiring.ts), and the host list read
+1 src/main/mcp-servers/terminal/terminal-mcp-cli-support.ts # runWslProcess for a WSL CLI's --help/--version probe, once per CLI and distro per 10 minutes
+1 src/main/mcp-servers/terminal/terminal-mcp-servers.ts # wslGuestOrcaLauncher: the managed WSL CLI launcher, resolved once per data folder per run
+3 src/main/mcp-servers/terminal/terminal-mcp-wsl-servers.ts # resolves the managed WSL CLI launcher (getManagedWslCliDir) once per data folder per run; settleWslAutomountRoot reads a distro mount root once per distro start (cached after)
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
@@ -1107,6 +1110,7 @@
 1 src/main/rate-limits/service/service-muse-usage-fetch.ts
 3 src/main/rate-limits/service/service-provider-cycles.ts
 1 src/main/rate-limits/service/service-state.ts
+1 src/main/rate-limits/service/service-target-usage-read.ts # the same sync Codex state-db read the poller already does, reached only when the WSL HTTP read fails; bounded by the renderer TTL and Retry-After
 2 src/main/remote-policies/release-asset-policy-live-update.ts
 4 src/main/ripgrep/bundled-ripgrep-path.ts
 1 src/main/ripgrep/bundled-ripgrep-spawn.ts

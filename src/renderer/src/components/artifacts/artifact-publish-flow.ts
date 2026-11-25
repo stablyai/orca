@@ -96,7 +96,7 @@ export async function publishArtifactFromSurface(
       ),
       error instanceof ArtifactPublishPreparationError
         ? { description: artifactPreparationErrorDescription(error.code) }
-        : // The desktop already wrote the limit and its local reset time into the message.
+        : // The desktop already wrote the limit and its reset time into the message.
           error instanceof RuntimeRpcCallError && error.code === ARTIFACT_RATE_LIMITED_CODE
           ? { description: error.message }
           : undefined

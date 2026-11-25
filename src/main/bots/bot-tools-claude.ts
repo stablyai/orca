@@ -93,6 +93,17 @@ export function cmdShimArgument(arg: string): string {
   return arg === '' || /[\s"]/.test(arg) ? arg : arg.replace(CMD_SPECIAL, '^^^$&')
 }
 
+/** A command server's program and args as a CLI that starts it with Node's spawn can run it. */
+export function cmdShimmedCommand(
+  server: { command: string; args: readonly string[] },
+  platform: NodeJS.Platform = process.platform
+): { command: string; args: string[] } {
+  const shim = platform === 'win32' && WINDOWS_CMD_SHIMS.has(server.command.toLowerCase())
+  return shim
+    ? { command: 'cmd', args: ['/c', server.command, ...server.args.map(cmdShimArgument)] }
+    : { command: server.command, args: [...server.args] }
+}
+
 /** The servers as Claude's own config writes them. */
 export function claudeServerConfig(
   server: BotToolServer,
@@ -101,11 +112,9 @@ export function claudeServerConfig(
   if ('url' in server) {
     return { type: 'http', url: server.url, ...(server.headers ? { headers: server.headers } : {}) }
   }
-  const shim = platform === 'win32' && WINDOWS_CMD_SHIMS.has(server.command.toLowerCase())
   return {
     type: 'stdio',
-    command: shim ? 'cmd' : server.command,
-    args: shim ? ['/c', server.command, ...server.args.map(cmdShimArgument)] : server.args,
+    ...cmdShimmedCommand(server, platform),
     ...(server.env ? { env: server.env } : {})
   }
 }

@@ -22,6 +22,8 @@ export function useNativeChatQuestionKeys(
       (isEditableTarget(target) && !(inField && isArrow)) ||
       target?.closest('[data-native-chat-find-bar], [data-queued-message-editor]') ||
       !isInNativeChatPaneOf(card, target) ||
+      // A card under an open subagent sheet is out of reach; its digits must not answer it.
+      card?.closest('[inert]') ||
       (!isNumberKey && !card?.contains(target))
     ) {
       return

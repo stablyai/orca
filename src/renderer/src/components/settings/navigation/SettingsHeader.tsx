@@ -8,7 +8,8 @@ type SettingsHeaderProps = {
   title: string
   subPageTitle?: string
   hostPicker?: ReactNode
-  onGeneral: () => void
+  /** The middle crumb: back from a sub-page to its section. */
+  onParent: () => void
   onClose: () => void
 }
 
@@ -16,7 +17,7 @@ export function SettingsHeader({
   title,
   subPageTitle,
   hostPicker,
-  onGeneral,
+  onParent,
   onClose
 }: SettingsHeaderProps): React.JSX.Element {
   const t = useTranslate()
@@ -34,7 +35,7 @@ export function SettingsHeader({
         </span>
         {subPageTitle ? (
           <>
-            <BreadcrumbButton onClick={onGeneral}>{title}</BreadcrumbButton>
+            <BreadcrumbButton onClick={onParent}>{title}</BreadcrumbButton>
             <span aria-hidden="true" className="text-muted-foreground">
               /
             </span>

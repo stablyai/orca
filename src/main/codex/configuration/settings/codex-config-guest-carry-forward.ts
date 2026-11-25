@@ -236,6 +236,6 @@ function planGuestRegenerationCarryForward(
 }
 
 // A `[root.name]` table beside an inline or dotted definition of that root would redefine a key.
-function canAppendRegistration(key: string, inlineRoots: ReadonlySet<string>): boolean {
-  return !inlineRoots.has(key.slice(0, key.indexOf(':')))
+function canAppendRegistration(key: string, definedOutsideTables: ReadonlySet<string>): boolean {
+  return !definedOutsideTables.has(key) && !definedOutsideTables.has(key.slice(0, key.indexOf(':')))
 }

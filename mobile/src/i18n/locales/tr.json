@@ -5868,6 +5868,12 @@
                 "message": "Claude kullanım bilgisi, Claude bir sonraki çalıştığında güncellenir."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex çalıştığında güncellenir",
+                "message": "Codex kullanım bilgisi, Codex bir sonraki çalıştığında güncellenir."
+              }
+            },
             "1804cd8c3f": "Oturum açma yenileniyor",
             "bf2e739f18": "Oturum açma kullanılamıyor",
             "f8f0f9d8cc": "Ağ sorunu",

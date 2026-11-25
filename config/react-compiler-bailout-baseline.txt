@@ -556,7 +556,7 @@
 1 src/renderer/src/components/ssh-host-recovery/SshHostMoveAnywayAction.tsx
 2 src/renderer/src/components/star-nag/StarNagAgentValueMomentObserver.tsx
 1 src/renderer/src/components/stats/ShareUsageButton.tsx
-2 src/renderer/src/components/status-bar/accounts/ClaudeSwitcherForOwner.tsx
+1 src/renderer/src/components/status-bar/accounts/ClaudeSwitcherForOwner.tsx
 1 src/renderer/src/components/status-bar/accounts/use-codex-switcher-controller.ts
 1 src/renderer/src/components/status-bar/accounts/use-provider-account-list.ts
 1 src/renderer/src/components/status-bar/composition/use-status-bar-controller.ts

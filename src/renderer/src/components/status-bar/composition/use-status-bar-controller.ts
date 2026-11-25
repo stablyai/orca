@@ -80,7 +80,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
 
   const refreshDetectedAgents = useAppStore((s) => s.refreshDetectedAgents)
   const handleRefresh = useCallback(async () => {
-    if (isRefreshing || (remoteOwner !== null && remoteOwner.environmentId === null)) {
+    if (isRefreshing || getUsageOwnerHostScope(remoteOwner) === null) {
       return
     }
     setIsRefreshing(true)

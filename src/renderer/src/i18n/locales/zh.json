@@ -2198,6 +2198,7 @@
         "folderWorkspaceRemoved": "文件夹工作区已移除。",
         "chatStillStarting": "此聊天仍在启动，请稍后重试",
         "chatOpenFailed": "无法打开此聊天",
+        "chatOpenDismiss": "忽略",
         "chatOpenRetry": "重试",
         "chatOpenShowDetails": "显示详情",
         "chatOpenHideDetails": "隐藏详情"
@@ -5322,6 +5323,12 @@
                 "message": "Claude 用量将在下次运行 Claude 时更新"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
+              }
+            },
             "remoteOwnerNotConfigured": "未在 {{server}} 上配置",
             "remoteOwnerSignInSavedHere": "其登录信息仅保存在此电脑上",
             "claudeNoUsageFromHost": "{{server}} 无用量数据",
@@ -7688,8 +7695,8 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "descriptionMoveFromSidebar": "Orca 会在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。你通过 \\\\wsl.localhost 打开的此发行版中的项目会留在这台电脑上，直到你从其侧边栏菜单中移动它们。位于 Windows 驱动器（/mnt/…）上的项目也会留在这里。你可以从侧边栏将已移动的项目移回",
-          "descriptionAutoMove": "Orca 会在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。你通过 \\\\wsl.localhost 打开的此发行版中的项目会在其终端空闲后自动移到此主机。位于 Windows 驱动器（/mnt/…）上的项目会留在这台电脑上。你可以从侧边栏将已移动的项目移回",
+          "descriptionMoveFromSidebar": "git、文件和终端在 Linux 中原生运行。现有的 WSL 项目会留在 Windows 上，直到你在其项目菜单中选择“移到 … 主机”。",
+          "descriptionAutoMove": "git、文件和终端在 Linux 中原生运行。WSL 项目会在其终端空闲后移到这里。",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
@@ -13433,7 +13440,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "切换“WSL 发行版作为主机”",
           "title": "WSL 发行版作为主机",
-          "description": "将 WSL 2 发行版添加为主机，Orca 在发行版内运行其服务器，因此其中新项目里的 git、文件和终端都在 Linux 中原生运行",
+          "description": "在 WSL 2 发行版内运行 Orca 的服务器，让 git、文件和终端在 Linux 中原生运行。",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "发行版"
@@ -13441,17 +13448,17 @@
         "wslHosts": {
           "title": "WSL 主机",
           "experimental": "实验性",
-          "description": "Orca 在每个发行版内运行一个服务器。打开项目不会启动已停止的发行版：请点击“启动”、打开新终端，或在此连接它。",
+          "description": "Orca 在每个发行版内运行一个服务器。要启动已停止的发行版，请点击“启动”、打开终端或在此处连接。",
           "add": "添加 WSL 发行版",
           "connect": "连接",
           "turnOn": "打开实验功能",
           "forceUpdate": "强制更新",
           "chip": "WSL",
-          "notStartedAsWslHost": "此主机的服务器是由 SSH 主机启动的，而不是作为 WSL 主机启动，因此无法将项目移到这里。请将其作为 WSL 主机重启以解决此问题",
+          "notStartedAsWslHost": "此服务器由 SSH 主机启动，因此无法将项目移到这里。请将其作为 WSL 主机重启以解决此问题。",
           "restartAsWslHost": {
             "button": "作为 WSL 主机重启",
             "title": "要作为 WSL 主机重启吗？",
-            "description": "这会结束 {{host}} 上运行的所有终端和智能体，包括 SSH 主机在那里打开的终端和智能体。随后 Orca 会作为 WSL 主机重新启动其服务器，以便将项目移到该主机",
+            "description": "结束 {{host}} 上的所有终端和代理（包括 SSH 主机打开的），然后将 Orca 的服务器作为 WSL 主机重启。",
             "cancel": "取消",
             "action": "结束终端并重启"
           }
@@ -20744,11 +20751,9 @@
         "unnamed": "子代理",
         "started_other": "已启动 {{count}} 个子智能体",
         "ran_other": "已运行 {{count}} 个子智能体",
-        "backToMain": "返回主智能体",
         "mainAgent": "主智能体",
-        "promptFromMain": "来自主智能体的提示词",
-        "backTo": "返回 {{value0}}",
         "path": "子智能体路径",
+        "backTo": "返回 {{value0}}",
         "stateHeading": {
           "completed": "已完成",
           "working": "工作中",
@@ -20760,7 +20765,14 @@
         "noSteps": "暂无步骤",
         "beforeClear": "此子智能体在聊天被清空之前运行",
         "stoppedBeforeReply": "回复前已停止",
-        "noReply": "已结束，没有回复"
+        "noReply": "已结束，没有回复",
+        "prompt": "提示词",
+        "result": "结果",
+        "close": "关闭",
+        "needsYou": "需要你处理",
+        "agentNeedsYou": "{{name}} 需要你处理",
+        "mainNeedsYou": "主代理需要你处理",
+        "show": "查看"
       },
       "drop": {
         "messageTitle": "拖放以附加到此消息",
@@ -23019,9 +23031,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "保持打开",
-        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭",
+        "bannerRunning": "完成后 {{minutes}} 分钟关闭",
+        "bannerFinished": "已完成 · {{countdown}}后关闭",
+        "bannerFinishedStatus": "工作代理已完成 · 即将关闭",
         "boundRunning": "随 {{worker}} 一同关闭",
         "boundFinished": "{{worker}} 已完成 · {{countdown}}后关闭",
         "boundFallbackName": "其工作代理"
@@ -27996,7 +28008,8 @@
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",
       "open": "打开",
-      "actions": "聊天操作"
+      "actions": "聊天操作",
+      "hideOlder": "隐藏更早的"
     },
     "items": {
       "view": {

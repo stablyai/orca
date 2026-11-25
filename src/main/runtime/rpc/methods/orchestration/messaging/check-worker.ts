@@ -9,11 +9,14 @@ import {
   exposeMessages,
   withReplyFollowUps
 } from './mailbox-message-receipt'
-import { routeAllMailboxPages, createDirectMailSnapshotRouter } from './mailbox-page-routing'
+import { createDirectMailSnapshotRouter } from './mailbox-page-routing'
+import { routeSettledDispatchMail } from './route-settled-dispatch-mail'
+import { isPotentiallyLiveRemoteAttachment } from '../../../../orchestration/db/federation/remote-attachment-liveness'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { interruptedAcknowledgedCheck } from '../routing'
 import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 import { currentDispatchAssigneeRun } from './recipient-routing'
+import { asRecoveredAssignee } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
 
 export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   const {
@@ -27,6 +30,9 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     activeDispatch,
     remoteAttachment
   } = args
+  // A restart-reissued caller is pinned to its recovered process at every fence, local or federated.
+  const holdsDispatch = (current: Parameters<typeof callerHoldsDispatchPane>[0]) =>
+    callerHoldsDispatchPane(current, paneKey) && (args.recoveredLocalProcessCurrent?.() ?? true)
   const workerMailbox = activeDispatch
     ? {
         dispatchId: activeDispatch.id,
@@ -57,8 +63,8 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     if (activeDispatch) {
       const current = db.getActiveDispatchForIdentity(handle, paneKey)
       if (current?.id === activeDispatch.id) {
-        // Re-attachment during awaits can retain the id while changing the pane.
-        if (callerHoldsDispatchPane(current, paneKey)) {
+        // Re-attachment during awaits can retain the id while changing the pane, or the process.
+        if (holdsDispatch(current)) {
           return
         }
         throw dispatchFenced()
@@ -70,7 +76,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
         db.isRemoteAttachmentProcessCurrent({
           dispatchId: current.dispatch_id,
           paneKey,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+          processIncarnation: args.processIncarnation()
         })
       ) {
         return
@@ -78,46 +84,22 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
     }
     const latestDispatch = db.getDispatchContextById(workerMailbox.dispatchId)
     const owningRunId = latestDispatch?.run_id ?? activeDispatch?.run_id ?? workerMailbox.runId
+    // A federated Dispatch has no local row. While its attachment may still be live, only this caller
+    // lost it: its mail stays for its worker, never moved into this host's placeholder for the home Run.
+    const federatedStillLive =
+      !activeDispatch &&
+      isPotentiallyLiveRemoteAttachment(db.getRemoteDispatchAttachment(workerMailbox.dispatchId))
     if (
       owningRunId &&
+      !federatedStillLive &&
       (!latestDispatch ||
         (latestDispatch.status !== 'pending' && latestDispatch.status !== 'dispatched'))
     ) {
-      const throughSequence = db.getLatestUnreadMessageSequence(address)
-      if (throughSequence !== undefined) {
-        const routedTypes = new Set<MessageType>()
-        const routePage = (): { routedCount: number; hasMore: boolean } => {
-          const routed = db.routeUnreadDispatchMailboxToRunMailbox(
-            workerMailbox.dispatchId,
-            owningRunId,
-            throughSequence
-          )
-          for (const routedType of routed.types) {
-            routedTypes.add(routedType)
-          }
-          return routed
-        }
-        const notifyRoutedTypes = (): void => {
-          for (const routedType of routedTypes) {
-            runtime.notifyMessageArrived(`run:${owningRunId}`, routedType)
-          }
-          routedTypes.clear()
-        }
-        try {
-          await routeAllMailboxPages(routePage, signal)
-        } catch (error) {
-          notifyRoutedTypes()
-          if (error instanceof OrchestrationError && error.code === 'request_aborted') {
-            setImmediate(() => {
-              void routeAllMailboxPages(routePage)
-                .catch(() => undefined)
-                .finally(notifyRoutedTypes)
-            })
-          }
-          throw error
-        }
-        notifyRoutedTypes()
-      }
+      await routeSettledDispatchMail(runtime, db, {
+        dispatchId: workerMailbox.dispatchId,
+        runId: owningRunId,
+        signal
+      })
     }
     throw new OrchestrationError(
       'dispatch_inactive',
@@ -203,7 +185,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
       }
       if (activeDispatch) {
         const current = db.getActiveDispatchForIdentity(handle, paneKey)
-        if (current?.id !== activeDispatch.id || !callerHoldsDispatchPane(current, paneKey)) {
+        if (current?.id !== activeDispatch.id || !holdsDispatch(current)) {
           throw dispatchFenced()
         }
       } else if (
@@ -212,7 +194,7 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
         !db.isRemoteAttachmentProcessCurrent({
           dispatchId: workerMailbox.dispatchId,
           paneKey,
-          processIncarnation: runtime.getTerminalProcessIncarnation(handle)
+          processIncarnation: args.processIncarnation()
         })
       ) {
         throw dispatchFenced()
@@ -268,7 +250,8 @@ export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
   }
   // Binding can happen during recovery, before run-create/run-use can cancel this wait.
   const waitResult =
-    activeDispatch && currentDispatchAssigneeRun(runtime, db, activeDispatch)
+    activeDispatch &&
+    currentDispatchAssigneeRun(runtime, db, asRecoveredAssignee(activeDispatch, args.recovered))
       ? 'cancelled'
       : await runtime.waitForMessage(address, {
           typeFilter: typeFilter as string[] | undefined,
