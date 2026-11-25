@@ -69,6 +69,16 @@ describe('agents and a browser profile with a site list', () => {
     expect(runtime.browserTabCreate.mock.calls[0][0]).toMatchObject({ profileId: 'default' })
   })
 
+  it('treats an agent tab that names no worktree as Default, where the runtime puts it', async () => {
+    setBrowserProfileSiteList('default', ['example.com'])
+    const { runtime, call } = setup()
+    expect(await call('browser.tabCreate', { profileId: 'other' })).toMatchObject(LOCKED)
+    expect(runtime.browserTabCreate).not.toHaveBeenCalled()
+    expect(runtime.showManagedWorktree).not.toHaveBeenCalled()
+    await call('browser.tabCreate', {})
+    expect(runtime.browserTabCreate.mock.calls[0][0]).toMatchObject({ profileId: 'default' })
+  })
+
   it("refuses an agent tab when the worktree's repo can't be read", async () => {
     const { runtime, call } = setup()
     runtime.showRepo.mockRejectedValueOnce(new Error('repo store unavailable'))

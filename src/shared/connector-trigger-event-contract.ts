@@ -11,7 +11,7 @@ const SourceTriggerEvent = z.object({
     .refine((id) => hookIdOfActor(id) === null),
   fromOwner: z.literal(true).optional(),
   onOwnerMessage: z.literal(true).optional(),
-  // A pull request that was opened, by its head: a bot worker's own is told apart by it.
+  // A pull request that was opened, by its head; no run reads it.
   pr: z
     .object({
       repoId: z.string().regex(/^\d{1,32}$/),

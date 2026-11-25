@@ -1,21 +1,17 @@
 // Who can ask's paired servers, as the desktop's BotPairedServersWhoCanAsk: the servers always allowed
 // to ask the bot without a card, each removable. Adding one without a card stays on the desktop.
 import { useEffect, useRef, useState } from 'react'
-import { View } from 'react-native'
-import { Server } from 'lucide-react-native'
 import * as z from 'zod'
 import { ORCHESTRATION_CLIENT_AGENT_ASKS_RUNTIME_CAPABILITY } from '../../../src/shared/orchestration/orchestration-runtime-capabilities'
 import { botChangeConcerns, readBotChangeScope } from '../../../src/shared/bots/bot-change-scope'
-import { LIST_LEADING_INSET, ListGroup, ListRow, SectionHeader } from '../components/list/ListGroup'
 import { useOptionalHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { SettingsNote } from '../settings/settings-screen-frame'
-import { colors } from '../theme/mobile-theme'
+import { SettingsSection } from '../settings/settings-screen-frame'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { subscribeSharedClientEvents } from '../transport/connection/shared-client-events'
-import { MobileBotTextButton } from './MobileBotTextButton'
+import { MobileWhoCanAskServerRow, WHO_FACE_INSET } from './MobileWhoCanAskRows'
 
 const Allowance = z.object({
   serverKey: z.string(),
@@ -130,41 +126,20 @@ export function MobileBotPairedServers(props: {
       .finally(reread)
   }
   return (
-    <View>
-      <SectionHeader
-        title={t('bots.pairedServers.heading', 'Paired servers')}
-        icon={<Server size={14} color={colors.textSecondary} />}
-      />
-      <ListGroup separatorInset={LIST_LEADING_INSET}>
-        {servers.map((server) => {
+    <SettingsSection
+      title={t('bots.pairedServers.heading', 'Paired servers')}
+      separatorInset={WHO_FACE_INSET}
+      footer={t('bots.pairedServers.footer', 'Their agents can ask without your approval.')}
+    >
+      {servers.map((server) => (
+        <MobileWhoCanAskServerRow
+          key={server.serverKey}
           // An older host names none.
-          const name = server.serverName || t('bots.pairedServers.unnamed', 'Paired server')
-          return (
-            <ListRow
-              key={server.serverKey}
-              leading={<Server size={20} color={colors.textSecondary} />}
-              title={name}
-              accessory={
-                <MobileBotTextButton
-                  label={t('bots.pairedServers.remove', 'Remove')}
-                  accessibilityLabel={t('bots.pairedServers.removeServer', 'Remove {{server}}', {
-                    server: name
-                  })}
-                  disabled={props.locked}
-                  onPress={() => remove(server)}
-                />
-              }
-            />
-          )
-        })}
-      </ListGroup>
-      <SettingsNote>
-        {t(
-          'bots.pairedServers.tooltip',
-          'Bots and agents on these servers can ask {{name}} without asking you each time.',
-          { name: bot.name }
-        )}
-      </SettingsNote>
-    </View>
+          name={server.serverName || t('bots.pairedServers.unnamed', 'Paired server')}
+          busy={props.locked}
+          onRemove={() => remove(server)}
+        />
+      ))}
+    </SettingsSection>
   )
 }

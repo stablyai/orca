@@ -1,5 +1,8 @@
 import { useState } from 'react'
-import { BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
+import {
+  BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY,
+  BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY
+} from '../../../src/shared/bot-runtime-capabilities'
 import type { BotUpdateParams } from '../../../src/shared/rpc-contract/bots-params'
 import { UNSAVED_DRAFTS_REMOVAL_REFUSAL } from '../../../src/shared/worktree/removal/removal'
 import { SheetHeader } from '../components/nav-bar/SheetHeader'
@@ -12,6 +15,7 @@ import { phoneAccessHost } from './bot-access-request-copy'
 import type { BotAccessRequests } from './use-bot-access-requests'
 import type { RouteBot } from './use-route-bot'
 import { readConnectionStatusProbe } from '../transport/connection/runtime-status-probe'
+import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { isHostNotConnectedError } from '../query/host-query-errors'
 import {
@@ -64,6 +68,8 @@ export function MobileBotSettingsTab(props: {
   const t = useMobileTranslation()
   const { bot, applyBot } = props.routeBot
   const status = props.client ? readConnectionStatusProbe(props.client) : undefined
+  const takesColor = useRouteCapability(BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY)
+  const takesOutfit = useRouteCapability(BOTS_AVATAR_OUTFIT_RUNTIME_CAPABILITY)
   const accessBot = { ...bot, accessHost: phoneAccessHost(status) }
   const [saving, setSaving] = useState(false)
   const locked = saving || !props.online
@@ -236,7 +242,8 @@ export function MobileBotSettingsTab(props: {
       <MobileBotIdentityPage
         bot={bot}
         avatar={props.routeBot.avatar}
-        takesColor={status?.capabilities?.includes(BOTS_AVATAR_COLOR_RUNTIME_CAPABILITY) === true}
+        takesColor={takesColor}
+        takesOutfit={takesOutfit}
         disabled={!props.online}
         banner={offlineBanner}
         onCancel={closePage}

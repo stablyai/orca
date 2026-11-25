@@ -7,7 +7,7 @@ import { bindRoutePartition } from './client-route/browser-client-route-cookie-i
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 import { clearGoogleCookiesFromPartition } from './browser-google-cookie-clear'
-import { restoreBrowserRoutePartitionSessionCookies } from './session-restore/browser-session-cookie-restore'
+import { restoreBrowserRoutePartitionSessionCookies } from './session-restore/browser-session-cookie-route-restore'
 
 export function googleCookieClearLocalTarget(
   profileId: string,

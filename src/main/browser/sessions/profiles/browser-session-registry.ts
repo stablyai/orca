@@ -26,8 +26,12 @@ import {
   type BrowserSessionMeta
 } from './browser-session-meta-store'
 import { seedBrowserProfileSiteLists } from '../site-list/browser-session-site-list'
-import { installBrowserSessionPartitionPolicies } from '../partition-policies/browser-session-partition-policies'
+import {
+  installBrowserSessionPartitionPolicies,
+  restoreBrowserSessionPartitionPolicies
+} from '../partition-policies/browser-session-partition-policies'
 import { isValidPersistedBrowserSessionProfile } from './browser-session-persisted-profile-validation'
+import { BrowserSessionProfileMap } from './browser-session-profile-map'
 import { inspectRetiredBrowserSessionProfileUserAgentModes } from '../../identity/mode/browser-retired-profile-identity-inspection'
 import {
   clearBrowserRoutePartitionPolicies,
@@ -63,7 +67,7 @@ export type BrowserSessionRegistryProfileOptions = {
 // This registry supplies the partition allowlist used by will-attach-webview.
 
 class BrowserSessionRegistry {
-  private readonly profiles = new Map<string, BrowserSessionProfile>()
+  private readonly profiles = new BrowserSessionProfileMap()
   private activeOrcaProfileId = DEFAULT_LOCAL_ORCA_PROFILE_ID
   private metadataPathOverride: string | null = null
   defaultPartition = ORCA_BROWSER_PARTITION
@@ -104,8 +108,7 @@ class BrowserSessionRegistry {
   }
 
   private persistProfiles(): void {
-    const nonDefault = [...this.profiles.values()].filter((p) => p.id !== 'default')
-    this.persistMeta({ profiles: nonDefault })
+    this.persistMeta({ profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') })
   }
 
   private loadPersistedMeta(): BrowserSessionMeta {
@@ -136,10 +139,7 @@ class BrowserSessionRegistry {
     const hydrated = this.hydrateFromPersisted(meta.profiles)
 
     // Hydration skips the default profile, so install its policies separately.
-    const defaultProfile = this.getDefaultProfile()
-    void installBrowserSessionPartitionPolicies(defaultProfile).catch(() => {
-      console.warn('[proxy] Failed to apply proxy to browser partition', defaultProfile.partition)
-    })
+    restoreBrowserSessionPartitionPolicies(this.getDefaultProfile())
     return hydrated && didReadBrowserSessionMeta(this.metadataPath)
   }
 
@@ -220,7 +220,7 @@ class BrowserSessionRegistry {
 
   /** The local browser profile a partition belongs to; tabs attach only in these. */
   profileIdForPartition(partition: string): string | null {
-    return this.listProfiles().find((p) => p.partition === partition)?.id ?? null
+    return this.profiles.idForPartition(partition)
   }
 
   resolvePartition(profileId: string | null | undefined): string {
@@ -235,11 +235,8 @@ class BrowserSessionRegistry {
   }
 
   setupRoutePartitionPolicies(partition: string, browserProfileId: string): Promise<void> {
-    const profile = this.profiles.get(browserProfileId)
-    if (!profile) {
-      throw new Error('browser_route_partition_profile_unavailable')
-    }
-    return installBrowserRoutePartitionPolicies(profile, partition)
+    this.requireRouteBrowserProfile(browserProfileId)
+    return installBrowserRoutePartitionPolicies(this.profiles.get(browserProfileId)!, partition)
   }
 
   requireRouteBrowserProfile(browserProfileId: string): void {
@@ -311,24 +308,27 @@ class BrowserSessionRegistry {
     return true
   }
 
-  async clearDefaultSessionCookies(): Promise<boolean> {
+  /** Clears every cookie in one profile's own jar; false for an unknown profile or a failed clear. */
+  async clearProfileSessionCookies(profileId: string): Promise<boolean> {
+    const profile = this.profiles.get(profileId)
+    if (!profile) {
+      return false
+    }
     try {
       // Clear import metadata first so quitting during storage cleanup cannot leave a stale source badge.
-      const defaultProfile = this.profiles.get('default')
-      if (defaultProfile) {
-        this.profiles.set('default', { ...defaultProfile, source: null })
-      }
+      this.profiles.set(profileId, { ...profile, source: null })
       const meta = this.loadPersistedMeta()
       const pendingCookieImports = { ...meta.pendingCookieImports }
-      delete pendingCookieImports[this.defaultPartition]
+      delete pendingCookieImports[profile.partition]
       this.persistMeta({
-        defaultSource: null,
-        pendingCookieDbPath: null,
+        ...(profileId === 'default'
+          ? { defaultSource: null, pendingCookieDbPath: null }
+          : { profiles: [...this.profiles.values()].filter((p) => p.id !== 'default') }),
         pendingCookieImports
       })
       this.onProfilesChanged?.()
 
-      await clearBrowserCookieJar(session.fromPartition(this.defaultPartition))
+      await clearBrowserCookieJar(session.fromPartition(profile.partition))
       return true
     } catch {
       return false
@@ -343,9 +343,7 @@ class BrowserSessionRegistry {
     for (const profile of valid) {
       this.profiles.set(profile.id, profile)
       if (profile.partition !== this.defaultPartition) {
-        void installBrowserSessionPartitionPolicies(profile).catch(() => {
-          console.warn('[proxy] Failed to apply proxy to browser partition', profile.partition)
-        })
+        restoreBrowserSessionPartitionPolicies(profile)
       }
     }
     return valid.length === profiles.length

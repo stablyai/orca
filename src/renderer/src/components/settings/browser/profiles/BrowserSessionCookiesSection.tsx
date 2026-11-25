@@ -1,4 +1,7 @@
 import { useGoogleCookieClear } from './use-google-cookie-clear'
+import { useProfileCookieClear } from './use-profile-cookie-clear'
+import type { BrowserSessionHostOption } from './browser-session-host-selection'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { Plus } from 'lucide-react'
 import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { Button } from '../../../ui/button'
@@ -9,16 +12,11 @@ import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfile
 import { BrowserProfileSiteList } from './BrowserProfileSiteList'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
-
-type BrowserSessionHostOption = {
-  id: ExecutionHostId
-  label: string
-  detail: string
-}
 
 type BrowserSessionCookiesSectionProps = {
   defaultProfile: BrowserSessionProfile | undefined
@@ -64,6 +62,19 @@ export function BrowserSessionCookiesSection({
     label: t('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
     source: null
   }
+  const parsedSelectedHost = parseExecutionHostId(selectedHost?.id)
+  const sshRoute =
+    parsedSelectedHost?.kind === 'ssh' && selectedHost
+      ? { sshTargetId: parsedSelectedHost.targetId, hostLabel: selectedHost.label }
+      : null
+  const profileCookieClear = useProfileCookieClear(
+    selectedHost ?? { id: selectedHostId, kind: 'local', label: '' },
+    activeProfileId,
+    translateBrowserSessionProfileLabel(
+      activeProfile?.label || (activeProfileId === 'default' ? 'Default' : 'Browser profile'),
+      activeProfileId
+    )
+  )
   return (
     <SearchableSetting
       id="browser-session-cookies"
@@ -143,7 +154,11 @@ export function BrowserSessionCookiesSection({
             <SelectContent align="end">
               {hostOptions.map((host) => (
                 <SelectItem key={host.id} value={host.id}>
-                  {host.label}
+                  {host.kind === 'ssh'
+                    ? t('browser.profileCookieClear.sshHostOption', '{{host}} (SSH)', {
+                        host: host.label
+                      })
+                    : host.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -158,7 +173,7 @@ export function BrowserSessionCookiesSection({
           importState={importState}
           isActive={activeProfileId === 'default'}
           onSelect={onSelectDefaultProfile}
-          isDefault
+          sshRoute={sshRoute}
         />
         {nonDefaultProfiles.map((profile) => (
           <BrowserProfileRow
@@ -168,12 +183,36 @@ export function BrowserSessionCookiesSection({
             importState={importState}
             isActive={activeProfileId === profile.id}
             onSelect={() => onSelectProfile(profile.id)}
+            sshRoute={sshRoute}
           />
         ))}
       </div>
       {selectedHostId === LOCAL_EXECUTION_HOST_ID ? (
         <BrowserProfileSiteList profiles={[shownDefaultProfile, ...nonDefaultProfiles]} />
       ) : null}
+      <div className="flex items-center justify-between gap-3 pt-3">
+        <div className="min-w-0 space-y-0.5">
+          <Label>{t('browser.profileCookieClear.label', 'Cookies')}</Label>
+          <p className="text-xs text-muted-foreground">{profileCookieClear.rowText}</p>
+          {profileCookieClear.available ? null : (
+            <p className="text-xs text-muted-foreground">
+              {t(
+                'browser.profileCookieClear.unavailable',
+                'Unavailable for this profile on the selected host.'
+              )}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="destructive"
+          size="xs"
+          className="shrink-0"
+          disabled={!profileCookieClear.available || profileCookieClear.busy}
+          onClick={() => void profileCookieClear.onClick()}
+        >
+          {t('browser.profileCookieClear.action', 'Clear cookies…')}
+        </Button>
+      </div>
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
           <Label>{t('browser.googleCookieClear.fe3f6e1721', 'Google cookies')}</Label>

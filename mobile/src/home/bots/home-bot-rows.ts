@@ -17,6 +17,7 @@ import type { HomeComputerBots } from './home-bots-query'
 import {
   agentsByHome,
   botRow,
+  workersByHome,
   groupRow,
   keptRows,
   NO_AGENTS,
@@ -36,7 +37,7 @@ export type HomeBots = {
   computers: readonly HomeComputerEntry[]
   /** Each computer's name by its key: a paired computer's own, or its server's. */
   labels: ReadonlyMap<string, string>
-  /** Each computer that lists no bots here, and why; and each listing one that takes no new bot. */
+  /** Each computer that lists no bots here, and why. */
   unavailable: readonly HomeBotsUnavailable[]
   /** Some computer lists its bots, even none. */
   listable: boolean
@@ -77,7 +78,7 @@ export function compareHomeBotRows(a: HomeBotRow, b: HomeBotRow): number {
 export type HomeBotsUnavailable = {
   key: string
   label: string
-  reason: 'update' | 'off' | 'unreachable' | 'no-create'
+  reason: 'update' | 'off' | 'unreachable'
   /** A server's paired computer, whose Settings hold its Bots switch. */
   desktopLabel?: string
 }
@@ -202,9 +203,6 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
       continue
     }
     listable = true
-    if (!answer.takesCreate) {
-      why('no-create')
-    }
     const place: Place = {
       placeKey: placeKey(entry),
       computerKey: entry.key,
@@ -220,9 +218,15 @@ export function homeBotRows(input: HomeBotRowsInput): HomeBots {
       rows.push(...keptRows(place, answer, entry.mode, groups, lastActivity, input.now))
     } else {
       const homes = homesOf(pairedHostId)
+      const workersOf = own ? workersByHome(input.worktreeInfo[pairedHostId]) : null
+      const access = input.botsByHost[pairedHostId]?.accessRequests[entry.key] ?? []
       for (const bot of answer.bots) {
+        const home = botHomeWorktreeId(bot)
         rows.push(
-          botRow(place, answer, bot, homes.get(botHomeWorktreeId(bot)) ?? NO_AGENTS, input.now)
+          botRow(place, answer, bot, homes.get(home) ?? NO_AGENTS, input.now, {
+            workers: workersOf?.(home),
+            access
+          })
         )
       }
       if (groups.length > 0) {

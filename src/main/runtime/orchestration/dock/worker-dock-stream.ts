@@ -93,7 +93,10 @@ export function subscribeWorkerDock(
       const live =
         held.snapshot.hasUnverifiedWorkers ||
         held.snapshot.identities.some(
-          (row) => !['failed', 'unexpected', 'saving'].includes(row.state)
+          // An unsettled stopped row is an exited worker whose chat can be continued.
+          (row) =>
+            !['failed', 'unexpected', 'saving'].includes(row.state) ||
+            (row.state === 'unexpected' && !row.settlement)
         )
       if (live && !unwatchActivity) {
         unwatchActivity = activity?.subscribe(() => {

@@ -1,7 +1,6 @@
 // Orca's asks as the phone lists them in Needs you: the chats waiting on the owner and their workers,
-// read from the chats tree it already has, the connectors that need a sign-in or fix, the access
-// requests waiting on the bot, and paired servers' agents waiting to message it. Tool apps' sign-ins
-// stay on the desktop for now, so the phone's count can be lower than the desktop's.
+// read from the chats tree it already has, the access requests waiting on the bot, paired servers'
+// agents waiting to message it, and the connectors that need a sign-in or fix, as one ask.
 import { useMemo } from 'react'
 import type { ConnectorAccessRequest } from '../../../../src/shared/connector-bot-access-contract'
 import { accessRequestPerson } from '../../../../src/shared/bots/bot-access-request'
@@ -12,6 +11,7 @@ import {
 } from '../../../../src/shared/bots/bot-item-groups'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import type { PairedServerAskCard } from '../../../../src/shared/rpc-contract/paired-server-asks-params'
+import type { ConnectorPage } from '../connectors/connector-pages'
 import { botNeedsYouCount } from '../../../../src/shared/bots/bot-now'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -39,30 +39,26 @@ export type PhoneAsk = {
   tool: { name: string; input: string | null } | null
   /** The question a chat's turn stopped for, when its host's status says. */
   question: string | null
+  /** When it began asking, where the reads say. */
+  at: number | null
   /** What a tap opens; null when the phone can't reach it. */
   open:
     | { chat: BotChatTreeChat }
     | { worker: BotChatTreeWorker }
     | { access: ConnectorAccessRequest }
-    | { connector: PhoneConnectorNeed }
+    /** Every connector that needs a sign-in or fix, one row for them all. */
+    | { connectors: readonly PhoneConnectorNeed[] }
     /** A paired server's agent waiting to message the bot: its card waits in the Home chat, null
      *  until the tree lists it. */
     | { pairedAsk: { card: PairedServerAskCard; home: BotChatTreeChat | null } }
-    /** An automation whose newest run stopped for a sign-in: listed, never counted. */
-    | { stopped: { automationId: string } }
     | null
-}
-
-/** Whether the ask counts toward Needs you: a run a sign-in stopped is context for the sign-in. */
-export function phoneAskCounts(ask: PhoneAsk): boolean {
-  return !(ask.open && 'stopped' in ask.open)
 }
 
 /** What the activity read says of a worker: its dot and the tool its permission prompt asks for. */
 export type PhoneWorkerAsk = { dot: string; tool?: { name: string; input: string | null } }
 
 /** Approvals first, then the rest: chats and their workers in the tree's order (needs-you first, then
- *  newest), then connectors, then access requests, then paired servers' asks, as the desktop lists them. */
+ *  newest), then access requests, then the connectors' one ask. */
 export function phoneNeedsYouAsks(
   chats: readonly BotChatTreeChat[],
   workerAsk: (dispatchId: string) => PhoneWorkerAsk | null,
@@ -70,8 +66,6 @@ export function phoneNeedsYouAsks(
   chatPrompt: (chat: BotChatTreeChat) => PhoneChatPrompt | undefined,
   connectors: readonly PhoneConnectorNeed[],
   accessRequests: readonly ConnectorAccessRequest[],
-  /** Automations whose newest run stopped for a sign-in. */
-  stoppedForSignIn: readonly { id: string; name: string }[],
   pairedAsks: readonly PairedServerAskCard[] = []
 ): PhoneAsk[] {
   const asks: PhoneAsk[] = []
@@ -93,6 +87,7 @@ export function phoneNeedsYouAsks(
         number: null,
         tool: approval ? { name: approval.tool, input: approval.input ?? null } : null,
         question: prompt?.awaitsBlockingQuestion?.text ?? null,
+        at: chat.lastActiveAt > 0 ? chat.lastActiveAt : null,
         open: { chat }
       })
     }
@@ -110,22 +105,11 @@ export function phoneNeedsYouAsks(
         number: item?.number ?? null,
         tool: seen?.tool ?? null,
         question: null,
+        at: null,
         // A handed agent with no Dispatch opens only where the tree placed it.
         open: worker.dispatchId || worker.worktreeId ? { worker } : null
       })
     }
-  }
-  for (const connector of connectors) {
-    asks.push({
-      key: `connector:${connector.key}`,
-      approval: false,
-      title: connector.title,
-      worker: null,
-      number: null,
-      tool: null,
-      question: null,
-      open: { connector }
-    })
   }
   for (const request of accessRequests) {
     asks.push({
@@ -136,6 +120,7 @@ export function phoneNeedsYouAsks(
       number: null,
       tool: null,
       question: null,
+      at: request.createdAt,
       open: { access: request }
     })
   }
@@ -150,20 +135,21 @@ export function phoneNeedsYouAsks(
       number: null,
       tool: null,
       question: null,
+      at: Date.parse(card.createdAt) || null,
       open: { pairedAsk: { card, home } }
     })
   }
-  // Runs don't name the connector, so with none needing the owner they are history, as on the desktop.
-  for (const automation of connectors.length > 0 ? stoppedForSignIn : []) {
+  if (connectors.length > 0) {
     asks.push({
-      key: `stopped:${automation.id}`,
+      key: 'connectors',
       approval: false,
-      title: automation.name,
+      title: connectors[0].title,
       worker: null,
       number: null,
       tool: null,
       question: null,
-      open: { stopped: { automationId: automation.id } }
+      at: null,
+      open: { connectors }
     })
   }
   return [...asks.filter((ask) => ask.approval), ...asks.filter((ask) => !ask.approval)]
@@ -175,9 +161,7 @@ export type PhoneAskOpeners = {
   worker: (worker: BotChatTreeWorker) => void
   access: (request: ConnectorAccessRequest) => void
   /** Absent where no connector is listed, as in a group. */
-  connector?: (need: PhoneConnectorNeed) => void
-  /** The automation's runs; absent where no stopped run is listed. */
-  stopped?: (automationId: string) => void
+  connector?: (page: ConnectorPage) => void
 }
 
 export function openPhoneAsk(ask: PhoneAsk, openers: PhoneAskOpeners): void {
@@ -190,15 +174,13 @@ export function openPhoneAsk(ask: PhoneAsk, openers: PhoneAskOpeners): void {
     openers.worker(ask.open.worker)
   } else if ('access' in ask.open) {
     openers.access(ask.open.access)
-  } else if ('connector' in ask.open) {
-    openers.connector?.(ask.open.connector)
-  } else if ('pairedAsk' in ask.open) {
+  } else if ('connectors' in ask.open) {
+    // One opens its own page; several, the Connectors list that shows them all.
+    const [only, ...rest] = ask.open.connectors
+    openers.connector?.(rest.length === 0 && only ? only.page : { kind: 'list' })
+  } else if (ask.open.pairedAsk.home) {
     // Its card waits docked in the Home chat.
-    if (ask.open.pairedAsk.home) {
-      openers.chat(ask.open.pairedAsk.home)
-    }
-  } else {
-    openers.stopped?.(ask.open.stopped.automationId)
+    openers.chat(ask.open.pairedAsk.home)
   }
 }
 
@@ -215,7 +197,6 @@ export function usePhoneNeedsYouAsks({
   items,
   access,
   connectors = NO_CONNECTORS,
-  automations,
   pairedAsks = NO_PAIRED_ASKS,
   itemCount
 }: {
@@ -231,8 +212,6 @@ export function usePhoneNeedsYouAsks({
   access: Pick<BotAccessRequests, 'requests'> | null
   /** Its connectors that need the owner; a group lists none. */
   connectors?: readonly PhoneConnectorNeed[]
-  /** The activity read's automations, for the runs a sign-in stopped. */
-  automations?: readonly { automation: { id: string; name: string }; needsSignIn?: boolean }[]
   /** Paired servers' agents waiting to message the bot; a group lists none. */
   pairedAsks?: readonly PairedServerAskCard[]
   /** Needs you items that aren't stale, unfiltered. */
@@ -250,14 +229,13 @@ export function usePhoneNeedsYouAsks({
       chatPrompt,
       connectors,
       accessRequests ?? [],
-      (automations ?? []).flatMap((row) => (row.needsSignIn ? [row.automation] : [])),
       pairedAsks
     )
-  }, [chats, workers, items, chatPrompt, connectors, accessRequests, automations, pairedAsks])
-  return { asks: all, count: botNeedsYouCount(all.filter(phoneAskCounts).length, itemCount) }
+  }, [chats, workers, items, chatPrompt, connectors, accessRequests, pairedAsks])
+  return { asks: all, count: botNeedsYouCount(all.length, itemCount) }
 }
 
-/** The bot panel's asks and Items tab count: with its connectors and the runs a sign-in stopped. */
+/** The bot panel's asks and Items tab count, with its connectors. */
 export function usePhonePanelNeedsYouAsks({
   client,
   chats,
@@ -291,7 +269,6 @@ export function usePhonePanelNeedsYouAsks({
     items: read,
     access: panel.accessRequests,
     connectors: usePhoneConnectorNeeds({ client, hostName, ...routeBot }),
-    automations: routeBot.activity?.automations,
     pairedAsks: useMobilePairedServerAsks({
       client,
       connected: panel.online,

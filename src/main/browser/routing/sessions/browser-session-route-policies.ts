@@ -1,11 +1,12 @@
 import { session } from 'electron'
 import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { BrowserSessionPermissionOptions } from '../../site-settings/permissions/browser-session-permission-handlers'
 import { isBrowserRoutePartition } from '../partitions/browser-route-identity'
 import {
   clearBrowserSessionPartitionPolicies,
   installBrowserSessionPartitionPolicies
 } from '../../sessions/partition-policies/browser-session-partition-policies'
-import { restoreBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
+import { restoreBrowserRoutePartitionSessionCookies } from '../../cookies/session-restore/browser-session-cookie-route-restore'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 
 // Same bound as launch: a slow restore must not hold the page.
@@ -16,8 +17,11 @@ export async function installBrowserRoutePartitionPolicies(
   partition: string,
   {
     sitePermissions,
+    clipboardRead,
     siteListProfile
-  }: { sitePermissions?: 'saved' | 'session'; siteListProfile?: boolean } = {}
+  }: Pick<BrowserSessionPermissionOptions, 'sitePermissions' | 'clipboardRead'> & {
+    siteListProfile?: boolean
+  } = {}
 ): Promise<void> {
   if (!isBrowserRoutePartition(partition)) {
     throw new Error('browser_route_partition_profile_unavailable')
@@ -25,7 +29,13 @@ export async function installBrowserRoutePartitionPolicies(
   await Promise.all([
     installBrowserSessionPartitionPolicies(
       { ...profile, partition },
-      { applyAppWideProxy: false, fileSystemAccess: false, sitePermissions, siteListProfile }
+      {
+        applyAppWideProxy: false,
+        fileSystemAccess: false,
+        sitePermissions,
+        clipboardRead,
+        siteListProfile
+      }
     ),
     // Why here: SSH and This-device partitions both pass through before their first page loads.
     withTimeout(

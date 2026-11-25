@@ -1,6 +1,6 @@
-import type {
-  CodexAppServerLaunch,
-  spawnCodexAppServerConnection
+import {
+  spawnCodexAppServerConnection,
+  type CodexAppServerLaunch
 } from '../codex-app-server-connection'
 import type {
   CodexAppServerConnection,
@@ -11,6 +11,10 @@ import { CodexSharedServerLease } from './codex-shared-server-lease'
 import { CodexSharedServer } from './codex-shared-server'
 import type { CodexSharedServerProcessSweep } from './codex-shared-server-chat-workload'
 import { CodexSharedServerMemoryCeiling } from './codex-shared-server-memory-ceiling'
+import {
+  CodexSharedServerUncontainedError,
+  CodexSharedServerWindowsJob
+} from './codex-shared-server-windows-job'
 
 /** A server with no chats waits this long for the next one before it stops. */
 const IDLE_SERVER_STOP_MS = 60_000
@@ -31,6 +35,8 @@ export class CodexSharedServerPool {
   private readonly stopping = new Set<CodexSharedServer>()
   /** Stops that couldn't prove an exit, retried when the next chat opens. */
   private readonly unproven = new Set<CodexSharedServer>()
+  /** Windows: settles once the server's tree is proven held in its job, after it is ready. */
+  private readonly contained = new WeakMap<CodexSharedServer, Promise<void>>()
   private readonly ceiling = new CodexSharedServerMemoryCeiling(
     () => this.allServers(),
     (server) => this.onServerFreed(server)
@@ -38,7 +44,10 @@ export class CodexSharedServerPool {
 
   constructor(
     private readonly connect?: typeof spawnCodexAppServerConnection,
-    private readonly sweep?: CodexSharedServerProcessSweep
+    private readonly sweep?: CodexSharedServerProcessSweep,
+    /** Windows: each server's job; null when one can't be made. Undefined elsewhere. */
+    private readonly createWindowsJob: () => CodexSharedServerWindowsJob | null | undefined = () =>
+      process.platform === 'win32' ? CodexSharedServerWindowsJob.create() : undefined
   ) {}
 
   async open(
@@ -61,7 +70,7 @@ export class CodexSharedServerPool {
     const lease = new CodexSharedServerLease(server, handlers, options.sessionId, spec.chatEnv)
     server.leases.add(lease)
     try {
-      await server.ready
+      await (this.contained.get(server) ?? server.ready)
       if (server.closed) {
         throw new Error('codex shared app-server exited before the chat joined it')
       }
@@ -86,13 +95,28 @@ export class CodexSharedServerPool {
   }
 
   private startServer(spec: CodexSharedServer['spec']): CodexSharedServer {
+    const windowsJob = this.createWindowsJob()
+    if (windowsJob === null) {
+      throw new CodexSharedServerUncontainedError()
+    }
+    const connect = this.connect ?? spawnCodexAppServerConnection
     const server = new CodexSharedServer(
       spec,
       (ended) => this.onServerFreed(ended),
-      this.connect,
+      windowsJob ? windowsJob.connect(connect) : connect,
       this.sweep
     )
     server.ready.catch(() => this.remove(server))
+    if (windowsJob) {
+      // A server its job can't hold couldn't end what chats leave running.
+      const held = server.ready.then(() => windowsJob.requireHolds(server.pid, () => server.exited))
+      held.catch(() => {
+        // Its waiting chats leave silently: their open rejects and a fallback reuses their handlers.
+        server.leases.clear()
+        this.stop(server)
+      })
+      this.contained.set(server, held)
+    }
     const group = this.servers.get(spec.key) ?? []
     group.push(server)
     this.servers.set(spec.key, group)

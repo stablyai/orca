@@ -4,8 +4,8 @@ import { sha256 } from '../hashing/sha256'
 /** A reader that sees another value must reject rather than guess at the shape. */
 export const MOBILE_WEB_BUNDLE_SCHEMA_VERSION = 1 as const
 
-/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. 3: also hands an `open` for the session on top its pane, and reports which session it shows. */
-export const MOBILE_WEB_PAGE_VERSION = 3
+/** Page build number: shells require their minimum and wall older desktops, and check it before using a newer page feature. 2: opens a shell's `open` target in-document. 3: also hands an `open` for the session on top its pane, and reports which session it shows. 4: draws a desktop's This-device browser tabs as rows. */
+export const MOBILE_WEB_PAGE_VERSION = 4
 
 /** The only stable-named asset, and the only one that references the content-addressed names. */
 export const MOBILE_WEB_BUNDLE_ENTRYPOINT = 'index.html'
@@ -77,7 +77,11 @@ export const MobileWebBundleAssetSchema = z
       .max(MOBILE_WEB_BUNDLE_MAX_ASSET_BYTES)
       .optional(),
     /** A language-catalog chunk: shells that read catalogs from the host skip it; outside buildId. */
-    kind: z.literal('catalog').optional()
+    kind: z.literal('catalog').optional(),
+    /** Code (the diagram engine) that shells serving it on request fetch only when the page first asks;
+     *  outside buildId. A field of its own: a running older desktop drops it, where a new kind value would
+     *  refuse the whole manifest an in-place update wrote. */
+    deferred: z.literal(true).optional()
   })
   .strict()
 

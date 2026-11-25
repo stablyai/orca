@@ -40,7 +40,8 @@ import {
 } from '../../../../shared/bots/bot-access-reach'
 import { finalSentenceStop, joinSentences } from '../../../../shared/text/sentence-joining'
 import { botAgentLabel, botErrorMessage } from './bot-presentation'
-import { setBotGoogle, useBotGoogleReach } from './google/google-connect-client'
+import { useBotGoogleReach } from './google/google-connect-client'
+import { setBotGoogle } from './google/set-bot-google'
 import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
 import { NewBotDialog } from './NewBotDialog'
 import { useBotAccessPlace } from './use-bot-access-place'
@@ -262,9 +263,11 @@ function BotAccessAdvice({
       return
     }
     if (fix === 'google-off') {
+      // Undo gives back the same accounts it had.
+      const accounts = bot.googleAccounts
       run(
         () => setBotGoogle(bot, false),
-        () => setApplied((all) => [...all, { fix, undo: () => turnOnGoogle(bot) }])
+        () => setApplied((all) => [...all, { fix, undo: () => turnOnGoogle(bot, accounts) }])
       )
       return
     }
