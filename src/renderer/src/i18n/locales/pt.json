@@ -14072,7 +14072,7 @@
           "50f7e753ea": "Enviando notas..."
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ navegar&nbsp;&nbsp;↵ selecionar&nbsp;&nbsp;esc descartar",
+          "e17b987473": "↑↓ navegar  ↵ selecionar  esc descartar",
           "63ced7cb9b": "Nenhum documento encontrado",
           "0e8489bc11": "Links de documento markdown",
           "showingOfTotal": "Mostrando {{shown}} de {{total}}"

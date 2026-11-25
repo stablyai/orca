@@ -16681,7 +16681,7 @@
           "13822cdfda": "Texte brut"
         },
         "RichMarkdownDocLinkMenu": {
-          "e17b987473": "↑↓ naviguer&nbsp;&nbsp;↵ sélectionner&nbsp;&nbsp;esc fermer",
+          "e17b987473": "↑↓ naviguer  ↵ sélectionner  esc fermer",
           "63ced7cb9b": "Aucun document trouvé",
           "0e8489bc11": "Liens de documents Markdown",
           "showingOfTotal": "Affichage : {{shown}} sur {{total}}"
