@@ -219,4 +219,45 @@ describe('connector wake client', () => {
     expect(h.wake.last?.headers.authorization).toBe('Bearer wake-1')
     client.stop()
   })
+
+  it('a shares_changed frame re-reads shares and polls nothing; a wake still polls', async () => {
+    const sharesChanged = vi.fn()
+    h.fake.wakeOffer = OFFER
+    h.fake.mintsWakeTokens = true
+    const { client } = h.startClient(undefined, undefined, (machine) => {
+      machine.sharesChanged = sharesChanged
+    })
+    await settle()
+    expect(h.fake.hellos[0]).toMatchObject({
+      features: expect.arrayContaining(['shares-changed-v1'])
+    })
+    h.wake.last?.accept()
+    h.poll([])
+    await settle()
+    h.poll([])
+    await settle()
+    const before = polls().length
+    h.wake.last?.sharesChanged()
+    await settle()
+    expect(sharesChanged).toHaveBeenCalledTimes(1)
+    expect(polls()).toHaveLength(before)
+    h.wake.last?.wake()
+    await settle()
+    expect(polls()).toHaveLength(before + 1)
+    expect(polls().at(-1)).toEqual({ v: 1, helloRev: 1, holdMs: 2_000 })
+    expect(sharesChanged).toHaveBeenCalledTimes(1)
+    client.stop()
+  })
+
+  it('a machine that does not take shares_changed neither lists it nor polls on it', async () => {
+    const { client } = await onWake()
+    expect(h.fake.hellos[0]).toMatchObject({
+      features: expect.not.arrayContaining(['shares-changed-v1'])
+    })
+    const before = polls().length
+    h.wake.dialed[0].sharesChanged()
+    await settle()
+    expect(polls()).toHaveLength(before)
+    client.stop()
+  })
 })

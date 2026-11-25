@@ -57,6 +57,9 @@ export type ConnectorMachine = {
   helloAnswered?: (answer: { webhookTombstones?: string[] }) => void
   /** Signed out or switched account: drop what the linked conversations' cloud was last shown. */
   resetConversations?: () => void
+  /** The account's shares changed (the wake socket's shares_changed); with it, hellos list
+   *  shares-changed-v1, and a signed-in machine with no poll client still holds the wake socket. */
+  sharesChanged?: () => void
   /** Whether the cloud can bring this machine work, so the connection is held: see hostNeedsConnector. */
   wantsConnection: () => boolean
   // Something a hello lists, or wantsConnection, may have changed: bots, automations or settings.

@@ -42,6 +42,10 @@ export class FakeWakeSocket extends EventEmitter {
     this.emit('message', Buffer.from('{"type":"wake"}'))
   }
 
+  sharesChanged(): void {
+    this.emit('message', Buffer.from('{"type":"shares_changed"}'))
+  }
+
   /** The server closes it with `code` after the upgrade. */
   end(code: number): void {
     this.close()

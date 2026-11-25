@@ -12,8 +12,10 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { mainProcessState as state } from '../main-process-state'
 import { botsRootFolder } from '../../bots/bot-home'
 import type { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
+import { SharedBotHostsPush } from '../../bots/shared-with-me/shared-bot-hosts-push'
 
 let sharedBotHosts: SharedBotHosts | null = null
+let sharesPush: SharedBotHostsPush | null = null
 
 /**
  * The desktop's or Electron `orca serve`'s connector, as this process's own Orca account.
@@ -30,7 +32,9 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     store: state.store,
     userDataPath,
     kind: serve ? 'serve' : 'desktop',
-    isFenced: () => state.isQuitting
+    isFenced: () => state.isQuitting,
+    // Only the desktop lists the shares with its account.
+    ...(serve ? {} : { sharesChanged: () => sharesPush?.changed() })
   })
   // `orca serve` runs agents too, with its own offscreen browser or a paired desktop's.
   installGoogleSetupHostWatch(runtime, {
@@ -59,6 +63,8 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     },
     phoneSharesChanged: () => runtime.notifySharedBotsChanged()
   })
+  const hosts = sharedBotHosts
+  sharesPush = new SharedBotHostsPush(() => hosts.refresh())
   powerMonitor.on('resume', refreshSharedBotHosts)
   // A share made while this window was in the background shows on return, not at the next idle read.
   let readOnFocusAt = 0
@@ -89,6 +95,7 @@ export function fenceMainProcessCloudOnQuit(): void {
   state.core.relayHost?.fence()
   mainProcessConnectorCloud()?.fence()
   sharedBotHosts?.stop()
+  sharesPush?.stop()
 }
 
 // Registered with the relay; like it, the first request waits for the persisted proxy.

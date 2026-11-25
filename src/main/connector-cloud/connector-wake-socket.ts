@@ -1,6 +1,7 @@
 // One wake socket: it only says "poll now". Keepalives go out every interval; the cloud answers them.
 import WebSocket, { type RawData } from 'ws'
 import {
+  CONNECTOR_SHARES_CHANGED_FRAME,
   CONNECTOR_WAKE_CLOSE_CODE,
   CONNECTOR_WAKE_FRAME,
   CONNECTOR_WAKE_GAP_HEADER,
@@ -57,6 +58,8 @@ export const createConnectorWakeSocket: ConnectorWakeSocketFactory = (url, heade
 export type ConnectorWakeSocketHandlers = {
   opened(): void
   wake(): void
+  /** The account's shares changed (shares_changed); a socket without it ignores the frame. */
+  sharesChanged?(): void
   /** Called once. */
   ended(end: ConnectorWakeSocketEnd): void
 }
@@ -140,6 +143,8 @@ export function openConnectorWakeSocket(
     const frame = data.toString()
     if (frame === CONNECTOR_WAKE_FRAME && !done) {
       handlers.wake()
+    } else if (frame === CONNECTOR_SHARES_CHANGED_FRAME && !done) {
+      handlers.sharesChanged?.()
     }
     // Anything else (the keepalive ack, a newer cloud's frame) only proves the link.
   })

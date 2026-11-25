@@ -8,7 +8,8 @@ import {
   type ConnectorResult
 } from './connector-cloud-request'
 import { ConnectorPollClient } from './connector-poll-client'
-import type { ConnectorMachine } from './connector-machine'
+import { ConnectorShareWakeHold } from './connector-share-wake'
+import type { ConnectorMachine, ConnectorPollClientOptions } from './connector-machine'
 import {
   ConnectorAccountTransport,
   type ConnectorCallOptions,
@@ -41,6 +42,7 @@ export type ConnectorCloudOptions = {
   fetchImpl?: typeof globalThis.fetch
   /** The journal's reply outbox (design item 125); null while no journal is open. */
   replyJournal?: () => ConnectorReplyJournal | null
+  wakeSocketFactory?: ConnectorPollClientOptions['wakeSocketFactory']
 }
 
 export class ConnectorCloud {
@@ -58,10 +60,9 @@ export class ConnectorCloud {
   private clientStop: string | null = null
   private readonly reach = new ConnectorReach(() => this.options.onStatusChanged?.())
   // One token cache per account, shared by the poll and the bot calls.
-  private transport: {
-    account: string
-    transport: ConnectorAccountTransport
-  } | null = null
+  private transport: { account: string; transport: ConnectorAccountTransport } | null = null
+  // Only the wake socket, while no client runs, so a teammate's shares changing still reach it.
+  private readonly shareWake = new ConnectorShareWakeHold(() => this.options)
 
   // The account the last sign-in hook saw, so a refresh of the same one is not a switch.
   private lastAccount: string | null
@@ -192,6 +193,7 @@ export class ConnectorCloud {
     this.signingOut = true
     this.noteAccount()
     this.stopClient()
+    this.shareWake.hold(null)
     if (this.events) {
       this.events.clear()
       this.events = null
@@ -285,6 +287,7 @@ export class ConnectorCloud {
         events,
         seam,
         machine: this.options.machine,
+        wakeSocketFactory: this.options.wakeSocketFactory,
         onHalt: (reason) => {
           if (this.client === client) {
             this.clientStop = reason
@@ -302,6 +305,7 @@ export class ConnectorCloud {
     } else {
       this.settling = null
     }
+    this.shareWake.hold(account && !this.client ? this.transportFor(account) : null)
   }
 
   /** Acks, events, posts and the hello saying what changed all reach the cloud before the client stops. */
@@ -314,6 +318,7 @@ export class ConnectorCloud {
       // Wanted again meanwhile, or already replaced.
       if (this.settling === client && this.client === client) {
         this.stopClient()
+        this.reconcile()
       }
     })
   }

@@ -3,6 +3,8 @@ import { z } from 'zod'
 // The wake channel: a socket that only says "poll now". A machine lists this feature in its hello;
 // only then may the hello answer carry a `wake` offer. Without an offer the machine long-polls.
 export const CONNECTOR_WAKE_FEATURE = 'connector-wake-v1'
+// A machine listing this re-reads its shares on the shares_changed frame; only it is sent one.
+export const CONNECTOR_SHARES_CHANGED_FEATURE = 'shares-changed-v1'
 
 export const CONNECTOR_WAKE_PATH = '/v1/connector/wake'
 // Milliseconds since the machine's previous wake socket closed, sent on the upgrade.
@@ -14,6 +16,8 @@ export const CONNECTOR_WAKE_TOKEN_PURPOSE = 'connector-wake'
 // Exact frames, so the server can answer a keepalive without waking the host's object. They match
 // the relay's client keepalive frames. The machine sends a keepalive every interval.
 export const CONNECTOR_WAKE_FRAME = '{"type":"wake"}'
+// Sent instead of the wake frame for an admin call with kind `shares_changed`.
+export const CONNECTOR_SHARES_CHANGED_FRAME = '{"type":"shares_changed"}'
 export const CONNECTOR_WAKE_KEEPALIVE_FRAME = '{"type":"keepalive"}'
 export const CONNECTOR_WAKE_KEEPALIVE_ACK_FRAME = '{"type":"keepalive-ack"}'
 export const CONNECTOR_WAKE_KEEPALIVE_INTERVAL_MS = 25_000

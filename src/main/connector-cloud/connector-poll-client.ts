@@ -31,7 +31,7 @@ import * as pollControl from './connector-poll-control'
 import { ConnectorOutboxSender } from './connector-outbox'
 import { ConnectorEventRequests } from './connector-event-requests'
 import { ConnectorClientSnapshots, type ConnectorClientHello } from './connector-snapshot-trace'
-import { ConnectorWakePolls } from './connector-wake-channel'
+import { ConnectorWakePolls } from './connector-wake-polls'
 
 // The cloud forgets a machine's running workers once it has been silent 15 minutes (its last-seen is
 // a minute coarse); back from a silence near that, a fresh hello's snapshot restates them.

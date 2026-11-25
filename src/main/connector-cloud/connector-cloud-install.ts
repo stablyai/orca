@@ -44,6 +44,7 @@ export type ConnectorCloudHost = {
     WebhookHostService,
     'receive' | 'notice' | 'helloAnswered' | 'pausing' | 'onConfirmed'
   >
+  sharesChanged?: () => void
 }
 
 /** The connector acts as this host's own signed-in Orca account; null without Orca Cloud auth config. */
@@ -54,7 +55,8 @@ export function createConnectorCloud({
   kind,
   isFenced,
   gitHubInstallations,
-  webhooks
+  webhooks,
+  sharesChanged
 }: ConnectorCloudHost): ConnectorCloud | null {
   const auth = getOrcaCloudAuthConfig()
   if (!auth.configured) {
@@ -179,6 +181,7 @@ export function createConnectorCloud({
             ? await runtime.botShareDevices.deliverBotShareHeldMessage(delivery)
             : { outcome: 'refused', reason: 'unknown_device' }
       },
+      ...(sharesChanged ? { sharesChanged } : {}),
       helloAnswered: (answer) => {
         webhooks.helloAnswered(answer)
         migratePlaces()

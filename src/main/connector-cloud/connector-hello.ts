@@ -14,6 +14,7 @@ import {
   type ConnectorTrigger
 } from '../../shared/connectors/connector-cloud-contract'
 import {
+  CONNECTOR_SHARES_CHANGED_FEATURE,
   CONNECTOR_WAKE_FEATURE,
   ConnectorHelloWakeOfferSchema
 } from '../../../cloud/packages/connector-contract/src/wake-messages'
@@ -159,7 +160,11 @@ export function connectorHello(
     agents: [],
     projects: [],
     promptKinds: PROMPT_KINDS,
-    features: machine.prEvent ? [...FEATURES, 'prEvents'] : FEATURES,
+    features: [
+      ...FEATURES,
+      ...(machine.prEvent ? ['prEvents'] : []),
+      ...(machine.sharesChanged ? [CONNECTOR_SHARES_CHANGED_FEATURE] : [])
+    ],
     sources: SOURCES,
     ...(botPages ? { botPages } : said.bots ? { bots: said.bots } : {})
   }

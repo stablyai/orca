@@ -29,6 +29,8 @@ export type ConnectorHostOptions = {
   kind: ConnectorRuntimeKind
   /** Quitting or relaunching: nothing new starts. */
   isFenced: () => boolean
+  /** Re-reads the shares with this account, on Orca Cloud's push; only a desktop lists them. */
+  sharesChanged?: () => void
 }
 
 export type ConnectorHost = {
@@ -48,7 +50,8 @@ export function installConnectorHost({
   store,
   userDataPath,
   kind,
-  isFenced
+  isFenced,
+  sharesChanged
 }: ConnectorHostOptions): ConnectorHost {
   const account = () => connectorAccount(userDataPath)
   // The connector's own account sends a share's invite email too, so every host kind emails it.
@@ -106,7 +109,8 @@ export function installConnectorHost({
       kind,
       isFenced,
       gitHubInstallations,
-      webhooks
+      webhooks,
+      sharesChanged
     })
   )
   const stops: (() => void)[] = []
