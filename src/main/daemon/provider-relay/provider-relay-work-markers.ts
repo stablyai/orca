@@ -95,7 +95,8 @@ function hidingEscape(values: readonly string[]): RegExp | null {
  * a streaming update is parsed only when it can be the one that matters).
  */
 export class ProviderRelayWorkReader {
-  /** Per marker: its quoted name, and the quoted values its positive `when` tests need. */
+  /** Per marker: its quoted name, the quoted values its positive `when` tests need, and the
+   *  escapes that can spell them. */
   private readonly needles: {
     name: string
     quoted: string
@@ -103,7 +104,13 @@ export class ProviderRelayWorkReader {
     hiding: RegExp | null
   }[]
 
+  /** Any escape that can spell any marker's value: one test per line before each marker's own. */
+  private readonly anyHiding: RegExp | null
+
   constructor(private readonly markers: readonly ProviderRelayWorkMarker[]) {
+    this.anyHiding = hidingEscape(
+      markers.flatMap((marker) => (marker.when ?? []).filter((test) => !test.not).map((t) => t.is))
+    )
     this.needles = markers.map((marker) => {
       const values = (marker.when ?? []).filter((test) => !test.not).map((test) => test.is)
       return {
@@ -121,10 +128,14 @@ export class ProviderRelayWorkReader {
       return false
     }
     // Only a line its name can match is searched for values or escapes; others cost one scan.
+    let hides: boolean | undefined
     return this.needles.some(
       (marker) =>
         (scanned === undefined ? line.includes(marker.quoted) : marker.name === scanned) &&
-        (marker.values.every((value) => line.includes(value)) || marker.hiding?.test(line) === true)
+        (marker.values.every((value) => line.includes(value)) ||
+          (marker.hiding !== null &&
+            (hides ??= this.anyHiding?.test(line) === true) &&
+            marker.hiding.test(line)))
     )
   }
 

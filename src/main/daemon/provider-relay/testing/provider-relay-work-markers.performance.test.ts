@@ -17,7 +17,7 @@ const CALL_END: ProviderRelayWorkMarker = {
 
 function parsesOfStreamedOutput(lines: number): number {
   const reader = new ProviderRelayWorkReader([CALL_END])
-  // Escaped `<`, `>` and `&` (as Go's encoder writes them) and an escaped slash in tool output.
+  // Escaped `<`, `>` and `&` in tool output, as Go's encoder writes them.
   const output = JSON.stringify({
     jsonrpc: '2.0',
     method: 'session/update',

@@ -53,7 +53,7 @@ export class ProviderRelaySpool {
    * Any other attached keep stays in memory and is released as a cut at the cap.
    */
   private heldSpill: 'off' | 'memory' | 'file' = 'off'
-  /** The last seq of kept lines dropped at the file cap, so an attach can say its replay starts mid-item. */
+  /** The last seq of kept lines dropped at a cap, so an attach can say its replay starts mid-item. */
   truncatedThrough = 0
   private disposed = false
   /** Ends the current attach's waits once it is superseded, so its call returns even on a stalled disk. */

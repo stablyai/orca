@@ -8,6 +8,7 @@ import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 /** Acks batch this long after output; the daemon asks sooner (relayAckWanted) when it holds a lot. */
 const ACK_DELAY_MS = 1_000
+const seqOf = (value: unknown): number => (typeof value === 'number' ? value : 0)
 /**
  * A held replay is handed on in slices of about this much text, yielding between them: the
  * stream hands a slice to its reader in one run, so the slice bounds main's longest run.
@@ -223,7 +224,9 @@ export class RelayedProviderOutput {
     await this.allTaken(waitMs)
     this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
     this.clearAckTimer()
-    return this.ack(false)
+    await this.ack(false)
+    // A release that ack learned of is recorded now: the hand-off stops acks after this.
+    return this.pendingCut ? this.ack(false) : undefined
   }
 
   /** Settles once the stream's reader took every line handed on, or after `waitMs` regardless. */
@@ -367,14 +370,9 @@ export class RelayedProviderOutput {
           this.releasedThrough = Math.max(this.releasedThrough, target)
         }
         // The daemon let kept lines go at a cap: they are given up, as a cut it records.
-        const ackedThrough = jsonProperty(reply, 'ackedThrough')
-        const truncated = jsonProperty(reply, 'truncatedThrough')
-        const released = Math.max(
-          typeof ackedThrough === 'number' && keepFrom !== null && ackedThrough >= keepFrom
-            ? ackedThrough
-            : 0,
-          typeof truncated === 'number' ? truncated : 0
-        )
+        const acked = seqOf(jsonProperty(reply, 'ackedThrough'))
+        const truncated = seqOf(jsonProperty(reply, 'truncatedThrough'))
+        const released = Math.max(keepFrom !== null && acked >= keepFrom ? acked : 0, truncated)
         if (released > this.releasedThrough) {
           // keptFrom stays: the daemon still keeps, so the next ack without a floor must reach it.
           this.releasedThrough = released
