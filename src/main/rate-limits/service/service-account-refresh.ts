@@ -1,21 +1,13 @@
-import {
-  consumeCodexRateLimitResetCredit,
-  fetchCodexRateLimits
-} from '../providers/codex/codex-fetcher'
-import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
-import { createEmptyRateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
+import { consumeCodexRateLimitResetCredit } from '../providers/codex/codex-fetcher'
 import { RateLimitServiceInactiveAccounts } from './service-inactive-accounts'
 import { hasUsageWindows } from './service-result-policy'
-import { toErrorMessage } from './service-types'
 import {
   normalizeCodexAccountSelectionTarget,
-  type CodexAccountSelectionTarget,
-  type NormalizedCodexAccountSelectionTarget
+  type CodexAccountSelectionTarget
 } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   normalizeClaudeAccountSelectionTarget,
-  type ClaudeAccountSelectionTarget,
-  type NormalizedClaudeAccountSelectionTarget
+  type ClaudeAccountSelectionTarget
 } from '../../claude-accounts/selection/runtime-selection'
 import type {
   ProviderRateLimits,
@@ -23,9 +15,6 @@ import type {
   RateLimitState,
   CodexRateLimitResetResult
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
-
-// Why: a hung WSL probe must not pin the renderer's owner usage read forever.
-const TARGET_USAGE_READ_TIMEOUT_MS = 30_000
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
   async refresh(): Promise<RateLimitState> {
@@ -275,74 +264,5 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     })
     await this.fetchClaudeOnly({ force: true })
     return this.getState()
-  }
-
-  /** One runtime target's selected Claude and Codex readings, for a focused WSL host's distro.
-   *  The read never switches this desktop's own fetch target or publishes state, so the host
-   *  runtime's numbers stay untouched (#42644 follow-up). */
-  async readUsageForRuntimeTarget(target: RateLimitRuntimeTarget): Promise<RateLimitState> {
-    const claudeTarget = normalizeClaudeAccountSelectionTarget(target)
-    const codexTarget = normalizeCodexAccountSelectionTarget(target)
-    const [claude, codex] = await Promise.all([
-      this.readClaudeUsageForTarget(claudeTarget),
-      this.readCodexUsageForTarget(codexTarget)
-    ])
-    return createEmptyRateLimitState({ claude, codex, claudeTarget, codexTarget })
-  }
-
-  private async readClaudeUsageForTarget(
-    target: NormalizedClaudeAccountSelectionTarget
-  ): Promise<ProviderRateLimits | null> {
-    // The poller already owns this exact target's reading; reuse it rather than double-fetch.
-    if (this.state.claude && this.isSameClaudeTarget(target, this.claudeFetchTarget)) {
-      return this.state.claude
-    }
-    // Why null: live statusline data belongs to the desktop's own fetch target, not this read's.
-    if (!this.isClaudeOAuthUsageEnabled()) {
-      return null
-    }
-    const preparation = await this.claudeAuthPreparationResolver?.(target)
-    return fetchActiveClaudeRateLimits({
-      authPreparation: preparation,
-      allowPtyFallback: this.shouldAllowClaudePtyFallback(preparation),
-      allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-      networkProxySettings: this.networkProxySettingsResolver?.(),
-      signal: AbortSignal.timeout(TARGET_USAGE_READ_TIMEOUT_MS)
-    }).catch((error): ProviderRateLimits => usageReadError('claude', error))
-  }
-
-  private async readCodexUsageForTarget(
-    target: NormalizedCodexAccountSelectionTarget
-  ): Promise<ProviderRateLimits | null> {
-    // The poller already owns this exact target's reading; reuse it rather than double-fetch.
-    if (this.state.codex && this.isSameCodexTarget(target, this.codexFetchTarget)) {
-      return this.state.codex
-    }
-    const home = await this.resolveCodexHome(target)
-    // Why null: a stopped distro must not be booted by an owner usage read.
-    if (home.skip) {
-      return null
-    }
-    const missingWslHome = home.homePath ? null : this.getMissingWslCodexHomeResult(target)
-    if (missingWslHome) {
-      return missingWslHome
-    }
-    return fetchCodexRateLimits({
-      codexHomePath: home.homePath,
-      readingAccount: home.readingAccount,
-      networkProxySettings: this.networkProxySettingsResolver?.(),
-      signal: AbortSignal.timeout(TARGET_USAGE_READ_TIMEOUT_MS)
-    }).catch((error): ProviderRateLimits => usageReadError('codex', error))
-  }
-}
-
-function usageReadError(provider: 'claude' | 'codex', error: unknown): ProviderRateLimits {
-  return {
-    provider,
-    session: null,
-    weekly: null,
-    updatedAt: Date.now(),
-    error: toErrorMessage(error),
-    status: 'error'
   }
 }

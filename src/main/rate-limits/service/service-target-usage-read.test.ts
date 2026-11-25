@@ -107,3 +107,47 @@ it('reuses the poller reading when the read target matches the desktop fetch tar
   expect(claudeFetch).not.toHaveBeenCalled()
   expect(codexFetch).not.toHaveBeenCalled()
 })
+
+it('keeps the other provider’s reading when one resolver rejects', async () => {
+  claudeFetch.mockReset()
+  codexFetch.mockReset()
+  codexFetch.mockResolvedValue(ok('codex', 24))
+  const service = new RateLimitService()
+  service.setClaudeAuthPreparationResolver(async () => {
+    throw new Error('wsl probe failed')
+  })
+  service.setCodexHomePathResolver(async () => ({ kind: 'ready', codexHomePath: '/home/u/.codex' }))
+
+  const read = await service.readUsageForRuntimeTarget({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+  expect(read.claude?.status).toBe('error')
+  expect(read.claude?.error).toBe('wsl probe failed')
+  expect(read.codex?.session?.usedPercent).toBe(24)
+  expect(claudeFetch).not.toHaveBeenCalled()
+})
+
+it('reads a target whose poller entry is still fetching instead of reusing the placeholder', async () => {
+  claudeFetch.mockReset()
+  codexFetch.mockReset()
+  let settlePoller: (value: ProviderRateLimits) => void = () => {}
+  claudeFetch.mockReturnValueOnce(
+    new Promise<ProviderRateLimits>((resolve) => {
+      settlePoller = resolve
+    })
+  )
+  const service = new RateLimitService()
+  service.setClaudeAuthPreparationResolver(
+    async () => undefined as unknown as ClaudeRuntimeAuthPreparation
+  )
+  service.setCodexHomePathResolver(async () => ({ kind: 'ready', codexHomePath: '/home/u/.codex' }))
+  codexFetch.mockResolvedValue(ok('codex', 24))
+  const target = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
+
+  const poller = service.refreshClaudeForTarget(target)
+  claudeFetch.mockResolvedValue(ok('claude', 42))
+  const read = await service.readUsageForRuntimeTarget(target)
+  expect(read.claude?.session?.usedPercent).toBe(42)
+  expect(claudeFetch).toHaveBeenCalledTimes(2)
+
+  settlePoller(ok('claude', 7))
+  await poller
+})

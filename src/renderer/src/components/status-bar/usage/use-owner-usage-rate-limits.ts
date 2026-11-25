@@ -127,13 +127,15 @@ export function useAccountOwnerUsage(
     if (!wslDistro) {
       return
     }
-    const readDistro = (): void => {
-      void refreshWslOwnerUsage(wslDistro).catch((error) =>
+    const readDistro = (force = false): void => {
+      void refreshWslOwnerUsage(wslDistro, force).catch((error) =>
         console.warn('[usage] WSL owner usage read failed', error)
       )
     }
     readDistro()
-    const timer = setInterval(readDistro, WSL_OWNER_USAGE_REFRESH_MS)
+    // Why forced: freshness starts at completion, so a bare tick can skip on a 299s-old read
+    // and stretch the cadence to ten minutes.
+    const timer = setInterval(() => readDistro(true), WSL_OWNER_USAGE_REFRESH_MS)
     return () => clearInterval(timer)
   }, [wslDistro])
 

@@ -6,7 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
-import { RateLimitServiceAccountRefresh } from './service-account-refresh'
+import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
 import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
   type CodexAccountSelectionTarget,
@@ -34,7 +34,7 @@ import type { InactiveClaudeAccount } from '../providers/claude/claude-managed-a
 import type { RateLimitState } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { NetworkProxySettings } from '../../../shared/network/network-proxy'
 
-export class RateLimitService extends RateLimitServiceAccountRefresh {
+export class RateLimitService extends RateLimitServiceTargetUsageRead {
   private lastOwnerReturnAt = Number.NEGATIVE_INFINITY
 
   refreshOnOwnerReturn(): Promise<void> {

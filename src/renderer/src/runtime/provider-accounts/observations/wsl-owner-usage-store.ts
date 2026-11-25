@@ -1,4 +1,5 @@
 import type {
+  ProviderRateLimits,
   RateLimitState,
   RateLimitRuntimeTarget
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
@@ -6,8 +7,14 @@ import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rat
 
 export type WslOwnerUsage = {
   rateLimits: RateLimitState
+  /** When the last successful read completed; the long freshness clock. */
   readAt: number
+  /** No reading was ever taken, so the owner reads as unreachable. */
   failed: boolean
+  /** When the last attempt finished, success or failure; the short retry clock. */
+  attemptAt: number
+  /** The last attempt failed but a previous reading is kept for display. */
+  attemptFailed: boolean
 }
 
 // A completed read stays fresh for one usage poll cadence; a failed one retries far sooner.
@@ -22,16 +29,38 @@ function distroTarget(distro: string): RateLimitRuntimeTarget {
   return { runtime: 'wsl', wslDistro: distro }
 }
 
-// A read still inside a Retry-After window re-reads on the short cadence, like a failed one,
-// without flagging it failed: the distro answered, so the display must not claim it is unreachable.
+// A read that is failed, still fetching, or inside a Retry-After window re-reads on the short
+// cadence — without flagging it failed: the distro answered, so it must not read as unreachable.
 function needsShortRetry(cached: WslOwnerUsage): boolean {
-  if (cached.failed) {
+  if (cached.failed || cached.attemptFailed) {
     return true
   }
-  const retryAtMs =
-    cached.rateLimits.claude?.usageMetadata?.retryAtMs ??
-    cached.rateLimits.codex?.usageMetadata?.retryAtMs
-  return retryAtMs !== undefined && retryAtMs > Date.now()
+  const now = Date.now()
+  return [cached.rateLimits.claude, cached.rateLimits.codex].some((provider) => {
+    if (provider?.status === 'fetching') {
+      return true
+    }
+    const retryAtMs = provider?.usageMetadata?.retryAtMs
+    return retryAtMs !== undefined && retryAtMs > now
+  })
+}
+
+// Mirrors the service's stale policy: a provider error keeps the last good windows it has,
+// while the other provider's fresh reading still lands.
+function retainPreviousOnError(
+  fresh: ProviderRateLimits | null,
+  previous: ProviderRateLimits | null
+): ProviderRateLimits | null {
+  if (!fresh || fresh.status !== 'error' || !previous || previous.status !== 'ok') {
+    return fresh
+  }
+  if (!previous.session && !previous.weekly) {
+    return fresh
+  }
+  const retryAtMs = fresh.usageMetadata?.retryAtMs
+  return retryAtMs
+    ? { ...previous, usageMetadata: { ...previous.usageMetadata, retryAtMs } }
+    : previous
 }
 
 export function subscribeWslOwnerUsage(listener: () => void): () => void {
@@ -56,14 +85,20 @@ export function clearWslOwnerUsageReads(): void {
 export function refreshWslOwnerUsage(distro: string, force = false): Promise<void> {
   const cached = readsByDistro.get(distro)
   if (!force && cached) {
-    const age = Date.now() - cached.readAt
-    if (needsShortRetry(cached) ? age < FAILED_RETRY_MS : age < FRESH_MS) {
+    const now = Date.now()
+    if (
+      needsShortRetry(cached)
+        ? now - cached.attemptAt < FAILED_RETRY_MS
+        : now - cached.readAt < FRESH_MS
+    ) {
       return Promise.resolve()
     }
   }
   const running = inFlightByDistro.get(distro)
   if (running) {
-    return running
+    // A forced refresh must not be satisfied by a read that started before it (e.g. an
+    // account switch mid-read); chain one that starts after.
+    return force ? running.then(() => refreshWslOwnerUsage(distro, true)) : running
   }
   const request = (async () => {
     try {
@@ -71,13 +106,34 @@ export function refreshWslOwnerUsage(distro: string, force = false): Promise<voi
       if (!rateLimits) {
         throw new Error('WSL usage read returned no state')
       }
-      readsByDistro.set(distro, { rateLimits, readAt: Date.now(), failed: false })
+      const previous = readsByDistro.get(distro)
+      const now = Date.now()
+      readsByDistro.set(distro, {
+        rateLimits: {
+          ...rateLimits,
+          claude: retainPreviousOnError(rateLimits.claude, previous?.rateLimits.claude ?? null),
+          codex: retainPreviousOnError(rateLimits.codex, previous?.rateLimits.codex ?? null)
+        },
+        readAt: now,
+        failed: false,
+        attemptAt: now,
+        attemptFailed: false
+      })
     } catch {
       // Why keep the last good read: one failed attempt is not proof the distro went away.
       const previous = readsByDistro.get(distro)
+      const now = Date.now()
       readsByDistro.set(
         distro,
-        previous ?? { rateLimits: createEmptyRateLimitState(), readAt: Date.now(), failed: true }
+        previous
+          ? { ...previous, attemptAt: now, attemptFailed: true }
+          : {
+              rateLimits: createEmptyRateLimitState(),
+              readAt: now,
+              failed: true,
+              attemptAt: now,
+              attemptFailed: true
+            }
       )
     } finally {
       inFlightByDistro.delete(distro)
