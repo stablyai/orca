@@ -52,6 +52,10 @@ function publish(
   const { value } = antigravityChatSignIn.get()
   const shown = value.flow
   if (shown?.flowId !== current.id || settled(shown.phase)) {
+    // A flow nothing shows any more can't be waited on: a settling one still stops agy.
+    if (settled(next.phase)) {
+      current.ended.abort()
+    }
     return
   }
   const flow = { ...next, flowId: current.id, owner: current.owner, intent: current.intent }

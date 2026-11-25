@@ -28,12 +28,16 @@ export type AntigravityChatSignInPrompt = 'signedOut' | 'signingIn' | 'failed'
 export function antigravityChatSignInPrompt(
   view: AntigravityChatSignInView
 ): AntigravityChatSignInPrompt | null {
-  if (view.status !== 'known' || view.auth === 'signedIn') {
+  if (view.status !== 'known') {
     return null
   }
   const phase = view.flow?.phase
+  // A sign-in under way needs its code box whatever the host last saw.
   if (antigravityChatSignInRunning(view.flow)) {
     return 'signingIn'
+  }
+  if (view.auth === 'signedIn') {
+    return null
   }
   if (view.auth === 'unknown') {
     return null

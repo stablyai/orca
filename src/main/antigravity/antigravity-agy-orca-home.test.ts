@@ -153,10 +153,15 @@ it("removes only a model listing's own session, and only from agy's homes", asyn
   }
   const orcaHome = join(folder(), 'antigravity-agy-chat')
   const ownHome = join(folder(), '.gemini')
-  const elsewhere = join(folder(), 'antigravity-chat')
-  const listed = [make(orcaHome, 'antigravity-acp'), make(ownHome, 'antigravity-cli')]
+  const legacy = join(folder(), 'antigravity-chat')
+  const elsewhere = join(folder(), 'not-an-agy-home')
+  const listed = [
+    make(orcaHome, 'antigravity-acp'),
+    make(ownHome, 'antigravity-cli'),
+    make(legacy, 'antigravity-acp')
+  ]
   const kept = [make(ownHome, 'antigravity-cli', other), make(elsewhere, 'antigravity-acp')]
-  for (const accountHomePath of [orcaHome, ownHome, elsewhere]) {
+  for (const accountHomePath of [orcaHome, ownHome, legacy, elsewhere]) {
     await discardAgyListingSession({ sessionId: id, cwd: '/tmp', accountHomePath, runAgent })
   }
   for (const path of listed) {

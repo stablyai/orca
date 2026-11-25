@@ -7,6 +7,7 @@ import {
   isAntigravityHostAccountHome,
   readyAntigravityHostAcpVersion
 } from '../../../../antigravity/antigravity-host-acp'
+import { isAntigravityAgyOrcaAccountHome } from '../../../../antigravity/antigravity-agy-orca-home'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
 import { acpHostBackendInput } from '../../../../acp/launch/acp-launch-command'
@@ -30,11 +31,13 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
     return { agy: false as const, orcaHome: true }
   }
   const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
+  // Someone is looking (a chat or Settings), so agy may be started once to answer.
   const input = await acpHostBackendInput(
     ANTIGRAVITY_LAUNCH_SPEC,
     env,
     getProfileUserDataPath(),
-    settings
+    settings,
+    { startsProgram: true }
   )
   return { agy: input ? await antigravityAgySignIn(input) : ('unknown' as const), orcaHome: false }
 }
@@ -113,7 +116,8 @@ export function restartIdleAgyChats(target: AntigravityAccountTarget): void {
   for (const id of host.loadedSessionIds()) {
     const home =
       host.sessionAgent(id) === 'antigravity' ? host.childAccountHome(id, true) : undefined
-    if (home && isAntigravityHostAccountHome(home)) {
+    // Orca's homes use agy's Google login too (Enterprise, the retired server's chats).
+    if (home && (isAntigravityHostAccountHome(home) || isAntigravityAgyOrcaAccountHome(home))) {
       void host.releaseIdleSession(id, true).catch((error: unknown) => {
         console.warn('[antigravity] an idle chat kept the previous account:', error)
       })
