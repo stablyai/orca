@@ -1564,7 +1564,7 @@
         "workspaces": "{{name}}：{{workspaces}}",
         "added": "已新增 {{name}}",
         "newSessions": "將套用至新的工作階段",
-        "restart": "重新啟動 {{count}} 個工作階段",
+        "restart_other": "重新啟動 {{count}} 個工作階段",
         "addedMany": "已新增 {{count}} 個伺服器",
         "repoOn": "已在 {{repo}} 中開啟 {{name}}",
         "repoOff": "已在 {{repo}} 中關閉 {{name}}"
