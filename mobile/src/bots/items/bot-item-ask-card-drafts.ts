@@ -12,6 +12,9 @@ import type { MobileNativeChatAskDraft } from '../../session/native-chat/input/p
 // Each item's unsent answer card, for this app session: leaving the item and opening it again shows
 // the picks and typed words as they were. One per item, for the ask it answers: it goes when the
 // host's read names a newer ask or the item closes, and a newer ask's card takes its place.
+// Only an open item page reads the host, so an item closed or answered elsewhere after you left it
+// keeps its card until you open it again: the last few edited stay, the oldest go first.
+export const KEPT_BOT_ITEM_ASK_CARDS = 20
 const drafts = new Map<
   string,
   { askId: string; questions: Readonly<Record<string, MobileNativeChatAskDraft>> }
@@ -36,7 +39,12 @@ export function saveBotItemAskCardDraft(
     Object.entries(questions).filter(([, { picks, other }]) => picks.length > 0 || other)
   )
   if (Object.keys(kept).length > 0) {
+    // Set again, so the card being edited is the newest and never the one that goes.
+    drafts.delete(itemKey)
     drafts.set(itemKey, { askId, questions: kept })
+    if (drafts.size > KEPT_BOT_ITEM_ASK_CARDS) {
+      drafts.delete(drafts.keys().next().value!)
+    }
   } else {
     drafts.delete(itemKey)
   }
@@ -62,7 +70,9 @@ export function retireBotItemAskCardDraft(
     (named !== null
       ? (parseBotItemEventId(named) ?? 0) > (parseBotItemEventId(draft.askId) ?? 0)
       : botItemQuestionPairing(item, events).questions.get(draft.askId)?.waiting === false)
-  if (over) {
-    drafts.delete(itemKey)
+  drafts.delete(itemKey)
+  if (!over) {
+    // Still waiting, on a page open now: it counts as just used, so it isn't the one that goes.
+    drafts.set(itemKey, draft)
   }
 }
