@@ -3,6 +3,8 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { afterEach, expect, it, vi } from 'vitest'
 import { documentQueryClient } from '../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { BotItemQuestionShape } from '../../../../src/shared/bots/bot-item-ask'
+import { makeTestBotItem } from '../../../../src/shared/bots/bot-item.test-fixture'
+import type { BotItem, BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import { useMobileBotItemAskSlot } from './MobileBotItemAskCard'
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
@@ -73,7 +75,36 @@ const two: BotItemQuestionShape = {
 type Ask = { askId: string; shape: BotItemQuestionShape; open: number[] } | null
 const ask1: Ask = { askId: 'ask-1', shape: one, open: [0] }
 
-type Host = { askId: string | null; closed: boolean }
+type Host = { item: BotItem; events: readonly BotItemEvent[] }
+
+// The host's read: the ask it names (none: null) and the item's status, with no events loaded yet.
+const read = (
+  waitingAsk: string | null,
+  status: BotItem['status'] = 'needs_you',
+  events: readonly BotItemEvent[] = []
+): Host => ({
+  item: makeTestBotItem(1, { status, ...(waitingAsk ? { waitingAsk } : {}) }),
+  events
+})
+const askEvent: BotItemEvent = {
+  id: 'ask-1',
+  kind: 'commented',
+  actor: { kind: 'bot', botId: 'bot-a', chatId: 'chat-home' },
+  data: {
+    text: 'Which branch?',
+    ask: {
+      questions: [{ prompt: 'Which branch?', options: [{ label: 'main' }, { label: 'release' }] }]
+    }
+  },
+  at: 1
+}
+const answerEvent: BotItemEvent = {
+  id: 'e5',
+  kind: 'commented',
+  actor: { kind: 'owner' },
+  data: { text: 'main' },
+  at: 2
+}
 
 function Card({ itemKey, ask, host, send }: { itemKey: string; ask: Ask; host: Host; send: Send }) {
   return useMobileBotItemAskSlot({
@@ -92,7 +123,7 @@ function open(
   itemKey: string,
   ask: Ask = ask1,
   send: Send = () => {},
-  host: Host = { askId: ask?.askId ?? null, closed: false }
+  host: Host = read(ask?.askId ?? null)
 ): void {
   const client = documentQueryClient()
   queries = client
@@ -162,7 +193,7 @@ it('keeps the card while the host names its ask, though the loaded history doesn
   await close()
 
   // The page read the item, but not yet the older events that hold the ask.
-  open('host\0bot\0item-5', null, undefined, { askId: 'ask-1', closed: false })
+  open('host\0bot\0item-5', null, undefined, read('ask-1'))
   await close()
   open('host\0bot\0item-5')
   expect(otherInput()?.props.value).toBe('Ship it')
@@ -173,7 +204,7 @@ it('drops the card once the item closes', async () => {
   typeOther('Ship it')
   await close()
 
-  open('host\0bot\0item-7', null, undefined, { askId: null, closed: true })
+  open('host\0bot\0item-7', null, undefined, read(null, 'done'))
   await close()
   open('host\0bot\0item-7')
   expect(otherInput()).toBeUndefined()
@@ -189,4 +220,27 @@ it('opens a newer ask’s card empty, and forgets the replaced ask’s words', a
   await close()
   open('host\0bot\0item-6')
   expect(otherInput()).toBeUndefined()
+})
+
+it('drops the card once the loaded history shows its ask answered and the host names none', async () => {
+  open('host\0bot\0item-8')
+  typeOther('A long answer, never sent')
+  await close()
+
+  // Answered elsewhere (a short pick on desktop, say): the item works on, waiting on nothing.
+  open('host\0bot\0item-8', null, undefined, read(null, 'working', [askEvent, answerEvent]))
+  await close()
+  open('host\0bot\0item-8')
+  expect(otherInput()).toBeUndefined()
+})
+
+it('keeps the card when the host names no ask but its event isn’t loaded yet', async () => {
+  open('host\0bot\0item-9')
+  typeOther('Still typing')
+  await close()
+
+  open('host\0bot\0item-9', null, undefined, read(null, 'working'))
+  await close()
+  open('host\0bot\0item-9')
+  expect(otherInput()?.props.value).toBe('Still typing')
 })

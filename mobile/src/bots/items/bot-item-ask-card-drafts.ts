@@ -1,3 +1,8 @@
+import {
+  botItemHostWaitingAsk,
+  botItemQuestionPairing
+} from '../../../../src/shared/bots/bot-item-question-answers'
+import type { BotItem, BotItemEvent } from '../../../../src/shared/bots/bot-items'
 import type { MobileNativeChatAskDraft } from '../../session/native-chat/input/prompts/use-mobile-native-chat-ask-answers'
 
 // Each item's unsent answer card, for this app session: leaving the item and opening it again shows
@@ -33,15 +38,26 @@ export function saveBotItemAskCardDraft(
   }
 }
 
-/** Drops the item's card once the host's read retires its ask: the item closed, or the read names
- *  another ask (`askId`). The loaded events don't decide: a page still reading older history shows
- *  no ask yet. Naming none keeps it too: the one card per item stays the only copy. */
+/** Drops the item's card once the host's read shows its ask over: the item closed, the read names
+ *  another ask, or it names none and the loaded events hold the ask with no line still waiting.
+ *  An ask whose event isn't loaded yet (older history still reading) keeps its card. */
 export function retireBotItemAskCardDraft(
   itemKey: string,
-  host: { askId: string | null; closed: boolean }
+  item: BotItem,
+  events: readonly BotItemEvent[]
 ): void {
   const draft = drafts.get(itemKey)
-  if (draft && (host.closed || (host.askId !== null && host.askId !== draft.askId))) {
+  if (!draft) {
+    return
+  }
+  const named = botItemHostWaitingAsk(item)
+  const over =
+    item.status === 'done' ||
+    item.status === 'canceled' ||
+    (named !== null
+      ? named !== draft.askId
+      : botItemQuestionPairing(item, events).questions.get(draft.askId)?.waiting === false)
+  if (over) {
     drafts.delete(itemKey)
   }
 }

@@ -107,8 +107,9 @@ export function useMobileBotItemAskSlot({
   replying: boolean
   /** The item is read, so the page has opened. */
   loaded: boolean
-  /** The host's read of the ask the agent waits on and whether the item closed; null until read. */
-  host: { askId: string | null; closed: boolean } | null
+  /** The host's read of the item and the events loaded so far, which retire its kept card; null
+   *  until read. */
+  host: { item: BotItem; events: readonly BotItemEvent[] } | null
   /** The page opened with the card up: it starts at its title, not at the end of Activity. */
   onOpenWithCard: () => void
   send: (text: string, answering: { askId: string; skipped: readonly number[] }) => void
@@ -145,16 +146,15 @@ export function useMobileBotItemAskSlot({
       Keyboard.dismiss()
     }
   }, [askShown])
-  const hostAskId = host?.askId ?? null
-  const hostRead = host !== null
-  const closed = host?.closed === true
+  const hostItem = host?.item ?? null
+  const hostEvents = host?.events ?? null
   useEffect(() => {
-    // The host's read decides: a card kept for a replaced ask, or on a closed item, goes; the open
-    // ask's stays across Back, offline, Not now, a failed Send and history still loading.
-    if (hostRead) {
-      retireBotItemAskCardDraft(itemKey, { askId: hostAskId, closed })
+    // Each read: a card kept for a replaced, answered or closed ask goes; the open ask's stays
+    // across Back, offline, Not now, a failed Send and history still loading.
+    if (hostItem && hostEvents) {
+      retireBotItemAskCardDraft(itemKey, hostItem, hostEvents)
     }
-  }, [hostRead, itemKey, hostAskId, closed])
+  }, [itemKey, hostItem, hostEvents])
   const fold = (): void => setFolded(key)
   if (!ask) {
     return { card: null, askOpen, askShown, strip: null, fold }
