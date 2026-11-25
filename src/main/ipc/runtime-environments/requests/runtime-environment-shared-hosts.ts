@@ -1,10 +1,6 @@
 // Hosts named by an environment id that has no pairing here: an agent shared with this Orca account,
 // reached over its share link. Every runtimeEnvironments call and stream asks this before the
 // paired-server registry, so a shared host has one route, the same as a paired server's.
-import {
-  isBotShareMethod,
-  isBotShareStreamMethod
-} from '../../../runtime/rpc/methods/rpc-method-share'
 import type {
   RuntimeRpcFailure,
   RuntimeRpcResponse
@@ -29,12 +25,25 @@ export type SharedHostRoute = {
   status: (options?: StatusOptions) => Promise<RuntimeHostStatusResponse>
 }
 
-let sharedHosts: { hosts: SharedHosts; statuses: SharedHostStatuses } | null = null
+/** What a share allows, read off the method registry by whoever wires the shared hosts (importing the
+ *  registry here would cycle through the methods that call runtimeEnvironments). */
+export type SharedHostMethods = {
+  allows: (method: string) => boolean
+  streams: (method: string) => boolean
+}
+
+let sharedHosts: {
+  hosts: SharedHosts
+  methods: SharedHostMethods
+  statuses: SharedHostStatuses
+} | null = null
 
 /** Set once by the desktop's shared-agents owner; `orca serve` and the phone path have none. */
-export function routeSharedHostsThrough(hosts: SharedHosts | null): void {
+export function routeSharedHostsThrough(
+  route: { hosts: SharedHosts; methods: SharedHostMethods } | null
+): void {
   sharedHosts?.statuses.dispose()
-  sharedHosts = hosts ? { hosts, statuses: new SharedHostStatuses(hosts) } : null
+  sharedHosts = route ? { ...route, statuses: new SharedHostStatuses(route.hosts) } : null
 }
 
 /** Each shared host's status, listed with the paired servers' by getStatusSnapshots. */
@@ -65,7 +74,10 @@ async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null
   if (!route) {
     return null
   }
-  const { hosts, statuses } = route
+  const { hosts, methods, statuses } = route
+  // The one gate on what a teammate's Orca asks a shared host: a method off the share allowlist is
+  // the host's to refuse, so it is refused here with the host's own answer and never sent.
+  const refusal = (method: string) => (methods.allows(method) ? null : methodNotFound(method))
   await hosts.ready()
   if (!hosts.reaches(selector)) {
     return null
@@ -78,7 +90,7 @@ async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null
     status,
     call,
     subscribe: async (method, params, onResponse) => {
-      if (refusal(method) || !isBotShareStreamMethod(method)) {
+      if (refusal(method) || !methods.streams(method)) {
         onResponse(await call(method, params))
         return () => {}
       }
@@ -101,18 +113,11 @@ export async function runtimeEnvironmentIdOf(
   }
 }
 
-/**
- * The one gate on what a teammate's Orca asks a shared host: a method off the share allowlist (the
- * owner's activity, suggestions, paired-server asks) is the host's to refuse, so it is refused here
- * with the host's own answer and never sent.
- */
-function refusal(method: string): RuntimeRpcFailure | null {
-  return isBotShareMethod(method)
-    ? null
-    : {
-        id: method,
-        ok: false,
-        // Read by its code, as from a host that lacks the method; never shown.
-        error: { code: 'method_not_found', message: method }
-      }
+function methodNotFound(method: string): RuntimeRpcFailure {
+  return {
+    id: method,
+    ok: false,
+    // Read by its code, as from a host that lacks the method; never shown.
+    error: { code: 'method_not_found', message: method }
+  }
 }

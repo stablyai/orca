@@ -6,6 +6,10 @@ import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay
 import { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 import { memorySharedBotHomes } from '../../bots/shared-with-me/shared-bot-home.test-fixture'
 import { routeSharedHostsThrough } from '../runtime-environments/requests/runtime-environment-shared-hosts'
+import {
+  isBotShareMethod,
+  isBotShareStreamMethod
+} from '../../runtime/rpc/methods/rpc-method-share'
 import nacl from 'tweetnacl'
 import { openBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
 import { SHARED_BOT_HOST_ERRORS } from '../../../shared/bots/shared-bot-hosts'
@@ -70,7 +74,10 @@ async function awayHost(hostKey?: string) {
     }),
     publish: () => {}
   })
-  routeSharedHostsThrough(hosts)
+  routeSharedHostsThrough({
+    hosts,
+    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
+  })
   await hosts.refresh()
   hosts.stop()
   return { hosts, userDataPath, holds }

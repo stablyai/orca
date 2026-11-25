@@ -12,6 +12,7 @@ import {
   sharedHostsChanged
 } from './runtime-environments/requests/runtime-environment-shared-hosts'
 import { SharedBotHomes, type SharedBotHomeDeps } from '../bots/shared-with-me/shared-bot-home'
+import { isBotShareMethod, isBotShareStreamMethod } from '../runtime/rpc/methods/rpc-method-share'
 
 const SendAgainArgs = z.object({
   environmentId: z.string().min(1),
@@ -53,7 +54,10 @@ export function registerSharedBotHostsHandlers(args: {
     const { environmentId, clientMessageId } = SendAgainArgs.parse(raw)
     return hosts.sendAgain(environmentId, clientMessageId)
   })
-  routeSharedHostsThrough(hosts)
+  routeSharedHostsThrough({
+    hosts,
+    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
+  })
   hosts.start()
   return hosts
 }

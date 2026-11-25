@@ -23,6 +23,10 @@ import {
   sharedHostsChanged,
   sharedHostStatusSnapshots
 } from './runtime-environment-shared-hosts'
+import {
+  isBotShareMethod,
+  isBotShareStreamMethod
+} from '../../../runtime/rpc/methods/rpc-method-share'
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { registerRuntimeEnvironmentPassiveHandlers } from '../connectivity/runtime-environment-connectivity-handlers'
 import { subscribeRuntimeEnvironmentForDocument } from '../subscriptions/runtime-environment-document-subscription'
@@ -110,7 +114,10 @@ beforeEach(() => {
   stop.mockClear()
   views = [{ ...view }]
   subscriptions.clear()
-  routeSharedHostsThrough(hosts)
+  routeSharedHostsThrough({
+    hosts,
+    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
+  })
   registerRuntimeEnvironmentPassiveHandlers(() => '/nowhere')
 })
 
