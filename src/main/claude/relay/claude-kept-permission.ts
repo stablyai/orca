@@ -131,6 +131,21 @@ export async function askKeptBypassLeavingPlan(
   }
 }
 
+/** A kept agent's pick made while a message took it out of Plan was only recorded (the chat still
+ *  looked in Plan), so it goes out now rather than leaving the mode that message wrote. */
+export async function sendKeptPickMadeLeavingPlan(
+  session: ClaudeSession,
+  requested: PermissionMode,
+  written: PermissionMode | null,
+  timeoutMs: number | undefined
+): Promise<PermissionMode | null> {
+  const latest = session.launchIntent?.permissionMode
+  if (!keptClaudeAgentRelay(session.connection) || !isBuildMode(latest) || latest === requested) {
+    return written
+  }
+  return setClaudeAllowedPermissionMode(session, latest, { timeoutMs })
+}
+
 /** At reattach the agent runs what it had when the last app let go, which a pick made since may
  *  have changed. Like the open app, the chat's mode and choices go with its next message: by then
  *  the replay has shown whether the agent is in Plan. The launch-seeded choices are forgotten, so

@@ -20,8 +20,6 @@ export type ClaudeStreamedTextCheckpointDeps = {
     ended?: ClaudeStreamedBlockEnd
   ) => void
   producer: ClaudeSubagentLinkageSource
-  /** Removes a row; a relay continuation that ends without its final moves off its shared row. */
-  retire?: (identity: AgentJournalItemIdentity) => void
   coalesceMs?: number
   schedule?: AgentSessionDeltaCoalescerDeps['schedule']
 }
@@ -130,17 +128,7 @@ export function createClaudeStreamedTextCheckpoints(
       coalescer.flush(key)
       const text = latestText.get(key)
       if (text !== undefined) {
-        // Every cut reply in a stream continues on one row, retired by its final; one that ends
-        // without a final keeps its text on a row of its own, so a later reply can't take it.
-        const { retire } = deps
-        const moved =
-          retire && identity.provider === 'claude' && identity.uuid.startsWith('block:relay:')
-            ? { ...identity, uuid: `${identity.uuid}:ended:${ended.completedAt ?? Date.now()}` }
-            : null
-        deps.persist(moved ?? identity, text, producerOptions(key), ended)
-        if (retire && moved) {
-          retire(identity)
-        }
+        deps.persist(identity, text, producerOptions(key), ended)
       }
       drop(key)
     }

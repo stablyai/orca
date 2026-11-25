@@ -100,7 +100,6 @@ export function createClaudeJournalTranslator(
     ...(deps.coalesceMs === undefined ? {} : { coalesceMs: deps.coalesceMs }),
     ...(deps.schedule ? { schedule: deps.schedule } : {}),
     producer: subagents.linkage,
-    retire: (identity) => deps.sink.appendTombstone(identity, { lifecycle: true }),
     persist: (identity, text, options, ended) => {
       deps.sink.appendItem(identity, claudeStreamingMessageBody(text), {
         ...options,

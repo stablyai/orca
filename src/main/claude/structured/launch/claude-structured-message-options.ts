@@ -30,7 +30,8 @@ import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
 import {
   applyKeptClaudeModeOwed,
-  askKeptBypassLeavingPlan
+  askKeptBypassLeavingPlan,
+  sendKeptPickMadeLeavingPlan
 } from '../../relay/claude-kept-permission'
 import {
   isAbortSignalReason,
@@ -115,14 +116,21 @@ export async function applyClaudeMessageOptions(
         await waitForPromiseWithSignal(askKeptBypassLeavingPlan(session, timeoutMs), signal)
       }
       const refused = claudeBypassRefused(session)
+      const requested = claudeBuildPermissionMode(session)
       // A refused Full access chat already running its fallback needs no write.
-      const mode =
+      const written =
         !leavingPlan && refused && !claudeOwesFullAccessFallback(session)
           ? null
           : await waitForPromiseWithSignal(
               writeClaudeBuildMode(session, timeoutMs, !leavingPlan && refused),
               signal
             )
+      const mode = leavingPlan
+        ? await waitForPromiseWithSignal(
+            sendKeptPickMadeLeavingPlan(session, requested, written, timeoutMs),
+            signal
+          )
+        : written
       session.appliedInputOptions.set('interactionMode', options.interactionMode)
       if (mode !== null) {
         session.appliedInputOptions.set('buildPermissionMode', mode)

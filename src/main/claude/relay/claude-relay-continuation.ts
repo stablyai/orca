@@ -1,6 +1,5 @@
 import type { ProviderRelayItemContinuation } from '../../provider-relay/relayed-provider-continuation'
 import { CLAUDE_RELAY_CONTINUATION_KEY } from '../structured/journal/claude-streamed-block-identity'
-import { claudeText } from '../structured/journal/claude-structured-item-translation'
 
 type StreamLine = Record<string, unknown>
 
@@ -104,17 +103,11 @@ export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
         TERMINAL_TASK_STATUSES.has(status))
     return ended && typeof frame.task_id === 'string' ? JSON.stringify([frame.task_id]) : null
   },
-  // One row per relay and stream, not per cut: every app that continues a reply writes the same
-  // row, which its final retires (a later reply's write revives it), so cuts leave no fragments.
+  // One row per cut, so no app's text can land on another's; finals too: one whose block
+  // streamed nothing after the cut is placed by its block stop.
   rekey: (line, tag) => {
-    // Finals too: one whose block streamed nothing after the cut is placed by its block stop.
     const frame = streamLine(line)
-    if (!frame) {
-      return line
-    }
-    const stream = `${claudeText(frame.session_id) ?? ''}|${claudeText(frame.parent_tool_use_id) ?? ''}`
-    const row = `${tag.slice(0, tag.lastIndexOf(':'))}:${stream}`
-    return JSON.stringify({ ...frame, [CLAUDE_RELAY_CONTINUATION_KEY]: row })
+    return frame ? JSON.stringify({ ...frame, [CLAUDE_RELAY_CONTINUATION_KEY]: tag }) : line
   },
   start: (line, tag) => {
     const frame = streamLine(line)
