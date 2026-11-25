@@ -56,12 +56,17 @@ describe('annotate palette placement', () => {
     // A find bar has pushed the shown top below the saved one; a sideways key must not save the pushed top.
     const shown = { x: 0.5, y: 0.2 }
     const saved = { x: 0.5, y: 0 }
-    expect(paletteKeyMove('ArrowRight', false, shown, saved, true, true)).toEqual({ x: 0.55, y: 0 })
-    expect(paletteKeyMove('End', false, shown, saved, true, true)).toEqual({ x: 1, y: 0 })
-    expect(paletteKeyMove('ArrowDown', false, { x: 0.3, y: 0.2 }, saved, true, true)).toEqual({
-      x: 0.5,
-      y: 0.25
+    expect(paletteKeyMove('ArrowRight', false, shown, saved, true, true)?.next).toEqual({
+      x: 0.55,
+      y: 0
     })
+    expect(paletteKeyMove('End', false, shown, saved, true, true)?.next).toEqual({ x: 1, y: 0 })
+    expect(paletteKeyMove('ArrowDown', false, { x: 0.3, y: 0.2 }, saved, true, true)?.next).toEqual(
+      {
+        x: 0.5,
+        y: 0.25
+      }
+    )
   })
 
   describe('where a drag comes to rest', () => {
@@ -78,7 +83,7 @@ describe('annotate palette placement', () => {
     }
 
     it('saves nothing for a press that never moved, so the anchored edge does not drift the saved place', () => {
-      expect(paletteDragRest(start, { left: 220, top: 181 }, 8)).toEqual({
+      expect(paletteDragRest(start, { left: null, top: null }, 8)).toEqual({
         left: 220,
         top: 181,
         save: null,
@@ -100,16 +105,16 @@ describe('annotate palette placement', () => {
         left: 8,
         saved: { x: 0.2, y: 0.5 }
       }
-      expect(paletteDragRest(pinnedX, { left: 8, top: 354 }, 8).save).toEqual({ x: 0.2, y: 1 })
+      expect(paletteDragRest(pinnedX, { left: null, top: 354 }, 8).save).toEqual({ x: 0.2, y: 1 })
       // Pinned on Y (38px palette in a 54px page): a sideways drag keeps the saved Y.
       const pinnedY = { ...start, boundsHeight: 54, top: 8, saved: { x: 0.5, y: 1 } }
-      expect(paletteDragRest(pinnedY, { left: 392, top: 8 }, 8).save).toEqual({ x: 1, y: 1 })
+      expect(paletteDragRest(pinnedY, { left: 392, top: null }, 8).save).toEqual({ x: 1, y: 1 })
       // An anchored edge 20px right of the saved centre doesn't leak into a vertical-only drag.
-      expect(paletteDragRest(start, { left: 220, top: 8 }, 8).save).toEqual({ x: 0.5, y: 0 })
+      expect(paletteDragRest(start, { left: null, top: 8 }, 8).save).toEqual({ x: 0.5, y: 0 })
     })
 
     it('saves the top as 0 when a drag ends at an open find bar limit', () => {
-      expect(paletteDragRest(start, { left: 220, top: 52 }, 52).save).toEqual({ x: 0.5, y: 0 })
+      expect(paletteDragRest(start, { left: null, top: 52 }, 52).save).toEqual({ x: 0.5, y: 0 })
     })
   })
 

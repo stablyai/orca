@@ -16,12 +16,11 @@ import {
   PALETTE_EDGE_INSET_PX,
   clampPaletteOffset,
   paletteKeyMove,
-  paletteOffsetForRatio,
+  paletteMeasuredLayout,
   paletteDragRest,
   paletteHintPlacement,
   paletteReanchor,
   paletteShownPosition,
-  samePaletteLayout,
   type PaletteLayout
 } from './palette-placement'
 
@@ -115,39 +114,8 @@ export function usePaletteDrag({
           return
         }
       }
-      setLayout((prev) => {
-        // Bounds resize, a new saved position or a new top limit: re-derive that axis. Content-only size
-        // change: keep the edge.
-        const keepLeft = prev !== null && prev.boundsWidth === boundsWidth && prev.x === x
-        const left = clampPaletteOffset(
-          keepLeft ? prev.left : paletteOffsetForRatio(x, boundsWidth, paletteWidth),
-          boundsWidth,
-          paletteWidth
-        )
-        const keepTop =
-          prev !== null &&
-          prev.boundsHeight === boundsHeight &&
-          prev.y === y &&
-          prev.topMin === topMin
-        const top = clampPaletteOffset(
-          keepTop ? prev.top : paletteOffsetForRatio(y, boundsHeight, paletteHeight, topMin),
-          boundsHeight,
-          paletteHeight,
-          topMin
-        )
-        const next: PaletteLayout = {
-          boundsWidth,
-          boundsHeight,
-          paletteWidth,
-          paletteHeight,
-          left,
-          top,
-          x,
-          y,
-          topMin
-        }
-        return prev && samePaletteLayout(prev, next) ? prev : next
-      })
+      const sizes = { boundsWidth, boundsHeight, paletteWidth, paletteHeight }
+      setLayout((prev) => paletteMeasuredLayout(prev, sizes, { x, y }, topMin))
     }
     measure()
     if (typeof ResizeObserver === 'undefined') {
@@ -176,11 +144,14 @@ export function usePaletteDrag({
   const canMove = canMoveX || canMoveY
   const shownPosition = layout ? paletteShownPosition(layout) : position
 
-  /** `axis`: a grip key re-anchors only the axis it moves; a reset re-anchors both. */
+  /**
+   * `reanchor`: on an unchanged saved value, a reset puts both axes back on it, a grip key only the axis it moves, and
+   * a drag neither (it has already placed the palette where it came to rest).
+   */
   const commitPosition = (
     next: AnnotatePalettePosition,
     animate: boolean,
-    axis?: 'x' | 'y'
+    reanchor: 'both' | 'x' | 'y' | 'none' = 'both'
   ): void => {
     if (animate) {
       setSnapping(true)
@@ -188,9 +159,16 @@ export function usePaletteDrag({
       snapTimerRef.current = window.setTimeout(() => setSnapping(false), SNAP_ANIMATION_MS)
     }
     const clamped = { x: Math.min(1, Math.max(0, next.x)), y: Math.min(1, Math.max(0, next.y)) }
-    if (clamped.x === x && clamped.y === y && layout) {
+    if (clamped.x === x && clamped.y === y && layout && reanchor !== 'none') {
       // Same saved value: re-anchor to it anyway (the edges may have drifted with content changes).
-      setLayout(paletteReanchor(layout, clamped, topMinRef.current, axis))
+      setLayout(
+        paletteReanchor(
+          layout,
+          clamped,
+          topMinRef.current,
+          reanchor === 'both' ? undefined : reanchor
+        )
+      )
     }
     onPositionChange(clamped)
   }
@@ -224,10 +202,10 @@ export function usePaletteDrag({
         const startLeft = layout.left
         const startTop = layout.top
         const dragStart = { ...layout, saved: position }
-        let currentLeft = startLeft
-        let currentTop = startTop
-        // Only where the pointer ends moves the top: the find bar's limit can also clamp it while the pointer goes sideways.
-        let movedY = false
+        // Where the pointer is now, unclamped: the find bar can close between the last move and the release, so the
+        // clamp is applied again then (an axis the pointer isn't away from its start on keeps its saved place).
+        let endX = startX
+        let endY = startY
         setDragging(true)
 
         const onMove = (moveEvent: PointerEvent): void => {
@@ -238,21 +216,22 @@ export function usePaletteDrag({
             endDrag(true)
             return
           }
-          currentLeft = clampPaletteOffset(
-            startLeft + moveEvent.clientX - startX,
+          endX = moveEvent.clientX
+          endY = moveEvent.clientY
+          const previewLeft = clampPaletteOffset(
+            startLeft + endX - startX,
             boundsWidth,
             paletteWidth
           )
-          movedY = moveEvent.clientY !== startY
-          currentTop = clampPaletteOffset(
-            startTop + moveEvent.clientY - startY,
+          const previewTop = clampPaletteOffset(
+            startTop + endY - startY,
             boundsHeight,
             paletteHeight,
             topMinRef.current
           )
           // Why straight to the style: one state write per drag, not one render per pointer move.
-          palette.style.left = `${currentLeft}px`
-          palette.style.top = `${currentTop}px`
+          palette.style.left = `${previewLeft}px`
+          palette.style.top = `${previewTop}px`
         }
         const onUp = (upEvent: PointerEvent): void => {
           if (upEvent.pointerId === pointerId) {
@@ -284,7 +263,12 @@ export function usePaletteDrag({
           const restTopMin = topMinRef.current
           const rest = paletteDragRest(
             dragStart,
-            commit ? { left: currentLeft, top: movedY ? currentTop : startTop } : null,
+            commit
+              ? {
+                  left: endX === startX ? null : startLeft + endX - startX,
+                  top: endY === startY ? null : startTop + endY - startY
+                }
+              : null,
             restTopMin
           )
           setLayout((prev) =>
@@ -296,7 +280,7 @@ export function usePaletteDrag({
           palette.style.top = `${rest.top}px`
           setDragging(false)
           if (rest.save) {
-            commitPosition(rest.save, rest.snapped)
+            commitPosition(rest.save, rest.snapped, 'none')
           }
         }
         grip.addEventListener('pointermove', onMove)
@@ -313,7 +297,7 @@ export function usePaletteDrag({
         if (dragRef.current) {
           return
         }
-        const next = paletteKeyMove(
+        const move = paletteKeyMove(
           event.key,
           event.shiftKey,
           shownPosition,
@@ -321,15 +305,13 @@ export function usePaletteDrag({
           canMoveX,
           canMoveY
         )
-        if (next === null) {
+        if (move === null) {
           return
         }
         event.preventDefault()
-        commitPosition(
-          next,
-          false,
-          event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'y' : 'x'
-        )
+        if (move.moves) {
+          commitPosition(move.next, false, move.axis)
+        }
       }
     }
   }

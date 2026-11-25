@@ -118,6 +118,36 @@ export function paletteHintPlacement(layout: PaletteLayout): CSSProperties {
     : { left, top: top + paletteHeight + HINT_GAP_PX }
 }
 
+/**
+ * The layout for a fresh measurement. A bounds resize, a new saved position or a new top limit re-derives that axis
+ * from the saved fraction; a content-only size change keeps the edge (see usePaletteDrag).
+ */
+export function paletteMeasuredLayout(
+  prev: PaletteLayout | null,
+  sizes: Pick<PaletteLayout, 'boundsWidth' | 'boundsHeight' | 'paletteWidth' | 'paletteHeight'>,
+  saved: AnnotatePalettePosition,
+  topMin: number
+): PaletteLayout {
+  const { boundsWidth, boundsHeight, paletteWidth, paletteHeight } = sizes
+  const { x, y } = saved
+  const keepLeft = prev !== null && prev.boundsWidth === boundsWidth && prev.x === x
+  const left = clampPaletteOffset(
+    keepLeft ? prev.left : paletteOffsetForRatio(x, boundsWidth, paletteWidth),
+    boundsWidth,
+    paletteWidth
+  )
+  const keepTop =
+    prev !== null && prev.boundsHeight === boundsHeight && prev.y === y && prev.topMin === topMin
+  const top = clampPaletteOffset(
+    keepTop ? prev.top : paletteOffsetForRatio(y, boundsHeight, paletteHeight, topMin),
+    boundsHeight,
+    paletteHeight,
+    topMin
+  )
+  const next: PaletteLayout = { ...sizes, left, top, x, y, topMin }
+  return prev && samePaletteLayout(prev, next) ? prev : next
+}
+
 /** Re-places the palette at its saved position; `axis` limits it to the one a grip key moved. */
 export function paletteReanchor(
   layout: PaletteLayout,
@@ -155,18 +185,22 @@ export type PaletteDragStart = {
 }
 
 /**
- * Where a drag comes to rest and what it saves. `released` is null for a cancelled drag. Only an axis the drag
- * actually moved is written: an unmoved one keeps its saved fraction (reading it back from an anchored or pinned
- * edge would drift it), so a press that never moved saves nothing.
+ * Where a drag comes to rest and what it saves. `released` is null for a cancelled drag; on each axis it holds the
+ * pointer's unclamped end (null where the pointer didn't move), clamped here against the limits current at release:
+ * a find bar can close between the last move and the release. Only an axis the pointer moved is written: an unmoved
+ * one keeps its saved fraction (reading it back from an anchored or pinned edge would drift it), so a press that
+ * never moved saves nothing.
  */
 export function paletteDragRest(
   start: PaletteDragStart,
-  released: { left: number; top: number } | null,
+  released: { left: number | null; top: number | null } | null,
   topMin: number
 ): { left: number; top: number; save: AnnotatePalettePosition | null; snapped: boolean } {
   const { boundsWidth, boundsHeight, paletteWidth, paletteHeight, saved } = start
-  const releasedLeft = released && released.left !== start.left ? released.left : null
-  const releasedTop = released && released.top !== start.top ? released.top : null
+  const rawLeft = released?.left ?? null
+  const releasedLeft =
+    rawLeft === null ? null : clampPaletteOffset(rawLeft, boundsWidth, paletteWidth)
+  const releasedTop = released?.top ?? null
   const rawX =
     releasedLeft === null
       ? saved.x
@@ -201,7 +235,8 @@ export function paletteDragRest(
 
 /**
  * Where a grip key moves the palette: the moved axis steps from where it shows now, the other keeps its saved
- * value (a find bar can push the shown top below the saved one; a sideways key must not save that). Null for keys
+ * value (a find bar can push the shown top below the saved one; a sideways key must not save that). `moves` is false
+ * for a key against the edge: committing it would overwrite a saved place that an anchored edge hides. Null for keys
  * that don't move it that way.
  */
 export function paletteKeyMove(
@@ -211,16 +246,19 @@ export function paletteKeyMove(
   saved: AnnotatePalettePosition,
   canMoveX: boolean,
   canMoveY: boolean
-): AnnotatePalettePosition | null {
+): { next: AnnotatePalettePosition; axis: 'x' | 'y'; moves: boolean } | null {
   const step = large ? KEY_STEP_LARGE : KEY_STEP
+  let next: AnnotatePalettePosition | null = null
   if (canMoveX && (key === 'ArrowLeft' || key === 'ArrowRight')) {
-    return { x: key === 'ArrowLeft' ? shown.x - step : shown.x + step, y: saved.y }
+    next = { x: key === 'ArrowLeft' ? shown.x - step : shown.x + step, y: saved.y }
+  } else if (canMoveY && (key === 'ArrowUp' || key === 'ArrowDown')) {
+    next = { x: saved.x, y: key === 'ArrowUp' ? shown.y - step : shown.y + step }
+  } else if (canMoveX && (key === 'Home' || key === 'End')) {
+    next = { x: key === 'Home' ? 0 : 1, y: saved.y }
   }
-  if (canMoveY && (key === 'ArrowUp' || key === 'ArrowDown')) {
-    return { x: saved.x, y: key === 'ArrowUp' ? shown.y - step : shown.y + step }
+  if (next === null) {
+    return null
   }
-  if (canMoveX && (key === 'Home' || key === 'End')) {
-    return { x: key === 'Home' ? 0 : 1, y: saved.y }
-  }
-  return null
+  const axis = key === 'ArrowUp' || key === 'ArrowDown' ? 'y' : 'x'
+  return { next, axis, moves: Math.min(1, Math.max(0, next[axis])) !== shown[axis] }
 }
