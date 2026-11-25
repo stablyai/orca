@@ -195,8 +195,16 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
+  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)])
+}
+
+/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+export function botToolCredentialFingerprints(
+  folder: string,
+  ids: ReadonlySet<string>
+): Map<string, unknown> {
   const sealed = readSealed(folder)
-  return JSON.stringify(
+  return new Map(
     [...ids].sort().map((id) => {
       const slot = sealed[id]
       const entry = slot?.entry

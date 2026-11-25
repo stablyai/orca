@@ -5,6 +5,7 @@ import {
   bundledSkillOutcomeText,
   type BundledSkillPlanSkillSummary
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { bundledSkillOutcomeRefusalNotices } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -16,6 +17,7 @@ import {
 } from './skill-plan-op-copy'
 import { skillBackupPaths, type SkillBackupLocation } from './skill-backup-location'
 import { SkillBackupPathLine } from './SkillBackupPathLine'
+import { SkillRefusalNotice } from './SkillRefusalNotice'
 
 export type SkillRowPhase = 'plan' | 'pending' | 'result'
 
@@ -142,6 +144,11 @@ export function SkillUpdateRow({
       </span>
       <div className="flex min-w-0 flex-col gap-1.5 text-foreground">
         {headline ? <span>{headline}</span> : null}
+        {phase === 'result' && outcome
+          ? bundledSkillOutcomeRefusalNotices(outcome).map((notice) => (
+              <SkillRefusalNotice key={notice.path} notice={notice} />
+            ))
+          : null}
         {choices.map((location) => {
           const reason = location.state === 'leave' ? locationStateText(location) : null
           const uniqueReason = reason && !seenReasons.has(reason) ? reason : null

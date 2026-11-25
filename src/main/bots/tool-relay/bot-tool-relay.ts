@@ -1,24 +1,25 @@
 // Orca's loopback relay for bots' HTTP tools: a bot's agent sends each call to 127.0.0.1 with its own
 // token, and Orca adds the tool's saved headers or its own sign-in's token and streams it to the
-// real server and back.
+// real server and back. A host list command server Orca runs once is reached through it too.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { resolve } from 'node:path'
 import { BoundedMap } from '../../../shared/collections/bounded-map'
-import {
-  COMPOSIO_HEADER_SOURCE,
-  COMPOSIO_SESSION_MCP_URL
-} from '../../../shared/composio/composio-apps'
+import { COMPOSIO_HEADER_SOURCE } from '../../../shared/composio/composio-apps'
 import { readComposioKey } from '../../composio/composio-key-store'
+import {
+  sharedMcpProcesses,
+  type RelayProcesses
+} from '../../mcp-servers/shared-process/shared-mcp-processes'
 import { getMainHttpClient } from '../../network/http-client'
 import { onBotToolCredentialEnded, type BotToolCredentialEnded } from '../bot-tool-credential-ended'
 import {
   botToolCredentialSource,
   type BotToolCredentialAnswer,
   type BotToolCredentialRequest,
-  type BotToolCredentialSource,
-  type BotToolHeaderSource
+  type BotToolCredentialSource
 } from '../tool-oauth/bot-tool-credential-source'
 import { RelayAdmission, type RelayCall } from './bot-tool-relay-admission'
+import { composioHeaderSource } from './bot-tool-relay-composio'
 import {
   MCP_HOST_LIST_RELAY_OWNER,
   RelayGrants,
@@ -59,7 +60,9 @@ export class BotToolRelay {
 
   constructor(
     private readonly fetchUpstream: RelayFetch,
-    private readonly source: BotToolCredentialSource = botToolCredentialSource()
+    private readonly source: BotToolCredentialSource = botToolCredentialSource(),
+    /** Read when used: the host list's processes import modules that import this one. */
+    private readonly processes: () => RelayProcesses | null = () => null
   ) {}
 
   /**
@@ -90,6 +93,7 @@ export class BotToolRelay {
 
   /** Stops listening, drops open calls, and forgets every token, session and problem. */
   close(): void {
+    this.processes()?.close()
     this.admission.abortWhere(() => true, CREDENTIAL_ENDED)
     this.stopListeningForEnds?.()
     this.stopListeningForEnds = null
@@ -169,12 +173,13 @@ export class BotToolRelay {
       if (!folder) {
         throw new RelayRefusal(404, 'This token has no such tool.')
       }
-      const { credentialId } = match
-      label = `${grant.owner} ${credentialId} ${method}`
+      const entry = match.process === undefined ? match.credentialId : `process:${match.process}`
+      label = `${grant.owner} ${entry} ${method}`
       // Counted before any wait for a token, so slow refreshes can't pile up calls. Every non-bot
       // session shares the host's token, so only this computer's limits bound its calls.
       const shared = grant.owner === MCP_HOST_LIST_RELAY_OWNER
-      call = this.admission.admit(grant.owner, method, credentialKey(folder, credentialId), !shared)
+      const key = credentialKey(folder, entry)
+      call = this.admission.admit(grant.owner, method, key, !shared, match.process !== undefined)
       if (!call) {
         throw new RelayRefusal(429, 'Too many tool calls at once.')
       }
@@ -184,7 +189,18 @@ export class BotToolRelay {
           abort.abort(AGENT_LEFT)
         }
       })
-      await this.forward(req, res, { owner: grant.owner, folder, credentialId }, abort.signal)
+      const { credentialId, process: serverId } = match
+      if (serverId === undefined) {
+        await this.forward(req, res, { owner: grant.owner, folder, credentialId }, abort.signal)
+        return
+      }
+      // A host list command server Orca runs once: its child answers, not an upstream address.
+      const processes = this.processes()
+      if (!processes) {
+        throw new RelayRefusal(404, 'This token has no such tool.')
+      }
+      const body = method === 'POST' ? await readBody(req) : undefined
+      await processes.handle({ folder, serverId, req, res, body, signal: abort.signal })
     } catch (error) {
       this.fail(res, call?.abort.signal, error, label)
     } finally {
@@ -324,20 +340,9 @@ export class BotToolRelay {
   }
 }
 
-/** The owner's current Composio key, read per call so a changed or removed key applies to the next
- *  one; only ever to Composio's own session address, whatever the saved entry names. */
-export const composioHeaderSource =
-  (readKey: () => string | null | Promise<string | null>): BotToolHeaderSource =>
-  async (credential) => {
-    if (!COMPOSIO_SESSION_MCP_URL.test(credential.url)) {
-      return null
-    }
-    const key = await readKey()
-    return key ? { 'x-api-key': key } : null
-  }
-
 /** The relay for this process; upstream calls follow Orca's proxy settings. */
 export const botToolRelay = new BotToolRelay(
   (url, init) => getMainHttpClient().fetch(url, init),
-  botToolCredentialSource({ [COMPOSIO_HEADER_SOURCE]: composioHeaderSource(readComposioKey) })
+  botToolCredentialSource({ [COMPOSIO_HEADER_SOURCE]: composioHeaderSource(readComposioKey) }),
+  () => sharedMcpProcesses
 )

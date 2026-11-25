@@ -658,6 +658,7 @@ import { LinkPreviewGetParams } from './link-preview/link-preview-params'
 import {
   McpServerAdd,
   McpServerAgentFilesAllow,
+  McpServerConnect,
   McpServerDiscover,
   McpServerImport,
   McpServerProblems,
@@ -1913,6 +1914,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mcpServers.add': McpServerAdd,
   'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
   'mcpServers.cancelProblems': McpServersList,
+  'mcpServers.connect': McpServerConnect,
   'mcpServers.copy': McpServerImport,
   'mcpServers.details': McpServerTarget,
   'mcpServers.discover': McpServerDiscover,

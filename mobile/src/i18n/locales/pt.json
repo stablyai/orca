@@ -5861,6 +5861,9 @@
       "continuesAt": "Continua às {{time}}",
       "continues": "Continua às {{time}}",
       "hitLimit": "Limite atingido · reinicia às {{time}}"
+    },
+    "new": {
+      "purposeTooLongForHost": "O Orca em {{host}} aceita até 200 caracteres para a finalidade. Encurte o texto ou atualize o Orca em {{host}}."
     }
   },
   "sidebar": {

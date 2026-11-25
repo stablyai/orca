@@ -43,6 +43,8 @@ import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webvi
 import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
 import { useBrowserPageViewportScrollReporting } from '../host-guest/viewport/use-browser-page-viewport-scroll-reporting'
 import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { openSshRoutedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
+import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import { useBrowserPageViewportSizeFeedback } from '../host-guest/viewport/use-browser-page-viewport-size-feedback'
 
 export function BrowserPagePane({
@@ -292,6 +294,8 @@ export function BrowserPagePane({
   const sshRoutedExternalUrl = sshRouted
     ? (url: string) => getSshRoutedOpenableExternalUrl(url, sshPortForwards)
     : undefined
+  const openExternalUrl = (url: string): void =>
+    sshRouted ? openSshRoutedUrlInSystemBrowser(url, sshPortForwards) : void openSystemHttpLink(url)
   const externalUrl = (sshRoutedExternalUrl ?? getOpenableExternalUrl)(liveBrowserUrl)
   const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
   // A file: page in this webview is always this machine's file, even in an SSH workspace.
@@ -337,6 +341,7 @@ export function BrowserPagePane({
         webviewRef={webviewRef}
         onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
         externalUrl={sshRoutedExternalUrl}
+        openExternal={sshRouted ? openExternalUrl : undefined}
       />
       <BrowserPageChromeHeader
         chromeHeaderRef={chromeHeaderRef}
@@ -361,7 +366,7 @@ export function BrowserPagePane({
         markupCancel={toolSwitch.exit}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
-        externalUrl={externalUrl}
+        onOpenExternal={externalUrl ? () => openExternalUrl(externalUrl) : null}
         isBlankTab={isBlankTab}
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}

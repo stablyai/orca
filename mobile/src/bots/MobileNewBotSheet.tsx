@@ -13,9 +13,11 @@ import { spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { RpcRefusedError } from '../transport/rpc/rpc-refused-error'
 import { isBotMascotId, mascotAvatar, randomMascotAvatar } from '../../../src/shared/bot-avatar'
 import {
   BOT_PURPOSE_MAX_LENGTH,
+  refusedForOlderHostPurposeLimit,
   proposalCreateParams,
   type BotProposal
 } from '../../../src/shared/bots/bot-proposal'
@@ -183,7 +185,16 @@ function NewBotForm(props: NewBotSheetProps) {
     } catch (error) {
       triggerError()
       setError(
-        error instanceof Error ? error.message : t('bots.new.failed', 'Couldn’t create the bot')
+        error instanceof RpcRefusedError &&
+          refusedForOlderHostPurposeLimit(error.code, error.message, made.purpose)
+          ? t(
+              'bots.new.purposeTooLongForHost',
+              "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
+              { host: computer.label }
+            )
+          : error instanceof Error
+            ? error.message
+            : t('bots.new.failed', 'Couldn’t create the bot')
       )
     } finally {
       setCreating(false)

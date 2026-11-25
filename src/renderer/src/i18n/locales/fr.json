@@ -20762,7 +20762,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Arrêté par vous",
+        "stopped": "Arrêté",
         "finished": "Terminé",
         "failedCount": "{{count}} en échec",
         "needsYouCount": "En attente de votre réponse : {{count}}",
@@ -25466,7 +25466,8 @@
       "startFromScratch": "Partir de zéro"
     },
     "errors": {
-      "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer."
+      "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer.",
+      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}."
     },
     "automations": {
       "paused": "En pause",

@@ -8176,6 +8176,7 @@
       "updateDesktopFirst": "Сначала обновите Orca на {{host}}",
       "checking": "Проверка…",
       "purposeLabel": "Описание бота",
+      "purposeTooLongForHost": "Orca на {{host}} принимает не более 200 символов для назначения. Сократите текст или обновите Orca на {{host}}.",
       "noAgent": "Нет",
       "purposePlaceholder": "Кто он и что делает",
       "noChatAgents": "На {{host}} нет доступных агентов для чата."
