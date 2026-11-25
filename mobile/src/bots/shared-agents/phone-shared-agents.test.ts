@@ -176,6 +176,42 @@ describe('a page’s call to a shared agent', () => {
   )
 })
 
+describe('following a computer’s shares', () => {
+  it('lists a share made after the phone connected, and two follows never ask for keys at once', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    let shared = false
+    let asking = 0
+    let release = () => {}
+    const gate = new Promise<void>((resolve) => (release = resolve))
+    const client = {
+      sendRequest: async (method: string, params?: unknown) => {
+        if (method === 'sharedBots.phone.list' && !shared) {
+          return { id: method, ok: true as const, result: { shares: [] } }
+        }
+        if (method === 'sharedBots.phone.provision') {
+          asking++
+          await gate
+        }
+        return await desktop.client.sendRequest(method, params)
+      }
+    }
+    await agents.syncComputer('computer-1', client)
+    expect(agents.views('computer-1')).toEqual([])
+
+    shared = true
+    const first = agents.syncComputer('computer-1', client)
+    const second = agents.syncComputer('computer-1', client)
+    await vi.waitFor(() => expect(asking).toBe(1))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(asking).toBe(1)
+    release()
+    await Promise.all([first, second])
+    expect(agents.views('computer-1').map((view) => view.shareId)).toEqual(['share-1'])
+  })
+})
+
 describe('a page frame before the phone’s shared agents are loaded', () => {
   it('waits for the computer’s verdict, and only a shared agent’s leaves once they load', async () => {
     const first = new PhoneSharedAgents(() => 1_000)

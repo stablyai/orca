@@ -28,8 +28,11 @@ export function registerSharedBotHostsHandlers(args: {
   userDataPath: string
   cloud: () => ConnectorCloud | null
   homes: Omit<SharedBotHomeDeps, 'userDataPath'>
+  /** The list this computer's phones read (sharedBots.phone.list) changed. */
+  phoneSharesChanged: () => void
 }): SharedBotHosts {
   const failures = new SharedBotHostFailures()
+  let phoneShares = ''
   const hosts = new SharedBotHosts({
     userDataPath: args.userDataPath,
     homes: new SharedBotHomes({ ...args.homes, userDataPath: args.userDataPath }),
@@ -43,6 +46,12 @@ export function registerSharedBotHostsHandlers(args: {
     connectorOrigin: () => args.cloud()?.origin() ?? null,
     publish: (state: SharedBotHostsState) => {
       sharedHostsChanged()
+      // Phones read the list only when told: a share reached after they connected shows on them too.
+      const shares = JSON.stringify(hosts.phones.phoneShares())
+      if (shares !== phoneShares) {
+        phoneShares = shares
+        args.phoneSharesChanged()
+      }
       for (const window of BrowserWindow.getAllWindows()) {
         if (!window.webContents.isDestroyed()) {
           window.webContents.send('sharedBotHosts:changed', state)

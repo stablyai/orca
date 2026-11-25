@@ -1,5 +1,6 @@
 // Home's rows for the agents shared with each paired computer's account. The phone follows each
-// computer's shares when it connects, and reads an agent's row (its avatar and last activity) from its
+// computer's shares when it connects and on each of Home's bots reads of it (the computer signals one
+// when its shares change), and reads an agent's row (its avatar and last activity) from its
 // host each time the phone's link to it comes up; the rows change only when one of those does.
 import { hostConnectionEpoch } from '../../query/host-status-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -51,7 +52,9 @@ export function homeSharedAgentRow(
 
 export function useHomeSharedAgentRows(
   hosts: readonly Host[],
-  hostStates: Readonly<Record<string, ConnectionState>>
+  hostStates: Readonly<Record<string, ConnectionState>>,
+  /** When Home's bots read of each computer last landed. */
+  botsReadAt: Readonly<Record<string, number | undefined>>
 ): readonly HomeBotRow[] {
   const connected = useMemo(
     () =>
@@ -62,18 +65,18 @@ export function useHomeSharedAgentRows(
       ),
     [hosts, hostStates]
   )
-  // Each connect is when the computer's shares (and this phone's keys to them) are followed; a
-  // state change elsewhere follows none again.
-  const synced = useRef(new Set<string>())
+  // Each connect and bots read is when the computer's shares (and this phone's keys to them) are
+  // followed; a state change elsewhere follows none again.
+  const synced = useRef(new Map<string, string>())
   useEffect(() => {
     for (const host of connected) {
-      const connection = `${host.hostId}\n${hostConnectionEpoch(host.client)}`
-      if (!synced.current.has(connection)) {
-        synced.current.add(connection)
+      const at = `${hostConnectionEpoch(host.client)}\n${botsReadAt[host.hostId] ?? ''}`
+      if (synced.current.get(host.hostId) !== at) {
+        synced.current.set(host.hostId, at)
         void phoneSharedAgents().syncComputer(host.hostId, host.client)
       }
     }
-  }, [connected])
+  }, [connected, botsReadAt])
   const [views, setViews] = useState<ReadonlyMap<string, SharedBotHostView[]>>(new Map())
   const hostIds = useMemo(() => hosts.map((host) => host.hostId).join('\n'), [hosts])
   useEffect(() => {

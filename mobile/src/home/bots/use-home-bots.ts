@@ -111,7 +111,11 @@ export function useHomeBots(args: {
     }
   }, [subscribed, fresh, reads, hydrated, bots.activityByHost])
   // Agents shared with a computer's account list among its own, by the same order.
-  const shared = useHomeSharedAgentRows(homeHosts, hostStates)
+  const botsReadAt = useMemo(
+    () => Object.fromEntries(Object.entries(reads).map(([id, read]) => [id, read?.readAt])),
+    [reads]
+  )
+  const shared = useHomeSharedAgentRows(homeHosts, hostStates, botsReadAt)
   const listed = useMemo(
     () =>
       shared.length === 0
