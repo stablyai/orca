@@ -90,6 +90,7 @@ const loopbackProvider: SshPortForwardProvider = {
   }
 }
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the manager and resolver read only isDisposed.
 const conn = { isDisposed: () => false } as unknown as SshConnection
 
 function useSshTarget(saved: {
@@ -99,7 +100,9 @@ function useSshTarget(saved: {
 }): SshPortForwardManager {
   const manager = new SshPortForwardManager({}, [loopbackProvider])
   setPortForwardManager(manager)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restore and the resolver call only getConnection.
   setConnectionManager({ getConnection: () => conn } as unknown as SshConnectionManager)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: restore reads getTarget and persists through updateTarget only.
   setSshTargetRegistryStore({
     getTarget: () => ({ id: 'target', portForwards: [saved] }),
     updateTarget: vi.fn()
@@ -152,6 +155,7 @@ describe('SSH forwards beside a local [::1] server on the same port', () => {
     expect(rootDot?.url.toString()).toBe(`http://127.0.0.1:${localPort}/`)
     // A reconnect leaves the listener on its old connection; a disconnect disposes the session.
     for (const current of [{ isDisposed: () => false }, { isDisposed: () => true }]) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resolver calls only getConnection.
       setConnectionManager({ getConnection: () => current } as unknown as SshConnectionManager)
       expect(await systemBrowserUrlForForward(request)).toBeNull()
     }

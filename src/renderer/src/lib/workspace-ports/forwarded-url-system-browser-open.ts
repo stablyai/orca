@@ -1,6 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { showBrowserOpenFailure } from '@/lib/browser/workspace/workspace-browser-open-failure-toast'
+import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import type { PortForwardEntry } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ForwardedUrlOpenRequest } from '../../../../shared/workspace/ports/forwarded-url-open'
 
@@ -13,7 +14,7 @@ export async function openForwardedUrlInSystemBrowser(
   const open = window.api.shell.openForwardedUrl
   try {
     if (!open) {
-      await window.api.shell.openUrl(url)
+      await openSystemHttpLink(url)
       return url
     }
     const result = await open({
@@ -75,6 +76,6 @@ export function openSshRoutedUrlInSystemBrowser(
   if (forward) {
     void openForwardedUrlInSystemBrowser(url, forward, 'ssh')
   } else {
-    void window.api.shell.openUrl(url)
+    void openSystemHttpLink(url)
   }
 }

@@ -16,17 +16,22 @@ export type ForwardedUrlOpenResult =
   | { opened: false }
 
 export function isForwardedUrlOpenRequest(value: unknown): value is ForwardedUrlOpenRequest {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-  const request = value as Record<string, unknown>
   return (
-    typeof request.url === 'string' &&
-    (request.forwardKind === 'ssh' || request.forwardKind === 'paired') &&
-    typeof request.connectionId === 'string' &&
-    typeof request.forwardId === 'string' &&
-    Number.isInteger(request.localPort) &&
-    typeof request.remoteHost === 'string' &&
-    Number.isInteger(request.remotePort)
+    typeof value === 'object' &&
+    value !== null &&
+    'url' in value &&
+    typeof value.url === 'string' &&
+    'forwardKind' in value &&
+    (value.forwardKind === 'ssh' || value.forwardKind === 'paired') &&
+    'connectionId' in value &&
+    typeof value.connectionId === 'string' &&
+    'forwardId' in value &&
+    typeof value.forwardId === 'string' &&
+    'localPort' in value &&
+    Number.isInteger(value.localPort) &&
+    'remoteHost' in value &&
+    typeof value.remoteHost === 'string' &&
+    'remotePort' in value &&
+    Number.isInteger(value.remotePort)
   )
 }
