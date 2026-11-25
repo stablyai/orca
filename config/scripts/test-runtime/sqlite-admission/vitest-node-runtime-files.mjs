@@ -33,6 +33,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
+  // Hands sockets to a native child as its stdio across a forked launcher.
+  'src/main/provider-process/launcher/provider-launcher.integration.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
   // Bun on macOS fails its read-only directory case with ENOTEMPTY; Node passes it.
   ...(process.platform === 'darwin'

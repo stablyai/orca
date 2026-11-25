@@ -7,22 +7,15 @@ import { DirectProviderChild } from './direct-provider-child'
 import { LegacyProviderChild } from './legacy-provider-child'
 import { providerOwnershipBootId } from './provider-ownership-journal'
 import { DeferredProviderOwner } from './deferred-provider-owner'
-import {
-  launchProviderOwner,
-  type HostedCwdReporter,
-  type ProviderHostRoute
-} from './hosted-provider-launch'
+import { launchProviderOwner, type ProviderHostRoute } from './hosted-provider-launch'
 
 export type ProviderProcessSpawner = (spec: ProcessSpec) => ChildProcess
 
 let hostRoute: ProviderHostRoute | null = null
 
 /** Only desktop composition installs this route; server and remote launchers keep direct spawn. */
-export function installProviderProcessHost(
-  getClient: ProviderHostRoute['getClient'],
-  reportCwd: HostedCwdReporter = () => {}
-): void {
-  hostRoute = { getClient, reportCwd }
+export function installProviderProcessHost(route: ProviderHostRoute): void {
+  hostRoute = route
 }
 
 /** Shared launch seam; native owners may start under the host, but this runtime owns them. */

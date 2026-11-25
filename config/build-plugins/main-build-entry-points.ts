@@ -71,6 +71,10 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'codex-project-trust-worker-entry': resolve(
     'src/main/codex/trust/project-trust/codex-project-trust-worker-entry.ts'
   ),
+  // Linux chat launches fork from this small process instead of Electron main.
+  'provider-launcher-worker-entry': resolve(
+    'src/main/provider-process/launcher/provider-launcher-worker-entry.ts'
+  ),
   'workspace-space-scan-worker-entry': resolve(
     'src/main/workspaces/space-analysis/workspace-space-scan-worker-entry.ts'
   ),

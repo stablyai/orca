@@ -110,19 +110,28 @@ export async function inspectHostedIdentity(
   return outcome === 'ok' ? identity : null
 }
 
+/** Starts the native owner in another process; this app still holds every owner pipe. */
+export type ProviderOwnerLauncher = {
+  /** False once a reconnect may have reached a launcher that never vetted this launch. */
+  current: () => boolean
+  spawn: (launch: HostedProviderSpawn, timeoutMs: number) => Promise<HostedProviderSpawnResult>
+}
+
 export type ProviderHostRoute = {
-  getClient: () => Promise<DaemonClient | null>
-  reportCwd: HostedCwdReporter
+  /** Null keeps this launch here; `abandoned` turns true once the start budget is spent. */
+  acquire: (cwd: string, abandoned: () => boolean) => Promise<ProviderOwnerLauncher | null>
 }
 
 // The bootstrap deadline starts with the launch; whichever owner attaches still needs time for
 // its ownership proof, so a failed hosted start always leaves a direct launch enough of it.
 const HOSTED_START_BUDGET_MS = PROVIDER_BOOTSTRAP_DEADLINE_MS - OWNERSHIP_PROOF_WINDOW_MS - 1_000
 
-async function connectedHost(route: ProviderHostRoute): Promise<DaemonClient | null> {
+async function connectedHost(
+  getClient: () => Promise<DaemonClient | null>
+): Promise<DaemonClient | null> {
   try {
     // A host still starting must not hold a chat past its bootstrap deadline; launch here instead.
-    const client = await withTimeout(route.getClient(), 1_000, null)
+    const client = await withTimeout(getClient(), 1_000, null)
     if (!client) {
       return null
     }
@@ -135,6 +144,30 @@ async function connectedHost(route: ProviderHostRoute): Promise<DaemonClient | n
     return client
   } catch {
     return null
+  }
+}
+
+/** The macOS terminal host: launches only after its signature and folder access check out. */
+export function daemonProviderHostRoute(
+  getClient: () => Promise<DaemonClient | null>,
+  reportCwd: HostedCwdReporter
+): ProviderHostRoute {
+  return {
+    acquire: async (cwd, abandoned) => {
+      const client = await connectedHost(getClient)
+      const identity =
+        client && !abandoned()
+          ? await inspectHostedIdentity(client, cwd, abandoned, reportCwd)
+          : null
+      if (!client || !isCurrentHostedIdentity(client, identity)) {
+        return null
+      }
+      return {
+        current: () => isCurrentHostedIdentity(client, identity),
+        spawn: (launch, timeoutMs) =>
+          client.request<HostedProviderSpawnResult>('spawnProvider', launch, timeoutMs)
+      }
+    }
   }
 }
 
@@ -160,9 +193,9 @@ function launchHere(owner: DeferredProviderOwner, spawn: () => ChildProcess): vo
   owner.attach(child.pid, new Map(child.stdio.map((stream, fd) => [fd, stream])))
 }
 
-/** Starts the native owner under the host when the host can read the chat's folder, and here
- * otherwise or when the host's start fails before attach. Either way this app holds every owner
- * pipe, so ownership is the same as a direct launch. */
+/** Starts the native owner through the route's launcher when it has one, and here otherwise or
+ * when the launcher's start fails before attach. Either way this app holds every owner pipe, so
+ * ownership is the same as a direct launch. */
 export async function launchProviderOwner(
   owner: DeferredProviderOwner,
   spec: ProviderSpawnSpec,
@@ -173,23 +206,16 @@ export async function launchProviderOwner(
   const remainingMs = (): number => Math.max(0, deadline - performance.now())
   // Checks still running past the budget must not report a verdict the direct launch has outlived.
   const abandoned = (): boolean => owner.canceled || remainingMs() === 0
-  // Connecting, signature and folder checks share the budget, so a slow host can't spend it all.
-  const { client, identity } = await withProviderStartDeadline(
-    (async () => {
-      const client = await connectedHost(route)
-      const identity =
-        client && !owner.canceled
-          ? await inspectHostedIdentity(client, spec.cwd, abandoned, route.reportCwd)
-          : null
-      return { client, identity }
-    })(),
+  // Connecting and the route's checks share the budget, so a slow launcher can't spend it all.
+  const launcher = await withProviderStartDeadline(
+    route.acquire(spec.cwd, abandoned),
     remainingMs()
-  ).catch(() => ({ client: null, identity: null }))
+  ).catch(() => null)
   if (owner.canceled) {
     owner.fail(new Error('Provider launch canceled'))
     return
   }
-  if (!client || !isCurrentHostedIdentity(client, identity)) {
+  if (!launcher?.current()) {
     launchHere(owner, spawnHere)
     return
   }
@@ -200,8 +226,7 @@ export async function launchProviderOwner(
     if (owner.canceled) {
       throw new Error('Provider launch canceled')
     }
-    // A reconnect may have reached a host that never read this folder.
-    if (!isCurrentHostedIdentity(client, identity)) {
+    if (!launcher.current()) {
       throw new Error('Provider host changed before launch')
     }
     if (remainingMs() === 0) {
@@ -209,11 +234,7 @@ export async function launchProviderOwner(
     }
     // A timer, not only the request's own timeout, so a stalled event loop still falls back in time.
     const result = await withProviderStartDeadline(
-      client.request<HostedProviderSpawnResult>(
-        'spawnProvider',
-        hostedLaunch(spec, path, listener.nonce),
-        remainingMs()
-      ),
+      launcher.spawn(hostedLaunch(spec, path, listener.nonce), remainingMs()),
       remainingMs()
     )
     if ('spawnError' in result) {

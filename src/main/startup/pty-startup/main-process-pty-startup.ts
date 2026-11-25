@@ -1,4 +1,6 @@
 import { installProviderProcessHost } from '../../provider-process/provider-process-spawn'
+import { daemonProviderHostRoute } from '../../provider-process/hosted-provider-launch'
+import { providerLauncherRoute } from '../../provider-process/launcher/provider-launcher-route'
 import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
@@ -208,17 +210,21 @@ export function bindTerminalRuntimeStartupServices(
 ): void {
   if (process.platform === 'darwin' && !state.isServeMode) {
     installProviderProcessHost(
-      async () => {
-        await state.localPtyProviderStartupReady
-        return getProviderProcessHostClient()
-      },
-      (verdict) => {
-        void reportDaemonPtyCwdVerdict({
-          ...verdict,
-          pidPath: getDaemonEndpointFacts()?.pidPath ?? null
-        })
-      }
+      daemonProviderHostRoute(
+        async () => {
+          await state.localPtyProviderStartupReady
+          return getProviderProcessHostClient()
+        },
+        (verdict) => {
+          void reportDaemonPtyCwdVerdict({
+            ...verdict,
+            pidPath: getDaemonEndpointFacts()?.pidPath ?? null
+          })
+        }
+      )
     )
+  } else if (process.platform === 'linux' && !state.isServeMode) {
+    installProviderProcessHost(providerLauncherRoute)
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)

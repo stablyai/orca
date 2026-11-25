@@ -23,6 +23,8 @@ import { resolveObservabilityConsent } from '../observability'
 import { getLogsDirectory } from '../observability/logs-directory'
 import { setHeavyWorkerHost } from '../utility-worker-host/heavy-worker-spawn'
 import { HEAVY_WORKER_HOST_NAME } from '../utility-worker-host/heavy-worker-host-name'
+import { setProviderLauncherSpawner } from '../provider-process/launcher/provider-launcher-route'
+import { PROVIDER_LAUNCHER_WORKER_FILENAME } from '../provider-process/launcher/provider-launcher-protocol'
 
 const CRASH_LIMIT = 3
 const CRASH_WINDOW_MS = 5 * 60_000
@@ -110,4 +112,23 @@ export function installElectronHeavyWorkerHost(): void {
     retry: () => host.retry(),
     pauseMessage: () => host.pauseMessage
   })
+}
+
+/** Linux forks copy the caller's whole address space; chat launches fork from this small process. */
+export function installElectronProviderLauncherHost(): void {
+  if (process.platform !== 'linux') {
+    return
+  }
+  const host = new UtilityWorkerHost('Orca process launcher', hostEntry, ({ filename, name }) =>
+    spawnWorkerThread(filename, { name })
+  )
+  setProviderLauncherSpawner(() =>
+    host.spawn({
+      filename: resolveWorkerThreadEntryPath(
+        currentWorkerEntryLayout(__dirname),
+        PROVIDER_LAUNCHER_WORKER_FILENAME
+      ),
+      name: 'orca-provider-launcher'
+    })
+  )
 }

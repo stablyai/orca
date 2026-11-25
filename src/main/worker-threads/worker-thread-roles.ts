@@ -22,6 +22,7 @@ export type WorkerThreadRole =
   | 'orca-plugin-transpile'
   | 'orca-port-scan'
   | 'orca-profile-state-backup'
+  | 'orca-provider-launcher'
   | 'orca-profile-state-writer'
   | 'orca-row-cache-checkpoint'
   | 'orca-session-search'

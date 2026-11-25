@@ -12,7 +12,8 @@ import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesy
 import { setDefaultProxySessionResolver } from '../network/electron-default-proxy-session'
 import {
   installElectronHeavyWorkerHost,
-  installElectronJournalReaderHost
+  installElectronJournalReaderHost,
+  installElectronProviderLauncherHost
 } from './electron-utility-worker-hosts'
 
 export function installElectronNativeServices(): void {
@@ -31,4 +32,5 @@ export function installElectronNativeServices(): void {
   setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
   installElectronJournalReaderHost()
   installElectronHeavyWorkerHost()
+  installElectronProviderLauncherHost()
 }
