@@ -4,7 +4,7 @@ import { SHARED_BOT_HELD_STATES } from '../../../../../src/shared/bots/shared-bo
 // The agents shared with the page's computer's account, as this phone reaches them. The shell serves
 // the watch itself, as it serves their calls: their link and held messages now and on each change. The
 // verb sends a refused message again; its grant is also how a page knows the shell serves the watch.
-export const BRIDGE_SHARED_AGENTS_VERB = 'native.sharedAgents.act'
+export const BRIDGE_SHARED_AGENTS_VERB = 'native.sharedagents.act'
 export const SHARED_AGENTS_WATCH_METHOD = 'sharedAgents.phone.watch'
 
 export const sharedAgentsParamsSchema = z.strictObject({

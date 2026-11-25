@@ -104,7 +104,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
   // and Back navigate, and Copy writes the clipboard.
   {
     pathname: '/h/[hostId]/shared/[environmentId]',
-    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.sharedAgents.act'],
+    grants: ['navigate', 'storage', 'externalLink', 'haptics', 'native.sharedagents.act'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
   {
@@ -121,7 +121,7 @@ export const MOBILE_WEB_PAGE_ROUTES = [
       'native.audio.start',
       'native.audio.read',
       'native.audio.stop',
-      'native.sharedAgents.act'
+      'native.sharedagents.act'
     ],
     optionalGrants: [
       'externalNavigation',
