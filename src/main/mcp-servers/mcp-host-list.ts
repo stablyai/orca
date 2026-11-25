@@ -3,6 +3,7 @@
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
 import { join, resolve } from 'node:path'
+import { z } from 'zod'
 import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
 import {
   ALL_MCP_SERVER_WORKSPACES,
@@ -36,6 +37,7 @@ import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
 /** `<userData>/mcp-servers`; the list is `.orca/bot-tools.json` inside, as in a bot's home. */
 export const mcpHostListFolder = (): string => join(getProfileUserDataPath(), 'mcp-servers')
 
+const AgentFilesSchema = z.record(z.string(), z.unknown())
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 // An entry whose workspaces Orca can't read is on nowhere, never everywhere.
 const NO_WORKSPACES: McpServerWorkspaces = { later: false, on: [], off: [] }
@@ -121,9 +123,8 @@ async function readHostEntries(folder: string): Promise<HostList> {
 
 /** The file's `agentFiles`: which agents' own MCP file the user let Orca keep its servers in. */
 function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
-  const stored: unknown = file.agentFiles
-  const allowed = (agent: McpFileAgent): boolean =>
-    typeof stored === 'object' && stored !== null && Reflect.get(stored, agent) === true
+  const stored = AgentFilesSchema.safeParse(file.agentFiles).data ?? {}
+  const allowed = (agent: McpFileAgent): boolean => stored[agent] === true
   return { grok: allowed('grok'), cursor: allowed('cursor'), droid: allowed('droid') }
 }
 
