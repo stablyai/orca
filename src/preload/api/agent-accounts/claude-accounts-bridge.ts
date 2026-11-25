@@ -19,6 +19,8 @@ export const claudeAccountsApi = {
   remove: (args: { accountId: string }) => ipcRenderer.invoke('claudeAccounts:remove', args),
   rename: (args: { accountId: string; displayName: string | null }) =>
     ipcRenderer.invoke('claudeAccounts:rename', args),
+  setHistoryIsolated: (args: { accountId: string; isolated: boolean }) =>
+    ipcRenderer.invoke('claudeAccounts:setHistoryIsolated', args),
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

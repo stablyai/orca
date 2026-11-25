@@ -3,14 +3,16 @@ import type { ClaudeProfileRouter } from '../../../claude-accounts/profiles/rout
 import { AgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { resolveSessionFilePath } from '../../../native-chat/session-file-resolver'
 import { prepareClaudeLaunchAccount } from './claude-launch-account'
+import { adoptClaudeTranscriptIntoIsolatedAccount } from './claude-isolated-history-adoption'
 
-/** Follow the current account selection and pin its environment for this launch. */
+/** Follow the project's bound account or the current selection and pin its environment for this launch. */
 export async function resolveClaudeStructuredLaunchHome(
   router: ClaudeProfileRouter | undefined,
   env: Record<string, string>,
-  recordHome: string
+  recordHome: string,
+  workspaceId?: string
 ): Promise<string> {
-  return (await prepareClaudeLaunchAccount(router, env, recordHome)).home
+  return (await prepareClaudeLaunchAccount(router, env, recordHome, workspaceId)).home
 }
 
 async function claudeTranscriptExists(input: {
@@ -46,6 +48,9 @@ export async function claudeLaunchResumesTranscript(input: {
   }
   if (input.leafUuid === null) {
     return false
+  }
+  if (router && (await adoptClaudeTranscriptIntoIsolatedAccount({ ...input, router }))) {
+    return true
   }
   const otherHomes = router
     ? [input.recordHome, ...router.accountHomes(), router.systemDefaultHome()]

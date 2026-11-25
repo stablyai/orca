@@ -12,3 +12,6 @@ export const CLAUDE_PROFILE_MISSING_MESSAGE =
 
 export const CLAUDE_PROFILE_SETUP_FAILED_MESSAGE =
   'The selected Claude account could not be set up. Try again or choose another account.'
+
+export const CLAUDE_ACCOUNT_BINDING_UNAVAILABLE_MESSAGE =
+  "This project's Claude account isn't available. Sign in to it again, or change the project's Claude account in its settings."

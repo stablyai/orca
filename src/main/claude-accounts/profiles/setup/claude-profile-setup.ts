@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
+import { separateClaudeProfileHistory } from './claude-profile-history-separation'
 import {
   claudeProfileMarkerPath,
   prepareClaudeProfileDirectory,
@@ -15,7 +17,8 @@ import {
   type ClaudeProfileReport
 } from '../claude-profile-report'
 
-/** `refused` means ownership validation failed before any writes. */
+/** `refused` means ownership validation failed before any writes, or a separate history could not
+ *  be separated. */
 export type ClaudeProfileSetupReport = ClaudeProfileReport & { outcome: 'refused' | 'prepared' }
 
 /** Run on the execution host; WSL profiles must be set up inside the guest. */
@@ -28,6 +31,8 @@ export async function provisionClaudeAccountProfile(args: {
   /** Runs after settings are copied so hook entries survive; null disables installation. */
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
   platform?: NodeJS.Platform
+  /** Keep the account's conversations in its own folder instead of System default's. */
+  historyIsolated?: boolean
 }): Promise<ClaudeProfileSetupReport> {
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
@@ -50,17 +55,30 @@ export async function provisionClaudeAccountProfile(args: {
   const firstSetup = !existsSync(claudeProfileMarkerPath(args.profile))
   const home = args.profile.home
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
-  for (const step of [
-    () => shareClaudeProfileHistory({ ...shared, platform }),
-    () => provisionClaudeProfile({ ...shared, platform, firstSetup })
-  ]) {
-    try {
-      const part = await step()
-      Object.assign(report.surfaces, part.surfaces)
-      report.warnings.push(...part.warnings)
-    } catch (error) {
-      warnClaudeProfile(report, 'profile', error)
-    }
+  let separated: boolean
+  try {
+    const history = args.historyIsolated
+      ? await separateClaudeProfileHistory(shared)
+      : await shareClaudeProfileHistory({ ...shared, platform })
+    Object.assign(report.surfaces, history.surfaces)
+    report.warnings.push(...history.warnings)
+    separated = !args.historyIsolated || !Object.values(history.surfaces).includes('failed')
+  } catch (error) {
+    warnClaudeProfile(report, 'profile', error)
+    separated = !args.historyIsolated
+  }
+  if (!separated) {
+    // Why: without the marker the next launch sets up again and refuses, instead of running on
+    // history that is still shared.
+    await rm(claudeProfileMarkerPath(args.profile), { force: true })
+    return { outcome: 'refused', ...report }
+  }
+  try {
+    const part = await provisionClaudeProfile({ ...shared, platform, firstSetup })
+    Object.assign(report.surfaces, part.surfaces)
+    report.warnings.push(...part.warnings)
+  } catch (error) {
+    warnClaudeProfile(report, 'profile', error)
   }
   const installHooks = args.installHooks
   await runClaudeProfileSurface(report, 'hooks', () => {

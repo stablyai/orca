@@ -71,6 +71,11 @@ export type ClaudeAccountsApi = {
     accountId: string
     displayName: string | null
   }) => Promise<ClaudeRateLimitAccountsState>
+  /** Desktop only: keeps a host account's conversations in its own folder. */
+  setHistoryIsolated?: (args: {
+    accountId: string
+    isolated: boolean
+  }) => Promise<ClaudeRateLimitAccountsState>
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

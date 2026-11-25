@@ -45,6 +45,7 @@ const TYPED_START_REFUSALS = [
   'historyInOtherAccount',
   'claudeAccountFolderMissing',
   'claudeAccountSetupFailed',
+  'claudeAccountBindingUnavailable',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
   'fullAccessAsRoot',

@@ -14,6 +14,7 @@ import {
   type ClaudePaneFolder
 } from '../../../../shared/agent-accounts/claude/claude-pane-account-folder'
 import { readClaudeForeground } from './claude-pane-foreground-read'
+import { installedClaudeAccountBinding } from '../../../claude-accounts/selection/claude-workspace-account-binding'
 import { answeredClaudeMove, claudeHostAccountSwitch } from './claude-host-account-switch'
 import type {
   ClaudeAccountSelectionChange,
@@ -201,7 +202,8 @@ export abstract class OrcaRuntimeWithClaudeRunningPaneAccountMove extends OrcaRu
         this.restartedClaudePanes.delete(ptyId)
         continue
       }
-      const pane = this.claudePaneOf(pty)
+      // A project bound to a Claude account keeps its terminals on it through any switch.
+      const pane = installedClaudeAccountBinding(pty.worktreeId) ? null : this.claudePaneOf(pty)
       if (pane && !this.restartingClaudePanes.has(pane.paneKey)) {
         panes.push(pane)
       }

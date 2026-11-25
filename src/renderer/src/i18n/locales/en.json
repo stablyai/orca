@@ -8013,6 +8013,10 @@
           "muteNotifications": "Mute Notifications",
           "unmuteNotifications": "Unmute Notifications"
         },
+        "ProjectGroupClaudeAccount": {
+          "menu": "Claude account",
+          "useParentGroup": "Use {{group}}’s account"
+        },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
           "hostAuthNeeded": "Authentication needed",
@@ -13934,6 +13938,17 @@
           "auto": "Agent",
           "off": "Off"
         },
+        "RepositoryClaudeAccountSection": {
+          "title": "Claude account",
+          "description": "Run this project’s Claude chats on a specific account, whatever account is selected.",
+          "longDescription": "New and resumed Claude chats and terminals in this project use this account, so other projects can run on another account at the same time.",
+          "selectLabel": "Account",
+          "useGroup": "Use the group’s account",
+          "groupLabel": "Default for the projects in {{group}}",
+          "followSelection": "Follow the selected account",
+          "missingAccount": "Removed account",
+          "saveFailed": "Could not save the Claude account for this project."
+        },
         "RepositoryGitHubAccountSection": {
           "unsupported": "This runtime’s GitHub CLI is too old for account binding (needs gh ≥ 2.40).",
           "capabilityUnknown": "Could not determine whether this runtime’s GitHub CLI supports account binding. Retry.",
@@ -16433,6 +16448,10 @@
             "folderWorkspaceUnavailable": "Folder workspace is no longer available.",
             "transcriptsSkippedCount_one": "{{count}} transcript skipped",
             "transcriptsSkippedCount_other": "{{count}} transcripts skipped"
+          },
+          "AiVaultClaudeAccountFilter": {
+            "label": "Claude account",
+            "all": "All accounts"
           },
           "AiVaultPanelControls": {
             "scanningSessions": "Scanning sessions",
@@ -21211,6 +21230,9 @@
       "useKnownId": "Use known user ID \"{{value0}}\""
     },
     "native-chat": {
+      "claudeAccountChip": {
+        "tooltip": "Claude account this chat runs on: {{account}}"
+      },
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…",
         "cliInstall": "Install",
@@ -21257,6 +21279,7 @@
         "historyInOtherAccount": "This chat's history is in another Claude account. Switch back to that account to continue it.",
         "claudeAccountFolderMissing": "The selected Claude account's folder is missing. Sign in to it again or choose another account.",
         "claudeAccountSetupFailed": "The selected Claude account could not be set up. Try again or choose another account.",
+        "claudeAccountBindingUnavailable": "This project's Claude account isn't available. Sign in to it again, or change the project's Claude account in its settings.",
         "agentCommandNotRunnable": "{{agent}}'s Command in Settings → Agents must start with a program Orca can find. Variables, pipes and other shell syntax aren't supported; use the Environment setting for variables. Change it or reset it.",
         "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
         "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
@@ -25592,6 +25615,10 @@
       "systemDefaultIsSaved": "System default is signed in as {{value0}}, which is also a saved account. An earlier Orca version may have copied that login there. If it is not your own login, select System default and run claude /login.",
       "systemDefaultIsSavedDismiss": "Dismiss",
       "signInRequired": "Sign in again to use this account",
+      "historySeparate": "Separate history",
+      "historyShared": "Shared history",
+      "historySeparateHint": "This account keeps its conversations in its own folder. Click to share them with your other accounts again.",
+      "historySharedHint": "This account’s conversations join your other accounts’ history. Click to keep new ones apart; earlier ones stay shared, and Orca chats created on it move over when resumed.",
       "signInAgain": "Sign in again",
       "usageSignInLabel": "Sign in again",
       "usageSignInMessage": "This account needs you to sign in again.",

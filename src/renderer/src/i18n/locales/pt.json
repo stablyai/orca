@@ -8132,6 +8132,17 @@
             }
           }
         },
+        "RepositoryClaudeAccountSection": {
+          "title": "Conta do Claude",
+          "description": "Rode os chats do Claude deste projeto numa conta específica, seja qual for a conta selecionada.",
+          "longDescription": "Chats e terminais do Claude novos e retomados neste projeto usam esta conta, então outros projetos podem rodar em outra conta ao mesmo tempo.",
+          "selectLabel": "Conta",
+          "useGroup": "Usar a conta do grupo",
+          "groupLabel": "Padrão para os projetos de {{group}}",
+          "followSelection": "Seguir a conta selecionada",
+          "missingAccount": "Conta removida",
+          "saveFailed": "Não foi possível salvar a conta do Claude deste projeto."
+        },
         "RepositoryGitHubAccountSection": {
           "unsupported": "A CLI do GitHub deste runtime é muito antiga para vinculação de conta (precisa de gh ≥ 2.40).",
           "capabilityUnknown": "Não foi possível determinar se a CLI do GitHub deste runtime suporta vinculação de conta. Tente novamente.",
@@ -11486,6 +11497,10 @@
             "resumeInNewCliTooltipFork": "Inicie uma nova sessão de agente no terminal com uma cópia desta conversa.",
             "resumeInNewCliTooltipChat": "Este chat permanece inalterado."
           },
+          "AiVaultClaudeAccountFilter": {
+            "label": "Conta do Claude",
+            "all": "Todas as contas"
+          },
           "AiVaultPanelControls": {
             "scanningSessions": "Escaneando sessões",
             "scopeAriaLabel": "Escopo do Histórico de Sessões: {{value0}}",
@@ -12160,6 +12175,10 @@
           "optionsFilterCount_one": "Opções do espaço de trabalho ({{count}} filtro)",
           "optionsFilterCount_other": "Opções do espaço de trabalho ({{count}} filtros)",
           "optionsFilterCount_many": "Opções do espaço de trabalho ({{count}} filtros)"
+        },
+        "ProjectGroupClaudeAccount": {
+          "menu": "Conta do Claude",
+          "useParentGroup": "Usar a conta de {{group}}"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Atualização necessária",
@@ -20904,6 +20923,9 @@
       "useKnownId": "Usar o ID de usuário conhecido \"{{value0}}\""
     },
     "native-chat": {
+      "claudeAccountChip": {
+        "tooltip": "Conta do Claude em que este chat roda: {{account}}"
+      },
       "taskList": {
         "title": "Tarefas",
         "completed": "Concluída",
@@ -21507,6 +21529,7 @@
         "historyInOtherAccount": "O histórico deste chat está em outra conta do Claude. Volte para essa conta para continuar.",
         "claudeAccountFolderMissing": "A pasta da conta do Claude selecionada não foi encontrada. Entre nela novamente ou escolha outra conta.",
         "claudeAccountSetupFailed": "Não foi possível configurar a conta do Claude selecionada. Tente novamente ou escolha outra conta.",
+        "claudeAccountBindingUnavailable": "A conta do Claude deste projeto não está disponível. Entre nela de novo ou troque a conta do Claude nas configurações do projeto.",
         "agentCommandNotRunnable": "O Comando do {{agent}} em Configurações → Agentes deve começar com um programa que o Orca consiga encontrar. Variáveis, pipes e outras sintaxes de shell não são compatíveis; use a configuração Ambiente para variáveis. Altere ou redefina o comando.",
         "agentCommandFailed": "O Comando do {{agent}} em Configurações → Agentes não iniciou o {{agent}}: {{detail}}. Altere ou redefina o comando.",
         "runtimeNotInstalled": "{{agent}} não está instalado no computador que executa este chat. Instale-o pelo chat em uma versão atual do Orca.",
@@ -23939,6 +23962,10 @@
       "systemDefaultIsSaved": "O Padrão do sistema está conectado como {{value0}}, que também é uma conta salva. Uma versão anterior do Orca pode ter copiado esse login para lá. Se não for seu próprio login, selecione Padrão do sistema e execute claude /login.",
       "systemDefaultIsSavedDismiss": "Dispensar",
       "signInRequired": "Entre novamente para usar esta conta",
+      "historySeparate": "Histórico separado",
+      "historyShared": "Histórico compartilhado",
+      "historySeparateHint": "Esta conta guarda as conversas na própria pasta. Clique para voltar a compartilhá-las com as outras contas.",
+      "historySharedHint": "As conversas desta conta entram no histórico das outras contas. Clique para manter as novas separadas; as anteriores continuam compartilhadas, e os chats do Orca criados nela são movidos ao serem retomados.",
       "signInAgain": "Entrar novamente",
       "usageSignInLabel": "Entrar novamente",
       "usageSignInMessage": "Esta conta precisa de um novo login.",

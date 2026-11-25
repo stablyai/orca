@@ -1,3 +1,4 @@
+import type { ClaudeAccountBinding } from '../../../shared/agent-accounts/claude/claude-account-binding'
 import type { GroupHookCheckResult } from '../../../shared/project/groups/project-group-hooks'
 import type { RepoCreateFailure } from '../../../shared/repository/creation/repo-create-failure-copy'
 import type {
@@ -86,6 +87,7 @@ export type RepositoryApi = {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      claudeAccount?: ClaudeAccountBinding | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       browserProfileId?: string | null
     }

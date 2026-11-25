@@ -248,7 +248,8 @@ export class ClaudeProfileRouter {
       userHome: this.userHome,
       userConfigDir: this.userConfigDir(),
       hooks,
-      claudeVersion: claudeVersion ?? undefined
+      claudeVersion: claudeVersion ?? undefined,
+      historyIsolated: this.savedAccount(profile.accountId)?.historyIsolated === true
     })
     if (report.outcome === 'prepared') {
       await getClaudeAgentViewService(this.args.dataRoot).prepareProfile(profile.home)

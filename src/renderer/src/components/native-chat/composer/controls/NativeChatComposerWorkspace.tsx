@@ -16,6 +16,8 @@ import {
 import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
 import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
 import { NativeChatAntigravityAuthChip } from '../../antigravity-auth/NativeChatAntigravityAuthChip'
+import { NativeChatClaudeAccountChip } from './NativeChatClaudeAccountChip'
+import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
 const FOOTER_TEXT =
@@ -29,7 +31,8 @@ export function NativeChatComposerWorkspace({
 }: {
   terminalTabId: string
   pendingCreationId?: string
-  structuredTransport?: NativeChatComposerWorkspaceTarget
+  structuredTransport?: NativeChatComposerWorkspaceTarget &
+    Partial<Pick<NativeChatStructuredComposerTransport, 'claudeAccountId' | 'runtime'>>
   isWorking?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -204,7 +207,12 @@ export function NativeChatComposerWorkspace({
           )}
         </div>
       )}
-      <span className="ml-auto flex min-w-0 shrink items-center empty:hidden">
+      <span className="ml-auto flex min-w-0 shrink items-center gap-1.5 empty:hidden">
+        <NativeChatClaudeAccountChip
+          accountId={structuredTransport?.claudeAccountId}
+          local={structuredTransport?.runtime === 'local'}
+          textClassName={FOOTER_TEXT}
+        />
         <NativeChatAntigravityAuthChip textClassName={FOOTER_TEXT} />
       </span>
     </div>

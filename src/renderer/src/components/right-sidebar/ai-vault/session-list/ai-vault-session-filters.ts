@@ -8,6 +8,7 @@ import {
   groupAiVaultSessions,
   type AiVaultSessionFilterState
 } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
+import { matchesAiVaultClaudeAccountFilter } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-claude-account'
 // Keep renderer imports stable while mobile reuses the shared core; Metro cannot import renderer code.
 
 /** What the list renders: a null label is a group of rows with no header of its own. */
@@ -43,6 +44,7 @@ export function useAiVaultPanelSessions(
     sessionProjectById,
     projectLabelByKey,
     hideEmptySessions,
+    claudeAccount,
     roomRows = KEEP_ROWS
   }: AiVaultSessionFilterState & { roomRows?: AiVaultRoomRows }
 ) {
@@ -50,7 +52,7 @@ export function useAiVaultPanelSessions(
     const placed = roomRows.place(sessions)
     return roomRows.fold(
       mode === 'search-hits'
-        ? placed
+        ? placed.filter((session) => matchesAiVaultClaudeAccountFilter(session, claudeAccount))
         : filterAiVaultSessions(placed, {
             query,
             agents,
@@ -60,7 +62,8 @@ export function useAiVaultPanelSessions(
             activeProjectKey,
             sessionProjectById,
             projectLabelByKey,
-            hideEmptySessions
+            hideEmptySessions,
+            claudeAccount
           })
     )
   }, [
@@ -75,6 +78,7 @@ export function useAiVaultPanelSessions(
     sessionProjectById,
     projectLabelByKey,
     hideEmptySessions,
+    claudeAccount,
     roomRows
   ])
   const groups = useMemo<AiVaultSessionListGroup[]>(

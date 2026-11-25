@@ -125,6 +125,11 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.claudeAccountSetupFailed',
         COPY.claudeAccountSetupFailed
       ),
+    claudeAccountBindingUnavailable: () =>
+      translate(
+        'components.native-chat.failureWords.claudeAccountBindingUnavailable',
+        COPY.claudeAccountBindingUnavailable
+      ),
     agentCommandNotRunnable: (values) =>
       translate(
         'components.native-chat.failureWords.agentCommandNotRunnable',

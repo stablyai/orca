@@ -1,3 +1,4 @@
+import { ClaudeAccountBindingUpdate } from './claude-account-binding-update'
 import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../../repository/appearance/repo-badge-color'
@@ -77,6 +78,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
           // Why: malformed bindings must omit the key (IPC deletes); never clear via undefined.
           return normalizeGhAccountBinding(value) ?? undefined
         }),
+      claudeAccount: ClaudeAccountBindingUpdate,
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
       agentWorkspaceTrust: z.enum(['pre-trust', 'agent-asks']).optional(),
       externalWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),

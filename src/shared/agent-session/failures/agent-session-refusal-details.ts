@@ -86,6 +86,8 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'claudeAccountFolderMissing',
     /** The selected Claude account's folder could not be set up. */
     'claudeAccountSetupFailed',
+    /** A project's bound Claude account is unavailable. */
+    'claudeAccountBindingUnavailable',
     /** Settings → Agents → Command names no program this host can run. */
     'agentCommandNotRunnable',
     /** The runtime Orca installs for the agent is not installed on this host. */

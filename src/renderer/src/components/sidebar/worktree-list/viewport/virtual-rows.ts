@@ -2,6 +2,10 @@ import { defaultRangeExtractor } from '@tanstack/react-virtual'
 import type { Range, VirtualItem } from '@tanstack/react-virtual'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import type { RenderRow } from '../listing/render-row'
+import {
+  GROUP_HEADER_DETAIL_LINE_HEIGHT,
+  groupHeaderDetailLines
+} from '../rows/group-header-detail-lines'
 
 export const GROUP_HEADER_ROW_HEIGHT = 28
 // Why: HostSectionHeader wraps its h-8 (32px) card in pt-1 (4px), so the row is 36px.
@@ -44,8 +48,11 @@ export function estimateRenderRowSize(
     )
   }
   if (row?.type === 'header') {
+    const detailLines = groupHeaderDetailLines(row)
     return (
-      GROUP_HEADER_ROW_HEIGHT +
+      (detailLines
+        ? GROUP_HEADER_DETAIL_LINE_HEIGHT * (detailLines + 1)
+        : GROUP_HEADER_ROW_HEIGHT) +
       6 +
       (shouldUseHeaderTopSpacing({
         rows,

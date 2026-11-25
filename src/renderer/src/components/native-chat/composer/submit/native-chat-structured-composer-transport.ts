@@ -63,6 +63,8 @@ export type NativeChatStructuredComposerTransport = {
   sideChat?: NativeChatSideChat
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
+  /** Claude: the saved account this chat runs on (null: System default); absent when unknown. */
+  claudeAccountId?: string | null
   /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */
   mcpPanel?: NativeChatMcpTrayState
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */

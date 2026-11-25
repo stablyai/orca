@@ -24,6 +24,7 @@ import {
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { ClaudeHistoryIsolationButton } from './claude-history-isolation-button'
 import { getObservedAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderClaudeAccountRow(
@@ -136,6 +137,7 @@ export function renderClaudeAccountRow(
           </span>
         </button>
         <div className="flex shrink-0 items-center justify-end gap-1 max-md:w-full max-md:flex-wrap">
+          <ClaudeHistoryIsolationButton account={account} model={model} t={t} />
           <AccountRenameButton
             t={t}
             disabled={claudeAction === `remove:${account.id}`}

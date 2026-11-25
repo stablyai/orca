@@ -1,5 +1,10 @@
 /** Local terminal panes that run Claude, found from status rows, saved records, process reads or launches. */
 import {
+  claudeAccountBindingForWorkspace,
+  type ClaudeWorkspaceBindingLookup
+} from '../../../../../../shared/agent-accounts/claude/claude-workspace-account-binding'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
@@ -99,7 +104,14 @@ export function* localClaudePanes(
   target: CodexAccountSelectionTarget
 ): Generator<LocalClaudePane> {
   const isLaneInScope = getCodexAccountSwitchLaneMatcher({ owner, target })
+  const bindings: ClaudeWorkspaceBindingLookup = {
+    getRepo: (id) => state.repos.find((repo) => repo.id === id),
+    getFolderWorkspace: (id) => selectFolderWorkspaces(state).find((folder) => folder.id === id),
+    getProjectGroups: () => state.projectGroups
+  }
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
+    // A bound project keeps its host terminals on its account; WSL ones follow the selection.
+    const bound = claudeAccountBindingForWorkspace(worktreeId, bindings) !== null
     for (const tab of tabs) {
       const boundPtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
       const leaves = Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
@@ -126,6 +138,9 @@ export function* localClaudePanes(
           continue
         }
         const { laneKey } = resolveCodexPaneSelectionLane({ state, tab, ptyId })
+        if (bound && !isWslLane(laneKey)) {
+          continue
+        }
         const providerSession =
           normalizeAgentProviderSession(entry?.providerSession) ??
           normalizeAgentProviderSession(saved)

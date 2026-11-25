@@ -26,6 +26,9 @@ import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
+import { ProjectGroupClaudeAccountLine } from './ProjectGroupClaudeAccountLine'
+import { ProjectGroupClaudeAccountName } from './ProjectGroupClaudeAccountName'
+import { groupHeaderDetailLines } from './group-header-detail-lines'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
@@ -233,7 +236,7 @@ export function renderWorktreeSectionHeaderRow(
           data-workspace-status={headerWorkspaceStatus ?? undefined}
           data-workspace-pin-drop-target={isPinnedHeader ? '' : undefined}
           className={cn(
-            'group relative flex h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
+            'group relative flex min-h-7 w-full items-center gap-1.5 pr-2 text-left transition-all',
             !(isDraggableRepoHeader || isDraggableProjectGroupHeader) && 'cursor-pointer',
             ctx.highlightedRevealRowKey === row.key &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
@@ -313,6 +316,8 @@ export function renderWorktreeSectionHeaderRow(
             <div
               className={cn(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                // Why: beside the name, not centered on the name plus its usage line.
+                groupHeaderDetailLines(row) > 0 && 'self-start',
                 repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
               )}
             >
@@ -334,10 +339,12 @@ export function renderWorktreeSectionHeaderRow(
               <div className="flex min-w-0 items-center gap-1.5">
                 <div className="min-w-0 truncate text-[13px] font-semibold leading-4">{label}</div>
                 {hostContext ? <ProjectHeaderHostLabel context={hostContext} /> : null}
+                <ProjectGroupClaudeAccountName row={row} />
                 <RepoForkIndicator upstream={row.repo?.upstream} />
                 <FolderPathStatusIndicator status={projectGroupPathStatus} />
                 {isRepoHeader ? <RepoScanUnavailableIndicator repo={row.repo!} /> : null}
               </div>
+              <ProjectGroupClaudeAccountLine row={row} />
             </div>
           </div>
 

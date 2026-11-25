@@ -1,3 +1,4 @@
+import { ClaudeAccountBindingUpdate } from './claude-account-binding-update'
 import { WorkspaceHookSettingsSchema } from '../../workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 
@@ -98,7 +99,8 @@ export const ProjectGroupUpdate = z.object({
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
     rootProjectOrder: z.number().finite().nullable().optional(),
-    color: OptionalString.nullable().optional()
+    color: OptionalString.nullable().optional(),
+    claudeAccount: ClaudeAccountBindingUpdate
   })
 })
 

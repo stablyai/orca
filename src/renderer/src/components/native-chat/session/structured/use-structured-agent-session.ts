@@ -96,6 +96,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     sendSource,
     unavailable,
     accountUsage,
+    claudeAccountId,
     threadGoal: threadGoalSupport,
     reportedThreadGoal,
     contextUsage: usageSupport,
@@ -235,6 +236,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     rewind,
     conversationCommands,
     accountUsage,
+    claudeAccountId,
     compactInstructions,
     ...structuredConversationCommandRunner({
       agentName,

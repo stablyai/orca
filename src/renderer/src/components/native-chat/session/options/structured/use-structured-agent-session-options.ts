@@ -211,6 +211,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     compactInstructions: support?.compactInstructions === true,
     /** Absent unless this host and session can change the goal. */
     accountUsage: support?.accountUsage,
+    claudeAccountId: support?.claudeAccountId,
     threadGoal: support?.threadGoal,
     /** A goal only the agent's own `/goal` changes; absent from a host that predates it. */
     reportedThreadGoal: support?.reportedThreadGoal,
