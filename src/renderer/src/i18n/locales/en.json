@@ -22918,8 +22918,6 @@
         "showQuestion": "Show {{name}} question",
         "show": "Show",
         "runningCount": "{{count}} running",
-        "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers",
         "stopAll": "Stop all",
         "clearFailed": "Clear failed",
         "unlistedDetail": "Some background work isn’t listed here",

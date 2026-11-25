@@ -22798,8 +22798,6 @@
         "showQuestion": "Soruyu göster: {{name}}",
         "show": "Göster",
         "runningCount": "{{count}} çalışıyor",
-        "cleared_one": "1 çalışan temizlendi",
-        "cleared_other": "{{count}} çalışan temizlendi",
         "stopAll": "Tümünü durdur",
         "clearFailed": "Başarısızları temizle",
         "unlistedDetail": "Bazı arka plan işleri burada listelenmiyor",

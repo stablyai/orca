@@ -21350,7 +21350,6 @@
         "showQuestion": "显示 {{name}} 的问题",
         "show": "显示",
         "runningCount": "{{count}} 个运行中",
-        "cleared_other": "已清除 {{count}} 个工作者",
         "stopAll": "全部停止",
         "clearFailed": "清除失败项",
         "unlistedDetail": "部分后台工作未在此列出",

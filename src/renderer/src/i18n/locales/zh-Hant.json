@@ -20478,7 +20478,6 @@
         "showQuestion": "顯示 {{name}} 的問題",
         "show": "顯示",
         "runningCount": "{{count}} 個執行中",
-        "cleared_other": "已清除 {{count}} 個工作者",
         "stopAll": "全部停止",
         "clearFailed": "清除失敗的項目",
         "unlistedDetail": "部分背景工作未列於此處",
