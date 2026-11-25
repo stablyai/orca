@@ -7,7 +7,8 @@ import {
   done,
   SCOPE,
   requestedFingerprint,
-  submittedAs
+  submittedAs,
+  type Outcome
 } from './structured-queued-edit.test-fixture'
 import { act } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
@@ -23,7 +24,11 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 // The host's answer to an applied update: it now holds exactly the requested body.
 const updatedAsRequested = async () => ({
   kind: 'done' as const,
-  value: { status: 'updated' as const, messageId: 'card', fingerprint: requestedFingerprint() }
+  value: {
+    status: 'updated' as const,
+    messageId: 'card',
+    fingerprint: requestedFingerprint()
+  }
 })
 
 const quoted = (words: string): string =>
@@ -56,7 +61,10 @@ it('a queued reply edit the card changed under records no original for its words
 it('a queued reply edit ending in a space keeps its original under the text the card stores', async () => {
   rememberNativeChatReplySource(SCOPE, quoted('When?'), 'm-orig')
   // With images supported the card stores its words without trailing whitespace.
-  const hook = harness(true, { messages: [withText(quoted('When?'))], imagesCapable: true })
+  const hook = harness(true, {
+    messages: [withText(quoted('When?'))],
+    imagesCapable: true
+  })
   await begin(hook)
   act(() => hook.result.current.editor?.change('When exactly? '))
   script.answer = updatedAsRequested
@@ -89,7 +97,11 @@ it('an edit the host reports unchanged but holding the requested words records i
   act(() => hook.result.current.editor?.change('Which one?'))
   script.answer = async () => ({
     kind: 'done',
-    value: { status: 'unchanged', messageId: 'card', fingerprint: requestedFingerprint() }
+    value: {
+      status: 'unchanged',
+      messageId: 'card',
+      fingerprint: requestedFingerprint()
+    }
   })
   await act(async () => hook.result.current.editor?.save())
   expect(nativeChatReplySourceOf(SCOPE, quoted('Which one?'))).toBe('m-orig')
@@ -111,22 +123,23 @@ it('an unconfirmed edit with no proof records nothing', async () => {
 })
 
 it('a queued reply edit the host refuses records no original for its words', async () => {
-  for (const [words, answer] of [
+  const refusals: [words: string, answer: () => Promise<Outcome>][] = [
     ['Why not?', done({ status: 'not-editable', messageId: 'card' })],
     [
       'Why so?',
       async () => ({
-        kind: 'not-done' as const,
+        kind: 'not-done',
         notice: 'no',
-        failure: { kind: 'refused' as const }
+        failure: { kind: 'refused', code: 'agent_session_conflict' }
       })
     ]
-  ] as const) {
+  ]
+  for (const [words, answer] of refusals) {
     rememberNativeChatReplySource(SCOPE, quoted('Why?'), 'm-orig')
     const hook = harness(true, { messages: [withText(quoted('Why?'))] })
     await begin(hook)
     act(() => hook.result.current.editor?.change(words))
-    script.answer = answer as typeof script.answer
+    script.answer = answer
     await act(async () => hook.result.current.editor?.save())
     expect(nativeChatReplySourceOf(SCOPE, quoted(words))).toBeUndefined()
     hook.unmount()
@@ -147,7 +160,10 @@ it('an unconfirmed edit seen sent with the edited words records its original; on
   await act(async () => sent.result.current.editor?.save())
   expect(nativeChatReplySourceOf(SCOPE, quoted('What now?'))).toBeUndefined()
   // The card left the queue as a submission holding exactly the edited words.
-  sent.rerender({ messages: [], submissions: [submittedAs(quoted('What now?'))] })
+  sent.rerender({
+    messages: [],
+    submissions: [submittedAs(quoted('What now?'))]
+  })
   expect(nativeChatReplySourceOf(SCOPE, quoted('What now?'))).toBe('m-orig')
   sent.unmount()
 
@@ -166,7 +182,11 @@ it("an update answered with another body's fingerprint records nothing", async (
   const hook = harness(true, { messages: [withText(quoted('Whose?'))] })
   await begin(hook)
   act(() => hook.result.current.editor?.change('Whose is it?'))
-  script.answer = done({ status: 'updated', messageId: 'card', fingerprint: '0'.repeat(64) })
+  script.answer = done({
+    status: 'updated',
+    messageId: 'card',
+    fingerprint: '0'.repeat(64)
+  })
   await act(async () => hook.result.current.editor?.save())
   expect(nativeChatReplySourceOf(SCOPE, quoted('Whose is it?'))).toBeUndefined()
 })
@@ -195,7 +215,11 @@ it('typing on while a save is out records the saved words, not the newer ones, a
       answer = () =>
         resolve({
           kind: 'done',
-          value: { status: 'updated', messageId: 'card', fingerprint: requestedFingerprint() }
+          value: {
+            status: 'updated',
+            messageId: 'card',
+            fingerprint: requestedFingerprint()
+          }
         })
     })
   let saving: Promise<unknown> | undefined

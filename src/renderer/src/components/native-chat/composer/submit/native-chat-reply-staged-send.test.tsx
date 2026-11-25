@@ -32,12 +32,26 @@ import {
 } from '../../session/structured/delivery/structured-agent-session-message-sender'
 import { noteStructuredAgentSessionFence } from '../../session/structured/delivery/structured-agent-session-send-attempt'
 
-const mocks = vi.hoisted(() => ({
-  call: vi.fn(),
-  handBack: vi.fn((..._args: unknown[]): boolean => true),
+type SentBody = { blocks: { type: string; text?: string }[] }
+type Upload = { finish: () => void; fail: () => void }
+
+const mocks = vi.hoisted(() => {
   // Each upload waits here, at the transport boundary, until the test settles it.
-  uploads: [] as { finish: () => void; fail: () => void }[]
-}))
+  const uploads: Upload[] = []
+  return {
+    call: vi.fn(
+      (
+        _target: unknown,
+        _method: string,
+        _params: { clientOperationId?: string; body?: SentBody }
+      ): Promise<unknown> => new Promise(() => {})
+    ),
+    handBack: vi.fn(
+      (_sessionId: string, _clientMessageId: string, _body: SentBody): boolean => true
+    ),
+    uploads
+  }
+})
 
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
@@ -58,7 +72,10 @@ vi.mock('../../drafts/native-chat-draft-attachment-staging', async (load) => ({
       new Promise<T>((resolve, reject) => {
         mocks.uploads.push({
           finish: () =>
-            resolve({ ...input, text: input.text.replaceAll('/local/', '/host/uploads/') }),
+            resolve({
+              ...input,
+              text: input.text.replaceAll('/local/', '/host/uploads/')
+            }),
           fail: () => reject(new Error('upload failed'))
         })
       })
@@ -156,21 +173,17 @@ async function flush(): Promise<void> {
   })
 }
 
+const textOf = (body: SentBody | undefined): string =>
+  (body?.blocks ?? [])
+    .flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
+    .join('\n')
+
 const dispatchedBodies = (): string[] =>
   mocks.call.mock.calls
     .filter((call) => call[1] === 'agentSession.send')
-    .map((call) =>
-      (call[2] as { body: { blocks: { type: string; text?: string }[] } }).body.blocks
-        .flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
-        .join('\n')
-    )
+    .map((call) => textOf(call[2].body))
 
-const returnedText = (): string => {
-  const body = mocks.handBack.mock.calls.at(-1)?.[2] as {
-    blocks: { type: string; text?: string }[]
-  }
-  return body.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('\n')
-}
+const returnedText = (): string => textOf(mocks.handBack.mock.calls.at(-1)?.[2])
 
 /** What Rewind or Edit opens for text read back in this chat, with only `loaded` messages present. */
 function reveals(text: string, loaded: readonly string[]): string | null {
