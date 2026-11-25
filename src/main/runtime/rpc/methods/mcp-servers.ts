@@ -108,8 +108,16 @@ export const MCP_SERVER_METHODS = [
           const nameGiven = 'config' in params || (params.name !== undefined && given.length === 1)
           // Each in turn: a later one refused leaves the earlier ones added, as separate adds would.
           const servers: McpServer[] = []
-          for (const server of given) {
-            servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+          try {
+            for (const server of given) {
+              servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+            }
+          } catch (error) {
+            // The ones added before the refusal are on the list: other clients re-read it.
+            if (servers.length > 0) {
+              context.runtime.notifyMcpServersChanged()
+            }
+            throw error
           }
           return { ...changed(servers[0]), servers }
         },
