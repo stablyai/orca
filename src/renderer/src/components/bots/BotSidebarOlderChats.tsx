@@ -9,27 +9,25 @@ export function BotSidebarOlderToggle({
   count,
   open,
   onToggle,
-  onRemovedWithFocus
+  removedWithFocus
 }: {
   count: number
   open: boolean
   onToggle: () => void
-  /** It is going away while it holds focus, so the list can hand focus on. */
-  onRemovedWithFocus: () => void
+  /** Set when it goes away while it holds focus, so the list can hand focus on. */
+  removedWithFocus: React.RefObject<boolean>
 }): React.JSX.Element {
   const t = useTranslate()
   const toggleRef = useRef<HTMLButtonElement>(null)
-  const removed = useRef(onRemovedWithFocus)
-  removed.current = onRemovedWithFocus
   // Runs before its button leaves the page, while focus is still on it.
-  useLayoutEffect(
-    () => () => {
-      if (toggleRef.current !== null && document.activeElement === toggleRef.current) {
-        removed.current()
+  useLayoutEffect(() => {
+    const button = toggleRef.current
+    return () => {
+      if (button !== null && document.activeElement === button) {
+        removedWithFocus.current = true
       }
-    },
-    []
-  )
+    }
+  }, [removedWithFocus])
   const toggle = (): void => {
     if (open && document.activeElement?.closest('[data-bot-sidebar-older-chat]')) {
       // Focus would otherwise drop to the page as the focused row goes away.

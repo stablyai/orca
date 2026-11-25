@@ -182,9 +182,7 @@ export function BotSidebarChats({
             count={older.length}
             open={showOlder}
             onToggle={onToggleOlder}
-            onRemovedWithFocus={() => {
-              toggleLeftWithFocus.current = true
-            }}
+            removedWithFocus={toggleLeftWithFocus}
           />
         ]
       : []),
