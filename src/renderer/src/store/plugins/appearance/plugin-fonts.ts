@@ -185,7 +185,10 @@ export function pluginFontFamilyWhenLoaded(fontFamily: string): string {
       loadFamily(family)
     }
   }
-  return names.filter((name) => !unloaded.has(familyKey(name))).join(', ')
+  return names
+    .filter((name) => !unloaded.has(familyKey(name)))
+    .map((name) => (name.includes(',') ? `"${name}"` : name))
+    .join(', ')
 }
 
 /** Changes when a plugin family `fontFamily` lists loads or goes away; constant otherwise. */
