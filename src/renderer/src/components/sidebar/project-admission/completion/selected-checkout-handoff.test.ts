@@ -10,6 +10,7 @@ import {
   finishProjectAddWithDefaultCheckout,
   openProjectDefaultCheckout
 } from './project-added-default-checkout'
+import { captureCheckoutHandoffIntent } from './checkout-handoff-intent'
 
 const harness: {
   state: AppState | null
@@ -103,6 +104,12 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
         activeView: 'terminal',
         activeWorktreeId: null,
         activeWorkspaceExecutionHostId: null,
+        activeTabType: 'terminal',
+        activeTabId: null,
+        activeBrowserTabId: null,
+        activeFileId: null,
+        activeGroupIdByWorktree: {},
+        groupsByWorktree: {},
         worktreesByRepo: {},
         detectedWorktreesByRepo: {},
         hideDefaultBranchWorkspace: true,
@@ -143,7 +150,7 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
   synchronize()
   return { store, persisted }
 }
-async function open(selectedPath: string, executionHostId?: 'local') {
+async function open(selectedPath: string, executionHostId?: 'local' | 'runtime:env') {
   await openProjectDefaultCheckout({
     repoId: 'project',
     source: 'local_folder_picker',
@@ -321,6 +328,137 @@ describe('selected checkout handoff', () => {
       executionHostId: 'local'
     })
   })
+
+  /** Holds the handoff's first host read until the returned gate opens, then answers ok or failed. */
+  function holdFirstScan(store: ReturnType<typeof setup>['store']) {
+    const refresh = store.getState().fetchWorktrees
+    const gate = deferred<boolean>()
+    vi.spyOn(store.getState(), 'fetchWorktrees').mockImplementationOnce(async (...args) =>
+      (await gate.promise) ? refresh(...args) : false
+    )
+    return gate
+  }
+
+  const visibleTabChanges: [string, Partial<AppState>][] = [
+    ['terminal tab', { activeTabId: 'terminal-2' }],
+    ['browser tab', { activeTabType: 'browser', activeBrowserTabId: 'browser-1' }]
+  ]
+
+  describe.each(visibleTabChanges)('picking another %s in the same workspace', (_tab, change) => {
+    it.each([
+      ['succeed', true],
+      ['fail', false]
+    ])('stands the handoff down when it would %s', async (_outcome, succeeds) => {
+      const { store } = setup([checkout('/repo'), checkout('/selected', { visible: false })])
+      store.setState({ activeWorktreeId: 'project::/repo', activeTabId: 'terminal-1' })
+      const gate = holdFirstScan(store)
+      const handoff = open('/selected', 'local')
+      store.setState(change)
+      gate.resolve(succeeds)
+      await handoff
+      expect(harness.activate).not.toHaveBeenCalled()
+      expect(harness.error).not.toHaveBeenCalled()
+    })
+
+    it('stands an explicit Retry down too', async () => {
+      const { store } = setup(
+        [checkout('/repo'), checkout('/selected', { visible: false })],
+        [repo],
+        true
+      )
+      store.setState({ activeWorktreeId: 'project::/repo', activeTabId: 'terminal-1' })
+      let retry: (() => void) | undefined
+      harness.error.mockImplementation((_message, options) => {
+        retry = options.action?.onClick
+      })
+      await open('/selected', 'local')
+      expect(harness.error).toHaveBeenCalledTimes(1)
+      const gate = holdFirstScan(store)
+      retry?.()
+      store.setState(change)
+      gate.resolve(true)
+      // Retry is fire-and-forget; let its held read settle.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(harness.activate).not.toHaveBeenCalled()
+      expect(harness.error).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('reports an owner removed during a held listing as unavailable, without Retry', async () => {
+    const { store } = setup([checkout('/repo'), checkout('/selected', { visible: false })])
+    const gate = holdFirstScan(store)
+    const handoff = open('/selected', 'local')
+    store.setState({ repos: [] })
+    gate.resolve(false)
+    await handoff
+    expect(harness.error).toHaveBeenCalledTimes(1)
+    const [, options] = harness.error.mock.calls[0]
+    expect(options.description).toMatch(/could not be identified/)
+    expect(options.action).toBeUndefined()
+  })
+
+  it.each([
+    ['before completion starts', false],
+    ['while onboarding is saved', true]
+  ])(
+    'leaves a same-type confirmation that replaced the add’s own alone (%s)',
+    async (_moment, duringOnboarding) => {
+      const { store } = setup([checkout('/repo'), checkout('/selected')])
+      store.setState({
+        activeModal: 'confirm-add-project-from-folder',
+        modalData: { folderPath: '/selected' }
+      })
+      const intent = captureCheckoutHandoffIntent()
+      const replacement = { folderPath: '/other' }
+      const gate = deferred<void>()
+      if (duringOnboarding) {
+        harness.onboarding.mockReturnValueOnce(gate.promise)
+      } else {
+        store.setState({ modalData: replacement })
+      }
+      const closeModal = vi.fn()
+      const handoff = finishProjectAddWithDefaultCheckout({
+        repoId: 'project',
+        source: 'local_folder_picker',
+        selectedPath: '/selected',
+        executionHostId: 'local',
+        closeModal,
+        intent
+      })
+      if (duringOnboarding) {
+        store.setState({ modalData: replacement })
+        gate.resolve()
+      }
+      await handoff
+      intent.dispose()
+      expect(closeModal).not.toHaveBeenCalled()
+      expect(store.getState().modalData).toBe(replacement)
+      expect(harness.activate).not.toHaveBeenCalled()
+      expect(harness.error).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each([['local' as const], ['runtime:env' as const]])(
+    'opens the selected sibling of a reused project and imports only it (%s)',
+    async (hostId) => {
+      const owner = hostId === 'local' ? repo : { ...repo, executionHostId: hostId }
+      const host = hostId === 'local' ? {} : { hostId }
+      const { persisted } = setup(
+        [
+          checkout('/repo', host),
+          checkout('/sibling-a', { visible: false, ...host }),
+          checkout('/sibling-b', { visible: false, ...host })
+        ],
+        [owner]
+      )
+      await open('/sibling-b', hostId)
+      expect(harness.activate).toHaveBeenCalledWith('project::/sibling-b', {
+        navigationIntent: 'user-open',
+        executionHostId: hostId
+      })
+      expect(persisted.get(hostId)?.importedExternalWorktreePaths).toEqual(['/sibling-b'])
+    }
+  )
 
   it('ignores a same-id remote checkout and refuses ambiguous owner inference', async () => {
     const remote = { ...repo, executionHostId: 'runtime:remote' as const }

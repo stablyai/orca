@@ -48,12 +48,15 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends RuntimeWorkspa
   async listDetectedManagedWorktrees(
     repoSelector: string,
     connectionId?: string | null,
-    sourceDefaultsSupported = true
+    sourceDefaultsSupported = true,
+    fresh = false
   ): Promise<DetectedWorktreeListResult> {
-    return this.listDetectedWorktreesForResolvedRepo(
-      await this.resolveRepoSelectorForConnection(repoSelector, connectionId),
-      sourceDefaultsSupported
-    )
+    const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
+    if (fresh) {
+      // A settled scan or cached failure may predate the caller's write or Git's recovery.
+      this.invalidateWorktreeScanCacheForRepo(repo.id)
+    }
+    return this.listDetectedWorktreesForResolvedRepo(repo, sourceDefaultsSupported)
   }
 
   protected listDetectedWorktreesForResolvedRepo(

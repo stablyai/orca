@@ -13,6 +13,8 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { finishProjectAddWithDefaultCheckout } from '../completion/project-added-default-checkout'
+import { captureCheckoutHandoffIntent } from '../completion/checkout-handoff-intent'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
@@ -35,19 +37,19 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const addGenRef = useRef(0)
 
   const isOpen = activeModal === 'confirm-add-project-from-folder'
-  const [previousOpen, setPreviousOpen] = useState(isOpen)
+  // A new request can replace this modal's data while it stays open; it is a new confirmation.
+  const request = isOpen ? modalData : null
+  const [previousRequest, setPreviousRequest] = useState(request)
   const folderPath = typeof modalData.folderPath === 'string' ? modalData.folderPath : ''
   const runtimeEnvironmentId =
     typeof modalData.runtimeEnvironmentId === 'string' ? modalData.runtimeEnvironmentId : null
 
-  if (isOpen !== previousOpen) {
-    setPreviousOpen(isOpen)
-    if (!isOpen) {
-      // Clear closed local state before commit so reopening cannot flash stale progress/errors.
-      addGenRef.current++
-      setIsAdding(false)
-      setError(null)
-    }
+  if (request !== previousRequest) {
+    setPreviousRequest(request)
+    // Clear the old request's state before commit so the new one cannot flash its progress/errors.
+    addGenRef.current++
+    setIsAdding(false)
+    setError(null)
   }
 
   const openNonGitConfirmation = useCallback(() => {
@@ -64,6 +66,10 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
       return
     }
     const gen = ++addGenRef.current
+    // Bound before the add it authorizes: a replaced request, navigation or newer add releases it.
+    const intent = captureCheckoutHandoffIntent()
+    const isCurrent = (): boolean =>
+      mountedRef.current && gen === addGenRef.current && intent.canReveal()
     setIsAdding(true)
     setError(null)
     try {
@@ -75,10 +81,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         runtimeEnvironmentId
       })
 
-      if (!mountedRef.current || gen !== addGenRef.current) {
-        return
-      }
-      if (!repo) {
+      if (!isCurrent() || !repo) {
         return
       }
       if (!isGitRepoKind(repo)) {
@@ -86,30 +89,32 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
         return
       }
       // The repo is already persisted; a non-authoritative refresh must not strand the add dialog.
-      const ownerOptions = worktreeRefreshOptions(runtimeEnvironmentId)
-      await fetchWorktrees(repo.id, ownerOptions)
-      if (!mountedRef.current || gen !== addGenRef.current) {
+      await fetchWorktrees(repo.id, worktreeRefreshOptions(runtimeEnvironmentId))
+      if (!isCurrent()) {
         return
       }
       await finishProjectAddWithDefaultCheckout({
         repoId: repo.id,
         source: runtimeEnvironmentId ? 'runtime_server_path' : 'local_folder_picker',
         selectedPath,
-        executionHostId: ownerOptions.executionHostId,
-        closeModal
+        // The returned row's own host: a reused row keeps its stamp, which the handoff must match.
+        executionHostId: getRepoExecutionHostId(repo),
+        closeModal,
+        intent
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (message.includes(NON_GIT_REPO_ERROR)) {
-        if (mountedRef.current && gen === addGenRef.current) {
+        if (isCurrent()) {
           openNonGitConfirmation()
         }
         return
       }
-      if (mountedRef.current && gen === addGenRef.current) {
+      if (isCurrent()) {
         setError(message)
       }
     } finally {
+      intent.dispose()
       if (mountedRef.current && gen === addGenRef.current) {
         setIsAdding(false)
       }

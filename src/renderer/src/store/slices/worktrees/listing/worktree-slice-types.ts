@@ -23,6 +23,8 @@ export type WorktreeSliceSet = Parameters<StateCreator<AppState, [], [], Worktre
 
 export type BackgroundRuntimeRefreshOptions = {
   reuseRecentCompatibilityFailure?: boolean
+  /** Ask the host for a Git observation newer than this request (hosts without support ignore it). */
+  fresh?: boolean
 }
 
 export type DetectedWorktreeRefreshOptions = BackgroundRuntimeRefreshOptions & {

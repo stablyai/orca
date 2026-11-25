@@ -10,11 +10,7 @@ import type {
   ProjectGroupImportResult
 } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import {
-  getRepoDialableSshTargetId,
-  getRepoExecutionHostId,
-  getRepoRoutingConnectionId
-} from '../../../shared/execution-host/execution-host'
+import { runtimeRepoIsRegistrationCandidate } from '../workspaces/catalog/runtime-worktree-selection'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
 import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'
@@ -124,17 +120,15 @@ export class RuntimeNestedRepoImport {
           null,
           importTargetResolver.getFamilyPaths(importRepoPath)
         )
-        const existing = store.getRepos().find(
-          (repo) =>
-            getRepoDialableSshTargetId(repo) === null &&
-            (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
-              isSameCheckoutFamily(repo) ||
-              // The resolved spelling names this machine's folder, so only native rows may match it.
-              (resolvedImportRepoPath !== null &&
-                getRepoRoutingConnectionId(repo) === null &&
-                !getRepoExecutionHostId(repo).startsWith('ssh:') &&
-                normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
-        )
+        const existing = store.getRepos().find((repo) => {
+          const repoPathKey = normalizeRuntimePathForComparison(repo.path)
+          return (
+            runtimeRepoIsRegistrationCandidate(repo) &&
+            (repoPathKey === normalizedImportRepoPath ||
+              repoPathKey === resolvedImportRepoPath ||
+              isSameCheckoutFamily(repo))
+          )
+        })
         const group = groupResolver.getGroupForRepo(repoPath)
         if (existing) {
           // A rescan can reuse the group, so keep its members' order and append the rest.

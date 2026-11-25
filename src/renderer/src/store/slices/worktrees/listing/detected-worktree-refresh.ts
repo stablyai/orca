@@ -156,7 +156,8 @@ async function listDetectedWorktreesForRuntimeRepoOnce(
   let refresh = options.forceFresh ? undefined : runtimeDetectedWorktreeRefreshesInFlight.get(key)
   if (!refresh) {
     refresh = listDetectedWorktreesForRepo({ kind: 'environment', environmentId }, repoId, {
-      reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure
+      reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure,
+      ...(options.forceFresh ? { fresh: true } : {})
     })
     runtimeDetectedWorktreeRefreshesInFlight.set(key, refresh)
   }

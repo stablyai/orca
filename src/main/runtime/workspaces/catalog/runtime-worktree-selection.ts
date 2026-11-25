@@ -2,6 +2,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
+  parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
@@ -71,12 +72,21 @@ export function runtimeRepoMatchesExecutionHost(
   return getRepoExecutionHostId(repo) === executionHostId
 }
 
-/** Registration reads this machine's path; an SSH row at that path belongs to another machine. */
+/**
+ * Registration reads this machine's path; an SSH row at that path belongs to another machine. Every
+ * other row is this machine's, whatever its stamp: local and a client-minted runtime: both address
+ * it, so neither spelling may hide a native row from a writer's identity checks.
+ */
 export function runtimeRepoIsRegistrationCandidate(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'>,
   executionHostId?: ExecutionHostId | null
 ): boolean {
-  return runtimeRepoMatchesExecutionHost(repo, executionHostId) && !getRepoSshConnectionId(repo)
+  if (getRepoSshConnectionId(repo)) {
+    return false
+  }
+  return parseExecutionHostId(executionHostId)?.kind === 'ssh'
+    ? runtimeRepoMatchesExecutionHost(repo, executionHostId)
+    : true
 }
 
 export function parseExactWorktreeIdSelector(

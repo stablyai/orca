@@ -15,6 +15,7 @@ import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { confirmNonGitFolderAdd } from './non-git-folder-confirmation'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { CompleteGitRepoAdd } from '../completion/use-complete-git-repo-add'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 import {
@@ -196,7 +197,8 @@ export function useAddRepoLocalFolderFlow({
           if (mode === 'batch') {
             return { status: 'completed', repo, selectedPath }
           }
-          await onGitRepoReady(repo.id, source, ownerOptions.executionHostId, { selectedPath })
+          // The returned row's own host: a reused row keeps its stamp, which the handoff must match.
+          await onGitRepoReady(repo.id, source, getRepoExecutionHostId(repo), { selectedPath })
         } else {
           // Folder projects activate their synthetic root through the add flow instead of Git checkout completion.
           closeModal()
@@ -252,11 +254,10 @@ export function useAddRepoLocalFolderFlow({
         source,
         gen,
         isCurrentGen: () => gen === localAddGenRef.current,
-        activeRuntimeEnvironmentId,
         addLocalPathForGeneration,
         onGitRepoReady
       }),
-    [activeRuntimeEnvironmentId, addLocalPathForGeneration, onGitRepoReady]
+    [addLocalPathForGeneration, onGitRepoReady]
   )
 
   useDroppedLocalPathAutoAdd({

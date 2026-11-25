@@ -40,7 +40,7 @@ export async function listDetectedWorktreesForRepo(
     return await callRuntimeRpc<DetectedWorktreeListResult>(
       target,
       'worktree.detectedList',
-      { repo: repoId },
+      { repo: repoId, ...(options.fresh ? { fresh: true } : {}) },
       {
         timeoutMs: 15_000,
         reuseRecentCompatibilityFailure: options.reuseRecentCompatibilityFailure

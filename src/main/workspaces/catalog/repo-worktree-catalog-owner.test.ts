@@ -108,4 +108,50 @@ describe('worktree catalog freshness', () => {
       worktrees: [{ path: '/repos/freshness/v2' }]
     })
   })
+
+  // A fresh detected listing (a handoff Retry) invalidates, then reads: what follows must be new Git.
+  const runtimeRead = (plan: ReturnType<typeof controlledScans>['plan'], target: Repo) =>
+    readWorktreeCatalog(
+      target,
+      'local:default',
+      { kind: 'runtime', maxAgeMs: 30_000, reusesFailure: true, overtakenFlights: 2 },
+      plan
+    )
+
+  it('reuses a settled failure inside its window only until an invalidation', async () => {
+    const scans = controlledScans()
+    const target = repoFor('retry-after-failure')
+    const failed = runtimeRead(scans.plan, target)
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    scans.pending.shift()!({ kind: 'failed', error: new Error('git unavailable') })
+    expect((await failed).observation?.outcome.kind).toBe('failed')
+
+    // Git recovers, but an ordinary read within the window still answers with the failure.
+    vi.setSystemTime(1_000)
+    expect((await runtimeRead(scans.plan, target)).observation?.outcome.kind).toBe('failed')
+    expect(scans.pending).toHaveLength(0)
+
+    invalidateWorktreeCatalogForRepo(target.id)
+    const retried = runtimeRead(scans.plan, target)
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    await scans.finish(`${target.path}/recovered`, 2_000)
+    expect((await retried).observation?.outcome).toMatchObject({
+      worktrees: [{ path: `${target.path}/recovered` }]
+    })
+  })
+
+  it('never answers a reader after an invalidation with a scan that started before it', async () => {
+    const scans = controlledScans()
+    const target = repoFor('held-across-invalidation')
+    void runtimeRead(scans.plan, target)
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    invalidateWorktreeCatalogForRepo(target.id)
+    const fresh = runtimeRead(scans.plan, target)
+    await scans.finish(`${target.path}/before-write`, 1_000)
+    await vi.waitFor(() => expect(scans.pending).toHaveLength(1))
+    await scans.finish(`${target.path}/after-write`, 2_000)
+    expect((await fresh).observation?.outcome).toMatchObject({
+      worktrees: [{ path: `${target.path}/after-write` }]
+    })
+  })
 })

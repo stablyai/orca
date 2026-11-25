@@ -1,4 +1,3 @@
-import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { track } from '@/diagnostics/telemetry/telemetry'
@@ -20,6 +19,7 @@ import {
 import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import { showSelectedCheckoutFailure } from './selected-checkout-failure-toast'
+import { captureCheckoutHandoffIntent, type CheckoutHandoffIntent } from './checkout-handoff-intent'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -30,21 +30,6 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
-
-let handoffGeneration = 0
-
-function captureProjectCheckoutReveal() {
-  const generation = ++handoffGeneration
-  const initial = useAppStore.getState()
-  return captureBrowserLinkReveal(useAppStore.getState, useAppStore.subscribe, () => {
-    const state = useAppStore.getState()
-    return (
-      generation === handoffGeneration &&
-      state.activeModal === initial.activeModal &&
-      state.modalData === initial.modalData
-    )
-  })
-}
 
 function findProjectRepo(repoId: string, executionHostId?: ExecutionHostId): Repo | null {
   const matches = useAppStore
@@ -158,19 +143,36 @@ function resolveInitialCwdForDefaultCheckout(
   return relativePath && relativePath.length > 0 ? selectedPath : undefined
 }
 
-export async function openProjectDefaultCheckout({
+/** Runs fn under the caller's intent, or one captured now and released when fn settles. */
+async function withIntent(
+  given: CheckoutHandoffIntent | undefined,
+  fn: (intent: CheckoutHandoffIntent) => Promise<void>
+): Promise<void> {
+  const intent = given ?? captureCheckoutHandoffIntent()
+  try {
+    await fn(intent)
+  } finally {
+    if (!given) {
+      intent.dispose()
+    }
+  }
+}
+
+export function openProjectDefaultCheckout({
   repoId,
   source,
   selectedPath,
-  executionHostId
+  executionHostId,
+  intent
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
   executionHostId?: ExecutionHostId
+  /** The user's add; omitted, the foreground at this call is what the handoff may change. */
+  intent?: CheckoutHandoffIntent
 }): Promise<void> {
-  const reveal = captureProjectCheckoutReveal()
-  try {
+  return withIntent(intent, async (reveal) => {
     const repo = findProjectRepo(repoId, executionHostId)
     const ownerHostId = executionHostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
     const { worktree: defaultCheckout, reason } =
@@ -205,7 +207,8 @@ export async function openProjectDefaultCheckout({
       reason
     })
     finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
-    if (!repo || !ownerHostId) {
+    // The owner can be removed while listing runs; only a live one can be retried.
+    if (!ownerHostId || !findProjectRepo(repoId, ownerHostId)) {
       showSelectedCheckoutFailure(repoId, { kind: 'owner_unavailable' })
       return
     }
@@ -229,38 +232,36 @@ export async function openProjectDefaultCheckout({
               retry
             }
     )
-  } finally {
-    reveal.dispose()
-  }
+  })
 }
 
-export async function finishProjectAddWithDefaultCheckout({
+export function finishProjectAddWithDefaultCheckout({
   repoId,
   source,
   selectedPath,
   closeModal,
-  executionHostId
+  executionHostId,
+  intent
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
   closeModal: () => void
   executionHostId?: ExecutionHostId
+  /** Captured when the user confirmed, before the add's own work; see openProjectDefaultCheckout. */
+  intent?: CheckoutHandoffIntent
 }): Promise<void> {
-  const reveal = captureProjectCheckoutReveal()
-  try {
+  return withIntent(intent, async (reveal) => {
     await markOnboardingProjectAdded('addedRepo')
-    if (!reveal.canReveal()) {
+    if (!reveal.closeOwnModal(closeModal)) {
       return
     }
-  } finally {
-    reveal.dispose()
-  }
-  closeModal()
-  await openProjectDefaultCheckout({
-    repoId,
-    source,
-    selectedPath,
-    executionHostId
+    await openProjectDefaultCheckout({
+      repoId,
+      source,
+      selectedPath,
+      executionHostId,
+      intent: reveal
+    })
   })
 }

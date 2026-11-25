@@ -10,6 +10,8 @@ export type LocalDetectedWorktreeRequest = {
   providerRequestId: ProviderRequestId
   repoId: string
   executionHostId: typeof LOCAL_EXECUTION_HOST_ID
+  /** The host must observe Git after this request, never answer from a settled scan or failure. */
+  fresh?: true
 }
 
 export type DirectSshDetectedWorktreeRequest = {

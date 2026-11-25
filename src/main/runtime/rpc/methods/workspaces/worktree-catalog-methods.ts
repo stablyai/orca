@@ -89,7 +89,8 @@ export const WORKTREE_CATALOG_METHODS = [
         await context.runtime.listDetectedManagedWorktrees(
           params.repo,
           undefined,
-          supportsWorktreeVisibilitySourceDefaults(context)
+          supportsWorktreeVisibilitySourceDefaults(context),
+          params.fresh === true
         ),
         context,
         pendingAtScan

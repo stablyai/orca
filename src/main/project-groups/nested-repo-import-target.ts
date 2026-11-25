@@ -4,14 +4,22 @@ import { listWorktreeGraph } from '../git/worktrees/catalog/worktree-scan-cache'
 
 export type NestedRepoImportTargetResolver = {
   resolveLocal: (repoPath: string) => Promise<string>
-  /** Checkouts sharing a resolved target's worktree graph; [] when Git could not prove one. */
+  /** Non-bare checkouts sharing a resolved target's worktree graph; [] when Git could not prove one. */
   getFamilyPaths: (targetPath: string) => readonly string[]
 }
 
-function findImportTarget(
+type WorktreeGraphRead = {
+  /** The non-bare main checkout imports stand for; null when the graph has none (a bare primary). */
+  targetPath: string | null
+  graphPaths: string[]
+  /** Family identity is known whenever Git listed this graph, independent of where imports land. */
+  familyPaths: string[]
+}
+
+function readImportGraph(
   selectedPath: string,
   worktrees: readonly GitWorktreeInfo[]
-): { targetPath: string; graphPaths: string[] } | null {
+): WorktreeGraphRead | null {
   const selectedPathKey = normalizeRuntimePathForComparison(selectedPath)
   const graphContainsSelectedPath = worktrees.some(
     (worktree) => normalizeRuntimePathForComparison(worktree.path) === selectedPathKey
@@ -19,18 +27,19 @@ function findImportTarget(
   if (!graphContainsSelectedPath) {
     return null
   }
-
   // Collapse a linked worktree only with Git proof it shares this non-bare owner graph.
   const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree && !worktree.isBare)
-  return mainWorktree
-    ? { targetPath: mainWorktree.path, graphPaths: worktrees.map((worktree) => worktree.path) }
-    : null
+  return {
+    targetPath: mainWorktree?.path ?? null,
+    graphPaths: worktrees.map((worktree) => worktree.path),
+    familyPaths: worktrees.filter((worktree) => !worktree.isBare).map((worktree) => worktree.path)
+  }
 }
 
 async function resolveWithCache(
   repoPath: string,
   cache: Map<string, string>,
-  familyByTarget: Map<string, string[]>,
+  familyByPath: Map<string, string[]>,
   readWorktreeGraph: (path: string) => Promise<GitWorktreeInfo[]>
 ): Promise<string> {
   const repoPathKey = normalizeRuntimePathForComparison(repoPath)
@@ -40,13 +49,17 @@ async function resolveWithCache(
   }
 
   try {
-    const target = findImportTarget(repoPath, await readWorktreeGraph(repoPath))
-    if (target) {
-      for (const graphPath of target.graphPaths) {
-        cache.set(normalizeRuntimePathForComparison(graphPath), target.targetPath)
+    const graph = readImportGraph(repoPath, await readWorktreeGraph(repoPath))
+    if (graph) {
+      for (const familyPath of graph.familyPaths) {
+        familyByPath.set(normalizeRuntimePathForComparison(familyPath), graph.familyPaths)
       }
-      familyByTarget.set(normalizeRuntimePathForComparison(target.targetPath), target.graphPaths)
-      return target.targetPath
+      if (graph.targetPath) {
+        for (const graphPath of graph.graphPaths) {
+          cache.set(normalizeRuntimePathForComparison(graphPath), graph.targetPath)
+        }
+        return graph.targetPath
+      }
     }
   } catch {
     // Fall through to selected-path compatibility behavior.
@@ -57,12 +70,12 @@ async function resolveWithCache(
 
 export function createNestedRepoImportTargetResolver(): NestedRepoImportTargetResolver {
   const localCache = new Map<string, string>()
-  const familyByTarget = new Map<string, string[]>()
+  const familyByPath = new Map<string, string[]>()
   return {
     resolveLocal: (repoPath) =>
-      resolveWithCache(repoPath, localCache, familyByTarget, (path) => listWorktreeGraph(path)),
+      resolveWithCache(repoPath, localCache, familyByPath, (path) => listWorktreeGraph(path)),
     getFamilyPaths: (targetPath) =>
-      familyByTarget.get(normalizeRuntimePathForComparison(targetPath)) ?? []
+      familyByPath.get(normalizeRuntimePathForComparison(targetPath)) ?? []
   }
 }
 

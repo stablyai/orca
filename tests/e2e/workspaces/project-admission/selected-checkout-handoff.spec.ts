@@ -267,16 +267,18 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
       throw new Error('Primary registration failed')
     }
     const original = store.getState().fetchWorktrees
-    // Inject one failed local confirmation; the saved import still goes through real persistence.
+    const faults: { repoId: string; importedSelected: boolean }[] = []
+    // Fail exactly the handoff's confirmation: the fresh read after it saved the selected import.
     Object.assign(store.getState(), {
       fetchWorktrees: async (id: string, options?: { forceFresh?: boolean }) => {
-        if (
-          options?.forceFresh &&
+        const importedSelected =
           store
             .getState()
             .repos.find((row) => row.id === id)
-            ?.importedExternalWorktreePaths?.includes(selected)
-        ) {
+            ?.importedExternalWorktreePaths?.includes(selected) === true
+        if (options?.forceFresh && importedSelected) {
+          faults.push({ repoId: id, importedSelected })
+          document.documentElement.dataset.selectedCheckoutFaults = JSON.stringify(faults)
           store.setState({ fetchWorktrees: original })
           return false
         }
@@ -286,12 +288,26 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
     store.getState().openModal('confirm-add-project-from-folder', { folderPath: selected })
     return repo.id
   }, paths)
+  const selectedWorktreeId = `${repoId}::${paths.selected}`
+  const selectedTerminals = () =>
+    orcaPage.evaluate(
+      (id) =>
+        (window.__store!.getState().tabsByWorktree[id] ?? []).flatMap(
+          (tab) => window.__store!.getState().ptyIdsByTabId[tab.id] ?? []
+        ),
+      selectedWorktreeId
+    )
   const dialog = orcaPage.getByRole('dialog', { name: 'Add Project', exact: true })
   await expect(dialog).toBeVisible()
   await dialog.getByRole('button', { name: 'Add Project', exact: true }).click()
   await expect(dialog).toBeHidden({ timeout: 30_000 })
   const retry = orcaPage.getByRole('button', { name: 'Retry', exact: true })
   await expect(retry).toBeVisible()
+  expect(
+    JSON.parse(
+      await orcaPage.evaluate(() => document.documentElement.dataset.selectedCheckoutFaults ?? '[]')
+    )
+  ).toEqual([{ repoId, importedSelected: true }])
   // The failure replaces this add's "already added" toast, so the add never reports both outcomes.
   await expect(orcaPage.getByText('Project already added', { exact: true })).toHaveCount(0)
   expect(
@@ -302,6 +318,8 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
       repoId
     )
   ).toEqual([paths.selected])
+  // Nothing opened the selected checkout before Retry, so a terminal after it is Retry's own.
+  expect(await selectedTerminals()).toEqual([])
   await orcaPage.screenshot({ path: testInfo.outputPath('failed-confirmation-retry.png') })
   await retry.click()
   await expect(
@@ -311,6 +329,7 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
     orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-hidden' })
   ).toHaveCount(0)
   const ptyId = await waitForActivePanePtyId(orcaPage)
+  expect(await selectedTerminals()).toContain(ptyId)
   await expect
     .poll(() => orcaPage.evaluate((id) => window.api.pty.getCwd(id), ptyId))
     .toBe(paths.selected)

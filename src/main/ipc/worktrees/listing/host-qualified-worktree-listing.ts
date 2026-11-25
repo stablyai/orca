@@ -20,6 +20,7 @@ import {
   isCapturedRepoCurrent,
   resolveRepoOwnershipEvidence
 } from './worktree-host-ownership'
+import { invalidateDetectedWorktreeScanCache } from './detected-worktree-scan-cache'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { dropWorkspacesTheListingInvalidates } from '../../../persistence/restoring-sessions/invalid-workspace-layout-purge'
 
@@ -89,6 +90,10 @@ export async function listHostQualifiedDetectedWorktrees(
       return true
     }
     return capturedAuthority !== null && isCurrentSshProviderAuthority(capturedAuthority)
+  }
+  if (parsedHost.kind === 'local' && 'fresh' in args && args.fresh === true) {
+    // A settled scan may predate the caller's write or Git's recovery; observe Git again.
+    invalidateDetectedWorktreeScanCache(repo.id)
   }
   const result = await listDetectedWorktreesForCapturedRepo(store, repo, isCurrent, providerAbort)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {

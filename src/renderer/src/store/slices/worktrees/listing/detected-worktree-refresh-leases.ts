@@ -211,7 +211,12 @@ export function createDetectedWorktreeRefreshLeaseRegistry(
             !candidate.cancelAttempted &&
             requestsAreCompatible(candidate.request, input)
         )
-    const invocation = joinable ?? startInvocation(publicKey, input)
+    const invocation =
+      joinable ??
+      startInvocation(
+        publicKey,
+        fresh && !('expectedAuthority' in input) ? { ...input, fresh: true } : input
+      )
     const waiterLeaseId = mintWaiterLeaseId()
     let resolveResult!: (result: HostQualifiedDetectedWorktreeResult) => void
     let rejectResult!: (error: unknown) => void

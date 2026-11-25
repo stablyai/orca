@@ -38,8 +38,15 @@ async function waitFor(check: () => boolean, label: string): Promise<void> {
   }
 }
 
-/** Raises the add's own toast first, as the add flow does, then the handoff failure. */
-function failureAfterAdd(repoId: string, failure: SelectedCheckoutFailure) {
+/**
+ * Raises the add's own toast first, as the add flow does, then each earlier failure and the final
+ * one on the same live toast, as a Retry that ends differently does.
+ */
+function failureAfterAdd(
+  repoId: string,
+  failure: SelectedCheckoutFailure,
+  earlier: readonly SelectedCheckoutFailure[] = []
+) {
   return defineFixture({
     width: 600,
     render: () => <ToastStage />,
@@ -49,6 +56,13 @@ function failureAfterAdd(repoId: string, failure: SelectedCheckoutFailure) {
         description: 'primary'
       })
       await waitFor(() => document.querySelector(LIVE_TOAST) !== null, 'the add toast')
+      for (const previous of earlier) {
+        showSelectedCheckoutFailure(repoId, previous)
+        await waitFor(
+          () => document.querySelector(`${LIVE_TOAST} [data-button]`) !== null,
+          'the earlier failure'
+        )
+      }
       showSelectedCheckoutFailure(repoId, failure)
       await waitFor(
         () => document.querySelector(LIVE_TOAST)?.getAttribute('data-type') === 'error',
@@ -75,3 +89,9 @@ export const refreshFailed = failureAfterAdd('refresh-failed', {
 })
 export const checkoutMissing = failureAfterAdd('missing', { kind: 'missing', retry })
 export const ownerUnavailable = failureAfterAdd('owner-unavailable', { kind: 'owner_unavailable' })
+/** Retry finds the project gone: the same live toast must drop the Retry it showed before. */
+export const retryThenOwnerUnavailable = failureAfterAdd(
+  'retry-then-owner-unavailable',
+  { kind: 'owner_unavailable' },
+  [{ kind: 'missing', retry }]
+)

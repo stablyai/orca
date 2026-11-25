@@ -76,7 +76,9 @@ export const WorktreeDetectedListParams = z.object({
   repo: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))
-    .pipe(z.string().min(1, 'Missing repo selector'))
+    .pipe(z.string().min(1, 'Missing repo selector')),
+  // Newer clients only; older hosts strip it and may answer from their scan cache.
+  fresh: z.boolean().optional()
 })
 
 export const WorktreeTeardownMissingTerminalsParams = WorktreeDetectedListParams.extend({

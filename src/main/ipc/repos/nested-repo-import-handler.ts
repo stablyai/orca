@@ -16,10 +16,8 @@ import {
   resolveNestedRepoSelection
 } from '../../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../../project-groups/nested-repo-import-target'
-import {
-  getRepoExecutionHostId,
-  LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
+import { runtimeRepoIsRegistrationCandidate as isThisMachineRepo } from '../../runtime/workspaces/catalog/runtime-worktree-selection'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { matchCheckoutFamily } from '../../workspaces/catalog/checkout-family'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
@@ -126,17 +124,17 @@ export function registerNestedRepoImportHandler(
             null,
             importTargetResolver.getFamilyPaths(importRepoPath)
           )
+          // SSH imports returned above, so every candidate is this machine's: never an SSH row.
           const findExisting = (): Repo | undefined =>
-            store.getRepos().find(
-              (repo) =>
-                (repo.connectionId ?? null) === (args.connectionId ?? null) &&
-                (normalizeRuntimePathForComparison(repo.path) === normalizedImportRepoPath ||
-                  isSameCheckoutFamily(repo) ||
-                  // The resolved spelling names this machine's folder, so only local rows may match it.
-                  (resolvedImportRepoPath !== null &&
-                    getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
-                    normalizeRuntimePathForComparison(repo.path) === resolvedImportRepoPath))
-            )
+            store.getRepos().find((repo) => {
+              const repoPathKey = normalizeRuntimePathForComparison(repo.path)
+              return (
+                isThisMachineRepo(repo) &&
+                (repoPathKey === normalizedImportRepoPath ||
+                  repoPathKey === resolvedImportRepoPath ||
+                  isSameCheckoutFamily(repo))
+              )
+            })
           const group = groupResolver.getGroupForRepo(repoPath)
           const reuseExisting = (existing: Repo): void => {
             // A rescan can reuse the group, so keep its members' order and append the rest.
