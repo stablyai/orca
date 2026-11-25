@@ -4,7 +4,6 @@ import { describeLoadError } from '../../../../components/feedback/load-error-de
 import type { NativeChatEmptyStateCopy } from '../../../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-noise'
-import { nativeChatStreamingMessage } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 import {
   foldToolMessages,
@@ -19,7 +18,6 @@ import {
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileNativeChatStatus } from '../../status/mobile-native-chat-session-status'
-import { orderNativeChatDisplayMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-order'
 import { translate } from '../../../../i18n/mobile-i18n'
 
 function mobileNativeChatEmptyStateCopy(
@@ -137,57 +135,34 @@ export function finishMobileNativeChatMessages(
   )
 }
 
-export function buildMobileNativeChatTransientData({
-  folded,
-  streaming,
-  pending,
-  imagePreviewsByMessageId
-}: {
-  folded: NativeChatMessage[]
-  streaming: string | null
-  pending: MobileNativeChatPendingItem[]
-  imagePreviewsByMessageId?: Record<string, string[]>
-}): { folded: NativeChatMessage[]; streaming: string | null; data: NativeChatMessage[] } {
-  const renderedFolded = folded.map((message) => {
-    const previews = imagePreviewsByMessageId?.[message.id]
-    if (message.role !== 'user' || !previews?.length) {
-      return message
+export function mobileNativeChatImagePreview(
+  message: NativeChatMessage,
+  previews: readonly string[]
+): NativeChatMessage {
+  let previewIndex = 0
+  const blocks = message.blocks.map((block) => {
+    if (!isImageRefBlock(block)) {
+      return block
     }
-    let previewIndex = 0
-    const blocks = message.blocks.map((block) => {
-      if (!isImageRefBlock(block)) {
-        return block
-      }
-      const url = previews[previewIndex]
-      previewIndex += 1
-      return url ? { ...block, url } : block
-    })
-    while (previewIndex < previews.length) {
-      blocks.push({ type: 'image-ref', url: previews[previewIndex] })
-      previewIndex += 1
-    }
-    return { ...message, blocks }
+    const url = previews[previewIndex++]
+    return url ? { ...block, url } : block
   })
-  const transient: NativeChatMessage[] = []
-  if (streaming) {
-    transient.push(nativeChatStreamingMessage(streaming))
+  while (previewIndex < previews.length) {
+    blocks.push({ type: 'image-ref', url: previews[previewIndex++] })
   }
-  for (const item of pending) {
-    transient.push({
-      id: item.id,
-      role: 'user',
-      blocks: [
-        ...(item.text ? [{ type: 'text' as const, text: item.text }] : []),
-        ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
-      ],
-      timestamp: item.sentAt ?? null,
-      pendingSend: item.pendingSend ?? 'active',
-      source: 'transcript'
-    })
-  }
+  return { ...message, blocks }
+}
+
+export function mobileNativeChatPendingRow(item: MobileNativeChatPendingItem): NativeChatMessage {
   return {
-    folded: renderedFolded,
-    streaming,
-    data: [...renderedFolded, ...orderNativeChatDisplayMessages(transient)]
+    id: item.id,
+    role: 'user',
+    blocks: [
+      ...(item.text ? [{ type: 'text' as const, text: item.text }] : []),
+      ...(item.images ?? []).map((url) => ({ type: 'image-ref' as const, url }))
+    ],
+    timestamp: item.sentAt ?? null,
+    pendingSend: item.pendingSend ?? 'active',
+    source: 'transcript'
   }
 }

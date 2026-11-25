@@ -1,3 +1,7 @@
+import {
+  neverThrowingStructuredAgentSessionLogger,
+  type StructuredAgentSessionLogger
+} from '../host/structured-agent-session-logger'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import type {
@@ -58,14 +62,26 @@ export type StructuredAgentSessionTransitionSink = {
 }
 
 export function createStructuredAgentSessionTransitionMembers(
-  queue: StructuredAgentSessionSinkQueue
+  queue: StructuredAgentSessionSinkQueue,
+  { logger, sessionId }: { logger: StructuredAgentSessionLogger; sessionId: string }
 ): Required<StructuredAgentSessionTransitionSink> {
+  const safeLogger = neverThrowingStructuredAgentSessionLogger(logger)
   return {
     tryAppendTransition: transitionAppend(queue),
     recordProviderReceipt: (receipt) => {
       queue.submit({
         bytes: Buffer.byteLength(receipt.clientMessageId, 'utf8') + 64,
-        run: (bound) => bound.journal.markDispatchWritten({ ...receipt, providerReceipt: true })
+        run: async ({ journal }) => {
+          try {
+            await journal.markDispatchWritten({ ...receipt, providerReceipt: true })
+          } catch (error) {
+            safeLogger.warn('writing a provider receipt failed', {
+              scope: 'journal-provider-receipt',
+              sessionId,
+              error
+            })
+          }
+        }
       })
     }
   }

@@ -30,17 +30,33 @@ export function changedSubmissionReceiptIds(
   return changed
 }
 
-const indexes = new WeakMap<readonly StructuredAgentSubmission[], ReadonlyMap<string, number>>()
+type SubmissionIndexes = {
+  positions: Map<string, number>
+  handedOffDrafts: Set<string>
+}
+const indexes = new WeakMap<readonly StructuredAgentSubmission[], SubmissionIndexes>()
 
-export function structuredAgentSubmissionIndex(submissions: readonly StructuredAgentSubmission[]) {
+export function structuredAgentSubmissionIndexes(
+  submissions: readonly StructuredAgentSubmission[]
+) {
   let index = indexes.get(submissions)
   if (!index) {
-    index = new Map(
-      submissions.map((submission, position) => [submission.clientMessageId, position])
-    )
+    const positions = new Map<string, number>()
+    const handedOffDrafts = new Set<string>()
+    submissions.forEach((submission, position) => {
+      positions.set(submission.clientMessageId, position)
+      if (submission.queuedMessageId !== undefined && submission.dispatchState !== 'rejected') {
+        handedOffDrafts.add(submission.queuedMessageId)
+      }
+    })
+    index = { positions, handedOffDrafts }
     indexes.set(submissions, index)
   }
   return index
+}
+
+export function structuredAgentSubmissionIndex(submissions: readonly StructuredAgentSubmission[]) {
+  return structuredAgentSubmissionIndexes(submissions).positions
 }
 
 // Receipt versions share all untouched branches, so queued renders keep their own snapshot.

@@ -125,14 +125,13 @@ export function useMobileStructuredQueuedMessageControls(args: {
     : null
   const allCards = useMemo(
     () =>
-      mobileQueuedMessageCards(queuedMessages, submissions, {
+      mobileQueuedMessageCards(composerActions.messages, submissions, {
         agentWorking,
         steerIntents,
         queuePaused: queuePause !== null,
         agentName: args.agentName,
         statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : [],
-        sending: args.sending,
-        order: composerActions.messages
+        sending: args.sending
       }),
     [
       agentWorking,
@@ -142,7 +141,6 @@ export function useMobileStructuredQueuedMessageControls(args: {
       failureItems,
       composerActions.messages,
       queuePause,
-      queuedMessages,
       submissions,
       t
     ]

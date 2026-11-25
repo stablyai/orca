@@ -2,7 +2,10 @@ import type { AgentSessionSendResult } from '../agent-session-wire'
 import { agentJournalSubmissionAwaitsAgent } from '../requests/agent-session-queued-submission'
 import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
-import type { StructuredAgentSubmission } from './structured-agent-session-submissions'
+import {
+  structuredAgentSubmissionIndexes,
+  type StructuredAgentSubmission
+} from './structured-agent-session-submissions'
 import type { StructuredAgentSessionOptimisticMessage } from './structured-agent-session-message-projection'
 import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
 import {
@@ -58,12 +61,10 @@ export function steeringQueuedMessageEchoes(
   if (steering.length === 0) {
     return []
   }
-  const handedOff = handedOffQueuedMessageIds(
-    submissions.filter((submission) => submission.dispatchState !== 'rejected')
-  )
+  const { handedOffDrafts } = structuredAgentSubmissionIndexes(submissions)
   const sentAt = new Map(pending.map((entry) => [entry.clientMessageId, entry.queuedAt]))
   return steering
-    .filter((message) => !handedOff.has(message.messageId))
+    .filter((message) => !handedOffDrafts.has(message.messageId))
     .sort((left, right) => left.position - right.position)
     .map((message) => ({
       clientMessageId: message.messageId,
@@ -72,6 +73,13 @@ export function steeringQueuedMessageEchoes(
       phase: 'recorded'
     }))
 }
+
+export const EMPTY_QUEUED_STEER_INTENTS: ReadonlyMap<string, string> = new Map()
+
+const queuedMessageIndexes = new WeakMap<
+  readonly AgentSessionQueuedMessage[],
+  ReadonlyMap<string, AgentSessionQueuedMessage>
+>()
 
 export function reconcileQueuedSteerIntents(
   intents: ReadonlyMap<string, string>,
@@ -82,19 +90,25 @@ export function reconcileQueuedSteerIntents(
   if (intents.size === 0) {
     return intents
   }
+  if (!session.agentWorking || session.queuePaused || !queuedMessages?.length) {
+    return EMPTY_QUEUED_STEER_INTENTS
+  }
   const next = new Map(intents)
+  let cards = queuedMessageIndexes.get(queuedMessages)
+  if (!cards) {
+    cards = new Map(queuedMessages.map((card) => [card.messageId, card]))
+    queuedMessageIndexes.set(queuedMessages, cards)
+  }
+  const { positions, handedOffDrafts } = structuredAgentSubmissionIndexes(submissions)
+  const pressed = { ...session, steerIntents: intents }
   for (const [id, operation] of intents) {
-    const card = queuedMessages?.find((message) => message.messageId === id)
+    const card = cards.get(id)
     if (
       !card ||
-      card.state !== 'waiting' ||
-      card.paused ||
-      queuedMessageSteersIn(card, session) ||
-      submissions.some(
-        (record) =>
-          record.clientMessageId === operation ||
-          (record.queuedMessageId === id && record.dispatchState !== 'rejected')
-      )
+      !queuedMessageSteersIn(card, pressed) ||
+      card.steers ||
+      positions.has(operation) ||
+      handedOffDrafts.has(id)
     ) {
       next.delete(id)
     }

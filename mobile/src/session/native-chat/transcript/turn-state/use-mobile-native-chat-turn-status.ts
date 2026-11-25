@@ -1,4 +1,4 @@
-import { nativeChatWorkingPresentation } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
+import { nativeChatIsWorking } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
 import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -44,7 +44,7 @@ export function useMobileNativeChatTurnStatus({
   isWorking: boolean
 } {
   const structured = journal !== null
-  const { isWorking } = nativeChatWorkingPresentation(working, workingStartedAt, structured, false)
+  const isWorking = nativeChatIsWorking(working, workingStartedAt, structured)
   const activeTurnKey = (enabled ? liveTurnKey : undefined) ?? NATIVE_CHAT_UNANCHORED_TURN_KEY
   const [scopedTiming, setScopedTiming] = useState<ScopedTurnTiming>(() => ({
     scopeKey,

@@ -1,3 +1,5 @@
+import { useQueuedSteerIntents as useDesktopSteer } from '../../../queue/use-queued-steer-intents'
+import type { AgentSessionQueuedMessage } from '../../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 // @vitest-environment happy-dom
 
 import { act, render, renderHook } from '@testing-library/react'
@@ -23,11 +25,23 @@ import type {
   StructuredAgentSessionAction,
   StructuredAgentSessionState
 } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
-import type { SubmissionReceipts } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
+import {
+  splitStructuredAgentSubmissions,
+  type SubmissionReceipts
+} from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { NativeChatTurnJournal } from '../../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
 import * as desktopSending from './structured-agent-sending-scope'
 import { useStructuredAgentSendingSource } from './use-structured-agent-sending-source'
 
+const { useQueuedSteerIntents: useMobileSteer } = await vi.importActual<{
+  useQueuedSteerIntents: (
+    owner: string,
+    state: Parameters<typeof useDesktopSteer>[1],
+    agentWorking: boolean
+  ) => ReturnType<typeof useDesktopSteer>
+}>(
+  '../../../../../../../../mobile/src/session/native-chat/input/queued-messages/use-queued-steer-intents'
+)
 const { useMobileStructuredAgentTurnTiming } = await vi.importActual<{
   useMobileStructuredAgentTurnTiming: (
     state: StructuredAgentSessionState,
@@ -72,6 +86,12 @@ const { useNativeChatTurnStatus } = await vi.importActual<{
     workingStartedAt: number | null
   }) => { turnWorking: boolean; turnStatuses: object }
 }>('../../../conversation/turns/use-native-chat-turn-status')
+vi.mock(
+  '../../../../../../../../mobile/src/session/native-chat/agent-session/structured-session-operation-id',
+  () => ({
+    structuredSessionOperationId: () => 'steer-operation'
+  })
+)
 vi.mock('../read/structured-agent-session-read-transport', () => ({
   startStructuredAgentSessionReadTransport: vi.fn()
 }))
@@ -573,3 +593,78 @@ it('visits only changed Sending IDs at 16 and 160 pending sends on each owner', 
     }
   }
 })
+
+// PR #45057: unresolved Steer presses rescanned retained submissions during ordinary renders.
+it.each([256, 2560])(
+  'reconciles changed steer inputs without revisiting %i retained submissions',
+  (count) => {
+    const owner = createReadOwner('chat', 'chat', { kind: 'local' })
+    const { submissions } = splitStructuredAgentSubmissions(
+      Array.from({ length: count }, (_, index) => ({
+        ...SEND,
+        clientMessageId: `retained-${index}`,
+        dispatchState: 'accepted'
+      }))
+    )
+    let submissionVisits = 0
+    for (const record of submissions) {
+      const id = record.clientMessageId
+      Object.defineProperty(record, 'clientMessageId', {
+        get: () => {
+          submissionVisits += 1
+          return id
+        }
+      })
+    }
+    let cardVisits = 0
+    const card: AgentSessionQueuedMessage = {
+      get messageId() {
+        cardVisits += 1
+        return 'draft'
+      },
+      position: 1,
+      state: 'waiting',
+      body: { kind: 'message', role: 'user', blocks: [] }
+    }
+    const initialProps = {
+      queuedMessages: [card],
+      epoch: EPOCH,
+      fence: 2,
+      queuePause: null,
+      submissions
+    }
+    const { result, rerender, unmount } = renderHook(
+      (state) => {
+        const desktop = useDesktopSteer(owner, state, true)
+        const mobile = useMobileSteer('chat', state, true)
+        return { desktop, mobile }
+      },
+      { initialProps }
+    )
+    const pending = () => new Promise<null>(() => {})
+    try {
+      act(() => {
+        void result.current.desktop.request('draft', true, pending)
+        void result.current.mobile.request('draft', true, pending)
+      })
+      expect(result.current.desktop.intents.has('draft')).toBe(true)
+      expect(result.current.mobile.intents.has('draft')).toBe(true)
+      expect(submissionVisits).toBe(0)
+      cardVisits = 0
+      for (let frame = 0; frame < 10; frame += 1) {
+        rerender({ ...initialProps })
+      }
+      expect(cardVisits).toBe(0)
+      expect(submissionVisits).toBe(0)
+
+      rerender({ ...initialProps, queuedMessages: [card] })
+      expect(cardVisits).toBeGreaterThan(0)
+      expect(submissionVisits).toBe(0)
+      rerender({ ...initialProps, queuedMessages: [] })
+      expect(result.current.desktop.intents.size).toBe(0)
+      expect(result.current.mobile.intents.size).toBe(0)
+    } finally {
+      unmount()
+    }
+  }
+)

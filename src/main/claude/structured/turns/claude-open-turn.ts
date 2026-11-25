@@ -62,7 +62,7 @@ export type ClaudeOpenTurnDeps = {
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
   readonly echoedDispatchStart = new ClaudeEchoedDispatchStart((startedAt) => {
-    if (this.current) {
+    if (this.current?.startedAt !== undefined && startedAt < this.current.startedAt) {
       this.current.startedAt = startedAt
       this.publish(this.current)
     }

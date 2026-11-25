@@ -1,6 +1,7 @@
 import {
   StructuredAgentSendingScope,
-  displayedSendingIds
+  useDisplayedSendingIds,
+  useSendingRowIds
 } from './sending/structured-agent-sending-scope'
 import type { ComponentProps, ReactElement } from 'react'
 import { FlatList, Platform } from 'react-native'
@@ -13,6 +14,9 @@ import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatTailFollow
 } from './viewport/use-mobile-native-chat-tail-follow'
+
+const rowId = (row: { id: string }) => row.id
+const waitingId = ({ item }: { item: { id: string } }) => item.id
 
 type PageProps = ComponentProps<typeof MobileNativeChatPageList>
 
@@ -27,12 +31,12 @@ type Props = Pick<
   | 'contentContainerStyle'
   | 'header'
   | 'footer'
-  | 'waitingRows'
   | 'sending'
   | 'emptyStateView'
   | 'onScroll'
   | 'onNearTop'
 > & {
+  waitingRows: readonly { item: PageProps['rows'][number] }[]
   tail: MobileNativeChatTailFollow
   rowKeys: MobileNativeChatRowKeys
   /** With a header, the row below it anchors the native list's visible content. */
@@ -43,6 +47,13 @@ type Props = Pick<
 export function MobileNativeChatRowList(props: Props): ReactElement {
   const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
   const { header, emptyStateView, waitingRows, sending } = props
+  const rowIds = useSendingRowIds(rows, rowId)
+  const waitingIds = useSendingRowIds(waitingRows, waitingId)
+  const nativeIds = useDisplayedSendingIds(
+    Platform.OS === 'web' ? undefined : sending,
+    rowIds,
+    waitingIds
+  )
   if (Platform.OS === 'web') {
     const { roots, runs, layoutKey, onNearTop, itemJump } = props
     return (
@@ -59,7 +70,8 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
               onScroll,
               onNearTop,
               itemJump,
-              waitingRows,
+              rowIds,
+              waitingIds,
               sending
             }}
           />
@@ -69,10 +81,7 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
   }
   return (
     <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
-      <StructuredAgentSendingScope
-        source={sending}
-        displayedIds={displayedSendingIds(sending, rows, waitingRows)}
-      >
+      <StructuredAgentSendingScope source={sending} displayedIds={nativeIds}>
         <FlatList
           {...tail.listProps}
           data={rows}

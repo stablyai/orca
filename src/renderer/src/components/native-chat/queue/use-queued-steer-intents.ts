@@ -4,11 +4,10 @@ import { structuredSessionOperationId } from '../session/structured/writes/struc
 import type { AgentSessionSendResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import {
+  EMPTY_QUEUED_STEER_INTENTS,
   reconcileQueuedSteerIntents,
   settleQueuedSteerRequest
 } from '../../../../../shared/agent-session/view/structured-agent-session-sending-queued-cards'
-
-const EMPTY: ReadonlyMap<string, string> = new Map()
 
 export function useQueuedSteerIntents(
   owner: StructuredAgentSessionReadOwner,
@@ -25,14 +24,17 @@ export function useQueuedSteerIntents(
   agentWorking: boolean
 ) {
   const scope = useMemo(() => ({ owner, epoch, fence }), [owner, epoch, fence])
-  const [state, setState] = useState({ scope, intents: EMPTY })
-  const intents =
-    state.scope === scope
-      ? reconcileQueuedSteerIntents(state.intents, queuedMessages ?? null, submissions, {
-          agentWorking,
-          queuePaused: queuePause != null
-        })
-      : EMPTY
+  const [state, setState] = useState({ scope, intents: EMPTY_QUEUED_STEER_INTENTS })
+  const intents = useMemo(
+    () =>
+      state.scope === scope
+        ? reconcileQueuedSteerIntents(state.intents, queuedMessages ?? null, submissions, {
+            agentWorking,
+            queuePaused: queuePause != null
+          })
+        : EMPTY_QUEUED_STEER_INTENTS,
+    [state, scope, queuedMessages, submissions, agentWorking, queuePause]
+  )
   if (state.scope !== scope || state.intents !== intents) {
     setState({ scope, intents })
   }

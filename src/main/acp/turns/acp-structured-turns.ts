@@ -1,3 +1,4 @@
+import { AcpHeldSends } from './acp-held-sends'
 import type {
   AcpStructuredTurnsDeps,
   AcpStructuredSend as Send
@@ -26,8 +27,7 @@ export class AcpStructuredTurns {
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: Send[] = []
-  private readonly unsettled = new Set<string>()
-  private heldSnapshot: ReadonlySet<string> = Object.freeze(new Set<string>())
+  private readonly unsettled = new AcpHeldSends()
   private readonly idleWaiters = new Set<() => void>()
   private ended = false
   private stopAt: number | null = null
@@ -57,7 +57,7 @@ export class AcpStructuredTurns {
   }
 
   get heldSends(): ReadonlySet<string> {
-    return this.heldSnapshot
+    return this.unsettled.snapshot()
   }
 
   get holdsSteers(): boolean {
@@ -133,9 +133,7 @@ export class AcpStructuredTurns {
   }
 
   dispatch(send: Send): void {
-    if (!this.unsettled.has(send.clientMessageId)) {
-      this.heldSnapshot = Object.freeze(new Set(this.unsettled.add(send.clientMessageId)))
-    }
+    this.unsettled.add(send.clientMessageId)
     if (this.active) {
       this.steers.push(send)
       this.cancelForSteer()
@@ -178,7 +176,6 @@ export class AcpStructuredTurns {
 
   accept(clientMessageId: string): void {
     if (this.unsettled.delete(clientMessageId)) {
-      this.heldSnapshot = Object.freeze(new Set(this.unsettled))
       this.deps.settle({
         clientMessageId,
         providerIdentity: { provider: 'orca', clientMessageId }
@@ -188,12 +185,13 @@ export class AcpStructuredTurns {
 
   private withdrawSteers(): boolean {
     this.withdrawals += 1
+    return this.rejectSteers(agentSessionFailureFact('cancelled', { neverReachedAgent: true }))
+  }
+
+  private rejectSteers(fact: SubmissionRejectionFact): boolean {
     const withdrawn = this.steers.splice(0)
-    for (const send of withdrawn) {
-      this.reject(
-        send.clientMessageId,
-        agentSessionFailureFact('cancelled', { neverReachedAgent: true })
-      )
+    for (const { clientMessageId } of this.unsettled.take(withdrawn)) {
+      this.settleRejection(clientMessageId, fact)
     }
     return withdrawn.length > 0
   }
@@ -201,14 +199,11 @@ export class AcpStructuredTurns {
   /** Teardown rejects held steers; an unconfirmed active send remains unknown. */
   end(reason: string, cause?: Error): void {
     this.ended = true
-    for (const send of this.steers.splice(0)) {
-      this.reject(send.clientMessageId, agentSessionFailureFact('providerExited'))
-    }
+    this.rejectSteers(agentSessionFailureFact('providerExited'))
     const active = this.active
     if (active && cause instanceof AcpAuthRequiredError) {
       this.agentFailed(active, cause)
     } else if (active && this.unsettled.delete(active.clientMessageId)) {
-      this.heldSnapshot = Object.freeze(new Set(this.unsettled))
       this.deps.settle({ clientMessageId: active.clientMessageId, state: 'unknown', reason })
     }
     this.active = null
@@ -340,7 +335,10 @@ export class AcpStructuredTurns {
     if (!this.unsettled.delete(clientMessageId)) {
       return
     }
-    this.heldSnapshot = Object.freeze(new Set(this.unsettled))
+    this.settleRejection(clientMessageId, fact)
+  }
+
+  private settleRejection(clientMessageId: string, fact: SubmissionRejectionFact): void {
     this.deps.settle({
       clientMessageId,
       state: 'rejected',

@@ -1,3 +1,18 @@
+import type { AgentSessionSendResult } from '../../../../../shared/agent-session/agent-session-wire'
+import {
+  reconcileQueuedSteerIntents,
+  settleQueuedSteerRequest,
+  steeringQueuedMessageEchoes
+} from '../../../../../shared/agent-session/view/structured-agent-session-sending-queued-cards'
+import {
+  nativeChatWorkingPresentation,
+  structuredAgentSessionSendingItemIds
+} from '../../../../../shared/agent-session/view/structured-agent-session-sending'
+import {
+  projectQueuedMessageCards,
+  queuedMessagesQueuePause
+} from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
+import { splitStructuredAgentSubmissions } from '../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
@@ -90,11 +105,13 @@ async function providerTurn(
 }
 
 /** A running turn with the person's follow-up queued behind it; resolves to both ids. */
-async function personQueued(): Promise<{ working: string; followUp: string }> {
+async function personQueued(carried?: {
+  model: string
+}): Promise<{ working: string; followUp: string }> {
   const working = await rig.workingSend()
   await rig.settleAccepted(working, 'working')
   await providerTurn(working, 'running')
-  const result = await rig.send('then fix the tests', 'queue-if-active').result
+  const result = await rig.send('then fix the tests', 'queue-if-active', { carried }).result
   if (!result.ok || !('queued' in result.value)) {
     throw new Error(`expected a queued follow-up, got ${JSON.stringify(result)}`)
   }
@@ -175,3 +192,54 @@ describe("another agent's mail after a failed turn", () => {
     expect(await rig.handoff(followUp)).toBeUndefined()
   })
 })
+
+it.each(['stopped', 'failed'] as const)(
+  'returns a deferred steer to a %s queue',
+  async (reason) => {
+    rig = await createQueuedMessageTestRig({ reportsModel: 'gpt-5.4' })
+    const { working, followUp } = await personQueued({ model: 'gpt-5.4-mini' })
+    const defer = async (): Promise<AgentSessionSendResult> => {
+      const result = await rig.sendNow(followUp)
+      if (!result.ok) {
+        throw new Error(JSON.stringify(result))
+      }
+      expect(result.value).toMatchObject({ queued: { messageId: followUp, state: 'waiting' } })
+      return result.value
+    }
+    const deferred = await defer()
+    let intents: ReadonlyMap<string, string> = new Map([[followUp, deferred.clientMessageId]])
+    if (reason === 'stopped') {
+      expect(await rig.stop()).toMatchObject({ ok: true })
+      await providerTurn(working, 'interrupted')
+    } else {
+      await providerTurn(working, 'completed', 'failure')
+    }
+    await eventually(async () => expect(await rig.queuePause()).toEqual({ reason }))
+    await settleQueuedSteerRequest(
+      async () => deferred,
+      () => {
+        intents = new Map()
+      }
+    )
+    const history = await rig.host.history({ sessionId: SESSION, direction: 'tail' })
+    if (!history.ok) {
+      throw new Error('history refused')
+    }
+    const { queuedMessages, queuePause } = history.page
+    const { submissions, writtenAtById } = splitStructuredAgentSubmissions(history.page.submissions)
+    // The paused queue update can reach a client that still has the running turn.
+    const session = { agentWorking: true, queuePaused: queuePause != null }
+    intents = reconcileQueuedSteerIntents(intents, queuedMessages ?? null, submissions, session)
+    const projection = { ...session, steerIntents: intents }
+    const cards = projectQueuedMessageCards(queuedMessages, submissions, projection)
+    const optimistic = steeringQueuedMessageEchoes(queuedMessages, submissions, [], projection)
+    const sending = structuredAgentSessionSendingItemIds(optimistic, submissions, writtenAtById)
+    expect(cards).toMatchObject([{ messageId: followUp, hold: 'queue-paused' }])
+    expect(queuedMessagesQueuePause(cards, queuePause ?? null)).toEqual({ reason })
+    expect([...sending]).toEqual([])
+    expect(
+      nativeChatWorkingPresentation(true, HOST_TEST_NOW, true, sending.size > 0).turnWorking
+    ).toBe(true)
+    expect(intents.size).toBe(0)
+  }
+)

@@ -1,6 +1,6 @@
 import {
   StructuredAgentSendingScope,
-  displayedSendingIds
+  useDisplayedSendingIds
 } from '../sending/structured-agent-sending-scope'
 import type { StructuredAgentSendingSource } from '../../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import type { MobileNativeChatItemJump } from './use-mobile-native-chat-item-navigation'
@@ -71,10 +71,9 @@ function isScroller(node: unknown): node is Scroller {
 function domElementOf(node: unknown): Element | null {
   return typeof Element !== 'undefined' && node instanceof Element ? node : null
 }
-type Held = {
+type Held = Pick<Props, 'rowIds' | 'waitingIds'> & {
   rows: readonly NativeChatMessage[]
   footer: ReactElement | null
-  waitingRows: readonly Row[]
   // Freeze renderItem too: grouping/turn context changes a row even if its message is unchanged.
   renderItem: (row: Row) => ReactElement
 }
@@ -96,7 +95,8 @@ type Props = {
   contentContainerStyle: StyleProp<ViewStyle>
   header: ReactElement | null
   footer: ReactElement | null
-  waitingRows: readonly Row[]
+  rowIds: readonly string[]
+  waitingIds: readonly string[]
   sending?: StructuredAgentSendingSource
   emptyStateView: ReactElement | null
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void
@@ -119,7 +119,8 @@ export function MobileNativeChatPageList({
   contentContainerStyle,
   header,
   footer: liveFooter,
-  waitingRows,
+  rowIds,
+  waitingIds,
   sending,
   emptyStateView,
   onScroll,
@@ -166,14 +167,14 @@ export function MobileNativeChatPageList({
   const touching = useRef(false)
   const readerScrolledAt = useRef(0)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const live = useRef<Held>({ rows: liveRows, footer: liveFooter, waitingRows, renderItem })
+  const live = useRef<Held>({ rows: liveRows, footer: liveFooter, rowIds, waitingIds, renderItem })
   const ask = useRef(onNearTop)
   // Read latest committed geometry from event handlers between renders.
   const latest = useRef({ first, opening, n, keys, indexOf, layoutKey, rowKeys })
   useLayoutEffect(() => {
     latest.current = { first, opening, n, keys, indexOf, layoutKey, rowKeys }
     ask.current = onNearTop
-    live.current = { rows: liveRows, footer: liveFooter, waitingRows, renderItem }
+    live.current = { rows: liveRows, footer: liveFooter, rowIds, waitingIds, renderItem }
   })
 
   const write = useCallback((s: MobileNativeChatScrollNode, to: number) => {
@@ -392,6 +393,13 @@ export function MobileNativeChatPageList({
     [onScroll, scroller, onEndDistance, isFollowing, hold, unhold, notePlace, drawAndFetch]
   )
 
+  const displayedIds = useDisplayedSendingIds(
+    sending,
+    rowIds,
+    waitingIds,
+    { first, heldFrom, heldAt },
+    held
+  )
   const drawnRows = rows.slice(first)
   return (
     <MobileNativeChatPageScroll
@@ -404,14 +412,7 @@ export function MobileNativeChatPageList({
       scrollEventThrottle={16}
     >
       <MobileNativeChatGrowthHoldContext.Provider value={growth}>
-        <StructuredAgentSendingScope
-          source={sending}
-          displayedIds={displayedSendingIds(
-            sending,
-            drawnRows,
-            (held ?? { waitingRows }).waitingRows
-          )}
-        >
+        <StructuredAgentSendingScope source={sending} displayedIds={displayedIds}>
           {header}
           {rows.length === 0 ? (
             emptyStateView

@@ -29,7 +29,7 @@ import {
   readAgentMessageSource,
   type AgentMessageSource
 } from '../journal/agent-session-message-source'
-import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import { structuredAgentSubmissionIndexes } from './structured-agent-session-submissions'
 import { queuedMessageIsWaitingAgentMail } from './structured-agent-session-waiting-agent-mail'
 import {
   NATIVE_CHAT_IMAGE_LABEL_ENGLISH,
@@ -56,8 +56,6 @@ export type QueuedMessageCard = {
   images?: readonly NativeChatImageRefBlock[]
   state: 'waiting' | 'returned'
   hold: QueuedMessageCardHold
-  /** Visible unheld waiting work. */
-  resumeEligible?: true
   /** A conversation command such as /compact: it never steers into a running turn. */
   command?: true
   /** The host refuses an edit (a command, an automation's run), so no Edit is offered. */
@@ -88,8 +86,6 @@ type QueuedMessageCardSession = {
   queuePaused?: boolean
   agentWorking?: boolean
   steerIntents?: ReadonlyMap<string, string>
-  /** Draw a steer on its way into the running turn as the person's message, not as a card. */
-  steersInTranscript?: true
 }
 
 /** A person's steer the running turn will take in: never a card where the transcript draws it. */
@@ -101,8 +97,9 @@ export function queuedMessageSteersIn(
     !queuedMessageIsWaitingAgentMail(message) &&
     message.state === 'waiting' &&
     !message.paused &&
-    (session.steerIntents?.has(message.messageId) === true ||
-      (message.steers === true && session.agentWorking === true && !session.queuePaused))
+    session.agentWorking === true &&
+    !session.queuePaused &&
+    (message.steers === true || session.steerIntents?.has(message.messageId) === true)
   )
 }
 
@@ -112,11 +109,9 @@ export function projectQueuedMessageCards(
   submissions: readonly AgentJournalSubmissionFields[],
   session: QueuedMessageCardSession
 ): QueuedMessageCard[] {
-  const handedOff = handedOffQueuedMessageIds(
-    submissions.filter((submission) => submission.dispatchState !== 'rejected')
-  )
+  const { handedOffDrafts } = structuredAgentSubmissionIndexes(submissions)
   const ordered = [...(queuedMessages ?? [])]
-    .filter((message) => !session.steersInTranscript || !queuedMessageSteersIn(message, session))
+    .filter((message) => !queuedMessageSteersIn(message, session))
     // Orca's own sends draw nothing in the chat, so they wait unseen; one on hold needs the person, so it shows.
     .filter(
       (message) =>
@@ -128,7 +123,6 @@ export function projectQueuedMessageCards(
     .sort((left, right) => left.position - right.position)
   // Establish semantic membership before handoff filtering, including during catch-up.
   const cards = ordered.map((message) => {
-    const resumeEligible = message.state === 'waiting' && !message.paused
     const hold: QueuedMessageCardHold =
       message.state === 'returned'
         ? 'returned'
@@ -144,23 +138,21 @@ export function projectQueuedMessageCards(
       message.body.origin === 'automation-run'
         ? readAutomationRunMessage(message.body.automationRun)
         : undefined
+    const text = queuedMessageCardText(message.body)
     return {
       messageId: message.messageId,
       position: message.position,
-      text: queuedMessageCardText(message.body),
+      text,
       ...(run
         ? { displayText: run.automation.name }
         : from
           ? {
-              displayText:
-                agentMessageDisplayText(message.body.blocks, from) ??
-                queuedMessageCardText(message.body)
+              displayText: agentMessageDisplayText(message.body.blocks, from) ?? text
             }
           : {}),
       ...queuedMessageCardImages(message.body),
       state: message.state,
       hold,
-      ...(resumeEligible ? { resumeEligible: true as const } : {}),
       ...(queuedMessageEditableText(message.body) === null ? { notEditable: true as const } : {}),
       ...(message.body.command !== undefined
         ? {
@@ -177,7 +169,7 @@ export function projectQueuedMessageCards(
       ...(typedByOther ? { typedByOther } : {})
     }
   })
-  return cards.filter((card) => card.state === 'returned' || !handedOff.has(card.messageId))
+  return cards.filter((card) => card.state === 'returned' || !handedOffDrafts.has(card.messageId))
 }
 
 function isOrcaNoticeSend(body: AgentSessionQueuedMessage['body']): boolean {
@@ -230,7 +222,10 @@ export function queuedMessagesQueuePause(
   queuePause: AgentSessionQueuePause | null,
   agentMailWaiting = false
 ): AgentSessionQueuePause | null {
-  return agentMailWaiting || cards.some((card) => card.resumeEligible) ? queuePause : null
+  return agentMailWaiting ||
+    cards.some((card) => card.hold === 'queue-paused' || card.hold === 'turn')
+    ? queuePause
+    : null
 }
 
 /** Steer moves turn-waiting cards mid-turn, even during queue pause; returned/individually held cards use Send, commands never steer. */

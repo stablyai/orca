@@ -5,7 +5,12 @@ import {
   placement,
   viewRenders
 } from './mobile-native-chat-view-receipt.test-fixture'
-import { createElement, useMemo } from 'react'
+import { createMobileNativeChatTailViewport } from './transcript/viewport/mobile-native-chat-tail-viewport'
+import { Platform } from 'react-native'
+import { MobileNativeChatRowList } from './transcript/MobileNativeChatRowList'
+import { createStructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/structured-agent-sending-source'
+import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import { createElement, useMemo, type ComponentProps } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -374,6 +379,111 @@ it.each([4096, 40960])(
     } finally {
       act(() => mounted.unmount())
       vi.useRealTimers()
+    }
+  }
+)
+
+// PR #45057: streaming text used to rescan the rows that could show Sending.
+it.each([
+  ['web', 160],
+  ['web', 1600],
+  ['ios', 160],
+  ['ios', 1600]
+] as const)(
+  'checks zero displayed memberships on a tail text update (%s, %i rows)',
+  async (platform, count) => {
+    const original = Platform.OS
+    Platform.OS = platform
+    const pending = 'orca:opener'
+    const receipts = new Map()
+    const source = createStructuredAgentSendingSource(
+      { getSnapshot: () => receipts, subscribe: noSubscription },
+      [{ clientMessageId: 'opener' }],
+      []
+    )
+    const has = vi.spyOn(source.candidates, 'has')
+    const rows: NativeChatMessage[] = Array.from({ length: count }, (_, index) => ({
+      id: index === count - 1 ? pending : `row-${index}`,
+      role: index === count - 1 ? 'user' : 'assistant',
+      blocks: [],
+      timestamp: null,
+      source: 'transcript'
+    }))
+    const noop = () => {}
+    const props: Omit<ComponentProps<typeof MobileNativeChatRowList>, 'rows'> = {
+      tail: {
+        listProps: { ref: noop },
+        pageListProps: {
+          ref: noop,
+          isFollowing: () => true,
+          onEndDistance: noop,
+          onPlaceRestored: noop
+        },
+        pinToTail: noop,
+        pinToTailAfterContentResize: noop,
+        showJumpToTail: false,
+        jumpToTail: noop,
+        releaseFollow: noop,
+        scrollRowToTop: noop,
+        beginUserScroll: noop,
+        endUserDrag: noop,
+        beginMomentum: noop,
+        endMomentum: noop,
+        scrollMayLoadEarlier: () => false,
+        recordScrollMetrics: noop,
+        viewport: createMobileNativeChatTailViewport()
+      },
+      rowKeys: {
+        scope: `membership-${platform}-${count}`,
+        keyOf: (row) => row.id,
+        current: (key) => key,
+        placement: (key) => key
+      },
+      itemJump: { rowKey: rows[0]!.id, beforeScroll: noop, complete: noop },
+      renderItem: () => createElement('span'),
+      contentContainerStyle: {},
+      header: null,
+      footer: null,
+      waitingRows: [],
+      sending: source,
+      emptyStateView: null,
+      onScroll: noop,
+      layoutKey: 'layout',
+      hasHeader: false,
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture's pinch wrapper renders its children without using the native gesture.
+      pinchGesture: {} as ComponentProps<typeof MobileNativeChatRowList>['pinchGesture']
+    }
+    let tree: ReactTestRenderer | undefined
+    try {
+      await act(() => {
+        tree = create(createElement(MobileNativeChatRowList, { ...props, rows }))
+      })
+      expect(has).toHaveBeenCalledWith(pending)
+      has.mockClear()
+      for (let index = 0; index < 10; index += 1) {
+        const next = [
+          ...rows.slice(0, -1),
+          { ...rows.at(-1)!, blocks: [{ type: 'text' as const, text: `chunk-${index}` }] }
+        ]
+        await act(() =>
+          tree!.update(createElement(MobileNativeChatRowList, { ...props, rows: next }))
+        )
+      }
+      expect(has.mock.calls).toHaveLength(0)
+      const footer = { item: rows.at(-1)!, index: count - 1 }
+      await act(() =>
+        tree!.update(
+          createElement(MobileNativeChatRowList, {
+            ...props,
+            rows: rows.slice(0, -1),
+            waitingRows: [footer]
+          })
+        )
+      )
+      expect(has).toHaveBeenCalledWith(pending)
+    } finally {
+      await act(() => tree?.unmount())
+      Platform.OS = original
     }
   }
 )

@@ -5,7 +5,7 @@ import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { nativeChatMessageSenderFields } from '../../native-chat-message-sender-fields'
 import { structuralValuesEqual } from '../../collections/structural-value-equality'
-import { handedOffQueuedMessageIds } from './structured-agent-session-draft-hand-off'
+import { structuredAgentSubmissionIndexes } from './structured-agent-session-submissions'
 
 /** Another agent's message waiting its turn: drawn after the chat's live activity in its delivered
  *  shape. One that failed to send or came back stays a card, where its caption says why. */
@@ -44,14 +44,9 @@ export function createWaitingAgentMailRows(): (
   }
   return (queuedMessages, submissions) => {
     const waiting = (queuedMessages ?? []).filter(queuedMessageIsWaitingAgentMail)
-    const handedOff =
-      waiting.length > 0
-        ? handedOffQueuedMessageIds(
-            submissions.filter((submission) => submission.dispatchState !== 'rejected')
-          )
-        : new Set<string>()
+    const { handedOffDrafts } = structuredAgentSubmissionIndexes(submissions)
     const messages = waiting
-      .filter((message) => !handedOff.has(message.messageId))
+      .filter((message) => !handedOffDrafts.has(message.messageId))
       .sort((left, right) => left.position - right.position)
     const same =
       messages.length === previous.messages.length &&

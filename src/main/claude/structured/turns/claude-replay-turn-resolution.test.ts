@@ -1,5 +1,12 @@
+import { splitStructuredAgentSubmissions } from '../../../../shared/agent-session/view/structured-agent-session-submissions'
+import { withTestAgentSessionDatabase } from '../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
+import { createQueuedMessageTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import { eventually } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { HOST_TEST_SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { structuredAgentSessionSendingItemIds } from '../../../../shared/agent-session/view/structured-agent-session-sending'
 import { claudeDispatchIsSteer } from './claude-command-lifecycle'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { selectStructuredAgentSettledTurns } from '../../../../shared/agent-session/view/structured-agent-session-turn-timing'
@@ -53,7 +60,15 @@ const stopFrames: Record<string, unknown>[] = [
   lifecycle('cancelled')
 ]
 
-function fixture(connection?: Partial<ClaudeSession['connection']>) {
+function fixture(
+  connection?: Partial<ClaudeSession['connection']>,
+  journal?: {
+    fence: number
+    handover: typeof HANDOVER
+    sink: StructuredAgentSessionEventSink
+    settle: (outcome: ClaudeLateDispatchOutcome) => void
+  }
+) {
   const writes: AgentJournalRenderItem[] = []
   const settled: ClaudeLateDispatchOutcome[] = []
   const receipts: {
@@ -68,7 +83,7 @@ function fixture(connection?: Partial<ClaudeSession['connection']>) {
       dispatchWaiters.some((waiter) =>
         kind === 'all' ? claudeDispatchIsSteer(waiter) : waiter.steers === true
       ),
-    sink: {
+    sink: journal?.sink ?? {
       appendItem: (identity, body, options) => {
         writes.push({
           itemId: agentJournalItemKey(identity),
@@ -86,7 +101,7 @@ function fixture(connection?: Partial<ClaudeSession['connection']>) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: frame translation uses only this session's replay state and journal translator.
   const session = {
     providerSessionId: SESSION,
-    fence: 3,
+    fence: journal?.fence ?? 3,
     dispatchSequence: 0,
     dispatchWaiters,
     retiredDispatchWaiters: [],
@@ -103,8 +118,9 @@ function fixture(connection?: Partial<ClaudeSession['connection']>) {
       message,
       observedAt,
       current,
-      onReceived: (receipt) => receipts.push(receipt),
-      onSettledLate: ({ sessionId: _chat, ...outcome }) => settled.push(outcome),
+      onReceived: journal?.sink.recordProviderReceipt ?? ((receipt) => receipts.push(receipt)),
+      onSettledLate: ({ sessionId: _chat, ...outcome }) =>
+        journal ? journal.settle(outcome) : settled.push(outcome),
       emit: translator.handle
     })
   return {
@@ -118,7 +134,7 @@ function fixture(connection?: Partial<ClaudeSession['connection']>) {
         clientMessageId,
         requestedAt,
         session.fence,
-        HANDOVER
+        journal?.handover ?? HANDOVER
       ),
     frame,
     settled,
@@ -227,9 +243,13 @@ it('opens a priority steer at its matched start after the parent ends', () => {
   })
 })
 
-it.each([false, true])(
-  'revises an echoed follow-up to its matched start (output first: %s)',
-  (outputFirst) => {
+it.each([
+  { startedAt: 6000, outputFirst: false, revisedAt: null },
+  { startedAt: 6000, outputFirst: true, revisedAt: null },
+  { startedAt: 5100, outputFirst: false, revisedAt: 5100 }
+])(
+  'only moves an echoed follow-up start earlier ($startedAt, output first: $outputFirst)',
+  ({ startedAt, outputFirst, revisedAt }) => {
     const f = fixture()
     f.arm(false, SENT, 'opener', 1000)
     f.frame(lifecycle('started'), 2000)
@@ -244,14 +264,15 @@ it.each([false, true])(
     if (outputFirst) {
       f.frame(output, 5500)
     }
-    f.frame(lifecycle('started', FOLLOW_UP), 6000)
-    f.frame(lifecycle('started', FOLLOW_UP), 6500)
+    f.frame(lifecycle('started', FOLLOW_UP), startedAt)
+    f.frame(lifecycle('started', FOLLOW_UP), startedAt)
+    f.frame(lifecycle('started', FOLLOW_UP), 5001)
 
     expect(f.turns().map(({ body }) => body)).toMatchObject([
       { turnId: SENT, state: 'running', startedAt: 2000 },
       { turnId: SENT, state: 'completed', startedAt: 2000 },
       { turnId: FOLLOW_UP, state: 'running', startedAt: 5200 },
-      { turnId: FOLLOW_UP, state: 'running', startedAt: outputFirst ? 5500 : 6000 }
+      ...(revisedAt === null ? [] : [{ turnId: FOLLOW_UP, state: 'running', startedAt: revisedAt }])
     ])
     expect(f.receipts).toEqual([
       { clientMessageId: 'opener', fence: 3, handoverCursor: HANDOVER, observedAt: 2000 },
@@ -456,4 +477,82 @@ it('settles a dropped prompt as rejected and suppresses the already-opened turn 
       }
     ]).get('orca:client-1')
   ).toBeNull()
+})
+
+it('recovers a failed Claude receipt at the echo and still closes on a failed content write', async () => {
+  const warn = vi.fn()
+  const rig = await createQueuedMessageTestRig({
+    agent: 'claude',
+    hostDeps: { logger: { warn, error: () => {} } }
+  })
+  try {
+    const id = await rig.workingSend()
+    const dispatch = rig.dispatch.mock.lastCall![0]
+    const changeSql = (sql: string) => withTestAgentSessionDatabase(rig.root, (db) => db.exec(sql))
+    const ops: Promise<void>[] = []
+    const sink = rig.providerEvents()
+    const child = () => rig.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)?.child
+    const alive = child()
+    expect(alive?.phase).toBe('ready')
+    await changeSql(`
+      CREATE TRIGGER fail_receipt BEFORE UPDATE OF payload_json ON journal_submission_attempts
+      WHEN json_extract(NEW.payload_json, '$.writtenAt') IS NOT NULL
+      BEGIN SELECT RAISE(ABORT, 'transient receipt write failure'); END
+    `)
+    const f = fixture(undefined, {
+      sink,
+      fence: dispatch.fence,
+      handover: dispatch.handoverCursor!()!,
+      settle: (outcome) =>
+        void ops.push(rig.host.settleLateDispatch({ sessionId: HOST_TEST_SESSION, ...outcome }))
+    })
+    const sending = async () => {
+      const { submissions, writtenAtById } = splitStructuredAgentSubmissions([
+        (await rig.submission(id))!
+      ])
+      return [...structuredAgentSessionSendingItemIds([], submissions, writtenAtById)]
+    }
+    expect(await sending()).toEqual([`orca:${id}`])
+    f.arm(false, SENT, id, 1000)
+    f.frame(lifecycle('queued'), 1500)
+    expect(await sink.written!()).toEqual({ ok: true })
+    expect(warn).toHaveBeenCalledWith(
+      'writing a provider receipt failed',
+      expect.objectContaining({
+        scope: 'journal-provider-receipt',
+        error: expect.objectContaining({
+          message: expect.stringContaining('transient receipt write failure')
+        })
+      })
+    )
+    expect(child()).toBe(alive)
+    expect(rig.closeSession).not.toHaveBeenCalled()
+    await changeSql('DROP TRIGGER fail_receipt')
+
+    f.frame(lifecycle('started'), 2000)
+    expect(await sink.written!()).toEqual({ ok: true })
+    expect((await rig.submission(id))?.writtenAt).toBeUndefined()
+    expect(await sending()).toEqual([`orca:${id}`])
+    const journal = (await rig.host.conversation(HOST_TEST_SESSION)).journal
+    expect((await journal.reads.runningTurn())?.turnId).toBe(SENT)
+    f.frame(echo(SENT), 2100)
+    f.frame(output, 2500)
+    await Promise.all(ops)
+    expect(await sink.written!()).toEqual({ ok: true })
+    expect((await rig.submission(id))?.dispatchState).toBe('accepted')
+    expect(await sending()).toEqual([])
+    expect(await journal.reads.runningTurn()).not.toBeNull()
+    expect(rig.closeSession).not.toHaveBeenCalled()
+
+    await changeSql(`
+      CREATE TRIGGER fail_content BEFORE INSERT ON journal_items
+      WHEN NEW.message_role = 'assistant'
+      BEGIN SELECT RAISE(ABORT, 'normal content write failure'); END
+    `)
+    f.frame({ ...output, uuid: RESULT }, 3000)
+    expect(await sink.written!()).toMatchObject({ ok: false })
+    await eventually(() => expect(rig.closeSession).toHaveBeenCalledTimes(1))
+  } finally {
+    await rig.dispose()
+  }
 })

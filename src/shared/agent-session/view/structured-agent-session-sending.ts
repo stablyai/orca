@@ -6,6 +6,14 @@ import {
 } from './structured-agent-session-submissions'
 import { agentJournalSubmissionDrawnAsHeld } from '../requests/agent-session-queued-submission'
 
+export function nativeChatIsWorking(
+  working: boolean,
+  startedAt: number | null | undefined,
+  structured: boolean
+): boolean {
+  return working && (!structured || startedAt != null)
+}
+
 /** Keep the running clock through a pending notice while hiding the Working indicator. */
 export function nativeChatWorkingPresentation(
   working: boolean,
@@ -13,7 +21,7 @@ export function nativeChatWorkingPresentation(
   structured: boolean,
   sendPending: boolean
 ): { isWorking: boolean; turnWorking: boolean } {
-  const isWorking = working && (!structured || startedAt != null)
+  const isWorking = nativeChatIsWorking(working, startedAt, structured)
   return { isWorking, turnWorking: isWorking && !sendPending }
 }
 

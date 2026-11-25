@@ -121,7 +121,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
         queuePaused: queuePause !== null,
-        steersInTranscript: true,
         steerIntents
       }),
       ...sendingQueuedMessageCards(

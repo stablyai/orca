@@ -290,7 +290,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       appendItem: (identity, body, options) => void appendItem(identity, body, options),
       tryAppendItem: appendItem,
       ...resolvedAppend,
-      ...createStructuredAgentSessionTransitionMembers(queue),
+      ...createStructuredAgentSessionTransitionMembers(queue, deps),
       journalEpoch: queue.journalEpoch,
       observeSettledTurns: queue.observeSettledTurns,
       journalSnapshot: queue.journalSnapshot,

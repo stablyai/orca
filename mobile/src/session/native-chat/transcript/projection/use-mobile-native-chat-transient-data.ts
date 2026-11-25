@@ -1,12 +1,20 @@
 import { useState } from 'react'
 import {
-  buildMobileNativeChatTransientData,
+  mobileNativeChatImagePreview,
+  mobileNativeChatPendingRow,
   type MobileNativeChatPendingItem
 } from './mobile-native-chat-render-data'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { orderNativeChatDisplayMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-order'
 
-type Input = Parameters<typeof buildMobileNativeChatTransientData>[0]
+import { nativeChatStreamingMessage } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
+
+type Input = {
+  folded: NativeChatMessage[]
+  streaming: string | null
+  pending: MobileNativeChatPendingItem[]
+  imagePreviewsByMessageId?: Record<string, string[]>
+}
 type Preview = { urls: readonly string[]; row: NativeChatMessage }
 type Pending = { input: MobileNativeChatPendingItem; row: NativeChatMessage }
 export type MobileNativeChatTransientProjection = {
@@ -46,12 +54,7 @@ export function projectMobileNativeChatTransientData(
         ? held
         : {
             urls,
-            row: buildMobileNativeChatTransientData({
-              ...input,
-              folded: [source],
-              streaming: null,
-              pending: []
-            }).folded[0]!
+            row: mobileNativeChatImagePreview(source, urls)
           }
     previews.set(source, preview)
     return preview.row
@@ -70,11 +73,7 @@ export function projectMobileNativeChatTransientData(
         ? held
         : {
             input: item,
-            row: buildMobileNativeChatTransientData({
-              folded: [],
-              streaming: null,
-              pending: [item]
-            }).data[0]!
+            row: mobileNativeChatPendingRow(item)
           }
     pending.set(item.id, entry)
     return entry.row
@@ -82,8 +81,7 @@ export function projectMobileNativeChatTransientData(
   const stream = input.streaming
     ? before?.input.streaming === input.streaming
       ? before.stream
-      : buildMobileNativeChatTransientData({ folded: [], streaming: input.streaming, pending: [] })
-          .data[0]
+      : nativeChatStreamingMessage(input.streaming)
     : undefined
   const data = [
     ...folded,

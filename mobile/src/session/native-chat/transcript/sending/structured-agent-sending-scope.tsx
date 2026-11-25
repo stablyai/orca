@@ -2,8 +2,9 @@ import {
   createContext,
   useCallback,
   useContext,
+  useLayoutEffect,
   useMemo,
-  useState,
+  useRef,
   useSyncExternalStore,
   type ReactNode
 } from 'react'
@@ -26,14 +27,10 @@ export function StructuredAgentSendingScope({
   displayedIds: ReadonlySet<string>
   children?: ReactNode
 }): ReactNode {
-  const [ids, setIds] = useState(displayedIds)
-  if (
-    ids !== displayedIds &&
-    (ids.size !== displayedIds.size || Array.from(displayedIds).some((id) => !ids.has(id)))
-  ) {
-    setIds(displayedIds)
-  }
-  const sending = useMemo(() => source && { source, ids, gate: source.gateFor(ids) }, [source, ids])
+  const sending = useMemo(
+    () => source && { source, ids: displayedIds, gate: source.gateFor(displayedIds) },
+    [source, displayedIds]
+  )
   return <SendingContext value={sending}>{children}</SendingContext>
 }
 
@@ -64,27 +61,43 @@ export function StructuredAgentWorkingGate({
 }
 
 const EMPTY_IDS: ReadonlySet<string> = new Set()
+const NO_ROWS: readonly string[] = []
 
-export function displayedSendingIds(
-  source: StructuredAgentSendingSource | undefined,
-  rows: readonly { id: string }[],
-  waiting: readonly { item: { id: string } }[]
-): ReadonlySet<string> {
-  if (!source?.candidates.size) {
-    return EMPTY_IDS
-  }
-  const ids = new Set<string>()
-  for (const { id } of rows) {
-    if (source.candidates.has(id)) {
-      ids.add(id)
-    }
-  }
-  for (const {
-    item: { id }
-  } of waiting) {
-    if (source.candidates.has(id)) {
-      ids.add(id)
-    }
-  }
+export function useSendingRowIds<Row>(rows: readonly Row[], idOf: (row: Row) => string) {
+  const committed = useRef(NO_ROWS)
+  const ids = useMemo(() => {
+    const previous = committed.current
+    return previous.length === rows.length &&
+      rows.every((row, index) => idOf(row) === previous[index])
+      ? previous
+      : rows.map(idOf)
+  }, [rows, idOf])
+  useLayoutEffect(() => {
+    committed.current = ids
+  }, [ids])
   return ids
+}
+
+export function useDisplayedSendingIds(
+  source: StructuredAgentSendingSource | undefined,
+  rows: readonly string[],
+  waiting: readonly string[],
+  window?: { first: number; heldFrom: number; heldAt: number },
+  frozen?: { rowIds: readonly string[]; waitingIds: readonly string[] } | null
+): ReadonlySet<string> {
+  const { first = 0, heldFrom = Infinity, heldAt = 0 } = window ?? {}
+  const held = frozen?.rowIds ?? NO_ROWS
+  const footer = frozen?.waitingIds ?? waiting
+  const candidates = source?.candidates
+  return useMemo(() => {
+    if (!candidates?.size) {
+      return EMPTY_IDS
+    }
+    return new Set(
+      rows
+        .slice(first, heldFrom)
+        .concat(held.slice(Math.max(first, heldFrom) - heldAt), footer)
+        .filter((id) => candidates.has(id))
+    )
+  }, [candidates, rows, footer, first, held, heldFrom, heldAt])
 }

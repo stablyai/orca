@@ -18,7 +18,6 @@ import {
 // Keep physical row keys when older messages join a folded run; the folded message id alone would remount it.
 export type MobileNativeChatRowKeys = {
   scope: string
-  sourceHead: string | undefined
   keyOf: (message: NativeChatMessage) => string
   current: (key: string) => string | undefined
   placement: (key: string) => string
@@ -278,7 +277,6 @@ export function useMobileNativeChatRowKeys(
       runOwners: assigned.displayed.keyById,
       runPlacements: assigned.runPlacements,
       scope: assigned.scope,
-      sourceHead: assigned.messages[0]?.id,
       keyOf: (message: NativeChatMessage) => assigned.keyById.get(message.id) ?? message.id,
       current: (key: string) => (assigned.moved.has(key) ? assigned.moved.get(key) : key),
       placement: (key: string) =>

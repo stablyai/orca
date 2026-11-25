@@ -152,8 +152,8 @@ vi.mock('./transcript/messages/mobile-native-chat-message-styles', () => ({
   scaledType: () => ({}),
   MONO_SIZE: 12
 }))
-vi.mock('./transcript/viewport/MobileNativeChatPageList', () => ({
-  MobileNativeChatPageList: () => null
+vi.mock('./transcript/viewport/MobileNativeChatPageScroll', () => ({
+  MobileNativeChatPageScroll: 'div'
 }))
 vi.mock('./transcript/message-content/MobileNativeChatFullContent', () => ({
   useMobileNativeChatFullMessage: (message: NativeChatMessage) => {
