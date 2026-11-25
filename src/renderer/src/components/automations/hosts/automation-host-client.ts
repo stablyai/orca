@@ -1,3 +1,4 @@
+import { prepareAutomationUpdateGuard, type AutomationUpdateGuard } from './automation-update-guard'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
@@ -186,9 +187,16 @@ export async function listRecentAutomationRunsForTarget(
 export async function updateAutomationForTarget(
   automation: Pick<Automation, 'id' | 'runContext'>,
   updates: AutomationUpdateInput,
-  sourceTarget?: AutomationHostTarget | null
+  sourceTarget?: AutomationHostTarget | null,
+  guard?: AutomationUpdateGuard
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
+  const unchangedSince = await prepareAutomationUpdateGuard(
+    target.kind === 'environment'
+      ? { kind: 'runtime', environmentId: target.environmentId, pairingRevision: 0 }
+      : { kind: 'desktop' },
+    guard
+  )
   const prepared = await prepareAutomationLaunchSetup(
     target.kind === 'environment'
       ? {
@@ -202,7 +210,11 @@ export async function updateAutomationForTarget(
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
-    { id: automation.id, updates: toRuntimeAutomationUpdateInput(prepared) },
+    {
+      id: automation.id,
+      updates: toRuntimeAutomationUpdateInput(prepared),
+      ...(unchangedSince ? { unchangedSince } : {})
+    },
     { timeoutMs: 15_000 }
   )
   return result.automation

@@ -1,3 +1,4 @@
+import { AutomationEditPrecondition } from './automation-edit-precondition-params'
 import * as z from 'zod'
 import { ChoicePatch, OptionKey } from '../agent-launch/agent-launch-settings-params'
 import { AGENT_PERMISSION_CHOICES } from '../../agent-launch/permissions/tui-agent-permission-choice'
@@ -330,6 +331,7 @@ export const AutomationUpdate = z.object({
   updates: AutomationUpdateFields,
   expectedOwner: ExpectedOwner,
   destination: Destination,
+  unchangedSince: AutomationEditPrecondition,
   callerSessionId: OptionalString,
   // An edit relying on the current new-per-run mode is refused if the stored mode changed first.
   expectedWorkspaceMode: z.literal('new_per_run').optional()

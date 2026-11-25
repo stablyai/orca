@@ -8,6 +8,11 @@ import {
 } from '../../shared/automation-event-triggers'
 import { assertWorkflowRepoRef, needsWorkflows } from '../../shared/automation-github-triggers'
 import type { AutomationBotResultsTo } from '../../shared/automation-bot-target'
+import {
+  AUTOMATION_CHANGED,
+  sameAutomationEditValue,
+  type AutomationEditPrecondition
+} from '../../shared/automations/automation-edit-precondition'
 import type {
   Automation,
   AutomationUpdateInput
@@ -245,19 +250,27 @@ export async function withPatchPlaceRefs(
   }
 }
 
-const AUTOMATION_CHANGED = 'automation_changed'
-
 /** Whether two reads of an automation have the same rules and bot target. */
 export const sameBotPlaces = (
   a: Pick<Automation, 'on' | 'bot'>,
   b: Pick<Automation, 'on' | 'bot'>
-) => JSON.stringify([a.on, a.bot]) === JSON.stringify([b.on, b.bot])
+) => sameAutomationEditValue([a.on, a.bot], [b.on, b.bot])
 
 export function assertBotPlacesUnchanged(
-  now: Pick<Automation, 'on' | 'bot'>,
-  since: Pick<Automation, 'on' | 'bot'> | undefined
+  now: Automation,
+  since: AutomationEditPrecondition | undefined
 ): void {
-  if (since && !sameBotPlaces(now, since)) {
+  if (
+    since &&
+    (!sameBotPlaces(now, since) ||
+      (since.schedule &&
+        !sameAutomationEditValue(since.schedule, {
+          rrule: now.rrule,
+          dtstart: now.dtstart,
+          timezone: now.timezone,
+          timezoneExplicit: now.timezoneExplicit
+        })))
+  ) {
     throw new Error(AUTOMATION_CHANGED)
   }
 }

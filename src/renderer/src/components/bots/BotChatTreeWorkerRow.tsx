@@ -125,7 +125,13 @@ export function botChatTreeWorkerOpen(
 ): (() => void) | undefined {
   const { run, dispatchId, worktreeId } = worker
   if (run) {
-    return () => openBotAutomation(bot.hostId, run.automationId, run.runId)
+    return () =>
+      openBotAutomation({
+        bot,
+        automationId: run.automationId,
+        runId: run.runId,
+        originRowKey: worker.key
+      })
   }
   if (dispatchId && !worker.neverStarted) {
     return () =>
@@ -185,6 +191,7 @@ export function BotChatTreeWorkerRow({
   const running = botChatTreeWorkerRunning(worker)
   return (
     <WorkerActivityRow
+      rowKey={worker.key}
       dispatchId={dispatchId ?? ''}
       title={worker.title}
       dot={null}

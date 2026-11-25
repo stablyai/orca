@@ -27,6 +27,7 @@ import {
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 
 export type WorkerActivityRowProps = {
+  rowKey?: string
   dispatchId: string
   title: string
   /** Drawn only without a host record; a recorded worker draws Crew's look from its record. */
@@ -107,6 +108,7 @@ export function WorkerActivityRow(props: WorkerActivityRowProps): React.JSX.Elem
       >
         <HoverCardTrigger asChild {...placement.trigger}>
           <ActivityRowButton
+            data-activity-row-key={props.rowKey}
             disabled={!props.onOpen}
             onClick={props.onOpen}
             nested={props.nested}

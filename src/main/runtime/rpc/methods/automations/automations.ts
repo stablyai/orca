@@ -139,6 +139,7 @@ export const AUTOMATION_METHODS = [
       const automation = await context.runtime.updateAutomation(params.id, params.updates, {
         expectedOwner: mutationOwner(params.id, params.expectedOwner, context),
         destination: params.destination,
+        unchangedSince: params.unchangedSince,
         expectedWorkspaceMode: params.expectedWorkspaceMode
       })
       const caller = chatOfCaller(params.callerSessionId, context)

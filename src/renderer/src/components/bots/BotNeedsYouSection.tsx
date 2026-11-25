@@ -3,7 +3,7 @@
 // soon as their need clears where Orca reads it, and only focus that leaves with a row moves.
 import { memo, useContext, useLayoutEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { botTarget, type BotOnHost } from '@/lib/bot-hosts'
+import { botTarget, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { reviewAccessRequest } from '@/lib/bot-access-requests'
@@ -41,6 +41,7 @@ export type BotNeedsYouAsks = {
   needs: readonly BotNeedView[]
   /** Runs a sign-in stopped: listed after the asks as context, never counted. */
   stoppedForSignIn: readonly StoppedForSignIn[]
+  stoppedBot?: (row: StoppedForSignIn) => BotRef | null
   /** The item a worker's Dispatch is linked to, whose title its ask takes. */
   itemOf: (dispatchId: string) => BotItem | null
 }
@@ -121,12 +122,18 @@ function permission(t: Translate, tool: string | null): string {
 }
 
 /** A worker's terminal or a terminal run asks in its own pane. */
-function paneOpener(row: BotSessionActivityRow, bot: BotOnHost): (() => void) | null {
+function paneOpener(row: BotSessionActivityRow, bot: BotRef, needKey: string): (() => void) | null {
   switch (row.kind) {
     case 'worker':
       return botWorkerRowOpener(row, botTarget(bot))
     case 'run':
-      return () => openBotAutomation(bot.hostId, row.automationId, row.runId)
+      return () =>
+        openBotAutomation({
+          bot,
+          automationId: row.automationId,
+          runId: row.runId,
+          originRowKey: needKey
+        })
     case 'thread':
       return null
   }
@@ -161,7 +168,7 @@ function SessionRowNeed({
       />
     )
   }
-  const open = paneOpener(row, bot)
+  const open = paneOpener(row, bot, needKey)
   // An item's worker asks under the item's title, its own name first so two of them read apart.
   const item = row.kind === 'worker' && row.dispatchId ? itemOf(row.dispatchId) : null
   const tool = row.kind === 'worker' ? (row.tool ?? null) : null
@@ -390,7 +397,10 @@ export function BotNeedsYouSection({
                   <NeedItem bot={bot} need={row.need} itemOf={itemOf} onApproval={onApproval} />
                 )
               ) : 'stopped' in row ? (
-                <StoppedForSignInRow row={row.stopped} />
+                <StoppedForSignInRow
+                  bot={typeof bot === 'function' ? (asks.stoppedBot?.(row.stopped) ?? null) : bot}
+                  row={row.stopped}
+                />
               ) : (
                 renderItem?.(row.item)
               )
@@ -398,6 +408,7 @@ export function BotNeedsYouSection({
               <div
                 key={row.key}
                 data-need-key={row.key}
+                data-activity-row-key={row.key}
                 ref={'item' in row && row.item.uid === backRow?.uid ? backRow.ref : undefined}
                 // Folded rows stay mounted, so a chat that turns into an approval still sorts first.
                 hidden={folded}

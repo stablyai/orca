@@ -45,7 +45,12 @@ function openChat(bot: Bot, chat: BotChatTreeChat): void {
     if (run.worktreeId && run.paneKey) {
       revealWorkerPane(run.worktreeId, run.paneKey, host?.kind === 'runtime' ? host.id : undefined)
     } else {
-      openBotAutomation(bot.hostId, run.automationId, run.runId)
+      openBotAutomation({
+        bot,
+        automationId: run.automationId,
+        runId: run.runId,
+        originRowKey: `chat:${chat.chatId}`
+      })
     }
   } else if (chat.closed) {
     // A closed chat reads in Session History.
@@ -249,6 +254,7 @@ export function BotChatTreeGroup({
       <BotChatContextMenu bot={bot} chat={chat} onOpen={() => openChat(bot, chat)}>
         <div className="group/bot-chat relative flex w-full min-w-0 items-start gap-1 rounded-md py-1.5 pr-2 pl-2 hover:bg-accent">
           <button
+            data-activity-row-key={`chat:${chat.chatId}`}
             type="button"
             aria-label={[label, chat.unread ? t('bots.chats.unread', 'Unread') : null]
               .filter(Boolean)

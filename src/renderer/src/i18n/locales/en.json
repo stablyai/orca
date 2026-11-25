@@ -19225,7 +19225,8 @@
           "showMore": "Show more",
           "copied": "Copied",
           "copyFailed": "Copy failed",
-          "copyPrompt": "Copy prompt"
+          "copyPrompt": "Copy prompt",
+          "copyInstructions": "Copy instructions"
         },
         "AutomationDetail": {
           "host": "Host",
@@ -19271,7 +19272,11 @@
           "createdByPluginTitle": "Plugin {{plugin}}",
           "createdByEnded": "Plugin removed or disabled; it must ask before changing this automation",
           "active": "Active",
-          "runNowStarting": "Starting…"
+          "runNowStarting": "Starting…",
+          "moreActions": "More actions for {{name}}",
+          "moreNotices": "+{{count}} more",
+          "starting": "Starting…",
+          "deleteEllipsis": "Delete…"
         },
         "AutomationEditorDialog": {
           "fb1896a5e7": "Cancel",
@@ -25145,7 +25150,8 @@
     "cancel": "Cancel",
     "unassigned": "Unassigned",
     "copy": "Copy",
-    "delete": "Delete"
+    "delete": "Delete",
+    "save": "Save"
   },
   "terminal": {
     "recentImages": {
@@ -27149,7 +27155,8 @@
       "newDraft": "Set up an automation that runs when ",
       "addDraft": "Change the automation “{{name}}” so it also runs when ",
       "editDraft": "Change the automation “{{name}}”: ",
-      "nextRun": "Runs on events"
+      "nextRun": "Runs on events",
+      "changeEventsInChat": "Change events in chat"
     },
     "wontFire": "Won’t run: needs the {{connectors}} connector",
     "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
@@ -30721,6 +30728,71 @@
         "expired": "The sign-in expired. Try again.",
         "couldNotSignIn": "Couldn’t sign in. Try again."
       }
+    },
+    "automationPanel": {
+      "discardWhen": "Discard changes to When?",
+      "discardResults": "Discard changes to Results?",
+      "discardBody": "Your edit hasn't been saved.",
+      "keepEditing": "Keep editing",
+      "discard": "Discard",
+      "crumb": "Automation",
+      "back": "Back to Activity",
+      "unroutable": "Can't reach {{name}}'s computer from this app.",
+      "openOnPage": "Open in Automations",
+      "openChat": "Open chat",
+      "openTerminal": "Open terminal",
+      "runLoading": "Reading that run…",
+      "runGone": "That run is no longer kept.",
+      "runUnsupported": "Can't open that run here.",
+      "runFailed": "Couldn't read that run.",
+      "retry": "Retry",
+      "runsFailed": "Couldn't read its runs.",
+      "openedRun": "Opened run",
+      "runsStale": "Couldn't read newer runs.",
+      "olderOnPage": "Older runs are in Automations",
+      "showMore": "Show more",
+      "onEvents": "On · Runs on events",
+      "onNext": "On · {{when}}",
+      "deleted": "Deleted {{name}}",
+      "instructions": "Instructions",
+      "chatFailed": "Couldn't open {{name}}'s chat.",
+      "setup": "Setup",
+      "computer": "Computer",
+      "draftKept": "Unsaved change kept from earlier",
+      "conflict": "This changed while you were editing. Latest: {{latest}}",
+      "saveMine": "Save mine",
+      "useLatest": "Use latest",
+      "tryAgain": "Try again",
+      "saving": "Saving…",
+      "editWhen": "Edit when it runs",
+      "zone": "Times are in {{zone}}",
+      "editResults": "Edit where results go",
+      "retired": "{{name}}'s computer changed.",
+      "unpaired": "{{name}}'s computer isn't paired anymore.",
+      "checking": "Checking {{name}}'s computer…",
+      "offline": "{{host}} is offline.",
+      "updateOrca": "Update Orca on {{host}}",
+      "unconfirmed": "Couldn't confirm the run started",
+      "checkAgain": "Check again",
+      "dismiss": "Dismiss",
+      "foreign": "This automation now belongs to another bot.",
+      "draftsFull": "Save or discard unsaved changes on one of {{count}} other automations first.",
+      "settingsStale": "Couldn't read the latest settings.",
+      "openedOnPage": "Opened in Automations: the bot's page isn't available.",
+      "running": "Running…",
+      "runningNotice": "Running",
+      "runStarted": "Run started",
+      "saved": "Saved",
+      "runAgain": "Run again…",
+      "runAgainTitle": "Run again?",
+      "runAgainBody": "The earlier request may already have started a run. Running again may create another one.",
+      "confirmRunAgain": "Run again",
+      "saveFailed": "Couldn't save.",
+      "thisComputer": "This computer",
+      "stillUnconfirmed": "Still couldn't confirm",
+      "editCapacity": "Save or discard another automation edit before opening this editor.",
+      "editTooLarge": "This change is too large to keep. Save or discard another automation edit first.",
+      "detailCapacity": "Open in Automations to read more details."
     }
   },
   "plugins": {

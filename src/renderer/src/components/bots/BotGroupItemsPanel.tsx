@@ -231,6 +231,8 @@ export function BotGroupItemsPanel({ group }: { group: BotGroup }): React.JSX.El
               asks={{
                 needs: merged.needs,
                 stoppedForSignIn: merged.stoppedForSignIn,
+                stoppedBot: (row) =>
+                  merged.reads.find((read) => read.stoppedForSignIn.includes(row))?.bot ?? null,
                 itemOf: merged.itemOf
               }}
               offline={merged.offline}

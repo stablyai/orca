@@ -6,6 +6,7 @@ import type { BotActivity } from '../../../../shared/bots/bot-activity-model'
 import type { BotActivityRead } from '../../../../shared/bots/bot-activity-schema'
 import type { BotReadAuthority } from './bot-read-authority'
 import { createBotHostRead, useBotHostRead, type BotReadSettled } from './use-bot-host-read'
+import { captureBotAutomationOwners } from '../automations/hosts/bot-automation-row-owner'
 
 export const NO_ACTIVITY: BotActivity = {
   workers: [],
@@ -23,7 +24,18 @@ const activityRead = createBotHostRead<BotActivityWithAuthority>(
   'bots.activity',
   (result: { activity: BotActivityRead }, authority) => ({ activity: result.activity, authority }),
   'Failed to read bot activity:',
-  BOT_WORK_KINDS
+  BOT_WORK_KINDS,
+  0,
+  false,
+  undefined,
+  // Each automation row keeps the owner captured before its read was sent.
+  (bot) => {
+    const commit = captureBotAutomationOwners(bot)
+    return (read) => {
+      const activity = commit(read.activity)
+      return activity === read.activity ? read : { ...read, activity }
+    }
+  }
 )
 
 // Stable, so a new incarnation answering the same Activity renders none of its plain readers.
