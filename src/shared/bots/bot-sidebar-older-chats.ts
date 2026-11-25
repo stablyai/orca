@@ -78,7 +78,8 @@ export function botSidebarChatFoldTimes<T extends { id: string }>(
     }
   }
   // An id two physical workspaces share (twins on two hosts) maps to one chat however many claim it, so
-  // which chat it belongs to can't be told: every chat whose lines include such an id holds.
+  // which chat it belongs to can't be told: every chat whose lines include such an id holds. Known limit:
+  // the read already placed both twins under one chat, so another chat that also claimed one isn't seen.
   const identitiesById = new Map<string, Set<string>>()
   for (const [identity, line] of lines) {
     identitiesById.set(line.id, (identitiesById.get(line.id) ?? new Set()).add(identity))

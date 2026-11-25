@@ -16,7 +16,10 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
-import { selectWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
+import {
+  selectWorktreeActivityStatus,
+  selectWorktreeTitleActivityStatus
+} from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { AppState } from '@/store/types'
 import { useShallow } from 'zustand/react/shallow'
@@ -38,6 +41,9 @@ export function pruneBotSidebarOlderChats(liveKeys: ReadonlySet<string>): void {
 const NO_IDS: string[] = []
 
 /** Card statuses that say nothing is going on in a workspace. */
+/** Title statuses that positively say an agent works or asks; an idle live shell reads `active`. */
+const TITLE_WORK: ReadonlySet<WorktreeStatus> = new Set(['working', 'monitoring', 'permission'])
+
 const IDLE_STATUSES: ReadonlySet<WorktreeStatus> = new Set([
   'inactive',
   'done',
@@ -158,9 +164,14 @@ export function useBotSidebarOlderChats(input: {
     [baseTimes]
   )
   const countDue = useCallback(
-    (clock: number) => {
-      // A clock nobody watched for a while reads stale on its first draw; the wall clock never does.
-      const now = Math.max(clock, Date.now())
+    (_tick: number) => {
+      // The clock's ticks only ask again; admission is always the wall clock now, so a tick sampled by
+      // another bot's list, or a clock set back, never admits a fold early. Folds already drawn are kept
+      // apart (`olderByBot`) and only held there, never admitted by an old time.
+      const now = Date.now()
+      if (!Number.isFinite(now)) {
+        return 0
+      }
       // How many fold times are at or before now: a binary search over the sorted times.
       let low = 0
       let high = dueTimes.length
@@ -218,6 +229,8 @@ export function useBotSidebarOlderChats(input: {
         : watchedIds.filter(
             (id) =>
               !IDLE_STATUSES.has(selectWorktreeActivityStatus(state, id)) ||
+              // A working or permission title counts even where the card's dot shows a failed hook.
+              TITLE_WORK.has(selectWorktreeTitleActivityStatus(state, id)) ||
               selectLiveAgentStatusEntriesForWorktree(state, id).some(
                 (entry) => entry.state !== 'done'
               )

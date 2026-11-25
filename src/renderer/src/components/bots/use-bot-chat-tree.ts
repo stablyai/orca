@@ -59,7 +59,11 @@ type ChangeNotices = {
   latest: number
   /** A notice came while the window was hidden; its read is asked for once it shows. */
   missed: boolean
+  /** A settle is waiting on a read. */
+  settling: boolean
   listeners: Set<() => void>
+  /** Asks again for a read covering the newest notice: when a reader attaches while one is unread. */
+  settle: () => void
   stop: () => void
 }
 
@@ -72,21 +76,30 @@ function watchChangeNotices(bot: BotRef, key: string): ChangeNotices {
     unread: false,
     latest: 0,
     missed: false,
+    settling: false,
     listeners: new Set(),
+    settle: () => {},
     stop: () => {}
   }
   const tell = (): void => notices.listeners.forEach((listener) => listener())
   // Unchanged answers notify no reader, so this waits on the read itself, not on the shown value. A read
-  // that fails or never comes leaves `unread` set until a later notice's read lands.
+  // that fails or never comes leaves `unread` set until a later covering read lands: the next notice's,
+  // the window showing again, or a reader attaching (its own first read, shared, not an extra one).
   const settle = (): void => {
     const notice = notices.latest
+    notices.settling = true
     void chatTreeRead.requestSettled(bot).then((settled) => {
-      if (settled.ok && notice === notices.latest && changeNoticesByBot.get(key) === notices) {
+      if (changeNoticesByBot.get(key) !== notices) {
+        return
+      }
+      notices.settling = false
+      if (settled.ok && notice === notices.latest) {
         notices.unread = false
         tell()
       }
     })
   }
+  notices.settle = settle
   const onChanged = (): void => {
     notices.latest += 1
     if (!notices.unread) {
@@ -101,7 +114,10 @@ function watchChangeNotices(bot: BotRef, key: string): ChangeNotices {
     }
   }
   const onVisible = (): void => {
-    if (notices.missed && document.visibilityState === 'visible') {
+    if (
+      (notices.missed || (notices.unread && !notices.settling)) &&
+      document.visibilityState === 'visible'
+    ) {
       notices.missed = false
       settle()
     }
@@ -136,6 +152,10 @@ function useChangeUnread(bot: Bot | null): boolean {
       }
       const watched = notices
       watched.listeners.add(listener)
+      // A reader attaching starts its own read; an unread notice with no settle waiting rides on it.
+      if (watched.unread && !watched.settling && document.visibilityState === 'visible') {
+        watched.settle()
+      }
       return () => {
         watched.listeners.delete(listener)
         if (watched.listeners.size === 0 && changeNoticesByBot.get(key) === watched) {
