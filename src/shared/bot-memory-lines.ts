@@ -1,12 +1,7 @@
 // MEMORY.md as the owner sees it: one fact per list line, optionally dated, everything else kept byte for byte.
 // Orca, not the bot, writes where a fact came from after " · from: "; plain text, so any reader shows it.
 
-import {
-  type BotMemoryAnchor,
-  botMemoryPutBack,
-  isBotMemoryAnchorLine,
-  withBotMemoryFollowers
-} from './bot-memory-anchors'
+import { botMemoryPutBack } from './bot-memory-anchors'
 import { BOT_MEMORY_FENCE, botMemoryFenceOpeners } from './bot-memory-fences'
 
 /** Lines of MEMORY.md a session loads at start; the rest stays on disk for the bot to read. */
@@ -54,10 +49,8 @@ export function countBotMemoryLines(text: string): number {
 type FactParts = Omit<BotMemoryFact, 'line'> & { prefix: string }
 
 /** Each line's fact, or null: a line in a code fence is never one, whatever it looks like. */
-function lineFacts(
-  lines: readonly string[],
-  openers: readonly number[] = botMemoryFenceOpeners(lines)
-): (FactParts | null)[] {
+function lineFacts(lines: readonly string[]): (FactParts | null)[] {
+  const openers = botMemoryFenceOpeners(lines)
   // A fence's opener opens the place after it; its closer is in the place before it.
   return lines.map((raw, line) =>
     openers[line] === -1 && openers[line + 1] === -1 ? factParts(raw) : null
@@ -150,7 +143,8 @@ export function dropBotMemoryFact(text: string, fact: string): { text: string; d
   return { text: kept.join(eol), dropped: lines.length - kept.length }
 }
 
-export type BotMemoryLine = BotMemoryAnchor & { line: string }
+/** A fact line, and the non-blank line it followed (null: the top of the file). */
+export type BotMemoryLine = { line: string; after: string | null }
 
 /** What a write did to MEMORY.md's facts, by their words: dates, marks and spacing aside. */
 export type BotMemoryChange = { added: BotMemoryLine[]; removed: BotMemoryLine[] }
@@ -165,8 +159,8 @@ function rawFactKey(raw: string): string | null {
 }
 
 /** Each line's fact key in `text`, fences read: null for a line that states no fact. */
-function lineKeys(lines: readonly string[], openers?: readonly number[]): (string | null)[] {
-  return lineFacts(lines, openers).map((fact) => (fact ? factKey(fact.text) : null))
+function lineKeys(lines: readonly string[]): (string | null)[] {
+  return lineFacts(lines).map((fact) => (fact ? factKey(fact.text) : null))
 }
 
 /** The facts `text` states, by their words. */
@@ -214,33 +208,18 @@ export function onlyBotMemoryFactsChanged(before: string, after: string): boolea
 export function botMemoryChange(before: string, after: string): BotMemoryChange {
   const only = (from: string, other: string): BotMemoryLine[] => {
     const keys = new Set(lineKeys(splitLines(other).lines))
-    // Each line, and the index in `from` it came from.
-    const [lines, picked]: [BotMemoryLine[], number[]] = [[], []]
-    const occurrences = new Map<string, number>()
+    const lines: BotMemoryLine[] = []
     let previous: string | null = null
-    let previousOccurrence = 0
     const rows = splitLines(from).lines
-    const openers = botMemoryFenceOpeners(rows)
-    const rowKeys = lineKeys(rows, openers)
+    const rowKeys = lineKeys(rows)
     for (const [index, raw] of rows.entries()) {
       const key = rowKeys[index]
       if (key !== null && !keys.has(key)) {
-        picked.push(index)
-        lines.push(
-          previous === null
-            ? { line: raw, after: null }
-            : { line: raw, after: previous, afterOccurrence: previousOccurrence }
-        )
+        lines.push({ line: raw, after: previous })
       }
-      // Counted as applyBotMemoryChange counts: only the lines a fact can follow.
-      if (raw.trim() !== '' && isBotMemoryAnchorLine(openers, index)) {
-        previous = raw
-        previousOccurrence = (occurrences.get(raw) ?? 0) + 1
-        occurrences.set(raw, previousOccurrence)
-      }
+      previous = raw.trim() === '' ? previous : raw
     }
-    // A line `other` keeps too is one a put-back still finds.
-    return withBotMemoryFollowers(lines, picked, rows, (index) => keys.has(rowKeys[index]))
+    return lines
   }
   return { added: only(after, before), removed: only(before, after) }
 }
@@ -269,7 +248,7 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
       continue
     }
     present.add(key)
-    putBack(added.line, added)
+    putBack(added.line, added.after)
     changed = true
   }
   return changed ? kept.join(eol) : text

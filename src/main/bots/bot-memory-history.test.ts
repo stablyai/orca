@@ -5,7 +5,6 @@ import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/
 import {
   addBotMemoryFact,
   botMemoryChange,
-  loadedBotMemoryLines,
   parseBotMemoryFacts
 } from '../../shared/bot-memory-lines'
 import { BOT_MEMORY_NO_FACT, quickAddBotMemoryChange } from '../../shared/bot-memory-quick-add'
@@ -165,17 +164,6 @@ describe("a bot's memory history", () => {
     expect(await stored()).not.toMatch(/hunter2|ghp_/)
   })
 
-  it('keeps a secret-looking line after a fact out of its row, which stays undoable', async () => {
-    const memory = '# Memory\n- target\n- token ghp_abcdefghijklmnopqrstuvwxyz0123\n'
-    const { forget, read, rows, stored, undo } = bot(memory)
-    await forget('target')
-    expect(await stored()).not.toMatch(/ghp_/)
-    const [row] = await rows()
-    expect(row.undoable).toBe(true)
-    expect(await undo(row.id)).toBe(true)
-    expect(read()).toBe(memory)
-  })
-
   it('leaves an edit alone once its new words were changed again or forgotten', async () => {
     const reworded = bot('# Memory\n- releases on Monday\n')
     await reworded.reword('Monday', 'Tuesday')
@@ -254,8 +242,8 @@ describe("a bot's memory history", () => {
     ])
   })
 
-  it('puts an older row without an occurrence back after the last copy outside a fence', async () => {
-    const legacyUndo = async (memory: string): Promise<string> => {
+  it('undoes a Forget after the last copy of the line it followed outside a code fence', async () => {
+    const undone = async (memory: string): Promise<string> => {
       const { history, read, rows, undo } = bot(memory)
       await history.append(
         'bot-1',
@@ -265,12 +253,12 @@ describe("a bot's memory history", () => {
       expect(await undo((await rows())[0].id)).toBe(true)
       return read()
     }
-    // As before occurrences were recorded: after the last copy.
-    expect(await legacyUndo('## Deploy\n- a\n## Deploy\n- b\n')).toBe(
+    // As on main: after the last copy.
+    expect(await undone('## Deploy\n- a\n## Deploy\n- b\n')).toBe(
       '## Deploy\n- a\n## Deploy\n- target\n- b\n'
     )
-    // A copy inside a code fence is never one a fact followed.
-    expect(await legacyUndo('## Deploy\n- a\n```md\n## Deploy\n```\n')).toBe(
+    // A copy inside a code fence is never one a fact followed, so it can't pull the fact into it.
+    expect(await undone('## Deploy\n- a\n```md\n## Deploy\n```\n')).toBe(
       '## Deploy\n- target\n- a\n```md\n## Deploy\n```\n'
     )
   })
@@ -281,57 +269,6 @@ describe("a bot's memory history", () => {
     await expect(quickAdd(' \n\t')).rejects.toThrow(BOT_MEMORY_NO_FACT)
     expect(read()).toBe(OLD)
     expect(await rows()).toEqual([])
-  })
-
-  it('undoes a Forget under the copy of a repeated heading it was under, whatever copies came or went', async () => {
-    const filler = (from: number, count: number): string =>
-      Array.from({ length: count }, (_, index) => `- 2026-11-01 fact ${from + index}\n`).join('')
-    const forgetThenUndo = async (memory: string, meanwhile: (text: string) => string) => {
-      const { forget, read, rows, stored, undo, write } = bot(memory)
-      expect(await forget('target')).toBe(true)
-      write(meanwhile(read()))
-      // Undo reads the row back as History stored it.
-      await stored()
-      expect(await undo((await rows())[0].id)).toBe(true)
-      return read()
-    }
-    const same = (text: string): string => text
-    const second = `## Deploy\n- a\n${filler(0, 10)}## Deploy\n- target\n${filler(10, 250)}`
-    expect(await forgetThenUndo(second, same)).toBe(second)
-    // Its twin above went, or a new copy came above.
-    expect(await forgetThenUndo(second, (text) => text.replace('## Deploy\n- a\n', '- a\n'))).toBe(
-      `- a\n${filler(0, 10)}## Deploy\n- target\n${filler(10, 250)}`
-    )
-    expect(await forgetThenUndo(second, (text) => `## Deploy\n- new\n${text}`)).toBe(
-      `## Deploy\n- new\n${second}`
-    )
-    // A new copy came below: still in the first section, within the lines a session loads.
-    const first = `## Deploy\n- target\n${filler(0, 250)}## Deploy\n- b\n`
-    const appended = await forgetThenUndo(first, (text) => `${text}## Deploy\n- c\n`)
-    expect(appended).toBe(`${first}## Deploy\n- c\n`)
-    expect(loadedBotMemoryLines(appended).lines).toContain('- target')
-    // A later twin went: still in its own section.
-    const middle = '## Deploy\n- a\n## Deploy\n- target\n- b\n## Deploy\n- c\n'
-    expect(await forgetThenUndo(middle, (text) => text.replace('- b\n## Deploy\n', '- b\n'))).toBe(
-      '## Deploy\n- a\n## Deploy\n- target\n- b\n- c\n'
-    )
-    // What followed it is in both sections: by its occurrence.
-    const alike = '## Deploy\n- a\n### Notes\n## Deploy\n- target\n### Notes\n'
-    expect(await forgetThenUndo(alike, same)).toBe(alike)
-    // A later copy in a code fence never pulls it down.
-    const fenced = `## Deploy\n- target\n${filler(0, 250)}\`\`\`md\n## Deploy\n\`\`\`\n`
-    expect(await forgetThenUndo(fenced, same)).toBe(fenced)
-  })
-
-  it('puts back a fact a chat dropped under its own heading when the chat also added a copy below', async () => {
-    const filler = Array.from({ length: 250 }, (_, index) => `- 2026-11-01 fact ${index}\n`).join(
-      ''
-    )
-    const memory = `## Deploy\n- 2026-11-01 target\n${filler}## Deploy\n- b\n`
-    const { read, turnEnded, write } = bot(memory)
-    write(`${memory.replace('- 2026-11-01 target\n', '')}## Deploy\n- c\n`)
-    await turnEnded()
-    expect(read().startsWith('## Deploy\n- 2026-11-01 target\n- 2026-11-01 fact 0\n')).toBe(true)
   })
 
   it("deletes rows past 90 days from disk, and every bot's on a host's first use", async () => {
