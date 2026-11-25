@@ -184,6 +184,8 @@ describe('terminals bound to a worker', () => {
 
   it('a stop during a running setup leaves it running, and no longer bound to the worker', async () => {
     const worker = startWorker(botChat, 'running')
+    // It shows no closes-soon countdown while it runs, since the worker's close leaves it open.
+    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
     const { runtime, closed } = host(worker)
     await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle])

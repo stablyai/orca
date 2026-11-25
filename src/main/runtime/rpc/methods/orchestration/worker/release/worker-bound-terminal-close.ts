@@ -2,9 +2,8 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { isEquivalentPaneKey } from '../../../../../orchestration/db/pane-key-match'
 import {
-  isFailedSetupBinding,
-  isRunningSetupBinding,
   listWorkerBoundTerminals,
+  setupBindingOutlivesWorker,
   unbindWorkerTerminal,
   type WorkerBoundTerminalRow
 } from '../../../../../orchestration/db/worker-terminal/worker-bound-terminals'
@@ -26,11 +25,11 @@ export async function closeWorkerBoundTerminals(
   try {
     for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
       // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
-      if (isFailedSetupBinding(db, bound)) {
-        continue
-      }
-      if (isRunningSetupBinding(db, bound)) {
+      const outlives = setupBindingOutlivesWorker(db, bound)
+      if (outlives === 'running') {
         unbindWorkerTerminal(db, bound.terminal_handle)
+      }
+      if (outlives) {
         continue
       }
       await closeBound(runtime, db, bound)
@@ -53,7 +52,7 @@ export async function closeRetriedFailedSetup(
     seen.add(attempt)
     const origin = db.getWorkerTerminalResourceByOwner(attempt)?.origin_dispatch_id ?? attempt
     for (const bound of listWorkerBoundTerminals(db, origin)) {
-      if (isFailedSetupBinding(db, bound)) {
+      if (setupBindingOutlivesWorker(db, bound) === 'failed') {
         await closeBound(runtime, db, bound)
       }
     }
