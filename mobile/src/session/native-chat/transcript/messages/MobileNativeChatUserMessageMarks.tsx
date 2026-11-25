@@ -2,7 +2,7 @@
 // Discord, the "Sam Lee · Slack" tag and the folded lines from people without access; for one another
 // person typed on their paired computer, "Sam Lee · Sam's MacBook Pro"; "Sent as goal".
 import { MobileNativeChatMessageDelivery } from '../notices/MobileNativeChatDeliveryNotice'
-import { useState } from 'react'
+import { createContext, useContext, useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { ChevronRight, Goal } from 'lucide-react-native'
 import type { ConnectorMessageAsker } from '../../../../../../src/shared/connector-message-asker'
@@ -30,10 +30,15 @@ import {
 
 const ICON_SIZE = 12
 
-/** The typist when someone other than the viewer: the phone has no Orca sign-in of its own, so the
- *  host's comparison decides. */
-export function phoneOtherPersonTypist(typist: PersonTypist | undefined): PersonTypist | undefined {
-  return typistOtherThanViewer(typist, null)
+/** Whose this chat's view is: a shared agent's chat names the account it is shared with. Null for the
+ *  phone's own computers (it has no Orca sign-in of its own), where the host's comparison decides. */
+export const MobileChatViewerAccountContext = createContext<string | null>(null)
+
+/** The typist when someone other than the viewer, by the one rule the desktop uses. */
+export function usePhoneOtherPersonTypist(
+  typist: PersonTypist | undefined
+): PersonTypist | undefined {
+  return typistOtherThanViewer(typist, useContext(MobileChatViewerAccountContext))
 }
 
 // The phone has no avatar cache, so a person shows by initials, as the desktop does when it can't load one.
@@ -123,7 +128,7 @@ function MobileTypedMessageTags({
 }): React.JSX.Element | null {
   const mirror = useMobileSlackMirrorContext()
   const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
-  const typist = phoneOtherPersonTypist(message.typist)
+  const typist = usePhoneOtherPersonTypist(message.typist)
   if (!posted && !typist) {
     return null
   }

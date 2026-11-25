@@ -95,6 +95,7 @@ const hosts = {
     listed: () => [],
     reach: async () => 'live',
     request: async () => ({ id: 'unused', ok: true, result: null }),
+    account: () => null,
     origin: () => null,
     requests: () => [],
     answer: async () => false

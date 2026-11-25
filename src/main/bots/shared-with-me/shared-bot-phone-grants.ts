@@ -27,6 +27,8 @@ export type SharedBotPhoneGrantsDeps = {
   /** The entry's link once any dial it can make has settled. */
   reach: (entry: SharedBotHostEntry) => Promise<SharedBotLink>
   request: (entry: SharedBotHostEntry, method: string, params: unknown) => Promise<RpcResponse>
+  /** The signed-in Orca account the shares are with; null signed out. */
+  account: () => string | null
   /** Orca Cloud's connector origin, which the phone holds messages at; null without a cloud. */
   origin: () => string | null
   /** The shares offered to the account, and its Accept or Decline of one, which phones show too. */
@@ -51,13 +53,15 @@ export class SharedBotPhoneGrants {
 
   /** The shared agents this computer has reached, which a phone can get a key to. */
   phoneShares(): SharedBotsPhoneList {
+    const accountId = this.deps.account()
     return {
       shares: this.paired().map((entry) => ({
         shareId: entry.shareId,
         botId: entry.botId,
         botName: entry.botName,
         ownerName: entry.ownerName,
-        environmentId: entry.environmentId
+        environmentId: entry.environmentId,
+        ...(accountId ? { accountId } : {})
       })),
       requests: [...this.deps.requests()]
     }

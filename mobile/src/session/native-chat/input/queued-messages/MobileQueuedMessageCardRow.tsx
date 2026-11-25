@@ -19,7 +19,7 @@ import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
 import {
   MobileQueuedTypedByLine,
-  phoneOtherPersonTypist
+  usePhoneOtherPersonTypist
 } from '../../transcript/messages/MobileNativeChatUserMessageMarks'
 import {
   QUEUED_ROW_NARROW_WIDTH,
@@ -105,7 +105,7 @@ function QueuedMessageCardContents({
   const t = useMobileTranslation()
   const narrow = useWindowDimensions().width < QUEUED_ROW_NARROW_WIDTH
   const returned = card.state === 'returned'
-  const typist = phoneOtherPersonTypist(card.typist)
+  const typist = usePhoneOtherPersonTypist(card.typist)
   // A card that needs attention offers its retry, Send, which is what its caption names.
   const busy = busyControl !== undefined
   const steers = agentWorking && !card.needsAttention && queuedMessageCardSteers(card)
