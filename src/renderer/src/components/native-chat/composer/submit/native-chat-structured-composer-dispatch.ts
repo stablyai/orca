@@ -1,7 +1,10 @@
 import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { AgentJournalSkillRef } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
-import { structuredAgentSessionSendBody } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import {
+  structuredAgentSessionSendBody,
+  structuredAgentSessionStoredText
+} from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { agentSessionWriteNoticeText } from '../../messages/notices/agent-session-write-notice-text'
 import { imageReferencesToPromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -9,6 +12,26 @@ import type { StructuredAgentSessionCommandOutcome } from '../../../../../../sha
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
+
+/** The prompt a structured send carries: image chips become `[Image #N]`, numbered by their
+ *  attachment order in this message. */
+export function nativeChatStructuredPrompt(
+  draftText: string,
+  attachments: readonly Pick<NativeChatComposerImageAttachment, 'id'>[]
+): string {
+  return imageReferencesToPromptMarkers(
+    draftText,
+    attachments.map((attachment) => attachment.id)
+  )
+}
+
+/** The words that prompt is stored as, and read back by Rewind and a queued edit. */
+export function nativeChatStructuredStoredPrompt(
+  draftText: string,
+  attachments: readonly Pick<NativeChatComposerImageAttachment, 'id'>[]
+): string {
+  return structuredAgentSessionStoredText(nativeChatStructuredPrompt(draftText, attachments))
+}
 
 export async function dispatchNativeChatStructuredComposerText(
   transport: NativeChatStructuredComposerTransport,
@@ -21,11 +44,7 @@ export async function dispatchNativeChatStructuredComposerText(
   > = {},
   onPending?: () => void
 ): Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'> & { revealsTranscript: boolean }> {
-  // Number image chips by their attachment order in this message.
-  const prompt = imageReferencesToPromptMarkers(
-    draftText,
-    attachments.map((attachment) => attachment.id)
-  )
+  const prompt = nativeChatStructuredPrompt(draftText, attachments)
   const pickedModeSkill =
     agentSessionInteractionCommand('codex', prompt) !== null &&
     skills.some((skill) => prompt.trimEnd() === `/${skill.name}`)

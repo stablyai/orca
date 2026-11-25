@@ -1,3 +1,7 @@
+import {
+  nativeChatReplyTargetFromSentText,
+  restoreNativeChatReplyTarget
+} from '../../../composer/reply/native-chat-reply-target'
 import { agentSessionAttachmentUploadIdOfPath } from '../../../../../../../shared/agent-session/agent-session-attachments'
 import type { AgentJournalMessageItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-storage'
@@ -46,10 +50,12 @@ export function returnMessageToComposer(
       ? [unavailableNativeChatComposerDraftImage({ id, path: block.path })]
       : [{ id, path: block.path, ...(connectionId ? { connectionId } : {}) }]
   })
-  const text = promptMarkersToImageReferences(
-    structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
-    imageIds
-  )
+  // A returned reply comes back as the user's words with its reply strip; when the box already
+  // answers another message, the words keep their quote so the context isn't lost.
+  const sent = structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks })
+  const { rest, target: reply } = nativeChatReplyTargetFromSentText(sent, composerScopeKey)
+  const sentText = reply && !restoreNativeChatReplyTarget(composerScopeKey, reply) ? sent : rest
+  const text = promptMarkersToImageReferences(sentText, imageIds)
   if (text === '' && images.length === 0) {
     return true
   }

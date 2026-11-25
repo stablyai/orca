@@ -25,6 +25,7 @@ import {
 import { nativeChatQueuedEditValueKey } from './native-chat-queued-edit-value'
 import { settleNativeChatQueuedEdit } from './native-chat-queued-edit-outcome'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { readNativeChatReplyTarget } from '../../composer/reply/native-chat-reply-target'
 import { structuredSessionOperationId } from '../../session/structured/writes/structured-agent-session-operation-id'
 import { startQueuedEditLease } from './structured-agent-session-queued-edit-lease'
 import {
@@ -242,7 +243,8 @@ export function useStructuredAgentSessionQueuedEdit(args: StructuredQueuedEditAr
       fingerprint: agentSessionSendBodyFingerprint(sessionId, edited.body),
       body: edited.body,
       draft: structuredClone(readNativeChatComposerDraft(edit.scopeKey)),
-      key: nativeChatQueuedEditValueKey(edit.scopeKey)
+      key: nativeChatQueuedEditValueKey(edit.scopeKey),
+      replySource: readNativeChatReplyTarget(edit.scopeKey)?.messageId || undefined
     }
     edit.attempt = attempt
     render(edit)

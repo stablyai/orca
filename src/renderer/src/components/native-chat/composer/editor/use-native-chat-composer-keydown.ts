@@ -1,3 +1,4 @@
+import { cancelNativeChatReplyFrom } from '../reply/native-chat-reply-target'
 import {
   useCallback,
   useRef,
@@ -131,7 +132,10 @@ export function useNativeChatComposerKeyDown({
 
       if (event.key === 'Escape') {
         event.preventDefault()
-        interrupt?.()
+        // With no picker open, Esc first drops a reply the message box holds, then interrupts.
+        if (!cancelNativeChatReplyFrom(event.target)) {
+          interrupt?.()
+        }
         return
       }
       const modified = event.key === 'Enter' && (isMacPlatform() ? event.metaKey : event.ctrlKey)
