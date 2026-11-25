@@ -84,6 +84,9 @@ const SHARED_PACKAGE_PREFIXES = [
   'resources/skills/',
   // The packaged CLI ships tsc output beside node_modules, so any CLI module's imports can break it (#48778).
   'src/cli/',
+  // `orca mcp connect`'s bundled bridge; its imports are checked only in the packaged app.
+  'src/main/mcp-servers/agent-files/mcp-connect-bridge',
+  'src/main/mcp-servers/agent-files/mcp-no-tools-server',
   // Packaged CLI launch and Electron entry/native loading.
   'src/main/cli/',
   'src/main/index.ts',
