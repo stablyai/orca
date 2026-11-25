@@ -1,6 +1,8 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { TaskStatus } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
+import type { recordedCreatorIdentity } from '../dispatch-depth'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 
 export type RemotePlacementRow = {
   task_id: string
@@ -13,6 +15,38 @@ export type RemotePlacementRow = {
   dispatch_id: string | null
   created_at: string
   never_sent_at: string | null
+} & RemoteStartCreatorColumns
+
+export type RemoteStartCreator = Pick<
+  ReturnType<typeof recordedCreatorIdentity>,
+  'creatorHandle' | 'creatorOrcaSessionId' | 'creatorTurnSource'
+>
+
+/** Each reservation names who asked for it; a placement's Dispatch copies it when first recorded. */
+export function recordPlacementCreator(
+  db: OrchestrationDb,
+  taskId: string,
+  creator: RemoteStartCreator | undefined
+): void {
+  db.db
+    .prepare(
+      `UPDATE remote_placements
+       SET creator_handle = ?, creator_orca_session_id = ?, creator_turn_source = ?
+       WHERE task_id = ?`
+    )
+    .run(
+      creator?.creatorHandle ?? null,
+      creator?.creatorOrcaSessionId ?? null,
+      creator?.creatorTurnSource ?? null,
+      taskId
+    )
+}
+
+/** The start's creator, as a local Dispatch's creator columns record it. */
+export type RemoteStartCreatorColumns = {
+  creator_handle: string | null
+  creator_orca_session_id: OrcaSessionId | null
+  creator_turn_source: 'connector' | null
 }
 
 /**

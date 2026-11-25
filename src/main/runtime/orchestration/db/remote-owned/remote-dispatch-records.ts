@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../orchestration-db'
 import { runLifecycleWriteTransaction } from '../lifecycle-write-transaction-runner'
 import type { RemoteRunLinkRow } from './remote-run-links'
 import { writtenRow } from './written-row'
+import type { RemoteStartCreatorColumns } from './remote-placement-hold'
 
 export type RemoteDispatchRow = {
   dispatch_id: string
@@ -23,7 +24,7 @@ export type RemoteDispatchRow = {
   task_settled_here: number
   created_at: string
   updated_at: string
-}
+} & RemoteStartCreatorColumns
 
 const SETTLED_WORKER_STATES = ['succeeded', 'failed', 'stopped', 'abandoned']
 /** `task_settled_here` for an attempt abandoned here, which a retry may follow at once. */
@@ -106,10 +107,14 @@ export function ensureRemoteDispatchRecord(
   link: RemoteRunLinkRow,
   identity: { dispatchId: string; taskId: string; agent?: string | null }
 ): RemoteDispatchRow {
+  // The placement it answers names who started it; a server-only Task's Dispatch has none.
   db.db
     .prepare(
-      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO remote_dispatches (dispatch_id, conversation_id, run_id, environment_id, task_id, agent,
+         creator_handle, creator_orca_session_id, creator_turn_source)
+       SELECT ?, ?, ?, ?, ?, ?, p.creator_handle, p.creator_orca_session_id, p.creator_turn_source
+       FROM (SELECT 1) LEFT JOIN remote_placements p ON p.task_id = ? AND p.conversation_id = ?
+       WHERE true
        ON CONFLICT(dispatch_id) DO UPDATE SET agent = COALESCE(remote_dispatches.agent, excluded.agent)`
     )
     .run(
@@ -118,7 +123,9 @@ export function ensureRemoteDispatchRecord(
       link.run_id,
       link.environment_id,
       identity.taskId,
-      identity.agent ?? null
+      identity.agent ?? null,
+      identity.taskId,
+      link.conversation_id
     )
   return writtenRow(getRemoteDispatch(db, identity.dispatchId), `Dispatch ${identity.dispatchId}`)
 }

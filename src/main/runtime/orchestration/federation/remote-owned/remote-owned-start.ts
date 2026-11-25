@@ -26,11 +26,14 @@ import {
 } from '../../db/remote-owned/remote-placements'
 import {
   markRemotePlacementNeverSent,
+  recordPlacementCreator,
   refuseTaskOfClosedPairing
 } from '../../db/remote-owned/remote-placement-hold'
 import { openRemoteRunLink } from '../../db/remote-owned/remote-run-links'
 import { callRemoteOwnedServer } from './remote-owned-calls'
 import { resolveCrossMachineChildParent } from '../cross-machine-child-parent'
+import { resolveDispatchCreator } from '../../../rpc/methods/orchestration/runs/dispatch-creator'
+import { recordedCreatorIdentity } from '../../db/dispatch-depth'
 import { remoteForwardKey } from './remote-forward-caller'
 import {
   errorData,
@@ -175,6 +178,12 @@ export async function startRemoteOwnedWorker(
           createdByRunGeneration: run.consumer_generation
         }
   })
+  // Before the send, as a local start's Dispatch records it: the server's reports go where the start was asked.
+  recordPlacementCreator(
+    db,
+    task.id,
+    recordedCreatorIdentity(resolveDispatchCreator(runtime, params.from, ctx.orchestrationCaller))
+  )
   // Its queue has a reader from the start, so mail sent before the answer still comes home.
   runtime.ensureOrchestrationFederationRelay(run.id)
   const options = serverStartOptions(params)

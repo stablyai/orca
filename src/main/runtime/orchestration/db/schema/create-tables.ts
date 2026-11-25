@@ -38,6 +38,13 @@ export function createTables(this: OrchestrationDb): void {
       'ALTER TABLE remote_dispatches ADD COLUMN task_settled_here INTEGER NOT NULL DEFAULT 0'
     )
   }
+  for (const table of ['remote_placements', 'remote_dispatches']) {
+    for (const column of ['creator_handle', 'creator_orca_session_id', 'creator_turn_source']) {
+      if (!this.hasColumn(table, column)) {
+        this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+      }
+    }
+  }
   this.createMailboxDeliveryIndexesIfPossible()
   this.db.exec(DERIVED_DELIVERY_SCHEMA_SQL)
 }
