@@ -5,21 +5,23 @@ import {
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees } from './session-tabs-inventory'
+import {
+  SESSION_TAB_CLOSE_KEPT_ERROR,
+  SESSION_TAB_NOT_FOUND_ERROR,
+  type SessionTabAutomaticClose
+} from '../../../../shared/workspace-layout/client-views/session-tab-close'
 
 // Bounds how stale a reused census may be: a terminal the controller holds but the runtime was never told about
 // shows up within this long, while a burst of reads still shares one census.
 const LOCAL_TERMINAL_CENSUS_REUSE_MS = 1_000
 
-/** A chat tab in a workspace: its session, title, where it sits (front of its group, pinned), and the
- *  publication it was read from, which a close can require to be still current. */
+/** A chat tab in a workspace: its session, title, and where it sits (front of its group, pinned). */
 export type ChatSessionTabRow = {
   sessionId: string
   title: string
   tabId: string
   isActive: boolean
   isPinned?: true
-  publicationEpoch: string
-  snapshotVersion: number
 }
 
 export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees {
@@ -42,13 +44,35 @@ export abstract class RuntimeSessionTabsInventoryPublication extends OrcaRuntime
               title: tab.title,
               tabId: tab.id,
               isActive: tab.isActive,
-              ...(tab.isPinned ? { isPinned: true as const } : {}),
-              publicationEpoch: snapshot.publicationEpoch,
-              snapshotVersion: snapshot.snapshotVersion
+              ...(tab.isPinned ? { isPinned: true as const } : {})
             }
           ]
         : []
     )
+  }
+
+  /** Asks the window that owns the layout whether Orca may close this chat tab on its own; the window
+   *  closes nothing. With no window to ask, the host's own tab state decides (consent). */
+  async askChatTabAutomaticClose(
+    worktreeId: string,
+    tabId: string,
+    automatic: SessionTabAutomaticClose
+  ): Promise<'consent' | 'kept' | 'error'> {
+    const notifier = this.notifier
+    if (!notifier?.closeSessionTab) {
+      return 'consent'
+    }
+    try {
+      await notifier.closeSessionTab(tabId, worktreeId, automatic)
+      return 'consent'
+    } catch (error) {
+      const message = error instanceof Error ? error.message : ''
+      if (message === SESSION_TAB_CLOSE_KEPT_ERROR) {
+        return 'kept'
+      }
+      // The window no longer has the tab: nothing there for a person to lose.
+      return message === SESSION_TAB_NOT_FOUND_ERROR ? 'consent' : 'error'
+    }
   }
 
   protected waitForSessionTabsInventoryPublication(signal?: AbortSignal): Promise<void> {

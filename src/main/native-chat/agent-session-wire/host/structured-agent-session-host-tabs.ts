@@ -26,12 +26,14 @@ export async function setStructuredAgentSessionTabVisibility(
   sessionId: string,
   visible: boolean,
   tabId?: string,
-  options?: AgentSessionTabVisibilityOptions
+  options?: AgentSessionTabVisibilityOptions,
+  /** Orca's own background hide: restart recovery stays offered (a person's close forgets it). */
+  keepRecovery = false
 ): Promise<void> {
   await (options
     ? host.deps.store.setSessionTabVisibility(sessionId, visible, tabId, options)
     : host.deps.store.setSessionTabVisibility(sessionId, visible, tabId))
-  if (!visible) {
+  if (!visible && !keepRecovery) {
     void host.restartResume.dismiss([sessionId]).catch(() => {
       host.deps.logger.warn('forgetting recovery records on chat close failed', {
         scope: 'tab-close-recovery-dismiss',
@@ -120,18 +122,27 @@ export function createStructuredAgentSessionTabSurface(
         capture?: (tabId: string | null) => void
         /** Hide the tab but keep the chat open: it works on with no tab. */
         background?: boolean
+        /** Orca's own hide: restart recovery stays offered. */
+        keepRecovery?: boolean
       }
     ): Promise<void> => {
       let actualId: string | null = null
-      await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId, {
-        check: options?.check,
-        writerFence: options?.writerFence,
-        capture: (id) => {
-          actualId = id
-          options?.capture?.(id)
+      await setStructuredAgentSessionTabVisibility(
+        host,
+        sessionId,
+        visible,
+        tabId,
+        {
+          check: options?.check,
+          writerFence: options?.writerFence,
+          capture: (id) => {
+            actualId = id
+            options?.capture?.(id)
+          },
+          background: options?.background
         },
-        background: options?.background
-      })
+        options?.keepRecovery === true
+      )
       if (!visible) {
         if (!options?.deferHiddenNotice) {
           notifyTabHidden(host, sessionId, actualId ?? undefined)

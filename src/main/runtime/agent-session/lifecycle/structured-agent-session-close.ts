@@ -199,13 +199,15 @@ export function structuredSessionSurfaceIsCurrent(
 }
 
 /** Bookkeeping cannot invalidate native proof or reach a surface created after admission.
- *  `background`: the chat keeps working with no tab, so it stays open. */
+ *  `background`: the chat keeps working with no tab, so it stays open. `automatic`: Orca's own hide,
+ *  which keeps restart recovery and commits only if `admit` (run inside the write) does not throw. */
 export async function retireCapturedStructuredSessionSurface(
   host: StructuredAgentSessionHost,
   sessionId: string,
   surface: StructuredSessionSurface | null,
   runtime?: StructuredSessionSurfaceRuntime,
-  background = false
+  background = false,
+  automatic?: { admit: () => void }
 ): Promise<{ committed: boolean; error?: unknown }> {
   const current = (hidden = false) =>
     structuredSessionSurfaceIsCurrent(host, sessionId, surface, runtime, hidden)
@@ -219,8 +221,15 @@ export async function retireCapturedStructuredSessionSurface(
     await host.setSessionTabVisibility(sessionId, false, undefined, {
       deferHiddenNotice: true,
       ...(background ? { background } : {}),
+      ...(automatic ? { keepRecovery: true } : {}),
       check: () => {
         if (!current()) {
+          throw obsolete
+        }
+        try {
+          automatic?.admit()
+        } catch {
+          // Refused at admission: nothing commits and nothing of the surface is retired.
           throw obsolete
         }
       }

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { markBotRequestChat } from '../runtime/orchestration/db/bot-requests/bot-request-chats-store'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { readBotChatTabFacts, sqliteUtcMs } from './bot-chat-tab-tidy-facts'
+import { isBotRequestChat, readBotChatTabFacts } from './bot-chat-tab-tidy-facts'
 
-const CHAT = '11111111-1111-4111-8111-111111111111'
-const SUCCESSOR = '22222222-2222-4222-8222-222222222222'
-const ADDRESS = `orca_session_id:${CHAT}`
-const CREATED_AT = sqliteUtcMs('2026-11-19 10:00:00')!
+const ROOT = '11111111-1111-4111-8111-111111111111'
+const MIDDLE = '22222222-2222-4222-8222-222222222222'
+const LIVE = '33333333-3333-4333-8333-333333333333'
+const address = (id: string) => `orca_session_id:${id}`
 
 let db: OrchestrationDb | null = null
 
@@ -39,86 +39,113 @@ function mail(
     )
 }
 
-function request(store: OrchestrationDb, messageId: string, purpose = 'question'): void {
+function request(
+  store: OrchestrationDb,
+  messageId: string,
+  extra: { purpose?: string; takenBy?: string; awaiting?: number } = {}
+): void {
   store.db
     .prepare(
-      `INSERT INTO bot_requests (message_id, root_key, to_bot_id, purpose, depth, record)
-       VALUES (?, ?, 'bot-1', ?, 0, '{}')`
+      `INSERT INTO bot_requests (message_id, root_key, to_bot_id, purpose, depth, record, taken_by, awaiting)
+       VALUES (?, ?, 'bot-1', ?, 0, '{}', ?, ?)`
     )
-    .run(messageId, messageId, purpose)
+    .run(
+      messageId,
+      messageId,
+      extra.purpose ?? 'question',
+      extra.takenBy ?? null,
+      extra.awaiting ?? null
+    )
 }
 
-function outcome(store: OrchestrationDb, messageId: string): void {
-  store.db
-    .prepare(`INSERT INTO bot_request_outcomes (message_id, outcome) VALUES (?, 'answered')`)
-    .run(messageId)
-}
+const facts = (store: OrchestrationDb) =>
+  readBotChatTabFacts(store, { rootChatId: ROOT, lineage: [ROOT, MIDDLE, LIVE] })
 
-const facts = (store: OrchestrationDb, createdAt: number | null = CREATED_AT) =>
-  readBotChatTabFacts(store, { chatId: CHAT, lineage: [CHAT, SUCCESSOR], chatCreatedAt: createdAt })
-
-describe('readBotChatTabFacts provenance', () => {
-  it('knows a chat Orca marked when a request opened it', () => {
+describe('isBotRequestChat', () => {
+  it('is true only for a chat a request opened (its mark), whatever mail it got', () => {
     const store = open()
-    markBotRequestChat(store, CHAT)
-    expect(facts(store, null)).toMatchObject({ requestChat: true, holds: [] })
-  })
-
-  it('knows an older chat whose first mail, soon after it was made, was a bot request', () => {
-    const store = open()
-    mail(store, { id: 'm1', to: ADDRESS })
-    request(store, 'm1')
-    expect(facts(store).requestChat).toBe(true)
-  })
-
-  it("keeps a person's chat: first mail not a request, a request long after it was made, or no time", () => {
-    const store = open()
-    mail(store, { id: 'm1', to: ADDRESS })
-    mail(store, { id: 'm2', to: ADDRESS })
-    request(store, 'm2')
-    expect(facts(store).requestChat).toBe(false)
-
-    const late = open()
-    mail(late, { id: 'm1', to: ADDRESS, at: '2026-11-19 11:00:00' })
-    request(late, 'm1')
-    expect(facts(late).requestChat).toBe(false)
-    expect(facts(late, null).requestChat).toBe(false)
+    mail(store, { id: 'first', to: address(ROOT) })
+    request(store, 'first')
+    expect(isBotRequestChat(store, ROOT)).toBe(false)
+    markBotRequestChat(store, ROOT)
+    expect(isBotRequestChat(store, ROOT)).toBe(true)
+    expect(isBotRequestChat(store, 'not-a-session')).toBe(false)
   })
 })
 
-describe('readBotChatTabFacts holds', () => {
-  function requestChat(): OrchestrationDb {
+describe('readBotChatTabFacts', () => {
+  it('holds nothing for the request that opened it, read, told and without an outcome', () => {
     const store = open()
-    markBotRequestChat(store, CHAT)
-    // The request that opened it, read, with no outcome: the failed case, which holds nothing.
-    mail(store, { id: 'opening', to: ADDRESS })
-    request(store, 'opening')
-    return store
-  }
-
-  it('holds nothing for a request that failed or was left without an outcome', () => {
-    expect(facts(requestChat()).holds).toEqual([])
-  })
-
-  it('holds a chat with unread mail, on any session of it', () => {
-    const store = requestChat()
-    mail(store, { id: 'unread', to: `orca_session_id:${SUCCESSOR}`, read: false })
-    expect(facts(store).holds).toEqual(['unread-mail'])
-  })
-
-  it('holds a chat that waits on its own question to a bot, until it has an outcome', () => {
-    const store = requestChat()
-    mail(store, { id: 'asked', from: ADDRESS })
-    request(store, 'asked', 'handoff')
-    expect(facts(store).holds).toEqual(['own-request'])
-    outcome(store, 'asked')
+    mail(store, { id: 'opening', to: address(ROOT) })
+    request(store, 'opening', { takenBy: `session:${ROOT}` })
     expect(facts(store).holds).toEqual([])
   })
 
-  it('reads the newest mail to or from it as activity', () => {
-    const store = requestChat()
-    mail(store, { id: 'later', from: ADDRESS, at: '2026-11-20 08:00:00' })
-    outcome(store, 'later')
-    expect(facts(store).lastMailAt).toBe(sqliteUtcMs('2026-11-20 08:00:00'))
+  it('holds a question it took and still owes, read or not', () => {
+    const store = open()
+    mail(store, { id: 'owed', to: address(LIVE) })
+    request(store, 'owed', { takenBy: `session:${ROOT}`, awaiting: 1 })
+    expect(facts(store).holds).toEqual(['owed-question'])
+  })
+
+  it('holds unread mail on an untabbed middle session of its lineage', () => {
+    const store = open()
+    mail(store, { id: 'unread', to: address(MIDDLE), read: false })
+    expect(facts(store).holds).toEqual(['unread-mail'])
+  })
+
+  it('holds its own unanswered ask until it has an outcome', () => {
+    const store = open()
+    mail(store, { id: 'asked', from: address(MIDDLE) })
+    request(store, 'asked', { purpose: 'handoff' })
+    expect(facts(store).holds).toEqual(['own-request'])
+    store.db
+      .prepare(
+        `INSERT INTO bot_request_outcomes (message_id, outcome) VALUES ('asked', 'answered')`
+      )
+      .run()
+    expect(facts(store).holds).toEqual([])
+  })
+
+  it('reads the newest non-heartbeat mail to or from any session of it', () => {
+    const store = open()
+    mail(store, { id: 'old', to: address(ROOT), at: '2026-11-19 10:00:00' })
+    mail(store, { id: 'newer', from: address(MIDDLE), at: '2026-11-20 08:00:00' })
+    mail(store, { id: 'beat', to: address(LIVE), at: '2026-11-21 08:00:00', type: 'heartbeat' })
+    expect(facts(store).lastMailAt).toBe(Date.parse('2026-11-20T08:00:00Z'))
+  })
+
+  it('reads each lookup through an index, never a table scan', () => {
+    const store = open()
+    const plan = (sql: string, ...values: string[]) =>
+      store.db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all(...values)
+        .map((row: unknown) =>
+          row && typeof row === 'object' && 'detail' in row ? String(row.detail) : ''
+        )
+        .join(' | ')
+    const lookups = [
+      plan(`SELECT 1 FROM messages WHERE to_handle = ? AND read = 0`, 'a'),
+      plan(`SELECT 1 FROM bot_requests WHERE taken_by = ? AND awaiting = 1`, 'a'),
+      plan(`SELECT 1 FROM question_threads WHERE taken_by = ? AND awaiting = 1`, 'a'),
+      plan(
+        `SELECT MAX(julianday(created_at)) AS at FROM messages WHERE to_handle = ? AND type <> 'heartbeat'`,
+        'a'
+      ),
+      plan(
+        `SELECT MAX(julianday(created_at)) AS at FROM messages WHERE from_handle = ? AND type <> 'heartbeat'`,
+        'a'
+      ),
+      plan(
+        `SELECT 1 FROM dispatch_contexts WHERE creator_orca_session_id = ? AND status IN ('pending', 'dispatched')`,
+        'a'
+      )
+    ]
+    for (const lookup of lookups) {
+      expect(lookup).not.toMatch(
+        /\bSCAN (messages|bot_requests|question_threads|dispatch_contexts)\b/
+      )
+    }
   })
 })

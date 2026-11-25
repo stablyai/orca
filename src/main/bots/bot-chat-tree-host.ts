@@ -33,6 +33,7 @@ import {
 import type { BotChatTreeParams } from '../../shared/rpc-contract/bots-params'
 import type { Bot } from '../../shared/bot-types'
 import { hasPairedServerCards } from '../runtime/orchestration/db/federation/paired-server-asks-store'
+import { isMarkedBotRequestChat } from '../runtime/orchestration/db/bot-requests/bot-request-chats-store'
 
 export type BotChatTreeHost = BotActivityHost & {
   /** The chat records, which live in the chat host that opens lazily. */
@@ -102,7 +103,8 @@ async function readBotChatBase(host: BotChatTreeHost, bot: Bot) {
   return { store, inputs, build }
 }
 
-/** The bot's newest empty side chat on its agent whose tab is open, so New chat opens it again. */
+/** The bot's newest empty side chat on its agent whose tab is open, so New chat opens it again. A chat
+ *  Orca started for a bot request is never handed to the owner, so it stays that request's alone. */
 export async function openEmptyBotChat(host: BotChatTreeHost, bot: Bot): Promise<string | null> {
   const { store, inputs, build } = await readBotChatBase(host, bot)
   const tabbed = new Set((await host.chatTabs(inputs.workspaceId)).map((tab) => tab.sessionId))
@@ -110,7 +112,8 @@ export async function openEmptyBotChat(host: BotChatTreeHost, bot: Bot): Promise
     (entry) =>
       entry.empty &&
       tabbed.has(entry.chatId) &&
-      store?.getRecord(entry.chatId)?.provider === bot.agent
+      store?.getRecord(entry.chatId)?.provider === bot.agent &&
+      !isMarkedBotRequestChat(host.db(), entry.chatId)
   )
   return chat?.chatId ?? null
 }

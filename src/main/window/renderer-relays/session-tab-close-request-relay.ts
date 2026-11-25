@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type {
+  SessionTabAutomaticClose,
   SessionTabCloseRequest,
   SessionTabCloseResponse
 } from '../../../shared/workspace-layout/client-views/session-tab-close'
@@ -15,7 +16,8 @@ const SESSION_TAB_CLOSE_RESPONSE_GRACE_MS = 5_000
 export async function requestSessionTabCloseFromRenderer(
   mainWindow: BrowserWindow,
   tabId: string,
-  worktreeId: string
+  worktreeId: string,
+  automatic?: SessionTabAutomaticClose
 ): Promise<void> {
   if (mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
     throw new Error('renderer_unavailable')
@@ -62,7 +64,13 @@ export async function requestSessionTabCloseFromRenderer(
         onRendererUnavailable
       )
     )
-    const request: SessionTabCloseRequest = { requestId, tabId, worktreeId, expiresAt }
+    const request: SessionTabCloseRequest = {
+      requestId,
+      tabId,
+      worktreeId,
+      expiresAt,
+      ...(automatic ? { automatic } : {})
+    }
     try {
       webContents.send('ui:sessionTabCloseRequest', request)
     } catch {

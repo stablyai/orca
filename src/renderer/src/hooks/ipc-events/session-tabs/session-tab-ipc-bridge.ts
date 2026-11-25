@@ -5,8 +5,10 @@ import {
   SESSION_TAB_CLOSE_CANCELED_ERROR,
   SESSION_TAB_CLOSE_FAILED_ERROR,
   SESSION_TAB_NOT_FOUND_ERROR,
-  SESSION_TAB_CLOSE_TIMEOUT_ERROR
+  SESSION_TAB_CLOSE_TIMEOUT_ERROR,
+  SESSION_TAB_CLOSE_KEPT_ERROR
 } from '../../../../../shared/workspace-layout/client-views/session-tab-close'
+import { automaticSessionTabCloseKept } from './automatic-session-tab-close'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
@@ -53,70 +55,89 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   )
 
   unsubs.push(
-    window.api.ui.onSessionTabCloseRequest(({ requestId, tabId, worktreeId, expiresAt }) => {
-      const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
-      const store = useAppStore.getState()
-      const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
-      let cancelConfirmation: (() => void) | undefined
-      let timeout: ReturnType<typeof setTimeout> | undefined
-      let settled = false
-      const respond = (error?: string): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        if (timeout !== undefined) {
-          clearTimeout(timeout)
-        }
-        window.api.ui.respondSessionTabClose({ requestId, ...(error ? { error } : {}) })
-      }
-      if (expiresAt !== undefined) {
-        timeout = setTimeout(
-          () => {
-            cancelConfirmation?.()
-            respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
-          },
-          Math.max(0, expiresAt - Date.now())
-        )
-      }
-      const closeAndRespond = (): void => {
-        if (expiresAt !== undefined && Date.now() >= expiresAt) {
-          respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
-          return
-        }
-        try {
-          if (browserTarget) {
-            useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
-            respond()
-            return
-          }
-          const closed = closeMobileSessionTabInStore(
+    window.api.ui.onSessionTabCloseRequest(
+      ({ requestId, tabId, worktreeId, expiresAt, automatic }) => {
+        if (automatic) {
+          // Orca's own close asks first and closes nothing here: the host hides the chat and this window
+          // drops the tab from its snapshot. A tab closed here would retire as a person's close does.
+          const kept = automaticSessionTabCloseKept(
             useAppStore.getState(),
             worktreeId,
-            localTabId
+            resolveWindowTabIdForHostTab(worktreeId, tabId),
+            automatic
           )
-          respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
-        } catch (error) {
-          respond(error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR)
+          window.api.ui.respondSessionTabClose({
+            requestId,
+            ...(kept ? { error: SESSION_TAB_CLOSE_KEPT_ERROR } : {})
+          })
+          return
         }
+        const localTabId = resolveWindowTabIdForHostTab(worktreeId, tabId)
+        const store = useAppStore.getState()
+        const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
+        let cancelConfirmation: (() => void) | undefined
+        let timeout: ReturnType<typeof setTimeout> | undefined
+        let settled = false
+        const respond = (error?: string): void => {
+          if (settled) {
+            return
+          }
+          settled = true
+          if (timeout !== undefined) {
+            clearTimeout(timeout)
+          }
+          window.api.ui.respondSessionTabClose({ requestId, ...(error ? { error } : {}) })
+        }
+        if (expiresAt !== undefined) {
+          timeout = setTimeout(
+            () => {
+              cancelConfirmation?.()
+              respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
+            },
+            Math.max(0, expiresAt - Date.now())
+          )
+        }
+        const closeAndRespond = (): void => {
+          if (expiresAt !== undefined && Date.now() >= expiresAt) {
+            respond(SESSION_TAB_CLOSE_TIMEOUT_ERROR)
+            return
+          }
+          try {
+            if (browserTarget) {
+              useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+              respond()
+              return
+            }
+            const closed = closeMobileSessionTabInStore(
+              useAppStore.getState(),
+              worktreeId,
+              localTabId
+            )
+            respond(closed ? undefined : SESSION_TAB_NOT_FOUND_ERROR)
+          } catch (error) {
+            respond(error instanceof Error ? error.message : SESSION_TAB_CLOSE_FAILED_ERROR)
+          }
+        }
+        if (isLocalSessionTabCloseOwned(worktreeId, tabId)) {
+          respond(
+            expiresAt !== undefined && Date.now() >= expiresAt
+              ? SESSION_TAB_CLOSE_TIMEOUT_ERROR
+              : undefined
+          )
+          return
+        }
+        const visibleId = browserTarget?.workspaceId ?? localTabId
+        cancelConfirmation = guardPinnedTabClose({
+          isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
+          tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
+          onClose: closeAndRespond,
+          onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR),
+          unsentNotes: browserTarget
+            ? hasUnsentBrowserNotes(store, browserTarget.workspaceId)
+            : false
+        })
       }
-      if (isLocalSessionTabCloseOwned(worktreeId, tabId)) {
-        respond(
-          expiresAt !== undefined && Date.now() >= expiresAt
-            ? SESSION_TAB_CLOSE_TIMEOUT_ERROR
-            : undefined
-        )
-        return
-      }
-      const visibleId = browserTarget?.workspaceId ?? localTabId
-      cancelConfirmation = guardPinnedTabClose({
-        isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
-        tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
-        onClose: closeAndRespond,
-        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR),
-        unsentNotes: browserTarget ? hasUnsentBrowserNotes(store, browserTarget.workspaceId) : false
-      })
-    })
+    )
   )
 
   unsubs.push(

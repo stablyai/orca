@@ -1,6 +1,6 @@
 // What the orchestration records say about one bot chat for the chat-tab tidy, read synchronously from
-// keyed rows of this chat's own ids and addresses: whether Orca started it for a bot request, whether it
-// still owes or waits on anything, and when mail last moved. A read that fails throws (the tidy skips).
+// keyed rows of the chat's own lineage (every session from its root to the one running it), so the same
+// read runs before the close and again inside the hide's write. A read that fails throws: the tab stays.
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
@@ -8,156 +8,152 @@ import {
 import { isMarkedBotRequestChat } from '../runtime/orchestration/db/bot-requests/bot-request-chats-store'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 
-/** How soon after a chat was created its first mail must be a bot request for it to count as one
- *  `--chat new` started, when it predates the durable mark. */
-export const REQUEST_CHAT_FIRST_MAIL_WITHIN_MS = 10 * 60 * 1000
+/** Why a chat keeps its tab, from its records. */
+export type BotChatTabHold =
+  | 'dispatch'
+  | 'unread-mail'
+  | 'owed-question'
+  | 'dispatch-question'
+  | 'run-question'
+  | 'own-request'
+  | 'incoming-mail'
 
 export type BotChatTabFacts = {
-  /** Orca started the chat for a bot request: its durable mark, or (older chats) its first mail. */
-  requestChat: boolean
-  /** Why it must keep its tab, empty when nothing holds it. */
+  /** Holds, empty when nothing holds the tab. */
   holds: BotChatTabHold[]
-  /** Newest orchestration mail to or from it; null when none. */
+  /** Newest non-heartbeat mail to or from any session of it, epoch ms; null when none. */
   lastMailAt: number | null
 }
 
-export type BotChatTabHold = 'dispatch' | 'unread-mail' | 'question' | 'own-request' | 'sending'
-
 type Db = Pick<OrchestrationDb, 'db' | 'getStructuredMailSendMailboxesForSession'>
 
-const list = (values: readonly unknown[]): string => values.map(() => '?').join(', ')
+const OPEN_DISPATCH = "status IN ('pending', 'dispatched')"
 
-function exists(db: Db, sql: string, values: readonly string[]): boolean {
-  return values.length > 0 && db.db.prepare(sql).get(...values) !== undefined
+function exists(db: Db, sql: string, ...values: string[]): boolean {
+  return db.db.prepare(sql).get(...values) !== undefined
 }
 
-/** SQLite's `datetime('now')` text (UTC, no zone) as epoch ms; null when unreadable. */
-export function sqliteUtcMs(value: unknown): number | null {
-  if (typeof value !== 'string' || value.length === 0) {
-    return null
-  }
-  const ms = Date.parse(`${value.replace(' ', 'T')}Z`)
-  return Number.isFinite(ms) ? ms : null
+/** Only a chat Orca started for a bot request (its exclusive durable mark) is the tidy's. */
+export function isBotRequestChat(db: Pick<OrchestrationDb, 'db'>, rootChatId: string): boolean {
+  return isOrcaSessionId(rootChatId) && isMarkedBotRequestChat(db, rootChatId)
 }
 
-function firstMailIsRequest(db: Db, address: string, chatCreatedAt: number | null): boolean {
-  if (chatCreatedAt === null) {
-    return false
-  }
-  const row: unknown = db.db
-    .prepare(
-      `SELECT m.created_at AS at,
-              EXISTS (SELECT 1 FROM bot_requests r WHERE r.message_id = m.id) AS request
-         FROM messages m WHERE m.to_handle = ? ORDER BY m.sequence LIMIT 1`
-    )
-    .get(address)
-  if (!row || typeof row !== 'object' || !('request' in row) || row.request !== 1) {
-    return false
-  }
-  const at = 'at' in row ? sqliteUtcMs(row.at) : null
-  return (
-    at !== null && at >= chatCreatedAt && at - chatCreatedAt <= REQUEST_CHAT_FIRST_MAIL_WITHIN_MS
-  )
-}
-
-function holdsOf(db: Db, ids: readonly string[], addresses: readonly string[]): BotChatTabHold[] {
-  const i = list(ids)
-  const a = list(addresses)
-  const holds: BotChatTabHold[] = []
-  const open = "status IN ('pending', 'dispatched')"
+/** Each check is one keyed lookup per session id or address, on the index named beside it. */
+function holdsOf(db: Db, rootChatId: string, ids: readonly string[]): BotChatTabHold[] {
+  const addresses = ids.map((id) => formatOrcaSessionAddress(id))
+  const holds = new Set<BotChatTabHold>()
+  const any = (values: readonly string[], sql: string) =>
+    values.some((value) => exists(db, sql, value))
   // A Dispatch it created or was given that is not final, whatever its terminal shows.
   if (
-    exists(
-      db,
-      `SELECT 1 FROM dispatch_contexts WHERE creator_orca_session_id IN (${i}) AND ${open} LIMIT 1`,
-      ids
+    any(
+      ids,
+      `SELECT 1 FROM dispatch_contexts WHERE creator_orca_session_id = ? AND ${OPEN_DISPATCH}`
     ) ||
-    exists(
-      db,
-      `SELECT 1 FROM dispatch_contexts WHERE assignee_orca_session_id IN (${i}) AND ${open} LIMIT 1`,
-      ids
+    any(
+      ids,
+      `SELECT 1 FROM dispatch_contexts WHERE assignee_orca_session_id = ? AND ${OPEN_DISPATCH}`
     ) ||
-    exists(
-      db,
-      `SELECT 1 FROM dispatch_contexts WHERE assignee_handle IN (${a}) AND ${open} LIMIT 1`,
-      addresses
+    any(addresses, `SELECT 1 FROM dispatch_contexts WHERE assignee_handle = ? AND ${OPEN_DISPATCH}`)
+  ) {
+    holds.add('dispatch')
+  }
+  // idx_inbox (to_handle, read).
+  if (any(addresses, 'SELECT 1 FROM messages WHERE to_handle = ? AND read = 0')) {
+    holds.add('unread-mail')
+  }
+  // A question it took and still owes an answer or a notice: the *_awaiting partial indexes. A chat
+  // takes as its /clear root.
+  const taker = `session:${rootChatId}`
+  if (
+    exists(db, 'SELECT 1 FROM bot_requests WHERE taken_by = ? AND awaiting = 1', taker) ||
+    exists(db, 'SELECT 1 FROM question_threads WHERE taken_by = ? AND awaiting = 1', taker) ||
+    exists(db, 'SELECT 1 FROM remote_owned_questions WHERE taken_by = ? AND awaiting = 1', taker)
+  ) {
+    holds.add('owed-question')
+  }
+  // A pending question on a Dispatch it was given, asked by it or of it.
+  const givenById = `SELECT id FROM dispatch_contexts WHERE assignee_orca_session_id = ?`
+  const givenByHandle = `SELECT id FROM dispatch_contexts WHERE assignee_handle = ?`
+  const pendingOn = (given: string) =>
+    `SELECT 1 FROM question_threads q WHERE q.dispatch_id IN (${given}) AND q.status = 'pending'`
+  const pendingTo = (given: string) =>
+    `SELECT 1 FROM question_threads q JOIN messages m ON m.id = q.message_id
+      WHERE m.to_handle IN (SELECT 'dispatch:' || id FROM (${given})) AND q.status = 'pending'`
+  if (
+    any(ids, pendingOn(givenById)) ||
+    any(addresses, pendingOn(givenByHandle)) ||
+    any(ids, pendingTo(givenById)) ||
+    any(addresses, pendingTo(givenByHandle))
+  ) {
+    holds.add('dispatch-question')
+  }
+  // A pending question in a Run it coordinates (idx_runs_coordinator_orca_session_id,
+  // idx_question_threads_run), its workers finished or not.
+  if (
+    any(
+      ids,
+      `SELECT 1 FROM runs r JOIN question_threads q ON q.run_id = r.id
+        WHERE r.coordinator_orca_session_id = ? AND q.status = 'pending'`
     )
   ) {
-    holds.push('dispatch')
+    holds.add('run-question')
   }
+  // Its own question or handoff to a bot with no outcome yet (idx_messages_crew_from).
   if (
-    exists(db, `SELECT 1 FROM messages WHERE to_handle IN (${a}) AND read = 0 LIMIT 1`, addresses)
-  ) {
-    holds.push('unread-mail')
-  }
-  // Orchestration questions with no answer on a Dispatch it was given: asked by it, or of it.
-  const given = `SELECT id FROM dispatch_contexts WHERE assignee_orca_session_id IN (${i})
-    UNION SELECT id FROM dispatch_contexts WHERE assignee_handle IN (${a})`
-  if (
-    exists(
-      db,
-      `SELECT 1 FROM question_threads WHERE dispatch_id IN (${given}) AND status = 'pending' LIMIT 1`,
-      [...ids, ...addresses]
-    ) ||
-    exists(
-      db,
-      `SELECT 1 FROM messages m JOIN question_threads q ON q.message_id = m.id
-        WHERE m.to_handle IN (SELECT 'dispatch:' || id FROM (${given})) AND q.status = 'pending'
-        LIMIT 1`,
-      [...ids, ...addresses]
-    )
-  ) {
-    holds.push('question')
-  }
-  // Its own question or handoff to a bot with no outcome yet: it waits on the answer. A request *to* it
-  // with no outcome is not a hold: that is the request that failed or was left, which this tidies.
-  if (
-    exists(
-      db,
+    any(
+      addresses,
       `SELECT 1 FROM messages m JOIN bot_requests r ON r.message_id = m.id
          LEFT JOIN bot_request_outcomes o ON o.message_id = m.id
-        WHERE m.from_handle IN (${a}) AND m.type <> 'heartbeat'
-          AND r.purpose IN ('question', 'handoff') AND o.message_id IS NULL LIMIT 1`,
-      addresses
+        WHERE m.from_handle = ? AND m.type <> 'heartbeat'
+          AND r.purpose IN ('question', 'handoff') AND o.message_id IS NULL`
     )
   ) {
-    holds.push('own-request')
+    holds.add('own-request')
   }
+  // Mail being handed into it (incoming pointer custody).
   if (ids.some((id) => db.getStructuredMailSendMailboxesForSession(id).length > 0)) {
-    holds.push('sending')
+    holds.add('incoming-mail')
   }
-  return holds
+  return [...holds]
 }
 
+/** SQLite's julian day as epoch ms; null when absent. */
+function julianMs(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.round((value - 2440587.5) * 86_400_000)
+    : null
+}
+
+/** Newest non-heartbeat mail per address and direction, each a max lookup on
+ *  idx_messages_crew_to / idx_messages_crew_from (handle, julianday(created_at)). */
 function lastMailAt(db: Db, addresses: readonly string[]): number | null {
-  if (addresses.length === 0) {
-    return null
-  }
-  const a = list(addresses)
-  const newest = (column: 'to_handle' | 'from_handle') => {
+  const newest = (column: 'to_handle' | 'from_handle', address: string) => {
     const row: unknown = db.db
-      .prepare(`SELECT MAX(created_at) AS at FROM messages WHERE ${column} IN (${a})`)
-      .get(...addresses)
-    return sqliteUtcMs(row && typeof row === 'object' && 'at' in row ? row.at : null)
+      .prepare(
+        `SELECT MAX(julianday(created_at)) AS at FROM messages
+          WHERE ${column} = ? AND type <> 'heartbeat'`
+      )
+      .get(address)
+    return julianMs(row && typeof row === 'object' && 'at' in row ? row.at : null)
   }
-  const times = [newest('to_handle'), newest('from_handle')].filter((at) => at !== null)
+  const times = addresses.flatMap((address) =>
+    [newest('to_handle', address), newest('from_handle', address)].filter((at) => at !== null)
+  )
   return times.length > 0 ? Math.max(...times) : null
 }
 
-/** `chatId` is the chat's root; `lineage` every session of it (root, /clear successors, tab sessions). */
+/** `rootChatId`: the chat's /clear root; `lineage`: every session from the root to the running one. */
 export function readBotChatTabFacts(
   db: Db,
-  input: { chatId: string; lineage: readonly string[]; chatCreatedAt: number | null }
+  input: { rootChatId: string; lineage: readonly string[] }
 ): BotChatTabFacts {
-  const ids = [...new Set([input.chatId, ...input.lineage])].filter(isOrcaSessionId)
-  const addresses = ids.map((id) => formatOrcaSessionAddress(id))
-  const requestChat =
-    isOrcaSessionId(input.chatId) &&
-    (isMarkedBotRequestChat(db, input.chatId) ||
-      firstMailIsRequest(db, formatOrcaSessionAddress(input.chatId), input.chatCreatedAt))
+  const ids = [...new Set([input.rootChatId, ...input.lineage])].filter(isOrcaSessionId)
   return {
-    requestChat,
-    holds: requestChat ? holdsOf(db, ids, addresses) : [],
-    lastMailAt: requestChat ? lastMailAt(db, addresses) : null
+    holds: holdsOf(db, input.rootChatId, ids),
+    lastMailAt: lastMailAt(
+      db,
+      ids.map((id) => formatOrcaSessionAddress(id))
+    )
   }
 }

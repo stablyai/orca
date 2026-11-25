@@ -9,8 +9,8 @@ import {
   botChatTabHeld,
   botChatTabsDue,
   tidyBotChatTabs,
-  type BotChatTabAdmission,
-  type BotChatTabCloseOutcome,
+  type BotChatTabConsent,
+  type BotChatTabHide,
   type BotChatTabTidyHost,
   type BotChatTabTidyTab
 } from './bot-chat-tab-tidy'
@@ -44,55 +44,70 @@ function tab(sessionId: string, overrides: Partial<BotChatTabTidyTab> = {}): Bot
 }
 
 type FakeInput = {
-  chats: BotChatTreeChat[]
+  bots?: string[]
+  chats: BotChatTreeChat[] | Record<string, BotChatTreeChat[]>
   tabs: BotChatTabTidyTab[]
-  admissions?: Record<string, Partial<BotChatTabAdmission>>
-  restartHeld?: string[]
-  unsettled?: string[]
+  keep?: string[]
+  throwOn?: string[]
+  consent?: Record<string, BotChatTabConsent>
+  hide?: Record<string, BotChatTabHide>
   focused?: Record<string, number>
   rootOf?: Record<string, string>
-  outcomes?: Record<string, BotChatTabCloseOutcome>
-  /** Tabs that turn up (or change) between the pass's first and fresh reads. */
+  /** Tabs as the second (fresh) read sees them. */
   laterTabs?: BotChatTabTidyTab[]
 }
 
 type FakeHost = BotChatTabTidyHost & {
-  closed: string[]
+  hidden: string[]
+  admitted: string[]
   notices: string[][]
-  admissionCalls: string[]
+  admitCalls: number
 }
 
 function fakeHost(input: FakeInput): FakeHost {
-  const closed: string[] = []
+  const hidden: string[] = []
+  const admitted: string[] = []
   const notices: string[][] = []
-  const admissionCalls: string[] = []
   let reads = 0
-  return {
-    closed,
+  const host: FakeHost = {
+    hidden,
+    admitted,
     notices,
-    admissionCalls,
-    bots: () => [{ id: 'bot-1', folderWorkspaceId: 'home-folder' }],
-    chats: async () => ({
-      chats: input.chats,
+    admitCalls: 0,
+    bots: () => (input.bots ?? ['bot-1']).map((id) => ({ id, folderWorkspaceId: 'home-folder' })),
+    chats: async (botId) => ({
+      chats: Array.isArray(input.chats) ? input.chats : (input.chats[botId] ?? []),
       rootOf: (sessionId) => input.rootOf?.[sessionId] ?? sessionId
     }),
     tabs: async (workspaceId) => {
       reads += 1
       const base = reads > 1 && input.laterTabs ? input.laterTabs : input.tabs
-      return workspaceId === WORKSPACE ? base.filter((entry) => !closed.includes(entry.tabId)) : []
+      return workspaceId === WORKSPACE ? base.filter((entry) => !hidden.includes(entry.tabId)) : []
     },
-    admission: async (_botId, chatId) => {
-      admissionCalls.push(chatId)
-      return { requestChat: true, holds: [], lastMailAt: null, ...input.admissions?.[chatId] }
-    },
-    restartHeld: async () => new Set(input.restartHeld ?? []),
-    settled: (sessionIds) => !sessionIds.some((id) => input.unsettled?.includes(id)),
     lastFocusedAt: (_workspaceId, entry) => input.focused?.[entry.tabId] ?? null,
-    closeTab: async (workspaceId, entry) => {
+    admission: async (_botId, entry) => {
+      admitted.push(entry.chatId)
+      if (input.throwOn?.includes(entry.chatId)) {
+        throw new Error('unreadable')
+      }
+      return input.keep?.includes(entry.chatId)
+        ? { kind: 'keep', why: 'held' }
+        : {
+            kind: 'go',
+            admit: () => {
+              host.admitCalls += 1
+            }
+          }
+    },
+    consent: async (workspaceId, entry) => {
       expect(workspaceId).toBe(WORKSPACE)
-      const outcome = input.outcomes?.[entry.tabId] ?? 'closed'
-      if (outcome !== 'refused') {
-        closed.push(entry.tabId)
+      return input.consent?.[entry.tabId] ?? 'consent'
+    },
+    hide: async (entry, admit) => {
+      admit()
+      const outcome = input.hide?.[entry.tabId] ?? 'committed'
+      if (outcome === 'committed') {
+        hidden.push(entry.tabId)
       }
       return outcome
     },
@@ -101,18 +116,19 @@ function fakeHost(input: FakeInput): FakeHost {
     now: () => NOW,
     warn: () => {}
   }
+  return host
 }
 
 describe('botChatTabsDue', () => {
-  it('takes settled side chats with no turn for a day, failed or not, oldest first', () => {
+  it('takes settled side chats with no turn for a day, failed or not', () => {
     const due = botChatTabsDue(
       [
         chat('exactly-a-day', { lastActiveAt: NOW - BOT_CHAT_TAB_IDLE_MS }),
-        chat('failed', { failedTotal: 2, finishedTotal: 2, lastActiveAt: OLD - 10 })
+        chat('failed', { failedTotal: 2, finishedTotal: 2 })
       ],
       NOW
     )
-    expect(due.map((entry) => entry.chatId)).toEqual(['failed', 'exactly-a-day'])
+    expect(due.map((entry) => entry.chatId)).toEqual(['exactly-a-day', 'failed'])
   })
 
   it('keeps Home, threads, automation runs, group rooms, ended chats and chats with no tab', () => {
@@ -156,161 +172,155 @@ describe('botChatTabHeld', () => {
 })
 
 describe('tidyBotChatTabs', () => {
-  it("closes a settled old request chat's tab, nothing else, and tells the bot's lists once", async () => {
+  it('hides a settled chat after the window consents, admits again inside the write, and tells its bot once', async () => {
     const host = fakeHost({
       chats: [chat('old'), chat('live', { live: 'replying' }), chat('home', { origin: 'home' })],
       tabs: [tab('old'), tab('live'), tab('home')]
     })
-    expect(await tidyBotChatTabs(host)).toEqual({ closed: ['old'], refused: [], more: false })
-    expect(host.closed).toEqual(['tab-old'])
+    expect(await tidyBotChatTabs(host)).toMatchObject({ closed: ['old'], refused: [], more: false })
+    expect(host.hidden).toEqual(['tab-old'])
+    expect(host.admitCalls).toBe(1)
     expect(host.notices).toEqual([['bot-1']])
   })
 
-  it("keeps a person's own chat and any chat something still holds", async () => {
-    const names = ['mine', 'dispatch', 'mail', 'item']
-    const host = fakeHost({
-      chats: names.map((name) => chat(name)),
-      tabs: names.map((name) => tab(name)),
-      admissions: {
-        mine: { requestChat: false },
-        dispatch: { holds: ['dispatch'] },
-        mail: { holds: ['unread-mail'] },
-        item: { holds: ['item'] }
-      }
-    })
-    expect((await tidyBotChatTabs(host)).closed).toEqual([])
-    expect(host.closed).toEqual([])
+  it('keeps a chat its records hold, without asking the window', async () => {
+    const consent = vi.fn()
+    const host = fakeHost({ chats: [chat('held')], tabs: [tab('held')], keep: ['held'] })
+    const pass = await tidyBotChatTabs({ ...host, consent })
+    expect(pass.closed).toEqual([])
+    expect(consent).not.toHaveBeenCalled()
     expect(host.notices).toEqual([])
   })
 
-  it('counts mail as activity: a chat mailed within the day keeps its tab', async () => {
+  it('keeps a pinned, front or recently focused tab, and a chat with two tabs, without reading records', async () => {
     const host = fakeHost({
-      chats: [chat('mailed')],
-      tabs: [tab('mailed')],
-      admissions: { mailed: { lastMailAt: RECENT } }
-    })
-    expect((await tidyBotChatTabs(host)).closed).toEqual([])
-  })
-
-  it('keeps a chat whose restart recovery is still offered, on any of its sessions', async () => {
-    const host = fakeHost({
-      chats: [chat('restart', { liveSessionId: 'restart-live' })],
-      tabs: [tab('restart-live')],
-      rootOf: { 'restart-live': 'restart' },
-      restartHeld: ['restart-live']
-    })
-    expect((await tidyBotChatTabs(host)).closed).toEqual([])
-  })
-
-  it('keeps a pinned, front, or recently focused tab, without reading its records', async () => {
-    const host = fakeHost({
-      chats: [chat('pinned'), chat('front'), chat('focused')],
-      tabs: [tab('pinned', { isPinned: true }), tab('front', { isActive: true }), tab('focused')],
+      chats: [chat('pinned'), chat('front'), chat('focused'), chat('two')],
+      tabs: [
+        tab('pinned', { isPinned: true }),
+        tab('front', { isActive: true }),
+        tab('focused'),
+        tab('two'),
+        tab('two-b', { tabId: 'tab-two-again' })
+      ],
+      rootOf: { 'two-b': 'two' },
       focused: { 'tab-focused': RECENT }
     })
     expect((await tidyBotChatTabs(host)).closed).toEqual([])
-    expect(host.admissionCalls).toEqual([])
+    expect(host.admitted).toEqual([])
   })
 
-  it('keeps a chat whose tab was brought forward after the first read', async () => {
-    const host = fakeHost({
+  it('keeps a tab brought forward or replaced after its records were read', async () => {
+    const forward = fakeHost({
       chats: [chat('a')],
       tabs: [tab('a')],
       laterTabs: [tab('a', { isActive: true })]
     })
-    expect((await tidyBotChatTabs(host)).closed).toEqual([])
-  })
-
-  it('keeps a chat not at rest or on a screen when the close comes, by any of its sessions', async () => {
-    const host = fakeHost({
-      chats: [chat('root', { liveSessionId: 'cleared' }), chat('viewed')],
-      tabs: [tab('cleared'), tab('viewed')],
-      rootOf: { cleared: 'root' },
-      unsettled: ['cleared', 'viewed']
+    expect((await tidyBotChatTabs(forward)).closed).toEqual([])
+    const replaced = fakeHost({
+      chats: [chat('a')],
+      tabs: [tab('a')],
+      laterTabs: [tab('a', { tabId: 'tab-reopened' })]
     })
-    expect((await tidyBotChatTabs(host)).closed).toEqual([])
+    expect((await tidyBotChatTabs(replaced)).closed).toEqual([])
   })
 
-  it("closes a /clear'd chat's tab, found through its lineage", async () => {
+  it('changes nothing when the window keeps the tab or cannot answer', async () => {
+    const hide = vi.fn()
+    const host = fakeHost({
+      chats: [chat('kept'), chat('silent')],
+      tabs: [tab('kept'), tab('silent')],
+      consent: { 'tab-kept': 'kept', 'tab-silent': 'error' }
+    })
+    const pass = await tidyBotChatTabs({ ...host, hide })
+    expect(pass).toMatchObject({ closed: [], refused: ['kept', 'silent'] })
+    expect(hide).not.toHaveBeenCalled()
+    expect(host.notices).toEqual([])
+  })
+
+  it('reports a hide the write refused or failed, and tells no one', async () => {
+    const host = fakeHost({
+      chats: [chat('refused'), chat('failed')],
+      tabs: [tab('refused'), tab('failed')],
+      hide: { 'tab-refused': 'refused', 'tab-failed': 'error' }
+    })
+    expect(await tidyBotChatTabs(host)).toMatchObject({
+      closed: [],
+      // Same activity, so ordered by chat id.
+      refused: ['failed', 'refused']
+    })
+    expect(host.notices).toEqual([])
+  })
+
+  it("hides a /clear'd chat's tab, found through its lineage", async () => {
     const host = fakeHost({
       chats: [chat('root', { liveSessionId: 'cleared' })],
       tabs: [tab('cleared')],
       rootOf: { cleared: 'root' }
     })
     expect((await tidyBotChatTabs(host)).closed).toEqual(['root'])
-    expect(host.closed).toEqual(['tab-cleared'])
+    expect(host.hidden).toEqual(['tab-cleared'])
   })
 
-  it('reports a refused close and passes over the chats the last pass was refused', async () => {
-    const host = fakeHost({
-      chats: [chat('refused'), chat('skipped')],
-      tabs: [tab('refused'), tab('skipped')],
-      outcomes: { 'tab-refused': 'refused' }
-    })
-    expect(await tidyBotChatTabs(host, new Set(['skipped']))).toEqual({
-      closed: [],
-      refused: ['refused'],
-      more: false
-    })
-    expect(host.admissionCalls).toEqual(['refused'])
-  })
-
-  it('stops at its close budget, oldest first, and says more remain', async () => {
+  it('charges a close per attempt, oldest first per bot, and resumes after where it stopped', async () => {
     const chats = [
       chat('newer', { lastActiveAt: OLD }),
       chat('oldest', { lastActiveAt: OLD - 20 }),
       chat('older', { lastActiveAt: OLD - 10 })
     ]
-    const host = fakeHost({ chats, tabs: chats.map((entry) => tab(entry.chatId)) })
-    expect(await tidyBotChatTabs(host, new Set(), { closes: 2, looks: 10 })).toEqual({
-      closed: ['oldest', 'older'],
-      refused: [],
-      more: true
-    })
-  })
-
-  it('stops at its look budget when every chat is kept', async () => {
-    const chats = ['a', 'b', 'c'].map((name) => chat(name))
     const host = fakeHost({
       chats,
       tabs: chats.map((entry) => tab(entry.chatId)),
-      admissions: { a: { requestChat: false }, b: { requestChat: false } }
+      consent: { 'tab-oldest': 'kept' }
     })
-    expect(await tidyBotChatTabs(host, new Set(), { closes: 10, looks: 2 })).toMatchObject({
-      closed: [],
-      more: true
-    })
-    expect(host.admissionCalls).toEqual(['a', 'b'])
+    const first = await tidyBotChatTabs(host, null, { closes: 2, looks: 10 })
+    expect(first).toMatchObject({ closed: ['older'], refused: ['oldest'], more: true })
+    const second = await tidyBotChatTabs(host, first.cursor, { closes: 2, looks: 10 })
+    expect(second.closed).toEqual(['newer'])
   })
 
-  it('goes on past a chat whose close throws and a bot whose read fails', async () => {
-    const host = fakeHost({ chats: [chat('a'), chat('b')], tabs: [tab('a'), tab('b')] })
+  it('reaches past a prefix of held and unreadable chats and later bots on following passes', async () => {
+    const held = Array.from({ length: 3 }, (_, index) =>
+      chat(`a-held-${index}`, { lastActiveAt: OLD - 100 + index })
+    )
+    const host = fakeHost({
+      bots: ['bot-a', 'bot-b'],
+      chats: {
+        'bot-a': [...held, chat('a-broken', { lastActiveAt: OLD })],
+        'bot-b': [chat('b-tail')]
+      },
+      tabs: [...held.map((entry) => tab(entry.chatId)), tab('a-broken'), tab('b-tail')],
+      keep: held.map((entry) => entry.chatId),
+      throwOn: ['a-broken']
+    })
+    let cursor = null
+    const closed: string[] = []
+    for (let pass = 0; pass < 3 && !closed.includes('b-tail'); pass += 1) {
+      const result = await tidyBotChatTabs(host, cursor, { closes: 10, looks: 2 })
+      closed.push(...result.closed)
+      cursor = result.cursor
+    }
+    expect(closed).toEqual(['b-tail'])
+  })
+
+  it('goes on past a bot whose chats cannot be read', async () => {
+    const host = fakeHost({
+      bots: ['broken', 'bot-1'],
+      chats: { 'bot-1': [chat('b')] },
+      tabs: [tab('b')]
+    })
     const warn = vi.fn()
-    let reads = 0
-    const flaky: BotChatTabTidyHost = {
+    const pass = await tidyBotChatTabs({
       ...host,
       warn,
-      bots: () => [
-        { id: 'broken', folderWorkspaceId: 'home-folder' },
-        { id: 'bot-1', folderWorkspaceId: 'home-folder' }
-      ],
       chats: async (botId) => {
-        reads += 1
         if (botId === 'broken') {
           throw new Error('unreadable')
         }
         return host.chats(botId)
-      },
-      closeTab: async (workspaceId, entry) => {
-        if (entry.tabId === 'tab-a') {
-          throw new Error('write failed')
-        }
-        return host.closeTab(workspaceId, entry)
       }
-    }
-    expect(await tidyBotChatTabs(flaky)).toEqual({ closed: ['b'], refused: ['a'], more: false })
-    expect(reads).toBe(2)
-    expect(warn).toHaveBeenCalledTimes(2)
+    })
+    expect(pass.closed).toEqual(['b'])
+    expect(warn).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -341,23 +351,18 @@ describe('BotChatTabTidyTicker', () => {
     expect(run).toHaveBeenCalledTimes(2)
   })
 
-  it('comes back sooner while a backlog remains, and skips last pass refusals once', async () => {
+  it('comes back sooner while a budget ran out, and finishes the backlog', async () => {
     const chats = Array.from({ length: 50 }, (_, index) =>
       chat(`c${String(index).padStart(2, '0')}`, { lastActiveAt: OLD - 100 + index })
     )
-    const host = fakeHost({
-      chats,
-      tabs: chats.map((entry) => tab(entry.chatId)),
-      outcomes: { 'tab-c00': 'refused' }
-    })
+    const host = fakeHost({ chats, tabs: chats.map((entry) => tab(entry.chatId)) })
     const ticker = new BotChatTabTidyTicker(() => host)
     await ticker.tick(0)
     const first = await ticker.tick(BOT_CHAT_TAB_TIDY_SOON_MS)
-    expect(first).toMatchObject({ refused: ['c00'], more: true })
-    expect(first.closed).toHaveLength(39)
+    expect(first).toMatchObject({ more: true })
+    expect(first.closed).toHaveLength(40)
     const second = await ticker.tick(2 * BOT_CHAT_TAB_TIDY_SOON_MS)
     expect(second.closed).toHaveLength(10)
-    expect(second.refused).toEqual([])
-    expect(host.closed).toHaveLength(49)
+    expect(host.hidden).toHaveLength(50)
   })
 })
