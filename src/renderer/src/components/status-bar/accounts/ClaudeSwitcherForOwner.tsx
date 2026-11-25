@@ -173,7 +173,7 @@ export function ClaudeSwitcherForOwner({
       }
       // Why: a distro selection changes its own reading, which no stream pushes to the footer.
       if (wslHostDistro) {
-        void ownerUsage.refreshRemote?.()
+        void ownerUsage.refreshRemote?.({ invalidate: true })
       }
       const nextActiveAccountId = getClaudeStatusActiveId(next, target)
       if (runningSessions || (!chatAction && previousActiveAccountId !== nextActiveAccountId)) {

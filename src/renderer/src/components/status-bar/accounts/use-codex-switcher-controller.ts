@@ -135,7 +135,7 @@ export function useCodexSwitcherController(
       }
       // Why: a distro selection changes its own reading, which no stream pushes to the footer.
       if (wslHostDistro) {
-        void ownerUsage.refreshRemote?.()
+        void ownerUsage.refreshRemote?.({ invalidate: true })
       }
       const nextActiveAccountId = getCodexStatusActiveId(next, target)
       if (previousActiveAccountId !== nextActiveAccountId) {

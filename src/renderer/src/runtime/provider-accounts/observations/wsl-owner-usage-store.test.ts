@@ -7,8 +7,10 @@ import type {
 import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import {
   clearWslOwnerUsageReads,
+  invalidateWslOwnerUsage,
   readWslOwnerUsage,
-  refreshWslOwnerUsage
+  refreshWslOwnerUsage,
+  wslOwnerUsageRetryDelayMs
 } from './wsl-owner-usage-store'
 
 const readUsageForRuntimeTarget = vi.fn()
@@ -50,12 +52,16 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-it('retries a read still inside its Retry-After window on the short cadence, a settled one on the long', async () => {
+it('holds a Retry-After read even against a forced refresh, and a settled one for the poll cadence', async () => {
   readUsageForRuntimeTarget.mockResolvedValue(
     createEmptyRateLimitState({ claude: claude(Date.now() + 30 * 60 * 1000) })
   )
   await refreshWslOwnerUsage('Ubuntu')
   vi.advanceTimersByTime(61_000)
+  await refreshWslOwnerUsage('Ubuntu')
+  await refreshWslOwnerUsage('Ubuntu', true)
+  expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(1)
+  vi.advanceTimersByTime(29 * 60 * 1000)
   await refreshWslOwnerUsage('Ubuntu')
   expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
 
@@ -124,4 +130,39 @@ it('does not let a read that started before a forced refresh satisfy it', async 
   settleFirst(createEmptyRateLimitState({ claude: claude() }))
   await Promise.all([first, forced])
   expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+})
+
+it('retries a provider error on the short cadence even when retained windows are shown', async () => {
+  readUsageForRuntimeTarget.mockResolvedValue(
+    createEmptyRateLimitState({
+      claude: { ...claude(), status: 'error', session: null, error: 'probe failed' }
+    })
+  )
+  await refreshWslOwnerUsage('Ubuntu')
+  expect(readWslOwnerUsage('Ubuntu')?.attemptFailed).toBe(true)
+  vi.advanceTimersByTime(61_000)
+  await refreshWslOwnerUsage('Ubuntu')
+  expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+})
+
+it('drops a cached reading when the selected account changes', async () => {
+  readUsageForRuntimeTarget.mockResolvedValue(createEmptyRateLimitState({ claude: claude() }))
+  await refreshWslOwnerUsage('Ubuntu')
+  expect(readWslOwnerUsage('Ubuntu')?.rateLimits.claude?.session?.usedPercent).toBe(40)
+
+  invalidateWslOwnerUsage('Ubuntu')
+  expect(readWslOwnerUsage('Ubuntu')).toBeNull()
+  // The invalidated read is not satisfied by its freshness: the new account must be read.
+  await refreshWslOwnerUsage('Ubuntu')
+  expect(readUsageForRuntimeTarget).toHaveBeenCalledTimes(2)
+})
+
+it('exposes a retry delay only while a reading is abnormal', async () => {
+  readUsageForRuntimeTarget.mockRejectedValue(new Error('probe failed'))
+  await refreshWslOwnerUsage('Ubuntu')
+  expect(wslOwnerUsageRetryDelayMs('Ubuntu')).toBe(60_000)
+
+  readUsageForRuntimeTarget.mockResolvedValue(createEmptyRateLimitState({ claude: claude() }))
+  await refreshWslOwnerUsage('Ubuntu', true)
+  expect(wslOwnerUsageRetryDelayMs('Ubuntu')).toBeNull()
 })

@@ -13,7 +13,7 @@ export type WslOwnerUsage = {
   failed: boolean
   /** When the last attempt finished, success or failure; the short retry clock. */
   attemptAt: number
-  /** The last attempt failed but a previous reading is kept for display. */
+  /** The last attempt failed or a provider errored but a previous reading is kept for display. */
   attemptFailed: boolean
 }
 
@@ -29,20 +29,24 @@ function distroTarget(distro: string): RateLimitRuntimeTarget {
   return { runtime: 'wsl', wslDistro: distro }
 }
 
-// A read that is failed, still fetching, or inside a Retry-After window re-reads on the short
-// cadence — without flagging it failed: the distro answered, so it must not read as unreachable.
-function needsShortRetry(cached: WslOwnerUsage): boolean {
-  if (cached.failed || cached.attemptFailed) {
-    return true
-  }
+function latestRetryAtMs(rateLimits: RateLimitState): number | undefined {
   const now = Date.now()
-  return [cached.rateLimits.claude, cached.rateLimits.codex].some((provider) => {
-    if (provider?.status === 'fetching') {
-      return true
-    }
-    const retryAtMs = provider?.usageMetadata?.retryAtMs
-    return retryAtMs !== undefined && retryAtMs > now
-  })
+  const deadlines = [rateLimits.claude, rateLimits.codex]
+    .map((provider) => provider?.usageMetadata?.retryAtMs)
+    .filter((retryAtMs): retryAtMs is number => retryAtMs !== undefined && retryAtMs > now)
+  return deadlines.length > 0 ? Math.max(...deadlines) : undefined
+}
+
+function hasFetching(rateLimits: RateLimitState): boolean {
+  return rateLimits.claude?.status === 'fetching' || rateLimits.codex?.status === 'fetching'
+}
+
+// An abnormal reading (failed attempt or fetching placeholder) retries on the short cadence;
+// a settled one on the poll cadence. A Retry-After window is enforced separately.
+function nextReadDueAt(cached: WslOwnerUsage): number {
+  return cached.failed || cached.attemptFailed || hasFetching(cached.rateLimits)
+    ? cached.attemptAt + FAILED_RETRY_MS
+    : cached.readAt + FRESH_MS
 }
 
 // Mirrors the service's stale policy: a provider error keeps the last good windows it has,
@@ -80,17 +84,44 @@ export function clearWslOwnerUsageReads(): void {
   inFlightByDistro.clear()
 }
 
+/** The distro's selected account changed, so its cached reading belongs to another account. */
+export function invalidateWslOwnerUsage(distro: string): void {
+  if (readsByDistro.delete(distro)) {
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+}
+
+/** Delay until an abnormal reading (failed attempt, fetching placeholder, or Retry-After) is
+ *  due again; null while the reading is healthy and the poll interval owns it. */
+export function wslOwnerUsageRetryDelayMs(distro: string): number | null {
+  const cached = readsByDistro.get(distro)
+  if (!cached) {
+    return null
+  }
+  const retryAtMs = latestRetryAtMs(cached.rateLimits)
+  if (
+    !cached.failed &&
+    !cached.attemptFailed &&
+    !hasFetching(cached.rateLimits) &&
+    retryAtMs === undefined
+  ) {
+    return null
+  }
+  return Math.max(0, Math.max(nextReadDueAt(cached), retryAtMs ?? 0) - Date.now())
+}
+
 /** Reads the distro's selected-account usage. One read runs per distro, only a settled read is
  *  kept, and a failed read never stands in as data — it is marked so the next call retries. */
 export function refreshWslOwnerUsage(distro: string, force = false): Promise<void> {
   const cached = readsByDistro.get(distro)
-  if (!force && cached) {
-    const now = Date.now()
-    if (
-      needsShortRetry(cached)
-        ? now - cached.attemptAt < FAILED_RETRY_MS
-        : now - cached.readAt < FRESH_MS
-    ) {
+  if (cached) {
+    // HTTP Retry-After outranks every caller, including a forced refresh.
+    if (latestRetryAtMs(cached.rateLimits) !== undefined) {
+      return Promise.resolve()
+    }
+    if (!force && Date.now() < nextReadDueAt(cached)) {
       return Promise.resolve()
     }
   }
@@ -117,7 +148,9 @@ export function refreshWslOwnerUsage(distro: string, force = false): Promise<voi
         readAt: now,
         failed: false,
         attemptAt: now,
-        attemptFailed: false
+        // A provider-level error is still a failed attempt for retry purposes, even when the
+        // previous windows are retained for display.
+        attemptFailed: rateLimits.claude?.status === 'error' || rateLimits.codex?.status === 'error'
       })
     } catch {
       // Why keep the last good read: one failed attempt is not proof the distro went away.
