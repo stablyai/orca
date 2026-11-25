@@ -124,7 +124,9 @@ export function rebuildAllTerminalWebglRenderers(reason: string): void {
 }
 
 /** Visits leaves of on-screen managers until `visit` returns true; one manager's teardown never stops the rest. */
-export function forEachVisibleInternalPane(visit: (pane: ManagedPaneInternal) => boolean | void): void {
+export function forEachVisibleInternalPane(
+  visit: (pane: ManagedPaneInternal) => boolean | void
+): void {
   for (const manager of visibleManagers) {
     let stop = false
     try {

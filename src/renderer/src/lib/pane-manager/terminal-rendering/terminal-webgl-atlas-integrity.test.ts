@@ -3,16 +3,18 @@ import type { ManagedPaneInternal } from '../pane-manager-types'
 import { registerLivePaneManager, unregisterLivePaneManager } from '../pane-manager-registry'
 import { setTerminalWebglDiagnosticRecorder } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 import {
-  admittedRect,
-  checkAtlasIntegrity,
   createAtlasIntegrityState,
-  createGlyphInkReader,
   requestAtlasChangeIntegrityCheck,
   verifyPaneWebglAtlasIntegrity,
-  type AtlasIntegrityDeps,
+  type AtlasIntegrityDeps
+} from './terminal-webgl-atlas-integrity'
+import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
+import {
+  admittedRect,
+  checkAtlasIntegrity,
   type GlyphAtlasLike,
   type GlyphInkReader
-} from './terminal-webgl-atlas-integrity'
+} from './terminal-webgl-atlas-sampling'
 
 type Glyph = NonNullable<GlyphAtlasLike['pages'][number]['glyphs']>[number]
 type Page = { canvas: { width: number; height: number }; glyphs: Glyph[] }
@@ -51,7 +53,10 @@ describe('admittedRect', () => {
 
 describe('checkAtlasIntegrity', () => {
   it('reports healthy only when every read in the observed set had ink', () => {
-    expect(checkAtlasIntegrity(atlas(), ink, traversal(), 16)).toEqual({ outcome: 'healthy', reads: 1 })
+    expect(checkAtlasIntegrity(atlas(), ink, traversal(), 16)).toEqual({
+      outcome: 'healthy',
+      reads: 1
+    })
     const mixed: GlyphInkReader = (_c, rect) => (rect.x === 0 ? 'ink' : 'unreadable')
     const twoQuadrants = atlas([glyph(0), glyph(300)])
     expect(checkAtlasIntegrity(twoQuadrants, mixed, traversal(), 16)).toEqual({
@@ -72,7 +77,10 @@ describe('checkAtlasIntegrity', () => {
     const prefix = Array.from({ length: 64 }, (_, i) => glyph(i, 0, 1))
     const page = atlas([...prefix, glyph(0, 100)])
     const walk = traversal()
-    expect(checkAtlasIntegrity(page, blank, walk, 16)).toEqual({ outcome: 'inconclusive', reads: 0 })
+    expect(checkAtlasIntegrity(page, blank, walk, 16)).toEqual({
+      outcome: 'inconclusive',
+      reads: 0
+    })
     expect(checkAtlasIntegrity(page, blank, walk, 16)).toMatchObject({ outcome: 'poisoned' })
   })
 
@@ -216,7 +224,10 @@ function fakePane(
   }
   const container = { isConnected: true, querySelector: () => (options.covered ? {} : null) }
   const addon = {
-    _renderer: { _charAtlas: paneAtlas, _gl: { isContextLost: () => options.contextLost === true } },
+    _renderer: {
+      _charAtlas: paneAtlas,
+      _gl: { isContextLost: () => options.contextLost === true }
+    },
     clearTextureAtlas: vi.fn(() => evict(paneAtlas))
   }
   return {
@@ -412,7 +423,10 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     const paneAtlas = atlas()
     const pane = fakePane(paneAtlas)
     register(true, [pane])
-    const forEach = vi.spyOn(registered[0] as { forEachInternalPane: () => void }, 'forEachInternalPane')
+    const forEach = vi.spyOn(
+      registered[0] as { forEachInternalPane: () => void },
+      'forEachInternalPane'
+    )
 
     verifyPaneWebglAtlasIntegrity(pane, 'attach', deps(ink))
     verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(blank))

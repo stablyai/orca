@@ -1,10 +1,20 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { forEachVisibleInternalPane, isElementInVisiblePaneManager } from '../pane-manager-registry'
-import { isManagedPaneDisplayNone } from '../terminal-fit/pane-display-visibility'
-import { getWindowParkVisible } from '../../window-activity/window-park-visibility'
-import { presentPaneViewport } from './pane-viewport-present'
-import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/native-chat-covered-pane'
+import { forEachVisibleInternalPane } from '../pane-manager-registry'
+import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
+import {
+  atlasOfPane,
+  isEligibleOwner,
+  isWindowPresented,
+  presentEligibleOwners
+} from './terminal-webgl-atlas-owners'
+import {
+  checkAtlasIntegrity,
+  type AtlasPoisonFinding,
+  type GlyphAtlasLike,
+  type GlyphInkReader,
+  type Traversal
+} from './terminal-webgl-atlas-sampling'
 
 /**
  * xterm shares one glyph atlas per font/colour config and never rechecks the page pixels behind a cache
@@ -12,260 +22,6 @@ import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/nativ
  * every renderer that uploads it draws blanks. Sample glyph rects that provably held ink and evict the atlas
  * when one reads blank. This does not detect glyphs cached empty or stale per-renderer GPU textures.
  */
-
-export type GlyphRect = { x: number; y: number; width: number; height: number }
-
-type AtlasGlyph = {
-  texturePosition?: { x: number; y: number }
-  size?: { x: number; y: number }
-  offset?: { x: number; y: number }
-}
-
-type AtlasCanvas = { width: number; height: number }
-
-type AtlasPageLike = {
-  canvas?: AtlasCanvas
-  glyphs?: readonly AtlasGlyph[]
-}
-
-export type GlyphAtlasLike = {
-  readonly pages: readonly AtlasPageLike[]
-  readonly pageLayoutVersion?: number
-}
-
-export type InkRead = 'ink' | 'blank' | 'unreadable'
-export type GlyphInkReader = (canvas: AtlasCanvas, rect: GlyphRect) => InkRead
-
-export type AtlasPoisonFinding = { reason: 'blank-page-glyph'; page: number; pageSize: number }
-
-export type AtlasCheckResult =
-  | { outcome: 'poisoned'; finding: AtlasPoisonFinding; reads: number }
-  | { outcome: 'healthy' | 'inconclusive'; reads: number }
-
-const MAX_RECT_SIZE = 256
-const MAX_VISITS_PER_PAGE = 64
-const MAX_VISITS_PER_ATTEMPT = 1024
-
-/**
- * xterm sets offset.y = padding - top + adj (padding 4, or 0 for restricted glyphs; adj >= 0), and a missed
- * top scan leaves top = 0. So offset.y <= -1 means the scan found an inked pixel, which lies inside the crop
- * xterm packs; an intact page therefore shows ink in this rect. Other glyphs are not evidence either way.
- */
-export function admittedRect(glyph: AtlasGlyph, canvas: AtlasCanvas): GlyphRect | null {
-  const { texturePosition: position, size, offset } = glyph
-  if (!position || !size || !offset || !(offset.y <= -1)) {
-    return null
-  }
-  const rect = { x: position.x, y: position.y, width: size.x, height: size.y }
-  if (
-    ![rect.x, rect.y, rect.width, rect.height].every(Number.isInteger) ||
-    rect.x < 0 ||
-    rect.y < 0 ||
-    rect.width < 1 ||
-    rect.height < 1 ||
-    rect.width > MAX_RECT_SIZE ||
-    rect.height > MAX_RECT_SIZE ||
-    rect.x + rect.width > canvas.width ||
-    rect.y + rect.height > canvas.height
-  ) {
-    return null
-  }
-  return rect
-}
-
-/** Per atlas and page: where the next visit starts, so every glyph is reached across attempts. */
-type Traversal = { layoutVersion: number | undefined; cursors: number[]; startPage: number }
-
-export function checkAtlasIntegrity(
-  atlas: GlyphAtlasLike,
-  read: GlyphInkReader,
-  traversal: Traversal,
-  maxReads: number
-): AtlasCheckResult {
-  if (traversal.layoutVersion !== atlas.pageLayoutVersion) {
-    traversal.layoutVersion = atlas.pageLayoutVersion
-    traversal.cursors = []
-  }
-  let reads = 0
-  let inked = 0
-  let visitsLeft = MAX_VISITS_PER_ATTEMPT
-  const pageCount = atlas.pages.length
-  const firstPage = pageCount ? traversal.startPage % pageCount : 0
-  traversal.startPage = firstPage + 1
-  for (let step = 0; step < pageCount && visitsLeft > 0; step++) {
-    const page = (firstPage + step) % pageCount
-    const { canvas, glyphs } = atlas.pages[page]
-    if (!canvas?.width || !canvas.height || !glyphs?.length) {
-      continue
-    }
-    const visits = Math.min(glyphs.length, MAX_VISITS_PER_PAGE, visitsLeft)
-    const start = (traversal.cursors[page] ?? 0) % glyphs.length
-    traversal.cursors[page] = start + visits
-    visitsLeft -= visits
-    const quadrants: (GlyphRect | undefined)[] = []
-    for (let i = 0; i < visits; i++) {
-      const rect = admittedRect(glyphs[(start + i) % glyphs.length], canvas)
-      if (rect) {
-        const quadrant = (rect.x >= canvas.width / 2 ? 1 : 0) + (rect.y >= canvas.height / 2 ? 2 : 0)
-        quadrants[quadrant] ??= rect
-      }
-    }
-    for (const rect of quadrants) {
-      if (!rect || reads >= maxReads) {
-        continue
-      }
-      reads++
-      let result: InkRead
-      try {
-        result = read(canvas, rect)
-      } catch {
-        result = 'unreadable'
-      }
-      if (result === 'blank') {
-        return {
-          outcome: 'poisoned',
-          finding: { reason: 'blank-page-glyph', page, pageSize: canvas.width },
-          reads
-        }
-      }
-      if (result === 'ink') {
-        inked++
-      }
-    }
-  }
-  return { outcome: inked > 0 && inked === reads ? 'healthy' : 'inconclusive', reads }
-}
-
-const SCRATCH_WIDTH = MAX_RECT_SIZE + 2
-const DESTINATION_CONTROL_X = MAX_RECT_SIZE
-const SOURCE_CONTROL_X = MAX_RECT_SIZE + 1
-
-type ReadKit = { ctx: CanvasRenderingContext2D; control: HTMLCanvasElement }
-
-function createKit(): ReadKit | null {
-  if (typeof document === 'undefined') {
-    return null
-  }
-  const element = document.createElement('canvas')
-  element.width = SCRATCH_WIDTH
-  element.height = MAX_RECT_SIZE
-  const ctx = element.getContext('2d', { alpha: true, willReadFrequently: true })
-  const control = document.createElement('canvas')
-  control.width = 1
-  control.height = 1
-  const controlContext = control.getContext('2d')
-  if (!ctx || !controlContext) {
-    return null
-  }
-  controlContext.fillStyle = '#000'
-  controlContext.fillRect(0, 0, 1, 1)
-  return { ctx, control }
-}
-
-function isUsable(ctx: CanvasRenderingContext2D): boolean {
-  return ctx.getContextAttributes?.().alpha !== false && ctx.isContextLost?.() !== true
-}
-
-function readOnce(current: ReadKit, canvas: AtlasCanvas, rect: GlyphRect): InkRead | 'control-failed' {
-  const { ctx, control } = current
-  if (!isUsable(ctx)) {
-    return 'control-failed'
-  }
-  const height = Math.max(1, rect.height)
-  ctx.clearRect(0, 0, SCRATCH_WIDTH, height)
-  // Source-over onto transparent pixels reproduces the source's alpha.
-  ctx.drawImage(
-    canvas as unknown as CanvasImageSource,
-    rect.x,
-    rect.y,
-    rect.width,
-    rect.height,
-    0,
-    0,
-    rect.width,
-    rect.height
-  )
-  ctx.fillStyle = '#000'
-  ctx.fillRect(DESTINATION_CONTROL_X, 0, 1, 1)
-  ctx.drawImage(control, SOURCE_CONTROL_X, 0)
-  const pixels = ctx.getImageData(0, 0, SCRATCH_WIDTH, height).data
-  const rowStride = SCRATCH_WIDTH * 4
-  for (let y = 0; y < rect.height; y++) {
-    for (let x = 0; x < rect.width; x++) {
-      if (pixels[y * rowStride + x * 4 + 3] > 0) {
-        return 'ink'
-      }
-    }
-  }
-  const controlsPassed =
-    pixels[DESTINATION_CONTROL_X * 4 + 3] === 255 && pixels[SOURCE_CONTROL_X * 4 + 3] === 255
-  return controlsPassed && isUsable(ctx) ? 'blank' : 'control-failed'
-}
-
-/**
- * Blank only when both fresh controls drawn after the copy read back opaque. Residual: the controls prove
- * the scratch and a canvas copy work, not the transfer from this particular page canvas.
- */
-export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit): GlyphInkReader {
-  let kit: ReadKit | null = null
-  return (canvas, rect) => {
-    for (let tries = 0; tries < 2; tries++) {
-      kit ??= makeKit()
-      if (!kit) {
-        return 'unreadable'
-      }
-      const result = readOnce(kit, canvas, rect)
-      if (result !== 'control-failed') {
-        return result
-      }
-      kit = null
-    }
-    return 'unreadable'
-  }
-}
-
-type WebglInternals = {
-  _renderer?: { _charAtlas?: unknown; _gl?: { isContextLost?: () => boolean } }
-}
-
-export function atlasOfPane(pane: ManagedPaneInternal): GlyphAtlasLike | undefined {
-  try {
-    const atlas = (pane.webglAddon as unknown as WebglInternals | null)?._renderer?._charAtlas as
-      | GlyphAtlasLike
-      | undefined
-    return atlas && Array.isArray(atlas.pages) ? atlas : undefined
-  } catch {
-    return undefined
-  }
-}
-
-function isWindowPresented(): boolean {
-  return (
-    getWindowParkVisible() &&
-    (typeof document === 'undefined' || document.visibilityState !== 'hidden')
-  )
-}
-
-function isEligibleOwner(pane: ManagedPaneInternal, atlas: GlyphAtlasLike): boolean {
-  try {
-    const renderer = (pane.webglAddon as unknown as WebglInternals | null)?._renderer
-    const terminalElement = (pane.terminal as { element?: { isConnected?: boolean } }).element
-    return (
-      !!pane.webglAddon &&
-      !pane.webglDisabledAfterContextLoss &&
-      typeof renderer?._gl?.isContextLost === 'function' &&
-      renderer._gl.isContextLost() === false &&
-      atlasOfPane(pane) === atlas &&
-      pane.container.isConnected &&
-      terminalElement?.isConnected === true &&
-      isElementInVisiblePaneManager(pane.container) &&
-      !isManagedPaneDisplayNone(pane) &&
-      !paneIsCoveredByNativeChat(pane)
-    )
-  } catch {
-    return false
-  }
-}
 
 export type AtlasCheckTrigger = 'reveal' | 'attach' | 'atlas-change' | 'deferred'
 
@@ -349,7 +105,12 @@ function globalReadyAt(deps: AtlasIntegrityDeps, now: number): number {
   return Math.max(deps.state.lastAttemptAt + GLOBAL_SPACING_MS, budgetAt)
 }
 
-function trace(entry: { trigger: AtlasCheckTrigger; outcome: string; reads: number; page?: number }): void {
+function trace(entry: {
+  trigger: AtlasCheckTrigger
+  outcome: string
+  reads: number
+  page?: number
+}): void {
   const hook = (globalThis as { __orcaAtlasIntegrityTrace?: (entry: object) => void })
     .__orcaAtlasIntegrityTrace
   if (typeof hook === 'function') {
@@ -359,18 +120,6 @@ function trace(entry: { trigger: AtlasCheckTrigger; outcome: string; reads: numb
       // Dev observation only.
     }
   }
-}
-
-function presentEligibleOwners(atlas: GlyphAtlasLike): void {
-  forEachVisibleInternalPane((pane) => {
-    if (isEligibleOwner(pane, atlas)) {
-      try {
-        presentPaneViewport(pane)
-      } catch {
-        // One owner's failed present must not stop its siblings.
-      }
-    }
-  })
 }
 
 function reset(
