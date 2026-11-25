@@ -3941,7 +3941,8 @@
         "needsAuth_other": "{{count}} need sign-in",
         "failed": "{{count}} failed"
       },
-      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
+      "manage": "Manage MCP servers"
     },
     "selectionQuote": {
       "action": "Quote",

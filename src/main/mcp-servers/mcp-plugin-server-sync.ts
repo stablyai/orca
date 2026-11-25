@@ -5,12 +5,8 @@ import { randomUUID } from 'node:crypto'
 import { freeBotToolName, type BotToolServer } from '../../shared/bot-tools'
 import type { BotToolNewCredential } from '../bots/bot-tools-file'
 import { sortAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
-import {
-  changeHostEntries,
-  mcpHostListFolder,
-  readHostEntries,
-  type HostEntry
-} from './mcp-host-list'
+import { changeHostEntries, readHostEntries, type HostEntry } from './mcp-host-list'
+import { mcpHostListFolder } from './mcp-host-list-folder'
 import { pluginMarkOf, type PluginMark } from './mcp-plugin-server-mark'
 
 /** One server an approved plugin adds; `server.name` is the plugin's own name for it. */
