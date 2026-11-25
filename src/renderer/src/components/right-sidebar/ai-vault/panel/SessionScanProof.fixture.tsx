@@ -95,6 +95,15 @@ function panelFixture(host: ExecutionHostId, populated: boolean, step: Step = 'w
           throw new Error('Seeded history cache did not install')
         }
       }
+      // The panel's chrome lists bot groups; this unpaired fixture shell has no host to ask.
+      const runtime = window.api.runtime
+      Reflect.set(window.api, 'runtime', {
+        ...runtime,
+        call: async (request: Parameters<typeof runtime.call>[0]) =>
+          request.method === 'bots.groups.list'
+            ? { ok: true, result: { groups: [] } }
+            : runtime.call(request)
+      })
       window.api.aiVault = {
         ...window.api.aiVault,
         listSessions: async (args) => {
