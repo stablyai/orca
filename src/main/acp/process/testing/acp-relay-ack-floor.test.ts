@@ -1,6 +1,7 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { RelayedProviderOutput } from '../../../provider-relay/relayed-provider-output'
+import { RELAY_CUT_KEYS_OVERFLOW } from '../../../daemon/protocol/daemon-provider-relay-protocol'
 import { AcpRelayTurns } from '../acp-relay-ack-floor'
 
 const update = (sessionUpdate: string, rest: Record<string, unknown> = {}): string =>
@@ -196,14 +197,38 @@ describe('ACP relay ack floor', () => {
     expect(named).not.toContain(JSON.stringify(['s', 'n0']))
   })
 
-  it("lets acks past an agent-started turn's messages once that turn ends", async () => {
+  it("lets acks past an agent-started turn's messages once that turn ends, and drops a late chunk", async () => {
     const { acks, send, turns } = rig()
     // A finished background task's report turn, with no prompt: held while it streams.
     await send(chunk('report', 'rep'), chunk(' done', 'rep'))
     expect(acks).toEqual([])
+    // Its end asks for an ack itself, with no line after it.
     turns.agentTurnEnded()
-    await send(update('available_commands_update', { availableCommands: [] }))
+    await vi.waitFor(() => expect(acks.at(-1)).toBe(2), { timeout: 3_000 })
+    // The app drops a late chunk of the ended turn's message, so the floor holds nothing for it.
+    await send(chunk(' late', 'rep'))
     expect(acks.at(-1)).toBe(3)
+  })
+
+  it('marks a cut that splits more messages than it can name', async () => {
+    const { output, cutKeys, send, prompt } = rig()
+    prompt()
+    const child = (session: string) =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: {
+          rootSessionId: 's',
+          childSessionId: session,
+          type: 'update',
+          update: { sessionUpdate: 'agent_message_chunk', messageId: `m-${session}`, content: {} }
+        }
+      })
+    await send(...Array.from({ length: 33 }, (_, at) => child(`c${at}`)))
+    await output.settle(true)
+    const named = cutKeys.at(-1)
+    expect(named).toHaveLength(32)
+    expect(named).toContain(RELAY_CUT_KEYS_OVERFLOW)
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {

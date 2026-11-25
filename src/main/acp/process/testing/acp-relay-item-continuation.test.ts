@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { ProviderRelayAttachResult } from '../../../daemon/protocol/daemon-provider-relay-protocol'
+import {
+  RELAY_CUT_KEYS_OVERFLOW,
+  type ProviderRelayAttachResult
+} from '../../../daemon/protocol/daemon-provider-relay-protocol'
 import { attachContinuation } from '../../../provider-relay/relayed-provider-continuation'
 import { AcpRelayItemContinuation } from '../acp-relay-item-continuation'
 
@@ -130,6 +133,18 @@ describe('ACP relay item continuation', () => {
       return idOf(out)
     })
     expect(ids).toEqual([undefined, 'm2', 'relay:r1:13:m1'])
+  })
+
+  it('moves every message a cut meets when it cut more than it could name', () => {
+    const hook = new AcpRelayItemContinuation()
+    const overflowing = {
+      ...attach([{ id: 7, method: 'session/prompt' }], 10),
+      cutKeys: [JSON.stringify(['s', 'm1']), RELAY_CUT_KEYS_OVERFLOW]
+    }
+    const cut = attachContinuation(hook, 'r1', 10, overflowing)
+    const replay = [chunk('m2', 'r'), chunk('m3', 'resumed tail')]
+    const ids = replay.map((line, at) => idOf(cut?.lines(11 + at, line, undefined)?.[0] ?? line))
+    expect(ids).toEqual(['relay:r1:11:m2', 'relay:r1:12:m3'])
   })
 
   it('moves a named message that resumes only after the replay, until its prompt is answered', () => {

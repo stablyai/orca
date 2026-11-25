@@ -1,4 +1,7 @@
-import type { ProviderRelayAttachResult } from '../../daemon/protocol/daemon-provider-relay-protocol'
+import {
+  RELAY_CUT_KEYS_OVERFLOW,
+  type ProviderRelayAttachResult
+} from '../../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayItemContinuation } from '../../provider-relay/relayed-provider-continuation'
 import { jsonRpcAnswerId } from '../../provider-relay/relayed-json-rpc-lines'
 import {
@@ -64,9 +67,11 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     if (this.seen.has(key)) {
       return { key, start: false, end: false }
     }
-    // Named by the cut, exactly those moved; else, as the floor cuts, a session's first message a
+    // Named by the cut, exactly those moved (all, past what a cut can name); else, as the floor cuts, a session's first message a
     // replay meets before a boundary.
-    const start = this.cutKeys ? !this.cutKeys.has(key) : this.started.has(update.sessionId)
+    const start = this.cutKeys
+      ? !this.cutKeys.has(key) && !this.cutKeys.has(RELAY_CUT_KEYS_OVERFLOW)
+      : this.started.has(update.sessionId)
     const full = this.seen.size >= MAX_SEEN_MESSAGES
     if (!full) {
       this.seen.add(key)
