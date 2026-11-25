@@ -58,7 +58,7 @@ function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
   }
   /** The connection's parse of a line it was handed. */
   const parsed = (line: string) => turns.observeSessionUpdate(JSON.parse(line).params)
-  return { output, acks, cuts, cutKeys, send, prompt, parsed }
+  return { output, acks, cuts, cutKeys, send, prompt, parsed, turns }
 }
 
 describe('ACP relay ack floor', () => {
@@ -194,6 +194,16 @@ describe('ACP relay ack floor', () => {
     expect(named).toHaveLength(16)
     expect(named).toContain(JSON.stringify(['s', 'n39']))
     expect(named).not.toContain(JSON.stringify(['s', 'n0']))
+  })
+
+  it("lets acks past an agent-started turn's messages once that turn ends", async () => {
+    const { acks, send, turns } = rig()
+    // A finished background task's report turn, with no prompt: held while it streams.
+    await send(chunk('report', 'rep'), chunk(' done', 'rep'))
+    expect(acks).toEqual([])
+    turns.agentTurnEnded()
+    await send(update('available_commands_update', { availableCommands: [] }))
+    expect(acks.at(-1)).toBe(3)
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {

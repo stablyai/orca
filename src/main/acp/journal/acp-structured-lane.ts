@@ -49,6 +49,8 @@ export type AcpStructuredLaneDeps = {
   onChildWorkFailure?: (error: unknown) => void
   now?: () => number
   childStops?: () => AcpChildStops
+  /** An agent-started turn ended (quiet, Stop or a send): its messages stream no more. */
+  onAgentTurnEnded?: () => void
 }
 
 export class AcpStructuredLane {
@@ -59,6 +61,7 @@ export class AcpStructuredLane {
   private readonly requestIdentity: ReturnType<typeof createLegacyProviderTimelineIdentityScheme>
   private retryTimer: ReturnType<typeof setTimeout> | null = null
   readonly agentTurn = new AcpAgentTurnQuiet(this, () => this.deps.now?.() ?? Date.now())
+  readonly agentTurnEnded = (): void => this.deps.onAgentTurnEnded?.()
   private failed = false
   private ended = false
   private disposed = false

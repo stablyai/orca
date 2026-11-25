@@ -316,6 +316,14 @@ export class AcpRelayTurns {
     return answered
   }
 
+  /** The agent's own turn ended (it has no prompt to answer): its messages no longer hold acks,
+   *  so a reattach doesn't replay them into a turn of their own again. */
+  readonly agentTurnEnded = (): void => {
+    if (!this.running) {
+      this.current?.endTurn()
+    }
+  }
+
   /** Every session update's params the connection parsed: a call's final status lets the floor
    *  past it. Acks follow the save barrier, so the parse is in before the floor is next read. */
   observeSessionUpdate(params: unknown): void {

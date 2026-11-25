@@ -205,6 +205,7 @@ export async function acquireAcpStructuredSession(input: {
       agentName,
       generation,
       ...(relayed ? { requestGeneration: `relay:${relayed.child.relayId}` } : {}),
+      onAgentTurnEnded: relayed?.turns.agentTurnEnded,
       providerSessionId,
       dialect: spec.dialect,
       now,
