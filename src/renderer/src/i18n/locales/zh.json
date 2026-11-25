@@ -29041,7 +29041,8 @@
       },
       "deliveryUnconfirmed": "投递未确认",
       "starting": "正在启动…",
-      "notStarted": "尚未启动"
+      "notStarted": "尚未启动",
+      "pickLocalBot": "请选择此电脑上的 bot"
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -29292,7 +29293,8 @@
       "fallbackNamed": "Webhook“{{automation}}”已生效。请在电脑上的 Orca 中复制其 URL：设置 › Bots › {{bot}} › Webhook。要暂停或删除它，请在这里告诉 {{bot}}",
       "fallback": "此 Webhook 已生效。请在电脑上的 Orca 中，从 bot 设置的“Webhook”下复制其 URL。要暂停或删除它，请在这里告诉 bot",
       "copiedNoClear": "用完后请清空剪贴板；此浏览器无法保证会替你清空",
-      "pausedSignedOut": "{{hooks}} · 未登录期间已暂停"
+      "pausedSignedOut": "{{hooks}} · 未登录期间已暂停",
+      "copied": "已复制"
     },
     "handToBot": {
       "cantMove": "无法从这里将 {{name}} 移到 {{bot}} 下",
@@ -29388,10 +29390,20 @@
           "label": "在议题或 PR 中提及 {{command}} 即可向 {{name}} 提问。例如“{{command}} {{ask}}”，{{name}} 会回复“{{reply}}”",
           "commented": "刚刚发表了评论",
           "ask": "评审这个 PR",
-          "reply": "收到，马上处理"
+          "reply": "收到，马上处理",
+          "bot": "bot"
         },
         "connectTitle": "连接 GitHub",
-        "manage": "管理"
+        "manage": "管理",
+        "add": "添加",
+        "addShort": "添加",
+        "addTitle": "添加 {{name}}",
+        "allRepos": "所有仓库",
+        "cancel": "取消",
+        "finishInYourBrowser": "请在浏览器中完成…",
+        "installApp": "安装应用",
+        "repoCount_other": "{{count}} 个仓库",
+        "whoCanAsk": "谁可以提问"
       },
       "account": {
         "defaultBot": "处理我的请求的默认 bot",
@@ -29525,7 +29537,8 @@
       "thisServer": "此服务器",
       "there": "那里",
       "executionComputer": "运行此智能体的电脑",
-      "yourComputer": "你的电脑"
+      "yourComputer": "你的电脑",
+      "actsAsYou": "他们会以你的身份在 {{computer}} 上操作"
     },
     "import": {
       "nudgeOne": "在 {{app}} 中发现了一个 bot",
@@ -29599,7 +29612,9 @@
         "unavailable": "没有已安装的智能体能够生成图片",
         "failed": "{{agent}} 无法生成图片。请重试",
         "face": "生成头像",
-        "agent": "使用 {{agent}} 生成"
+        "agent": "使用 {{agent}} 生成",
+        "closeAnytime": "可随时关闭",
+        "failedFor": "无法为 {{name}} 生成头像"
       }
     },
     "section": {
@@ -29888,7 +29903,9 @@
       "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
-      "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"
+      "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除",
+      "avatarHomeUnreadable": "无法读取已保存的图片。请重新选择",
+      "folderNotOwned": "无法验证此 bot 的文件夹"
     },
     "slack": {
       "setup": {
@@ -30039,7 +30056,11 @@
         "mine": "这台电脑上的令牌已过期。请粘贴新令牌",
         "paste": "粘贴新令牌以重新连接",
         "expiredOnTitle": "{{host}} 上的 Slack 登录已过期",
-        "signInAgain": "重新登录"
+        "signInAgain": "重新登录",
+        "neededTitle": "Slack 需要此工作区的令牌",
+        "whyNeeded": "Orca 没有此工作区可用的 Slack 令牌",
+        "pasteNeeded": "请粘贴令牌以继续",
+        "continue": "继续"
       },
       "approve": {
         "noteUntil": "仅可使用一次，有效期至 {{time}}。请在那里以你自己的身份登录 Slack；Orca Cloud 会把批准结果传回 {{host}}。",
@@ -30153,7 +30174,8 @@
       "groupReplierNotMember": "请在“房间回复”中选择一位当前的房间成员。",
       "groupMailNeverStarted": "这封邮件从未开始一轮对话。",
       "groupRemoteUnreachable": "无法连接 {{host}}。{{detail}}",
-      "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。"
+      "groupRemoteUnreachableRetry": "无法连接 {{host}}。{{detail}} 重新发布即可重试。",
+      "googleAccountsChanged": "这个 bot 的 Google 账户在你打开后有变化，请重新检查并保存。"
     },
     "notices": {
       "couldNotFinish": "{{bot}} 未能完成",
