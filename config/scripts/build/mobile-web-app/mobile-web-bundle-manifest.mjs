@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { brotliCompress, constants as zlibConstants } from 'node:zlib'
+import { assertMobileWebManifestMatchesContract } from './mobile-web-manifest-contract.mjs'
 
 const { darkBuildMarkers } = createRequire(import.meta.url)('../../../dark-build-switches.cjs')
 
@@ -199,6 +200,7 @@ export async function writeMobileWebBundleTree({
         })
   }
 
+  await assertMobileWebManifestMatchesContract(manifest)
   // Clear entire output or stale unreferenced assets ship inside asar.
   await rm(outDir, { recursive: true, force: true })
   await mkdir(join(outDir, 'assets'), { recursive: true })

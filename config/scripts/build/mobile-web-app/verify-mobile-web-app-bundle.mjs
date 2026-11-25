@@ -2,10 +2,13 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
+import {
+  loadMobileWebManifestContract,
+  MOBILE_WEB_MANIFEST_CONTRACT
+} from './mobile-web-manifest-contract.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
@@ -17,13 +20,6 @@ import {
 } from './mobile-web-bundle-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
-const manifestContract = join(
-  projectDir,
-  'src',
-  'shared',
-  'mobile-web-bundle',
-  'manifest-contract.ts'
-)
 
 // Derive asset ceiling as chunks+images+document so chunk overflow reports splitting cause before generic count; flat ceiling drifts as routes grow.
 export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunkCount = 0) {
@@ -184,20 +180,11 @@ function fail(message) {
 
 // Load phone’s manifest asset ceiling from contract through esbuild, which resolves extensionless TS imports; never copy native shell count.
 export async function readMobileWebBundleMaxAssets() {
-  const { outputFiles } = await esbuild.build({
-    entryPoints: [manifestContract],
-    bundle: true,
-    write: false,
-    format: 'esm',
-    platform: 'node',
-    logLevel: 'silent'
-  })
-  const source = Buffer.from(outputFiles[0].contents).toString('base64')
-  const { MOBILE_WEB_BUNDLE_MAX_ASSETS: ceiling } = await import(
-    `data:text/javascript;base64,${source}`
-  )
+  const { MOBILE_WEB_BUNDLE_MAX_ASSETS: ceiling } = await loadMobileWebManifestContract()
   if (typeof ceiling !== 'number') {
-    fail(`${manifestContract} exports no MOBILE_WEB_BUNDLE_MAX_ASSETS to bound the build with`)
+    fail(
+      `${MOBILE_WEB_MANIFEST_CONTRACT} exports no MOBILE_WEB_BUNDLE_MAX_ASSETS to bound the build with`
+    )
   }
   return ceiling
 }
