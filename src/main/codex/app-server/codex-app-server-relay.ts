@@ -120,6 +120,7 @@ export function codexConnectionRelay(
   return {
     reattached,
     releaseOutput: () => child.releaseOutput(),
-    endedWork: () => child.attachResult?.endedWork
+    endedWork: () => child.attachResult?.endedWork,
+    openWork: () => child.attachResult?.openWork
   }
 }

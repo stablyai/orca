@@ -6,19 +6,20 @@ describe('a cut ack naming the items it split', () => {
   it('reports the named items with the cut, replaced by each cut, and none for a later spool drop', () => {
     const cut = new ProviderRelayCut()
     cut.record(10, 6, { cut: true, cutKeys: ['a'] })
-    expect(cut.report(0, 5)).toEqual({ truncatedThrough: 5, cutKeys: ['a'] })
+    expect(cut.report(0)).toEqual({ truncatedThrough: 5, cutKeys: ['a'] })
     // An ack that isn't a cut leaves the last cut's keys alone; the next cut replaces them.
     cut.record(12, undefined, {})
     cut.record(20, 15, { cut: true, cutKeys: ['b'] })
-    expect(cut.report(0, 14)).toEqual({ truncatedThrough: 14, cutKeys: ['b'] })
+    expect(cut.report(0)).toEqual({ truncatedThrough: 14, cutKeys: ['b'] })
     // A cut that names nothing leaves the reattach to guess.
     cut.record(22, undefined, { cut: true })
-    expect(cut.report(0, 22)).toEqual({ truncatedThrough: 22 })
+    expect(cut.report(0)).toEqual({ truncatedThrough: 22 })
     cut.record(30, 26, { cut: true, cutKeys: ['c'] })
     // The spool dropped kept lines past the client's own cut: those split items no key names.
-    expect(cut.report(28, 25)).toEqual({ truncatedThrough: 28 })
-    // A replay from past the cut never started inside it.
-    expect(cut.report(0, 26)).toEqual({})
+    expect(cut.report(28)).toEqual({ truncatedThrough: 28 })
+    // Reported however far past it a replay starts: an item it split may still be streaming.
+    expect(cut.report(0)).toEqual({ truncatedThrough: 25, cutKeys: ['c'] })
+    expect(new ProviderRelayCut().report(0)).toEqual({})
   })
 
   it('moves exactly the named items to continuation rows, and guesses only without names', () => {
