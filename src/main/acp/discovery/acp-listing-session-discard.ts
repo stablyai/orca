@@ -1,12 +1,11 @@
 import type { AcpListingSession, AcpSessionModelDiscovery } from './acp-model-discovery-policy'
 import type { ProviderAcquisitionConnection } from '../../provider-process/provider-acquisition-starts'
-import { waitForProcessExitUntil } from '../../provider-process/provider-process-exit-deadline'
+import { waitForProviderExitUntil } from '../../provider-process/provider-process-exit-deadline'
 
 const LISTING_EXIT_WAIT_MS = 5_000
 
-/** Runs after the listing process exits, so the agent no longer writes the sessions it removes. A
- *  close can return once the kill is sent, so only a listing with sessions to remove waits for the
- *  exit itself (at most LISTING_EXIT_WAIT_MS). */
+/** Runs after the listing process exits (waiting at most LISTING_EXIT_WAIT_MS), so the agent no
+ *  longer writes the sessions it removes; a listing with none to remove doesn't wait. */
 export async function discardAcpListingSessions(
   agent: string,
   listing: AcpSessionModelDiscovery,
@@ -18,8 +17,7 @@ export async function discardAcpListingSessions(
     return
   }
   if (listingProcess) {
-    const exited = new Promise<void>((resolve) => listingProcess.onExit(resolve))
-    await waitForProcessExitUntil(exited, LISTING_EXIT_WAIT_MS)
+    await waitForProviderExitUntil(listingProcess, LISTING_EXIT_WAIT_MS)
   }
   for (const sessionId of sessionIds) {
     await listing.discardSession({ ...session, sessionId }).catch((error: unknown) => {
