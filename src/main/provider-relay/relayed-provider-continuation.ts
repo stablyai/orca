@@ -63,12 +63,14 @@ export class RelayedProviderContinuation {
     private readonly savedThrough = 0
   ) {
     const awaits = (key: string) => key !== RELAY_CUT_KEYS_OVERFLOW && (hook.awaits?.(key) ?? true)
-    this.awaited = new Set(open ? [...(cutKeys ?? [])].filter(awaits) : [])
+    const resumable = open !== null || hook.mayResume?.() === true
+    this.awaited = new Set(resumable ? [...(cutKeys ?? [])].filter(awaits) : [])
   }
 
   private lastSeq = 0
   /** Lines since a moved item's last one. */
   private sinceMoved = 0
+  private pruned = false
   /** Moved items seen only through `follows` lines: maybe whole already, so they hold nothing open. */
   private readonly whole = new Set<string>()
 
@@ -82,13 +84,23 @@ export class RelayedProviderContinuation {
     if (this.lastSeq < this.replayThrough) {
       return false
     }
+    // Once no moved item may resume past the open work, those it awaited for that come no more.
+    if (this.awaited.size > 0 && !this.pruned && this.hook.mayResume?.() === false) {
+      this.pruned = true
+      for (const key of this.awaited) {
+        if (!(this.hook.awaits?.(key) ?? true)) {
+          this.awaited.delete(key)
+        }
+      }
+    }
     // With no work open, a moved item that stops streaming has ended (it reports no end itself).
     const quiet =
       this.open === null && this.sinceMoved >= MOVED_QUIET_LINES && !this.hook.mayResume?.()
     const settled = (this.moved.size === this.whole.size || quiet) && this.awaited.size === 0
     // Past what a cut names, an unnamed item may resume later, until its open work ends.
     const unnamed = this.open !== null && this.cutKeys?.has(RELAY_CUT_KEYS_OVERFLOW) === true
-    return (settled && !unnamed) || (this.open !== null && this.open.size === 0)
+    const openEnded = this.open !== null && this.open.size === 0 && !this.hook.mayResume?.()
+    return (settled && !unnamed) || openEnded
   }
 
   /** The lines to hand on for this one: itself, re-keyed, or a moved item's finishing lines. */
