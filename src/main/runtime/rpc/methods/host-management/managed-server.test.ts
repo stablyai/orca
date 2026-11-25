@@ -1,3 +1,4 @@
+// @orca-isolated-worker: the real runtime registers callbacks that survive the shared-worker reset.
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
