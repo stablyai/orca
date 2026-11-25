@@ -27520,6 +27520,7 @@
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
       "disconnected": "Disconnected",
+      "connecting": "Connecting…",
       "runsOn": "Runs on {{host}}"
     },
     "new": {
@@ -30159,6 +30160,7 @@
       "open": "Open",
       "actions": "Chat actions",
       "needsYouCount": "{{count}} needs you",
+      "personHome": "{{name}}’s Home",
       "noMessages": "No messages yet",
       "searchPerson": "Search {{name}}'s chats",
       "searchOwn": "Search your chats",

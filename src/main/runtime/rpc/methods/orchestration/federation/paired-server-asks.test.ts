@@ -204,7 +204,7 @@ describe('agents on a paired server messaging an agent on this computer', () => 
     pulls = []
     dir = mkdtempSync(join(tmpdir(), 'orca-paired-server-asks-'))
     withChat.mockReset()
-    withChat.mockImplementation((_botId, work) => work(DOCS_CHAT))
+    withChat.mockImplementation((_botId, _of, work) => work(DOCS_CHAT))
     server = openSide('server', 'Build Box', [makeTestBot({ id: 'ranger', name: 'Ranger' })])
     computer = openSide(
       'computer',

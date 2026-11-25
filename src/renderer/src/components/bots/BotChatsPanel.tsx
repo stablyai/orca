@@ -78,7 +78,7 @@ function BotChatsTab({ bot }: { bot: Bot }): React.JSX.Element {
   const tree = useBotOwnChatTree(bot)
   // Its server is down: the last read shows with its actions off until it's back.
   const offline = useBotHostOffline(bot.hostId)
-  const people = useMemo(() => botChatPeople(bot.shares), [bot.shares])
+  const people = useMemo(() => botChatPeople(bot), [bot])
   const [pickState, setPick] = useState<BotChatPersonPick>(EVERYONE)
   // A teammate no longer shared with drops the pick back to everyone.
   const pick =

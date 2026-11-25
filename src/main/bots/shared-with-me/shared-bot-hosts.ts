@@ -18,9 +18,10 @@ import {
   sharedBotStreamAnswer,
   sharedBotUnshared
 } from './shared-bot-host-answers'
-import { nextPairingStep, sharedBotsPollMs, type MineShare } from './shared-bot-pairing'
+import { nextPairingStep, type MineShare } from './shared-bot-pairing'
 import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
+import { SharedBotOfferWaits } from './shared-bot-offer-waits'
 import type { SharedBotHomes } from './shared-bot-home'
 import { SharedBotPhoneGrants } from './shared-bot-phone-grants'
 
@@ -49,6 +50,7 @@ export class SharedBotHosts {
   private readonly held: SharedBotHeldSends
   private readonly reads = new SerialRerun((applied) => this.readMine(applied), SHARES_LIST_WAIT_MS)
   private timer: ReturnType<typeof setTimeout> | null = null
+  private readonly offerWaits = new SharedBotOfferWaits()
   private readonly now: () => number
   private loaded: Promise<void> | null = null
   private stopped = false
@@ -118,6 +120,7 @@ export class SharedBotHosts {
       sharedBotHostView(entry, {
         homeWorkspaceId: entry.homeWorkspaceId ?? null,
         link: this.linkFor(entry).current(),
+        accepting: this.offerWaits.connecting(entry.shareId, this.linkFor(entry).current()),
         holds: entry.hostKey !== undefined,
         held: this.held.views(entry)
       })
@@ -155,9 +158,10 @@ export class SharedBotHosts {
       this.timer = null
     }
     const read = this.held.beginRead()
+    const wait = this.offerWaits.take()
     const answer = this.stopped
       ? null
-      : await this.sharing.read(this.deps.cloud(), () => this.publish())
+      : await this.sharing.read(this.deps.cloud(), () => this.publish(), wait)
     if (this.stopped) {
       applied()
       return
@@ -170,9 +174,10 @@ export class SharedBotHosts {
     if (shares) {
       await Promise.all(this.store.list().map((entry) => this.advance(entry)))
     }
+    this.offerWaits.settled(wait)
     this.publish()
     if (!this.stopped) {
-      const waitMs = sharedBotsPollMs(this.store.list(), (entry) => ({
+      const waitMs = this.offerWaits.nextReadMs(this.store.list(), (entry) => ({
         link: this.linkFor(entry).current(),
         waiting: entry.held.some((held) => this.held.isWaiting(held))
       }))
@@ -296,6 +301,7 @@ export class SharedBotHosts {
       })
       if (answer?.ok) {
         this.store.put({ ...(this.store.get(entry.shareId) ?? entry), acceptedAt: this.now() })
+        this.offerWaits.accepted(entry)
       }
     } else if (step.kind === 'connect' && (step.credential.kind === 'invite' || share.hostOnline)) {
       const link = await this.linkFor(entry).connect(step.credential)

@@ -68,7 +68,8 @@ export function instanceOf(runtime: OrcaRuntimeService) {
     })
     const setup = new ComposioSetup(bots, {
       botName: (botId) => botOf(runtime, botId).name,
-      tellBot: (botId, line) => runtimeBotChats(runtime).sendToChat(botId, line, 'card-answer'),
+      tellBot: (botId, line) =>
+        runtimeBotChats(runtime).sendToChat(botId, 'owner', line, 'card-answer'),
       chatOf: (botId) => botOf(runtime, botId).chatSessionId ?? undefined,
       write: (sessionId, item) =>
         typeof item === 'string'

@@ -40,6 +40,8 @@ export type BotChatTreeChat = {
   origin: BotChatOrigin
   /** The thread's place or the automation's name, e.g. '#orca'. */
   originLabel?: string
+  /** Another person's Home Chat, by their name; the row draws a house. Absent from older hosts. */
+  homeOf?: string
   live: 'replying' | 'needs-you' | 'idle'
   /** The session running the chat now, when a /clear moved it past `chatId`: its status is keyed
    *  by this id. Absent from older hosts. */

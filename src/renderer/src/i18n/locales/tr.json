@@ -24560,6 +24560,7 @@
     "row": {
       "runsOn": "{{host}} üzerinde çalışıyor",
       "disconnected": "Bağlantı kesildi",
+      "connecting": "Bağlanıyor…",
       "idle": "Boşta",
       "paused": "Duraklatıldı",
       "reading": "Mesajınızı okuyor",
@@ -24645,6 +24646,7 @@
       "loading": "Sohbetler yükleniyor…",
       "readFailed": "Bu botun sohbetleri okunamadı.",
       "searchRetry": "Tekrar dene",
+      "personHome": "Home ({{name}})",
       "noMessages": "Henüz mesaj yok",
       "searchPerson": "{{name}} adlı kişinin sohbetlerinde ara",
       "searchOwn": "Sohbetlerinde ara",

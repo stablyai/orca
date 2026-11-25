@@ -71,7 +71,7 @@ vi.mock('../../../google/google-setup-chat-cards', async (importOriginal) => {
 })
 vi.mock('../../../bots/bot-chat-session', () => ({
   runtimeBotChats: () => ({
-    sendToChat: async (_botId: string, line: string) => {
+    sendToChat: async (_botId: string, _of: unknown, line: string) => {
       state.lines.push(line)
       return { sessionId: BOT.chatSessionId }
     }

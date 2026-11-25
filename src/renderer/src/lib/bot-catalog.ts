@@ -63,7 +63,7 @@ import { isHome, type BotHomeOwner } from '../../../shared/bots/bot-homes'
 import { requestNativeChatComposerFocus } from '../components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/drafts/native-chat-draft-scope'
 import { botHomeHostId } from '../../../shared/bots/bot-home-host'
-import { sharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
+import { closeSharedBotChat, openSharedBotChat } from './agent-session/open/shared-bot-chat-open'
 
 export { isHome, readBots, readHostBots, refreshBotHost, refreshBots, subscribeToBotChanges }
 
@@ -273,10 +273,18 @@ export async function openBotChat(bot: BotRef): Promise<string> {
 
 /** A new Home Chat; the old one stops, leaves the tab bar and stays in history. */
 export async function newBotHomeChat(bot: BotRef): Promise<string> {
+  const saved = readHostBots(bot.hostId).find((entry) => entry.id === bot.id)
   const { sessionId } = await callBotRpc<{ sessionId: string }>(bot, 'bots.chat.reset', {
     botId: bot.id
   })
   await refreshBotHost(bot.hostId)
+  // A shared agent's host keeps no tabs for this account: the Home it replaced leaves them here.
+  if (saved?.chatSessionId) {
+    closeSharedBotChat({
+      workspaceId: folderWorkspaceKey(saved.folderWorkspaceId),
+      sessionId: saved.chatSessionId
+    })
+  }
   return sessionId
 }
 
@@ -320,8 +328,8 @@ export function openBotHome(bot: Bot): boolean {
     executionHostId: botHomeHostId(bot),
     // Bots are not rows of the workspace list, so there is nothing there to reveal.
     revealInSidebar: false,
-    // A shared agent's home here holds only the teammate's chat tabs, never a terminal in its folder.
-    ...(sharedBotHostOf(bot.hostId) ? { providesInitialSurface: true } : {})
+    // Its surface is this account's Home chat, which BotHomeChat opens on the page: never a seeded terminal.
+    providesInitialSurface: true
   })
   return opened !== false
 }
@@ -331,14 +339,12 @@ export function openBotHome(bot: Bot): boolean {
  * `draft` is added to Home's unsent message, never sent, and its composer takes focus.
  */
 export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Promise<boolean> {
-  // Home exists before the page opens, so the page lands on it rather than on a new terminal. A
-  // shared agent's Home Chat is its owner's: the share opens only its home here.
-  const chatSessionId = sharedBotHostOf(bot.hostId)
-    ? null
-    : await openBotChat(bot).catch((error: unknown) => {
-        console.error('Failed to open the bot chat:', error)
-        return null
-      })
+  // Home exists before the page opens, so the page lands on it rather than on a new terminal. The
+  // host decides whose: a shared agent's opens this account's own Home there.
+  const chatSessionId = await openBotChat(bot).catch((error: unknown) => {
+    console.error('Failed to open the bot chat:', error)
+    return null
+  })
   // The home must be in the catalog before it can open.
   await useAppStore.getState().fetchFolderWorkspaces({
     runtimeEnvironmentId: runtimeTargetEnvironmentId(botHostTarget(botHomeHostId(bot)))
@@ -348,8 +354,12 @@ export async function openBotHomeTab(bot: Bot, options?: { draft?: string }): Pr
   }
   if (chatSessionId) {
     const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
-    // An open Home switches here; one not in this window yet opens when the host's activation arrives.
-    if (!activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })) {
+    // A shared agent's host keeps no tabs for this account: its Home opens in a tab kept here. Else an
+    // open Home switches here; one not in this window yet opens when the host's activation arrives.
+    if (
+      openSharedBotChat({ workspaceId: worktreeId, sessionId: chatSessionId }) === null &&
+      !activateStructuredAgentSessionById({ worktreeId, sessionId: chatSessionId })
+    ) {
       activateStructuredAgentSessionTabOnOwner(worktreeId, chatSessionId)
     }
     if (options?.draft) {

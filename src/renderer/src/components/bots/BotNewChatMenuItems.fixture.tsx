@@ -11,6 +11,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 import { OpenAgentSettingsMenuItem } from '../agent/launch-menu/OpenAgentSettingsMenuItem'
 import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
+import { botHomeOffers } from '../../../../shared/bots/bot-agent-choices'
 import { BotNewChatMenuItems } from './BotNewChatMenuItems'
 
 const bot: Bot = {
@@ -83,7 +84,7 @@ function menuCase(width: number) {
           <DropdownMenu defaultOpen modal={false}>
             <DropdownMenuTrigger>New</DropdownMenuTrigger>
             <DropdownMenuContent align="start" style={{ width }}>
-              <BotNewChatMenuItems bot={bot} model={model} />
+              <BotNewChatMenuItems bot={bot} offers={botHomeOffers(bot, model, null)} />
               <DropdownMenuSeparator />
               <OpenAgentSettingsMenuItem variant="create" />
             </DropdownMenuContent>

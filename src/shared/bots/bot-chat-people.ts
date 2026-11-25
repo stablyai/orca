@@ -1,23 +1,17 @@
 // Whose chat each of a shared bot's chats is on the owner's list, and the Chats tab's person filter.
-import { shareOwnsChat, type BotRequestAsker } from './bot-acts-for'
+import type { Bot } from '../bot-types'
 import type { BotChatPerson, BotChatTreeChat } from './bot-chat-tree'
-import type { BotShare } from './bot-team-shares'
+import { botSharePersonName } from './bot-home-of'
+import { botShareUsable } from './bot-team-shares'
 
-/** The teammates a bot is shared with by account, as their share rows name them. */
-export function botChatPeople(shares: readonly BotShare[] | undefined): BotChatPerson[] {
-  return (shares ?? []).flatMap((share) =>
-    share.kind === 'account'
-      ? [{ accountId: share.accountId, name: share.name ?? share.email }]
+/** The teammates who may have chats, as their share rows name them: the usable account shares,
+ *  the same ones whose chats `botHomeOfActsFor` names. */
+export function botChatPeople(bot: Pick<Bot, 'shares'>): BotChatPerson[] {
+  return (bot.shares ?? []).flatMap((share) =>
+    share.kind === 'account' && botShareUsable(share)
+      ? [{ accountId: share.accountId, name: botSharePersonName(bot, share.accountId) }]
       : []
   )
-}
-
-/** The teammate a chat acts for alone, by Orca's record; none for the owner's or an unrecorded chat. */
-export function botChatPersonOf(
-  actsFor: readonly BotRequestAsker[] | undefined,
-  people: readonly BotChatPerson[]
-): BotChatPerson | undefined {
-  return actsFor ? people.find((person) => shareOwnsChat(actsFor, person.accountId)) : undefined
 }
 
 /** Who the Chats tab shows: everyone, the owner's own chats, or one teammate's. */

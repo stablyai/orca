@@ -4,15 +4,15 @@ import type { BotRequestPerson } from '../../../shared/bots/bot-acts-for'
 import { actsForOwner, shareOwnsChat } from '../../../shared/bots/bot-acts-for'
 import type { Bot } from '../../../shared/bot-types'
 import type { BotChatTreeChat } from '../../../shared/bots/bot-chat-tree'
-import { botChatPeople, botChatPersonOf } from '../../../shared/bots/bot-chat-people'
+import { botHomePlaceholderAccount, botSharePersonName } from '../../../shared/bots/bot-home-of'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { RpcContext } from '../../runtime/rpc/core'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { createChatOrcaSessionIdResolver } from '../../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 import { botOfSession } from '../bot-session-tabs'
 import {
+  botHomesOfChats,
   readBotConversationActsFor,
-  readBotConversationActsForMany,
   type BotConversationActsForSources
 } from '../bot-conversation-acts-for'
 
@@ -94,26 +94,31 @@ export function emptyChatReusableBy(
   }
 }
 
-/** The owner's chats, each a teammate's own naming them: the one place the desktop and the phone
- *  learn whose a chat is. A chat Orca never recorded stays the owner's, unnamed. */
+/** The owner's chats, each a teammate's own naming them, by whose Home it falls under: the one place
+ *  the desktop and the phone learn whose a chat is. A chat Orca never recorded stays the owner's. */
 export function withBotChatPeople<T extends { chats: BotChatTreeChat[] }>(
   sources: BotConversationActsForSources,
   bot: Pick<Bot, 'shares'> | undefined,
   read: T
 ): T {
-  const people = botChatPeople(bot?.shares)
-  if (people.length === 0) {
+  if (!bot?.shares?.some((share) => share.kind === 'account')) {
     return read
   }
-  const records = readBotConversationActsForMany(
+  const homes = botHomesOfChats(
     sources,
+    bot,
     read.chats.map((chat) => chat.chatId)
   )
   return {
     ...read,
     chats: read.chats.map((chat) => {
-      const person = botChatPersonOf(records.get(chat.chatId)?.actsFor, people)
-      return person ? { ...chat, person } : chat
+      // A teammate's Home not made yet has no record; its row's id names them.
+      const of = homes.get(chat.chatId)
+      const accountId =
+        botHomePlaceholderAccount(chat.chatId) ?? (of && of !== 'owner' ? of.accountId : null)
+      return accountId
+        ? { ...chat, person: { accountId, name: botSharePersonName(bot, accountId) } }
+        : chat
     })
   }
 }

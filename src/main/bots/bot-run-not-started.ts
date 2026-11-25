@@ -1,5 +1,5 @@
 // A bot run whose prompt no chat took: its Couldn't start card goes in the chat it was meant for, else
-// the bot's Chat, so the owner sees why there and can send it again.
+// the Home Chat of the person it runs for, so they see why there and can send it again.
 import type { Bot } from '../../shared/bot-types'
 import type { AgentJournalAutomationRunNotStartedItem } from '../../shared/agent-journal-orca-card-items'
 import type { BotRunChat } from '../automations/bot-automation-launch'
@@ -7,6 +7,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { appendOrcaChatCard } from '../runtime/orca-chat-card'
 import { botChatTakingMail } from '../runtime/rpc/methods/bots-chats'
 import { requireStructuredHost, type botChatSessions } from './bot-chat-session'
+import type { BotHomeOf } from '../../shared/bots/bot-home-of'
 
 export type BotRunNotStartedDependencies = {
   chats: Pick<ReturnType<typeof botChatSessions>, 'ensure'>
@@ -19,6 +20,7 @@ export type BotRunNotStartedDependencies = {
 async function cardChat(
   deps: BotRunNotStartedDependencies,
   bot: Bot,
+  home: BotHomeOf,
   destination: BotRunChat
 ): Promise<string> {
   const meant =
@@ -27,18 +29,19 @@ async function cardChat(
       : destination.kind === 'bot-chat'
         ? await deps.chatSession(bot, destination.chatId)
         : null
-  return meant && (await deps.sessionExists(meant)) ? meant : deps.chats.ensure(bot.id)
+  return meant && (await deps.sessionExists(meant)) ? meant : deps.chats.ensure(bot.id, home)
 }
 
 /** Never fails the run it reports. */
 export async function showBotRunNotStarted(
   deps: BotRunNotStartedDependencies,
   bot: Bot,
+  home: BotHomeOf,
   destination: BotRunChat,
   card: AgentJournalAutomationRunNotStartedItem
 ): Promise<void> {
   try {
-    deps.append(await cardChat(deps, bot, destination), card)
+    deps.append(await cardChat(deps, bot, home, destination), card)
   } catch (error) {
     console.warn("[bots] could not show a run that couldn't start", error)
   }

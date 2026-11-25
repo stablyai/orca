@@ -12,7 +12,8 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { botSessionStart } from '../bot-sheet-operations'
 import { mobileBotAvatarSource } from '../host-bot-row-facts'
-import { hostBotsKey } from '../host-bots-read'
+import { hostBotsKey, openBotHomeChat } from '../host-bots-read'
+import type { BotChatTreeChat } from '../../../../src/shared/bots/bot-chat-tree'
 import { MobileBotChatTree, type BotChatTreeNote } from '../MobileBotChatTree'
 import { usePhoneBotChatTree } from '../use-phone-bot-chat-tree'
 import {
@@ -87,6 +88,26 @@ export function MobileSharedAgentPage() {
     )
     open(sessionId)
   }
+  // Their Home row before its first open has no chat yet: the host starts it, then it opens. Away, the
+  // host can't start one, so the row shows disabled.
+  const unmadeHome = (chat: BotChatTreeChat) => chat.origin === 'home' && !chat.chatId
+  const opens = (chat: BotChatTreeChat) => !unmadeHome(chat) || agent?.live === true
+  const openChat = (chat: BotChatTreeChat) => {
+    if (!unmadeHome(chat)) {
+      open(chat.chatId, chat.title)
+      return
+    }
+    if (!agent?.client || !agent.live) {
+      return
+    }
+    void openBotHomeChat(agent.client, agent.view.botId)
+      .then((opened) => {
+        if ('sessionId' in opened) {
+          open(opened.sessionId, chat.title)
+        }
+      })
+      .catch(() => {})
+  }
   if (page.kind !== 'agent') {
     return <MobileSharedAgentUnavailable page={page} onBack={back} />
   }
@@ -122,7 +143,7 @@ export function MobileSharedAgentPage() {
               chats={chats}
               loadMore={tree.kind === 'tree' ? tree.loadMore : () => {}}
               search={tree.kind === 'tree' ? tree.search : NO_SEARCH}
-              actions={{ openChat: (chat) => open(chat.chatId, chat.title), openWorker: () => {} }}
+              actions={{ openChat, opens, openWorker: () => {} }}
               heading={t('bots.shared.yourChats', 'Your chats')}
               note={note}
             />

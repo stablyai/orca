@@ -5,6 +5,7 @@ import { botRosterFields, type BotRosterEntry } from '../../../shared/bot-roster
 import type { BotShareScopedMethod } from '../../../shared/bots/bot-share-rpc-methods'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RpcContext } from '../../runtime/rpc/core'
+import type { HostBotAgentChoices } from '../../runtime/rpc/methods/bots-agent-choices'
 import { botShareListedBots } from './bot-share-access'
 import { botShareChatFilter, botShareScopeOf, botShareSessionFilter } from './bot-share-chats'
 
@@ -13,8 +14,14 @@ type EveryScopedMethod<T extends Record<BotShareScopedMethod, unknown>> = T
 export type BotShareScopedView = EveryScopedMethod<{
   'bots.list': (bots: readonly Bot[]) => Bot[]
   'bots.roster': () => BotRosterEntry[]
-  /** The shared bot's chats, kept by chat id (its /clear root). */
-  'bots.chats.own': { botIds: [string]; owns: (chatId: string) => boolean }
+  /** The shared agent's chats, kept by chat id (its /clear root); their own Home is read elsewhere. */
+  'bots.chats.own': {
+    botIds: [string]
+    owns: (chatId: string) => boolean
+    home: { accountId: string }
+  }
+  /** The agents the owner's + menu offers for a new chat; not those New bot offers. */
+  'bots.agentChoices': (choices: HostBotAgentChoices) => Pick<HostBotAgentChoices, 'newChatAgents'>
   /** By session id; one per stream, as it keeps the answers it has given. */
   'agentSession.subscribeStatus': (sessionId: string) => boolean
   /** The protocol and capabilities a teammate's Orca checks; nothing of the owner's computer. */
@@ -38,7 +45,12 @@ export function botShareScopedView(
         ...botRosterFields(bot),
         specialty: null
       })),
-    'bots.chats.own': { botIds: [scope.botId], owns: botShareChatFilter(runtime, scope) },
+    'bots.chats.own': {
+      botIds: [scope.botId],
+      owns: botShareChatFilter(runtime, scope),
+      home: { accountId: scope.accountId }
+    },
+    'bots.agentChoices': ({ newChatAgents }) => ({ newChatAgents }),
     'agentSession.subscribeStatus': botShareSessionFilter(runtime, scope),
     'status.get': botShareStatus
   }

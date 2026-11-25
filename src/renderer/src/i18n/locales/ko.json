@@ -27748,6 +27748,7 @@
     "row": {
       "runsOn": "{{host}}에서 실행 중",
       "disconnected": "연결 끊김",
+      "connecting": "연결 중…",
       "idle": "유휴 상태",
       "paused": "일시 중지됨",
       "reading": "메시지를 읽는 중",
@@ -27833,6 +27834,7 @@
       "searchRetry": "다시 시도하세요",
       "loading": "채팅 로드 중…",
       "readFailed": "이 봇의 채팅을 읽지 못했습니다.",
+      "personHome": "{{name}}의 Home",
       "noMessages": "아직 메시지가 없습니다",
       "searchPerson": "{{name}}님의 채팅 검색",
       "searchOwn": "내 채팅 검색",

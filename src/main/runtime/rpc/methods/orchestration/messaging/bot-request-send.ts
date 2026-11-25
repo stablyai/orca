@@ -323,7 +323,7 @@ async function admitBotRequestMail(
     return admit(args.to, false, await failureHeldChat(runtime, receiving.chat, home)).receipt
   }
   // Held through the store, so a new Chat can't retire this one between choosing it and mailing it.
-  return runtimeBotChats(runtime).withChat(target.id, async (sessionId) => {
+  return runtimeBotChats(runtime).withChat(target.id, 'owner', async (sessionId) => {
     const held = await failureHeldChat(runtime, sessionId, true)
     return admit(sessionAddress(sessionId), false, held).receipt
   })

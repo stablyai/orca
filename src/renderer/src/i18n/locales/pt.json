@@ -25552,6 +25552,7 @@
     "row": {
       "runsOn": "Em execução em {{host}}",
       "disconnected": "Desconectado",
+      "connecting": "Conectando…",
       "idle": "Inativo",
       "paused": "Pausado",
       "reading": "Lendo sua mensagem",
@@ -25640,6 +25641,7 @@
       "loading": "Carregando chats…",
       "readFailed": "Não foi possível ler os chats deste bot.",
       "searchRetry": "Tentar novamente",
+      "personHome": "Home de {{name}}",
       "noMessages": "Ainda não há mensagens",
       "searchPerson": "Pesquisar nos chats de {{name}}",
       "searchOwn": "Pesquisar nos seus chats",

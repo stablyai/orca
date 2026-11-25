@@ -128,7 +128,8 @@ function BotChatPreview({
       : chat.live === 'idle'
         ? t('bots.chats.noMessages', 'No messages yet')
         : null)
-  const person = hidePerson ? null : (chat.person?.name ?? null)
+  // A teammate's Home is titled by their name already.
+  const person = hidePerson || chat.homeOf ? null : (chat.person?.name ?? null)
   const place = botChatPlace(chat)
   const rest = [closed, preview].filter(Boolean).join(' · ')
   return (

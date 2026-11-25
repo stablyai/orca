@@ -11,20 +11,20 @@ import { newBotHomeChat, startBotSession } from '@/lib/bot-catalog'
 import type { Bot, BotAgent } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { chatUnavailableLabel } from '../agent/launch-menu/agent-menu-row-presentation'
-import type { NewTabAgentMenuModel } from '../agent/launch-menu/new-tab-agent-menu-model'
 import { BotAgentAvatar } from './BotAgentAvatar'
 import { useConfirmNewHomeChat } from './bot-home-chat-confirm'
 import { botAgentLabel, botErrorMessage } from './bot-presentation'
-import { botNewChatAgents } from '../../../../shared/bots/bot-agent-choices'
+import type { BotHomeOffers } from '../../../../shared/bots/bot-agent-choices'
 
 /** The + menu's bot items in a bot's home: a new Home Chat, then a side chat with the bot on each
- *  agent it can be. The menu's search field keeps focus on open, as in every other workspace. */
+ *  agent it can be, as far as `offers` has them. The menu's search field keeps focus on open, as in
+ *  every other workspace. */
 export function BotNewChatMenuItems({
   bot,
-  model
+  offers
 }: {
   bot: Bot
-  model: NewTabAgentMenuModel
+  offers: BotHomeOffers
 }): React.JSX.Element {
   const t = useTranslate()
   // Opens the tab here as well as on the host, refreshing the tab list if it has not arrived yet.
@@ -45,7 +45,7 @@ export function BotNewChatMenuItems({
     }
   }
 
-  const entries = botNewChatAgents(bot, model)
+  const entries = offers.agents
   return (
     <>
       <DropdownMenuItem variant="create" onSelect={() => void newHomeChat()}>

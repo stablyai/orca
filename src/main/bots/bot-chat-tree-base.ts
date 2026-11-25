@@ -11,6 +11,7 @@ import type { Bot } from '../../shared/bot-types'
 import { botOfHomeWorkspace } from '../../shared/bots/bot-homes'
 import type { BotChatOrigin, BotChatTreeChat } from '../../shared/bots/bot-chat-tree'
 import { HOME_CHAT_TITLE } from '../../shared/bots/bot-chat-tree-model'
+import { botHomeRoots, botHomes, type BotHomeOf } from '../../shared/bots/bot-home-of'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import {
   isOrcaSessionId,
@@ -73,7 +74,7 @@ export function botChatInputsKey(inputs: BotChatInputs): string {
   const { bot } = inputs
   return JSON.stringify([
     bot.folderWorkspaceId,
-    bot.chatSessionId,
+    botHomes(bot).map((home) => home.sessionId),
     inputs.runs.map((run) => [
       run.id,
       run.automationId,
@@ -96,7 +97,11 @@ export type BotChatBaseChat = Pick<
   BotChatTreeChat,
   'chatId' | 'origin' | 'originLabel' | 'lastActiveAt' | 'preview' | 'liveSessionId' | 'closed'
 > & {
+  /** The owner's Home Chat: owner-only work (extras, handed workspaces) binds to it alone. */
   home: boolean
+  /** Whose Home Chat it is, the owner's or a teammate's; absent for any other chat. Host-internal:
+   *  each viewer's projection decides how it shows. */
+  whoseHome?: BotHomeOf
   /** Its own name, else its origin's, else the provider's default; a tab's title wins over it. */
   title: string
   /** The pane whose status is this chat's: its lineage's live session. */
@@ -115,12 +120,12 @@ export type BotChatBaseBuild = {
   sessionOfChat: Map<string, string>
   placement: BotDispatchPlacement
   rootOf: (sessionId: string) => string
-  homeRoot: string | null
+  homeRoots: ReadonlyMap<string, BotHomeOf>
   originBySessionId: ReadonlyMap<string, { origin: BotChatOrigin; label?: string; title?: string }>
 }
 
 type BotChatRecordRow = NonNullable<ReturnType<typeof botChatRecordRow>>
-type BotChatBasePartial = Pick<BotChatBaseBuild, 'rootOf' | 'homeRoot' | 'originBySessionId'>
+type BotChatBasePartial = Pick<BotChatBaseBuild, 'rootOf' | 'homeRoots' | 'originBySessionId'>
 
 /** The row a record lists as, or null for none of the bot's (another home, cleared into a successor, a
  *  background run). */
@@ -132,7 +137,7 @@ function botChatBaseRow(
 ): BotChatRecordRow | null {
   return botOfHomeWorkspace([bot], record.location.workspaceId) &&
     !isBotBackgroundRun(ctx.backgroundRuns, record)
-    ? botChatRecordRow(record, build.rootOf, build.homeRoot)
+    ? botChatRecordRow(record, build.rootOf, build.homeRoots)
     : null
 }
 
@@ -174,12 +179,16 @@ function botChatBaseChatOfRow(
     addressable: (id: OrcaSessionId) => Boolean(addressableSessionParty(id, parties))
   }
   const closed = root ? structuredSessionMailReachWith(reach, store, root).kind === 'ended' : false
-  const origin = row.home ? { origin: 'home' as const } : build.originBySessionId.get(row.id)
+  // Only the owner's Home is the Home row here; a teammate's lists by its own name until a viewer's
+  // projection makes it theirs.
+  const ownerHome = row.homeOf === 'owner'
+  const origin = ownerHome ? { origin: 'home' as const } : build.originBySessionId.get(row.id)
   const preview = botChatPreviewText(row.lastSaid ?? row.lastAsked ?? '')
   return {
     chatId: row.id,
-    home: row.home,
-    title: row.home
+    home: ownerHome,
+    ...(row.homeOf ? { whoseHome: row.homeOf } : {}),
+    title: ownerHome
       ? HOME_CHAT_TITLE
       : row.title ||
         origin?.title ||
@@ -192,7 +201,7 @@ function botChatBaseChatOfRow(
     paneKey: structuredAgentSessionStatusPaneKey(live?.sessionId ?? row.id),
     ...(live && live.sessionId !== row.id ? { liveSessionId: live.sessionId } : {}),
     closed,
-    empty: !origin && record.sessionId === row.id && botChatRecordEmpty(record)
+    empty: !origin && !row.homeOf && record.sessionId === row.id && botChatRecordEmpty(record)
   }
 }
 
@@ -205,10 +214,7 @@ export function buildBotChatBase(
 ): BotChatBaseBuild {
   const root = store ? createCanonicalOrcaSessionResolver(store) : (id: string) => id
   const rootOf = (id: string): string => (isOrcaSessionId(id) ? root(id) : id)
-  const homeRoot =
-    inputs.bot.chatSessionId && isOrcaSessionId(inputs.bot.chatSessionId)
-      ? root(inputs.bot.chatSessionId)
-      : null
+  const homeRoots = botHomeRoots(inputs.bot, rootOf)
   const originBySessionId = new Map<
     string,
     { origin: BotChatOrigin; label?: string; title?: string }
@@ -237,7 +243,7 @@ export function buildBotChatBase(
   )
   const chats = new Map<string, BotChatBaseChat>()
   const sessionOfChat = new Map<string, string>()
-  const partial = { rootOf, homeRoot, originBySessionId }
+  const partial = { rootOf, homeRoots, originBySessionId }
   if (store) {
     const rows = homeRecords.flatMap((record) => {
       const row = botChatBaseRow(ctx, inputs.bot, record, partial)
@@ -308,7 +314,7 @@ export function buildBotChatBase(
     sessionOfChat,
     placement,
     rootOf,
-    homeRoot,
+    homeRoots,
     originBySessionId
   }
 }
