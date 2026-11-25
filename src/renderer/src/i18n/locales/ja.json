@@ -20270,7 +20270,12 @@
         "stateMonitoringCount": "{{value0}} 監視",
         "stateUnverifiableCount": "{{value0}} は状態を取得できません",
         "stateWaitingCount": "{{value0}} 待機中",
-        "stateWorkingCount": "{{value0}} 実行中"
+        "stateWorkingCount": "{{value0}} 実行中",
+        "openAgent": "{{value0}} を開く",
+        "needsAttention_other": "要対応 {{count}} 件",
+        "workerBadge": "ワーカー",
+        "subagentBadge": "サブ Agent",
+        "nameInMessage": "{{name}} をメッセージに追加"
       },
       "railLabel": "あなたのメッセージ",
       "railImageMessage": "画像添付",
@@ -20308,7 +20313,24 @@
         "tokens": "{{value0}} トークン",
         "unnamed": "サブ Agent",
         "started_other": "{{count}} 個のサブ Agent を起動しました",
-        "ran_other": "{{count}} 個のサブ Agent を実行しました"
+        "ran_other": "{{count}} 個のサブ Agent を実行しました",
+        "backToMain": "メイン Agent に戻る",
+        "mainAgent": "メイン Agent",
+        "promptFromMain": "メイン Agent からのプロンプト",
+        "backTo": "{{value0}} に戻る",
+        "path": "サブ Agent の階層",
+        "stateHeading": {
+          "completed": "完了",
+          "working": "実行中",
+          "idle": "アイドル",
+          "failed": "失敗",
+          "stopped": "停止",
+          "unverifiable": "ステータスを取得できません"
+        },
+        "noSteps": "まだステップはありません",
+        "beforeClear": "このサブ Agent はチャットがクリアされる前に実行されました",
+        "stoppedBeforeReply": "返信する前に停止しました",
+        "noReply": "返信なしで終了しました"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",
@@ -20406,6 +20428,7 @@
         "reorderHint": "ドラッグするか、上下の矢印キーを使って並べ替えます。",
         "reorderMessage": "メッセージを並べ替え",
         "imageCount": "画像 {{count}} 枚",
+        "queuedCount_other": "キュー待ち {{count}} 件",
         "couldNotSend": "送信できませんでした",
         "retry": "再試行",
         "showLessRows": "表示を減らす",
@@ -20639,6 +20662,9 @@
       "webPeek": {
         "unavailable": "このページのプレビューはありません。"
       },
+      "workers": {
+        "stopUnconfirmed": "Orca はワーカーの停止を確認できませんでした。"
+      },
       "usageLimitActions": {
         "switchAccount": "アカウントを切り替え",
         "addAccount": "アカウントを追加…",
@@ -20761,9 +20787,77 @@
       "dock": {
         "label": "メッセージ欄とプロンプト"
       },
+      "workerDock": {
+        "commandOutputPending": "コマンドの出力はまだありません。",
+        "notNow": "後で",
+        "retry": "再試行",
+        "dismiss": "閉じる",
+        "openWorker": "ワーカーを開く",
+        "remoteOwner": "実行元のコンピュータで停止またはクリアしてください",
+        "restore": "ドックに再表示",
+        "alreadyStopped": "停止済み",
+        "cantStop": "今は停止できません",
+        "clearAllLabel_other": "失敗したワーカー {{count}} 件をすべてクリア",
+        "loadingWorker": "ワーカーを読み込み中…",
+        "resultUnavailable": "ワーカーの結果を取得できません",
+        "showDetails": "詳細を表示",
+        "hideDetails": "詳細を非表示",
+        "close": "閉じる",
+        "workersRegion": "ワーカー",
+        "doneResult": "完了 · 結果を開く",
+        "clearName": "{{name}} をクリア",
+        "stopUnavailable": "{{name}} · {{title}} を停止できません · {{reason}}",
+        "stopName": "{{name}} · {{title}} を停止",
+        "stopping": "停止中…",
+        "clear": "クリア",
+        "stop": "停止",
+        "coordinator": "コーディネーターの応答待ち",
+        "starting": "起動中",
+        "running": "実行中",
+        "idle": "アイドル",
+        "saving": "結果を保存中…",
+        "failed": "失敗",
+        "unexpected": "予期せず停止しました",
+        "unavailableState": "ステータスを取得できません",
+        "needsYou": "対応待ち",
+        "worker": "ワーカー",
+        "agent": "Agent",
+        "command": "コマンド",
+        "workflow": "ワークフロー",
+        "monitor": "モニター",
+        "task": "タスク",
+        "taskCount_other": "{{count}} 件のタスク",
+        "workerCount_other": "{{count}} 件のワーカー",
+        "commandCount_other": "{{count}} 件のコマンド",
+        "workflowCount_other": "{{count}} 件のワークフロー",
+        "monitorCount_other": "{{count}} 件のモニター",
+        "agentCount_other": "{{count}} 個の Agent",
+        "stoppedByYou": "手動で停止しました",
+        "finished": "完了",
+        "failedCount": "失敗 {{count}} 件",
+        "needsYouCount": "対応待ち {{count}} 件",
+        "newQuestions_other": "ワーカーからの新規質問 {{count}} 件が回答待ちです",
+        "waitingOnYouName": "{{name}} · 対応待ち",
+        "moreQuestions": "ほかに対応待ち {{count}} 件",
+        "questions": "対応待ち {{count}} 件",
+        "queuedQuestions": "ワーカーからの質問（回答待ち）",
+        "showQuestion": "{{name}} の質問を表示",
+        "show": "表示",
+        "runningCount": "実行中 {{count}} 件",
+        "cleared_other": "ワーカー {{count}} 件をクリアしました",
+        "stopAll": "すべて停止",
+        "clearFailed": "失敗したものをクリア",
+        "pillLabel_other": "ワーカー {{count}} 件、最新: {{title}}",
+        "unlistedDetail": "一部のバックグラウンド処理はここに表示されません",
+        "unlisted": "バックグラウンド処理を実行中",
+        "unread": "ワーカーを読み込めませんでした",
+        "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます"
+      },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
         "argumentHint": "<question>",
+        "pill": "サイドチャット",
+        "placeholder": "別件の質問を入力",
         "notReady": "サイドチャットはまだ準備できていません。しばらくしてからもう一度お試しください。",
         "replyRunning": "この返信が完了すると利用できます。",
         "noReply": "最初の返信の後に利用できます。",
@@ -20772,6 +20866,13 @@
         "questionNotSentDetail": "質問はこのチャットに残っています。再試行するには、もう一度 /btw を送信してください。",
         "questionUnconfirmed": "{{agent}} のサイドチャットに質問が届いたか確認できませんでした",
         "questionUnconfirmedDetail": "もう一度質問する前に、サイドチャットを確認してください。質問はこのチャットに残っています。"
+      },
+      "memoryUpdated": {
+        "added": "追加",
+        "removed": "削除",
+        "noteChanged": "メモを変更",
+        "indexChanged": "MEMORY.md を変更",
+        "openMemory": "メモリを開く"
       },
       "automationRun": {
         "waitOver": "待機終了",
@@ -20887,6 +20988,11 @@
         "updatedAutomation": "更新したオートメーション",
         "waiting": "待機中",
         "waitsFor": "待機対象"
+      },
+      "typedBy": {
+        "anotherComputer": "別のコンピュータ",
+        "fromVia": "送信者: {{name}}（{{computer}} 経由）",
+        "fromViaPhone": "送信者: {{name}}（{{phone}} で入力、{{computer}} 経由）"
       },
       "eventRow": {
         "showLess": "表示を減らす",
