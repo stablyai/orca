@@ -15,8 +15,8 @@ import { PrioritySemaphore } from '../../../../../shared/concurrency/priority-se
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeRpc } from '@/runtime/rpc/subscriptions/runtime-rpc-subscribe'
 
-// Above the host's two-minute updater limit plus its waits before and after, so its answer normally arrives.
-const RUN_TIMEOUT_MS = 3 * 60_000
+// Above the host's ten-minute updater limit plus its waits before and after; a later answer still settles the row.
+const RUN_TIMEOUT_MS = 12 * 60_000
 // Chat starts come in bursts; one ask per host in this window is enough.
 const CHECK_INTERVAL_MS = 10 * 60_000
 // Opening the update list checks sooner; a CLI updated in a terminal sends no finish event.
@@ -121,6 +121,29 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
   }
   const writeRun = (key: string, agent: AgentCliUpdateAgent, run: AgentCliUpdateRun) =>
     writeHost(key, (host) => ({ ...host, runs: { ...host.runs, [agent]: run } }))
+  /** Records a run's answer; returns the failed run it wrote, or null when the update landed. */
+  const settleRun = (
+    key: string,
+    agent: AgentCliUpdateAgent,
+    result: AgentCliUpdateRunResult
+  ): AgentCliUpdateRun | null => {
+    if (!result.ok) {
+      const failed: AgentCliUpdateRun = {
+        phase: 'failed',
+        output: result.output,
+        ...(result.command ? { command: result.command } : {}),
+        finishedAt: Date.now()
+      }
+      writeRun(key, agent, failed)
+      return failed
+    }
+    writeHost(key, (host) => {
+      const runs = { ...host.runs }
+      delete runs[agent]
+      return { updates: host.updates.filter((update) => update.agent !== agent), runs }
+    })
+    return null
+  }
   const hostAnswers = (target: RuntimeClientTarget): boolean =>
     target.kind === 'local' ||
     lastVerifiedRuntimeStatus(
@@ -238,35 +261,27 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
         ok: false,
         output: `The update did not finish within ${RUN_TIMEOUT_MS / 60_000} minutes.`
       }
+      const call = callRuntimeRpc<AgentCliUpdateRunResult>(
+        target,
+        'agentCliUpdate.run',
+        { agent },
+        { timeoutMs: RUN_TIMEOUT_MS }
+      ).catch((error: unknown): AgentCliUpdateRunResult => ({
+        ok: false,
+        output: error instanceof Error ? error.message : String(error)
+      }))
       // Local calls ignore timeoutMs, so an updater that never exits would leave the row running for good.
-      const result = await withTimeout(
-        callRuntimeRpc<AgentCliUpdateRunResult>(
-          target,
-          'agentCliUpdate.run',
-          { agent },
-          { timeoutMs: RUN_TIMEOUT_MS }
-        ).catch((error: unknown): AgentCliUpdateRunResult => ({
-          ok: false,
-          output: error instanceof Error ? error.message : String(error)
-        })),
-        RUN_TIMEOUT_MS,
-        timedOut
-      ).finally(release)
-      if (!result.ok) {
-        writeRun(key, agent, {
-          phase: 'failed',
-          output: result.output,
-          ...(result.command ? { command: result.command } : {}),
-          finishedAt: Date.now()
+      const result = await withTimeout(call, RUN_TIMEOUT_MS, timedOut).finally(release)
+      const settled = settleRun(key, agent, result)
+      if (result === timedOut && settled) {
+        // A late answer still decides the row, unless a newer run has replaced it.
+        void call.then((late) => {
+          if (get().agentCliUpdates.get(key)?.runs[agent] === settled) {
+            settleRun(key, agent, late)
+          }
         })
-        return false
       }
-      writeHost(key, (host) => {
-        const runs = { ...host.runs }
-        delete runs[agent]
-        return { updates: host.updates.filter((update) => update.agent !== agent), runs }
-      })
-      return true
+      return result.ok
     }
   }
 }

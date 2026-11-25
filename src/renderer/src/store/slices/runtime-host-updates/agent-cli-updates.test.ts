@@ -175,10 +175,31 @@ describe('runAgentCliUpdate', () => {
     await vi.advanceTimersByTimeAsync(0)
     expect(store.getState().agentCliUpdates.get('')?.runs.claude?.phase).toBe('running')
 
-    await vi.advanceTimersByTimeAsync(3 * 60_000)
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
 
     expect(await run).toBe(false)
     expect(store.getState().agentCliUpdates.get('')?.runs.claude?.phase).toBe('failed')
+  })
+
+  it('lets a host answer that comes after the deadline settle the row', async () => {
+    vi.useFakeTimers()
+    callRuntimeRpc.mockReset()
+    let answer = (): void => {}
+    callRuntimeRpc.mockReturnValue(
+      new Promise((resolve) => {
+        answer = () => resolve({ ok: true })
+      })
+    )
+    const store = createTestStore()
+    store.setState({ agentCliUpdates: new Map([['', listed]]) })
+    const run = store.getState().runAgentCliUpdate(LOCAL, 'claude')
+    await vi.advanceTimersByTimeAsync(12 * 60_000)
+    expect(await run).toBe(false)
+
+    answer()
+    await vi.waitFor(() =>
+      expect(store.getState().agentCliUpdates.get('')).toEqual({ updates: [], runs: {} })
+    )
   })
 
   it('runs three updates on a host at once and queues the rest', async () => {

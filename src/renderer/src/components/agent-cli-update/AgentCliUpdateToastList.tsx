@@ -75,7 +75,10 @@ function CopyButton({ command }: { command: string }): React.JSX.Element {
         })
       }
     >
-      {copied ? t('agentCliUpdate.copied', 'Copied') : t('agentCliUpdate.copyCommand', 'Copy')}
+      {/* Polite, so screen readers hear Copied as the toast would have said it. */}
+      <span aria-live="polite">
+        {copied ? t('agentCliUpdate.copied', 'Copied') : t('agentCliUpdate.copyCommand', 'Copy')}
+      </span>
     </Button>
   )
 }
