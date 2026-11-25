@@ -1,5 +1,5 @@
 import type { AgentSessionQueuedMessage } from '../../../agent-session/requests/agent-session-queued-message-wire'
-import type { AgentJournalSubmission } from '../../../agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../agent-session/view/structured-agent-session-submissions'
 import { agentSessionSendBodyFingerprint } from '../../../agent-session/requests/structured-agent-session-send-mutation'
 
 /** React container identity is not a new host publication. */
@@ -7,7 +7,7 @@ export function queuedEditPublicationKey(
   view: {
     messages: readonly AgentSessionQueuedMessage[] | null
     cards: readonly { messageId: string }[]
-    submissions?: readonly AgentJournalSubmission[]
+    submissions?: readonly StructuredAgentSubmission[]
   },
   sessionId: string,
   messageId: string | undefined

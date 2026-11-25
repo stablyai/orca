@@ -1,6 +1,6 @@
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../journal/agent-session-journal-types'
 import type { AgentJournalBodyLookup } from './structured-agent-session-command-entry'
 import { isQueuedAgentJournalSubmission } from './agent-session-queued-submission'
@@ -12,7 +12,7 @@ export function currentStructuredAgentSessionAnswer(
   items: readonly AgentJournalRenderItem[],
   /** The session's sends while its status is working, else none: an idle status (a send released
    *  in doubt, or one the live child no longer holds) owes no send and keeps its answer. */
-  workingSends: readonly AgentJournalSubmission[],
+  workingSends: readonly AgentJournalSubmissionFields[],
   bodyOf: AgentJournalBodyLookup | undefined,
   botSession: boolean,
   currentFence?: number | null

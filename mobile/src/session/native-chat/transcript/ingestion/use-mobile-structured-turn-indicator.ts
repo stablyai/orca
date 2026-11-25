@@ -31,7 +31,11 @@ export function useMobileStructuredTurnIndicator(input: {
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null,
     [state.items, turnId, state.activity]
   )
-  const thinking = isStructuredAgentSessionThinking(state)
+  const { items, latestTurn } = state
+  const thinking = useMemo(
+    () => isStructuredAgentSessionThinking({ items, latestTurn }),
+    [items, latestTurn]
+  )
   const working = input.isWorking || input.canStop
   const stopping = agentStopDisplayStatus({ working, hostStopping, stopPressed }) === 'stopping'
   const stopRequestInFlight = working && stopPressed

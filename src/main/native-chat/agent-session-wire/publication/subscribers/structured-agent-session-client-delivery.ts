@@ -122,6 +122,8 @@ export class StructuredAgentSessionClientDelivery {
       readBackgroundTasks,
       onJournalPublished: (sessionId, journal) => this.publishJournal(sessionId, journal),
       readCurrentWork: (sessionId, journal) => this.currentWork(sessionId, journal),
+      readCachedWork: (sessionId, journal) =>
+        this.statusFeed.journalProjection.cachedWork(sessionId, journal),
       readWorkFrame: (sessionId, journal, rows) =>
         this.statusFeed.journalProjection.workFrame(sessionId, journal, rows),
       onPromptSuggestionInterest: (sessionId, wanted) =>

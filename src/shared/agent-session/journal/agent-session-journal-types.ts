@@ -7,6 +7,8 @@ import type {
 } from './agent-session-journal-approval-subject'
 import type { AgentJournalCursor, AgentJournalItemIdentity } from './agent-session-journal-identity'
 import type { AgentJournalTurnScope } from './agent-session-journal-turn-scope'
+import type { AgentJournalSubmission } from './agent-session-journal-written-stamp'
+export type { AgentJournalSubmission } from './agent-session-journal-written-stamp'
 import type { AgentSessionProviderContextBoundary } from '../conversation-context/agent-session-provider-context'
 // Persist/republish plain JSON only. Append-only rows are upcast on read, never rewritten;
 // unreadable versions/kinds must refuse writes rather than be skipped or compacted away.
@@ -366,10 +368,7 @@ export type AgentJournalRowAttribution = AgentJournalProducerLinkage & {
   turnScope: AgentJournalTurnScope
 }
 
-export type AgentJournalPosition = {
-  sequence: number
-  index: number
-}
+export type AgentJournalPosition = { sequence: number; index: number }
 
 /** Order by sequence; provider observedAt can precede earlier sequences after crash recovery. */
 export type AgentJournalRenderItem = AgentJournalProducerLinkage & {
@@ -412,7 +411,7 @@ export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[n
 
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
-export type AgentJournalSubmission = {
+export type AgentJournalSubmissionFields = {
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
   fence: number

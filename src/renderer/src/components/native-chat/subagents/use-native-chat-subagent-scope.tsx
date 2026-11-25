@@ -2,10 +2,8 @@ import { useEffect, useMemo } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { latestAgentSessionContextClearSequence } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentSessionLatestTurn } from '../../../../../shared/agent-session/agent-session-wire'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { StructuredAgentSubagentRoster } from '../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type {
   NativeChatMessage,
@@ -72,7 +70,7 @@ export function useNativeChatSubagentScope({
   subagentRows: ReadonlyMap<string, readonly NativeChatSubagentRow[]>
   roster: StructuredAgentSubagentRoster | undefined
   journalItems: readonly AgentJournalRenderItem[] | undefined
-  journalSubmissions: readonly AgentJournalSubmission[] | undefined
+  journalSubmissions: readonly StructuredAgentSubmission[] | undefined
   latestTurn: AgentSessionLatestTurn | null | undefined
   isWorking: boolean
 }) {

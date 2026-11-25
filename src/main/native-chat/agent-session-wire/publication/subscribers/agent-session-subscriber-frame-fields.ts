@@ -69,7 +69,8 @@ async function buildSubscriberFrame(
   withholdQueued: boolean,
   work?: AgentSessionPublishedWork,
   journal?: AgentSessionJournal,
-  queuePublication?: { value: QueuePublication | undefined }
+  queuePublication?: { value: QueuePublication | undefined },
+  restatement?: true
 ): Promise<SubscriberFrame> {
   const commands =
     subscriber.boundedFrames && !subscriber.commandsOnRequest
@@ -81,7 +82,7 @@ async function buildSubscriberFrame(
     event.type !== 'end' &&
     (event.type !== 'batch' || commands !== subscriber.commands)
   const queued =
-    withholdQueued || (subscriber.projectJournalEvent && !journal)
+    withholdQueued || (subscriber.projectJournalEvent && !journal && !restatement)
       ? undefined
       : queuePublication
         ? queuePublication.value
@@ -90,15 +91,18 @@ async function buildSubscriberFrame(
     queued !== undefined &&
     event.type !== 'end' &&
     (event.type !== 'batch' || queued !== subscriber.queuePublication)
-  event = journal
-    ? ((await subscriber.projectJournalEvent?.(
-        journal,
-        event,
-        subscriber.queuePublication,
-        queued,
-        work
-      )) ?? event)
-    : event
+  // Pause-only changes and repeated restatement chunks reuse the legacy image relation.
+  event =
+    journal &&
+    (!restatement || queued?.queuedMessages !== subscriber.queuePublication?.queuedMessages)
+      ? ((await subscriber.projectJournalEvent?.(
+          journal,
+          event,
+          subscriber.queuePublication,
+          queued,
+          work
+        )) ?? event)
+      : event
   const backgroundTasks = subscriberBackgroundTasks(hooks, subscriber, event)
   const sideQueued = attachedQueued
     ? (subscriber.projectQueuePublication?.(queued) ?? queued)
@@ -177,8 +181,23 @@ export async function emitSubscriberFrame(
     journal?: AgentSessionJournal
     queuePublication?: { value: QueuePublication | undefined }
     isActive?: () => boolean
+    current?: () => void
+    receiptsOnly?: true
+    restatement?: true
   }
 ): Promise<void> {
+  if (options?.receiptsOnly) {
+    const frames = subscriber.boundedFrames
+      ? boundedFrames(event, { queued: undefined, backgroundTasks: undefined }, subscriber.cursor)
+      : [event]
+    for (const frame of frames) {
+      if (options.isActive && !options.isActive()) {
+        return
+      }
+      subscriber.emit(frame)
+    }
+    return
+  }
   const marker =
     event.type !== 'end' && subscriber.readsCurrentRequests
       ? options?.currentWork?.requestProjection(subscriber.sessionId).marker
@@ -192,11 +211,13 @@ export async function emitSubscriberFrame(
     options?.withholdQueued === true,
     options?.currentWork,
     options?.journal,
-    options?.queuePublication
+    options?.queuePublication,
+    options?.restatement
   )
   if (options?.isActive && !options.isActive()) {
     return
   }
+  options?.current?.()
   for (const outgoing of built.frames) {
     if (options?.isActive && !options.isActive()) {
       return

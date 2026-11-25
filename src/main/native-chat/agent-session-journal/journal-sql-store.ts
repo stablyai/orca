@@ -39,6 +39,7 @@ import type {
   JournalDomainHistoryWork
 } from './journal-domain-history-page'
 import type { JournalDomainEditLeaseOutcome } from './journal-domain-edit-leases'
+import { adoptJournalStatusCursor } from './journal-status-receipt-progress'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
@@ -167,12 +168,13 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       const savedAt = this.now()
       const context: JournalReceiptStage = { savedAt, row: receiptRow(operation) }
       const preparation = (await prepare?.(context)) ?? {}
+      const stopSettle = this.stopMarks.fact()
       const facts: JournalWriterHostFacts = {
         identity: this.identity,
         openedThrough: this.openedThrough,
         goals: this.goalAttachments.snapshot(),
         ...this.queuedMessages.facts(),
-        ...settled(this.stopMarks.fact()),
+        ...(stopSettle && { stopSettle }),
         ...preparation.facts
       }
       let staged: JournalStagedReceipt | undefined
@@ -220,7 +222,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         this.goalAttachments.adopt(commit.goals)
       }
       const advanced = !sameJournalCursor(this.acknowledged, commit.cursor)
-      this.acknowledged = { ...commit.cursor }
+      this.acknowledged = adoptJournalStatusCursor(this, this.acknowledged, commit, operation)
       if (commit.queueRevision !== undefined) {
         this.queuedMessages.adoptRevision(commit.queueRevision)
       }
@@ -328,8 +330,4 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     }
     return this.database.serialize(this.identity.sessionId, run)
   }
-}
-
-function settled(stopSettle: JournalWriterHostFacts['stopSettle']) {
-  return stopSettle ? { stopSettle } : {}
 }

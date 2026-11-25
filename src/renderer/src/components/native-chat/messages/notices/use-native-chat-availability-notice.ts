@@ -6,10 +6,8 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../../../shared/agent-session/failures/agent-session-availability'
 import { readAgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { inSendOrder } from '../../../../../../shared/native-chat/transcript/pending-sends/native-chat-send-order'
@@ -45,7 +43,7 @@ function failedStartReason(items: readonly AgentJournalRenderItem[] | undefined)
 }
 
 type NoticeSubmission = Pick<
-  AgentJournalSubmission,
+  StructuredAgentSubmission,
   'clientMessageId' | 'dispatchState' | 'rejection' | 'submittedAt' | 'submittedSequence'
 >
 

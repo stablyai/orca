@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuePause
@@ -20,7 +20,7 @@ const NO_ROWS: readonly NativeChatMessage[] = []
  *  the composer's cards; a paused queue holding only that mail still offers Resume. */
 export function useStructuredAgentSessionWaitingAgentMail(args: {
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   queuePause: AgentSessionQueuePause | null
   /** Every card the host holds, agent mail included. */
   allCards: QueuedMessageCard[]

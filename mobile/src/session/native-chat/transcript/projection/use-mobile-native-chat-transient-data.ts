@@ -103,7 +103,7 @@ export function projectMobileNativeChatTransientData(
   }
 }
 
-export function useMobileNativeChatTransientData(input: Input, scope: string): NativeChatMessage[] {
+export function useMobileNativeChatTransientData(input: Input, scope: string) {
   const [state, setState] = useState(() => ({
     scope,
     projection: projectMobileNativeChatTransientData(input)

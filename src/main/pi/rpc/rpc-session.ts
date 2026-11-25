@@ -32,7 +32,11 @@ export class PiRpcSession {
   readonly dialogs: PiRpcDialogCallbacks
   readonly selected = new Map<string, string>()
   /** Hold sends from handover through settlement. */
-  readonly heldSends = new Set<string>()
+  private readonly held = new Set<string>()
+  private heldSnapshot: ReadonlySet<string> | undefined
+  get heldSends(): ReadonlySet<string> {
+    return (this.heldSnapshot ??= new Set(this.held))
+  }
   readonly optionProof = {
     current: new Map<string, string>(),
     writes: new Map<string, PiRpcOptionWrite>()
@@ -154,13 +158,15 @@ export class PiRpcSession {
 
   async submit(...args: Parameters<PiRpcTurns['submit']>): ReturnType<PiRpcTurns['submit']> {
     const [clientMessageId] = args
-    this.heldSends.add(clientMessageId)
+    this.held.add(clientMessageId)
+    this.heldSnapshot = undefined
     let outcome: AgentSessionDispatchOutcome | undefined
     try {
       return (outcome = await this.turns.submit(...args))
     } finally {
       if (outcome?.state !== 'admitted') {
-        this.heldSends.delete(clientMessageId)
+        this.held.delete(clientMessageId)
+        this.heldSnapshot = undefined
       }
     }
   }
@@ -283,7 +289,8 @@ export class PiRpcSession {
   }
 
   private settle(clientMessageId: string, outcome: AgentSessionDispatchOutcome): void {
-    this.heldSends.delete(clientMessageId)
+    this.held.delete(clientMessageId)
+    this.heldSnapshot = undefined
     this.deps.onSettled({
       sessionId: this.input.identity.sessionId,
       clientMessageId,

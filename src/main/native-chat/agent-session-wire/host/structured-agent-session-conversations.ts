@@ -42,7 +42,12 @@ export class StructuredAgentSessionConversations extends Map<
         commit?: JournalWriterCommit
       ) => void
       forget?: (sessionId: string) => void
-      deliver: (sessionId: string, journal: AgentSessionJournal, inputChanged?: boolean) => void
+      deliver: (
+        sessionId: string,
+        journal: AgentSessionJournal,
+        inputChanged?: boolean,
+        receiptsAfter?: AgentJournalCursor
+      ) => void
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
       logger: StructuredAgentSessionLogger
@@ -74,6 +79,8 @@ export class StructuredAgentSessionConversations extends Map<
     this.attachments.get(sessionId)?.release()
     let queued = false
     let inputChanged = false
+    let writtenOnly = true
+    let lastNonReceiptCursor = journal.cursor()
     const source = {
       journal,
       release: () => {
@@ -87,19 +94,26 @@ export class StructuredAgentSessionConversations extends Map<
       if (!current()) {
         return
       }
-      this.publish(sessionId, 'commit', commit)
-      session.workChanged?.()
-      this.settledTurns.deliver(sessionId, journal, commit)
-      try {
-        this.delivery.observe?.(sessionId, journal, commit)
-      } catch (error) {
-        this.delivery.logger.warn('observing committed requests failed', {
-          scope: 'request-outcomes',
-          sessionId,
-          error
-        })
+      const receipt = commit.publication?.writtenOnly === true
+      if (receipt) {
+        this.touch(sessionId)
+      } else {
+        lastNonReceiptCursor = commit.cursor
+        this.publish(sessionId, 'commit', commit)
+        session.workChanged?.()
+        this.settledTurns.deliver(sessionId, journal, commit)
+        try {
+          this.delivery.observe?.(sessionId, journal, commit)
+        } catch (error) {
+          this.delivery.logger.warn('observing committed requests failed', {
+            scope: 'request-outcomes',
+            sessionId,
+            error
+          })
+        }
       }
       inputChanged ||= commit.inputChanged
+      writtenOnly &&= receipt
       if (queued) {
         return
       }
@@ -107,12 +121,14 @@ export class StructuredAgentSessionConversations extends Map<
       queueMicrotask(() => {
         queued = false
         const affectsInput = inputChanged
+        const receiptsAfter = writtenOnly ? lastNonReceiptCursor : undefined
         inputChanged = false
+        writtenOnly = true
         if (!current()) {
           return
         }
         try {
-          this.delivery.deliver(sessionId, journal, affectsInput)
+          this.delivery.deliver(sessionId, journal, affectsInput, receiptsAfter)
         } catch (error) {
           this.delivery.logger.warn('delivering a journal commit failed', {
             scope: 'journal-delivery',

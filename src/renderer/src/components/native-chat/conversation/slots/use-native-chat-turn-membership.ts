@@ -1,8 +1,6 @@
 import { useMemo } from 'react'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../../../shared/agent-session/agent-session-wire'
 import { nativeChatTurnMembership } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
@@ -22,7 +20,7 @@ export type NativeChatTurnRows = {
 export function useNativeChatTurnMembership(
   messages: readonly NativeChatMessage[],
   journalItems: readonly AgentJournalRenderItem[] | undefined,
-  journalSubmissions: readonly AgentJournalSubmission[] | undefined,
+  journalSubmissions: readonly StructuredAgentSubmission[] | undefined,
   latestTurn?: AgentSessionLatestTurn | null
 ): NativeChatTurnRows {
   return useMemo(() => {

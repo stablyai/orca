@@ -87,6 +87,20 @@ export function admitJournalDomainImageEvents(
   // Touched identities only accumulate, so the first non-fit determines every halved prefix.
   const limit = halvedJournalDomainEventLimit(rows.length, count)
   const kept = new Set(rows.slice(0, limit).flatMap(eventIds))
+  const stamped = new Set(
+    rows
+      .slice(0, Math.max(1, limit))
+      .flatMap((row) => row.writtenSubmissionIds ?? [])
+      .map(agentJournalSubmissionKey)
+      .filter((id) => !kept.has(id))
+  )
+  if (stamped.size > 0) {
+    // A stamp names only its submission: read that row, never its unchanged message.
+    for (const send of readSnapshot(stamped, new Map(), undefined, ordinals, []).submissions) {
+      submissions.set(send.clientMessageId, send)
+      kept.add(agentJournalSubmissionKey(send.clientMessageId))
+    }
+  }
   return {
     limit: Math.max(1, limit),
     forms,

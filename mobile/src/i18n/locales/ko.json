@@ -258,6 +258,7 @@
       "historyRepaired": "이 채팅 기록의 일부를 불러올 수 없습니다."
     },
     "message": {
+      "sending": "전송 중…",
       "copyMessage": "메시지 복사",
       "forkFromResponse": "이 응답에서 분기",
       "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",

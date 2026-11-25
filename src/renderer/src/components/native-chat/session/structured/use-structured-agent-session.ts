@@ -39,9 +39,7 @@ import { useStructuredAgentSessionContextUsage } from '../../usage/use-structure
 import { useStructuredAgentSessionRailOutline } from '../../viewport/rail/use-structured-agent-session-rail-outline'
 import { useStructuredAgentSessionQueuedMessages } from '../../queue/use-structured-agent-session-queued-messages'
 import { structuredConversationCommandRunner } from './writes/structured-conversation-command-send'
-import { useStructuredAgentSessionTranscriptPending } from './delivery/use-structured-agent-session-transcript-pending'
 import { hostStatesTurnScopes } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-membership'
-import { withNativeChatCutTurnNotices } from '../../../../../../shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { useNativeChatContextClearFloor } from '../../conversation/projection/use-native-chat-context-clear-floor'
 import { useStructuredAgentSessionRewind } from '../../messages/actions/use-structured-agent-session-rewind'
 
@@ -59,6 +57,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const {
     state,
     stateRef,
+    readOwner,
     readCurrent,
     loadingOlder,
     olderHistoryGeneration,
@@ -145,7 +144,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     target,
     // Never held for an in-doubt rewind: the host recovers it on the next send.
     fence: transportState.fence,
-    cursor: state.cursor,
+    readOwner,
     submissions: transportState.submissions,
     queuedMessageIds,
     queue,
@@ -200,15 +199,12 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     agent
   })
   const contextClear = useNativeChatContextClearFloor(state.epoch, journalItems)
-  // Project since the latest /clear and add a notice only for cut turns without an explaining row.
-  const transcriptItems = useMemo(
-    () => withNativeChatCutTurnNotices(contextClear.rows, { agentName }),
-    [agentName, contextClear.rows]
-  )
-  const messages = useStructuredAgentSessionMessages(
-    transcriptItems,
-    useStructuredAgentSessionTranscriptPending(transportState, pending, isWorking),
-    transportState.submissions
+  const { transcriptItems, transcriptPending, messages, steer } = useStructuredAgentSessionMessages(
+    contextClear.rows,
+    agentName,
+    { ...transportState, owner: readOwner, epoch: state.epoch },
+    pending,
+    isWorking
   )
   const editTransport = useQueuedMessageEditTransport(target, sessionId, write)
   const queuedController = useStructuredAgentSessionQueuedMessages({
@@ -224,10 +220,12 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     mutate,
     editTransport,
     admit,
-    capturePresentation
+    capturePresentation,
+    steer
   })
   return {
     epoch: state.epoch,
+    readOwner,
     /** Whether a live `/clear` is fading the old transcript out, and how many this view drew. */
     contextClear,
     /** The transcript has caught up with the host since this pane last started reading. */
@@ -276,6 +274,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     trimHistory,
     prompts,
     pending,
+    transcriptPending,
     /** A send is out, or a /clear holds sends; the chat takes none until it settles. */
     sendOut: sending || sends.held,
     /** The journal's rows for sent messages, which carry a rejected message's whole fact. */
@@ -294,7 +293,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
       ...legacyLaunchStop,
       host: stopControl,
       transportState,
-      sends: { sending, stopSends: sends.stopSends }
+      sends: {
+        sending: sending || transcriptPending.some((entry) => entry.phase === 'recorded'),
+        stopSends: sends.stopSends
+      }
     }),
     stopPressed: stopControl.pressed,
     queuedMessages: queuedController,

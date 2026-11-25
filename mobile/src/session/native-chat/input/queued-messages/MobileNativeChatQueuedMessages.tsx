@@ -191,7 +191,7 @@ export function MobileNativeChatQueuedMessages({
     }
   }
   // Forget closed menu identity so a Stop-requeued draft with the same id cannot reopen it.
-  const menuCard = cards.find((card) => card.messageId === menuFor)
+  const menuCard = cards.find((card) => card.messageId === menuFor && card.hold !== 'sending')
   if (menuFor !== null && !menuCard) {
     setMenuFor(null)
   }
@@ -321,20 +321,26 @@ export function MobileNativeChatQueuedMessages({
           inlineEditorActive={editor !== undefined}
         >
           {(reveal, drag, show) => {
-            // Order matters only with two or more cards in view, so the grip shows only then.
-            return onMove && !editor && showAll && cards.length > 1 ? (
-              <DragReorderList
-                items={cards}
-                itemKey={(card) => card.messageId}
-                isMoveDisabled={(card) => busyIds.has(MOVE_KEY) || busyIds.has(card.messageId)}
-                rowPresentation="plain"
-                liftFromRow
-                renderRow={(card, handle) => renderRow(card, reveal, show, handle)}
-                onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY], 'move')}
-                {...drag}
-              />
-            ) : (
-              shownCards.map((card) => renderRow(card, reveal, show))
+            const held = shownCards.filter((card) => card.hold !== 'sending')
+            const sending = shownCards.filter((card) => card.hold === 'sending')
+            return (
+              <>
+                {onMove && !editor && showAll && held.length > 1 ? (
+                  <DragReorderList
+                    items={held}
+                    itemKey={(card) => card.messageId}
+                    isMoveDisabled={(card) => busyIds.has(MOVE_KEY) || busyIds.has(card.messageId)}
+                    rowPresentation="plain"
+                    liftFromRow
+                    renderRow={(card, handle) => renderRow(card, reveal, show, handle)}
+                    onMove={(move) => run(move.movedId, () => onMove(move), [MOVE_KEY], 'move')}
+                    {...drag}
+                  />
+                ) : (
+                  held.map((card) => renderRow(card, reveal, show))
+                )}
+                {sending.map((card) => renderRow(card, reveal, show))}
+              </>
             )
           }}
         </MobileQueuedMessageScrollList>

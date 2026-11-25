@@ -3,7 +3,11 @@ import { MobileNativeChatBotIdentityContext } from '../../mobile-native-chat-bot
 import { useContext, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { nativeChatElapsedSeconds } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import {
+  nativeChatElapsedSeconds,
+  type NativeChatTurnStatus
+} from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
+import { StructuredAgentWorkingGate } from '../sending/structured-agent-sending-scope'
 import {
   formatMobileNativeChatTurnStatusLabel,
   nativeChatTurnStatusCopy
@@ -21,6 +25,35 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
   const [mountedAt] = useState(() => Date.now())
   const now = useNow(1_000, counting)
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
+}
+
+export function mobileNativeChatMessageTurnBar(
+  status: NativeChatTurnStatus | null | undefined,
+  {
+    turnExpanded,
+    turnKey,
+    onToggleTurn
+  }: {
+    turnExpanded?: boolean
+    turnKey?: string
+    onToggleTurn?: (turnKey: string) => void
+  }
+): React.JSX.Element | null {
+  if (!status) {
+    return null
+  }
+  const bar = (
+    <MobileNativeChatTurnStatus
+      {...status}
+      expanded={turnExpanded ?? false}
+      onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
+    />
+  )
+  return status.workedSeconds == null ? (
+    <StructuredAgentWorkingGate>{bar}</StructuredAgentWorkingGate>
+  ) : (
+    bar
+  )
 }
 
 export function MobileNativeChatTurnStatus({

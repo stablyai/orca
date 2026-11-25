@@ -34,16 +34,23 @@ const SEP = '\u0000'
 
 /** Stable while no receipt changes the message it follows, so streaming text redraws none. */
 export function useMobileWorkerApprovalReceiptPlacement(
-  shown: {
+  {
+    listMessages: messages,
+    waitingRows
+  }: {
     listMessages: readonly NativeChatMessage[]
     waitingRows: readonly { item: NativeChatMessage }[]
   },
   receipts: readonly MobileWorkerApproval[] | undefined
 ): Placed | null {
-  const anchors = receipts?.length
-    ? anchorNativeChatTimedRows(
-        [...shown.listMessages, ...shown.waitingRows.map(({ item }) => item)].flatMap((row) =>
-          row.timestamp === null ? [] : [{ id: row.id, at: row.timestamp }]
+  const anchors = useMemo(() => {
+    if (!receipts?.length) {
+      return ''
+    }
+    return (
+      anchorNativeChatTimedRows(
+        [...messages, ...waitingRows.map(({ item }) => item)].flatMap(({ id, timestamp }) =>
+          timestamp === null ? [] : [{ id, at: timestamp }]
         ),
         receipts.map((entry) => ({
           key: entry.approval.approvalId,
@@ -53,7 +60,8 @@ export function useMobileWorkerApprovalReceiptPlacement(
         // A conversation with no dated message has nowhere to place one.
         .flatMap(([key, messageId]) => (messageId ? [`${key}${SEP}${messageId}`] : []))
         .join(SEP + SEP)
-    : ''
+    )
+  }, [messages, waitingRows, receipts])
   return useMemo(() => {
     if (!anchors || !receipts) {
       return null

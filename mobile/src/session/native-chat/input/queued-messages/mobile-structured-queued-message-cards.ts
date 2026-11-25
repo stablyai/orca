@@ -1,7 +1,7 @@
 import { stripSentImagePromptMarkers } from '../../../../../../src/shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import type { AgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { mobileAgentSessionWriteNoticeText } from '../../agent-session/agent-session-write-notice-copy'
-import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import {
   QUEUED_MESSAGE_PAUSED_SEND_FAILED,
   type AgentSessionQueuedMessage
@@ -46,7 +46,6 @@ function queuedMessageCardCaption(
       return card.waitsForAgent
         ? "Couldn't send — tap Send to retry once the agent finishes"
         : "Couldn't send — tap Send to retry"
-    // The phone draws no card for a send still on its way.
     case 'sending':
     case 'turn':
     case 'queue-paused':
@@ -56,15 +55,30 @@ function queuedMessageCardCaption(
 
 export function mobileQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly StructuredAgentSubmission[],
   facts: {
     agentWorking?: boolean
+    steerIntents?: ReadonlyMap<string, string>
     queuePaused?: boolean
     agentName?: string
     statedFailures?: readonly AgentSessionFailureFact[]
+    sending?: readonly QueuedMessageCard[]
+    order?: readonly AgentSessionQueuedMessage[] | null
   } = {}
 ): MobileQueuedMessageCard[] {
-  return projectQueuedMessageCards(queuedMessages, submissions, facts).map((card) => ({
+  const cards = projectQueuedMessageCards(queuedMessages, submissions, {
+    ...facts,
+    steersInTranscript: true
+  })
+  // Reorder preview changes positions without making a hidden handoff visible again.
+  const byId = new Map(cards.map((card) => [card.messageId, card]))
+  const ordered = facts.order
+    ? facts.order.flatMap(({ messageId }) => {
+        const card = byId.get(messageId)
+        return card ? [card] : []
+      })
+    : cards
+  return [...ordered, ...(facts.sending ?? [])].map((card) => ({
     ...card,
     line: queuedMessageCardLine({
       ...card,

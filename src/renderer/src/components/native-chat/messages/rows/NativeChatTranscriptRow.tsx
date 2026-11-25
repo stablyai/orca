@@ -27,6 +27,10 @@ import { useNativeChatSlackMirrorPost } from '../../slack-mirror/NativeChatSlack
 import { slackMirrorPostLine } from '../../../../../../shared/connectors/slack-mirror-post-line'
 import { nativeChatRowEndsInOwnBubbleMeta } from './native-chat-own-bubble-meta'
 import type { NativeChatNewRowsMarkerState } from '../../viewport/new-rows/native-chat-new-rows-marker'
+import {
+  StructuredAgentWorkingGate,
+  useStructuredAgentItemSending
+} from '../../session/structured/delivery/structured-agent-sending-scope'
 
 /** Memoize shared context so unchanged rows keep their props during transcript updates. */
 export type NativeChatTranscriptRowContext = {
@@ -42,6 +46,7 @@ export type NativeChatTranscriptRowContext = {
   latestTurnKey?: string
   /** Keyed by message id: the user messages that did not go through, each with its own words. */
   deliveryNotices?: ReadonlyMap<string, NativeChatDeliveryNotice>
+  hideWorking?: boolean
   /** Keyed by message id: rows from outside the conversation that came right after that message. */
   timedRows?: ReadonlyMap<string, readonly NativeChatTimedRow[]>
   structuredAttachments?: boolean
@@ -107,6 +112,8 @@ function NativeChatRowNewRowsMarker({
   )
 }
 
+const SENDING_NOTICE: NativeChatDeliveryNotice = { sending: true }
+
 /** Wrap message, status and rollup for one virtualized measurement; internal spacing is the row’s, inter-row gaps the window’s. */
 export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot,
@@ -127,6 +134,9 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   // Offered only on the conversation's own turn-opening prompts (`nativeChatRowOffersRewind`).
   const rewind = useContext(NativeChatRewindContext)
   const fork = useContext(NativeChatForkContext)
+  const sending = useStructuredAgentItemSending(
+    slot.kind === 'message' ? slot.message.id : undefined
+  )
   if (slot.kind === 'subagent') {
     return (
       <NativeChatSubagentHead
@@ -138,7 +148,8 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   }
   const { message, turnKey, status, receipt, turnDiff, openedPullRequests, workRun, itemNotes } =
     slot
-  const deliveryNotice = context.deliveryNotices?.get(message.id)
+  const deliveryNotice =
+    context.deliveryNotices?.get(message.id) ?? (sending ? SENDING_NOTICE : undefined)
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   const marker = newRowsMarker ? (
@@ -152,18 +163,25 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   ) : null
   // A settling quiet turn's bar fades alone, or with its whole row when nothing else draws in it.
   const leavesWhole = nativeChatSlotLeavesWhole(slot)
-  const bar = status ? (
-    <NativeChatWorkingStatus
-      bot={context.turnBot}
-      startedAt={status.startedAt}
-      workedSeconds={status.workedSeconds}
-      verdict={status.verdict}
-      expanded={expanded === true}
-      onToggleExpanded={
-        slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
-      }
-    />
-  ) : null
+  const turnBar =
+    status && !(context.hideWorking && status.workedSeconds == null) ? (
+      <NativeChatWorkingStatus
+        bot={context.turnBot}
+        startedAt={status.startedAt}
+        workedSeconds={status.workedSeconds}
+        verdict={status.verdict}
+        expanded={expanded === true}
+        onToggleExpanded={
+          slot.turnFolds && turnKey ? () => context.onToggleExpandedTurn(turnKey) : undefined
+        }
+      />
+    ) : null
+  const bar =
+    turnBar && status?.workedSeconds == null ? (
+      <StructuredAgentWorkingGate>{turnBar}</StructuredAgentWorkingGate>
+    ) : (
+      turnBar
+    )
   const statusRow =
     bar && slot.leaving === 'bar' && !leavesWhole ? (
       <NativeChatQuietTurnLeave gap={slot.statusAbove ? 'below' : 'above'}>

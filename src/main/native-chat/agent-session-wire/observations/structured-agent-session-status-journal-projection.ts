@@ -1,3 +1,4 @@
+import { withHostTurnEnd } from './structured-agent-session-work-policy'
 import {
   copyJournalWorkAuthority,
   copyJournalCurrentWorkAuthority
@@ -6,6 +7,11 @@ import {
   journalSqlWorkAnswerIsCurrent,
   readJournalSqlWorkFrame
 } from '../../agent-session-journal/journal-sql-work-answer'
+import {
+  cachedWorkAuthority,
+  readCachedWorkFrame,
+  rememberWorkAuthority
+} from './structured-agent-session-work-authority'
 import type { JournalSqlWorkResult } from '../../agent-session-journal/journal-work-read'
 import type { JournalDomainHistoryWork } from '../../agent-session-journal/journal-domain-history-page'
 import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
@@ -17,6 +23,12 @@ import type { HostUsageLimitCut } from '../recovery/structured-agent-session-usa
 import { sameJournalCursor } from '../../agent-session-journal/replay/journal-cursor'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+import {
+  advanceJournalStatusActivity,
+  advanceJournalStatusWork,
+  journalStatusCursorIsCurrent,
+  journalStatusReceiptProgress
+} from '../../agent-session-journal/journal-status-receipt-progress'
 export type StructuredAgentSessionStatusState = JournalObserverResult['state']
 
 export type StructuredAgentSessionJournalProjection = {
@@ -52,7 +64,6 @@ type ProjectionEntry =
 
 type PendingObservation = { key: string; result: Promise<JournalObserverResult> }
 type CapturedWork = { authority: JournalWorkAuthority; contextId: string | null }
-
 export class StructuredAgentSessionJournalProjections {
   // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
   private readonly byJournal = new WeakMap<SqlAgentSessionJournal, ProjectionEntry>()
@@ -79,8 +90,8 @@ export class StructuredAgentSessionJournalProjections {
       projection &&
       physicalCursor &&
       !journal.isClosed &&
-      sameJournalCursor(projection, journal.cursor()) &&
-      sameJournalCursor(physicalCursor, journal.physicalCursor()) &&
+      journalStatusCursorIsCurrent(journal, projection, journal.cursor()) &&
+      journalStatusCursorIsCurrent(journal, physicalCursor, journal.physicalCursor()) &&
       authority.handle === journal.observationHandle() &&
       sameJournalCursor(authority.openedThrough, journal.openingCursor())
       ? entry
@@ -102,30 +113,28 @@ export class StructuredAgentSessionJournalProjections {
       : null
   }
 
-  private currentWorkSql(
+  currentWorkSql(
     journal: SqlAgentSessionJournal,
     captured: CapturedWork
   ): JournalSqlWorkResult | undefined {
-    const authority = copyJournalCurrentWorkAuthority(captured.authority)
     const entry = this.currentEntry(journal)
-    const answer: JournalSqlWorkResult | undefined =
-      entry?.kind === 'work-only'
-        ? entry.contextId === captured.contextId
-          ? entry.answer
-          : undefined
-        : entry?.projection.work &&
-            entry.projection.contextId === captured.contextId &&
-            entry.projection.authority
-          ? {
-              cursor: { epoch: entry.projection.epoch, sequence: entry.projection.sequence },
-              physicalCursor: entry.physicalCursor,
-              authority: copyJournalCurrentWorkAuthority(entry.projection.authority),
-              result: { kind: 'state', state: entry.projection.work }
-            }
-          : undefined
-    return answer &&
-      journalSqlWorkAnswerIsCurrent(journal, () => captured.authority, authority, answer)
-      ? answer
+    if (entry?.kind === 'work-only') {
+      const { answer, contextId } = entry
+      return contextId === captured.contextId &&
+        answer.result.kind === 'state' &&
+        cachedWorkAuthority(answer.result.state, captured.authority)
+        ? advanceJournalStatusWork(answer, journal.cursor(), journal.physicalCursor())
+        : undefined
+    }
+    const work = entry?.projection.work
+    const authority = work && cachedWorkAuthority(work, captured.authority)
+    return entry && work && authority && entry.projection.contextId === captured.contextId
+      ? {
+          cursor: journal.cursor(),
+          physicalCursor: journal.physicalCursor(),
+          authority,
+          result: { kind: 'state', state: work }
+        }
       : undefined
   }
 
@@ -154,7 +163,7 @@ export class StructuredAgentSessionJournalProjections {
       ) {
         continue
       }
-      this.remember(journal, recaptured, result, captured.contextId)
+      this.remember(journal, recaptured, result)
       return result
     }
   }
@@ -176,17 +185,19 @@ export class StructuredAgentSessionJournalProjections {
       return { answer: null, value: (await read(undefined)).value, current: () => !capture() }
     }
     const cached = this.currentWorkSql(journal, captured)
+    if (cached) {
+      return readCachedWorkFrame(journal, captured, capture, read, cached)
+    }
     const frame = await readJournalSqlWorkFrame(
       journal,
       () => {
         const live = capture()
         return live && live.contextId === captured.contextId ? live.authority : null
       },
-      read,
-      cached
+      read
     )
-    if (frame && frame.answer !== cached) {
-      this.remember(journal, captured, frame.answer, captured.contextId)
+    if (frame) {
+      this.remember(journal, captured, frame.answer)
     }
     return frame
   }
@@ -194,11 +205,13 @@ export class StructuredAgentSessionJournalProjections {
   private remember(
     journal: SqlAgentSessionJournal,
     captured: CapturedWork,
-    answer: JournalSqlWorkResult,
-    contextId: string | null
+    answer: JournalSqlWorkResult
   ) {
     if (this.currentEntry(journal)?.kind !== 'full' || !this.currentWorkSql(journal, captured)) {
-      this.byJournal.set(journal, { kind: 'work-only', answer, contextId })
+      if (answer.result.kind === 'state') {
+        rememberWorkAuthority(answer.result.state, captured.authority, answer.authority)
+      }
+      this.byJournal.set(journal, { kind: 'work-only', answer, contextId: captured.contextId })
     }
   }
 
@@ -219,8 +232,7 @@ export class StructuredAgentSessionJournalProjections {
     }
     const currentProjection = this.currentSql(journal, captured)
     if (currentProjection) {
-      observed?.(currentProjection)
-      return currentProjection
+      return advanceJournalStatusActivity(journal, currentProjection, journal.cursor(), observed)
     }
     const contextId = captured.contextId
     const authority = copyJournalWorkAuthority(captured.authority)
@@ -237,9 +249,10 @@ export class StructuredAgentSessionJournalProjections {
       firstInputSubmissionKey: sameContext?.firstInputSubmissionKey ?? null,
       ...(turnEnd?.botSession ? { botSession: true as const } : {})
     }
+    const sequence = journalStatusReceiptProgress(journal)?.after ?? cursor.sequence
     const key = JSON.stringify({
-      cursor,
-      physicalCursor: journal.physicalCursor(),
+      cursor: { epoch: cursor.epoch, sequence },
+      physicalEpoch: journal.physicalCursor().epoch,
       contextId,
       input
     })
@@ -261,8 +274,8 @@ export class StructuredAgentSessionJournalProjections {
     if (
       !current ||
       journal.isClosed ||
-      !sameJournalCursor(result.cursor, journal.cursor()) ||
-      !sameJournalCursor(result.physicalCursor, journal.physicalCursor()) ||
+      !journalStatusCursorIsCurrent(journal, result.cursor, journal.cursor()) ||
+      !journalStatusCursorIsCurrent(journal, result.physicalCursor, journal.physicalCursor()) ||
       authority.handle !== journal.observationHandle() ||
       !sameJournalCursor(authority.openedThrough, journal.openingCursor()) ||
       current.contextId !== contextId ||
@@ -286,6 +299,7 @@ export class StructuredAgentSessionJournalProjections {
       authority,
       work: result.work
     }
+    rememberWorkAuthority(result.work, current.authority)
     const stop = authority.stop
     const savedStop = stop && { sequence: stop.sequence, event: stop.event }
     this.byJournal.set(journal, {
@@ -294,8 +308,7 @@ export class StructuredAgentSessionJournalProjections {
       physicalCursor: result.physicalCursor,
       savedStop
     })
-    observed?.(projection)
-    return projection
+    return advanceJournalStatusActivity(journal, projection, journal.cursor(), observed)
   }
 }
 
@@ -304,22 +317,4 @@ export class StructuredAgentSessionJournalProjections {
 export type StructuredAgentSessionTurnEndPolicy = {
   botSession: boolean
   quietEnd: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean
-}
-
-/** Whether its alert stays quiet: a turn that succeeded on a bot's quiet marker, or one that ended
- *  in a way its host keeps quiet (a look-around that already failed last time). */
-export function withHostTurnEnd(
-  state: StructuredAgentSessionStatusState,
-  quietEnd?: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean,
-  usageLimited = false
-): StructuredAgentSessionStatusState {
-  const outcome = state.summary.turnOutcome
-  const request = state.latestRequest
-  const quiet =
-    outcome === 'failure'
-      ? quietEnd?.('failure', usageLimited) === true
-      : request?.kind === 'turn' &&
-        request.outcome === 'success' &&
-        (state.quietAnswer === true || quietEnd?.('success') === true)
-  return quiet ? { ...state, quiet: true } : state
 }

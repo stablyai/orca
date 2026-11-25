@@ -1,4 +1,5 @@
 import { useId } from 'react'
+import { StructuredAgentWorkingGate } from '../../session/structured/delivery/structured-agent-sending-scope'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -36,6 +37,14 @@ export function NativeChatTurnActivityLine({
 }: {
   line: NativeChatLiveLine
 }): React.JSX.Element {
+  return (
+    <StructuredAgentWorkingGate>
+      <TurnActivityLine line={line} />
+    </StructuredAgentWorkingGate>
+  )
+}
+
+function TurnActivityLine({ line }: { line: NativeChatLiveLine }): React.JSX.Element {
   const t = useTranslate()
   const resolved = describeNativeChatActiveTurnLabel(line)
   const label = resolved.source === 'activity' ? resolved.text : statusLabel(resolved.key, t)

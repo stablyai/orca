@@ -13,6 +13,7 @@ export function useMobileStructuredStopOffer(input: {
   sessionKey: string
   turnId: string | null
   isWorking: boolean
+  hasPendingSend: boolean
   stopsConversation: boolean
 }): { canStop: boolean; sendsOut: MobileStructuredSendsOut } {
   const { sessionKey } = input
@@ -58,7 +59,7 @@ export function useMobileStructuredStopOffer(input: {
     canStop: structuredAgentSessionCanStop({
       turnId: input.turnId,
       isWorking: input.isWorking,
-      sending: sendingKeys.has(sessionKey),
+      sending: input.hasPendingSend || sendingKeys.has(sessionKey),
       stopsConversation: input.stopsConversation
     }),
     sendsOut

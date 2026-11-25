@@ -8,7 +8,6 @@ import {
   type AgentSessionRewindSendOutcome
 } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
-import { actionableStructuredPrompts } from '../input/prompts/mobile-structured-actionable-prompt'
 import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
 import { sayMobileNativeChatRewind } from '../history/mobile-native-chat-rewind-copy'
 import type { MobileNativeChatSendOutcome } from '../composer/delivery/mobile-native-chat-send'
@@ -40,6 +39,7 @@ export function useMobileStructuredAgentRewind<A extends unknown[]>(
       'rewindSupport' | 'rewindBlockedReason'
     >
     turnId: string | null
+    hasPrompt: boolean
     backgroundTasks: MobileStructuredBackgroundTasks
     sendsOut: MobileStructuredSendsOut
     commandPendingRef: { readonly current: boolean }
@@ -58,7 +58,7 @@ export function useMobileStructuredAgentRewind<A extends unknown[]>(
   const blocked =
     args.turnId !== null ||
     args.backgroundTasks.view.isMonitoring ||
-    actionableStructuredPrompts(state).length > 0 ||
+    args.hasPrompt ||
     args.sendsOut.sending() ||
     args.commandPendingRef.current ||
     (args.queuedMessages?.length ?? 0) > 0
@@ -91,6 +91,7 @@ export function useMobileStructuredAgentRewind<A extends unknown[]>(
     },
     [agentName, client, enabled, sessionId, stateRef]
   )
+  const { epoch, cursor, fence, items, status, submissions } = state
   const input = useMemo<AgentSessionRewindInput>(
     () => ({
       sessionId: sessionId ?? '',
@@ -103,7 +104,7 @@ export function useMobileStructuredAgentRewind<A extends unknown[]>(
         : {}),
       // A dropped link (the app in the background) reads nothing, so a late reset isn't a failure.
       isVisible: connected,
-      state,
+      state: { epoch, cursor, fence, items, status, submissions },
       contextFloor: rewindSupport?.contextFloor,
       support: offered && enabled ? rewindSupport?.support : undefined,
       hostBlockedReason: rewindBlockedReason,
@@ -122,7 +123,12 @@ export function useMobileStructuredAgentRewind<A extends unknown[]>(
       rewindSend,
       rewindSupport,
       sessionId,
-      state
+      epoch,
+      cursor,
+      fence,
+      items,
+      status,
+      submissions
     ]
   )
   const { admitsSend, surface } = useAgentSessionRewind(input)

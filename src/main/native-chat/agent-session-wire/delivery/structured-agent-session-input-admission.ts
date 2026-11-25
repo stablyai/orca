@@ -1,3 +1,5 @@
+import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
+import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-session-adapter'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -71,4 +73,17 @@ export async function admitStructuredAgentSessionInput(
     )
   }
   await result.response
+}
+
+/** Non-delivery proof applies only to queued handoffs; direct sends still owe stopped-history handling. */
+export function cancelledDispatch(
+  neverReachedAgent: boolean
+): Extract<AgentSessionDispatchOutcome, { state: 'rejected' }> {
+  return {
+    state: 'rejected',
+    ...agentSessionFailureWords(
+      agentSessionFailureFact('cancelled', neverReachedAgent ? { neverReachedAgent } : {}),
+      { surface: 'rejection' }
+    )
+  }
 }

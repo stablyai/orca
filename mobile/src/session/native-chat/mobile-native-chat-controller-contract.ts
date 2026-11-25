@@ -12,6 +12,7 @@ import type {
 import type { AskPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { MobileChatPermission } from './input/prompts/mobile-native-chat-permission'
 import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
+import type { StructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import type { MobileNativeChatCollapsedPrompt } from './input/prompts/MobileNativeChatPromptStrip'
 import type { MobileChatQuestion } from './input/prompts/mobile-native-chat-question'
 import type {
@@ -70,6 +71,7 @@ export type MobileNativeChatController = {
   nativeChatWorkingStartedAt: number | null
   nativeChatSettledTurns: NativeChatSettledTurns | null
   nativeChatTurnJournal: NativeChatTurnJournal | null
+  nativeChatSending?: StructuredAgentSendingSource
   nativeChatReceipts: ReadonlyMap<string, NativeChatResolvedPrompt> | null
   nativeChatActionablePromptIds: readonly string[] | undefined
   nativeChatCommandRefusalCauses: MobileNativeChatCommandRefusalCauses

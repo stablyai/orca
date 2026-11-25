@@ -14,6 +14,7 @@ import { nativeChatRewindReasonCopy } from '../../../messages/actions/native-cha
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
 import {
   findStructuredAgentSessionPendingSend,
+  getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends,
   structuredAgentSessionSendsWatched,
   updateStructuredAgentSessionPendingSend,
@@ -171,7 +172,7 @@ export function beginSend(
   const { clientMessageId, sessionId } = entry
   const owner = getStructuredAgentSessionReadOwner(sessionId, target)
   updateStructuredAgentSessionPendingSend(sessionId, clientMessageId, {
-    afterSequence: owner.getSnapshot().state.cursor?.sequence
+    afterSequence: owner.getReadCursor()?.sequence
   })
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     runtimes.set(clientMessageId, {
@@ -183,4 +184,32 @@ export function beginSend(
     })
   })
   return { clientMessageId, outcome }
+}
+
+/** Only acknowledged sends can gain settlement credit from cursor-only progress. */
+export function structuredAgentSessionCursorSettlement(sessionId: string) {
+  const byEpoch = new Map<
+    string,
+    { sequence: number; entry: StructuredAgentSessionPendingSend }[]
+  >()
+  for (const entry of getStructuredAgentSessionPendingSends(sessionId)) {
+    const cursor = entry.recordedCursor
+    if (entry.phase === 'recorded' && cursor) {
+      const sameEpoch = byEpoch.get(cursor.epoch) ?? []
+      sameEpoch.push({ sequence: cursor.sequence, entry })
+      byEpoch.set(cursor.epoch, sameEpoch)
+    }
+  }
+  for (const recorded of byEpoch.values()) {
+    recorded.sort((a, b) => b.sequence - a.sequence)
+  }
+  return (cursor: AgentJournalCursor | null) => {
+    const due = cursor && byEpoch.get(cursor.epoch)
+    while (cursor && due?.length && due.at(-1)!.sequence <= cursor.sequence) {
+      const { entry } = due.pop()!
+      if (findStructuredAgentSessionPendingSend(sessionId, entry.clientMessageId) === entry) {
+        finish(entry, 'recorded')
+      }
+    }
+  }
 }

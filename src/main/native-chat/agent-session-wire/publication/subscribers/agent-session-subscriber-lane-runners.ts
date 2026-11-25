@@ -13,7 +13,9 @@ import {
   type SubscriberDeliveryLaneRunners,
   type SubscriberDeliveryRetention
 } from './agent-session-subscriber-delivery-lane'
+import { journalStatusReceiptProgress } from '../../../agent-session-journal/journal-status-receipt-progress'
 import type { Subscriber } from './agent-session-subscribe-input'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 
 type LaneOwner = {
   deliveryPort: () => SubscriberDeliveryPort
@@ -29,8 +31,16 @@ export function subscriberLaneRunners(
 ): SubscriberDeliveryLaneRunners {
   const { sessionId } = subscriber
   return {
-    catchUp: ({ journal, port, hostNow, activity }) =>
-      deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
+    catchUp: ({ journal, port, hostNow, activity, receiptsOnly, queuePort }) =>
+      deliverToSubscriber(port, {
+        subscriber,
+        journal,
+        hostNow,
+        emitCheckpoint: false,
+        activity,
+        receiptsOnly,
+        queuePort
+      }),
     backgroundTasks: (fence) =>
       republishSubscriberBackgroundTasks(
         owner.deliveryPort(),
@@ -74,6 +84,7 @@ export function mergeSubscriberCatchUp(
     port: queueChanged === next.queueChanged ? next.port : next.queuePort(),
     queuePort: next.queuePort,
     queueChanged,
+    receiptsOnly: pending.receiptsOnly && next.receiptsOnly,
     hostNow: next.hostNow,
     ...(activity !== undefined ? { activity } : {})
   }
@@ -84,6 +95,34 @@ export class SubscriberLanes {
   private readonly lanes = new WeakMap<Subscriber, SubscriberDeliveryLane>()
 
   constructor(private readonly owner: LaneOwner) {}
+
+  catchUp(
+    subscribers: Iterable<Subscriber>,
+    next: SubscriberCatchUp,
+    receiptsAfter?: AgentJournalCursor
+  ): void {
+    const progress = receiptsAfter && journalStatusReceiptProgress(next.journal)
+    for (const subscriber of subscribers) {
+      const catchUpOwed =
+        receiptsAfter !== undefined &&
+        (subscriber.cursor.epoch !== receiptsAfter.epoch ||
+          subscriber.cursor.sequence < receiptsAfter.sequence)
+      // A receipt may supersede a capture that still owes an earlier turn or queue change.
+      if (receiptsAfter && !subscriber.readsProviderReceipts && !catchUpOwed) {
+        continue
+      }
+      const receiptSuffix =
+        progress &&
+        subscriber.readsProviderReceipts &&
+        subscriber.cursor.epoch === progress.epoch &&
+        subscriber.cursor.sequence >= progress.after
+      this.of(subscriber).catchUp(
+        catchUpOwed && !next.queueChanged && !receiptSuffix
+          ? { ...next, port: next.queuePort(), queueChanged: true }
+          : { ...next, receiptsOnly: receiptsAfter !== undefined && !next.queueChanged }
+      )
+    }
+  }
 
   of(subscriber: Subscriber): SubscriberDeliveryLane {
     let lane = this.lanes.get(subscriber)

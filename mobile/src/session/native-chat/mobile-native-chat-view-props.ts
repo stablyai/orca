@@ -21,6 +21,7 @@ import type { MobileNativeChatPromptCard } from './input/prompts/MobileNativeCha
 import type { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
 import type { MobileNativeChatPendingItem } from './transcript/projection/mobile-native-chat-render-data'
 import type { MobileWorkerApprovals } from './input/prompts/use-mobile-worker-approvals'
+import type { StructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/structured-agent-sending-source'
 
 export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
@@ -49,6 +50,7 @@ export type MobileNativeChatViewProps = MobileNativeChatSendProps &
     workingStartedAt?: number | null
     settledTurns?: NativeChatSettledTurns | null
     turnJournal?: NativeChatTurnJournal | null
+    structuredSending?: StructuredAgentSendingSource
     /** A stored copy or the first read, until a live frame confirms the transcript. */
     transcriptLoading?: boolean
     receipts?: ReadonlyMap<string, NativeChatResolvedPrompt> | null

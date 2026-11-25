@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalCursor } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import {
@@ -45,7 +45,7 @@ export function useMobileStructuredSends(args: {
   sessionId?: string | null
   connected?: boolean
   cursor?: AgentJournalCursor | null
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   onSendError: MobileNativeChatSendErrorReporter
   /** Asks the host whether it recorded a send; null where only the loaded pages can say. */
@@ -153,16 +153,19 @@ export function useMobileStructuredSends(args: {
     (clientMessageId: string) => forget(new Set([clientMessageId])),
     [forget]
   )
-  // The journal records a send under its id: once it does, the saved copy goes.
-  const recorded = useCallback(
-    (ids: readonly string[]): Set<string> => {
-      const { cards, recorded } = structuredAgentSessionSettledSends(
+  const settlements = useMemo(
+    () =>
+      structuredAgentSessionSettledSends(
         submissions,
         (queuedMessages ?? []).map((message) => message.messageId)
-      )
-      return new Set(ids.filter((id) => cards.has(id) || recorded.has(id)))
-    },
+      ),
     [queuedMessages, submissions]
+  )
+  // The journal records a send under its id: once it does, the saved copy goes.
+  const recorded = useCallback(
+    (ids: readonly string[]): Set<string> =>
+      new Set(ids.filter((id) => settlements.cards.has(id) || settlements.recorded.has(id))),
+    [settlements]
   )
 
   // Before a send returns to the box, ask its chat's host: the record can sit past the pages loaded here.

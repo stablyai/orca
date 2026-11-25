@@ -6,7 +6,10 @@ import {
   type AgentJournalMessageItem,
   type AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { StructuredAgentSessionInputNotAdmitted } from './structured-agent-session-input-admission'
+import {
+  cancelledDispatch,
+  StructuredAgentSessionInputNotAdmitted
+} from './structured-agent-session-input-admission'
 import type { AgentSessionHandoverContext } from '../host/structured-agent-session-host-types'
 import {
   agentSessionFailureFact,
@@ -16,7 +19,10 @@ import type { AgentSessionExecutionOptions } from '../../../../shared/agent-sess
 import { isAbortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { resolveHandover } from '../operations/structured-agent-session-operation-settlement'
+import {
+  markHandoverWritten,
+  resolveHandover
+} from '../operations/structured-agent-session-operation-settlement'
 import { readContextStructuredAgentSessionTurnScope } from '../observations/structured-agent-session-read-work'
 import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-session-adapter'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -24,7 +30,7 @@ import {
   handOverStructuredAgentSessionCommand,
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
-import type { StoppedHistoryDelivery } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
+import type { JournalHandoverResult } from '../../agent-session-journal/journal-store-contracts'
 import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import { structuredAgentSessionRideAlong } from '../structured-agent-session-ride-along'
 import {
@@ -68,10 +74,12 @@ export async function beginSubmissionHandover(
   }
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = await readContextStructuredAgentSessionTurnScope(ctx)
-  let carried: StoppedHistoryDelivery | null = null
+  let handover: JournalHandoverResult
   const rideAlong = structuredAgentSessionRideAlong(ctx, submission, body)
   const outgoing = (): AgentJournalMessageItem =>
-    rideAlong.outgoing(carried ? withStoppedHistory(body, carried.messages) : body)
+    rideAlong.outgoing(
+      handover.carried ? withStoppedHistory(body, handover.carried.messages) : body
+    )
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined
   let unwritten = false
@@ -90,7 +98,7 @@ export async function beginSubmissionHandover(
   const attempt = ctx.acquireAborts?.begin(ctx.sessionId, true, false, isBound)
   const queued = submission.queuedMessageId !== undefined
   try {
-    carried = await ctx.journal.prepareHandover({
+    handover = await ctx.journal.prepareHandover({
       clientMessageId,
       fence: ctx.fence,
       turnScope,
@@ -105,7 +113,7 @@ export async function beginSubmissionHandover(
   }
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
-    carried = await ctx.journal.prepareHandover({
+    handover = await ctx.journal.prepareHandover({
       clientMessageId,
       fence,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
@@ -150,6 +158,7 @@ export async function beginSubmissionHandover(
                       queued,
                       ownsChild,
                       prepareFresh,
+                      () => handover,
                       attempt?.signal
                     )
                   : null
@@ -203,6 +212,15 @@ export async function beginSubmissionHandover(
         if (outcome?.state !== 'unknown' && (!unwritten || !closing)) {
           await resolveHandover(ctx, clientMessageId, outcome)
         }
+        const { handoverCursor } = handover
+        if (
+          outcome?.state === 'admitted' &&
+          outcome.writtenAt !== undefined &&
+          !unwritten &&
+          handoverCursor
+        ) {
+          await markHandoverWritten(ctx, clientMessageId, handoverCursor, outcome.writtenAt)
+        }
         await commit(async () => {
           if (outcome?.state === 'unknown') {
             await resolveHandover(
@@ -245,6 +263,7 @@ async function dispatchSafely(
   queued: boolean,
   isCurrent: () => boolean,
   prepare: (fence: number) => Promise<AgentJournalMessageItem>,
+  handover: () => JournalHandoverResult,
   signal?: AbortSignal
 ): Promise<AgentSessionDispatchOutcome> {
   const { admitFreshInput } = ctx
@@ -263,7 +282,9 @@ async function dispatchSafely(
         : {}),
       isCurrent,
       fence: ctx.fence,
+      handoverCursor: () => handover().handoverCursor,
       requestedAt,
+      turnScope: handover().turnScope,
       onInputPreparation: ctx.recordRanOptions?.prepareInput,
       onExecutionSnapshot: ctx.recordRanOptions?.checkpoint
     })
@@ -287,18 +308,5 @@ async function dispatchSafely(
       }
     }
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-/** Non-delivery proof applies only to queued handoffs; direct sends still owe stopped-history handling. */
-function cancelledDispatch(
-  neverReachedAgent: boolean
-): Extract<AgentSessionDispatchOutcome, { state: 'rejected' }> {
-  return {
-    state: 'rejected',
-    ...agentSessionFailureWords(
-      agentSessionFailureFact('cancelled', neverReachedAgent ? { neverReachedAgent } : {}),
-      { surface: 'rejection' }
-    )
   }
 }

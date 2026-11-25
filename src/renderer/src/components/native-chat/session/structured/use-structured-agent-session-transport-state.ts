@@ -38,11 +38,19 @@ export function useStructuredAgentSessionTransportState(
     [journalItems, submissions]
   )
   // A long turn’s record may be off-page; prefer the host’s whole-journal answer.
-  const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
+  const turnId = useMemo(
+    () => runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn }),
+    [journalItems, latestTurn]
+  )
   // Prefer current-provider host evidence; older hosts use the same projection as session lists so chat and sidebar agree.
   const hostWorking = enabled ? state.working : undefined
-  const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
-    isStructuredAgentSessionMainAgentWorking(turnId, current.submissions, fence)
+  const contextSubmissions = current.submissions
+  const isWorking = useMemo(
+    () =>
+      structuredAgentSessionHostSaysWorking(hostWorking, () =>
+        isStructuredAgentSessionMainAgentWorking(turnId, contextSubmissions, fence)
+      ),
+    [contextSubmissions, fence, hostWorking, turnId]
   )
   const queueSendsNext = structuredAgentSessionQueueSendsNext(
     enabled ? state.nextQueuedMessageId : null,

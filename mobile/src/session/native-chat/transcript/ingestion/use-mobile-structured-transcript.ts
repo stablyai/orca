@@ -1,3 +1,9 @@
+import { useQueuedSteerIntents } from '../../input/queued-messages/use-queued-steer-intents'
+import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
+import {
+  createStructuredAgentSendingSource,
+  type SubmissionReceiptSource
+} from '../../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
@@ -6,6 +12,11 @@ import {
 } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
+import { pendingSendsOutsideQueuedCards } from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending'
+import {
+  sendingQueuedMessageCards,
+  steeringQueuedMessageEchoes
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-sending-queued-cards'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
@@ -30,10 +41,37 @@ const mobileStructuredTranscript = createStructuredQuestionProjection(
  * From this phone's /clear press until its divider lands, the rows drawn at the press stay hidden:
  * the host stops the old agent before it writes the divider. */
 export function useMobileStructuredTranscript(
-  agent: string | null,
-  state: Pick<StructuredAgentSessionState, 'epoch' | 'items' | 'submissions'>,
-  optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  sessionKey: string
+  {
+    agent,
+    read: { state, submissionReceipts },
+    optimistic,
+    sessionKey,
+    turnId,
+    queueSendsNext = false
+  }: {
+    agent: string | null
+    read: {
+      state: Pick<
+        StructuredAgentSessionState,
+        | 'epoch'
+        | 'fence'
+        | 'items'
+        | 'submissions'
+        | 'latestTurn'
+        | 'working'
+        | 'hostClock'
+        | 'queuedMessages'
+        | 'queuePause'
+      >
+      submissionReceipts: SubmissionReceiptSource
+    }
+    optimistic: readonly StructuredAgentSessionOptimisticMessage[]
+    sessionKey: string
+    turnId: string | null
+    queueSendsNext?: boolean
+  },
+  isWorking: boolean,
+  live = true
 ) {
   const [clearSent, setClearSent] = useState<{
     sessionKey: string
@@ -58,12 +96,15 @@ export function useMobileStructuredTranscript(
     () => latestAgentSessionContextClearSequence(state.items),
     [state.items]
   )
-  const clearing = agentSessionContextClearOutstanding(state.items, latestClear, clearSentTail)
+  const clearing = useMemo(
+    () => agentSessionContextClearOutstanding(state.items, latestClear, clearSentTail),
+    [clearSentTail, latestClear, state.items]
+  )
   // Retire a press that hides nothing (its divider landed, or its rows left), so a later trim cannot re-arm it.
   if (clearSent?.sessionKey === sessionKey && !clearing) {
     setClearSent(null)
   }
-  const floor = clearing ? clearSentTail + 1 : latestClear
+  const floor = clearing && clearSentTail !== null ? clearSentTail + 1 : latestClear
   const transcriptItems = useMemo(
     () =>
       withNativeChatCutTurnNotices(agentSessionTranscriptRows(state.items, floor), {
@@ -76,17 +117,59 @@ export function useMobileStructuredTranscript(
     []
   )
   const questionTranscript = useMemo(() => mobileStructuredTranscript.stream(), [])
+  const heldIds = useMemo(
+    () => (state.queuedMessages ?? []).map((message) => message.messageId),
+    [state.queuedMessages]
+  )
+  const { queuedMessages, submissions, queuePause } = state
+  const queuePaused = queuePause != null
+  const steer = useQueuedSteerIntents(live ? sessionKey : '', state, isWorking)
+  const steerIntents = steer.intents
+  const queueSendsAsCards = isWorking || queueSendsNext
+  const transcriptPending = useMemo(() => {
+    const outside = pendingSendsOutsideQueuedCards(optimistic, heldIds, queueSendsAsCards)
+    const steering = steeringQueuedMessageEchoes(queuedMessages, submissions, optimistic, {
+      agentWorking: isWorking,
+      queuePaused,
+      steerIntents
+    })
+    return steering.length > 0 ? [...outside, ...steering] : outside
+  }, [
+    optimistic,
+    heldIds,
+    queueSendsAsCards,
+    queuedMessages,
+    submissions,
+    isWorking,
+    queuePaused,
+    steerIntents
+  ])
+  const sendingCards = useMemo(
+    () => sendingQueuedMessageCards(optimistic, heldIds, queueSendsAsCards, submissions),
+    [optimistic, heldIds, queueSendsAsCards, submissions]
+  )
+  const projectedMessages = useMemo(
+    () => projectMessages(transcriptItems, transcriptPending, state.submissions),
+    [transcriptItems, transcriptPending, state.submissions, projectMessages]
+  )
+  // The goal strip on the composer shows goal state, as on desktop.
   const messages = useMemo(
+    () => omitNativeChatThreadGoalRows(projectedMessages),
+    [projectedMessages]
+  )
+  const sending = useMemo(
     () =>
-      // The goal strip on the composer shows goal state, as on desktop.
-      omitNativeChatThreadGoalRows(projectMessages(transcriptItems, optimistic, state.submissions)),
-    [transcriptItems, optimistic, state.submissions, projectMessages]
+      createStructuredAgentSendingSource(submissionReceipts, transcriptPending, state.submissions),
+    [state.submissions, submissionReceipts, transcriptPending]
   )
   return {
     clearing,
+    steer,
     onClearSent,
-    transcriptItems,
+    timing: useMobileStructuredAgentTurnTiming(state, turnId, transcriptItems),
     messages,
+    sending,
+    sendingCards,
     receipts: questionTranscript(transcriptItems).receipts
   }
 }

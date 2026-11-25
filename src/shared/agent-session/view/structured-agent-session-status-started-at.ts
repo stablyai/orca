@@ -2,8 +2,8 @@
 // Turn records need no producer filter because they never carry child linkage (structured-agent-session-live-turn.ts).
 
 import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields,
+  AgentJournalRenderItem
 } from '../journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { readAgentJournalTurn } from '../lifecycle/records/agent-session-turn-record'
@@ -18,7 +18,7 @@ import { isUnansweredStructuredAgentSessionDispatch } from '../requests/structur
 export function structuredAgentSessionStatusStartedAt(
   status: StructuredAgentSessionProjectedStatus,
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   currentFence: number | null | undefined,
   latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null
 ): number | undefined {

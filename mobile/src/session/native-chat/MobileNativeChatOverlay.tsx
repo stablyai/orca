@@ -311,6 +311,7 @@ function MobileNativeChatOverlayContent({
                       workingStartedAt={controller.nativeChatWorkingStartedAt}
                       settledTurns={controller.nativeChatSettledTurns}
                       turnJournal={controller.nativeChatTurnJournal}
+                      structuredSending={controller.nativeChatSending}
                       transcriptLoading={session.transcriptLoading}
                       receipts={controller.nativeChatReceipts}
                       actionablePromptIds={controller.nativeChatActionablePromptIds}

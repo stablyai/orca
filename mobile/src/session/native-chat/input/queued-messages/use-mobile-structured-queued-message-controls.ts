@@ -1,11 +1,12 @@
 import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
-import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
+import {
+  useMobileQueuedMessageComposerActions,
+  useMobileQueuedActionResolved
+} from './use-mobile-queued-message-composer-actions'
 import { useCallback, useMemo } from 'react'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import { agentSessionVisibleFailureFacts } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { mapSettledWithConcurrency } from '../../../../../../src/shared/concurrency/map-with-concurrency'
 import type {
@@ -14,8 +15,12 @@ import type {
   AgentSessionQueuedMessagesResumeResult,
   AgentSessionQueuePause
 } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
-import { queuedMessagesQueuePause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
+import type { useQueuedSteerIntents } from './use-queued-steer-intents'
+import {
+  queuedMessagesQueuePause,
+  queuedMessageCardSteers,
+  type QueuedMessageCard
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
   composerQueuedCards,
   createWaitingAgentMailRows
@@ -25,7 +30,10 @@ import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
 } from './mobile-structured-queued-message-cards'
-import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
+import {
+  sendMobileQueuedMessage,
+  type MobileStructuredAgentMutate
+} from '../../agent-session/use-mobile-structured-agent-mutation'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useMobileStructuredQueuedEdit } from './use-mobile-structured-queued-edit'
 import { useMobileWaitingAgentMailArrivalAnnouncement } from '../../transcript/agent-messages/use-mobile-waiting-agent-mail-arrival-announcement'
@@ -82,7 +90,9 @@ export function useMobileStructuredQueuedMessageControls(args: {
   queueCurrent: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
+  sending?: readonly QueuedMessageCard[]
+  steer: ReturnType<typeof useQueuedSteerIntents>
   agentWorking?: boolean
   mutate: MobileStructuredAgentMutate
   // Without a live composer or a successful copy, Edit must refuse.
@@ -100,6 +110,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
     queuedMessages,
     queuePause,
     sessionKey,
+    steer: { intents: steerIntents, request: requestSteer },
     submissions
   } = args
   const composerActions = useMobileQueuedMessageComposerActions({
@@ -107,35 +118,35 @@ export function useMobileStructuredQueuedMessageControls(args: {
     messages: queuedMessages,
     reorderCapable: args.reorderCapable === true
   })
-  const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
   // Only a returned card's caption reads the transcript, so streaming leaves the cards alone otherwise.
   const failureItems = queuedMessages?.some((draft) => draft.state === 'returned')
     ? (args.journalItems ?? NO_ITEMS)
     : null
-  const allCards = useMemo(() => {
-    const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
+  const allCards = useMemo(
+    () =>
+      mobileQueuedMessageCards(queuedMessages, submissions, {
+        agentWorking,
+        steerIntents,
+        queuePaused: queuePause !== null,
+        agentName: args.agentName,
+        statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : [],
+        sending: args.sending,
+        order: composerActions.messages
+      }),
+    [
       agentWorking,
-      queuePaused: queuePause !== null,
-      agentName: args.agentName,
-      statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : []
-    })
-    // Preview changes display order; published membership and current handoff visibility stay intact.
-    const visibleById = new Map(visibleCards.map((card) => [card.messageId, card]))
-    return (orderedMessages ?? []).flatMap((message) => {
-      const card = visibleById.get(message.messageId)
-      return card ? [card] : []
-    })
-  }, [
-    agentWorking,
-    args.agentName,
-    failureItems,
-    orderedMessages,
-    queuePause,
-    queuedMessages,
-    submissions,
-    t
-  ])
+      steerIntents,
+      args.agentName,
+      args.sending,
+      failureItems,
+      composerActions.messages,
+      queuePause,
+      queuedMessages,
+      submissions,
+      t
+    ]
+  )
   const { begin: beginInlineEdit, editor } = useMobileStructuredQueuedEdit({
     ...args,
     enabled: args.enabled && args.editCapable === true,
@@ -157,27 +168,18 @@ export function useMobileStructuredQueuedMessageControls(args: {
     listening:
       args.chatActive && args.transcriptShown && args.queueCurrent && queuedMessages !== null
   })
-  const resolved = useCallback(
-    (accepted: boolean): boolean => {
-      if (accepted) {
-        onActionResolved?.()
-      }
-      return accepted
-    },
-    [onActionResolved]
-  )
+  const resolved = useMobileQueuedActionResolved(onActionResolved)
   const send = useCallback(
-    async (messageId: string): Promise<boolean> =>
-      resolved(
-        (
-          await mutate<AgentSessionSendResult>(
-            'agentSession.queuedMessageSend',
-            'agentSession.queuedMessageSend',
-            { messageId }
-          )
-        ).status === 'accepted'
-      ),
-    [mutate, resolved]
+    async (messageId: string): Promise<boolean> => {
+      const card = allCards.find((entry) => entry.messageId === messageId)
+      const value = await requestSteer(
+        messageId,
+        args.enabled && agentWorking && !!card && queuedMessageCardSteers(card),
+        (operation) => sendMobileQueuedMessage(mutate, messageId, operation)
+      )
+      return resolved(value !== null)
+    },
+    [agentWorking, allCards, args.enabled, mutate, requestSteer, resolved]
   )
   const deleteQueued = useCallback(
     async (messageId: string, copied: boolean): Promise<boolean> => {
@@ -294,15 +296,12 @@ export function useMobileStructuredQueuedMessageControls(args: {
     (messageId: string): boolean => editableIds.has(messageId),
     [editableIds]
   )
-  const holds = useCallback(
-    (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),
-    [allCards]
-  )
   // Delete all also takes the waiting agent mail the transcript draws, as it did when that was a card.
   const clearIds = useMemo(
     () => allCards.filter((card) => card.hold !== 'sending').map((card) => card.messageId),
     [allCards]
   )
+  const holds = useCallback((messageId: string) => clearIds.includes(messageId), [clearIds])
 
   return {
     cards,

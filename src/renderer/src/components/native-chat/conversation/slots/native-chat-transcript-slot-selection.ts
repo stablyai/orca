@@ -1,7 +1,5 @@
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
@@ -34,7 +32,7 @@ export function splitNativeChatSlotsWaitingBehindLiveTurn(
   slots: readonly NativeChatTranscriptSlot[],
   journalItems: readonly AgentJournalRenderItem[] | undefined,
   stopping = false,
-  journalSubmissions?: readonly AgentJournalSubmission[],
+  journalSubmissions?: readonly StructuredAgentSubmission[],
   host: Parameters<typeof nativeChatMessagesWaitingBehindLiveTurn>[4] = {}
 ): { slots: NativeChatTranscriptSlot[]; waitingSlots: NativeChatTranscriptSlot[] } {
   const waiting = nativeChatMessagesWaitingBehindLiveTurn(

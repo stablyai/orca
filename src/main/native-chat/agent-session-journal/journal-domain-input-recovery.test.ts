@@ -10,6 +10,7 @@ import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
+import { applyJournalDomainDispatchWritten } from './journal-domain-dispatch-written'
 import { applyJournalDomainDispatch } from './journal-domain-dispatch'
 import {
   applyJournalDomainInputRecovery,
@@ -476,4 +477,36 @@ it('makes an uncertain command turn unverifiable without manufacturing a failure
   expect(result.value).toEqual({ value: undefined })
   expect(f.item('orca:command-turn%3Acommand')?.body).toMatchObject({ state: 'unverifiable' })
   expect(f.item('orca:command-result%3Acommand')).toBeUndefined()
+})
+
+it('refuses a provider receipt issued against a retired journal epoch', () => {
+  const f = fixture()
+  f.admit('send')
+  f.dispatch({
+    clientMessageId: 'send',
+    state: 'pending',
+    turnScope: { kind: 'thread' },
+    fence: 1
+  })
+  f.db
+    .prepare('UPDATE journal_chat_state SET epoch=? WHERE session_id=?')
+    .run('replacement', 'chat')
+  expect(() =>
+    f.transaction(() =>
+      applyJournalDomainDispatchWritten(
+        f.db,
+        target,
+        {
+          kind: 'dispatch-written',
+          handoverCursor: { epoch: target.epoch, sequence: f.attempt('send')!.handover!.sequence },
+          clientMessageId: 'send',
+          fence: 1,
+          observedAt: now,
+          providerReceipt: true
+        },
+        now + 20
+      )
+    )
+  ).toThrow('retired chat epoch')
+  expect(f.attempt('send')?.submission.writtenAt).toBeUndefined()
 })

@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { StructuredMessageSteeringInputs } from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionMcpOperation,
@@ -24,6 +25,7 @@ import type {
   AgentJournalMessageItem,
   AgentJournalTurnItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -77,6 +79,7 @@ export type AgentSessionAcquisition = {
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
 export type StructuredAgentSessionCommandRun = {
+  handoverCursor?: AgentJournalCursor
   clientMessageId: string
   turnId: string
   identity: AgentJournalItemIdentity
@@ -101,8 +104,9 @@ export type AgentSessionDispatchOutcome =
       /** The running turn it joined, which another send opened. */
       answeredInTurn?: AgentJournalAnsweredTurnIdentity
     } & AgentSessionRanOptionsEvidence)
-  /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery. */
-  | ({ state: 'admitted' } & AgentSessionRanOptionsEvidence)
+  /** Transport admission stays pending until provider acknowledgement; elapsed time never proves unknown delivery.
+   *  `writtenAt`: when the host observed provider-confirmed receipt. */
+  | ({ state: 'admitted'; writtenAt?: number } & AgentSessionRanOptionsEvidence)
   /** Generate rejection words with agentSessionFailureWords; answeredInTurn identifies an already-ended answering turn. */
   | ({
       state: 'rejected'
@@ -217,8 +221,11 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     /** Abort only before provider write, preserving the original signal reason so the host knows it was unwritten. */
     signal?: AbortSignal
     fence: number
+    /** Read at provider enqueue, after any fresh handover replaced the initial attempt. */
+    handoverCursor?: () => AgentJournalCursor | undefined
     /** Preserve submission time as the opened turn’s requestedAt. */
     requestedAt?: number
+    turnScope?: AgentJournalTurnScope
     beforeDispatch?: () => Promise<void>
     /** Whether the host still owns this exact child after asynchronous preparation. */
     isCurrent?: () => boolean
@@ -289,6 +296,7 @@ export type StructuredAgentSessionAdapter = AdapterControls & {
     generation: string
   }): (() => boolean) | undefined
   /** Undefined without a live child; then the host conservatively treats unanswered sends as held. */
+  /** A stable, immutable snapshot until the held membership changes. */
   heldSends?(sessionId: string): ReadonlySet<string> | undefined
   /** Prove this acquisition’s root alive for lease renewal; absent/false falls back to PID probing. */
   holdsLiveProviderProcess?(sessionId: string, acquisitionGeneration: string): boolean

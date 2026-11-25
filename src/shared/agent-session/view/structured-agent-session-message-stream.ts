@@ -1,6 +1,6 @@
 import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields,
+  AgentJournalRenderItem
 } from '../journal/agent-session-journal-types'
 import { compareAgentJournalItems } from '../journal/agent-session-journal-position'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
@@ -45,7 +45,7 @@ function independentRow(row: NativeChatMessage | undefined): boolean {
 type MessageStream = StructuredAgentSessionMessageRows & {
   items: readonly AgentJournalRenderItem[]
   optimistic: readonly StructuredAgentSessionOptimisticMessage[]
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
   /** Conversation row index by id, for rows drawn undecorated from one item. */
   rowAt: Map<string, number>
   submissionIds: ReadonlySet<string>
@@ -56,7 +56,7 @@ function withRowIndex(
   projection: StructuredAgentSessionMessageRows,
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ): MessageStream {
   const rowAt = new Map<string, number>()
   for (let index = 0; index < projection.conversationEnd; index += 1) {
@@ -180,7 +180,7 @@ export function createStructuredAgentSessionMessageProjection(
   return (
     items: readonly AgentJournalRenderItem[],
     optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly AgentJournalSubmissionFields[]
   ): NativeChatMessage[] => {
     const reused =
       previous?.optimistic === optimistic && previous.submissions === submissions

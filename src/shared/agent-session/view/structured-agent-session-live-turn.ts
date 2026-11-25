@@ -141,7 +141,18 @@ export function latestTurnAfterStructuredAgentSessionBatch(
 ): AgentSessionLatestTurn | null | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  const next = carriesRows || event.latestTurn !== undefined ? event.latestTurn : previous
+  return sameLatestTurn(previous, next) ? previous : next
+}
+
+function sameLatestTurn(
+  left: AgentSessionLatestTurn | null | undefined,
+  right: AgentSessionLatestTurn | null | undefined
+): boolean {
+  return (
+    left === right ||
+    (left != null && right != null && JSON.stringify(left) === JSON.stringify(right))
+  )
 }
 
 /** Row-carrying batches restate actionable prompts; missing fields from older hosts clear prior claims. */
@@ -151,9 +162,19 @@ export function actionablePromptIdsAfterStructuredAgentSessionBatch(
 ): string[] | undefined {
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
-  return carriesRows || event.actionablePromptIds !== undefined
-    ? event.actionablePromptIds
-    : previous
+  const next =
+    carriesRows || event.actionablePromptIds !== undefined ? event.actionablePromptIds : previous
+  return sameActionablePromptIds(previous, next) ? previous : next
+}
+
+function sameActionablePromptIds(left: string[] | undefined, right: string[] | undefined): boolean {
+  return (
+    left === right ||
+    (left !== undefined &&
+      right !== undefined &&
+      left.length === right.length &&
+      left.every((id, index) => id === right[index]))
+  )
 }
 
 /** Apply the same row-carrying/older-host reset rule as latestTurn. */
@@ -164,6 +185,31 @@ export function hostWorkingAfterStructuredAgentSessionBatch(
   const { items, removedItemIds, submissions } = event.batch
   const carriesRows = items.length > 0 || removedItemIds.length > 0 || submissions.length > 0
   return carriesRows || event.working !== undefined ? event.working : previous
+}
+
+export function structuredAgentSessionBatchHostWork(
+  state: {
+    latestTurn?: AgentSessionLatestTurn | null
+    actionablePromptIds?: string[]
+    working?: boolean
+  },
+  event: Extract<AgentSessionSubscribeEvent, { type: 'batch' }>,
+  receiptRestatement: boolean
+) {
+  return {
+    latestTurn:
+      receiptRestatement && event.latestTurn === undefined
+        ? state.latestTurn
+        : latestTurnAfterStructuredAgentSessionBatch(state.latestTurn, event),
+    actionablePromptIds:
+      receiptRestatement && event.actionablePromptIds === undefined
+        ? state.actionablePromptIds
+        : actionablePromptIdsAfterStructuredAgentSessionBatch(state.actionablePromptIds, event),
+    working:
+      receiptRestatement && event.working === undefined
+        ? state.working
+        : hostWorkingAfterStructuredAgentSessionBatch(state.working, event)
+  }
 }
 
 /** Host work can change at generation end without any row; changed turn/prompt/working facts must prevent no-op reduction. */
@@ -179,10 +225,9 @@ export function restatesStructuredAgentSessionHostWork(
   }
 ): boolean {
   return (
-    (event.latestTurn === undefined ||
-      JSON.stringify(event.latestTurn) === JSON.stringify(state.latestTurn)) &&
+    (event.latestTurn === undefined || sameLatestTurn(event.latestTurn, state.latestTurn)) &&
     (event.actionablePromptIds === undefined ||
-      event.actionablePromptIds.join('\n') === state.actionablePromptIds?.join('\n')) &&
+      sameActionablePromptIds(event.actionablePromptIds, state.actionablePromptIds)) &&
     (event.working === undefined || event.working === state.working)
   )
 }

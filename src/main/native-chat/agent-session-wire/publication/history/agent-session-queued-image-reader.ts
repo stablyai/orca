@@ -160,6 +160,18 @@ export const unchangedQueuedImageSubmission = (
   send: AgentJournalSubmission
 ): AgentJournalSubmission => send
 
+/** Captured queue arrays already own the source relation from snapshot/event decoration. */
+export function restatedQueuedImageSubmission(
+  cards: QueuePublication['queuedMessages'],
+  send: AgentJournalSubmission
+): AgentJournalSubmission {
+  const relation = relations.get(cards)
+  return relation &&
+    (relation.ids.has(send.clientMessageId) || relation.imageIds.has(send.queuedMessageId ?? ''))
+    ? sourcePresentation(send, relation.ids.get(send.clientMessageId) === true)
+    : send
+}
+
 export function queuedImageSubmissionPresenter(policy: QueuedImageHistoryPolicy) {
   if (policy.ids.length === 0 && policy.imageIds.length === 0) {
     return unchangedQueuedImageSubmission

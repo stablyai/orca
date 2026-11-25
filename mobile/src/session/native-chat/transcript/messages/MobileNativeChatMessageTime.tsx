@@ -5,6 +5,8 @@ import { colors, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
+import { useStructuredAgentItemSending } from '../sending/structured-agent-sending-scope'
+import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 
 /** A message's time as drawn ("2:10 PM", or with its day once it is older) and in full. */
 export function useMobileNativeChatMessageTimeLabel(
@@ -21,25 +23,33 @@ export function useMobileNativeChatMessageTimeLabel(
 
 export const MobileNativeChatMessageTime = memo(function MobileNativeChatMessageTime({
   timestamp,
-  fontScale
+  fontScale,
+  submissionItemId
 }: {
   timestamp: number | null | undefined
   fontScale: number
+  submissionItemId?: string
 }): React.JSX.Element | null {
   useMobileColorScheme()
+  const sending = useStructuredAgentItemSending(submissionItemId)
   const time = useMobileNativeChatMessageTimeLabel(timestamp)
-  if (!time) {
+  if (!time && !sending) {
     return null
   }
   return (
     <Text
       style={[styles.time, scaledType(typography.metaSize, fontScale, 5)]}
-      accessibilityLabel={time.full}
+      accessibilityLabel={sending ? undefined : time?.full}
     >
-      {time.short}
+      {sending ? <SendingLabel /> : time?.short}
     </Text>
   )
 })
+
+function SendingLabel(): string {
+  const t = useMobileTranslation()
+  return t('chat.message.sending', 'Sending…')
+}
 
 const styles = themedStyleSheet(() => ({
   time: {

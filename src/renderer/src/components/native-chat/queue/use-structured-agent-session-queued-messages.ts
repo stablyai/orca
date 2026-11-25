@@ -7,7 +7,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { mapSettledWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import type {
   AgentSessionQueuedMessage,
@@ -15,7 +15,7 @@ import type {
   AgentSessionQueuedMessagesResumeResult,
   AgentSessionQueuePause
 } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionSendResult } from '../../../../../shared/agent-session/agent-session-wire'
+import type { useQueuedSteerIntents } from './use-queued-steer-intents'
 import { useStructuredAgentSessionQueuedEdit } from './editing/use-structured-agent-session-queued-edit'
 import type {
   QueuedEditTransport,
@@ -24,15 +24,13 @@ import type {
 import type { StructuredAgentSessionPendingSend } from '../session/structured/delivery/structured-agent-session-pending-sends'
 import {
   headSteerableQueuedMessageCard,
+  queuedMessageCardSteers,
   projectQueuedMessageCards,
   type QueuedMessageCard
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import { useStructuredAgentSessionWaitingAgentMail } from './use-structured-agent-session-waiting-agent-mail'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import {
-  pendingQueueSendsOnTheirWay,
-  sendingQueuedMessageCards
-} from './structured-agent-session-sending-queued-cards'
+import { sendingQueuedMessageCards } from '../../../../../shared/agent-session/view/structured-agent-session-sending-queued-cards'
 import type {
   AdmitStructuredAgentSessionAction,
   CaptureStructuredAgentSessionPresentation,
@@ -97,7 +95,7 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   enabled: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
   hasPendingPrompt: boolean
   /** A turn is running, whoever started it, or the queue is about to send its next card. */
   isWorking: boolean
@@ -110,11 +108,12 @@ export function useStructuredAgentSessionQueuedMessages(args: {
   mutate: StructuredAgentSessionMutate
   admit: AdmitStructuredAgentSessionAction
   capturePresentation: CaptureStructuredAgentSessionPresentation
+  steer: ReturnType<typeof useQueuedSteerIntents>
   editTransport: QueuedEditTransport
 }): StructuredAgentSessionQueuedMessagesController {
   const { composerScopeKey, enabled, hasPendingPrompt, mutate, queuedMessages, submissions } = args
-  const { admit, capturePresentation, isWorking, queuePause } = args
-  const sending = args.sending ?? NO_SENDS
+  const { admit, capturePresentation, isWorking, queuePause, sending = NO_SENDS } = args
+  const { intents: steerIntents, request: requestSteer } = args.steer
 
   const allCards = useMemo(
     () => [
@@ -122,18 +121,17 @@ export function useStructuredAgentSessionQueuedMessages(args: {
         // A command card offers no send while the agent works.
         agentWorking: isWorking,
         queuePaused: queuePause !== null,
-        steersInTranscript: true
+        steersInTranscript: true,
+        steerIntents
       }),
       ...sendingQueuedMessageCards(
-        pendingQueueSendsOnTheirWay(
-          sending,
-          (queuedMessages ?? []).map((message) => message.messageId),
-          isWorking,
-          submissions
-        )
+        sending.filter((entry) => entry.phase === 'sending'),
+        (queuedMessages ?? []).map((message) => message.messageId),
+        isWorking,
+        submissions
       )
     ],
-    [isWorking, sending, queuePause, queuedMessages, submissions]
+    [isWorking, sending, queuePause, queuedMessages, submissions, steerIntents]
   )
   const editing = useStructuredAgentSessionQueuedEdit({
     transport: args.editTransport,
@@ -195,15 +193,23 @@ export function useStructuredAgentSessionQueuedMessages(args: {
 
   const steer = useCallback(
     async (messageId: string): Promise<void> => {
+      const action = admit()
+      if (!action) {
+        return
+      }
+      const card = allCards.find((entry) => entry.messageId === messageId)
       await run([messageId], 'send', () =>
-        mutate<AgentSessionSendResult>(
-          'agentSession.queuedMessageSend',
-          'agentSession.queuedMessageSend',
-          { messageId }
+        requestSteer(messageId, isWorking && !!card && queuedMessageCardSteers(card), (operation) =>
+          action.mutate(
+            'agentSession.queuedMessageSend',
+            'agentSession.queuedMessageSend',
+            { messageId },
+            operation
+          )
         )
       )
     },
-    [mutate, run]
+    [admit, allCards, isWorking, requestSteer, run]
   )
 
   const remove = useCallback(
@@ -225,7 +231,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
 
   // The host's whole queue, in the order a pending drag will leave it: its head is what the shortcut sends.
   const steerOrder = reordered.held
-  const mailLeads = steerOrder[0] !== undefined && mail.waitingIds.has(steerOrder[0].messageId)
   const steerHead = useCallback((): boolean => {
     if (!enabled) {
       return false
@@ -333,6 +338,6 @@ export function useStructuredAgentSessionQueuedMessages(args: {
     stopping: args.stopping,
     agentMail: mail.agentMail,
     agentMailEditable: mail.agentMailEditable,
-    mailLeads
+    mailLeads: steerOrder[0] !== undefined && mail.waitingIds.has(steerOrder[0].messageId)
   }
 }

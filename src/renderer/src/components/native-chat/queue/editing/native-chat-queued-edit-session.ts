@@ -24,10 +24,8 @@ import { queuedEditReturnedNotice } from './queued-message-edit-notices'
 import { subscribeToNativeChatPendingAttachments } from '../../attachments/chips/native-chat-pending-attachment-cache'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentSessionQueuedMessage } from '../../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type {
-  AgentJournalMessageItem,
-  AgentJournalSubmission
-} from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { QueuedMessageCard } from '../../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionWrite } from '../../session/structured/writes/use-structured-agent-session-mutate'
 
@@ -83,7 +81,7 @@ export type NativeChatQueuedEditSession = NativeChatQueuedEditDraft & {
   view: {
     messages: readonly AgentSessionQueuedMessage[] | null
     cards: readonly QueuedMessageCard[]
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
     promptOpen: boolean
   }
   lease: QueuedEditLease
@@ -174,7 +172,7 @@ export type StructuredQueuedEditArgs = {
   messages: readonly AgentSessionQueuedMessage[] | null
   /** The cards this pane shows; a card that leaves them has left the queue. */
   cards: readonly QueuedMessageCard[]
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
   composerScopeKey: string | undefined
   /** A question or approval holds the chat box's place. */
   promptOpen: boolean

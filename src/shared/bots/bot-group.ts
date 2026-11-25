@@ -4,7 +4,7 @@ import { BotNameSchema } from '../bot-types'
 import { agentJournalSubmissionKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSnapshot
+  AgentJournalSubmissionFields
 } from '../agent-session/journal/agent-session-journal-types'
 import { structuredAgentTurnAnchors } from '../native-chat/transcript/turns/native-chat-turn-membership'
 import { remoteMemberKey } from './bot-group-mentions'
@@ -147,7 +147,7 @@ export const BotGroupDelete = GroupId
 
 type GroupJournal = {
   items: readonly AgentJournalRenderItem[]
-  submissions: AgentJournalSnapshot['submissions']
+  submissions: readonly AgentJournalSubmissionFields[]
 }
 
 /** The submission a group operation (its queued or client message id) handed to the session. */

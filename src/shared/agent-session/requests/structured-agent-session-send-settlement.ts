@@ -1,5 +1,5 @@
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from './structured-agent-session-send-evidence'
 import { handedOffQueuedMessageIds } from '../view/structured-agent-session-draft-hand-off'
 
@@ -16,19 +16,44 @@ export function structuredAgentSessionReadCoversSend(
   )
 }
 
+type SettledSends = {
+  cards: ReadonlySet<string>
+  recorded: ReadonlyMap<string, AgentJournalSubmissionFields>
+}
+
+const settlementBySubmissions = new WeakMap<
+  readonly AgentJournalSubmissionFields[],
+  {
+    recorded: SettledSends['recorded']
+    handoffs: ReadonlySet<string>
+    byQueue: WeakMap<readonly string[], SettledSends>
+  }
+>()
+
 /** Settle by host-published ID as queued card/handoff or submission, whichever arrives before the send response; cards win. */
 export function structuredAgentSessionSettledSends(
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   queuedMessageIds: readonly string[]
-): {
-  cards: ReadonlySet<string>
-  recorded: ReadonlyMap<string, AgentJournalSubmission>
-} {
-  const rows = submissions.filter(
-    (row) => row.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
-  )
-  return {
-    cards: new Set([...queuedMessageIds, ...handedOffQueuedMessageIds(rows)]),
-    recorded: new Map(rows.map((submission) => [submission.clientMessageId, submission]))
+): SettledSends {
+  let facts = settlementBySubmissions.get(submissions)
+  if (!facts) {
+    const rows = submissions.filter(
+      (row) => row.reason !== STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING
+    )
+    facts = {
+      recorded: new Map(rows.map((submission) => [submission.clientMessageId, submission])),
+      handoffs: handedOffQueuedMessageIds(rows),
+      byQueue: new WeakMap()
+    }
+    settlementBySubmissions.set(submissions, facts)
   }
+  let settled = facts.byQueue.get(queuedMessageIds)
+  if (!settled) {
+    settled = {
+      cards: new Set([...queuedMessageIds, ...facts.handoffs]),
+      recorded: facts.recorded
+    }
+    facts.byQueue.set(queuedMessageIds, settled)
+  }
+  return settled
 }

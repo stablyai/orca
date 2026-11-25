@@ -11,7 +11,11 @@ import {
   type AgentSessionPublishedWork
 } from '../../observations/agent-session-published-work'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
+import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import type { Subscriber } from './agent-session-subscribe-input'
+import { journalReceiptOverlay } from '../../../agent-session-journal/journal-status-receipt-progress'
+import { restatedQueuedImageSubmission } from '../history/agent-session-queued-image-reader'
+import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 
 /** Restatements cannot share a history page's already allocated byte budget. */
 export async function refreshPublishedWork(
@@ -19,17 +23,26 @@ export async function refreshPublishedWork(
   subscriber: Subscriber,
   journal: AgentSessionJournal,
   work: AgentSessionPublishedWork | undefined,
-  shared: { hostNow: number; activity?: AgentSessionTurnActivity | null }
+  current: () => boolean,
+  shared: { hostNow: number; activity?: AgentSessionTurnActivity | null },
+  queue?: { value: QueuePublication | undefined }
 ): Promise<void> {
-  if (!work || !port.isActive(subscriber)) {
+  if (!work || subscriber.stopped?.aborted || !port.isActive(subscriber)) {
     return
   }
   const view = work.workViewKey()
   const fields = agentSessionPublishedWorkFields(journal, work)
   const { budgetBytes } = subscriberHistoryReader(subscriber)
+  const withReceipt = journalReceiptOverlay(journal, work.cursor)
+  const checkCurrent = () => {
+    if (!current()) {
+      throw new SubscriberFrameSuperseded()
+    }
+  }
   let pending: AgentJournalSubmission[] = []
   let bytes = 0
   const emit = async (): Promise<void> => {
+    checkCurrent()
     await port.emit(
       subscriber,
       {
@@ -40,12 +53,24 @@ export async function refreshPublishedWork(
         ...fields,
         ...shared
       },
-      { currentWork: work, journal }
+      {
+        currentWork: work,
+        journal,
+        current: checkCurrent,
+        restatement: true,
+        queuePublication: queue
+      }
     )
     pending = []
     bytes = 0
   }
-  for (const submission of work.restatedSubmissions()) {
+  const cards = subscriber.projectJournalEvent
+    ? (queue?.value ?? subscriber.queuePublication)?.queuedMessages
+    : undefined
+  checkCurrent()
+  for (const record of work.restatedSubmissions()) {
+    const stamped = withReceipt(record)
+    const submission = cards ? restatedQueuedImageSubmission(cards, stamped) : stamped
     const submissionBytes = Buffer.byteLength(JSON.stringify(submission), 'utf8') + 1
     if (
       pending.length > 0 &&
@@ -55,6 +80,7 @@ export async function refreshPublishedWork(
       if (!port.isActive(subscriber)) {
         return
       }
+      checkCurrent()
     }
     pending.push(submission)
     bytes += submissionBytes
@@ -62,6 +88,7 @@ export async function refreshPublishedWork(
   // Empty work still owes its fields when ownership changed without a journal row.
   await emit()
   if (port.isActive(subscriber)) {
+    checkCurrent()
     subscriber.workView = view
   }
 }

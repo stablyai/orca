@@ -15,7 +15,7 @@ import { feedback } from '../../theme/mobile-theme'
 /**
  * A button whose press sends something to the host and waits. The pending rule, shared by every
  * such control: the control that started the send shows `pending` (same size and colour, its
- * content swapped for a spinner, presses ignored) until the send settles — a list row keeps its
+ * content swapped for a spinner, presses ignored by default) until the send settles — a list row keeps its
  * content and shows the spinner after it, as list rows show progress; the send ticks
  * `triggerSelection` as it starts (`useMobilePendingControl` does both), and a failure buzzes
  * through the chat's send-error reporter. Other controls the send locks pass `disabled` and take
@@ -24,6 +24,7 @@ import { feedback } from '../../theme/mobile-theme'
 export function MobilePendingButton({
   label,
   pending = false,
+  pressWhilePending = false,
   disabled = false,
   onPress,
   onLongPress,
@@ -44,6 +45,7 @@ export function MobilePendingButton({
   /** Shown unless `iconOnly`; always the accessible name unless `accessibilityLabel` is given. */
   label: string
   pending?: boolean
+  pressWhilePending?: boolean
   disabled?: boolean
   onPress: () => void
   onLongPress?: () => void
@@ -64,7 +66,7 @@ export function MobilePendingButton({
   children?: ReactNode
   contentStyle?: StyleProp<ViewStyle>
 }): React.JSX.Element {
-  const off = disabled || pending
+  const off = disabled || (pending && !pressWhilePending)
   return (
     <Pressable
       accessibilityRole="button"

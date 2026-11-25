@@ -3,13 +3,10 @@ import { useMobileUnresolvedFailureRows } from '../status/use-mobile-unresolved-
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
+import { useMobileStructuredSessionWork } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
-import {
-  runningStructuredAgentSessionTurnId,
-  structuredAgentSessionQueueSendsNext
-} from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
-import { mobileStructuredLinkedPrompts } from '../input/prompts/mobile-structured-linked-prompts'
+import { structuredAgentSessionQueueSendsNext } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import { useMobileStructuredLinkedPrompts } from '../input/prompts/mobile-structured-linked-prompts'
 import {
   projectStructuredPermission,
   projectStructuredQuestion
@@ -28,7 +25,6 @@ import { useMobileStructuredAccountUsage } from '../usage/use-mobile-structured-
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
-import { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import { useMobileStructuredRequestCancel } from './mobile-structured-agent-session-cancel'
 import { useMobileStructuredAgentMutate } from './use-mobile-structured-agent-mutation'
 import { useMobileStructuredSendWithOutcome } from '../composer/delivery/use-mobile-structured-send-with-outcome'
@@ -73,8 +69,8 @@ export function useMobileStructuredAgentSession(
   const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
-  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } =
-    useMobileStructuredAgentState(stateArgs)
+  const read = useMobileStructuredAgentState(stateArgs)
+  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } = read
 
   const mutate = useMobileStructuredAgentMutate({
     client,
@@ -85,7 +81,7 @@ export function useMobileStructuredAgentSession(
     ...(agent ? { agentName: tuiAgentDisplayName(agent) ?? agent } : {})
   })
 
-  const turnId = runningStructuredAgentSessionTurnId(state)
+  const { turnId, isWorking } = useMobileStructuredSessionWork(state)
   const options = useMobileStructuredAgentOptions({
     agent,
     modelCatalogCache: useHostModelCatalogCache({ hostId, client, agent, enabled }),
@@ -107,12 +103,8 @@ export function useMobileStructuredAgentSession(
   })
   const { contextUsageSupport, accountUsageReported, ...optionFields } = options
 
-  const { status, epoch } = state
-  const linked = useMemo(
-    () => mobileStructuredLinkedPrompts(state, args.itemLink, sessionId),
-    [state, args.itemLink, sessionId]
-  )
-  const { approvalPrompt, questionPrompt } = linked
+  const { approvalPrompt, questionPrompt, navigation, promptIdentity } =
+    useMobileStructuredLinkedPrompts(state, args.itemLink, sessionId)
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
     approvalItemId: approvalPrompt?.itemId,
     questionItemId: questionPrompt?.itemId,
@@ -130,11 +122,13 @@ export function useMobileStructuredAgentSession(
     onSendError,
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
-  const transcript = useMobileStructuredTranscript(agent, state, sends.optimistic, sessionKey)
-  const { clearing, transcriptItems, messages, receipts } = transcript
-  const timing = useMobileStructuredAgentTurnTiming({ ...state, items: transcriptItems }, turnId)
-  const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
+  const { clearing, messages, receipts, timing, onClearSent, sending, sendingCards, steer } =
+    useMobileStructuredTranscript(
+      { agent, read, optimistic: sends.optimistic, sessionKey, turnId, queueSendsNext },
+      isWorking,
+      enabled && connected
+    )
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
     state,
@@ -152,6 +146,7 @@ export function useMobileStructuredAgentSession(
     sessionKey,
     turnId,
     isWorking,
+    hasPendingSend: sending.candidates.size > 0,
     stopsConversation: hostSupport?.conversationStop === true
   })
   const turnIndicator = useMobileStructuredTurnIndicator({
@@ -187,7 +182,7 @@ export function useMobileStructuredAgentSession(
     stopping: turnIndicator.stopping,
     ...sends,
     commandPending: commandPendingRef,
-    onClearSent: transcript.onClearSent,
+    onClearSent,
     sendsOut,
     controller: mcp.commands,
     sessionCommands: args.sessionCommands,
@@ -209,6 +204,7 @@ export function useMobileStructuredAgentSession(
     stateRef,
     options,
     turnId,
+    hasPrompt: promptIdentity !== undefined,
     backgroundTasks,
     sendsOut,
     commandPendingRef,
@@ -216,23 +212,23 @@ export function useMobileStructuredAgentSession(
     send: sendWithOutcomeUngated
   })
   useMobileStructuredThreadGoalSend(goal.sendRef, sendWithOutcome)
-  const unresolvedFailureRows = useMobileUnresolvedFailureRows(state.items)
   const usageLimit = useMobileNativeChatUsageLimit(args, state, {
     busy: isWorking || queueSendsNext || sendsOut.sending(),
     send: sendWithOutcome
   })
   const queued = useMobileStructuredQueuedMessageControls({
     ...args,
-    appendComposerText: args.appendComposerText,
     sessionKey,
     agentName: agent ? (tuiAgentDisplayName(agent) ?? agent) : undefined,
     journalItems: state.items,
     transcriptShown: messages.length > 0,
     // A saved or reloading copy is not this chat's current queue yet.
-    queueCurrent: status !== 'loading' && savedAt === null,
+    queueCurrent: state.status !== 'loading' && savedAt === null,
     queuedMessages,
     queuePause,
     submissions: state.submissions,
+    sending: sendingCards,
+    steer,
     agentWorking: isWorking,
     imagesCapable: hostSupport?.queuedMessageImageEdit === true,
     skillsCapable: hostSupport?.queuedMessageSkillsEdit === true,
@@ -240,6 +236,7 @@ export function useMobileStructuredAgentSession(
     editCapable: hostSupport ? hostSupport.queuedMessageEdit === true : null,
     chatActive: enabled,
     enabled: enabled && connected,
+    appendComposerText: args.appendComposerText,
     mutate,
     ...(onActionResolved ? { onActionResolved } : {})
   })
@@ -258,17 +255,18 @@ export function useMobileStructuredAgentSession(
     journal: { items: state.items, submissions: state.submissions },
     contextUsage: useMobileStructuredContextUsage(state.items, contextUsageSupport, state.epoch),
     visualSource: useMobileNativeChatVisualSource(client, sessionId),
-    ...useMobileStructuredAsyncQuestions(args, epoch),
+    ...useMobileStructuredAsyncQuestions(args, state.epoch),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {
-      itemNavigation: savedAt === null ? linked.navigation : null,
+      itemNavigation: savedAt === null ? navigation : null,
       messages,
-      status,
+      status: state.status,
       // A stored copy can't answer "is this ask still open?" until a live frame confirms it.
-      transcriptLoading: status === 'loading' || savedAt !== null,
+      transcriptLoading: state.status === 'loading' || savedAt !== null,
       error: state.error,
-      readFailedFinally: status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
+      readFailedFinally:
+        state.status === 'error' && isFinalAgentSessionReadRefusal(state.readRefusal),
       clearing,
       hasMore: state.hasOlder && olderPages !== 'unavailable' && !clearing,
       loadingEarlier: olderPages === 'loading',
@@ -282,11 +280,12 @@ export function useMobileStructuredAgentSession(
     turnId,
     turnIndicator,
     ...timing,
+    sending,
     sendWithOutcome,
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),
     cancelPrompt: (prompt?: { itemId: string; expectedRevision: number }) =>
-      requestCancel(prompt ?? linked.promptIdentity),
+      requestCancel(prompt ?? promptIdentity),
     receipts,
     actionablePromptIds: state.actionablePromptIds,
     permission: projectStructuredPermission(approvalPrompt),
@@ -305,6 +304,6 @@ export function useMobileStructuredAgentSession(
     accountUsage: useMobileStructuredAccountUsage(args, accountUsageReported),
     rewind,
     usageLimit,
-    unresolvedFailureRows
+    unresolvedFailureRows: useMobileUnresolvedFailureRows(state.items)
   }
 }

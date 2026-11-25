@@ -15,8 +15,8 @@ import type { AgentSessionWriteNoticePart } from '../failures/agent-session-writ
 import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionAttemptFailureParts } from '../failures/structured-agent-session-rejection-words'
 import type {
-  AgentJournalItemBody,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields,
+  AgentJournalItemBody
 } from '../journal/agent-session-journal-types'
 import { pendingPromptsAllUnanswerableHere } from '../requests/prompts/agent-session-approval-subject'
 import type { NativeChatImageRefBlock } from '../../native-chat/native-chat-types'
@@ -87,6 +87,7 @@ export function queuedMessageCardImages(
 type QueuedMessageCardSession = {
   queuePaused?: boolean
   agentWorking?: boolean
+  steerIntents?: ReadonlyMap<string, string>
   /** Draw a steer on its way into the running turn as the person's message, not as a card. */
   steersInTranscript?: true
 }
@@ -94,22 +95,21 @@ type QueuedMessageCardSession = {
 /** A person's steer the running turn will take in: never a card where the transcript draws it. */
 export function queuedMessageSteersIn(
   message: AgentSessionQueuedMessage,
-  session: Pick<QueuedMessageCardSession, 'queuePaused' | 'agentWorking'>
+  session: Pick<QueuedMessageCardSession, 'queuePaused' | 'agentWorking' | 'steerIntents'>
 ): boolean {
   return (
-    message.steers === true &&
     !queuedMessageIsWaitingAgentMail(message) &&
     message.state === 'waiting' &&
     !message.paused &&
-    session.agentWorking === true &&
-    !session.queuePaused
+    (session.steerIntents?.has(message.messageId) === true ||
+      (message.steers === true && session.agentWorking === true && !session.queuePaused))
   )
 }
 
 /** Hide waiting cards after live submission hand-off to avoid catch-up duplicates; rejected hand-offs restore cards, and returned cards never hide. */
 export function projectQueuedMessageCards(
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   session: QueuedMessageCardSession
 ): QueuedMessageCard[] {
   const handedOff = handedOffQueuedMessageIds(

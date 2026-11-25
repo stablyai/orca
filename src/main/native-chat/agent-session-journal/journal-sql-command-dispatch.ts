@@ -16,6 +16,7 @@ import { applyJournalSqlItemCommand } from './journal-sql-item-command'
 
 import { applyJournalDomainSubmission } from './journal-domain-submission-admission'
 
+import { applyJournalDomainDispatchWritten } from './journal-domain-dispatch-written'
 import { applyJournalDomainDispatchCommand } from './journal-domain-dispatch-command'
 
 import { applyJournalDomainQueueCommand } from './journal-domain-queue-command'
@@ -125,6 +126,10 @@ export async function runJournalSqlCommand(
         journalSqlInputCoordinates(target.epoch, result.coordinates),
         [...result.items.map((item) => item.itemId), ...result.removedItemIds]
       )
+    }
+    case 'dispatch-written': {
+      const result = applyJournalDomainDispatchWritten(db, target, operation, savedAt)
+      return finishJournalSqlCommand(db, stateDirectory, command, result, undefined, [])
     }
     case 'pending-unknown':
     case 'pending-reject':

@@ -92,7 +92,11 @@ export function useMobileNativeChatFork(input: {
       latestTurnKey: membership.turnKeys.findLast((key) => key !== undefined)
     }
   }, [messages, turnJournal])
-  const contextFloorSequence = latestAgentSessionContextClearSequence(turnJournal?.items ?? [])
+  const journalItems = turnJournal?.items
+  const contextFloorSequence = useMemo(
+    () => latestAgentSessionContextClearSequence(journalItems ?? []),
+    [journalItems]
+  )
   // The sheet's row is a display projection; only one naming the agent's own message forks.
   const { forkableItemIds, inheritedThroughSequence } = useMemo(
     () => nativeChatForkInventory(turnJournal?.items ?? []),

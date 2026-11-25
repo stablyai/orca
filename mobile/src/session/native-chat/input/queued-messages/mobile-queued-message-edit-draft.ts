@@ -16,7 +16,7 @@ import {
   updateMobileNativeChatDraftInputs
 } from '../../composer/drafts/mobile-native-chat-draft-inputs'
 import type { AgentSessionQueuedMessage } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { pickedSkillsInText } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
@@ -67,7 +67,7 @@ export type MobileQueuedEditDraft = {
   published: {
     cards: readonly MobileQueuedMessageCard[]
     messages: readonly AgentSessionQueuedMessage[] | null
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
   }
   scopeKey: string
   destination: MobileNativeChatDraftDestination | null
@@ -234,7 +234,7 @@ export type MobileStructuredQueuedEditArgs = {
   skillsCapable?: boolean
   composerScopeKey?: string | null
   messages: readonly AgentSessionQueuedMessage[] | null
-  submissions?: readonly AgentJournalSubmission[]
+  submissions?: readonly StructuredAgentSubmission[]
   cards: readonly MobileQueuedMessageCard[]
   mutate: MobileStructuredAgentMutate
   appendComposerText: MobileComposerWriter | undefined

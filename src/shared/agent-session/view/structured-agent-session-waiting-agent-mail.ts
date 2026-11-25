@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { readAgentMessageSource } from '../journal/agent-session-message-source'
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
@@ -36,7 +36,7 @@ function waitingAgentMailRow(message: AgentSessionQueuedMessage): NativeChatMess
  *  each unchanged message keeps its row object when others come or go. */
 export function createWaitingAgentMailRows(): (
   queuedMessages: readonly AgentSessionQueuedMessage[] | null | undefined,
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ) => readonly NativeChatMessage[] {
   let previous: { messages: AgentSessionQueuedMessage[]; rows: readonly NativeChatMessage[] } = {
     messages: [],

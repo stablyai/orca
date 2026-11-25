@@ -6,4 +6,6 @@ export type JournalDomainEventChanges = {
   submissions: string[]
   cards: string[]
   removedItemIds?: string[]
+  /** Submissions whose only change is their writtenAt stamp: restated alone, without their message or the queue. */
+  writtenSubmissions?: string[]
 }

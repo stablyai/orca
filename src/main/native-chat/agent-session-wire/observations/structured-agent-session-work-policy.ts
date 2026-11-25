@@ -1,3 +1,4 @@
+import type { JournalObserverResult } from '../../agent-session-journal/journal-observer-read'
 import type { JournalStatusState } from '../../agent-session-journal/journal-status-state'
 import type {
   StructuredAgentSessionWorkEvidence,
@@ -8,7 +9,8 @@ import { isHistoricalProviderTimelineItem } from '../../agent-session-timeline/p
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem,
-  type AgentJournalSubmission
+  type AgentJournalSubmission,
+  type AgentJournalSubmissionFields
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
@@ -152,7 +154,7 @@ export class StructuredAgentSessionWorkPolicy {
       ? admittedStructuredSubmission(submission, this.generationEnded(submission))
       : submission
 
-  private unanswered(submission: AgentJournalSubmission): boolean {
+  private unanswered(submission: AgentJournalSubmissionFields): boolean {
     return (
       this.facts.continuingInput(submission.clientMessageId) ||
       (submission.dispatchState === 'pending' &&
@@ -172,7 +174,7 @@ export class StructuredAgentSessionWorkPolicy {
     return this.unansweredSends().map(this.publishedSubmission)
   }
 
-  private holds(submission: AgentJournalSubmission): boolean {
+  private holds(submission: AgentJournalSubmissionFields): boolean {
     const held = this.heldSends?.()
     return (
       held === undefined ||
@@ -194,12 +196,12 @@ export class StructuredAgentSessionWorkPolicy {
   }
 
   /** Hand over only this process’s accepted sends; earlier-process sends remain ordinary history. */
-  handsOver(submission: AgentJournalSubmission): boolean {
+  handsOver(submission: AgentJournalSubmissionFields): boolean {
     return structuredAgentSessionHandsOver(this.facts, submission)
   }
 
   /** Work means admissible queued sends or unanswered sends the live child still holds, never stale delivery rows. */
-  owesSend(submission: AgentJournalSubmission): boolean {
+  owesSend(submission: AgentJournalSubmissionFields): boolean {
     if (isQueuedAgentJournalSubmission(submission)) {
       return this.handsOver(submission)
     }
@@ -269,4 +271,22 @@ export function withStructuredAgentSessionDiedTurnVerdict(
     request.turnState === 'running'
     ? { ...state, summary: { ...state.summary, turnOutcome: 'interruption' } }
     : state
+}
+
+/** Whether its alert stays quiet: a turn that succeeded on a bot's quiet marker, or one that ended
+ *  in a way its host keeps quiet (a look-around that already failed last time). */
+export function withHostTurnEnd(
+  state: JournalObserverResult['state'],
+  quietEnd?: (outcome: 'success' | 'failure', usageLimited?: boolean) => boolean,
+  usageLimited = false
+): JournalObserverResult['state'] {
+  const outcome = state.summary.turnOutcome
+  const request = state.latestRequest
+  const quiet =
+    outcome === 'failure'
+      ? quietEnd?.('failure', usageLimited) === true
+      : request?.kind === 'turn' &&
+        request.outcome === 'success' &&
+        (state.quietAnswer === true || quietEnd?.('success') === true)
+  return quiet ? { ...state, quiet: true } : state
 }

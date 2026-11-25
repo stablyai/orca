@@ -348,6 +348,7 @@
       "historyRepaired": "此聊天的部分历史记录无法加载"
     },
     "message": {
+      "sending": "正在发送…",
       "copyMessage": "复制消息",
       "forkFromResponse": "从此回复创建分支",
       "scrollMessageToTop": "将此消息滚动到顶部",

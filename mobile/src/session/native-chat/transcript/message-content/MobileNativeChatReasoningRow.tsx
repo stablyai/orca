@@ -1,3 +1,4 @@
+import { StructuredAgentWorkingGate } from '../sending/structured-agent-sending-scope'
 import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import { mobileNativeChatMemberId } from '../viewport/mobile-native-chat-reading-place'
 import { useState } from 'react'
@@ -17,6 +18,21 @@ import { colors } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
 import { styles } from '../messages/mobile-native-chat-message-styles'
+
+export function mobileNativeChatStandaloneReasoning(
+  liveReasoning: 'working' | 'stopping' | undefined,
+  markdown: string,
+  row: React.JSX.Element
+): React.JSX.Element | null {
+  if (!markdown.trim() || liveReasoning === 'stopping') {
+    return null
+  }
+  return liveReasoning === 'working' ? (
+    <StructuredAgentWorkingGate whileSending>{row}</StructuredAgentWorkingGate>
+  ) : (
+    row
+  )
+}
 
 /** A grouped thought keeps its own source recovery when its original transcript row is hidden. */
 export function MobileNativeChatGroupedThought({

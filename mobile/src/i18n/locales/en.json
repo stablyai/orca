@@ -3528,6 +3528,7 @@
       "responding": "Agent is responding"
     },
     "message": {
+      "sending": "Sending…",
       "copyMessage": "Copy message",
       "forkFromResponse": "Fork from this response",
       "scrollMessageToTop": "Scroll this message to top",

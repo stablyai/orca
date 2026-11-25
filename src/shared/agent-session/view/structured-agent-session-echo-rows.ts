@@ -1,4 +1,4 @@
-import type { AgentJournalSubmission } from '../journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structured-agent-session-send-evidence'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
@@ -9,7 +9,7 @@ import type { StructuredAgentSessionOptimisticMessage } from './structured-agent
 export function structuredAgentSessionEchoRows(
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
   journalled: ReadonlySet<string>,
-  submissionsByItemId: ReadonlyMap<string, AgentJournalSubmission>
+  submissionsByItemId: ReadonlyMap<string, AgentJournalSubmissionFields>
 ): NativeChatMessage[] {
   return optimistic
     .filter((entry) => {

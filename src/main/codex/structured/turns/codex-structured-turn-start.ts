@@ -224,8 +224,10 @@ export async function dispatchCodexTurn(
   let answer: { turnId: string | null; via: AgentJournalTurnJoin } | false
   // Capture wire order at reply receipt, before async continuations run.
   let answeredAt: number | undefined
+  let replyObservedAt: number | undefined
   const onReply = (): void => {
     answeredAt = session.dispatchEchoes.tick()
+    replyObservedAt = Date.now()
   }
   try {
     answer = await startCodexTurn(session, { ...input, timeoutMs, onReply })
@@ -272,5 +274,12 @@ export async function dispatchCodexTurn(
       answeredAt ?? session.dispatchEchoes.tick()
     )
   }
-  return { state: 'admitted', ranOptions: { ...session.appliedTurnOptions } }
+  // A steer joined a running turn: only its echo clears "Sending…", not the write.
+  return {
+    state: 'admitted',
+    ...(answer.via !== 'steer' && replyObservedAt !== undefined
+      ? { writtenAt: replyObservedAt }
+      : {}),
+    ranOptions: { ...session.appliedTurnOptions }
+  }
 }

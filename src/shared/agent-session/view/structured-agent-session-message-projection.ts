@@ -1,14 +1,14 @@
 import type { AgentJournalCursor } from '../journal/agent-session-journal-identity'
 import type {
+  AgentJournalSubmissionFields,
   AgentJournalMessageItem,
-  AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalRenderItem
 } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import {
   agentJournalSubmissionReturnedToCard,
-  isQueuedAgentJournalSubmission
+  agentJournalSubmissionDrawnAsHeld
 } from '../requests/agent-session-queued-submission'
 import { collapseProviderRetryRuns } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
@@ -42,6 +42,7 @@ export type StructuredAgentSessionOptimisticMessage = {
   body: AgentJournalMessageItem
   /** Null when this client did not make the send and nothing dates it. */
   queuedAt: number | null
+  delivery?: 'queue-if-active'
   phase?: 'sending' | 'recorded' | 'unconfirmed'
   recordedCursor?: AgentJournalCursor
   /** In-memory placement captured at Send, independent of any acknowledgement. */
@@ -64,13 +65,13 @@ export function structuredAgentSessionCommandItemIds(
 /** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
  * and commands carry rejection in their own reply. `resent`: rejected sends a later copy stands in for. */
 export function structuredAgentSessionRejectedShownInPlace(
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   commandItemIds: ReadonlySet<string>,
   clearSequences: readonly number[] = []
 ): { shown: Set<string>; resent: Set<string> } {
   const latest = new Map<string, number>()
   const later = Array.from<number | undefined>({ length: submissions.length })
-  const scopeKey = (submission: AgentJournalSubmission) =>
+  const scopeKey = (submission: AgentJournalSubmissionFields) =>
     JSON.stringify([
       agentSessionContextSequenceFor(submission.acceptedSequence ?? 0, clearSequences),
       submission.payloadFingerprint
@@ -130,7 +131,7 @@ function startFailureRowsAfter(
 export function projectStructuredAgentSessionMessages(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   projectItems = projectStructuredItemsToNativeChat
 ): NativeChatMessage[] {
   return projectStructuredAgentSessionMessageRows(items, optimistic, submissions, projectItems)
@@ -151,7 +152,7 @@ export type StructuredAgentSessionMessageRows = {
 export function projectStructuredAgentSessionMessageRows(
   items: readonly AgentJournalRenderItem[],
   optimistic: readonly StructuredAgentSessionOptimisticMessage[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   projectItems: StructuredAgentSessionItemProjector
 ): StructuredAgentSessionMessageRows {
   // Keep stopped-before-start sends in conversation history; queued handoffs stay in their cards.
@@ -212,11 +213,7 @@ export function projectStructuredAgentSessionMessageRows(
           ? deliveredAgentMailRow(row, submission.queuedMessageId)
           : row
     // Until handover, queued sends have no conversation position.
-    if (
-      submission &&
-      submission.queuedMessageId === undefined &&
-      isQueuedAgentJournalSubmission(submission)
-    ) {
+    if (submission && agentJournalSubmissionDrawnAsHeld(submission)) {
       held.push({ ...message, queued: true })
     } else if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(withAutomationResultMarks(message, marks))

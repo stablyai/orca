@@ -9,6 +9,7 @@ import {
   type StructuredAgentSessionJournalProjection
 } from './structured-agent-session-status-journal-projection'
 import { CorruptJournalReads } from './corrupt-journal-reads'
+import { journalStatusCursorIsCurrent } from '../../agent-session-journal/journal-status-receipt-progress'
 
 type Observed = (projection: StructuredAgentSessionJournalProjection) => void
 
@@ -68,12 +69,14 @@ export function createStructuredAgentSessionStatusReader(
       : undefined
     return projections.readSql(
       journal,
-      () =>
-        captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
-          cursor,
+      () => {
+        const current = journal.cursor()
+        return captureStructuredAgentSessionWorkAuthority(journal, sessionId, deps, {
+          cursor: journalStatusCursorIsCurrent(journal, cursor, current) ? current : cursor,
           revision,
           latest: journal.stopMarks.withCurrentSettlement(latest)
-        }),
+        })
+      },
       refresh,
       observed,
       turnEnd
@@ -133,5 +136,12 @@ export function createStructuredAgentSessionStatusReader(
       : null
   }
 
-  return Object.assign(read, { work, workFrame })
+  const cachedWork = (sessionId: string, journal: SqlAgentSessionJournal) => {
+    const captured = capture(sessionId, journal)()
+    return captured
+      ? observedWork(journal, projections.currentWorkSql(journal, captured) ?? null)
+      : null
+  }
+
+  return Object.assign(read, { work, workFrame, cachedWork })
 }

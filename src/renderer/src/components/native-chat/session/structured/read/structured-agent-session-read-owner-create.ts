@@ -1,3 +1,4 @@
+import { isStructuredAgentSessionReceiptUpdate } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-receipt-state'
 import { createStructuredAgentSessionReadHydrate } from './structured-agent-session-read-hydrate'
 import type { AgentProviderSessionMetadata } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
@@ -36,6 +37,9 @@ export function createReadOwner(
     initialHistoryAutoLoad: true,
     current: false
   }
+  let published = snapshot
+  const receiptListeners = new Set<() => void>()
+  const deliveryListeners = new Set<() => void>()
   let stopActiveRun: (() => void) | null = null
   const retiredHistoryRead = (): boolean => true
   let captureActiveHistoryReadGuard = (): (() => boolean) => retiredHistoryRead
@@ -52,17 +56,22 @@ export function createReadOwner(
     ? createStructuredAgentSessionPRLinkObserver(sessionId, target)
     : () => {}
 
-  const emit = (): void => {
-    for (const listener of listeners) {
-      listener()
-    }
-  }
-  const setSnapshot = (next: StructuredAgentSessionReadSnapshot): void => {
+  const setSnapshot = (next: StructuredAgentSessionReadSnapshot, receiptsOnly = false): void => {
     if (next === snapshot) {
       return
     }
+    const before = snapshot.state
     snapshot = next
-    emit()
+    if (!receiptsOnly) {
+      published = next
+      listeners.forEach((listener) => listener())
+    }
+    if (before.writtenAtById !== next.state.writtenAtById) {
+      receiptListeners.forEach((listener) => listener())
+    }
+    if (before.cursor !== next.state.cursor) {
+      deliveryListeners.forEach((listener) => listener())
+    }
   }
   const apply = (action: StructuredAgentSessionAction): void => {
     const state = reduceStructuredAgentSession(snapshot.state, action, Date.now())
@@ -78,9 +87,13 @@ export function createReadOwner(
       (action.type === 'event' &&
         action.event.type !== 'end' &&
         !(action.event.type === 'batch' && action.event.hasNewer))
-    if (state !== snapshot.state || current !== snapshot.current) {
-      setSnapshot({ ...snapshot, state, current })
+    if (state === snapshot.state && current === snapshot.current) {
+      return
     }
+    const receiptsOnly =
+      current === snapshot.current &&
+      isStructuredAgentSessionReceiptUpdate(snapshot.state, state, action)
+    setSnapshot({ ...snapshot, state, current }, receiptsOnly)
   }
   const markStale = (): void => {
     if (snapshot.current) {
@@ -183,7 +196,12 @@ export function createReadOwner(
   let owner: StructuredAgentSessionReadOwner
   let retained = 0
   const deleteIfUnused = (): void => {
-    const subscriptions = activations.size + listeners.size + commandListeners.size
+    const subscriptions =
+      activations.size +
+      listeners.size +
+      commandListeners.size +
+      deliveryListeners.size +
+      receiptListeners.size
     if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
@@ -253,9 +271,15 @@ export function createReadOwner(
       activations.clear()
       listeners.clear()
       commandListeners.clear()
+      deliveryListeners.clear()
+      receiptListeners.clear()
       stopActiveRun?.()
     },
-    getSnapshot: () => snapshot,
+    getSnapshot: () => published,
+    getReadCursor: () => snapshot.state.cursor,
+    getSubmissionReceipts: () => snapshot.state.writtenAtById,
+    subscribeReceipts: (listener) => subscribeTo(receiptListeners, listener),
+    subscribeDelivery: (listener) => subscribeTo(deliveryListeners, listener),
     trimHistory,
     retainHistory: () => {
       const reader = Symbol('history-reader')

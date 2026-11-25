@@ -7,10 +7,8 @@ import { useState } from 'react'
 import { NativeChatFileLinkExistenceContext } from '../links/actions/native-chat-file-link-existence'
 import { NativeChatStructuredAsyncQuestion } from './NativeChatStructuredAsyncQuestion'
 import { projectStructuredAgentSessionMessages } from '../conversation/projection/structured-agent-session-message-projection'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { NativeChatLinkClickContext } from '../links/actions/native-chat-link-click-context'
 
@@ -125,7 +123,7 @@ function PendingAsyncQuestion() {
       blocks: [{ type: 'text', text: `> ${title}\n\nGet outside` }]
     }
   }
-  const submission: AgentJournalSubmission = {
+  const submission: StructuredAgentSubmission = {
     clientMessageId: 'weekend-answer',
     fence: 1,
     payloadFingerprint: 'weekend-answer',

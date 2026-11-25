@@ -1,3 +1,5 @@
+import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { SubmissionReceipts } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { AppState } from '@/store/types'
 import type { StructuredAgentSessionState } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { AgentSessionHistoryPage } from '../../../../../../../shared/agent-session/agent-session-wire'
@@ -31,6 +33,10 @@ export type StructuredAgentSessionReadOwner = {
   resync?: () => void
   dispose: () => void
   getSnapshot: () => StructuredAgentSessionReadSnapshot
+  getReadCursor: () => AgentJournalCursor | null
+  getSubmissionReceipts: () => SubmissionReceipts
+  subscribeReceipts: (listener: () => void) => () => void
+  subscribeDelivery: (listener: () => void) => () => void
   loadOlder: () => Promise<NativeChatOlderPageResult>
   retainHistory: () => () => void
   trimHistory: () => void

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useMemo,
+  useSyncExternalStore
+} from 'react'
 import { isRootAgentJournalItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
   AgentSessionQueuedMessage,
@@ -10,10 +18,6 @@ import {
 } from '../../../../../src/shared/agent-session/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../../../src/shared/agent-session/view/structured-agent-session-holder'
 import { startStructuredAgentSessionLiveRead } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-live-read'
-import {
-  type AgentSessionTextAppendCapabilities,
-  agentSessionTextAppendRequest
-} from '../../../../../src/shared/agent-session/view/live-read/agent-session-text-append'
 import { isFinalAgentSessionReadRefusal } from '../../../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -22,69 +26,34 @@ import {
   type StructuredAgentSessionState
 } from '../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { subscribeConnectionRevival } from '../../../diagnostics/connection/connection-revival-signal'
-import {
-  readRuntimeStatusProbe,
-  recordRuntimeStatusProbe
-} from '../../../transport/connection/runtime-status-probe'
-import { decodeHostStatusReply, readHostStatusReply } from '../../../query/host-status-query'
-import { hostStatusSchema } from '../../../transport/hosts/host-status-reply-schema'
-import {
-  AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
-  AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
-} from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
   agentSessionReadFailureRefusal,
   agentSessionReadRefusalText,
   callAgentSession
 } from './mobile-structured-agent-session-rpc'
-import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-subscription'
+import {
+  hostTextAppends,
+  subscribeTranscriptAfterHold
+} from './mobile-structured-transcript-subscription'
 import {
   useMobileOlderPageLoader,
   type OlderPagePhase
 } from '../transcript/ingestion/use-mobile-older-page-loader'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import {
-  reduceStructuredChatState,
   noteChatTranscript,
   storedStructuredSessionState,
   storedStructuredCopy,
   unconfirmedStructuredStateSavedAt
 } from '../transcript/persistence/mobile-native-chat-transcript-writer'
 import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
+import type { SubmissionReceiptSource } from '../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 
-const MAX_RETAINED_SESSION_STATES = 32
+import { createMobileStructuredChatStateCache } from './mobile-structured-chat-state-cache'
 
 /** The host already batches streamed text, so phones merge only within about a frame; desktop keeps the shared window. */
 const STREAMED_TEXT_COALESCE_MS = 16
-
-// Read alongside the hold, so the stream's first open knows whether to ask for appends: this
-// connection's probe, else the status the shell proved (direct hosts only), else the connection's status read.
-async function hostTextAppends(
-  client: RpcClient
-): Promise<AgentSessionTextAppendCapabilities | null> {
-  let status = readRuntimeStatusProbe(client)
-  const shell =
-    status === undefined ? hostStatusSchema.safeParse(client.getShellHostStatus?.()) : null
-  if (shell?.success) {
-    status = shell.data
-  } else if (status === undefined) {
-    const reply = await readHostStatusReply(client, {
-      timeoutMs: 15_000,
-      failWhenDisconnected: true
-    }).catch(() => null)
-    const landed = reply ? decodeHostStatusReply(reply) : null
-    if (landed) {
-      recordRuntimeStatusProbe(client, landed.status)
-    }
-    status = landed?.status
-  }
-  const advertised = status?.capabilities ?? []
-  return agentSessionTextAppendRequest({
-    textAppend: advertised.includes(AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY),
-    toolOutputAppend: advertised.includes(AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY)
-  })
-}
 
 export function useMobileStructuredAgentState(args: {
   onCommandsChanged?: () => void
@@ -97,6 +66,7 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
+  submissionReceipts: SubmissionReceiptSource
   /** Null until the host publishes a queue (older hosts never do). */
   queuedMessages: AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
@@ -110,61 +80,67 @@ export function useMobileStructuredAgentState(args: {
   useLayoutEffect(() => {
     commandsChanged.current = args.onCommandsChanged
   }, [args.onCommandsChanged])
-  // Bound synchronous per-session retention so offline tab switches cannot grow memory indefinitely.
-  const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
-    () => new Map()
+  const [cache] = useState(createMobileStructuredChatStateCache)
+  const readKey = enabled ? sessionKey : null
+  const subscribe = useCallback(
+    (listener: () => void) => (readKey ? cache.subscribe(readKey, listener) : () => {}),
+    [cache, readKey]
   )
-  const retained = enabled && sessionKey ? sessionStates.get(sessionKey) : undefined
+  const retained = useSyncExternalStore(subscribe, () =>
+    readKey ? cache.getSnapshot(readKey) : undefined
+  )
   const stored =
     enabled && sessionKey && !retained ? storedStructuredSessionState(sessionKey) : null
   const state = retained ?? stored ?? EMPTY_STRUCTURED_AGENT_SESSION
-  // The phone's copy is written when a turn settles, on hidden and when the chat closes; never per frame.
+  const { epoch, working, latestTurn, items, submissions, fence } = state
+  const publishedRef = useRef(state)
+  useLayoutEffect(() => {
+    publishedRef.current = state
+  }, [state])
+  const submissionReceipts = useMemo(
+    () => cache.receiptsFor(readKey, epoch, submissions, stored, publishedRef),
+    [cache, epoch, readKey, stored, submissions]
+  )
   const liveRead = enabled && sessionKey !== null && state.status === 'ready'
-  useEffect(() => {
-    if (liveRead && sessionKey) {
-      const isLive = () => client?.getState() === 'connected'
-      noteChatTranscript(sessionKey, state, isLive, (at) => storedStructuredCopy(state, at))
-    }
-  }, [client, liveRead, sessionKey, state])
+  const turnSettled = useMemo(
+    () =>
+      liveRead &&
+      !mobileStructuredAgentSessionWorking({ working, latestTurn, items, submissions, fence }),
+    [liveRead, working, latestTurn, items, submissions, fence]
+  )
   const readingStore = useStoredChatTranscript({
     identity: enabled && sessionId ? sessionKey : null,
     read: !retained,
-    turnSettled: liveRead && !mobileStructuredAgentSessionWorking(state)
+    turnSettled
   })
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
-  const stateRef = useRef(state)
-  useLayoutEffect(() => {
-    stateRef.current = state
-  }, [state])
+  const stateRef = useMemo(
+    () => ({
+      get current() {
+        return cache.currentForSnapshot(readKey, publishedRef.current)
+      }
+    }),
+    [cache, readKey]
+  )
 
   const apply = useCallback(
     (action: StructuredAgentSessionAction) => {
       if (!sessionKey) {
         return
       }
-      setSessionStates((current) => {
-        const previous =
-          current.get(sessionKey) ??
-          storedStructuredSessionState(sessionKey) ??
-          EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredChatState(previous, action, Date.now())
-        if (next === previous) {
-          return current
-        }
-        const updated = new Map(current)
-        updated.delete(sessionKey)
-        updated.set(sessionKey, next)
-        while (updated.size > MAX_RETAINED_SESSION_STATES) {
-          const oldest = updated.keys().next().value
-          if (oldest === undefined) {
-            break
-          }
-          updated.delete(oldest)
-        }
-        return updated
-      })
+      const next = cache.apply(
+        sessionKey,
+        () => storedStructuredSessionState(sessionKey),
+        action,
+        Date.now()
+      )
+      // Remember the receipt and cursor together for the next settle, hide or close flush.
+      if (next?.status === 'ready') {
+        const isLive = () => client?.getState() === 'connected'
+        noteChatTranscript(sessionKey, next, isLive, (at) => storedStructuredCopy(next, at))
+      }
     },
-    [sessionKey]
+    [cache, client, sessionKey]
   )
   useEffect(() => {
     supersede()
@@ -199,7 +175,8 @@ export function useMobileStructuredAgentState(args: {
             : { type: 'error', message }
         )
       },
-      getCursor: () => stateRef.current.cursor,
+      getCursor: () =>
+        (sessionKey ? cache.get(sessionKey)?.cursor : undefined) ?? stateRef.current.cursor,
       onContactLost: () => {},
       onHistoryReadInvalidated: supersede,
       readCurrentRequests: (request) =>
@@ -228,7 +205,18 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
+  }, [
+    apply,
+    cache,
+    client,
+    connected,
+    enabled,
+    readingStore,
+    sessionId,
+    sessionKey,
+    stateRef,
+    supersede
+  ])
 
   const loadEarlier = useCallback(() => {
     const start = oldestStructuredAgentSessionCursor(stateRef.current)
@@ -284,11 +272,12 @@ export function useMobileStructuredAgentState(args: {
       // Subagent-only pages add no visible rows; keep paging until the reader has content or history ends.
       return page.items.some(isRootAgentJournalItem) ? 'drew' : 'drew-nothing'
     })
-  }, [apply, client, loadOlderPages, sessionId, sessionKey])
+  }, [apply, client, loadOlderPages, sessionId, sessionKey, stateRef])
 
   // Auto-page once per invisible head: subagent-only windows cannot scroll to request earlier history, including byte-capped first pages.
+  const hasOwnItems = useMemo(() => items.some(isRootAgentJournalItem), [items])
   const drawsNothingFrom =
-    state.status === 'ready' && state.hasOlder && !state.items.some(isRootAgentJournalItem)
+    state.status === 'ready' && state.hasOlder && !hasOwnItems
       ? `${sessionKey}:${state.epoch}:${state.items[0]?.sequence}`
       : null
   const readBackFromRef = useRef<string | null>(null)
@@ -308,6 +297,7 @@ export function useMobileStructuredAgentState(args: {
   return {
     state,
     stateRef,
+    submissionReceipts,
     // A published null is an empty queue; only an absent list is no claim.
     queuedMessages: state.queuedMessages === undefined ? null : (state.queuedMessages ?? []),
     queuePause: state.queuePause ?? null,

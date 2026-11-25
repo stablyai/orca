@@ -1,29 +1,35 @@
 import { useEffect, useMemo, useRef } from 'react'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { dispatchWasWithdrawn } from '../../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { structuredAgentSessionCommandItemIds } from '../../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
-import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { useStructuredAgentSessionStartFailureFacts } from '../../../messages/notices/use-structured-agent-session-start-failure-facts'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 
+export function useStructuredAgentSessionHasRejection(
+  submissions: readonly StructuredAgentSubmission[]
+) {
+  return useMemo(
+    () =>
+      submissions.some(
+        (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+      ),
+    [submissions]
+  )
+}
+
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
-  pending: readonly StructuredAgentSessionPendingSend[]
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly StructuredAgentSubmission[]
   journalItems: readonly AgentJournalRenderItem[]
   agentName: string
   startFailures?: readonly AgentSessionFailureFact[]
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
-  const { agentName, pending, submissions } = args
+  const { agentName, submissions } = args
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
-  const hasRejected = submissions.some(
-    (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
-  )
+  const hasRejected = useStructuredAgentSessionHasRejection(submissions)
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
     hasRejected && args.startFailures === undefined
@@ -33,17 +39,16 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   const notices = useMemo(
     () =>
       structuredAgentSessionDeliveryNotices({
-        pending,
         submissions,
         agentName,
         startFailures,
         commandItemIds
       }),
-    [pending, submissions, agentName, startFailures, commandItemIds]
+    [submissions, agentName, startFailures, commandItemIds]
   )
   // Reuse unchanged notices/maps across submission batches to avoid rerendering rows.
   const previousRef = useRef(notices)
-  const stable = sameNoticesKept(previousRef.current, notices)
+  const stable = useMemo(() => sameNoticesKept(previousRef.current, notices), [notices])
   useEffect(() => {
     previousRef.current = stable
   }, [stable])
@@ -63,8 +68,10 @@ function useCommandItemIds(
   )
   const previousRef = useRef(ids)
   const previous = previousRef.current
-  const stable =
-    previous.size === ids.size && [...ids].every((id) => previous.has(id)) ? previous : ids
+  const stable = useMemo(
+    () => (previous.size === ids.size && [...ids].every((id) => previous.has(id)) ? previous : ids),
+    [previous, ids]
+  )
   useEffect(() => {
     previousRef.current = stable
   }, [stable])

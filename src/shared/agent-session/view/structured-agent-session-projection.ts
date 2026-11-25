@@ -7,12 +7,12 @@ import {
   AGENT_STATUS_TOOL_INPUT_MAX_LENGTH
 } from '../../agent-status/contracts/agent-status-field-normalization'
 import {
+  type AgentJournalSubmissionFields,
   AGENT_JOURNAL_MESSAGE_SEND_MODES,
   AGENT_JOURNAL_MESSAGE_STATES,
   type AgentJournalMessageItem,
   type AgentJournalMessageSendMode,
-  type AgentJournalRenderItem,
-  type AgentJournalSubmission
+  type AgentJournalRenderItem
 } from '../journal/agent-session-journal-types'
 import type { AgentTurnOutcome } from '../../agent-status/lifecycle/agent-turn-outcome'
 import type { AgentSessionAwaitedQuestion, AgentSessionStatusSummary } from '../agent-session-wire'
@@ -143,7 +143,7 @@ export function pendingStructuredAgentSessionPrompt(
 /** Host scope excludes ended-generation work from Working/attention. */
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = [],
+  submissions: readonly AgentJournalSubmissionFields[] = [],
   currentFence?: number | null,
   scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
@@ -179,7 +179,7 @@ export type StructuredAgentSessionStatusProjection = Pick<
  * bound assistant prose below the hook’s 8 KB body because every streaming checkpoint republishes a one-line preview. */
 export function projectStructuredAgentSessionStatusSummary(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = [],
+  submissions: readonly AgentJournalSubmissionFields[] = [],
   currentFence?: number | null
 ): StructuredAgentSessionStatusProjection {
   return projectStructuredAgentSessionStatusState(items, submissions, currentFence).summary
@@ -188,7 +188,7 @@ export function projectStructuredAgentSessionStatusSummary(
 /** Return the summary and its request together so the host completion feed cannot diverge or rescan. */
 export function projectStructuredAgentSessionStatusState(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = [],
+  submissions: readonly AgentJournalSubmissionFields[] = [],
   currentFence?: number | null,
   scope?: StructuredAgentSessionWorkScope,
   /** An indexed read of these rows by id, so per-write status finds command turns without scanning history. */

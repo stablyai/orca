@@ -9,18 +9,15 @@ import { foldBotItemNotes } from '../../../../../../src/shared/bots/bot-item-not
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import {
-  nativeChatLiveLine,
-  type NativeChatLiveLine
-} from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-live-line'
+  useMobileNativeChatLiveLine,
+  type MobileNativeChatLiveLine
+} from './use-mobile-native-chat-live-line'
 import type {
   NativeChatSettledTurns,
   NativeChatTurnStatus
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-live-turn-membership'
-import {
-  nativeChatTurnMembership,
-  type NativeChatTurnJournal
-} from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
@@ -30,13 +27,11 @@ import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-grouping'
+import type { NativeChatTurnJournal } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-status'
 import { mobileNativeChatQuietTurns } from './mobile-native-chat-quiet-turns'
-import { structuredAgentTurnOpeningSendPending } from '../../../../../../src/shared/agent-session/view/structured-agent-session-turn-timing'
 
 const NO_TURN_KEYS: readonly undefined[] = []
-
-export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
 
 export function useMobileNativeChatTurnDisclosure({
   messages,
@@ -104,19 +99,22 @@ export function useMobileNativeChatTurnDisclosure({
       unresolvedRowIds: membership.unresolvedRowIds
     }
   }, [enabled, messages, turnJournal])
-  const turnStatuses = useMobileNativeChatTurnStatus({
+  const {
+    active,
+    activeTurnKey,
+    completedByTurn,
+    isWorking: drawsActiveTurn
+  } = useMobileNativeChatTurnStatus({
     turnKeys,
     liveTurnKey,
     enabled,
-    // The clock starts once the host has the opening message, as desktop's "Sending…" clears.
-    isWorking:
-      isWorking && !structuredAgentTurnOpeningSendPending(liveTurnKey, turnJournal?.submissions),
+    working: isWorking,
     workingStartedAt,
     settledTurns,
     thinking,
-    scopeKey
+    scopeKey,
+    journal: turnJournal
   })
-  const { active, activeTurnKey, completedByTurn } = turnStatuses
   const rows = useMobileNativeChatGeneratedImageAnswers(
     enabled,
     sourceRows,
@@ -175,29 +173,16 @@ export function useMobileNativeChatTurnDisclosure({
     [enabled, isWorking, liveTurnKey, turnKeys, unresolvedRowIds, rows]
   )
   const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
-  const line = useMemo(
-    () =>
-      nativeChatLiveLine({
-        draws: isWorking && !lineYields && (!enabled || active !== null),
-        thinking: active?.thinking === true,
-        stopping,
-        activityText: activeActivityText,
-        messages: rows,
-        inLiveWorkingTurn
-      }),
-    [active, activeActivityText, enabled, inLiveWorkingTurn, isWorking, lineYields, rows, stopping]
-  )
-  const liveReasoningId = line?.reasoning?.message.id
-  const liveLine = useMemo<MobileNativeChatLiveLine | null>(
-    () =>
-      line && {
-        ...line,
-        reasoningExpanded:
-          line.reasoning !== null &&
-          expandedReasoning.has(nativeChatReasoningDisclosureKey(line.reasoning.message.id))
-      },
-    [expandedReasoning, line]
-  )
+  const liveLine = useMobileNativeChatLiveLine({
+    draws: !lineYields && (stopping || (drawsActiveTurn && (!enabled || active !== null))),
+    thinking: active?.thinking === true,
+    stopping,
+    activityText: activeActivityText,
+    messages: rows,
+    inLiveWorkingTurn,
+    expandedReasoning
+  })
+  const liveReasoningId = liveLine?.reasoning?.message.id
   const { fold, trailingRunIndex, workRuns, activityJoins } = useMobileNativeChatTranscriptRows({
     enabled,
     rows,
@@ -256,7 +241,9 @@ export function useMobileNativeChatTurnDisclosure({
         ...(workRuns.joined.has(index) ? { joinsWorkRun: true } : {}),
         ...(activityJoins.has(index) ? { activityJoin: activityJoins.get(index) } : {}),
         mayStillGrow: !lineYields && message.id === latestAssistantId,
-        reasoningIsLive: message.id === liveReasoningId,
+        ...(message.id === liveReasoningId
+          ? { liveReasoning: stopping ? 'stopping' : 'working' }
+          : {}),
         reasoningExpanded:
           message.role === 'reasoning' &&
           expandedReasoning.has(nativeChatReasoningDisclosureKey(message.id)),
@@ -287,6 +274,7 @@ export function useMobileNativeChatTurnDisclosure({
       latestAssistantId,
       lineYields,
       liveReasoningId,
+      stopping,
       expandedReasoning,
       toggleReasoning,
       isWorking,

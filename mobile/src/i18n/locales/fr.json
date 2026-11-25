@@ -262,6 +262,7 @@
       "historyRepaired": "Une partie de l'historique de ce chat n'a pas pu être chargée."
     },
     "message": {
+      "sending": "Envoi…",
       "copyMessage": "Copier le message",
       "forkFromResponse": "Créer une branche à partir de cette réponse",
       "scrollMessageToTop": "Revenir au début du message",

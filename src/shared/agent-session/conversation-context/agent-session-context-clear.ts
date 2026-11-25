@@ -2,7 +2,7 @@ import type { AgentJournalCursor } from '../journal/agent-session-journal-identi
 import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../journal/agent-session-journal-types'
 import { isAgentSessionProviderContextBoundary } from './agent-session-provider-context'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
@@ -86,7 +86,7 @@ export function agentSessionHasOlderTranscript(
 
 export function agentSessionCurrentContextRows(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = [],
+  submissions: readonly AgentJournalSubmissionFields[] = [],
   minimumSequence = 0
 ) {
   const sequence = Math.max(minimumSequence, latestAgentSessionContextClearSequence(items))

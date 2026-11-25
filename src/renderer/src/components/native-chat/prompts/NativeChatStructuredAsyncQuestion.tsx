@@ -6,7 +6,7 @@ import type { useStructuredAgentSession } from '../session/structured/use-struct
 import { nativeChatAskDismissKey } from '../../../../../shared/native-chat/input/questions/native-chat-ask-dismiss-key'
 import { useMemo, useState } from 'react'
 import type { QueuedMessageCard } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
-import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   nativeChatAnswerOperationPending,
   type NativeChatAnswerOperation,
@@ -23,7 +23,7 @@ import {
 } from './use-structured-agent-session-async-question-skip'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
-const NO_SUBMISSIONS: readonly AgentJournalSubmission[] = []
+const NO_SUBMISSIONS: readonly AgentJournalSubmissionFields[] = []
 
 type PromptAnswerOperation = NativeChatAnswerOperation & { promptKey: string }
 
@@ -51,7 +51,7 @@ export function NativeChatStructuredAsyncQuestion({
   send: NativeChatStructuredComposerTransport['send']
   sendFollowUp?: NativeChatStructuredComposerTransport['sendFollowUp']
   queuedCards?: readonly Pick<QueuedMessageCard, 'text'>[]
-  submissions?: readonly AgentJournalSubmission[]
+  submissions?: readonly AgentJournalSubmissionFields[]
 }): React.JSX.Element | null {
   const [operation, setOperation] = useState<PromptAnswerOperation | null>(null)
   const queuedTexts = useMemo(() => queuedCards?.map((card) => card.text), [queuedCards])

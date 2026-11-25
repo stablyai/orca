@@ -20,6 +20,14 @@ export function acpCompactPrompt(instructions?: string, command?: string): Conte
   return [{ type: 'text', text: agentSessionCompactCommandText(instructions, command) }]
 }
 
+export function acpCompactSend(
+  { clientMessageId, instructions }: { clientMessageId: string; instructions?: string },
+  command: string | undefined,
+  requestedAt: number
+) {
+  return { clientMessageId, prompt: acpCompactPrompt(instructions, command), requestedAt }
+}
+
 export type AcpCompaction = {
   reply: string
   failure?: AcpTurnFailureEvidence

@@ -30,6 +30,7 @@ export function receiptRow(operation: JournalSqlStoreOperation): JournalReceiptS
     case 'send-admission':
       return 'submission'
     case 'accept-late':
+    case 'dispatch-written':
     case 'command-open':
     case 'command-settle':
     case 'context-clear':

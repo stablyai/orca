@@ -1,3 +1,4 @@
+import { structuredAgentSessionCursorSettlement } from './structured-agent-session-send-runtime'
 import type {
   StructuredAgentSessionSendControl,
   StructuredAgentSessionAttachment
@@ -6,8 +7,8 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-c
 import { AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY } from '../../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
-import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSessionReadOwner } from '../read/structured-agent-session-read-owner-contract'
+import type { AgentJournalSubmissionFields } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionQueueRequest,
@@ -26,7 +27,7 @@ import {
 } from './structured-agent-session-pending-sends'
 import { noteStructuredAgentSessionFence } from './structured-agent-session-send-attempt'
 import { recoverLegacyStructuredAgentSessionOutbox } from './structured-agent-session-legacy-outbox'
-import { pendingSendsOutsideQueuedCards } from '../../../queue/structured-agent-session-sending-queued-cards'
+import { pendingSendsOutsideQueuedCards } from '../../../../../../../shared/agent-session/view/structured-agent-session-sending'
 import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
 
 /** The open chat's view of its sends: they live in the sender, which works without this view. */
@@ -34,8 +35,8 @@ export function useStructuredAgentSessionSends(args: {
   sessionId: string
   target: RuntimeClientTarget
   fence: number | null
-  cursor?: AgentJournalCursor | null
-  submissions: readonly AgentJournalSubmission[]
+  readOwner: StructuredAgentSessionReadOwner
+  submissions: readonly AgentJournalSubmissionFields[]
   queuedMessageIds: readonly string[]
   queue: StructuredAgentSessionQueueDelivery
   /** The chat's history has loaded, so its rows and cards can answer for a legacy copy. */
@@ -49,7 +50,7 @@ export function useStructuredAgentSessionSends(args: {
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
-    cursor,
+    readOwner,
     fence,
     historyLoaded,
     isWorking = false,
@@ -87,8 +88,22 @@ export function useStructuredAgentSessionSends(args: {
   }, [fence, sessionId])
 
   useEffect(() => {
-    settleStructuredAgentSessionSendsFromJournal(sessionId, submissions, queuedMessageIds, cursor)
-  }, [cursor, pending, queuedMessageIds, sessionId, submissions])
+    const settle = () =>
+      settleStructuredAgentSessionSendsFromJournal(
+        sessionId,
+        submissions,
+        queuedMessageIds,
+        readOwner.getReadCursor()
+      )
+    settle()
+    const settleCursor = structuredAgentSessionCursorSettlement(sessionId)
+    return readOwner.subscribeDelivery(() => {
+      const { state } = readOwner.getSnapshot()
+      if (state.submissions === submissions) {
+        settleCursor(readOwner.getReadCursor())
+      }
+    })
+  }, [pending, queuedMessageIds, readOwner, sessionId, submissions])
 
   const recoverLegacy = historyLoaded && fence !== null
   // Why an event: once per open, from the first loaded history; later batches add nothing it needs.

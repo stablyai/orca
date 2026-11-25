@@ -16,6 +16,7 @@ export type AgentSessionPublishedWork = Pick<
   | 'workViewKey'
   | 'publishedSubmission'
   | 'restatedSubmissions'
+  | 'cursor'
   | 'requestProjection'
 >
 
@@ -24,14 +25,21 @@ type PublishedWorkFields = Pick<
   'latestTurn' | 'actionablePromptIds' | 'working'
 >
 
+const boundedPromptIds = new WeakMap<string[], boolean>()
+
 function publishedWorkFields(
   latestTurn: AgentSessionHistoryPage['latestTurn'],
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
   const ids = work.actionablePromptIds()
+  let fits = boundedPromptIds.get(ids)
+  if (fits === undefined) {
+    fits = Buffer.byteLength(JSON.stringify(ids)) <= 8 * 1024
+    boundedPromptIds.set(ids, fits)
+  }
   return {
     latestTurn: work.publishedLatestTurn(latestTurn ?? null),
-    ...(Buffer.byteLength(JSON.stringify(ids)) <= 8 * 1024 ? { actionablePromptIds: ids } : {}),
+    ...(fits ? { actionablePromptIds: ids } : {}),
     working: work.working()
   }
 }

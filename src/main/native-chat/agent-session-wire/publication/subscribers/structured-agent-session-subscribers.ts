@@ -1,4 +1,5 @@
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalCursor } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { subscriberDeliveryPort } from './agent-session-subscriber-delivery-port'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
 import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
@@ -174,24 +175,19 @@ export class AgentSessionSubscribers {
     sessionId: string,
     journal: AgentSessionJournal,
     activity?: AgentSessionTurnActivity | null,
-    queueChanged = true
+    queueChanged = true,
+    receiptsAfter?: AgentJournalCursor
   ): void {
-    const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal, queueChanged)
     let owedQueue: SubscriberDeliveryPort | undefined
     // Subscribers whose waiting catch-up still owes a queue read share one port for it.
     const queuePort = () =>
       queueChanged ? port : (owedQueue ??= this.deliveryPort(sessionId, journal, true))
-    for (const subscriber of this.subscribers(sessionId)) {
-      this.lanes.of(subscriber).catchUp({
-        journal,
-        port,
-        queuePort,
-        queueChanged,
-        hostNow,
-        ...(activity !== undefined ? { activity } : {})
-      })
-    }
+    this.lanes.catchUp(
+      this.bySession.get(sessionId)?.values() ?? [],
+      { journal, port, queuePort, queueChanged, hostNow: this.now(), activity },
+      receiptsAfter
+    )
   }
 
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {

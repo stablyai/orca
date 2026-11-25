@@ -1,6 +1,6 @@
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../requests/structured-agent-session-command-entry'
@@ -24,7 +24,7 @@ export function isStructuredAgentSessionAsyncQuestionRow(item: AgentJournalRende
  *  the way the chat's question card reads it (another agent's message answers none). */
 export function newestOpenStructuredAgentSessionAsyncQuestion(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ): AgentSessionAwaitedQuestion | undefined {
   const messages = projectStructuredAgentSessionMessages(
     items.filter(isStructuredAgentSessionAsyncQuestionRow),

@@ -278,6 +278,7 @@
       "historyRepaired": "Não foi possível carregar parte do histórico deste chat."
     },
     "message": {
+      "sending": "Enviando…",
       "copyMessage": "Copiar mensagem",
       "forkFromResponse": "Criar ramificação a partir desta resposta",
       "scrollMessageToTop": "Rolar esta mensagem para o topo",

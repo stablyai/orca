@@ -1,6 +1,6 @@
 // Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
-import type { AgentJournalSubmission } from '../../../agent-session/journal/agent-session-journal-types'
+import type { AgentJournalSubmissionFields } from '../../../agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../agent-session/journal/agent-session-journal-item-key'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../agent-session/requests/structured-agent-session-send-evidence'
 import type { AskPrompt, AskQuestion } from './native-chat-ask-types'
@@ -229,7 +229,7 @@ export type NativeChatAnswerOperation = { clientMessageId?: string; inFlight: bo
 export function nativeChatAnswerOperationEvidence(
   clientMessageId: string | undefined,
   messages: readonly NativeChatMessage[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmissionFields[] = []
 ): boolean | undefined {
   if (!clientMessageId) {
     return undefined
@@ -255,7 +255,7 @@ export function nativeChatAnswerOperationEvidence(
 export function nativeChatAnswerOperationPending(
   operation: NativeChatAnswerOperation | null,
   messages: readonly NativeChatMessage[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmissionFields[] = []
 ): boolean {
   return (
     operation !== null &&
@@ -266,5 +266,5 @@ export function nativeChatAnswerOperationPending(
 
 export type NativeChatAnswerSource = {
   messages: readonly NativeChatMessage[]
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 }

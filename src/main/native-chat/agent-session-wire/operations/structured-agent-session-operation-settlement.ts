@@ -1,3 +1,4 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionHandoverContext } from '../host/structured-agent-session-host-types'
 import type { AgentSessionDispatchOutcome } from '../providers/structured-agent-session-adapter'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
@@ -121,6 +122,25 @@ export function observedReceipt(
     }
   }
   return observed
+}
+
+/** "Sending…" clears on this; a failed stamp only leaves it until the echo, so never fail the send over it. */
+export async function markHandoverWritten(
+  ctx: AgentSessionHandoverContext,
+  clientMessageId: string,
+  handoverCursor: AgentJournalCursor,
+  observedAt: number
+): Promise<void> {
+  try {
+    await ctx.journal.markDispatchWritten({
+      clientMessageId,
+      fence: ctx.fence,
+      handoverCursor,
+      observedAt
+    })
+  } catch (error) {
+    console.warn('[agent-session] could not record a written send:', error)
+  }
 }
 
 export async function resolveHandover(

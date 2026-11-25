@@ -22,7 +22,11 @@ export function MobileNativeChatMessageMeta({
   const copyText = nativeChatMessageCopyText(message)
   return (
     <View style={styles.meta}>
-      <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
+      <MobileNativeChatMessageTime
+        timestamp={message.timestamp}
+        fontScale={fontScale}
+        submissionItemId={message.role === 'user' ? message.id : undefined}
+      />
       {/* An empty wrapper would still pull the time over by the icons' edge margin. */}
       {copyText.length > 0 || rewindable || mobileNativeChatRowHoldsForkSlot(message) ? (
         <View style={styles.metaActions}>

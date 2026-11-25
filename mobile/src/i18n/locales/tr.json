@@ -395,6 +395,7 @@
       "historyRepaired": "Bu sohbetin geçmişinin bir bölümü yüklenemedi."
     },
     "message": {
+      "sending": "Gönderiliyor…",
       "copyMessage": "Mesajı kopyala",
       "forkFromResponse": "Bu yanıttan çatalla",
       "scrollMessageToTop": "Bu mesajı yukarı kaydır",

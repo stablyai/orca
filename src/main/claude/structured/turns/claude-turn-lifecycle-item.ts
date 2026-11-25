@@ -10,7 +10,7 @@ import type { ClaudeCommandTurn } from './claude-command-turn'
 export type ClaudeCurrentTurn = {
   sessionId: string
   turnId: string
-  startedAt: number
+  startedAt?: number
   /** Host submission time; absent when the provider resumes without an Orca send. */
   requestedAt?: number
   /** Anchor to the user echo, an unechoed started submission, or the provider-resumed lifecycle row. */
@@ -78,6 +78,7 @@ export function claudeTurnLifecycleItem(
 } {
   const { sessionId, turnId, startedAt, requestedAt, userItemId } = turn
   const requested = requestedAt === undefined ? {} : { requestedAt }
+  const started = startedAt === undefined ? {} : { startedAt }
   return {
     identity: claudeCurrentTurnIdentity(turn),
     body: agentJournalTurnBody(
@@ -86,16 +87,16 @@ export function claudeTurnLifecycleItem(
             turnId,
             state: end.state,
             ...(end.outcome === undefined ? {} : { outcome: end.outcome }),
-            startedAt,
+            ...started,
             ...requested,
             completedAt: end.completedAt,
             userItemId,
             ...(end.durationMs === undefined ? {} : { durationMs: end.durationMs })
           }
-        : { turnId, state: 'running', startedAt, ...requested, userItemId }
+        : { turnId, state: 'running', ...started, ...requested, userItemId }
     ),
     // Use the turn start timestamp so append latency does not inflate timing.
-    options: end ? {} : { observedAt: startedAt },
+    options: end || startedAt === undefined ? {} : { observedAt: startedAt },
     publishCoalescingKey: end ? 'publish' : `turn-start:${sessionId}:${turnId}`
   }
 }

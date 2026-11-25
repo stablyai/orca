@@ -105,7 +105,7 @@ export function MobileNativeChatComposerSendSlot({
   return (
     <MobileNativeChatControlSwap swapKey={showsStop && stop ? 'stop' : 'send'}>
       {showsStop && stop ? (
-        // Only this phone's own request holds Stop: a repeat is how a stuck stop escalates.
+        // Show busy only for this phone's request so another press can escalate a stuck stop.
         <MobileNativeChatStopButton onStop={stop.onStop} held={stop.held} />
       ) : (
         <MobileNativeChatSendButton

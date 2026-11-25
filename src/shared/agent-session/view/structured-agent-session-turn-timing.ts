@@ -2,8 +2,8 @@
 
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import type {
+  AgentJournalSubmissionFields,
   AgentJournalRenderItem,
-  AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from '../journal/agent-session-journal-types'
 import {
@@ -81,7 +81,7 @@ type StructuredAgentJournalTurns = {
 
 function readStructuredAgentJournalTurns(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmissionFields[] = []
 ): StructuredAgentJournalTurns {
   const anchors = structuredAgentTurnAnchors(items, submissions)
   const byAnchor = new Map<string, StructuredAgentTurnTiming | null>()
@@ -103,7 +103,7 @@ function readStructuredAgentJournalTurns(
 
 export function selectStructuredAgentTurnTimings(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmissionFields[] = []
 ): ReadonlyMap<string, StructuredAgentTurnTiming | null> {
   return readStructuredAgentJournalTurns(items, submissions).byAnchor
 }
@@ -114,21 +114,6 @@ export function selectStructuredAgentRunningTurnTiming(
   turnId: string
 ): StructuredAgentTurnTiming | null {
   return readStructuredAgentJournalTurns(items).byTurnId.get(turnId) ?? null
-}
-
-/** The turn's opening send still awaits the host's answer, so its clock has not started. */
-export function structuredAgentTurnOpeningSendPending(
-  turnKey: string | undefined,
-  submissions: readonly AgentJournalSubmission[] = []
-): boolean {
-  return (
-    turnKey !== undefined &&
-    submissions.some(
-      (submission) =>
-        submission.dispatchState === 'pending' &&
-        agentJournalSubmissionKey(submission.clientMessageId) === turnKey
-    )
-  )
 }
 
 /** Whole seconds a settled turn ran, or null when the host never observed its end. */
@@ -143,6 +128,7 @@ export function completedStructuredAgentTurnSeconds(
     return Math.max(0, Math.floor((timing.completedAt - timing.startedAt) / 1000))
   }
   if (timing.durationMs !== undefined) {
+    // Claude's own measure already includes the model's wait.
     return Math.floor(timing.durationMs / 1000)
   }
   return timing.completedAt !== undefined
@@ -155,28 +141,31 @@ export function completedStructuredAgentTurnSeconds(
 export function structuredAgentTurnLocalStartedAt(
   timing: StructuredAgentTurnTiming,
   firstSeenAt: number,
-  hostNow?: number
+  hostNow?: number,
+  correctedStart = false
 ): number {
   const hostElapsed =
     hostNow !== undefined && Number.isFinite(hostNow)
       ? hostNow - timing.startedAt
       : timing.observedAt - timing.startedAt
   // Clamp NTP-induced negative host elapsed so the counter cannot run backwards.
-  return firstSeenAt - Math.max(0, hostElapsed)
+  return (
+    firstSeenAt - (correctedStart && hostNow !== undefined ? hostElapsed : Math.max(0, hostElapsed))
+  )
 }
 
 /** Host null durations outrank local guesses, keeping live/reloaded surfaces consistent for unobserved ends.
- * Rejected sends opened no turn and therefore show no duration. */
+ * Rejected sends suppress timing even when the provider reported a start. */
 export function selectStructuredAgentSettledTurns(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[] = []
+  submissions: readonly AgentJournalSubmissionFields[] = []
 ): NativeChatSettledTurns {
   return settledTurnsOf(readStructuredAgentJournalTurns(items, submissions), submissions)
 }
 
 function settledTurnsOf(
   turns: StructuredAgentJournalTurns,
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ): NativeChatSettledTurns {
   const settled = new Map<string, NativeChatSettledTurn | null>()
   for (const [userItemId, timing] of turns.byAnchor) {
@@ -194,7 +183,10 @@ function settledTurnsOf(
   }
   for (const submission of submissions) {
     const userItemId = agentJournalSubmissionKey(submission.clientMessageId)
-    if (submission.dispatchState === 'rejected' && !settled.has(userItemId)) {
+    if (
+      submission.dispatchState === 'rejected' ||
+      (submission.dispatchState === 'unknown' && !settled.has(userItemId))
+    ) {
       settled.set(userItemId, null)
     }
   }
@@ -204,7 +196,7 @@ function settledTurnsOf(
 /** Scan once for settled/running timings; nativeChatTurnMembership separately chooses the running bar. */
 export function selectStructuredAgentTurnBars(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   turnId: string | null,
   /** The host's newest turn record, which times a running turn whose row is not loaded. */
   latestTurn?: AgentSessionLatestTurn | null
@@ -213,16 +205,38 @@ export function selectStructuredAgentTurnBars(
   runningTiming: StructuredAgentTurnTiming | null
 } {
   const turns = readStructuredAgentJournalTurns(items, submissions)
-  const unloaded =
-    turnId !== null && !turns.byTurnId.has(turnId) && latestTurn?.turn.turnId === turnId
-      ? latestTurn
-      : null
+  const hostTurn = turnId !== null && latestTurn?.turn.turnId === turnId ? latestTurn : null
+  const timing = hostTurn
+    ? readTiming({ body: { kind: 'turn', ...hostTurn.turn }, observedAt: hostTurn.observedAt })
+    : turnId === null
+      ? null
+      : turns.byTurnId.get(turnId)
   return {
     settledTurns: settledTurnsOf(turns, submissions),
-    runningTiming: unloaded
-      ? readTiming({ body: { kind: 'turn', ...unloaded.turn }, observedAt: unloaded.observedAt })
-      : turnId === null
-        ? null
-        : (turns.byTurnId.get(turnId) ?? null)
+    runningTiming: timing?.state === 'running' ? timing : null
+  }
+}
+
+/** Per-view projection: receipt updates can reuse timing derived from the same submission facts. */
+export function createStructuredAgentTurnBarsSelector(): typeof selectStructuredAgentTurnBars {
+  let previous: {
+    items: readonly AgentJournalRenderItem[]
+    submissions: readonly AgentJournalSubmissionFields[]
+    turnId: string | null
+    latestTurn: AgentSessionLatestTurn | null | undefined
+    bars: ReturnType<typeof selectStructuredAgentTurnBars>
+  } | null = null
+  return (items, submissions, turnId, latestTurn) => {
+    if (
+      previous?.items === items &&
+      previous.turnId === turnId &&
+      previous.latestTurn === latestTurn &&
+      previous.submissions === submissions
+    ) {
+      return previous.bars
+    }
+    const bars = selectStructuredAgentTurnBars(items, submissions, turnId, latestTurn)
+    previous = { items, submissions, turnId, latestTurn, bars }
+    return bars
   }
 }

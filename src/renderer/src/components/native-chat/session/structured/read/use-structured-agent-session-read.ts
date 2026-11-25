@@ -75,6 +75,7 @@ export function useStructuredAgentSessionRead(args: {
 
   return {
     state: snapshot.state,
+    readOwner: owner,
     readCurrent: snapshot.current,
     loadingOlder: snapshot.loadingOlder,
     olderHistoryGeneration: snapshot.olderHistoryGeneration,

@@ -46,7 +46,10 @@ export type AgentSessionRewindInput = {
   onMessageReturned?: () => void
   /** Whether the view is shown, and so reading; absent means shown. */
   isVisible?: boolean
-  state: StructuredAgentSessionState
+  state: Pick<
+    StructuredAgentSessionState,
+    'epoch' | 'cursor' | 'fence' | 'items' | 'status' | 'submissions'
+  >
   contextFloor?: AgentJournalCursor
   /** Undefined until the host has answered for the current runtime. */
   support: AgentSessionRewindSupport | undefined
@@ -283,8 +286,12 @@ export function createAgentSessionRewindHook(
       return !blockedRef.current
     }, [])
     const offered = nativeChatRewindOffered(input.support)
-    const floor = agentSessionRewindContextFloor(input.state, input.contextFloor)
-    const { items, submissions } = input.state
+    const { epoch, items, submissions } = input.state
+    const { contextFloor } = input
+    const floor = useMemo(
+      () => agentSessionRewindContextFloor({ epoch, items }, contextFloor),
+      [contextFloor, epoch, items]
+    )
     // Streaming rebuilds items per chunk; keep the set while its ids hold so row actions don't redraw.
     const heldTargets = useRef<ReadonlySet<string>>(new Set())
     const eligibleItemIds = useMemo(() => {

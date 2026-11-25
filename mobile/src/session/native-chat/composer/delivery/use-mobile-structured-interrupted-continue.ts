@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission
+  AgentJournalSubmissionFields
 } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { latestNativeChatOrcaStopCut } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import {
@@ -34,7 +34,7 @@ export function useMobileStructuredInterruptedContinue(
     sessionKey: string
     hostSupport: StructuredAgentSessionHostSupport | null
     items: readonly AgentJournalRenderItem[]
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly AgentJournalSubmissionFields[]
   },
   /** Also true while the host may take no turn: Continue starts one. */
   isWorking: boolean

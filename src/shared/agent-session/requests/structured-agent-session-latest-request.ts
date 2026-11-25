@@ -2,7 +2,7 @@
 
 import type {
   AgentJournalRenderItem,
-  AgentJournalSubmission,
+  AgentJournalSubmissionFields,
   AgentJournalTurnLifecycle,
   AgentJournalTurnLifecycleState
 } from '../journal/agent-session-journal-types'
@@ -62,7 +62,7 @@ export function isStructuredAgentSessionNonRequestRow(
 /** Skip accepted/unanswered sends and nonfailures (withdrawal/restart/close); null when no request has a verdict. */
 export function latestStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
   bodyOf?: AgentJournalBodyLookup
 ): StructuredAgentSessionLatestRequest | null {
@@ -88,7 +88,7 @@ export function latestStructuredAgentSessionRequest(
 /** Undefined skips a candidate; null is the unknown-user barrier that clears the verdict. */
 export function structuredAgentSessionRequestFromItem(
   item: AgentJournalRenderItem,
-  rejected: AgentJournalSubmission | undefined,
+  rejected: AgentJournalSubmissionFields | undefined,
   steered: (turnItemId: string) => boolean,
   commandTurns: Pick<ReadonlySet<string>, 'has'>
 ): StructuredAgentSessionLatestRequest | null | undefined {
@@ -132,7 +132,10 @@ export function structuredAgentSessionRequestFromItem(
 }
 
 /** A user message steered into a turn the agent started makes it the user's turn too. */
-function steeredInto(submissions: readonly AgentJournalSubmission[], turnItemId: string): boolean {
+function steeredInto(
+  submissions: readonly AgentJournalSubmissionFields[],
+  turnItemId: string
+): boolean {
   return submissions.some(
     ({ answeredInTurn }) =>
       answeredInTurn?.via === 'steer' && answeredInTurn.turnItemId === turnItemId
@@ -142,7 +145,7 @@ function steeredInto(submissions: readonly AgentJournalSubmission[], turnItemId:
 /** Exclude sends that failed nobody and never became turns; include provider-journaled user rows, even from children/history/old hosts. */
 export function hasStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[],
+  submissions: readonly AgentJournalSubmissionFields[],
   currentFence?: number | null
 ): boolean {
   const sent = new Set(
@@ -166,9 +169,9 @@ export function hasStructuredAgentSessionRequest(
 }
 
 function rejectedSubmissionsByItem(
-  submissions: readonly AgentJournalSubmission[]
-): Map<string, AgentJournalSubmission> {
-  const rejected = new Map<string, AgentJournalSubmission>()
+  submissions: readonly AgentJournalSubmissionFields[]
+): Map<string, AgentJournalSubmissionFields> {
+  const rejected = new Map<string, AgentJournalSubmissionFields>()
   for (const submission of submissions) {
     if (submission.dispatchState === 'rejected') {
       rejected.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
@@ -223,7 +226,7 @@ export function latestStructuredAgentSessionUserItem(
 /** Why the latest request failed, typed: its refused send's rejection, or its turn's failure row. */
 export function latestStructuredAgentSessionFailure(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmissionFields[]
 ): AgentSessionFailureFact | undefined {
   const request = latestStructuredAgentSessionRequest(items, submissions)
   if (request?.kind === 'refused-send') {

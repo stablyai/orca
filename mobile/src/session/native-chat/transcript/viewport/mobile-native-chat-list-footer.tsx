@@ -1,7 +1,33 @@
 import { Fragment, type ReactElement } from 'react'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import type { NativeChatAwaitingInput } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import { StructuredAgentWorkingGate } from '../sending/structured-agent-sending-scope'
+import { MobileNativeChatLiveLine } from '../messages/MobileNativeChatLiveLine'
+import { MobileNativeChatAwaitingInputRow } from '../messages/MobileNativeChatAwaitingInputRow'
+import type { useMobileNativeChatTurnDisclosure } from '../turn-state/use-mobile-native-chat-turn-disclosure'
 
 type MobileNativeChatListRow = { item: NativeChatMessage; index: number }
+
+export function mobileNativeChatFooterStatus(
+  {
+    liveLine,
+    onToggleReasoning
+  }: Pick<ReturnType<typeof useMobileNativeChatTurnDisclosure>, 'liveLine' | 'onToggleReasoning'>,
+  fontScale: number,
+  awaitingInput: NativeChatAwaitingInput | null
+): ReactElement | null {
+  if (awaitingInput === 'unshown') {
+    return <MobileNativeChatAwaitingInputRow subject={null} pending fontScale={fontScale} />
+  }
+  if (!liveLine) {
+    return null
+  }
+  return (
+    <StructuredAgentWorkingGate>
+      <MobileNativeChatLiveLine line={liveLine} {...{ onToggleReasoning, fontScale }} />
+    </StructuredAgentWorkingGate>
+  )
+}
 
 export function mobileNativeChatListFooter(
   liveStatus: ReactElement | null,
