@@ -122,7 +122,7 @@ export class RuntimeLinearSaveFieldCommands extends RuntimeLinearTaskFieldComman
       const project = await this.resolveLinearCreateProject(params.projectInput, team, signal)
       fields.projectId = project.id
     }
-    if (params.milestoneInput) {
+    if (params.milestoneInput !== undefined) {
       const milestone = await this.resolveLinearProjectMilestone(
         params.milestoneInput,
         fields.projectId,
