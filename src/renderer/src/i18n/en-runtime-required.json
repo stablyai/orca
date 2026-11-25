@@ -1189,8 +1189,6 @@
             "runningSkills_other": "Updating {{count}} skills…"
           },
           "SshStatusSegment": {
-            "connectedHostCount_one": "{{count}} host",
-            "connectedHostCount_other": "{{count}} hosts",
             "moreSshHostMatches_one": "{{count}} more match. Keep typing to narrow it down.",
             "moreSshHostMatches_other": "{{count}} more matches. Keep typing to narrow them down.",
             "moreSshHosts_one": "Find {{count}} more SSH host…",
