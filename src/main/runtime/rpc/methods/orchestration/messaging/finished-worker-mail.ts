@@ -85,17 +85,30 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   }
 }
 
-/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
+/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal.
+ *  A worker since given local work is no longer that finished worker: its default mail goes to its
+ *  working Dispatch, so only mail naming the finished remote Dispatch is refused. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
-  paneKey: string | undefined,
+  sender: { address: string; paneKey: string | undefined },
   to: string | undefined
 ): void {
+  const { address, paneKey } = sender
   const attachment = paneKey ? db.findLatestRemoteAttachmentForPane(paneKey) : undefined
-  if (attachment && (!to || to === `dispatch:${attachment.dispatch_id}`)) {
-    throw new OrchestrationError(
-      'run_home_unreachable',
-      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
-    )
+  if (!attachment) {
+    return
   }
+  if (to === `dispatch:${attachment.dispatch_id}`) {
+    throw finishedRemoteUnreachable(attachment.dispatch_id)
+  }
+  if (!to && !db.getActiveDispatchForIdentity(address, paneKey)) {
+    throw finishedRemoteUnreachable(attachment.dispatch_id)
+  }
+}
+
+function finishedRemoteUnreachable(dispatchId: string): OrchestrationError {
+  return new OrchestrationError(
+    'run_home_unreachable',
+    `Dispatch ${dispatchId} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
+  )
 }
