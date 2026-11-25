@@ -68,16 +68,18 @@ afterEach(() => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: access reads the session id, and the dispatch lookup its address and pane
-const caller = (sessionId: string) =>
-  ({
+const caller = (sessionId: string): OrchestrationSessionCaller => {
+  const fields = {
     sessionId,
     orcaSessionId: sessionId,
     address: `orca_session_id:${sessionId}`,
     terminalHandle: null,
     paneKey: null,
     workspaceId: 'workspace'
-  }) as unknown as OrchestrationSessionCaller
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: access reads the session id, and the dispatch lookup its address and pane
+  return fields as unknown as OrchestrationSessionCaller
+}
 
 function addItem(title: string, actsForAccounts: readonly string[] | null): void {
   store.add(
