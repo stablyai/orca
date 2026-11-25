@@ -61,14 +61,15 @@ const sendAndRefuse = async (sessionId: string, expiredIndexes: number[]) => {
   const hosts = prepared.attachments!.map(({ path }) => path)
   // Not delivered after a confirmed handoff: release waits for the draft to hold the files.
   send.releaseWhenHeld()
+  const refused: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: hosts.map((path) => ({ type: 'image-ref', path }))
+  }
   handBackStructuredAgentSessionMessage(
     sessionId,
     'refused',
-    {
-      kind: 'message',
-      role: 'user',
-      blocks: hosts.map((path) => ({ type: 'image-ref', path }))
-    } as AgentJournalMessageItem,
+    refused,
     undefined,
     new Set(expiredIndexes.map((index) => agentSessionAttachmentUploadIdOfPath(hosts[index])!))
   )
