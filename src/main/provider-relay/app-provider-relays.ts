@@ -9,6 +9,7 @@ export {
   keptProviderRelaySpawnToken,
   keptRunningProviderRelayPid,
   providerRelayKeptFromLastRun,
+  providerRelayChatsIdleStoppedThisRun,
   liveKeptProviderRelayChats as liveProviderRelayChats,
   registerReattachableProviderRelayAgent
 } from './provider-relay-launch-inventory'

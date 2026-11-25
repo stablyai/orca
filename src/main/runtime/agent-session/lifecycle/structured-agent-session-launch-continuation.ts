@@ -9,7 +9,8 @@ import type { AgentSessionRecordStore } from '../records/agent-session-record-st
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import {
   listProviderRelaysAtLaunch,
-  liveProviderRelayChats
+  liveProviderRelayChats,
+  providerRelayChatsIdleStoppedThisRun
 } from '../../../provider-relay/app-provider-relays'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { KeptAgentRebind } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-kept-agent'
@@ -48,6 +49,8 @@ export type StructuredAgentSessionLaunchContinuationDeps = {
   resumeWorkOnRestart: () => boolean
   /** Chats whose agent the terminal host kept running; they were never cut and reattach live. */
   keptRunning?: () => Promise<ReadonlySet<string>>
+  /** Chats whose detached agent the terminal host idle-stopped after its work ended: not cut. */
+  finishedWhileDetached?: () => ReadonlySet<string>
   rebindKeptAgent?: (sessionId: string) => Promise<KeptAgentRebind>
 }
 
@@ -73,11 +76,14 @@ export async function continueStructuredAgentSessionsAtLaunch(
       kept.add(sessionId)
     }
   })
+  const finished = deps.finishedWhileDetached?.() ?? new Set<string>()
   const heldByLastRun = deps.store
     .listHeldSessionIds()
     .filter(
       (sessionId) =>
-        !kept.has(sessionId) && deps.store.replacedRuntime(sessionId)?.runtime !== undefined
+        !kept.has(sessionId) &&
+        !finished.has(sessionId) &&
+        deps.store.replacedRuntime(sessionId)?.runtime !== undefined
     )
   const offers = async () => [
     ...(await deps.restartResume.list()),
@@ -165,6 +171,7 @@ export function structuredAgentSessionLaunchContinuationDeps(
           await listProviderRelaysAtLaunch()
           return liveProviderRelayChats()
         },
+        finishedWhileDetached: providerRelayChatsIdleStoppedThisRun,
         rebindKeptAgent: host.mutations.rebindKeptAgent
       }
     : undefined
