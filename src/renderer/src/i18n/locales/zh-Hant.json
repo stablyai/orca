@@ -21154,6 +21154,15 @@
           "selectionVanishedCount_other": "所選的 {{count}} 個工作區已不存在。",
           "selectionWithheldCount_other": "所選的 {{count}} 個工作區已被目前的篩選條件隱藏，因此已取消選取。",
           "lastActive": "上次活動時間：{{value0}}",
+          "projectNamed": "專案：{{value0}}",
+          "pathLabel": "路徑",
+          "copyPath": "複製路徑",
+          "gitNotChecked": "尚未檢查",
+          "workspaceCount_other": "{{count}} 個工作區",
+          "restoreFailed": "無法取消忽略 {{value0}}",
+          "ignoreTooltip": "忽略：批次刪除時略過",
+          "stopIgnoring": "取消忽略",
+          "stopIgnoringNamed": "取消忽略 {{value0}}",
           "sortAscending": "升冪",
           "sortDescending": "降冪"
         },
@@ -21600,6 +21609,212 @@
       "repositoryHooks": {
         "availableEnvVars": "可用的環境變數"
       },
+      "workspaceCleanup": {
+        "title": "工作區清理",
+        "description": "移除你已用完的工作區。移除任何內容之前，Orca 會再次檢查是否有未儲存的工作。",
+        "unsupportedHost": "此主機執行的 Orca 版本不支援自動清理。請更新該主機上的 Orca 以使用這些設定。",
+        "previewFailed": "無法確認此變更後哪些工作區會符合。",
+        "pinFailed": "無法保留 {{name}}。",
+        "rules": {
+          "branchNote": "已合併的分支會隨工作區一併刪除，未合併的分支則會保留。",
+          "recommended": "推薦",
+          "inactiveDescription": "{{count}} 天沒有活動。",
+          "advancedDescription": "自動化與編排工作者的工作區",
+          "inactiveFor": "閒置時間",
+          "days": "天",
+          "then": "接著",
+          "archiveDescription": "封存會釋放磁碟空間，並將工作區保留在側邊欄中。",
+          "deleteDescription": "刪除會移除工作區及其資料夾。",
+          "archive": "封存",
+          "delete": "刪除",
+          "matchesCount": "目前有 {{count}} 個工作區符合",
+          "hideMatches": "隱藏",
+          "showMatches": "顯示",
+          "merged": "刪除已合併的工作區",
+          "mergedDescription": "PR 已合併，且工作區中的所有內容都已包含在其中。",
+          "unchanged": "刪除未變更的工作區",
+          "unchangedDescription": "沒有預設分支以外的提交，也沒有未提交的編輯。",
+          "inactiveCleanUp": "清理閒置的工作區",
+          "inactive": "刪除閒置的工作區",
+          "automationRuns": "刪除執行已結束的自動化工作區",
+          "automationRunsDescription": "自動化執行所建立的工作區，於該次執行結束後刪除。",
+          "orchestrationWorkers": "刪除已釋放的編排工作者工作區",
+          "orchestrationWorkersDescription": "編排工作者使用過的工作區，於協調者釋放該工作者後刪除。",
+          "inactiveDescription_other": "{{count}} 天沒有活動。",
+          "matchesCount_other": "目前有 {{count}} 個工作區符合",
+          "checking": "正在確認哪些工作區符合…",
+          "checkFailed": "無法確認哪些工作區符合。"
+        },
+        "protection": {
+          "title": "保護",
+          "keepIgnoredFiles": "有 Git 忽略的檔案時保留工作區",
+          "keepIgnoredFilesDescription": ".env 和本機設定之類的檔案無法復原。node_modules 和建置輸出不算在內。",
+          "alwaysKeptLabel": "一律保留",
+          "alwaysKeptList": "已固定的工作區、執行中的代理程式或終端機、編輯器中未儲存的變更、未提交的變更、未推送的提交。"
+        },
+        "activity": {
+          "loadFailed": "無法載入活動記錄：{{error}}",
+          "empty": "清理尚未執行過。",
+          "unfinished": "未能完成",
+          "nothingRemoved": "沒有需要清理的項目",
+          "removedCount": "已移除 {{count}} 個",
+          "keptCount": "已保留 {{count}} 個",
+          "failedCount": "{{count}} 個失敗",
+          "removed": "已移除 · {{count}}",
+          "failed": "失敗 · {{count}}",
+          "archived": "已封存",
+          "deleted": "已刪除",
+          "kept": "已保留 · {{count}}",
+          "showMore": "再顯示 {{count}} 個",
+          "waiting": "已閒置 {{elapsed}}/{{after}} 天",
+          "title": "活動記錄",
+          "notListed_other": "另有 {{count}} 個保留的工作區未列出。",
+          "chatsDeletedCount_other": "已刪除 {{count}} 個聊天",
+          "chatsDeleted_other": "已從刪除的工作區中刪除 {{count}} 個聊天",
+          "chatsFailed_other": "{{count}} 個聊天無法刪除"
+        },
+        "runFailed": "無法執行清理。",
+        "updateFailed": "無法儲存清理規則。",
+        "enable": {
+          "title": "開啟「{{rule}}」？",
+          "description_other": "目前有 {{count}} 個工作區符合。開啟此規則幾秒後就會刪除這些工作區。",
+          "summary": "將刪除 {{count}} 個",
+          "cancel": "取消",
+          "turnOn": "開啟"
+        },
+        "reason": {
+          "merged": "已合併",
+          "unchanged": "未變更",
+          "inactive": "閒置",
+          "automationRun": "自動化執行",
+          "orchestrationWorker": "編排工作者",
+          "mergedNumber": "{{label}} · #{{number}}"
+        },
+        "keep": {
+          "pinned": "已固定",
+          "noRuleMatched": "沒有符合的規則",
+          "recentlyActive": "過去一小時內使用過",
+          "activeWorkspace": "目前已開啟",
+          "agentRunning": "代理程式執行中",
+          "terminalRunning": "終端機正在執行行程",
+          "terminalUnknown": "終端機狀態未知",
+          "unsavedEditorChanges": "編輯器中未儲存的變更",
+          "uncommittedChanges": "未提交的變更",
+          "unpushedCommits": "未推送的提交",
+          "ignoredFiles": "Git 忽略的檔案",
+          "gitUnknown": "無法讀取 Git 狀態",
+          "archiveUnavailable": "無法封存",
+          "archiveScript": "有封存指令碼",
+          "removing": "已在移除中",
+          "folderWorkspaceSibling": "此工作區中的另一個存放庫仍在使用中",
+          "waiting": "等待中",
+          "notRemovable": "主工作區或資料夾專案",
+          "projectOff": "此專案已關閉清理",
+          "rulesOff": "未開啟任何規則",
+          "withDetail": "{{cause}} · {{detail}}"
+        },
+        "trigger": {
+          "startup": "啟動時",
+          "hourly": "每小時",
+          "settings": "規則變更後",
+          "runNow": "立即執行規則",
+          "cli": "從 CLI 執行"
+        },
+        "search": {
+          "cleanup": "清理",
+          "cleanUp": "清除",
+          "delete": "刪除",
+          "automatic": "自動",
+          "pullRequest": "PR",
+          "inactiveDescription": "數天沒有活動。",
+          "stale": "過時",
+          "days": "天",
+          "automations": "自動化",
+          "orchestration": "編排",
+          "protection": "保護",
+          "activityDescription": "每次清理移除和保留了哪些工作區。",
+          "history": "歷史記錄",
+          "runs": "執行記錄",
+          "envFile": ".env",
+          "manual": "手動",
+          "automaticDescription": "自動清理是否開啟、下次執行時間，以及立即執行規則。",
+          "runRulesNow": "立即執行規則",
+          "cleanUpNow": "立即清理",
+          "schedule": "排程"
+        },
+        "status": {
+          "lastRunFailed": "上次執行（{{when}}）未能完成：{{error}}",
+          "lastRunNothing": "上次執行（{{when}}）沒有移除任何工作區。",
+          "lastRunFreed_other": "上次執行（{{when}}）移除了 {{count}} 個工作區，釋放 {{size}}。",
+          "lastRunRemoved_other": "上次執行（{{when}}）移除了 {{count}} 個工作區。",
+          "nextRun": "下次執行：{{when}}。",
+          "justNow": "剛剛",
+          "inUnderAMinute": "不到一分鐘後",
+          "lastRunChats_other": "上次執行（{{when}}）從已刪除的工作區中刪除了 {{count}} 個聊天。"
+        },
+        "change": {
+          "title": "變更「{{rule}}」？",
+          "description_other": "此變更會讓目前多出 {{count}} 個符合的工作區。套用幾秒後就會刪除這些工作區。",
+          "apply": "套用"
+        },
+        "rulesLoadFailed": "無法載入此主機的清理規則：{{error}}",
+        "retry": "重試",
+        "summary": {
+          "merged": "刪除已合併",
+          "unchanged": "刪除未變更",
+          "inactiveCleanUp": "清理閒置",
+          "inactive": "刪除閒置",
+          "automationRuns": "自動化工作區",
+          "orchestrationWorkers": "編排工作者",
+          "off": "關閉"
+        },
+        "disableIgnoredFiles": {
+          "title": "不再保護 Git 忽略的檔案？",
+          "description": "使用這些清理規則的專案中，Git 忽略的檔案將不再阻止自動清理。.env 和本機設定之類的檔案可能會被刪除，且無法復原。",
+          "matches_other": "若不固定，關閉保護幾秒後將額外刪除 {{count}} 個工作區。",
+          "noMatches": "目前沒有額外符合的工作區。此設定會影響使用這些規則的專案日後的清理。",
+          "turnOff": "關閉保護"
+        },
+        "pinAndKeep": {
+          "description": "確認後會固定所選的工作區。已固定的工作區在取消固定前不會被自動清理。",
+          "named": "固定並保留 {{name}}",
+          "label": "固定並保留"
+        },
+        "chatHistory": {
+          "title": "聊天記錄"
+        },
+        "manual": {
+          "title": "手動清理",
+          "label": "刪除你挑選的工作區",
+          "review": "檢查工作區",
+          "description": "查看所有工作區，並選擇要刪除哪些。"
+        },
+        "automatic": {
+          "offDetail": "開啟任一規則，即可依排程移除工作區。",
+          "running": "正在移除符合規則的工作區…",
+          "title": "自動清理",
+          "on": "已開啟",
+          "off": "已關閉",
+          "runningButton": "執行中…",
+          "runNow": "立即執行規則"
+        }
+      },
+      "repository": {
+        "workspaceCleanup": {
+          "title": "工作區清理",
+          "description": "僅適用於 {{name}} 的規則。「使用全域」會依循「設定 / 工作區清理」。",
+          "usingGlobal": "使用全域：{{rules}}",
+          "globalDefault": "全域預設：{{rules}}",
+          "useGlobal": "使用全域",
+          "off": "關閉",
+          "custom": "自訂",
+          "rules": "清理規則",
+          "rulesDescription": "此專案適用哪些工作區清理規則。",
+          "keywordCleanup": "清理",
+          "keywordDelete": "刪除",
+          "keywordMerged": "已合併"
+        }
+      },
       "bitbucket": {
         "credentials": {
           "dialog": {
@@ -21622,6 +21837,28 @@
         "confirmCheckHomeFolder": "沒有其他共用此主資料夾的電腦正在執行 Orca",
         "details": "詳細資料",
         "clearing": "正在清除…"
+      },
+      "agents": {
+        "deleteHistoryWithWorkspace": {
+          "updateFailed": "無法更新 {{host}} 上的設定。",
+          "recommended": "推薦",
+          "unsupported": "請更新 {{host}} 上的 Orca，才能在該主機使用此設定。",
+          "confirmTitle": "刪除已刪除工作區的代理程式歷史記錄？",
+          "confirmDescription": "Orca 會刪除已不存在的工作區中的 Orca、Claude Code 和 Codex 聊天，今天以前刪除的工作區也包括在內。現有工作區中的聊天會保留。刪除的聊天無法復原。",
+          "cancel": "取消",
+          "turnOn": "開啟",
+          "title": "刪除工作區時一併刪除代理程式歷史記錄",
+          "description": "已刪除工作區中的 Orca、Claude Code 和 Codex 聊天會自動移除，以釋放磁碟空間。移除後無法復原。",
+          "codexHistoryBadge": "Codex 歷史記錄：{{size}}",
+          "codexHistoryBadgeAtLeast": "Codex 歷史記錄：{{size}}+",
+          "codexHistoryTooltip": "Codex 在 {{host}} 上存放自身聊天記錄所用的空間，包括你仍保有的工作區中的聊天。",
+          "codexHistoryTooltipAtLeast": "Codex 在 {{host}} 上存放自身聊天記錄至少用了這麼多空間，包括你仍保有的工作區中的聊天。",
+          "chat": "聊天",
+          "transcripts": "對話記錄",
+          "diskSpace": "磁碟空間",
+          "cleanup": "清理",
+          "chatHistory": "刪除聊天記錄"
+        }
       }
     },
     "agentChildRow": {
@@ -25415,6 +25652,20 @@
     "devinProduct": "Devin CLI",
     "codebuddyProduct": "CodeBuddy Code",
     "thisComputer": "這台電腦"
+  },
+  "perfNotices": {
+    "hiddenTabs": {
+      "title": "節省閒置分頁佔用的記憶體",
+      "description_other": "你有 {{count}} 個分頁已超過 {{hours}} 小時未檢視。開啟「記憶體節省」即可釋放它們佔用的記憶體。",
+      "descriptionOneHour_other": "你有 {{count}} 個分頁已超過一小時未檢視。開啟「記憶體節省」即可釋放它們佔用的記憶體。",
+      "turnOnMemorySaver": "開啟記憶體節省"
+    },
+    "disk": {
+      "title": "磁碟空間即將用盡",
+      "description": "在「設定 > 工作區清理」中找出不再需要的工作區。",
+      "reviewOld": "檢視舊的工作區"
+    },
+    "dontShowAgain": "不再顯示"
   },
   "activityBar": {
     "moveUp": "上移",
