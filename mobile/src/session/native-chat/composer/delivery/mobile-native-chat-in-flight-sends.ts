@@ -190,6 +190,18 @@ export function readMobileNativeChatInFlightSend(id: string): {
   return inFlightSends.get(id) ?? null
 }
 
+export function readMobileNativeChatInFlightStructuredSession(
+  sessionId: string
+): MobileNativeChatInFlightSend[] {
+  const sends: MobileNativeChatInFlightSend[] = []
+  for (const { send } of inFlightSends.values()) {
+    if (send.kind === 'structured' && send.sessionId === sessionId && send.clientMessageId) {
+      sends.push(send)
+    }
+  }
+  return sends
+}
+
 export function readMobileNativeChatInFlightSendsByScope(): Map<
   string,
   MobileNativeChatInFlightSend[]

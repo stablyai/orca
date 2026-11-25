@@ -13,6 +13,10 @@ import { agentSessionWriteNotDoneParts } from '../../../../../../../shared/agent
 import { agentSessionWriteNoticeText } from '../../../messages/notices/agent-session-write-notice-text'
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
+import {
+  structuredAgentSessionRetryLineages,
+  structuredAgentSessionRetryRow
+} from '../../../../../../../shared/agent-session/view/structured-agent-session-retry-lineage'
 
 /** One shared value, so a rebuilt map re-renders no row still sending. */
 const STRUCTURED_AGENT_SESSION_DELIVERY_SENDING: NativeChatDeliveryNotice = { sending: true }
@@ -30,20 +34,11 @@ export function structuredAgentSessionDeliveryNotices(args: {
 }): ReadonlyMap<string, NativeChatDeliveryNotice> {
   const { agentName, submissions } = args
   let byId: Map<string, AgentJournalSubmission> | undefined
-  let retried: Set<string> | undefined
   let pendingRetries: Set<string> | undefined
   let hasRejected = false
+  const lineages = structuredAgentSessionRetryLineages(submissions)
   for (const submission of submissions) {
     hasRejected ||= submission.dispatchState === 'rejected'
-    const original = submission.retryOfClientMessageId
-    if (!original) {
-      continue
-    }
-    if (submission.dispatchState === 'accepted') {
-      ;(retried ??= new Set()).add(original)
-    } else if (submission.dispatchState === 'pending' || submission.dispatchState === 'unknown') {
-      ;(pendingRetries ??= new Set()).add(original)
-    }
   }
   for (const entry of args.pending) {
     if (entry.retryOfClientMessageId) {
@@ -71,13 +66,20 @@ export function structuredAgentSessionDeliveryNotices(args: {
     if (submission.dispatchState === 'accepted' || submission.dispatchState === 'unknown') {
       continue
     }
-    const rootId = agentJournalSubmissionKey(
-      submission.retryOfClientMessageId ?? submission.clientMessageId
-    )
-    const id =
-      submission.retryOfClientMessageId && args.itemIds && !args.itemIds.has(rootId)
-        ? agentJournalSubmissionKey(submission.clientMessageId)
-        : rootId
+    const root = submission.retryOfClientMessageId ?? submission.clientMessageId
+    const retry = lineages.get(root)
+    if (
+      retry?.dispatchState === 'accepted' ||
+      retry?.dispatchState === 'unknown' ||
+      (retry &&
+        submission.clientMessageId !== root &&
+        submission.clientMessageId !== retry.clientMessageId)
+    ) {
+      continue
+    }
+    const id = retry
+      ? structuredAgentSessionRetryRow(root, retry, (itemId) => args.itemIds?.has(itemId) ?? true)
+      : agentJournalSubmissionKey(root)
     const original = submission.retryOfClientMessageId
       ? ((byId ??= new Map(submissions.map((entry) => [entry.clientMessageId, entry]))).get(
           submission.retryOfClientMessageId
@@ -86,10 +88,7 @@ export function structuredAgentSessionDeliveryNotices(args: {
           clientMessageId: submission.retryOfClientMessageId
         })
       : submission
-    if (retried?.has(original.clientMessageId)) {
-      continue
-    }
-    if (submission.dispatchState === 'pending') {
+    if (submission.dispatchState === 'pending' || retry?.dispatchState === 'pending') {
       notices.set(id, STRUCTURED_AGENT_SESSION_DELIVERY_SENDING)
     } else if (
       submission.dispatchState === 'rejected' &&

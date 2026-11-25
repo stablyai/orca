@@ -35,6 +35,7 @@ import {
 import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
+import { hasUnsettledStart } from '../delivery/structured-agent-session-input-selection'
 
 export function registerStructuredAgentSessionStart(
   context: StructuredAgentSessionAttachContext,
@@ -234,7 +235,7 @@ export async function structuredAgentSessionStartStillQueued(
   if (startedFor === undefined) {
     return true
   }
-  if (!session) {
+  if (!session || hasUnsettledStart(session.journal, startedFor)) {
     return false
   }
   const entry = await session.journal.reads.submission(startedFor)

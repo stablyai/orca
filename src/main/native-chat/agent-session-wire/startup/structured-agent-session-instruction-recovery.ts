@@ -15,6 +15,7 @@ import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { stopStructuredAgentSessionAgentUnderSerialize } from '../termination/structured-agent-session-host-lifetime'
+import { holdUnsettledStart } from '../delivery/structured-agent-session-input-selection'
 
 export class BotInstructionRecoveryDeadline extends Error {}
 
@@ -87,6 +88,11 @@ export async function settleInstructionRecoveryFailure(
   writing: Promise<void>,
   failure: SubmissionRejectionFact
 ) {
+  const journal = context.sessions.get(sessionId)?.journal
+  const release =
+    startedFor !== undefined && children.length === 0 && journal
+      ? holdUnsettledStart(journal, startedFor)
+      : undefined
   try {
     await writing
     if (
@@ -96,6 +102,7 @@ export async function settleInstructionRecoveryFailure(
     ) {
       return unknownTaskGate()
     }
+    release?.()
     return null
   } catch {
     return unknownTaskGate()

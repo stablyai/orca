@@ -254,7 +254,14 @@ export async function tagBotMemoryFile(
     if (!isCurrent()) {
       return null
     }
-    if (tagged === current || (await fs.replaceText(path, current, tagged))) {
+    if (
+      tagged === current ||
+      (await fs.replaceText(path, current, tagged, () => {
+        if (!isCurrent()) {
+          throw new Error('bot_memory_write_custody_lost')
+        }
+      }))
+    ) {
       return { text: tagged, kept: botMemoryChange(current, kept) }
     }
   }

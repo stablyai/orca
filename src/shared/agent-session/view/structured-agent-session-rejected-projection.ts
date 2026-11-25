@@ -4,6 +4,7 @@ import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispa
 import { readAgentSessionFailureFact } from '../failures/agent-session-failure'
 import { agentSessionContextSequenceFor } from '../conversation-context/agent-session-context-clear'
 import { agentJournalSubmissionReturnedToCard } from '../requests/agent-session-queued-submission'
+import { structuredAgentSessionRetryLineages } from './structured-agent-session-retry-lineage'
 
 /** Rejected sends shown as unsent in submission order; withdrawals use stop notices, queued handoffs/cards keep their cards,
  * and commands carry rejection in their own reply. `resent`: rejected sends a later copy stands in for. */
@@ -13,7 +14,7 @@ export function structuredAgentSessionRejectedShownInPlace(
   clearSequences: readonly number[] = []
 ): { shown: Set<string>; resent: Set<string> } {
   const latest = new Map<string, number>()
-  let retried: Set<string> | undefined
+  const lineages = structuredAgentSessionRetryLineages(submissions)
   const later = Array.from<number | undefined>({ length: submissions.length })
   const scopeKey = (submission: AgentJournalSubmission) =>
     JSON.stringify([
@@ -22,9 +23,6 @@ export function structuredAgentSessionRejectedShownInPlace(
     ])
   for (let index = submissions.length - 1; index >= 0; index--) {
     const submission = submissions[index]
-    if (submission.dispatchState === 'accepted' && submission.retryOfClientMessageId) {
-      ;(retried ??= new Set()).add(submission.retryOfClientMessageId)
-    }
     const key = scopeKey(submission)
     later[index] = latest.get(key)
     if (!dispatchWasWithdrawn(submission)) {
@@ -49,7 +47,8 @@ export function structuredAgentSessionRejectedShownInPlace(
     // was known counts, so a repeat sent before it is kept.
     const key = agentJournalSubmissionKey(submission.clientMessageId)
     if (
-      retried?.has(submission.clientMessageId) ||
+      lineages.get(submission.retryOfClientMessageId ?? submission.clientMessageId)
+        ?.dispatchState === 'accepted' ||
       (!readAgentSessionFailureFact(submission.rejection)?.instructionRecovery &&
         resolvedAt !== null &&
         later[index] !== undefined &&

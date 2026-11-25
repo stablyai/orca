@@ -64,7 +64,11 @@ function context() {
     (work) => work,
     logger
   )!
-  const open = async (fresh = false, historyUnchanged = true) => {
+  const open = async (
+    fresh = false,
+    historyUnchanged = true,
+    request = vi.fn(async () => ({}))
+  ) => {
     await botSessionInstructions(
       bot,
       [
@@ -81,7 +85,6 @@ function context() {
       fs
     )
     const snapshot = bot.instructionSnapshot!('release-chat')!
-    const request = vi.fn(async () => ({}))
     const fence = store.getRecord('release-chat')!.lease.runtimeFence
     const currentGeneration = `generation-${++generation}`
     const link = {
@@ -252,9 +255,10 @@ it('repairs a legacy receipt without a proved baseline instead of declaring curr
 })
 
 describe.each([
-  { path: 'normal', historyUnchanged: true, filesIncluded: false },
-  { path: 'recovery', historyUnchanged: false, filesIncluded: true }
-])('$path resume after idle changes', ({ historyUnchanged, filesIncluded }) => {
+  { path: 'normal', historyUnchanged: true, filesIncluded: false, cold: false },
+  { path: 'recovery', historyUnchanged: false, filesIncluded: true, cold: false },
+  { path: 'cold full repair', historyUnchanged: false, filesIncluded: true, cold: true }
+])('$path resume after idle changes', ({ historyUnchanged, filesIncluded, cold }) => {
   it.each([
     {
       file: 'SOUL',
@@ -285,9 +289,13 @@ describe.each([
       for (const [file, text] of edits) {
         files.set(join(FOLDER, file), text)
       }
-      const result = await first.open(false, historyUnchanged)
+      if (cold) {
+        await reopenInstallationStore()
+      }
+      const repairing = cold ? context() : first
+      const result = await repairing.open(false, historyUnchanged)
       expect(result.installed.filesIncluded).toBe(filesIncluded)
-      const pending = await first.plan()
+      const pending = await repairing.plan()
       expect(pending?.note).toMatchObject({
         presentation: 'bot-context',
         botContext: { botId: 'release-manager', changed }
@@ -321,9 +329,13 @@ describe.each([
       files.set(join(FOLDER, 'SOUL.md'), 'My own soul edit.')
       files.set(join(FOLDER, 'MEMORY.md'), '- own fact\n- first fact')
     })
-    const result = await first.open(false, historyUnchanged)
+    if (cold) {
+      await reopenInstallationStore()
+    }
+    const repairing = cold ? context() : first
+    const result = await repairing.open(false, historyUnchanged)
     expect(result.installed.filesIncluded).toBe(filesIncluded)
-    expect(await first.plan()).toBeNull()
+    expect(await repairing.plan()).toBeNull()
     await reopenInstallationStore()
     const reopened = context()
     await reopened.open()
@@ -331,14 +343,62 @@ describe.each([
   })
 })
 
-it('adds no file-change note when static repair carries unchanged files', async () => {
+it('adds no file-change note when a cold full repair carries unchanged files', async () => {
   const first = context()
   await first.open(true)
-  const result = await first.open(false, false)
+  await reopenInstallationStore()
+  const repairing = context()
+  const result = await repairing.open(false, false)
   expect(result.installed.filesIncluded).toBe(true)
-  expect(await first.plan()).toBeNull()
+  expect(await repairing.plan()).toBeNull()
   await reopenInstallationStore()
   const reopened = context()
   await reopened.open()
   expect(await reopened.plan()).toBeNull()
+})
+
+it('cold full repair preserves comparison through failed delivery and another cold open', async () => {
+  const first = context()
+  await first.open(true)
+  const prior = store.getRecord('release-chat')!.instructionPolicy!
+  files.set(join(FOLDER, 'SOUL.md'), 'Earlier outside edit.')
+  await reopenInstallationStore()
+  await expect(
+    context().open(
+      false,
+      false,
+      vi.fn(async () => {
+        throw new Error('reply lost after append')
+      })
+    )
+  ).rejects.toMatchObject({ fact: { instructionRecovery: 'unknown' } })
+  expect(store.getRecord('release-chat')!.instructionPolicy).toMatchObject({
+    state: 'pending',
+    baseline: prior.baseline,
+    comparisonAnchor: prior.anchor
+  })
+  files.set(join(FOLDER, 'MEMORY.md'), '- Later outside edit\n- first fact')
+  await seedInstallationRecord((record) => ({
+    ...record,
+    instructionPolicy: { ...record.instructionPolicy!, state: 'released' },
+    lease: {
+      ...record.lease,
+      deathEvidence: {
+        kind: 'exit-observed',
+        detail: 'test writer exit',
+        observedAt: NOW,
+        ownerFence: record.instructionPolicy!.fence
+      }
+    }
+  }))
+  const repairing = context()
+  await repairing.open(false, false)
+  const plan = await repairing.plan()
+  expect(plan?.note).toMatchObject({ botContext: { changed: ['soul', 'memory'] } })
+  expect(plan?.text).toContain('Later outside edit')
+  await plan?.given(TAKEN)
+  await reopenInstallationStore()
+  const settled = context()
+  await settled.open()
+  expect(await settled.plan()).toBeNull()
 })

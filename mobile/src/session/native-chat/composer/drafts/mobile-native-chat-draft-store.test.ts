@@ -126,9 +126,9 @@ describe('mobile native-chat draft store', () => {
       act(() => currentState().setComposerText('retained task'))
       const origin = sendOrigin('retained task')
       act(() => currentState().clearDraftForSend(origin, 'retained task'))
-      beginMobileNativeChatInFlightSend(origin, 'structured', 'retained task', {
+      const inFlightId = beginMobileNativeChatInFlightSend(origin, 'structured', 'retained task', {
         clientMessageId: 'recovery-task'
-      })
+      })!
       const submission: AgentJournalSubmission = {
         clientMessageId: 'recovery-task',
         fence: 1,
@@ -151,6 +151,10 @@ describe('mobile native-chat draft store', () => {
       act(() => settleMobileInstructionRecovery('session-a', [settled], error))
       act(() => settleMobileInstructionRecovery('session-a', [settled], error))
       expect(currentState().composerText).toBe('')
+      expect(readMobileNativeChatInFlightSend(inFlightId) !== null).toBe(state === 'unknown')
+      expect(error.mock.calls).toEqual(
+        state === 'rejected' ? [[expect.any(String), { announceOnly: true }]] : []
+      )
     }
   )
 

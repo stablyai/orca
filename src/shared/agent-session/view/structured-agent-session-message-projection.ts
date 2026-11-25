@@ -30,6 +30,11 @@ import {
 } from '../../bots/bot-automation-result-marks'
 import { isActionableStructuredAgentSessionPrompt } from './structured-agent-session-live-turn'
 import { isAgentSessionContextClear } from '../conversation-context/agent-session-context-clear'
+import {
+  structuredAgentSessionRetryLineages,
+  structuredAgentSessionRetryRow
+} from './structured-agent-session-retry-lineage'
+import { agentJournalSubmissionReturnedToCard } from '../requests/agent-session-queued-submission'
 
 /** Client echo until host publication; an acknowledged read past recordedCursor supersedes it. */
 export type StructuredAgentSessionOptimisticMessage = {
@@ -131,27 +136,29 @@ export function projectStructuredAgentSessionMessageRows(
   const visibleItems: AgentJournalRenderItem[] = []
   const unsentItems: AgentJournalRenderItem[] = []
   let itemIds: Set<string> | undefined
-  const hasOriginal = (id: string): boolean =>
-    (itemIds ??= new Set(items.map((item) => item.itemId))).has(agentJournalSubmissionKey(id))
+  const hasItem = (id: string): boolean =>
+    (itemIds ??= new Set(items.map((item) => item.itemId))).has(id)
   const submissionsByItemId = new Map<string, AgentJournalSubmission>()
-  let hasUnsettledRetry = false
+  const lineages = structuredAgentSessionRetryLineages(submissions)
   for (const submission of submissions) {
     submissionsByItemId.set(agentJournalSubmissionKey(submission.clientMessageId), submission)
-    hasUnsettledRetry ||=
-      submission.retryOfClientMessageId !== undefined &&
-      (submission.dispatchState === 'pending' || submission.dispatchState === 'rejected')
   }
   for (const item of items) {
-    const retry = hasUnsettledRetry ? submissionsByItemId.get(item.itemId) : undefined
-    if (
-      retry?.retryOfClientMessageId &&
-      (retry.dispatchState === 'pending' || retry.dispatchState === 'rejected')
-    ) {
-      if (hasOriginal(retry.retryOfClientMessageId)) {
+    const send = lineages.size ? submissionsByItemId.get(item.itemId) : undefined
+    const root = send && (send.retryOfClientMessageId ?? send.clientMessageId)
+    const retry = root ? lineages.get(root) : undefined
+    if (send && retry && root && send.dispatchState !== 'accepted') {
+      const retainedOriginal = retry.dispatchState === 'unknown' && send.clientMessageId === root
+      if (
+        !retainedOriginal &&
+        item.itemId !== structuredAgentSessionRetryRow(root, retry, hasItem)
+      ) {
         continue
       }
-      if (retry.dispatchState === 'rejected') {
-        unsentItems.push(item)
+      if (send.dispatchState === 'rejected' && send.retryOfClientMessageId) {
+        if (!agentJournalSubmissionReturnedToCard(send)) {
+          unsentItems.push(item)
+        }
         continue
       }
     }
@@ -225,7 +232,10 @@ export function projectStructuredAgentSessionMessageRows(
     // Host rows supersede client echoes under either client or provider IDs.
     ...structuredAgentSessionEchoRows(
       optimistic.filter(
-        (entry) => !entry.retryOfClientMessageId || !hasOriginal(entry.retryOfClientMessageId)
+        (entry) =>
+          !entry.retryOfClientMessageId ||
+          (lineages.get(entry.retryOfClientMessageId)?.dispatchState !== 'accepted' &&
+            !hasItem(agentJournalSubmissionKey(entry.retryOfClientMessageId)))
       ),
       journalled,
       submissionsByItemId

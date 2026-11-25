@@ -33,6 +33,7 @@ export type AgentSessionInstructionPolicy = {
   fence: number
   state: 'pending' | 'delivered' | 'released'
   baseline?: AgentSessionInstructionBaseline
+  comparisonAnchor?: string
 }
 
 const bounded = z.string().min(1).max(512)
@@ -49,6 +50,7 @@ const policySchema = z.object({
   anchor: bounded,
   fence: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER),
   state: z.enum(['pending', 'delivered', 'released']),
+  comparisonAnchor: bounded.optional(),
   baseline: z
     .object({
       soul: digest.nullable(),

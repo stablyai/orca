@@ -97,6 +97,42 @@ it('a refused retry keeps one copy of the retained task', () => {
   ).toEqual([expect.objectContaining({ id: agentJournalSubmissionKey(KEPT_ID), unsent: true })])
 })
 
+it('keeps only the current off-page retry and retires it when another sibling accepts', () => {
+  const failure = agentSessionFailureFact('startFailed', {
+    instructionRecovery: 'timeout',
+    neverReachedAgent: true
+  })
+  const a = rejected({ rejection: failure })
+  const b = rejected({
+    clientMessageId: 'retry-b',
+    retryOfClientMessageId: KEPT_ID,
+    rejection: failure,
+    submittedAt: 3
+  })
+  const c = rejected({
+    clientMessageId: 'retry-c',
+    retryOfClientMessageId: KEPT_ID,
+    rejection: failure,
+    submittedAt: 4
+  })
+  const bRow = userItem('retry-b', 'the kept words', 3)
+  const cRow = userItem('retry-c', 'the kept words', 4)
+  const ids = (items: AgentJournalRenderItem[], sends: AgentJournalSubmission[]) =>
+    projectStructuredAgentSessionMessages(items, [], sends).map(({ id }) => id)
+  expect(ids([bRow, cRow], [b, c])).toEqual([cRow.itemId])
+  expect(ids([bRow], [{ ...b, submittedAt: c.submittedAt, retryLineage: c }])).toEqual([])
+  const aRow = userItem(KEPT_ID, 'the kept words', 1)
+  expect(ids([aRow, bRow, cRow], [a, b, c])).toEqual([aRow.itemId])
+  const accepted = { ...c, dispatchState: 'accepted' as const, rejection: undefined }
+  expect(ids([bRow, cRow], [b, accepted])).toEqual([cRow.itemId])
+  expect(ids([bRow], [{ ...b, retryLineage: accepted }])).toEqual([])
+  expect(ids([aRow], [{ ...a, retryLineage: accepted }])).toEqual([])
+  const pending = { ...c, dispatchState: 'pending' as const, rejection: undefined }
+  expect(ids([bRow, cRow], [b, pending])).toEqual([cRow.itemId])
+  const independent = { ...accepted, retryOfClientMessageId: undefined }
+  expect(ids([bRow, cRow], [b, independent])).toEqual([bRow.itemId, cRow.itemId])
+})
+
 it('keeps an uncertain retry visible without calling that attempt unsent', () => {
   const a = rejected({
     rejection: agentSessionFailureFact('startFailed', {

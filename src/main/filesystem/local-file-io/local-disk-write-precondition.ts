@@ -149,13 +149,15 @@ async function editorWriteInodeKey(filePath: string): Promise<string | null> {
 export async function writeLocalTextFileWithDiskPrecondition(
   requestedPath: string,
   content: string,
-  precondition: FileWriteDiskPrecondition | undefined
+  precondition: FileWriteDiskPrecondition | undefined,
+  assertCanWrite?: () => void
 ): Promise<FileWriteResult> {
   // A UNC drive-mount file opens only through its drive path; locks key on that one spelling.
   const filePath = windowsFsPath(requestedPath)
   // Unguarded writes bypass locks held by stalled guarded saves.
   if (!precondition) {
     await assertLocalWriteTargetIsRegularFile(filePath)
+    assertCanWrite?.()
     await writeFile(filePath, content, 'utf-8')
     return FILE_WRITE_OK
   }
@@ -168,6 +170,7 @@ export async function writeLocalTextFileWithDiskPrecondition(
       return { ok: false, diskConflict }
     }
     await assertLocalWriteTargetIsRegularFile(filePath)
+    assertCanWrite?.()
     await writeFile(filePath, content, 'utf-8')
     return FILE_WRITE_OK
   }

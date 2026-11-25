@@ -1,4 +1,6 @@
 import { subscribeStructuredAgentSessionTurnContext } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -10,9 +12,12 @@ import {
   HOST_TEST_SESSION,
   HOST_TEST_THREAD
 } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
-import { createBotMemoryRecord } from './bot-memory-record'
+import { createBotMemoryRecord, tagBotMemoryFile } from './bot-memory-record'
 import { createBotTurnContext } from './bot-turn-context'
 import { HELD_BOT_RULES } from './bot-turn-rules.test-fixture'
+import { localBotHomeFilesystem } from './bot-home'
+import { runLocalEditorWrite } from '../filesystem/local-file-io/local-disk-write-precondition'
+import { FILE_WRITE_OK } from '../../shared/file-write/file-write-disk-precondition'
 
 const SESSION = HOST_TEST_SESSION
 const BOT = 'scout'
@@ -173,5 +178,81 @@ it('never publishes an old turn’s memory receipt through a replacement host ac
     await bot.drain()
     unsubscribe?.()
     await rig.dispose()
+  }
+})
+
+it('keeps a delayed physical memory write behind its original lease', async () => {
+  const folder = await mkdtemp(join(tmpdir(), 'orca-owned-bot-memory-'))
+  const path = join(folder, 'MEMORY.md')
+  const edited = '- Fresh fact\n'
+  const before = '- Old fact\n'
+  const rig = await createQueuedMessageTestRig({ restartable: true })
+  try {
+    const seed = rig.send('Seed the conversation.')
+    expect(await seed.result).toMatchObject({ ok: true })
+    await vi.waitFor(() => expect(rig.dispatch).toHaveBeenCalledTimes(1))
+    await rig.settleAccepted(seed.id, 'old')
+    const fence = rig.store.getConversation(SESSION)!.currentFence
+    const isCurrent = () => rig.store.getConversation(SESSION)!.currentFence === fence
+    await writeFile(path, edited)
+    await tagBotMemoryFile(
+      localBotHomeFilesystem,
+      folder,
+      before,
+      async () => null,
+      undefined,
+      isCurrent
+    )
+    expect(await readFile(path, 'utf8')).toContain('Old fact')
+
+    await writeFile(path, edited)
+    const locked = Promise.withResolvers<void>()
+    const unlock = Promise.withResolvers<void>()
+    const entering = Promise.withResolvers<void>()
+    const hold = runLocalEditorWrite(path, async () => {
+      locked.resolve()
+      await unlock.promise
+      return FILE_WRITE_OK
+    })
+    await locked.promise
+    const pending = tagBotMemoryFile(
+      {
+        readText: localBotHomeFilesystem.readText,
+        replaceText: (...args) => {
+          entering.resolve()
+          return localBotHomeFilesystem.replaceText(...args)
+        }
+      },
+      folder,
+      before,
+      async () => null,
+      undefined,
+      isCurrent
+    )
+    const finished = Promise.allSettled([hold, pending])
+    try {
+      await entering.promise
+      await rig.host.close(SESSION, 'evict')
+      const replacement = structuredAgentSessionMessageSendMutation({
+        sessionId: SESSION,
+        clientOperationId: `1800000000000-${'8'.repeat(32)}`,
+        expectedRuntimeFence: rig.store.getConversation(SESSION)!.currentFence,
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Continue.' }] }
+      })
+      expect(
+        await rig.host.send({ callerKey: 'client-1' }, { ...replacement, userSend: true })
+      ).toMatchObject({ ok: true })
+      await vi.waitFor(() => expect(rig.dispatch).toHaveBeenCalledTimes(2))
+      expect(isCurrent()).toBe(false)
+    } finally {
+      unlock.resolve()
+      await finished
+    }
+    expect(await readFile(path, 'utf8')).toBe(edited)
+    expect(await localBotHomeFilesystem.replaceText(path, before, 'stale content')).toBe(false)
+    expect(await readFile(path, 'utf8')).toBe(edited)
+  } finally {
+    await rig.dispose()
+    await rm(folder, { recursive: true, force: true })
   }
 })

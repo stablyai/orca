@@ -104,7 +104,7 @@ export function readJournalSqlQueue(
                 physicalCursor,
                 authority: operation.authority,
                 result: readJournalSqlWorkInput(context, operation.authority, input, state, () =>
-                  journalDomainResolvedInputEligibility(context, state)
+                  journalDomainResolvedInputEligibility(context, state, operation.authority)
                 )
               }
             : readJournalSqlWork(context, { authority: operation.authority, operation: input })

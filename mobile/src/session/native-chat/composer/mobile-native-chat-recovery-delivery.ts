@@ -5,7 +5,7 @@ import { readWholeAgentSessionFailureFact } from '../../../../../src/shared/agen
 import { structuredAgentSessionRejectionParts } from '../../../../../src/shared/agent-session/failures/structured-agent-session-rejection-words'
 import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'
 import {
-  readMobileNativeChatInFlightSendsByScope,
+  readMobileNativeChatInFlightStructuredSession,
   settleMobileNativeChatInFlightSend,
   settleRecordedMobileNativeChatInFlightSends
 } from './delivery/mobile-native-chat-in-flight-sends'
@@ -15,45 +15,44 @@ export function settleMobileInstructionRecovery(
   submissions: readonly AgentSessionDeliveryFact[],
   onSendError: MobileNativeChatSendErrorReporter
 ): void {
-  if (!sessionId) {
+  if (!sessionId || submissions.length === 0) {
+    return
+  }
+  const sends = readMobileNativeChatInFlightStructuredSession(sessionId)
+  if (sends.length === 0) {
     return
   }
   const byId = new Map(submissions.map((submission) => [submission.clientMessageId, submission]))
-  for (const sends of readMobileNativeChatInFlightSendsByScope().values()) {
-    for (const send of sends) {
-      if (send.kind !== 'structured' || send.sessionId !== sessionId || !send.clientMessageId) {
+  for (const send of sends) {
+    const submission = send.clientMessageId && byId.get(send.clientMessageId)
+    if (
+      !submission ||
+      submission.dispatchState === 'pending' ||
+      submission.dispatchState === 'unknown'
+    ) {
+      continue
+    }
+    const fact = readWholeAgentSessionFailureFact(submission.rejection)
+    if (submission.dispatchState === 'rejected' && fact?.instructionRecovery) {
+      if (!submission.keptAsQueuedMessageId && !submission.queuedMessageId) {
         continue
       }
-      const submission = byId.get(send.clientMessageId)
-      if (
-        !submission ||
-        submission.dispatchState === 'pending' ||
-        submission.dispatchState === 'unknown'
-      ) {
-        continue
-      }
-      const fact = readWholeAgentSessionFailureFact(submission.rejection)
-      if (submission.dispatchState === 'rejected' && fact?.instructionRecovery) {
-        if (!submission.keptAsQueuedMessageId && !submission.queuedMessageId) {
-          continue
-        }
-        settleMobileNativeChatInFlightSend(send.id, 'sent')
-        const message = mobileAgentSessionWriteNoticeText(
-          structuredAgentSessionRejectionParts(submission.reason, 'send', fact, {
-            agentName: 'Codex'
-          })
-        )
-        onSendError(message, { announceOnly: true })
-      } else {
-        settleMobileNativeChatInFlightSend(
-          send.id,
-          submission.dispatchState === 'accepted' ||
-            submission.keptAsQueuedMessageId !== undefined ||
-            submission.queuedMessageId !== undefined
-            ? 'sent'
-            : 'kept'
-        )
-      }
+      settleMobileNativeChatInFlightSend(send.id, 'sent')
+      const message = mobileAgentSessionWriteNoticeText(
+        structuredAgentSessionRejectionParts(submission.reason, 'send', fact, {
+          agentName: 'Codex'
+        })
+      )
+      onSendError(message, { announceOnly: true })
+    } else {
+      settleMobileNativeChatInFlightSend(
+        send.id,
+        submission.dispatchState === 'accepted' ||
+          submission.keptAsQueuedMessageId !== undefined ||
+          submission.queuedMessageId !== undefined
+          ? 'sent'
+          : 'kept'
+      )
     }
   }
 }

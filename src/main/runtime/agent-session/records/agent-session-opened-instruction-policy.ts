@@ -19,18 +19,45 @@ export type OpenedInstructionPolicy = {
   generation: string
 }
 
+export function priorInstructionComparison(
+  record: AgentSessionRecord,
+  identity: Pick<AgentSessionInstructionPolicy, 'botId' | 'nativeId' | 'scope'>
+): { anchor: string; baseline: AgentSessionInstructionBaseline } | undefined {
+  const prior = record.instructionPolicy
+  const head = record.providerHandleChain.at(-1)
+  if (
+    !prior?.baseline ||
+    !head ||
+    prior.botId !== identity.botId ||
+    prior.scope !== identity.scope ||
+    prior.nativeId !== identity.nativeId ||
+    head.handle.nativeId !== identity.nativeId ||
+    (prior.state === 'delivered' ? prior.anchor : prior.comparisonAnchor) !== head.linkId
+  ) {
+    return undefined
+  }
+  return { anchor: head.linkId, baseline: prior.baseline }
+}
+
 export function recordOpenedInstructionPolicy(
   record: AgentSessionRecord,
   started: AgentSessionRecord,
   link: AgentSessionRecord['providerHandleChain'][number],
   { policy, context, snapshot, fence, generation }: OpenedInstructionPolicy
 ): AgentSessionRecord {
+  const { comparisonAnchor, ...delivered } = policy
+  const prior = comparisonAnchor ? priorInstructionComparison(record, policy) : undefined
   if (
+    policy.state !== 'delivered' ||
     policy.botId !== snapshot.botId ||
     policy.standing !== snapshot.standing ||
     (context.filesIncluded &&
       (policy.snapshot !== snapshot.digest ||
-        !sameInstructionBaseline(policy.baseline, snapshot.baseline))) ||
+        (comparisonAnchor
+          ? record.instructionPolicy?.state !== 'pending' ||
+            prior?.anchor !== comparisonAnchor ||
+            !sameInstructionBaseline(policy.baseline, prior.baseline)
+          : !sameInstructionBaseline(policy.baseline, snapshot.baseline)))) ||
     policy.scope !== agentSessionInstructionScope(record, context.account) ||
     snapshot.digest !== context.digest ||
     (!context.filesIncluded &&
@@ -44,14 +71,16 @@ export function recordOpenedInstructionPolicy(
     policy.anchor !== link.linkId ||
     policy.nativeId !== link.handle.nativeId ||
     (record.instructionPolicy?.state === 'pending' &&
-      record.instructionPolicy.operationId !== policy.operationId)
+      (record.instructionPolicy.operationId !== policy.operationId ||
+        record.instructionPolicy.comparisonAnchor !== comparisonAnchor ||
+        !sameInstructionBaseline(record.instructionPolicy.baseline, policy.baseline)))
   ) {
     throw new Error('agent_session_checkpoint_stale')
   }
   return {
     ...started,
     instructionPolicy: {
-      ...policy,
+      ...delivered,
       anchor: started.providerHandleChain.at(-1)!.linkId,
       ...(!context.filesIncluded ? { baseline: record.instructionPolicy?.baseline } : {})
     }

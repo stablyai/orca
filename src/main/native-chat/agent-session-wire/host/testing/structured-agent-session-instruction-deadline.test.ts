@@ -3,6 +3,9 @@ import { expect, it, vi } from 'vitest'
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentSessionInstructionScope } from '../../../../runtime/agent-session/records/agent-session-instruction-scope'
+import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { projectStructuredAgentSessionMessages } from '../../../../../shared/agent-session/view/structured-agent-session-message-projection'
+import { codexInstructionFailure } from '../../../../codex/structured/threads/codex-bot-instruction-installation'
 import {
   hostTestSendParams,
   HOST_TEST_SESSION as SESSION
@@ -12,6 +15,7 @@ import {
   acquire,
   dispatch,
   eventually,
+  failOpen,
   enableBotHome,
   host,
   providerOpen,
@@ -102,6 +106,67 @@ it('a new explicit B has its own task identity; a late A cannot open its gate', 
   expect(dispatch.mock.calls.map((call) => call[0].clientMessageId)).toEqual([b])
 })
 
+it('publishes one canonical retry through the writer and bounded history', async () => {
+  await resumeBot()
+  const text = 'one retained task'
+  const a = await ownerTask(text)
+  await eventually(() => expect(providerOpen.mock.calls.length).toBe(1))
+  await failOpen(codexInstructionFailure('commit'))
+  await eventually(async () => expect((await submission(a))?.dispatchState).toBe('rejected'))
+  const retry = (target: string) => {
+    const message = hostTestSendParams(text)
+    return structuredAgentSessionMessageSendMutation({
+      sessionId: SESSION,
+      expectedRuntimeFence: store.getRecord(SESSION)!.lease.runtimeFence,
+      clientOperationId: message.envelope.clientOperationId,
+      body: message.body,
+      retryOfClientMessageId: target
+    })
+  }
+  const b = retry(a)
+  expect(await host.send(CALLER, { ...b, userSend: true })).toMatchObject({ ok: true })
+  await eventually(() => expect(providerOpen.mock.calls.length).toBe(2))
+  await failOpen(codexInstructionFailure('commit'))
+  const bId = b.envelope.clientOperationId
+  await eventually(async () => expect((await submission(bId))?.dispatchState).toBe('rejected'))
+  const recent = await host.history({ sessionId: SESSION, direction: 'tail' })
+  const bRow = recent.page.items.find(({ itemId }) => itemId === agentJournalSubmissionKey(bId))!
+
+  const c = retry(bId)
+  expect(await host.send(CALLER, { ...c, userSend: true })).toMatchObject({ ok: true })
+  await eventually(() => expect(providerOpen.mock.calls.length).toBe(3))
+  expect(await host.send(CALLER, { ...retry(a), userSend: true })).toMatchObject({
+    ok: false,
+    refusal: { code: 'agent_session_operation_invalid' }
+  })
+  await proveOpen()
+  const cId = c.envelope.clientOperationId
+  await eventually(async () =>
+    expect(await submission(cId)).toMatchObject({
+      dispatchState: 'accepted',
+      retryOfClientMessageId: a
+    })
+  )
+
+  const older = await host.history({
+    sessionId: SESSION,
+    direction: 'before',
+    limit: 1,
+    cursor: { epoch: recent.page.epoch, sequence: bRow.sequence + 1 }
+  })
+  expect(older.page.submissions.map(({ clientMessageId }) => clientMessageId)).toEqual([bId])
+  expect(older.page.submissions[0]?.retryLineage).toMatchObject({
+    clientMessageId: cId,
+    dispatchState: 'accepted'
+  })
+  expect(
+    projectStructuredAgentSessionMessages(older.page.items, [], older.page.submissions).some(
+      ({ id }) => id === bRow.itemId
+    )
+  ).toBe(false)
+  expect(dispatch.mock.calls.map(([call]) => call.clientMessageId)).toEqual([cId])
+})
+
 it('reacquires an idle warm thread that became a bot home before its first owner task', async () => {
   const seed = await accept('plain thread before bot discovery')
   await proveOpen()
@@ -154,6 +219,7 @@ it('keeps a failed task-gate commit uncertain and refuses B without replaying A'
   await resumeBot()
   const a = await accept('uncertain task A')
   await eventually(() => expect(providerOpen.mock.calls.length).toBe(1))
+  const flight = host.collaboratorsForTests().runtimeState.startFlights.get(SESSION)!
   const record = store.getRecord(SESSION)!
   const open = providerOpen.mock.calls[0][0]
   await store.updateRecord(SESSION, {
@@ -174,30 +240,137 @@ it('keeps a failed task-gate commit uncertain and refuses B without replaying A'
     }
   })
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const failing = vi
-    .spyOn(journal, 'appendLifecycleBatch')
-    .mockRejectedValue(new Error('write unavailable'))
-  closeSession.mockResolvedValue(false)
-  await vi.advanceTimersByTimeAsync(10_000)
-  await eventually(() => expect(closeSession.mock.calls.length).toBeGreaterThan(0))
-  expect(await submission(a)).not.toMatchObject({ dispatchState: 'rejected' })
-  failing.mockRestore()
-  const b = await host.send(CALLER, hostTestSendParams('explicit B'))
-  expect(b).toMatchObject({
-    ok: true,
-    value: {
-      submission: { dispatchState: 'rejected', rejection: { instructionRecovery: 'pending' } }
+  const write = journal.write.bind(journal)
+  const failed = vi.fn()
+  const failing = vi.spyOn(journal, 'write').mockImplementation((operation, prepare) => {
+    if (operation.kind === 'start-failure-settle') {
+      failed(operation.input)
+      return Promise.reject(new Error('write unavailable'))
     }
+    return write(operation, prepare)
   })
-  await proveOpen()
-  await host.flushStreamedEvents(SESSION)
-  expect(dispatch.mock.calls).toEqual([])
-  expect(store.getRecord(SESSION)?.instructionPolicy).toMatchObject({
-    operationId: 'uncertain-install-A',
-    state: 'pending'
-  })
-  closeSession.mockResolvedValue(true)
+  closeSession.mockResolvedValue(false)
+  try {
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await flight.outcome).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown' }
+    })
+    await eventually(() => expect(closeSession.mock.calls.length).toBeGreaterThan(0))
+    expect(failed).toHaveBeenCalledTimes(1)
+    expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
+    failing.mockRestore()
+    const b = await host.send(CALLER, hostTestSendParams('explicit B'))
+    expect(b).toMatchObject({
+      ok: true,
+      value: {
+        submission: { dispatchState: 'rejected', rejection: { instructionRecovery: 'pending' } }
+      }
+    })
+    await proveOpen()
+    await host.flushStreamedEvents(SESSION)
+    expect(dispatch.mock.calls).toEqual([])
+    expect(store.getRecord(SESSION)?.instructionPolicy).toMatchObject({
+      operationId: 'uncertain-install-A',
+      state: 'pending'
+    })
+  } finally {
+    failing.mockRestore()
+    closeSession.mockResolvedValue(true)
+  }
 })
+
+it('bypasses A after a pre-child timeout and failed typed settlement', async () => {
+  await resumeBot()
+  const entered = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  acquire.mockImplementationOnce(async () => {
+    entered.resolve()
+    await release.promise
+    throw new Error('preflight ended without a child')
+  })
+  const a = await ownerTask('A stopped before acquiring a child')
+  await entered.promise
+  const { runtimeState, sessions } = host.collaboratorsForTests()
+  const flight = runtimeState.startFlights.get(SESSION)!
+  const session = sessions.get(SESSION)!
+  expect(session.child).toBeFalsy()
+  expect(providerOpen).not.toHaveBeenCalled()
+  const write = session.journal.write.bind(session.journal)
+  const failed = vi.fn()
+  const fault = vi.spyOn(session.journal, 'write').mockImplementation((operation, prepare) => {
+    if (operation.kind === 'start-failure-settle') {
+      failed(operation.input)
+      return Promise.reject(new Error('injected task-gate write failure'))
+    }
+    return write(operation, prepare)
+  })
+  try {
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(await flight.outcome).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_operation_unknown' }
+    })
+    expect(failed).toHaveBeenCalledTimes(1)
+    expect(await session.journal.reads.submission(a)).toMatchObject({ dispatchState: 'pending' })
+    expect(dispatch).not.toHaveBeenCalled()
+  } finally {
+    fault.mockRestore()
+    release.resolve()
+  }
+  await runtimeState.startFlights.attemptsEnded(SESSION)
+  const b = await ownerTask('B after the writer is available')
+  await proveOpen()
+  let deliveredB = b
+  await eventually(async () => {
+    deliveredB = (await session.journal.queuedMessages.get(b))?.consumedAs ?? b
+    expect((await session.journal.reads.submission(deliveredB))?.dispatchState).toBe('accepted')
+  })
+  expect(await session.journal.reads.submission(a)).toMatchObject({ dispatchState: 'pending' })
+  expect(dispatch.mock.calls.map(([call]) => call.clientMessageId)).toEqual([deliveredB])
+})
+
+it.each(['released', 'failed'] as const)(
+  'settles in order after a provider-handle write is %s past the deadline',
+  async (verdict) => {
+    await resumeBot()
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const write = store.updateRecord.bind(store)
+    const held = vi.spyOn(store, 'updateRecord').mockImplementation(async (id, command, check) => {
+      if (command.kind === 'provider-handle') {
+        entered.resolve()
+        await release.promise
+        if (verdict === 'failed') {
+          throw new Error('injected provider-handle write failure')
+        }
+      }
+      return write(id, command, check)
+    })
+    try {
+      const a = await ownerTask('A waits for a committed provider handle')
+      await proveOpen()
+      await entered.promise
+      try {
+        await vi.advanceTimersByTimeAsync(10_000)
+        expect(dispatch).not.toHaveBeenCalled()
+        expect(await submission(a)).toMatchObject({ dispatchState: 'pending' })
+      } finally {
+        release.resolve()
+      }
+      await eventually(async () =>
+        expect(await submission(a)).toMatchObject({
+          dispatchState: 'rejected',
+          rejection: { instructionRecovery: 'timeout', neverReachedAgent: true }
+        })
+      )
+      expect(dispatch).not.toHaveBeenCalled()
+    } finally {
+      release.resolve()
+      held.mockRestore()
+    }
+  }
+)
 
 it('cannot retry an automation task as authenticated owner text', async () => {
   await resumeBot()

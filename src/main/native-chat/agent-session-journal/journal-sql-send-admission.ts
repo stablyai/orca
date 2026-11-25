@@ -25,6 +25,7 @@ import type { JournalWriterCommand } from './journal-writer-command'
 import type { JournalSendAdmissionResult } from './journal-send-admission'
 import { readAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { readJournalDomainSubmissionAttempt } from './journal-domain-submission-records'
+import { journalDomainLastRetry } from './journal-domain-retry-lineage'
 
 /** Replay, queue eligibility, byte budget and acceptance share this writer position. */
 export function applyJournalSqlSendAdmission(
@@ -103,25 +104,29 @@ export function applyJournalSqlSendAdmission(
         })
       : empty({ kind: 'admitted', value: { clientMessageId: id, submission: existing } })
   }
-  const retryId = input.retryOfClientMessageId
-  if (retryId) {
-    const original = readJournalDomainSubmissionAttempt(db, target, retryId)
+  const requestedRetry = input.retryOfClientMessageId
+  let retryId: string | undefined
+  if (requestedRetry) {
+    const requested = readJournalDomainSubmissionAttempt(db, target, requestedRetry)
+    retryId = requested?.submission.retryOfClientMessageId ?? requestedRetry
+    const original =
+      retryId === requestedRetry
+        ? requested
+        : readJournalDomainSubmissionAttempt(db, target, retryId)
     const originalBody = original?.admission.body
     if (
       input.origin !== 'client' ||
+      requested?.submission.dispatchState !== 'rejected' ||
+      !readAgentSessionFailureFact(requested.submission.rejection)?.instructionRecovery ||
       original?.submission.origin !== 'client' ||
       original.submission.dispatchState !== 'rejected' ||
+      original.submission.retryOfClientMessageId !== undefined ||
       !readAgentSessionFailureFact(original.submission.rejection)?.instructionRecovery ||
       original.submission.payloadFingerprint !== input.payloadFingerprint ||
+      requested.submission.payloadFingerprint !== input.payloadFingerprint ||
       originalBody?.role !== 'user' ||
       originalBody.from ||
-      db
-        .prepare(
-          `SELECT 1 FROM journal_submission_attempts
-         WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state<>'rejected'
-           AND json_extract(payload_json, '$.retryOfClientMessageId')=? LIMIT 1`
-        )
-        .get(...scope.prefix, retryId)
+      journalDomainLastRetry(scope, retryId, true)
     ) {
       return empty({
         kind: 'refused',
@@ -268,7 +273,7 @@ export function applyJournalSqlSendAdmission(
     db,
     stateDirectory,
     target,
-    { kind: 'submission', input },
+    { kind: 'submission', input: retryId ? { ...input, retryOfClientMessageId: retryId } : input },
     facts,
     savedAt
   )

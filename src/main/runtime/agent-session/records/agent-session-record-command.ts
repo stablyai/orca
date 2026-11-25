@@ -6,6 +6,7 @@ import { sameInstructionBaseline } from '../../../../shared/agent-session/agent-
 import { agentSessionInstructionScope } from './agent-session-instruction-scope'
 import {
   recordOpenedInstructionPolicy,
+  priorInstructionComparison,
   type OpenedInstructionPolicy
 } from './agent-session-opened-instruction-policy'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -206,10 +207,16 @@ export function applyAgentSessionRecordCommand(
     }
     case 'instruction-pending': {
       const { account, policy, priorOperationId } = command
+      const comparison = policy.comparisonAnchor
+        ? priorInstructionComparison(record, policy)
+        : undefined
       if (
         record.lease.runtimeFence !== policy.fence ||
         agentSessionInstructionScope(record, account) !== policy.scope ||
-        record.instructionPolicy?.operationId !== priorOperationId
+        record.instructionPolicy?.operationId !== priorOperationId ||
+        (policy.comparisonAnchor !== undefined &&
+          (comparison?.anchor !== policy.comparisonAnchor ||
+            !sameInstructionBaseline(comparison.baseline, policy.baseline)))
       ) {
         throw new Error('agent_session_checkpoint_stale')
       }

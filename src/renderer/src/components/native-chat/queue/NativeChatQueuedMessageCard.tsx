@@ -38,7 +38,10 @@ import {
   QueuedMessageRowTool,
   queuedRowToolsMask
 } from '@/components/native-chat/queue/NativeChatQueuedMessageRowTools'
-import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
+import {
+  readWholeAgentSessionFailureFact,
+  type AgentSessionFailureFact
+} from '../../../../../shared/agent-session/failures/agent-session-failure'
 import {
   NativeChatQueuedMessageComposer,
   type QueuedEditAttachTarget
@@ -164,6 +167,8 @@ export function NativeChatQueuedMessageCard({
   const returned = card.state === 'returned'
   const attention = queuedMessageCardNeedsAttention(card)
   const failed = attention && caption !== null
+  const retryLabel =
+    failed && !readWholeAgentSessionFailureFact(card.returnedRejection)?.instructionRecovery
   const sendNow = queuedMessageCardSendNow(card, agentWorking, t)
   const busy = pending !== null
   const isMac = isMacPlatform()
@@ -347,7 +352,7 @@ export function NativeChatQueuedMessageCard({
                       <Send className={STEER_GLYPH} />
                     )}
                   </NativeChatPendingIcon>
-                  {failed
+                  {retryLabel
                     ? t('components.native-chat.queuedMessages.retry', 'Retry')
                     : sendNow.label}
                 </Button>

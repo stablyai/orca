@@ -30,7 +30,12 @@ export type BotHomeFilesystem = {
   /** `exclusive` leaves an existing file untouched and reports false. */
   writeText(path: string, text: string, options?: { exclusive?: boolean }): Promise<boolean>
   /** Writes `text` only if the file still holds `expected`; false when it changed meanwhile. */
-  replaceText(path: string, expected: string, text: string): Promise<boolean>
+  replaceText(
+    path: string,
+    expected: string,
+    text: string,
+    assertCanWrite?: () => void
+  ): Promise<boolean>
   /** Creates missing parents; false when `path` itself already existed, so two creators never share it. */
   reserveDirectory(path: string): Promise<boolean>
   makeDirectory(path: string): Promise<void>
@@ -59,11 +64,14 @@ export const localBotHomeFilesystem: BotHomeFilesystem = {
       throw error
     }
   },
-  replaceText: async (path, expected, text) =>
+  replaceText: async (path, expected, text, assertCanWrite) =>
     (
-      await writeLocalTextFileWithDiskPrecondition(path, text, {
-        expectedSignature: getDiskBaselineSignature(expected)
-      })
+      await writeLocalTextFileWithDiskPrecondition(
+        path,
+        text,
+        { expectedSignature: getDiskBaselineSignature(expected) },
+        assertCanWrite
+      )
     ).ok,
   reserveDirectory: async (path) => {
     await mkdir(dirname(path), { recursive: true })

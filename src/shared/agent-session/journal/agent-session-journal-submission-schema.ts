@@ -9,6 +9,13 @@ import { AgentSessionExecutionOptionsSchema } from '../options/protocol/agent-se
 // Every persisted field is listed, or a parse strips it: this schema drops unknown keys.
 export const AgentJournalSubmissionSchema = z.object({
   retryOfClientMessageId: z.string().min(1).optional(),
+  retryLineage: z
+    .object({
+      clientMessageId: z.string().min(1),
+      dispatchState: z.string().min(1),
+      submittedAt: z.number()
+    })
+    .optional(),
   clientMessageId: z.string().min(1),
   fence: z.number().int(),
   payloadFingerprint: z.string(),

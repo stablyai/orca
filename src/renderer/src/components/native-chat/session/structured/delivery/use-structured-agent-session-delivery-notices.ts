@@ -13,6 +13,7 @@ import { useStructuredAgentSessionStartFailureFacts } from '../../../messages/no
 import type { NativeChatDeliveryNotice } from '../../../messages/rows/NativeChatMessageRow'
 import type { AgentSessionFailureFact } from '../../../../../../../shared/agent-session/failures/agent-session-failure'
 import { rowsBesideStreamedText } from '../../../../../../../shared/agent-session/view/structured-agent-session-streamed-text-rows'
+import { structuredAgentSessionRetryLineages } from '../../../../../../../shared/agent-session/view/structured-agent-session-retry-lineage'
 
 /** The structured chat's delivery notices, by the message id each row renders under. */
 export function useStructuredAgentSessionDeliveryNotices(args: {
@@ -29,13 +30,18 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
       args.onRetry?.(submission, bodyClientMessageId)
   )
   const retryEnabled = args.onRetry !== undefined
+  const lineages = useMemo(() => structuredAgentSessionRetryLineages(submissions), [submissions])
   // Only rejection wording needs journal items; pending delivery comes from submissions alone.
   const hasRejected = useMemo(
     () =>
       submissions.some(
-        (submission) => submission.dispatchState === 'rejected' && !dispatchWasWithdrawn(submission)
+        (submission) =>
+          submission.dispatchState === 'rejected' &&
+          !dispatchWasWithdrawn(submission) &&
+          lineages.get(submission.retryOfClientMessageId ?? submission.clientMessageId)
+            ?.dispatchState !== 'accepted'
       ),
-    [submissions]
+    [lineages, submissions]
   )
   const loadedFailures = useStructuredAgentSessionStartFailureFacts(
     args.journalItems,
@@ -51,19 +57,16 @@ export function useStructuredAgentSessionDeliveryNotices(args: {
   )
   const retryOriginals = useMemo(() => {
     let ids: Set<string> | undefined
-    for (const submission of submissions) {
-      if (
-        submission.retryOfClientMessageId &&
-        (submission.dispatchState === 'pending' || submission.dispatchState === 'rejected')
-      ) {
+    for (const [root, retry] of lineages) {
+      if (retry.dispatchState === 'pending' || retry.dispatchState === 'rejected') {
         if (!ids) {
           ids = new Set()
         }
-        ids.add(agentJournalSubmissionKey(submission.retryOfClientMessageId))
+        ids.add(agentJournalSubmissionKey(root))
       }
     }
     return ids ?? NO_ITEMS
-  }, [submissions])
+  }, [lineages])
   const itemIds = useStableItemIds(
     useMemo(() => {
       if (retryOriginals.size === 0) {
@@ -106,18 +109,14 @@ const NO_ITEMS: ReadonlySet<string> = new Set()
 function useStableItemIds(ids: ReadonlySet<string>): ReadonlySet<string> {
   const previousRef = useRef(ids)
   const previous = previousRef.current
-  const stable = sameIds(previous, ids) ? previous : ids
+  const stable =
+    previous === ids || (previous.size === ids.size && [...ids].every((id) => previous.has(id)))
+      ? previous
+      : ids
   useEffect(() => {
     previousRef.current = stable
   }, [stable])
   return stable
-}
-
-// The memo holds while only a reply streams, so the same set skips comparing its ids.
-function sameIds(previous: ReadonlySet<string>, ids: ReadonlySet<string>): boolean {
-  return (
-    previous === ids || (previous.size === ids.size && [...ids].every((id) => previous.has(id)))
-  )
 }
 
 /** Reuse equivalent prior notices and the whole prior map when every entry matches. */

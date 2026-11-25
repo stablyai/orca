@@ -57,19 +57,14 @@ export function createBotInstructionDelivery(
       const candidate = candidates.get(sessionId)
       if (candidate?.snapshot.digest === digest) {
         candidates.delete(sessionId)
-        if (!filesIncluded) {
-          update(
-            sessionId,
-            proven
-              ? {
-                  ...proven,
-                  memoryText:
-                    candidate.prior.memory === proven.memory
-                      ? (candidate.prior.memoryText ?? null)
-                      : null
-                }
-              : candidate.prior
-          )
+        if (proven) {
+          const known = filesIncluded ? baseline(sessionId) : candidate.prior
+          update(sessionId, {
+            ...proven,
+            memoryText: known?.memory === proven.memory ? (known.memoryText ?? null) : null
+          })
+        } else if (!filesIncluded) {
+          update(sessionId, candidate.prior)
         }
       }
     },

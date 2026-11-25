@@ -11,6 +11,7 @@ import {
   type AgentSessionFailureFact
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexMethodUnavailable } from '../catalog/codex-structured-applied-settings'
+import { priorInstructionComparison } from '../../../runtime/agent-session/records/agent-session-opened-instruction-policy'
 
 export function codexInstructionFailure(
   reason: NonNullable<AgentSessionFailureFact['instructionRecovery']>,
@@ -106,13 +107,17 @@ export async function installCodexBotInstructions(input: {
       filesIncluded: false
     }
   }
+  const comparison = priorInstructionComparison(record, receipt)
+  const repair = comparison
+    ? { ...receipt, baseline: comparison.baseline, comparisonAnchor: comparison.anchor }
+    : receipt
   await store
     .updateRecord(
       sessionId,
       {
         kind: 'instruction-pending',
         account,
-        policy: receipt,
+        policy: repair,
         priorOperationId: prior?.operationId
       },
       input.assertCurrent
@@ -146,5 +151,5 @@ export async function installCodexBotInstructions(input: {
     throw codexInstructionFailure(signal.aborted ? 'timeout' : 'unknown', error)
   })
   input.assertCurrent()
-  return { policy: receipt, filesIncluded: true }
+  return { policy: repair, filesIncluded: true }
 }

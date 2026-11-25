@@ -21,6 +21,14 @@ import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-c
 import type { AgentMessageSource } from './agent-session-message-source'
 import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type { AgentJournalOrcaCardItem } from '../../agent-journal-orca-card-items'
+import type {
+  AgentJournalDispatchState,
+  AgentJournalRetryLineage
+} from './agent-session-journal-dispatch'
+export type {
+  AgentJournalAcceptanceReceipt,
+  AgentJournalDispatchState
+} from './agent-session-journal-dispatch'
 export type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
@@ -407,12 +415,11 @@ export type AgentJournalAnsweredTurnIdentity = {
   via: AgentJournalTurnJoin
 }
 
-export const AGENT_JOURNAL_DISPATCH_STATES = ['pending', 'accepted', 'rejected', 'unknown'] as const
-export type AgentJournalDispatchState = (typeof AGENT_JOURNAL_DISPATCH_STATES)[number]
-
 /** The write-ahead submission row, projected. `unknown` is a displayed state:
  *  the turn reads as delivery unconfirmed, never as sent and never as failed. */
 export type AgentJournalSubmission = {
+  /** The newest relevant explicit retry, even when its row is outside this journal page. */
+  retryLineage?: AgentJournalRetryLineage
   retryOfClientMessageId?: string
   clientMessageId: string
   /** Execution fence of the latest dispatch attempt or recovery. */
@@ -470,15 +477,6 @@ export type AgentJournalSubmission = {
   /** Immutable choices captured on acceptance and applied when the agent is handed the message;
    *  absent on older submissions. The host's alone: clients ignore it. */
   options?: AgentSessionExecutionOptions
-}
-
-/** Durable answer to "did my send land?", keyed by client message id. Only an
- *  `accepted` dispatch mints one, and it outlives the journal tail. */
-export type AgentJournalAcceptanceReceipt = {
-  clientMessageId: string
-  providerItemId: string
-  cursor: AgentJournalCursor
-  acceptedAt: number
 }
 
 // ─── Snapshots and cursor resume ────────────────────────────────────────────
