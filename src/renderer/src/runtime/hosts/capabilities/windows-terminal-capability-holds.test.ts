@@ -82,6 +82,7 @@ describe('a released tab strip returning to its workspace', () => {
       },
       gitBashProbed: false
     }))
+    readWindowsTerminalCapabilities.mockClear()
 
     const first = await loadWindowsTerminalCapabilities({
       ownerKey: 'ssh:down',
@@ -91,10 +92,10 @@ describe('a released tab strip returning to its workspace', () => {
     const second = await loadWindowsTerminalCapabilities({
       ownerKey: 'ssh:down',
       sshConnectionId: 'down',
-      now: 0,
-      force: true
+      now: 5_000
     })
 
+    expect(readWindowsTerminalCapabilities).toHaveBeenCalledTimes(2)
     expect(first).toBe(second)
     expect(first).toEqual({
       wslAvailable: false,

@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { WindowsTerminalCapabilities } from './windows-terminal-capabilities'
+import type { WindowsTerminalCapabilities } from './windows-terminal-capability-cache'
 
 // A failed read builds a new all-false object. Reuse checks the shared placeholder by identity.
 export function capabilitiesToCache(
@@ -18,6 +18,19 @@ export function capabilitiesToCache(
     return capabilities
   }
   return unavailable
+}
+
+export function freshCachedCapabilities(
+  cached: { capabilities: WindowsTerminalCapabilities; loadedAt: number } | undefined,
+  unavailable: WindowsTerminalCapabilities,
+  now: number,
+  ttlMs: number,
+  force?: boolean
+): WindowsTerminalCapabilities | undefined {
+  if (!cached || cached.capabilities === unavailable || force || now - cached.loadedAt >= ttlMs) {
+    return undefined
+  }
+  return cached.capabilities
 }
 
 export function isWindowsTerminalCapabilityHost(args: {
