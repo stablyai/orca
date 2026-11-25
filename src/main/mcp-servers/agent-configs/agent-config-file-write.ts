@@ -16,7 +16,7 @@ import {
 } from 'node:fs/promises'
 import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
-import { getGuardedOperationHeldPath } from '../../filesystem/atomic-file-publication'
+import { isHardLinkUnsupported } from '../../filesystem/hard-link-unsupported-error'
 import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { isReplaceableReadOnlyBackup } from '../../filesystem/rolling-file-backup'
 
@@ -93,28 +93,39 @@ export async function writeAgentConfigIfUnchanged(
   }
 }
 
+export type AgentConfigRemoval = {
+  /** Where this Orca holds the file while comparing it; two Orcas never share one. */
+  held: string
+  /** Written instead on a filesystem without hard links, where a held file can't go back safely. */
+  emptyText: string
+}
+
 /**
  * Deletes `path` only while it holds `computedFrom`; false otherwise, or when a file is saved there
- * meanwhile. The async form of `removeFileAtomicallyIfUnchanged`, sharing its held name: the file is
- * moved to it before the compare, so a save landing at any moment is either the one compared (and put
- * back without replacing anything) or a new file at `path` that is never touched.
+ * meanwhile. The async form of `removeFileAtomicallyIfUnchanged`: the file is moved to `held` before
+ * the compare, so a save landing at any moment is either the one compared (and put back without
+ * replacing anything) or a new file at `path` that is never touched.
  */
 export async function removeAgentConfigIfUnchanged(
   path: string,
-  computedFrom: string
+  computedFrom: string,
+  { held, emptyText }: AgentConfigRemoval
 ): Promise<boolean> {
-  const held = getGuardedOperationHeldPath(path)
-  // A removal that stopped between its move and its put-back left the file held.
-  await restoreHeldConfig(held, path)
+  await restoreHeldAgentConfig(held, path)
   const probe = `${path}.${randomUUID()}.link-probe`
   try {
-    // Without hard links a held file can't go back without risking a newer save: leave it.
     await link(path, probe)
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
       return false
     }
-    throw error
+    if (!isHardLinkUnsupported(error)) {
+      throw error
+    }
+    return (
+      computedFrom === emptyText ||
+      (await writeAgentConfigIfUnchanged(path, emptyText, computedFrom))
+    )
   } finally {
     await rm(probe, { force: true })
   }
@@ -130,23 +141,23 @@ export async function removeAgentConfigIfUnchanged(
   try {
     matched = (await readAgentConfigText(held)) === computedFrom
     if (matched) {
-      // A failure here leaves it held for the next call to put back.
+      // A failure here leaves it held for the next restore.
       await rm(held, { force: true })
     }
   } finally {
     if (!matched) {
-      await restoreHeldConfig(held, path)
+      await restoreHeldAgentConfig(held, path)
     }
   }
   return matched && (await lstatIfPresent(path)) === null
 }
 
 /**
- * Puts a held file back at `path`, never over a newer save there; that one stays and the held bytes
- * are kept beside it as `<path>.orca-kept-<content hash>`, as the guarded sync helpers keep theirs.
- * Throws, leaving it held for the next call, when neither name is free.
+ * Puts a file a stopped removal left held back at `path`, never over a newer save there; that one
+ * stays and the held bytes are kept beside it as `<path>.orca-kept-<content hash>`, as the guarded
+ * sync helpers keep theirs. Throws, leaving it held for the next try, when neither name is free.
  */
-async function restoreHeldConfig(held: string, path: string): Promise<void> {
+export async function restoreHeldAgentConfig(held: string, path: string): Promise<void> {
   let bytes: Buffer
   try {
     bytes = await readFile(held)

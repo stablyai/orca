@@ -13,7 +13,9 @@ import { thisAppOrcaCliLauncher } from '../../cli/launchers/this-app-orca-cli-la
 import {
   readAgentConfigText,
   removeAgentConfigIfUnchanged,
-  writeAgentConfigIfUnchanged
+  restoreHeldAgentConfig,
+  writeAgentConfigIfUnchanged,
+  type AgentConfigRemoval
 } from '../agent-configs/agent-config-file-write'
 import {
   agentMcpConfigLocations,
@@ -26,6 +28,7 @@ import { isMcpServersFeatureEnabled } from '../mcp-servers-feature'
 import {
   mcpAgentFileEntry,
   mcpAgentFileEntryName,
+  mcpAgentFileHeldPath,
   mcpAgentFileMarkers,
   mcpHostServerNameOfEntry,
   type McpAgentFileEntry
@@ -136,6 +139,11 @@ async function syncFileOnce(
   deps: McpAgentFileSyncDeps
 ): Promise<boolean> {
   const record = (await deps.ledger.read()).files[path] ?? null
+  const held = mcpAgentFileHeldPath(path, deps.userDataPath)
+  if (record) {
+    // A removal that stopped mid-way (a quit or crash) left the file held: it goes back first.
+    await restoreHeldAgentConfig(held, path)
+  }
   // Without a record a JSON entry can't be told from the user's; a TOML block's markers still can.
   const nothingToDo = !record && wanted.size === 0
   if (nothingToDo && edit.format === 'json') {
@@ -194,7 +202,10 @@ async function syncFileOnce(
     added !== null && adding.size === 0 && created && isEmptyMcpAgentFile(edit, added)
       ? null
       : added
-  if (next !== current && !(await publish(path, next, current))) {
+  if (
+    next !== current &&
+    !(await publish(path, next, current, { held, emptyText: edit.format === 'toml' ? '' : '{}\n' }))
+  ) {
     return false
   }
   await deps.ledger.set(
@@ -219,7 +230,8 @@ async function syncFileOnce(
 async function publish(
   path: string,
   next: string | null,
-  current: string | null
+  current: string | null,
+  removal: AgentConfigRemoval
 ): Promise<boolean> {
   if (current === null) {
     await mkdir(dirname(path), { recursive: true })
@@ -234,7 +246,7 @@ async function publish(
     }
   }
   return next === null
-    ? await removeAgentConfigIfUnchanged(path, current)
+    ? await removeAgentConfigIfUnchanged(path, current, removal)
     : await writeAgentConfigIfUnchanged(path, next, current)
 }
 

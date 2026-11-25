@@ -13,6 +13,7 @@ import { dirname, join } from 'node:path'
 import { parse } from 'jsonc-parser'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addMcpServer, setMcpAgentFileAllowed } from '../mcp-host-list'
+import { mcpAgentFileHeldPath } from './mcp-agent-file-entry'
 import { McpAgentFileLedger } from './mcp-agent-file-ledger'
 import { syncMcpAgentFiles, type McpAgentFileSyncDeps } from './mcp-agent-file-sync'
 
@@ -233,6 +234,22 @@ describe("Orca's servers in Grok's, Cursor's and Droid's own MCP files", () => {
       expect(readdirSync(dirname(paths.droid))).toEqual(['mcp.json'])
     }
   )
+
+  it('puts back a file that a removal stopped by a quit left held', async () => {
+    const { homeDir, folder, paths } = await setUp()
+    const app = instance(folder, homeDir, join(homeDir, 'orca'))
+    await setMcpAgentFileAllowed('droid', true, folder)
+    await syncMcpAgentFiles(app)
+    await setMcpAgentFileAllowed('droid', false, folder)
+    // The user's save, moved to the held name just before Orca quit.
+    const save = '{ "mcpServers": { "mine": { "command": "my-mcp" } } }\n'
+    writeFileSync(mcpAgentFileHeldPath(paths.droid, app.userDataPath), save)
+    rmSync(paths.droid)
+
+    await syncMcpAgentFiles(app)
+    expect(read(paths.droid)).toBe(save)
+    expect(readdirSync(dirname(paths.droid))).toEqual(['mcp.json'])
+  })
 
   it('writes nothing while the MCP servers switch is off', async () => {
     const { homeDir, folder, paths } = await setUp()
