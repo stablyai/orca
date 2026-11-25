@@ -142,9 +142,7 @@ export function createCodexStructuredItemStreams(
   const releaseLiveText = deps.sink.bindLiveText?.({
     read: () => [],
     has: () => coalescer.someLength((key, length) => length !== (checkpointLengths.get(key) ?? 0)),
-    flush: () => {
-      flush()
-    },
+    flush: () => void flush(),
     deferrable: true
   })
 
@@ -213,6 +211,10 @@ export function createCodexStructuredItemStreams(
     },
     track: (threadId, turnId, item, identity, startedAt) => {
       const key = codexStructuredItemKey(threadId, item.id)
+      // A start (also one replayed after a reattach) rebuilds its row whole, not onto seeded output.
+      if (startedAt !== undefined) {
+        forgetState(key)
+      }
       states.retain(key, codexItemStreamState(item, identity, startedAt))
       producers.set(key, { threadId, turnId })
       trimStates()

@@ -6,6 +6,8 @@ import { CODEX_TEXT_ITEM_TYPES } from './codex-relay-item-continuation'
 const ENVELOPE_SCAN_CHARS = 4096
 /** More open items than this can't be real; the oldest stay held, so nothing is acked past them. */
 const MAX_OPEN_ITEMS = 256
+/** A running command's row is saved at checkpoints, so its output is held like streamed text. */
+const HELD_ITEM_TYPES: ReadonlySet<string> = new Set([...CODEX_TEXT_ITEM_TYPES, 'commandExecution'])
 
 function itemKey(line: string): { key: string; running: boolean } | null {
   let message: unknown
@@ -23,7 +25,7 @@ function itemKey(line: string): { key: string; running: boolean } | null {
   if (
     typeof threadId !== 'string' ||
     typeof id !== 'string' ||
-    !CODEX_TEXT_ITEM_TYPES.has(String(type))
+    !HELD_ITEM_TYPES.has(String(type))
   ) {
     return null
   }
@@ -35,9 +37,11 @@ function itemKey(line: string): { key: string; running: boolean } | null {
 
 /**
  * Codex items stream from `item/started` to `item/completed` and are keyed by their own ids, so a
- * reattach that replays an open item from its start rewrites the same row whole. Only streamed text
- * items are held: a command's end carries its whole output, so a replay from mid-command loses
- * nothing. Only those two notifications are parsed; every other line is passed by its envelope.
+ * reattach that replays an open item from its start rewrites the same row whole. Streamed text and
+ * running commands are held: their rows are saved only at checkpoints, so output acked past one
+ * would be gone after a crash. The daemon asks for a saved ack well before its memory cap, and an
+ * item whose start it released then is held no more. Only those two notifications are parsed;
+ * every other line is passed by its envelope.
  */
 export function createCodexRelayAckFloor(): ProviderRelayAckFloor {
   /** Insertion order is seq order, so the first entry is the floor. */
@@ -68,10 +72,16 @@ export function createCodexRelayAckFloor(): ProviderRelayAckFloor {
       }
     },
     // An item whose end the reader hasn't taken yet still needs its start after a crash.
-    floor: (through = Number.POSITIVE_INFINITY) => {
+    floor: (through = Number.POSITIVE_INFINITY, released = 0) => {
+      for (const [key, start] of open) {
+        if (start > released) {
+          break
+        }
+        open.delete(key)
+      }
       let floor = open.values().next().value ?? null
       for (const [key, [start, end]] of ending) {
-        if (end <= through) {
+        if (end <= through || start <= released) {
           ending.delete(key)
         } else if (floor === null || start < floor) {
           floor = start
