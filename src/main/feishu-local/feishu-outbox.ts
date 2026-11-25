@@ -1,7 +1,7 @@
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { dmKey, type Binding } from './feishu-binding'
-import { replyFeishu, finalFeishuMessage, uploadFeishuFile } from './feishu-replies'
+import { replyFeishu, feishuReplyMessage, uploadFeishuFile } from './feishu-replies'
 import type { FeishuStore } from './feishu-store-ops'
 import { drainFeishuTextOutbox } from './feishu-text-outbox'
 
@@ -13,12 +13,13 @@ export async function drainFeishuOutbox(
   signal: AbortSignal,
   active: () => boolean,
   checkProfile: () => Promise<void>,
-  changed: () => void
+  changed: () => void,
+  botName: string
 ): Promise<void> {
   if (!b.chat) {
     return
   }
-  await drainFeishuTextOutbox(inbox, b, signal, active, checkProfile, changed)
+  await drainFeishuTextOutbox(inbox, b, signal, active, checkProfile, changed, botName)
   let after: string | null = null
   do {
     const rows = await journal.readOwed(b.account, after, 32)
@@ -84,7 +85,7 @@ export async function drainFeishuOutbox(
           b.account,
           row.deliveryId,
           b.chat,
-          finalFeishuMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca')),
+          feishuReplyMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca'), botName),
           'final',
           signal
         )

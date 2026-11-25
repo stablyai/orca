@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { originalResource } from './feishu-resources'
-import { finalFeishuMessage } from './feishu-replies'
+import { feishuReplyMessage } from './feishu-replies'
 import { dmKey } from './feishu-binding'
 import { FeishuInbox } from './feishu-inbox'
 
@@ -39,17 +39,12 @@ it('accepts a resource only under the original human, DM, message, bot identity 
   expect(read(reply(original, 'user'))).toBeNull()
 })
 
-it('preserves normal Markdown and leaves external image references in plain text', () => {
-  const md = '**Complete**\n\n[Details](https://example.org)'
-  expect(finalFeishuMessage(md)).toEqual({
-    type: 'post',
-    content: { zh_cn: { title: '', content: [[{ tag: 'md', text: md }]] } }
-  })
+it('leaves external image references in plain text without activating card resources', () => {
   for (const text of [
     '![photo](https://example.org/test.png)',
     '<IMG src="https://example.org/test.png">'
   ]) {
-    expect(finalFeishuMessage(text)).toEqual({ type: 'text', content: { text } })
+    expect(feishuReplyMessage(text, 'Example')).toEqual({ type: 'text', content: { text } })
   }
 })
 

@@ -8,7 +8,7 @@ export async function replyFeishu(
   account: string,
   original: string,
   chat: string,
-  message: { type: 'text' | 'post' | 'file'; content: unknown },
+  message: { type: 'text' | 'post' | 'interactive' | 'file'; content: unknown },
   part: 'final' | 'file' | `reply:${string}`,
   signal: AbortSignal
 ): Promise<string> {
@@ -44,12 +44,39 @@ export async function replyFeishu(
     .parse(response).data.message_id
 }
 
-/** Raw post content never invokes the CLI Markdown helper's URL fetcher. */
-export function finalFeishuMessage(text: string): { type: 'post' | 'text'; content: unknown } {
+/** Raw card content never invokes the CLI Markdown helper's URL fetcher. */
+export function feishuReplyMessage(
+  text: string,
+  botName: string
+): { type: 'interactive' | 'post' | 'text'; content: unknown } {
+  const structured = /^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|`{3}|~{3}|\|.+\|)/m.test(text)
   if (!text.trim() || text.includes('![') || /<img\b/i.test(text)) {
     return { type: 'text', content: { text } }
   }
-  return { type: 'post', content: { zh_cn: { title: '', content: [[{ tag: 'md', text }]] } } }
+  if (!structured && text.length <= 240) {
+    return { type: 'post', content: { zh_cn: { title: '', content: [[{ tag: 'md', text }]] } } }
+  }
+  return {
+    type: 'interactive',
+    content: {
+      schema: '2.0',
+      config: {
+        update_multi: true,
+        width_mode: 'default',
+        summary: { content: [...text.trim().replace(/\s+/g, ' ')].slice(0, 160).join('') }
+      },
+      header: {
+        title: { tag: 'plain_text', content: botName },
+        template: 'default',
+        icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
+      },
+      body: {
+        direction: 'vertical',
+        padding: '12px 12px 20px 12px',
+        elements: [{ tag: 'markdown', content: text, text_size: 'normal' }]
+      }
+    }
+  }
 }
 export async function uploadFeishuFile(
   app: string,

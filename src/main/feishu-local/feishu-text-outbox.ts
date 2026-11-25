@@ -1,6 +1,6 @@
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
-import { finalFeishuMessage, replyFeishu } from './feishu-replies'
+import { feishuReplyMessage, replyFeishu } from './feishu-replies'
 
 export async function drainFeishuTextOutbox(
   inbox: FeishuStore,
@@ -8,7 +8,8 @@ export async function drainFeishuTextOutbox(
   signal: AbortSignal,
   active: () => boolean,
   checkProfile: () => Promise<void>,
-  changed: () => void
+  changed: () => void,
+  botName: string
 ): Promise<void> {
   if (!b.chat) {
     return
@@ -35,7 +36,7 @@ export async function drainFeishuTextOutbox(
         b.account,
         row.mid,
         b.chat,
-        finalFeishuMessage(row.text),
+        feishuReplyMessage(row.text, botName),
         `reply:${row.id}`,
         signal
       )

@@ -278,7 +278,8 @@ export class FeishuConnection {
   }
   private async sendOwed(): Promise<void> {
     const b = this.binding
-    if (!b.chat) {
+    const bot = this.bot()
+    if (!b.chat || !bot) {
       return
     }
     const journal = getStructuredAgentSessionHost()?.deps.store.connectorReplies()
@@ -294,7 +295,8 @@ export class FeishuConnection {
       this.signal,
       () => !this.signal.aborted && Boolean(this.bot()),
       () => this.checkProfile(),
-      () => this.changed()
+      () => this.changed(),
+      bot.name
     )
   }
 }
