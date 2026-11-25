@@ -325,3 +325,268 @@ test('bot work-target picker keyboard/IME/autocomplete boundaries and observable
     fs.rmSync(stubDir, { recursive: true, force: true })
   }
 })
+
+test('newly created bot chats activate work-target picker via toolbar icon and shortcut with isolated drafts and real delivery', async ({
+  orcaPage
+}) => {
+  await orcaPage.setViewportSize({ width: 1440, height: 900 })
+  await waitForSessionReady(orcaPage)
+  await waitForActiveWorktree(orcaPage)
+
+  const stubDir = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-work-target-new-chat-e2e-'))
+  const { command: claudeStub, inputsLog } = writeClaudeStub(stubDir)
+  const shortcut = process.platform === 'darwin' ? 'Meta+Shift+P' : 'Control+Shift+P'
+
+  try {
+    const setup = await orcaPage.evaluate(async (stubCommand) => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('Store unavailable')
+      }
+      await store.getState().updateSettings({
+        uiLanguage: 'en',
+        nativeChatProviders: { claude: true, codex: true },
+        agentCmdOverrides: { claude: stubCommand }
+      })
+
+      const created = await window.api.runtime.call({
+        method: 'bots.create',
+        params: { name: 'NewChatBot', agent: 'claude', takingOver: true }
+      })
+      if (!created.ok) {
+        throw new Error(`bots.create failed: ${JSON.stringify(created)}`)
+      }
+      const createdResult = created.result
+      const botValue =
+        typeof createdResult === 'object' && createdResult !== null && 'bot' in createdResult
+          ? createdResult.bot
+          : null
+      if (
+        typeof botValue !== 'object' ||
+        botValue === null ||
+        !('id' in botValue) ||
+        typeof botValue.id !== 'string' ||
+        !('folderWorkspaceId' in botValue) ||
+        typeof botValue.folderWorkspaceId !== 'string'
+      ) {
+        throw new Error(`Unexpected bots.create result: ${JSON.stringify(createdResult)}`)
+      }
+
+      const opened = await window.api.runtime.call({
+        method: 'bots.chat.open',
+        params: { botId: botValue.id }
+      })
+      if (!opened.ok) {
+        throw new Error(`bots.chat.open failed: ${JSON.stringify(opened)}`)
+      }
+      const seededRepo = store.getState().repos[0]
+      if (!seededRepo) {
+        throw new Error('Expected seeded local repo')
+      }
+
+      await store.getState().fetchFolderWorkspacesForAllHosts()
+      store.getState().setActiveWorktree(`folder:${botValue.folderWorkspaceId}`)
+      return { seededRepoName: seededRepo.displayName }
+    }, claudeStub)
+
+    const visibleOverlay = () =>
+      orcaPage.locator('[data-structured-agent-session-overlay-tab-id]:visible').first()
+    const visibleTrigger = () => visibleOverlay().locator('[data-work-target-trigger]')
+    const visibleComposer = () => visibleOverlay().getByRole('textbox').first()
+    const visibleTargetChip = () => visibleOverlay().locator('[data-work-target-chip]')
+    const searchInput = orcaPage.getByRole('combobox', {
+      name: 'Filter projects and workspaces…'
+    })
+
+    // Seed a draft + target in Home Chat so new-chat isolation is verified directly.
+    await expect(visibleTrigger()).toBeVisible({ timeout: 20_000 })
+    const homeTabId = await visibleOverlay().getAttribute(
+      'data-structured-agent-session-overlay-tab-id'
+    )
+    expect(homeTabId).toBeTruthy()
+    await visibleTrigger().click()
+    await expect(searchInput).toBeVisible()
+    await searchInput.fill('e2e-secondary')
+    await orcaPage.keyboard.press('Enter')
+    await expect(visibleTargetChip()).toContainText('e2e-secondary')
+    await orcaPage.keyboard.type('home draft kept')
+
+    // 1) Create a brand-new bot side chat from the TabBar "+" menu.
+    await orcaPage
+      .locator('[data-contextual-tour-target="tab-create-menu"]:visible')
+      .first()
+      .click()
+    await orcaPage
+      .locator('[role="menuitem"]')
+      .filter({ hasText: 'New Claude Code Chat' })
+      .first()
+      .click()
+
+    await expect
+      .poll(() => visibleOverlay().getAttribute('data-structured-agent-session-overlay-tab-id'), {
+        timeout: 20_000
+      })
+      .not.toBe(homeTabId)
+    const sideTabId = await visibleOverlay().getAttribute(
+      'data-structured-agent-session-overlay-tab-id'
+    )
+    expect(sideTabId).toBeTruthy()
+
+    // New side chat keeps its own clean draft/target and exposes the toolbar icon.
+    await expect(visibleTrigger()).toBeVisible({ timeout: 20_000 })
+    await expect(visibleTrigger()).toBeEnabled()
+    await expect(visibleTargetChip()).toHaveCount(0)
+    await expect(visibleComposer()).not.toContainText('home draft kept')
+
+    // Toolbar icon click opens the picker and focuses search; Escape closes & returns focus.
+    await visibleTrigger().click()
+    await expect(searchInput).toBeVisible()
+    await expect(searchInput).toBeFocused()
+    await orcaPage.keyboard.press('Escape')
+    await expect(searchInput).toHaveCount(0)
+    await expect(visibleComposer()).toBeFocused()
+
+    // Shortcut opens the picker even when focus is on the empty chat canvas (outside textbox).
+    await visibleOverlay()
+      .locator('[data-native-chat-root="true"]')
+      .click({ position: { x: 200, y: 120 } })
+    await orcaPage.keyboard.press(shortcut)
+    await expect(searchInput).toBeVisible()
+    await expect(searchInput).toBeFocused()
+    await orcaPage.keyboard.press('Escape')
+    await expect(searchInput).toHaveCount(0)
+
+    // Shortcut from composer dismisses slash autocomplete, preserves @/IME safety, and arms target.
+    await visibleComposer().click()
+    await orcaPage.keyboard.type('/')
+    await expect(visibleComposer()).toHaveAttribute('aria-expanded', 'true')
+    await orcaPage.keyboard.press(shortcut)
+    await expect(searchInput).toBeVisible()
+    await expect(visibleComposer()).toHaveAttribute('aria-expanded', 'false')
+
+    await searchInput.fill('e2e-secondary')
+    await searchInput.evaluate((input) => {
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '에' }))
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          code: 'Enter',
+          keyCode: 229,
+          isComposing: true,
+          bubbles: true,
+          cancelable: true
+        })
+      )
+      input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '에' }))
+    })
+    await expect(searchInput).toBeVisible()
+    await orcaPage.keyboard.press('Enter')
+    await expect(searchInput).toHaveCount(0)
+    await expect(visibleTargetChip()).toContainText('e2e-secondary')
+    await expect(visibleComposer()).toBeFocused()
+
+    // Clear leading '/' and verify '@' keeps the armed target intact before sending.
+    await orcaPage.keyboard.press('Backspace')
+    await orcaPage.keyboard.type('@')
+    await expect(visibleTargetChip()).toContainText('e2e-secondary')
+    await orcaPage.keyboard.press('Backspace')
+
+    // Sending from the newly created side chat delivers exact <orca_context> placement metadata.
+    await orcaPage.keyboard.type('new side chat targeted work')
+    await orcaPage.keyboard.press('Enter')
+    await expect(visibleTargetChip()).toHaveCount(0)
+    await expect.poll(() => readStubInputs(inputsLog).length, { timeout: 20_000 }).toBe(1)
+    const sideTurn1 = readStubInputs(inputsLog)[0] ?? ''
+    expect(sideTurn1).toContain('<orca_context>')
+    expect(sideTurn1).toContain('e2e-secondary')
+    expect(sideTurn1).toContain(setup.seededRepoName)
+    expect(sideTurn1).toContain('--worktree identity:wt2:local:')
+    expect(sideTurn1).toContain('new side chat targeted work')
+    await expect(
+      visibleOverlay()
+        .locator('[data-work-target-tag]')
+        .filter({ hasText: 'e2e-secondary' })
+        .first()
+    ).toBeVisible({ timeout: 15_000 })
+
+    // Wait for turn 1 to settle, then confirm an untargeted follow-up in the same new chat omits it.
+    await expect(visibleOverlay().getByRole('button', { name: /Stop/i })).toHaveCount(0, {
+      timeout: 15_000
+    })
+    await visibleComposer().click()
+    await orcaPage.keyboard.type('new side chat plain follow-up')
+    await orcaPage.keyboard.press('Enter')
+    await expect.poll(() => readStubInputs(inputsLog).length, { timeout: 20_000 }).toBe(2)
+    const sideTurn2 = readStubInputs(inputsLog)[1] ?? ''
+    expect(sideTurn2).toContain('new side chat plain follow-up')
+    expect(sideTurn2).not.toContain('--worktree identity:')
+
+    // 2) Create another new chat via Right Sidebar Chats panel "+ New chat" button.
+    await orcaPage.evaluate(() => {
+      const store = window.__store
+      if (!store) {
+        throw new Error('Store unavailable')
+      }
+      store.getState().setRightSidebarTab('bot-chats')
+      store.getState().setRightSidebarOpen(true)
+    })
+    const panelNewChatButton = orcaPage.getByRole('button', { name: 'New chat' }).first()
+    await expect(panelNewChatButton).toBeVisible({ timeout: 10_000 })
+    await panelNewChatButton.click()
+
+    await expect
+      .poll(() => visibleOverlay().getAttribute('data-structured-agent-session-overlay-tab-id'), {
+        timeout: 20_000
+      })
+      .not.toBe(sideTabId)
+    const panelTabId = await visibleOverlay().getAttribute(
+      'data-structured-agent-session-overlay-tab-id'
+    )
+    expect(panelTabId).not.toBe(homeTabId)
+
+    await expect(visibleTrigger()).toBeVisible({ timeout: 20_000 })
+    await visibleTrigger().click()
+    await expect(searchInput).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
+    await expect(searchInput).toHaveCount(0)
+    await orcaPage.keyboard.press(shortcut)
+    await expect(searchInput).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
+    await expect(searchInput).toHaveCount(0)
+
+    // 3) Create a New Home Chat via TabBar "+" menu -> "New Home Chat".
+    await orcaPage
+      .locator('[data-contextual-tour-target="tab-create-menu"]:visible')
+      .first()
+      .click()
+    await orcaPage.locator('[role="menuitem"]').filter({ hasText: 'New Home Chat' }).first().click()
+    const confirmNewHomeButton = orcaPage.getByRole('button', { name: 'New Home Chat' }).first()
+    await expect(confirmNewHomeButton).toBeVisible({ timeout: 10_000 })
+    await confirmNewHomeButton.click()
+
+    await expect
+      .poll(() => visibleOverlay().getAttribute('data-structured-agent-session-overlay-tab-id'), {
+        timeout: 20_000
+      })
+      .not.toBe(panelTabId)
+    const newHomeTabId = await visibleOverlay().getAttribute(
+      'data-structured-agent-session-overlay-tab-id'
+    )
+    expect(newHomeTabId).not.toBe(homeTabId)
+
+    await expect(visibleTrigger()).toBeVisible({ timeout: 20_000 })
+    await visibleTrigger().click()
+    await expect(searchInput).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
+    await expect(searchInput).toHaveCount(0)
+    await visibleOverlay()
+      .locator('[data-native-chat-root="true"]')
+      .click({ position: { x: 200, y: 120 } })
+    await orcaPage.keyboard.press(shortcut)
+    await expect(searchInput).toBeVisible()
+    await orcaPage.keyboard.press('Escape')
+    await expect(searchInput).toHaveCount(0)
+  } finally {
+    fs.rmSync(stubDir, { recursive: true, force: true })
+  }
+})

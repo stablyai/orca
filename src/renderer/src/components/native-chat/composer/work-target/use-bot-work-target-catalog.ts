@@ -48,15 +48,16 @@ export function useNativeChatComposerWorkTargetPicker(
 ) {
   const { workTarget, setWorkTarget } = useNativeChatComposerWorkTarget(draftScopeKey)
   const [open, setOpen] = useState(false)
-  const openPicker = useCallback(() => {
+  const openPicker = useCallback((): boolean => {
     if (!support || disabled) {
-      return
+      return false
     }
     if (!support.supported) {
       setNotice(agentSessionWriteNoticeText(['workTargetHostUnsupported']))
-      return
+      return true
     }
     setOpen(true)
+    return true
   }, [disabled, setNotice, support])
 
   const pickerProps = support

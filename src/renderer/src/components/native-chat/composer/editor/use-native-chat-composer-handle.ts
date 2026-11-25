@@ -26,6 +26,8 @@ type UseNativeChatComposerHandleArgs = Parameters<typeof useNativeChatTypedInser
     pastedTextEditor: (() => NativeChatComposerInput | null) | null
     /** Text this long pastes as a "Pasted text" file; defaults to chat's. */
     longPasteThreshold?: number
+    /** Opens the bot chat project/workspace target picker when available. */
+    openWorkTargetPicker?: () => boolean
   }
 
 function resolveTargetKey(args: UseNativeChatComposerHandleArgs): string {
@@ -53,6 +55,7 @@ export function useNativeChatComposerHandle(
     setDraft,
     setActiveSuggestion,
     target: _target,
+    openWorkTargetPicker,
     ...restPasteArgs
   } = args
   const pasteArgs = { ...restPasteArgs, targetKey: resolveTargetKey(args) }
@@ -128,7 +131,10 @@ export function useNativeChatComposerHandle(
       appendText,
       handlePasteEvent,
       pasteFromClipboard,
-      contains
+      contains,
+      ...(openWorkTargetPicker
+        ? { openWorkTargetPicker: () => !isComposing() && openWorkTargetPicker() }
+        : {})
     }),
     [
       textareaRef,
@@ -141,7 +147,8 @@ export function useNativeChatComposerHandle(
       appendText,
       handlePasteEvent,
       pasteFromClipboard,
-      contains
+      contains,
+      openWorkTargetPicker
     ]
   )
   return handlePasteEvent

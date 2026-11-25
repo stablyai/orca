@@ -224,6 +224,8 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
                 onOpenChange={(nextOpen) => {
                   if (nextOpen) {
                     close()
+                    requestAnimationFrame(() => workTargetPicker.onOpenChange(true))
+                    return
                   }
                   workTargetPicker.onOpenChange(nextOpen)
                 }}
