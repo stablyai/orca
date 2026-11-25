@@ -1,9 +1,13 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { showBrowserOpenFailure } from '@/lib/browser/workspace/workspace-browser-open-failure-toast'
-import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
+import {
+  openSystemHttpLink,
+  openSystemHttpLinkReportingOutcome
+} from '@/lib/browser/navigation/http-link-routing'
 import type { PortForwardEntry } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { ForwardedUrlOpenRequest } from '../../../../shared/workspace/ports/forwarded-url-open'
+import { isEligibleLocalCertificateHost } from '../../../../shared/browser/navigation/browser-url'
 
 /** Opens `url`, which names `forward`'s local port, in the system browser; returns the URL opened. */
 export async function openForwardedUrlInSystemBrowser(
@@ -14,8 +18,7 @@ export async function openForwardedUrlInSystemBrowser(
   const open = window.api.shell.openForwardedUrl
   try {
     if (!open) {
-      await openSystemHttpLink(url)
-      return url
+      return (await openSystemHttpLinkReportingOutcome(url)) ? url : null
     }
     const result = await open({
       url,
@@ -53,10 +56,9 @@ export async function openForwardedUrlInSystemBrowser(
   }
 }
 
-const LOOPBACK_NAMES = new Set(['localhost', '127.0.0.1'])
-
 /** For a page browsing through an SSH host: its system-browser URL names a forward's local port when
- *  it is the host's localhost, and opens through that forward; a public URL opens as is. */
+ *  it is the host's localhost, and opens through that forward; a public URL opens as is. Loopback is
+ *  judged as getSshRoutedOpenableExternalUrl judged it, so only URLs it mapped to a forward match. */
 export function openSshRoutedUrlInSystemBrowser(
   url: string,
   forwards: readonly PortForwardEntry[]
@@ -67,13 +69,10 @@ export function openSshRoutedUrlInSystemBrowser(
   } catch {
     return
   }
-  // A root dot (localhost.) still names localhost to a browser.
-  const hostname = parsed.hostname.toLowerCase().replace(/\.$/, '')
   const port = parsed.port === '' ? (parsed.protocol === 'https:' ? 443 : 80) : Number(parsed.port)
-  const forward =
-    LOOPBACK_NAMES.has(hostname) || hostname.endsWith('.localhost')
-      ? forwards.find((entry) => entry.localPort === port)
-      : undefined
+  const forward = isEligibleLocalCertificateHost(parsed.hostname)
+    ? forwards.find((entry) => entry.localPort === port)
+    : undefined
   if (forward) {
     void openForwardedUrlInSystemBrowser(url, forward, 'ssh')
   } else {
