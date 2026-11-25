@@ -290,7 +290,7 @@ export function attachWebgl(pane: ManagedPaneInternal): void {
     addon.onAddTextureAtlasCanvas((page) => handleTerminalWebglAtlasPage(page, pane))
     addon.onChangeTextureAtlas(() => {
       noteTerminalWebglAtlasChange(pane)
-      requestAtlasChangeIntegrityCheck(pane)
+      requestAtlasChangeIntegrityCheck(pane, addon)
     })
     pane.terminal.loadAddon(addon)
     pane.webglAddon = addon

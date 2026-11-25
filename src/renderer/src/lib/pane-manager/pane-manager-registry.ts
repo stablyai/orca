@@ -13,7 +13,7 @@ type RegisteredPaneManager = {
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
   containsElement?: (element: Element) => boolean
-  forEachInternalPane?: (visit: (pane: ManagedPaneInternal) => void) => void
+  forEachInternalPane?: (visit: (pane: ManagedPaneInternal) => boolean | void) => boolean
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -128,18 +128,12 @@ export function forEachVisibleInternalPane(
   visit: (pane: ManagedPaneInternal) => boolean | void
 ): void {
   for (const manager of visibleManagers) {
-    let stop = false
     try {
-      manager.forEachInternalPane?.((pane) => {
-        if (!stop && visit(pane) === true) {
-          stop = true
-        }
-      })
+      if (manager.forEachInternalPane?.(visit)) {
+        return
+      }
     } catch {
       // Continue with the remaining managers.
-    }
-    if (stop) {
-      return
     }
   }
 }

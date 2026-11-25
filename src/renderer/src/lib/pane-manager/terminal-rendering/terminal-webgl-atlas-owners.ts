@@ -47,6 +47,18 @@ export function isEligibleOwner(pane: ManagedPaneInternal, atlas: GlyphAtlasLike
   }
 }
 
+export function findEligibleOwner(atlas: GlyphAtlasLike): ManagedPaneInternal | undefined {
+  let owner: ManagedPaneInternal | undefined
+  forEachVisibleInternalPane((pane) => {
+    if (isEligibleOwner(pane, atlas)) {
+      owner = pane
+      return true
+    }
+    return false
+  })
+  return owner
+}
+
 export function presentEligibleOwners(atlas: GlyphAtlasLike): void {
   forEachVisibleInternalPane((pane) => {
     if (isEligibleOwner(pane, atlas)) {

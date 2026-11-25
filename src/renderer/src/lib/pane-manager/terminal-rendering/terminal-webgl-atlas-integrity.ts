@@ -1,10 +1,10 @@
 import type { ManagedPaneInternal } from '../pane-manager-types'
 import { recordTerminalWebglDiagnostic } from '../../../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
-import { forEachVisibleInternalPane } from '../pane-manager-registry'
 import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
 import { trace } from './terminal-webgl-atlas-integrity-trace'
 import {
   atlasOfPane,
+  findEligibleOwner,
   isEligibleOwner,
   isWindowPresented,
   presentEligibleOwners
@@ -116,37 +116,48 @@ function reset(
   now: number,
   deps: AtlasIntegrityDeps
 ): string {
+  if (!deps.isWindowPresented() || !isEligibleOwner(owner, atlas)) {
+    return 'inconclusive'
+  }
   const allowed =
     deps.state.resets < MAX_RESETS_PER_SESSION &&
     state.resets < MAX_RESETS_PER_ATLAS &&
     now - state.resetAt >= RESET_INTERVAL_MS
   let outcome: 'reset' | 'reset-failed' | 'refused' = 'refused'
   if (allowed) {
+    const before = atlas.pageLayoutVersion
     state.resets++
     state.resetAt = now
     deps.state.resets++
-    const before = atlas.pageLayoutVersion
+    outcome = 'reset-failed'
     try {
       owner.webglAddon?.clearTextureAtlas()
+      // Same object, before any presentation can rasterize into it again.
+      const after = atlas.pageLayoutVersion
+      if (
+        before !== undefined &&
+        after !== undefined &&
+        after > before &&
+        atlas.pages.length === 1 &&
+        atlas.pages[0].glyphs?.length === 0
+      ) {
+        outcome = 'reset'
+      }
     } catch {
-      // Read below: eviction may have committed before the throw.
+      // A failed clear may still have changed the atlas, so its owners still need a redraw.
     }
-    // Same object, before any presentation can rasterize into it again.
-    const evicted =
-      atlas.pageLayoutVersion !== before &&
-      atlas.pages.length === 1 &&
-      (atlas.pages[0].glyphs?.length ?? 0) === 0
-    outcome = evicted ? 'reset' : 'reset-failed'
   }
-  recordTerminalWebglDiagnostic('webgl-atlas-poisoned', {
-    ...finding,
-    outcome,
-    trigger,
-    pages: atlas.pages.length
-  })
-  if (outcome !== 'refused') {
-    console.warn('[terminal] WebGL glyph atlas page lost its pixels; evicted the atlas', outcome)
-    presentEligibleOwners(atlas)
+  try {
+    recordTerminalWebglDiagnostic('webgl-atlas-poisoned', {
+      ...finding,
+      outcome,
+      trigger,
+      pages: atlas.pages.length
+    })
+  } finally {
+    if (outcome !== 'refused') {
+      presentEligibleOwners(atlas)
+    }
   }
   return outcome
 }
@@ -237,19 +248,6 @@ function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): 
   armService(deps, now)
 }
 
-function findEligibleOwner(atlas: GlyphAtlasLike): ManagedPaneInternal | undefined {
-  let owner: ManagedPaneInternal | undefined
-  // One walk over visible managers' leaves, stopping at the first eligible owner.
-  forEachVisibleInternalPane((pane) => {
-    if (isEligibleOwner(pane, atlas)) {
-      owner = pane
-      return true
-    }
-    return false
-  })
-  return owner
-}
-
 /** Per firing: maintenance, the gate, <= 8 selection checks, <= 1 discovery walk, <= 1 attempt, then one re-arm. */
 function service(deps: AtlasIntegrityDeps): void {
   deps.state.timerArmed = false
@@ -329,12 +327,12 @@ export function verifyPaneWebglAtlasIntegrity(
 /** xterm reports an atlas change before assigning it; act next task only if the publishing addon is current. */
 export function requestAtlasChangeIntegrityCheck(
   pane: ManagedPaneInternal,
+  origin: NonNullable<ManagedPaneInternal['webglAddon']>,
   deps: AtlasIntegrityDeps = defaultDeps
 ): void {
   try {
-    const origin = pane.webglAddon
     deps.setTimer(() => {
-      if (origin && pane.webglAddon === origin) {
+      if (pane.webglAddon === origin) {
         verifyPaneWebglAtlasIntegrity(pane, 'atlas-change', deps)
       }
     }, 0)

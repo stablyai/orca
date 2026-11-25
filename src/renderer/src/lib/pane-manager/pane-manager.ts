@@ -272,10 +272,13 @@ export class PaneManager {
     presentPaneViewports(this.panes.values())
   }
 
-  forEachInternalPane(visit: (pane: ManagedPaneInternal) => void): void {
+  forEachInternalPane(visit: (pane: ManagedPaneInternal) => boolean | void): boolean {
     for (const pane of this.panes.values()) {
-      visit(pane)
+      if (visit(pane) === true) {
+        return true
+      }
     }
+    return false
   }
 
   setAtlasRecoveryVisible(visible: boolean): void {

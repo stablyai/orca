@@ -40,10 +40,10 @@ function readOnce(
   current: ReadKit,
   canvas: AtlasCanvas,
   rect: GlyphRect
-): InkRead | 'control-failed' {
+): Exclude<InkRead, 'unavailable'> {
   const { ctx, control } = current
   if (!isUsable(ctx)) {
-    return 'control-failed'
+    return 'unreadable'
   }
   const height = Math.max(1, rect.height)
   ctx.clearRect(0, 0, SCRATCH_WIDTH, height)
@@ -67,7 +67,7 @@ function readOnce(
   const controlsPassed =
     pixels[DESTINATION_CONTROL_X * 4 + 3] === 255 && pixels[SOURCE_CONTROL_X * 4 + 3] === 255
   if (!controlsPassed || !isUsable(ctx)) {
-    return 'control-failed'
+    return 'unreadable'
   }
   const rowStride = SCRATCH_WIDTH * 4
   for (let y = 0; y < rect.height; y++) {
@@ -80,23 +80,27 @@ function readOnce(
   return 'blank'
 }
 
-/**
- * Ink or blank only when the context is live and both fresh controls drawn after the copy read back opaque. Residual: the controls prove
- * the scratch and a canvas copy work, not the transfer from this particular page canvas.
- */
+/** The live context and fresh controls validate the scratch copy path, with no guarantee for a specific source page. */
 export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit): GlyphInkReader {
   let kit: ReadKit | null = null
   return (canvas, rect) => {
-    // A failed kit is replaced before the next permitted candidate, never by re-reading this rect.
-    kit ??= makeKit()
+    try {
+      kit ??= makeKit()
+    } catch {
+      return 'unavailable'
+    }
     if (!kit) {
       return 'unavailable'
     }
-    const result = readOnce(kit, canvas, rect)
-    if (result === 'control-failed') {
-      kit = null
-      return 'unreadable'
+    try {
+      const result = readOnce(kit, canvas, rect)
+      if (result !== 'unreadable') {
+        return result
+      }
+    } catch {
+      // A throwing read invalidates the scratch just like a failed control.
     }
-    return result
+    kit = null
+    return 'unreadable'
   }
 }
