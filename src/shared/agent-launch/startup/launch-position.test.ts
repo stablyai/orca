@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { withClaudeAgentViewPlugin } from '../../agent-hook-listener/providers/claude/view/claude-agent-view-launch'
 import { addClaudeTeammateModeAuto, isDirectClaudeCommand } from './claude-agent-teams-tmux-compat'
 import { withClaudeDirectLaunchCommand } from './claude-direct-launch-command'
 import { readLaunchArguments, readLaunchPosition } from './launch-position'
@@ -105,6 +106,19 @@ it('gives Agent Teams the whole executable span for apostrophe paths', () => {
   expect(addClaudeTeammateModeAuto(`${powershell} --resume x`)).toBe(
     "& 'C:\\Users\\O''Brien\\orca\\claude.exe' --teammate-mode auto --resume x"
   )
+})
+
+it('splices PowerShell launch arguments while preserving model expansions and literal backticks', () => {
+  expect(
+    withClaudeAgentViewPlugin('claude --model $env:CLAUDE_MODEL', 'C:\\plugin', 'powershell')
+  ).toBe("claude --plugin-dir 'C:\\plugin' --model $env:CLAUDE_MODEL")
+  expect(
+    withClaudeAgentViewPlugin(
+      '& \'C:\\Users\\a`b\\claude.exe\' --model "$env:CLAUDE_MODEL"',
+      'C:\\plugin',
+      'powershell'
+    )
+  ).toBe("& 'C:\\Users\\a`b\\claude.exe' --plugin-dir 'C:\\plugin' --model \"$env:CLAUDE_MODEL\"")
 })
 
 it('escapes Claude native argv as an array without losing JSON or prompt quotes', () => {

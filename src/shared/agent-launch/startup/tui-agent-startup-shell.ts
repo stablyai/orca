@@ -11,6 +11,7 @@ import {
 export type AgentStartupShell = 'posix' | 'powershell' | 'cmd'
 
 type WindowsStartupShell = Extract<AgentStartupShell, 'powershell' | 'cmd'>
+type StartupLiteralMode = boolean | 'preserve-expansions'
 const POWERSHELL_LITERAL_ESCAPES = new Map([
   ['r', '\r'],
   ['n', '\n'],
@@ -42,8 +43,10 @@ function hasOddBackslashRun(value: string, quoteIndex: number): boolean {
 function tokenizeWindowsStartupCommand(
   value: string,
   shell: WindowsStartupShell,
-  requireLiteral = false
+  literalMode: StartupLiteralMode
 ): StartupCommandTokens {
+  const requireLiteral = literalMode === true
+  const decodeLiterals = literalMode !== false
   const tokens: string[] = []
   const spans: CommandTokenSpan[] = []
   let token = ''
@@ -59,7 +62,7 @@ function tokenizeWindowsStartupCommand(
       char === escape &&
       index + 1 < value.length &&
       !(
-        requireLiteral &&
+        decodeLiterals &&
         ((shell === 'cmd' && quote === '"') || (shell === 'powershell' && quote === "'"))
       )
     ) {
@@ -76,7 +79,7 @@ function tokenizeWindowsStartupCommand(
         // Recognized PowerShell escapes change values in both bare and quoted arguments.
         (shell === 'powershell' && '0abefnrtuv'.includes(value[index + 1]))
       const literalEscape =
-        requireLiteral && shell === 'powershell' && quote === '"'
+        decodeLiterals && shell === 'powershell' && quote === '"'
           ? POWERSHELL_LITERAL_ESCAPES.get(value[index + 1])
           : undefined
       if (literalEscape !== undefined) {
@@ -163,11 +166,11 @@ function tokenizeWindowsStartupCommand(
 export function tokenizeStartupCommand(
   value: string,
   shell: AgentStartupShell,
-  requireLiteral = false
+  literalMode: StartupLiteralMode = false
 ): StartupCommandTokens {
   // Unix settings text is tokenized once then re-quoted, so workspace shells must not change its meaning. Windows shells reparse the built line separately.
   return isWindowsStartupShell(shell)
-    ? tokenizeWindowsStartupCommand(value, shell, requireLiteral)
+    ? tokenizeWindowsStartupCommand(value, shell, literalMode)
     : tokenizeCustomCommandTemplate(value)
 }
 
