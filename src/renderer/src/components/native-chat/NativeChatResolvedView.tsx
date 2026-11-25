@@ -63,6 +63,7 @@ export function NativeChatResolvedView({
   terminalTabId,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  readTerminalScreen,
   readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
@@ -175,7 +176,8 @@ export function NativeChatResolvedView({
     transcriptPath: transcriptPath ?? null,
     messages: sessionAfterCommandBoundaries.messages,
     transcriptSettled: session.readPhase === 'ready',
-    canSend
+    canSend,
+    ...(readTerminalScreen ? { readTerminalScreen } : {})
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard

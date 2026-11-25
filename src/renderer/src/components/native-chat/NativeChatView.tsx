@@ -48,6 +48,7 @@ function NativeChatBridgeView({
   resolvedAgent,
   ownsTabWideLaunchDraft,
   onSwitchToTerminal,
+  readTerminalScreen,
   readTerminalDraft,
   contextMenuActions
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
@@ -80,6 +81,7 @@ function NativeChatBridgeView({
             terminalTabId={terminalTabId}
             ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}
             onSwitchToTerminal={onSwitchToTerminal}
+            readTerminalScreen={readTerminalScreen}
             readTerminalDraft={readTerminalDraft}
             contextMenuActions={contextMenuActions}
           />
