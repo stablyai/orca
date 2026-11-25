@@ -205,7 +205,8 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/shared/secure-storage/secure-path-windows-acl.win32.test.ts',
   'src/main/runtime/rpc/server/pairing/unreadable-secret-store-preservation.win32.test.ts',
-  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts'
+  'src/main/browser/network/tunnels/remote-browser-socks-client-owner.test.ts',
+  'src/main/runtime/files/watch/windows-file-watch.win32.test.ts'
 ]
 
 const WINDOWS_BOUNDARY_PREFIXES = [
@@ -240,8 +241,10 @@ const WINDOWS_BOUNDARY_PREFIXES = [
   'src/main/codex/hooks/',
   'src/main/orca-profiles/',
   'src/main/persistence/profile-state/',
+  'src/main/runtime/files/watch/windows-file-watch',
   'src/main/runtime/rpc/server/pairing/',
   'src/main/windows/',
+  'src/shared/file-watch/windows-',
   'src/shared/file-write/windows-',
   'src/shared/orca-profiles/',
   'src/shared/secure-storage/'
