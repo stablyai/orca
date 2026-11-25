@@ -95,12 +95,12 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
-15 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential
+16 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential; +1 botToolCredentialsReader: one store read serves every sign-in and saved-value lookup of a list, check or write
 3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
 3 src/main/bots/bot-tool-secret-scrub.ts
 4 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: the user and per-folder config reads readClaudeInheritedTools and readClaudeMirror already do, once per chat launch that has host servers
-21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys
-13 src/main/bots/bot-tools-host.ts
+22 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys; +1 botOwnTools and changeSnapshot: one credential store read per list and write instead of one per row
+14 src/main/bots/bot-tools-host.ts # +1 botOwnTools and botToolCredentialsReader: one credential store read per tools list and check instead of one per row
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
 2 src/main/bots/bot-work-runtime.ts
@@ -111,7 +111,7 @@
 1 src/main/bots/tool-oauth/bot-tool-oauth-revoke.ts
 4 src/main/bots/tool-oauth/bot-tool-oauth-sign-in.ts
 12 src/main/bots/tool-oauth/bot-tool-oauth-tokens.ts
-6 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts
+7 src/main/bots/tool-oauth/bot-tool-owned-sign-in.ts # +1 botOwnTool now reads the credential store in its own file; it always did, through botToolSignInState
 3 src/main/bots/tool-oauth/bot-tool-sign-in-attempts.ts
 7 src/main/bots/tool-oauth/bot-tool-sign-in-flows.ts
 2 src/main/bots/tool-relay/bot-tool-relay.ts
@@ -756,7 +756,7 @@
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
 3 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect; +2 the saved-values digests, read at launch and after Orca writes the list
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
-8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+10 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +2 botOwnTools for a list from one credential store read, and botOwnTool now reading the store in its own file
 1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
 3 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file, its revision check (moved from bot-structured-session-wiring.ts), and the host list read
 1 src/main/mcp-servers/terminal/terminal-mcp-cli-support.ts # runWslProcess for a WSL CLI's --help/--version probe, once per CLI and distro per 10 minutes
@@ -1227,7 +1227,7 @@
 2 src/main/runtime/rpc/dispatcher.ts
 3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
-11 src/main/runtime/rpc/methods/bots-tools.ts
+12 src/main/runtime/rpc/methods/bots-tools.ts # +1 botOwnTool now reads the credential store in its own file; it always did, through botToolSignInState
 1 src/main/runtime/rpc/methods/bots.ts
 1 src/main/runtime/rpc/methods/browser/browser-identity-rpc.ts
 15 src/main/runtime/rpc/methods/computer/computer.ts
