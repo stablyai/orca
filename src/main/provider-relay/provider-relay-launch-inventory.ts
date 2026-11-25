@@ -27,10 +27,6 @@ const keptThisRun = new Map<string, number>()
  *  nothing of theirs was cut and restart offers leave them alone. */
 const idleStoppedThisRun = new Set<string>()
 
-/** Chats whose detached agent the daemon idle-stopped: it stops only work that had ended, so
- *  nothing of theirs was cut and restart offers leave them alone. */
-const idleStoppedThisRun = new Set<string>()
-
 /** The kept agent's own spawn token, so its reattach records the identity the process carries. */
 const spawnTokens = new Map<string, string>()
 
@@ -61,8 +57,6 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
       listed.set(info.chatKey, { channel, info })
       if (keptProviderRelayOutstanding(info)) {
         keptThisRun.set(info.chatKey, info.spawnedAtMs)
-      } else if (info.exit?.idleStopped) {
-        idleStoppedThisRun.add(info.chatKey)
       }
       if (info.exit?.idleStopped) {
         idleStoppedThisRun.add(info.chatKey)
