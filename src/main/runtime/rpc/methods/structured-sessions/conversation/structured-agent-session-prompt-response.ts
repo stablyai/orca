@@ -40,7 +40,7 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
   defineMethod({
     name: 'agentSession.setOption',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: SetOptionParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).setOption(
