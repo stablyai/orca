@@ -32,13 +32,16 @@ import {
   type AppRailItemId
 } from './AppRailButton'
 import { AppRailMoreMenu, useAppRailSlotCapacity } from './AppRailMoreMenu'
+import { AppRailCustomizeMenu, type AppRailCustomizeRow } from './AppRailCustomizeMenu'
 import { partitionAppRail } from './app-rail-overflow'
 import { railItemOwningFocus } from './app-rail-focus-ownership'
 import { useWorkspaceListRegionPresent } from './workspace-list-region-presence'
 import {
+  APP_RAIL_DESTINATION_IDS,
   activateRailDestination,
   selectCurrentRailDestination,
   selectShownRailDestinationsKey,
+  setRailDestinationShown,
   shownRailDestinationsFromKey,
   type AppRailDestinationId
 } from './app-rail-destinations'
@@ -84,6 +87,19 @@ export function AppRail({
   const capacity = useAppRailSlotCapacity(toolbar, () => {
     transitionOwnerRef.current = toolbarRef.current ? railItemOwningFocus(toolbarRef.current) : null
   })
+  // Customize can change the shown set with its menu open; sample focus before that commits, as for a fold.
+  useLayoutEffect(
+    () =>
+      useAppStore.subscribe((state, prev) => {
+        if (
+          toolbarRef.current &&
+          selectShownRailDestinationsKey(state) !== selectShownRailDestinationsKey(prev)
+        ) {
+          transitionOwnerRef.current = railItemOwningFocus(toolbarRef.current)
+        }
+      }),
+    []
+  )
   // Hidden destinations are left out before partitioning; hidden is never folded.
   const shownDestinations = shownRailDestinationsFromKey(shownDestinationsKey)
   const partition = partitionAppRail(shownDestinations.length, capacity)
@@ -94,7 +110,7 @@ export function AppRail({
   const renderedItems: AppRailItemId[] = [
     'workspaces',
     ...railDestinations,
-    ...(partition.more ? (['more'] as const) : []),
+    partition.more ? 'more' : 'customize',
     ...(partition.helpInMore ? [] : (['help'] as const)),
     ...(partition.settingsInMore ? [] : (['settings'] as const))
   ]
@@ -121,13 +137,11 @@ export function AppRail({
 
   const renderedKey = renderedItems.join(',')
   const renderedItemsRef = useRef(renderedItems)
-  const tabStopRef = useRef(tabStopItem)
   useLayoutEffect(() => {
     renderedItemsRef.current = renderedItems
-    tabStopRef.current = tabStopItem
   })
   // If the transition removed the focused button or its open menu, focus its new home: the button itself if it is
-  // still rendered, else More (it folded in), else the tab stop. Focus that is still connected is left alone.
+  // still rendered, else the "…" slot (More it folded into, or Customize/More swapping forms). Connected focus stays.
   useLayoutEffect(() => {
     const owner = transitionOwnerRef.current
     transitionOwnerRef.current = null
@@ -144,13 +158,14 @@ export function AppRail({
         ? owner
         : rendered.includes('more')
           ? 'more'
-          : tabStopRef.current
+          : 'customize'
       toolbarRef.current
         ?.querySelector<HTMLElement>(`[${APP_RAIL_ITEM_ATTRIBUTE}="${home}"]`)
         ?.focus({ preventScroll: true })
     })
     return () => cancelAnimationFrame(frame)
-  }, [renderedKey])
+    // The shown set is a dep so a sample taken for a change that moved nothing on the rail is consumed, not kept.
+  }, [renderedKey, shownDestinationsKey])
 
   // Turning the experiment off unmounts the rail (cleanup runs before its nodes leave the DOM): if a rail button or a
   // menu opened from one has focus, hand it to the titlebar's sidebar toggle, else blur. Other focus is untouched.
@@ -196,21 +211,32 @@ export function AppRail({
   const destinationIcon = (
     id: AppRailDestinationId,
     size: number,
-    strokeWidth?: number
+    strokeWidth?: number,
+    className?: string
   ): React.ReactNode => {
+    const props = { size, strokeWidth, className, 'aria-hidden': true }
     switch (id) {
       case 'tasks':
-        return <List size={size} strokeWidth={strokeWidth} aria-hidden />
+        return <List {...props} />
       case 'automations':
-        return <CalendarClock size={size} strokeWidth={strokeWidth} aria-hidden />
+        return <CalendarClock {...props} />
       case 'artifacts':
-        return <Files size={size} strokeWidth={strokeWidth} aria-hidden />
+        return <Files {...props} />
       case 'skills':
-        return <BookOpen size={size} strokeWidth={strokeWidth} aria-hidden />
+        return <BookOpen {...props} />
       case 'mobile':
-        return <Smartphone size={size} strokeWidth={strokeWidth} aria-hidden />
+        return <Smartphone {...props} />
     }
   }
+  const shownDestinationSet = new Set<AppRailDestinationId>(shownDestinations)
+  // Every page but Workspaces, in rail order, shown or not.
+  const customizeRows: AppRailCustomizeRow[] = APP_RAIL_DESTINATION_IDS.map((id) => ({
+    id,
+    label: destinationLabel(id),
+    icon: destinationIcon(id, 14, undefined, 'size-3.5'),
+    shown: shownDestinationSet.has(id),
+    onToggle: () => setRailDestinationShown(id, !shownDestinationSet.has(id))
+  }))
   const openSettings = (): void => useAppStore.getState().openSettingsPage()
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>): void => {
@@ -299,6 +325,7 @@ export function AppRail({
               settingsActive={settingsActive}
               onOpenSettings={openSettings}
               tabStop={tabStopItem === 'more'}
+              customizeRows={customizeRows}
               destinations={foldedDestinations.map((id) => ({
                 id,
                 label: destinationLabel(id),
@@ -309,7 +336,9 @@ export function AppRail({
                 onSelect: () => activateRailDestination(id)
               }))}
             />
-          ) : null}
+          ) : (
+            <AppRailCustomizeMenu rows={customizeRows} tabStop={tabStopItem === 'customize'} />
+          )}
         </div>
         <div className="flex flex-col items-center gap-2.5">
           {partition.helpInMore ? null : (
