@@ -29,7 +29,8 @@ export async function fillRecoveredTurn(
     agentOf: (sessionId: string) => string
   }
 ): Promise<{ kind: 'unresolved' | 'cut'; stamps: AgentJournalConnectorDelivery[] }> {
-  const outcome = readAgentJournalTurnOutcome(readAgentJournalTurn(turn.body))
+  const record = readAgentJournalTurn(turn.body)
+  const outcome = readAgentJournalTurnOutcome(record)
   const items = snapshot.items.filter((item) => item.sequence <= turn.sequence)
   const opener = await readEndedChatTurnOpener(
     () => chat.journalReads(sessionId),
@@ -53,8 +54,9 @@ export async function fillRecoveredTurn(
       stamps,
       ...(opener ? { openerItemId: opener.itemId } : {}),
       outcome,
-      ...structuredAgentSessionTurnReply(snapshot.items, turn.itemId),
-      bot: deps.isBot(sessionId),
+      ...(record?.startedAt ? { postsSince: record.startedAt } : {}),
+      ...(record?.completedAt ? { postsUntil: record.completedAt } : {}),
+      ...turnReplyOf(snapshot.items, turn.itemId, deps.isBot(sessionId)),
       links: [],
       ...(outcome === 'failure'
         ? {
@@ -67,4 +69,10 @@ export async function fillRecoveredTurn(
     })
   }
   return { kind: 'unresolved', stamps: [] }
+}
+
+/** A recovered turn's words, as the live end reads them for a bot or another chat. */
+function turnReplyOf(items: AgentJournalSnapshot['items'], turnItemId: string, bot: boolean) {
+  const { prose, botProse, toolsRan } = structuredAgentSessionTurnReply(items, turnItemId)
+  return bot ? { prose: botProse, earlierProse: prose, toolsRan, bot } : { prose, toolsRan, bot }
 }
