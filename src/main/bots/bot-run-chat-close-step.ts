@@ -34,6 +34,10 @@ export type RunChatCloseSteps = {
     forget: (sessionId: string) => void
     list: (botId: string) => readonly string[]
   }
+  /** Chats whose stop waited for their agent's start, until their moves finished: they read as
+   *  open until that start ends, and their record must stay. In memory, as a restart ends the
+   *  start too. */
+  stopping: Set<string>
 }
 
 /** `stopping`: the chat closes once its agent's start ends, and the moves follow then. */
@@ -79,6 +83,7 @@ async function finishClose(
     .dropUnreadMail(bot, from)
     .then(() => true, warned('tell the senders of the unread mail'))
   if (moved && handedOver && told) {
+    steps.stopping.delete(from)
     forget(steps, from)
   }
 }
@@ -113,8 +118,15 @@ export function closeRunChatUnderLock(
     if (!closed.stopped && closed.whenStopped) {
       // That start may end long after, so the moves wait for it outside the lock. The record stays
       // until they finish, so a stop that never proves itself is judged on a later look.
+      steps.stopping.add(sessionId)
       void closed.whenStopped
-        .then((stopped) => (stopped ? finishUnderLock(chats, steps, botId, sessionId) : undefined))
+        .then((stopped) => {
+          if (stopped) {
+            return finishUnderLock(chats, steps, botId, sessionId)
+          }
+          steps.stopping.delete(sessionId)
+          return undefined
+        })
         .catch(warned('finish the moves'))
       return 'stopping'
     }
@@ -140,7 +152,10 @@ export async function settleClosedRunChats(
 ): Promise<void> {
   for (const sessionId of steps.owed.list(botId)) {
     if (now.open.has(sessionId)) {
-      forget(steps, sessionId)
+      // One that reads open only while its stop waits, or as read before that stop ended, stays.
+      if (!steps.stopping.has(sessionId)) {
+        forget(steps, sessionId)
+      }
     } else if (now.closed.has(sessionId)) {
       // One chat that cannot be moved now is tried again on the next look; the rest go on.
       await finishUnderLock(chats, steps, botId, sessionId).catch(warned('finish the moves'))
@@ -155,6 +170,8 @@ export function runChatClosesOwed(
 ): boolean {
   return unfinishedRunChatCloses(runtime.getOrchestrationDb(), botId).length > 0
 }
+
+const stopsWaiting = new Set<string>()
 
 export function runtimeRunChatClose(runtime: OrcaRuntimeService) {
   const steps: RunChatCloseSteps = {
@@ -186,7 +203,8 @@ export function runtimeRunChatClose(runtime: OrcaRuntimeService) {
         recordUnfinishedRunChatClose(runtime.getOrchestrationDb(), botId, sessionId),
       forget: (sessionId) => forgetUnfinishedRunChatClose(runtime.getOrchestrationDb(), sessionId),
       list: (botId) => unfinishedRunChatCloses(runtime.getOrchestrationDb(), botId)
-    }
+    },
+    stopping: stopsWaiting
   }
   const chats = runtimeBotChats(runtime)
   return {

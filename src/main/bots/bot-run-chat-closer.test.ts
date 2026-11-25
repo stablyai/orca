@@ -612,7 +612,8 @@ describe('closing one run chat under the bot lock', () => {
           owed.delete(sessionId)
         },
         list: (botId) => [...owed].flatMap(([id, owner]) => (owner === botId ? [id] : []))
-      }
+      },
+      stopping: new Set<string>()
     }
     const close = (sessionId: string, ended: boolean) =>
       closeRunChatUnderLock(chats, steps, 'bot-1', sessionId, async () => ended)
@@ -622,7 +623,7 @@ describe('closing one run chat under the bot lock', () => {
         closed: new Set(closedChats),
         open: new Set(openChats)
       })
-    return { calls, close, settle, fail, throwsFor, bot, owed }
+    return { calls, close, settle, fail, throwsFor, bot, owed, stopping: steps.stopping }
   }
 
   const moves = (id: string) => [
@@ -724,6 +725,7 @@ describe('closing one run chat under the bot lock', () => {
     startEnds(true)
     await vi.waitFor(() => expect(starting.owed.size).toBe(0))
     expect(starting.calls).toEqual(['close run-chat', ...moves('run-chat')])
+    expect(starting.stopping.size).toBe(0)
 
     // A start that ended with no proof the chat closed leaves the record for the next look to judge.
     const unproven = Promise.resolve(false)
@@ -732,6 +734,30 @@ describe('closing one run chat under the bot lock', () => {
     await unproven
     expect(unprovenClose.calls).toEqual(['close run-chat'])
     expect(unprovenClose.owed.size).toBe(1)
+    // That look finds it open and drops the record.
+    await unprovenClose.settle([], ['run-chat'])
+    expect(unprovenClose.owed.size).toBe(0)
+  })
+
+  it('keeps the record of a chat whose stop waits for its start while it reads open, and after a move failed', async () => {
+    let startEnds: (stopped: boolean) => void = () => {}
+    const whenStopped = new Promise<boolean>((resolve) => (startEnds = resolve))
+    const { calls, close, settle, fail, owed } = sessions({ stopped: false, whenStopped })
+    await expect(close('run-chat', true)).resolves.toBe('stopping')
+    // It reads open until its agent's start ends.
+    await settle([], ['run-chat'])
+    expect(owed.size).toBe(1)
+    fail.carry = true
+    startEnds(true)
+    await vi.waitFor(() => expect(calls).toContain('drop run-chat'))
+    // A look that read the chat before it closed still finds it open.
+    await settle([], ['run-chat'])
+    expect(owed.size).toBe(1)
+    fail.carry = false
+    calls.length = 0
+    await settle(['run-chat'])
+    expect(calls).toEqual(moves('run-chat'))
+    expect(owed.size).toBe(0)
   })
 
   it('holds up nothing on a record it cannot drop: a tab still refuses as tab-open, and the next records settle', async () => {
