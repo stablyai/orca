@@ -60,6 +60,7 @@ export function registerRuntimeWindowLifecycle(
     orchestrationSessionWorkersChanged: (sessionId) =>
       send('runtime:orchestrationSessionWorkersChanged', { sessionId }),
     peerMailReturned: () => send('runtime:peerMailReturned'),
+    mcpServersChanged: () => send('runtime:mcpServersChanged'),
     workspaceCleanupRunFinished: (run) => send('workspaceCleanup:runFinished', run),
     activateWorktree: (
       repoId,

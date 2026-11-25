@@ -15,6 +15,10 @@
     "terminalPromptFailed": "Orca は {{value0}} のターミナルを開きましたが、プロンプトを渡せませんでした。そのターミナルでプロンプトを送信してください。"
   },
   "app": {
+    "saving": {
+      "delayedTitle": "プロファイルのストレージ処理に通常より時間がかかっています",
+      "delayedDescription": "この処理が完了するまで、その後の保存が遅れる場合があります。"
+    },
     "recoverableError": {
       "rootTitle": "Orca でレンダラーエラーが発生しました。",
       "rootDescription": "アプリシェルのレンダリングを完了できませんでした。再マウントを試すか、エラーが解決しない場合は Orca を再起動してください。",
@@ -67,7 +71,6 @@
       },
       "providers": {
         "title": "プロバイダー",
-        "antigravityAccount": "アカウント",
         "searchAgents": "Agent",
         "searchTerminal": "ターミナル",
         "searchCli": "CLI"
@@ -4654,8 +4657,6 @@
             "runtime_reconnecting": "再接続中",
             "runtime_last_close_reason": "クローズ: {{value0}}",
             "runtime_reconnect_attempt": "試行 {{value0}}",
-            "connectedHostCount_one": "{{count}} 台のホスト",
-            "connectedHostCount_other": "{{count}} 台のホスト",
             "searchSshHosts": "SSH ホストを検索…",
             "noMatchingSshHosts": "一致する SSH ホストはありません。",
             "moreSshHostMatches_one": "ほかに {{count}} 件一致しています。入力を続けて絞り込んでください。",
@@ -20826,12 +20827,7 @@
         "workflow": "ワークフロー",
         "monitor": "モニター",
         "task": "タスク",
-        "taskCount_other": "{{count}} 件のタスク",
         "workerCount_other": "{{count}} 件のワーカー",
-        "commandCount_other": "{{count}} 件のコマンド",
-        "workflowCount_other": "{{count}} 件のワークフロー",
-        "monitorCount_other": "{{count}} 件のモニター",
-        "agentCount_other": "{{count}} 個の Agent",
         "stoppedByYou": "手動で停止しました",
         "finished": "完了",
         "failedCount": "失敗 {{count}} 件",
@@ -20844,14 +20840,13 @@
         "showQuestion": "{{name}} の質問を表示",
         "show": "表示",
         "runningCount": "実行中 {{count}} 件",
-        "cleared_other": "ワーカー {{count}} 件をクリアしました",
         "stopAll": "すべて停止",
         "clearFailed": "失敗したものをクリア",
-        "pillLabel_other": "ワーカー {{count}} 件、最新: {{title}}",
         "unlistedDetail": "一部のバックグラウンド処理はここに表示されません",
         "unlisted": "バックグラウンド処理を実行中",
         "unread": "ワーカーを読み込めませんでした",
-        "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます"
+        "unreadDetail": "読み込みが終わると、ここにワーカーが表示されます",
+        "chipLabel": "{{label}}、最新: {{title}}"
       },
       "sideChat": {
         "description": "このチャットの横に分岐して、別の質問をする",
@@ -20981,6 +20976,7 @@
         "paused": "一時停止中",
         "replied": "{{actor}} が返信しました",
         "rowAccessibleName": "{{label}}: {{name}}。{{details}}",
+        "thenAt": "{{time}} に 1 回実行します",
         "thenLine": "その後",
         "thenOnce": "発生したときに 1 回実行します",
         "thenOnceBy": "1 回実行します。何も届かなければ {{time}} に実行します",
@@ -23587,22 +23583,16 @@
       "cancel": "キャンセル"
     },
     "antigravity": {
-      "chatSignIn": "サインイン",
-      "chatChangeAccount": "アカウントを変更",
-      "chatRetry": "サインインを再試行",
       "chatCancel": "キャンセル",
       "chatCopyLink": "サインインリンクをコピー",
       "chatCopyFailed": "リンクをコピーできませんでした。",
       "chatStarting": "サインインを開始しています…",
-      "chatWaiting": "ブラウザーでサインインを完了してください。",
       "chatOpenFailed": "リンクをコピーしてブラウザーで開いてください。",
       "chatVerifying": "サインインを完了しています…",
-      "chatPasteHelp": "サインイン後の最後のページが読み込まれない場合は、ブラウザーからそのページの完全なアドレスをコピーしてここに貼り付けてください。",
       "chatContinue": "続行",
       "chatCancelled": "サインインをキャンセルしました。",
       "chatExpired": "サインインがタイムアウトしました。もう一度お試しください。",
       "chatFailed": "サインインに失敗しました。もう一度お試しください。",
-      "chatOtherClient": "別のクライアントでサインインが進行中です。",
       "chatReadFailed": "{{host}} のサインインを確認できませんでした。",
       "retry": "再試行",
       "changed": "ネイティブアカウントが変更されました。AGYを起動する前に、保存したアカウントを再度選択してください。",
@@ -23632,20 +23622,10 @@
       "settingsSaveFailed": "Orca は Antigravity のサインイン設定を保存できませんでした。もう一度お試しください。",
       "lastReading": "{{reading}} · {{time}} に取得",
       "noReading": "使用量は不明：未取得",
-      "chatSeparate": "agy ターミナルのアカウントとは別です。",
-      "chatBadgeSigningIn": "サインイン中",
-      "chatBadgeSignedIn": "サインイン済み",
-      "chatBadgeSignedOut": "未サインイン",
-      "chatSignInWith": "{{method}} でサインイン",
-      "chatPasteOpen": "ブラウザのページが表示されませんでしたか？",
-      "chatSwitchMethod": "{{method}} に切り替えるには、もう一度サインインしてください。",
-      "enterpriseFieldsNeeded": "Google Cloud のプロジェクトとロケーションを入力してください。",
       "fd47b5a5dd": "Antigravityアカウント",
       "personalOption": "個人の Google AI プラン",
       "enterpriseOption": "組織のライセンス",
       "location": "ロケーション",
-      "enterpriseFieldsShort": "プロジェクトとロケーションを入力してください。",
-      "chatUseMethod": "もう一度サインインして {{method}} を使用",
       "signInEllipsis": "サインイン…",
       "loadFailed": "agy のアカウントを読み込めませんでした",
       "loading": "アカウントを読み込み中…",
@@ -23658,7 +23638,6 @@
       "saveShort": "保存",
       "readAt": "{{time}} に取得",
       "active": "アクティブ",
-      "chatDescriptionKeyOnAgy": "新規チャットは、下のサインインを使って agy 上で実行されます。ターミナルの agy とは別に管理されます。",
       "apiKeyGet": "APIキーを取得する"
     },
     "claude": {

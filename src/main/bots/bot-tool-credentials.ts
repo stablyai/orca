@@ -310,7 +310,7 @@ export function commitBotToolOAuth(
   if (current && (next === null || next.grant !== current.grant || next.url !== current.url)) {
     announceBotToolCredentialsEnded(folder, [id])
   }
-  announceIfShownChanged(current, next)
+  announceIfShownChanged(folder, current, next)
   return next === null ? null : { ...next, revision }
 }
 

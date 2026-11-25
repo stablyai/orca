@@ -456,6 +456,10 @@
       "rootDescription": "O shell do aplicativo não conseguiu concluir a renderização. Tente novamente para remontá-lo, ou reinicie o Orca se o erro persistir.",
       "webTitle": "O Orca Web encontrou um erro de renderização.",
       "webDescription": "Tente novamente no cliente web ou reconecte-se ao runtime pareado."
+    },
+    "saving": {
+      "delayedTitle": "O armazenamento do perfil está demorando mais que o normal",
+      "delayedDescription": "Outros salvamentos podem demorar enquanto esta operação termina."
     }
   },
   "sidebar": {
@@ -1832,8 +1836,7 @@
         "title": "Provedores",
         "searchAgents": "agentes",
         "searchCli": "CLI",
-        "searchTerminal": "terminal",
-        "antigravityAccount": "Conta"
+        "searchTerminal": "terminal"
       },
       "permissionsDescriptionOwnAgents": "Novos chats seguem a permissão de cada agente em Configurações → Agentes.",
       "launch": {
@@ -3666,9 +3669,6 @@
             "runtime_last_close_reason": "Fechado: {{value0}}",
             "runtime_reconnect_attempt": "Tentativa {{value0}}",
             "runtime_workspace_window_closed": "Janela do espaço de trabalho fechada",
-            "connectedHostCount_one": "{{count}} host",
-            "connectedHostCount_other": "{{count}} hosts",
-            "connectedHostCount_many": "{{count}} hosts",
             "searchSshHosts": "Buscar hosts SSH…",
             "noMatchingSshHosts": "Nenhum host SSH encontrado.",
             "moreSshHostMatches_one": "Mais {{count}} resultado. Continue digitando para refinar a busca.",
@@ -22247,6 +22247,7 @@
         "paused": "Pausada",
         "replied": "{{actor}} respondeu",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "Executa uma vez às {{time}}",
         "thenLine": "Depois",
         "thenOnce": "Executa uma vez, quando acontecer",
         "thenOnceBy": "Executa uma vez; às {{time}} se nada chegar",
@@ -22355,24 +22356,9 @@
         "workflow": "Fluxo de trabalho",
         "monitor": "Monitor",
         "task": "Tarefa",
-        "taskCount_one": "{{count}} tarefa",
-        "taskCount_other": "{{count}} tarefas",
-        "taskCount_many": "{{count}} tarefas",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "commandCount_one": "{{count}} comando",
-        "commandCount_other": "{{count}} comandos",
-        "commandCount_many": "{{count}} comandos",
-        "workflowCount_one": "{{count}} fluxo de trabalho",
-        "workflowCount_other": "{{count}} fluxos de trabalho",
-        "workflowCount_many": "{{count}} fluxos de trabalho",
-        "monitorCount_one": "{{count}} monitor",
-        "monitorCount_other": "{{count}} monitores",
-        "monitorCount_many": "{{count}} monitores",
-        "agentCount_one": "{{count}} agente",
-        "agentCount_other": "{{count}} agentes",
-        "agentCount_many": "{{count}} agentes",
         "stoppedByYou": "Parado por você",
         "finished": "Concluído",
         "failedCount": "{{count}} com falha",
@@ -22387,18 +22373,13 @@
         "showQuestion": "Mostrar pergunta de {{name}}",
         "show": "Mostrar",
         "runningCount": "{{count}} em execução",
-        "cleared_one": "1 worker limpo",
-        "cleared_other": "{{count}} workers limpos",
-        "cleared_many": "{{count}} workers limpos",
         "stopAll": "Parar todos",
         "clearFailed": "Limpar workers com falha",
-        "pillLabel_one": "{{count}} worker, mais recente: {{title}}",
-        "pillLabel_other": "{{count}} workers, mais recente: {{title}}",
-        "pillLabel_many": "{{count}} workers, mais recente: {{title}}",
         "unlistedDetail": "Alguns trabalhos em segundo plano não estão listados aqui",
         "unlisted": "Trabalho em segundo plano em execução",
         "unread": "Não foi possível carregar os workers",
-        "unreadDetail": "Os workers aparecerão aqui quando forem carregados"
+        "unreadDetail": "Os workers aparecerão aqui quando forem carregados",
+        "chipLabel": "{{label}}, mais recente: {{title}}"
       },
       "automationSaved": {
         "resultsInRuns": "resultados em cada execução",
@@ -23728,22 +23709,16 @@
       "description": "Os agentes lá usam as contas padrão do Claude e do Codex da distribuição até que o Orca no WSL seja atualizado."
     },
     "antigravity": {
-      "chatSignIn": "Entrar",
-      "chatChangeAccount": "Trocar conta",
-      "chatRetry": "Tentar entrar novamente",
       "chatCancel": "Cancelar",
       "chatCopyLink": "Copiar link de login",
       "chatCopyFailed": "Não foi possível copiar o link.",
       "chatStarting": "Iniciando login…",
-      "chatWaiting": "Conclua o login no navegador.",
       "chatOpenFailed": "Copie o link e abra-o no navegador.",
       "chatVerifying": "Concluindo login…",
-      "chatPasteHelp": "Se a última página após o login não carregar, copie o endereço completo do navegador e cole aqui.",
       "chatContinue": "Continuar",
       "chatCancelled": "Login cancelado.",
       "chatExpired": "O tempo para entrar esgotou. Tente novamente.",
       "chatFailed": "Falha ao entrar. Tente novamente.",
-      "chatOtherClient": "O login está em andamento em outro cliente.",
       "chatReadFailed": "Não foi possível verificar o login em {{host}}.",
       "retry": "Tentar novamente",
       "changed": "A conta nativa mudou. Selecione uma conta salva novamente antes de iniciar o agy.",
@@ -23775,8 +23750,6 @@
       "enterpriseOption": "Licença da sua organização",
       "apiKeyGet": "Obter chave de API",
       "location": "Localização",
-      "enterpriseFieldsShort": "Informe um projeto e uma localização.",
-      "chatUseMethod": "Entre novamente para usar {{method}}",
       "loadFailed": "Não foi possível carregar as contas do agy",
       "loading": "Carregando contas…",
       "notSignedIn": "Não conectado",
@@ -23787,8 +23760,7 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "readAt": "Lido {{time}}",
-      "active": "Ativo",
-      "chatDescriptionKeyOnAgy": "Novos chats são executados no agy com o login abaixo, separado do agy no terminal."
+      "active": "Ativo"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
