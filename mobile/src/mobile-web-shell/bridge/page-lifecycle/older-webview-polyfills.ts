@@ -143,7 +143,12 @@ export function objectGroupBy<T>(
   keyOf: (item: T, index: number) => PropertyKey
 ): Partial<Record<PropertyKey, T[]>> {
   const result: Partial<Record<PropertyKey, T[]>> = Object.create(null)
-  for (const [key, group] of groupInto(items, keyOf)) {
+  // Property keys are strings or symbols, so 1 and "1" share a group, as in the built-in.
+  const propertyKeyOf = (item: T, index: number) => {
+    const key = keyOf(item, index)
+    return typeof key === 'symbol' ? key : String(key)
+  }
+  for (const [key, group] of groupInto(items, propertyKeyOf)) {
     result[key] = group
   }
   return result

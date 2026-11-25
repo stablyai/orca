@@ -53,6 +53,8 @@ describe('older WebView polyfills match the built-ins', () => {
     expect([...mapGroupBy(words, firstLetter)]).toEqual([...Map.groupBy(words, firstLetter)])
     expect(objectGroupBy(words, firstLetter)).toEqual(Object.groupBy(words, firstLetter))
     expect(Object.getPrototypeOf(objectGroupBy(words, firstLetter))).toBeNull()
+    const mixedKey = (value: number) => (value % 2 === 0 ? 1 : '1')
+    expect(objectGroupBy([1, 2, 3], mixedKey)).toEqual(Object.groupBy([1, 2, 3], mixedKey))
   })
 
   it('parses like URL.canParse', () => {
