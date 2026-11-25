@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { botItemQuestionLine, normalizeBotItemAsk } from './bot-item-ask'
+import { botItemAskText, botItemQuestionLine, normalizeBotItemAsk } from './bot-item-ask'
 
 describe('botItemQuestionLine', () => {
   it('skips a leading line that is only a Markdown mark', () => {
@@ -7,26 +7,23 @@ describe('botItemQuestionLine', () => {
   })
 })
 
-it('normalizes a written "(Recommended)" into the recommended flag, once', () => {
-  const ask = (labels: string[], recommended?: number, multi?: true) =>
-    normalizeBotItemAsk({
-      questions: [
-        {
-          prompt: 'Go?',
-          options: labels.map((label) => ({ label })),
-          ...(recommended === undefined ? {} : { recommended }),
-          ...(multi ? { multi } : {})
-        }
-      ]
-    }).questions[0]!
-  const labelsOf = (question: ReturnType<typeof ask>) => question.options.map((o) => o.label)
+const question = (labels: string[], recommended?: number, multi?: true) => ({
+  prompt: 'Go?',
+  options: labels.map((label) => ({ label })),
+  ...(recommended === undefined ? {} : { recommended }),
+  ...(multi ? { multi } : {})
+})
+const ask = (labels: string[], recommended?: number, multi?: true) =>
+  normalizeBotItemAsk({ questions: [question(labels, recommended, multi)] }).questions[0]!
+const labelsOf = (asked: ReturnType<typeof ask>) => asked.options.map((o) => o.label)
 
+it('normalizes a written "(Recommended)" into the recommended flag, once', () => {
   // Written and flagged: the flag stays, the label loses the words.
   const both = ask(['Go (Recommended)', 'Wait'], 0)
   expect(labelsOf(both)).toEqual(['Go', 'Wait'])
   expect(both.recommended).toBe(0)
   // Written only: the one marked option becomes the recommendation.
-  expect(ask(['Go', 'Wait [recommended]']).recommended).toBe(1)
+  expect(ask(['Go', 'Wait [recommended]'])).toMatchObject({ recommended: 1 })
   // The flag wins over words on another option.
   expect(ask(['Go', 'Wait (recommended)'], 0)).toMatchObject({ recommended: 0 })
   // Two written and no flag: no guess, and the words stay as the only hint.
@@ -35,66 +32,45 @@ it('normalizes a written "(Recommended)" into the recommended flag, once', () =>
   expect(two.recommended).toBeUndefined()
   // Two written with a flag: the flag decides, both labels are cleaned.
   expect(labelsOf(ask(['Go (Recommended)', 'Wait (Recommended)'], 1))).toEqual(['Go', 'Wait'])
-  // Words it would empty stay as written.
-  expect(labelsOf(ask(['(Recommended)', 'Wait']))).toEqual(['(Recommended)', 'Wait'])
-  // A mark with no other words still counts: two marked and no flag, nothing is guessed.
-  const bare = ask(['(Recommended)', 'Wait (Recommended)'])
-  expect(labelsOf(bare)).toEqual(['(Recommended)', 'Wait (Recommended)'])
-  expect(bare.recommended).toBeUndefined()
-  // Recommended inside a label, or in a mismatched pair, is its words.
-  expect(labelsOf(ask(['The recommended fix']))).toEqual(['The recommended fix'])
-  const mismatched = ask(['Go (recommended]', 'Wait'])
-  expect(labelsOf(mismatched)).toEqual(['Go (recommended]', 'Wait'])
-  expect(mismatched.recommended).toBeUndefined()
-  expect(labelsOf(ask(['Go [recommended)', 'Wait'], 1))).toEqual(['Go [recommended)', 'Wait'])
   // A mark written twice goes whole, and cleaning again changes nothing.
   const twice = ask(['Deploy (Recommended) [recommended]', 'Wait'])
   expect(labelsOf(twice)).toEqual(['Deploy', 'Wait'])
   expect(normalizeBotItemAsk({ questions: [twice] }).questions[0]).toEqual(twice)
+  // Pick several with no ", " in its labels is cleaned like pick one.
+  expect(ask(['Audit (Recommended)', 'Notify'], undefined, true)).toMatchObject({
+    options: [{ label: 'Audit' }, { label: 'Notify' }],
+    recommended: 0
+  })
 })
 
-it('keeps the words of options cleaning would make read alike', () => {
-  const ask = (labels: string[], recommended?: number, multi?: true) =>
-    normalizeBotItemAsk({
-      questions: [
-        {
-          prompt: 'Go?',
-          options: labels.map((label) => ({ label })),
-          ...(recommended === undefined ? {} : { recommended }),
-          ...(multi ? { multi } : {})
-        }
-      ]
-    }).questions[0]!
-  const labelsOf = (question: ReturnType<typeof ask>) => question.options.map((o) => o.label)
-
-  // A twin keeps its words, yet the recommendation is still read from them.
-  const twin = ask(['Go', 'Go (Recommended)'])
-  expect(labelsOf(twin)).toEqual(['Go', 'Go (Recommended)'])
-  expect(twin.recommended).toBe(1)
-  // Twins keep their words in either order; a sibling is still cleaned.
-  expect(labelsOf(ask(['Go (Recommended)', 'Go [recommended]', 'Wait (Recommended)'], 1))).toEqual([
+it('leaves words that are not a clean mark, or a label cleaning would confuse, as written', () => {
+  const asWritten = (labels: string[], recommended?: number, multi?: true) =>
+    expect(ask(labels, recommended, multi)).toEqual(question(labels, recommended, multi))
+  // Recommended inside a label, in a mismatched pair, or with no space before it is its words.
+  asWritten(['The recommended fix', 'Wait'])
+  asWritten(['Go (recommended]', 'Wait'])
+  asWritten(['Go [recommended)', 'Wait'], 1)
+  asWritten(['Go(Recommended)', 'Wait'])
+  // Words it would empty.
+  asWritten(['(Recommended)', 'Wait'])
+  asWritten(['(Recommended)', 'Wait (Recommended)'])
+  // A twin, in either order, by its words or as answers send it (spacing folded); no recommendation
+  // is read from words that stay.
+  asWritten(['Go', 'Go (Recommended)'])
+  asWritten(['Go (Recommended)', 'Go [recommended]'], 1)
+  asWritten(['Go [recommended]', 'Go (Recommended)'], 0)
+  asWritten(['Deploy (Recommended) (Recommended)', 'Deploy'], 1)
+  asWritten(['Ship  now (Recommended)', 'Ship now'])
+  // Pick several whose labels hold ", ": its picks are joined that way.
+  asWritten(['Audit', 'Notify', 'Audit, Notify (Recommended)'], undefined, true)
+  asWritten(['Audit (Recommended)', 'Notify', 'Audit, Notify'], 0, true)
+  asWritten(['A, B (Recommended)', 'C', 'A', 'B, C'], undefined, true)
+  asWritten(['Audit,  Notify (Recommended)', 'Audit', 'Notify'], undefined, true)
+  // Twins keep their words while a sibling is still cleaned.
+  expect(labelsOf(ask(['Go (Recommended)', 'Go [recommended]', 'Wait (Recommended)'], 2))).toEqual([
     'Go (Recommended)',
     'Go [recommended]',
     'Wait'
-  ])
-  expect(labelsOf(ask(['Go [recommended]', 'Go (Recommended)', 'Wait (Recommended)'], 0))).toEqual([
-    'Go [recommended]',
-    'Go (Recommended)',
-    'Wait'
-  ])
-  // Not the phone's twin either: it drops one "(Recommended)" from a label itself.
-  expect(labelsOf(ask(['Deploy (Recommended) (Recommended)', 'Deploy'], 1))).toEqual([
-    'Deploy (Recommended) (Recommended)',
-    'Deploy'
-  ])
-  // Pick several: a label that would read like two siblings sent together keeps every label's words.
-  const joined = ask(['Audit', 'Notify', 'Audit, Notify (Recommended)'], undefined, true)
-  expect(labelsOf(joined)).toEqual(['Audit', 'Notify', 'Audit, Notify (Recommended)'])
-  expect(joined.recommended).toBe(2)
-  expect(labelsOf(ask(['Audit (Recommended)', 'Notify', 'Audit, Notify'], 0, true))).toEqual([
-    'Audit (Recommended)',
-    'Notify',
-    'Audit, Notify'
   ])
   // Pick one: the same labels are cleaned, since its answer is one label.
   expect(labelsOf(ask(['Audit', 'Notify', 'Audit, Notify (Recommended)']))).toEqual([
@@ -102,4 +78,22 @@ it('keeps the words of options cleaning would make read alike', () => {
     'Notify',
     'Audit, Notify'
   ])
+})
+
+it('never makes the ask text longer than written', () => {
+  const cases: [string[], number?][] = [
+    [['Go (Recommended)', 'Wait']],
+    [['Go [recommended]', 'Wait']],
+    [['Go (Recommended)', 'Wait'], 1],
+    [['Go (  recommended )', 'Wait (Recommended)'], 0],
+    [['Deploy (Recommended) (Recommended)', 'Wait']],
+    [['Go', 'Go (Recommended)']],
+    [['Go(Recommended)', 'Wait']]
+  ]
+  for (const [labels, recommended] of cases) {
+    const written = { questions: [question(labels, recommended)] }
+    expect(botItemAskText(normalizeBotItemAsk(written)).length).toBeLessThanOrEqual(
+      botItemAskText(written).length
+    )
+  }
 })

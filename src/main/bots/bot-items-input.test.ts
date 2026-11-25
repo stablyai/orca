@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest'
-import { botItemPickedReplies, botItemQuestionShape } from '../../shared/bots/bot-item-ask'
+import {
+  botItemAskText,
+  botItemPickedReplies,
+  botItemQuestionShape
+} from '../../shared/bots/bot-item-ask'
 import { BOT_ITEM_LIMITS } from '../../shared/bots/bot-items'
 import { botItemCommentData } from './bot-items-input'
 
@@ -45,30 +49,30 @@ it('stores a flagged and written ask with one mark, read back as the reply it po
   ])
 })
 
-it('takes an ask that fit as written even when a read recommendation would not', () => {
-  const ask = (recommended?: number) => ({
-    context: 'x'.repeat(BOT_ITEM_LIMITS.text - 45),
-    questions: [
-      {
-        prompt: 'Choose?',
-        options: [{ label: 'Close' }, { label: 'Close (Recommended)' }],
-        ...(recommended === undefined ? {} : { recommended })
-      }
-    ]
-  })
-  const asWritten = botItemCommentData(undefined, ask())
-  expect(asWritten.text).toHaveLength(BOT_ITEM_LIMITS.text)
-  expect(asWritten.ask?.questions[0]).toEqual(ask().questions[0])
-  // A flag on the other option notes it, as it always did; the twin keeps its words.
-  const flagged = botItemCommentData(undefined, {
-    ...ask(0),
-    context: 'x'.repeat(BOT_ITEM_LIMITS.text - 59)
-  })
-  expect(flagged.text).toHaveLength(BOT_ITEM_LIMITS.text)
-  expect(flagged.ask?.questions[0]).toEqual(ask(0).questions[0])
-  expect(flagged.text.endsWith('   - Close (recommended)\n   - Close (Recommended)')).toBe(true)
-  // Too long as written is still refused.
-  expect(() => botItemCommentData(undefined, { ...ask(), context: `${ask().context}xx` })).toThrow(
-    /limit/
+it("takes an exact-limit ask, keeping each question's own recommendation", () => {
+  const questions = [
+    {
+      prompt: 'Merge?',
+      options: [{ label: 'Merge now (Recommended)' }, { label: 'Wait' }],
+      recommended: 0
+    },
+    { prompt: 'Choose?', options: [{ label: 'Close' }, { label: 'Close (Recommended)' }] },
+    { prompt: 'Notify?', options: [{ label: 'Yes [recommended]' }, { label: 'No' }] }
+  ]
+  const written = { questions }
+  const context = (extra: number) =>
+    'x'.repeat(BOT_ITEM_LIMITS.text - botItemAskText(written).length - 2 + extra)
+  const data = botItemCommentData(undefined, { context: context(0), questions })
+  expect(data.text.length).toBeLessThanOrEqual(BOT_ITEM_LIMITS.text)
+  expect(data.ask?.questions).toEqual([
+    { prompt: 'Merge?', options: [{ label: 'Merge now' }, { label: 'Wait' }], recommended: 0 },
+    // A twin keeps its words and no recommendation is read from them.
+    questions[1],
+    { prompt: 'Notify?', options: [{ label: 'Yes' }, { label: 'No' }], recommended: 0 }
+  ])
+  // The stored text is what is checked: one cleaned mark's room is taken, and past it is refused.
+  expect(botItemCommentData(undefined, { context: context(14), questions }).text).toHaveLength(
+    BOT_ITEM_LIMITS.text
   )
+  expect(() => botItemCommentData(undefined, { context: context(15), questions })).toThrow(/limit/)
 })
