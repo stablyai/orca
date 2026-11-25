@@ -2,6 +2,7 @@ import {
   promptPublicationFor,
   type PromptPublication
 } from '../external-conversations/external-conversation-prompt-publication'
+import { FeishuNativeFeed } from './feishu-native-feed'
 import { FeishuAsyncQuestions } from './feishu-async-questions'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
@@ -19,6 +20,7 @@ import { FeishuCardDelivery } from './feishu-card-delivery'
 import { readFeishuClick } from './feishu-card-events'
 
 export class FeishuInteractions {
+  private readonly native: FeishuNativeFeed
   readonly cards: FeishuCardDelivery
   private events: Promise<void> = Promise.resolve()
   private readonly asyncQuestions: FeishuAsyncQuestions
@@ -30,6 +32,7 @@ export class FeishuInteractions {
     private readonly active: () => boolean,
     private readonly wake: () => void
   ) {
+    this.native = new FeishuNativeFeed(runtime, store, b, signal, active, wake)
     this.cards = new FeishuCardDelivery(store, b, signal, active)
     this.asyncQuestions = new FeishuAsyncQuestions(runtime, store, b, signal, active, wake)
   }
@@ -90,6 +93,9 @@ export class FeishuInteractions {
     }
     if (event.kind === 'snapshot') {
       for (const entry of event.conversations) {
+        if (entry.working) {
+          this.native.track(entry.conversation.externalId)
+        }
         await this.record(
           {
             ...entry,
@@ -115,6 +121,13 @@ export class FeishuInteractions {
       return
     }
     this.asyncQuestions.track(externalId)
+    if (
+      event.kind === 'turn-started' ||
+      event.kind === 'activity' ||
+      (event.kind === 'prompt' && event.prompt.kind !== 'unsupported')
+    ) {
+      this.native.track(externalId)
+    }
     if (event.kind === 'prompt') {
       const prompt = event.prompt
       const supported =
@@ -210,6 +223,7 @@ export class FeishuInteractions {
     this.cards.name = botName
     await this.events
     await this.asyncQuestions.flush()
+    await this.native.flush()
     const b = this.b
     for (const card of await this.store.pendingCards(b.account)) {
       if (!this.active()) {

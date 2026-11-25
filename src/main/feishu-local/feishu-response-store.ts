@@ -46,10 +46,38 @@ export class FeishuResponseStore {
       return null
     }
     // A late activity, reconnect snapshot or retried progress must never reopen a final answer.
-    if (response.final !== undefined) {
+    if (response.final !== undefined && change.kind !== 'native') {
       return id
     }
     switch (change.kind) {
+      case 'native':
+        if (
+          response.native &&
+          (change.value.startedAt < response.native.startedAt ||
+            (response.final !== undefined &&
+              change.value.turnItemId !== response.native.turnItemId))
+        ) {
+          return id
+        }
+        const previous =
+          response.native?.turnItemId === change.value.turnItemId ? response.native : undefined
+        if (previous?.completedAt !== undefined && change.value.completedAt === undefined) {
+          return id
+        }
+        response.native = {
+          ...change.value,
+          tools: [
+            ...new Map(
+              [...(previous?.tools ?? []), ...change.value.tools].map((t) => [t.id, t])
+            ).values()
+          ].slice(-60),
+          messages: [
+            ...new Map(
+              [...(previous?.messages ?? []), ...change.value.messages].map((m) => [m.id, m])
+            ).values()
+          ].slice(-20)
+        }
+        break
       case 'begin':
         break
       case 'start':

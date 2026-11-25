@@ -14,7 +14,9 @@ const row = z.object({
   state: z.enum(['open', 'claimed', 'closed']),
   selected: z.string().nullable(),
   first_post: z.number().nullable(),
-  review: z.number()
+  review: z.number(),
+  cardkit: z.string().nullable(),
+  cardkit_sequence: z.number()
 })
 export type FeishuCardRow = z.infer<typeof row>
 
@@ -25,6 +27,29 @@ export class FeishuCardStore {
       body TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 1,sent INTEGER NOT NULL DEFAULT 0,
       state TEXT NOT NULL DEFAULT 'open',selected TEXT,first_post INTEGER,review INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY(account,id),UNIQUE(account,message));`)
+    const columns = db.prepare('PRAGMA table_info(feishu_cards)').all()
+    if (!columns.some((c) => c.name === 'cardkit')) {
+      db.exec(
+        'ALTER TABLE feishu_cards ADD COLUMN cardkit TEXT; ALTER TABLE feishu_cards ADD COLUMN cardkit_sequence INTEGER NOT NULL DEFAULT 0'
+      )
+    }
+  }
+  cardkit(account: string, id: string, entity: string) {
+    this.db
+      .prepare('UPDATE feishu_cards SET cardkit=? WHERE account=? AND id=? AND cardkit IS NULL')
+      .run(entity, account, id)
+  }
+  sequence(account: string, id: string) {
+    this.db
+      .prepare(
+        'UPDATE feishu_cards SET cardkit_sequence=cardkit_sequence+1 WHERE account=? AND id=?'
+      )
+      .run(account, id)
+    const card = this.get(account, id)
+    if (!card?.cardkit) {
+      throw new Error('CardKit entity missing')
+    }
+    return card.cardkit_sequence
   }
   put(
     account: string,

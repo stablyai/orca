@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { nativeResponse, type FeishuNativeResponse } from './feishu-native-data'
 
 export const cardData = z.object({
   kind: z.enum(['status', 'prompt', 'choices', 'async-question', 'response']),
@@ -15,7 +16,8 @@ export const cardData = z.object({
       phase: z.enum(['working', 'done', 'failed']),
       progress: z.array(z.object({ id: z.string(), text: z.string() })),
       trace: z.array(z.string()),
-      final: z.string().optional()
+      final: z.string().optional(),
+      native: nativeResponse.optional()
     })
     .optional()
 })
@@ -23,6 +25,7 @@ export type FeishuCardData = z.infer<typeof cardData>
 
 export type FeishuResponseChange =
   | { kind: 'begin' }
+  | { kind: 'native'; value: FeishuNativeResponse }
   | { kind: 'start'; turn: number }
   | { kind: 'status'; text: string; turn?: number | null }
   | { kind: 'trace'; text: string; turn: number }

@@ -50,6 +50,8 @@ export class FeishuInbox {
   laneRoute(account: string, external: string) {
     return this.routes.lane(account, external)
   }
+  cardkit = (...args: Parameters<FeishuCardStore['cardkit']>) => this.cards.cardkit(...args)
+  cardSequence = (...args: Parameters<FeishuCardStore['sequence']>) => this.cards.sequence(...args)
   getCard = (...args: Parameters<FeishuCardStore['get']>) => this.cards.get(...args)
   updateResponse = (...args: Parameters<FeishuResponseStore['update']>) =>
     this.responses.update(...args)

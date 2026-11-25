@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { FeishuCardKit } from './feishu-cardkit'
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 import { cardData } from './feishu-card-data'
@@ -8,6 +9,7 @@ import { feishuCommand } from './feishu-cli'
 import { replyFeishu } from './feishu-replies'
 
 export class FeishuCardDelivery {
+  private readonly cardkit: FeishuCardKit
   private writes: Promise<unknown> = Promise.resolve()
   name = 'Orca'
   constructor(
@@ -15,7 +17,9 @@ export class FeishuCardDelivery {
     private readonly b: Binding,
     private readonly signal: AbortSignal,
     private readonly active: () => boolean
-  ) {}
+  ) {
+    this.cardkit = new FeishuCardKit(store, b, signal)
+  }
 
   publish(id: string): Promise<string | null> {
     const next = this.writes.catch(() => {}).then(() => this.write(id))
@@ -44,7 +48,9 @@ export class FeishuCardDelivery {
         ? feishuResponseCard(data, this.name)
         : feishuControlCard(data, this.name, card.state === 'open')
     let message = card.message
-    if (message) {
+    if (data.kind === 'response' && (card.cardkit || !message)) {
+      message = await this.cardkit.write(card, data, this.name)
+    } else if (message) {
       const result = await feishuCommand(
         [
           '--profile',
