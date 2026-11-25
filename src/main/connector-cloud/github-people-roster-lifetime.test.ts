@@ -48,7 +48,7 @@ describe('the one roster read per app run, on the real gh runner', () => {
     vi.useRealTimers()
   })
 
-  it('kills a slow read at the deadline and never starts another child, whatever its end', async () => {
+  it('asks a slow read to stop at the deadline and never admits another read, whatever its end', async () => {
     const first = child(11)
     spawnMock.mockReturnValueOnce(first)
     const rosters = new GitHubPeopleRosters()
@@ -60,7 +60,8 @@ describe('the one roster read per app run, on the real gh runner', () => {
     // The group is still reported alive: the caller gets its answer anyway...
     await vi.advanceTimersByTimeAsync(5 * 60_000)
     expect(await slow).toEqual({ status: 'unavailable', spent: true })
-    // ...and no later request, for any scope, starts a second child, before or after it closes.
+    // ...and no later request, for any scope, is admitted as another read (so nothing else spawns),
+    // before or after it closes.
     expect(await rosters.read(repos('c/d'), 'owner')).toEqual({
       status: 'unavailable',
       spent: true

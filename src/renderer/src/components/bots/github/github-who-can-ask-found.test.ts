@@ -74,9 +74,12 @@ describe('the GitHub picker’s reading of a search', () => {
     expect(labels({ repositories: true, organizations: false })?.scoped).toBe('Your repos')
     expect(labels({ repositories: false, organizations: true })).toEqual({
       scoped: 'Your orgs',
-      outsideTag: 'Not in your repo list'
+      outsideTag: 'Not in your org list'
     })
-    expect(labels({ repositories: true, organizations: true })?.scoped).toBe('Your repos and orgs')
+    expect(labels({ repositories: true, organizations: true })).toEqual({
+      scoped: 'Your repos and orgs',
+      outsideTag: 'Not in your GitHub list'
+    })
   })
 
   it('explains each kind of fixed cut, and an omission, without advising typing', () => {

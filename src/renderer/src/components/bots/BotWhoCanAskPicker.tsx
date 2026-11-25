@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
@@ -12,93 +12,13 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { BOT_MAX_MEMBERS, type Bot, type BotMember } from '../../../../shared/bot-types'
 import { BotMemberAvatar, BotOwnerAvatar } from './bot-connector-people'
-import type {
-  BotWhoCanAskFound,
-  BotWhoCanAskService,
-  BotWhoCanAskSession
-} from './BotWhoCanAskList'
-import type { BotSlackResult } from '../../../../shared/connector-bot-slack-contract'
+import type { BotWhoCanAskFound, BotWhoCanAskService } from './BotWhoCanAskList'
+import { useWhoCanAskSearch } from './use-who-can-ask-search'
 
-const SEARCH_DEBOUNCE_MS = 250
 // How close to a service's cap the picker starts showing it while people are ticked.
 const NEAR_CAP = 5
 
-type Search =
-  | { status: 'loading' }
-  | { status: 'ready'; found: BotWhoCanAskFound }
-  | { status: 'failed'; error: string }
-
 type Found = BotWhoCanAskFound['members'][number]
-
-function useMemberSearch(
-  service: BotWhoCanAskService,
-  query: string
-): { search: Search; retry: () => void; retryInPlace: () => void } {
-  const [search, setSearch] = useState<Search>({ status: 'loading' })
-  // Try again starts a fresh session (and with it a fresh read of what the service lists).
-  const [session, setSession] = useState(0)
-  const { errorMessage } = service
-  // One search session per picker open, kept across keystrokes.
-  const active = useMemo(
-    (): BotWhoCanAskSession =>
-      session >= 0 && service.begin ? service.begin() : { search: service.search },
-    [service, session]
-  )
-  // Bumped whenever the query or session changes, or the picker closes: an in-place retry paints
-  // only if nothing changed since it was asked for (it never repaints an old query).
-  const generation = useRef(0)
-  useEffect(() => {
-    generation.current += 1
-    let current = true
-    const show = (result: BotSlackResult<BotWhoCanAskFound>): void => {
-      if (current) {
-        setSearch(
-          result.ok
-            ? { status: 'ready', found: result.value }
-            : { status: 'failed', error: errorMessage(result.error) }
-        )
-      }
-    }
-    setSearch({ status: 'loading' })
-    // When more of the search lands (a list still loading), ask again for this same query in
-    // place: the rows stay up until the fuller answer replaces them. One listener per query,
-    // dropped when the query changes or the picker closes.
-    const stopWatching =
-      active.onUpdate?.(() => {
-        if (current) {
-          void active.search(query.trim()).then(show)
-        }
-      }) ?? (() => {})
-    const timer = setTimeout(() => {
-      void active.search(query.trim()).then(show)
-    }, SEARCH_DEBOUNCE_MS)
-    return () => {
-      current = false
-      generation.current += 1
-      clearTimeout(timer)
-      stopWatching()
-    }
-  }, [active, errorMessage, query])
-  return {
-    search,
-    retry: () => setSession((count) => count + 1),
-    // Try again for a part that failed: the same query asked once more, in place (no
-    // "Searching…"), so the rows, picks and count stay until its answer replaces the rows.
-    retryInPlace: () => {
-      const asked = generation.current
-      active.retry?.()
-      void active.search(query.trim()).then((result) => {
-        if (generation.current === asked) {
-          setSearch(
-            result.ok
-              ? { status: 'ready', found: result.value }
-              : { status: 'failed', error: errorMessage(result.error) }
-          )
-        }
-      })
-    }
-  }
-}
 
 const matches = (name: string, needle: string): boolean =>
   needle === '' || name.toLowerCase().includes(needle)
@@ -161,35 +81,48 @@ export function BotWhoCanAskPicker({
 }): React.JSX.Element {
   const t = useTranslate()
   const [query, setQuery] = useState('')
-  const [picked, setPicked] = useState<BotMember[]>([])
-  // A ticked person's row label and real name, so they look the same and a search by their real
-  // name still shows them once they scroll off.
-  const [pickedLabels, setPickedLabels] = useState<
-    Readonly<Record<string, { label?: string; name?: string }>>
-  >({})
-  const { search, retry, retryInPlace } = useMemberSearch(service, query)
-  const needle = query.trim().toLowerCase()
+  const [ticked, setTicked] = useState<BotMember[]>([])
+  // A ticked person's real name, part of who they are: Selected shows it beside them, and a
+  // search by it still finds them once they scroll off. A row's source tag is never kept.
+  const [realNames, setRealNames] = useState<Readonly<Record<string, string>>>({})
+  const { search, identities, retrying, retry, retryInPlace } = useWhoCanAskSearch(service, query)
+  const typed = query.trim()
+  const needle = (service.normalizeQuery?.(typed) ?? typed).toLowerCase()
   const listed = service.listed(bot.members)
   const added = new Set(listed.map((member) => member.id))
+  const isOwner = (id: string): boolean =>
+    id === service.ownerId || (service.otherOwnerIds?.includes(id) ?? false)
+  // The picks as they stand now: anyone since listed, linked as the owner, or shown by a live
+  // answer to be someone else is left out of the count, the cap and the grant; a live answer's
+  // login replaces the one they were picked by. Everyone else stays picked.
+  const picked = ticked
+    .filter(
+      (member) => !added.has(member.id) && !isOwner(member.id) && !identities.retired.has(member.id)
+    )
+    .map((member) => {
+      const name = identities.names[member.id]
+      return name && name !== member.name ? { ...member, name } : member
+    })
   const full =
     bot.members.length + picked.length >= BOT_MAX_MEMBERS ||
     added.size + picked.length >= service.max
   const isPicked = (id: string): boolean => picked.some((entry) => entry.id === id)
-  const toggle = (member: BotMember, label?: string, realName?: string): void => {
-    const known = pickedLabels[member.id]
-    if ((label || realName) && (known?.label !== label || known?.name !== realName)) {
-      setPickedLabels((current) => ({ ...current, [member.id]: { label, name: realName } }))
+  const toggle = (member: BotMember, realName?: string): void => {
+    if (realName && realNames[member.id] !== realName) {
+      setRealNames((current) => ({ ...current, [member.id]: realName }))
     }
-    setPicked((current) =>
-      isPicked(member.id) ? current.filter((entry) => entry.id !== member.id) : [...current, member]
+    setTicked((current) =>
+      isPicked(member.id)
+        ? current.filter((entry) => entry.id !== member.id)
+        : [...current.filter((entry) => entry.id !== member.id), member]
     )
   }
 
   const found = search.status === 'ready' ? search.found.members : []
   const handles = new Map(found.map((person) => [person.id, person.handle]))
-  const isOwner = (id: string): boolean =>
-    id === service.ownerId || (service.otherOwnerIds?.includes(id) ?? false)
-  const addable = found.filter((person) => !added.has(person.id) && !isOwner(person.id))
+  const addable = found.filter(
+    (person) => !added.has(person.id) && !isOwner(person.id) && !identities.retired.has(person.id)
+  )
   const withAccess = listed.filter(
     (member) => matches(member.name || member.id, needle) || found.some((p) => p.id === member.id)
   )
@@ -207,12 +140,9 @@ export function BotWhoCanAskPicker({
   const note = search.status === 'ready' ? search.found.note : undefined
   const labels = search.status === 'ready' ? search.found.labels : undefined
 
-  /** `handle`: the muted text beside the name; `realName`: what else a search may match them by. */
-  const pickRow = (
-    member: BotMember,
-    handle?: string,
-    realName: string | undefined = handle
-  ): React.JSX.Element => {
+  /** `beside`: the muted text after the name; `realName`: who they are besides their login, kept
+   *  with the pick (a source tag beside them is not). */
+  const pickRow = (member: BotMember, beside?: string, realName?: string): React.JSX.Element => {
     const on = isPicked(member.id)
     return (
       <CommandItem
@@ -220,7 +150,7 @@ export function BotWhoCanAskPicker({
         value={member.id}
         aria-checked={on}
         disabled={full && !on}
-        onSelect={() => toggle(member, handle, realName)}
+        onSelect={() => toggle(member, realName)}
         className="group/person"
       >
         <Checkbox checked={on} tabIndex={-1} aria-hidden className="pointer-events-none" />
@@ -228,7 +158,7 @@ export function BotWhoCanAskPicker({
         <span className="size-6 shrink-0 rounded-full group-data-[selected=true]/person:ring-1 group-data-[selected=true]/person:ring-border">
           <BotMemberAvatar member={member} />
         </span>
-        <PersonLabel name={member.name || member.id} handle={handle} />
+        <PersonLabel name={member.name || member.id} handle={beside} />
       </CommandItem>
     )
   }
@@ -237,27 +167,38 @@ export function BotWhoCanAskPicker({
   const offScreen = picked.filter(
     (member) =>
       !addable.some((person) => person.id === member.id) &&
-      (matches(member.name || member.id, needle) ||
-        matches(pickedLabels[member.id]?.name ?? '', needle))
+      (matches(member.name || member.id, needle) || matches(realNames[member.id] ?? '', needle))
   )
   const selectedGroup =
     offScreen.length > 0 ? (
       <CommandGroup heading={t('bots.whoCanAsk.selectedHeading', 'Selected')}>
-        {offScreen.map((member) =>
-          pickRow(member, pickedLabels[member.id]?.label, pickedLabels[member.id]?.name)
-        )}
+        {offScreen.map((member) => pickRow(member, realNames[member.id], realNames[member.id]))}
       </CommandGroup>
     ) : null
 
-  // Asks a failed part of this search again in place; the query, rows and picks stay.
+  // Asks a failed part of this search again in place; the query, rows and picks stay. Enter is
+  // the button's own (the list would take it as picking the highlighted row).
   const retryAction =
     search.status === 'ready' && search.found.retryable ? (
-      <Button size="xs" variant="outline" onClick={retryInPlace}>
+      <Button
+        size="xs"
+        variant="outline"
+        disabled={retrying}
+        onClick={retryInPlace}
+        onKeyDown={(event) => event.stopPropagation()}
+      >
         {t('bots.whoCanAsk.retry', 'Try again')}
       </Button>
     ) : null
+  // The username check is still out and nothing else shows: not an answer yet.
+  const pending =
+    search.status === 'ready' &&
+    search.found.pending === true &&
+    addable.length === 0 &&
+    offScreen.length === 0
   const noMatch =
     !idle &&
+    !pending &&
     search.status === 'ready' &&
     addable.length === 0 &&
     withAccess.length === 0 &&
@@ -266,7 +207,7 @@ export function BotWhoCanAskPicker({
     offScreen.length === 0
   // A note on what the search couldn't cover replaces a hint or empty result's usual detail.
   const peopleGroup = idle ? (
-    <PickerNote title={idle.title} detail={note ?? idle.detail} />
+    <PickerNote title={idle.title} detail={note ?? idle.detail} action={retryAction} />
   ) : search.status === 'failed' ? (
     <div role="alert" className="flex items-center gap-2 p-3 text-sm">
       <span className="min-w-0 flex-1 text-destructive">{search.error}</span>
@@ -274,7 +215,7 @@ export function BotWhoCanAskPicker({
         {t('bots.whoCanAsk.retry', 'Try again')}
       </Button>
     </div>
-  ) : search.status === 'loading' ? (
+  ) : search.status === 'loading' || pending ? (
     <p role="status" className="p-3 text-sm text-muted-foreground">
       {t('bots.whoCanAsk.searching', 'Searching…')}
     </p>
@@ -282,7 +223,7 @@ export function BotWhoCanAskPicker({
     <>
       {scoped.length > 0 ? (
         <CommandGroup heading={labels?.scoped ?? service.scopedHeading ?? service.peopleHeading}>
-          {scoped.map((person) => pickRow(asMember(person, service), person.handle))}
+          {scoped.map((person) => pickRow(asMember(person, service), person.handle, person.handle))}
         </CommandGroup>
       ) : null}
       {unsorted.length > 0 ? (

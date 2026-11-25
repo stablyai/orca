@@ -60,7 +60,7 @@ describe('one Add picker open on GitHub', () => {
     expect(users.mock.calls.map(([args]) => args.query)).toEqual(['bren', 'hong'])
   })
 
-  it('answers while the roster is slow, tells its one listener once, and never repeats the exact lookup', async () => {
+  it('answers while the roster is slow, tells only its current listener, and never repeats the exact lookup', async () => {
     const slow = deferred<BotSlackResult<BotGitHubRoster>>()
     const users = vi.fn(async (_args: { query: string }): Promise<Users> => stranger)
     const session = gitHubWhoCanAskSession(
@@ -74,20 +74,48 @@ describe('one Add picker open on GitHub', () => {
     const first = session.search('brennan')
     await vi.advanceTimersByTimeAsync(ROSTER_WAIT_MS)
     expect(names(await first)).toEqual(['brennan'])
+    const toldBefore = told.mock.calls.length
     slow.resolve({ ok: true, value: roster })
     await vi.advanceTimersByTimeAsync(0)
-    // Only the latest listener is told, and only once.
+    // Only the latest listener is told: the lookup landing, then the roster.
     expect(replaced).not.toHaveBeenCalled()
-    expect(told).toHaveBeenCalledOnce()
+    expect(told).toHaveBeenCalledTimes(toldBefore + 1)
     expect(names(await session.search('brennan'))).toEqual(['brennanb2025', 'brennan'])
     expect(users).toHaveBeenCalledOnce()
-    // A changed query still gets its own exact answer.
+    // A changed query still gets its own exact answer; a listener that left hears nothing.
+    session.onUpdate?.(vi.fn())()
     await session.search('jinwoo')
+    await vi.advanceTimersByTimeAsync(0)
     expect(users.mock.calls.map(([args]) => args.query)).toEqual(['brennan', 'jinwoo'])
-    // Once the roster is in, a listener has nothing to wait for.
-    const late = vi.fn()
-    session.onUpdate?.(late)()
-    expect(late).not.toHaveBeenCalled()
+    expect(told).toHaveBeenCalledTimes(toldBefore + 1)
+  })
+
+  it('answers with the read list at once and tells the listener when the lookup lands, not an older one', async () => {
+    const maya = deferred<Users>()
+    const lee = deferred<Users>()
+    const users = vi.fn(({ query }: { query: string }) =>
+      query === 'brennan' ? maya.promise : lee.promise
+    )
+    const session = gitHubWhoCanAskSession(
+      { people: async () => ({ ok: true, value: roster }), users },
+      { scope, ownerLogin: 'owner', producer: 'local', t }
+    )
+    await session.search('')
+    const told = vi.fn()
+    session.onUpdate?.(told)
+    const early = await session.search('brennan')
+    expect(names(early)).toEqual(['brennanb2025'])
+    expect(early.ok && early.value.pending).toBe(true)
+    await session.search('jinwoo')
+    // The replaced lookup lands: nobody is told.
+    maya.resolve(stranger)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(told).not.toHaveBeenCalled()
+    lee.resolve(noOne)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(told).toHaveBeenCalledOnce()
+    const settled = await session.search('jinwoo')
+    expect(settled.ok && settled.value.pending).toBeUndefined()
   })
 
   it('keeps no search waiting on the roster past its deadline, however many queries are typed', async () => {

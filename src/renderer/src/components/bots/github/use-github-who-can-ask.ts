@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useBotHostLabel } from '../use-bot-host-label'
 import { useBotGitHubRead } from '@/lib/bot-github-state'
@@ -13,7 +13,7 @@ import { gitHubLinkedAccounts } from '../../../../../shared/connector-bot-github
 import { CONNECTOR_CLIENT_LIMITS } from '../../../../../shared/connectors/connector-cloud-contract'
 import type { BotWhoCanAskService } from '../BotWhoCanAskList'
 import { botGitHubErrorMessage } from './bot-github-copy'
-import { gitHubWhoCanAskSession } from './github-who-can-ask-session'
+import { gitHubSearchTerm, gitHubWhoCanAskSession } from './github-who-can-ask-session'
 import {
   gitHubPeopleScope,
   type GitHubPeopleScope
@@ -37,12 +37,15 @@ export function useGitHubWhoCanAsk(
     logins[0]
   const ownerId = shown?.userId ?? null
   const ownerName = shown?.login ?? null
+  // Everything below is keyed by content: a state refresh hands over equal new objects, which
+  // must not rebuild the service, restart the search or drop what it has read.
+  const otherOwnersKey = logins
+    .filter((entry) => entry.userId !== ownerId)
+    .map((entry) => entry.userId)
+    .join('\n')
   const otherOwnerIds = useMemo(
-    () =>
-      (github ? gitHubLinkedAccounts(github) : [])
-        .filter((entry) => entry.userId !== ownerId)
-        .map((entry) => entry.userId),
-    [github, ownerId]
+    () => (otherOwnersKey === '' ? [] : otherOwnersKey.split('\n')),
+    [otherOwnersKey]
   )
   // One list is read for every row, so it is keyed by the first linked login, not this row's.
   const rosterOwner = logins[0]?.login ?? null
@@ -62,8 +65,10 @@ export function useGitHubWhoCanAsk(
     [scopeKey]
   )
   const withOrganizations = (scope?.owners.length ?? 0) > 0
-  return useMemo((): BotWhoCanAskService => {
-    const session = () =>
+  // One search session per picker open, rebuilt only when what it reads for changes (host, scope,
+  // linked logins), so a refresh or a change of who is the owner keeps it.
+  const session = useCallback(
+    () =>
       gitHubWhoCanAskSession(botGitHubCalls(hostId), {
         scope,
         ownerLogin: rosterOwner,
@@ -73,7 +78,18 @@ export function useGitHubWhoCanAsk(
         producer:
           hostId === LOCAL_EXECUTION_HOST_ID && !isPairedWebClientWindow() ? 'local' : 'remote',
         t
-      })
+      }),
+    [hostId, scope, rosterOwner, linkedLogins, t]
+  )
+  const search = useCallback<BotWhoCanAskService['search']>(
+    (query) => session().search(query),
+    [session]
+  )
+  const errorMessage = useCallback(
+    (code: string) => botGitHubErrorMessage(code, hostName),
+    [hostName]
+  )
+  return useMemo((): BotWhoCanAskService => {
     return {
       listed: (members) =>
         installationId === undefined
@@ -84,11 +100,12 @@ export function useGitHubWhoCanAsk(
           ? { source: 'github' }
           : { source: 'github', workspaceId: installationId },
       max: CONNECTOR_CLIENT_LIMITS.maxBotWorkspaceMembers,
-      search: (query) => session().search(query),
+      search,
       // One roster read per picker open, filtered as the owner types.
-      begin: () => session(),
-      errorMessage: (code) => botGitHubErrorMessage(code, hostName),
+      begin: session,
+      errorMessage,
       searchPlaceholder: t('bots.github.whoCanAsk.searchPeople', 'Search by name or username'),
+      normalizeQuery: gitHubSearchTerm,
       peopleHeading: t('bots.github.whoCanAsk.found', 'People on GitHub'),
       scopedHeading: withOrganizations
         ? t('bots.github.whoCanAsk.foundInReposAndOrgs', 'Found in your repos and orgs')
@@ -123,16 +140,14 @@ export function useGitHubWhoCanAsk(
       )
     }
   }, [
-    hostId,
-    hostName,
+    errorMessage,
     linked,
     installationId,
     ownerId,
     otherOwnerIds,
     ownerName,
-    rosterOwner,
-    linkedLogins,
-    scope,
+    session,
+    search,
     withOrganizations,
     t
   ])

@@ -13,6 +13,9 @@ import { gitHubWhoCanAskAnswer, type GitHubRosterState } from './github-who-can-
  *  it has, and the session tells its listener when the roster lands. Logical only. */
 export const ROSTER_WAIT_MS = 1_500
 
+/** What GitHub search matches by: what was typed, without a leading @. */
+export const gitHubSearchTerm = (query: string): string => query.trim().replace(/^@/, '')
+
 type Calls = {
   people: (args: {
     scope: GitHubPeopleScope
@@ -36,7 +39,7 @@ type Exact = BotSlackResult<ConnectorGitHubUsersResponse>
 
 /** One picker open: the roster is asked for once, on the first search, and every keystroke after
  *  filters it. The exact-username lookup runs once per username-shaped query; asking again for the
- *  same query (when the roster lands) reuses its answer.
+ *  same query (when the roster or the lookup lands) reuses its answer.
  *
  *  What a session holds, and until when:
  *  - the roster request: one per session; its answer arrives when the host answers (bounded by the
@@ -44,18 +47,21 @@ type Exact = BotSlackResult<ConnectorGitHubUsersResponse>
  *  - roster waiters: one per search still within ROSTER_WAIT_MS, removed at that deadline or when
  *    the roster lands, whichever comes first, so nothing waits on the roster past it;
  *  - one update listener (the picker's current query), replaced by the next, removed by its
- *    unsubscribe (query change, close) or once told;
+ *    unsubscribe (query change, close); told when the roster lands and when the current lookup
+ *    settles;
  *  - the last query's exact lookup: it settles on the cloud call's own bounds (shared token mint,
- *    request timeout, one renewal on 401), independently of the roster; the picker drops its
- *    answer once the query changes or the picker closes. */
+ *    request timeout, one renewal on 401), independently of the roster. With the list read, a
+ *    search answers with the list's rows while it is out, and the listener hears when it lands;
+ *    a lookup a newer query replaced tells no one. */
 export function gitHubWhoCanAskSession(
   calls: Calls,
   { scope, ownerLogin, linkedLogins, producer, t }: Context
 ): BotWhoCanAskSession & { readonly waiters: number } {
   let roster: Promise<GitHubRosterState> | null = null
   let settled: GitHubRosterState | null = null
-  // At most one listener, the picker's current query's; cleared once told or when it leaves.
+  // At most one listener, the picker's current query's; cleared when it leaves.
   let listener: (() => void) | null = null
+  const tell = (): void => listener?.()
   // Searches waiting (up to ROSTER_WAIT_MS) for a roster still loading; each removes itself.
   const waiting = new Set<(state: GitHubRosterState | null) => void>()
   const settledWithin = (ms: number): Promise<GitHubRosterState | null> =>
@@ -70,9 +76,13 @@ export function gitHubWhoCanAskSession(
     })
   // The last valid query's exact lookup: one entry, so asking again for that same query never
   // repeats it (a failure included) unless the owner asks to retry; a different query is its own.
-  let lastExact: { login: string; answer: Promise<Exact>; failed: boolean } | null = null
-  // Set by an asked-for retry: the next search waits for the whole list answer (the picker keeps
-  // its rows on screen meanwhile) rather than going out at ROSTER_WAIT_MS.
+  let lastExact: {
+    login: string
+    answer: Promise<Exact>
+    settled: Exact | null
+  } | null = null
+  // Set by an asked-for retry: the next search waits for the whole answer, list and lookup (the
+  // picker keeps its rows on screen meanwhile), rather than going out at ROSTER_WAIT_MS.
   let patient = false
 
   const load = (): Promise<GitHubRosterState> => {
@@ -93,25 +103,30 @@ export function gitHubWhoCanAskSession(
       for (const done of waiting) {
         done(state)
       }
-      const told = listener
-      listener = null
-      told?.()
+      tell()
       return state
     })
     return roster
   }
-  const exactFor = (login: string): Promise<Exact> | null => {
+  const exactFor = (login: string): typeof lastExact => {
     if (!GITHUB_LOGIN_PATTERN.test(login)) {
       return null
     }
     if (lastExact?.login !== login) {
-      const entry = { login, answer: calls.users({ query: login }), failed: false }
+      const entry: NonNullable<typeof lastExact> = {
+        login,
+        answer: calls.users({ query: login }),
+        settled: null
+      }
       void entry.answer.then((answer) => {
-        entry.failed = !answer.ok
+        entry.settled = answer
+        if (lastExact === entry) {
+          tell()
+        }
       })
       lastExact = entry
     }
-    return lastExact.answer
+    return lastExact
   }
 
   return {
@@ -120,11 +135,17 @@ export function gitHubWhoCanAskSession(
     },
     search: async (query) => {
       const loading = load()
-      const exact = exactFor(query.trim().replace(/^@/, ''))
+      const exact = exactFor(gitHubSearchTerm(query))
       const waitWhole = patient
       patient = false
       const early = settled ?? (await (waitWhole ? loading : settledWithin(ROSTER_WAIT_MS)))
-      const exactAnswer = exact ? await exact : null
+      // With the list read, its rows go out now; the lookup joins them when it lands.
+      const exactAnswer =
+        exact === null
+          ? null
+          : !waitWhole && (settled ?? early)?.status === 'read'
+            ? (exact.settled ?? 'pending')
+            : await exact.answer
       // The roster may have landed while the exact lookup was still on its way.
       const now = settled ?? early
       return gitHubWhoCanAskAnswer(
@@ -148,15 +169,12 @@ export function gitHubWhoCanAskSession(
         roster = null
         settled = null
       }
-      if (lastExact?.failed) {
+      if (lastExact?.settled && !lastExact.settled.ok) {
         lastExact = null
       }
       patient = true
     },
     onUpdate: (next) => {
-      if (settled) {
-        return () => {}
-      }
       listener = next
       return () => {
         if (listener === next) {

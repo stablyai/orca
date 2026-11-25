@@ -1,8 +1,7 @@
+// @protected-copy: the setup dialog's picker shows these list sources, dates and absences.
 import type { Translate } from '@/i18n/use-translate'
 import {
   BOT_GITHUB_OFF,
-  GITHUB_PEOPLE_PER_SOURCE,
-  GITHUB_PERSONAL_REPOSITORIES,
   type BotGitHubRoster,
   type ConnectorGitHubUsersResponse
 } from '../../../../../shared/connector-bot-github-contract'
@@ -10,6 +9,7 @@ import type { BotSlackResult } from '../../../../../shared/connector-bot-slack-c
 import { rankGitHubPeople } from '../../../../../shared/bots/github-people-rank'
 import type { GitHubPeopleScope } from '../../../../../shared/bots/github-people-scope'
 import type { BotWhoCanAskFound } from '../BotWhoCanAskList'
+import { cutLine, listCopy, readTime, type ListKind } from './github-who-can-ask-list-copy'
 
 /** People listed at once; typing narrows the rest. */
 export const GITHUB_PEOPLE_SHOWN = 30
@@ -26,8 +26,9 @@ export type GitHubRosterState =
 
 type Answer = {
   roster: GitHubRosterState
-  /** The cloud's exact-username lookup; null when the query can't be a username. */
-  exact: BotSlackResult<ConnectorGitHubUsersResponse> | null
+  /** The cloud's exact-username lookup; null when the query can't be a username, `pending` while
+   *  it is still on its way (the list's rows go out meanwhile). */
+  exact: BotSlackResult<ConnectorGitHubUsersResponse> | 'pending' | null
   query: string
   /** The first linked GitHub login, the key the list is read for. */
   ownerLogin: string | null
@@ -44,40 +45,6 @@ type Answer = {
 /** A reused list older than this is worth mentioning on every search. */
 export const STALE_LIST_MS = 60 * 60_000
 
-/** When a list was read: the time today, the date otherwise (date and time wouldn't fit one line). */
-function readTime(readAt: number, now: number): string {
-  const read = new Date(readAt)
-  return new Date(now).toDateString() === read.toDateString()
-    ? read.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-    : read.toLocaleDateString([], { month: 'short', day: 'numeric' })
-}
-
-/** Why the roster holds only part of its sources' people, by the kind of read that stopped at its
- *  fixed size; typing can't bring those back, so this never advises typing. */
-function cutLine(
-  cut: { people: boolean; members: boolean; repositories: boolean },
-  t: Translate
-): string | null {
-  const kinds = [cut.people, cut.members, cut.repositories].filter(Boolean).length
-  if (kinds > 1) {
-    // Kinds differ (a repo's people, an org's members, a person's repos): say it neutrally.
-    return t('bots.github.whoCanAsk.partlyRead', 'Some lists were only partly read.')
-  }
-  return cut.people
-    ? t('bots.github.whoCanAsk.firstPerRepo', 'Showing the first {{count}} people per repo.', {
-        count: GITHUB_PEOPLE_PER_SOURCE
-      })
-    : cut.members
-      ? t('bots.github.whoCanAsk.firstPerOrg', 'Showing the first {{count}} members per org.', {
-          count: GITHUB_PEOPLE_PER_SOURCE
-        })
-      : cut.repositories
-        ? t('bots.github.whoCanAsk.recentRepos', 'Only your {{count}} latest repos were read.', {
-            count: GITHUB_PERSONAL_REPOSITORIES
-          })
-        : null
-}
-
 /** One search as the picker draws it. Every line says only what was actually read: an empty list
  *  never reads as "no one exists" when nothing, or not everything, was looked at, and a list read
  *  for another scope or account makes no claim about the current ones. */
@@ -89,7 +56,12 @@ export function gitHubWhoCanAskAnswer(
   // nothing could look: the error (and its retry) says more than an empty list. A roster still
   // loading may yet answer, so that case waits for it rather than failing now.
   const rosterSettledUnread = roster.status !== 'read' && roster.status !== 'loading'
-  if (exact && !exact.ok && (exact.error === BOT_GITHUB_OFF || rosterSettledUnread)) {
+  if (
+    exact &&
+    exact !== 'pending' &&
+    !exact.ok &&
+    (exact.error === BOT_GITHUB_OFF || rosterSettledUnread)
+  ) {
     return exact
   }
   const read = roster.status === 'read' ? roster : null
@@ -102,12 +74,14 @@ export function gitHubWhoCanAskAnswer(
     (scope === undefined ||
       JSON.stringify(read.readFor.scope) !== JSON.stringify(scope) ||
       read.readFor.owner !== ownerLogin)
-  const place =
+  const place: ListKind =
     read?.from.organizations && read.from.repositories
       ? 'both'
       : read?.from.organizations
         ? 'orgs'
         : 'repos'
+  const list = listCopy(place, read ? readTime(read.readAt, now) : '', t)
+  const settledExact = exact === 'pending' ? null : exact
 
   const ranked = read ? rankGitHubPeople(read.people, query) : []
   const shown = ranked.slice(0, GITHUB_PEOPLE_SHOWN)
@@ -123,26 +97,40 @@ export function gitHubWhoCanAskAnswer(
         : read
           ? t('bots.github.whoCanAsk.notAllLoaded', 'Not all people loaded')
           : t('bots.github.whoCanAsk.reposNotChecked', 'Repos not checked')
-  const members: BotWhoCanAskFound['members'] = shown.map((person) => ({
-    id: person.id,
-    name: person.login,
-    group: 'scoped' as const,
-    ...(person.name && person.name !== person.login ? { handle: person.name } : {})
-  }))
-  for (const member of exact?.ok ? exact.value.members : []) {
+  const live = settledExact?.ok ? settledExact.value.members : []
+  // The live lookup owns each login it returns: a list entry with that login under another id
+  // is a renamed account the list hasn't caught up with, so it is neither shown nor kept picked.
+  const retired = (read?.people ?? [])
+    .filter((person) =>
+      live.some(
+        (member) =>
+          member.id !== person.id && member.name.toLowerCase() === person.login.toLowerCase()
+      )
+    )
+    .map((person) => person.id)
+  const members: BotWhoCanAskFound['members'] = shown
+    .filter((person) => !retired.includes(person.id))
+    .map((person) => ({
+      id: person.id,
+      name: person.login,
+      group: 'scoped' as const,
+      ...(person.name && person.name !== person.login ? { handle: person.name } : {})
+    }))
+  for (const member of live) {
     const row = members.find((shownRow) => shownRow.id === member.id)
     if (row) {
       // Already shown: the live lookup's login is current (the list's may be from before a rename).
       row.name = member.name
+      row.live = true
     } else if (listed.has(member.id)) {
       // In the list under another login, or past the shown cap: show it, by its current login.
-      members.push({ id: member.id, name: member.name, group: 'scoped' as const })
+      members.push({ id: member.id, name: member.name, group: 'scoped' as const, live: true })
     } else {
       // Only a whole current read shows the list doesn't hold them; otherwise say what's unknown.
       members.push(
         whole
-          ? { id: member.id, name: member.name, group: 'outside' as const }
-          : { id: member.id, name: member.name, tag: uncheckedTag }
+          ? { id: member.id, name: member.name, group: 'outside' as const, live: true }
+          : { id: member.id, name: member.name, tag: uncheckedTag, live: true }
       )
     }
   }
@@ -169,10 +157,9 @@ export function gitHubWhoCanAskAnswer(
               : null
   // The unavailable line already explains the missing list, and a third sentence would wrap.
   const exactOnly =
-    (roster.status === 'none' || roster.status === 'skipped') && exact?.ok
+    (roster.status === 'none' || roster.status === 'skipped') && settledExact?.ok
       ? t('bots.github.whoCanAsk.exactOnly', 'Exact usernames only.')
       : null
-  const time = read ? readTime(read.readAt, now) : ''
   const limits = [
     // Whatever the list contributes to this answer (rows, a stranger's tag, an empty result, a
     // limit) is dated by this first line, with or without a heading in view. A host reads its
@@ -184,21 +171,9 @@ export function gitHubWhoCanAskAnswer(
           now - read.readAt > STALE_LIST_MS ||
           (query.trim() !== '' && shown.length === 0))
         ? remote
-          ? t(
-              'bots.github.whoCanAsk.readEarlierRemote',
-              'Repo list from {{time}}. Restart the bot’s Orca.',
-              {
-                time
-              }
-            )
-          : t(
-              'bots.github.whoCanAsk.readEarlier',
-              'Repo list from {{time}}. Restart Orca to refresh.',
-              {
-                time
-              }
-            )
-        : t('bots.github.whoCanAsk.listFrom', 'Repo list from {{time}}.', { time })
+          ? list.earlierRemote
+          : list.earlier
+        : list.from
       : null,
     read?.omitted && !historical
       ? t('bots.github.whoCanAsk.omitted', 'Not every connected repo was read.')
@@ -210,7 +185,9 @@ export function gitHubWhoCanAskAnswer(
     ranked.length > shown.length
       ? t('bots.github.whoCanAsk.keepTyping', 'Keep typing to narrow.')
       : null,
-    exact && !exact.ok ? t('bots.github.whoCanAsk.exactFailed', 'Username check failed.') : null,
+    settledExact && !settledExact.ok
+      ? t('bots.github.whoCanAsk.exactFailed', 'Username check failed.')
+      : null,
     searchedAs &&
     ownerLogin &&
     !(linkedLogins ?? [ownerLogin]).some(
@@ -224,17 +201,10 @@ export function gitHubWhoCanAskAnswer(
   // One sentence per line, so no line wraps at the popover's width.
   const note = [rosterLine, exactOnly, ...limits].filter(Boolean).join('\n') || undefined
 
-  const exactSearched = exact?.ok === true
+  const exactSearched = settledExact?.ok === true
   // An absence refers to the dated list in the heading, never to the repos as they are now.
   const searchedLine =
-    !read || historical
-      ? null
-      : exactSearched
-        ? t(
-            'bots.github.whoCanAsk.searchedListExact',
-            'Searched your repo list and exact usernames.'
-          )
-        : t('bots.github.whoCanAsk.searchedList', 'Searched your repo list.')
+    !read || historical ? null : exactSearched ? list.searchedExact : list.searched
   // A roster still on its way: nothing definitive yet, whatever the exact lookup said.
   const empty =
     roster.status === 'loading'
@@ -271,19 +241,24 @@ export function gitHubWhoCanAskAnswer(
       // The note's first line dates the list; an absence refers to that list.
       labels: {
         scoped: historical
-          ? t('bots.github.whoCanAsk.fromEarlierList', 'From an earlier repo list')
+          ? list.historical
           : place === 'both'
             ? t('bots.github.whoCanAsk.reposOrgs', 'Your repos and orgs')
             : place === 'orgs'
               ? t('bots.github.whoCanAsk.orgs', 'Your orgs')
               : t('bots.github.whoCanAsk.repos', 'Your repos'),
-        outsideTag: t('bots.github.whoCanAsk.notInList', 'Not in your repo list')
+        outsideTag: list.absent
       },
+      ...(retired.length > 0 ? { retired } : {}),
+      // The username check is still out: no empty result is final until it answers.
+      ...(exact === 'pending' ? { pending: true as const } : {}),
       ...(note ? { note } : {}),
       empty,
       // A failed exact lookup or an unanswered list request can be asked again in place,
       // keeping the query, rows and picks.
-      ...((exact && !exact.ok) || roster.status === 'unreached' ? { retryable: true } : {})
+      ...((settledExact && !settledExact.ok) || roster.status === 'unreached'
+        ? { retryable: true }
+        : {})
     }
   }
 }

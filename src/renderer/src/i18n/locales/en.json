@@ -28384,7 +28384,21 @@
         "listFrom": "Repo list from {{time}}.",
         "reposOrgs": "Your repos and orgs",
         "orgs": "Your orgs",
-        "repos": "Your repos"
+        "repos": "Your repos",
+        "orgListFrom": "Org list from {{time}}.",
+        "orgReadEarlier": "Org list from {{time}}. Restart Orca to refresh.",
+        "orgReadEarlierRemote": "Org list from {{time}}. Restart the bot’s Orca.",
+        "notInOrgList": "Not in your org list",
+        "searchedOrgList": "Searched your org list.",
+        "searchedOrgListExact": "Searched your org list and exact usernames.",
+        "fromEarlierOrgList": "From an earlier org list",
+        "gitHubListFrom": "GitHub list from {{time}}.",
+        "gitHubReadEarlier": "GitHub list from {{time}}. Restart Orca to refresh.",
+        "gitHubReadEarlierRemote": "GitHub list from {{time}}. Restart the bot’s Orca.",
+        "notInGitHubList": "Not in your GitHub list",
+        "searchedGitHubList": "Searched your GitHub list.",
+        "searchedGitHubListExact": "Searched your GitHub list and exact usernames.",
+        "fromEarlierGitHubList": "From an earlier GitHub list"
       },
       "connection": {
         "description": "{{repos}} · signed in as @{{login}}",

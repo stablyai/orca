@@ -32,6 +32,8 @@ export type BotWhoCanAskFound = {
     group?: 'scoped' | 'outside'
     /** Muted in the real-name slot, saying why this person's source is uncertain. */
     tag?: string
+    /** `name` was just confirmed live, so a pick of this id takes it as their current name. */
+    live?: true
   }[]
   complete: boolean
   /** What this search could not cover, shown in place of the generic incomplete line. */
@@ -42,10 +44,16 @@ export type BotWhoCanAskFound = {
   retryable?: boolean
   /** Headings and tags naming where this search actually looked, over the service's defaults. */
   labels?: { scoped?: string; outsideTag?: string }
+  /** Ids a live answer showed are no longer who an earlier list called them: never offered, and
+   *  dropped from the picks. */
+  retired?: string[]
+  /** Part of the search is still out, so an empty result isn't final yet. */
+  pending?: true
 }
 
-/** One picker open's search. `onUpdate` keeps one listener, told once when more of the search
- *  arrives (a list still loading), so the picker can ask again; it returns the unsubscribe. */
+/** One picker open's search. `onUpdate` keeps one listener (the picker's current query), told
+ *  each time more of the search arrives (a list or a username check landing), so the picker can
+ *  ask again; it returns the unsubscribe. */
 export type BotWhoCanAskSession = {
   search: (query: string) => Promise<BotSlackResult<BotWhoCanAskFound>>
   onUpdate?: (listener: () => void) => () => void
@@ -65,6 +73,8 @@ export type BotWhoCanAskService = {
   begin?: () => BotWhoCanAskSession
   errorMessage: (code: string) => string
   searchPlaceholder: string
+  /** What a search matches people by, from what was typed (GitHub drops a leading @). */
+  normalizeQuery?: (query: string) => string
   /** The picker's heading over found people, e.g. "People in Globex". */
   peopleHeading: string
   /** The heading over `scoped` people, e.g. "People in your repositories". */

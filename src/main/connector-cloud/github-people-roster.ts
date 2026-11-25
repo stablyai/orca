@@ -2,22 +2,24 @@
 // through the host's own gh and filtered by the picker as the owner types. The cloud only resolves
 // one exact username, so typing a teammate's first name found a stranger.
 //
-// One read per app run, per host process. The first request starts it; every later request, from
-// any picker and for any scope, gets that same read (marked `reused`, with when it ran) and never
-// starts another gh child. Why: the runner can't prove a gh process tree has ended (on Windows it
-// reports a root's close or a lost worker; on macOS and Linux a normal root close, even if its
-// group remains), so this feature never runs a second child behind one that may still be alive.
-// The exact-username lookup stays live; restarting the app (this host's Orca) reads the list
-// again. A failed read keeps the latch too: the runner may have started a gh attempt (another
-// binary, a WSL fallback) before failing, so no failure proves that no process ever existed.
+// One logical read per app run, per host process. The first request admits it; every later
+// request, from any picker and for any scope, gets that same read (marked `reused`, with when it
+// ran) and is never admitted as another logical read. That bounds logical reads, not OS
+// processes: the one read may run more than one gh attempt (the runner tries another gh binary or
+// a WSL fallback, one at a time), and the runner can't prove a gh process tree has ended (on
+// Windows it reports a root's close or a lost worker; on macOS and Linux a normal root close, even
+// if its group remains). So this feature never admits a second read behind one whose processes
+// may still be alive, and a failed read keeps the latch too: no failure proves that no gh attempt
+// started. Nothing here bounds other gh callers, or processes left from an earlier app run. The
+// exact-username lookup stays live; restarting the app (this host's Orca) reads the list again.
 //
-// Scale: one logical read and its gh attempts per host per app run. Each picker open asks for
-// it once (one RPC per session); each keystroke filters locally and runs only the cloud's
-// exact-username lookup.
+// Scale: one logical read per host per app run. Each picker open asks for it once (one RPC per
+// session); each keystroke filters locally and runs only the cloud's exact-username lookup.
 //
-// The one read: one logical gh call (the runner may try another gh binary if the first is
-// missing, one at a time), killed by the runner at ROSTER_TIMEOUT_MS and never retried. Its answer
-// goes out as soon as the runner settles the call.
+// The one read is never retried. ROSTER_TIMEOUT_MS is the runner's capture deadline for a gh
+// attempt: reaching it requests cleanup (a kill) of that attempt, which neither guarantees that
+// every descendant has exited nor bounds the whole call (another attempt, the runner settling).
+// Its answer goes out as soon as the runner settles the call.
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import { extractExecError } from '../git/command-runner/process-capture/exec-error'
 import type { BotGitHubRoster } from '../../shared/connector-bot-github-contract'
