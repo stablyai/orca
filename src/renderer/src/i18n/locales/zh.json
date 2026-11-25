@@ -28133,7 +28133,9 @@
         "snoozed": "将此事项暂缓至 {{when}}",
         "snoozedBare": "暂缓了此事项",
         "unsnoozed": "取消了此事项的暂缓",
-        "snoozeEnded": "提前结束暂缓"
+        "snoozeEnded": "提前结束暂缓",
+        "anotherAgent": "另一个智能体",
+        "waitingOn": "正在等待"
       },
       "cancel": {
         "confirmMany": "取消 {{count}} 项",
@@ -28176,7 +28178,8 @@
           "linkedMany": "{{chat}} 将 {{count}} 个链接关联到 {{items}}",
           "linked": "{{chat}} 将 {{link}} 关联到 {{items}}"
         },
-        "anotherChat": "另一个聊天"
+        "anotherChat": "另一个聊天",
+        "anotherAgent": "另一个智能体"
       },
       "chatFallback": "聊天",
       "comment": {
@@ -28229,11 +28232,15 @@
         "issue": "议题 #{{number}}",
         "notRead": "尚未读取",
         "pr": "PR #{{number}}",
-        "serverPr": "服务器上的工作暂不显示 PR"
+        "serverPr": "服务器上的工作暂不显示 PR",
+        "automation": "自动化",
+        "automationEnded": "已结束",
+        "automationOn": "会为这个事项唤醒智能体"
       },
       "menu": {
         "cancel": "取消事项",
-        "done": "完成"
+        "done": "完成",
+        "waiting": "等待中…"
       },
       "pill": {
         "clear": "清除选择",
@@ -28259,7 +28266,8 @@
         "done": "已完成",
         "needsYou": "需要你处理",
         "planned": "已计划",
-        "working": "进行中"
+        "working": "进行中",
+        "waiting": "等待中"
       },
       "tab": "主页",
       "loading": "正在加载事项…",
@@ -28297,7 +28305,14 @@
         "sendSomeLabel": "发送 {{total}} 个回答中的 {{count}} 个",
         "changeAnswer": "{{question}}：{{answer}}。更改回答"
       },
-      "readMoreClosedFailed": "无法读取更多已关闭的条目"
+      "readMoreClosedFailed": "无法读取更多已关闭的条目",
+      "wait": {
+        "confirm": "设为等待中",
+        "keep": "取消",
+        "placeholder": "在等待…",
+        "titleMany": "{{count}} 个事项在等待什么？",
+        "titleOne": "{{title}} 在等待什么？"
+      }
     },
     "usageLimit": {
       "continuesAt": "将于 {{time}} 继续",
@@ -28874,7 +28889,8 @@
       "resumeShort": "恢复",
       "deleting": "正在删除…",
       "deleteFailed": "无法删除 {{name}}",
-      "deleteDescription": "删除 <name/> 及其运行历史。"
+      "deleteDescription": "删除 <name/> 及其运行历史。",
+      "nextAt": "下次 {{time}}"
     },
     "host": {
       "errors": {
@@ -30191,6 +30207,17 @@
         "expired": "登录已过期。请重试。",
         "couldNotSignIn": "无法登录。请重试。"
       }
+    },
+    "pairedServers": {
+      "add": "添加已配对的服务器",
+      "allAdded": "所有已配对的服务器均已添加",
+      "heading": "已配对的服务器",
+      "info": "关于已配对的服务器",
+      "none": "没有已配对的服务器",
+      "remove": "移除",
+      "removeServer": "移除 {{server}}",
+      "search": "搜索已配对的服务器",
+      "tooltip": "这些服务器上的 bot 和智能体可以向 {{name}} 提问，无需每次征得你的同意。"
     }
   },
   "speechModelUpdate": {
