@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import type { AppIdentity } from '../../../shared/app-lifecycle/identity/app-identity'
+import type { AppProfile } from '../../app-profiles/app-profile'
 
 const BASE_APP_NAME = 'Orca'
 const BASE_APP_USER_MODEL_ID = 'com.stablyai.orca'
@@ -52,19 +53,22 @@ function createDevAppUserModelId(identityKey: string | null): string {
 
 export function getDevInstanceIdentity(
   isDev: boolean,
+  appProfile: Pick<AppProfile, 'name' | 'bundleId'> | null,
   env: NodeJS.ProcessEnv = process.env
 ): DevInstanceIdentity {
   if (!isDev) {
+    // An app profile has its own name and bundle id.
+    const name = appProfile?.name ?? BASE_APP_NAME
     return {
-      name: BASE_APP_NAME,
-      appName: BASE_APP_NAME,
+      name,
+      appName: name,
       isDev: false,
       devLabel: null,
       devBranch: null,
       devWorktreeName: null,
       devRepoRoot: null,
       dockBadgeLabel: null,
-      appUserModelId: BASE_APP_USER_MODEL_ID
+      appUserModelId: appProfile?.bundleId ?? BASE_APP_USER_MODEL_ID
     }
   }
 

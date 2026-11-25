@@ -1,5 +1,7 @@
 import '../memory/host-malloc-tunables-claim'
 import '../ipc/pty/host-env/inherited-orca-identity-claim'
+// Before any module reads a path, so it reads an app profile's own folders.
+import './host-runtime/orcad-app-profile-env'
 import process from 'node:process'
 import { main } from './serve-startup/orcad-command-startup'
 import { resolveOrcadExitCode } from './serve-startup/orcad-exit-code'

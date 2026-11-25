@@ -75,7 +75,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     ) {
       return false
     }
-    if (!app.isPackaged) {
+    if (!app.isPackaged || this.inAppProfile()) {
       this.sendStatus({ state: 'not-available' })
       return false
     }

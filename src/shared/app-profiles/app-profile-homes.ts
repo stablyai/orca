@@ -1,12 +1,20 @@
-// The paths of `~/.orca` and of the agent folders. Code reads them only through these helpers.
+// Each app profile has its own `~/.orca` and agent folders.
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
+import { applyAppProfileHomesCore } from './app-profile-env-core'
 
 /**
- * Agent CLIs that read their folder from a variable (checked in each CLI's docs or source), each
- * with the name of its folder in an app profile (#46496). Agents without such a variable, and Pi,
- * OMP, Prime Agent and OpenCode (Orca rewrites their variables per pane, or they move only with
- * XDG), are not in this list.
+ * Overrides `~/.orca`. Only an app profile sets it. Every Orca entry point (the main bundle's
+ * banner, orcad, the CLI) sets it for a profile and removes it otherwise, so a value under it is
+ * a profile's value.
+ */
+export const ORCA_HOME_DIR_ENV = 'ORCA_HOME_DIR'
+
+/**
+ * Agent CLIs that read their folder from a variable (checked in each CLI's docs or source), and the
+ * profile's subfolder for each. Agents without such a variable, and Pi, OMP, Prime Agent and
+ * OpenCode (Orca rewrites their variables per pane, or they move only with XDG), read the real
+ * home: the isAppProfileRuntime() checks guard them.
  */
 export const APP_PROFILE_AGENT_HOME_VARIABLES = {
   CLAUDE_CONFIG_DIR: 'claude',
@@ -26,30 +34,71 @@ export const APP_PROFILE_AGENT_HOME_VARIABLES = {
 
 export type AppProfileAgentHomeVariable = keyof typeof APP_PROFILE_AGENT_HOME_VARIABLES
 
-/** `~/.orca` in `home`. */
-export function orcaHomeDir(home: string = homedir()): string {
-  return join(home, '.orca')
+/** The variables that a profile sets: `~/.orca` and the agent folders. */
+export const APP_PROFILE_HOME_ENV_KEYS: readonly string[] = [
+  ORCA_HOME_DIR_ENV,
+  ...Object.keys(APP_PROFILE_AGENT_HOME_VARIABLES)
+]
+
+/**
+ * Points `~/.orca` and the agent folders at the profile, or with null removes the values that a
+ * profile set. A profile replaces a value that the user set; the default app keeps it. Children
+ * (terminals, serve, orcad, agents) inherit the result. Shell startup files that export these variables override them in a terminal.
+ */
+export function applyAppProfileHomes(userDataPath: string | null, env: NodeJS.ProcessEnv): void {
+  applyAppProfileHomesCore(env, userDataPath, APP_PROFILE_AGENT_HOME_VARIABLES)
 }
 
-/** An agent's folder in the user's home. `variable` names the agent's folder variable. */
-export function defaultAgentHomeDir(
-  _variable: AppProfileAgentHomeVariable,
-  homeRelative: string
+/** Whether a value lies under the profile's `ORCA_HOME_DIR`, that is, a profile set it. */
+export function isAppProfileHomeValue(
+  value: string | undefined,
+  env: NodeJS.ProcessEnv = process.env
+): value is string {
+  const profileHome = env[ORCA_HOME_DIR_ENV]
+  return Boolean(
+    profileHome && value && (value === profileHome || value.startsWith(`${profileHome}/`))
+  )
+}
+
+function isLocalHome(home: string): boolean {
+  return resolve(home) === resolve(homedir())
+}
+
+/** `~/.orca` of this machine's user, or the profile's. Another home (a remote host) keeps its own. */
+export function orcaHomeDir(
+  home: string = homedir(),
+  env: NodeJS.ProcessEnv = process.env
 ): string {
-  return join(homedir(), homeRelative)
+  const override = env[ORCA_HOME_DIR_ENV]?.trim()
+  return override && isLocalHome(home) ? override : join(home, '.orca')
 }
 
-/** An agent's folder in `home`. `variable` names the agent's folder variable. */
+/** An agent's folder that a profile set; else the folder in the user's home. */
+export function defaultAgentHomeDir(
+  variable: AppProfileAgentHomeVariable,
+  homeRelative: string,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const value = env[variable]?.trim()
+  return isAppProfileHomeValue(value, env) ? value : join(homedir(), homeRelative)
+}
+
+/** An agent's folder in `home`: the profile's when `home` is this user's home, else `home`'s own. */
 export function agentHomeDirIn(
   home: string,
-  _variable: AppProfileAgentHomeVariable,
+  variable: AppProfileAgentHomeVariable,
   homeRelative: string,
   joinPath: (...segments: string[]) => string = join
 ): string {
-  return joinPath(home, homeRelative)
+  return isLocalHome(home)
+    ? defaultAgentHomeDir(variable, homeRelative)
+    : joinPath(home, homeRelative)
 }
 
-/** Claude's global state file, `~/.claude.json`. */
-export function defaultClaudeJsonPath(): string {
-  return join(homedir(), '.claude.json')
+/** Claude's global state file: in CLAUDE_CONFIG_DIR when a profile set it, else `~/.claude.json`. */
+export function defaultClaudeJsonPath(env: NodeJS.ProcessEnv = process.env): string {
+  const dir = env.CLAUDE_CONFIG_DIR?.trim()
+  return isAppProfileHomeValue(dir, env)
+    ? join(dir, '.claude.json')
+    : join(homedir(), '.claude.json')
 }

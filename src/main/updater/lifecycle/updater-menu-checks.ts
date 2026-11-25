@@ -19,7 +19,7 @@ export abstract class UpdaterMenuChecks extends UpdaterScheduling {
     ) {
       return
     }
-    if (!app.isPackaged) {
+    if (!app.isPackaged || this.inAppProfile()) {
       this.sendStatus({ state: 'not-available', userInitiated: true })
       return
     }

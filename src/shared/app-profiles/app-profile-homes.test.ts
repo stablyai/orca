@@ -1,72 +1,184 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  APP_PROFILE_AGENT_HOME_VARIABLES,
+  APP_PROFILE_HOME_ENV_KEYS,
+  agentHomeDirIn,
+  applyAppProfileHomes,
+  defaultAgentHomeDir,
+  defaultClaudeJsonPath,
+  orcaHomeDir,
+  type AppProfileAgentHomeVariable
+} from './app-profile-homes'
 
-let first: string
-let second: string
+let home: string
+let work: string
+let other: string
 
-// Two temp homes stand for the user's home: a site that keeps the first one built its path at load.
+function profileFolder(id: string): string {
+  const folder = join(home, 'Orca Profiles', id)
+  mkdirSync(folder, { recursive: true })
+  writeFileSync(join(folder, 'orca-app-profile.json'), JSON.stringify({ id }))
+  return folder
+}
+
+// A temp HOME stands for the user's home: nothing here may resolve inside it.
 beforeEach(() => {
-  first = mkdtempSync(join(tmpdir(), 'orca-homes-first-'))
-  second = mkdtempSync(join(tmpdir(), 'orca-homes-second-'))
+  home = mkdtempSync(join(tmpdir(), 'orca-profile-homes-'))
   // os.homedir() reads USERPROFILE on Windows.
-  vi.stubEnv('HOME', first)
-  vi.stubEnv('USERPROFILE', first)
-  for (const variable of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'GROK_HOME', 'KIRO_HOME']) {
-    vi.stubEnv(variable, undefined)
+  vi.stubEnv('HOME', home)
+  vi.stubEnv('USERPROFILE', home)
+  for (const key of APP_PROFILE_HOME_ENV_KEYS) {
+    vi.stubEnv(key, undefined)
   }
+  work = profileFolder('work')
+  other = profileFolder('other')
 })
 
 afterEach(() => {
   vi.unstubAllEnvs()
   vi.resetModules()
-  rmSync(first, { recursive: true, force: true })
-  rmSync(second, { recursive: true, force: true })
+  rmSync(home, { recursive: true, force: true })
 })
 
-it("builds each rewritten site's path in the user's home when it runs", async () => {
-  const { getSharedManagedScriptPath } =
-    await import('../../main/agent-hooks/installation/scripts/managed-hook-script-path')
-  const { getUserKeybindingsPath } = await import('../../main/keybindings/keybinding-file')
-  const { getSystemCodexHomePath } =
-    await import('../../main/codex/configuration/homes/codex-home-paths')
-  const { getWorkspaceFilePath } =
-    await import('../../main/linear/accounts/linear-credential-paths')
-  const { codexHomeSessionsDir } =
-    await import('../../main/ai-vault/discovery/session-scanner-roots')
-  const { AI_VAULT_AGENT_SOURCES, defaultCodexHomeDir } =
-    await import('../../main/ai-vault/discovery/session-scanner-agent-sources')
-  const { getClaudePluginMetadataPaths } =
-    await import('../../main/skills/discovery/claude-plugin-skill-sources')
-  const { buildSkillDiscoverySources } =
-    await import('../../main/skills/discovery/skill-discovery-sources')
-  vi.stubEnv('HOME', second)
-  vi.stubEnv('USERPROFILE', second)
-  expect(homedir()).toBe(second)
-  const sources = buildSkillDiscoverySources({ homeDir: homedir(), cwd: '/repo' })
-  const skillRoot = (id: string): string => sources.find((source) => source.id === id)!.path
-  expect({
-    hookScript: getSharedManagedScriptPath('claude-hook.sh'),
-    keybindings: getUserKeybindingsPath(homedir()),
-    codexHome: getSystemCodexHomePath(),
-    linear: getWorkspaceFilePath().startsWith(join(second, '.orca') + sep),
-    codexSessions: codexHomeSessionsDir(),
-    codexDefault: defaultCodexHomeDir(),
-    claudePlugins: getClaudePluginMetadataPaths(homedir(), '/repo').installedPlugins,
-    kiroSessions: AI_VAULT_AGENT_SOURCES.kiro!.rootDirs({}, [])[0],
-    codexSkills: skillRoot('home-codex'),
-    copilotSkills: skillRoot('home-copilot')
-  }).toEqual({
-    hookScript: join(second, '.orca', 'agent-hooks', 'claude-hook.sh'),
-    keybindings: join(second, '.orca', 'keybindings.json'),
-    codexHome: join(second, '.codex'),
-    linear: true,
-    codexSessions: join(second, '.codex', 'sessions'),
-    codexDefault: join(second, '.codex'),
-    claudePlugins: join(second, '.claude', 'plugins', 'installed_plugins.json'),
-    kiroSessions: join(second, '.kiro', 'sessions', 'cli'),
-    codexSkills: join(second, '.codex', 'skills'),
-    copilotSkills: join(second, '.copilot', 'skills')
+const underProfile = (path: string): boolean => path.startsWith(work + sep)
+
+describe('app profile homes', () => {
+  it("replace every value in a profile, also the user's", () => {
+    const env: NodeJS.ProcessEnv = { CODEX_HOME: '/user/codex' }
+    applyAppProfileHomes(other, env)
+    expect(env.CODEX_HOME).toBe(join(other, 'orca-home', 'agents', 'codex'))
+    applyAppProfileHomes(work, env)
+    expect(env.CODEX_HOME).toBe(join(work, 'orca-home', 'agents', 'codex'))
+    expect(env.CLAUDE_CONFIG_DIR).toBe(join(work, 'orca-home', 'agents', 'claude'))
+  })
+
+  it("remove only a profile's values in the default app", () => {
+    const env: NodeJS.ProcessEnv = {}
+    applyAppProfileHomes(work, env)
+    // A shell startup file may export its own value after the profile; it is the user's.
+    env.GROK_HOME = '/user/grok'
+    // An `orca-home` folder outside the profile's is the user's too.
+    env.QWEN_HOME = join(home, 'not-a-profile', 'orca-home', 'qwen')
+    applyAppProfileHomes(null, env)
+    expect(env.CLAUDE_CONFIG_DIR).toBeUndefined()
+    expect(env.ORCA_HOME_DIR).toBeUndefined()
+    expect(env).toMatchObject({
+      GROK_HOME: '/user/grok',
+      QWEN_HOME: join(home, 'not-a-profile', 'orca-home', 'qwen')
+    })
+  })
+
+  it('resolve every helper path under the profile folder', () => {
+    applyAppProfileHomes(work, process.env)
+    expect(homedir()).toBe(home)
+    const paths = [
+      orcaHomeDir(),
+      orcaHomeDir(homedir()),
+      defaultClaudeJsonPath(),
+      ...Object.keys(APP_PROFILE_AGENT_HOME_VARIABLES)
+        .filter(
+          (key): key is AppProfileAgentHomeVariable => key in APP_PROFILE_AGENT_HOME_VARIABLES
+        )
+        .flatMap((variable) => [
+          defaultAgentHomeDir(variable, '.agent'),
+          agentHomeDirIn(homedir(), variable, '.agent')
+        ])
+    ]
+    expect(paths.filter((path) => !underProfile(path))).toEqual([])
+    // Another host's home keeps its own folders.
+    expect(orcaHomeDir('/remote/home')).toBe('/remote/home/.orca')
+    expect(agentHomeDirIn('/remote/home', 'CODEX_HOME', '.codex')).toBe('/remote/home/.codex')
+  })
+
+  it("honour an agent value only under the profile's ORCA_HOME_DIR", () => {
+    vi.stubEnv('CLAUDE_CONFIG_DIR', '/user/claude')
+    vi.stubEnv('CODEX_HOME', join(work, 'orca-home', 'agents', 'codex'))
+    // No ORCA_HOME_DIR: the default app. A value from a profile that is gone is not honoured.
+    expect(orcaHomeDir()).toBe(join(home, '.orca'))
+    expect(defaultAgentHomeDir('CODEX_HOME', '.codex')).toBe(join(home, '.codex'))
+    vi.stubEnv('ORCA_HOME_DIR', join(work, 'orca-home'))
+    expect(defaultAgentHomeDir('CODEX_HOME', '.codex')).toBe(
+      join(work, 'orca-home', 'agents', 'codex')
+    )
+    // The user's own value outside the profile folder.
+    expect(defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')).toBe(join(home, '.claude'))
+    expect(defaultClaudeJsonPath()).toBe(join(home, '.claude.json'))
+  })
+
+  it('resolve the rewritten sites under the profile folder, also when imported first', async () => {
+    // Imported before the env is set: a path that a module builds at load fails here.
+    const { getSharedManagedScriptPath } =
+      await import('../../main/agent-hooks/installation/scripts/managed-hook-script-path')
+    const { getUserKeybindingsPath } = await import('../../main/keybindings/keybinding-file')
+    const { getSystemCodexHomePath, getLocalCodexTrustConfigFiles } =
+      await import('../../main/codex/configuration/homes/codex-home-paths')
+    const { getWorkspaceFilePath } =
+      await import('../../main/linear/accounts/linear-credential-paths')
+    const { claudeProjectsHostDirs, codexHomeSessionsDir } =
+      await import('../../main/ai-vault/discovery/session-scanner-roots')
+    const { AI_VAULT_AGENT_SOURCES, defaultCodexHomeDir } =
+      await import('../../main/ai-vault/discovery/session-scanner-agent-sources')
+    const { getClaudePluginMetadataPaths } =
+      await import('../../main/skills/discovery/claude-plugin-skill-sources')
+    const { buildSkillDiscoverySources } =
+      await import('../../main/skills/discovery/skill-discovery-sources')
+    const { resolveEnvironmentSkillProviderRoots } =
+      await import('../../main/skills/providers/skill-provider-runtime-roots')
+    applyAppProfileHomes(work, process.env)
+    const sources = buildSkillDiscoverySources({ homeDir: homedir(), cwd: '/repo' })
+    const skillRoot = (id: string): string => sources.find((source) => source.id === id)!.path
+    const installRoots = resolveEnvironmentSkillProviderRoots(process.env, homedir())
+    const paths = [
+      getSharedManagedScriptPath('claude-hook.sh'),
+      getUserKeybindingsPath(homedir()),
+      getSystemCodexHomePath(),
+      getLocalCodexTrustConfigFiles(homedir()).at(-1)!,
+      getWorkspaceFilePath(),
+      ...claudeProjectsHostDirs(),
+      codexHomeSessionsDir(),
+      defaultCodexHomeDir(),
+      getClaudePluginMetadataPaths(homedir(), '/repo').installedPlugins,
+      ...(['copilot', 'kiro', 'cline', 'codebuddy', 'openclaw'] as const).map(
+        (agent) => AI_VAULT_AGENT_SOURCES[agent]!.rootDirs({}, [])[0]
+      ),
+      ...['home-codex', 'codex-plugin-cache', 'home-qoder', 'home-copilot'].map(skillRoot),
+      ...(['claude', 'grok', 'codebuddy', 'kiro'] as const).map(
+        (id) => installRoots[id] ?? `missing ${id}`
+      )
+    ]
+    expect(paths.filter((path) => !underProfile(path))).toEqual([])
+  })
+
+  it('write workspace trust into the profile folders, not the user home', async () => {
+    const { applyWorkspaceTrustOnThisHost } =
+      await import('../../main/agent-launch/trust/execution-host-workspace-trust')
+    applyAppProfileHomes(work, process.env)
+    const workspace = join(home, 'repo')
+    mkdirSync(workspace)
+    for (const preset of ['copilot', 'qoder', 'kimi', 'qwen-code'] as const) {
+      await applyWorkspaceTrustOnThisHost(preset, workspace, () => ({
+        homes: [homedir()],
+        agentHome: homedir(),
+        claudeConfig: () => null,
+        codexConfigFiles: () => [],
+        agentEnv: {},
+        deadlineMs: 5_000
+      }))
+    }
+    const agents = join(work, 'orca-home', 'agents')
+    expect(readdirSync(join(agents, 'copilot'))).toEqual(['config.json'])
+    expect(readdirSync(join(agents, 'qoder'))).toEqual(['settings.json'])
+    expect(readdirSync(join(agents, 'kimi-code'))).toEqual(['workspace-trust'])
+    expect(readdirSync(join(agents, 'qwen'))).toEqual(['settings.json'])
+    expect(readdirSync(home).filter((name) => name.startsWith('.'))).toEqual([])
+  })
+
+  it('leave the default app on the user home', () => {
+    expect(orcaHomeDir()).toBe(join(home, '.orca'))
+    expect(defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude')).toBe(join(home, '.claude'))
+    expect(defaultClaudeJsonPath()).toBe(join(home, '.claude.json'))
   })
 })

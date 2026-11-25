@@ -3,8 +3,8 @@ import { join, relative, sep } from 'node:path'
 import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
-// A raw path into the user's home for `~/.orca` or an agent folder skips the path helpers.
-// Production code builds these paths through src/shared/app-profiles/app-profile-homes.ts.
+// A raw path into the user's home for `~/.orca` or an agent folder bypasses the app profile's own
+// folders. Production code builds these paths through src/shared/app-profiles/app-profile-homes.ts.
 const ROOT = join(__dirname, '..', '..', '..')
 // `~/.orca` and the folder of each agent in APP_PROFILE_AGENT_HOME_VARIABLES.
 const AGENT_DIRS =
@@ -25,7 +25,7 @@ const RAW_PATTERNS = [
   // app.getPath('home') + '/.claude'
   new RegExp(`getPath\\(\\s*['"]home['"]\\s*\\)[^;]{0,60}?\\.(${AGENT_DIRS})(?![\\w.-])`, 'g')
 ]
-// The variable that sets each folder: a path on a line that reads it is not raw.
+// The variable that moves each folder: a path that reads it first follows the profile.
 const FOLDER_VARIABLE: Record<string, string> = {
   claude: 'CLAUDE_CONFIG_DIR',
   codex: 'CODEX_HOME',
@@ -44,28 +44,29 @@ const FOLDER_VARIABLE: Record<string, string> = {
 // Each entry says why the raw path is right there. `line` limits it to lines that contain it.
 type Allowed = { file: string; line?: string; reason: string }
 const WSL = "a WSL guest's or another host's own home"
-const ANTIGRAVITY = 'Antigravity has no folder variable'
+const ANTIGRAVITY = 'Antigravity has no folder variable; a profile installs no Antigravity hooks'
 const ALLOWED: Allowed[] = [
   { file: 'src/shared/app-profiles/app-profile-homes.ts', reason: 'the helpers themselves' },
+  { file: 'src/shared/app-profiles/app-profile-env-core.ts', reason: 'the helpers themselves' },
   {
     file: 'src/main/orcad/host-runtime/orcad-app-paths.ts',
     reason: "orcad's data folder, not ~/.orca"
   },
   {
     file: 'src/main/codebuddy/codebuddy-acp-launch-spec.ts',
-    reason: 'used only when CODEBUDDY_CONFIG_DIR is unset'
+    reason: 'used only when CODEBUDDY_CONFIG_DIR is unset; a profile sets it'
   },
   {
     file: 'src/main/hermes/hermes-default-home.ts',
-    reason: 'used only when HERMES_HOME is unset'
+    reason: 'used only when HERMES_HOME is unset; a profile sets it'
   },
   {
     file: 'src/main/agent-hooks/installation/commands/runtime-home-hook-command.ts',
-    reason: 'hook commands: the hooks use the .orca folder in HOME'
+    reason: 'hook commands; a profile installs no managed hooks'
   },
   {
     file: 'src/main/codex/hooks/definitions/codex-hook-command-form.ts',
-    reason: 'frozen Codex hook command bytes'
+    reason: 'frozen Codex hook command bytes; a profile installs no managed hooks'
   },
   { file: 'src/main/wsl/discovery/wsl-distro-holder-command.ts', reason: WSL },
   { file: 'src/main/wsl/host-lifecycle/wsl-host-ssh-orcad-conflict.ts', reason: WSL },
@@ -215,7 +216,7 @@ const ALLOWED: Allowed[] = [
   },
   {
     file: 'src/main/claude-accounts/profiles/claude-profile-paths.ts',
-    reason: 'userConfigDir reads CLAUDE_CONFIG_DIR before the default'
+    reason: "userConfigDir reads CLAUDE_CONFIG_DIR, the profile's, before the default"
   },
   {
     file: 'src/main/codex-cli/codex-home-process-lock.ts',
@@ -224,7 +225,7 @@ const ALLOWED: Allowed[] = [
   },
   {
     file: 'src/main/bots/bot-home.ts',
-    reason: "the bots folder in ~/.orca or in Orca's userData, chosen per setup"
+    reason: "the default profile's bots folder; a profile keeps its bots in its userData"
   }
 ]
 
@@ -241,7 +242,7 @@ function productionFiles(dir: string): string[] {
 }
 
 describe('paths into the home folder', () => {
-  it('go through the path helpers', () => {
+  it('go through the app profile helpers', () => {
     const raw: string[] = []
     for (const file of productionFiles(join(ROOT, 'src'))) {
       const path = relative(ROOT, file).split(sep).join('/')
@@ -270,7 +271,7 @@ describe('paths into the home folder', () => {
     expect(raw).toEqual([])
   })
 
-  it('are not built when a module loads', () => {
+  it('are not built when a module loads, before the profile folders are set', () => {
     const helpers = new Set([
       'defaultAgentHomeDir',
       'orcaHomeDir',

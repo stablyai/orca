@@ -30,7 +30,7 @@ export function getClaudePluginMetadataPaths(
   cwd: string,
   pathApi: SkillDiscoveryPathApi = defaultPathApi
 ): { installedPlugins: string; settings: string[] } {
-  // On this host, the Claude folder comes from the path helpers.
+  // On this host, an app profile's Claude folder replaces the one in the user's home.
   const claudeHome =
     pathApi === defaultPathApi
       ? agentHomeDirIn(homeDir, 'CLAUDE_CONFIG_DIR', '.claude')

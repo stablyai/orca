@@ -131,7 +131,7 @@ export function buildSkillDiscoverySources(
 ): SkillScanRoot[] {
   const pathApi = args.pathApi ?? { basename, join }
   const home = args.homeDir ?? homedir()
-  // On this host, the agent folders come from the path helpers.
+  // On this host, an app profile's agent folders replace the ones in the user's home.
   const agentHome = (variable: AppProfileAgentHomeVariable, folder: string): string =>
     args.pathApi ? pathApi.join(home, folder) : agentHomeDirIn(home, variable, folder)
   const cwd = args.cwd ?? process.cwd()

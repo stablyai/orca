@@ -38,7 +38,7 @@ export function claudeConfigDirEnvPatch(
   const env = options.env ?? process.env
   const platform = options.platform ?? process.platform
   const resolved = accountHome.trim()
-  // The folder the CLI uses with this env: CLAUDE_CONFIG_DIR, else ~/.claude.
+  // The folder the CLI uses with this env. Without the variable it is ~/.claude, also in a profile.
   const cliDefault = env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
   if (!resolved || samePath(resolved, cliDefault, platform)) {
     return {}

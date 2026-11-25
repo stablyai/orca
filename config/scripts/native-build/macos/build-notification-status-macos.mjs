@@ -32,11 +32,38 @@ mkdirSync(workDir, { recursive: true })
 try {
   const plistPath = path.join(workDir, 'Info.plist')
   writeFileSync(plistPath, embeddedInfoPlist(bundleId), 'utf8')
+  build(plistPath, outputPath)
+  // The release build also makes the app profile variant, with no embedded Info.plist. A profile
+  // app copies it into its own Contents/MacOS and signs it with its own bundle id
+  // A dev bundle (--output) needs no variant.
+  if (outputPath === defaultOutputPath) {
+    build(null, path.join(path.dirname(outputPath), 'profile-template', 'orca-notification-status'))
+  }
+} finally {
+  rmSync(workDir, { recursive: true, force: true })
+}
+
+function build(plist, output) {
   const triples = singleArch
     ? [process.arch === 'arm64' ? 'arm64-apple-macosx' : 'x86_64-apple-macosx']
     : ['arm64-apple-macosx', 'x86_64-apple-macosx']
+  const embed = plist
+    ? [
+        '-Xlinker',
+        '-sectcreate',
+        '-Xlinker',
+        '__TEXT',
+        '-Xlinker',
+        '__info_plist',
+        '-Xlinker',
+        plist
+      ]
+    : []
   const builtBinaries = triples.map((triple) => {
-    const output = path.join(workDir, `orca-notification-status-${triple}`)
+    const binary = path.join(
+      workDir,
+      `orca-notification-status-${plist ? '' : 'profile-'}${triple}`
+    )
     execFileSync(
       'swiftc',
       [
@@ -45,29 +72,20 @@ try {
         '-target',
         triple.replace('-apple-macosx', '-apple-macosx11.0'),
         '-o',
-        output,
-        '-Xlinker',
-        '-sectcreate',
-        '-Xlinker',
-        '__TEXT',
-        '-Xlinker',
-        '__info_plist',
-        '-Xlinker',
-        plistPath
+        binary,
+        ...embed
       ],
       { stdio: 'inherit' }
     )
-    return output
+    return binary
   })
-  mkdirSync(path.dirname(outputPath), { recursive: true })
+  mkdirSync(path.dirname(output), { recursive: true })
   if (builtBinaries.length === 1) {
-    execFileSync('cp', [builtBinaries[0], outputPath])
+    execFileSync('cp', [builtBinaries[0], output])
   } else {
-    execFileSync('lipo', ['-create', ...builtBinaries, '-output', outputPath])
+    execFileSync('lipo', ['-create', ...builtBinaries, '-output', output])
   }
-  execFileSync('chmod', ['755', outputPath])
-} finally {
-  rmSync(workDir, { recursive: true, force: true })
+  execFileSync('chmod', ['755', output])
 }
 
 function readArg(name) {

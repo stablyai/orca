@@ -16,6 +16,7 @@ import { prepareWindowsAdministratorRestart } from '../windows/windows-administr
 import { quitProcess } from '../startup/quit/process-quit-request'
 import type { Store } from '../persistence/loading-store/store'
 import { getDevInstanceIdentity } from '../startup/profile-startup/dev-instance-identity'
+import { getAppProfile } from '../app-profiles/app-profile'
 import { isPwshAvailableAsync } from '../pty/shell-startup/pwsh'
 import { isWslAvailableAsync } from '../wsl/discovery/wsl-availability'
 import { listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
@@ -153,7 +154,7 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
-    const identity = getDevInstanceIdentity(!app.isPackaged)
+    const identity = getDevInstanceIdentity(!app.isPackaged, getAppProfile())
     return {
       name: identity.name,
       isDev: identity.isDev,
