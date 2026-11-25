@@ -312,7 +312,7 @@ export function formatAutomationTriggerOptions(
       : []),
     ...(bot?.cloudSignedOut ? [signedOutTriggerOptionsNote(bot)] : []),
     ...sources,
-    "Nothing else can start an automation. For an event that isn't listed, tell your owner instead of polling for it on a schedule. This list grows as connectors and Orca update: run this again before saying an event can't start one.",
+    'Besides these, only a time starts one: `--trigger` for a schedule, or `--once --by <ISO time>` alone for a one-time reminder ("in 10 minutes"). For an event that isn\'t listed, tell your owner instead of polling for it on a schedule. This list grows as connectors and Orca update: run this again before saying an event can\'t start one.',
     "A run gets your prompt, then the event: its source, kind and time; for Slack, the channel id and message ts (and thread ts in a thread); then, quoted, who did it, where, a link and the text. With --results-to thread (the default when only these events start it), the run answers in the event's thread: `orca bot reply` posts there, and so does its final message. `orca skills get orca-cli --reference automations` has each source's fields."
   ].join('\n\n')
 }

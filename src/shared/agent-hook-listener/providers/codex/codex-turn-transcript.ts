@@ -62,18 +62,25 @@ export function readTurnEnd(
   return { turnId, end: payload.error == null ? 'completed' : 'failed' }
 }
 
-export function childIsComplete(records: JsonRecord[]): boolean {
-  let complete = false
+/** The child's turn after these records; undefined when they hold no turn boundary. */
+export function childTurnState(
+  records: JsonRecord[],
+  interruptEndsTurn = false
+): 'running' | 'ended' | undefined {
+  let turn: 'running' | 'ended' | undefined
   for (const recordValue of records) {
     if (recordValue.type !== 'event_msg') {
       continue
     }
     const payload = record(recordValue.payload)
     if (payload?.type === 'task_started') {
-      complete = false
-    } else if (payload?.type === 'task_complete') {
-      complete = true
+      turn = 'running'
+    } else if (
+      payload?.type === 'task_complete' ||
+      (interruptEndsTurn && payload?.type === 'turn_aborted' && payload.reason === 'interrupted')
+    ) {
+      turn = 'ended'
     }
   }
-  return complete
+  return turn
 }
