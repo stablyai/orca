@@ -101,10 +101,8 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     worktreeId: string,
     tabId: string
   ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
+    const tabs = this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]
+    const tab = tabs?.find((candidate) => candidate.id === tabId || candidate.entityId === tabId)
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 

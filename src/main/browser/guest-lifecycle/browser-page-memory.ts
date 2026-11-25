@@ -280,9 +280,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   }
 }
 
-export function browserMemoryGeneration(pageId: string): number | undefined {
-  return pages.get(pageId)?.generation
-}
+export const browserMemoryGeneration = (pageId: string) => pages.get(pageId)?.generation
 
 export async function waitForBrowserPageReady(
   pageId: string,

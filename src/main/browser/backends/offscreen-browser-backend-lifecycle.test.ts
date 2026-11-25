@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  windows: [] as MockBrowserWindow[],
+  windows: new Array<MockBrowserWindow>(),
   BrowserWindow: vi.fn(),
   finishLoads: true
 }))

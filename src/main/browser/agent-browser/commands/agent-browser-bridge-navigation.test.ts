@@ -7,7 +7,7 @@ const { execFileMock, webContentsFromIdMock, existsSyncMock, readFileSyncMock, s
     webContentsFromIdMock: vi.fn(),
     existsSyncMock: vi.fn(() => false),
     readFileSyncMock: vi.fn(() => Buffer.from('')),
-    stdinWrites: [] as string[]
+    stdinWrites: new Array<string>()
   }))
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))

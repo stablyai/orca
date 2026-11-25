@@ -209,10 +209,6 @@ export function requireCallerWindow(
   return entry
 }
 
-function tabStatus(contents: Electron.WebContents): 'loading' | 'complete' {
-  return contents.isLoading() ? 'loading' : 'complete'
-}
-
 /** The fields Orca owns; url/title come from Electron's native result or describeBrowserExtensionTab. */
 function orcaTabFields(entry: BrowserExtensionTabEntry): chrome.tabs.Tab {
   const { contents } = entry
@@ -228,7 +224,7 @@ function orcaTabFields(entry: BrowserExtensionTabEntry): chrome.tabs.Tab {
     autoDiscardable: true,
     incognito: false,
     groupId: -1,
-    status: tabStatus(contents),
+    status: contents.isLoading() ? 'loading' : 'complete',
     audible: contents.isCurrentlyAudible(),
     mutedInfo: { muted: contents.isAudioMuted() }
   }
@@ -256,14 +252,8 @@ export function mergeNativeTab(
   entry: BrowserExtensionTabEntry
 ): chrome.tabs.Tab {
   const native: Partial<chrome.tabs.Tab> = {}
-  for (const key of [
-    'url',
-    'title',
-    'favIconUrl',
-    'lastAccessed',
-    'audible',
-    'mutedInfo'
-  ] as const) {
+  const keys = ['url', 'title', 'favIconUrl', 'lastAccessed', 'audible', 'mutedInfo'] as const
+  for (const key of keys) {
     if (nativeTab[key] !== undefined) {
       const value = nativeTab[key]
       Object.assign(native, {

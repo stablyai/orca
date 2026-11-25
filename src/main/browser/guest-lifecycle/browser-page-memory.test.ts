@@ -66,6 +66,7 @@ function attach(
     loadURL: vi.fn(() => load),
     navigationHistory: {
       getAllEntries: () => entries,
+      getEntryAtIndex: () => ({ pageState: 'BAAAACgAAAA=' }),
       getActiveIndex: () => 1,
       restore: vi.fn(() => load)
     },
