@@ -317,7 +317,10 @@ export function AppWorkspaceShell(props: {
                 )
               }
             />
-            <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+            <div
+              className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden"
+              data-workspace-shell-content=""
+            >
               {/* Every page sits under the top bar; window controls and board sheets rely on it. */}
               {layout.stackedSidebarOpen ? (
                 <div className="titlebar">{titlebarMainStrip}</div>

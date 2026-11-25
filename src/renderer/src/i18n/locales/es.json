@@ -20460,7 +20460,7 @@
         "workerCount_one": "{{count}} trabajador",
         "workerCount_other": "{{count}} trabajadores",
         "workerCount_many": "{{count}} trabajadores",
-        "stoppedByYou": "Detenido por ti",
+        "stopped": "Detenido",
         "finished": "Terminado",
         "failedCount": "{{count}} con error",
         "needsYouCount": "Esperando tu respuesta: {{count}}",
@@ -25276,7 +25276,11 @@
           "hostLabel": "Dirección de GitLab (opcional)",
           "hostHint": "Para instalaciones autogestionadas o Dedicated. Déjalo vacío para GitLab.com."
         },
+        "intercom": {
+          "siteLabel": "Región de Intercom"
+        },
         "place": {
+          "unitedStates": "Estados Unidos",
           "usEast": "Este de Estados Unidos",
           "usWest": "Oeste de Estados Unidos",
           "usCentral": "Centro de Estados Unidos",
@@ -25306,7 +25310,13 @@
         "github": "Menciones y eventos en issues y PR",
         "slack": "Mensajes y menciones",
         "linear": "Issues asignados y menciones",
-        "google": "Gmail, Calendar y Drive, como tú"
+        "google": "Gmail, Calendar y Drive, como tú",
+        "clickup": "Gestiona tareas, listas y documentos",
+        "airtable": "Consulta y edita bases, tablas y registros",
+        "todoist": "Añade, ordena y completa tareas",
+        "zapier": "Ejecuta acciones en las apps que configuraste en Zapier",
+        "granola": "Busca notas y transcripciones de reuniones",
+        "intercom": "Busca conversaciones, contactos y artículos"
       },
       "composioLine": {
         "outlook": "Correo, calendario y contactos",
@@ -25460,7 +25470,8 @@
       "startFromScratch": "Empezar de cero"
     },
     "errors": {
-      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo."
+      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo.",
+      "purposeTooLongForHost": "Orca en {{host}} admite hasta 200 caracteres para el propósito. Acórtalo o actualiza Orca en {{host}}."
     },
     "automations": {
       "paused": "En pausa",

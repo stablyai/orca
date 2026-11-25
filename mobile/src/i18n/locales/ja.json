@@ -1210,7 +1210,7 @@
       "pairingInvalid": "ペアリングが無効です。デスクトップと再度ペアリングしてください。",
       "rePairDetail": "デスクトップと再度ペアリングしてください。",
       "reconnecting": "再接続中…",
-      "relayAccessExpired": "{{host}} のリレーアクセスの有効期限が切れています",
+      "relayAccessRefused": "{{host}} へのリレーアクセスが拒否されました",
       "relayConnectFailed": "リレー経由で接続できません",
       "relayUnreachable": "リレーに接続できません",
       "signInDetail": "再接続するには、デスクトップで Orca にサインインしてください。",
@@ -5194,7 +5194,13 @@
         "github": "Issue と PR でのメンションとイベント",
         "slack": "メッセージとメンション",
         "linear": "割り当てられた Issue とメンション",
-        "google": "あなたとして Gmail、カレンダー、ドライブを使う"
+        "google": "あなたとして Gmail、カレンダー、ドライブを使う",
+        "clickup": "タスク、リスト、ドキュメントを管理",
+        "airtable": "ベース、テーブル、レコードを照会・編集",
+        "todoist": "タスクを追加、整理、完了",
+        "zapier": "Zapier で設定したアプリでアクションを実行",
+        "granola": "会議メモと文字起こしを検索",
+        "intercom": "会話、連絡先、記事を検索"
       },
       "composioLine": {
         "outlook": "メール、カレンダー、連絡先",
@@ -5243,6 +5249,9 @@
       "continuesAt": "{{time}} に再開",
       "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} の Orca では、用途は 200 文字までです。短くするか、{{host}} の Orca を更新してください。"
     }
   },
   "sidebar": {

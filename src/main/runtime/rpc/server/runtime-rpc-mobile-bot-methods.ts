@@ -112,6 +112,7 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.tools.list',
   'bots.tools.problems',
   'bots.tools.remove',
+  'bots.tools.setHostMcpServers',
   'bots.tools.signIn.cancel',
   'bots.tools.signIn.finish',
   'bots.tools.signIn.start',

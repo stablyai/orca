@@ -250,7 +250,8 @@ import {
   BotToolSignInWait,
   BotToolTarget,
   BotToolUpdate,
-  BotToolsList
+  BotToolsList,
+  BotToolsSetHostMcpServers
 } from './bots-tools-params'
 import { BotWorkForget, BotWorkList } from './bots-work-params'
 import {
@@ -655,8 +656,10 @@ import { LinkPreviewGetParams } from './link-preview/link-preview-params'
 import {
   McpServerAdd,
   McpServerAgentFilesAllow,
+  McpServerConnect,
   McpServerDiscover,
   McpServerImport,
+  McpServerPreviewPaste,
   McpServerProblems,
   McpServerSessions,
   McpServerSetAgentEnabled,
@@ -1390,6 +1393,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.tools.list': BotToolsList,
   'bots.tools.problems': BotToolProblems,
   'bots.tools.remove': BotToolTarget,
+  'bots.tools.setHostMcpServers': BotToolsSetHostMcpServers,
   'bots.tools.signIn.cancel': BotToolSignInFlow,
   'bots.tools.signIn.finish': BotToolSignInFinish,
   'bots.tools.signIn.start': BotToolSignInStart,
@@ -1908,11 +1912,13 @@ export const RPC_PARAMS_BY_METHOD = {
   'mcpServers.add': McpServerAdd,
   'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
   'mcpServers.cancelProblems': McpServersList,
+  'mcpServers.connect': McpServerConnect,
   'mcpServers.copy': McpServerImport,
   'mcpServers.details': McpServerTarget,
   'mcpServers.discover': McpServerDiscover,
   'mcpServers.list': McpServersList,
   'mcpServers.move': McpServerImport,
+  'mcpServers.previewPaste': McpServerPreviewPaste,
   'mcpServers.problems': McpServerProblems,
   'mcpServers.remove': McpServerTarget,
   'mcpServers.sessions.restart': McpServerSessions,

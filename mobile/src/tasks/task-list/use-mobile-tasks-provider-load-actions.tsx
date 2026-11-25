@@ -32,6 +32,7 @@ import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { createGitHubTask, mapWithConcurrency } from '../item-detail/mobile-tasks-item-mapping'
 import { reconcileTeamSelection } from '../item-detail/mobile-tasks-reviewer-linear'
 import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
+import { sortWorkItemsByRecency } from '../../../../src/shared/work-items/work-item-order'
 import {
   githubWorkItemCountRead,
   linearAccountStatusRead,
@@ -225,10 +226,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
 
       return {
-        // Host pagination orders by issue number; merge in that order so rows cannot reshuffle between pages.
-        items: results
-          .flatMap((result) => result.items)
-          .sort((a, b) => b.source.number - a.source.number),
+        items: sortWorkItemsByRecency(
+          results.flatMap((result) => result.items),
+          (item) => item.source
+        ),
         failedCount: results.filter((result) => result.error).length,
         errorTypes: results.flatMap((result) => result.errorTypes ?? []),
         sourcesByRepoId,

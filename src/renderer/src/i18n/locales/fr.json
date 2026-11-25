@@ -20787,7 +20787,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Arrêté par vous",
+        "stopped": "Arrêté",
         "finished": "Terminé",
         "failedCount": "{{count}} en échec",
         "needsYouCount": "En attente de votre réponse : {{count}}",
@@ -25297,7 +25297,11 @@
           "hostLabel": "Adresse GitLab (facultative)",
           "hostHint": "Pour les instances autogérées ou Dedicated. Laissez vide pour GitLab.com."
         },
+        "intercom": {
+          "siteLabel": "Région Intercom"
+        },
         "place": {
+          "unitedStates": "États-Unis",
           "usEast": "Est des États-Unis",
           "usWest": "Ouest des États-Unis",
           "usCentral": "Centre des États-Unis",
@@ -25327,7 +25331,13 @@
         "github": "Mentions et événements sur les issues et les PR",
         "slack": "Messages et mentions",
         "linear": "Issues assignées et mentions",
-        "google": "Gmail, Agenda et Drive, en votre nom"
+        "google": "Gmail, Agenda et Drive, en votre nom",
+        "clickup": "Gérer les tâches, listes et docs",
+        "airtable": "Interroger et modifier les bases, tables et enregistrements",
+        "todoist": "Ajouter, trier et terminer des tâches",
+        "zapier": "Lancer des actions dans les apps configurées dans Zapier",
+        "granola": "Rechercher dans les notes et transcriptions de réunion",
+        "intercom": "Rechercher conversations, contacts et articles"
       },
       "composioLine": {
         "outlook": "E-mails, calendrier et contacts",
@@ -25481,7 +25491,8 @@
       "startFromScratch": "Partir de zéro"
     },
     "errors": {
-      "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer."
+      "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer.",
+      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}."
     },
     "automations": {
       "paused": "En pause",

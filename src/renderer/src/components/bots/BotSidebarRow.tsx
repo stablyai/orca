@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Bell, BellOff, Pencil } from 'lucide-react'
+import { Bell, BellMinus, BellOff, BellRing, Pencil } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -9,6 +9,7 @@ import {
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { ActivityThreadHoverCardRoot } from '@/components/activity/thread-preview/activity-thread-hover-card-root'
 import { WORKTREE_CARD_SURFACE_CLASS_NAME } from '@/components/sidebar/workspace-card/surface/worktree-card-surface'
+import { WorktreeCardNotificationsMutedBadge } from '@/components/sidebar/workspace-card/identity/WorktreeCardNotificationsMutedBadge'
 import { WorktreeTitleInlineRename } from '@/components/sidebar/workspace-card/identity/WorktreeTitleInlineRename'
 import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import { useTranslate } from '@/i18n/use-translate'
@@ -159,6 +160,7 @@ export function BotSidebarRow({
                       beginEditing={renameRequested}
                       onBeginEditingConsumed={() => setRenameRequested(false)}
                     />
+                    <WorktreeCardNotificationsMutedBadge worktreeId={workspaceId} />
                     {age ? (
                       <span className="ml-auto shrink-0 text-3xs leading-none text-muted-foreground tabular-nums">
                         {age}
@@ -194,9 +196,30 @@ export function BotSidebarRow({
           {isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
           {isUnread ? t('bots.row.markRead', 'Mark Read') : t('bots.row.markUnread', 'Mark Unread')}
         </ContextMenuItem>
+        <BotNotificationMuteMenuItem workspaceId={workspaceId} />
         {menuFooter}
       </ContextMenuContent>
     </ContextMenu>
+  )
+}
+
+/** Mounted only while the context menu is open, so closed rows never subscribe to the mute map. */
+function BotNotificationMuteMenuItem({ workspaceId }: { workspaceId: string }): React.JSX.Element {
+  const t = useTranslate()
+  const notificationsMuted = useAppStore(
+    (s) => s.notificationsMutedByWorktree?.[workspaceId] === true
+  )
+  const toggleWorktreeNotificationsMuted = useAppStore((s) => s.toggleWorktreeNotificationsMuted)
+  return (
+    <ContextMenuItem onSelect={() => toggleWorktreeNotificationsMuted(workspaceId)}>
+      {notificationsMuted ? <BellRing className="size-3.5" /> : <BellMinus className="size-3.5" />}
+      {notificationsMuted
+        ? t(
+            'auto.components.sidebar.WorktreeContextMenu.unmuteNotifications',
+            'Unmute Notifications'
+          )
+        : t('auto.components.sidebar.WorktreeContextMenu.muteNotifications', 'Mute Notifications')}
+    </ContextMenuItem>
   )
 }
 

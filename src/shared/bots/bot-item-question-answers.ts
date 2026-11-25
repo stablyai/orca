@@ -242,7 +242,8 @@ function quotedLine(
 }
 
 /** The ask the host's item read says waits: its `waitingAsk`, else its Needs you question. */
-function hostWaitingAsk(item: BotItemWaitingView): string | null {
+/** The ask the host's read says the agent waits on, whatever events are loaded; null when it names none. */
+export function botItemHostWaitingAsk(item: BotItemWaitingView): string | null {
   return item.waitingAsk ?? (item.status === 'needs_you' ? (item.question?.eventId ?? null) : null)
 }
 
@@ -263,7 +264,7 @@ export function botItemWaitingAsk(
   if (!paired) {
     return null
   }
-  const host = hostWaitingAsk(item)
+  const host = botItemHostWaitingAsk(item)
   if (
     host === null ||
     host === paired[0] ||
@@ -278,6 +279,21 @@ export function botItemWaitingAsk(
 /** A line the comment box replies to; `eventId` is the comment that asks it. */
 export type BotItemWaitingLine = { id: string; eventId: string; line: string; replies: boolean }
 
+/** Line `index` of the ask `askId`, as the comment box names it. */
+export function botItemAskLine(
+  askId: string,
+  shape: BotItemQuestionShape,
+  index: number
+): BotItemWaitingLine {
+  const decision = shape.decisions[index]!
+  return {
+    id: `${askId}:${index}`,
+    eventId: askId,
+    line: botItemQuestionLine(decision.question),
+    replies: decision.replies.length > 0
+  }
+}
+
 /** What the comment box replies to while the agent waits: the first open line of its ask, with
  *  `replies` when that line has quick replies. The item's own question stands in until its event is
  *  read. A Needs you comment that asks no question has nothing to reply to. */
@@ -287,14 +303,8 @@ export function botItemWaitingLine(
 ): BotItemWaitingLine | null {
   const waiting = botItemWaitingAsk(item, events)
   const open = waiting?.answers.indexOf(null) ?? -1
-  const line = waiting?.shape.decisions[open]
-  if (waiting && line) {
-    return {
-      id: `${waiting.askId}:${open}`,
-      eventId: waiting.askId,
-      line: botItemQuestionLine(line.question),
-      replies: line.replies.length > 0
-    }
+  if (waiting && waiting.shape.decisions[open]) {
+    return botItemAskLine(waiting.askId, waiting.shape, open)
   }
   const { question } = item
   if (item.status !== 'needs_you' || !question) {
@@ -308,9 +318,10 @@ export function botItemWaitingLine(
   const decision = events.some((event) => event.id === question.eventId)
     ? undefined
     : question.decisions?.[0]
+  // Its first line, named as it is once the event is read, so a draft bound to it keeps it then.
   return decision
     ? {
-        id: question.eventId,
+        id: `${question.eventId}:0`,
         eventId: question.eventId,
         line: botItemQuestionLine(decision.question),
         replies: decision.replies.length > 0

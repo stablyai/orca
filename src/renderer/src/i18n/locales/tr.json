@@ -7129,7 +7129,7 @@
           "preservedTitle": "{{value0}} üzerindeki düzenlemeleriniz ayrı olarak kaydedildi",
           "preservedDescription": "Orca beceriyi güncelledi ve düzenlemelerinizi {{value0}} konumuna kaydetti.",
           "uncertainTitle": "Orca, {{value0}} üzerindeki beceri güncellemesini doğrulayamadı",
-          "uncertainDescription": "Orca, {{value0}} üzerindeki becerileri güncellemiş olabilir ancak sonucu doğrulayamadı. Güncelleme sırasında bir beceriyi düzenlediyseniz kopyanız {{value1}} konumunda."
+          "uncertainDescriptionKept": "Orca, {{value0}} üzerindeki becerileri güncellemiş olabilir ancak sonucu doğrulayamadı. Güncelleme sırasında bir beceriyi düzenlediyseniz kopyanız {{value1}} konumunda ya da hâlâ beceriler klasöründe."
         },
         "SkillBackupPathLine": {
           "movedTo": "Eski kopyanın taşındığı yer:",
@@ -16644,8 +16644,6 @@
           "noRemote": "Yerel Git repository’si · remote yok",
           "openUpstream": "{{value0}} adresini tarayıcıda aç",
           "forkOf": "{{value0}} fork’u",
-          "openSettingsPage": "Ayarlar sayfasını aç",
-          "done": "Bitti",
           "resetDone": "Simge ve renk sıfırlandı",
           "undo": "Geri al",
           "styleLetters": "Harfler",
@@ -22749,7 +22747,7 @@
         "task": "Görev",
         "workerCount_one": "{{count}} çalışan",
         "workerCount_other": "{{count}} çalışan",
-        "stoppedByYou": "Sizin tarafınızdan durduruldu",
+        "stopped": "Durduruldu",
         "finished": "Tamamlandı",
         "failedCount": "{{count}} başarısız",
         "needsYouCount": "{{count}} sizi bekliyor",
@@ -25830,19 +25828,6 @@
       }
     }
   },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} sekme",
-      "chipOnlyName_other": "{{title}}, {{count}} sekme",
-      "entryNeedsAttention": "{{title}}, ilgilenmeniz gerekiyor",
-      "moreTabs_one": "{{count}} sekme daha",
-      "moreTabs_other": "{{count}} sekme daha",
-      "needAttention_one": ", {{count}} sekme ilgilenmenizi bekliyor",
-      "needAttention_other": ", {{count}} sekme ilgilenmenizi bekliyor",
-      "openTabs_one": "{{count}} açık sekme",
-      "openTabs_other": "{{count}} açık sekme"
-    }
-  },
   "updates": {
     "installOnQuit": {
       "title": "Güncelleme yüklenmeye hazır",
@@ -28019,8 +28004,12 @@
           "hostHint": "Kendi yönettiğiniz kurulumlar veya Dedicated için. GitLab.com için boş bırakın.",
           "hostLabel": "GitLab adresi (isteğe bağlı)"
         },
+        "intercom": {
+          "siteLabel": "Intercom bölgesi"
+        },
         "hostInvalid": "{{example}} gibi bir sunucu adı girin.",
         "place": {
+          "unitedStates": "Amerika Birleşik Devletleri",
           "australia": "Avustralya",
           "europe": "Avrupa",
           "japan": "Japonya",
@@ -28048,7 +28037,13 @@
         "github": "Sorunlar ve PR’lardaki bahsetmeler ve olaylar",
         "slack": "Mesajlar ve bahsetmeler",
         "linear": "Atanan sorunlar ve bahsetmeler",
-        "google": "Sizin adınıza Gmail, Takvim ve Drive"
+        "google": "Sizin adınıza Gmail, Takvim ve Drive",
+        "clickup": "Görevleri, listeleri ve belgeleri yönet",
+        "airtable": "Tabanları, tabloları ve kayıtları sorgula ve düzenle",
+        "todoist": "Görev ekle, sırala ve tamamla",
+        "zapier": "Zapier'da kurduğun uygulamalarda eylem çalıştır",
+        "granola": "Toplantı notlarında ve dökümlerinde ara",
+        "intercom": "Konuşmalarda, kişilerde ve makalelerde ara"
       },
       "composioLine": {
         "outlook": "Posta, takvim ve kişiler",
@@ -28664,6 +28659,7 @@
     "errors": {
       "unsavedDrafts": "Klasöründe kaydedilmemiş düzenleyici değişiklikleri var. Bunları kaydedin veya kapatın, ardından silmeyi tekrar deneyin.",
       "nameTaken": "Bu ad başka bir bot tarafından kullanılıyor.",
+      "purposeTooLongForHost": "{{host}} üzerindeki Orca, amaç için en fazla 200 karakter kabul ediyor. Kısaltın veya {{host}} üzerindeki Orca'yı güncelleyin.",
       "generic": "Bir sorun oluştu. Tekrar deneyin.",
       "avatarHomeUnreadable": "Kaydedilen resim okunamadı. Resmi yeniden seçin.",
       "folderNotOwned": "Bu botun klasörü doğrulanamadı.",
@@ -30894,6 +30890,7 @@
     "toolsLabel": "Uygulama araçları",
     "workspaces": "Çalışma Alanları",
     "more": "Daha fazla",
+    "customize": "Özelleştir",
     "pageRegion": "Sayfa"
   },
   "chats": {

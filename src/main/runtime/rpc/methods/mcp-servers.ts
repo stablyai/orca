@@ -5,6 +5,7 @@ import type { McpServer } from '../../../../shared/mcp-servers/mcp-servers'
 import {
   McpServerAdd,
   McpServerAgentFilesAllow,
+  McpServerConnect,
   McpServerDiscover,
   McpServerImport,
   McpServerProblems,
@@ -17,17 +18,17 @@ import {
   McpServersList
 } from '../../../../shared/rpc-contract/mcp-servers-params'
 import { botToolProblems } from '../../../bots/bot-tools-host'
+import { botToolsEpoch } from '../../../bots/bot-tools-revision'
 import {
-  cancelBotToolHealthChecks,
-  sharedBotToolHealthCheck
-} from '../../../bots/bot-tool-health-checks'
+  cancelHostListHealthChecks,
+  joinHostListHealthCheck
+} from '../../../mcp-servers/mcp-host-list-health-checks'
 import { resolveBotToolInput } from '../../../bots/bot-tool-details'
 import { MCP_HOST_LIST_RELAY_OWNER } from '../../../bots/tool-relay/bot-tool-relay'
 import {
   addMcpServer,
   readMcpHostList,
   setMcpAgentFileAllowed,
-  mcpHostListFolder,
   mcpServerDetails,
   mcpServerIdsByName,
   removeMcpServer,
@@ -38,8 +39,21 @@ import {
 } from '../../../mcp-servers/mcp-host-list'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
+import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
+import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
+import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
+import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
+import { sharedMcpProcesses } from '../../../mcp-servers/shared-process/shared-mcp-processes'
 import { defineMethod, type RpcContext } from '../core'
-import { botToolServerOf, toolsHomeFor } from './bots-tools'
+import { toolsHomeFor } from './bots-tools'
+import { mcpServersOfPaste } from '../../../mcp-servers/mcp-server-paste'
+import {
+  agentMcpImportHost,
+  copyAgentMcpServer,
+  importAgentMcpServer,
+  listAgentMcpServers,
+  moveAgentMcpServer
+} from './mcp-servers-import'
 
 /** Runs `work` with the switch on; a change also tells every other client to re-read the list. */
 export async function onHost<T>(
@@ -51,11 +65,21 @@ export async function onHost<T>(
   const result = await work()
   if (changes) {
     context.runtime.notifyMcpServersChanged()
+    // A shared server removed, unshared or edited stops now, not on its next request.
+    void sharedMcpProcesses.reconcile(mcpHostListFolder()).catch(() => {})
   }
   return result
 }
 
 export const changed = (server: McpServer) => ({ server })
+
+/** The client a problems request is from: its window or socket, so a cancel lets go of only its own. */
+function problemsClient(context: RpcContext): string {
+  return (
+    context.connectionId ??
+    (context.caller ? rpcCallerOperationKey(context.caller) : 'unidentified')
+  )
+}
 
 /** A method later hosts fill in; this one refuses it in words a client can tell apart. */
 async function notYet(method: string): Promise<never> {
@@ -68,7 +92,8 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.list',
     permission: 'workspace',
     params: McpServersList,
-    handler: (_params, context) => onHost(context, () => readMcpHostList())
+    handler: (_params, context) =>
+      onHost(context, async () => withMcpAgentProblems(await readMcpHostList()))
   }),
   defineMethod({
     name: 'mcpServers.add',
@@ -80,10 +105,24 @@ export const MCP_SERVER_METHODS = [
         async () => {
           const given =
             'config' in params
-              ? resolveBotToolInput(params.config)
-              : botToolServerOf(params.source, params.name)
-          const nameGiven = 'config' in params || params.name !== undefined
-          return changed(await addMcpServer(given, { nameGiven, signal: context.signal }))
+              ? [resolveBotToolInput(params.config)]
+              : mcpServersOfPaste(params.source, params.name)
+          // A name the user gave is refused when taken; a paste's own names move to a free one.
+          const nameGiven = 'config' in params || (params.name !== undefined && given.length === 1)
+          // Each in turn: a later one refused leaves the earlier ones added, as separate adds would.
+          const servers: McpServer[] = []
+          try {
+            for (const server of given) {
+              servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+            }
+          } catch (error) {
+            // The ones added before the refusal are on the list: other clients re-read it.
+            if (servers.length > 0) {
+              context.runtime.notifyMcpServersChanged()
+            }
+            throw error
+          }
+          return { ...changed(servers[0]), servers }
         },
         true
       )
@@ -133,11 +172,14 @@ export const MCP_SERVER_METHODS = [
         const agent = params.agent ?? 'claude'
         const remote = params.scope === 'remote'
         const folder = mcpHostListFolder()
-        // The bots' check, run by that agent's CLI over the host's list: one per agent and scope at a
-        // time. Ids come from the checked run's own read, so a request that joins it gets that run's.
-        const problems = await sharedBotToolHealthCheck(
-          MCP_HOST_LIST_RELAY_OWNER,
-          `${agent}\0${remote ? 'remote' : 'all'}`,
+        // The bots' check, run by that agent's CLI over the host's list: one per agent, scope and list
+        // write (epoch) at a time, so a request after an edit never joins a check of the old list. Read
+        // without waiting, so the request joins before a cancel sent right after it can arrive.
+        // Ids come from the checked run's own read, so a request that joins it gets that run's.
+        const problems = await joinHostListHealthCheck(
+          `${agent}\0${remote ? 'remote' : 'all'}\0${botToolsEpoch(folder)}`,
+          problemsClient(context),
+          context.signal,
           async (signal) => {
             const ids = await mcpServerIdsByName(folder)
             const home = await toolsHomeFor(context.runtime, agent, {
@@ -159,13 +201,13 @@ export const MCP_SERVER_METHODS = [
       })
   }),
   defineMethod({
-    // The asking window let go: its check's CLI and servers close now, not at the check's timeout.
+    // The asking window let go; the check's CLI and servers close once no other client waits on it.
     name: 'mcpServers.cancelProblems',
     permission: 'workspace',
     params: McpServersList,
     handler: (_params, context) =>
       onHost(context, async () => {
-        cancelBotToolHealthChecks(MCP_HOST_LIST_RELAY_OWNER)
+        cancelHostListHealthChecks(problemsClient(context))
         return { cancelled: true }
       })
   }),
@@ -207,19 +249,24 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.discover',
     permission: 'workspace',
     params: McpServerDiscover,
-    handler: () => notYet('mcpServers.discover')
+    handler: (_params, context) =>
+      onHost(context, async () => ({
+        servers: await listAgentMcpServers(await agentMcpImportHost(context.runtime))
+      }))
   }),
   defineMethod({
     name: 'mcpServers.move',
     permission: 'workspace',
     params: McpServerImport,
-    handler: () => notYet('mcpServers.move')
+    handler: (params, context) =>
+      onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.copy',
     permission: 'workspace',
     params: McpServerImport,
-    handler: () => notYet('mcpServers.copy')
+    handler: (params, context) =>
+      onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',
@@ -230,6 +277,22 @@ export const MCP_SERVER_METHODS = [
         context,
         async () => ({ agentFiles: await setMcpAgentFileAllowed(params.agent, params.allowed) }),
         true
+      )
+  }),
+  defineMethod({
+    // `orca mcp connect` in Grok's, Cursor's and Droid's own MCP files. The answer carries the
+    // relay token or a command's secret env, so this host's own CLI is the only caller it serves.
+    name: 'mcpServers.connect',
+    permission: 'workspace',
+    params: McpServerConnect,
+    handler: (params, context) =>
+      onHost(context, () =>
+        mcpServerConnection(context.runtime, {
+          ...params,
+          ...(context.pairedDeviceId !== undefined
+            ? { pairedDeviceId: context.pairedDeviceId }
+            : {})
+        })
       )
   }),
   defineMethod({

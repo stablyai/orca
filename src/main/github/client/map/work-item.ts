@@ -1,6 +1,7 @@
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import {
   authorFieldsFromUnknown,
+  createdAtFromUnknown,
   extractHeadOwnerLogin,
   usersFromUnknown,
   latestReviewsFromUnknown,
@@ -29,6 +30,7 @@ export function mapIssueWorkItem(item: Record<string, unknown>): MainWorkItem {
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
+    ...createdAtFromUnknown(item),
     ...authorFieldsFromUnknown(item),
     ...(typeof item.comments === 'number' ? { commentCount: item.comments } : {}),
     ...(item.assignees !== undefined ? { assignees: usersFromUnknown(item.assignees) } : {})
@@ -86,6 +88,7 @@ export function mapPullRequestWorkItem(
           .filter(Boolean)
       : [],
     updatedAt: String(item.updated_at ?? item.updatedAt ?? ''),
+    ...createdAtFromUnknown(item),
     ...authorFieldsFromUnknown(item),
     branchName:
       typeof item.head === 'object' && item.head !== null && 'ref' in item.head

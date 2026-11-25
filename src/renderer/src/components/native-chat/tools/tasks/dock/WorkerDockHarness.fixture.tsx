@@ -240,6 +240,7 @@ function Harness({
       {details ? (
         <WorkerDockResultDialogSlot
           dialog={owner.dialog}
+          hostId="local"
           ownerActionsAvailable
           onClose={owner.close}
           onOpen={(row) => record({ action: 'open', id: row.id })}

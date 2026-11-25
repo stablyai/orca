@@ -12,7 +12,8 @@ import { NETWORK_PORT_FORWARD_RUNTIME_CAPABILITY } from '../../../../shared/remo
 import { isLoopbackBrowserUrl } from '../../../../shared/browser/navigation/loopback-browser-url'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RestoredPortForwardMove } from '../../../../shared/remote-runtime/host-catalog/runtime-environment-port-forward-channel'
-import { forwardedUrlForRemoteUrl } from './workspace-port-urls'
+import { forwardedTargetForRemoteUrl } from './workspace-port-urls'
+import { openForwardedUrlInSystemBrowser } from './forwarded-url-system-browser-open'
 import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
 import {
   serverForwardsPorts,
@@ -72,12 +73,12 @@ export async function openServerLoopbackInSystemBrowser(
     await openSshTargetLoopback(rawUrl, port, sshTargetId, host)
     return
   }
-  const known = forwardedUrlForRemoteUrl(
+  const known = forwardedTargetForRemoteUrl(
     rawUrl,
     state.portForwardsByConnection[environmentId] ?? []
   )
   if (known) {
-    await openSystemHttpLink(known)
+    await openForwardedUrlInSystemBrowser(known.url, known.forward, 'paired')
     return
   }
   const api = window.api.runtimeEnvironments.portForwards
@@ -97,7 +98,7 @@ export async function openServerLoopbackInSystemBrowser(
     )
     return
   }
-  await openThroughNewForward(rawUrl, port, host, () =>
+  await openThroughNewForward(rawUrl, port, host, 'paired', () =>
     api.ensure({ environmentId, remotePort: port })
   )
 }
@@ -125,12 +126,12 @@ async function openSshTargetLoopback(
   targetId: string,
   host: string
 ): Promise<void> {
-  const known = forwardedUrlForRemoteUrl(
+  const known = forwardedTargetForRemoteUrl(
     rawUrl,
     useAppStore.getState().portForwardsByConnection[targetId] ?? []
   )
   if (known) {
-    await openSystemHttpLink(known)
+    await openForwardedUrlInSystemBrowser(known.url, known.forward, 'ssh')
     return
   }
   const ensure = window.api.ssh?.ensurePortForward
@@ -144,7 +145,9 @@ async function openSshTargetLoopback(
     )
     return
   }
-  await openThroughNewForward(rawUrl, port, host, () => ensure({ targetId, remotePort: port }))
+  await openThroughNewForward(rawUrl, port, host, 'ssh', () =>
+    ensure({ targetId, remotePort: port })
+  )
 }
 
 function remoteUrlPort(rawUrl: string): number | null {
@@ -160,13 +163,14 @@ async function openThroughNewForward(
   rawUrl: string,
   port: number,
   host: string,
+  forwardKind: 'ssh' | 'paired',
   ensure: () => Promise<{ entry: PortForwardEntry; created: boolean }>
 ): Promise<void> {
-  let target: string | null
+  let target: { url: string; forward: PortForwardEntry } | null
   let created: boolean
   try {
     const result = await ensure()
-    target = forwardedUrlForRemoteUrl(rawUrl, [result.entry])
+    target = forwardedTargetForRemoteUrl(rawUrl, [result.entry])
     created = result.created
   } catch {
     target = null
@@ -182,8 +186,8 @@ async function openThroughNewForward(
     )
     return
   }
-  await openSystemHttpLink(target)
-  if (created) {
+  const opened = await openForwardedUrlInSystemBrowser(target.url, target.forward, forwardKind)
+  if (opened && created) {
     toast.success(
       translate(
         'auto.lib.workspace.ports.serverPortForward.forwarded',
@@ -194,7 +198,7 @@ async function openThroughNewForward(
         description: translate(
           'auto.lib.workspace.ports.serverPortForward.opened',
           'Opened {{address}} in your default browser.',
-          { address: new URL(target).host }
+          { address: new URL(opened).host }
         )
       }
     )

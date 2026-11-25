@@ -51,7 +51,8 @@ export function MobileSessionHeader({
     botPanel,
     openBotPanel,
     terminalResume,
-    connState
+    connState,
+    statusDot
   } = controller
   // A switched-back terminal shows its last screen at once; only a slow catch-up shows the refresh line.
   const catchingUp = useSyncExternalStore(terminalResume.subscribe, terminalResume.anyCatchingUp)
@@ -110,9 +111,14 @@ export function MobileSessionHeader({
             : worktreeName || t('session.header.terminalTitle', 'Terminal')
         }
         leading={routeBot ? <MobileBotAvatar avatar={routeBot.avatar} size={18} /> : undefined}
-        connState={presentedConnState}
+        connState={statusDot.state}
+        verdict={statusDot.verdict}
         details={details}
-        meta={botStatus && presentedConnState === 'connected' ? botStatus.line : terminalSummary}
+        meta={
+          botStatus && presentedConnState === 'connected' && !connectionEscalated
+            ? botStatus.line
+            : terminalSummary
+        }
         centered={!tabsInTopBar}
         showConnectionRetry={showConnectionRetry}
         onRetry={() => {

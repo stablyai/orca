@@ -20759,7 +20759,7 @@
         "task": "Aufgabe",
         "workerCount_one": "{{count}} Worker",
         "workerCount_other": "{{count}} Worker",
-        "stoppedByYou": "Von dir gestoppt",
+        "stopped": "Gestoppt",
         "finished": "Abgeschlossen",
         "failedCount": "{{count}} fehlgeschlagen",
         "needsYouCount": "{{count}} mit Rückfrage",
@@ -24685,7 +24685,11 @@
           "hostLabel": "GitLab-Adresse (optional)",
           "hostHint": "Für selbst verwaltete Instanzen oder Dedicated. Für GitLab.com leer lassen."
         },
+        "intercom": {
+          "siteLabel": "Intercom-Region"
+        },
         "place": {
+          "unitedStates": "USA",
           "usEast": "USA Ost",
           "usWest": "USA West",
           "usCentral": "USA Mitte",
@@ -24715,7 +24719,13 @@
         "github": "Erwähnungen und Ereignisse in Issues und PRs",
         "slack": "Nachrichten und Erwähnungen",
         "linear": "Zugewiesene Issues und Erwähnungen",
-        "google": "Gmail, Kalender und Drive, als du"
+        "google": "Gmail, Kalender und Drive, als du",
+        "clickup": "Aufgaben, Listen und Docs verwalten",
+        "airtable": "Bases, Tabellen und Datensätze abfragen und bearbeiten",
+        "todoist": "Aufgaben anlegen, sortieren und erledigen",
+        "zapier": "Aktionen in den Apps ausführen, die du in Zapier eingerichtet hast",
+        "granola": "Besprechungsnotizen und Transkripte durchsuchen",
+        "intercom": "Unterhaltungen, Kontakte und Artikel durchsuchen"
       },
       "composioLine": {
         "outlook": "E-Mail, Kalender und Kontakte",
@@ -24864,7 +24874,8 @@
       "startFromScratch": "Ohne Vorlage starten"
     },
     "errors": {
-      "unsavedDrafts": "In seinem Ordner gibt es ungespeicherte Änderungen im Editor. Speichere sie oder schließe die betroffenen Dateien und versuche dann erneut, den Bot zu löschen."
+      "unsavedDrafts": "In seinem Ordner gibt es ungespeicherte Änderungen im Editor. Speichere sie oder schließe die betroffenen Dateien und versuche dann erneut, den Bot zu löschen.",
+      "purposeTooLongForHost": "Orca auf {{host}} erlaubt höchstens 200 Zeichen für den Zweck. Kürze ihn oder aktualisiere Orca auf {{host}}."
     },
     "automations": {
       "paused": "Pausiert",

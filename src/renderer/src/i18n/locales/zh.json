@@ -6343,7 +6343,7 @@
           "preservedTitle": "你对 {{value0}} 的修改已单独保存",
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
           "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
-          "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
+          "uncertainDescriptionKept": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}，或仍在技能文件夹中"
         },
         "SkillBackupPathLine": {
           "movedTo": "旧副本已移动到：",
@@ -21327,7 +21327,7 @@
         "monitor": "监控任务",
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
-        "stoppedByYou": "已由你停止",
+        "stopped": "已停止",
         "finished": "已完成",
         "failedCount": "{{count}} 个失败",
         "needsYouCount": "{{count}} 个等待你处理",
@@ -27842,7 +27842,13 @@
         "context7": "代码库的最新文档和示例",
         "atlassian": "Jira 议题和 Confluence 页面",
         "notion": "搜索、阅读和编辑页面",
-        "stripe": "查询付款、客户和订阅"
+        "stripe": "查询付款、客户和订阅",
+        "clickup": "管理任务、列表和文档",
+        "airtable": "查询和编辑 Base、数据表和记录",
+        "todoist": "添加、整理和完成任务",
+        "zapier": "在你于 Zapier 中设置的应用里执行操作",
+        "granola": "搜索会议笔记和转录",
+        "intercom": "搜索对话、联系人和文章"
       },
       "mcp": {
         "adding": "正在添加 {{app}}…",
@@ -27856,7 +27862,11 @@
           "hostLabel": "GitLab 地址（可选）",
           "hostHint": "适用于自管理或 Dedicated 实例。留空则使用 GitLab.com"
         },
+        "intercom": {
+          "siteLabel": "Intercom 区域"
+        },
         "place": {
+          "unitedStates": "美国",
           "usEast": "美国东部",
           "usWest": "美国西部",
           "usCentral": "美国中部",
@@ -29811,6 +29821,7 @@
     },
     "errors": {
       "nameTaken": "已有其他 bot 使用此名称",
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
       "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"
@@ -30417,7 +30428,8 @@
     "navigationLabel": "应用导航",
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
-    "more": "更多"
+    "more": "更多",
+    "customize": "自定义"
   },
   "chats": {
     "delete": {

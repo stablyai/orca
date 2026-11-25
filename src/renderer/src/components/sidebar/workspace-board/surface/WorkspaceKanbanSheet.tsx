@@ -10,6 +10,37 @@ import { resolveSidebarDrawerInset } from '../../chrome/sidebar-drawer-inset'
 import { useAppStore } from '@/store/index'
 import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
 
+const MIN_DOCKED_BOARD_WIDTH = 320
+const BOARD_CONTENT_WIDTH = '--workspace-board-content-width'
+
+function trackWorkspaceBoardBounds(element: HTMLElement | null): (() => void) | undefined {
+  if (!element) {
+    return
+  }
+
+  const stopTrackingSidebar = trackSidebarLiveWidth(element)
+  const workspace = element.ownerDocument.querySelector('[data-workspace-shell-content]')
+  if (!workspace) {
+    return stopTrackingSidebar
+  }
+
+  let lastWidth: string | null = null
+  // Why: ResizeObserver's initial delivery runs before first paint, so no synchronous sync is needed.
+  const observer = new ResizeObserver(() => {
+    const next = `${workspace.getBoundingClientRect().width}px`
+    if (next === lastWidth) {
+      return
+    }
+    lastWidth = next
+    element.style.setProperty(BOARD_CONTENT_WIDTH, next)
+  })
+  observer.observe(workspace)
+  return () => {
+    observer.disconnect()
+    stopTrackingSidebar?.()
+  }
+}
+
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
   children: React.ReactNode
@@ -82,7 +113,7 @@ export default function WorkspaceKanbanSheet({
         side={edge}
         data-workspace-drawer-edge={edge}
         showCloseButton={false}
-        ref={trackSidebarLiveWidth}
+        ref={trackWorkspaceBoardBounds}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,
@@ -96,7 +127,7 @@ export default function WorkspaceKanbanSheet({
           top: WORKSPACE_TOP_CHROME_HEIGHT,
           bottom: drawerBottom,
           height: 'auto',
-          width: `min(calc(100vw - ${insetCss}), 1294px)`
+          width: `min(max(var(${BOARD_CONTENT_WIDTH}, 100vw), ${MIN_DOCKED_BOARD_WIDTH}px), 100vw - ${insetCss}, 1294px)`
         }}
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""
