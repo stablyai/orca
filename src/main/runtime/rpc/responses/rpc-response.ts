@@ -1,6 +1,9 @@
+import { BotFailureError } from '../../../../shared/bots/bot-failure-copy'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
 import { BotItemError } from '../../../bots/bot-item-error'
+import { BotSessionRefusedError } from '../../../bots/bot-session-refused-error'
 import { AgentConversationRefusal } from '../../agent-conversations/agent-conversation-refusal'
+import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
@@ -88,6 +91,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worktree_id_requires_full_path',
   // A workspace selector's choices ride in data; a plain Error('selector_ambiguous') keeps the bare code.
   'selector_ambiguous',
+  // A refused worker-start names its flag in data; a plain Error('selector_not_found') keeps the bare code.
+  'selector_not_found',
   'run_not_found',
   'run_home_unreachable',
   'run_required',
@@ -180,7 +185,7 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
   if (error instanceof BotItemError) {
     return errorResponse(id, meta, error.code, message, error.data)
   }
-  if (error instanceof AgentConversationRefusal) {
+  if (error instanceof AgentConversationRefusal || error instanceof McpServersError) {
     return errorResponse(id, meta, error.code, message)
   }
   // A recipe workspace removal keeps its environment's own code (archive hook, PTY stop, selector).
@@ -194,7 +199,9 @@ export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknow
     error instanceof BranchSwitchCollisionError ||
     error instanceof TerminalSplitOutcomeError ||
     error instanceof SparsePresetValidationError ||
-    error instanceof WslHostWindowsDriveRefusalError
+    error instanceof WslHostWindowsDriveRefusalError ||
+    error instanceof BotSessionRefusedError ||
+    error instanceof BotFailureError
   ) {
     // Keep the existing RPC code while preserving structured details.
     return errorResponse(id, meta, 'runtime_error', message, error.data)

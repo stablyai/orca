@@ -157,7 +157,8 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
           const { review, readOutcome } = await requestHostedReviewForBranch(
             target,
             { repo: repo?.id ?? options?.repoId ?? repoPath, repoPath, ...args },
-            { repoPath, ...hostedReviewOwnerIpcArgs(options), ...args }
+            { repoPath, ...hostedReviewOwnerIpcArgs(options), ...args },
+            options?.background
           )
           if (requestGenerations.get(cacheKey) === generation) {
             set((state) => {

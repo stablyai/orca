@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { AlertCircle, Check, Copy } from 'lucide-react'
 import {
   Dialog,
@@ -32,6 +32,10 @@ type AgentCommandFailedDialogProps = {
   detailsFinishedAt?: number | null
   /** Empties the live region while an attempt runs, so an identical result is announced again. */
   announcementPaused?: boolean
+  /** Lets an action that moves elsewhere (Settings) keep focus from returning to the trigger. */
+  onCloseAutoFocus?: (event: Event) => void
+  /** The dialog's own content element, so a caller can tell its focus apart from another modal's. */
+  contentRef?: Ref<HTMLDivElement>
 }
 
 /** A failed agent command: what ran, its output with Copy, and the caller's next step. */
@@ -47,7 +51,9 @@ export function AgentCommandFailedDialog({
   reason = null,
   tone = 'error',
   detailsFinishedAt = null,
-  announcementPaused = false
+  announcementPaused = false,
+  onCloseAutoFocus,
+  contentRef
 }: AgentCommandFailedDialogProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
@@ -123,7 +129,7 @@ export function AgentCommandFailedDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl">
+      <DialogContent ref={contentRef} className="sm:max-w-xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>
             <span className={cn('flex items-center gap-2', tone === 'error' && 'text-destructive')}>
@@ -161,14 +167,18 @@ export function AgentCommandFailedDialog({
             </div>
           </div>
         ) : null}
-        <DialogFooter>
-          {showFooterClose ? (
-            <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-              {t('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
-            </Button>
-          ) : null}
-          {action}
-        </DialogFooter>
+        {/* One right-aligned row that wraps as a unit; the default stacks full-width buttons when narrow.
+            No buttons, no footer: an empty one leaves a dead band under the content. */}
+        {showFooterClose || action ? (
+          <DialogFooter className="flex-row flex-wrap justify-end">
+            {showFooterClose ? (
+              <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
+                {t('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
+              </Button>
+            ) : null}
+            {action}
+          </DialogFooter>
+        ) : null}
       </DialogContent>
     </Dialog>
   )

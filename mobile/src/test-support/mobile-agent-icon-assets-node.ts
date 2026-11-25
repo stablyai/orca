@@ -14,7 +14,6 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   codebuddy: 10,
   qoder: 11,
   'qoder-cn': 12,
-  gemini: 13,
   antigravity: 14,
   goose: 15,
   amp: 16,

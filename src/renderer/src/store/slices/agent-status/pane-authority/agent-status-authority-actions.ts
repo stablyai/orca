@@ -9,6 +9,7 @@ import {
 } from './agent-pane-authority'
 import {
   boundRecentlyRetiredAgentStatusPaneKeys,
+  editRemoteHostRecords,
   movePaneKeyedRecord,
   removePaneKeys
 } from './agent-status-pane-keyed-records'
@@ -75,6 +76,10 @@ export function createAgentStatusAuthorityActions(
             runtimeAgentOrchestrationByPaneKey: removePaneKeys(
               s.runtimeAgentOrchestrationByPaneKey,
               retiredPaneKeySet
+            ),
+            remoteAgentOrchestrationByHost: editRemoteHostRecords(
+              s.remoteAgentOrchestrationByHost,
+              (record) => removePaneKeys(record, retiredPaneKeySet)
             ),
             sleepingAgentSessionsByPaneKey: options?.preserveSleepingAgentSession
               ? s.sleepingAgentSessionsByPaneKey
@@ -200,6 +205,10 @@ export function createAgentStatusAuthorityActions(
             s.runtimeAgentOrchestrationByPaneKey,
             from,
             to
+          ),
+          remoteAgentOrchestrationByHost: editRemoteHostRecords(
+            s.remoteAgentOrchestrationByHost,
+            (record) => movePaneKeyedRecord(record, from, to)
           ),
           sleepingAgentSessionsByPaneKey:
             sleepingSession === undefined

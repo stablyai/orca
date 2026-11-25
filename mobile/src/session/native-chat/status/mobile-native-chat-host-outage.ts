@@ -1,5 +1,6 @@
 import {
   isConnectionOutage,
+  verdictDisplayLabel,
   type ConnectionVerdict
 } from '../../../transport/connection/connection-health'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
@@ -42,6 +43,11 @@ export function mobileNativeChatHostOutage(
       return { text: verdict.label }
     }
     const offline = isConnectionOutage(verdict)
+    // Relay named a cause other than the desktop being off (signed out, refused, unreachable): say that.
+    if (offline && verdict.relay !== undefined && verdict.relay !== 'host-offline') {
+      const text = verdictDisplayLabel(verdict)
+      return args.reconnect ? { text, onReconnect: args.reconnect } : { text }
+    }
     if (!offline && args.neverConnected) {
       return null
     }

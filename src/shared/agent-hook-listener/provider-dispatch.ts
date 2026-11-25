@@ -19,10 +19,10 @@ import { normalizeClaudeEvent } from './providers/claude/claude-events'
 import { normalizeCodexEvent } from './providers/codex/codex-events'
 import { codexHookEventForEndedTurn } from './providers/codex/codex-ended-turn-event'
 import { codexHookEventForEphemeralThread } from './providers/codex/codex-ephemeral-threads'
-import { normalizeGeminiEvent } from './providers/gemini/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor/cursor-events'
 import { normalizePiCompatibleEvent } from './providers/pi-family/pi-family-events'
+import { restatePiFamilyEventName } from './providers/pi-family/pi-subagent-start-event'
 import { normalizeDroidEvent } from './providers/droid/droid-events'
 import { normalizeCommandCodeEvent } from './providers/command-code/command-code-events'
 import { normalizeGrokEvent } from './providers/grok/grok-events'
@@ -41,7 +41,7 @@ export type ProviderDispatchResult = {
   resolvedPromptText: string
   promptInteractionKey?: string
   hasTranscriptPromptEvidence: boolean
-  /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
+  /** The event the payload was normalized as, which a provider may restate (Codex ended turns, Pi subagent starts). */
   eventName: unknown
   hostTurnSignals: Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'>
   /** Full reply text this hook carried, outside the cached tool snapshot; refreshes carry none. */
@@ -68,7 +68,7 @@ export function normalizeProviderEvent(input: {
     source === 'codex'
       ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload)
       : undefined
-  const eventName =
+  let eventName =
     source !== 'codex'
       ? input.eventName
       : codexEventName === undefined
@@ -110,9 +110,6 @@ export function normalizeProviderEvent(input: {
         hookPayload,
         input.eventName
       )
-      break
-    case 'gemini':
-      payload = normalizeGeminiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'antigravity':
       if (isNewTurnEvent('antigravity', eventName)) {
@@ -161,6 +158,7 @@ export function normalizeProviderEvent(input: {
         paneKey,
         hookPayload
       )
+      eventName = restatePiFamilyEventName(eventName, hookPayload)
       break
     case 'droid':
       payload = normalizeDroidEvent(state, eventName, promptText, paneKey, hookPayload)

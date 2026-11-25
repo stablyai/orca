@@ -268,13 +268,14 @@ export type GlobalSettings = GlobalSettingsBase & {
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
-  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: new
-   *  chats use the user's own signed-in agy or Orca's server, and chats already on agy run the
-   *  user's own agy (same history) or, where there is none, refuse as agy not found. Absent means on. */
+  /** Main-side kill switch for Orca's copy of agy. Off, it runs no chat and isn't updated: chats
+   *  run the user's own agy or, where there is none, refuse as agy not found. Absent means on. */
   antigravityManagedAgyEnabled?: boolean
-  /** How chats on the Google account method sign in: agy's own login, or Orca's built-in sign-in
-   *  on Google's ACP server. Absent or 'auto': the server where Orca's sign-in is already in use,
-   *  else agy. */
+  /** No longer read: Orca's Antigravity ACP server is retired. Kept so older clients' updates of
+   *  this host-owned key are still accepted. */
+  antigravityServerAutoUpdateEnabled?: boolean
+  /** No longer read: Google-account chats always use agy's own login. Kept so older clients'
+   *  updates of this host-owned key are still accepted. */
   antigravityGoogleSignIn?: 'auto' | 'agy' | 'orca'
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */
   browserProfileScope?: BrowserProfileScope
@@ -373,8 +374,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   minimaxEndpoint: MiniMaxEndpoint
   /** GLM Coding Plan site whose API key is saved in AI Provider Accounts; defaults to the international Z.AI console. */
   zcodePlanSite?: ZcodePlanSite
-  /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
-  geminiCliOAuthEnabled: boolean
   /** Poll Claude usage with existing CLI credentials. Off uses live terminal readings only. */
   claudeOAuthUsageEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
@@ -455,7 +454,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   experimentalAgentDashboardPopout?: boolean
   /** Experimental: panel beside chats and terminals listing the agents each agent works with; off mounts nothing. */
   experimentalOrchestrationPanel?: boolean
-  /** Experimental: icon-only app rail left of the workspace list for switching between Orca destinations. */
+  /** Experimental: icon-only app rail left of the workspace list for switching between Orca destinations; on for new profiles, off for profiles saved before this default. */
   experimentalAppRail?: boolean
   /** Set after the one-time legacy Agents tab introduction has been acknowledged. */
   agentsSidebarIntroShown?: boolean

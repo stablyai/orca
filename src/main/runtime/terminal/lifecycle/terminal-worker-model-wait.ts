@@ -1,11 +1,17 @@
 import { RuntimePtyExitWorkerObservation } from './pty-exit-worker-observation'
 import type { TerminalModelWait } from '../../../agent-hooks/server/server-model-wait'
 import {
+  claudeCompactingOnScreen,
   claudeModelWaitLastSeen,
   claudeReplyScreen,
-  claudeToolRunsOnScreen
+  claudeToolRunsOnScreen,
+  claudeTurnDoneOnScreen
 } from '../wait/claude-model-wait-screen'
-import { reportWorkerModelWait } from '../../orchestration/workers/turn-stops/worker-model-wait-report'
+import { readClaudeToolReturnWithoutRequest } from '../../../claude/transcripts/claude-tool-return-without-request'
+import {
+  reportWorkerModelWait,
+  WORKER_MODEL_WAIT_MS
+} from '../../orchestration/workers/turn-stops/worker-model-wait-report'
 import type { WorkerTurnStopDispatch } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
 
 // Claude draws a streaming reply a line at a time: a slow stream (rig: about 3 tokens a second)
@@ -33,15 +39,21 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
     if (!first || !middle || !after || (grew(first, middle) && grew(middle, after))) {
       return true
     }
-    // A hook during the look (a tool call that just arrived) restarted the stopwatch.
-    if (!wait.stillWaiting()) {
+    // A hook during the look (a tool call that just arrived) restarted the stopwatch, and a turn
+    // Claude shows as done waits on nothing.
+    if (!wait.stillWaiting() || claudeTurnDoneOnScreen(after)) {
       return true
     }
     if (wait.toolMaybeOpen && claudeToolRunsOnScreen(after)) {
       wait.toolSeenRunning()
       return true
     }
-    // Re-read: the Dispatch may have settled while the screen was read.
+    const toolReturnedAt = await toolReturnWithoutRequest(wait, after)
+    // A hook during the read restarted the stopwatch: this stretch is over.
+    if (!wait.stillWaiting()) {
+      return true
+    }
+    // Re-read: the Dispatch may have settled while the screen and transcript were read.
     const db = this._orchestrationDb
     const target = this.modelWaitTarget(handle, paneKey)
     if (db && target) {
@@ -54,7 +66,8 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
           kind: 'waiting',
           stretchKey: `${wait.turnKey}:${wait.since}`,
           waitedMs: Date.now() - wait.since,
-          ...(lastSeen ? { lastSeen } : {})
+          ...(lastSeen ? { lastSeen } : {}),
+          ...(toolReturnedAt !== null ? { toolReturnedAt } : {})
         },
         this.workerTurnStopReportDeps
       )
@@ -75,6 +88,21 @@ export abstract class RuntimeTerminalWorkerModelWait extends RuntimePtyExitWorke
       ? { kind: 'remote', attachment }
       : null
   }
+}
+
+/** When the last tool returned, only if the transcript shows no request since, for the whole wait. */
+async function toolReturnWithoutRequest(
+  wait: TerminalModelWait,
+  screen: readonly string[]
+): Promise<number | null> {
+  if (!wait.transcriptPath || claudeCompactingOnScreen(screen) || !wait.firstTranscriptLook()) {
+    return null
+  }
+  return readClaudeToolReturnWithoutRequest({
+    transcriptPath: wait.transcriptPath,
+    quietMs: WORKER_MODEL_WAIT_MS,
+    stillWanted: wait.stillWaiting
+  })
 }
 
 function grew(before: readonly string[], after: readonly string[]): boolean {

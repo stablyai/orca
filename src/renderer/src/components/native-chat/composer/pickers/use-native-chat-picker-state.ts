@@ -36,11 +36,8 @@ import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/i
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import { useNativeChatPickerDismissal } from './use-native-chat-picker-dismissal'
-import {
-  emitNativeChatPickerItemAccepted,
-  emitNativeChatPickerOpened,
-  emitNativeChatSendClassified
-} from '@/components/native-chat/telemetry/native-chat-telemetry'
+import { nativeChatFileMentionToken } from './native-chat-file-mention-token'
+import { emitNativeChatPickerItemAccepted } from '@/components/native-chat/telemetry/native-chat-telemetry'
 
 export type NativeChatPickerState = {
   autocomplete: ComposerAutocomplete
@@ -187,7 +184,6 @@ export function useNativeChatPickerState(args: {
     const openKey = `${dismissalContext}:${autocomplete.triggerKey}`
     if (lastOpenKeyRef.current !== openKey) {
       lastOpenKeyRef.current = openKey
-      emitNativeChatPickerOpened({ agent, prefix: autocomplete.prefix })
       onPickerOpened?.()
     }
   }, [agent, autocomplete, dismissalContext, onPickerOpened])
@@ -229,7 +225,7 @@ export function useNativeChatPickerState(args: {
       const result = applyPickerSuggestion(text, at, item)
       if (item.kind === 'skill' && textareaRef.current?.insertSkill) {
         const from = result.caret - result.insertedToken.length - 1
-        textareaRef.current.insertSkill(from, at, result.insertedToken, item.path)
+        textareaRef.current.insertSkill(from, result.replacedEnd, result.insertedToken, item.path)
       }
       commitCompletion(result)
       skillOriginRef.current = item.kind === 'skill' ? result.insertedToken : null
@@ -242,11 +238,18 @@ export function useNativeChatPickerState(args: {
     (path: string, token?: Parameters<typeof applyMention>[4], from?: number) => {
       if (!disabledRef.current && (from !== undefined || autocomplete.mode === 'mention')) {
         commitCompletion(
-          applyMention(textareaRef.current, ...liveDraft(), path, token, from, mentionNameMatches)
+          applyMention(
+            textareaRef.current,
+            ...liveDraft(),
+            path,
+            token ?? nativeChatFileMentionToken(terminalTabId, path),
+            from,
+            mentionNameMatches
+          )
         )
       }
     },
-    [autocomplete, commitCompletion, liveDraft, mentionNameMatches, textareaRef]
+    [autocomplete, commitCompletion, liveDraft, mentionNameMatches, terminalTabId, textareaRef]
   )
 
   const handleDraftOrCaretChange = useCallback(
@@ -276,16 +279,14 @@ export function useNativeChatPickerState(args: {
 
   const classifySend = useCallback(
     (value: string) => {
-      const outcome = classifyNativeChatSend(
+      return classifyNativeChatSend(
         value,
         agentCommands,
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )
-      emitNativeChatSendClassified({ agent, outcome })
-      return outcome
     },
-    [agent, agentCommands, profile]
+    [agentCommands, profile]
   )
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null

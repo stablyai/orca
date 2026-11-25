@@ -1,5 +1,4 @@
 import type {
-  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -9,7 +8,6 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { translate } from '@/i18n/i18n'
-import { readClaudeRunningSessionsPolicy } from '@/lib/provider-accounts/claude-account-switch-sessions'
 
 // Mirrors OrcaRuntime.getAccountsSnapshot() / the accounts.subscribe payload.
 export type ProviderAccountsSnapshot = {
@@ -20,12 +18,6 @@ export type ProviderAccountsSnapshot = {
   failedProviders?: ('claude' | 'codex')[]
 }
 
-type ProviderAccountSelection = {
-  accountId: string | null
-  runtime: 'host' | 'wsl'
-  wslDistro?: string | null
-}
-
 type ProviderAccountsSubscriptionMessage = {
   type: 'ready' | 'snapshot' | 'end'
   snapshot?: ProviderAccountsSnapshot
@@ -33,7 +25,7 @@ type ProviderAccountsSubscriptionMessage = {
 
 const REMOTE_ACCOUNTS_FIRST_SNAPSHOT_TIMEOUT_MS = 15_000
 // Selection applies before slow usage refreshes; allow time so broken auth does not report an already-applied switch as failed.
-const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
+export const REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS = 30_000
 const pendingProviderAccountsSnapshots = new Map<string, Promise<ProviderAccountsSnapshot>>()
 
 export function getProviderAccountsOwnerKey(target: RuntimeClientTarget): string {
@@ -222,37 +214,6 @@ export function fetchProviderAccountsSnapshot(
   // Share simultaneous switcher reads, never completed results or different owners’ requests.
   void request.then(clearPending, clearPending)
   return request
-}
-
-export async function selectClaudeProviderAccount(
-  target: RuntimeClientTarget,
-  selection: ProviderAccountSelection
-): Promise<ClaudeAccountSelectResult> {
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeAccountSelectResult>(
-      target,
-      'accounts.selectClaude',
-      // Why the policy: the server's own setting is not the one this app's Settings edits.
-      { accountId: selection.accountId, runningSessions: readClaudeRunningSessionsPolicy() },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.claudeAccounts.select(selection)
-}
-
-export async function selectCodexProviderAccount(
-  target: RuntimeClientTarget,
-  selection: ProviderAccountSelection
-): Promise<CodexRateLimitAccountsState> {
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<CodexRateLimitAccountsState>(
-      target,
-      'accounts.selectCodex',
-      { accountId: selection.accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.codexAccounts.select(selection)
 }
 
 export async function removeClaudeProviderAccount(

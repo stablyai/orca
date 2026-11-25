@@ -69,6 +69,7 @@ export const AgentLaunchPicker = memo(
     entries: suppliedEntries,
     triggerLabel,
     triggerDetail,
+    defaultModelLabel,
     inline,
     draftScope,
     worktreeId,
@@ -97,6 +98,8 @@ export const AgentLaunchPicker = memo(
     triggerLabel?: string
     /** Muted after triggerLabel, as the launch summary follows an agent's name. */
     triggerDetail?: string
+    /** Model already resolved by the owning settings page, for the trigger summary only. */
+    defaultModelLabel?: string
     inline?: boolean
     draftScope?: object
     worktreeId?: string
@@ -236,8 +239,8 @@ export const AgentLaunchPicker = memo(
         return ''
       }
       const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
-      return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
-    }, [entry, summaryKey, pickedModel])
+      return agentLaunchSetupSummary(entry, parsed, pickedModel, defaultModelLabel).join(' · ')
+    }, [entry, summaryKey, pickedModel, defaultModelLabel])
     const surface =
       entry && !setupDisabled && !selectAgentOnTab && !entry.textGeneration
         ? cli

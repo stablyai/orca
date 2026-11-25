@@ -330,7 +330,7 @@ export function TaskPageGitHubFilters({
                     <RepoBadgeLabel
                       name={repo.displayName}
                       color={repo.badgeColor}
-                      badgeClassName="size-1.5"
+                      repo={repo}
                       className="text-[10px] text-muted-foreground"
                     />
                   ) : null}

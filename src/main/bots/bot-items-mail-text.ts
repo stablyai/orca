@@ -1,6 +1,7 @@
 // What item mail tells the bot (Orca's voice, workflow only). The owner's and other chats' words are
 // fenced, so a comment can't pose as Orca's instructions; each mail names its event for `show --after`.
 import { fenceQuotedText, inlineUntrusted } from '../../shared/quoted-text-fence'
+import { BOT_QUIET_MARKER } from '../../shared/bot-quiet-result'
 import {
   botItemCommentImages,
   botItemCommentSkills,
@@ -16,6 +17,7 @@ import type { BotItemEventRecord, BotItemRecord } from './bot-items-schema'
 const STATUS_WORDS: Record<BotItemStatus, string> = {
   planned: 'Planned',
   working: 'In progress',
+  waiting: 'Waiting',
   needs_you: 'Needs you',
   done: 'Done',
   canceled: 'Canceled'
@@ -48,7 +50,13 @@ export function botItemChangeMail(
 ): { subject: string; body: string } | null {
   const actor = changes[0]?.event.actor
   const who =
-    actor?.kind === 'owner' ? 'Your owner' : actor?.kind === 'bot' ? 'Your other chat' : null
+    actor?.kind === 'owner'
+      ? 'Your owner'
+      : actor?.kind === 'bot'
+        ? actor.botId === changes[0]?.item.ownerBotId
+          ? 'Your other chat'
+          : 'Another agent'
+        : null
   const lines = changes.flatMap((change) => {
     const what = changeWords(change.event)
     return what ? [{ ...change, what }] : []
@@ -90,15 +98,18 @@ export function botItemChangeMail(
   const answered = lines.some(({ event }) => isAnswer(event))
   const next = [
     answered
-      ? "Your owner answered your question, and the item is In progress again: carry on with that answer. If your question still stands, set it to Needs you again with only what's left."
+      ? 'Your owner answered your question, and the item is In progress again: carry on with that answer. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.'
       : null,
     replied
-      ? "Your owner replied to your question, so the item moved to In progress. If your question still stands, set it to Needs you again with only what's left."
+      ? 'Your owner replied to your question, so the item moved to In progress. A new set of questions replaces any earlier ones still unanswered, so include an earlier question again only if it still matters.'
       : null,
     tos.some(isClosed)
       ? 'If something linked to a closed item is still running, stop or redirect it.'
       : null,
-    tos.some((to) => !isClosed(to)) ? 'Pick a moved item up from there.' : null
+    tos.includes('waiting')
+      ? "A Waiting item waits on what its note says: leave it until that happens, and don't start work on it."
+      : null,
+    tos.some((to) => !isClosed(to) && to !== 'waiting') ? 'Pick a moved item up from there.' : null
   ].filter((line) => line !== null)
   const subjectWhat = lines.length === 1 ? first.what : items.size === 1 ? 'updated' : 'changed'
   return {
@@ -108,7 +119,7 @@ export function botItemChangeMail(
       ...body,
       '',
       ...(next.length > 0 ? [next.join(' '), ''] : []),
-      `Check with \`orca bot item show <n>\` before acting: items may have changed since, and mail can repeat after a crash. If nothing needs doing, end the turn without a chat reply.`
+      `Check with \`orca bot item show <n>\` before acting: items may have changed since, and mail can repeat after a crash. If nothing needs doing, stay silent with ${BOT_QUIET_MARKER}.`
     ].join('\n')
   }
 }
@@ -119,7 +130,23 @@ function commentWords(event: BotItemEventRecord, imagesBefore: number): string {
   const images = botItemCommentImages(event.data)
   const text = offsetSentImagePromptMarkers(str(event.data.text) ?? '', images.length, imagesBefore)
   const said = text.trim() || images.length === 0 ? `:\n${fenceQuotedText(text)}` : ''
-  return `${said}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+  return `${said}${skippedNote(event.data.skipped)}${imagesNote(images, imagesBefore)}${skillsNote(botItemCommentSkills(event.data))}`
+}
+
+/** The questions of the answered set the owner skipped: they are closed, unanswered. */
+function skippedNote(skipped: unknown): string {
+  const questions = Array.isArray(skipped)
+    ? skipped.filter((question): question is string => typeof question === 'string')
+    : []
+  if (questions.length === 0) {
+    return ''
+  }
+  const named = questions.map((question) => `"${quoted(inlineUntrusted(question))}"`).join(', ')
+  const closed =
+    questions.length === 1
+      ? `this question is closed unanswered: ${named}. If it still matters`
+      : `these questions are closed unanswered: ${named}. If one still matters`
+  return `\n  [Orca: they skipped the rest of that set, so ${closed}, ask it again in a new set.]`
 }
 
 const quoted = (text: string): string => text.replaceAll('"', '\\"')
@@ -211,6 +238,6 @@ export function botItemMakerCommentMail(
 ): { subject: string; body: string } {
   return {
     subject: `${makerName} commented (${itemName(item)})`,
-    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, end the turn without a chat reply.`
+    body: `${makerName}, which added ${itemName(item)} for you, commented on it:\n${fenceQuotedText(commentText)}${imagesNote(images, 0, false)}\n\nCheck with \`orca bot item show ${item.number}\` before acting. If nothing needs doing, stay silent with ${BOT_QUIET_MARKER}.`
   }
 }

@@ -1,7 +1,8 @@
+import { getSystem32ExePath } from '../../../windows/windows-command-paths'
+
 // Absolute forward-slash paths prevent PATH hijacking and survive cmd.exe and Git Bash.
 export function getWindowsSystem32Path(relativePath: string): string {
-  const systemRoot = process.env.SystemRoot || 'C:\\Windows'
-  return `${systemRoot.replaceAll('\\', '/')}/System32/${relativePath}`
+  return getSystem32ExePath(relativePath).replaceAll('\\', '/')
 }
 
 export function getWindowsPowerShellExecutablePath(): string {

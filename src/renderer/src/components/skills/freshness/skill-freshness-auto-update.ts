@@ -8,6 +8,10 @@ import {
   holdsCurrentBundledSkillCopy,
   isBundledSkillAutoUpdateOp
 } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import {
+  bundledSkillOpBackupPaths,
+  bundledSkillOpPublished
+} from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/skills/discovery/installed-agent-skill-discovery'
 import {
   bundledSkillTargetKey,
@@ -16,7 +20,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { autoUpdateBundledSkillsOnTarget } from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { useAppStore } from '@/store/index'
+import { skillBackupDirectory } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { skillHostLabel } from './skill-backup-location'
 import { getSkillUpdateRun, runAutomaticSkillUpdate } from './skill-update-run-store'
 
 // Why per skill and observed bytes: a failed or raced update re-plans identically and must fall back to the nudge, without blocking other skills.
@@ -56,11 +61,15 @@ function warnAboutEdits(title: string, description: string): void {
   toast.warning(title, { description, duration: Number.POSITIVE_INFINITY })
 }
 
-/** A write that raced the update is kept aside; never let that pass as a silent success. */
-function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
+/**
+ * A write that raced the update is kept aside; never let that pass as a silent success. A copy
+ * whose backup was refused (it is on another drive) stays where the result says, with the edits.
+ */
+export function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
   for (const skill of result?.skills ?? []) {
     for (const op of skill.ops) {
-      if (op.strandedPath) {
+      const keptPath = op.backupRefusal?.path ?? op.strandedPath
+      if (keptPath) {
         warnAboutEdits(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.strandedTitle',
@@ -70,59 +79,52 @@ function reportPreservedEdits(result: BundledSkillInstallResult | null): void {
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.strandedDescription',
             'Your edits are still in {{value0}}. Copy them somewhere safe before updating again.',
-            { value0: op.strandedPath }
+            { value0: keptPath }
           )
         )
-      } else if (op.backupPath) {
+      }
+      // Backups that finished still count beside a later refusal.
+      const published = bundledSkillOpPublished(op)
+      for (const backupPath of bundledSkillOpBackupPaths(op)) {
         warnAboutEdits(
           translate(
             'auto.components.skills.skillFreshnessAutoUpdate.preservedTitle',
             'Your edits to {{value0}} were saved separately',
             { value0: skill.name }
           ),
-          translate(
-            'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
-            'Orca updated the skill and saved your edits to {{value0}}.',
-            { value0: op.backupPath }
-          )
+          published
+            ? translate(
+                'auto.components.skills.skillFreshnessAutoUpdate.preservedDescription',
+                'Orca updated the skill and saved your edits to {{value0}}.',
+                { value0: backupPath }
+              )
+            : translate(
+                'auto.components.skills.skillFreshnessAutoUpdate.preservedBackupOnly',
+                'Orca saved your edits to {{value0}}.',
+                { value0: backupPath }
+              )
         )
       }
     }
   }
 }
 
-function targetLabel(target: BundledSkillTarget): string {
-  if (target.kind === 'local') {
-    return translate('auto.components.skills.host.local', 'This machine')
-  }
-  const environment =
-    target.kind === 'environment'
-      ? useAppStore
-          .getState()
-          .runtimeEnvironments.find((candidate) => candidate.id === target.environmentId)
-      : undefined
-  return environment?.name ?? translate('auto.components.skills.host.remote', 'Connected runtime')
-}
-
-/** The host-side folder where the executor preserves edits that raced a swap. */
-function skillBackupDirectory(homeDirectory: string): string {
-  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
-  const home = homeDirectory.replace(/[\\/]+$/u, '')
-  return [home, '.agents', '.orca-skill-backups'].join(separator)
-}
-
 /** A lost or timed-out reply may follow a committed swap, so its backups must not go unmentioned. */
-function reportUncertainOutcome(target: BundledSkillTarget, plan: BundledSkillPlan): void {
+export function reportUncertainOutcome(
+  target: BundledSkillTarget,
+  plan: Pick<BundledSkillPlan, 'homeDirectory'>
+): void {
   warnAboutEdits(
     translate(
       'auto.components.skills.skillFreshnessAutoUpdate.uncertainTitle',
       "Orca couldn't confirm the skill update on {{value0}}",
-      { value0: targetLabel(target) }
+      { value0: skillHostLabel(target) }
     ),
+    // A backup refused across drives leaves the edited copy in the skills folder instead.
     translate(
-      'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescription',
-      "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}.",
-      { value0: targetLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
+      'auto.components.skills.skillFreshnessAutoUpdate.uncertainDescriptionKept',
+      "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}} or still in the skills folder.",
+      { value0: skillHostLabel(target), value1: skillBackupDirectory(plan.homeDirectory) }
     )
   )
 }

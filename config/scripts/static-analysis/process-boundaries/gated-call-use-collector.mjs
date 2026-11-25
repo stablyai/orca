@@ -112,12 +112,13 @@ export function createGatedCallCollector(families, ratchetName) {
 
   // Count each gated value reference, alias use and re-export; imports and plain alias bindings alone do not count.
   // File-wide, not scope-aware: computed specifiers/members and non-const holder flows are unresolved; local wrappers are not traced.
-  function collectUses(file, contents) {
+  function collectUses(file, contents, parsedSource = undefined) {
     // Escaped spellings and relative imports inside gated modules still need the full analysis.
     const analyze =
       contents.includes('\\') ||
       (markerPattern !== null && (markerPattern.test(contents) || markerPattern.test(file)))
-    const source = ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, analyze)
+    const source =
+      parsedSource ?? ts.createSourceFile(file, contents, ts.ScriptTarget.Latest, analyze)
     if (source.parseDiagnostics.length > 0) {
       throw new Error(`Cannot parse ${file}; the ${ratchetName} ratchet must not skip it.`)
     }

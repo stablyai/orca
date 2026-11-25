@@ -18,10 +18,10 @@ export type RemoteUrlProbeContext = {
   admissionTier?: GitAdmissionTier
 }
 
-/** A URL with the repo config signature taken before Git read it; undefined when it cannot be signed. */
-export type SignedRemoteUrl = { url: string; configSignature: string | undefined }
+/** A shared read and the repo config signature taken before its Git read; undefined when unsigned. */
+type SharedRemoteUrlRead = { configSignature: Promise<string | undefined>; url: Promise<string> }
 
-type SharedRemoteUrlReads = { open: boolean; reads: Map<string, Promise<SignedRemoteUrl>> }
+type SharedRemoteUrlReads = { open: boolean; reads: Map<string, SharedRemoteUrlRead> }
 
 const sharedRemoteUrlReads = new AsyncLocalStorage<SharedRemoteUrlReads>()
 
@@ -37,10 +37,13 @@ export async function withSharedRemoteUrlReads<T>(work: () => Promise<T>): Promi
   }
 }
 
-/** Reads a remote URL, or null for an SSH repo, which this process does not serve. */
+/** Reads a remote URL, or null for an SSH repo, which this process does not serve. Callers that cache
+ *  the answer pass the config signature they took just before, so a shared read from older config is
+ *  not reused under it. */
 export async function readRemoteUrl(
   context: RemoteUrlProbeContext,
-  remoteName: string
+  remoteName: string,
+  configSignature?: string
 ): Promise<string | null> {
   if (context.connectionId) {
     return null
@@ -49,36 +52,6 @@ export async function readRemoteUrl(
   if (!scope?.open) {
     return readUncachedRemoteUrl(context, remoteName)
   }
-  return (
-    await readSharedRemoteUrl(scope, context, remoteName, () =>
-      readLocalGitConfigSignature(context)
-    )
-  ).url
-}
-
-/** Like readRemoteUrl, but pairs the URL with the config signature it was read under; a shared read
- *  may predate the caller's own signature. `configSignature` is the caller's, taken just before. */
-export async function readSignedRemoteUrl(
-  context: RemoteUrlProbeContext,
-  remoteName: string,
-  configSignature: string | undefined
-): Promise<SignedRemoteUrl | null> {
-  if (context.connectionId) {
-    return null
-  }
-  const scope = sharedRemoteUrlReads.getStore()
-  if (!scope?.open) {
-    return { url: await readUncachedRemoteUrl(context, remoteName), configSignature }
-  }
-  return readSharedRemoteUrl(scope, context, remoteName, async () => configSignature)
-}
-
-function readSharedRemoteUrl(
-  scope: SharedRemoteUrlReads,
-  context: RemoteUrlProbeContext,
-  remoteName: string,
-  readSignature: () => Promise<string | undefined>
-): Promise<SignedRemoteUrl> {
   const key = [
     context.wslDistro ?? '',
     context.admissionTier ?? '',
@@ -86,14 +59,22 @@ function readSharedRemoteUrl(
     remoteName
   ].join('\0')
   let read = scope.reads.get(key)
+  if (read && configSignature !== undefined && (await read.configSignature) !== configSignature) {
+    read = undefined
+  }
   if (!read) {
-    read = (async () => {
-      const configSignature = await readSignature()
-      return { url: await readUncachedRemoteUrl(context, remoteName), configSignature }
-    })()
+    // Unsigned callers sign the shared read too, so a later signed caller can trust it.
+    const readSignature =
+      configSignature !== undefined
+        ? Promise.resolve(configSignature)
+        : readLocalGitConfigSignature(context)
+    read = {
+      configSignature: readSignature,
+      url: readSignature.then(() => readUncachedRemoteUrl(context, remoteName))
+    }
     scope.reads.set(key, read)
   }
-  return read
+  return read.url
 }
 
 async function readUncachedRemoteUrl(

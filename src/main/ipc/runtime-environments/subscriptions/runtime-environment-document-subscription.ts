@@ -193,7 +193,7 @@ export async function subscribeRuntimeEnvironmentForDocument(
         },
         () => transportIsCurrent() && !setupController.signal.aborted,
         setupController.signal,
-        undefined,
+        args.background || args.wake ? { background: args.background, wake: args.wake } : undefined,
         crewResult
           ? {
               assertCurrent: assertCrewCurrent,
@@ -239,7 +239,7 @@ export async function subscribeRuntimeEnvironmentForDocument(
         pendingSubscriptions.get(subscriptionId) !== pending ||
         setupController.signal.aborted ||
         rendererGone ||
-        document.isGone() ||
+        !document.isCurrent() ||
         transportClosed
       ) {
         disposeRendererLifetime()
