@@ -18,7 +18,7 @@ export const BOT_SLACK_INTRO_HANDLERS: Record<string, CommandHandler> = {
     if (flags.get('on') === true) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Only the owner turns the Slack intro back on, in Orca: the bot’s Slack settings.'
+        'This command can only turn the Slack intro off. Turn it back on in Orca, in the bot’s Slack settings.'
       )
     }
     const selector = getOptionalStringFlag(flags, 'bot')

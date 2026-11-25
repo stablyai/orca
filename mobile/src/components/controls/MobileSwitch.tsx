@@ -18,6 +18,8 @@ export type MobileSwitchProps = {
   value: boolean
   onValueChange: (value: boolean) => void
   accessibilityLabel: string
+  /** What switching it does, read after the label (the row's description). */
+  accessibilityHint?: string
   disabled?: boolean
   testID?: string
 }
@@ -36,6 +38,7 @@ export function MobileSwitch({
   value,
   onValueChange,
   accessibilityLabel,
+  accessibilityHint,
   disabled = false,
   testID
 }: MobileSwitchProps) {
@@ -78,6 +81,7 @@ export function MobileSwitch({
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={accessibilityLabel}
+      accessibilityHint={accessibilityHint}
       accessibilityState={{ checked: value, disabled }}
       aria-checked={value}
       testID={testID}

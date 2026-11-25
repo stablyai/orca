@@ -19,12 +19,12 @@ export function MobileSlackChannelIntro(props: {
     botSlackApps(bot).length > 1
       ? t(
           'bots.slack.channelIntro.detailEvery',
-          'When someone adds {{name}} to a channel, it says how to ask it. In every Slack workspace {{name}} is in.',
+          'When someone adds {{name}} to a channel, it posts a message there saying how to ask it. This setting applies to every Slack workspace {{name}} is in.',
           { name: bot.name }
         )
       : t(
           'bots.slack.channelIntro.detail',
-          'When someone adds {{name}} to a channel, it says how to ask it.',
+          'When someone adds {{name}} to a channel, it posts a message there saying how to ask it.',
           { name: bot.name }
         )
   return (
@@ -36,6 +36,7 @@ export function MobileSlackChannelIntro(props: {
         accessory={
           <MobileSwitch
             accessibilityLabel={title}
+            accessibilityHint={subtitle}
             value={bot.slackChannelHello !== false}
             disabled={!props.online}
             onValueChange={props.onChange}

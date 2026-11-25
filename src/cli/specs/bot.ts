@@ -258,7 +258,7 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'bot', 'on', 'off'],
     notes: [
       'Without --off it says whether the intro is on. Run from a bot’s chat it changes only that bot,',
-      'and only in a turn its owner asked for. Only the owner turns it back on, in Orca.'
+      'and only in a turn its owner asked for. It can’t turn the intro back on: do that in Orca.'
     ]
   }
 ]

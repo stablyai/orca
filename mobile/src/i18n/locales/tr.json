@@ -6253,8 +6253,8 @@
       "channelIntro": {
         "caption": "Kanallarda",
         "title": "Kanala eklenince tanıtım",
-        "detail": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır.",
-        "detailEvery": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır. {{name}} adlı botun bulunduğu her Slack çalışma alanında geçerlidir."
+        "detail": "Biri {{name}} adlı botu bir kanala eklediğinde, kanala ona nasıl soru sorulacağını anlatan bir mesaj gönderir.",
+        "detailEvery": "Biri {{name}} adlı botu bir kanala eklediğinde, kanala ona nasıl soru sorulacağını anlatan bir mesaj gönderir. Bu ayar, {{name}} adlı botun bulunduğu her Slack çalışma alanı için geçerlidir."
       }
     },
     "cloudSignIn": {

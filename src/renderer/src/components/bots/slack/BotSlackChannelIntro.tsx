@@ -1,7 +1,7 @@
 // "Intro when added to a channel": whether the bot says how to ask it in a Slack channel a
 // person adds it to. One switch for the bot, so every workspace's page shows the same one. Hidden
 // while the bot's host's Orca Cloud doesn't honour it, since there the intro posts whatever it says.
-import React from 'react'
+import React, { useId } from 'react'
 import { toast } from 'sonner'
 import { Switch } from '@/components/ui/switch'
 import { useTranslate } from '@/i18n/use-translate'
@@ -15,6 +15,8 @@ export function BotSlackChannelIntro({ bot }: { bot: Bot }): React.JSX.Element |
   const t = useTranslate()
   const supported = useBotSlackChannelHello(bot.hostId)
   const paged = useBotConnectorPaged()
+  // The description is the switch's too, so a screen reader hears what it covers.
+  const detailId = useId()
   if (!supported) {
     return null
   }
@@ -24,12 +26,12 @@ export function BotSlackChannelIntro({ bot }: { bot: Bot }): React.JSX.Element |
     botSlackApps(bot).length > 1
       ? t(
           'bots.slack.channelIntro.detailEvery',
-          'When someone adds {{name}} to a channel, it says how to ask it. In every Slack workspace {{name}} is in.',
+          'When someone adds {{name}} to a channel, it posts a message there saying how to ask it. This setting applies to every Slack workspace {{name}} is in.',
           { name: bot.name }
         )
       : t(
           'bots.slack.channelIntro.detail',
-          'When someone adds {{name}} to a channel, it says how to ask it.',
+          'When someone adds {{name}} to a channel, it posts a message there saying how to ask it.',
           { name: bot.name }
         )
   const change = (next: boolean): void => {
@@ -48,7 +50,7 @@ export function BotSlackChannelIntro({ bot }: { bot: Bot }): React.JSX.Element |
       <SettingsInsetGroup className={paged ? '*:border *:border-border *:bg-card' : undefined}>
         <SettingsInsetRow
           title={title}
-          detail={detail}
+          detail={<span id={detailId}>{detail}</span>}
           wrapDetail
           end={
             <Switch
@@ -56,6 +58,7 @@ export function BotSlackChannelIntro({ bot }: { bot: Bot }): React.JSX.Element |
               className="after:absolute after:-inset-2"
               checked={on}
               aria-label={title}
+              aria-describedby={detailId}
               onCheckedChange={change}
             />
           }
