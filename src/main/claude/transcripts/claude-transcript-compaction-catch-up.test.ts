@@ -29,11 +29,6 @@ const boundary = (uuid: string, logicalParentUuid: string, second: number) => ({
   compactMetadata: { trigger: 'auto', preTokens: 39559 }
 })
 
-const COMPACTED: AgentJournalItemBody = {
-  kind: 'status',
-  text: 'Context compacted',
-  presentation: 'compaction'
-}
 const promptKey = (uuid: string) =>
   agentJournalItemKey({ provider: 'claude', sessionId: PROVIDER, uuid })
 const savedRow = (key: string, body: AgentJournalItemBody): JournalHistoryItem => ({
@@ -74,9 +69,6 @@ async function catchUp(rows: Record<string, unknown>[], saved: JournalHistoryIte
       (row) =>
         row.kind === 'item' && row.body.kind === 'status' && row.body.presentation === 'compaction'
     ),
-    continuedOutside: mutations.some(
-      (row) => row.kind === 'item' && row.identity.provider === 'legacy'
-    ),
     keys: mutations.map((row) => agentJournalItemKey(row.identity))
   }
 }
@@ -92,27 +84,54 @@ const liveKey = agentJournalItemKey(
   })!
 )
 
+// Claude Code 2.1.332 manual /compact, captured 2026-11-25: the boundary precedes the command row.
+const manualCompact = (parent: string) => [
+  {
+    ...boundary('b1', parent, 4),
+    compactMetadata: { trigger: 'manual', preTokens: 38625 }
+  },
+  {
+    type: 'user',
+    uuid: 's1',
+    parentUuid: 'b1',
+    sessionId: PROVIDER,
+    timestamp: at(4),
+    isCompactSummary: true,
+    isVisibleInTranscriptOnly: true,
+    message: {
+      role: 'user',
+      content: 'This session is being continued from a previous conversation.'
+    }
+  },
+  {
+    type: 'user',
+    uuid: 'c1',
+    parentUuid: 's1',
+    sessionId: PROVIDER,
+    timestamp: at(3),
+    message: {
+      role: 'user',
+      content:
+        '<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args></command-args>'
+    }
+  },
+  {
+    type: 'user',
+    uuid: 'o1',
+    parentUuid: 'c1',
+    sessionId: PROVIDER,
+    timestamp: at(5),
+    message: { role: 'user', content: '<local-command-stdout>Compacted</local-command-stdout>' }
+  }
+]
+
 describe('Claude compaction rows on transcript catch-up', () => {
-  it('recovers a boundary from unseen work under the live key, without an outside-work divider of its own', async () => {
+  it('recovers an automatic boundary from unseen work under the live key', async () => {
     const unseen = await catchUp([prompt('u1', null, 1), boundary('b1', 'u1', 2)], [])
     expect(unseen.compactions.map((row) => agentJournalItemKey(row.identity))).toEqual([liveKey])
-
-    const onlyBoundary = await catchUp(
-      [prompt('u1', null, 1), boundary('b1', 'u1', 2)],
-      [savedRow(promptKey('u1'), { kind: 'message', role: 'user', text: 'Synthetic turn u1' })]
-    )
-    expect(onlyBoundary.continuedOutside).toBe(false)
   })
 
-  it('adds no second row when the live row already exists', async () => {
-    const result = await catchUp(
-      [prompt('u1', null, 1), boundary('b1', 'u1', 2)],
-      [savedRow(liveKey, COMPACTED)]
-    )
-    expect(result.compactions).toEqual([])
-  })
-
-  it('leaves boundaries inside saved turns or before saved history to the live writer', async () => {
+  it('leaves boundaries Orca already showed, or could have, to the live writer', async () => {
     // Older builds saved /compact under the command's own key and no automatic row at all.
     const savedTurn = await catchUp(
       [prompt('u1', null, 1), boundary('b1', 'u1', 2)],
@@ -125,7 +144,10 @@ describe('Claude compaction rows on transcript catch-up', () => {
       [prompt('u1', null, 1), boundary('b1', 'u1', 2), prompt('u2', 'b1', 3)],
       [savedRow(promptKey('u2'), { kind: 'message', role: 'user', text: 'Synthetic turn u2' })]
     )
-    expect(beforeSaved.compactions).toEqual([])
     expect(beforeSaved.keys).not.toContain(liveKey)
+
+    // Orca's /compact wrote its own row live, which catch-up cannot see before the command row.
+    const manual = await catchUp([prompt('u1', null, 1), ...manualCompact('u1')], [])
+    expect(manual.compactions).toEqual([])
   })
 })

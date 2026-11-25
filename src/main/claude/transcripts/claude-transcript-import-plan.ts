@@ -42,7 +42,8 @@ import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 import { claudeTranscriptRowFrame } from './claude-local-command-reply'
 import {
   createTranscriptCompactionRecovery,
-  isCompactionRow
+  isCompactionRow,
+  isRecoverableClaudeBoundary
 } from './claude-transcript-compaction-recovery'
 
 export function createClaudeTranscriptImportPlan(input: {
@@ -149,7 +150,7 @@ export function createClaudeTranscriptImportPlan(input: {
         const uuid = String(row.uuid)
         const parsedAt = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
         sourceObservedAt = Number.isFinite(parsedAt) && parsedAt > 0 ? parsedAt : undefined
-        const boundary = row.type === 'system' && row.subtype === 'compact_boundary'
+        const boundary = isRecoverableClaudeBoundary(row)
         if (!envelope && !queued && !boundary) {
           if (row.type === 'system' && row.subtype === 'turn_duration') {
             idle(sourceObservedAt)

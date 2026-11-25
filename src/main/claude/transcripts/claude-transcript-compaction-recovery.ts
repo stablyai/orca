@@ -1,5 +1,22 @@
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
+/**
+ * Only automatic boundaries are recovered from a transcript. Orca's own /compact writes its row
+ * live, and Claude saves that boundary before the command row, ahead of anything that marks the
+ * turn as one Orca already saved.
+ */
+export function isRecoverableClaudeBoundary(row: Record<string, unknown>): boolean {
+  const metadata = row.compactMetadata
+  return (
+    row.type === 'system' &&
+    row.subtype === 'compact_boundary' &&
+    typeof metadata === 'object' &&
+    metadata !== null &&
+    'trigger' in metadata &&
+    metadata.trigger === 'auto'
+  )
+}
+
 export function isCompactionRow(body: AgentJournalItemBody): boolean {
   return body.kind === 'status' && body.presentation === 'compaction'
 }
