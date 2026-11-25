@@ -32,3 +32,31 @@ it('retires a removed workspace feedback on the owner-only and project removal p
   expect(hasDeferredNativeChatComposerNotice('notice-project')).toBe(false)
   expect(hasDeferredNativeChatComposerNotice('notice-survivor')).toBe(true)
 })
+
+// Removing a folder's local copy while its same-ID SSH copy survives: the folder's submission fallback
+// (launch transport origin) can match both copies, but feedback follows its confirmed host only.
+it('keeps a surviving same-ID folder copy feedback when the other copy is removed', () => {
+  const folder = 'notice-folder-key'
+  const removed: NativeChatComposerDraftOwner = { workspaceId: folder, executionHostId: 'local' }
+  const survivor: NativeChatComposerDraftOwner = {
+    workspaceId: folder,
+    executionHostId: 'ssh:kept'
+  }
+  const removedRoute = openNativeChatComposerNoticeRoute('notice-folder-removed', removed)
+  const survivorRoute = openNativeChatComposerNoticeRoute('notice-folder-survivor', survivor)
+  deferNativeChatComposerNotice(
+    'notice-folder-survivor',
+    'Image paste failed.',
+    undefined,
+    survivor
+  )
+
+  deleteWorkspaceChatDraftOwners(
+    { owners: [removed], conversations: [], terminalTabIds: [] },
+    (owner) => owner.workspaceId === folder
+  )
+
+  expect(closeNativeChatComposerNoticeRoute(removedRoute)).toBeNull()
+  expect(closeNativeChatComposerNoticeRoute(survivorRoute)).toBe('notice-folder-survivor')
+  expect(hasDeferredNativeChatComposerNotice('notice-folder-survivor')).toBe(true)
+})

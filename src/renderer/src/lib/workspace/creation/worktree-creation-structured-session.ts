@@ -24,10 +24,8 @@ import {
 import '@/components/native-chat/composer/focus/use-native-chat-composer-reveal-focus'
 import { openBackgroundDeclinedTerminal } from '@/lib/workspace/creation/worktree-creation-background-mount'
 import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab-host-agents'
-import {
-  captureNativeChatStagedInput,
-  hasNativeChatStagedFiles
-} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { hasNativeChatStagedFiles } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import { captureNativeChatStagedInput } from '@/components/native-chat/drafts/native-chat-staged-input'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 
 const HANDOFF_READY_TIMEOUT_MS = 5000

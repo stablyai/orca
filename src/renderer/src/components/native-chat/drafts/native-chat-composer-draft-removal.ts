@@ -10,7 +10,10 @@ import {
   deleteLoadingNativeChatComposerDraftsWhere,
   persistNativeChatComposerDraft
 } from './native-chat-composer-draft-persistence'
-import { releaseNativeChatStagedFiles } from './native-chat-draft-attachment-staging'
+import {
+  nativeChatStagedScopes,
+  releaseNativeChatStagedFiles
+} from './native-chat-draft-attachment-staging'
 import { retireDeferredNativeChatComposerNoticesWhere } from '../composer/controls/native-chat-deferred-composer-notice'
 import type {
   StoredNativeChatComposerDraft,
@@ -32,6 +35,13 @@ export function deleteNativeChatComposerDraftsWhere(
       owner ? { ...(record ?? { text: '', images: [], savedAt: 0 }), owner } : record
     )
   })
+  // Files staged for a scope with no recorded draft or subscriber (a provisional destination, or a draft
+  // cleared and unmounted while a send lease kept its originals) go with a matching deletion too.
+  for (const scope of nativeChatStagedScopes()) {
+    if (!records.has(scope) && !scopeListeners.has(scope) && matches(scope, undefined)) {
+      releaseNativeChatStagedFiles(scope)
+    }
+  }
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {

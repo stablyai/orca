@@ -70,20 +70,22 @@ export function moveWorktreeCreationDraftToTarget(
 }
 
 /**
- * The first send's staged browser files stay leased until a holder is proven: the send was recorded as
- * delivered, or the chat the draft moved into still references every submitted file. A moved draft alone
- * proves nothing: a refused send can come back with an unavailable chip and no reference, and releasing
- * then would leave no readable copy. Undelivered files stay for Retry or the recipient; dismissing the
- * pending creation, or deleting the draft that now holds them, releases them.
+ * The first send's staged browser files stay leased until a holder is proven. A recorded delivery
+ * releases them. A draft that moved into a confirmed chat releases them once that draft holds every file
+ * (the original itself, as a refused send returns it, or a live host upload of it), now or at a later
+ * draft change. A moved draft alone proves nothing, and an undelivered send to a stale chat keeps them
+ * for Retry; dismissing the pending creation, or deleting the draft that now holds them, releases them.
  */
 export function releaseFirstSendFilesWhenHeld(
   delivery: Promise<StructuredPromptDeliveryResult> | undefined,
   draftTransferred: () => boolean,
-  files: { release: () => void; heldByDraft: () => boolean }
+  files: { release: () => void; releaseWhenHeld: () => void }
 ): void {
   void delivery?.then((result) => {
-    if (result.delivered || (draftTransferred() && files.heldByDraft())) {
+    if (result.delivered) {
       files.release()
+    } else if (draftTransferred()) {
+      files.releaseWhenHeld()
     }
   })
 }

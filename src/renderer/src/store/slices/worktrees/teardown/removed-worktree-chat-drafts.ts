@@ -76,32 +76,40 @@ export function deleteWorkspaceChatDrafts(keys: WorkspaceChatDraftKeys): void {
 }
 
 /** Committed deletion revokes only the new automatic return writer; saved cleanup remains ordinary. */
+/**
+ * `additionally` widens only the submission match: a caller's fallback (such as a folder's launch
+ * transport origin) may not tell apart two hosts of one same-ID workspace. Paste feedback carries its
+ * confirmed workspace and host, so it is retired by exact owner, or by `feedbackAlso`, which must
+ * itself judge the confirmed host.
+ */
 export function deleteWorkspaceChatDraftOwners(
   keys: WorkspaceChatDraftKeys,
-  additionally?: (owner: NativeChatComposerDraftOwner, scope: string) => boolean
+  additionally?: (owner: NativeChatComposerDraftOwner, scope: string) => boolean,
+  feedbackAlso?: (owner: NativeChatComposerDraftOwner) => boolean
 ): void {
   const owners = new Set(
     keys.owners.map((owner) => JSON.stringify([owner.executionHostId, owner.workspaceId]))
   )
-  const retired = (owner: NativeChatComposerDraftOwner | undefined, scope: string): boolean =>
-    !!owner &&
-    (owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId])) ||
-      additionally?.(owner, scope) === true)
-  retireNativeChatComposerSubmissionsWhere((scope, draft) =>
-    retired(
-      launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner,
-      scope
-    )
-  )
+  const exact = (owner: NativeChatComposerDraftOwner): boolean =>
+    owners.has(JSON.stringify([owner.executionHostId, owner.workspaceId]))
+  retireNativeChatComposerSubmissionsWhere((scope, draft) => {
+    const owner =
+      launchDraftSource(scope) ?? nativeChatLaunchPromptDraftOwner(scope) ?? draft?.owner
+    return !!owner && (exact(owner) || additionally?.(owner, scope) === true)
+  })
   // Also reached when a same-ID survivor skips the full draft sweep, and by project removal: a paste
   // failure kept for a removed workspace's draft goes too, judged by the owner the notice was given.
-  retireDeferredNativeChatComposerNoticesWhere((scope, owner) => retired(owner, scope))
+  retireDeferredNativeChatComposerNoticesWhere(
+    (_scope, owner) => !!owner && (exact(owner) || feedbackAlso?.(owner) === true)
+  )
 }
 export function deleteProjectChatDrafts(projectId: string, executionHostId: ExecutionHostId): void {
+  const inProject = (owner: NativeChatComposerDraftOwner): boolean =>
+    owner.executionHostId === executionHostId &&
+    getRepoIdFromWorktreeId(owner.workspaceId) === projectId
   deleteWorkspaceChatDraftOwners(
     { owners: [], conversations: [], terminalTabIds: [] },
-    (owner) =>
-      owner.executionHostId === executionHostId &&
-      getRepoIdFromWorktreeId(owner.workspaceId) === projectId
+    inProject,
+    inProject
   )
 }

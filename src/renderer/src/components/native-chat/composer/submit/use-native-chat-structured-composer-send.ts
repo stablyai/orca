@@ -1,8 +1,6 @@
 import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent-reference-send'
-import {
-  hasNativeChatStagedFiles,
-  captureNativeChatStagedInput
-} from '../../drafts/native-chat-draft-attachment-staging'
+import { hasNativeChatStagedFiles } from '../../drafts/native-chat-draft-attachment-staging'
+import { captureNativeChatStagedInput } from '../../drafts/native-chat-staged-input'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'

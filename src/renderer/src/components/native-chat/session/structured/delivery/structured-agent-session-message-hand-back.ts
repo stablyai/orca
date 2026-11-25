@@ -1,4 +1,7 @@
 import { agentSessionAttachmentUploadIdOfPath } from '../../../../../../../shared/agent-session/agent-session-attachments'
+import { formatNativeChatFileReference } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
+import { nativeChatTextAttachmentParts } from '../../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
+import { restoreNativeChatExpiredUploads } from '../../../drafts/native-chat-staged-input'
 import type { AgentJournalMessageItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-storage'
 import { appendToNativeChatComposerDraft } from '../../../drafts/native-chat-composer-draft-store'
@@ -31,6 +34,21 @@ export function returnMessageToComposer(
     block.type === 'image-ref' ? [`${attachmentIdPrefix}-${index}`] : []
   )
   let image = 0
+  const expired = (path: string): boolean => {
+    const uploadId = agentSessionAttachmentUploadIdOfPath(path)
+    return !!uploadId && !!expiredUploadIds?.has(uploadId)
+  }
+  const messageText = structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks })
+  // An expired upload whose staged original this draft still holds comes back as that original, so
+  // Send uploads it afresh; only one the draft never held asks to be attached again.
+  const restored = restoreNativeChatExpiredUploads(composerScopeKey, [
+    ...blocks.flatMap((block) =>
+      block.type === 'image-ref' && block.path && expired(block.path) ? [block.path] : []
+    ),
+    ...nativeChatTextAttachmentParts(messageText, true, expired).flatMap((part) =>
+      part.path ? [part.path] : []
+    )
+  ])
   // Not the attachment hook's helper: its imports reach the store, whose teardown imports this.
   const images = blocks.flatMap((block, index): NativeChatComposerDraftImage[] => {
     if (block.type !== 'image-ref') {
@@ -41,13 +59,20 @@ export function returnMessageToComposer(
       return []
     }
     const id = `${attachmentIdPrefix}-${index}`
-    const uploadId = agentSessionAttachmentUploadIdOfPath(block.path)
-    return uploadId && expiredUploadIds?.has(uploadId)
+    const original = restored.get(block.path)
+    if (original) {
+      return [{ id, path: original }]
+    }
+    return expired(block.path)
       ? [unavailableNativeChatComposerDraftImage({ id, path: block.path })]
       : [{ id, path: block.path, ...(connectionId ? { connectionId } : {}) }]
   })
   const text = promptMarkersToImageReferences(
-    structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks }),
+    nativeChatTextAttachmentParts(messageText, true, (path) => restored.has(path))
+      .map((part) =>
+        part.path ? formatNativeChatFileReference(restored.get(part.path)!) : part.text
+      )
+      .join(''),
     imageIds
   )
   if (text === '' && images.length === 0) {
