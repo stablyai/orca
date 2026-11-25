@@ -29,10 +29,37 @@ export type GitHistoryFence = {
 }
 
 // Share each worktree and execution owner’s history across panel remounts.
-export const gitHistorySlots = new BoundedMap<string, GitHistoryEntry>({ maxEntries: 256 })
+export const gitHistorySlots = new BoundedMap<string, GitHistoryEntry>({
+  maxEntries: 256,
+  onEvict: (_entry, slotKey) => notifyGitHistorySlot(slotKey)
+})
 export const latestGitHistoryRequest = new Map<string, { worktreeId: string; id: number }>()
 export const mountedHistoryConsumers = new Map<string, number>()
-const gitHistoryListeners = new Set<() => void>()
+const gitHistoryListeners = new Map<string, Set<() => void>>()
+
+function notifyGitHistorySlot(slotKey: string): void {
+  for (const listener of gitHistoryListeners.get(slotKey) ?? []) {
+    listener()
+  }
+}
+export const releasedHistorySlots = new Set<string>()
+let sweptWorktreeCatalog: ReadonlyMap<string, unknown> | null = null
+
+export function claimGitHistoryCatalogSweep(catalog: ReadonlyMap<string, unknown>): boolean {
+  if (sweptWorktreeCatalog === catalog) {
+    return false
+  }
+  sweptWorktreeCatalog = catalog
+  return true
+}
+
+export function retireGitHistorySlot(slotKey: string): void {
+  gitHistorySlots.delete(slotKey)
+  latestGitHistoryRequest.delete(slotKey)
+  releasedHistorySlots.delete(slotKey)
+  notifyGitHistorySlot(slotKey)
+}
+
 let gitHistoryRequestSeq = 0
 
 export function nextGitHistoryRequestId(): number {
@@ -42,14 +69,19 @@ export function nextGitHistoryRequestId(): number {
 
 export function publishGitHistory(slotKey: string, entry: GitHistoryEntry): void {
   gitHistorySlots.set(slotKey, entry)
-  for (const listener of gitHistoryListeners) {
-    listener()
-  }
+  notifyGitHistorySlot(slotKey)
 }
 
-export function subscribeGitHistory(listener: () => void): () => void {
-  gitHistoryListeners.add(listener)
-  return () => gitHistoryListeners.delete(listener)
+export function subscribeGitHistory(slotKey: string, listener: () => void): () => void {
+  const listeners = gitHistoryListeners.get(slotKey) ?? new Set<() => void>()
+  gitHistoryListeners.set(slotKey, listeners)
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (!listeners.size && gitHistoryListeners.get(slotKey) === listeners) {
+      gitHistoryListeners.delete(slotKey)
+    }
+  }
 }
 
 function pageKeyMatches(key: GitHistoryPageKey, fence: GitHistoryFence): boolean {

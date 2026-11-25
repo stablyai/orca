@@ -19,6 +19,9 @@ import {
   gitHistorySlots,
   latestGitHistoryRequest,
   mountedHistoryConsumers,
+  releasedHistorySlots,
+  claimGitHistoryCatalogSweep,
+  retireGitHistorySlot,
   nextGitHistoryRequestId,
   publishGitHistory,
   subscribeGitHistory,
@@ -96,7 +99,11 @@ export function useSourceControlGitHistory({
     compareBaseRef,
     compareBaseOid
   ])
-  const entry = useSyncExternalStore(subscribeGitHistory, () =>
+  const subscribeHistorySlot = useCallback(
+    (listener: () => void) => subscribeGitHistory(slotKey, listener),
+    [slotKey]
+  )
+  const entry = useSyncExternalStore(subscribeHistorySlot, () =>
     activeWorktreeId ? gitHistorySlots.get(slotKey) : undefined
   )
   const gitHistoryState = activeWorktreeId
@@ -107,12 +114,7 @@ export function useSourceControlGitHistory({
     const mounted = activeWorktreeId && worktreeMap.has(activeWorktreeId)
     if (mounted) {
       mountedHistoryConsumers.set(slotKey, (mountedHistoryConsumers.get(slotKey) ?? 0) + 1)
-    }
-    for (const [key, request] of latestGitHistoryRequest) {
-      if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
-        gitHistorySlots.delete(key)
-        latestGitHistoryRequest.delete(key)
-      }
+      releasedHistorySlots.delete(slotKey)
     }
     return () => {
       if (!mounted) {
@@ -123,9 +125,32 @@ export function useSourceControlGitHistory({
         mountedHistoryConsumers.set(slotKey, remaining)
       } else {
         mountedHistoryConsumers.delete(slotKey)
+        releasedHistorySlots.add(slotKey)
       }
     }
   }, [activeWorktreeId, slotKey, worktreeMap])
+
+  const ownsWorktreeCatalog = scope === null
+  useEffect(() => {
+    if (!ownsWorktreeCatalog) {
+      return
+    }
+    if (claimGitHistoryCatalogSweep(worktreeMap)) {
+      for (const [key, request] of latestGitHistoryRequest) {
+        if (!worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
+          retireGitHistorySlot(key)
+        }
+      }
+    } else {
+      for (const key of releasedHistorySlots) {
+        const request = latestGitHistoryRequest.get(key)
+        if (request && !worktreeMap.has(request.worktreeId) && !mountedHistoryConsumers.has(key)) {
+          retireGitHistorySlot(key)
+        }
+      }
+    }
+    releasedHistorySlots.clear()
+  }, [ownsWorktreeCatalog, slotKey, worktreeMap])
 
   const refreshGitHistory = useCallback(
     async (options?: HistoryRefresh): Promise<void> => {
