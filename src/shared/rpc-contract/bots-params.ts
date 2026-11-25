@@ -52,10 +52,11 @@ export const BOT_ERROR_CODES = [
 ] as const
 
 const HandedWorkspaces = z.array(HandedWorkspaceSchema).min(1).max(HANDED_WORKSPACES_MAX)
+const BotAgent = z.enum(BOT_AGENTS).optional()
 
 export const BotCreate = z.object({
   name: NewBotNameSchema,
-  agent: z.enum(BOT_AGENTS).optional(),
+  agent: BotAgent,
   /** The model and options picked for `agent`; absent, its chats start on the native chat defaults. */
   launch: BotLaunchSchema.optional(),
   /** Absent, its chats follow the native chat permission default. */
@@ -129,7 +130,7 @@ export const BotUpdate = z.object({
   updates: z
     .object({
       name: BotNameSchema.optional(),
-      agent: z.enum(BOT_AGENTS).optional(),
+      agent: BotAgent,
       avatar: SettableBotAvatar.optional(),
       /** The mascot revision visible when its color or outfit was picked. */
       lookAtEpoch: z.uuid().optional(),
@@ -243,9 +244,7 @@ export const BotChatReset = z.object({
 
 /** A fact to take out of a bot's MEMORY.md, by its words; from a bot's own chat with no botId,
  *  that bot's. */
-export const BotMemoryForget = BotChatReset.extend({
-  fact: requiredString('Missing fact')
-})
+export const BotMemoryForget = BotChatReset.extend({ fact: requiredString('Missing fact') })
 
 /** From Settings: a new fact, or `fact` (its words as they are) reworded to `text`. */
 export const BotMemoryEdit = BotChat.extend({
@@ -273,8 +272,11 @@ export const BotRoster = z.object({
   withoutChats: z.boolean().optional()
 })
 
-/** A new conversation with the bot; `agent` runs it on another of the agents a bot can be. */
-export const BotSessionStart = BotChat.extend({ agent: z.enum(BOT_AGENTS).optional() })
+/** A new conversation with the bot; `agent` runs it on another of the agents a bot can be.
+ *  `newChatId`: a shared teammate's id for this new chat, so their start and their message held while
+ *  the host was away open the same one; the owner's starts ignore it. */
+const NewChatId = z.string().min(1).max(128).optional()
+export const BotSessionStart = BotChat.extend({ agent: BotAgent, newChatId: NewChatId })
 
 /** The owner handed the bot a workspace, already moved under its home: Orca tells the bot in its Home
  *  (a bot just made for it) or in a new chat. */

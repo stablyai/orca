@@ -69,6 +69,7 @@ export type DispatchMachine = Pick<
   | 'threadMute'
   | 'shareResolved'
   | 'shareAccept'
+  | 'shareSend'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
 export type SendDelivery = Extract<ConnectorDelivery, { kind: 'send' }>
@@ -148,6 +149,13 @@ export function dispatchDelivery(
   }
   if (delivery.kind === 'share_accept') {
     return doneOnly(deliveryId, machine.shareAccept, delivery, UNKNOWN_SHARE_REFUSAL)
+  }
+  if (delivery.kind === 'share_send') {
+    const take = machine.shareSend
+    // Done once the message is in the chat's journal, or refused with why.
+    return take
+      ? { deliveryId, received: false, done: settle(() => take.deliver(delivery)) }
+      : refuse(deliveryId, { outcome: 'unsupported' })
   }
   if (delivery.kind === 'pr_event') {
     const hold = machine.prEvent

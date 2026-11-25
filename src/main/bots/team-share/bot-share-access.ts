@@ -5,12 +5,21 @@ import type { BotShare } from '../../../shared/bots/bot-team-shares'
 import type { BotHostUpdates } from '../../../shared/rpc-contract/bots-params'
 import type { BotShareCallerScope } from '../../runtime/rpc/callers/rpc-caller-scope'
 import type { BotShareOfferMint } from '../bot-team-share-deliveries'
+import type {
+  ConnectorDelivery,
+  ConnectorDeliveryResult
+} from '../../../shared/connectors/connector-cloud-contract'
 
 /** The RPC server's teammate devices; null until it starts, and on a host without one. */
 export type BotShareDevices = {
   mintBotShareOffer: BotShareOfferMint
   /** One teammate's devices with `accountId`, else every device on the bot; false if not all ended. */
   revokeBotShareDevices: (botId: string, accountId?: string) => Promise<boolean>
+  /** The key teammates seal held messages to: this host's pairing E2EE key, null without one. */
+  getE2EEPublicKey: () => string | null
+  deliverBotShareHeldMessage: (
+    delivery: Extract<ConnectorDelivery, { kind: 'share_send' }>
+  ) => Promise<ConnectorDeliveryResult>
 }
 
 /** Whether the bot is still shared with the account: every teammate device stands on this alone. */
@@ -66,7 +75,7 @@ export async function removeBotShare(
       botId: string,
       edit: (saved: Pick<Bot, 'shares'>) => Pick<BotHostUpdates, 'shares'>
     ) => Promise<Bot>
-    devices: BotShareDevices | null
+    devices: Pick<BotShareDevices, 'revokeBotShareDevices'> | null
   },
   botId: string,
   shareId: string

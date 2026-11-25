@@ -21,6 +21,7 @@ import type { JournalConnectorReplyOutcome } from '../agent-session/journal/jour
 import {
   ShareAcceptDelivery,
   ShareResolvedDelivery,
+  ShareSendDelivery,
   type ConnectorBotShare
 } from '../connector-share-contract'
 
@@ -226,14 +227,11 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
     conversation: ConnectorConversation.extend({ source: z.enum(CONNECTOR_CLOUD_SOURCES) })
   }),
   // An event on a pull request this machine's bots' owner opened; its conversation is the PR's own.
-  z.object({
-    ...DeliveryBase,
-    kind: z.literal('pr_event'),
-    event: PrEvent
-  }),
+  z.object({ ...DeliveryBase, kind: z.literal('pr_event'), event: PrEvent }),
   // A shared bot's people (connector-share-contract.ts), on the share's own conversation.
   ShareResolvedDelivery,
-  ShareAcceptDelivery
+  ShareAcceptDelivery,
+  ShareSendDelivery
 ])
 export type ConnectorDelivery = z.infer<typeof ConnectorDelivery>
 

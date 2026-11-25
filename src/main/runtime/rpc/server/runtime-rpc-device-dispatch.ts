@@ -1,5 +1,6 @@
 // One authenticated device's call, once its message is parsed and routed: shared by full pairings and
 // teammates' share devices, which get only what `dispatchForDevice` gives every device.
+import { randomUUID } from 'node:crypto'
 import type { WebSocket } from 'ws'
 import type {
   PairingGetEndpointsParams,
@@ -12,7 +13,20 @@ import type { RpcDispatchStreamingOptions } from '../dispatch/dispatcher-stream-
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import type { DeviceEntry } from './pairing/device-entry'
-import type { DevicePrincipal } from './pairing/device-principal'
+import {
+  botShareCallerScopeOf,
+  botSharePrincipalOf,
+  type DevicePrincipal
+} from './pairing/device-principal'
+import type { BotShareDevice } from './pairing/bot-share-device-store'
+import type {
+  ConnectorDelivery,
+  ConnectorDeliveryResult
+} from '../../../../shared/connectors/connector-cloud-contract'
+import { deliverBotShareHeldMessage } from '../../../bots/team-share/bot-share-held-messages'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { injectDeviceScope } from './runtime-rpc-device-scope-stamp'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
@@ -191,5 +205,57 @@ export class RuntimeRpcDeviceDispatch extends RuntimeRpcMobileDevices {
       abortRegistration?.dispose()
       this.releaseLongPoll(longPoll, device.deviceId)
     }
+  }
+
+  /** A teammate's message held while this host was away: see `deliverBotShareHeldMessage`. */
+  async deliverBotShareHeldMessage(
+    delivery: Extract<ConnectorDelivery, { kind: 'share_send' }>
+  ): Promise<ConnectorDeliveryResult> {
+    const devices = this.botShareDevices
+    if (!devices) {
+      return { outcome: 'refused', reason: 'unknown_device' }
+    }
+    return await deliverBotShareHeldMessage(
+      {
+        hostKeypair: this.e2eeKeypair,
+        bots: this.runtime.bots,
+        devices,
+        call: (device, method, params) => this.callAsBotShareDevice(device, method, params),
+        fence: (sessionId) =>
+          getStructuredAgentSessionHost()?.deps.store.getConversation(sessionId)?.currentFence ??
+          null
+      },
+      delivery
+    )
+  }
+
+  /** One call as a share device with no socket (its held message), admitted as its socket's calls
+   *  are: the share allowlist and guard, then the handler. */
+  protected async callAsBotShareDevice(
+    device: BotShareDevice,
+    method: string,
+    params: unknown
+  ): Promise<unknown> {
+    const principal = botSharePrincipalOf(device)
+    const response = await this.dispatcher.dispatch(
+      { id: randomUUID(), authToken: '', method, params },
+      {
+        authenticatedCallerFingerprint: principal.callerFingerprint,
+        clientId: principal.clientId,
+        pairedDeviceId: device.deviceId,
+        pairedDeviceParentId: device.parentDeviceId,
+        // As the teammate's desktop would send it live: its handshake's capabilities, which take a
+        // send's answer at acceptance.
+        clientKind: 'runtime',
+        callerScope: botShareCallerScopeOf(device),
+        clientCapabilities: remoteRuntimeClientCapabilities(
+          ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+        )
+      }
+    )
+    if (!response.ok) {
+      throw new Error(response.error.message || response.error.code)
+    }
+    return response.result
   }
 }

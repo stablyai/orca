@@ -21,7 +21,8 @@ const THREADLESS_KINDS = [
   'webhook_notice',
   'pr_event',
   'share_resolved',
-  'share_accept'
+  'share_accept',
+  'share_send'
 ] as const
 const THREADLESS: ReadonlySet<string> = new Set(THREADLESS_KINDS)
 type ThreadDelivery = Exclude<ConnectorDelivery, { kind: (typeof THREADLESS_KINDS)[number] }>
