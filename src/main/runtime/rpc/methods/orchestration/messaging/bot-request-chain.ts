@@ -24,7 +24,7 @@ export type BotRequestChain = {
 
 type ChainTurn = Pick<
   BotActingTurn,
-  'rootItemId' | 'requestIds' | 'askedBy' | 'byAutomation' | 'openedAt' | 'ownerRequest'
+  'rootItemId' | 'requestIds' | 'askedBy' | 'openedBy' | 'openedAt' | 'ownerRequest'
 >
 
 /** A turn no request woke starts its chain: who or what sent the message that opened it. */
@@ -32,25 +32,24 @@ function turnStart(sessionId: string | null, turn: ChainTurn): BotRequestStart {
   return {
     kind: isBotGroupMemberSession(sessionId)
       ? 'group'
-      : turn.byAutomation
-        ? 'automation'
-        : actsForOwner(turn.askedBy)
-          ? 'owner'
-          : 'person',
+      : (turn.openedBy ?? (actsForOwner(turn.askedBy) ? 'owner' : 'person')),
     at: turn.openedAt ?? null,
     request: turn.ownerRequest ?? null
   }
 }
 
-/** The start a request's record carries; `bot` for a record written before Orca kept it. */
+/** A start Orca can't tell: a record written before Orca kept it, or a turn it couldn't read. */
+export const UNKNOWN_REQUEST_START: BotRequestStart = { kind: 'bot', at: null, request: null }
+
+/** The start a request's record carries. */
 function recordedStart(record: string): BotRequestStart {
   try {
     const parsed: unknown = JSON.parse(record)
     const start =
       typeof parsed === 'object' && parsed !== null && 'start' in parsed ? parsed.start : null
-    return requestStartOf(start) ?? { kind: 'bot', at: null, request: null }
+    return requestStartOf(start) ?? UNKNOWN_REQUEST_START
   } catch {
-    return { kind: 'bot', at: null, request: null }
+    return UNKNOWN_REQUEST_START
   }
 }
 

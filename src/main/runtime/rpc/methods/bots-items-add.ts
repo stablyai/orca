@@ -16,7 +16,11 @@ import { sessionCallerOf } from '../../orchestration/addressing/orchestration-ca
 import type { RpcContext } from '../core'
 import { readBotTurnOrigin } from './orchestration/messaging/bot-turn-origin'
 import { readBotTurn } from './orchestration/messaging/bot-recipient'
-import { botRequestOrigin, botTurnRequestOrigin } from './orchestration/messaging/bot-request-chain'
+import {
+  botRequestOrigin,
+  botTurnRequestOrigin,
+  UNKNOWN_REQUEST_START
+} from './orchestration/messaging/bot-request-chain'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import type { BotItemsRemote } from '../../../bots/bot-items-ops'
@@ -126,7 +130,8 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
 }
 
 /** The request the calling turn acts on, read as a send from it reads it, so the item shares that
- *  send's chain; none when the turn can't be read, which never stops the add. */
+ *  send's chain. A turn that can't be read never stops the add: the item keeps `--from-item`'s key
+ *  with an unknown start, or records none. */
 async function turnRequestOrigin(
   context: RpcContext,
   sessionId: string,
@@ -138,7 +143,7 @@ async function turnRequestOrigin(
     return botTurnRequestOrigin(db, sessionId, turn, { fromItemKey })
   } catch (error) {
     console.warn('[bots] could not read the request an item came from', error)
-    return null
+    return fromItemKey ? { rootKey: fromItemKey, ...UNKNOWN_REQUEST_START } : null
   }
 }
 

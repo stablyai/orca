@@ -24,6 +24,8 @@ export type BotItemListView = {
   items: BotItem[]
   counts: Partial<Record<BotItemStatus, number>>
   nextCursor?: string
+  /** The `--root-key` the host filtered by; absent from hosts that ignore it. */
+  rootKey?: string
 }
 
 export type BotItemShowView = { item: BotItem; events: BotItemEvent[]; nextCursor?: string }

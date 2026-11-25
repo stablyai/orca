@@ -238,7 +238,7 @@ export type BotItemOrigin = {
   rootKey: string
   /** Who or what started the request: the owner, someone else (a teammate through a connector), a
    *  group room, an automation, or `bot` for a request whose record was written before Orca kept
-   *  how it started. A send no bot's turn made (a terminal agent, another computer's agent) counts
+   *  how it started, or an item whose turn Orca couldn't read. A send no bot's turn made (a terminal agent, another computer's agent) counts
    *  as started by whom it acts for: `owner`, or `person`, with no time or words. */
   kind: 'owner' | 'person' | 'group' | 'automation' | 'bot'
   /** When the request started (epoch ms): when the message that started it arrived; null unknown. */

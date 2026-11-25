@@ -184,3 +184,36 @@ it("keeps only the owner's own words as a request's text", () => {
     request: null
   })
 })
+
+it('takes the start from the message that opened the turn, not from ones steered into it', () => {
+  const steered = (itemId: string, at: number, body: unknown): AgentJournalRenderItem => ({
+    ...row(itemId, at, body),
+    turnScope: { kind: 'turn', turnItemId: 't1' }
+  })
+  const run = { runId: 'r1', automation: { id: 'a1', name: 'Triage' }, trigger: 'schedule' }
+  const turn = read(
+    [
+      row('u1', 1000, { ...text('Build a board'), typedBy: { by: 'host' } }),
+      turnRow('t1', 'u1', 1001),
+      steered('a1', 2000, { ...text('Triage'), origin: 'automation-run', automationRun: run }),
+      steered('c1', 3000, {
+        ...text('Also add a chart'),
+        origin: 'connector',
+        asker: {
+          source: 'slack',
+          userId: 'U_DANA',
+          name: 'Dana',
+          role: 'member',
+          place: { kind: 'public_channel', id: 'C1' }
+        }
+      })
+    ],
+    [typedInOrca('u1')]
+  )
+  expect(botTurnRequestOrigin(db, HOME, turn)).toEqual({
+    rootKey: `${HOME}:u1`,
+    kind: 'owner',
+    at: 1000,
+    request: 'Build a board'
+  })
+})

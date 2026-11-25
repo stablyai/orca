@@ -21,6 +21,7 @@ import { ownerRequestOf } from './bot-owner-request-text'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 import { requestTextOf } from './bot-request-text'
 import { requestTurnAskedBy } from './bot-request-askers-of'
+import { turnOpenedBy, type BotTurnOpenedBy } from './bot-turn-opener'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -62,8 +63,8 @@ export type BotActingTurn = {
   typedByAnother?: true
   /** Who did the event behind the automation prompt that opened the turn, for the record only. */
   triggeredBy?: AutomationTriggeredBy
-  /** An automation's run or event prompt opened the turn. */
-  byAutomation?: true
+  /** Who or what sent the message that opened the turn (bot-turn-opener.ts). */
+  openedBy?: BotTurnOpenedBy
   /** When the message that opened the turn arrived (its row's observedAt). */
   openedAt?: number
   /** The owner's own words that opened the turn (bot-request-chain.ts reads them as the request's):
@@ -321,14 +322,11 @@ export function readBotActingTurnWithin(
       const ran = openers.some(
         (entry) => entry.reading.kind === 'conversation' && entry.reading.run
       )
-      const automation = openers.some(
-        ({ item: { body } }) => body.kind === 'message' && (body.memorySource || body.automationRun)
-      )
       const ownerRequest = ownerRequestOf(opener.item, sends)
       // Only the newest turn: one a worker's report reads back to is not the turn now running.
       const typedByOwner = index === 0 && window.every((item) => typedInOrcaByOwner(item, sends))
       // A paired device Orca can't place as the owner asked as someone it can't name.
-      const askedBy = openers.flatMap((entry): readonly BotRequestAsker[] =>
+      const askedByOf = (entry: (typeof openers)[number]): readonly BotRequestAsker[] =>
         entry.reading.kind === 'asker'
           ? [entry.reading.asker]
           : entry.reading.kind === 'conversation' && entry.reading.run
@@ -338,7 +336,7 @@ export function readBotActingTurnWithin(
               : typedOnAnotherDevice(entry.item)
                 ? [{ kind: 'unknown' }]
                 : OWNER_ACTS_FOR
-      )
+      const askedBy = openers.flatMap(askedByOf)
       return {
         rootItemId: opener.item.itemId,
         // Anyone stamped in the same turn still holds a mixed turn to the least trusted.
@@ -360,7 +358,8 @@ export function readBotActingTurnWithin(
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
-        ...(automation ? { byAutomation: true as const } : {}),
+        // The opener alone, so the start's kind, time and words are one message's.
+        openedBy: turnOpenedBy(opener.item.body, askedByOf(opener)),
         openedAt: opener.item.observedAt,
         ...(ownerRequest ? { ownerRequest } : {}),
         ...(origin ? { origin } : {})

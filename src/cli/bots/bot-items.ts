@@ -6,6 +6,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
+  getPresentStringFlag,
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
@@ -96,7 +97,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(links.length > 0 ? { links } : {}),
       ...optional('forBot', getOptionalStringFlag(flags, 'for')),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
-      ...optional('fromItem', getOptionalStringFlag(flags, 'from-item'))
+      ...optional('fromItem', getPresentStringFlag(flags, 'from-item'))
     })
   },
   'bot item set': async (ctx) => {
@@ -151,7 +152,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     const botId = selector ? (await findBot(client, selector)).id : undefined
     const status = getOptionalStringFlag(flags, 'status')
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
-    const rootKey = getOptionalStringFlag(flags, 'root-key')
+    const rootKey = getPresentStringFlag(flags, 'root-key')
     const result = await callBots<BotItemListView>(client, 'bots.items.list', {
       ...callerChat(),
       ...(botId ? { botId } : {}),
@@ -164,18 +165,14 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(limit !== undefined ? { limit } : {}),
       ...optional('cursor', getOptionalStringFlag(flags, 'cursor'))
     })
-    // An older runtime ignores rootKey and lists every item, so only that request's are kept.
-    const shown =
-      rootKey === undefined
-        ? result
-        : {
-            ...result,
-            result: {
-              ...result.result,
-              items: result.result.items.filter((item) => item.origin?.rootKey === rootKey)
-            }
-          }
-    print(shown, json, (value) => formatBotItemList(value, Date.now()))
+    // An older runtime drops rootKey and lists every item; only one that filtered echoes it.
+    if (rootKey !== undefined && result.result.rootKey !== rootKey) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host cannot list items by --root-key. Update Orca on that host.'
+      )
+    }
+    print(result, json, (value) => formatBotItemList(value, Date.now()))
   },
   'bot item show': async ({ flags, client, json }) => {
     const result = await callBots<BotItemShowView>(client, 'bots.items.show', {

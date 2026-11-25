@@ -1,5 +1,6 @@
 // `item add --from-item`: only the bot's own item's request is joined, by its key alone, and the
-// request mail an item made `--for` another bot records that key in `bot_requests.root_key`.
+// request mail an item made `--for` another bot records that key in `bot_requests.root_key`. A turn
+// that can't be read still keeps that key.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { BotItemOrigin } from '../../../../shared/bots/bot-items'
 import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
@@ -12,7 +13,8 @@ import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { BotItemsStore } from '../../../bots/bot-items-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { fromItemOf } from './bots-items-add'
+import type { BotItemsRemote } from '../../../bots/bot-items-ops'
+import { addItem, fromItemOf } from './bots-items-add'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import { createOrchestrationRpcHarness } from './orchestration/rpc-test-harness'
 
@@ -23,6 +25,16 @@ const BOARD: BotItemOrigin = {
   at: 1000,
   request: 'Build a board'
 }
+
+vi.mock('./bots-items-caller', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  itemsWriter: (sessionId: string) => ({
+    bot: { id: 'coordinator', name: 'Coordinator' },
+    actor: { kind: 'bot', botId: 'coordinator', chatId: HOME },
+    sessionId,
+    source: { kind: 'home', title: null }
+  })
+}))
 
 const harness = createOrchestrationRpcHarness()
 let store: BotItemsStore
@@ -120,4 +132,27 @@ it("stores the named item's key as the request mail's root_key, with the sender'
   expect(row?.root_key).toBe(BOARD.rootKey)
   // Only the key is joined: the record's start stays the sender's own (a terminal's here).
   expect(JSON.parse(row?.record ?? '{}').start).toEqual({ kind: 'owner', at: null, request: null })
+})
+
+it("keeps the named item's key, with an unknown start, when the calling turn can't be read", async () => {
+  const { runtime } = harness.setup()
+  vi.spyOn(runtime.bots, 'assertEnabled').mockImplementation(() => {})
+  vi.spyOn(runtime.bots, 'list').mockReturnValue([])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the in-memory store answers the calls an add makes.
+  vi.spyOn(runtime.botItems, 'store').mockReturnValue(store as unknown as BotItemsRemote)
+  made('coordinator', BOARD)
+  // No chat host is running, so neither the turn nor where it started can be read.
+  const { item } = await addItem(
+    { title: 'Test the board', fromItem: '1' },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an add reads only these fields of the context.
+    { runtime, orchestrationCaller: { sessionId: 'home' } } as unknown as Parameters<
+      typeof addItem
+    >[1]
+  )
+  expect(store.originsOf([item.uid])[item.uid]).toEqual({
+    rootKey: BOARD.rootKey,
+    kind: 'bot',
+    at: null,
+    request: null
+  })
 })
