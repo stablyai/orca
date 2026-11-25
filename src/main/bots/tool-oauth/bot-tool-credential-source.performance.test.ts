@@ -1,4 +1,4 @@
-// Guards the relay credential fix: each call the relay makes, and each token it saves, opens the one
+// Guards PR #49171: each call the relay makes, and each token it saves, opens the one
 // credential it is for, not every credential the bot has saved.
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'

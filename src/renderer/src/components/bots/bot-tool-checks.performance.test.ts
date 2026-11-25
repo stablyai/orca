@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Guards the bot tools reads fix: a host's bots change rereads only the bots a view still shows, so
+// Guards PR #49171: a host's bots change rereads only the bots a view still shows, so
 // tools views opened and closed earlier cost the host no reads, and a finished check outlives them.
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
