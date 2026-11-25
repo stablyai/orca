@@ -38,6 +38,7 @@ export function EditorPanelHeaderPath({
   const t = useTranslate()
   const [pathMenuOpen, setPathMenuOpen] = useState(false)
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
+  const pathRowRef = useRef<HTMLDivElement>(null)
   const skipMenuFocusRestoreRef = useRef(false)
   const headerCopyState = getEditorHeaderCopyState(activeFile, t)
   const displayPath = splitPathForDisplay(headerCopyState.pathLabel)
@@ -64,6 +65,8 @@ export function EditorPanelHeaderPath({
   return (
     <div className="editor-header-text">
       <div
+        ref={pathRowRef}
+        tabIndex={-1}
         className="editor-header-path-row"
         onContextMenuCapture={(event) => {
           event.preventDefault()
@@ -129,7 +132,10 @@ export function EditorPanelHeaderPath({
         )}
       </div>
       <DropdownMenu open={pathMenuOpen} onOpenChange={setPathMenuOpen} modal={false}>
-        <ViewportDropdownMenuTrigger point={pathMenuPoint} />
+        <ViewportDropdownMenuTrigger
+          point={pathMenuPoint}
+          onRestoreFocus={() => pathRowRef.current?.focus({ preventScroll: true })}
+        />
         <DropdownMenuContent
           className="min-w-56"
           sideOffset={0}

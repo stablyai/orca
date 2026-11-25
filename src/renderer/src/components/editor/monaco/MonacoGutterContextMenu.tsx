@@ -18,6 +18,7 @@ import { getRemoteUrlLineRange } from '../contextual-copy/selection-copy'
 type MonacoGutterContextMenuProps = {
   open: boolean
   onOpenChange: (open: boolean) => void
+  onRestoreFocus: () => void
   point: { x: number; y: number }
   line: number
   selection: IRange | null
@@ -30,6 +31,7 @@ type MonacoGutterContextMenuProps = {
 export function MonacoGutterContextMenu({
   open,
   onOpenChange,
+  onRestoreFocus,
   point,
   line,
   selection,
@@ -41,7 +43,7 @@ export function MonacoGutterContextMenu({
   const t = useTranslate()
   return (
     <DropdownMenu open={open} onOpenChange={onOpenChange} modal={false}>
-      <ViewportDropdownMenuTrigger point={point} />
+      <ViewportDropdownMenuTrigger point={point} onRestoreFocus={onRestoreFocus} />
       <DropdownMenuContent sideOffset={0} align="start">
         <DropdownMenuItem
           onSelect={() => {
