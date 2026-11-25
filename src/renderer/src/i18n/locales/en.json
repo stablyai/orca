@@ -23025,7 +23025,6 @@
         "zoomIn": "Zoom in",
         "zoomOut": "Zoom out",
         "saveFailed": "Couldn’t save your notes. They’re still here.",
-        "keptUnsaved": "Notes kept, but they couldn’t be saved and won’t survive a restart.",
         "imageChanged": "This image left the message box. Your notes are still here.",
         "goalHeld": "Your message box is setting a goal, which can’t include images. Finish or leave it first.",
         "keptNoMessageBox": "Notes kept with {{name}}. This chat’s message box isn’t available right now.",

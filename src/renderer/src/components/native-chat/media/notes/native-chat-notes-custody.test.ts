@@ -262,6 +262,8 @@ it('a draft that moves on again before its first move settled keeps its first so
     scope === SCOPE
       ? Promise.reject(new DOMException('refused', 'QuotaExceededError'))
       : write(scope, draft)
+  // Nothing journals either, so neither move is durable until a destination's write is confirmed.
+  const unjournaled = refuseNotesWrites()
   moveNativeChatComposerDraft(SOURCE, MIDDLE)
   moveNativeChatComposerDraft(MIDDLE, SCOPE)
   await nativeChatComposerDraftSaved(MIDDLE)
@@ -270,6 +272,7 @@ it('a draft that moves on again before its first move settled keeps its first so
   // The last destination refused its write: the first source is still the saved copy.
   expect(drafts.drafts.get(SOURCE)?.text).toBe('words')
   drafts.write = write
+  unjournaled.mockRestore()
   updateNativeChatComposerDraft(SCOPE, { text: 'words!' }, 'immediate')
   await nativeChatComposerDraftSaved(SCOPE)
   await nativeChatComposerDraftSaved(SOURCE)

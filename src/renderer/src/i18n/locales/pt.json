@@ -22390,7 +22390,6 @@
         "zoomIn": "Aumentar zoom",
         "zoomOut": "Diminuir zoom",
         "saveFailed": "Não foi possível salvar suas notas. Elas continuam aqui.",
-        "keptUnsaved": "Notas mantidas, mas não foi possível salvá-las e elas serão perdidas ao reiniciar.",
         "imageChanged": "Esta imagem saiu da caixa de mensagem. Suas notas continuam aqui.",
         "goalHeld": "Sua caixa de mensagem está definindo uma meta, que não pode incluir imagens. Conclua ou saia dela primeiro.",
         "keptNoMessageBox": "Notas mantidas com {{name}}. A caixa de mensagem deste chat não está disponível agora.",

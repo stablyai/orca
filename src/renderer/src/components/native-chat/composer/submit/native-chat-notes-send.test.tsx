@@ -8,10 +8,10 @@ import {
   setNativeChatComposerDraftStorageForTests
 } from '../../drafts/native-chat-composer-draft-storage'
 import { useNativeChatDraft } from '../../drafts/use-native-chat-draft'
+import { clearNativeChatComposerImagesExcept } from '../../attachments/chips/native-chat-composer-images-clear'
 import {
   appendToNativeChatComposerDraft,
-  readNativeChatComposerDraft,
-  updateNativeChatComposerDraft
+  readNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
@@ -90,9 +90,8 @@ it('a terminal command leaves a marked image and its notes in the message box fo
       setDraft: vi.fn(),
       setCaret: vi.fn(),
       clearSkillOrigin: vi.fn(),
-      // As the message box does: every image leaves the draft.
-      clearImageAttachments: () =>
-        updateNativeChatComposerDraft(scope, { images: [] }, 'immediate'),
+      // As the message box does: every image leaves the draft but the ones it is told to keep.
+      clearImageAttachments: (keep) => clearNativeChatComposerImagesExcept(scope, keep),
       setNotice: vi.fn()
     })
   )

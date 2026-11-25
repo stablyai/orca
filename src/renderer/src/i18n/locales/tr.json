@@ -23020,7 +23020,6 @@
         "zoomIn": "Yakınlaştır",
         "zoomOut": "Uzaklaştır",
         "saveFailed": "Notların kaydedilemedi. Hâlâ burada.",
-        "keptUnsaved": "Notlar tutuldu ama kaydedilemedi; yeniden başlatınca kaybolur.",
         "imageChanged": "Bu görsel mesaj kutusundan çıktı. Notların hâlâ burada.",
         "goalHeld": "Mesaj kutunuz bir hedef belirliyor ve hedef görsel içeremez. Önce bitirin ya da çıkın.",
         "keptNoMessageBox": "Notlar {{name}} ile tutuldu. Bu sohbetin mesaj kutusu şu anda kullanılamıyor.",

@@ -20804,7 +20804,6 @@
         "zoomIn": "Vergrößern",
         "zoomOut": "Verkleinern",
         "saveFailed": "Deine Notizen konnten nicht gespeichert werden. Sie sind noch da.",
-        "keptUnsaved": "Notizen behalten, aber sie konnten nicht gespeichert werden und gehen bei einem Neustart verloren.",
         "imageChanged": "Dieses Bild ist nicht mehr im Nachrichtenfeld. Deine Notizen sind noch da.",
         "goalHeld": "Dein Nachrichtenfeld legt gerade ein Ziel fest, das keine Bilder enthalten kann. Schließe es zuerst ab oder verlasse es.",
         "keptNoMessageBox": "Notizen bei {{name}} behalten. Das Nachrichtenfeld dieses Chats ist gerade nicht verfügbar.",

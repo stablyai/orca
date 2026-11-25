@@ -20504,7 +20504,6 @@
         "zoomIn": "Acercar",
         "zoomOut": "Alejar",
         "saveFailed": "No se pudieron guardar tus notas. Siguen aquí.",
-        "keptUnsaved": "Notas conservadas, pero no se pudieron guardar y se perderán al reiniciar.",
         "imageChanged": "Esta imagen ya no está en el cuadro de mensaje. Tus notas siguen aquí.",
         "goalHeld": "Tu cuadro de mensaje está fijando un objetivo, que no puede incluir imágenes. Termínalo o sal de él primero.",
         "keptNoMessageBox": "Notas guardadas con {{name}}. El cuadro de mensaje de este chat no está disponible ahora.",
