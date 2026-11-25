@@ -58,8 +58,8 @@ export type JournalOperationWindowAnchors = {
    *  tool printed, which is nearly all of a long chat's bytes. */
   withoutToolOutput?: boolean
   /** With `operationIds` alone, for a reader of the anchored operations' own turns: the window ends where the next root turn
-   *  opens, and only the anchored operations' sends and those placed inside the window are read, so
-   *  its cost never grows with the chat after them. Unanswered sends outside it do not come along. */
+   *  opens, unless a turn in the window has assistant text after that boundary. The bounded read
+   *  uses only the anchored operations' sends and those placed inside the window. */
   throughAnchoredTurns?: boolean
   /** Only the rows that say who opened and ran each turn: messages, turn and status rows, and any
    *  row of no known turn (it ends a turn's reach); never tool calls or diffs. */
@@ -185,6 +185,20 @@ export function readJournalDomainOperationWindow(
     start = next
   }
   const items = start === null ? [] : readOperationWindowItems(scope, start, anchors, end)
+  if (end !== null) {
+    const turnIds = items.flatMap(({ body, itemId }) => (body.kind === 'turn' ? [itemId] : []))
+    // Some providers or imports can add assistant rows to a turn after the next root turn opens.
+    const lateReply = scope.db
+      .prepare(`SELECT 1 FROM json_each(?) turn
+        CROSS JOIN journal_items item INDEXED BY journal_items_stop_turn
+        WHERE item.session_id=? AND item.epoch=? AND item.hidden=0 AND item.turn_item_id=turn.value
+        AND item.turn_item_id IS NOT NULL AND item.sequence>=?
+        AND item.kind='message' AND item.message_role='assistant' LIMIT 1`)
+      .get(JSON.stringify(turnIds), ...scope.prefix, end)
+    if (lateReply) {
+      return readJournalDomainOperationWindow(scope, { ...anchors, throughAnchoredTurns: false })
+    }
+  }
   const first = scope.db
     .prepare(`SELECT MIN(sequence) AS sequence FROM journal_items INDEXED BY journal_items_visible_position
     WHERE session_id=? AND epoch=? AND hidden=0`)

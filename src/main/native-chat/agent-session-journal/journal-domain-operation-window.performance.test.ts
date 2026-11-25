@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { ensureAgentSessionAttachmentClaimTables } from '../agent-session-attachments/agent-session-attachment-claims'
@@ -11,14 +11,38 @@ import { applyJournalDomainItem } from './journal-domain-item'
 import { readJournalDomainOperationWindow } from './journal-domain-operation-window'
 import { JournalWindowNotIndexed } from './journal-operation-window-sends'
 import { JournalSqlScope } from './journal-sql-scope'
+import { runJournalSqlSteps } from './journal-sql-steps'
 import { keptSends } from './journal-operation-window-held-sends'
 import { marginBefore } from './journal-operation-window-turn-ahead'
 import type { Send } from './journal-operation-window-sends'
 import { codexTurnLifecycleIdentity } from '../../codex/structured/journal/codex-structured-journal-translation-turns'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+
+import { botChatReads } from '../../bots/bot-chat-reads'
+import type * as ChatSession from '../../bots/bot-chat-session'
+import { recoverBotGroupReplies } from '../../bots/bot-group-completed-replies'
+import { BotGroupStore } from '../../bots/bot-group-store'
+import type { BotGroupTurn } from '../../../shared/bots/bot-group'
+
+const live = vi.hoisted(
+  (): {
+    operationWindow?: (
+      anchors: Parameters<typeof readJournalDomainOperationWindow>[1]
+    ) => Promise<ReturnType<typeof readJournalDomainOperationWindow>>
+  } => ({})
+)
+vi.mock('../../bots/bot-chat-session', async (original) => ({
+  ...(await original<typeof ChatSession>()),
+  requireStructuredHost: async () => ({
+    journalReads: async () => ({ operationWindow: live.operationWindow })
+  })
+}))
 
 // #47529: opening one ended turn of a bot group room reads it through the operation window. Guards
 // the bounded read: the rows and sends it returns stay fixed however many turns the chat ran after
@@ -60,7 +84,8 @@ function chat(
   /** Every send in one family: a chain (each shares a provider id with one neighbour and a card with
    *  the other), one queued card they all carry, or one answering turn they all name (the newest).
    *  Or `unsettled`: every send before the newest ten handed over, and never known answered. */
-  family?: 'chain' | 'card' | 'answered' | 'unsettled'
+  family?: 'chain' | 'card' | 'answered' | 'unsettled',
+  withGroupReplies = false
 ): Database {
   const chained = family === 'chain'
   const directory = mkdtempSync(join(tmpdir(), 'orca-operation-window-'))
@@ -77,6 +102,13 @@ function chat(
   for (let index = 0; index < turns; index += 1) {
     const linked = linkedAt(index)
     const id = `m${index}`
+    const providerIdentity = {
+      provider: 'codex' as const,
+      threadId: 'thread',
+      turnId: 'echo',
+      ordinal: chained ? Math.floor((index + 1) / 2) : index
+    }
+    const providerOpener = withGroupReplies && index === 0
     const turn = codexTurnLifecycleIdentity('chat', `turn-${index}`)
     const body: AgentJournalMessageItem = {
       kind: 'message',
@@ -132,13 +164,8 @@ function chat(
                   clientMessageId: id,
                   fence: 1,
                   state: 'accepted',
-                  providerIdentity: {
-                    provider: 'codex',
-                    threadId: 'thread',
-                    turnId: 'echo',
-                    ordinal: chained ? Math.floor((index + 1) / 2) : index
-                  },
-                  ...(linked
+                  providerIdentity,
+                  ...(linked && !providerOpener
                     ? {
                         answeredInTurn: {
                           turn:
@@ -154,6 +181,71 @@ function chat(
         now++
       )
     )
+    if (withGroupReplies && index === 0) {
+      const clientMessageId = 'follow-up'
+      applyJournalDomainSubmission(
+        db,
+        directory,
+        target,
+        {
+          kind: 'submission',
+          input: {
+            clientMessageId,
+            body,
+            payloadFingerprint: agentSessionSendBodyFingerprint('chat', body),
+            fence: 1,
+            origin: 'client',
+            source: { kind: 'agent' },
+            handoverRecorded: true,
+            queuedMessageId: 'follow-up-card'
+          }
+        },
+        facts,
+        now++
+      )
+      applyJournalDomainDispatch(
+        db,
+        target,
+        {
+          kind: 'dispatch',
+          input: {
+            state: 'accepted',
+            clientMessageId,
+            fence: 1,
+            answeredInTurn: { turn, via: 'steer' },
+            providerIdentity: {
+              provider: 'codex',
+              threadId: 'thread',
+              turnId: 'turn-0',
+              ordinal: 1
+            }
+          }
+        },
+        now++
+      )
+    }
+    if (withGroupReplies && index < 2) {
+      applyJournalDomainItem(
+        db,
+        target,
+        {
+          kind: 'item',
+          identity: { provider: 'orca', clientMessageId: `studio-reply-${index}` },
+          body: {
+            kind: 'message',
+            role: 'assistant',
+            blocks: [
+              {
+                type: 'text',
+                text: index === 0 ? 'The review is complete.' : 'The checklist is ready.'
+              }
+            ]
+          },
+          options: { turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(turn) }, fence: 1 }
+        },
+        now++
+      )
+    }
     transaction(() =>
       applyJournalDomainItem(
         db,
@@ -166,7 +258,14 @@ function chat(
             turnId: `turn-${index}`,
             state: 'completed',
             outcome: 'success',
-            ...(linked ? { userItemId: agentJournalSubmissionKey(id) } : {})
+            ...(withGroupReplies && index === 0 ? { completedAt: 40 } : {}),
+            ...(linked
+              ? {
+                  userItemId: providerOpener
+                    ? agentJournalItemKey(providerIdentity)
+                    : agentJournalSubmissionKey(id)
+                }
+              : {})
           },
           options: { turnScope: { kind: 'thread' }, fence: 1 }
         },
@@ -206,9 +305,185 @@ function chat(
       now++
     )
   }
+  if (withGroupReplies) {
+    applyJournalDomainItem(
+      db,
+      target,
+      {
+        kind: 'item',
+        identity: { provider: 'orca', clientMessageId: 'worker-start' },
+        body: {
+          kind: 'agent-start',
+          dispatchId: 'worker-start',
+          task: 'Check the Studio list.',
+          worker: {
+            name: 'Pilot',
+            party: { address: 'dispatch:worker-start', terminalHandle: null, orcaSessionId: null }
+          }
+        },
+        options: { turnScope: { kind: 'thread' }, fence: 1 }
+      },
+      now++
+    )
+  }
   db.exec('COMMIT')
   return db
 }
+
+it('recovers the same sidebar replies without reading the later chat history', async () => {
+  for (const length of [10, 100]) {
+    const journal = chat(length, undefined, undefined, 0, 0, 0, undefined, true)
+    const database = new Database(':memory:')
+    try {
+      const work = { rows: 0, decodedBytes: 0 }
+      live.operationWindow = async (anchors) =>
+        readJournalDomainOperationWindow(
+          new JournalSqlScope(journal, 'chat', 'epoch', work),
+          anchors
+        )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked host lookup is the only consumer of this runtime
+      const reads = botChatReads({} as never)
+      const store = new BotGroupStore(database)
+      store.put({
+        id: 'studio',
+        name: 'Studio',
+        hostId: 'local',
+        folder: 'studio',
+        folderWorkspaceId: 'home',
+        revision: 1,
+        createdAt: 1,
+        members: [],
+        replyMode: { kind: 'mentions' }
+      })
+      const scout: BotGroupTurn = {
+        botId: 'scout',
+        botName: 'Scout',
+        avatar: null,
+        agent: 'codex',
+        sessionId: 'chat',
+        operationId: 'card-0',
+        workerDispatchIds: ['worker-start']
+      }
+      store.append({
+        id: 'post',
+        groupId: 'studio',
+        createdAt: 1,
+        author: { kind: 'owner' },
+        text: 'Status?',
+        turns: [
+          scout,
+          { ...scout, botId: 'atlas', botName: 'Atlas', operationId: 'm1' },
+          { ...scout, botId: 'pilot', botName: 'Pilot', operationId: 'follow-up-card' }
+        ]
+      })
+      const result = await store.listing(true, (messages, cache) =>
+        recoverBotGroupReplies(messages, reads, cache)
+      )
+      expect(
+        result[0].replyPreviews?.map((row) => [
+          row.botId,
+          row.messageId,
+          'operationId' in row ? row.operationId : null,
+          row.text,
+          row.at,
+          row.replyMessageId
+        ])
+      ).toEqual([
+        ['scout', 'post', 'card-0', 'The review is complete.', 40, 'orca:studio-reply-0'],
+        ['atlas', 'post', 'm1', 'The checklist is ready.', null, 'orca:studio-reply-1'],
+        ['pilot', 'post', 'follow-up-card', 'The review is complete.', 40, 'orca:studio-reply-0']
+      ])
+      expect(work.rows).toBeLessThanOrEqual(40)
+
+      // New prose and a completion time can arrive after the next turn has already opened.
+      if (length === 10) {
+        const identity = codexTurnLifecycleIdentity('chat', 'turn-1')
+        journal.exec('BEGIN IMMEDIATE')
+        const revised = runJournalSqlSteps(
+          journal,
+          {
+            target: { ...target, ownerToken: 'owner' },
+            operation: {
+              kind: 'steps',
+              steps: [
+                {
+                  kind: 'resolved-item',
+                  reservedBytes: 1024,
+                  options: {
+                    fence: 1,
+                    turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(identity) }
+                  },
+                  resolution: {
+                    kind: 'guarded-item',
+                    change: 'open',
+                    identity: { provider: 'orca', clientMessageId: 'late-reply' },
+                    body: {
+                      kind: 'message',
+                      role: 'assistant',
+                      blocks: [{ type: 'text', text: 'The checklist was delivered.' }]
+                    }
+                  }
+                },
+                {
+                  kind: 'resolved-item',
+                  reservedBytes: 1024,
+                  options: { fence: 1, turnScope: { kind: 'thread' } },
+                  resolution: {
+                    kind: 'turn-row',
+                    target: { identity },
+                    write: {
+                      lifecycle: {
+                        kind: 'turn',
+                        turnId: 'turn-1',
+                        state: 'completed',
+                        outcome: 'success',
+                        userItemId: agentJournalSubmissionKey('m1'),
+                        completedAt: 50
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          51
+        )
+        journal.exec('COMMIT')
+        expect(revised.value.outcomes).toEqual([
+          { kind: 'committed', wrote: true },
+          { kind: 'committed', wrote: true }
+        ])
+        store.append({
+          id: 'new-post',
+          groupId: 'studio',
+          createdAt: 52,
+          author: { kind: 'owner' },
+          text: 'Hello',
+          turns: [
+            {
+              ...scout,
+              operationId: 'new',
+              reply: 'Still reviewing.',
+              replyAt: 35,
+              replyMessageId: 'new-answer'
+            }
+          ]
+        })
+        const [refreshed] = await store.listing(true, (messages, cache) =>
+          recoverBotGroupReplies(messages, reads, cache)
+        )
+        expect(refreshed.replyPreviews?.find(({ botId }) => botId === 'atlas')).toMatchObject({
+          at: 50,
+          text: 'The checklist is ready. The checklist was delivered.',
+          replyMessageId: 'orca:studio-reply-1'
+        })
+      }
+    } finally {
+      journal.close()
+      database.close()
+    }
+  }
+})
 
 function openFirstTurn(db: Database, ...operationIds: string[]) {
   const scope = new JournalSqlScope(db, 'chat', 'epoch')

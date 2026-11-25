@@ -15,7 +15,8 @@ export type BotChatReads = {
   /** The items of the turns these group operations opened, keyed by operation. */
   turnItems: (
     sessionId: string,
-    turns: readonly { operationId: string; workerDispatchIds?: readonly string[] }[]
+    turns: readonly { operationId: string; workerDispatchIds?: readonly string[] }[],
+    windowOptions?: Pick<JournalOperationWindowAnchors, 'throughAnchoredTurns'>
   ) => Promise<Map<string, AgentJournalRenderItem[]>>
 }
 
@@ -45,9 +46,12 @@ export function botChatReads(runtime: OrcaRuntimeService): BotChatReads {
   return {
     messagesSince: async (sessionId, since) =>
       (await window(sessionId, { observedSince: since })).items,
-    turnItems: async (sessionId, turns) => {
+    turnItems: async (sessionId, turns, windowOptions) => {
       const read = indexBotGroupJournal(
-        await window(sessionId, { operationIds: turns.map((turn) => turn.operationId) })
+        await window(sessionId, {
+          operationIds: turns.map((turn) => turn.operationId),
+          ...windowOptions
+        })
       )
       return new Map(
         turns.map((turn) => [turn.operationId, read(turn.operationId, turn.workerDispatchIds)])

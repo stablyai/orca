@@ -46,7 +46,7 @@ export async function recoverBotGroupReplies(
   for (const [sessionId, turns] of missing) {
     for (let index = 0; index < turns.length; index += 64) {
       const window = await reads
-        .turnItems(sessionId, turns.slice(index, index + 64))
+        .turnItems(sessionId, turns.slice(index, index + 64), { throughAnchoredTurns: true })
         .catch((error: unknown) => {
           complete = false
           console.warn('[bot-groups] could not recover a member reply window', error)
