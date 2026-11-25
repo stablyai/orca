@@ -231,8 +231,8 @@ export function resolveSourceControlAiForOperation(
     operation: input.operation,
     hostKey,
     agentId: resolvedAgent,
-    isAvailable: (modelId) =>
-      runsUnlistedPicks || models.some((candidate) => candidate.id === modelId)
+    // Only an account listing skips a pick; elsewhere the nearest pick stands, as before.
+    isAvailable: (modelId) => !listing || listing.some((candidate) => candidate.id === modelId)
   })
   const pickedModel =
     models.find((candidate) => candidate.id === persistedModelId) ??
