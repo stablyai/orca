@@ -583,8 +583,8 @@ it.each([
       if (terminal === 'disposal') {
         owner.dispose()
       } else {
-        // Model a wall-clock jump ahead of the transport's performance-based deadline.
-        vi.setSystemTime(Date.now() + 15_001)
+        // Advance the elapsed clock without running the deadline callback.
+        vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 15_001)
       }
     }
     let finish!: (value: OrchestrationWorkerServer) => void

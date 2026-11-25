@@ -61,7 +61,7 @@ it.each(['disposed', 'hard-deadline', 'stale-proof'] as const)(
       if (phase === 'disposed') {
         owner.dispose()
       } else if (phase === 'hard-deadline') {
-        vi.setSystemTime(Date.now() + 15_001)
+        vi.spyOn(performance, 'now').mockReturnValue(performance.now() + 15_001)
       }
       const guard = vi.fn<RuntimeRequestGuard>(async (selected) => {
         const commit = await prepare(selected)
