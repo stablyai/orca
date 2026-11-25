@@ -53,7 +53,8 @@ export const AgentSessionContextUsageSchema = z.object({
       currency: z.string().min(1).max(MAX_CONTEXT_CURRENCY_CHARS),
       capturedAt: CapturedAt
     })
-    .optional()
+    .optional(),
+  autoCompaction: z.object({ autoCompactAtTokens: WindowTokens, capturedAt: CapturedAt }).optional()
 })
 
 export function isAdmissibleAgentSessionContextUsage(

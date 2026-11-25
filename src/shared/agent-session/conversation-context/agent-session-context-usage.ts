@@ -65,9 +65,16 @@ export type AgentSessionCost = {
   capturedAt: number
 }
 
+/** Where the agent compacts on its own, when it says so outside a `/context` report. */
+export type AgentSessionAutoCompaction = {
+  autoCompactAtTokens: number
+  capturedAt: number
+}
+
 /** Context facts on a turn row. An absent part says nothing. */
 export type AgentSessionContextUsage = {
   window?: AgentSessionContextWindow
   used?: AgentSessionContextUsed
   cost?: AgentSessionCost
+  autoCompaction?: AgentSessionAutoCompaction
 }

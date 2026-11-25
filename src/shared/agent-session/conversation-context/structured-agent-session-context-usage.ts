@@ -2,6 +2,7 @@
 
 import {
   contextTokensFromUsage,
+  type AgentSessionAutoCompaction,
   type AgentSessionContextUsage,
   type AgentSessionContextUsageCategory,
   type AgentSessionContextUsed,
@@ -27,6 +28,8 @@ export type StructuredAgentContextUsage = {
   categories: readonly AgentSessionContextUsageCategory[]
   /** The session's spend so far, when the provider totals one. */
   cost?: Pick<AgentSessionCost, 'amount' | 'currency'>
+  /** Where the agent compacts on its own, inside the window. */
+  autoCompactAtTokens?: number
 }
 
 type ContextFactSource = Pick<AgentJournalRenderItem, 'sequence' | 'body'>
@@ -39,6 +42,7 @@ export function latestStructuredAgentContextFacts(
   let used: { sequence: number; fact: AgentSessionContextUsed } | null = null
   let window: { sequence: number; fact: AgentSessionContextWindow } | null = null
   let cost: { sequence: number; fact: AgentSessionCost } | null = null
+  let autoCompaction: { sequence: number; fact: AgentSessionAutoCompaction } | null = null
   for (const item of items) {
     if (isAgentSessionContextClear(item.body) && item.sequence > minimumSequence) {
       minimumSequence = item.sequence
@@ -50,6 +54,9 @@ export function latestStructuredAgentContextFacts(
       }
       if (cost && cost.sequence <= minimumSequence) {
         cost = null
+      }
+      if (autoCompaction && autoCompaction.sequence <= minimumSequence) {
+        autoCompaction = null
       }
     }
     if (item.sequence <= minimumSequence) {
@@ -65,11 +72,18 @@ export function latestStructuredAgentContextFacts(
     if (facts?.cost && (cost === null || item.sequence >= cost.sequence)) {
       cost = { sequence: item.sequence, fact: facts.cost }
     }
+    if (
+      facts?.autoCompaction &&
+      (autoCompaction === null || item.sequence >= autoCompaction.sequence)
+    ) {
+      autoCompaction = { sequence: item.sequence, fact: facts.autoCompaction }
+    }
   }
   return {
     ...(used ? { used: used.fact } : {}),
     ...(window ? { window: window.fact } : {}),
-    ...(cost ? { cost: cost.fact } : {})
+    ...(cost ? { cost: cost.fact } : {}),
+    ...(autoCompaction ? { autoCompaction: autoCompaction.fact } : {})
   }
 }
 
@@ -107,10 +121,20 @@ function summarizeStructuredAgentContextFacts(
   facts: AgentSessionContextUsage
 ): StructuredAgentContextUsage | null {
   const usage = summarizeContextWindowFacts(facts)
-  const cost = facts.cost
-  return usage && cost
-    ? { ...usage, cost: { amount: cost.amount, currency: cost.currency } }
-    : usage
+  if (!usage) {
+    return null
+  }
+  const { cost, autoCompaction } = facts
+  // A point from before a model change can sit past the new window.
+  const compactAt =
+    autoCompaction && autoCompaction.autoCompactAtTokens < usage.windowTokens
+      ? autoCompaction.autoCompactAtTokens
+      : undefined
+  return {
+    ...usage,
+    ...(cost ? { cost: { amount: cost.amount, currency: cost.currency } } : {}),
+    ...(compactAt !== undefined ? { autoCompactAtTokens: compactAt } : {})
+  }
 }
 
 function summarizeContextWindowFacts({

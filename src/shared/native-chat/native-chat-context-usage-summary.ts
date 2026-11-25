@@ -10,24 +10,35 @@ export type NativeChatContextUsageSummary = {
   /** Largest first, as a share of the window; empty rows are dropped, and deferred rows sit outside the used total. */
   rows: readonly { name: string; tokens: number; percentage: number; deferred?: true }[]
   cost?: StructuredAgentContextUsage['cost']
+  autoCompactAtTokens?: number
 }
 
 /** Past this the window is nearly spent, so the ring turns red to say so. */
 const CRITICAL_PERCENTAGE = 90
 
-/** What a ring draws: its fill clamped to 0-100, the red state, the token counts and the session cost as shown. */
+/** What a ring draws: its fill clamped to 0-100, the red state, the token counts, where the agent
+ *  compacts (as a count and a share of the window) and the session cost as shown. */
 export function contextUsageRingReadout(usage: NativeChatContextUsageSummary): {
   filled: number
   critical: boolean
   used: string
   window: string
+  compactsAt: { tokens: string; percentage: number } | null
   cost: string | null
 } {
+  const compactAt = usage.autoCompactAtTokens
   return {
     filled: Math.min(Math.max(usage.percentage, 0), 100),
     critical: usage.percentage >= CRITICAL_PERCENTAGE,
     used: formatContextTokenCount(usage.usedTokens),
     window: formatContextTokenCount(usage.windowTokens),
+    compactsAt:
+      compactAt !== undefined && usage.windowTokens > 0
+        ? {
+            tokens: formatContextTokenCount(compactAt),
+            percentage: Math.min((compactAt / usage.windowTokens) * 100, 100)
+          }
+        : null,
     cost: usage.cost ? formatCurrencyAmount(usage.cost.amount, usage.cost.currency) : null
   }
 }
@@ -53,7 +64,10 @@ export function summarizeContextUsage(
         ...(row.deferred === true ? { deferred: true as const } : {})
       }))
       .sort((left, right) => right.tokens - left.tokens),
-    ...(usage.cost ? { cost: usage.cost } : {})
+    ...(usage.cost ? { cost: usage.cost } : {}),
+    ...(usage.autoCompactAtTokens !== undefined
+      ? { autoCompactAtTokens: usage.autoCompactAtTokens }
+      : {})
   }
 }
 
