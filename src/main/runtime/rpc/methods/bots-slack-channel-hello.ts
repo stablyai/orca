@@ -108,6 +108,13 @@ async function setSlackChannelHello(params: BotSlackChannelHelloSetParams, conte
   if (why) {
     throw new InvalidArgumentError(`${why} Nothing was changed.`)
   }
+  // A bot's token can't be checked from another computer (its run lives here), so a bot's command
+  // that came over a pairing changes nothing; the owner's own paired client sends no token.
+  if (params.botToken && context.pairedDeviceId !== undefined) {
+    throw new InvalidArgumentError(
+      'Only your owner can turn off your Slack intro. Ask them to, or to do it in Orca.'
+    )
+  }
   // From a bot's chat or run, only a turn its owner asked for may change the owner's setting, as the
   // host verified it: a bot's command without that evidence (an older CLI, a WSL chat, a raw call)
   // changes nothing.
@@ -119,11 +126,16 @@ async function setSlackChannelHello(params: BotSlackChannelHelloSetParams, conte
       )
     }
   }
-  if (bot.slackChannelHello === false) {
-    return { ...stateOf(bot, cloud), change: `${bot.name}’s Slack intro was already off.` }
+  // Decided inside the update queue, from the record as saved: an owner's edit made while the turn
+  // was read is neither undone nor misreported.
+  let wasOff = false
+  const saved = await runtime.bots.update(bot.id, (current) => {
+    wasOff = current.slackChannelHello === false
+    return { slackChannelHello: false }
+  })
+  if (wasOff) {
+    return { ...stateOf(saved, cloud), change: `${saved.name}’s Slack intro was already off.` }
   }
-  // Inside the update queue, so an owner's edit in Settings made meanwhile is not undone.
-  const saved = await runtime.bots.update(bot.id, () => ({ slackChannelHello: false }))
   const change = `Saved: ${saved.name} is set not to post an intro when added to a Slack channel.`
   // The owner sees it in the bot's own chat: the one that ran it, or else its Home Chat.
   writeInChat(

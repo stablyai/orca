@@ -152,6 +152,13 @@ describe('bots.slackChannelHello.set', () => {
       ],
       // A bot's token with no chat to check the turn in.
       ['a token with no session', {}, { botToken: 'scout-token', off: true }, 'Only your owner'],
+      // A bot's token over a pairing can't be checked here.
+      [
+        'a bot token over a pairing',
+        { pairedDeviceId: 'laptop' },
+        { botToken: 'scout-token', botId: 'scout', off: true },
+        'Only your owner'
+      ],
       // A paired client's session claim names no chat, so it must name the bot.
       [
         'a paired claim',
@@ -179,6 +186,17 @@ describe('bots.slackChannelHello.set', () => {
       expect(saved.get('scout')?.slackChannelHello, why).toBeUndefined()
       expect(saved.get('reviewer')?.slackChannelHello, why).toBeUndefined()
     }
+  })
+
+  it('reports already off from the saved record, after an edit made meanwhile', async () => {
+    const { context, saved } = contextFor()
+    // The owner turned it off in Settings after the command read the bot.
+    saved.set('scout', { ...saved.get('scout')!, slackChannelHello: false })
+    const stale = { ...SCOUT }
+    context.runtime.bots.list = () => [stale, REVIEWER]
+    await expect(setIntro!.handler({ botId: 'scout', off: true }, context)).resolves.toMatchObject({
+      change: 'Scout’s Slack intro was already off.'
+    })
   })
 
   it('cannot express on: its params refuse anything but off', () => {
