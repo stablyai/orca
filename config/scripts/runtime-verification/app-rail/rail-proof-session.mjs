@@ -190,19 +190,24 @@ export async function runRailProof(name, body) {
     console.error(error instanceof Error ? (error.stack ?? error.message) : String(error))
     log(`${name}: FAIL`)
   } finally {
-    const closing = Promise.all([
-      browser &&
+    const closing = []
+    if (browser) {
+      closing.push(
         closeResource('driver browser', async () => {
           const connection = await browser.newBrowserCDPSession()
           await connection.send('Browser.close')
-        }),
-      vite &&
+        })
+      )
+    }
+    if (vite) {
+      closing.push(
         closeResource('fixture server', () =>
           process.env.ORCA_RAIL_PROOF_HANG === 'vite-close' ? new Promise(() => {}) : vite.close()
         )
-    ])
+      )
+    }
     await holdAt('teardown')
-    const complete = (await closing).every((outcome) => outcome !== false)
+    const complete = (await Promise.all(closing)).every(Boolean)
     const code = complete ? (signalName ? SIGNAL_CODES[signalName] : passed ? 0 : 1) : 1
     // The supervisor owns group teardown, including any Chromium and Vite descendants still running here.
     process.stdout.write('', () => process.stderr.write('', () => process.exit(code)))
