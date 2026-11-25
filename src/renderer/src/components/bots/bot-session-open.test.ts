@@ -66,6 +66,9 @@ vi.mock('@/lib/agent-session/open/activate-ai-vault-structured-session', () => (
 vi.mock('@/lib/agent-session/open/chat-open-failure-toast', () => ({
   showChatOpenUnavailable: mocks.unavailable
 }))
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string) => fallback
+}))
 vi.mock('@/lib/agent-session/open/bot-link-item-target', () => ({ targetBotChatLatest: vi.fn() }))
 vi.mock('@/lib/focused-chat-workers', () => ({ selectFocusedChatTab: () => null }))
 vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
@@ -153,8 +156,10 @@ describe('openBotChatTab', () => {
     await expect(openBotChatTab(serverBot, 'chat-1')).resolves.toBe(false)
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(mocks.unavailable).toHaveBeenCalledTimes(1)
-    const { retry, detail } = mocks.unavailable.mock.calls[0][0]
-    expect(detail).toBe("The bot's home did not open on this computer.")
+    const { retry, message, detail } = mocks.unavailable.mock.calls[0][0]
+    // One plain body line; there is no raw output, so no details disclosure.
+    expect(message).toBe("Bot's Home didn't load.")
+    expect(detail).toBeUndefined()
 
     mocks.fetchFolderWorkspaces.mockImplementationOnce(async () => {
       mocks.admit.mockReturnValue(opened)

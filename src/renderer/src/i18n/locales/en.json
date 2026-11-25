@@ -28121,6 +28121,9 @@
       "pick": "More than one computer has a bot for this link: {{hosts}}. Open it from the sidebar.",
       "updateNeeded": "Update Orca on {{hosts}} to open this bot here."
     },
+    "chatOpen": {
+      "homeDidNotLoad": "Bot's Home didn't load."
+    },
     "activity": {
       "title": "Activity",
       "completed": "Completed",

@@ -4,6 +4,7 @@ import { targetBotChatLatest } from '@/lib/agent-session/open/bot-link-item-targ
 import { botTarget, callBotRpc, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { activateAndRevealFolderWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { showChatOpenUnavailable } from '@/lib/agent-session/open/chat-open-failure-toast'
+import { translate } from '@/i18n/i18n'
 import { watchBotOpenIntent, type BotOpenIntent } from './bot-open-intent'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
@@ -16,8 +17,10 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 /** A bot's home as the catalog stamps it: on the host that listed the bot, not only this computer. */
 type BotHome = Pick<Bot, 'folderWorkspaceId'> & BotOnHost
 
-/** Raw cause for the open toast's details, like the open path's own causes. */
-const HOME_DID_NOT_OPEN = "The bot's home did not open on this computer."
+/** Why the open stopped, as the toast's one body line: the Home lives on the bot's host. */
+function homeDidNotLoad(): string {
+  return translate('bots.chatOpen.homeDidNotLoad', "Bot's Home didn't load.")
+}
 
 function admitHome(bot: BotHome): ReturnType<typeof activateAndRevealFolderWorkspaceWithOutcome> {
   return activateAndRevealFolderWorkspaceWithOutcome(bot.folderWorkspaceId, {
@@ -76,7 +79,7 @@ export async function openBotChatTab(
   if (home !== 'opened') {
     if (home === 'refused') {
       showChatOpenUnavailable({
-        detail: HOME_DID_NOT_OPEN,
+        message: homeDidNotLoad(),
         retry: () => void retry().catch(() => {})
       })
     }
