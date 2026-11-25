@@ -10,6 +10,7 @@ export function readFormerlyOwnedResources(
     return new Map()
   }
   // A chain shares one row, so read the pairs first and each distinct row once, not once per Dispatch.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both selected columns are NOT NULL TEXT keys of the prior-owner index.
   const pairs = this.db
     .prepare(
       `SELECT p.dispatch_id, p.resource_id FROM worker_terminal_resource_prior_owners p
