@@ -1,5 +1,6 @@
 import { takeAcpKeptVersionSkip } from '../launch/acp-launch-version'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import { acpLaunchNote } from './acp-kept-launch-permission'
 import type { ProviderRelayKeepSpec } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import {
   launchRelayedProviderProcess,
@@ -221,7 +222,7 @@ export async function launchRelayedAcpAgent(
     abandoned: () => boolean
   },
   /** `resume`: the session the chat reopens; a kept agent running another one can't carry on. */
-  launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants'>,
+  launch: Pick<AcpStructuredLaunch, 'resume' | 'release' | 'appBoundGrants' | 'fullAccess'>,
   processLaunch: ProviderProcessLaunch
 ): Promise<AcpRelayedProcess | null> {
   const { spec } = input.deps
@@ -249,7 +250,7 @@ export async function launchRelayedAcpAgent(
       },
       continuation
     },
-    keep: acpRelayKeep(spec.dialect),
+    keep: { ...acpRelayKeep(spec.dialect), note: acpLaunchNote(launch.fullAccess) },
     passWhileHeld: (line) => isJsonRpcAnswerAbove(line, floor)
   }
   const relayed = await launchRelayedProviderProcess(processLaunch, relay).catch(refuse)

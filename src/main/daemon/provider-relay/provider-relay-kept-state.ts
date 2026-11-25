@@ -103,6 +103,7 @@ export class ProviderRelayKeptState {
   ): {
     kept?: ProviderRelayKeptLine[]
     outstanding?: ProviderRelayOutstandingRequest[]
+    launchNote?: string
   } {
     const outstanding = [
       ...[...this.answered.values()]
@@ -123,7 +124,8 @@ export class ProviderRelayKeptState {
     ]
     return {
       ...(kept.length > 0 ? { kept } : {}),
-      ...(outstanding.length > 0 ? { outstanding } : {})
+      ...(outstanding.length > 0 ? { outstanding } : {}),
+      ...(this.spec?.note === undefined ? {} : { launchNote: this.spec.note })
     }
   }
 

@@ -30,6 +30,11 @@ function moveSession(
   }
 }
 
+/** Messages are put back at their old start when one resumes, so they're read for the least. */
+const earliest = (open: Map<string, { seq: number }>): number | null =>
+  open.size === 0 ? null : Math.min(...[...open.values()].map((item) => item.seq))
+/** A session's messages held whole at once; another one past these supersedes the oldest. */
+const HELD_PER_SESSION = 16
 const first = (open: Map<string, { seq: number }>): number | null =>
   open.values().next().value?.seq ?? null
 
@@ -136,7 +141,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
 
   floor(through?: number): number | null {
     const turn = this.numbered || !this.givesIds ? this.turnStart : null
-    const held = [first(this.calls), first(this.messages), turn].filter(
+    const held = [first(this.calls), earliest(this.messages), turn].filter(
       (seq): seq is number => seq !== null
     )
     const floor = held.length > 0 ? Math.min(...held) : null
@@ -227,15 +232,20 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Ends a session's messages, all but `except`. */
   private closeMessages(session: string | undefined, except?: string): void {
     if (except !== undefined) {
-      // OpenCode resumes a message's id after another's: a cut one pauses, others are superseded.
+      // A message resumes its id after another's within a step (OpenCode's text between its
+      // reasoning blocks): a cut one pauses, and a session's latest few stay held from their
+      // start. Older ones are superseded: one that resumes after all is cut if acks passed it.
       moveSession(this.cutMessages, this.pausedCuts, session, except)
-      for (const [id, item] of this.messages) {
-        if (id !== except && item.session === session) {
-          this.messages.delete(id)
-          if (this.superseded.size < MAX_OPEN_ITEMS) {
-            this.superseded.set(id, item)
-          }
+      const held = [...this.messages].filter(
+        ([id, item]) => id !== except && item.session === session
+      )
+      held.sort(([, a], [, b]) => a.seq - b.seq)
+      for (const [id, item] of held.slice(0, Math.max(0, held.length - HELD_PER_SESSION + 1))) {
+        this.messages.delete(id)
+        if (this.superseded.size >= MAX_OPEN_ITEMS) {
+          this.superseded.delete(this.superseded.keys().next().value ?? '')
         }
+        this.superseded.set(id, item)
       }
       return
     }

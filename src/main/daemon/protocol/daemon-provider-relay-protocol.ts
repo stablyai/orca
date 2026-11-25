@@ -159,6 +159,8 @@ export type ProviderRelayKeepSpec = {
   /** Agent request `method`s the daemon answers itself, with this result, while no app is attached:
    *  housekeeping whose answer never depends on the app (an attached app answers as usual). */
   replies?: Record<string, unknown>
+  /** The app's own note on this launch (opaque, short), handed back on each attach. */
+  note?: string
 }
 
 /** A kept line's seq and the name it was kept under (`a:<method>`, `q:<method>` or `l:<marker>`). */
@@ -225,6 +227,8 @@ export type ProviderRelayAttachResult = {
   outstanding?: ProviderRelayOutstandingRequest[]
   /** The items the client said its last cut split, when that cut is the one `truncatedThrough` names. */
   cutKeys?: string[]
+  /** The keep spec's `note`, from the app that spawned this agent. */
+  launchNote?: string
 }
 
 export type ProviderRelayInfo = {
