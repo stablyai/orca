@@ -1,5 +1,9 @@
 import type { BundledSkillOpOutcome } from '../../../../../shared/skills/bundled/bundled-skill-plan'
-import { collapseHomePath } from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import {
+  collapseHomePath,
+  skillBackupDirectory
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { bundledSkillOpBackupPaths } from '../../../../../shared/skills/bundled/bundled-skill-backup-refusal'
 import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
@@ -11,13 +15,6 @@ export type SkillBackupLocation = {
   /** The planned host's backups root, with its home shown as `~`. */
   folder: string
   host: SkillBackupHost
-}
-
-/** The host-side folder where Replace and the executor move old copies. */
-export function skillBackupDirectory(homeDirectory: string): string {
-  const separator = /^[a-z]:[\\/]|^\\\\/iu.test(homeDirectory) ? '\\' : '/'
-  const home = homeDirectory.replace(/[\\/]+$/u, '')
-  return [home, '.agents', '.orca-skill-backups'].join(separator)
 }
 
 export function skillBackupLocation(
@@ -51,14 +48,23 @@ export function skillBackupHost(target: BundledSkillTarget | null | undefined): 
   return hostFor(target, environmentName(useAppStore.getState().runtimeEnvironments, target))
 }
 
+/** The host a toast names: "This machine", the environment's name, or "Connected runtime". */
+export function skillHostLabel(target: BundledSkillTarget): string {
+  const host = skillBackupHost(target)
+  return host.kind === 'local'
+    ? translate('auto.components.skills.host.local', 'This machine')
+    : host.name
+}
+
 export function useSkillBackupHost(target: BundledSkillTarget | null | undefined): SkillBackupHost {
   const name = useAppStore((state) => environmentName(state.runtimeEnvironments, target))
   return hostFor(target, name)
 }
 
-/** Every backup path one install result created, in op order, without repeats. */
+/**
+ * Every backup path one install result created, in op order, without repeats. An op that failed
+ * or was refused can still have finished backups before it stopped, and those copies were moved.
+ */
 export function skillBackupPaths(ops: readonly BundledSkillOpOutcome[]): string[] {
-  return [
-    ...new Set(ops.flatMap((op) => (op.status === 'done' && op.backupPath ? [op.backupPath] : [])))
-  ]
+  return [...new Set(ops.flatMap(bundledSkillOpBackupPaths))]
 }

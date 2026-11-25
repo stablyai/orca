@@ -30,10 +30,28 @@ export function turnMessages(
   submissions: readonly AgentJournalSubmission[],
   turns: readonly AgentJournalRenderItem[]
 ): AgentJournalRenderItem[][] {
-  const anchors = structuredAgentTurnAnchors(items, submissions)
-  const messages: { item: AgentJournalRenderItem; index: number }[] = []
+  // One pass: each message lands on the turns it opens and the one it was steered into.
+  const openedBy = new Map<string, string[]>()
+  for (const [turnId, opener] of structuredAgentTurnAnchors(items, submissions)) {
+    const opens = openedBy.get(opener)
+    if (opens) {
+      opens.push(turnId)
+    } else {
+      openedBy.set(opener, [turnId])
+    }
+  }
+  const byTurn = new Map<string, AgentJournalRenderItem[]>()
+  const take = (turnId: string, item: AgentJournalRenderItem): void => {
+    const bucket = byTurn.get(turnId)
+    if (bucket) {
+      bucket.push(item)
+    } else {
+      byTurn.set(turnId, [item])
+    }
+  }
   // The index of the turn record before each turn record.
   const previousRecord = new Map<string, number>()
+  const messages: { item: AgentJournalRenderItem; index: number }[] = []
   let lastRecord = -1
   items.forEach((item, index) => {
     if (isRootUserMessage(item)) {
@@ -43,14 +61,16 @@ export function turnMessages(
       lastRecord = index
     }
   })
-  return turns.map((turn) => {
-    const opener = anchors.get(turn.itemId)
-    const after = previousRecord.get(turn.itemId) ?? -1
-    return messages.flatMap(({ item, index }) =>
-      (item.itemId === opener && index > after) ||
-      (item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turn.itemId)
-        ? [item]
-        : []
-    )
-  })
+  for (const { item, index } of messages) {
+    const steeredInto = item.turnScope?.kind === 'turn' ? item.turnScope.turnItemId : null
+    for (const turnId of openedBy.get(item.itemId) ?? []) {
+      if (turnId !== steeredInto && index > (previousRecord.get(turnId) ?? -1)) {
+        take(turnId, item)
+      }
+    }
+    if (steeredInto !== null) {
+      take(steeredInto, item)
+    }
+  }
+  return turns.map((turn) => byTurn.get(turn.itemId) ?? [])
 }

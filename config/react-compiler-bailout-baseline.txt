@@ -388,7 +388,7 @@
 1 src/renderer/src/components/right-sidebar/source-control/sync/use-remote-action-runner.ts
 1 src/renderer/src/components/runtime-access/RuntimeRepairDialog.tsx
 1 src/renderer/src/components/session-search/use-session-search-status.ts
-7 src/renderer/src/components/settings/accounts/AccountsPane.tsx
+6 src/renderer/src/components/settings/accounts/AccountsPane.tsx
 1 src/renderer/src/components/settings/accounts/providers/CursorAccountsSection.tsx
 2 src/renderer/src/components/settings/accounts/providers/GrokAccountsSection.tsx
 2 src/renderer/src/components/settings/accounts/providers/ManagedDataAccountsSection.tsx
@@ -551,7 +551,6 @@
 2 src/renderer/src/components/star-nag/StarNagCard.tsx
 1 src/renderer/src/components/stats/ShareUsageButton.tsx
 1 src/renderer/src/components/status-bar/accounts/ClaudeSwitcherForOwner.tsx
-1 src/renderer/src/components/status-bar/accounts/provider-icons.tsx
 1 src/renderer/src/components/status-bar/accounts/use-codex-switcher-controller.ts
 1 src/renderer/src/components/status-bar/accounts/use-provider-account-list.ts
 1 src/renderer/src/components/status-bar/composition/use-status-bar-controller.ts
@@ -697,7 +696,6 @@
 1 src/renderer/src/hooks/skills/installation/use-bundled-skill-install.ts
 2 src/renderer/src/hooks/useImmediateMutation.ts
 1 src/renderer/src/lib/agent-session/launch/inventory/host-chat-program-acquisition.ts
-2 src/renderer/src/lib/agent-session/launch/inventory/useDetectedAgents.ts
 2 src/renderer/src/lib/connector-setup-open.ts
 1 src/renderer/src/lib/files/search/quick-open-file-history.ts
 1 src/renderer/src/lib/list-interaction/use-windowed-command-virtualizer.ts

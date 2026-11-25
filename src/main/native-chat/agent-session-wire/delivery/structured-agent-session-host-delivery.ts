@@ -16,7 +16,10 @@ import type { StructuredAgentSessionClientDelivery } from '../publication/subscr
 import type { StructuredAgentSessionDeliveryOrder } from './structured-agent-session-delivery-order'
 import { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 
-import type { StructuredAgentSessionDeliveryLoopDeps } from './structured-agent-session-delivery-loop-deps'
+import {
+  launchToolsRefreshDue,
+  type StructuredAgentSessionDeliveryLoopDeps
+} from './structured-agent-session-delivery-loop-deps'
 import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
@@ -162,12 +165,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
       return record ? structuredAgentSessionImmediatePermission(deps, record) : null
     },
     retainedWork: owesWork,
-    ...(launchTools
-      ? {
-          launchToolsRefreshDue: async (sessionId: string, id: string) =>
-            launchTools.outdated(sessionId) && !(await owesWork(sessionId, id))
-        }
-      : {}),
+    ...(launchTools ? { launchToolsRefreshDue: launchToolsRefreshDue(launchTools, owesWork) } : {}),
     readiness: input.readiness,
     startFlights: input.startFlights,
     deliveryOrder: input.deliveryOrder,

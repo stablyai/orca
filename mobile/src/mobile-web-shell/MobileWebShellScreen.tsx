@@ -29,7 +29,6 @@ import {
   useShellPageHeader
 } from './page-header/PageHeaderLayer'
 import { useShellPageBack } from './routing/use-shell-page-back'
-import { useShellNativeVerbServer } from './native-capabilities/use-shell-native-verb-server'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
 import { usePageOpenTarget } from './routing/page-open-target'
@@ -121,8 +120,7 @@ export function MobileWebShellScreen({
     pageFrame,
     backClaimed,
     ownsHostArea,
-    hostStatus,
-    store
+    hostStatus
   } = useMobileWebShellSession({
     hostId,
     routePathname: route.pathname,
@@ -170,11 +168,10 @@ export function MobileWebShellScreen({
   const serveNativeVerb = useShellNativeVerbServer({
     hostId,
     sessionId: readySessionId,
-    buildId: state.kind === 'ready' ? state.buildId : null,
-    store,
     readWorkspaceKey,
     dialogs: pageDialogs
   })
+
   // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
   const openPageRoute = (href: string, replace = false) => {
     if (overlay) {

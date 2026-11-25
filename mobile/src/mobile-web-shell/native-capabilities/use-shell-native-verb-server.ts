@@ -6,9 +6,6 @@ import { processDeviceStore } from '../../device-store/device-store'
 import { serveDeviceStoreVerb } from './device-store-verb-server'
 import { BRIDGE_STORE_VERB } from '../bridge/native-capabilities/bridge-store-verb'
 import { BRIDGE_DIALOG_VERB } from '../bridge/native-capabilities/bridge-dialog-verb'
-import type { GenerationStore } from '../generations/generation-store'
-import { useDeferredCodeServer } from './deferred-code-verb-server'
-import { BRIDGE_DEFERRED_CODE_VERB } from '../bridge/protocol/bridge-frame-fields'
 import {
   storageReadParamsSchema,
   type BridgeNativeVerb
@@ -18,8 +15,6 @@ import {
 export function useShellNativeVerbServer(args: {
   hostId: string
   sessionId: string | null
-  buildId: string | null
-  store: GenerationStore
   readWorkspaceKey: (key: string) => Promise<string | null>
   dialogs: PageDialogQueue
 }): (verb: BridgeNativeVerb, params: unknown) => Promise<unknown> {
@@ -27,7 +22,6 @@ export function useShellNativeVerbServer(args: {
   const serveDeviceVerb = useNativeDeviceVerbs(sessionId)
   const servePdfView = useNativePdfViewer(hostId, sessionId)
   const serveImageAction = useNativeImageActions(sessionId)
-  const serveDeferredCode = useDeferredCodeServer(hostId, args.buildId, args.store)
   return (verb, params) =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
@@ -39,7 +33,5 @@ export function useShellNativeVerbServer(args: {
             ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
             : verb === BRIDGE_DIALOG_VERB
               ? dialogs.serve(params)
-              : verb === BRIDGE_DEFERRED_CODE_VERB
-                ? serveDeferredCode(params)
-                : serveDeviceVerb(verb, params)
+              : serveDeviceVerb(verb, params)
 }

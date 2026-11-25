@@ -95,17 +95,18 @@ export function useGitHistoryCommitActions({
         return cached
       }
       const connectionId = sourceControlConnectionId(scope, activeWorktreeId, ownerConnectionId)
-      const request = getRuntimeGitCommitCompare(
-        {
-          // Compare on the repo owner, which may differ from the focused host.
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: activeWorktreeId,
-          worktreePath,
-          connectionId
-        },
-        item.id
+      return trackCommitCompare(generation, item.id, () =>
+        getRuntimeGitCommitCompare(
+          {
+            // Compare on the repo owner, which may differ from the focused host.
+            target: requireGitOwnerTarget(activeRepoTarget),
+            worktreeId: activeWorktreeId,
+            worktreePath,
+            connectionId
+          },
+          item.id
+        )
       )
-      return trackCommitCompare(generation, item.id, request)
     },
     [activeRepoTarget, activeWorktreeId, scope, worktreePath, ownerConnectionId]
   )
@@ -126,7 +127,7 @@ export function useGitHistoryCommitActions({
       // Switching away from a still-open tab does not, and neither does a scope change in the list.
       await runLatestCommitDiffOpen(
         JSON.stringify([generation.key, item.id]),
-        () => generation.pending.get(item.id)?.completion.promise ?? loadCommitCompare(item),
+        () => loadCommitCompare(item),
         () => generationRef.current === generation && (isSurfaceOpen?.() ?? true),
         (compare) => {
           useAppStore

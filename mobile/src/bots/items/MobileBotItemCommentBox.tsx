@@ -42,6 +42,7 @@ import { useBotDraftImages } from '../use-bot-draft-images'
 import {
   botItemCommentDraftKey,
   botItemCommentDrafts as drafts,
+  writeBotItemCommentDraft,
   shownBotItemCommentDrafts as shownDrafts
 } from './bot-item-comment-drafts'
 
@@ -104,11 +105,7 @@ export function MobileBotItemCommentBox({
     (next: string) => {
       setTextState(next)
       setError(null)
-      if (next) {
-        drafts.set(key, next)
-      } else {
-        drafts.delete(key)
-      }
+      writeBotItemCommentDraft(key, next)
     },
     [key]
   )

@@ -78,8 +78,8 @@ export function MobileBotItemsTab({
   /** Checked rows; empty when not selecting. */
   selected: ReadonlySet<string>
   onSelected: (next: ReadonlySet<string>) => void
-  /** `walk`: the list as it shows now, which the item page steps through. */
-  onOpen: (item: BotItem, walk: BotItemWalk) => void
+  /** `walk`: the item's section as it shows now, which the item page steps through. */
+  onOpen: (item: BotItem, walk: BotItemWalk | null) => void
   setSheet: (sheet: BotItemSheet) => void
   /** Automations and Up next, below the groups as on the desktop; hidden while filtered. */
   after: ReactNode
@@ -190,7 +190,7 @@ export function MobileBotItemsTab({
         now={now}
         disabled={disabled}
         onPress={() =>
-          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal))
+          selecting ? toggle(item) : onOpen(item, botItemWalkOf(groups, closedTotal, item.uid))
         }
         onLongPress={() => (selecting ? toggle(item) : setSheet({ kind: 'row', item }))}
       />

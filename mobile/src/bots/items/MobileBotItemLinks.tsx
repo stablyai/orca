@@ -17,7 +17,8 @@ import {
 } from '../../components/icons/app-icons'
 import { Text, View } from 'react-native'
 import {
-  botItemLinkRows,
+  BOT_ITEM_LINK_ROWS,
+  botItemLinkPage,
   botItemWorkerRow,
   type BotItemGitHubRow,
   type BotItemLinkRow
@@ -143,7 +144,9 @@ export function MobileBotItemLinks({
   const t = useMobileTranslation()
   const clipboard = useClipboardWriter()
   const [pressed, setPressed] = useState<LongPress | null>(null)
-  const rows = botItemLinkRows(links)
+  const [shown, setShown] = useState(BOT_ITEM_LINK_ROWS)
+  // The newest page first; each Show more adds the next older one.
+  const { rows, more } = botItemLinkPage(links, shown)
   const row = (entry: BotItemLinkRow): React.JSX.Element => {
     switch (entry.kind) {
       case 'worker': {
@@ -266,7 +269,21 @@ export function MobileBotItemLinks({
     : []
   return (
     <>
-      <ListGroup separatorInset={LIST_LEADING_INSET}>{rows.map(row)}</ListGroup>
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        {[
+          ...rows.map(row),
+          ...(more > 0
+            ? [
+                <ListRow
+                  key="more"
+                  title={t('bots.items.group.showMore', 'Show {{count}} more', { count: more })}
+                  leading={<View />}
+                  onPress={() => setShown(shown + BOT_ITEM_LINK_ROWS)}
+                />
+              ]
+            : [])
+        ]}
+      </ListGroup>
       <ActionSheetModal
         visible={pressed !== null}
         title={pressed?.title}
