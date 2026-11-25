@@ -1,3 +1,4 @@
+import type { WebContents } from 'electron'
 import { expect, it } from 'vitest'
 import { registerAgentInputSuspension } from '../input/agent-input-injection'
 import { sendGuestCdpCommand } from './guest-cdp-command'
@@ -8,8 +9,9 @@ it('delivers CDP pointer commands when a tool-key policy cannot acknowledge, but
     isDestroyed: () => false,
     isCrashed: () => false,
     setIgnoreMenuShortcuts: () => {},
+    isOffscreen: () => false,
     debugger: { sendCommand: async () => ({ ok: true }) }
-  }
+  } as unknown as WebContents
   const unavailable = new Error('key policy unavailable')
   const dispose = registerAgentInputSuspension(guest, async () => {
     throw unavailable
