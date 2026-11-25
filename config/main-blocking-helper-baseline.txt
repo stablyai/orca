@@ -107,7 +107,7 @@
 1 src/main/bots/sharing/bot-share-client.ts
 1 src/main/bots/sharing/bot-share-picks-store.ts
 3 src/main/bots/sharing/bot-share-sources.ts
-5 src/main/bots/tool-oauth/bot-tool-credential-source.ts
+4 src/main/bots/tool-oauth/bot-tool-credential-source.ts
 1 src/main/bots/tool-oauth/bot-tool-oauth-revoke.ts
 4 src/main/bots/tool-oauth/bot-tool-oauth-sign-in.ts
 12 src/main/bots/tool-oauth/bot-tool-oauth-tokens.ts

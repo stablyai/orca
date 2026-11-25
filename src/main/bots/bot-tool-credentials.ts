@@ -6,17 +6,15 @@ import { createHash, randomBytes } from 'node:crypto'
 import { readFileSync, rmSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { z } from 'zod'
 import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { BotToolServer } from '../../shared/bot-tools'
 import { announceBotToolCredentialsEnded } from './bot-tool-credential-ended'
 import {
-  CredentialsFile,
   type Entry,
   openEntry,
+  parseEnvelopes,
   refuseUnsealedSecrets,
   sealEntry,
-  warnOnce,
   type Stored
 } from './bot-tool-credential-envelope'
 import { announceIfShownChanged } from './bot-tool-sign-in-changed'
@@ -45,8 +43,6 @@ export type BotToolOAuthEntry = {
   record: BotToolOAuthRecord
 }
 
-const OlderLayout = z.object({ credentials: z.record(z.string(), z.unknown()) })
-
 let rootOverride: string | null = null
 
 /** Tests point the store at a temporary folder. */
@@ -74,35 +70,6 @@ function readFileText(path: string): string | null {
     }
     throw error
   }
-}
-
-const parseJson = (text: string): unknown => {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
-  }
-}
-
-/**
- * The file's envelopes, still sealed. A file in the older layout, with plaintext addresses beside
- * separately sealed values, is never opened: nothing vouches for its addresses, so its tools need
- * signing in again.
- */
-function parseEnvelopes(text: string | null): Record<string, string> {
-  if (text === null) {
-    return {}
-  }
-  const json = parseJson(text)
-  const parsed = CredentialsFile.safeParse(json)
-  if (parsed.success) {
-    return parsed.data.credentials
-  }
-  if (OlderLayout.safeParse(json).success) {
-    warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
-    return {}
-  }
-  throw new BotFailureError('toolCredentialsUnreadable')
 }
 
 /** The file's entries, every one opened. */

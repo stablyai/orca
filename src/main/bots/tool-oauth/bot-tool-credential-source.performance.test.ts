@@ -4,7 +4,10 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { _resetSecretStoreForTests, setSecretStore } from '../../../shared/secure-storage/secret-store'
+import {
+  _resetSecretStoreForTests,
+  setSecretStore
+} from '../../../shared/secure-storage/secret-store'
 import { useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { writeBotToolServers } from '../bot-tools-file'
 import { botToolsPath } from '../bot-tools-path'

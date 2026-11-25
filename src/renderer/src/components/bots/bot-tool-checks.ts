@@ -26,6 +26,8 @@ type BotToolReads = {
   agent: string | null
   tools: Promise<BotTools>
   checks: Partial<Record<CheckScope, Check>>
+  /** The host changed while no view showed it: the next view reads the tools again. */
+  stale?: boolean
 }
 // Shared by every row and card of a bot until the next change: a check starts its servers. Keyed by botRefKey.
 const reads = new Map<string, BotToolReads>()
@@ -37,7 +39,7 @@ let listeningForHost = false
 /**
  * The host says its bots changed (in any window, or on its own: a sign-in ended, couldn't start):
  * every shown bot's tools are read again, and the checks under way keep running. A bot no view
- * shows is forgotten instead, so the next view to open reads it fresh.
+ * shows waits for its next view instead, and is forgotten unless it holds a finished check.
  */
 function rereadToolLists(hostId: ExecutionHostId): void {
   for (const [key, read] of reads) {
@@ -45,7 +47,11 @@ function rereadToolLists(hostId: ExecutionHostId): void {
       continue
     }
     if (!listReaders.has(key)) {
-      reads.delete(key)
+      if (finishedCheck(read)) {
+        read.stale = true
+      } else {
+        reads.delete(key)
+      }
       continue
     }
     const tools = callBotRpc<BotTools>(read.bot, 'bots.tools.list', { botId: read.bot.id })
@@ -92,6 +98,10 @@ function readsFor(bot: BotRef, agent: string | null): BotToolReads {
   const key = botRefKey(bot)
   const cached = reads.get(key)
   if (cached?.revision === toolsRevision() && cached.agent === agent) {
+    if (cached.stale) {
+      cached.stale = false
+      cached.tools = callBotRpc<BotTools>(cached.bot, 'bots.tools.list', { botId: bot.id })
+    }
     return cached
   }
   if (cached) {
