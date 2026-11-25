@@ -113,6 +113,20 @@ export async function resolveGoogleClient(): Promise<GoogleClientConfig | null> 
   )
 }
 
+const accountWrites = new Set<() => void>()
+
+/** Called after an account is saved or removed on this host. */
+export function onGoogleAccountWritten(listener: () => void): () => void {
+  accountWrites.add(listener)
+  return () => accountWrites.delete(listener)
+}
+
+function accountWritten(): void {
+  for (const listener of accountWrites) {
+    listener()
+  }
+}
+
 export async function saveGoogleAccount(
   record: GoogleAccountRecord,
   expectedRefreshToken?: string
@@ -127,7 +141,7 @@ export async function saveGoogleAccount(
     }
     await mkdir(accountsDir(), { recursive: true, mode: 0o700 })
     await writeEncryptedCredential('Google', accountPath(record.email), JSON.stringify(record))
-  })
+  }).then(accountWritten)
 }
 
 /** The saved account; null when there is none or this host can't read it, so a new sign-in replaces it. */
@@ -180,7 +194,7 @@ export async function hasGoogleAccount(email: string): Promise<boolean> {
 export async function removeGoogleAccount(email: string): Promise<void> {
   return inCredentialFileOrder(`${accountsDir()}.mutation`, async () => {
     await removeFile(accountPath(email))
-  })
+  }).then(accountWritten)
 }
 
 const DefaultAccountSchema = z.object({ email: z.string().min(1) })

@@ -18,13 +18,15 @@ type CardSource = Pick<
   | 'github'
 >
 
-/** The card the hello carries for an agent; absent when it has neither a mascot nor a service. */
-export function agentCardOf(agent: CardSource): AgentCard | undefined {
+/** The card the hello carries for an agent; absent when it has neither a mascot nor a service.
+ *  `google`: one of the Google accounts it may use works (see ConnectorBotGoogle). */
+export function agentCardOf(agent: CardSource, google = false): AgentCard | undefined {
   const picture = parseBotAvatar(agent.avatar)
   const on: Record<AgentCardService, boolean> = {
     github: agent.github !== null,
     slack: botSlackApps(agent).length > 0,
-    linear: botLinearWorkspaces(agent).length > 0
+    linear: botLinearWorkspaces(agent).length > 0,
+    google
   }
   const services = AGENT_CARD_SERVICES.filter((service) => on[service])
   const card: AgentCard = {

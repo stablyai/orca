@@ -1,4 +1,7 @@
 import { ConnectorBotPurposes } from './connector-bot-purposes'
+import { ConnectorBotGoogle } from './connector-bot-google'
+import { getGoogleConnect } from '../google/google-connect'
+import { onGoogleAccountWritten } from '../google/google-credential-store'
 import { CONNECTOR_CLOUD_MENTIONED_FEATURE } from '../../shared/connector-cloud-features'
 import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
@@ -73,6 +76,13 @@ export function createConnectorCloud({
   const purposes = new ConnectorBotPurposes({ bots: () => store.getBots?.() ?? [] })
   // A share or a bot's edit is a bot write; a SOUL.md edit alone is read on the next one.
   runtime.onBotsWritten(() => void purposes.refresh())
+  const google = new ConnectorBotGoogle({
+    bots: () => store.getBots?.() ?? [],
+    accounts: () => getGoogleConnect()?.accounts() ?? null
+  })
+  // Turning Google on, choosing its accounts or sharing is a bot write; a sign-in or sign-out writes an account.
+  runtime.onBotsWritten(() => void google.refresh())
+  onGoogleAccountWritten(() => void google.refresh())
   const migratePlaces = botPlaceMigrationOnHello(
     {
       list: () => store.listAutomations(),
@@ -139,12 +149,14 @@ export function createConnectorCloud({
           // Asks the cloud only for an account with a bot on GitHub.
           (store.getBots?.() ?? []).some((bot) => bot.github) ? gitHubInstallations.ids() : [],
           runtime.getConnectorCloud()?.cloudFeatures() ?? null,
-          (botId) => purposes.of(botId)
+          (botId) => purposes.of(botId),
+          (botId) => google.works(botId)
         ),
       beforeFirstHello: async () => {
         await Promise.all([
           runtime.machineNameReady(),
           purposes.refresh(),
+          google.refresh(),
           (store.getBots?.() ?? []).some((bot) => bot.github)
             ? gitHubInstallations.firstAnswer(FIRST_GITHUB_ANSWER_WAIT_MS)
             : undefined
@@ -230,6 +242,7 @@ export function createConnectorCloud({
         store.onSettingsChanged?.(() => listener())
         gitHubInstallations.onChange(listener)
         purposes.onChange(listener)
+        google.onChange(listener)
         webhooks.onConfirmed(listener)
       }
     }

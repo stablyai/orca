@@ -83,8 +83,8 @@ function purposeField(botPurpose: string | undefined): { botPurpose?: string } {
 }
 
 // Only an agent the hello lists as shared: nobody else is shown it.
-function cardField(bot: Bot): { agentCard?: AgentCard } {
-  const agentCard = sharedWith(bot.shares).sharedWith ? agentCardOf(bot) : undefined
+function cardField(bot: Bot, google: boolean): { agentCard?: AgentCard } {
+  const agentCard = sharedWith(bot.shares).sharedWith ? agentCardOf(bot, google) : undefined
   return agentCard ? { agentCard } : {}
 }
 
@@ -113,7 +113,9 @@ export function connectorBots(
   /** What the cloud's last hello answer listed; null before one. */
   cloudFeatures: ReadonlySet<string> | null = null,
   /** A shared bot's purpose (`ConnectorBotPurposes`); absent, none goes. */
-  purposeOf: (botId: string) => string | undefined = () => undefined
+  purposeOf: (botId: string) => string | undefined = () => undefined,
+  /** Whether a shared bot's Google works (`ConnectorBotGoogle`); absent, its card names none. */
+  googleWorks: (botId: string) => boolean = () => false
 ): ConnectorBot[] {
   const {
     maxHelloBots,
@@ -223,7 +225,7 @@ export function connectorBots(
       ]),
       ...sharedWith(bot.shares),
       ...purposeField(purposeOf(bot.id)),
-      ...cardField(bot)
+      ...cardField(bot, googleWorks(bot.id))
     }))
     .map(withinBotBudget)
 }
