@@ -10,7 +10,6 @@ import {
 } from '../../../shared/agent-launch/startup/agent-executable-args'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { MCP_TOKEN_ENV } from '../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
-import { claudeServerConfig } from '../../bots/bot-tools-claude'
 import { piMcpServersConfig, piMcpServersExtensionSource } from '../../bots/bot-tools-pi'
 import { readOpenCodeInlineConfig } from '../../opencode/opencode-inline-config'
 import { withOpenCodeStandaloneServer } from '../../opencode/opencode-private-server'
@@ -22,7 +21,6 @@ import {
 import { writePluginFileAtomically } from '../../plugins/installation/plugin-atomic-file-write'
 import { codexTerminalMcpArgs } from './codex-terminal-mcp-args'
 import {
-  claudeRefusesMcpConfig,
   cliRefusal,
   launchFilePath,
   NOT_PLAIN,
@@ -32,42 +30,18 @@ import {
   withArgs,
   withLiteralToken,
   withTokenReference,
-  type TerminalMcpDelivery,
+  type TerminalMcpAdapter,
   type TerminalMcpLaunch
 } from './terminal-mcp-delivery'
+import { claude, claudeAgentTeams } from './terminal-mcp-claude-adapters'
 
-export type { TerminalMcpDelivery, TerminalMcpLaunch } from './terminal-mcp-delivery'
+export type {
+  TerminalMcpAdapter,
+  TerminalMcpDelivery,
+  TerminalMcpLaunch
+} from './terminal-mcp-delivery'
 
-type Adapter = {
-  /** The agent the host list's switches name. */
-  agent: string
-  /** The CLI's executable names, for the launch command's agent token. */
-  executables: readonly string[]
-  /** It delivers to a WSL distro too (with the servers WSL gets). */
-  wsl: boolean
-  deliver(launch: TerminalMcpLaunch, executable: string): Promise<TerminalMcpDelivery>
-}
-
-const claude: Adapter = {
-  agent: 'claude',
-  executables: ['claude'],
-  wsl: true,
-  async deliver(launch, executable) {
-    if (await claudeRefusesMcpConfig(launch, executable)) {
-      return skip('Claude Code’s organization settings refuse --mcp-config', true)
-    }
-    const platform = platformOf(launch)
-    const mcpServers = Object.fromEntries(
-      launch.servers.map((server) => [server.name, claudeServerConfig(server, platform)])
-    )
-    const path = await launchFilePath(launch, 'claude', { mcpServers })
-    // One token: --mcp-config takes every value after it, so a prompt after it would be read as one.
-    const command = path && withArgs(launch, this.executables, [`--mcp-config=${path}`])
-    return command ? { delivered: true, command, tokenInEnv: true } : skip(NOT_PLAIN)
-  }
-}
-
-const copilot: Adapter = {
+const copilot: TerminalMcpAdapter = {
   agent: 'copilot',
   executables: ['copilot'],
   wsl: false,
@@ -106,7 +80,7 @@ const copilot: Adapter = {
   }
 }
 
-const amp: Adapter = {
+const amp: TerminalMcpAdapter = {
   agent: 'amp',
   executables: ['amp'],
   wsl: false,
@@ -145,7 +119,7 @@ const amp: Adapter = {
 // `bearer_token_env_var` on a server, first in Codex's MCP client.
 const CODEX_BEARER_ENV_VERSION = '0.60.0'
 
-const codex: Adapter = {
+const codex: TerminalMcpAdapter = {
   agent: 'codex',
   executables: ['codex'],
   wsl: true,
@@ -179,7 +153,7 @@ const codex: Adapter = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const opencode: Adapter = {
+const opencode: TerminalMcpAdapter = {
   agent: 'opencode',
   executables: ['opencode'],
   wsl: true,
@@ -270,7 +244,7 @@ async function installPiMcpExtension(agentDir: string): Promise<boolean> {
 }
 
 /** Pi loads Orca's marked extension from its agent dir; it adds the servers only for a run that sets its variable. */
-const pi: Adapter = {
+const pi: TerminalMcpAdapter = {
   agent: 'pi',
   executables: ['pi'],
   wsl: false,
@@ -297,8 +271,9 @@ const pi: Adapter = {
   }
 }
 
-const ADAPTERS: Partial<Record<TuiAgent, Adapter>> = {
+const ADAPTERS: Partial<Record<TuiAgent, TerminalMcpAdapter>> = {
   claude,
+  'claude-agent-teams': claudeAgentTeams,
   codex,
   copilot,
   amp,
@@ -306,15 +281,17 @@ const ADAPTERS: Partial<Record<TuiAgent, Adapter>> = {
   pi
 }
 
-export type TerminalMcpAdapter = Adapter
-
 /** The adapter for a launched agent; null for one whose terminal takes no servers from Orca here. */
-export function terminalMcpAdapterFor(agent: TuiAgent): Adapter | null {
+export function terminalMcpAdapterFor(agent: TuiAgent): TerminalMcpAdapter | null {
   return ADAPTERS[agent] ?? null
 }
 
-/** The agent's executable as the launch command names it; null when it doesn't. */
-export function terminalMcpExecutable(adapter: Adapter, launch: TerminalMcpLaunch): string | null {
+/** The agent's executable as the launch command names it (for a launcher, the CLI it runs); null
+ *  when it doesn't. */
+export function terminalMcpExecutable(
+  adapter: TerminalMcpAdapter,
+  launch: TerminalMcpLaunch
+): string | null {
   const parsed = tokenizeStartupCommand(launch.command, launch.shell)
   if (!parsed.ok) {
     return null
@@ -322,5 +299,11 @@ export function terminalMcpExecutable(adapter: Adapter, launch: TerminalMcpLaunc
   const index = findAgentExecutableIndex(parsed.tokens, launch.shell, (token) =>
     isAgentExecutableToken(token, adapter.executables)
   )
-  return index < 0 ? null : (parsed.tokens[index] ?? null)
+  if (index < 0) {
+    return null
+  }
+  if (adapter.launcher) {
+    return parsed.tokens[index + 1] === adapter.launcher.subcommand ? adapter.launcher.runs : null
+  }
+  return parsed.tokens[index] ?? null
 }

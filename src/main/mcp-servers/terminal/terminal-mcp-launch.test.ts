@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { tokenizeStartupCommand } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { changeBotToolEntries } from '../../bots/bot-tools-file'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import { teammateMcpRelayEnv } from './agent-teams-teammate-mcp-env'
 import { withTerminalMcpServers, type TerminalMcpLaunchInput } from './terminal-mcp-launch'
 
 const dirs: string[] = []
@@ -61,7 +63,7 @@ async function hostList(): Promise<string> {
   return folder
 }
 
-const launch = (agent: 'claude' | 'codex', command: string): TerminalMcpLaunchInput => ({
+const launch = (agent: TuiAgent, command: string): TerminalMcpLaunchInput => ({
   launchAgent: agent,
   command,
   env: { PATH: '/usr/bin:/bin', OPENCODE_CONFIG_CONTENT: '{"keep":true}' },
@@ -77,13 +79,39 @@ const launch = (agent: 'claude' | 'codex', command: string): TerminalMcpLaunchIn
 describe('the host list in an agent terminal', () => {
   it('leaves the launch exactly as it was while the switch is off', async () => {
     const hostFolder = await hostList()
-    for (const agent of ['claude', 'codex'] as const) {
-      const input = launch(agent, `${agent} --foo`)
+    for (const [agent, command] of [
+      ['claude', 'claude --foo'],
+      ['codex', 'codex --foo'],
+      ['claude-agent-teams', 'orca claude-teams --foo']
+    ] as const) {
+      const input = launch(agent, command)
       const before = structuredClone({ env: input.env, envToDelete: input.envToDelete })
       const result = await withTerminalMcpServers(input, { relay, hostFolder })
-      expect(result).toEqual({ command: `${agent} --foo`, pane: null })
+      expect(result).toEqual({ command, pane: null })
       expect({ env: input.env, envToDelete: input.envToDelete }).toEqual(before)
     }
+    expect(teammateMcpRelayEnv({ ORCA_MCP_TOKEN: TOKEN, NO_PROXY: '127.0.0.1' })).toEqual({})
+  })
+
+  it('gives an Agent Teams lead the config after its claude-teams subcommand, which forwards it to claude', async () => {
+    process.env.ORCA_MCP_SERVERS = '1'
+    const hostFolder = await hostList()
+    const input = launch('claude-agent-teams', 'orca claude-teams --foo')
+    const { command, pane } = await withTerminalMcpServers(input, { relay, hostFolder })
+
+    const parsed = tokenizeStartupCommand(command!, 'posix')
+    const tokens = parsed.ok ? parsed.tokens : []
+    expect(tokens.slice(0, 2)).toEqual(['orca', 'claude-teams'])
+    expect(tokens[2]).toMatch(/^--mcp-config=/)
+    expect(tokens.slice(3)).toEqual(['--foo'])
+    expect(command).not.toContain(TOKEN)
+    expect(pane?.agent).toBe('claude')
+    // Teammates start with the team's env, so the relay env they need is taken from the lead's.
+    expect(teammateMcpRelayEnv(input.env)).toEqual({
+      ORCA_MCP_TOKEN: TOKEN,
+      NO_PROXY: expect.stringContaining('127.0.0.1'),
+      no_proxy: expect.stringContaining('127.0.0.1')
+    })
   })
 
   it('never puts a saved value or the relay token on the command line or in the launch file', async () => {
