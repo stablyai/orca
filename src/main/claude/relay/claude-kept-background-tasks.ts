@@ -11,7 +11,9 @@ export function restateKeptClaudeBackgroundTasks(
     Partial<Pick<ClaudeSession, 'translator'>>,
   taskIds: readonly string[],
   /** The last app left a turn running; with none, every open task is background work. */
-  turnRunning: boolean
+  turnRunning: boolean,
+  /** Saved subagents' launching calls, by task id. */
+  launches: ReadonlyMap<string, string> = new Map()
 ): void {
   const invocations = session.childWork.taskInvocations
   const starts = taskIds.map((task_id) => ({
@@ -21,7 +23,7 @@ export function restateKeptClaudeBackgroundTasks(
     // A subagent's kind and launching call are only in its unreplayed start; without them the task
     // reads as unknown work and a follow-up can't send it to the background.
     ...(invocations.savedAsSubagent(task_id) ? { task_type: 'local_agent' } : {}),
-    ...withLaunch(invocations.savedLaunch(task_id)),
+    ...withLaunch(launches.get(task_id) ?? invocations.savedLaunch(task_id)),
     // Foreground work ends with its turn; mid-turn, only the journal knows which ran in the background.
     is_backgrounded: !turnRunning || invocations.savedAsBackground(task_id),
     status: 'running'

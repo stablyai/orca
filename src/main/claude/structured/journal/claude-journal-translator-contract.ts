@@ -93,6 +93,8 @@ export type ClaudeJournalTranslator = {
     turn: ClaudeCurrentTurn | null
     tools: readonly ClaudeToolUse[]
     backgroundTasks: readonly ClaudeBackgroundTaskRow[]
+    /** Each saved subagent's launching call, by its task id. */
+    subagentLaunches: ReadonlyMap<string, string>
   }) => void
   dispose: () => void
 }

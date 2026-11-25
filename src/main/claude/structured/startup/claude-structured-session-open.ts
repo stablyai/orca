@@ -15,6 +15,7 @@ import { applyKeptClaudeModeOwed, noteKeptClaudeReattach } from '../../relay/cla
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
 import {
   keptClaudeBackgroundTasks,
+  keptClaudeSubagentLaunches,
   keptClaudeToolCalls,
   keptClaudeTurn
 } from '../../relay/claude-kept-turn'
@@ -118,10 +119,12 @@ async function openStartingClaudeSession(
     const items = (await events?.journalHistory?.()?.reads.generation())?.items ?? []
     const keptTurn = keptClaudeTurn(items, session.providerSessionId)
     const backgroundTasks = keptClaudeBackgroundTasks(items)
+    const subagentLaunches = keptClaudeSubagentLaunches(items)
     session.translator?.adoptKept({
       turn: keptTurn?.kind === 'turn' ? keptTurn.turn : null,
       tools: keptClaudeToolCalls(items),
-      backgroundTasks
+      backgroundTasks,
+      subagentLaunches
     })
     if (keptTurn?.kind === 'command') {
       events?.appendItem(keptTurn.identity, keptTurn.body, { turnScope: { kind: 'thread' } })
@@ -130,7 +133,7 @@ async function openStartingClaudeSession(
     const taskIds = kept.workCarried
       ? kept.taskIds
       : [...new Set([...kept.taskIds, ...backgroundTasks.map((row) => row.block.taskId)])]
-    restateKeptClaudeBackgroundTasks(session, taskIds, keptTurn !== null)
+    restateKeptClaudeBackgroundTasks(session, taskIds, keptTurn !== null, subagentLaunches)
     // Claude's own last word on its mode (Plan included) outranks what its launch reported.
     if (kept.confirmedMode !== undefined) {
       session.reportedOptions.reportedPermissionMode = kept.confirmedMode

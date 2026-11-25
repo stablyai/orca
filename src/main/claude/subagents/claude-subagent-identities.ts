@@ -80,6 +80,16 @@ export class ClaudeSubagentIdentities {
     return true
   }
 
+  /** A kept subagent launched before this app started: its start isn't replayed, so its launch
+   *  (from its saved roster row) names it, as the start would have. */
+  adoptKept(taskId: string, toolUseId: string): void {
+    this.ids.alias(toolUseId, taskId)
+    if (!this.known.has(taskId)) {
+      const attempt = Math.max(1, this.deps.journaled?.attempt(taskId) ?? 0)
+      this.known.set(taskId, { run: toolUseId, attempt })
+    }
+  }
+
   dispose(): void {
     this.ids.clear()
     this.known.clear()

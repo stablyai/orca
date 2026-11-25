@@ -104,6 +104,22 @@ export function keptClaudeBackgroundTasks(
   })
 }
 
+/** Each saved subagent's launching call, from its roster row (a self-named run is no launch). */
+export function keptClaudeSubagentLaunches(
+  items: readonly AgentJournalRenderItem[]
+): Map<string, string> {
+  const launches = new Map<string, string>()
+  for (const item of items) {
+    const blocks = 'blocks' in item.body && Array.isArray(item.body.blocks) ? item.body.blocks : []
+    for (const block of blocks) {
+      if (block.type === 'subagent' && block.run && block.run !== block.id) {
+        launches.set(block.id, block.run)
+      }
+    }
+  }
+  return launches
+}
+
 export function adoptKeptClaudeWork(
   open: Pick<ClaudeOpenTurn, 'adoptKept'>,
   tools: Map<string, ClaudeToolUse>,
@@ -111,9 +127,15 @@ export function adoptKeptClaudeWork(
     turn: ClaudeCurrentTurn | null
     tools: readonly ClaudeToolUse[]
     backgroundTasks: readonly ClaudeBackgroundTaskRow[]
+    subagentLaunches: ReadonlyMap<string, string>
   },
-  backgroundTasks: { rows: Map<string, ClaudeBackgroundTaskRow> }
+  backgroundTasks: { rows: Map<string, ClaudeBackgroundTaskRow> },
+  subagents: { adoptKept: (taskId: string, toolUseId: string) => void }
 ): void {
+  // Before any replayed or live frame of theirs, so each lands under its own subagent.
+  for (const [taskId, toolUseId] of kept.subagentLaunches) {
+    subagents.adoptKept(taskId, toolUseId)
+  }
   for (const row of kept.backgroundTasks) {
     if (!backgroundTasks.rows.has(row.block.taskId)) {
       backgroundTasks.rows.set(row.block.taskId, row)
