@@ -305,11 +305,13 @@ export function ImportBotDialog({
         )}
         <DialogFooter className="items-center">
           {missing ? (
-            <span className="mr-auto text-xs text-muted-foreground">{missing}</span>
+            <span className="mr-auto max-w-max flex-1 text-xs text-muted-foreground">
+              {missing}
+            </span>
           ) : again ? null : (
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="mr-auto text-xs text-muted-foreground">
+                <span className="mr-auto max-w-max flex-1 text-xs text-muted-foreground">
                   {t('bots.import.keysStay', 'Keys and logins stay behind')}
                 </span>
               </TooltipTrigger>
@@ -340,16 +342,32 @@ export function ImportBotDialog({
               : t('bots.new.cancel', 'Cancel')}
           </Button>
           {again ? (
-            <Button type="button" size="sm" disabled={!existing} onClick={() => void update()}>
-              {t('bots.import.update', 'Update {{bot}}', { bot: again.name })}
+            <Button
+              type="button"
+              size="sm"
+              className="max-w-full min-w-0 shrink"
+              disabled={!existing}
+              onClick={() => void update()}
+            >
+              <span className="truncate">
+                {t('bots.import.update', 'Update {{bot}}', { bot: again.name })}
+              </span>
             </Button>
           ) : (
-            <Button type="button" size="sm" disabled={!canCreate} onClick={() => void create()}>
-              {creating
-                ? t('bots.new.creating', 'Creating…')
-                : trimmedName
-                  ? t('bots.import.create', 'Create {{name}}', { name: trimmedName })
-                  : t('bots.new.create', 'Create')}
+            <Button
+              type="button"
+              size="sm"
+              className="max-w-full min-w-0 shrink"
+              disabled={!canCreate}
+              onClick={() => void create()}
+            >
+              <span className="truncate">
+                {creating
+                  ? t('bots.new.creating', 'Creating…')
+                  : trimmedName
+                    ? t('bots.import.create', 'Create {{name}}', { name: trimmedName })
+                    : t('bots.new.create', 'Create')}
+              </span>
             </Button>
           )}
         </DialogFooter>

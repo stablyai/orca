@@ -40,11 +40,7 @@ import type { PhoneBotItemStepper } from './use-phone-bot-item-walk'
 import { MobileBotItemPageHeader } from './MobileBotItemPageHeader'
 import { MobileBotItemDescription } from './MobileBotItemDescription'
 import { usePhoneBotItemPendingComments } from './use-phone-bot-item-pending-comments'
-import {
-  botItemCommentDraftKey,
-  quoteIntoBotItemCommentDraft,
-  returnBotItemCommentDraft
-} from './bot-item-comment-drafts'
+import { botItemCommentDraftKey, quoteIntoBotItemCommentDraft } from './bot-item-comment-drafts'
 import { useBotItemQuestionSteps } from './use-phone-bot-item-question-steps'
 import { MobileNativeChatComposerMenuHost } from '../../session/native-chat/composer/menus/MobileNativeChatComposerMenuHost'
 
@@ -95,8 +91,6 @@ export function MobileBotItemPage({
   const takesImages = useRouteCapability(BOTS_ITEM_COMMENT_ATTACHMENTS_RUNTIME_CAPABILITY)
   // One item on one host: its pending comments and its asks' held answers.
   const itemKey = `${hostKey}\0${bot.id}\0${uid}`
-  // The card's answers: one refused for a newer question isn't put back in the box under the new card.
-  const cardAnswers = useRef(new Set<string>())
   const pending = usePhoneBotItemPendingComments({
     client,
     key: itemKey,
@@ -104,11 +98,8 @@ export function MobileBotItemPage({
     events: view.events,
     hostName,
     showToast,
-    returnText: (text) => {
-      if (!cardAnswers.current.has(text)) {
-        returnBotItemCommentDraft(botItemCommentDraftKey(hostId, uid), text)
-      }
-    }
+    draftKey: botItemCommentDraftKey(hostId, uid),
+    refresh: view.retry
   })
   // From the comment box or the answer card: shown at once, then sent to the host.
   const jump = useBotItemActivityFollow({
@@ -135,10 +126,7 @@ export function MobileBotItemPage({
     replying,
     loaded: view.item !== null,
     onOpenWithCard: jump.top,
-    send: (text, answering) => {
-      cardAnswers.current.add(text)
-      quick(text, answering)
-    }
+    send: quick
   })
   const commentField = useRef<TextInputInstance>(null)
   // Quoting starts a comment, so the answer card folds to its strip and the box shows.

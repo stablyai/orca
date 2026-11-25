@@ -20,7 +20,7 @@ import { botToolSignInProgress, connectBotToolSignIn } from './bot-tool-sign-in-
  * in under (`signIn`, the credential to add with it). One with saved values, or that answers without a sign-in, is added as given.
  * Throws, in the host's words, when the address can't be used.
  */
-async function classifyAddedBotTool(
+export async function classifyAddedBotTool(
   server: BotToolServer,
   signal?: AbortSignal
 ): Promise<{ server: BotToolServer; signIn?: ReadonlyMap<string, BotToolNewCredential> }> {

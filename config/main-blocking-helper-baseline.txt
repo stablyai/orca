@@ -66,10 +66,9 @@
 1 src/main/ai-vault/session-handoff-snapshot.ts
 1 src/main/ai-vault/session-titles/session-title-resolver.ts
 4 src/main/amp/hook-service.ts
-1 src/main/antigravity/antigravity-chat-sign-in.ts
 8 src/main/antigravity/hook-service.ts
 1 src/main/antigravity/native-account-host.ts
-3 src/main/antigravity/native-account-launch.ts
+2 src/main/antigravity/native-account-launch.ts
 4 src/main/antigravity/native-credential-backend.ts
 1 src/main/antigravity/native-file-credentials.ts
 12 src/main/antigravity/native-windows-credentials.ts
@@ -98,10 +97,10 @@
 1 src/main/bots/bot-package-apply.ts
 2 src/main/bots/bot-structured-session-wiring.ts
 14 src/main/bots/bot-tool-credentials.ts
-2 src/main/bots/bot-tool-details.ts
+3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
 3 src/main/bots/bot-tool-secret-scrub.ts
 2 src/main/bots/bot-tools-claude.ts
-20 src/main/bots/bot-tools-file.ts
+21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys
 13 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-removal.ts
 5 src/main/bots/bot-tools-sign-in.ts
@@ -162,10 +161,7 @@
 1 src/main/browser/guest-lifecycle/prompts/browser-system-dialogs.ts
 7 src/main/browser/identity/mode/browser-identity-mode-store.ts
 1 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-1 src/main/browser/network/execution-routes/browser-network-execution-route-dispatch.ts
 1 src/main/browser/network/execution-routes/ssh-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-execution-route.ts
-2 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
 1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partition-bindings.ts # moved with the jar binding code from local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/local-ssh-browser-partitions.ts
 1 src/main/browser/routing/local-host-partitions/wsl-host-browser-route-partition.ts
@@ -452,7 +448,7 @@
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
 1 src/main/daemon/providers/lifecycle/daemon-uninstall-shutdown.ts
-3 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
+2 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
 8 src/main/daemon/providers/routing/daemon-newer-protocol-hold.ts
 2 src/main/daemon/providers/routing/daemon-unlisted-session.ts
 1 src/main/daemon/providers/wsl/daemon-wsl-bridge-boot-identity.ts
@@ -515,7 +511,6 @@
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
-6 src/main/gemini/hook-service.ts
 1 src/main/git/command-runner/git-environment/git-ssh-policy-env.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 3 src/main/git/command-runner/git-exec-file.ts
@@ -759,6 +754,8 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
@@ -1047,7 +1044,6 @@
 1 src/main/provider-process/provider-ownership-journal.ts
 1 src/main/provider-process/provider-process-spawn.ts
 1 src/main/provider-process/supervised-provider-child-location.ts
-2 src/main/providers/accounts/provider-account-services.ts
 1 src/main/providers/execution-host-provider-dispatch.ts
 2 src/main/providers/foreground/agent-process.ts
 1 src/main/providers/foreground/windows/process-rows.ts
@@ -1222,7 +1218,6 @@
 2 src/main/runtime/repositories/runtime-repository-registration-controller.ts
 1 src/main/runtime/repositories/runtime-repository-settings-controller.ts
 2 src/main/runtime/rpc/dispatcher.ts
-4 src/main/runtime/rpc/methods/accounts/antigravity-accounts.ts
 3 src/main/runtime/rpc/methods/accounts/usage-credentials.ts
 2 src/main/runtime/rpc/methods/bots-tools-owned-sign-in.ts
 11 src/main/runtime/rpc/methods/bots-tools.ts
@@ -1233,6 +1228,8 @@
 1 src/main/runtime/rpc/methods/host-management/environment-doctor.ts
 1 src/main/runtime/rpc/methods/host-management/host-capabilities.ts
 1 src/main/runtime/rpc/methods/host-management/managed-runtime-install.ts
+3 src/main/runtime/rpc/methods/mcp-servers-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+3 src/main/runtime/rpc/methods/mcp-servers.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 1 src/main/runtime/rpc/methods/mobile-delivery/bundled-mobile-web-bundle.ts
 8 src/main/runtime/rpc/methods/mobile-delivery/mobile-web-bundle.ts
 1 src/main/runtime/rpc/methods/orcad/orcad-migration.ts

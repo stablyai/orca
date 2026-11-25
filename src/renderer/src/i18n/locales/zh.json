@@ -60,7 +60,6 @@
       },
       "providers": {
         "title": "提供方",
-        "antigravityAccount": "账户",
         "searchAgents": "代理",
         "searchTerminal": "终端",
         "searchCli": "CLI"
@@ -165,7 +164,6 @@
       "statusBar": {
         "claudeToggleDescription": "显示当前工作区的 Claude Token 与费用消耗情况",
         "codexToggleDescription": "显示当前工作区的 Codex Token 与费用消耗情况",
-        "geminiToggleDescription": "显示当前工作区的 Gemini Token 与费用消耗情况",
         "opencodeGoToggleDescription": "显示当前工作区的 OpenCode Go Token 与费用消耗情况",
         "kimiToggleDescription": "显示当前工作区的 Kimi 订阅使用情况",
         "minimaxToggleDescription": "显示当前工作区的 MiniMax 订阅使用情况",
@@ -472,6 +470,9 @@
           "sleep": "休眠",
           "performance": "性能"
         }
+      },
+      "sessionHost": {
+        "sshDetail": "此 SSH 主机的页面会在这台电脑上打开"
       }
     },
     "agents": {
@@ -1022,7 +1023,8 @@
       "keywordSecurity": "安全",
       "1b4d825e0e": "更新延迟",
       "ab7e864374": "关于更新延迟",
-      "ee1d96f74a": "跳过本次延迟"
+      "ee1d96f74a": "跳过本次延迟",
+      "teamManaged": "由你的团队设置"
     },
     "breadcrumb": {
       "settings": "设置",
@@ -1328,6 +1330,25 @@
       "description": "在支持此功能的桌面安装中，Orca 会在定期检查时下载符合条件的更新，并自动重启以完成安装。",
       "info": "关于自动更新",
       "saveFailed": "无法保存自动更新设置。"
+    },
+    "cloudConsole": {
+      "manageInBrowser": "在浏览器中管理",
+      "openFailed": "无法打开浏览器，请重试",
+      "teamAdmin": {
+        "title": "团队与管理员",
+        "description": "在浏览器中管理你的团队"
+      },
+      "signInFailed": "无法登录控制台",
+      "signInFailedDetail": "浏览器仍然打开了控制台，请在其中登录后继续"
+    },
+    "mobile": {
+      "teamDisabledRelay": "你的团队已关闭 Orca Relay，请使用局域网"
+    },
+    "computerUse": {
+      "teamDisabled": "你的团队已关闭“计算机控制”"
+    },
+    "artifacts": {
+      "teamDisabled": "你的团队已关闭产物分享"
     }
   },
   "menu": {
@@ -1756,7 +1777,6 @@
           "8da11d876c": "Goose",
           "b32627f09b": "Aider",
           "691dd11789": "Antigravity",
-          "12e6baa4f7": "Gemini",
           "09973b4d84": "OMP",
           "302934c5d9": "Pi",
           "e7a4ca5103": "OpenCode",
@@ -2007,8 +2027,26 @@
           "tab": {
             "open": {
               "urlFailed": "无法打开网址",
-              "searchFailed": "无法使用 {{value0}} 搜索"
+              "searchFailed": "无法使用 {{value0}} 搜索",
+              "failure": {
+                "stageError": "错误 · {{value0}} · {{value1}}",
+                "hostNotFound": "找不到工作区所在的电脑",
+                "linkBlocked": "已阻止打开链接",
+                "notWebLink": "不是网页链接"
+              }
             }
+          }
+        },
+        "ports": {
+          "serverPortForward": {
+            "updateServer": "无法从 {{host}} 转发端口 {{port}}，请更新 {{host}} 上的 Orca 后重试",
+            "failed": "无法从 {{host}} 转发端口 {{port}}，请检查连接后重试",
+            "forwarded": "已从 {{host}} 转发端口 {{port}}",
+            "opened": "已在默认浏览器中打开 {{address}}",
+            "otherMachine": "无法转发端口 {{port}}：此工作区并非运行在 {{host}} 本身上",
+            "useSshPorts": "无法从 {{host}} 转发端口 {{port}}，请先在“端口”中转发，然后重试",
+            "restoredMoved": "已将 {{host}} 的端口 {{port}} 转发到 localhost:{{localPort}}",
+            "restoredMovedReason": "这台电脑上的 localhost:{{previousPort}} 已被占用"
           }
         }
       },
@@ -2325,11 +2363,6 @@
           "failedToLoadUsage": "无法加载用量数据",
           "failedToParseCliOutput": "解析 CLI 输出失败",
           "fetchAborted": "速率限制获取已中止",
-          "geminiCredentialsNotFound": "未找到 Gemini CLI 凭据",
-          "geminiOauthDisabled": "设置中已禁用 Gemini CLI OAuth",
-          "geminiProjectIdLoadFailed": "加载 Gemini 项目 ID 失败 (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "API 响应中未找到 Gemini 项目 ID",
-          "geminiProjectIdNotFound": "未找到 Gemini 项目 ID",
           "grokAuthInvalid": "Grok 认证文件无效",
           "grokAuthUnreadable": "无法读取 Grok 认证文件",
           "grokBillingConfigMissing": "Grok 账单响应未包含配置",
@@ -2365,13 +2398,11 @@
           "opencodeNoWorkspaceIdShort": "未找到工作区 ID",
           "ptyTimeout": "PTY 超时",
           "ptyUsageTimeout": "PTY 超时 — /usage 面板未渲染",
-          "quotaFetchFailed": "配额获取失败 ({{status}})",
           "rpcFailed": "RPC 失败",
           "rpcProcessExited": "RPC 进程意外退出",
           "rpcTimeout": "RPC 超时",
           "sessionCookieNotConfigured": "未配置会话 Cookie",
           "signInWithChatgpt": "请使用 ChatGPT 登录",
-          "tokenRefreshFailed": "Token 刷新失败",
           "unknown": "未知错误",
           "usagePageFetchFailed": "用量页面获取失败 ({{status}})",
           "waitingForClaudeSession": "正在等待 Claude 会话",
@@ -2540,7 +2571,6 @@
         "cd50cec5d7": "通过 Orca 协调多个编码代理",
         "58a868e8e4": "编排",
         "7c79d3b7bf": "可选",
-        "b1c2f8b0ac": "Claude、Codex、Gemini、OpenCode Go、MiniMax、Grok 的账户切换与用量",
         "f70ac54d38": "AI 提供商账户",
         "4121f7a0a2": "管理代理、默认项与命令",
         "b49abbd2f7": "代理",
@@ -4661,6 +4691,7 @@
             "downloadAlreadyLocal": "“{{value0}}”已在此电脑上",
             "downloadFolderUnsupported": "无法从此主机下载文件夹“{{value0}}”",
             "downloadOpenFailed": "下载\"{{value0}}\"失败",
+            "openLinkInThisGroupRefused": "无法在此分组中打开链接",
             "openInNewTab": "在新标签页中打开",
             "openInThisGroupRefused": "无法在此分组中打开 {{value0}}",
             "copyFilePath": "复制文件路径",
@@ -5039,8 +5070,6 @@
             "runtime_reconnecting": "重新连接中",
             "runtime_last_close_reason": "已关闭：{{value0}}",
             "runtime_reconnect_attempt": "第 {{value0}} 次尝试",
-            "connectedHostCount_one": "{{count}} 个主机",
-            "connectedHostCount_other": "{{count}} 个主机",
             "searchSshHosts": "搜索 SSH 主机…",
             "noMatchingSshHosts": "没有匹配的 SSH 主机",
             "moreSshHostMatches_one": "还有 {{count}} 个匹配项，继续输入以缩小范围",
@@ -5064,7 +5093,6 @@
             "24ac89df1a": "远程主机",
             "5e59007df4": "Kimi 使用情况",
             "8c86cd77b0": "OpenCode Go 使用情况",
-            "c1df0d67ec": "Gemini 使用情况",
             "c0909c686e": "Codex 使用情况",
             "3885eb74d8": "Claude 使用情况",
             "c8857b40f7": "刷新使用数据",
@@ -5102,6 +5130,7 @@
             "cursorUsageMenu": "Cursor 用量",
             "hiddenUsageProviders": "另有：{{value0}}",
             "zcodeUsageMenu": "Z代码使用",
+            "rateLimitResetsUnsupportedWsl_other": "可重置速率限制 {{count}} 次 · WSL 暂不支持",
             "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次",
             "staleCodexSessions_other": "{{count}} 个 Codex 会话仍在使用旧账户",
             "4025a6f62f": "无限制",
@@ -5305,6 +5334,7 @@
             "updatedAgo": "更新于 {{time}}",
             "notYetUpdated": "尚未更新",
             "rateLimitResetsAvailable_other": "可重置速率限制 {{count}} 次",
+            "unsupportedOwner": "{{server}} 的使用量不可用",
             "fbc80d8be2": "Zen 余额",
             "c03c61f53f": "余额",
             "f6a27a3c0a": "可用 {{value0}}",
@@ -5338,6 +5368,7 @@
             "gotIt": "知道了"
           },
           "UsageRosterPanel": {
+            "wslUsageNotShown": "WSL 使用量暂不显示",
             "title": "使用量",
             "openDetails": "查看使用详情",
             "notSignedIn": "未登录",
@@ -6282,7 +6313,16 @@
           "repairAvailable": "可修复",
           "installAvailable": "可安装",
           "otherBuild": "由其他版本的 Orca 安装",
-          "otherBuildKept": "已保留：由其他版本的 Orca 写入"
+          "otherBuildKept": "已保留：由其他版本的 Orca 写入",
+          "differsFromOrca": "此副本与 Orca 的副本不同",
+          "replaceMovesFolder": "替换会将整个文件夹（包括所有额外文件）移动到 {{folder}}。",
+          "replaceMovesFolderOnHost": "替换会将整个文件夹（包括所有额外文件）移动到 {{host}} 上的 {{folder}}。",
+          "replaceMovesLink": "替换会将此链接移动到 {{folder}}。",
+          "replaceMovesLinkOnHost": "替换会将此链接移动到 {{host}} 上的 {{folder}}。",
+          "replaceMovesFile": "替换会将此文件移动到 {{folder}}。",
+          "replaceMovesFileOnHost": "替换会将此文件移动到 {{host}} 上的 {{folder}}。",
+          "replaceMovesCopy": "替换会将此副本移动到 {{folder}}。",
+          "replaceMovesCopyOnHost": "替换会将此副本移动到 {{host}} 上的 {{folder}}。"
         },
         "installResult": {
           "installed": "已安装并验证",
@@ -6304,6 +6344,11 @@
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
           "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
           "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "旧副本已移动到：",
+          "movedToOnHost": "旧副本已移动到 {{host}} 上的以下路径：",
+          "showFolder": "显示文件夹"
         }
       },
       "sidebar": {
@@ -7861,12 +7906,6 @@
           "67e3c33670": "OpenCode Go 会话 cookie",
           "ea631977b5": "配置 OpenCode Go 提供商设置",
           "4ac10b4d08": "OpenCode Go",
-          "c2aee76420": "从本机 Gemini CLI 提取 OAuth 凭据，供 {{value0}} Google 登录，可能随 CLI 更新失效",
-          "96f3649526": "使用 Gemini CLI 凭据(实验)",
-          "d676c41fc6": "从本机 Gemini CLI 提取 Google OAuth 凭据，可能随 CLI 更新失效",
-          "0c7f915b01": "使用 Gemini CLI 凭据",
-          "973741a871": "配置 Gemini 提供商设置",
-          "0c64dc2a64": "Gemini CLI（旧版）",
           "db209ee572": "移除",
           "8a0f870153": "重新验证",
           "3d245ef7d9": "Codex 报告此登录已过时",
@@ -8439,6 +8478,12 @@
             "description": "位于左侧边缘的图标栏，用于在工作区和其他页面之间切换",
             "copy": "在工作区列表左侧添加一个图标栏。“工作区”、“设置”和“帮助”会移到图标栏上，且在列表折叠时它仍保持可见",
             "toggleLabel": "切换应用栏"
+          },
+          "sharedCodexServers": {
+            "title": "共享 Codex 服务器",
+            "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
+            "copy": "占用内存更少，新聊天启动更快。如果共享进程崩溃，其所有聊天都会重新连接。更改后仅对这台电脑上新启动的聊天生效，远程和 WSL 主机仍为每个聊天一个进程",
+            "toggleLabel": "切换共享 Codex 服务器"
           }
         },
         "FloatingWorkspacePane": {
@@ -9936,13 +9981,6 @@
             "38d22ff8d6": "如果自动查找失败，可选的工作区 ID 覆盖",
             "9c4e40cf6b": "会话",
             "61f7d1fcbe": "cookies",
-            "b7c2cee442": "实验性",
-            "7118d2f908": "证书",
-            "933deaf732": "OAuth",
-            "8630464352": "CLI",
-            "e8e1ff3887": "gemini",
-            "bada4a3218": "从本地 Gemini CLI 安装中提取 OAuth 凭据以通过 Google 认证",
-            "d819755b02": "使用 Gemini CLI 凭据",
             "35b461d817": "登入",
             "f2d666a886": "可选",
             "8b06729e0f": "活跃",
@@ -10190,8 +10228,6 @@
             "a9d56852eb": "opencode",
             "7f72de7cbe": "在状态栏中显示 OpenCode Go Token 和成本使用情况",
             "51b0ccd6a2": "谷歌",
-            "2804a920ad": "gemini",
-            "9660c5b2f1": "在状态栏中显示 Gemini Token 和成本使用情况",
             "97957e374e": "开放伊",
             "8dfd676c28": "codex",
             "e9e4412545": "在状态栏中显示 Codex Token 和成本使用情况",
@@ -10266,7 +10302,6 @@
             "1b404ee6ad": "显示 Orca 手机端按钮",
             "183e6b8ef9": "Z代码使用",
             "d408ece868": "关闭时最小化到托盘",
-            "585be839e9": "Gemini 使用情况",
             "20e7d30150": "OpenCode Go 使用情况",
             "ca64c95969": "Grok 使用情况",
             "7f5d534f81": "显示自动化按钮",
@@ -10612,6 +10647,12 @@
               "navigation": "导航",
               "sidebar": "侧边栏",
               "icons": "图标"
+            },
+            "sharedCodexServers": {
+              "title": "共享 Codex 服务器",
+              "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
+              "codex": "codex",
+              "memory": "内存"
             }
           }
         },
@@ -12493,6 +12534,7 @@
           "pathLabel": "开发插件文件夹路径",
           "placeholder": "插件文件夹路径",
           "add": "添加路径",
+          "teamDisabled": "你的团队已关闭开发文件夹",
           "reviewHelp": "只审核一次。之后的代码修改会直接运行",
           "dialogTitle": "开发文件夹"
         },
@@ -12938,6 +12980,11 @@
           "title": "Orca 账户",
           "description": "即时分享工作，并随时通过 Orca Mobile 访问桌面",
           "searchDescription": "登录或退出产物和 Orca Relay 使用的账户",
+          "managed": "你的团队管理着部分 Orca 设置",
+          "deviceReportNamedViewers": "{{teams}} 的所有者和管理员可以查看此设备的报告",
+          "deviceReportViewers": "团队所有者和管理员可以查看此设备的报告",
+          "reportingDetails": "设备报告详情",
+          "reportingDisclosure": "“设备”视图会显示你的 Orca 版本、发布渠道、设备名称、平台、更新状态、Orca 无法安装的必需插件，以及设备上次报告的时间",
           "benefitsTitle": "账户已包含",
           "artifactsTitle": "产物分享",
           "artifactsDescription": "发布 HTML 和 Markdown 文件，然后在 Orca 中管理所有分享链接",
@@ -13542,6 +13589,10 @@
           "defaultHostHelp": "现有项目保持不变",
           "defaultHostWebHelp": "此浏览器会在所选服务器上打开新项目",
           "updateAll": "全部更新",
+          "shareRowHint": "让另一个 Orca 连接到这里",
+          "manageShare": "管理",
+          "share": "共享",
+          "serversCaption": "服务器",
           "updatesCount_other": "有 {{count}} 个可用更新",
           "addServer": "添加服务器",
           "moreWaysToAdd": "添加服务器的更多方式",
@@ -13613,7 +13664,11 @@
           "attentionOther": "需要处理 · 另一个技能已使用此名称",
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}",
+          "attentionDiffersFromOrca": "需要处理 · 此副本与 Orca 的副本不同",
+          "replaceMovesCopyToBackup": "替换会将当前副本（包括所有额外文件）移动到备份。",
+          "replaceMovesCopyToFolder": "替换会将当前副本（包括所有额外文件）移动到 {{folder}}。",
+          "replaceMovesCopyToFolderOnHost": "替换会将当前副本（包括所有额外文件）移动到 {{host}} 上的 {{folder}}。"
         },
         "recoverServer": {
           "checking": "正在检查锁…",
@@ -13757,6 +13812,7 @@
           "customEditor": "编辑器"
         },
         "PluginManagerRows": {
+          "requiredByTeam": "团队要求",
           "reinstall": "重新安装",
           "crashedCount": "连续崩溃 {{value0}} 次",
           "crashed": "启动时崩溃",
@@ -14023,7 +14079,6 @@
             "windows": "时间窗口的已用或剩余百分比",
             "reset": "距重置的时间，例如 3h 15m",
             "resetAt": "重置时刻，例如 20:50",
-            "buckets": "Gemini 模型分组",
             "optional": "其中的占位符为空时省略该组"
           }
         },
@@ -14198,13 +14253,6 @@
             "c76693e456": "无法加载此工作区的文件："
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "尚无提交",
-            "d0fb0f4bf2": "刷新提交记录",
-            "9f7535d22b": "引用是指向该确切提交的分支或标签名称，它们仅出现在 Git 具有该提交的命名引用的位置",
-            "9289ba0cb9": "什么是参考文献？",
-            "d836037d02": "提交",
-            "8232c8b2f2": "打开提交 {{value0}}：{{value1}}",
-            "e5e81e59a6": "调整提交记录高度",
             "6d1e0a7c3b": "无法加载提交文件"
           },
           "HostedReviewActions": {
@@ -14568,7 +14616,58 @@
             "keepFile": "保留文件",
             "keepDeletion": "保留删除",
             "refreshAll": "全部刷新",
-            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的"
+            "statusReadFailed": "Git 无法读取此工作区，显示的更改可能不是最新的",
+            "baseUpToDate": "已是最新",
+            "rebaseOperationInProgress": "请等待当前 Git 操作完成",
+            "rebaseButton": "变基",
+            "rebaseConflictCount_other": "{{count}} 个冲突",
+            "rebasePaused": "变基已暂停",
+            "rebaseResolveConflictsFirst": "请先解决冲突",
+            "rebaseAbort": "中止",
+            "rebaseContinue": "继续",
+            "continueRebasePausedAgain": "变基在下一个冲突处暂停",
+            "continueRebaseFailed": "继续变基失败",
+            "rebaseAutostashConflict": "已变基。你的未提交更改未能干净地重新应用，已保存在 stash 中。",
+            "rebaseStoppedByGit": "Git 暂停了变基",
+            "continueRebaseUnconfirmed": "无法确认结果。源代码管理已刷新以显示当前状态。",
+            "noRebaseInProgress": "没有正在进行的变基",
+            "rebaseStopMovedOn": "变基已经继续进行。请查看面板后重试。",
+            "rebaseEmptyStep": "此步骤没有可提交的内容。请中止变基，或在终端中完成它。",
+            "rebaseStepUnreadableShort": "检查失败",
+            "rebaseCheckAgain": "重新检查",
+            "rebaseRetryInspect": "重试",
+            "rebaseRetryInspectLabel": "重新检查变基步骤",
+            "rebaseStoppedFinishInTerminal": "Git 已在此步骤暂停。请在终端中完成或中止。",
+            "rebaseCheckingStep": "正在检查变基步骤",
+            "rebaseEmptyStepShort": "空步骤",
+            "rebaseAbortLabel": "中止变基",
+            "scopeFileCount_one": "{{count}} 个文件",
+            "scopeFileCount_other": "{{count}} 个文件",
+            "scopeCommitCount_one": "{{count}} 次提交",
+            "scopeCommitCount_other": "{{count}} 次提交",
+            "scopeUncommitted": "未提交",
+            "scopeAllChanges": "所有更改",
+            "scopeNone": "无",
+            "scopeOpenDiff": "打开差异",
+            "scopeShowAll": "显示所有更改",
+            "scopeLoadingBranchChanges": "正在加载分支更改…",
+            "scopeBranchCommits": "此分支上的提交",
+            "scopeRecentCommits": "最近提交",
+            "scopeCompareTo": "与 {{ref}} 比较",
+            "scopeFilterCommits": "筛选提交",
+            "scopeCommitsFailed": "无法加载提交。",
+            "scopeFilesFailed": "无法加载文件。",
+            "scopeLoadingFiles": "正在加载文件…",
+            "scopeNoSharedHistory": "与 {{ref}} 没有共同历史记录",
+            "scopeRetryCommits": "重试",
+            "scopeLoadingCommits": "正在加载提交…",
+            "scopeNoMatchingCommits": "没有匹配的提交",
+            "scopeNoBranchCommitsYet": "此分支上还没有提交",
+            "scopeNoCommitsYet": "还没有提交",
+            "scopeOlderHistory": "在 Git Graph 中查看更早的历史",
+            "scopeNoUncommitted": "没有未提交的更改。",
+            "scopeCommitFiles": "文件",
+            "gitGraphButton": "图谱"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的代理",
@@ -14998,10 +15097,8 @@
                   "titlePublishBranchFirst": "请先发布分支再同步提交",
                   "titleUseForcePush": "使用提交并强制推送 — 远程只有本地提交的旧副本",
                   "titleCommitThenPullPush": "先提交，再拉取并推送",
-                  "rebaseFromNamedBase": "从 {{baseRef}} 变基",
                   "rebaseFromBase": "从基准分支变基",
                   "rebaseChooseRemoteBase": "选择要从中变基的远程基准分支",
-                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或暂存本地更改",
                   "rebaseWithLatestFrom": "使用 {{baseRef}} 的最新提交变基当前分支",
                   "blockedCommitFirst": "请先提交更改",
                   "blockedCheckOutBranchFirst": "请先检出分支",
@@ -15023,7 +15120,6 @@
                   "titleCommitAndPush": "提交已暂存的更改并推送",
                   "commitForcePush": "提交并强制推送",
                   "commitPush": "提交并推送",
-                  "titleOperationInProgress": "操作正在进行中…",
                   "titleAbortRebaseInProgress": "中止正在进行的变基",
                   "titleAbortMergeInProgress": "中止正在进行的合并",
                   "titleNothingToPushTo": "没有要推送到 {{upstreamName}} 的内容",
@@ -15084,7 +15180,6 @@
                   "statusSetsUpstream": "将设置上游",
                   "statusMayFail": "可能失败",
                   "statusPublished": "已发布",
-                  "statusStashFirst": "请先存入 stash",
                   "statusReplaces": "替换 ↓{{behind}}",
                   "statusCommitFirst": "请先提交",
                   "statusReviewOpen": "{{shortLabel}} 已打开",
@@ -15095,7 +15190,14 @@
                   "statusPushFirst": "请先推送",
                   "statusForcePushFirst": "请先强制推送",
                   "statusSyncFirst": "请先同步",
-                  "statusUnsupported": "不支持"
+                  "statusUnsupported": "不支持",
+                  "rebaseOntoNamedBase": "变基到 {{base}}",
+                  "rebaseCommitOrStashFirst": "请先提交或储藏（stash）更改",
+                  "continueRebase": "继续变基",
+                  "titleContinueRebase": "继续已暂停的变基",
+                  "rebaseFromNamedBase": "从 {{baseRef}} 变基",
+                  "rebaseDirtyHint": "尝试变基；git 可能要求先提交或储藏（stash）本地更改",
+                  "statusStashFirst": "请先存入 stash"
                 }
               },
               "primary": {
@@ -15138,7 +15240,8 @@
                   "e9b5d1f470": "在创建 {{value0}} 之前检出一个分支",
                   "f0c6e2a581": "此分支尚未准备好创建 {{value0}}",
                   "8f9a0b1c2d": "没有可提交的内容，分支已是最新状态",
-                  "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…"
+                  "h3i4j5k607": "正在检查此分支是否可以创建 {{value0}}…",
+                  "nothingToCommit": "没有可提交的内容"
                 }
               },
               "branch": {
@@ -15424,12 +15527,7 @@
             "f8a2c4d1e0": "资源管理器搜索模式"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "此提交没有文件更改",
-            "c3d4e5f6a7": "打开未提交的差异"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "显示提交{{value0}}中的文件：{{value1}}",
-            "4a8d9e0c1f": "隐藏提交{{value0}}中的文件：{{value1}}"
+            "b2c3d4e5f6": "此提交没有文件更改"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "在浏览器中打开提交",
@@ -19785,7 +19883,8 @@
         "transitionFieldsNeedsUpdate": "请更新远程 Orca 服务器以提交必填的流转字段，或在 Jira 中完成流转"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
+        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。",
+        "continueRebaseNeedsNewerHost": "继续变基需要此主机上更新版本的 Orca。请在该主机上更新 Orca。"
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "解决冲突需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
@@ -20133,7 +20232,6 @@
         "pasteNotSaved": "此粘贴内容未保存。请重新粘贴或将其移除",
         "pastedTextTooLarge": "此次粘贴会使消息超过单条消息 256 KB 的上限。请缩短后再粘贴",
         "imageUnavailable": "预览不可用",
-        "botFor": "用途：{{detail}}",
         "agents": "智能体",
         "recent": "最近",
         "bots": "Bots",
@@ -21164,6 +21262,66 @@
       "dock": {
         "label": "消息框和提示"
       },
+      "workerDock": {
+        "commandOutputPending": "命令输出暂不可用",
+        "notNow": "暂不",
+        "retry": "重试",
+        "dismiss": "关闭",
+        "openWorker": "打开工作者",
+        "remoteOwner": "请在运行它的计算机上停止或清除",
+        "restore": "重新在停靠栏中显示",
+        "alreadyStopped": "已停止",
+        "cantStop": "暂时无法停止",
+        "clearAllLabel_other": "清除 {{count}} 个失败的工作者",
+        "loadingWorker": "正在加载工作者…",
+        "resultUnavailable": "工作者结果不可用",
+        "showDetails": "显示详情",
+        "hideDetails": "隐藏详情",
+        "close": "关闭",
+        "workersRegion": "工作者",
+        "doneResult": "已完成 · 打开结果",
+        "clearName": "清除 {{name}}",
+        "stopUnavailable": "无法停止 {{name}} · {{title}} · {{reason}}",
+        "stopName": "停止 {{name}} · {{title}}",
+        "stopping": "正在停止…",
+        "clear": "清除",
+        "stop": "停止",
+        "coordinator": "等待协调者",
+        "starting": "正在启动",
+        "running": "运行中",
+        "idle": "空闲",
+        "saving": "正在保存结果…",
+        "failed": "失败",
+        "unexpected": "意外停止",
+        "unavailableState": "状态不可用",
+        "needsYou": "等待你处理",
+        "worker": "工作者",
+        "agent": "智能体",
+        "command": "命令",
+        "workflow": "工作流程",
+        "monitor": "监控任务",
+        "task": "任务",
+        "workerCount_other": "{{count}} 个工作者",
+        "stoppedByYou": "已由你停止",
+        "finished": "已完成",
+        "failedCount": "{{count}} 个失败",
+        "needsYouCount": "{{count}} 个等待你处理",
+        "newQuestions_other": "{{count}} 个新的工作者问题等待你回答",
+        "waitingOnYouName": "{{name}} · 等待你处理",
+        "moreQuestions": "另有 {{count}} 个等待你处理",
+        "questions": "{{count}} 个等待你处理",
+        "queuedQuestions": "排队中的工作者问题",
+        "showQuestion": "显示 {{name}} 的问题",
+        "show": "显示",
+        "runningCount": "{{count}} 个运行中",
+        "stopAll": "全部停止",
+        "clearFailed": "清除失败项",
+        "unlistedDetail": "部分后台工作未在此列出",
+        "unlisted": "后台工作正在运行",
+        "unread": "无法加载工作者",
+        "unreadDetail": "工作者加载后将显示在此处",
+        "chipLabel": "{{label}}，最新：{{title}}"
+      },
       "editDeliveryNotice": "编辑",
       "signIn": {
         "title": "登录 {{agent}} 即可开始聊天"
@@ -21278,6 +21436,8 @@
       "sideChat": {
         "description": "在此聊天旁的分支中顺便提个问题",
         "argumentHint": "<问题>",
+        "pill": "支线聊天",
+        "placeholder": "顺便问个问题",
         "notReady": "支线聊天尚未就绪，请稍后重试",
         "replyRunning": "此回复完成后可用",
         "noReply": "收到第一条回复后可用",
@@ -21421,6 +21581,7 @@
         "paused": "已暂停",
         "replied": "{{actor}} 已回复",
         "rowAccessibleName": "{{label}}：{{name}}。{{details}}",
+        "thenAt": "在 {{time}} 运行一次",
         "thenLine": "然后",
         "thenOnce": "发生时运行一次",
         "thenOnceBy": "运行一次；如果到 {{time}} 还没发生，就在那时运行",
@@ -21503,11 +21664,8 @@
         "otherWays": "你也可以改用 API 密钥或 gcloud 登录",
         "moreOptions": "更多选项…",
         "useApiKey": "使用你的 Gemini API 密钥",
-        "useGcloud": "使用 gcloud（{{project}}）",
         "useGoogle": "使用你的 Google 登录",
-        "apiKeyFromEnvironment": "已在你的环境变量中找到 GEMINI_API_KEY",
         "apiKeySaved": "已保存在 Orca 中",
-        "gcloudFound": "已找到你的 gcloud 登录（应用默认凭据）",
         "googleFound": "你之前在此主机上用 Google 登录过",
         "askApiKeyEnvironment": "改用在你的环境变量中找到的 Gemini API 密钥？",
         "askApiKeySaved": "改用保存在 Orca 中的 Gemini API 密钥？",
@@ -21518,19 +21676,12 @@
         "signedOut": "Antigravity 尚未登录",
         "refused": "Google 拒绝了此聊天的凭据",
         "usageLimit": "此登录凭据已达到使用上限",
-        "foundLead": "Orca 在此主机上找到了可改用的凭据：",
         "signInGoogle": "使用 Google 登录",
-        "useKeyOrGcloud": "API 密钥或 gcloud",
         "yourAgy": "你的 agy",
         "yourAgyVersion": "你的 agy · v{{version}}",
-        "orcaCopy": "Orca 自带版本",
-        "orcaCopyVersion": "Orca 自带版本 · v{{version}}",
         "orcasAgy": "Orca 自带的 agy",
         "orcasAgyVersion": "Orca 自带的 agy · v{{version}}",
-        "runsOn": "运行于：{{program}}",
-        "agyItem": "agy 自身的登录",
-        "agyHint": "此聊天在此主机上运行 Antigravity CLI，其他登录方式仅适用于新聊天",
-        "confirmSignIn": "使用 Google 登录？"
+        "runsOn": "运行于：{{program}}"
       },
       "automationSaved": {
         "resultsInRuns": "结果留在每次运行中",
@@ -22226,7 +22377,7 @@
         "ciResultLinesSearchChecks": "检查",
         "ciResultLinesSearchPr": "PR",
         "promptSuggestionsTitle": "建议的提示词",
-        "promptSuggestionsCopy": "Claude 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入你的 Claude 用量。",
+        "promptSuggestionsCopy": "Claude 或 Codex 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入该智能体的用量。",
         "promptSuggestionsSearchNext": "下一条提示词",
         "promptSuggestionsSearchGhost": "幽灵文本"
       },
@@ -22870,7 +23021,10 @@
         "keepOpen": "保持打开",
         "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
         "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭"
+        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭",
+        "boundRunning": "随 {{worker}} 一同关闭",
+        "boundFinished": "{{worker}} 已完成 · {{countdown}}后关闭",
+        "boundFallbackName": "其工作代理"
       }
     },
     "wslHostMark": {
@@ -23238,6 +23392,19 @@
       "title": "浏览器页面已停止",
       "failed": "浏览器页面意外停止，请重试以恢复"
     },
+    "serverPage": {
+      "download": {
+        "started": "正在下载到 {{host}} 上的 {{path}}",
+        "saveHere": "保存到这台电脑",
+        "copying": "正在将 {{filename}} 下载到这台电脑…",
+        "copied": "已保存到 {{path}}",
+        "copyFailed": "无法将 {{filename}} 保存到这台电脑",
+        "showInFolder": "在文件夹中显示"
+      },
+      "print": {
+        "failed": "无法将页面保存为 PDF"
+      }
+    },
     "clientHosted": {
       "preparationFailed": "无法在此桌面上启动远程浏览器，请检查配对连接后重试",
       "unavailableTitle": "客户端托管的浏览器不可用",
@@ -23442,6 +23609,25 @@
     },
     "loadStall": {
       "waitingForHost": "正在等待 {{host}}…"
+    },
+    "profileCookieClear": {
+      "label": "Cookie",
+      "action": "清除 Cookie…",
+      "rowLocal": "退出这台电脑上 {{profile}} 中所有网站的登录",
+      "rowServer": "退出 {{host}} 上 {{profile}} 中所有网站的登录，包括这台电脑上的页面和串流页面",
+      "rowSsh": "退出 {{host}} 所用 {{profile}} 中所有网站的登录",
+      "unavailable": "所选主机上的此配置文件不可用",
+      "confirmTitle": "清除 {{host}} 上 {{profile}} 中的 Cookie？",
+      "confirmTitleLocal": "清除这台电脑上 {{profile}} 中的 Cookie？",
+      "confirmDescriptionServer": "此配置文件中所有网站都将退出登录，包括这台电脑上的页面和串流页面，其他配置文件和主机的 Cookie 会保留",
+      "confirmDescription": "此配置文件中所有网站都将退出登录，其他配置文件和主机的 Cookie 会保留",
+      "clear": "清除",
+      "cancel": "取消",
+      "cleared": "已清除 {{host}} 上 {{profile}} 中的 Cookie",
+      "clearedLocal": "已清除这台电脑上 {{profile}} 中的 Cookie",
+      "failed": "无法清除 {{host}} 上 {{profile}} 中的 Cookie，请重试",
+      "failedLocal": "无法清除这台电脑上 {{profile}} 中的 Cookie，请重试",
+      "sshHostOption": "{{host}} (SSH)"
     }
   },
   "runtimeRpc": {
@@ -24492,22 +24678,16 @@
       "cancel": "取消"
     },
     "antigravity": {
-      "chatSignIn": "登录",
-      "chatChangeAccount": "更换帐户",
-      "chatRetry": "重试登录",
       "chatCancel": "取消",
       "chatCopyLink": "复制登录链接",
       "chatCopyFailed": "无法复制链接",
       "chatStarting": "正在开始登录…",
-      "chatWaiting": "请在浏览器中完成登录",
       "chatOpenFailed": "复制链接并在浏览器中打开",
       "chatVerifying": "正在完成登录…",
-      "chatPasteHelp": "如果登录后的最后一个页面无法加载，请从浏览器复制它的完整地址并粘贴到这里",
       "chatContinue": "继续",
       "chatCancelled": "已取消登录",
       "chatExpired": "登录超时，请重试",
       "chatFailed": "登录失败，请重试",
-      "chatOtherClient": "另一个客户端正在登录",
       "chatReadFailed": "无法检查 {{host}} 上的登录",
       "retry": "重试",
       "changed": "本机帐户已更改，在启动 agy 之前再次选择已保存的帐户",
@@ -24538,14 +24718,6 @@
       "enterprise": "Gemini Enterprise",
       "projectPlaceholder": "my-project-id",
       "locationPlaceholder": "us-central1",
-      "chatSeparate": "与你的 agy 终端账户相互独立",
-      "chatBadgeSigningIn": "正在登录",
-      "chatBadgeSignedIn": "已登录",
-      "chatBadgeSignedOut": "未登录",
-      "chatSignInWith": "使用 {{method}} 登录",
-      "chatPasteOpen": "浏览器页面没有加载？",
-      "chatSwitchMethod": "重新登录以切换到 {{method}}",
-      "enterpriseFieldsNeeded": "请输入 Google Cloud 项目和位置",
       "personalOption": "你的个人 Google AI 套餐",
       "enterpriseOption": "你所在组织的许可证",
       "apiKeyOption": "来自 Google AI Studio 的密钥",
@@ -24562,8 +24734,6 @@
       "apiKeyReplace": "更换密钥",
       "apiKeyRemove": "移除",
       "location": "位置",
-      "enterpriseFieldsShort": "请输入项目和位置",
-      "chatUseMethod": "重新登录以使用 {{method}}",
       "signInEllipsis": "登录…",
       "loadFailed": "无法加载 agy 账户",
       "loading": "正在加载账户…",
@@ -24576,31 +24746,11 @@
       "saveShort": "保存",
       "readAt": "读取于 {{time}}",
       "active": "当前",
-      "account": "账户",
       "runtime": "运行时",
       "chatTitle": "Antigravity 聊天",
-      "chatDescription": "通过浏览器登录，因此无需安装 agy 也能使用聊天",
-      "chatDescriptionAgy": "agy 已在此主机上登录，因此新聊天会使用下方 agy 的账户。agy 未登录时，会改用此处的登录信息",
-      "chatDescriptionAgyVersion": "新聊天在你的 agy（v{{version}}）上运行，并使用下方 agy 的账户。agy 未登录时，会改用此处的登录信息",
-      "chatDescriptionManagedVersion": "新聊天在 Orca 的副本（v{{version}}）上运行，因此无需安装 agy 也能使用聊天",
-      "chatDescriptionAgySignedOut": "新聊天会使用 agy，但 agy 尚未登录。请在此主机上运行 agy 以登录",
-      "chatDescriptionOrcaAgy": "聊天在 Orca 的 agy 副本上运行，并使用 agy 自己的登录信息",
-      "chatDescriptionAgyOwnSignIn": "聊天在 agy 上运行，并使用 agy 自己的登录信息",
-      "chatDescriptionInstallAgy": "在下方安装 agy 即可使用聊天。agy 会使用自己的账户登录",
-      "chatDescriptionOrcaAgyVersion": "聊天在 Orca 的 agy（v{{version}}）上运行，并使用 agy 自己的登录信息",
-      "chatDescriptionAgyOwnSignInVersion": "聊天在你的 agy（v{{version}}）上运行，并使用 agy 自己的登录信息",
       "terminalTitle": "终端中的 agy",
-      "terminalDescriptionWindows": "使用 agy 自己保存的账户。切换会应用于主机默认的 agy 凭据",
       "terminalDescription": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话",
-      "terminalDescriptionChats": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话和 Antigravity 聊天",
-      "terminalDescriptionNoChats": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话，但不会应用于 Antigravity 聊天",
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击“保存”",
-      "googleSignIn": "Google 账户登录",
-      "googleSignInAgy": "agy 自带的登录",
-      "googleSignInAgyOption": "通过运行 agy 登录",
-      "googleSignInOrca": "Orca 内置登录",
-      "googleSignInOrcaOption": "在此通过浏览器登录，无需 agy",
-      "googleSignInUpdateFailed": "无法更改 Antigravity 使用 Google 登录的方式",
       "apiKeyGet": "获取 API 密钥"
     },
     "claude": {
@@ -24672,7 +24822,14 @@
         "title": "Claude 用量轮询",
         "description": "使用 Claude Code 登录凭据检查用量、额度和非活跃账号。关闭后，仅显示运行中终端会话提供的实时用量。",
         "about": "关于 Claude 用量轮询"
-      }
+      },
+      "organizationSuffix": "组织 ···{{suffix}}",
+      "personalOrganization": "个人"
+    },
+    "codex": {
+      "usageSignInLabel": "已退出登录",
+      "usageSignInMessage": "登录后即可查看使用量",
+      "usageSignInSettingsMessage": "打开“设置 → 账户”登录"
     },
     "hostSignIn": {
       "copied": "已复制",
@@ -25317,6 +25474,12 @@
     }
   },
   "updates": {
+    "installOnQuit": {
+      "title": "更新已准备就绪，可安装",
+      "summary": "退出 Orca，安装完成后重新打开",
+      "quit": "退出 Orca",
+      "later": "稍后"
+    },
     "installBlock": {
       "instancesLabel": "正在使用 Orca 的实例",
       "browserLabel": "后台浏览器",
@@ -25377,6 +25540,7 @@
       "rateLimitedInMinuteSignedOut": "已达到 GitHub 速率限制。请约一分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
       "rateLimitedInMinutes_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试",
       "rateLimitedInMinutesSignedOut_other": "已达到 GitHub 速率限制。请约 {{count}} 分钟后重试，或运行 `gh auth login`，以便 Orca 使用你账户的更高限额",
+      "teamUpdatePolicy": "你的团队管理着 Orca 更新",
       "automaticInstallCheckpointFailed": "Orca 无法在重启前保存当前窗口。请重试安装更新。",
       "automaticInstallTerminalBusy": "重启会结束部分终端会话。Orca 会在之后检查更新时重试。",
       "macStagingTimeout": "macOS 仍在准备更新。如果长时间停留在此状态，请退出并重新打开 Orca。"
@@ -25385,6 +25549,21 @@
       "downloading": "正在下载 Orca {{version}}…",
       "installing": "正在安装 Orca {{version}}…",
       "restarting": "Orca 将自动重启"
+    },
+    "emergencyRequired": {
+      "title": "需要 Orca {{version}}",
+      "summary": "需要 Orca {{version}}，请重启以更新"
+    },
+    "teamRequired": {
+      "summary": "你的团队要求使用 Orca {{version}}，请重启以更新",
+      "title": "你的团队要求使用 Orca {{version}}",
+      "restartNow": "立即重启",
+      "countdown": "倒计时结束后，Orca 会保存你的会话并重启，运行中的智能体可能会延迟重启",
+      "waiting": "Orca 正在等待运行中的智能体结束，然后重启",
+      "retry": "Orca 会在下次启动时重试此更新",
+      "manual": "自动安装失败，请手动安装此更新",
+      "deadline": "请在 {{deadline}} 前重启，Orca 会在重启前保存你的会话",
+      "download": "打开下载页面"
     },
     "remoteUpdateBusy": "此服务器已在更新中。请在更新完成后重新检查"
   },
@@ -25461,7 +25640,11 @@
       "agents": "智能体",
       "otherTerminals": "其他终端",
       "privateBytes": "Orca 和终端已提交的内存"
-    }
+    },
+    "chatRow": {
+      "tooltip": "{{agent}} 聊天（包括其下运行的进程）"
+    },
+    "sharedAgentProcesses": "共享智能体进程"
   },
   "browserExtensions": {
     "permission": {
@@ -26301,6 +26484,7 @@
       },
       "agentInterrupted": "智能体在完成此次运行前被中断",
       "botsOff": "设置中已关闭机器人，因此 Orca 跳过了这次运行。",
+      "botsOffByTeam": "你的团队已关闭 Bots，因此 Orca 跳过了此次运行",
       "botMissing": "运行这个自动化的机器人已不存在。",
       "botFolderMissing": "机器人的文件夹已不可用。",
       "botPaused": "{{bot}} 已暂停，因此 Orca 跳过了这次运行。"
@@ -26412,7 +26596,8 @@
     "eventsWontFire": "仅按计划运行：需要 {{connectors}} 连接器",
     "webhooksOff": "无法运行：Orca Cloud 尚不支持 Webhook",
     "webhooksOffScheduled": "仅按计划运行：Orca Cloud 尚不支持 Webhook",
-    "openConnectors": "打开连接器"
+    "openConnectors": "打开连接器",
+    "hostUnreachable": "无法连接到 {{host}}，待其恢复后请重试"
   },
   "codeHost": {
     "errors": {
@@ -26837,7 +27022,8 @@
     "branchCreated": "已在 {{commit}} 创建 {{branch}}",
     "branchName": "分支名称",
     "invalidBranchName": "此分支名称无效。请选择其他名称。",
-    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。"
+    "createBranchFailed": "Orca 无法创建分支。请在终端中检查此仓库，然后重试。",
+    "openDiff": "打开差异"
   },
   "bots": {
     "deepLink": {
@@ -29082,13 +29268,11 @@
         "refresh": "刷新"
       },
       "setup": {
-        "install": "安装 Orca 应用",
         "close": "关闭",
         "checking": "正在检查 GitHub…",
         "retry": "重试",
         "installing": "正在等待安装完成或组织所有者批准…",
         "finish": "完成",
-        "title": "将 {{name}} 添加到 GitHub",
         "pushesAsYou": "{{name}} 会使用你自己的 git 凭据从此电脑推送代码",
         "addMore": "添加仓库或组织",
         "checkingInstalls": "正在检查 GitHub 上的更改…",
@@ -29097,7 +29281,6 @@
         "repositories": "仓库",
         "isOn": "{{name}} 已接入 GitHub",
         "new": "新增",
-        "finishInBrowser": "请在浏览器中的 GitHub 页面上完成…",
         "openAgain": "再次打开",
         "added": "已从 GitHub 添加：{{names}}",
         "pushesOnHost": "{{name}} 会在 {{host}} 上使用该电脑的 git 凭据推送代码",
@@ -29145,7 +29328,6 @@
         "waiting": "请在浏览器中完成 GitHub 登录…",
         "requested": "已请求组织所有者批准 Orca 应用",
         "notInstalled": "Orca 应用尚未安装在你的任何仓库上",
-        "turnOn": "启用 {{name}}",
         "connected": "已连接 GitHub",
         "pickRepositories": "登录并选择 {{name}} 可以在哪些仓库中工作",
         "readsOnly": "Orca 只会读取你的 GitHub 用户名和 ID"
@@ -29990,6 +30172,13 @@
     }
   },
   "plugins": {
+    "blockedByTeam": "已被你的团队阻止",
+    "requiredFailures": {
+      "toast": "无法安装必需的插件",
+      "open": "打开插件",
+      "label": "团队要求",
+      "body": "Orca 无法安装 {{plugin}}"
+    },
     "frameSaveAs": {
       "title": "保存文件",
       "allFiles": "所有文件"
@@ -30013,6 +30202,11 @@
       "unknownProject": "未知项目",
       "automationNewWorkspaces": "自动化 {{id}}：按 {{schedule}} 运行，每次都在 {{project}} 中新建工作区",
       "automationInWorkspace": "自动化 {{id}}：在 {{project}} / {{workspace}} 中按 {{schedule}} 运行"
+    },
+    "catalog": {
+      "managedByTeam": "由你的团队管理",
+      "managedByNamedTeams": "由 {{teams}} 管理",
+      "teamPublisher": "你的团队"
     },
     "displayText": {
       "tb0b38488": "适用于 Orca 的 GitHub 主题",
@@ -30145,6 +30339,8 @@
     "modelRequiresClaude": "需要 Claude Code CLI {{version}} 或更高版本",
     "modelRequiresCodex": "需要 Codex CLI {{version}} 或更高版本",
     "modelRequires": "需要 {{product}} {{version}} 或更高版本",
+    "devinProduct": "Devin CLI",
+    "codebuddyProduct": "CodeBuddy Code",
     "commandCopied": "命令已复制",
     "commandNotCopied": "无法复制命令",
     "copyCommand": "复制",
@@ -30210,5 +30406,18 @@
       "workerOwed": "仍有编排在等待此聊天",
       "home": "托管智能体的主聊天无法删除"
     }
+  },
+  "activityBar": {
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "hide": "隐藏",
+    "show": "显示 {{name}}",
+    "dragStart": "已拿起 {{name}}",
+    "dragOver": "{{name}} 悬停在 {{target}} 上",
+    "dragEnd": "已放下 {{name}}",
+    "dragCancel": "已取消移动 {{name}}",
+    "moveLeft": "左移",
+    "moveRight": "右移",
+    "reset": "重置标签页顺序"
   }
 }

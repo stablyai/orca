@@ -138,7 +138,12 @@ import {
   AutomationRuns,
   AutomationUpdate
 } from './automations/automation-params'
-import { BotAvatarRead, BotAvatarUpload } from './bot-avatar-params'
+import {
+  BotAvatarRead,
+  BotAvatarUpload,
+  BotSlackIconUpload,
+  BotSlackIconWanted
+} from './bot-avatar-params'
 import {
   ComposioApp,
   ComposioApps,
@@ -376,6 +381,7 @@ import {
 } from './computer/computer-schemas-params'
 import {
   ConnectorAct,
+  ConnectorLeaveThread,
   ConnectorReact,
   ConnectorReply,
   ConnectorSlackMirrorPost,
@@ -648,6 +654,24 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import {
+  McpServerAdd,
+  McpServerAgentFilesAllow,
+  McpServerDiscover,
+  McpServerImport,
+  McpServerProblems,
+  McpServerSessions,
+  McpServerSetAgentEnabled,
+  McpServerSetSharedProcess,
+  McpServerSetWorkspaces,
+  McpServerSignInFinish,
+  McpServerSignInFlow,
+  McpServerSignInStart,
+  McpServerSignInWait,
+  McpServerTarget,
+  McpServerUpdate,
+  McpServersList
+} from './mcp-servers-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
@@ -837,6 +861,7 @@ import {
   GitCommitAction,
   GitCommitCompare,
   GitCommitDiff,
+  GitContinueRebase,
   GitCreateBranch,
   GitDiff,
   GitDiscoverCommitMessageModels,
@@ -1243,6 +1268,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'bots.activity': BotActivityRead,
   'bots.agentChoices': null,
   'bots.avatar.read': BotAvatarRead,
+  'bots.avatar.slackIcon.upload': BotSlackIconUpload,
+  'bots.avatar.slackIcon.wanted': BotSlackIconWanted,
   'bots.avatar.upload': BotAvatarUpload,
   'bots.chat.open': BotChat,
   'bots.chat.reset': BotChatReset,
@@ -1526,6 +1553,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'computer.setValue': SetValue,
   'computer.typeText': TypeText,
   'connector.act': ConnectorAct,
+  'connector.leaveThread': ConnectorLeaveThread,
   'connector.react': ConnectorReact,
   'connector.reply': ConnectorReply,
   'connector.slackMirror.post': ConnectorSlackMirrorPost,
@@ -1626,6 +1654,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.commitDiff': GitCommitDiff,
   'git.completeMerge': WorktreeSelectorOfGitParams,
   'git.conflictOperation': WorktreeSelectorOfGitParams,
+  'git.continueRebase': GitContinueRebase,
   'git.createBranch': GitCreateBranch,
   'git.diff': GitDiff,
   'git.discard': GitFilePath,
@@ -1640,6 +1669,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.mutationInFlight': WorktreeSelectorOfGitParams,
   'git.pull': GitTargetedRemote,
   'git.push': GitPush,
+  'git.rebaseAutoStash': WorktreeSelectorOfGitParams,
   'git.rebaseFromBase': GitRebaseFromBase,
   'git.refs': GitRefs,
   'git.remoteCommitUrl': GitRemoteCommitUrl,
@@ -1878,6 +1908,27 @@ export const RPC_PARAMS_BY_METHOD = {
   'managedServer.update': ManagedServerUpdate,
   'markdown.readTab': ActivateTab,
   'markdown.saveTab': SaveMarkdownTab,
+  'mcpServers.add': McpServerAdd,
+  'mcpServers.agentFiles.allow': McpServerAgentFilesAllow,
+  'mcpServers.cancelProblems': McpServersList,
+  'mcpServers.copy': McpServerImport,
+  'mcpServers.details': McpServerTarget,
+  'mcpServers.discover': McpServerDiscover,
+  'mcpServers.list': McpServersList,
+  'mcpServers.move': McpServerImport,
+  'mcpServers.problems': McpServerProblems,
+  'mcpServers.remove': McpServerTarget,
+  'mcpServers.sessions.restart': McpServerSessions,
+  'mcpServers.sessions.stale': McpServerSessions,
+  'mcpServers.setAgentEnabled': McpServerSetAgentEnabled,
+  'mcpServers.setSharedProcess': McpServerSetSharedProcess,
+  'mcpServers.setWorkspaces': McpServerSetWorkspaces,
+  'mcpServers.signIn.cancel': McpServerSignInFlow,
+  'mcpServers.signIn.finish': McpServerSignInFinish,
+  'mcpServers.signIn.start': McpServerSignInStart,
+  'mcpServers.signIn.wait': McpServerSignInWait,
+  'mcpServers.signOut': McpServerTarget,
+  'mcpServers.update': McpServerUpdate,
   'mobileRelay.hosts.list': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
   'mobileRelay.projectSections': null,

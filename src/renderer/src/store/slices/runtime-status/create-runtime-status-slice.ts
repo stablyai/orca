@@ -149,6 +149,7 @@ export const createRuntimeStatusSlice: (
     if (retiredEnvironmentIds.length > 0) {
       evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(retiredEnvironmentIds)
       get().purgeStaleRuntimeHostState?.(retiredEnvironmentIds)
+      get().forgetAgentCliUpdateHosts?.(retiredEnvironmentIds)
       get().clearHostWorkspaceStatuses?.(retiredEnvironmentIds)
       retiredEnvironmentIds.forEach(dismissRuntimeDisconnectedToast)
     }

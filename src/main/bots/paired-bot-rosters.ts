@@ -2,14 +2,14 @@
 // server's own roster, read from it, with the `--on` that reaches it.
 import { z } from 'zod'
 import type { BotRosterEntry, BotRosterServer } from '../../shared/bot-roster'
-import { BOT_AGENTS } from '../../shared/bot-types'
+import { BotAgentReadSchema } from '../../shared/bot-types'
 
 const ROSTER_READ_TIMEOUT_MS = 4_000
 
 const PairedRosterEntry = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
-  agent: z.enum(BOT_AGENTS),
+  agent: BotAgentReadSchema,
   paused: z.boolean(),
   specialty: z.string().nullable(),
   linked: z.array(z.string())
