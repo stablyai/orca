@@ -202,7 +202,7 @@ export const noMatch = scene(['alice', 'bo', 'sam'], { query: '@alcie' })
 /** Picked people wait in the field as chips; nothing is saved until Share. */
 export const staged = scene(['alice', 'bo'], { staged: ['dana', 'alicia'] })
 
-/** After Share: an invite says it reaches them in Orca, emailed or not. */
+/** After Share: the invite is greyed out as Invited until they accept. */
 export const invited = scene(['alice', 'bo', 'sam', 'dana'])
 
 /** The invite resolved: Dana has access as her Orca account. */
@@ -218,8 +218,11 @@ export const inviteMenu = scene(['alice', 'bo', 'dana'], {
   }
 })
 
-/** Each answer: accepted, waiting to accept, an email invite, and declined. */
+/** Each answer: accepted, an account and an email invited but not in yet (greyed), and declined. */
 export const answers = scene(['alice', 'boWaiting', 'dana', 'eli'])
+
+/** One of each: has access, invited, declined. */
+export const rows = scene(['alice', 'dana', 'eli'])
 
 /** A declined person's menu: Share again and Remove. */
 export const declinedMenu = scene(['alice', 'boWaiting', 'dana', 'eli'], {

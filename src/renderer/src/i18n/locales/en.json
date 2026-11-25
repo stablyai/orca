@@ -30701,20 +30701,18 @@
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
       "you": "{{name}} (you)",
-      "hasAccess": "Has access",
-      "waitingToAccept": "Waiting to accept",
       "declined": "Declined",
       "personActions": "Actions for {{name}}",
       "shareAgain": "Share again",
       "cancel": "Cancel",
       "shareStaged": "Share",
-      "invitedInOrca": "Invited · they’ll see it in Orca",
       "discardOne": "{{name}} won’t get access.",
       "discardMany": "These people won’t get access.",
       "discard": "Discard",
       "keepEditing": "Keep editing",
       "discardTitleOne": "Discard invite?",
-      "discardTitleMany": "Discard {{count}} invites?"
+      "discardTitleMany": "Discard {{count}} invites?",
+      "invited": "Invited"
     }
   },
   "plugins": {
