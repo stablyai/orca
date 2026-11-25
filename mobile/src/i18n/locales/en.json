@@ -8538,6 +8538,7 @@
     },
     "sections": {
       "needsYou": "Needs you",
+      "failed": "Failed",
       "working": "Working",
       "done": "Done",
       "offline": "Offline",

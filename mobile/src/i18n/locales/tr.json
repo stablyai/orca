@@ -8552,6 +8552,7 @@
     },
     "sections": {
       "needsYou": "Sizi bekliyor",
+      "failed": "Başarısız",
       "working": "Çalışıyor",
       "done": "Tamamlananlar",
       "offline": "Çevrimdışı",

@@ -1,5 +1,6 @@
 import {
   AGENT_LIST_STATUS_RANK,
+  agentListStatusNeedsYou,
   type AgentListVerdict
 } from '../../../src/shared/agent-status/presentation/agent-list-status'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
@@ -16,13 +17,16 @@ import {
 import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
 
-export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
+export type AgentStatusGroup = 'needs-you' | 'failed' | 'working' | 'done' | 'idle'
 
-/** Desktop's status ranks cut into sections: everything ranked above live work needs the user. */
+/** Desktop's status ranks cut into sections; only desktop's waiting-on-you states need the user. */
 export function agentStatusGroup(state: AgentDotState): AgentStatusGroup {
+  if (agentListStatusNeedsYou(state)) {
+    return 'needs-you'
+  }
   const rank = AGENT_LIST_STATUS_RANK[state]
   if (rank < AGENT_LIST_STATUS_RANK.working) {
-    return 'needs-you'
+    return 'failed'
   }
   if (rank <= AGENT_LIST_STATUS_RANK.monitoring) {
     return 'working'

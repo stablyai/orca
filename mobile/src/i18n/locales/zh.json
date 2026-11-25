@@ -8303,6 +8303,7 @@
     },
     "sections": {
       "needsYou": "需要你处理",
+      "failed": "失败",
       "working": "工作中",
       "done": "已完成",
       "offline": "离线",

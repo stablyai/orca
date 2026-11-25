@@ -1,4 +1,7 @@
-import type { AgentListStatus as ActivityThreadStatusId } from '../../../../../shared/agent-status/presentation/agent-list-status'
+import {
+  agentListStatusNeedsYou,
+  type AgentListStatus as ActivityThreadStatusId
+} from '../../../../../shared/agent-status/presentation/agent-list-status'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { showsAgentToolPreview } from '../../../../../shared/agent-status/presentation/agent-row-tool-preview'
@@ -266,7 +269,7 @@ export function activityThreadRowCopy(
   const liveState = threadCurrentState(thread)
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
   const state = activityThreadStatusId(thread)
-  const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
+  const needsAttention = agentListStatusNeedsYou(state)
   if (
     state !== 'unverifiable' &&
     renderedPreview &&

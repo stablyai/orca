@@ -306,6 +306,7 @@ function AgentListSectionHeading(props: {
   }
   const titles: Partial<Record<AgentListSection['kind'], string>> = {
     'needs-you': t('agents.sections.needsYou', 'Needs you'),
+    failed: t('agents.sections.failed', 'Failed'),
     working: t('agents.sections.working', 'Working'),
     done: t('agents.sections.done', 'Done'),
     desktop

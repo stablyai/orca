@@ -83,6 +83,7 @@ function byUrgencyThenRecent(a: GroupDraft, b: GroupDraft): number {
 
 const STATUS_SECTIONS: readonly Exclude<AgentStatusGroup, 'idle'>[] = [
   'needs-you',
+  'failed',
   'working',
   'done'
 ]
@@ -107,7 +108,8 @@ export function buildAgentList(
     row.unread === true ||
     (row.unread === undefined && !listedAgentVerdict(row.entry.agent)) ||
     row.workers.some((worker) => worker.unread)
-  const topLevel = (host: HostAgents): AgentListRow[] => {
+  // `flat`: each agent under its own status, as desktop's Status grouping lists them.
+  const topLevel = (host: HostAgents, flat = false): AgentListRow[] => {
     if (query) {
       // A match is shown on its own; its coordinator may not match.
       return everyRow(host.roots)
@@ -125,6 +127,9 @@ export function buildAgentList(
         })
         .map(asTopLevel)
         .filter(shown)
+    }
+    if (flat) {
+      return everyRow(host.roots).map(asTopLevel).filter(shown)
     }
     // A worker that needs the user can't hide inside a folded coordinator.
     const surfaced = host.roots.flatMap((root) => root.workers.filter(rowNeedsYou).map(asTopLevel))
@@ -168,7 +173,7 @@ export function buildAgentList(
   }
 
   if (view.groupBy === 'status') {
-    const live = hosts.filter((host) => host.live).flatMap(topLevel)
+    const live = hosts.filter((host) => host.live).flatMap((host) => topLevel(host, true))
     const sections: AgentListSection[] = STATUS_SECTIONS.map((kind) =>
       section(
         { key: kind, rows: live.filter((row) => agentStatusGroup(row.dotState) === kind) },
@@ -209,7 +214,7 @@ export function buildAgentList(
     return { sections, anyLive }
   }
 
-  const rows = hosts.flatMap(topLevel)
+  const rows = hosts.flatMap((host) => topLevel(host))
   const drafts =
     view.groupBy === 'workspace'
       ? groupRows(rows, (row) => ({

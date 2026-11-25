@@ -165,7 +165,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
   const group = row.stale ? null : agentStatusGroup(row.dotState)
   const preview = agentListPreview(agent, group, title)
   const needsYou = group === 'needs-you'
-  const stateWord = needsYou ? agentStateLabel(row.dotState) : ''
+  const stateWord = needsYou || group === 'failed' ? agentStateLabel(row.dotState) : ''
   const spokenState = row.dotState === 'monitoring' ? agentStateLabel(row.dotState) : stateWord
   const place = [
     props.footer === 'agent' ? formatAgentTypeLabel(agent.agentType) : row.entry.workspaceName,
@@ -292,7 +292,13 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
               <Text style={styles.preview} numberOfLines={2}>
                 {stateWord ? (
                   <Text
-                    style={row.dotState === 'failed' ? styles.stateFailed : styles.stateNeedsYou}
+                    style={
+                      row.dotState === 'failed'
+                        ? styles.stateFailed
+                        : needsYou
+                          ? styles.stateNeedsYou
+                          : undefined
+                    }
                   >
                     {stateWord}
                   </Text>

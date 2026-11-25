@@ -8866,6 +8866,7 @@
     },
     "sections": {
       "needsYou": "Ждёт вас",
+      "failed": "Ошибка",
       "working": "Работает",
       "done": "Готово",
       "offline": "Не в сети",

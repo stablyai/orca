@@ -32,6 +32,11 @@ export const AGENT_LIST_STATUS_RANK: Record<AgentListStatus, number> = {
   idle: 10
 }
 
+/** Waiting on the user, as desktop's rows and Needs You badge mean it; Failed and Couldn't confirm are outcomes. */
+export function agentListStatusNeedsYou(status: AgentListStatus): boolean {
+  return status === 'waiting' || status === 'blocked' || status === 'permission'
+}
+
 /** How the desktop Agents list shows one agent pane; unlisted panes are not in the list at all. */
 export type AgentListVerdict =
   /** `unread`: a closed chat's finished turn not yet read, for its chat row. */
