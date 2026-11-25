@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
@@ -25,11 +25,8 @@ export function hasDefaultFolderWorkspaceName(name: string, groupName: string): 
 function TitledByAgent({ agent, ...card }: CardProps & { agent: DashboardAgentRow }) {
   const conversationName = useAgentRowConversationNaming(agent).name
   const topic = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  const worktree = useMemo(
-    () => (topic ? { ...card.worktree, displayName: topic } : card.worktree),
-    [card.worktree, topic]
-  )
-  return <WorktreeCard {...card} worktree={worktree} />
+  // Display only: rename still starts from, and saves over, the session's real name.
+  return <WorktreeCard {...card} titleOverride={topic || undefined} />
 }
 
 function FirstAgentTitled({ paneKey, ...card }: CardProps & { paneKey: string }) {

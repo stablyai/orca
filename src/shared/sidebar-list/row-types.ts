@@ -145,6 +145,8 @@ export type ProjectChatsRow = {
       repo: Repo
       /** This host's main checkout (a folder project's folder); null until it loads, when "+ chat" creates a workspace instead. */
       mainWorktree: Worktree | null
+      /** Chats only: the main checkouts it lists, one per host copy an all-hosts header covers. */
+      chatSources?: readonly Worktree[]
       /** The header's rows all sit on its repo's host, so "+ worktree" may pin that host. */
       pinHost: boolean
     }

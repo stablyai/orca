@@ -24,14 +24,21 @@ export function useExpandActiveProject(
   // changes rerun the effect but stop here while the project stays the same.
   const previousRepoIdRef = useRef(activeRepoId)
   useEffect(() => {
-    const previousRepoId = previousRepoIdRef.current
-    previousRepoIdRef.current = activeRepoId
-    if (!activeRepoId || activeRepoId === previousRepoId) {
+    if (!activeRepoId) {
+      previousRepoIdRef.current = null
+      return
+    }
+    if (activeRepoId === previousRepoIdRef.current) {
       return
     }
     const section = sections.find((candidate) => candidate.group.repoIds.has(activeRepoId))
+    if (!section) {
+      // The switch stays pending until the project's section is listed (a filter may hide it).
+      return
+    }
+    previousRepoIdRef.current = activeRepoId
     const keys = new Set<string>()
-    for (let path = section?.revealPath; path; path = path.parent) {
+    for (let path = section.revealPath; path; path = path.parent) {
       keys.add(path.key)
     }
     const { collapsedGroups, setCollapsedGroups } = useAppStore.getState()

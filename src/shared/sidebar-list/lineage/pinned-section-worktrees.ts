@@ -30,7 +30,8 @@ export function getSidebarLineageChildren(
   filterRepoIds: readonly string[] = [],
   lineageParentIdentities?: SidebarLineageParentIdentities,
   folderRows: readonly Worktree[] = [],
-  nestAcrossProjects = true
+  /** Tree style: which children may still nest under another project's row; omitted, all may. */
+  nestsAcrossProjects?: (child: Worktree) => boolean
 ): Map<string, Worktree[]> {
   const rowsByIdentity = getSidebarLineageRowsByIdentity(
     worktrees,
@@ -50,7 +51,8 @@ export function getSidebarLineageChildren(
     if (
       !parent ||
       // A group's folder workspace spans its projects, so it still nests any of theirs.
-      (!nestAcrossProjects &&
+      (nestsAcrossProjects &&
+        !nestsAcrossProjects(child) &&
         parent.repoId !== child.repoId &&
         !projectGroupIdFromRepoId(parent.repoId)) ||
       (allowedRepoIds &&

@@ -18,7 +18,7 @@ import { selectWorktreeActivityStatus } from '../../workspace-card/activity/use-
 import { useAgentPresentation } from '../../workspace-card/activity/useWorktreeAgentRows'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
-import { isProjectHome, mainCheckoutOf } from '../listing/project-chat-rows'
+import { headerHostId, isProjectHome, mainCheckoutOf } from '../listing/project-chat-rows'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
@@ -104,7 +104,9 @@ export const ProjectChatHeaderButton = React.memo(function ProjectChatHeaderButt
   hostId: ExecutionHostId | undefined
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const main = useAppStore((s) => mainCheckoutOf(repo, selectWorktreesByRepo(s), hostId))
+  const main = useAppStore((s) =>
+    mainCheckoutOf(repo, selectWorktreesByRepo(s), headerHostId(hostId, repo))
+  )
   if (!main) {
     return null
   }

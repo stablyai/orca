@@ -32,11 +32,14 @@ export function startProjectChat(main: Pick<Worktree, 'id' | 'hostId'>): void {
     keybindings: useAppStore.getState().keybindings,
     matchShortcut: (actionId) => actionId === 'tab.newAgent'
   })
-  launchAgentTabShortcut(
-    mainWorktreeId,
-    resolved,
-    () => useAppStore.getState().activeWorktreeId === mainWorktreeId
-  )
+  // The host matters too: switching to another host's copy (same id) must cancel a pending launch.
+  launchAgentTabShortcut(mainWorktreeId, resolved, () => {
+    const state = useAppStore.getState()
+    return (
+      state.activeWorktreeId === mainWorktreeId &&
+      (state.activeWorkspaceExecutionHostId ?? null) === (main.hostId ?? null)
+    )
+  })
   // A native chat spawns no PTY, so starting one would not otherwise rank the project as recent.
   useAppStore.getState().bumpWorktreeActivity(mainWorktreeId)
 }

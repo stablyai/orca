@@ -10,6 +10,7 @@ import type { ProjectGroup } from '../../../../../../shared/project/groups/proje
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import type { ProjectChatsRow } from '../../../../../../shared/sidebar-list/row-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { getTreeLane } from './project-frame'
 import { startGroupChat, startProjectChat } from './start-chat'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
@@ -92,26 +93,32 @@ function ProjectActions({
   )
 }
 
-function ChatsList({ mainWorktree }: { mainWorktree: Worktree }): React.JSX.Element {
-  const t = useTranslate()
+function SourceChats({ mainWorktree }: { mainWorktree: Worktree }): React.JSX.Element | null {
   const allRoots = useAgentPresentation(
     `roots\0${mainWorktree.id}`,
     useCallback((p) => p.display.roots(mainWorktree.id), [mainWorktree.id])
   )
   const roots = useHostRootKeys(mainWorktree.id, mainWorktree.hostId, allRoots)
+  return roots.length > 0 ? (
+    // Agent rows inset their glyph 4px; pulling back keeps it on the lane.
+    <div className="-ms-1">
+      <WorktreeCardAgents
+        worktreeId={mainWorktree.id}
+        executionHostId={mainWorktree.hostId}
+        expandAll
+      />
+    </div>
+  ) : null
+}
+
+function ChatsList({ sources }: { sources: readonly Worktree[] }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <SectionLabel label={t('components.sidebar.projectChats.title', 'Chats')} />
-      {roots.length > 0 ? (
-        // Agent rows inset their glyph 4px; pulling back keeps it on the lane.
-        <div className="-ms-1">
-          <WorktreeCardAgents
-            worktreeId={mainWorktree.id}
-            executionHostId={mainWorktree.hostId}
-            expandAll
-          />
-        </div>
-      ) : null}
+      {sources.map((source) => (
+        <SourceChats key={getWorktreeHostIdentity(source)} mainWorktree={source} />
+      ))}
     </>
   )
 }
@@ -138,8 +145,8 @@ export const ProjectChatsLine = React.memo(function ProjectChatsLine({
       style={{ paddingInlineStart: lane.glyph, paddingInlineEnd: lane.right }}
       data-project-chats={row.section === 'chats' ? row.repo.id : undefined}
     >
-      {row.section === 'chats' && row.mainWorktree ? (
-        <ChatsList mainWorktree={row.mainWorktree} />
+      {row.section === 'chats' ? (
+        <ChatsList sources={row.chatSources ?? []} />
       ) : row.section === 'worktrees' ? (
         <SectionLabel label={t('components.sidebar.projectChats.worktrees', 'Worktrees')} />
       ) : row.section === 'actions' ? (

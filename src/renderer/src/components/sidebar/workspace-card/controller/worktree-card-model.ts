@@ -35,6 +35,8 @@ export type WorktreeCardProps = {
   compactLine?: boolean
   /** A compact line that still ends with its status and time, like a sidebar row (bot lines leave it off). */
   lineTime?: boolean
+  /** Shown in place of the name, which rename still starts from (a default-named session shows its chat's topic). */
+  titleOverride?: string
   /** A line under a bot: the bot's computer. A line on another paired server names that server. */
   lineOwnerHostId?: ExecutionHostId
   /** A line under a bot's chat: a muted note after its name, such as "handed over". */

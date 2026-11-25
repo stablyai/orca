@@ -13,7 +13,8 @@ import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
-  LOCAL_EXECUTION_HOST_ID,
+  getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host/execution-host'
 import { isProjectTreeOn } from '../../../../../../shared/sidebar-list/project-tree-settings'
@@ -53,7 +54,8 @@ type ProjectChatRowsArgs = {
 /** The viewport's rows: the plan's, plus the Tree card style's section lines. */
 export function useProjectTreeRows(
   rows: HostSectionRow[],
-  { groupBy, collapsedGroups }: Pick<ProjectChatRowsArgs, 'groupBy' | 'collapsedGroups'>
+  groupBy: WorktreeGroupBy,
+  collapsedGroups: ReadonlySet<string>
 ): HostSectionRow[] {
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const enabled = useAppStore((s) => isProjectTreeOn(s.settings))
@@ -61,7 +63,7 @@ export function useProjectTreeRows(
     () =>
       rows.flatMap((row) =>
         row.type === 'header' && row.repo
-          ? (mainCheckoutOf(row.repo, worktreesByRepo, row.hostId)?.id ?? [])
+          ? headerMainCheckouts(row, row.repo, worktreesByRepo).map((home) => home.id)
           : []
       ),
     [rows, worktreesByRepo]
@@ -85,13 +87,29 @@ export function isProjectHome(worktree: Worktree): boolean {
 export function mainCheckoutOf(
   repo: Repo,
   worktreesByRepo: ProjectChatRowsArgs['worktreesByRepo'],
-  hostId: ExecutionHostId | undefined
+  hostId: ExecutionHostId
 ): Worktree | undefined {
   return worktreesByRepo[repo.id]?.find(
-    (worktree) =>
-      isProjectHome(worktree) &&
-      (hostId === undefined || (worktree.hostId ?? LOCAL_EXECUTION_HOST_ID) === hostId)
+    (worktree) => isProjectHome(worktree) && getWorktreeExecutionHostId(worktree, repo) === hostId
   )
+}
+
+/** A project header's host: its host section's, else its own registration's (an all-hosts header's anchor). */
+export function headerHostId(hostId: ExecutionHostId | undefined, repo: Repo): ExecutionHostId {
+  return hostId ?? getRepoExecutionHostId(repo)
+}
+
+/** The main checkouts a header's Chats stand for: one per host copy an unsplit all-hosts header covers. */
+function headerMainCheckouts(
+  row: GroupHeaderRow,
+  repo: Repo,
+  worktreesByRepo: ProjectChatRowsArgs['worktreesByRepo']
+): Worktree[] {
+  const copies: [ExecutionHostId, Repo][] =
+    row.hostId === undefined && row.hostRepos
+      ? [...row.hostRepos]
+      : [[headerHostId(row.hostId, repo), repo]]
+  return copies.flatMap(([hostId, copy]) => mainCheckoutOf(copy, worktreesByRepo, hostId) ?? [])
 }
 
 function isOpen(row: GroupHeaderRow, collapsedGroups: ReadonlySet<string>): boolean {
@@ -150,7 +168,8 @@ export function withProjectChatRows(
       return
     }
     const repo = row.repo
-    const main = mainCheckoutOf(repo, worktreesByRepo, row.hostId) ?? null
+    // "+ chat" starts on the header's host, like "+ worktree".
+    const main = mainCheckoutOf(repo, worktreesByRepo, headerHostId(row.hostId, repo)) ?? null
     const base = {
       type: 'project-chats' as const,
       key: `${row.hostId ?? ''}:${row.key}`,
@@ -159,13 +178,14 @@ export function withProjectChatRows(
       groupDepth,
       pinHost: isSingleHostProjectHeader(row)
     }
-    // A visible main checkout card already lists its agents; an empty Chats section shows nothing.
-    const chatsShown =
-      main !== null &&
-      !renderedIds.has(getWorktreeHostIdentity(main)) &&
-      mainsWithChats.has(main.id)
+    // Listing a hidden main checkout's chats is the point of Tree: "Hide default branch" hides the
+    // checkout's row, not its chats. A visible one's card already lists them; empty sections hide.
+    const chatSources = headerMainCheckouts(row, repo, worktreesByRepo).filter(
+      (home) => !renderedIds.has(getWorktreeHostIdentity(home)) && mainsWithChats.has(home.id)
+    )
+    const chatsShown = chatSources.length > 0
     if (chatsShown) {
-      out.push({ ...base, section: 'chats' })
+      out.push({ ...base, section: 'chats', chatSources })
     }
     worktreesLabel =
       chatsShown && isGitRepoKind(repo)
