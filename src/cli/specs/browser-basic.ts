@@ -1,6 +1,6 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
-import { withBrowserPageTarget } from './browser-page-target'
+import { OPEN_URL_COMMAND_SPEC, withBrowserPageTarget } from './browser-page-target'
 import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser/automation/browser-wait-timeout'
 
 export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
@@ -18,13 +18,7 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     allowedFlags: [...GLOBAL_FLAGS, 'mode', 'reset'],
     notes: ["Pages a paired desktop renders for this host use that desktop's identity."]
   },
-  {
-    path: ['open-url'],
-    summary: 'Open a URL on the paired client that hosts this terminal',
-    usage: 'orca open-url --url <url> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree'],
-    notes: ['`orca <http(s) url>` is shorthand, so headless terminals can use orca as BROWSER.']
-  },
+  OPEN_URL_COMMAND_SPEC,
   {
     path: ['snapshot'],
     summary: 'Capture an accessibility snapshot of the active browser tab',

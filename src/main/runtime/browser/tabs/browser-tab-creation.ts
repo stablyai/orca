@@ -14,9 +14,9 @@ import type { RuntimeBrowserCommandHost } from '../commands/browser-command-cont
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
 import {
   createBrowserClientPage,
-  createBrowserPageOnPairedHost,
-  openBrowserUrlOnClient
+  createBrowserPageOnPairedHost
 } from '../client-pages/browser-client-page-opening'
+import { openUrlForMobileOrClient } from './mobile-terminal-browser-open'
 import { opensOnPairedDesktop } from '../client-pages/server-agent-tab-placement'
 
 type BrowserTabCreateRequest = {
@@ -56,6 +56,8 @@ export class RuntimeBrowserTabCreation {
       | 'getAuthoritativeWindowId'
       | 'markHeadlessBrowserSessionTabActive'
       | 'notifyHeadlessBrowserSessionTabsChanged'
+      | 'hasMobileTerminalViewer'
+      | 'followBrowserTabOnMobile'
       | 'serveBrowserTabs'
     >,
     private readonly targets: Pick<
@@ -229,9 +231,17 @@ export class RuntimeBrowserTabCreation {
     params: {
       url: string
       worktree: string
+      paneKey?: string
+      onlyWhenMobileViewing?: boolean
     },
     options?: { signal?: AbortSignal }
-  ): Promise<{ browserPageId: string }> {
-    return openBrowserUrlOnClient(this.host, params, options?.signal)
+  ): Promise<{ browserPageId: string | null }> {
+    return openUrlForMobileOrClient({
+      host: this.host,
+      params,
+      canCreateServerTab: true,
+      signal: options?.signal,
+      createServerTab: (tabParams, caller) => this.browserTabCreate(tabParams, caller)
+    })
   }
 }

@@ -78,6 +78,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     browserPageId: string,
     options: BrowserSessionTabSelectionOptions
   ): Promise<void>
+  protected abstract hasMobileTerminalViewerForPane(paneKey: string): boolean
+  protected abstract followBrowserTabOnMobile(worktreeId: string, pageId: string): Promise<void>
   abstract notifyMobileSessionTabsChanged(worktreeId?: string): void
   protected abstract getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId
   protected abstract setWorkspaceSessionForWorktree(
@@ -212,6 +214,8 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
         readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) =>
           ownsBrowserTabBarWorkspace(this.store, id)
         ),
+      hasMobileTerminalViewer: this.hasMobileTerminalViewerForPane.bind(this),
+      followBrowserTabOnMobile: this.followBrowserTabOnMobile.bind(this),
       retireRuntimeOwnedBrowserSessionTab: (worktreeId, browserPageId) =>
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId),
       serveBrowserTabs: this.serveBrowserTabs

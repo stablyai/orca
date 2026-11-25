@@ -5,6 +5,12 @@ export const ORCA_CLI_POSIX_PATH_RESTORE = `if [ -n "\${ORCA_CLI_BIN_DIR:-}" ]; 
     *) export PATH="$ORCA_CLI_BIN_DIR\${PATH:+:$PATH}" ;;
   esac
 fi
+if [ -n "\${ORCA_OPEN_SHIM_DIR:-}" ]; then
+  case "\${PATH:-}" in
+    "$ORCA_OPEN_SHIM_DIR"|"$ORCA_OPEN_SHIM_DIR":*) ;;
+    *) export PATH="$ORCA_OPEN_SHIM_DIR\${PATH:+:$PATH}" ;;
+  esac
+fi
 if [ -n "\${ORCA_MANAGED_AGENT_PATH:-}" ]; then
   case ":\${PATH:-}:" in
     *":$ORCA_MANAGED_AGENT_PATH:"*) ;;

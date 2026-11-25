@@ -24,5 +24,7 @@ export const BrowserTabCreateParams = z.object({
 
 export const BrowserOpenUrlParams = z.object({
   url: z.url(),
-  worktree: z.string().min(1)
+  worktree: z.string().min(1),
+  paneKey: OptionalString,
+  onlyWhenMobileViewing: z.boolean().optional()
 })

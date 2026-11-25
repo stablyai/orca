@@ -18,9 +18,9 @@ import {
   createBrowserClientPage,
   createBrowserPageOnPairedHost,
   DEFAULT_BROWSER_PROFILE_ID,
-  hasPairedPageHost,
-  openBrowserUrlOnClient
+  hasPairedPageHost
 } from '../../runtime/browser/client-pages/browser-client-page-opening'
+import { openUrlForMobileOrClient } from '../../runtime/browser/tabs/mobile-terminal-browser-open'
 import {
   opensOnPairedDesktop,
   pairedDesktopTabMismatch
@@ -83,8 +83,15 @@ export function orcadClientPageCommand(
       engineAvailable() ? engineTabs(forward) : null
     )
   if (name === 'browserOpenUrlOnClient') {
-    return (...args: Parameters<RuntimeBrowserCommands['browserOpenUrlOnClient']>) =>
-      openBrowserUrlOnClient(host, args[0], args[1]?.signal)
+    return (...[params, opts]: Parameters<RuntimeBrowserCommands['browserOpenUrlOnClient']>) =>
+      openUrlForMobileOrClient({
+        host,
+        params,
+        canCreateServerTab: engineAvailable(),
+        signal: opts?.signal,
+        createServerTab: async (...tabArgs) =>
+          requireCreatedPage(await createTab(host, tabArgs, forward, engineAvailable))
+      })
   }
   if (name === 'browserTabCreate') {
     return (...args: Parameters<RuntimeBrowserCommands['browserTabCreate']>) =>

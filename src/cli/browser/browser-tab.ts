@@ -23,13 +23,29 @@ import { getBrowserCommandTarget, getScopedBrowserWorktreeSelector } from './bro
 export const BROWSER_TAB_HANDLERS: Record<string, CommandHandler> = {
   'open-url': async ({ flags, client, cwd, json }) => {
     const url = getRequiredStringFlag(flags, 'url')
-    const worktree = await getScopedBrowserWorktreeSelector(flags, cwd, client)
-    const result = await client.call<{ browserPageId: string }>(
+    const worktree =
+      (await getScopedBrowserWorktreeSelector(flags, cwd, client)) ??
+      (process.env.ORCA_WORKTREE_ID ? `id:${process.env.ORCA_WORKTREE_ID}` : undefined)
+    const paneKey = process.env.ORCA_PANE_KEY || undefined
+    const onlyWhenMobileViewing = flags.has('if-mobile-viewing')
+    const result = await client.call<{ browserPageId: string | null }>(
       'browser.openUrl',
-      { url, worktree },
+      {
+        url,
+        worktree,
+        ...(paneKey ? { paneKey } : {}),
+        ...(onlyWhenMobileViewing ? { onlyWhenMobileViewing: true } : {})
+      },
       { timeoutMs: 60_000 }
     )
-    printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
+    if (onlyWhenMobileViewing && !result.result.browserPageId) {
+      // Signal caller shims (e.g. macOS open) to fall through to the host's default browser.
+      process.exitCode = 2
+      return
+    }
+    if (!flags.has('quiet')) {
+      printResult(result, json, (v) => `Opened URL in tab ${v.browserPageId}`)
+    }
   },
   'tab list': async ({ flags, client, cwd, json }) => {
     const worktree = await getBrowserWorktreeSelector(flags, cwd, client)
