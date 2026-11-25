@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { act } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import type { ConnectorLink } from '../../../../../../shared/connectors/connector-links-contract'
 import { toRuntimeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { LinkedAccountsSettings } from './LinkedAccountsSettings'
@@ -85,9 +85,9 @@ function serve(): { method: string; params: unknown }[] {
 
 function show(): void {
   render(
-    <ConfirmationDialogProvider>
+    <TooltipProvider>
       <LinkedAccountsSettings hostId={SERVER} hostName="Lab server" />
-    </ConfirmationDialogProvider>
+    </TooltipProvider>
   )
 }
 
@@ -104,8 +104,8 @@ describe('Linked accounts', () => {
   it("lists a paired server's links, several per service", async () => {
     serve()
     show()
-    expect(await screen.findByText('Northwind')).toBeTruthy()
-    expect(screen.getByText('Acme Partners')).toBeTruthy()
+    expect(await screen.findByText('Slack · Northwind')).toBeTruthy()
+    expect(screen.getByText('Slack · Acme Partners')).toBeTruthy()
     expect(screen.getByText('mara-lin')).toBeTruthy()
     expect(screen.getAllByRole('button', { name: 'Unlink' })).toHaveLength(3)
   })
@@ -113,7 +113,7 @@ describe('Linked accounts', () => {
   it('unlinks one link only after the confirm', async () => {
     const asked = serve()
     show()
-    await screen.findByText('Acme Partners')
+    await screen.findByText('Slack · Acme Partners')
     fireEvent.click(screen.getAllByRole('button', { name: 'Unlink' })[1]!)
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Unlink mara in Acme Partners?')).toBeTruthy()
@@ -127,14 +127,19 @@ describe('Linked accounts', () => {
     )
   })
 
-  it('offers Slack Link until a cloud without Sign in with Slack answers', async () => {
+  it('offers Slack in the Link account menu until a cloud without Sign in with Slack answers', async () => {
     serve()
     show()
-    await screen.findByText('Northwind')
-    expect(screen.getAllByRole('button', { name: /Link another/ })).toHaveLength(2)
-    fireEvent.click(screen.getAllByRole('button', { name: /Link another/ })[0]!)
+    await screen.findByText('Slack · Northwind')
+    const menuItems = async (): Promise<string[]> => {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Link account' }), { key: 'Enter' })
+      const items = await screen.findAllByRole('menuitem')
+      return items.map((item) => item.textContent ?? '')
+    }
+    expect(await menuItems()).toEqual(['SlackAnother account', 'GitHubAnother account', 'Linear'])
+    fireEvent.click(screen.getByRole('menuitem', { name: /Slack/ }))
     expect(await screen.findByText('Linking Slack isn’t available yet.')).toBeTruthy()
-    // GitHub still offers its Link; Slack no longer does.
-    expect(screen.getAllByRole('button', { name: /Link another/ })).toHaveLength(1)
+    // GitHub and Linear still offer a link; Slack no longer does.
+    expect(await menuItems()).toEqual(['GitHubAnother account', 'Linear'])
   })
 })

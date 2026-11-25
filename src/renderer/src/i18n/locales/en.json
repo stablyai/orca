@@ -2035,7 +2035,8 @@
     },
     "linkedAccounts": {
       "unlink": "Unlink",
-      "linkAnother": "Link another",
+      "linkAccount": "Link account",
+      "anotherAccount": "Another account",
       "link": "Link",
       "waiting": "Waiting for {{service}}…",
       "cancel": "Cancel",

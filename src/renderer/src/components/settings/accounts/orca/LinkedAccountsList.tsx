@@ -1,7 +1,17 @@
 // Settings › Orca Account › Linked accounts: the Slack, GitHub and Linear people linked to the account,
 // several per service. Presentational; LinkedAccountsSettings feeds it the host's state.
-import { Loader2, Plus, UserRound } from 'lucide-react'
+import { useState, type ComponentType } from 'react'
+import { Loader2, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { SettingsSubsectionHeader } from '@/components/settings/form-controls/SettingsFormControls'
 import { BOT_CONNECTORS } from '@/components/bots/bot-connectors'
@@ -15,33 +25,97 @@ import {
  *  host's cloud has no sign-in for the service. */
 export type LinkedAccountsTrip = { waiting: boolean; error: string | null; canLink: boolean } | null
 
-function LinkedAccountRow({
+type Trips = Readonly<Record<ConnectorLinkSource, LinkedAccountsTrip>>
+
+const ROW = 'group flex h-10 items-center gap-3 rounded-md px-2.5'
+const ROW_HOVER =
+  'hover:bg-accent/50 focus-within:bg-accent/50 has-[[data-state=open]]:bg-accent/50'
+// Kept focusable while hidden so keyboard users reach it; focus inside the row reveals it.
+const REVEAL =
+  'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100'
+
+function connectorOf(source: ConnectorLinkSource): {
+  label: string
+  Icon: ComponentType<{ className?: string }> | undefined
+} {
+  const connector = BOT_CONNECTORS.find((entry) => entry.id === source)
+  return { label: connector?.label ?? source, Icon: connector?.Icon }
+}
+
+function canStartLink(trip: LinkedAccountsTrip): boolean {
+  return Boolean(trip?.canLink && !trip.waiting)
+}
+
+function UnlinkButton({
   link,
+  label,
   onUnlink
 }: {
   link: ConnectorLink
+  label: string
   onUnlink: (link: ConnectorLink) => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [open, setOpen] = useState(false)
+  const name = link.name || link.userId
   return (
-    <div className="flex items-center gap-3 py-1.5 pl-9">
-      <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <UserRound className="size-3.5" aria-hidden />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm">{link.name || link.userId}</p>
-        {link.workspaceName ? (
-          <p className="truncate text-xs text-muted-foreground">{link.workspaceName}</p>
-        ) : null}
-      </div>
-      <Button size="sm" variant="outline" onClick={() => onUnlink(link)}>
-        {t('settings.linkedAccounts.unlink', 'Unlink')}
-      </Button>
-    </div>
+    <Popover open={open} onOpenChange={setOpen}>
+      <span className={REVEAL}>
+        <PopoverTrigger asChild>
+          <Button size="sm" variant="muted-field-icon">
+            {t('settings.linkedAccounts.unlink', 'Unlink')}
+          </Button>
+        </PopoverTrigger>
+      </span>
+      <PopoverContent align="end" className="w-72">
+        <div className="space-y-3 p-3.5">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {link.workspaceName
+                ? t('settings.linkedAccounts.unlinkTitleIn', 'Unlink {{name}} in {{workspace}}?', {
+                    name,
+                    workspace: link.workspaceName
+                  })
+                : t('settings.linkedAccounts.unlinkTitle', 'Unlink {{name}} on {{service}}?', {
+                    name,
+                    service: label
+                  })}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {link.workspaceName
+                ? t(
+                    'settings.linkedAccounts.unlinkNoteWorkspace',
+                    'Bots shared with you won’t know it’s you in that workspace.'
+                  )
+                : t(
+                    'settings.linkedAccounts.unlinkNote',
+                    'Bots shared with you won’t know it’s you on {{service}}.',
+                    { service: label }
+                  )}
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>
+              {t('settings.linkedAccounts.cancel', 'Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                setOpen(false)
+                onUnlink(link)
+              }}
+            >
+              {t('settings.linkedAccounts.unlink', 'Unlink')}
+            </Button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }
 
-function LinkedAccountsGroup({
+function LinkedAccountsSourceRows({
   source,
   links,
   trip,
@@ -57,55 +131,111 @@ function LinkedAccountsGroup({
   onUnlink: (link: ConnectorLink) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const connector = BOT_CONNECTORS.find((entry) => entry.id === source)
-  const label = connector?.label ?? source
-  const Icon = connector?.Icon
+  const { label, Icon } = connectorOf(source)
+  const glyph = Icon ? <Icon className="size-3.5 shrink-0" /> : <span className="size-3.5" />
   return (
-    <div className="space-y-1 px-4 py-3">
-      <div className="flex min-h-8 items-center gap-3">
-        <div className="flex size-6 shrink-0 items-center justify-center rounded-md border border-border">
-          {Icon ? <Icon className="size-3.5" /> : null}
-        </div>
-        <p className="min-w-0 flex-1 truncate text-sm font-medium">{label}</p>
-        {trip?.canLink && !trip.waiting ? (
-          <Button size="sm" variant="outline" onClick={() => onLink(source)}>
-            <Plus />
-            {links.length > 0
-              ? t('settings.linkedAccounts.linkAnother', 'Link another')
-              : t('settings.linkedAccounts.link', 'Link')}
-          </Button>
-        ) : null}
-      </div>
+    <>
       {links.map((link) => (
-        <LinkedAccountRow
-          key={`${link.workspaceId}\0${link.userId}`}
-          link={link}
-          onUnlink={onUnlink}
-        />
+        <div key={`${link.workspaceId}\0${link.userId}`} className={cn(ROW, ROW_HOVER)}>
+          {glyph}
+          <div className="flex min-w-0 flex-1 items-baseline gap-2">
+            <p className="truncate text-sm">{link.name || link.userId}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {link.workspaceName ? `${label} · ${link.workspaceName}` : label}
+            </p>
+          </div>
+          <UnlinkButton link={link} label={label} onUnlink={onUnlink} />
+        </div>
       ))}
       {trip?.waiting ? (
-        <div className="flex items-center gap-3 py-1.5 pl-9">
-          <div className="flex size-6 shrink-0 items-center justify-center">
-            <Loader2 className="size-4 animate-spin text-muted-foreground" aria-hidden />
-          </div>
+        <div className={ROW}>
+          <Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" aria-hidden />
           <p className="min-w-0 flex-1 truncate text-sm">
             {t('settings.linkedAccounts.waiting', 'Waiting for {{service}}…', { service: label })}
           </p>
-          <Button size="sm" variant="outline" onClick={() => onCancel(source)}>
+          <Button size="sm" variant="muted-field-icon" onClick={() => onCancel(source)}>
             {t('settings.linkedAccounts.cancel', 'Cancel')}
           </Button>
         </div>
       ) : links.length === 0 ? (
-        <p className="py-1 pl-9 text-xs text-muted-foreground">
-          {t('settings.linkedAccounts.none', 'Not linked')}
-        </p>
+        <div className={cn(ROW, canStartLink(trip) && ROW_HOVER)}>
+          {glyph}
+          <p className="min-w-0 flex-1 truncate text-sm">{label}</p>
+          {/* "Not linked" and Link share one cell, so hover swaps them in place. */}
+          <div className="grid items-center justify-items-end">
+            <p
+              className={cn(
+                'col-start-1 row-start-1 pr-3 text-xs text-muted-foreground',
+                canStartLink(trip) && 'group-hover:invisible group-focus-within:invisible'
+              )}
+            >
+              {t('settings.linkedAccounts.none', 'Not linked')}
+            </p>
+            {canStartLink(trip) ? (
+              <span className={cn('col-start-1 row-start-1', REVEAL)}>
+                <Button size="sm" variant="muted-field-icon" onClick={() => onLink(source)}>
+                  {t('settings.linkedAccounts.link', 'Link')}
+                </Button>
+              </span>
+            ) : null}
+          </div>
+        </div>
       ) : null}
       {trip?.error ? (
-        <p role="alert" className="pl-9 text-xs text-destructive">
+        <p role="alert" className="px-2.5 pb-1 pl-9 text-xs text-destructive">
           {trip.error}
         </p>
       ) : null}
-    </div>
+    </>
+  )
+}
+
+function LinkAccountMenu({
+  links,
+  trips,
+  onLink
+}: {
+  links: readonly ConnectorLink[]
+  trips: Trips
+  onLink: (source: ConnectorLinkSource) => void
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const sources = CONNECTOR_LINK_SOURCES.filter((source) => canStartLink(trips[source]))
+  if (sources.length === 0) {
+    return null
+  }
+  const label = t('settings.linkedAccounts.linkAccount', 'Link account')
+  return (
+    <DropdownMenu modal={false}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button variant="muted-field-icon" size="icon-xs" aria-label={label} className="mr-2">
+              <Plus className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent side="top" sideOffset={4}>
+          {label}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" className="min-w-52">
+        {sources.map((source) => {
+          const { label: service, Icon } = connectorOf(source)
+          return (
+            <DropdownMenuItem key={source} onSelect={() => onLink(source)}>
+              {Icon ? <Icon className="size-3.5" /> : null}
+              <span className="flex-1">{service}</span>
+              {links.some((link) => link.source === source) ? (
+                <span className="text-xs text-muted-foreground">
+                  {t('settings.linkedAccounts.anotherAccount', 'Another account')}
+                </span>
+              ) : null}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -117,18 +247,22 @@ export function LinkedAccountsList({
   onUnlink
 }: {
   links: readonly ConnectorLink[]
-  trips: Readonly<Record<ConnectorLinkSource, LinkedAccountsTrip>>
+  trips: Trips
   onLink: (source: ConnectorLinkSource) => void
   onCancel: (source: ConnectorLinkSource) => void
   onUnlink: (link: ConnectorLink) => void
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <section className="space-y-3">
-      <SettingsSubsectionHeader title={t('settings.linkedAccounts.title', 'Linked accounts')} />
-      <div className="divide-y divide-border rounded-lg border border-border">
+    <section className="space-y-2">
+      <SettingsSubsectionHeader
+        className="items-center"
+        title={t('settings.linkedAccounts.title', 'Linked accounts')}
+        action={<LinkAccountMenu links={links} trips={trips} onLink={onLink} />}
+      />
+      <div className="-mx-2.5">
         {CONNECTOR_LINK_SOURCES.map((source) => (
-          <LinkedAccountsGroup
+          <LinkedAccountsSourceRows
             key={source}
             source={source}
             links={links.filter((link) => link.source === source)}
