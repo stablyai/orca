@@ -1,5 +1,6 @@
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { CodexTurnOrdinals } from '../journal/codex-turn-ordinals'
+import { codexRelayContinuedItemId } from '../../app-server/codex-relay-item-continuation'
 
 // Count only messages: resumed history can omit other items and renumber provider IDs.
 const CODEX_MESSAGE_ITEM_TYPES = new Set(['userMessage', 'agentMessage'])
@@ -34,6 +35,11 @@ export function codexItemIdentity(input: {
 }): AgentJournalItemIdentity {
   const { item, turnId } = input
   if (turnId && isCodexMessageItemType(item.type)) {
+    // A kept message still streaming isn't in Codex's history: its number comes before its continuation's.
+    const continued = codexRelayContinuedItemId(item.id)
+    if (continued) {
+      input.ordinals.ordinalFor(input.threadId, turnId, continued)
+    }
     return {
       provider: 'codex',
       threadId: input.threadId,

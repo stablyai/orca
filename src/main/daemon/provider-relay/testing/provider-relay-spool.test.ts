@@ -293,37 +293,39 @@ describe('provider relay spool', () => {
     await spool.dispose()
   })
 
-  it('names the held lines it dropped at the file cap, and a later attach replays only what is left', async () => {
+  it('keeps a held replay past the file cap up to its held cap, then names what it dropped, and a later attach replays only what is left', async () => {
+    const path = join(dir, 'r.ndjson')
     const delivered: number[] = []
     const spool = new ProviderRelaySpool({
-      path: join(dir, 'r.ndjson'),
+      path,
       deliver: (record) => delivered.push(record.seq),
       onPressureChanged: () => {},
-      // The kept span outgrows memory first, so it moves to the file, which has the cap.
+      // The kept span outgrows memory first, so it moves to the file, which has the caps.
       memoryCapBytes: 1024,
+      // A held keep goes to 4 times the file cap.
       fileCapBytes: 2048
     })
     await spool.attach(0)
     spool.append('{"method":"item/started"}')
     spool.ack(1, 1, true)
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 30; i++) {
       spool.append('x'.repeat(100))
     }
-    spool.ack(11, 1, true)
-    // Under the cap, nothing kept is dropped.
-    expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([0, 0])
-    for (let i = 0; i < 20; i++) {
-      spool.append('x'.repeat(100))
-    }
-    // Once its writes start, the kept span alone holds the agent paused at the cap, so the
-    // client's own acks release it.
     spool.ack(31, 1, true)
+    await vi.waitFor(() => expect(statSync(path).size).toBeGreaterThan(2048))
+    // Past the file cap but under the held cap: a reopening chat's unsaved lines are all kept.
+    expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([0, 0])
+    for (let i = 0; i < 30; i++) {
+      spool.append('x'.repeat(100))
+    }
+    // Past the held cap, the kept span alone holds the agent paused, so what the client already
+    // took is released, as a cut it can name; the lines after it stay kept.
     await vi.waitFor(() => expect([spool.ackedSeq, spool.truncatedThrough]).toEqual([31, 31]))
     spool.append('after')
     await spool.detach()
     delivered.length = 0
     await spool.attach(0)
-    expect(delivered).toEqual([32])
+    expect(delivered).toEqual(Array.from({ length: 31 }, (_, i) => 32 + i))
     await spool.dispose()
   })
 })
