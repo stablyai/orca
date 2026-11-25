@@ -149,7 +149,11 @@ export function journalClaudeMessage(
     ctx.streamedText.forget(agentJournalItemKey(streamed.retired))
     ctx.sink.appendTombstone(streamed.retired, { lifecycle: true })
   }
-  const thinking = ctx.streamedThinking.finalize(outputEnvelope, observedAt)
+  const thinking = ctx.streamedThinking.finalize(
+    outputEnvelope,
+    observedAt,
+    message[CLAUDE_RELAY_CONTINUATION_KEY] !== undefined
+  )
   if (body) {
     // Open before appending so backward scans include the turn's first output.
     ctx.turn.ensureOpen(message, source, observedAt)

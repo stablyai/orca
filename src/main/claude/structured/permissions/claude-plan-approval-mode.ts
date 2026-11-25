@@ -66,7 +66,9 @@ export function leaveClaudePlanModeOnApproval(
       connection: Pick<ClaudeSession['connection'], 'setPermissionMode'>
     },
   prompt: Pick<ClaudePendingPrompt, 'toolName'>,
-  reply: PermissionResult
+  reply: PermissionResult,
+  /** Written first, ahead of the allow: a kept agent's Full access picked in Plan is asked of Claude. */
+  askFirst?: () => Promise<void> | undefined
 ): void {
   const mode = session.orderedPermissionMode
     ? session.orderedPermissionMode()
@@ -87,7 +89,11 @@ export function leaveClaudePlanModeOnApproval(
       return undefined
     })
   try {
-    leave(claudePlanApprovalMode(session)).catch((error: unknown) => {
+    const asked = askFirst?.()
+    ;(asked
+      ? asked.then(() => leave(claudePlanApprovalMode(session)))
+      : leave(claudePlanApprovalMode(session))
+    ).catch((error: unknown) => {
       // Claude accepted a step out of Plan before a later one went unanswered: the chat has
       // left Plan, and its fallback is owed again.
       if (error instanceof ClaudePermissionModeUnsettled) {

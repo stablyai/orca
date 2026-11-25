@@ -123,8 +123,9 @@ export async function applyClaudeMessageOptions(
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
-      if (leavingPlan) {
-        await waitForPromiseWithSignal(askKeptBypassLeavingPlan(session, timeoutMs), signal)
+      const asked = leavingPlan ? askKeptBypassLeavingPlan(session, timeoutMs) : undefined
+      if (asked) {
+        await waitForPromiseWithSignal(asked, signal)
       }
       const refused = claudeBypassRefused(session)
       const requested = claudeBuildPermissionMode(session)

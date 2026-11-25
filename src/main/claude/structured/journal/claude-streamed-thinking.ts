@@ -91,6 +91,9 @@ export function createClaudeStreamedThinking(deps: {
       if (restarted !== null) {
         finish({ completedAt: observedAt }, restarted)
       }
+      if (blocks.placeAt(frame)) {
+        return true
+      }
       const delta = blocks.observe(frame, observedAt)
       if (!delta) {
         return false
@@ -108,7 +111,9 @@ export function createClaudeStreamedThinking(deps: {
     /** Close the streamed row if present; only streaming gives us an observed end time. */
     finalize: (
       envelope: ClaudeMessageEnvelope,
-      observedAt: number
+      observedAt: number,
+      /** A relay continuation's final: with no streamed block, its block stop places it. */
+      continued = false
     ): ClaudeReasoningFinal | null => {
       if (!envelope.content.some((part) => claudeRecord(part)?.type === 'thinking')) {
         return null
@@ -131,6 +136,13 @@ export function createClaudeStreamedThinking(deps: {
         text,
         endedJournalReasoning(streamed ? observedAt : undefined)
       )
+      const { messageId } = envelope
+      if (body && !streamed && continued && messageId) {
+        blocks.holdUnplaced({ ...envelope, messageId }, (row) => {
+          deps.sink.appendItem(row, body, { turnScope: deps.turnScope(), lifecycle: true })
+          deps.sink.appendTombstone(identity, { lifecycle: true })
+        })
+      }
       return body
         ? { identity, body, ...(streamed ? { startedAt: streamed.startedAt } : {}) }
         : null

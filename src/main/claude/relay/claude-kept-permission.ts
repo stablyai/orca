@@ -117,18 +117,17 @@ function applyPick(
 
 /** Full access picked in Plan wasn't asked of Claude (asking leaves Plan), so leaving Plan asks it
  *  first; otherwise an Ask launch's first init reads as a refusal and the ladder never tries it. */
-export async function askKeptBypassLeavingPlan(
+export function askKeptBypassLeavingPlan(
   session: ClaudeSession,
   timeoutMs: number | undefined
-): Promise<void> {
-  if (
-    keptClaudeAgentRelay(session.connection) &&
+): Promise<void> | undefined {
+  // Written now (not after a tick), so it goes out ahead of whatever the caller writes next.
+  return keptClaudeAgentRelay(session.connection) &&
     session.launchIntent?.permissionMode === 'bypassPermissions' &&
     session.bypassAccepted !== true &&
     session.bypassDisabled !== true
-  ) {
-    await askKeptBypass(session, timeoutMs).catch(() => {})
-  }
+    ? askKeptBypass(session, timeoutMs).catch(() => {})
+    : undefined
 }
 
 /** A kept agent's pick made while a message took it out of Plan was only recorded (the chat still
