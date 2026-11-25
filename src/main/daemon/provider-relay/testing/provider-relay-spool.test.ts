@@ -238,12 +238,48 @@ describe('provider relay spool', () => {
     expect([outcome, replayed]).toEqual(['done', ['1:whole']])
   })
 
+  it("keeps an attached client's kept span in memory, writing nothing to disk until it outgrows memory", async () => {
+    const path = join(dir, 'r.ndjson')
+    const spool = new ProviderRelaySpool({
+      path,
+      deliver: () => {},
+      onPressureChanged: () => {},
+      memoryCapBytes: 4096
+    })
+    await spool.attach(0)
+    spool.append('{"method":"item/started"}')
+    spool.ack(1, 1)
+    for (let i = 0; i < 20; i++) {
+      spool.append('x'.repeat(100))
+    }
+    spool.ack(21, 1)
+    await spool.detach()
+    // Kept lines reach the file only on detach.
+    expect(existsSync(path)).toBe(true)
+    await spool.attach(spool.ackedSeq)
+    spool.ack(21)
+    await spool.detach()
+    expect(existsSync(path)).toBe(false)
+    await spool.attach(21)
+    spool.append('{"method":"item/started"}')
+    spool.ack(22, 22)
+    for (let i = 0; i < 20; i++) {
+      spool.append('y'.repeat(100))
+    }
+    spool.ack(42, 22)
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(existsSync(path)).toBe(false)
+    await spool.dispose()
+  })
+
   it('names the kept lines it dropped at the file cap, and a later attach replays only what is left', async () => {
     const delivered: number[] = []
     const spool = new ProviderRelaySpool({
       path: join(dir, 'r.ndjson'),
       deliver: (record) => delivered.push(record.seq),
       onPressureChanged: () => {},
+      // The kept span outgrows memory first, so it moves to the file, which has the cap.
+      memoryCapBytes: 1024,
       fileCapBytes: 2048
     })
     await spool.attach(0)
