@@ -1356,6 +1356,143 @@
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
     },
+    "mcpServers": {
+      "custom": {
+        "noneChecked": "勾选要添加的服务器。",
+        "addMany": "添加 {{count}} 个服务器",
+        "found": "找到 {{count}} 个服务器",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "命令 · {{line}}",
+        "title": "自定义服务器",
+        "sourceLabel": "服务器 URL、启动命令或配置",
+        "sourceHint": "粘贴服务器 URL、启动命令或配置，也可以自己填写详细信息。",
+        "nameTaken": "已经有名为 {{name}} 的服务器，请换一个名称。",
+        "line": "URL、启动命令或配置",
+        "foundTaken": "已添加"
+      },
+      "empty": {
+        "copied": "已从 {{host}} 复制 {{count}} 个服务器",
+        "title": "{{host}} 上没有 MCP 服务器",
+        "copyFrom": "从 {{host}} 复制"
+      },
+      "addServer": "添加服务器",
+      "toast": {
+        "allOn": "已为所有智能体开启 {{name}}",
+        "allOff": "已为所有智能体关闭 {{name}}",
+        "agentOn": "已为 {{agent}} 开启 {{name}}",
+        "agentOff": "已为 {{agent}} 关闭 {{name}}",
+        "saved": "已保存 {{name}}",
+        "sharedOn": "{{name}} 现共用一个进程",
+        "sharedOff": "{{name}} 现在每个会话中单独运行",
+        "signedOut": "已从 {{name}} 退出登录",
+        "removed": "已移除 {{name}}",
+        "workspaces": "{{name}}：{{workspaces}}",
+        "added": "已添加 {{name}}",
+        "newSessions": "对新会话生效",
+        "restart": "重启 {{count}} 个会话",
+        "addedMany": "已添加 {{count}} 个服务器",
+        "repoOn": "已在 {{repo}} 中开启 {{name}}",
+        "repoOff": "已在 {{repo}} 中关闭 {{name}}"
+      },
+      "fileAgent": {
+        "title": "允许 Orca 编辑 {{agent}} 的 MCP 文件？",
+        "line": "Orca 会将你的 MCP 服务器保存在 {{agent}} 的设置文件（{{file}}）中。你自己的条目保持不变。",
+        "allow": "允许"
+      },
+      "agents": {
+        "title": "智能体",
+        "allOff": "全部关闭",
+        "allOn": "全部开启",
+        "all": "所有智能体",
+        "someOff": "已关闭 {{count}} 个智能体",
+        "none": "无智能体",
+        "some": "{{total}} 个智能体中的 {{on}} 个"
+      },
+      "stale": "此服务器已在其他地方更改，现显示其当前状态。",
+      "launch": {
+        "title": "启动",
+        "command": "命令",
+        "args": "参数",
+        "env": "环境"
+      },
+      "connection": {
+        "title": "连接",
+        "url": "URL",
+        "headers": "请求头"
+      },
+      "shared": {
+        "title": "所有智能体共用一个进程",
+        "line": "占用更少内存。服务器在工作区文件夹之外运行。"
+      },
+      "status": {
+        "needsSignIn": "需要登录",
+        "signedIn": "已登录",
+        "commandFailed": "在 {{host}} 上找不到命令",
+        "unreachable": "无法连接到 {{host}}"
+      },
+      "signIn": "登录",
+      "signInActions": "登录操作",
+      "signInAgain": "重新登录",
+      "signOut": "退出登录",
+      "loading": "正在读取 MCP 服务器…",
+      "remove": {
+        "title": "移除 {{name}}？",
+        "line": "{{host}} 上的新会话将不再使用它。其已保存的值和登录信息会被删除。",
+        "confirm": "移除",
+        "button": "移除服务器"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · 仅限 {{projects}}",
+        "move": "移至 Orca",
+        "actions": "{{name}} 操作",
+        "copy": "复制到 Orca",
+        "open": "打开",
+        "copied": "已将 {{name}} 复制到 Orca",
+        "title": "来自你的智能体",
+        "summary": "在 {{agents}} 中找到 {{count}} 个服务器",
+        "moveAll": "全部移至 Orca"
+      },
+      "signedInToast": "已登录 {{name}}",
+      "pasteRefused": "该地址不属于此次登录。",
+      "workspaces": {
+        "title": "工作区",
+        "later": "之后添加的工作区",
+        "all": "所有工作区",
+        "none": "无工作区",
+        "allBut": "除 {{names}} 外的所有工作区",
+        "only": "仅 {{names}}"
+      },
+      "catalog": {
+        "noMatch": "没有与“{{query}}”匹配的服务器。",
+        "search": "搜索服务器",
+        "caption": "服务器"
+      },
+      "add": {
+        "title": "添加 MCP 服务器"
+      },
+      "catalogLine": {
+        "github": "议题、拉取请求和代码搜索",
+        "linear": "读取和更新议题与项目"
+      },
+      "move": {
+        "title": "将 {{name}} 移至 Orca？",
+        "allTitle": "将 {{count}} 个服务器移至 Orca？",
+        "line": "Orca 会将它从 {{agents}} 的设置中移除，并保留备份。",
+        "allLine": "Orca 会将它们从 {{agents}} 的设置中移除，并保留备份。",
+        "confirm": "移动"
+      },
+      "yours": "你的服务器",
+      "fromPlugins": "来自插件",
+      "unsupported": "{{host}} 上无法使用 MCP 服务器。",
+      "title": "MCP 服务器",
+      "description": "你的智能体可以使用的服务器。更改将应用于新会话。",
+      "repo": {
+        "on": "在此仓库中已开启",
+        "add": "为此仓库添加服务器",
+        "files": "来自此仓库的文件",
+        "open": "打开 {{file}}"
+      }
+    },
     "navigation": {
       "accounts": {
         "description": "可以选择为 Claude、Codex、Antigravity、OpenCode Go、MiniMax 和 Grok 配置账户切换和用量。"
@@ -30712,5 +30849,14 @@
     "moveLeft": "左移",
     "moveRight": "右移",
     "reset": "重置标签页顺序"
+  },
+  "mcpServers": {
+    "paste": {
+      "badAddCommand": "请检查 mcp add 命令：需要写名称，以及 URL 或命令。",
+      "badCommand": "请直接在 mcp add 命令里写出值：Orca 无法自动填充 $VARIABLES 或其他 shell 表达式。",
+      "badJson": "粘贴的 JSON 格式有误，无法解析。",
+      "none": "Orca 未找到可添加的服务器。SSE 服务器、自带 OAuth 客户端或工具筛选器的服务器，以及从环境读取的值（${VAR}）都不支持。",
+      "unsupported": "这个服务器用了 SSE、自带的 OAuth 客户端，或从环境读取的值，Orca 无法按原样添加。"
+    }
   }
 }
