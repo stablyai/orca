@@ -1,4 +1,9 @@
 import type { ContextBridge, IpcRenderer, WebFrame } from 'electron'
+import {
+  BROWSER_HISTORY_GESTURE_CHANNEL,
+  BROWSER_HISTORY_WHEEL_CHANNEL
+} from '../shared/browser-history-gesture'
+import { installBrowserHistoryWheel } from './browser-history-wheel'
 import { installBrowserPasswordDetector } from './browser/passwords/browser-password-detector'
 import {
   installBrowserWindowCloseGuard,
@@ -15,7 +20,7 @@ import { BROWSER_GUEST_PAGE_VISIBILITY_CHANNEL } from '../shared/browser/guest-l
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {
   contextBridge: ContextBridge
-  ipcRenderer: Pick<IpcRenderer, 'send' | 'sendToHost' | 'sendSync' | 'on'>
+  ipcRenderer: Pick<IpcRenderer, 'send' | 'sendToHost' | 'sendSync' | 'on' | 'removeListener'>
   webFrame: WebFrame
 } = require('electron')
 const { contextBridge, ipcRenderer } = electron
@@ -33,6 +38,22 @@ if (process.isMainFrame) {
     args: [() => ipcRenderer.sendToHost(PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL)]
   })
 }
+
+if (process.isMainFrame && process.platform === 'darwin') {
+  installBrowserHistoryWheel(
+    (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, gestureId: unknown): void => {
+        callback(
+          typeof gestureId === 'number' && Number.isSafeInteger(gestureId) ? gestureId : null
+        )
+      }
+      ipcRenderer.on(BROWSER_HISTORY_GESTURE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(BROWSER_HISTORY_GESTURE_CHANNEL, listener)
+    },
+    (wheel) => ipcRenderer.send(BROWSER_HISTORY_WHEEL_CHANNEL, wheel)
+  )
+}
+
 // Electron reports no frame removal; a site iframe's demand for header rewrites ends with it.
 // Only those sites' documents report, so ordinary iframes send main nothing.
 if (!process.isMainFrame) {

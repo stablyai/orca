@@ -2,6 +2,7 @@ import { isTrustedBrowserRenderer } from '../../../ipc/browser/browser-renderer-
 import { resolveRendererWebContents } from '../browser-guest-renderer-target'
 // oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { setupGuestContextMenu } from '../input/browser-guest-context-menu'
+import { setupGuestHistoryGesture } from '../input/browser-guest-history-gesture'
 import { setupGrabShortcutForwarding } from '../input/shortcuts/browser-guest-grab-shortcuts'
 import { setupGuestMouseWheelZoomForwarding } from '../input/browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from '../input/shortcuts/browser-guest-shortcut-forwarding'
@@ -47,21 +48,31 @@ export abstract class BrowserManagerBindings extends BrowserManagerGrab {
       this.shortcutForwardingCleanupByTabId.delete(browserTabId)
     }
 
-    this.shortcutForwardingCleanupByTabId.set(
+    const cleanupShortcuts = setupGuestShortcutForwarding({
       browserTabId,
-      setupGuestShortcutForwarding({
-        browserTabId,
-        guest,
-        resolveRenderer: (tabId) =>
-          resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
-        isLocalRenderer: isTrustedBrowserRenderer,
-        shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
-        isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
-        getKeybindings: () => this.settingsResolver?.().keybindings,
-        resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
-        resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
-      })
-    )
+      guest,
+      resolveRenderer: (tabId) =>
+        resolveRendererWebContents(this.rendererWebContentsIdByTabId, tabId),
+      isLocalRenderer: isTrustedBrowserRenderer,
+      shouldForwardDictationShortcut: () => this.shouldForwardDictationShortcut?.() ?? false,
+      isMobileEmulatorEnabled: () => this.settingsResolver?.().mobileEmulatorEnabled !== false,
+      getKeybindings: () => this.settingsResolver?.().keybindings,
+      resolveWorktreeId: (tabId) => this.worktreeIdByTabId.get(tabId) ?? null,
+      resolveWorkspaceId: (tabId) => this.workspaceIdByPageId.get(tabId) ?? null
+    })
+    const cleanupHistoryGesture = setupGuestHistoryGesture({
+      browserTabId,
+      guest,
+      resolveRenderer: (tabId) => {
+        const renderer = this.resolveRendererForBrowserTab(tabId)
+        return renderer && isTrustedBrowserRenderer(renderer) ? renderer : null
+      },
+      isViewportPresetActive: () => this.isViewportPresetActive(browserTabId, guest.id)
+    })
+    this.shortcutForwardingCleanupByTabId.set(browserTabId, () => {
+      cleanupShortcuts()
+      cleanupHistoryGesture()
+    })
   }
 
   protected setupMouseWheelZoomForwarding(browserTabId: string, guest: Electron.WebContents): void {
