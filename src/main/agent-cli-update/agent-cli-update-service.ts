@@ -127,7 +127,7 @@ async function readAgentCliUpdate(
     return null
   }
   const { version, latest } = behind
-  const plan = agentCliUpdatePlan(agent, version, cli.installPath)
+  const plan = agentCliUpdatePlan(agent, version, cli)
   const models = await readModelsNeedingCliUpdate(agent, version, latest)
   return {
     agent,
@@ -213,7 +213,7 @@ async function updateAgentCli(
   }
   const version = await installedVersion(agent, cli)
   // An unread version compares equal to every gate, so the agent's own update still runs.
-  const plan = agentCliUpdatePlan(agent, version ?? '', cli.installPath)
+  const plan = agentCliUpdatePlan(agent, version ?? '', cli)
   if (!plan.runnable) {
     return { ok: false, output: `Run this to update:\n${plan.command}` }
   }

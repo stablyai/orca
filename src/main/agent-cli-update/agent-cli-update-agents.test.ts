@@ -10,7 +10,8 @@ const SELF_UPDATE: AgentCliUpdatePlan = { runnable: true, args: ['update'] }
 const manual = (command: string): AgentCliUpdatePlan => ({ runnable: false, command })
 
 describe('agentCliUpdatePlan', () => {
-  it.each<[AgentCliUpdateAgent, string, string, AgentCliUpdatePlan]>([
+  // The PATH command only matters for npm, whose global bins sit beside its global node_modules.
+  it.each<[AgentCliUpdateAgent, string, string, AgentCliUpdatePlan, string?]>([
     [
       'claude',
       '2.1.323',
@@ -42,13 +43,22 @@ describe('agentCliUpdatePlan', () => {
       'claude',
       '2.1.323',
       '/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js',
-      SELF_UPDATE
+      SELF_UPDATE,
+      '/usr/local/bin/claude'
     ],
     [
       'qwen-code',
       '0.21.0',
       '/opt/homebrew/lib/node_modules/@qwen-code/qwen-code/cli.js',
-      manual('npm install -g @qwen-code/qwen-code@latest')
+      manual('npm install -g @qwen-code/qwen-code@latest'),
+      '/opt/homebrew/bin/qwen'
+    ],
+    [
+      'qwen-code',
+      '0.21.0',
+      'C:\\tools\\node_modules\\@qwen-code\\qwen-code\\cli.js',
+      manual('npm install -g @qwen-code/qwen-code@latest'),
+      'C:\\tools\\qwen.cmd'
     ],
     [
       'qwen-code',
@@ -57,7 +67,13 @@ describe('agentCliUpdatePlan', () => {
       manual('bun add -g @qwen-code/qwen-code@latest')
     ],
     // A project's own copy isn't a global install.
-    ['qwen-code', '0.21.0', '/work/app/node_modules/@qwen-code/qwen-code/cli.js', SELF_UPDATE],
+    [
+      'qwen-code',
+      '0.21.0',
+      '/work/lib/node_modules/@qwen-code/qwen-code/cli.js',
+      SELF_UPDATE,
+      '/work/lib/node_modules/.bin/qwen'
+    ],
     [
       'qwen-code',
       '0.21.0',
@@ -69,15 +85,9 @@ describe('agentCliUpdatePlan', () => {
       '0.120.0',
       '/Users/a/Library/pnpm/global/v11/13aa9-1a211c9e393/node_modules/@openai/codex/bin/codex.js',
       manual('pnpm add -g @openai/codex@latest')
-    ],
-    [
-      'codex',
-      '0.120.0',
-      'C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js',
-      manual('npm install -g @openai/codex@latest')
     ]
-  ])('%s %s at %s', (agent, installed, installPath, plan) => {
-    expect(agentCliUpdatePlan(agent, installed, installPath)).toEqual(plan)
+  ])('%s %s at %s', (agent, installed, installPath, plan, program = installPath) => {
+    expect(agentCliUpdatePlan(agent, installed, { program, installPath })).toEqual(plan)
   })
 })
 

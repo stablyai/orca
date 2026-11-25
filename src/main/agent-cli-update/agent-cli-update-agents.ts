@@ -11,7 +11,8 @@ import type { AgentCliReleaseSource } from './agent-cli-latest-release'
 import {
   isHomebrewCask,
   packageUpgradeCommand,
-  type AgentCliPackages
+  type AgentCliPackages,
+  type AgentCliPaths
 } from './agent-cli-package-install'
 
 /** Runs `args` on the found CLI, or names a command the user runs themselves. */
@@ -26,7 +27,7 @@ type AgentCliUpdateDefinition = {
   /** Package installs its own update only prints the manager's command for; Orca names that command instead. */
   updatedByPackageManager?: AgentCliPackages
   latest: (installed: string, installPath: string) => AgentCliReleaseSource
-  plan: (installed: string, installPath: string) => AgentCliUpdatePlan
+  plan: (installed: string, cli: AgentCliPaths) => AgentCliUpdatePlan
 }
 
 const npm = (pkg: string): AgentCliReleaseSource => ({ kind: 'npm', package: pkg })
@@ -64,13 +65,13 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
     parseVersion: parseCodexCliVersion,
     // Codex's npm, Homebrew and standalone builds all publish from this release.
     latest: () => ({ kind: 'github', repo: 'openai/codex', tagPrefix: 'rust-v' }),
-    plan: (installed, installPath) =>
+    plan: (installed, cli) =>
       compareAppVersions(installed, CODEX_UPDATE_COMMAND_SINCE) >= 0
         ? { runnable: true, args: ['update'] }
         : {
             runnable: false,
             command:
-              packageUpgradeCommand(installPath, CODEX_PACKAGES) ??
+              packageUpgradeCommand(cli, CODEX_PACKAGES) ??
               agentSessionInstallCommand('codex', process.platform) ??
               'codex update'
           }
@@ -161,11 +162,11 @@ export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUp
 export function agentCliUpdatePlan(
   agent: AgentCliUpdateAgent,
   installed: string,
-  installPath: string
+  cli: AgentCliPaths
 ): AgentCliUpdatePlan {
   const { updatedByPackageManager, plan } = AGENT_CLI_UPDATE_DEFINITIONS[agent]
   const command = updatedByPackageManager
-    ? packageUpgradeCommand(installPath, updatedByPackageManager)
+    ? packageUpgradeCommand(cli, updatedByPackageManager)
     : null
-  return command ? { runnable: false, command } : plan(installed, installPath)
+  return command ? { runnable: false, command } : plan(installed, cli)
 }

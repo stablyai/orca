@@ -49,8 +49,26 @@ export async function packageShimTarget(path: string): Promise<string | null> {
   }
 }
 
-// `modulesParent` is the folder holding the package's node_modules; a project's own copy isn't global.
-function nodeGlobalManager(path: string, modulesParent: string): NodeGlobalManager | null {
+/** The command found on PATH and the installed file behind it. */
+export type AgentCliPaths = { program: string; installPath: string }
+
+const forwardSlashes = (path: string): string => path.replaceAll('\\', '/')
+
+// npm links a global bin into <prefix>/bin beside <prefix>/lib/node_modules, or on Windows into
+// <prefix> beside <prefix>/node_modules; a project's own copy runs from node_modules/.bin.
+function isNpmGlobal(program: string, modulesParent: string): boolean {
+  const bin = forwardSlashes(program)
+    .replace(/\/[^/]*$/, '')
+    .toLowerCase()
+  const parent = modulesParent.toLowerCase()
+  return bin === parent || (parent.endsWith('/lib') && bin === `${parent.slice(0, -4)}/bin`)
+}
+
+function nodeGlobalManager(
+  program: string,
+  path: string,
+  modulesParent: string
+): NodeGlobalManager | null {
   if (path.includes('/.bun/install/global/')) {
     return 'bun'
   }
@@ -60,15 +78,24 @@ function nodeGlobalManager(path: string, modulesParent: string): NodeGlobalManag
   if (/\/yarn\/(?:data\/)?global\//i.test(path)) {
     return 'yarn'
   }
-  // <prefix>/lib/node_modules, or <prefix>/node_modules under Windows' %APPDATA%\npm.
-  return /\/(?:lib|npm)$/i.test(modulesParent) ? 'npm' : null
+  return isNpmGlobal(program, modulesParent) ? 'npm' : null
 }
 
-function agentCliPackageInstall(installPath: string): AgentCliPackageInstall | null {
-  const path = installPath.replaceAll('\\', '/')
-  const brew = /\/(Caskroom|Cellar)\/([^/]+)\//.exec(path)
+function homebrewInstall(
+  path: string
+): { manager: 'homebrew'; cask: boolean; name: string } | null {
+  const brew = /\/(Caskroom|Cellar)\/([^/]+)\//.exec(forwardSlashes(path))
+  return brew ? { manager: 'homebrew', cask: brew[1] === 'Caskroom', name: brew[2] } : null
+}
+
+function agentCliPackageInstall({
+  program,
+  installPath
+}: AgentCliPaths): AgentCliPackageInstall | null {
+  const path = forwardSlashes(installPath)
+  const brew = homebrewInstall(path)
   if (brew) {
-    return { manager: 'homebrew', cask: brew[1] === 'Caskroom', name: brew[2] }
+    return brew
   }
   // User scope only, as Claude's own WinGet check reads it.
   const winget = /\/Microsoft\/WinGet\/Packages\/([^/_]+)_/i.exec(path)
@@ -76,7 +103,7 @@ function agentCliPackageInstall(installPath: string): AgentCliPackageInstall | n
     return { manager: 'winget', name: winget[1] }
   }
   const node = /^(.*)\/node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(path)
-  const manager = node ? nodeGlobalManager(path, node[1]) : null
+  const manager = node ? nodeGlobalManager(program, path, node[1]) : null
   return node && manager ? { manager, name: node[2] } : null
 }
 
@@ -110,14 +137,14 @@ function isAgentPackage(install: AgentCliPackageInstall, packages: AgentCliPacka
 
 // Only the agent's own packages count: a mise or Volta shim on PATH resolves into that manager's keg.
 export function packageUpgradeCommand(
-  installPath: string,
+  cli: AgentCliPaths,
   packages: AgentCliPackages
 ): string | null {
-  const install = agentCliPackageInstall(installPath)
+  const install = agentCliPackageInstall(cli)
   return install && isAgentPackage(install, packages) ? upgradeCommand(install) : null
 }
 
 export function isHomebrewCask(installPath: string, cask: string): boolean {
-  const install = agentCliPackageInstall(installPath)
-  return install?.manager === 'homebrew' && install.cask && install.name === cask
+  const install = homebrewInstall(installPath)
+  return install !== null && install.cask && install.name === cask
 }
