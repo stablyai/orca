@@ -1,5 +1,6 @@
 import type { WebContents } from 'electron'
 import { invalidateBrowserGuestDiscardProtection } from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
+import { forgetGuestFrameSessions } from '../input/guest-frame-input-sessions'
 
 type DebuggerLeaseState = {
   attachedByLease: boolean
@@ -50,6 +51,7 @@ export function acquireElectronDebugger(webContents: WebContents): ElectronDebug
       }
       try {
         dbg.detach()
+        forgetGuestFrameSessions(webContents)
       } catch {
         // The tab may be destroyed or debugger ownership may have changed.
       }

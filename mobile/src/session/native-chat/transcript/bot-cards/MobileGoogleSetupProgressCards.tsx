@@ -9,6 +9,7 @@ import type {
 } from '../../../../../../src/shared/google/google-setup-blocker'
 import {
   googleSetupActionAnswer,
+  googleSetupFoldedSteps,
   googleSetupProgressView,
   googleSetupShownStepStatus,
   googleSetupStepCardView
@@ -166,6 +167,22 @@ export function MobileGoogleSetupProgressCard({
   // The paused panel offers it already, as one of its buttons.
   const letMe = view.panel?.actions.some((action) => action.id === 'let-me') ? null : view.letMe
   const services = run.services ?? []
+  const [expanded, setExpanded] = useState(false)
+  const { before, after } = expanded
+    ? { before: 0, after: 0 }
+    : googleSetupFoldedSteps(run, view.steps)
+  // Either folded line opens the whole list.
+  const fold = (mark: React.ReactNode, label: string) => (
+    <Pressable
+      accessibilityRole="button"
+      hitSlop={6}
+      onPress={() => setExpanded(true)}
+      style={({ pressed }) => [styles.step, pressed && pressedStyle]}
+    >
+      {mark}
+      <Text style={[styles.stepPending, scaledType(typography.bodySize, fontScale)]}>{label}</Text>
+    </Pressable>
+  )
   const state =
     view.state === 'done'
       ? t('chat.botCards.google.progress.done', 'Done')
@@ -184,20 +201,22 @@ export function MobileGoogleSetupProgressCard({
       fontScale={fontScale}
     >
       <View style={styles.steps}>
-        {view.steps.map((step, index) => {
+        {before > 0
+          ? fold(
+              <StepMark index={0} status="done" />,
+              t('chat.botCards.google.progress.doneCount', '{{count}} steps done', {
+                count: before
+              })
+            )
+          : null}
+        {view.steps.slice(before, view.steps.length - after).map((step, offset) => {
           const entry = run.steps[step]
           const status = googleSetupShownStepStatus(run, step)
-          const who =
-            status === 'done'
-              ? entry?.by === 'user'
-                ? t('chat.botCards.google.progress.you', 'You')
-                : scope.botName
-              : null
           // A stopped run's open step drops what it asked of the person.
-          const note = status === (entry?.status ?? 'pending') ? (entry?.note ?? who) : null
+          const note = status === (entry?.status ?? 'pending') ? entry?.note : null
           return (
             <View key={step} style={styles.step}>
-              <StepMark index={index} status={status} />
+              <StepMark index={before + offset} status={status} />
               <View style={styles.stepBody}>
                 <Text
                   style={[
@@ -229,6 +248,12 @@ export function MobileGoogleSetupProgressCard({
             </View>
           )
         })}
+        {after > 0
+          ? fold(
+              <View style={styles.foldMark} />,
+              t('chat.botCards.google.progress.more', '+ {{count}} more steps', { count: after })
+            )
+          : null}
       </View>
       <MobileGoogleSetupError text={error} fontScale={fontScale} />
       {view.panel ? (
@@ -384,5 +409,6 @@ const styles = themedStyleSheet(() => ({
   markDone: { backgroundColor: colors.textSecondary, borderColor: colors.textSecondary },
   markText: { fontSize: 11, fontWeight: '700', color: colors.textSecondary },
   markTextActive: { color: colors.textPrimary },
-  markTextYou: { color: colors.agentQuestion }
+  markTextYou: { color: colors.agentQuestion },
+  foldMark: { width: MARK }
 }))
