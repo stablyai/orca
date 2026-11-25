@@ -78,13 +78,14 @@ export function keptInitializeResult(line: string | null): unknown {
 
 /** What a Codex connection exposes of its relayed app-server. */
 export function codexConnectionRelay(
-  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult'>,
+  child: Pick<RelayedProviderChild, 'releaseOutput' | 'attachResult' | 'handedOff'>,
   reattached: boolean
 ): NonNullable<CodexAppServerConnection['relay']> {
   return {
     reattached,
     releaseOutput: () => child.releaseOutput(),
     endedWork: () => child.attachResult?.endedWork,
-    openWork: () => child.attachResult?.openWork
+    openWork: () => child.attachResult?.openWork,
+    handedOff: () => child.handedOff
   }
 }

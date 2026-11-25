@@ -8,6 +8,8 @@ import {
   ProviderRelayWorkReader
 } from './provider-relay-work-markers'
 
+import type { ProviderRelayStop } from './provider-relay-detached-cap'
+
 export { readProviderRelayDetachPolicy } from './provider-relay-detach-policy'
 
 type IdleStopHost = {
@@ -57,7 +59,7 @@ export class ProviderRelayIdleStop {
         readonly working: { readonly size: number }
         workMethods: ReadonlySet<string>
       }
-      stoppedBy: 'idle' | 'cap' | null
+      stoppedBy: ProviderRelayStop
       close: () => Promise<unknown>
     },
     options: { relayId: string; log?: (event: string, details?: Record<string, unknown>) => void },
@@ -91,6 +93,11 @@ export class ProviderRelayIdleStop {
 
   get unread(): boolean {
     return this.host.unread?.() === true
+  }
+
+  /** Tracked, with no work open and no approval waiting: only unread output could have held it. */
+  get finished(): boolean {
+    return this.armed && this.work !== null && !this.work.busy && this.host.pendingCount() === 0
   }
 
   /** Learned at spawn or attach, for a stream that drops without a detach of its own. */

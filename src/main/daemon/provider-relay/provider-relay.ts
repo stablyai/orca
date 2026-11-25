@@ -9,6 +9,7 @@ import type {
 } from '../protocol/daemon-provider-relay-protocol'
 import { ProviderRelayPendingRequests } from './provider-relay-pending-requests'
 import { ProviderRelayCut, type ProviderRelayAckOptions } from './provider-relay-cut'
+import { providerRelayStopFlags, type ProviderRelayStop } from './provider-relay-detached-cap'
 import { ProviderRelaySpool } from './provider-relay-spool'
 import { ProviderRelayLineReader } from './provider-relay-line-reader'
 import { ProviderRelayAttachment, type ProviderRelayStream } from './provider-relay-attachment'
@@ -29,7 +30,7 @@ export class ProviderRelay {
   private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
   /** Set by the idle stop or the detached cap before it closes the agent; its exit says which. */
-  stoppedBy: 'idle' | 'cap' | null = null
+  stoppedBy: ProviderRelayStop = null
   /** The client's own acks that gave up an open kept span (the daemon's ask at its file cap). */
   private readonly cut = new ProviderRelayCut()
   private stdoutEnded = false
@@ -101,8 +102,7 @@ export class ProviderRelay {
         code: exit.code,
         signal: exit.signal,
         ...(this.failure ? { error: this.failure } : {}),
-        ...(this.stoppedBy === 'idle' ? { idleStopped: true as const } : {}),
-        ...(this.stoppedBy === 'cap' ? { capStopped: true as const } : {})
+        ...providerRelayStopFlags(this.stoppedBy)
       }
       this.pending.clear()
       this.idleStop.disarm()
@@ -141,7 +141,10 @@ export class ProviderRelay {
     )
   }
 
-  get idleStopPolicy(): Pick<ProviderRelayIdleStop, 'configure' | 'tracking' | 'unread'> {
+  get idleStopPolicy(): Pick<
+    ProviderRelayIdleStop,
+    'configure' | 'tracking' | 'unread' | 'finished'
+  > {
     return this.idleStop
   }
 
