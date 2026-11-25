@@ -30790,7 +30790,20 @@
     "failedChipTooltip": "更新失败，点击查看详情",
     "failedTitle": "无法更新 {{product}}",
     "failedDescription": "Orca 在 <strong>{{host}}</strong> 上运行了 <code>{{command}}</code>，以将你的 {{product}} 从 <strong>{{installedVersion}}</strong> 更新到 <strong>{{latestVersion}}</strong>，但运行失败",
-    "failedDescriptionNoCommand": "Orca 无法更新你在 <strong>{{host}}</strong> 上的 {{product}}"
+    "failedDescriptionNoCommand": "Orca 无法更新你在 <strong>{{host}}</strong> 上的 {{product}}",
+    "cardLabel": "智能体 CLI 更新",
+    "cardLater": "稍后",
+    "copied": "已复制",
+    "hideList": "收起列表",
+    "manualSection": "需手动更新",
+    "queued": "已排队",
+    "showList": "展开列表",
+    "toastClose": "关闭",
+    "toastDone_other": "已更新 {{count}} 个 CLI",
+    "toastFailedCount_other": "{{count}} 个更新失败",
+    "toastRetry": "重试 {{failed}} 个",
+    "toastUpdate": "更新 {{total}} 个",
+    "toastUpdating_other": "正在更新第 {{current}} 个，共 {{count}} 个 CLI"
   },
   "backgroundWorkerPaused": {
     "title": "部分后台任务因反复崩溃已暂停",
