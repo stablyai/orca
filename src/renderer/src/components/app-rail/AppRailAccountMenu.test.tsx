@@ -224,7 +224,7 @@ describe('AppRailAccountMenu sign-out dialog focus', () => {
       orcaProfileAuthStatus: SIGNED_IN,
       signOutCurrentOrcaProfile: async () => {
         useAppStore.setState({ orcaProfileAuthStatus: SIGNED_OUT })
-        return { status: 'signed-out', auth: SIGNED_OUT } as never
+        return { status: 'signed-out', auth: SIGNED_OUT, activeProfileId: 'p1', profiles: [] }
       }
     })
     render(<Harness />)
