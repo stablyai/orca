@@ -55,7 +55,8 @@ export async function showMcpStaleTerminalsToast(
     id: `mcp-stale-terminals:${target.kind === 'local' ? 'local' : target.environmentId}`,
     description: translate(
       'settings.mcpServers.toast.staleTerminalsRestart',
-      'Restart them to get Orca’s MCP servers back.'
+      'Restart them to reconnect Orca’s MCP servers.',
+      { count, defaultValue_one: 'Restart it to reconnect Orca’s MCP servers.' }
     ),
     // Their tools stay broken until they restart, so the offer waits to be seen.
     duration: Infinity,
