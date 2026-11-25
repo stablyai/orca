@@ -13,6 +13,7 @@ export type WorktreeCardSecondaryDetailsInputs = Pick<
 > &
   Pick<
     Foundation,
+    | 'isSleeping'
     | 'newCardStyle'
     | 'compactCards'
     | 'cardDetails'

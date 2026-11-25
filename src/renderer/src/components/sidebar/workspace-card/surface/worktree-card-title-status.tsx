@@ -41,7 +41,6 @@ import {
   WorktreeCardTitlePills,
   WorktreeCardTitleTime
 } from '../slots/WorktreeCardSlot'
-import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
 const NO_DESCENDANTS: readonly HostScopedWorktreeKey[] = []
 const NO_EXCEPTIONS: readonly SlotException[] = []
@@ -77,8 +76,13 @@ export function WorktreeCardTitleStatusProvider({
   card: WorktreeCardController
   children: React.ReactNode
 }): React.JSX.Element {
-  const { worktree, showInlineAgentList, lineageCollapsed, lineageDescendantIdentities } = card
-  const isSleeping = useIsSleepingWorktree(worktree.id)
+  const {
+    worktree,
+    isSleeping,
+    showInlineAgentList,
+    lineageCollapsed,
+    lineageDescendantIdentities
+  } = card
   const agents = card.inlineAgentRows
   const signals = useSlotAgentSignals(agents)
   const offline = card.isRuntimeDisconnected || card.isSshDisconnected

@@ -32,7 +32,6 @@ import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/cl
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
 import type { AgentChildren } from '@/store/slices/agent-status/projection/agent-row-display-model'
 import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
-import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
 type Props = {
@@ -47,13 +46,12 @@ export default React.memo(function WorktreeCardAgents({
   executionHostId,
   className
 }: Props) {
-  const isSleeping = useIsSleepingWorktree(worktreeId)
   const allRoots = useAgentPresentation(
     `roots\0${worktreeId}`,
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
   const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
-  return !isSleeping && roots.length ? (
+  return roots.length ? (
     <WorktreeCardAgentsBody
       worktreeId={worktreeId}
       executionHostId={executionHostId}

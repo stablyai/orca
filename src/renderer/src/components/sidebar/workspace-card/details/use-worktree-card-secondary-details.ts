@@ -14,7 +14,6 @@ import { usePromptCacheCountdownStartedAt } from '../activity/CacheTimer'
 import { useWorktreeAgentRows } from '../activity/useWorktreeAgentRows'
 import type { WorktreeCardSecondaryDetailsInputs } from './worktree-card-secondary-details-inputs'
 import { useWorktreeBot } from '@/components/bots/use-worktree-bot'
-import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 
 export function useWorktreeCardSecondaryDetails({
   worktree,
@@ -40,6 +39,7 @@ export function useWorktreeCardSecondaryDetails({
   linkedAzureDevOpsPR,
   linkedGiteaPR,
   newCardStyle,
+  isSleeping,
   compactCards,
   cardDetails,
   agentActivityDisplayMode,
@@ -64,7 +64,6 @@ export function useWorktreeCardSecondaryDetails({
   const metaCliProvenance = showCli ? worktree.cliProvenance : null
   const metaBot = useWorktreeBot(worktree, showBot && settings?.botsEnabled !== false)
   const metaComment = showComment ? hoverComment : null
-  const isSleeping = useIsSleepingWorktree(worktree.id)
   const showInlineAgentList = cardDetails.inlineAgents
   const inlineAgentRows = useWorktreeAgentRows(
     worktree.id,

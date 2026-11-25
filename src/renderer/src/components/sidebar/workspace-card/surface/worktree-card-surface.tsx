@@ -4,7 +4,6 @@ import { LoaderCircle } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
-import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
@@ -47,9 +46,9 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
     handleContextMenuSelect,
     showRenameErrorDialog,
     setShowRenameErrorDialog,
-    contentIndent
+    contentIndent,
+    isSleeping
   } = card
-  const isSleeping = useIsSleepingWorktree(worktree.id)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
   const { content: templateContent, frame } = renderWorkspaceCardTemplate(

@@ -23,6 +23,7 @@ import {
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
+import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
 import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export function useWorktreeCardFoundation({
@@ -216,7 +217,10 @@ export function useWorktreeCardFoundation({
       : ''
   )
 
+  const isSleeping = useIsSleepingWorktree(worktree.id)
+
   return {
+    isSleeping,
     openModal,
     openTaskPage,
     updateWorktreeMeta,
