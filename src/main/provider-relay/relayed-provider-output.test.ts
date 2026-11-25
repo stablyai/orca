@@ -94,8 +94,8 @@ describe('relayed provider output', () => {
       stdout: new Readable({ read() {} }),
       durable: async () => true,
       passWhileHeld: () => false,
-      ack: async (seq, keepFrom) => {
-        acks.push(keepFrom === undefined ? `${seq}` : `${seq} keep ${keepFrom}`)
+      ack: async (seq, keepFrom, cut) => {
+        acks.push(`${seq}${keepFrom === undefined ? '' : ` keep ${keepFrom}`}${cut ? ' cut' : ''}`)
       }
     })
     output.restartAt(10)
@@ -107,9 +107,9 @@ describe('relayed provider output', () => {
     // The daemon's ask (its memory cap): received, but kept for a later attach.
     await output.settle(true)
     expect(acks).toEqual(['12 keep 11'])
-    // Its ask while keeping (the file cap) lets them go; the held lines still reach the chat.
+    // Its ask while keeping (the file cap) lets them go, said as a cut so the next attach knows.
     await output.settle(true)
-    expect(acks).toEqual(['12 keep 11', '12'])
+    expect(acks).toEqual(['12 keep 11', '12 cut'])
   })
 
   it('never acks a line whose streamed text is only in memory, unless the ask saved it first', async () => {

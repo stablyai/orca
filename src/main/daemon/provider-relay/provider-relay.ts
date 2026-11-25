@@ -28,6 +28,8 @@ export class ProviderRelay {
   private readerBusy = false
   private exitStatus: ProviderRelayExit | null = null
   private idleStopped = false
+  /** The client's own acks that gave up an open kept span (the daemon's ask at its file cap). */
+  private cutThrough = 0
   private stdoutEnded = false
   private exitAnnounced = false
   private spoolPaused = false
@@ -145,7 +147,7 @@ export class ProviderRelay {
     const cursor = Math.min(fromSeq, this.spool.nextSeq - 1)
     this.idleStop.disarm()
     // Read before the replay: lines released later through this client's own acks reached it.
-    const { truncatedThrough } = this.spool
+    const truncatedThrough = Math.max(this.spool.truncatedThrough, this.cutThrough)
     this.options.log?.('relay-attached', { relayId: this.relayId, cursor, truncatedThrough })
     this.release()
     // Live records wait for this attach's own replay, or they would reach the new client twice.
@@ -192,7 +194,8 @@ export class ProviderRelay {
       stderrTail: this.options.managed.stderrTail(),
       exit: this.exitStatus,
       // Lines the client already had before its cursor were never missing from its replay.
-      ...(truncatedThrough > cursor ? { truncatedThrough } : {}),
+      // A cut at the cursor counts too: the kept lines it gave up were the ones a replay needed.
+      ...(truncatedThrough > 0 && truncatedThrough >= cursor ? { truncatedThrough } : {}),
       ...this.idleStop.carriedWork()
     }
   }
@@ -226,7 +229,8 @@ export class ProviderRelay {
     })
   }
 
-  ack(seq: number, keepFrom?: number): void {
+  ack(seq: number, keepFrom?: number, cut = false): void {
+    this.cutThrough = cut ? Math.max(this.cutThrough, seq) : this.cutThrough
     this.spool.ack(seq, keepFrom)
   }
 

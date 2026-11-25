@@ -46,9 +46,14 @@ export type ProviderRelayRequest =
    * The client received through `seq`. `keepFrom` (optional) is the first line it still needs after
    * a restart, such as the start of an open streamed item: memory is freed through `seq`, lines from
    * `keepFrom` on are kept in the spool file, and a later attach replays from there. A kept span
-   * longer than the file cap is released through `seq` rather than stalling the agent.
+   * longer than the file cap is released through `seq` rather than stalling the agent. `cut` says
+   * this ack gives up a kept span still open, so a later attach reports `truncatedThrough`.
    */
-  | { id: string; type: 'relayAck'; payload: { relayId: string; seq: number; keepFrom?: number } }
+  | {
+      id: string
+      type: 'relayAck'
+      payload: { relayId: string; seq: number; keepFrom?: number; cut?: true }
+    }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
   | {

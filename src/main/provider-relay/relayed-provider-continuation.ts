@@ -90,8 +90,8 @@ export class RelayedProviderContinuation {
 }
 
 /**
- * A reattach from `fromSeq` may start inside an open item: the daemon reports where it dropped
- * kept lines, and a forced release (its file cap) can leave a kept start behind the cursor too.
+ * A reattach whose replay starts inside an open item: the daemon reports where kept lines were
+ * given up (at its file cap, or by the client's own ack on its ask), as `truncatedThrough`.
  */
 export function attachContinuation(
   hook: ProviderRelayItemContinuation,
@@ -102,8 +102,8 @@ export function attachContinuation(
   const groups = typeof hook.openGroup === 'string' ? [hook.openGroup] : (hook.openGroup ?? [])
   const carried = groups.flatMap((group) => result.openWork?.[group] ?? [])
   const open = carried.length > 0 ? carried : null
-  // A dropped kept span engages it even between turns; then the replay alone bounds it.
-  if (fromSeq <= 0 || (open === null && result.truncatedThrough === undefined)) {
+  // Only a replay that really starts inside a cut item engages it; open work then bounds it.
+  if (fromSeq <= 0 || result.truncatedThrough === undefined) {
     return null
   }
   return new RelayedProviderContinuation(

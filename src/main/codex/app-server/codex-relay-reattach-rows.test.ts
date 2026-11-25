@@ -120,13 +120,13 @@ describe('codex rows across a reattach', () => {
     expect(second.ids).toEqual(first.ids)
   })
 
-  it('a reattach whose cursor a cap release moved past an open start still moves the item, until its turn ends', async () => {
+  it('a reattach whose cut is at its cursor still moves the open item, until its turn ends; an uncut one never does', async () => {
     const delta = (id: string) =>
       JSON.stringify({ method: 'item/agentMessage/delta', params: { threadId: 't', itemId: id } })
     const turnDone = JSON.stringify({ method: 'turn/completed', params: { threadId: 't' } })
     const attach = async (openTurns: string[][], truncatedThrough?: number) => {
       const relay = fakeProviderRelayChannel({
-        // The release left the daemon's cursor at 10, so it reports no truncation.
+        // A release at the cursor (10) is reported as truncatedThrough 10.
         attach: async () => {
           relay.sink().line('relayData', 11, delta('a'))
           return {
@@ -165,7 +165,9 @@ describe('codex rows across a reattach', () => {
       await settle()
       return ids
     }
-    expect(await attach([['t']])).toEqual(['relay:r1:11:a', null, 'z'])
+    expect(await attach([['t']], 10)).toEqual(['relay:r1:11:a', null, 'z'])
+    // With nothing cut, a replay from the cursor is whole: no continuation, whatever is open.
+    expect(await attach([['t']])).toEqual(['a', null, 'z'])
     // Nothing was running at the quit, so no item can be cut: lines pass as they are.
     expect(await attach([])).toEqual(['a', null, 'z'])
     // A dropped kept span says the replay starts inside an item, whatever the open turns say.

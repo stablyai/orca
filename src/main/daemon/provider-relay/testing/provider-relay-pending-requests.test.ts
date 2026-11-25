@@ -81,6 +81,33 @@ describe('provider relay pending requests', () => {
     await relay.dispose()
   })
 
+  it('tells the next attach its replay starts inside a cut item only when an ack gave one up', async () => {
+    const { managed, stdout } = fakeManaged()
+    const relay = new ProviderRelay({
+      relayId: 'r-cut',
+      chatKey: 'chat',
+      managed,
+      spoolPath: join(dir, 'r-cut.ndjson'),
+      onSettled: () => {},
+      onDetached: () => {}
+    })
+    const stream = { socket: new PassThrough() }
+    await relay.attach('app-1', stream, 0)
+    stdout.write('a\nb\nc\n')
+    await tick()
+    relay.ack(3, 2)
+    await relay.detach()
+    expect((await relay.attach('app-2', stream, relay.info().ackedSeq)).truncatedThrough).toBe(
+      undefined
+    )
+    // The client gives up its kept span (the daemon's ask at the file cap): the cursor moves past it.
+    relay.ack(3, undefined, true)
+    await relay.detach()
+    expect(relay.info().ackedSeq).toBe(3)
+    expect((await relay.attach('app-3', stream, 3)).truncatedThrough).toBe(3)
+    await relay.dispose()
+  })
+
   it('never replays a request the client already answered, while an unanswered one is still asked', async () => {
     const { managed, stdout } = fakeManaged()
     const relay = new ProviderRelay({

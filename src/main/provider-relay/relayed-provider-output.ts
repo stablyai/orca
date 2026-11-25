@@ -33,7 +33,7 @@ type OutputOptions = {
    */
   durable?: (force: boolean) => Promise<boolean>
   /** `keepFrom`: the daemon keeps lines from it on for a later attach, though `seq` is received. */
-  ack: (seq: number, keepFrom?: number) => Promise<unknown>
+  ack: (seq: number, keepFrom?: number, cut?: true) => Promise<unknown>
 }
 
 /**
@@ -225,13 +225,11 @@ export class RelayedProviderOutput {
       // Lines a continuation adds before this one go out ahead of it, under its seq.
       for (const added of lines) {
         this.options.ackFloor?.observe(seq, added)
-        this.options.stdout.push(`${added}\n`)
+        // Counted before it is handed on: a flowing reader takes it inside push.
         this.consumption.pushed(true, this.pushedSeq)
+        this.options.stdout.push(`${added}\n`)
       }
       this.options.ackFloor?.observe(seq, line)
-    }
-    if (line) {
-      this.options.stdout.push(`${line}\n`)
     }
     if (seq !== null && seq > this.pushedSeq) {
       this.pushedSeq = seq
@@ -239,6 +237,9 @@ export class RelayedProviderOutput {
     }
     // The reader makes no record of a blank line, so it counts as the cursor alone.
     this.consumption.pushed(line !== null && /\S/.test(line), this.pushedSeq)
+    if (line) {
+      this.options.stdout.push(`${line}\n`)
+    }
   }
 
   /** The first spool line still held, not yet handed on to the chat. */
@@ -298,7 +299,13 @@ export class RelayedProviderOutput {
         if ((await this.options.durable?.(force)) === false && keepFrom === null) {
           return
         }
-        await (keepFrom === null ? this.options.ack(target) : this.options.ack(target, keepFrom))
+        // Giving up an open kept span: the next attach must know its replay starts inside an item.
+        const cut = force && keepFrom === null && this.keptFrom !== null
+        await (keepFrom !== null
+          ? this.options.ack(target, keepFrom)
+          : cut
+            ? this.options.ack(target, undefined, true)
+            : this.options.ack(target))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
