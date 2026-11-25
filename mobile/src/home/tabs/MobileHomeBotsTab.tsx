@@ -9,6 +9,10 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import type { HomeBotRow, HomeBots, HomeBotsUnavailable } from '../bots/home-bot-rows'
 import { translate } from '../../i18n/mobile-i18n'
 import { MobileHomeBotRows } from '../bots/MobileHomeBotRow'
+import {
+  MobileSharedAgentRequestRows,
+  useSharedAgentRequests
+} from '../bots/MobileSharedAgentRequestRows'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabEmpty } from './MobileHomeTabEmpty'
 import { MobileHomeTabHeader, MobileHomeTabHeaderButton } from './MobileHomeTabHeader'
@@ -39,7 +43,14 @@ export function MobileHomeBotsTab(props: {
     />
   )
   const canCreate = props.onNewBot !== undefined
-  const notice = useMemo(() => homeBotsNotice(data.bots, canCreate), [data.bots, canCreate])
+  const requests = useSharedAgentRequests(
+    useMemo(() => data.hostCatalog.map((host) => host.id), [data.hostCatalog])
+  )
+  const listed = requests.length > 0
+  const notice = useMemo(
+    () => homeBotsNotice(data.bots, canCreate, listed),
+    [data.bots, canCreate, listed]
+  )
   if (!data.hostCatalogLoaded) {
     return header
   }
@@ -68,6 +79,7 @@ export function MobileHomeBotsTab(props: {
             isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
         >
+          <MobileSharedAgentRequestRows requests={requests} />
           <MobileHomeBotRows rows={rows} onOpen={props.onOpenBot} />
           {notice.kind === 'waiting' ? (
             <View style={styles.connecting}>
@@ -91,15 +103,18 @@ type HomeBotsNotice =
  *  is too old or switched off, else a quiet line per computer it can't list. */
 export function homeBotsNotice(
   bots: Pick<HomeBots, 'rows' | 'unavailable' | 'listable' | 'awaiting'>,
-  canCreate: boolean
+  canCreate: boolean,
+  /** Shares offered to this account list above the rows, so the list isn't empty. */
+  requests = false
 ): HomeBotsNotice {
   const reasons = bots.unavailable.filter((entry) => entry.reason !== 'no-create')
-  if (bots.rows.length === 0 && bots.awaiting) {
+  if (bots.rows.length === 0 && bots.awaiting && !requests) {
     return { kind: 'waiting' }
   }
   const only = reasons[0]?.reason
   if (
     bots.rows.length === 0 &&
+    !requests &&
     !bots.listable &&
     (only === 'update' || only === 'off') &&
     reasons.every((entry) => entry.reason === only)
@@ -107,7 +122,7 @@ export function homeBotsNotice(
     return emptyNotice(only, reasons)
   }
   const lines = [
-    ...(bots.rows.length === 0
+    ...(bots.rows.length === 0 && !requests
       ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
       : []),
     ...reasons.map((entry) => ({ key: `${entry.reason}:${entry.key}`, text: endLine(entry) })),

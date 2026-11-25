@@ -40,13 +40,11 @@ export function awaitingKeyView(share: SharedBotPhoneShare): SharedBotHostView {
 const LIST_READ_OPTIONS = { timeoutMs: 15_000, budgetSpansConnect: true }
 
 /** The computer's list, or null when it gave none (offline, or too old to list shared agents). */
-export async function readComputerShares(
-  computer: Computer
-): Promise<readonly SharedBotPhoneShare[] | null> {
+export async function readComputerShares(computer: Computer): Promise<SharedBotsPhoneList | null> {
   const answer = await computer.client
     .sendRequest(SHARED_BOTS_PHONE_LIST_METHOD, undefined, LIST_READ_OPTIONS)
     .catch(() => null)
-  return answer?.ok ? (SharedBotsPhoneList.safeParse(answer.result).data?.shares ?? null) : null
+  return answer?.ok ? (SharedBotsPhoneList.safeParse(answer.result).data ?? null) : null
 }
 
 /** Keeps exactly the shares the computer lists under it; asks for a key to each new one. */

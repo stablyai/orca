@@ -1,7 +1,13 @@
 // A shared bot's deliveries on its host: an invite that signed in as an Orca account, and a
 // teammate's device asking to reach the bot. Each is done only once handled, so the share's next
 // delivery waits for it.
-import { botAccountShare, withBotShareResolved } from '../../shared/bots/bot-team-shares'
+import {
+  botAccountShare,
+  withBotShareAnswer,
+  withBotShareResolved,
+  withBotSharesReached,
+  type BotShareAnswer
+} from '../../shared/bots/bot-team-shares'
 import type { ConnectorDelivery } from '../../shared/connectors/connector-cloud-contract'
 import type { Bot } from '../../shared/bot-types'
 import * as z from 'zod'
@@ -19,18 +25,19 @@ import type { BotHostUpdates } from '../../shared/rpc-contract/bots-params'
 import { botSharedWithAccount } from './team-share/bot-share-access'
 
 type ShareResolved = Extract<ConnectorDelivery, { kind: 'share_resolved' }>
+type SharedBotsEditor = {
+  list: () => readonly Pick<Bot, 'id' | 'shares'>[]
+  // BotController.update: the edit reads the bot as saved, inside its write queue.
+  update: (
+    botId: string,
+    edit: (saved: Pick<Bot, 'shares'>) => Pick<BotHostUpdates, 'shares'>
+  ) => Promise<unknown>
+}
 type ShareAccept = Extract<ConnectorDelivery, { kind: 'share_accept' }>
 
 /** Rewrites the invite as the account; false once it was removed or is another email's. */
 export async function resolveBotShareInvite(
-  bots: {
-    list: () => readonly Pick<Bot, 'id' | 'shares'>[]
-    // BotController.update: the edit reads the bot as saved, inside its write queue.
-    update: (
-      botId: string,
-      edit: (saved: Pick<Bot, 'shares'>) => Pick<BotHostUpdates, 'shares'>
-    ) => Promise<unknown>
-  },
+  bots: SharedBotsEditor,
   delivery: ShareResolved
 ): Promise<boolean> {
   const bot = bots.list().find((entry) => entry.id === delivery.botId)
@@ -66,11 +73,55 @@ export type BotShareOfferMint = (input: {
   devicePublicKey: string
 }) => Promise<BotTeamShareOffer>
 
+/** Marks the teammate's answer on the owner's list (the Share dialog shows it); false once the share
+ *  isn't theirs. A decline notifies no one. */
+export async function answerBotShare(
+  bots: SharedBotsEditor,
+  answer: BotShareAnswer & { botId: string },
+  at: number
+): Promise<boolean> {
+  if (
+    !botAccountShare(
+      bots.list().find((bot) => bot.id === answer.botId)?.shares,
+      answer.shareId,
+      answer.accountId
+    )
+  ) {
+    return false
+  }
+  await bots.update(answer.botId, (saved) => {
+    const next = withBotShareAnswer(saved.shares ?? [], answer, at)
+    return next !== saved.shares ? { shares: [...next] } : {}
+  })
+  return true
+}
+
+/** Marks accepted every share whose teammate already reaches the bot: accepted before the list kept
+ *  answers. `reached` is each bot's accounts with a share device. */
+export async function markReachedBotShares(
+  bots: SharedBotsEditor,
+  reached: ReadonlyMap<string, ReadonlySet<string>>,
+  at: number
+): Promise<void> {
+  for (const bot of bots.list()) {
+    const accounts = reached.get(bot.id)
+    const shares = bot.shares ?? []
+    if (accounts && withBotSharesReached(shares, accounts, at) !== shares) {
+      await bots.update(bot.id, (saved) => {
+        const next = withBotSharesReached(saved.shares ?? [], accounts, at)
+        return next !== saved.shares ? { shares: [...next] } : {}
+      })
+    }
+  }
+}
+
 export type BotShareAcceptDeps = {
   bots: { list: () => readonly Pick<Bot, 'id' | 'shares'>[] }
   mintOffer: BotShareOfferMint
   /** Ends the account's devices on the bot, as removing its share does. */
   revokeDevices: (botId: string, accountId: string) => Promise<boolean>
+  /** Marks the share accepted on the owner's list once its offer is out. */
+  markAccepted?: (answer: BotShareAnswer & { botId: string }) => Promise<unknown>
   /** putBotShareOffer, as the signed-in account. */
   putOffer: (
     botId: string,
@@ -133,5 +184,6 @@ export async function acceptBotShare(
     // Refused with why: the teammate's Orca asks again, with the same key.
     throw new Error(sent.error)
   }
+  await deps.markAccepted?.({ ...delivery, answer: 'accepted' })
   return true
 }

@@ -40,7 +40,6 @@ export class NextReadWaits {
         resolve()
       }
       const timer = setTimeout(done, this.capMs)
-      ;(timer as { unref?: () => void }).unref?.()
       ;(later || !this.current ? this.later : this.current).push(done)
     })
   }

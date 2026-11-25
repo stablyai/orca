@@ -12,10 +12,10 @@ import { relayStreamError } from '../../../shared/remote-runtime/relay/client/re
 import { sharedBotHostLink, type SharedBotHostLink } from './shared-bot-host-link'
 import {
   newSharedBotHostEntry,
-  sharedBotHostKey,
   SharedBotHostStore,
   type SharedBotHostEntry
 } from './shared-bot-host-store'
+import { applySharedBotMine, sharedBotRequests } from './shared-bot-mine-apply'
 import {
   namesSharedBotNewChat,
   SharedBotHeldSends,
@@ -24,7 +24,7 @@ import {
   sharedBotOffline,
   sharedBotUnshared
 } from './shared-bot-held-sends'
-import { nextPairingStep, pinnedSharedBotOffer, type MineShare } from './shared-bot-pairing'
+import { nextPairingStep, type MineShare } from './shared-bot-pairing'
 import { SerialRerun } from '../../../shared/concurrency/serial-rerun'
 import { CloudSharesSupport, type SharedBotsCloud } from './shared-bots-cloud'
 import type { SharedBotHomes } from './shared-bot-home'
@@ -81,7 +81,9 @@ export class SharedBotHosts {
       listed: () => this.listed(),
       reach: (entry) => this.reach(entry),
       request: (entry, method, params) => this.linkFor(entry).request(method, params),
-      origin: () => deps.connectorOrigin?.() ?? null
+      origin: () => deps.connectorOrigin?.() ?? null,
+      requests: () => sharedBotRequests(this.store, this.shares),
+      answer: (shareId, accept) => (accept ? this.accept(shareId) : this.decline(shareId))
     })
   }
 
@@ -111,7 +113,8 @@ export class SharedBotHosts {
   }
 
   state(): SharedBotHostsState {
-    return { hosts: this.views(), sharing: this.sharing.value }
+    const requests = sharedBotRequests(this.store, this.shares)
+    return { hosts: this.views(), sharing: this.sharing.value, requests }
   }
 
   views(): SharedBotHostsState['hosts'] {
@@ -250,31 +253,36 @@ export class SharedBotHosts {
 
   /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */
   private applyMine(shares: readonly MineShare[], read: number): SharedBotHostEntry[] {
-    const current = new Map(shares.map((share) => [share.shareId, share]))
-    this.shares = current
-    this.held.applyMine(shares)
-    const gone = this.store.list().filter((entry) => !current.has(entry.shareId))
-    for (const { shareId } of gone) {
+    this.shares = new Map(shares.map((share) => [share.shareId, share]))
+    const closeLink = (shareId: string) => {
       this.links.get(shareId)?.close()
       this.links.delete(shareId)
     }
-    this.store.remove(new Set(gone.map((entry) => entry.shareId)))
-    for (const share of shares) {
-      const entry = this.store.get(share.shareId) ?? newSharedBotHostEntry(share)
-      const { hostKey: _hostKey, avatarUrl: _avatar, ...rest } = entry
-      const offer = pinnedSharedBotOffer(entry, share)
-      const hostKey = sharedBotHostKey({ offer, hostKey: share.hostKey })
-      this.store.put({
-        ...rest,
-        botName: share.botName,
-        ownerName: share.ownerName,
-        ...(share.avatarUrl ? { avatarUrl: share.avatarUrl } : {}),
-        ...(hostKey ? { hostKey } : {}),
-        ...(offer ? { offer } : {}),
-        held: this.held.settle(entry.held, read)
-      })
+    return applySharedBotMine({ store: this.store, held: this.held, closeLink }, shares, read)
+  }
+
+  /** Accept: keeps the share and runs its accept and pairing; false when it isn't offered now. */
+  async accept(shareId: string): Promise<boolean> {
+    await this.ready()
+    const share = this.shares?.get(shareId)
+    if (!share) {
+      return false
     }
-    return gone
+    this.store.put(this.store.get(shareId) ?? newSharedBotHostEntry(share))
+    await this.refresh()
+    return true
+  }
+
+  /** Decline: kept, so it is never offered again, and told to the cloud for the owner. */
+  async decline(shareId: string): Promise<boolean> {
+    await this.ready()
+    if (!this.shares?.has(shareId) || this.store.get(shareId)) {
+      return false
+    }
+    this.store.decline(shareId)
+    this.publish()
+    await this.deps.cloud()?.decline(shareId)
+    return true
   }
 
   /** Accepts; dials a fresh invite at once so it is spent before it expires, and an online host so

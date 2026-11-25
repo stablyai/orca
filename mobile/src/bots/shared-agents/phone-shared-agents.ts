@@ -34,7 +34,12 @@ import {
   syncComputerShares
 } from './phone-shared-agent-provisioning'
 import { PhoneSharedAgentStore, type PhoneSharedAgent } from './phone-shared-agent-store'
-import type { SharedBotPhoneShare } from '../../../../src/shared/bots/bot-share-phone'
+import type {
+  SharedBotPhoneRequest,
+  SharedBotPhoneShare
+} from '../../../../src/shared/bots/bot-share-phone'
+import { answerComputerRequest } from './phone-shared-agent-requests'
+import { watchPhoneSharedAgents } from './phone-shared-agent-watch'
 
 type Link = SharedHostRelayLink<PhoneSharedAgent>
 type Computer = { pairedHostId: string; client: UnvalidatedRpcRequestPort }
@@ -65,6 +70,7 @@ export class PhoneSharedAgents {
   })
   // Listed by a computer but with no key here yet (its host wasn't reached): shown, not callable.
   private readonly awaitingKey = new Map<string, readonly SharedBotPhoneShare[]>()
+  private readonly requestsOf = new Map<string, readonly SharedBotPhoneRequest[]>()
   private readonly follows = new PhoneSharedAgentFollows<UnvalidatedRpcRequestPort>(
     (pairedHostId, client, applied) => this.followComputer({ pairedHostId, client }, applied)
   )
@@ -118,7 +124,11 @@ export class PhoneSharedAgents {
   private async followComputer(computer: Computer, applied: () => void): Promise<void> {
     await this.ready()
     const { pairedHostId } = computer
-    const shares = await readComputerShares(computer)
+    const list = await readComputerShares(computer)
+    const shares = list?.shares ?? null
+    if (list) {
+      this.requestsOf.set(pairedHostId, list.requests ?? [])
+    }
     if (shares) {
       const listed = new Set(shares.map((share) => share.shareId))
       for (const entry of this.store.list()) {
@@ -152,6 +162,18 @@ export class PhoneSharedAgents {
         })
     )
     this.changed()
+  }
+
+  /** The shares offered to the computer's account that wait for Accept or Decline. */
+  requests(pairedHostId: string): readonly SharedBotPhoneRequest[] {
+    return this.requestsOf.get(pairedHostId) ?? []
+  }
+
+  /** Accept or Decline, through the computer; its shares are followed again once it took it. */
+  async answerRequest(pairedHostId: string, shareId: string, accept: boolean): Promise<boolean> {
+    const client = this.computers.get(pairedHostId)
+    const followAgain = () => (client ? this.syncComputer(pairedHostId, client) : Promise.resolve())
+    return !!client && (await answerComputerRequest(client, shareId, accept, followAgain))
   }
 
   /** What the computer's pages show of its shared agents, as the desktop window does. */
@@ -247,22 +269,7 @@ export class PhoneSharedAgents {
 
   /** The computer's shared agents as `views` reads them, now and on each change that alters them. */
   watch(pairedHostId: string, onViews: (views: SharedBotHostView[]) => void): () => void {
-    let last: string | null = null
-    const emit = () => {
-      const views = this.views(pairedHostId)
-      const seen = JSON.stringify(views)
-      if (seen !== last) {
-        last = seen
-        onViews(views)
-      }
-    }
-    let stopped = false
-    const stop = this.onChanged(emit)
-    void this.ready().then(() => !stopped && emit())
-    return () => {
-      stopped = true
-      stop()
-    }
+    return watchPhoneSharedAgents(this, () => this.views(pairedHostId), onViews)
   }
 
   async sendAgain(entry: PhoneSharedAgent, clientMessageId: string): Promise<boolean> {

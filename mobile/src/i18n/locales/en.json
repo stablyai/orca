@@ -7558,7 +7558,11 @@
         "viewOriginal": "View original",
         "originalGone": "No longer available"
       },
-      "sharedBy": "Shared by {{name}}"
+      "sharedBy": "Shared by {{name}}",
+      "requestFailed": "Couldn’t answer the request. Try again.",
+      "requestLine": "{{owner}} shared {{agent}} with you",
+      "accept": "Accept",
+      "decline": "Decline"
     },
     "settingsView": {
       "sharing": "Sharing",

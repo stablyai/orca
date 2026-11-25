@@ -1,5 +1,16 @@
 // The Share dialog's rows: one per person with access, and the Add field's suggestions.
-import { Ellipsis, Mail, Search, Trash2, X } from 'lucide-react'
+import {
+  CircleCheck,
+  CircleX,
+  Clock,
+  Ellipsis,
+  Mail,
+  Search,
+  Trash2,
+  UserPlus,
+  X,
+  type LucideIcon
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -17,6 +28,7 @@ import { BotOwnerAvatar } from '../bot-connector-people'
 import {
   teamSharePersonName,
   type TeamShareLinkSource,
+  type TeamShareAnswer,
   type TeamShareOwner,
   type TeamSharePerson,
   type TeamShareSuggestion
@@ -73,15 +85,53 @@ function PersonAvatar({
   )
 }
 
-function useSubline(person: TeamSharePerson): string {
+// Where a person stands, on the row's second line: color only on its icon.
+const ANSWER_ICONS: Record<TeamShareAnswer, { icon: LucideIcon; className: string }> = {
+  accepted: { icon: CircleCheck, className: 'text-status-success' },
+  pending: { icon: Clock, className: 'text-status-warning' },
+  declined: { icon: CircleX, className: 'text-destructive' }
+}
+
+function StateLine({
+  icon: Icon,
+  className,
+  text
+}: {
+  icon: LucideIcon
+  className?: string
+  text: string
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 items-center gap-1 text-xs leading-4 text-muted-foreground">
+      <Icon className={cn('size-3 shrink-0', className)} aria-hidden />
+      <span className="min-w-0 truncate">{text}</span>
+    </div>
+  )
+}
+
+function useSubline(person: TeamSharePerson): React.ReactNode {
   const t = useTranslate()
   switch (person.kind) {
-    case 'account':
-      return person.email
+    case 'account': {
+      const answer = person.answer ?? 'accepted'
+      const words = {
+        accepted: t('bots.teamShare.hasAccess', 'Has access'),
+        pending: t('bots.teamShare.waitingToAccept', 'Waiting to accept'),
+        declined: t('bots.teamShare.declined', 'Declined')
+      }[answer]
+      return <StateLine {...ANSWER_ICONS[answer]} text={`${words} · ${person.email}`} />
+    }
     case 'invite':
-      return person.emailSent
-        ? t('bots.teamShare.invited', 'Invited')
-        : t('bots.teamShare.emailNotSent', 'Email not sent yet')
+      return (
+        <StateLine
+          icon={Mail}
+          text={
+            person.emailSent
+              ? t('bots.teamShare.invited', 'Invited')
+              : t('bots.teamShare.emailNotSent', 'Email not sent yet')
+          }
+        />
+      )
     case 'slack':
       return person.handle
         ? t('bots.teamShare.slackLine', '{{handle}} on Slack · {{workspace}}', {
@@ -108,7 +158,7 @@ function RowShell({
   avatar: React.ReactNode
   name: string
   links?: readonly TeamShareLinkSource[]
-  subline: string
+  subline: React.ReactNode
   trailing: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -119,7 +169,11 @@ function RowShell({
           <span className="truncate text-[13px] leading-5 font-medium">{name}</span>
           {links ? <LinkIcons links={links} /> : null}
         </div>
-        <div className="truncate text-xs leading-4 text-muted-foreground">{subline}</div>
+        {typeof subline === 'string' ? (
+          <div className="truncate text-xs leading-4 text-muted-foreground">{subline}</div>
+        ) : (
+          subline
+        )}
       </div>
       <div className="flex shrink-0 items-center">{trailing}</div>
     </li>
@@ -146,19 +200,47 @@ export function TeamShareOwnerRow({ owner }: { owner: TeamShareOwner }): React.J
 export function TeamSharePersonRow({
   person,
   onRemove,
-  onResend
+  onResend,
+  onShareAgain
 }: {
   person: TeamSharePerson
   onRemove: (person: TeamSharePerson) => void
   /** Only an invite's row offers Resend. */
   onResend?: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
+  /** Only a declined account's row offers Share again. */
+  onShareAgain?: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const name = teamSharePersonName(person)
   const subline = useSubline(person)
   const removeLabel = t('bots.teamShare.remove', 'Remove')
+  const answer = person.kind === 'account' ? (person.answer ?? 'accepted') : null
   const trailing =
-    person.kind === 'invite' && onResend ? (
+    answer === 'pending' || answer === 'declined' ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={t('bots.teamShare.personActions', 'Actions for {{name}}', { name })}
+          >
+            <Ellipsis className="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {answer === 'declined' && person.kind === 'account' && onShareAgain ? (
+            <DropdownMenuItem onSelect={() => onShareAgain(person)}>
+              <UserPlus />
+              {t('bots.teamShare.shareAgain', 'Share again')}
+            </DropdownMenuItem>
+          ) : null}
+          <DropdownMenuItem variant="destructive" onSelect={() => onRemove(person)}>
+            <Trash2 />
+            {removeLabel}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : person.kind === 'invite' && onResend ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

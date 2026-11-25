@@ -1852,6 +1852,9 @@
       "youAndOthers_one": "You and {{count}} other",
       "youAndOthers_other": "You and {{count}} others"
     },
+    "share": {
+      "ownersComputer": "{{name}}’s computer"
+    },
     "slack": {
       "postAs": {
         "line": "When you reply to a Slack thread from Orca, it posts as <picker>{{name}}</picker>"

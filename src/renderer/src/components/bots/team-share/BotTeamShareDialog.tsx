@@ -29,6 +29,7 @@ export function BotTeamShareDialog({
   onAdd,
   onRemove,
   onResend,
+  onShareAgain,
   onClose,
   children
 }: {
@@ -45,6 +46,8 @@ export function BotTeamShareDialog({
   onAdd: (suggestion: TeamShareSuggestion) => void
   onRemove: (person: TeamSharePerson) => void
   onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
+  /** A declined person, asked again under a new share id. */
+  onShareAgain: (person: Extract<TeamSharePerson, { kind: 'account' }>) => void
   onClose: () => void
   /** Rows the caller draws itself after `people`: Slack- and GitHub-only people, from Who can ask. */
   children?: React.ReactNode
@@ -175,6 +178,7 @@ export function BotTeamShareDialog({
                 person={person}
                 onRemove={onRemove}
                 onResend={onResend}
+                onShareAgain={onShareAgain}
               />
             ))}
             {children}

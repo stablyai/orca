@@ -20,6 +20,16 @@ export class OrcaRuntimeRpcServer extends RuntimeRpcMobilePairing {
     this.runtime.botShareDevices = this
   }
 
+  /** Each bot's teammates with a share device on it: who already accepted its share. */
+  reachedAccounts(): ReadonlyMap<string, ReadonlySet<string>> {
+    const reached = new Map<string, Set<string>>()
+    for (const device of this.getBotShareDevices()?.list() ?? []) {
+      const accounts = reached.get(device.botId) ?? new Set<string>()
+      reached.set(device.botId, accounts.add(device.accountId))
+    }
+    return reached
+  }
+
   /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */
   checkRuntimeMetadataOwnership(): Promise<void> {
     return this.metadataOwnershipWatch?.check() ?? Promise.resolve()

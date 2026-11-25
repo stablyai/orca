@@ -187,6 +187,7 @@ describe('an account switch while a shares read is out', () => {
           accepted.push(shareId)
           return { ok: true, value: { status: 'queued' } }
         },
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
       platform: NODE_RELAY_CLIENT_PLATFORM,

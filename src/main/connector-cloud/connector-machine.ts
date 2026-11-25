@@ -45,6 +45,10 @@ export type ConnectorMachine = {
   ) => Promise<boolean>
   /** A teammate's device asked to reach a bot shared with them; false once the share isn't theirs. */
   shareAccept?: (delivery: Extract<ConnectorDelivery, { kind: 'share_accept' }>) => Promise<boolean>
+  /** A teammate declined a bot shared with them; false once the share isn't theirs. */
+  shareDeclined?: (
+    delivery: Extract<ConnectorDelivery, { kind: 'share_declined' }>
+  ) => Promise<boolean>
   /** Teammates' messages held while this machine was away. `hostKey`, read per hello, is the key they
    *  are sealed to; null (no pairing identity) holds nothing. `deliver` settles once it is written. */
   shareSend?: {

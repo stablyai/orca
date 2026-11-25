@@ -96,6 +96,7 @@ export type DispatchMachine = Pick<
   | 'prEvent'
   | 'shareResolved'
   | 'shareAccept'
+  | 'shareDeclined'
   | 'shareSend'
 >
 export type RequestDelivery = Extract<ConnectorDelivery, { kind: 'start' | 'send' }>
@@ -106,6 +107,7 @@ const THREADLESS_KINDS = [
   'pr_event',
   'share_resolved',
   'share_accept',
+  'share_declined',
   'share_send'
 ] as const
 const THREADLESS: ReadonlySet<string> = new Set(THREADLESS_KINDS)
@@ -190,6 +192,9 @@ export function dispatchDelivery(
   }
   if (delivery.kind === 'share_accept') {
     return doneOnly(deliveryId, machine.shareAccept, delivery, UNKNOWN_SHARE_REFUSAL)
+  }
+  if (delivery.kind === 'share_declined') {
+    return doneOnly(deliveryId, machine.shareDeclined, delivery, UNKNOWN_SHARE_REFUSAL)
   }
   if (delivery.kind === 'share_send') {
     const take = machine.shareSend

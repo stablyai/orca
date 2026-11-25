@@ -2,6 +2,7 @@
 // accept for one, and a message held for a host that is away.
 import {
   ConnectorShareAcceptSchema,
+  ConnectorShareDeclineSchema,
   ConnectorShareHoldSchema,
   ConnectorSharesMineSchema,
   sharePath,
@@ -19,6 +20,8 @@ export function sharedBotsCloud(cloud: Pick<ConnectorCloud, 'call'>) {
       }),
     accept: (shareId: string, request: ConnectorShareAcceptRequest) =>
       cloud.call(sharePath(shareId, 'accept'), request, ConnectorShareAcceptSchema),
+    decline: (shareId: string) =>
+      cloud.call(sharePath(shareId, 'decline'), { v: 1 }, ConnectorShareDeclineSchema),
     hold: (shareId: string, request: ConnectorShareHoldRequest) =>
       cloud.call(sharePath(shareId, 'messages'), request, ConnectorShareHoldSchema)
   }

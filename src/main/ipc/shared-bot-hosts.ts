@@ -3,6 +3,7 @@
 // ask for keys of their own (bots-share-phone.ts).
 import { BrowserWindow, ipcMain } from 'electron'
 import { z } from 'zod'
+import { BotShareIdSchema } from '../../shared/bots/bot-team-shares'
 import type { SharedBotHostsState } from '../../shared/bots/shared-bot-hosts'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
@@ -19,6 +20,7 @@ import {
 import { SharedBotHomes, type SharedBotHomeDeps } from '../bots/shared-with-me/shared-bot-home'
 import { isBotShareMethod, isBotShareStreamMethod } from '../runtime/rpc/methods/rpc-method-share'
 
+const ShareArgs = z.object({ shareId: BotShareIdSchema })
 const SendAgainArgs = z.object({
   environmentId: z.string().min(1),
   clientMessageId: z.string().min(1)
@@ -53,7 +55,13 @@ export function registerSharedBotHostsHandlers(args: {
       }
     }
   })
-  for (const channel of ['sharedBotHosts:list', 'sharedBotHosts:sendAgain']) {
+  const channels = [
+    'sharedBotHosts:list',
+    'sharedBotHosts:sendAgain',
+    'sharedBotHosts:accept',
+    'sharedBotHosts:decline'
+  ]
+  for (const channel of channels) {
     ipcMain.removeHandler(channel)
   }
   // Answered once the kept shares are loaded, so the window never reads an empty list as "none".
@@ -65,6 +73,12 @@ export function registerSharedBotHostsHandlers(args: {
     const { environmentId, clientMessageId } = SendAgainArgs.parse(raw)
     return hosts.sendAgain(environmentId, clientMessageId)
   })
+  ipcMain.handle('sharedBotHosts:accept', (_event, raw: unknown) =>
+    hosts.accept(ShareArgs.parse(raw).shareId)
+  )
+  ipcMain.handle('sharedBotHosts:decline', (_event, raw: unknown) =>
+    hosts.decline(ShareArgs.parse(raw).shareId)
+  )
   routeSharedHostsThrough({
     hosts,
     methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }

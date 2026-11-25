@@ -204,7 +204,10 @@ describe('following a computer’s shares', () => {
     const first = agents.syncComputer('computer-1', client)
     const second = agents.syncComputer('computer-1', client)
     await vi.waitFor(() => expect(asking).toBe(1))
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    // Every turn the second follow could take to ask, had it not waited.
+    for (let turn = 0; turn < 20; turn += 1) {
+      await Promise.resolve()
+    }
     expect(asking).toBe(1)
     release()
     await Promise.all([first, second])
@@ -294,6 +297,37 @@ describe('a send from the phone to a shared agent', () => {
     )
     const response = await agents.call(entry, 'agentSession.send', send('op-2'))
     expect(response.ok ? null : response.error.code).toBe(SHARED_BOT_HOST_ERRORS.failed)
+  })
+})
+
+describe('a share offered to the computer’s account', () => {
+  it('lists from the computer, and Accept goes through it and follows its shares again', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    const request = { shareId: 'share-2', botId: 'bot-2', botName: 'Ivy', ownerName: 'Jinwoo Hong' }
+    const answers: unknown[] = []
+    let lists = 0
+    const client = {
+      sendRequest: async (method: string, params?: unknown) => {
+        if (method === 'sharedBots.phone.list') {
+          lists += 1
+          return { id: method, ok: true as const, result: { shares: [], requests: [request] } }
+        }
+        if (method === 'sharedBots.phone.accept') {
+          answers.push(params)
+          return { id: method, ok: true as const, result: { answered: true } }
+        }
+        return await desktop.client.sendRequest(method, params)
+      }
+    }
+    await agents.syncComputer('computer-1', client)
+    expect(agents.requests('computer-1')).toEqual([request])
+    expect(await agents.answerRequest('computer-1', 'share-2', true)).toBe(true)
+    expect(answers).toEqual([{ shareId: 'share-2' }])
+    expect(lists).toBe(2)
+    // No key is asked for a share the computer hasn't paired.
+    expect(desktop.asks).toEqual([])
   })
 })
 

@@ -54,7 +54,8 @@ function share(overrides: Partial<MineShare> = {}): MineShare {
     botName: 'Ivy',
     ownerName: 'Jinwoo Hong',
     hostOnline: true,
-    state: 'needs-accept',
+    // Accepted by this account (as a share from before Accept existed): it pairs without asking.
+    state: 'ready',
     held: [],
     ...overrides
   }
@@ -102,6 +103,7 @@ function hosts(
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-hosts-'))
   dirs.push(dir)
   const accepts: [string, ConnectorShareAcceptRequest][] = []
+  const declines: string[] = []
   let mineReads = 0
   // As the cloud does, a read lists every message it has taken, waiting unless `mine` says more.
   const taken: [string, string][] = []
@@ -127,6 +129,10 @@ function hosts(
       accepts.push([shareId, request])
       return { ok: true, value: { status: 'queued' } }
     },
+    decline: async (shareId) => {
+      declines.push(shareId)
+      return { ok: true, value: { status: 'declined' } }
+    },
     hold: async (shareId, request) => {
       holds.push([shareId, request])
       const answer = await hold(shareId, request)
@@ -151,7 +157,7 @@ function hosts(
     homes: memory.homes,
     now
   })
-  return { service, accepts, holds, published, mineReads: () => mineReads, dir, memory }
+  return { service, accepts, declines, holds, published, mineReads: () => mineReads, dir, memory }
 }
 
 describe('shared agent pairing', () => {
@@ -379,6 +385,7 @@ describe('the held queue’s order', () => {
         cloud: () => ({
           mine: async () => UNREADABLE_ANSWER,
           accept: async () => UNREADABLE_ANSWER,
+          decline: async () => ({ ok: true, value: { status: 'declined' } }),
           hold: async () => UNREADABLE_ANSWER
         }),
         now: () => 0,
@@ -423,6 +430,7 @@ describe('a held message and a cloud read that cross', () => {
         cloud: () => ({
           mine: async () => UNREADABLE_ANSWER,
           accept: async () => UNREADABLE_ANSWER,
+          decline: async () => ({ ok: true, value: { status: 'declined' } }),
           hold: () =>
             new Promise((resolve) => {
               accept = () => resolve({ ok: true, value: { status: 'held' } })
@@ -471,6 +479,7 @@ describe('a held message and a cloud read that cross', () => {
       cloud: () => ({
         mine: async () => ({ ok: true, value: { v: 1, shares: [share({ hostKey: HOST_KEY })] } }),
         accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
       platform: NODE_RELAY_CLIENT_PLATFORM,
@@ -499,6 +508,7 @@ describe('a shared agent’s home on this computer', () => {
       cloud: () => ({
         mine: async () => ({ ok: true, value: { v: 1, shares } }),
         accept: async () => ({ ok: true, value: { status: 'queued' } }),
+        decline: async () => ({ ok: true, value: { status: 'declined' } }),
         hold: async () => ({ ok: true, value: { status: 'held' } })
       }),
       platform: NODE_RELAY_CLIENT_PLATFORM,

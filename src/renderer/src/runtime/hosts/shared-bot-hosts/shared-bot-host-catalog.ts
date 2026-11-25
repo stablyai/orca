@@ -3,7 +3,8 @@
 import { useSyncExternalStore } from 'react'
 import type {
   SharedBotHostsState,
-  SharedBotHostView
+  SharedBotHostView,
+  SharedBotRequestView
 } from '../../../../../shared/bots/shared-bot-hosts'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -13,7 +14,9 @@ import {
 import { setSharedBotHostLookup } from '../../../../../shared/bots/bot-home-host'
 
 const NO_HOSTS: readonly SharedBotHostView[] = []
+const NO_REQUESTS: readonly SharedBotRequestView[] = []
 let views: readonly SharedBotHostView[] = NO_HOSTS
+let requests: readonly SharedBotRequestView[] = NO_REQUESTS
 // Whether this account's Orca Cloud takes shares; null until it answers either way.
 let sharing: boolean | null = null
 // Until main first answers, the list says nothing about which shares are gone.
@@ -23,6 +26,7 @@ const listeners = new Set<() => void>()
 function setState(next: SharedBotHostsState): void {
   // A cloud that doesn't take shares has none to show, whatever was kept from before.
   views = next.sharing === false ? NO_HOSTS : next.hosts
+  requests = next.sharing === false ? NO_REQUESTS : (next.requests ?? NO_REQUESTS)
   sharing = next.sharing
   hydrated = true
   for (const listener of listeners) {
@@ -41,6 +45,7 @@ export function installSharedBotHostCatalog(): () => void {
     stop()
     stopLookup()
     views = NO_HOSTS
+    requests = NO_REQUESTS
     sharing = null
     hydrated = false
     for (const listener of listeners) {
@@ -93,6 +98,11 @@ export function readTeamSharingOffered(): boolean {
 
 export function useTeamSharingOffered(): boolean {
   return useSyncExternalStore(subscribeSharedBotHosts, readTeamSharingOffered)
+}
+
+/** The shares offered to this account that wait for its Accept or Decline. */
+export function useSharedBotRequests(): readonly SharedBotRequestView[] {
+  return useSyncExternalStore(subscribeSharedBotHosts, () => requests)
 }
 
 export function useSharedBotHosts(): readonly SharedBotHostView[] {

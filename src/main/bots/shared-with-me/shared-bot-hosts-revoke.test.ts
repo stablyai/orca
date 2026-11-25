@@ -29,7 +29,7 @@ const share = (shareId: string): MineShare => ({
   botName: 'Ivy',
   ownerName: 'Jinwoo Hong',
   hostOnline: true,
-  state: 'needs-accept',
+  state: 'ready',
   held: []
 })
 
@@ -48,6 +48,7 @@ function hosts(cloud: {
       await cloud.accept(shareId)
       return { ok: true, value: { status: 'queued' } }
     },
+    decline: async () => ({ ok: true, value: { status: 'declined' } }),
     hold: async () => ({ ok: true, value: { status: 'held' } })
   }
   return new SharedBotHosts({

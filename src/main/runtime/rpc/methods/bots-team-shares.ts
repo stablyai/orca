@@ -1,7 +1,11 @@
 // Who a bot is shared with, by Orca account or invited email: its owner adds and removes them in Orca.
 import { randomUUID } from 'node:crypto'
 import type { Bot } from '../../../../shared/bot-types'
-import { withBotShareInvites, withBotSharesEmailed } from '../../../../shared/bots/bot-team-shares'
+import {
+  withBotShareInvites,
+  withBotShareRenewed,
+  withBotSharesEmailed
+} from '../../../../shared/bots/bot-team-shares'
 import {
   BotTeamSharesAdd,
   BotTeamSharesRemove,
@@ -75,6 +79,18 @@ export const BOT_TEAM_SHARES_METHODS = [
       ownerOnly(context, OWNER_ONLY)
       const saved = context.runtime.bots.list().find((entry) => entry.id === botId)
       const invite = saved?.shares?.find((share) => share.shareId === shareId)
+      // A declined account is asked again under a new share id: its old one is never offered again.
+      if (saved && invite?.kind === 'account' && invite.declinedAt !== undefined) {
+        const bot = await context.runtime.bots.update(botId, (current) => ({
+          shares: [
+            ...withBotShareRenewed(current.shares ?? [], shareId, () => ({
+              shareId: randomUUID(),
+              addedAt: Date.now()
+            }))
+          ]
+        }))
+        return { bot, emailed: false }
+      }
       if (!saved || invite?.kind !== 'invite') {
         throw new InvalidArgumentError('That invite is no longer on the share list.')
       }

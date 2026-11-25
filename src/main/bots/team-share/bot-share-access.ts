@@ -28,6 +28,8 @@ export type BotShareDevices = {
   revokeBotSharePhone: (parentDeviceId: string, deviceId: string) => Promise<boolean>
   /** The key teammates seal held messages to: this host's pairing E2EE key, null without one. */
   getE2EEPublicKey: () => string | null
+  /** Each bot's teammates (accounts) with a share device on it. */
+  reachedAccounts: () => ReadonlyMap<string, ReadonlySet<string>>
   deliverBotShareHeldMessage: (
     delivery: Extract<ConnectorDelivery, { kind: 'share_send' }>
   ) => Promise<ConnectorDeliveryResult>

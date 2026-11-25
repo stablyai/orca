@@ -52,6 +52,11 @@ export const ShareAcceptDelivery = z
   })
   .refine(isOnItsShare)
 
+// The teammate declined the share: its owner sees so, and a new share id asks them again.
+export const ShareDeclinedDelivery = z
+  .object({ ...ShareDeliveryFields, kind: z.literal('share_declined'), accountId: Id })
+  .refine(isOnItsShare)
+
 // The contract's maxHeldMessageChars: one held message keeps under the cloud's 1 MiB request cap.
 /** One held message as the cloud's request holds it: sealed, base64 (contract maxHeldMessageChars). */
 export const MAX_HELD_MESSAGE_CHARS = 1024 * 1024 - 4 * 1024
@@ -67,6 +72,14 @@ export const ShareSendDelivery = z
     sealed: z.string().min(1).max(MAX_HELD_MESSAGE_CHARS)
   })
   .refine(isOnItsShare)
+
+/** Every share delivery, as the delivery union lists them. */
+export const SHARE_DELIVERIES = [
+  ShareResolvedDelivery,
+  ShareAcceptDelivery,
+  ShareDeclinedDelivery,
+  ShareSendDelivery
+] as const
 
 /** PUT `${bots}/<bot id>/shares/<share id>/offer`: the accept's answer, sealed to its sealKey. */
 export type ConnectorShareOfferRequest = { v: 1; devicePublicKey: string; sealedOffer: string }
@@ -103,6 +116,8 @@ export const ConnectorSharesMineSchema = z.object({
       avatarUrl: z.string().url().max(2048).optional(),
       hostOnline: z.boolean(),
       state: z.enum(['ready', 'needs-accept']),
+      // The agent's purpose line from its owner's hello, when given.
+      botPurpose: z.string().min(1).max(1000).optional(),
       // Present only once the host takes held messages; absent, hold nothing.
       hostKey: PublicKey.optional(),
       offers: z
@@ -136,6 +151,10 @@ export const ConnectorShareHeldSchema = z.object({
 })
 export type ConnectorShareHeld = z.infer<typeof ConnectorShareHeldSchema>
 
-export function sharePath(shareId: string, tail: 'accept' | 'messages'): string {
+// POST `…/<share id>/decline` ({ v: 1 }): this account turns the share down. Idempotent; the share then
+// leaves `mine`, and the owner's host gets share_declined.
+export const ConnectorShareDeclineSchema = z.object({ status: z.literal('declined') })
+
+export function sharePath(shareId: string, tail: 'accept' | 'decline' | 'messages'): string {
   return `${CONNECTOR_PATHS.shares}/${encodeURIComponent(shareId)}/${tail}`
 }

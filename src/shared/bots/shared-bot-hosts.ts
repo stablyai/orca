@@ -64,6 +64,20 @@ export function sharedBotHostView(
 export type SharedBotHostsState = {
   hosts: SharedBotHostView[]
   sharing: boolean | null
+  /** Shares that wait for this account's Accept or Decline: nothing of them is paired yet. Absent:
+   *  none. */
+  requests?: SharedBotRequestView[]
+}
+
+/** A share offered to this account, before it accepts: who shared what. */
+export type SharedBotRequestView = {
+  shareId: string
+  botId: string
+  botName: string
+  ownerName: string
+  /** The agent's one-line purpose, when its owner gave one. */
+  botPurpose?: string
+  avatarUrl?: string
 }
 
 // A new chat started while the host is away: its id until the host starts it from the first held message.

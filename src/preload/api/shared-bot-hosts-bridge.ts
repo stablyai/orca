@@ -10,5 +10,7 @@ export const sharedBotHostsApi = {
     ipcRenderer.on('sharedBotHosts:changed', listener)
     return () => ipcRenderer.removeListener('sharedBotHosts:changed', listener)
   },
-  sendAgain: (args) => ipcRenderer.invoke('sharedBotHosts:sendAgain', args)
+  sendAgain: (args) => ipcRenderer.invoke('sharedBotHosts:sendAgain', args),
+  accept: (args) => ipcRenderer.invoke('sharedBotHosts:accept', args),
+  decline: (args) => ipcRenderer.invoke('sharedBotHosts:decline', args)
 } satisfies PreloadApi['sharedBotHosts']

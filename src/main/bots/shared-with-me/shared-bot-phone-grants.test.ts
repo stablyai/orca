@@ -63,7 +63,9 @@ function grants() {
           }
         : { id: method, ok: true, result: { revoked: true } }
     },
-    origin: () => 'https://cloud.example'
+    origin: () => 'https://cloud.example',
+    requests: () => [],
+    answer: async () => false
   })
   return { store, phones, asked, setLink: (next: SharedBotLink) => (link = next) }
 }

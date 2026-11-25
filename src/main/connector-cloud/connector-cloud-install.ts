@@ -11,6 +11,8 @@ import { connectorBots, displayText, type ConnectorPlacesStore } from './connect
 import { connectorAccount, desktopConnectorTokenMint } from './connector-token-mint'
 import {
   acceptBotShare,
+  answerBotShare,
+  markReachedBotShares,
   putBotShareOffer,
   resolveBotShareInvite
 } from '../bots/bot-team-share-deliveries'
@@ -168,10 +170,13 @@ export function createConnectorCloud({
             },
             revokeDevices: async (botId, accountId) =>
               (await runtime.botShareDevices?.revokeBotShareDevices(botId, accountId)) ?? false,
-            putOffer: (...offer) => putBotShareOffer(runtime.getConnectorCloud(), ...offer)
+            putOffer: (...offer) => putBotShareOffer(runtime.getConnectorCloud(), ...offer),
+            markAccepted: (answer) => answerBotShare(runtime.bots, answer, Date.now())
           },
           delivery
         ),
+      shareDeclined: (delivery) =>
+        answerBotShare(runtime.bots, { ...delivery, answer: 'declined' }, Date.now()),
       shareSend: {
         hostKey: () => runtime.botShareDevices?.getE2EEPublicKey() ?? null,
         deliver: async (delivery) =>
@@ -182,6 +187,11 @@ export function createConnectorCloud({
       helloAnswered: (answer) => {
         webhooks.helloAnswered(answer)
         migratePlaces()
+        void markReachedBotShares(
+          runtime.bots,
+          runtime.botShareDevices?.reachedAccounts() ?? new Map(),
+          Date.now()
+        )
       },
       wantsConnection: () =>
         hostNeedsConnector(

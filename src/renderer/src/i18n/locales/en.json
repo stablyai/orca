@@ -29759,7 +29759,11 @@
       "duplicateSkill": "Same name, in {{folder}} · not shared",
       "sharedBy": "Shared by {{name}}",
       "sharedWith": "Shared with {{names}}",
-      "ownersComputer": "{{name}}’s computer"
+      "ownersComputer": "{{name}}’s computer",
+      "requestFailed": "Couldn’t answer the request. Try again.",
+      "requestLine": "{{owner}} shared {{agent}} with you",
+      "accept": "Accept",
+      "decline": "Decline"
     },
     "apps": {
       "title": "Add to {{bot}}",
@@ -30696,7 +30700,12 @@
       "thisComputer": "this computer",
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
-      "you": "{{name}} (you)"
+      "you": "{{name}} (you)",
+      "hasAccess": "Has access",
+      "waitingToAccept": "Waiting to accept",
+      "declined": "Declined",
+      "personActions": "Actions for {{name}}",
+      "shareAgain": "Share again"
     }
   },
   "plugins": {

@@ -22,6 +22,7 @@ import {
 import {
   BotShareProvisionPhoneParams,
   BotShareRevokePhoneParams,
+  SharedBotsPhoneAnswerParams,
   SharedBotsPhoneProvisionParams
 } from '../bots/bot-share-phone'
 import {
@@ -2109,6 +2110,8 @@ export const RPC_PARAMS_BY_METHOD = {
   'settings.update': SettingsUpdate,
   'settings.updatePRBotAuthorOverride': PRBotAuthorOverrideUpdate,
   'settings.updateTerminalQuickCommands': TerminalQuickCommandsUpdate,
+  'sharedBots.phone.accept': SharedBotsPhoneAnswerParams,
+  'sharedBots.phone.decline': SharedBotsPhoneAnswerParams,
   'sharedBots.phone.list': null,
   'sharedBots.phone.provision': SharedBotsPhoneProvisionParams,
   'sidebarInputs.activityFacts': null,

@@ -85,6 +85,7 @@ export function BotTeamShareDialogHost({
           })
           .catch(failed)
       }
+      onShareAgain={(person) => void resendBotTeamShare(bot, person.key).catch(failed)}
       onClose={onClose}
     >
       {connectors.map((entry) => (

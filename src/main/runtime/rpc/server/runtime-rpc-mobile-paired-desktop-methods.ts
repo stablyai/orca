@@ -1,4 +1,6 @@
 import {
+  SHARED_BOTS_PHONE_ACCEPT_METHOD,
+  SHARED_BOTS_PHONE_DECLINE_METHOD,
   SHARED_BOTS_PHONE_LIST_METHOD,
   SHARED_BOTS_PHONE_PROVISION_METHOD
 } from '../../../../shared/bots/bot-share-phone'
@@ -25,6 +27,8 @@ export const PAIRED_DESKTOP_METHODS = [
   // The agents shared with this computer's account, and the phone's own key to each.
   SHARED_BOTS_PHONE_LIST_METHOD,
   SHARED_BOTS_PHONE_PROVISION_METHOD,
+  SHARED_BOTS_PHONE_ACCEPT_METHOD,
+  SHARED_BOTS_PHONE_DECLINE_METHOD,
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',

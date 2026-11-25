@@ -66,7 +66,23 @@ const PEOPLE = {
     email: 'lena@stably.ai',
     links: ['linear']
   },
-  ana: { kind: 'slack', key: 'ana', name: 'Ana Ruiz', handle: '@ana', workspace: 'Stably' }
+  ana: { kind: 'slack', key: 'ana', name: 'Ana Ruiz', handle: '@ana', workspace: 'Stably' },
+  boWaiting: {
+    kind: 'account',
+    key: 'bo',
+    name: 'Bo Park',
+    email: 'bo@stably.ai',
+    links: [],
+    answer: 'pending'
+  },
+  eli: {
+    kind: 'account',
+    key: 'eli',
+    name: 'Eli Ross',
+    email: 'eli@stably.ai',
+    links: [],
+    answer: 'declined'
+  }
 } satisfies Record<string, TeamSharePerson>
 
 type PersonKey = keyof typeof PEOPLE
@@ -120,6 +136,7 @@ function Scene({
         onAdd={() => setQuery('')}
         onRemove={(person) => setPeople(people.filter((entry) => entry.key !== person.key))}
         onResend={() => {}}
+        onShareAgain={() => {}}
         onClose={() => {}}
       />
     </div>
@@ -163,6 +180,19 @@ export const inviteMenu = scene(['alice', 'bo', 'dana'], {
   interact: () => {
     const trigger = document.querySelector<HTMLButtonElement>(
       'button[aria-label="Invite actions for dana@acme.co"]'
+    )
+    trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  }
+})
+
+/** Each answer: accepted, waiting to accept, an email invite, and declined. */
+export const answers = scene(['alice', 'boWaiting', 'dana', 'eli'])
+
+/** A declined person's menu: Share again and Remove. */
+export const declinedMenu = scene(['alice', 'boWaiting', 'dana', 'eli'], {
+  interact: () => {
+    const trigger = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Actions for Eli Ross"]'
     )
     trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
   }

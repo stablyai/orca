@@ -49,8 +49,31 @@ export const SharedBotPhoneShare = z.object({
 })
 export type SharedBotPhoneShare = z.infer<typeof SharedBotPhoneShare>
 
-export const SharedBotsPhoneList = z.object({ shares: z.array(SharedBotPhoneShare) })
+/** A share offered to the computer's account that waits for Accept or Decline; nothing of it is
+ *  paired, so the phone gets no key to it until it is accepted. */
+export const SharedBotPhoneRequest = z.object({
+  shareId: BotShareIdSchema,
+  botId: Id,
+  botName: Name,
+  ownerName: Name,
+  botPurpose: z.string().min(1).max(1000).optional(),
+  avatarUrl: z.string().url().max(2048).optional()
+})
+export type SharedBotPhoneRequest = z.infer<typeof SharedBotPhoneRequest>
+
+export const SharedBotsPhoneList = z.object({
+  shares: z.array(SharedBotPhoneShare),
+  // Absent from a computer from before Accept.
+  requests: z.array(SharedBotPhoneRequest).max(50).optional()
+})
 export type SharedBotsPhoneList = z.infer<typeof SharedBotsPhoneList>
+
+/** The phone's Accept or Decline of a share offered to its computer's account, which that computer
+ *  answers as its own. */
+export const SHARED_BOTS_PHONE_ACCEPT_METHOD = 'sharedBots.phone.accept'
+export const SHARED_BOTS_PHONE_DECLINE_METHOD = 'sharedBots.phone.decline'
+export const SharedBotsPhoneAnswerParams = z.object({ shareId: BotShareIdSchema })
+export const SharedBotsPhoneAnswer = z.object({ answered: z.boolean() })
 
 export const SharedBotsPhoneProvisionParams = BotShareProvisionPhoneParams.extend({
   shareId: BotShareIdSchema
