@@ -1,0 +1,118 @@
+// `orca mcp exec <id>`: an agent terminal's command server whose saved environment stays with
+// Orca. The running Orca on this computer hands over the command and its environment, and this
+// process becomes the server (execve), or on Windows starts it and stays as its wrapper, so the
+// values never sit in the agent's config, its command line or its own environment.
+import { isAbsolute, resolve } from 'node:path'
+import { spawnProcess } from '@orca/process-host'
+import type { McpServerConnection } from '../../shared/mcp-servers/mcp-servers'
+import { resolveCliCommand } from '../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  readInjectedAgentSessionId,
+  readInjectedBotToken
+} from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { RuntimeClientError } from '../runtime/connection/types'
+
+type CommandServer = { command: string; args: string[]; env: Record<string, string> }
+
+// What Orca's launchers set or move aside to run this CLI under Electron; the server gets the
+// environment the agent started it with instead.
+const LAUNCHER_ENV = [
+  'ORCA_USER_DATA_PATH',
+  'ELECTRON_RUN_AS_NODE',
+  'ORCA_APP_EXECUTABLE',
+  'ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT',
+  'ORCA_NODE_OPTIONS',
+  'ORCA_NODE_REPL_EXTERNAL_MODULE',
+  'ORCA_CLI_HANDOFF',
+  'ORCA_CLI_ELECTRON_EXECUTABLE',
+  'ORCA_WINDOWS_PACKAGED_CLI_LAUNCHER'
+] as const
+
+/** The server's environment: the agent's, as it was before Orca's launcher, plus its own. */
+function serverEnv(server: CommandServer): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...process.env }
+  for (const name of LAUNCHER_ENV) {
+    delete env[name]
+  }
+  if (process.env.ORCA_NODE_OPTIONS) {
+    env.NODE_OPTIONS = process.env.ORCA_NODE_OPTIONS
+  }
+  if (process.env.ORCA_NODE_REPL_EXTERNAL_MODULE) {
+    env.NODE_REPL_EXTERNAL_MODULE = process.env.ORCA_NODE_REPL_EXTERNAL_MODULE
+  }
+  return { ...env, ...server.env }
+}
+
+function executablePath(command: string, env: NodeJS.ProcessEnv, cwd: string): string {
+  if (/[\\/]/.test(command)) {
+    return isAbsolute(command) ? command : resolve(cwd, command)
+  }
+  const found = resolveCliCommand(command, { pathEnv: env.PATH ?? env.Path ?? null })
+  if (!isAbsolute(found)) {
+    throw new RuntimeClientError('not_found', `${command} isn’t installed on this computer.`)
+  }
+  return found
+}
+
+/** Runs the server as a child and passes its exit on, for a platform with no execve. */
+function runAsWrapper(server: CommandServer, env: NodeJS.ProcessEnv, cwd: string): Promise<void> {
+  return new Promise((done, fail) => {
+    const child = spawnProcess({
+      // Node finds `npx` only as `npx.cmd`; the resolved path lets process-host run it through cmd.
+      program: executablePath(server.command, env, cwd),
+      args: server.args,
+      env,
+      cwd,
+      stdio: 'inherit'
+    })
+    const stop = (): void => {
+      child.kill()
+    }
+    process.once('SIGINT', stop)
+    process.once('SIGTERM', stop)
+    child.once('error', fail)
+    child.once('exit', (code, signal) => {
+      process.exitCode = code ?? (signal ? 1 : 0)
+      done()
+    })
+  })
+}
+
+export const MCP_EXEC_HANDLERS: Record<string, CommandHandler> = {
+  'mcp exec': async ({ flags, client, cwd }) => {
+    const id = getRequiredStringFlag(flags, 'id')
+    const agent = getRequiredStringFlag(flags, 'agent')
+    const workspaceId = getOptionalStringFlag(flags, 'workspace') ?? null
+    const botToken = readInjectedBotToken()
+    const callerSessionId = readInjectedAgentSessionId()
+    const { result } = await client.call<McpServerConnection>('mcpServers.connect', {
+      id,
+      agent,
+      workspaceId,
+      ...(botToken ? { botToken } : {}),
+      ...(callerSessionId ? { callerSessionId } : {})
+    })
+    if (!result.on) {
+      throw new RuntimeClientError('mcp_server_off', `This server is off for ${agent} here.`)
+    }
+    if ('url' in result) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'This server is reached by its URL, not started with a command.'
+      )
+    }
+    const server = { command: result.command, args: result.args, env: result.env }
+    const env = serverEnv(server)
+    if (process.platform !== 'win32' && typeof process.execve === 'function') {
+      // The agent talks to the server over this process's stdio, which the exec keeps.
+      process.execve(
+        executablePath(server.command, env, cwd),
+        [server.command, ...server.args],
+        env
+      )
+    }
+    await runAsWrapper(server, env, cwd)
+  }
+}

@@ -24504,7 +24504,9 @@
       "untitled": "新對話",
       "searchRetry": "重試",
       "loading": "正在載入聊天…",
-      "readFailed": "無法讀取此機器人的聊天。"
+      "readFailed": "無法讀取此機器人的聊天。",
+      "older": "顯示 {{count}} 個較早的",
+      "hideOlder": "隱藏較早的"
     },
     "needs": {
       "chat": "你與 {{name}} 的對話",
