@@ -1,5 +1,5 @@
 import { getBrowserPageIdleDiscard } from './browser-page-idle-discard'
-import { createHash, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../browser-error'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import { browserNavigationError } from './browser-navigation-error'
@@ -13,7 +13,8 @@ import {
   type Page
 } from './browser-page-memory-state'
 import { noteBrowserPageClosed, noteBrowserPageOpened } from './browser-page-partition-presence'
-import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
+import { recordBrowserPageFirstLoad } from './browser-page-first-load'
+export { claimBrowserPageFirstLoad } from './browser-page-first-load'
 
 type Attach = {
   pageId: string
@@ -161,8 +162,6 @@ export function associateBrowserPageAttach(guest: Electron.WebContents): boolean
   return true
 }
 const pendingLoads = new WeakMap<Electron.WebContents, Attach>()
-// A guest's fresh first load, kept settled so tab create waits for it instead of sending it again.
-const freshLoads = new WeakMap<Electron.WebContents, { urlDigest: string; load: Promise<void> }>()
 
 /** Route pages call this only after their existing main-owned navigation grant. */
 export function startBrowserPageAttach(guest: Electron.WebContents, url?: string): boolean {
@@ -264,7 +263,7 @@ export function startBrowserPageAttach(guest: Electron.WebContents, url?: string
   guestLoads.set(guest, promise)
   // A page attaches only after its profile's extensions had their wait, so a second load adds nothing.
   if (!snapshot) {
-    freshLoads.set(guest, { urlDigest: navigationUrlDigest(url ?? navigationUrl), load: promise })
+    recordBrowserPageFirstLoad(guest, url ?? navigationUrl, promise)
   }
   void promise
     .catch(() => {})
@@ -296,24 +295,4 @@ export function forgetBrowserPageAttach(page: Page): void {
 
 export function hasPendingBrowserPageAttach(guest: Electron.WebContents): boolean {
   return pendingLoads.has(guest)
-}
-
-/** The attach's own first load of `url` into this page, claimed once; null when there is none. */
-export function claimBrowserPageFirstLoad(
-  pageId: string,
-  url: string
-): { guest: Electron.WebContents; load: Promise<void> } | null {
-  const guest = pages.get(pageId)?.guest
-  const fresh = guest ? freshLoads.get(guest) : undefined
-  if (!guest || !fresh || fresh.urlDigest !== navigationUrlDigest(url)) {
-    return null
-  }
-  freshLoads.delete(guest)
-  return { guest, load: fresh.load }
-}
-
-function navigationUrlDigest(url: string): string {
-  return createHash('sha256')
-    .update(normalizeBrowserNavigationUrl(url) ?? url, 'utf16le')
-    .digest('hex')
 }

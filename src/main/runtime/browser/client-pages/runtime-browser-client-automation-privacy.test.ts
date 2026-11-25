@@ -36,8 +36,7 @@ async function legacyResponse(
       clientPageInitializations: { lease: () => undefined },
       issueClientPageCommand: () => ({ result: Promise.resolve(response) })
     } as unknown as BrowserHostLeaseRegistry,
-    resolveWorkspace: async () => ({ id: 'workspace' }),
-    resolveWorkspacePath: async () => '/unused'
+    resolveWorkspace: async () => ({ id: 'workspace' })
   })
 }
 

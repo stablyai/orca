@@ -256,12 +256,11 @@ export function mergeNativeTab(
   for (const key of keys) {
     if (nativeTab[key] !== undefined) {
       const value = nativeTab[key]
-      Object.assign(native, {
-        [key]:
-          ['url', 'title', 'favIconUrl'].includes(key) && typeof value === 'string'
-            ? redactKagiSessionToken(value)
-            : value
-      })
+      const safeValue =
+        ['url', 'title', 'favIconUrl'].includes(key) && typeof value === 'string'
+          ? redactKagiSessionToken(value)
+          : value
+      Object.assign(native, { [key]: safeValue })
     }
   }
   return { ...orcaTabFields(entry), ...native }
