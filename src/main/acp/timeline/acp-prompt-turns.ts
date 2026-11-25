@@ -23,9 +23,9 @@ export type AcpPromptTurn = {
 /**
  * `compactionTurn`: the host's `/compact` turn, already begun. `adopted`: an earlier app's prompt a
  * kept agent still runs, its turn saved already. `renumber`: the replay lacks that turn's first
- * lines, so its unnumbered messages take rows of their own.
+ * lines, so its unnumbered messages take rows of their own, keyed by this.
  */
-export type AcpPromptOpening = [compactionTurn?: string, adopted?: boolean, renumber?: boolean]
+export type AcpPromptOpening = [compactionTurn?: string, adopted?: boolean, renumber?: string]
 
 export const ACP_PROMPT_TURN_PREFIX = 'prompt:'
 export const acpPromptTurnId = (clientMessageId: string): string =>

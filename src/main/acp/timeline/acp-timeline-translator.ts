@@ -87,7 +87,7 @@ export class AcpTimelineTranslator {
     }
     const prompt = this.prompts.open(clientMessageId, at, open[0], open[1])
     if (open[2]) {
-      this.ownership.messages.carry(prompt.promptId)
+      this.ownership.messages.carry(prompt.promptId, open[2])
     }
     this.agentTurns.resume()
     if (this.prompts.current?.opened) {

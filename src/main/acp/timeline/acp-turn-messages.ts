@@ -135,9 +135,10 @@ export class AcpTurnMessages {
     return `turn-message:${JSON.stringify(carried ? [turn, ordinal, carried] : [turn, ordinal])}`
   }
 
-  carry(turn: string): void {
-    // Each reattach's own, so a second restart in one turn doesn't reuse the first's rows.
-    this.carried.set(turn, `carried:${randomUUID()}`)
+  /** `salt`: the same for every replay from one cut, so a restart that replays it again rewrites
+   *  the rows the last one wrote; a replay from elsewhere numbers rows of its own. */
+  carry(turn: string, salt: string = randomUUID()): void {
+    this.carried.set(turn, `carried:${salt}`)
   }
 
   dispose(): void {
