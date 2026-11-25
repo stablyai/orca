@@ -10,6 +10,13 @@ export const ACP_SESSION_UPDATE_METHODS = new Set([
   '_x.ai/session/update'
 ])
 
+/** Those and OpenCode's child sessions' updates, which carry their own messages and calls. */
+const ACP_UPDATE_METHODS = new Set([
+  ...ACP_SESSION_UPDATE_METHODS,
+  'opencode/session/child_update',
+  '_opencode/session/child_update'
+])
+
 const ENVELOPE_SCAN_CHARS = 4096
 /** A long line's fields are read from its start and end; no line is parsed here. */
 const FIELD_WINDOW_CHARS = 4096
@@ -17,7 +24,10 @@ const FIELD_WINDOW_CHARS = 4096
 const MAX_OPEN_ITEMS = 256
 export const ACP_MESSAGE_CHUNKS = new Set(['agent_message_chunk', 'agent_thought_chunk'])
 /** Updates after which a session's message chunks don't continue (as the translator numbers them). */
+/** An OpenCode child's status report, read as an update of its session. */
+const CHILD_STATUS = 'orca:child_status'
 export const ACP_MESSAGE_ENDS = new Set([
+  CHILD_STATUS,
   'user_message_chunk',
   'tool_call',
   'tool_call_update',
@@ -34,6 +44,7 @@ export type AcpUpdateFields = {
 /** A key outside any string: an unescaped quote can't sit inside a JSON string. */
 const field = (name: string): RegExp => new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`)
 const SESSION_ID = field('sessionId')
+const CHILD_SESSION_ID = field('childSessionId')
 const SESSION_UPDATE = field('sessionUpdate')
 const MESSAGE_ID = field('messageId')
 const TOOL_CALL_ID = field('toolCallId')
@@ -53,10 +64,14 @@ function updateFields(line: string): AcpUpdateFields {
     windows.map((text) => pattern.exec(text)?.[1]).find((value) => value !== undefined)
   const sessionUpdate = find(SESSION_UPDATE)
   if (sessionUpdate === 'tool_call') {
-    return { sessionId: find(SESSION_ID), sessionUpdate, toolCallId: find(TOOL_CALL_ID) }
+    return {
+      sessionId: find(CHILD_SESSION_ID) ?? find(SESSION_ID),
+      sessionUpdate,
+      toolCallId: find(TOOL_CALL_ID)
+    }
   }
   return {
-    sessionId: find(SESSION_ID),
+    sessionId: find(CHILD_SESSION_ID) ?? find(SESSION_ID),
     sessionUpdate,
     ...(sessionUpdate && ACP_MESSAGE_CHUNKS.has(sessionUpdate)
       ? { messageId: find(MESSAGE_ID) }
@@ -71,9 +86,13 @@ export function acpSessionUpdateFields(line: string): AcpUpdateFields | null {
     maxFields: 8
   })
   const method = properties.find((property) => property.key === 'method')?.value
-  return typeof method === 'string' && ACP_SESSION_UPDATE_METHODS.has(method)
-    ? updateFields(line)
-    : null
+  if (typeof method !== 'string' || !ACP_UPDATE_METHODS.has(method)) {
+    return null
+  }
+  const fields = updateFields(line)
+  return fields.sessionUpdate === undefined && !ACP_SESSION_UPDATE_METHODS.has(method)
+    ? { ...fields, sessionUpdate: CHILD_STATUS }
+    : fields
 }
 
 const first = (open: Map<string, { seq: number }>): number | null =>
@@ -135,6 +154,12 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.numbered = true
       } else {
         this.givesIds = true
+        // Another message started: the continuation moves only the first one a replay meets.
+        for (const [id, session] of this.cutMessages) {
+          if (id !== update.messageId && session === update.sessionId) {
+            this.cutMessages.delete(id)
+          }
+        }
         this.open(this.messages, update.messageId, { seq, session: update.sessionId })
       }
     }

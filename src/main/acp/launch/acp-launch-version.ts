@@ -30,6 +30,10 @@ export async function checkAcpLaunchVersion(
     skippedForKept.add(launch.chat)
     return { status: 'unknown', version: null }
   }
+  // A launch that skipped and then stopped before spawning left its mark; this one checks.
+  if (launch.chat !== undefined) {
+    skippedForKept.delete(launch.chat)
+  }
   if (!spec.minimumVersions && !wantVersion) {
     noteAcpForkVersion(spec.agent, null)
     return { status: 'unknown', version: null }
