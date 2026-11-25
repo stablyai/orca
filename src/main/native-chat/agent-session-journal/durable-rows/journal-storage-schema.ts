@@ -184,7 +184,9 @@ export const storedMessageBody = messageBody.extend({
   origin: text,
   asker: storedConnectorAsker.optional(),
   connectorConversation: z.object({ source: z.string(), externalId: z.string() }).optional(),
+  leaveEligible: z.literal(true).optional(),
   connectorDelivery: storedConnectorDelivery.optional(),
+  carriedCards: z.array(z.object({ messageId: z.string(), fingerprint: z.string() })).optional(),
   connectorClaim: z
     .object({
       cutTurnId: z.string(),

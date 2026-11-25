@@ -12,7 +12,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-const store = { read: () => true, write: () => {}, runScroll: new Map() }
+const store = { read: () => true, write: () => {}, toolRunMeasurements: new Map() }
 
 // Perf contract: an expanded thought that streams parses only its new tail each live window,
 // never its whole text again.

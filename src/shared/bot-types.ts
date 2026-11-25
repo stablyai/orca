@@ -62,11 +62,8 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   const readable: Bot[] = []
   const newer: Bot[] = []
   for (const bot of bots) {
-    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
-      readable.push(bot)
-    } else {
-      newer.push(bot)
-    }
+    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    side.push(bot)
   }
   return { readable, newer }
 }
@@ -180,6 +177,13 @@ export const BotSchema = z.object({
   /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
    *  as none (wornBotOutfit) but survives a save, for the version that added it. */
   avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
+  /** Mascot replaced by an automatic upload at the current revision. */
+  generatedOverMascot: z.string().optional().catch(undefined),
+  /** Bumped by every picture, color or outfit write, so a write can require that none landed since it was
+   *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
+  avatarRevision: z.number().int().nonnegative().optional().catch(undefined),
+  /** Rotated when an explicit picture choice repairs a lost revision history. */
+  avatarRevisionEpoch: z.uuid().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
@@ -201,6 +205,9 @@ export const BotSchema = z.object({
   slackMirror: z.boolean().optional().catch(undefined),
   /** The bot may use the Google accounts signed in on its host, for its owner's own requests. Absent is off. */
   google: z.boolean().optional(),
+  /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed
+   *  list reads as none, never as every account. */
+  googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
   skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
   /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
@@ -392,20 +399,4 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   return bots
 }
 
-const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
-
-/** A folder name every supported filesystem accepts. */
-export function botFolderName(botName: string): string {
-  const slug = botName
-    .normalize('NFKD')
-    .toLowerCase()
-    // Why: NFKD leaves an accent as a combining mark; drop it so it doesn't split the word.
-    .replace(/(\p{M}+)|[^a-z0-9]+/gu, (_run, marks) => (marks ? '' : '-'))
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/, '')
-  if (!slug) {
-    return 'bot'
-  }
-  return WINDOWS_RESERVED_NAME.test(slug) ? `${slug}-bot` : slug
-}
+export { botFolderName } from './bots/bot-folder-name'

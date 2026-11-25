@@ -7,12 +7,9 @@ import type {
 } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { issueBrowserGuestNavigation } from '../../host-guest/metadata/browser-guest-metadata-cache'
 import type { useBrowserPageReloadActions } from '../../navigate/use-browser-page-reload-actions'
-import {
-  getRemoteRoutedOpenableExternalUrl,
-  toDisplayUrl
-} from '../../describe-page/browser-page-url-display'
+import { toDisplayUrl } from '../../describe-page/browser-page-url-display'
 import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
-import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
+import { useServerPageOpenExternal } from '../../describe-page/use-server-page-open-external'
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import BrowserAddressBar from '../address-bar/BrowserAddressBar'
@@ -81,7 +78,7 @@ export function ClientHostedBrowserPageToolbar({
   const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
     applyBrowserViewportPreset(browserPageId, nextId)
   const viewportPresetId = browserTab.viewportPresetId ?? null
-  const externalUrl = getRemoteRoutedOpenableExternalUrl(browserTab.url)
+  const onOpenExternal = useServerPageOpenExternal(browserTab.url, runtimeEnvironmentId, worktreeId)
   const browserProfileId = useServerBrowserPageProfileId(browserPageId)
   // The page runs this desktop's extensions when its server profile is Default; main decides.
   const extensionToolbar = useBrowserExtensionToolbar(
@@ -180,9 +177,7 @@ export function ClientHostedBrowserPageToolbar({
             onFind: onOpenFind,
             onHardReload: () => reload.runReloadTrigger('hard-reload'),
             onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
-            onOpenExternal: externalUrl
-              ? () => void openAppHttpLink(externalUrl, { worktreeId, destination: 'system' })
-              : null,
+            onOpenExternal,
             deviceMoveItem: (
               <BrowserPageDeviceMoveItem
                 target={{

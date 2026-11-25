@@ -175,7 +175,9 @@ export function installedPluginDisplayNames(
     names = disambiguatedPluginNames(
       plugins.map((plugin) => ({
         key: plugin.pluginKey,
-        name: plugin.name,
+        // Why the key first: a blank name clashes with every other blank name, and the publisher
+        // added to that clash ("(acme)") would not tell two plugins of one publisher apart.
+        name: plugin.name.trim() ? plugin.name : plugin.pluginKey,
         publisher: plugin.publisher || null,
         official: plugin.official
       })),

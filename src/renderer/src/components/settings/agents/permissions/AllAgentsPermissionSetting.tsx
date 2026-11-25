@@ -55,7 +55,11 @@ export function AllAgentsPermissionSetting({
               <ChevronDown className="size-3 shrink-0" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
+          <DropdownMenuContent
+            align="start"
+            collisionPadding={8}
+            className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+          >
             <DropdownMenuRadioGroup aria-label={title} value={choice ?? ''}>
               <AgentPermissionChoiceItems
                 choices={['ask', 'auto', 'full-access', 'own']}
@@ -99,7 +103,11 @@ export function AllAgentsPermissionSetting({
                 <ChevronDown className="size-3 shrink-0" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" collisionPadding={8} className="w-72">
+            <DropdownMenuContent
+              align="start"
+              collisionPadding={8}
+              className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+            >
               <DropdownMenuRadioGroup aria-label={withoutAutoTitle} value={withoutAutoChoice ?? ''}>
                 <AgentPermissionChoiceItems
                   choices={['full-access', 'own']}

@@ -76,7 +76,7 @@ export function NativeChatReasoningRow({
             <NativeChatReasoningChevron />
           </button>
         </CollapsibleTrigger>
-        <CollapsibleContent animation="height" data-native-chat-member-detail>
+        <CollapsibleContent animation="height">
           <NativeChatReplyRevealsContext.Provider value={heldReveals}>
             <NativeChatReasoningBody
               rowKey={disclosureKey}

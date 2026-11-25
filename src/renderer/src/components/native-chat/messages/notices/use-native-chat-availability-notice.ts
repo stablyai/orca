@@ -146,11 +146,13 @@ export function useNativeChatAvailabilityNotice(input: {
             },
             sayAgentSessionFailureTranslated
           )
-        : notSignedInSentence(
-            { agentName },
-            { kind: 'notSignedIn', account: unavailable.account },
-            sayAgentSessionFailureTranslated
-          ),
+        : unavailable.reason === 'agentCommandNotRunnable'
+          ? sayAgentSessionFailureTranslated('agentCommandNotRunnable', { agent: agentName })
+          : notSignedInSentence(
+              { agentName },
+              { kind: 'notSignedIn', account: unavailable.account },
+              sayAgentSessionFailureTranslated
+            ),
     onDismiss: () => setDismissal({ key, dismissed: true })
   }
 }

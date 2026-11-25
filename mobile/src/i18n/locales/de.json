@@ -207,8 +207,7 @@
       "next": "Weiter",
       "other": "Sonstiges…",
       "skip": "Überspringen",
-      "step": "Schritt {{step}}",
-      "submit": "Absenden"
+      "step": "Schritt {{step}}"
     },
     "askRow": {
       "asked": "Gefragt:",
@@ -380,14 +379,6 @@
     },
     "promptStrip": {
       "expand": "Ausklappen"
-    },
-    "question": {
-      "otherReplyPlaceholder": "Oder eine Antwort eingeben…",
-      "replyPlaceholder": "Antwort eingeben…",
-      "sendReply": "Antwort senden",
-      "submit": "Absenden",
-      "submitCount": "Absenden ({{count}})",
-      "submitSelectedOptions": "Ausgewählte Optionen absenden"
     },
     "queuedMessages": {
       "deleteAll": "Alle löschen",
@@ -4125,7 +4116,6 @@
       "empty": "Keine Arbeitsbereiche",
       "loadFailed": "Arbeitsbereiche von diesem Host konnten nicht geladen werden.",
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
-      "noMatches": "Keine passenden Arbeitsbereiche",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt."
     },
@@ -4470,10 +4460,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
-      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
@@ -4512,7 +4499,6 @@
       "access": "Zugriff",
       "whoCanAsk": "Wer fragen darf",
       "deleteBot": "Bot löschen…",
-      "agentDetail": "Wird für Bot-Unterhaltungen und Automatisierungen verwendet. Ein neues Modell gilt für neue Unterhaltungen; der Home-Chat behält sein aktuelles.",
       "accountChecking": "Wird geprüft…",
       "signedOut": "Von Orca abgemeldet",
       "orcaAccount": "Orca-Konto",
@@ -4527,7 +4513,6 @@
       "onlyYou": "Nur du",
       "model": "Modell",
       "effort": "Denkaufwand",
-      "chatDefaultNote": "Nutzt deinen Chat-Standard. Hintergrundläufe nutzen deine Agents-Einstellung.",
       "modelDefault": "Standard",
       "signInChanged": "Orca-Anmeldung geändert",
       "sameAsChatsDetail": "Verwendet deine Chat-Berechtigungseinstellung.",
@@ -4553,7 +4538,6 @@
     "lookAround": {
       "looking": "Sucht…",
       "save": "Speichern",
-      "detail": "Liest verbundene Apps und Projekte, um nächste Schritte vorzuschlagen. Nur Lesen. Jedes Umsehen nutzt deinen Agenten-Plan, und Orca muss auf dem Host laufen.",
       "lookNow": "Jetzt umsehen",
       "notYet": "Noch nicht",
       "backToLookAround": "Zurück zum Umsehen"
@@ -4568,28 +4552,13 @@
     "groups": {
       "group": "Gruppe",
       "peerTold": "{{from}} hat {{to}} Bescheid gegeben",
-      "startAConversationWithThisGroupMentionBots": "Starte eine Unterhaltung mit dieser Gruppe. Erwähne Bots mit @Name oder @everyone.",
       "items": {
-        "thisGroup": "Diese Gruppe",
-        "thread": "Thread",
-        "all": "Ihre gesamte Arbeit",
-        "orNames": "{{names}} oder {{last}}",
-        "outsideRoom_one": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideRoom_other": "{{count}} weitere außerhalb dieses Raums",
-        "outsideThread_one": "{{count}} weiteres außerhalb dieses Threads",
-        "outsideThread_other": "{{count}} weitere außerhalb dieses Threads",
-        "outside_one": "{{count}} weiteres außerhalb dieser Gruppe",
-        "outside_other": "{{count}} weitere außerhalb dieser Gruppe",
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
-        "emptyBody": "Wenn {{names}} in dieser Gruppe etwas übernehmen, erscheint es hier.",
         "needsYouCount_one": "{{count}} braucht dich",
         "needsYouCount_other": "{{count}} brauchen dich",
         "workingCount_one": "{{count}} arbeitet",
         "workingCount_other": "{{count}} arbeiten",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} weiteres außerhalb dieses Raums",
-        "outsideThread": "{{count}} weiteres außerhalb dieses Threads",
-        "outside": "{{count}} weiteres außerhalb dieser Gruppe",
         "needsYouCount": "{{count}} braucht dich",
         "workingCount": "{{count}} arbeitet"
       },
@@ -4621,14 +4590,11 @@
     "tidyUp": {
       "title": "Gedächtnispflege",
       "never": "Noch nicht",
-      "footer": "Ändert nur Gedächtnisdateien. Nutzt deinen Agenten-Tarif wie ein kurzer Chat. Orca muss auf deinem Computer laufen.",
-      "undoNote": "Beim Rückgängigmachen wird MEMORY.md in einem Schritt auf den Stand vor diesem Aufräumen zurückgesetzt. Den vollständigen Verlauf und die Gedächtnisbearbeitung findest du auf deinem Computer unter Einstellungen → Gedächtnis.",
       "backToTidyUp": "Zurück zur Gedächtnispflege"
     },
     "items": {
       "filter": {
-        "clearAll": "Filter zurücksetzen",
-        "chat": "Chat"
+        "clearAll": "Filter zurücksetzen"
       },
       "tab": "Einträge",
       "activity": {
@@ -4644,8 +4610,7 @@
         "title": "Element",
         "placeOf": "{{index}} von {{total}}",
         "previous": "Vorheriges Element",
-        "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "next": "Nächstes Element"
       },
       "write": {
         "offline": "{{host}} ist offline."
@@ -4654,7 +4619,6 @@
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
       "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
       "ask": {
-        "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
         "skipped": "Übersprungen"
@@ -4693,7 +4657,6 @@
       },
       "rotate": {
         "open": "Schlüssel rotieren…",
-        "title": "Schlüssel für „{{automation}}“ rotieren?",
         "confirm": "Schlüssel rotieren",
         "note": "Die URL bekommt einen neuen Schlüssel. Aktualisiere damit jeden Absender.",
         "overlap": "Alten Schlüssel 24 Stunden weiter gültig lassen",
@@ -4708,19 +4671,15 @@
         "add": "Signatur-Secret hinzufügen…",
         "generatedTitle": "Signatur-Secret bereit",
         "done": "Erledigt",
-        "generatedNote": "Kopiere es in die Webhook-Einstellungen von {{sender}}. Ab jetzt müssen Aufrufe seine Signatur tragen.",
         "copy": "Secret kopieren",
         "copied": "Secret kopiert",
         "changeTitle": "Signatur-Secret ändern",
         "addTitle": "Signatur-Secret hinzufügen",
-        "note": "Orca akzeptiert dann nur Aufrufe, die mit diesem Secret signiert sind, sodass eine geleakte URL allein „{{automation}}“ nicht starten kann.",
         "sender": "Absender",
         "modeGenerate": "Orca erzeugt eins",
         "modePaste": "Das des Absenders einfügen",
         "generateNote": "Orca erzeugt dieses Secret. Als Nächstes kopierst du es in {{sender}}.",
         "paste": "{{sender}}-Secret",
-        "pasteNote": "Verwende dies, wenn der Absender dir sein eigenes Secret gibt.",
-        "generate": "Secret erzeugen",
         "save": "Speichern",
         "saved": "Signatur-Secret gespeichert",
         "changeOpen": "Signatur-Secret ändern…",
@@ -4754,7 +4713,6 @@
       "hookCount_one": "{{count}} Hook",
       "hookCount_other": "{{count}} Hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Im Chat hinzufügen",
       "setUpDraft": "Richte einen Webhook ein, der ",
       "resumed": "Webhook fortgesetzt",
@@ -4820,8 +4778,7 @@
         "unverifiable": "Nicht überprüfbar",
         "unverifiableDetail": "Der Computer von {{bot}} ist nicht erreichbar"
       },
-      "back": "Zurück zu den Webhooks",
-      "howToCallShort": "Jedes Tool oder Skript kann per POST an die URL eines Hooks senden. Jeder Hook startet eine Automatisierung."
+      "back": "Zurück zu den Webhooks"
     },
     "errors": {
       "generic": "Etwas ist schiefgelaufen. Versuche es erneut."
@@ -4887,7 +4844,6 @@
       "colorInk": "Tinte",
       "title": "Name und Bild",
       "mascot": "Maskottchen",
-      "background": "Hintergrundfarbe",
       "choosePhoto": "Aus Fotos auswählen",
       "slackToo": "Ändert auch das Bild deines Bots in Slack."
     },
@@ -4904,9 +4860,7 @@
       "addButton": "Hinzufügen",
       "sourceLabel": "Server-URL oder Startbefehl",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Nur {{name}} bekommt es, zusätzlich zu deinen eigenen Werkzeugen.",
       "details": "Details",
-      "commandWarning": "Der Befehl läuft im Home-Ordner dieses Bots auf {{host}}. Hinzufügen oder Speichern kann ihn während der nativen Prüfung starten. Füge nur Software hinzu, der du vertraust.",
       "serverType": "Servertyp",
       "urlMode": "Mit einer URL verbinden",
       "commandMode": "Befehl ausführen",
@@ -4914,7 +4868,6 @@
       "removeTitle": "{{app}} entfernen?",
       "removeNote": "{{bot}} kann {{app}} nicht mehr verwenden. Du kannst es jederzeit wieder hinzufügen.",
       "remove": "Entfernen",
-      "signInOrca": "Funktioniert mit Claude und Codex",
       "signInMissing": "{{agent}} ist nicht angemeldet",
       "signInHeld": "Von {{agent}} verwaltet",
       "wontStart": "Startet nicht",
@@ -4976,7 +4929,17 @@
         "denied": "Der Zugriff wurde nicht erlaubt.",
         "expired": "Die Anmeldung ist abgelaufen. Versuche es erneut.",
         "couldNotSignIn": "Anmeldung nicht möglich. Versuche es erneut."
-      }
+      },
+      "trust": "Füge nur Software hinzu, der du vertraust.",
+      "argument": "Argument",
+      "removeArgument": "Argument entfernen",
+      "header": "Header",
+      "variable": "Variable",
+      "removeHeaderRow": "Header entfernen",
+      "removeVariableRow": "Variable entfernen",
+      "emptyArgument": "Leer",
+      "valueNew": "Neuer Wert",
+      "valueSaved": "Gespeichert"
     },
     "handToBot": {
       "menu": "An Bot übergeben…",
@@ -5009,7 +4972,6 @@
       "rowDetail": "{{app}} {{kind}}",
       "bringOver": "Übernehmen",
       "otherApp": "Andere App…",
-      "otherAppNote": "Dein alter Bot kopiert seine Dateien für dich",
       "noneFoundNote": "Keine Bots in OpenClaw (~/.openclaw), Hermes (~/.hermes) oder OpenBot gefunden.",
       "sendStep": "Sende deinem alten Bot diese Nachricht",
       "copyMessage": "Nachricht kopieren",
@@ -5020,18 +4982,13 @@
       "replyLabel": "Seine Antwort",
       "title": "Aus einer anderen App importieren",
       "newBot": "Neuer Bot",
-      "exportDescription": "Bitte deinen alten Bot um eine Kopie von sich selbst und gib die Kopie dann deinem neuen Bot.",
-      "description": "Dein neuer Bot liest den alten und richtet sich selbst ein.",
       "nameAnother": "Neuen Bot benennen",
-      "importedBefore": "{{bot}} stammt von diesem Bot",
       "keysStay": "Schlüssel und Logins bleiben zurück",
       "chooseFolderTitle": "Ordner auswählen",
       "loadingFolders": "Ordner werden geladen…",
       "lookingOn": "Suche auf {{host}}…",
       "foundOn": "{{count}} auf {{host}} gefunden",
-      "copiedNote": "Kopiert. Füge die Nachricht dort ein, wo du mit deinem alten Bot chattest.",
       "copyAgain": "Erneut kopieren",
-      "addStepNote": "Er speichert auf {{host}} unter Downloads einen Ordner, dessen Name auf -export endet.",
       "folderItems_one": "{{count}} Element",
       "folderItems_other": "{{count}} Elemente",
       "chooseAnother": "Anderen Ordner auswählen…",
@@ -5193,6 +5150,9 @@
       },
       "webhooks": {
         "line": "Ereignisse aus jedem Tool oder Skript"
+      },
+      "composio": {
+        "keyOnHost": "Gespeichert auf {{host}}; Bots sehen ihn nie."
       }
     },
     "share": {
@@ -5207,6 +5167,7 @@
     },
     "usageLimit": {
       "continuesAt": "Fortsetzung um {{time}}",
+      "continues": "Fortsetzung um {{time}}",
       "hitLimit": "Limit erreicht · Reset {{time}}"
     }
   },

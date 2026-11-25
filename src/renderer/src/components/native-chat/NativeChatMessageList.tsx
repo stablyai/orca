@@ -2,6 +2,7 @@ import { rowsBesideStreamedText } from '../../../../shared/agent-session/view/st
 import type { BotChatIdentity } from '../bots/use-bot-chat-identity'
 import { nativeChatTranscriptOuterClass } from './appearance/native-chat-appearance-style'
 import { NativeChatTranscriptViewport } from './NativeChatTranscriptViewport'
+import { useNativeChatToolRunScroll as useToolRunScroll } from './viewport/scroll/native-chat-transcript-scroll-context'
 import { NativeChatTranscriptColumn } from './NativeChatTranscriptColumn'
 import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
@@ -279,6 +280,7 @@ export function NativeChatMessageList({
   })
   const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
     transcriptScroll
+  const toolRunScroll = useToolRunScroll(scrollRef, isVisible, transcriptWindow, transcriptScroll)
   const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
@@ -320,14 +322,7 @@ export function NativeChatMessageList({
     scrollToBottom
   })
   const { beginNavigation, jumpToLatest } = navigation
-  const { railRef, wake: wakeRail, sustain: sustainRail } = useNativeChatRailWake()
-  const onTranscriptScroll = useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      onScroll(event)
-      sustainRail()
-    },
-    [onScroll, sustainRail]
-  )
+  const { railRef, wake: wakeRail, onScroll: onTranscriptScroll } = useNativeChatRailWake(onScroll)
   const onReaderScroll = useCallback(() => {
     beginNavigation()
     recordReaderScroll()
@@ -376,6 +371,7 @@ export function NativeChatMessageList({
           <NativeChatTranscriptViewport
             scrollRef={scrollRef}
             scrollerProps={{ onScroll: onTranscriptScroll, ...readerInput.scrollerProps }}
+            toolRunScroll={toolRunScroll}
             forwardedGesture={readerInput.forwardedGesture}
             showJump={showJump}
             onJump={jumpToLatest}
@@ -383,12 +379,14 @@ export function NativeChatMessageList({
             overlays={
               <>
                 <NativeChatMessageRail
+                  key={session.transcriptIdentity ?? session.sessionId}
                   rail={rail}
                   railRef={railRef}
                   scrollRef={scrollRef}
                   onSelect={navigation.selectRailItem}
                   onReaderScroll={readerInput.railWheel}
                   pendingId={navigation.pendingRailId}
+                  listEnabled={isVisible}
                 />
                 <NativeChatNewRowsAnnouncement marked={newRows.marker !== undefined} />
               </>

@@ -9,20 +9,26 @@ export function filterWorkspaceCleanupRemovalCandidates(
   candidates: readonly WorkspaceCleanupCandidate[],
   deleteStateByWorktreeId: Record<string, DeletionFlagState | undefined>
 ): WorkspaceCleanupCandidate[] {
-  return candidates.filter((candidate) => {
-    const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
-    const qualifiedState = hostId
-      ? deleteStateByWorktreeId[composeWorktreeHostIdentity(hostId, candidate.worktreeId)]
-      : undefined
-    const legacyState = deleteStateByWorktreeId[candidate.worktreeId]
-    const legacyStateMatchesHost =
-      legacyState?.executionHostId === undefined ||
-      legacyState.executionHostId === null ||
-      hostId === null ||
-      legacyState.executionHostId === hostId
-    return (
-      qualifiedState?.isDeleting !== true &&
-      !(legacyState?.isDeleting === true && legacyStateMatchesHost)
-    )
-  })
+  return candidates.filter(
+    (candidate) => !isWorkspaceCleanupRemovalBusy(candidate, deleteStateByWorktreeId)
+  )
+}
+
+export function isWorkspaceCleanupRemovalBusy(
+  candidate: WorkspaceCleanupCandidate,
+  deleteStateByWorktreeId: Record<string, DeletionFlagState | undefined>
+): boolean {
+  const hostId = resolveWorkspaceCleanupRemovalHostId(candidate)
+  const qualifiedState = hostId
+    ? deleteStateByWorktreeId[composeWorktreeHostIdentity(hostId, candidate.worktreeId)]
+    : undefined
+  const legacyState = deleteStateByWorktreeId[candidate.worktreeId]
+  const legacyStateMatchesHost =
+    legacyState?.executionHostId == null ||
+    hostId === null ||
+    legacyState.executionHostId === hostId
+  return (
+    qualifiedState?.isDeleting === true ||
+    (legacyState?.isDeleting === true && legacyStateMatchesHost)
+  )
 }

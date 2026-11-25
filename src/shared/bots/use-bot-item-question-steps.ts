@@ -1,5 +1,6 @@
-// An ask of several questions, one line at a time, on the desktop and the phone: a quick reply or the
-// box's send answers the line it is on, and the step moves to the first open line. Answers, picked or
+// An ask of several questions, one line at a time, on the phone (the desktop shows them all on one
+// card, in its own use-bot-item-question-steps): a quick reply or the box's send answers the line it is
+// on, and the step moves to the first open line. Answers, picked or
 // typed, are held on this device (the app's draft store, keyed by `heldScope`) and post as one comment
 // when the last line is answered, so the agent wakes once, or with "send anyway", which skips the
 // lines still unanswered: they close, and the agent's mail names them. An
@@ -19,7 +20,7 @@ import {
   botItemWaitingLine,
   type BotItemWaitingLine
 } from './bot-item-question-answers'
-import type { BotItemPendingComment } from './bot-item-pending-comments'
+import type { BotItemPendingComment, BotItemPendingIntent } from './bot-item-pending-comments'
 
 const NO_ASK: BotItemQuestionShape = { body: '', decisions: [] }
 
@@ -63,21 +64,24 @@ export type BotItemQuickReplyActions = {
 export type BotItemSentAnswers = { askId: string; text: string; answers: (string | null)[] }
 
 /** `questionId`: the ask the text answers, so a reply that lands after a new question is refused;
- *  `plain`: it answers none; `skipped`: that ask's lines it leaves unanswered, closing them. */
+ *  `plain`: it answers none; `skipped`: that ask's lines it leaves unanswered, closing them; `intent`:
+ *  what it answers, kept on this device, so a refusal gives back the right words. */
 export type BotItemQuestionStepsSend = (
   text: string,
   paths?: readonly string[],
   questionId?: string,
   plain?: boolean,
   skills?: readonly BotItemCommentSkill[],
-  skipped?: readonly number[]
+  skipped?: readonly number[],
+  intent?: BotItemPendingIntent
 ) => void
 
 export type BotItemQuestionStepsState = {
   steps: BotItemQuestionSteps | null
   sent: BotItemSentAnswers | null
-  /** A quick reply of one question, posted at once as it always has. */
-  quick: (text: string) => void
+  /** A quick reply of one question, posted at once as it always has; `answering`: the ask it answers
+   *  when its event isn't read yet, and the lines it leaves unanswered, closing them. */
+  quick: (text: string, answering?: { askId: string; skipped: readonly number[] }) => void
   /** The comment box's send: it answers only the question its "Replying to" names; with none named
    *  (its × closed), the comment answers nothing. */
   fromBox: (
@@ -164,7 +168,7 @@ export function createBotItemQuestionStepsHooks(
     ): void => {
       hold([])
       setSent({ askId, text, answers })
-      send(text, paths, askId, undefined, skills, skipped)
+      send(text, paths, askId, undefined, skills, skipped, { askId, shape, answers })
     }
     // Typed words wait like a quick reply; files and skills aren't held here, so they post the answers so far.
     const settle = (
@@ -230,14 +234,30 @@ export function createBotItemQuestionStepsHooks(
     const steps = waiting
       ? { askId, shape, held, current, lines, go, answer, heldCount, sendHeld }
       : null
-    const quick = useLatest((text: string) => {
-      if (asked) {
-        const { shape: own } = asked
-        const answers = own.decisions.map((_, index) => botItemAnswerWords(own, index, { text }))
-        setSent({ askId: asked.askId, text, answers })
+    const quick = useLatest(
+      (text: string, answering?: { askId: string; skipped: readonly number[] }) => {
+        let intent: BotItemPendingIntent | undefined
+        if (asked) {
+          const { shape: own } = asked
+          // Several lines: only those the text names; a line it skips stays open until the read.
+          const answers =
+            own.decisions.length > 1
+              ? botItemNamedAnswers(own, text)
+              : [botItemAnswerWords(own, 0, { text })]
+          setSent({ askId: asked.askId, text, answers })
+          intent = { askId: asked.askId, shape: own, answers }
+        }
+        send(
+          text,
+          [],
+          asked?.askId ?? answering?.askId,
+          undefined,
+          undefined,
+          answering?.skipped,
+          intent
+        )
       }
-      send(text, [], asked?.askId)
-    })
+    )
     const stepLine = steps?.shape.decisions[steps.current]
     return {
       steps,
