@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { ArrowDownToLine, ArrowUp, CloudDownload, GitBranch } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitSubmoduleRepo } from '../../../../../../shared/git/status/git-submodule-repo-types'
 import { ActionButton } from './action-button'
 import { SectionHeader } from './section-header'
@@ -32,6 +32,7 @@ function SubmoduleRepoRow({
   anyBusy: boolean
   onAction: (action: SubmoduleRepoAction) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const enabled = submoduleRepoActionsEnabled(repo)
   const name = repo.path.split('/').pop() ?? repo.path
   const { ahead = 0, behind = 0 } = repo.upstream ?? {}
@@ -48,10 +49,7 @@ function SubmoduleRepoRow({
           <GitBranch className="size-3 shrink-0" />
           <span className="truncate">
             {repo.branch ??
-              translate(
-                'auto.components.right.sidebar.SourceControl.submoduleDetached',
-                'Detached HEAD'
-              )}
+              t('auto.components.right.sidebar.SourceControl.submoduleDetached', 'Detached HEAD')}
           </span>
           {ahead > 0 || behind > 0 ? (
             <span className="shrink-0 tabular-nums">
@@ -63,37 +61,25 @@ function SubmoduleRepoRow({
       </div>
       <ActionButton
         icon={CloudDownload}
-        title={translate(
-          'auto.components.right.sidebar.SourceControl.submoduleFetch',
-          'Fetch {{name}}',
-          {
-            name
-          }
-        )}
+        title={t('auto.components.right.sidebar.SourceControl.submoduleFetch', 'Fetch {{name}}', {
+          name
+        })}
         disabled={anyBusy || !enabled.fetch}
         onClick={() => onAction('fetch')}
       />
       <ActionButton
         icon={ArrowDownToLine}
-        title={translate(
-          'auto.components.right.sidebar.SourceControl.submodulePull',
-          'Pull {{name}}',
-          {
-            name
-          }
-        )}
+        title={t('auto.components.right.sidebar.SourceControl.submodulePull', 'Pull {{name}}', {
+          name
+        })}
         disabled={anyBusy || !enabled.pull}
         onClick={() => onAction('pull')}
       />
       <ActionButton
         icon={ArrowUp}
-        title={translate(
-          'auto.components.right.sidebar.SourceControl.submodulePush',
-          'Push {{name}}',
-          {
-            name
-          }
-        )}
+        title={t('auto.components.right.sidebar.SourceControl.submodulePush', 'Push {{name}}', {
+          name
+        })}
         disabled={anyBusy || !enabled.push}
         onClick={() => onAction('push')}
       />
@@ -107,6 +93,7 @@ export function SourceControlSubmoduleReposSection({
   busy,
   runAction
 }: UseSourceControlSubmoduleReposResult): React.JSX.Element | null {
+  const t = useTranslate()
   const [collapsed, setCollapsed] = useState(false)
   if (repos.length === 0) {
     return null
@@ -114,10 +101,7 @@ export function SourceControlSubmoduleReposSection({
   return (
     <div>
       <SectionHeader
-        label={translate(
-          'auto.components.right.sidebar.SourceControl.submodulesSection',
-          'Submodules'
-        )}
+        label={t('auto.components.right.sidebar.SourceControl.submodulesSection', 'Submodules')}
         count={repos.length}
         isCollapsed={collapsed}
         onToggle={() => setCollapsed((value) => !value)}

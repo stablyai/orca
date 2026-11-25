@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { GitSubmoduleRepo } from '../../../../../../shared/git/status/git-submodule-repo-types'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type SubmoduleRepoAction = 'fetch' | 'pull' | 'push'
@@ -41,7 +41,9 @@ export function useSourceControlSubmoduleRepos(
   )
   const [busy, setBusy] = useState<UseSourceControlSubmoduleReposResult['busy']>(null)
   const worktreePathRef = useRef(worktreePath)
-  worktreePathRef.current = worktreePath
+  useLayoutEffect(() => {
+    worktreePathRef.current = worktreePath
+  }, [worktreePath])
 
   const load = useCallback(async (path: string): Promise<void> => {
     try {
@@ -74,11 +76,10 @@ export function useSourceControlSubmoduleRepos(
         await window.api.git[action]({ worktreePath: path, submodulePath })
       } catch (error) {
         toast.error(extractIpcErrorMessage(error, `${action} failed`))
-      } finally {
-        setBusy(null)
-        await load(path)
-        onChanged()
       }
+      setBusy(null)
+      await load(path)
+      onChanged()
     },
     [load, onChanged]
   )

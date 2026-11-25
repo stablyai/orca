@@ -12,7 +12,6 @@ import type {
   ContinueRebaseAction,
   ContinueRebaseRequest,
   ContinueRebaseResult,
-  GitStagingArea,
   RebaseFromBaseResult,
   GitUpstreamStatus
 } from '../../../shared/git/status/git-status-types'
@@ -26,7 +25,7 @@ import type {
   GitHistoryResult
 } from '../../../shared/git/history/git-history-types'
 import type { PreloadApi } from '../../api-types'
-import type { GitSubmoduleRepo } from '../../../shared/git/status/git-submodule-repo-types'
+import { gitSubmoduleBridge } from './git-submodule-bridge'
 
 export const gitApi = {
   status: (args: {
@@ -49,12 +48,7 @@ export const gitApi = {
     branch?: string
     upstreamName?: string
   }): Promise<void> => ipcRenderer.invoke('git:setStatusUpstreamRefWatch', args),
-  submoduleStatus: (args: {
-    worktreePath: string
-    submodulePath: string
-    connectionId?: string
-    area?: GitStagingArea
-  }) => ipcRenderer.invoke('git:submoduleStatus', args),
+  ...gitSubmoduleBridge,
   checkIgnored: (args: {
     worktreePath: string
     paths: string[]
@@ -118,10 +112,6 @@ export const gitApi = {
     connectionId?: string
     pushTarget?: GitPushTarget
   }): Promise<GitUpstreamStatus> => ipcRenderer.invoke('git:upstreamStatus', args),
-  submoduleRepos: (args: {
-    worktreePath: string
-    connectionId?: string
-  }): Promise<GitSubmoduleRepo[]> => ipcRenderer.invoke('git:submoduleRepos', args),
   fetch: (args: {
     worktreePath: string
     worktreeId?: string
