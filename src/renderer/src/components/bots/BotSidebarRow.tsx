@@ -63,6 +63,35 @@ export type BotSidebarRowProps = {
   menuFooter: React.ReactNode
 }
 
+/** Every Bots row's frame, so a row of any kind lines up with the rest. A two-line workspace card's
+ *  padding, so bots sit as tight as Projects' rows. */
+export const BOT_SIDEBAR_ROW_CLASS_NAME = cn(
+  WORKTREE_CARD_SURFACE_CLASS_NAME,
+  'flex items-center pt-1.25 pb-1.25 pl-1.25'
+)
+
+/** A Bots row's picture, with a mark on its corner that takes no room of its own. */
+export function BotSidebarRowPicture({
+  picture,
+  pictureClassName,
+  pictureStyle,
+  mark
+}: {
+  picture: React.ReactNode
+  pictureClassName?: string
+  pictureStyle?: React.CSSProperties
+  mark: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <span className="relative mr-2 shrink-0">
+      <span className={cn('flex', pictureClassName)} style={pictureStyle}>
+        {picture}
+      </span>
+      {mark}
+    </span>
+  )
+}
+
 export function BotSidebarRow({
   avatar,
   name,
@@ -108,10 +137,9 @@ export function BotSidebarRow({
           aria-expanded={expanded}
           data-project-group-header-drag-handle={dragHandle ? '' : undefined}
           className={cn(
-            WORKTREE_CARD_SURFACE_CLASS_NAME,
-            // A two-line workspace card's padding, so bots sit as tight as Projects' rows.
+            BOT_SIDEBAR_ROW_CLASS_NAME,
             // A size container: the fold strip slims down in a narrow sidebar.
-            'group/bot-row @container/bot-row flex items-center pt-1.25 pb-1.25 pl-1.25',
+            'group/bot-row @container/bot-row',
             !isActive && 'worktree-sidebar-card-hover',
             dimmed && 'opacity-60'
           )}
@@ -130,12 +158,11 @@ export function BotSidebarRow({
           }}
         >
           {/* Exceptions sit on the picture's corner, the same in both card styles. */}
-          <span className="relative mr-2 shrink-0">
-            <span className="flex" style={botAvatarBadgeCutout(badge)}>
-              {avatar}
-            </span>
-            <BotAvatarStatusBadge {...badge} />
-          </span>
+          <BotSidebarRowPicture
+            picture={avatar}
+            pictureStyle={botAvatarBadgeCutout(badge)}
+            mark={<BotAvatarStatusBadge {...badge} />}
+          />
           {/* Opens on pointer rest like Activity's cards, so sweeping across rows doesn't flash them.
               The trigger runs to the row's end, fold toggle included, so the card always opens past
               the sidebar's edge as a workspace row's does. */}
