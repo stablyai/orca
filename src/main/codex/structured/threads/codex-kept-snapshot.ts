@@ -58,8 +58,8 @@ async function turnPage(
 
 /**
  * One thread's state: its latest turn whole (its messages' numbering and running commands), its
- * recent turns' states for the translator, and for a child its parent. Only the chat's own latest
- * turn is required; any other read that fails is logged and left out.
+ * recent turns' states for the translator, and for a child its parent. Only the chat's own turns
+ * are required; any other read that fails is logged and left out.
  */
 async function readKeptThread(input: {
   connection: Connection
@@ -75,24 +75,20 @@ async function readKeptThread(input: {
       input.onError(threadId, error)
       return fallback
     })
-  // The chat's own latest turn numbers its replayed rows, so it is asked twice before giving up.
-  const latest = input.primary
-    ? turnPage(connection, threadId, 1, 'full', timeoutMs).catch(async (error: unknown) => {
-        input.onError(threadId, error)
-        await new Promise((resolve) => setTimeout(resolve, PRIMARY_RETRY_MS))
-        // Bounded, so a wedged agent holds a launch slot only a little past one request.
-        return turnPage(
-          connection,
-          threadId,
-          1,
-          'full',
-          Math.min(timeoutMs, PRIMARY_RETRY_TIMEOUT_MS)
-        )
-      })
-    : turnPage(connection, threadId, 1, 'full', timeoutMs)
+  // The chat's own turns number its replayed rows and keep finished ones finished, so they are
+  // asked twice before giving up; a child's are best effort.
+  const required = <T>(read: (ms: number) => Promise<T>, fallback: T): Promise<T> =>
+    input.primary
+      ? read(timeoutMs).catch(async (error: unknown) => {
+          input.onError(threadId, error)
+          await new Promise((resolve) => setTimeout(resolve, PRIMARY_RETRY_MS))
+          // Bounded, so a wedged agent holds a launch slot only a little past one request.
+          return read(Math.min(timeoutMs, PRIMARY_RETRY_TIMEOUT_MS))
+        })
+      : soft(read(timeoutMs), fallback)
   const [[turn], recent, parentThreadId] = await Promise.all([
-    input.primary ? latest : soft(latest, []),
-    soft(turnPage(connection, threadId, SNAPSHOT_TURNS, 'notLoaded', timeoutMs), []),
+    required((ms) => turnPage(connection, threadId, 1, 'full', ms), []),
+    required((ms) => turnPage(connection, threadId, SNAPSHOT_TURNS, 'notLoaded', ms), []),
     input.primary
       ? null
       : soft(

@@ -79,11 +79,11 @@ export class CodexJournalTurnBoundaries {
 
   /** The agent's own view at reattach; the replay that follows only fills in content. */
   seedKept(threadId: string, turns: readonly CodexKeptTurnState[]): void {
+    // A running turn becomes active only at its replayed start: seeded earlier, it would claim the
+    // rows of an earlier turn whose start was acked before the replay.
     for (const turn of turns) {
       if (!turn.running) {
         this.keptFinished.add(`${threadId}\u0000${turn.id}`)
-      } else if (!this.deps.activeTurns.has(threadId, turn.id)) {
-        this.deps.activeTurns.remember(threadId, turn.id)
       }
     }
   }
