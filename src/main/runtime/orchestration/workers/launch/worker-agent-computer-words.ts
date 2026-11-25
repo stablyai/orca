@@ -3,7 +3,7 @@
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { agentSessionSetupFor } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
+import { agentSessionSignInCommand } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 
 export const THIS_COMPUTER = 'this computer'
 
@@ -21,7 +21,8 @@ export function workerAgentSignInMessage(agent: unknown, computer: string): stri
   if (!isTuiAgent(agent)) {
     return null
   }
-  const login = agentSessionSetupFor(agent)?.loginCommand?.join(' ')
+  // Signed in from another computer, so a browser login's localhost redirect would land on the wrong one.
+  const login = agentSessionSignInCommand(agent, { remote: true })
   return `${agentName(agent)} on ${computer} isn't signed in${login ? `: run \`${login}\` there` : ''}.`
 }
 
