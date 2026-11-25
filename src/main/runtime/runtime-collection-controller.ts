@@ -1,5 +1,5 @@
 import type { Collection } from '../../shared/collection-types'
-import type { RuntimeStore } from './runtime-store-contract'
+import type { RuntimeStore } from './construction/runtime-store-contract'
 
 type RuntimeCollectionDependencies = {
   getStore: () => RuntimeStore | null

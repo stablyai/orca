@@ -9,6 +9,7 @@ import type {
 type BrowserHostLeaseFenceDependencies = {
   leasesByClientId: Map<string, BrowserHostLeaseState>
   pagePlacements: Pick<BrowserHostPagePlacementRegistry, 'fenceClientHostPlacements'>
+  retireInitializations?(state: BrowserHostLeaseState): void
   clearReconnect(state: BrowserHostLeaseState): void
   fenceReconciliation(state: BrowserHostLeaseState): void
   fenceRoute(route: BrowserHostRouteState, reason: BrowserHostFenceReason): void
@@ -24,6 +25,7 @@ export function dispatchBrowserHostLeaseFence(
   if (dependencies.leasesByClientId.get(state.lease.browserHostClientId)?.token !== state.token) {
     return
   }
+  dependencies.retireInitializations?.(state)
   dependencies.fenceReconciliation(state)
   const fencedPages = dependencies.pagePlacements.fenceClientHostPlacements({
     browserHostClientId: state.lease.browserHostClientId,

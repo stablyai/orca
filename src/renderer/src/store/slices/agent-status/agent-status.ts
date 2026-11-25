@@ -1,27 +1,27 @@
-import { agentSenderPublicationPatch } from '@/runtime/agent-sender-associations'
+import { acceptedAgentStatuses } from './status-ownership/accepted-agent-statuses'
+import { agentSenderPublicationPatch } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { AgentStatusSlice } from './agent-status-slice-contract'
-import { createAgentStatusRuntime } from './agent-status-runtime'
-import { createAgentStatusAuthorityActions } from './agent-status-authority-actions'
-import { createAgentStatusCleanupActions } from './agent-status-cleanup-actions'
-import { createAgentStatusDropActions } from './agent-status-drop-actions'
-import { createAgentStatusWorktreeDropActions } from './agent-status-worktree-drop-actions'
-import { createAgentStatusLaunchActions } from './agent-status-launch-actions'
-import { createAgentStatusLiveActions } from './agent-status-live-actions'
-import { createAgentStatusOrchestrationActions } from './agent-status-orchestration-actions'
-import { createAgentStatusProviderSessionActions } from './agent-status-provider-session-actions'
-import { createAgentStatusProgramStatusActions } from './agent-status-program-status-actions'
-import { createAgentStatusRecoveryActions } from './agent-status-recovery-actions'
-import { createAgentStatusRetentionActions } from './agent-status-retention-actions'
+import type { AgentStatusSlice } from './contracts/agent-status-slice-contract'
+import { createAgentStatusRuntime } from './status-ownership/agent-status-runtime'
+import { createAgentStatusAuthorityActions } from './pane-authority/agent-status-authority-actions'
+import { createAgentStatusCleanupActions } from './retirement/agent-status-cleanup-actions'
+import { createAgentStatusDropActions } from './retirement/agent-status-drop-actions'
+import { createAgentStatusWorktreeDropActions } from './retirement/agent-status-worktree-drop-actions'
+import { createAgentStatusLaunchActions } from './launch-config/agent-status-launch-actions'
+import { createAgentStatusLiveActions } from './live-status/agent-status-live-actions'
+import { createAgentStatusOrchestrationActions } from './orchestration/agent-status-orchestration-actions'
+import { createAgentStatusProviderSessionActions } from './live-status/agent-status-provider-session-actions'
+import { createAgentStatusProgramStatusActions } from './live-status/agent-status-program-status-actions'
+import { createAgentStatusRecoveryActions } from './sleep-recovery/agent-status-recovery-actions'
 
 // Keep this path as the public contract for callers while implementation details live beside it.
 
-import './agent-status-recovery-collection'
-import './agent-status-sleeping-records'
-import './agent-status-drop-reducer'
-import './agent-status-capacity-eviction'
-import './agent-status-pane-keyed-records'
+import './sleep-recovery/agent-status-recovery-collection'
+import './sleep-recovery/agent-status-sleeping-records'
+import './retirement/agent-status-drop-reducer'
+import './live-status/agent-status-capacity-eviction'
+import './pane-authority/agent-status-pane-keyed-records'
 
 export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusSlice> = (
   storeSet,
@@ -49,8 +49,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
     ...createAgentStatusOrchestrationActions(runtime),
     ...createAgentStatusProviderSessionActions(runtime),
     ...createAgentStatusProgramStatusActions(runtime),
-    ...createAgentStatusRecoveryActions(runtime),
-    ...createAgentStatusRetentionActions(runtime)
+    ...createAgentStatusRecoveryActions(runtime)
   }
   composedActions = {
     setAgentStatus: actions.setAgentStatus,
@@ -67,16 +66,15 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }),
     subscribeAgentStatusChanges: runtime.subscribeAgentStatusChanges,
     updateAgentStatusState: runtime.set,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     agentConversationsByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {},
+    remoteAgentOrchestrationByHost: {},
     migrationUnsupportedByPtyId: {},
     agentStatusEpoch: 0,
     transientClearedAgentStatusConnectionIds: {},
-    retainedAgentsByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
-    retentionSuppressedPaneKeys: {},
     recentlyClosedAgentStatusTabIds: {},
     recentlyRetiredAgentStatusPaneKeys: {}
   }

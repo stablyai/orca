@@ -1,0 +1,209 @@
+import { useEffect, useRef, type ComponentType } from 'react'
+import {
+  Animated,
+  Easing,
+  Modal,
+  Platform,
+  Pressable,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react-native'
+import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
+import { colors, feedback, radii, spacing } from '../../../theme/mobile-theme'
+import { themedStyleSheet } from '../../../theme/themed-styles'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import type { PanZoomSize } from '../../../../../src/shared/document-preview/pan-zoom-view'
+import { MobilePanZoomImage } from './MobilePanZoomImage'
+import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
+import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
+import { useBackClaim } from '../../../navigation/use-back-claim'
+
+const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)
+const VIEWER_OPEN_MS = 250
+const VIEWER_CLOSE_MS = 200
+// Page Pressables ignore hitSlop, so each round button is itself the 44pt target.
+const BUTTON_SIZE = 44
+
+export type ImageViewerActionsProps = {
+  uri: string
+  buttonStyle: StyleProp<ViewStyle>
+  toastInset: number
+}
+
+/** Full-screen pinch, drag and double-tap zoom for chat and Markdown images, and Mermaid diagrams. */
+export function MobileImageViewer({
+  uri,
+  label,
+  size,
+  upscale,
+  actions: Actions,
+  onPrevious,
+  onNext,
+  onClose
+}: {
+  uri: string
+  label: string
+  /** A drawing's own size; raster images measure themselves. */
+  size?: PanZoomSize | null
+  /** Let fit enlarge a vector past its natural size. */
+  upscale?: boolean
+  /** A button beside Close; passed in so diagrams don't pull the share sheet into their bundle. */
+  actions?: ComponentType<ImageViewerActionsProps>
+  /** In a set of images: steps back or on. Null at that end; both omitted for a lone image. */
+  onPrevious?: (() => void) | null
+  onNext?: (() => void) | null
+  onClose: () => void
+}): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const insets = useWindowSafeAreaInsets()
+  const { style, stageStyle, close } = useViewerPresence(onClose)
+  // In the web shell, system Back reaches the shell's claim stack, not this Modal: without a claim it closes the sheet underneath.
+  useBackClaim(() => {
+    close()
+    return true
+  })
+  return (
+    <Modal visible transparent animationType="none" onRequestClose={close}>
+      <Animated.View style={[styles.backdrop, style]}>
+        <Animated.View style={[styles.stage, stageStyle]}>
+          <MobilePanZoomImage key={uri} uri={uri} label={label} size={size} upscale={upscale} />
+        </Animated.View>
+        {onPrevious !== undefined || onNext !== undefined ? (
+          <>
+            <StepButton
+              icon={ChevronLeft}
+              label={t('chat.nativeChatImageViewer.previousImage', 'Previous image')}
+              onPress={onPrevious ?? null}
+              style={{ top: insets.top + spacing.sm, left: insets.left + spacing.lg }}
+            />
+            <StepButton
+              icon={ChevronRight}
+              label={t('chat.nativeChatImageViewer.nextImage', 'Next image')}
+              onPress={onNext ?? null}
+              style={{
+                top: insets.top + spacing.sm,
+                left: insets.left + spacing.lg + BUTTON_SIZE + spacing.sm
+              }}
+            />
+          </>
+        ) : null}
+        <Pressable
+          style={({ pressed }) => [
+            styles.close,
+            { top: insets.top + spacing.sm, right: insets.right + spacing.lg },
+            pressed && { opacity: feedback.pressedOpacity }
+          ]}
+          onPress={close}
+          accessibilityRole="button"
+          accessibilityLabel={t('chat.nativeChatImageViewer.closeImage', 'Close image')}
+        >
+          <X size={22} color={colors.textPrimary} strokeWidth={2} />
+        </Pressable>
+        {Actions ? (
+          <Actions
+            uri={uri}
+            buttonStyle={[
+              styles.close,
+              {
+                top: insets.top + spacing.sm,
+                right: insets.right + spacing.lg + BUTTON_SIZE + spacing.sm
+              }
+            ]}
+            toastInset={insets.bottom}
+          />
+        ) : null}
+      </Animated.View>
+    </Modal>
+  )
+}
+
+function StepButton({
+  icon: Icon,
+  label,
+  onPress,
+  style
+}: {
+  icon: typeof ChevronLeft
+  label: string
+  onPress: (() => void) | null
+  style: ViewStyle
+}): React.JSX.Element {
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        styles.close,
+        style,
+        !onPress && { opacity: feedback.disabledOpacity },
+        pressed && { opacity: feedback.pressedOpacity }
+      ]}
+      onPress={onPress ?? undefined}
+      disabled={!onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !onPress }}
+    >
+      <Icon size={22} color={colors.textPrimary} strokeWidth={2} />
+    </Pressable>
+  )
+}
+
+function viewerTiming(value: Animated.Value, toValue: number, ms: number, reducedMotion: boolean) {
+  return Animated.timing(value, {
+    toValue,
+    duration: reducedMotion ? REDUCED_MOTION_FADE_MS : ms,
+    easing: VIEWER_EASING,
+    useNativeDriver: Platform.OS !== 'web'
+  })
+}
+
+// Grows from the centre while fading in, and shrinks back before the caller unmounts it; a close mid-open turns around from where it is.
+function useViewerPresence(onClose: () => void) {
+  const reducedMotion = useReducedMotionEnabled() === true
+  const shown = useRef(new Animated.Value(0)).current
+  const closing = useRef(false)
+  useEffect(() => {
+    if (closing.current) {
+      return
+    }
+    const opening = viewerTiming(shown, 1, VIEWER_OPEN_MS, reducedMotion)
+    opening.start()
+    return () => opening.stop()
+  }, [reducedMotion, shown])
+  const close = () => {
+    if (closing.current) {
+      return
+    }
+    closing.current = true
+    viewerTiming(shown, 0, VIEWER_CLOSE_MS, reducedMotion).start(({ finished }) => {
+      if (finished) {
+        onClose()
+      }
+    })
+  }
+  const scale = reducedMotion
+    ? 1
+    : shown.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] })
+  return { style: { opacity: shown }, stageStyle: { transform: [{ scale }] }, close }
+}
+
+const styles = themedStyleSheet(() => ({
+  backdrop: {
+    flex: 1,
+    backgroundColor: colors.bgBase
+  },
+  stage: {
+    flex: 1
+  },
+  close: {
+    position: 'absolute',
+    width: BUTTON_SIZE,
+    height: BUTTON_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    backgroundColor: colors.bgRaised
+  }
+}))

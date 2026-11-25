@@ -1,8 +1,8 @@
-import { useMemo } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { useAppStore, type AppState } from '@/store'
-import { hasAwakeStructuredChat } from '@/store/slices/structured-chat-slept-at'
-import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
+import { resolveWorktreeStatusParts } from '@/lib/workspace/activity/worktree-status'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
   selectLivePtyIdsForWorktree,
@@ -10,8 +10,8 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
-import { selectStoppedWslDistro } from '@/lib/wsl-host-stopped-status'
-import { selectWorkspaceRuntimeEnvironmentId } from '../../../terminal-pane/remote-server-outage'
+import { selectStoppedWslDistro } from '@/runtime/hosts/wsl/wsl-host-stopped-status'
+import { selectWorkspaceRuntimeEnvironmentId } from '../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** The Start card's rule: a pane with no server yet, or on the stopped one, ended with its distro. */
@@ -25,7 +25,6 @@ function withoutStoppedHostPtys(
       const environmentId = parseRemoteRuntimePtyId(ptyId)?.environmentId
       return environmentId != null && environmentId !== stoppedEnvironmentId
     })
-    // Same array when nothing dropped, so useShallow keeps the card from re-rendering.
     if (kept.length > 0) {
       live[tabId] = kept.length === ptyIds.length ? ptyIds : kept
     }
@@ -45,89 +44,111 @@ function hasStoppedWslHost(state: {
   return false
 }
 
-export function selectWorktreeActivityPtyIds(
-  state: AppState,
-  worktreeId: string
-): Record<string, string[]> {
-  const ptyIds = selectLivePtyIdsForWorktree(state, worktreeId)
+function selectStoppedWorktreeEnvironmentId(state: AppState, worktreeId: string): string | null {
   if (!hasStoppedWslHost(state)) {
-    return ptyIds
+    return null
   }
   const owner = selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
-  return owner && selectStoppedWslDistro(state, owner) !== null
-    ? withoutStoppedHostPtys(ptyIds, owner)
-    : ptyIds
+  return owner && selectStoppedWslDistro(state, owner) !== null ? owner : null
+}
+
+type StatusMemo = {
+  inputs: readonly unknown[]
+  status: WorktreeStatus
+  /** The terminal-title status before explicit agent rows rank over it. */
+  titleStatus: WorktreeStatus
+}
+
+// Carry only the workspaces read in the previous snapshot, regardless of how many were visible.
+let generation: {
+  state: AppState
+  byWorktreeId: Map<string, StatusMemo>
+  carried: ReadonlyMap<string, StatusMemo> | undefined
+} | null = null
+
+export function selectWorktreeActivityStatus(
+  statusInputs: AppState,
+  worktreeId: string
+): WorktreeStatus {
+  if (generation?.state !== statusInputs) {
+    generation = {
+      state: statusInputs,
+      byWorktreeId: new Map(),
+      carried: generation?.byWorktreeId
+    }
+  }
+  const { byWorktreeId, carried } = generation
+  let memo = byWorktreeId.get(worktreeId)
+  if (memo === undefined) {
+    memo = resolveMemoizedStatus(statusInputs, worktreeId, carried?.get(worktreeId))
+    byWorktreeId.set(worktreeId, memo)
+  }
+  return memo.status
+}
+
+/** What a workspace's terminal titles say before explicit agent rows rank over them: a failed hook on one
+ *  pane outranks another tab's working title for the dot, but the work is still there. Same memo. */
+export function selectWorktreeTitleActivityStatus(
+  statusInputs: AppState,
+  worktreeId: string
+): WorktreeStatus {
+  selectWorktreeActivityStatus(statusInputs, worktreeId)
+  return generation!.byWorktreeId.get(worktreeId)!.titleStatus
+}
+
+function resolveMemoizedStatus(
+  statusInputs: AppState,
+  worktreeId: string,
+  memo: StatusMemo | undefined
+): StatusMemo {
+  const summary = selectWorktreeAgentActivitySummary(statusInputs, worktreeId)
+  const inputs = [
+    statusInputs.tabsByWorktree[worktreeId] ?? EMPTY_TABS,
+    statusInputs.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
+    hasAwakeStructuredChat(
+      statusInputs.unifiedTabsByWorktree[worktreeId],
+      statusInputs.structuredChatSleptAtByPaneKey
+    ),
+    selectLivePtyIdsForWorktree(statusInputs, worktreeId),
+    selectStoppedWorktreeEnvironmentId(statusInputs, worktreeId),
+    selectRuntimePaneTitlesForWorktree(statusInputs, worktreeId),
+    selectTerminalLayoutRootsForWorktree(statusInputs, worktreeId),
+    summary
+  ] as const
+  if (memo && inputs.every((input, index) => input === memo.inputs[index])) {
+    return memo
+  }
+  const [
+    tabs,
+    browserTabs,
+    hasStructuredChat,
+    ptyIdsByTabId,
+    stoppedEnvironmentId,
+    runtimePaneTitlesByTabId,
+    terminalLayoutRootsByTabId
+  ] = inputs
+  const { status, heuristic } = resolveWorktreeStatusParts({
+    tabs,
+    browserTabs,
+    hasStructuredChat,
+    ptyIdsByTabId: stoppedEnvironmentId
+      ? withoutStoppedHostPtys(ptyIdsByTabId, stoppedEnvironmentId)
+      : ptyIdsByTabId,
+    runtimePaneTitlesByTabId,
+    agentStatusPaneIdsByTabId: summary.agentStatusPaneIdsByTabId,
+    stalePaneIdsByTabId: summary.stalePaneIdsByTabId,
+    terminalLayoutRootsByTabId,
+    hasPermission: summary.hasPermission,
+    hasLiveWorking: summary.hasLiveWorking,
+    hasLiveMonitoring: summary.hasLiveMonitoring,
+    hasFailed: summary.hasFailed,
+    hasInterrupted: summary.hasInterrupted,
+    hasUnconfirmed: summary.hasUnconfirmed,
+    hasLiveDone: summary.hasLiveDone
+  })
+  return { inputs, status, titleStatus: heuristic }
 }
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
-  const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  const browserTabs = useAppStore((s) => s.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS)
-  const hasStructuredChat = useAppStore((s) =>
-    hasAwakeStructuredChat(s.unifiedTabsByWorktree[worktreeId], s.structuredChatSleptAtByPaneKey)
-  )
-  const runtimePaneTitlesForWorktree = useAppStore(
-    useShallow((s) => selectRuntimePaneTitlesForWorktree(s, worktreeId))
-  )
-  const ptyIdsForWorktree = useAppStore(
-    useShallow((s) => selectWorktreeActivityPtyIds(s, worktreeId))
-  )
-  const terminalLayoutRootsByTabId = useAppStore(
-    useShallow((s) => selectTerminalLayoutRootsForWorktree(s, worktreeId))
-  )
-  const {
-    hasPermission,
-    hasLiveWorking,
-    hasLiveMonitoring,
-    hasFailed,
-    hasInterrupted,
-    hasUnconfirmed,
-    hasLiveDone,
-    hasRetainedDone,
-    hasRetainedFailed,
-    agentStatusPaneIdsByTabId,
-    stalePaneIdsByTabId
-  } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
-
-  // Use common liveness and agent-row precedence so compact and detailed cards show the same status.
-  return useMemo(
-    () =>
-      resolveWorktreeStatus({
-        tabs,
-        browserTabs,
-        hasStructuredChat,
-        ptyIdsByTabId: ptyIdsForWorktree,
-        runtimePaneTitlesByTabId: runtimePaneTitlesForWorktree,
-        agentStatusPaneIdsByTabId,
-        stalePaneIdsByTabId,
-        terminalLayoutRootsByTabId,
-        hasPermission,
-        hasLiveWorking,
-        hasLiveMonitoring,
-        hasFailed,
-        hasInterrupted,
-        hasUnconfirmed,
-        hasLiveDone,
-        hasRetainedDone,
-        hasRetainedFailed
-      }),
-    [
-      tabs,
-      browserTabs,
-      hasStructuredChat,
-      ptyIdsForWorktree,
-      runtimePaneTitlesForWorktree,
-      agentStatusPaneIdsByTabId,
-      stalePaneIdsByTabId,
-      terminalLayoutRootsByTabId,
-      hasPermission,
-      hasLiveWorking,
-      hasLiveMonitoring,
-      hasFailed,
-      hasInterrupted,
-      hasUnconfirmed,
-      hasLiveDone,
-      hasRetainedDone,
-      hasRetainedFailed
-    ]
-  )
+  return useAppStore((state) => selectWorktreeActivityStatus(state, worktreeId))
 }

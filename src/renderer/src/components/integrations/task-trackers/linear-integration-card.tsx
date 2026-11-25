@@ -1,12 +1,13 @@
-import { taskProviderErrorMessage } from '@/lib/task-provider-error-copy'
+import { taskProviderErrorMessage } from '@/lib/work-items/task-provider-error-copy'
 import { UnsealedCredentialNotice } from '../../provider-accounts/UnsealedCredentialNotice'
 import { useState } from 'react'
 import { AlertCircle, CheckCircle2, LoaderCircle, Unlink } from 'lucide-react'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
+import { LinearApiKeyDialog } from '@/components/integrations/task-trackers/linear-api-key-dialog'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,
@@ -14,17 +15,16 @@ import {
 } from '../presentation/integration-card-shell'
 import { useIntegrationSubordinateRowClass } from '../presentation/integration-card-presentation'
 import { LinearAgentSkillInstallCta } from '../../skills/setup/linear-agent-skill-install-cta'
-import {
-  getProviderAccountScope,
-  type ProviderHostScope
-} from '../../provider-accounts/provider-account-scope'
+import type { ProviderHostScope } from '../../provider-accounts/provider-account-scope'
+import { useProviderAccountScope } from '../../provider-accounts/use-provider-host-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { LINEAR_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
 
 export function LinearIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const linearStatus = useAppStore((s) => s.linearStatus)
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -45,7 +45,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
   const checking = !contextMatches || !linearStatusChecked
   const connected = contextMatches && linearStatus.connected
   const workspaces = linearStatus.workspaces ?? []
-  const accountScope = getProviderAccountScope(settings)
+  const accountScope = useProviderAccountScope(defaultScopeHost(settings))
   const subordinateRowClass = useIntegrationSubordinateRowClass('flex items-center gap-3')
 
   const handleDisconnect = async (workspaceId?: string): Promise<void> => {
@@ -83,7 +83,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
       name="Linear"
       description={
         connected
-          ? translate(
+          ? t(
               workspaces.length === 1
                 ? 'auto.components.settings.task.tracker.integration.cards.connectedWorkspaceSingular'
                 : 'auto.components.settings.task.tracker.integration.cards.connectedWorkspacePlural',
@@ -93,11 +93,11 @@ export function LinearIntegrationCard(): React.JSX.Element {
               { count: workspaces.length }
             )
           : checking
-            ? translate(
+            ? t(
                 'auto.components.settings.task.tracker.integration.cards.fe9231215b',
                 'Checking Linear access before showing setup actions.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.task.tracker.integration.cards.eae4a9f16b',
                 'Add Linear access to browse and link issues.'
               )
@@ -106,11 +106,11 @@ export function LinearIntegrationCard(): React.JSX.Element {
       statusTone={connected ? 'connected' : 'attention'}
       statusLabel={
         connected
-          ? translate(
+          ? t(
               'auto.components.settings.task.tracker.integration.cards.statusConnected',
               'Connected'
             )
-          : translate(
+          : t(
               'auto.components.settings.task.tracker.integration.cards.statusNotConnected',
               'Not connected'
             )
@@ -123,11 +123,11 @@ export function LinearIntegrationCard(): React.JSX.Element {
             onClick={() => setDialogOpen(true)}
           >
             {connected
-              ? translate(
+              ? t(
                   'auto.components.settings.task.tracker.integration.cards.622c224082',
                   'Add workspace access'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.task.tracker.integration.cards.1a12e33fe5',
                   'Add Linear access'
                 )}
@@ -139,7 +139,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
         <ProviderAccountScopeRow scope={accountScope} />
         <UnsealedCredentialNotice
           protection={linearStatus.credentialProtection ?? null}
-          credentialName={translate(
+          credentialName={t(
             'auto.components.settings.task.tracker.integration.cards.linearTokenName',
             'Your Linear API token'
           )}
@@ -163,7 +163,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
                   {testResult?.state === 'ok' ? (
                     <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                       <CheckCircle2 className="size-3.5" />
-                      {translate(
+                      {t(
                         'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
                         'Verified'
                       )}
@@ -184,13 +184,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
                     {testing ? (
                       <>
                         <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                        {translate(
+                        {t(
                           'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
                           'Testing...'
                         )}
                       </>
                     ) : (
-                      translate(
+                      t(
                         'auto.components.settings.task.tracker.integration.cards.c24e56c532',
                         'Test'
                       )
@@ -198,7 +198,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
                   </Button>
                   <button
                     onClick={() => void handleDisconnect(workspace.id)}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.task.tracker.integration.cards.dd3529015d',
                       'Disconnect {{value0}}',
                       { value0: workspace.organizationName }
@@ -211,7 +211,7 @@ export function LinearIntegrationCard(): React.JSX.Element {
               )
             })}
             <p className="text-[11px] text-muted-foreground/70">
-              {translate(
+              {t(
                 'auto.components.settings.task.tracker.integration.cards.6224fe9d34',
                 'Each connected Linear workspace has one key stored by the active runtime. Full-access keys can cover all teams the key owner can access; restricted keys can be replaced any time.'
               )}
@@ -220,16 +220,13 @@ export function LinearIntegrationCard(): React.JSX.Element {
         ) : !checking ? (
           <>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.task.tracker.integration.cards.cef18762a2',
                 'Add access with a Personal API key from your Linear settings. Full-access keys can see every team the key owner can reach.'
               )}
             </p>
             <Button variant="ghost" size="sm" onClick={() => void checkLinearConnection(true)}>
-              {translate(
-                'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
-                'Re-check'
-              )}
+              {t('auto.components.settings.task.tracker.integration.cards.c90f2ef419', 'Re-check')}
             </Button>
           </>
         ) : null}
@@ -249,11 +246,12 @@ export function LinearIntegrationCard(): React.JSX.Element {
 }
 
 function ProviderAccountScopeRow({ scope }: { scope: ProviderHostScope }) {
+  const t = useTranslate()
   const subordinateRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   return (
     <ProviderHostScopeControl
-      labelPrefix={translate(
+      labelPrefix={t(
         'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
         'Account scope'
       )}

@@ -114,12 +114,15 @@ async function preflightCodexRewind(
 /** Confirm a lost revert reply only when history ends at the expected retained turn. */
 export async function recoverCodexRewind(
   session: CodexSession,
-  input: { fence: number; beforeTurnId: string; keptTurnId: string | null },
+  input: { fence: number; beforeTurnId: string; keptTurnId: string | null; threadId?: string },
   timeoutMs?: number
 ): ReturnType<NonNullable<StructuredAgentSessionAdapter['recoverRewind']>> {
   const admission = await preflightCodexRewind(session, input.fence, timeoutMs)
   if (!admission.ok) {
     return admission
+  }
+  if (input.threadId && input.threadId !== session.threadId) {
+    return { ok: false, reason: 'invalid-target' }
   }
   let turns = 0
   const verdict = await findInCodexTurnsNewestFirst(
@@ -147,6 +150,45 @@ export async function recoverCodexRewind(
   return applied ? { ok: true } : { ok: false, reason: 'provider-refused' }
 }
 
+export async function prepareCodexRewind(
+  session: CodexSession,
+  input: { fence: number; beforeTurnId: string },
+  timeoutMs?: number
+): ReturnType<NonNullable<StructuredAgentSessionAdapter['prepareRewind']>> {
+  const admission = await preflightCodexRewind(session, input.fence, timeoutMs)
+  if (!admission.ok) {
+    return admission
+  }
+  try {
+    let found = false
+    const keptTurnId = await findInCodexTurnsNewestFirst(
+      session,
+      (id) => {
+        if (found) {
+          return id
+        }
+        if (id === input.beforeTurnId) {
+          found = true
+        }
+        return undefined
+      },
+      timeoutMs
+    )
+    return found
+      ? {
+          ok: true,
+          revert: {
+            threadId: session.threadId,
+            beforeTurnId: input.beforeTurnId,
+            keptTurnId: keptTurnId ?? null
+          }
+        }
+      : { ok: false, reason: 'invalid-target' }
+  } catch {
+    return { ok: false, reason: 'provider-refused' }
+  }
+}
+
 export async function rewindCodexSession(
   session: CodexSession,
   input: Omit<Parameters<NonNullable<StructuredAgentSessionAdapter['rewind']>>[0], 'sessionId'>,
@@ -155,23 +197,6 @@ export async function rewindCodexSession(
   const admission = await preflightCodexRewind(session, input.fence, timeoutMs)
   if (!admission.ok) {
     return admission
-  }
-  let targetPresent: boolean | undefined
-  try {
-    targetPresent = await findInCodexTurnsNewestFirst(
-      session,
-      (turnId) => (turnId === input.beforeTurnId ? true : undefined),
-      timeoutMs
-    )
-  } catch {
-    return { ok: false, reason: 'provider-refused' }
-  }
-  if (!targetPresent) {
-    return { ok: false, reason: 'invalid-target' }
-  }
-  const current = await preflightCodexRewind(session, input.fence, timeoutMs)
-  if (!current.ok) {
-    return current
   }
   let result: unknown
   try {

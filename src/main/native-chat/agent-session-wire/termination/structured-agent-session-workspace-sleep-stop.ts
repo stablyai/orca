@@ -1,10 +1,8 @@
-import { recordAgentSessionAcquisitionExit } from '../../../runtime/agent-session/agent-session-acquisition-exit-transition'
+import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import {
   agentSessionLeaseIsReleased,
-  agentSessionLeaseOwnerVerdict
-} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import '../../../runtime/agent-session/records/agent-session-record-founding'
-import { agentSessionNeverStarted as structuredSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+  agentSessionLeasePossiblyWriting
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import type {
@@ -39,21 +37,24 @@ export async function stopWorkspaceSleepChat(input: {
       const receipt = deps.adapter.stoppedAcquisition?.(sessionId)
       if (ownedStopped && receipt) {
         try {
-          await deps.store.transitionHandoff(sessionId, (record) => {
-            if (
-              deps.adapter.stoppedAcquisition?.(sessionId) !== receipt ||
-              sessions.get(sessionId)?.child
-            ) {
-              throw new Error('agent_session_ownership_unknown')
-            }
-            return recordAgentSessionAcquisitionExit(
-              record,
+          await deps.store.updateRecord(
+            sessionId,
+            {
+              kind: 'acquisition-exit',
               receipt,
-              input.fence,
-              input.now(),
-              stopped === 'kill-delivered' ? stopped : undefined
-            )
-          })
+              fence: input.fence,
+              now: input.now(),
+              deathEvidenceKind: stopped === 'kill-delivered' ? stopped : undefined
+            },
+            () => {
+              if (
+                deps.adapter.stoppedAcquisition?.(sessionId) !== receipt ||
+                sessions.get(sessionId)?.child
+              ) {
+                throw new Error('agent_session_ownership_unknown')
+              }
+            }
+          )
           deps.adapter.acknowledgeSessionRelease?.(sessionId, receipt)
         } catch (error) {
           deps.logger.warn('saving failed acquisition exit evidence failed', {
@@ -83,7 +84,8 @@ export async function stopWorkspaceSleepChat(input: {
   return childStopped || ownedStopped || alreadyStopped
 }
 
-/** Release alone cannot prove a restarted root stopped; require exit evidence or a never-started record. */
+/** Release alone cannot prove a restarted root stopped; require exit evidence or a never-acquired
+ *  lease, which covers an adopted conversation no agent has run for yet. */
 function workspaceSleepChatAtRest(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'adapter'>,
   sessions: StructuredAgentSessionConversations,
@@ -93,8 +95,7 @@ function workspaceSleepChatAtRest(
   return (
     !!record &&
     agentSessionLeaseIsReleased(record.lease) &&
-    (agentSessionLeaseOwnerVerdict(record.lease) === 'exited' ||
-      structuredSessionNeverStarted(record)) &&
+    !agentSessionLeasePossiblyWriting(record.lease) &&
     !sessions.get(sessionId)?.child &&
     deps.adapter.hasOwnedAcquisition?.(sessionId) !== true
   )
@@ -115,13 +116,23 @@ export function workspaceSleepStartAborts(
   sessionId: string
 ) {
   const aborted: Promise<unknown>[] = []
+  const abort = (): void => {
+    const flight = runtimeState().startFlights.get(sessionId)
+    if (flight) {
+      aborted.push(flight.outcome)
+    }
+    runtimeState().acquireAborts.abort(sessionId, 'closed while starting')
+  }
   return {
-    abort: (): void => {
-      const flight = runtimeState().startFlights.get(sessionId)
-      if (flight) {
-        aborted.push(flight.outcome)
+    abort,
+    /** Before the lane: end handovers and starts, so the lane's stop is not queued behind them. */
+    cut: (
+      journal: Parameters<typeof closeStructuredAgentSessionHandovers>[0] | undefined
+    ): void => {
+      if (journal) {
+        closeStructuredAgentSessionHandovers(journal)
       }
-      runtimeState().acquireAborts.abort(sessionId, 'closed while starting')
+      abort()
     },
     settle: (
       input: Pick<Parameters<typeof stopWorkspaceSleepChat>[0], 'deps' | 'sessions' | 'sessionId'>,

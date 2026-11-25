@@ -1,14 +1,15 @@
 import { z } from 'zod'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
-import { ghExecFileAsync, type OwnerRepo } from '../../gh-utils'
-import type { GitHubRepoExecOptions } from '../../github-api-repository'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'
 import { mapPullRequestWorkItem } from '../map/work-item'
 import type { MainWorkItem } from '../map/work-item-field-coercion'
 import { buildWorkItemListRequest } from './work-item-list-request'
 import { searchWorkItemPage, usesGraphqlWorkItemSearch } from './work-item-search-page'
 
 const PR_NODE_SELECTION = `__typename ... on PullRequest {
-  number title state url updatedAt isDraft headRefName baseRefName headRefOid
+  number title state url createdAt updatedAt isDraft headRefName baseRefName headRefOid
   headRepositoryOwner { login }
   author { __typename login avatarUrl ... on User { name } }
   labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
@@ -35,6 +36,7 @@ const prNodeSchema = z.object({
   title: z.string(),
   state: z.enum(['OPEN', 'CLOSED', 'MERGED']),
   url: z.string(),
+  createdAt: z.string(),
   updatedAt: z.string(),
   isDraft: z.boolean(),
   headRefName: z.string(),

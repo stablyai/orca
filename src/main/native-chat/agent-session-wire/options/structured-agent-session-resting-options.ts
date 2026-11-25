@@ -1,9 +1,12 @@
 import type { AgentModelCatalogReadParams } from '../../agent-model-catalog/agent-model-catalog-service-contract'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
-import { finishedListingIds } from '../../../../shared/agent-session/options/structured-agent-session-listing-verified-ids'
-import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
-import { independentAgentModelCatalog } from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
+import { finishedListingIds } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-listing-verified-ids'
+import { savedEffectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
+import {
+  independentAgentModelCatalog,
+  unpickedFastModeIsOff
+} from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import {
@@ -43,11 +46,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
         sessionId,
         savedOnly: true,
         ...(!reader.readsWithoutModel ? { legacyOptionsDisplay: true as const } : {}),
-        ...(inSessionWorkspace
-          ? { inSessionWorkspace: true as const }
-          : independentAgentModelCatalog(record.provider)
-            ? { workspacePath: null }
-            : {})
+        ...(inSessionWorkspace ? { inSessionWorkspace: true as const } : {})
       })
       .catch(() => null)) ?? { origin: 'unknown' }
   if (!reader.readsWithoutModel) {
@@ -69,29 +68,32 @@ export async function readStructuredAgentSessionOptionsAtRest(
       legacyOptionsDisplay: true
     })
   }
-  const saved = record.options ?? {}
+  const stored = record.options ?? {}
   // The chat's own folder decides its default, as its first frame did.
   const scoped = await readCatalog(true)
   const folderDefault =
     scoped.origin === 'unknown' ? undefined : scoped.models.find((entry) => entry.isDefault)
   // Where the folder names none, a client that needs a model keeps the account default it got before.
+  // Claude and Codex already read the account's listing here; naming none means the project's
+  // settings pick the model, so the account's default would name the wrong one.
   const catalog =
-    saved.model === undefined &&
+    stored.model === undefined &&
     !folderDefault &&
     scoped.origin !== 'unknown' &&
-    !reader.readsWithoutModel
+    !reader.readsWithoutModel &&
+    !independentAgentModelCatalog(record.provider)
       ? (await deps.modelCatalog?.prepareSaved?.({
           ...scope,
           agent: record.provider,
           sessionId,
           deadline,
-          legacyOptionsDisplay: true,
-          ...(independentAgentModelCatalog(record.provider) ? { workspacePath: null } : {})
+          legacyOptionsDisplay: true
         }),
         await readCatalog(false))
       : scoped
   // With no catalog for the account, the list a running child of this agent falls back to.
   const listed = catalog.origin === 'unknown' ? (rules?.fallbackModels() ?? null) : catalog.models
+  const saved = rules?.listedSelection?.(stored, listed ?? []) ?? stored
   const models =
     catalog.origin === 'unknown' && saved.model === undefined
       ? (listed ?? []).map((row) => ({ ...row, isDefault: false }))
@@ -111,7 +113,7 @@ export async function readStructuredAgentSessionOptionsAtRest(
   const listedModelIds = proof ? finishedListingIds(proof) : undefined
   const fastMode =
     saved.fastMode === undefined
-      ? rules?.acceptsKey('fastMode')
+      ? unpickedFastModeIsOff(record.provider) && rules?.acceptsKey('fastMode')
         ? false
         : null
       : decodeStructuredAgentSessionOptionValue('fastMode', saved.fastMode)
@@ -130,7 +132,9 @@ export async function readStructuredAgentSessionOptionsAtRest(
   return {
     inventory: catalog,
     fallback: catalog.origin === 'unknown' ? models : [],
-    models: listed ? structuredAgentSessionOptionModels(models, model, (row) => row) : [],
+    models: listed
+      ? structuredAgentSessionOptionModels(record.provider, models, model, (row) => row)
+      : [],
     ...(catalog.origin !== 'unknown' && catalog.fastModeSupport
       ? { fastModeSupport: catalog.fastModeSupport }
       : {}),

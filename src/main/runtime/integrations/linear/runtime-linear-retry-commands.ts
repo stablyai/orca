@@ -2,7 +2,7 @@ import {
   type LinearAgentAccessError,
   linearError,
   sanitizeLinearErrorMessage
-} from '../../../linear/issue-context/errors'
+} from '../../../linear/issues/context/linear-access-errors'
 import type { LinearAgentWriteTarget } from './linear-agent-write-target'
 import type { LinearCreateFieldIntent } from './linear-create-field-intent'
 import { RuntimeLinearCommandBase } from './runtime-linear-command-base'

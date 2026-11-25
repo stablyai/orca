@@ -1,14 +1,18 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { ShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import { BrowserPageToolbar } from './browser-page-toolbar'
 import { BrowserPageDownloadList } from '../navigate/browser-page-download-list'
-import { BrowserPageChromeBanners } from './browser-page-chrome-banners'
+import { BrowserPageChromeBanners } from './feedback/browser-page-chrome-banners'
 import type { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
 import type { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
-import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
-import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
+import type { useBrowserPageGrabAnnotations } from '../annotate/grab/use-browser-page-grab-annotations'
+import type { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeNoteActions
+} from './toolbar/browser-annotate-tool-button'
 
 export function BrowserPageChromeHeader({
   chromeHeaderRef,
@@ -25,13 +29,15 @@ export function BrowserPageChromeHeader({
   grab,
   grabAnnotations,
   annotationSend,
+  elementTools,
+  notes,
+  onOpenFind,
   markupIsActive,
   markupStart,
   markupCancel,
-  grabElementShortcut,
   shareableArtifactFile,
   currentBrowserUrl,
-  externalUrl,
+  onOpenExternal,
   isBlankTab,
   resourceNotice,
   setResourceNotice
@@ -50,13 +56,15 @@ export function BrowserPageChromeHeader({
   grab: GrabModeHook
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
+  elementTools: BrowserChromeElementTools
+  notes: BrowserChromeNoteActions
+  onOpenFind: () => void
   markupIsActive: boolean
   markupStart: () => Promise<void>
   markupCancel: () => void
-  grabElementShortcut: string
   shareableArtifactFile: ShareableBrowserArtifactFile | null
   currentBrowserUrl: string
-  externalUrl: string | null
+  onOpenExternal: (() => void) | null
   isBlankTab: boolean
   resourceNotice: string | null
   setResourceNotice: Dispatch<SetStateAction<string | null>>
@@ -90,18 +98,17 @@ export function BrowserPageChromeHeader({
         navigateToUrl={nav.navigateToUrl}
         addressBarInputRef={addressBarInputRef}
         dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
-        grab={grab}
-        grabIntent={grabAnnotations.grabIntent}
-        startGrabIntent={grabAnnotations.startGrabIntent}
+        elementTools={elementTools}
+        grabIdle={grab.state === 'idle'}
         isBlankTab={isBlankTab}
         markupIsActive={markupIsActive}
         markupStart={markupStart}
         markupCancel={markupCancel}
-        grabElementShortcut={grabElementShortcut}
-        browserAnnotationsLength={annotationSend.browserAnnotations.length}
+        notes={notes}
+        onOpenFind={onOpenFind}
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
-        externalUrl={externalUrl}
+        onOpenExternal={onOpenExternal}
       />
       <BrowserPageDownloadList
         visibleDownloads={nav.visibleDownloads}
@@ -112,23 +119,8 @@ export function BrowserPageChromeHeader({
       <BrowserPageChromeBanners
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
-        grab={grab}
-        grabIntent={grabAnnotations.grabIntent}
-        pendingAnnotationPayload={grabAnnotations.pendingAnnotationPayload}
-        browserAnnotationsLength={annotationSend.browserAnnotations.length}
-        annotationBannerSendOpen={annotationSend.annotationBannerSendOpen}
-        handleAnnotationBannerSendOpenChange={annotationSend.handleAnnotationBannerSendOpenChange}
+        tools={{ grab, grabAnnotations, annotationSend }}
         worktreeId={worktreeId}
-        activeGroupId={annotationSend.activeGroupId}
-        browserAnnotationsPrompt={annotationSend.browserAnnotationsPrompt}
-        includePageDetails={annotationSend.includePageDetails}
-        handleIncludePageDetailsChange={annotationSend.handleIncludePageDetailsChange}
-        handleBrowserAnnotationsSentToAgent={annotationSend.handleBrowserAnnotationsSentToAgent}
-        handleBrowserAnnotationsHandedOff={annotationSend.handleBrowserAnnotationsHandedOff}
-        handleCopyBrowserAnnotations={annotationSend.handleCopyBrowserAnnotations}
-        browserAnnotationsCopied={annotationSend.browserAnnotationsCopied}
-        handleClearBrowserAnnotations={annotationSend.handleClearBrowserAnnotations}
-        setPendingAnnotationPayload={grabAnnotations.setPendingAnnotationPayload}
       />
     </div>
   )

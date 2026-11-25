@@ -1,4 +1,4 @@
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { JournalForkInstall } from '../../agent-session-journal/journal-fork-stages'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionRefusalError,
@@ -10,7 +10,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 
 export async function prepareCreateTranscript(
@@ -32,6 +32,9 @@ export async function prepareAdoptedTranscript(
   | { ok: true; items: JournalReplacementItem[] | null }
   | { ok: false; refusal: AgentSessionWireRefusal }
 > {
+  if (params.fork) {
+    return { ok: true, items: null }
+  }
   if (!params.adopt) {
     return { ok: true, items: null }
   }
@@ -74,7 +77,7 @@ async function readAdoptedTranscript(
     options: { filePath: adopt.transcriptPath, source: adopt.source, signal }
   })
   if (!prepared.ok) {
-    throw new Error(prepared.error)
+    throw isAgentSessionRefusalError(prepared.cause) ? prepared.cause : new Error(prepared.error)
   }
   if (prepared.items.length === 0) {
     throw agentSessionRefusalError('agent_session_identity_required', {
@@ -91,20 +94,56 @@ export async function importAdoptedTranscript(
   record: AgentSessionRecord,
   prepared: JournalReplacementItem[] | null,
   options: { uncommittedCreate?: true; store?: AgentSessionRecordStore } = {}
-): Promise<void> {
+): Promise<JournalForkInstall | undefined> {
+  if (params.fork) {
+    const installation = await attached.journal.stageFork(params.fork.prepared, {
+      fence: record.lease.runtimeFence,
+      operationId: params.envelope.clientOperationId,
+      fingerprint: params.envelope.payloadFingerprint,
+      historyOrigin: params.fork.historyOrigin
+    })
+    if (options.uncommittedCreate) {
+      return installation
+    }
+    if (!options.store) {
+      throw new Error('fork adoption requires its record receipt owner')
+    }
+    let installed = false
+    try {
+      const receipt = options.store.conversationReceipts.forkBoundary(record.sessionId, {
+        sessionId: params.fork.sessionId,
+        itemId: params.fork.itemId,
+        childBoundary: { kind: 'start' }
+      })
+      await params.fork.withAdmission(() =>
+        attached.journal.write({ kind: 'fork-install' }, () => ({
+          receipt,
+          forkInstall: installation
+        }))
+      )
+      installed = true
+    } finally {
+      if (!installed) {
+        await attached.journal.abortFork(installation)
+      }
+    }
+    return
+  }
   if (options.uncommittedCreate) {
     // Rolled-back creates may leave unowned imported history.
     if (prepared || attached.journal.cursor().sequence > 1) {
-      await attached.journal.replaceEpochItems(
-        params.adopt ? 'legacy_import' : 'session_created',
-        record.lease.runtimeFence,
-        prepared ?? []
-      )
+      await attached.journal.write({
+        kind: 'epoch-replace',
+        reason: params.adopt ? 'legacy_import' : 'session_created',
+        fence: record.lease.runtimeFence,
+        items: prepared ?? []
+      })
     }
     return
   }
   // Failed import must not close the conversation-owned journal.
   await applyAdoptedTranscript(params, attached, record, prepared, options.store)
+  return undefined
 }
 
 async function applyAdoptedTranscript(
@@ -120,24 +159,14 @@ async function applyAdoptedTranscript(
     return
   }
   if (prepared) {
-    await params.fork?.revalidate()
-    const fork = params.fork
-    const last = prepared.at(-1)
-    const receipt =
-      fork && store
-        ? store.conversationReceipts.forkBoundary(record.sessionId, {
-            sessionId: fork.sessionId,
-            itemId: fork.itemId,
-            childBoundary: last
-              ? { kind: 'item', itemId: agentJournalItemKey(last.identity) }
-              : { kind: 'start' }
-          })
-        : undefined
-    await attached.journal.replaceEpochItems(
-      'legacy_import',
-      record.lease.runtimeFence,
-      prepared,
-      receipt ? () => receipt : undefined
+    await attached.journal.write(
+      {
+        kind: 'epoch-replace',
+        reason: 'legacy_import',
+        fence: record.lease.runtimeFence,
+        items: prepared
+      },
+      undefined
     )
     return
   }

@@ -4,18 +4,20 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { CommandReceiptRead } from '../../agent-session-journal/writing/command-receipt-table'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
+import type { SqlJournalQueuedMessages } from '../../agent-session-journal/journal-sql-queued-messages'
 
-type SendAnswerJournal = Pick<AgentSessionJournal, 'submission' | 'inputOrder'> & {
-  queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
+type SendAnswerJournal = {
+  reads: Pick<AgentSessionJournal['reads'], 'input' | 'submission'>
+  queuedMessages: Pick<AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages, 'get'>
 }
 
 /** A card whose row is gone answers from its latest handoff, found by key, never by a history scan. */
-function latestHandoff(
-  journal: SendAnswerJournal,
+async function latestHandoff(
+  journal: Pick<SendAnswerJournal, 'reads'>,
   messageId: string
-): AgentJournalSubmission | undefined {
+): Promise<AgentJournalSubmission | undefined> {
   let latest: AgentJournalSubmission | undefined
-  for (const handoff of journal.inputOrder.linkedTo(messageId)) {
+  for (const handoff of (await journal.reads.input({ kind: 'linked-to', messageId })).submissions) {
     if (
       handoff.queuedMessageId === messageId &&
       (handoff.submittedSequence ?? 0) >= (latest?.submittedSequence ?? 0)
@@ -27,15 +29,15 @@ function latestHandoff(
 }
 
 /** Refused conversions replay as returned cards, avoiding duplicate Retry rows; null means never queued. */
-export function queuedSendAnswer(
+export async function queuedSendAnswer(
   journal: SendAnswerJournal,
   clientMessageId: string
-): AgentSessionSendResult | null {
-  const draft = journal.queuedMessages.get(clientMessageId)
+): Promise<AgentSessionSendResult | null> {
+  const draft = await journal.queuedMessages.get(clientMessageId)
   if (draft) {
     const consumed =
       draft.state === 'dispatched' && draft.consumedAs !== null
-        ? journal.submission(draft.consumedAs)
+        ? await journal.reads.submission(draft.consumedAs)
         : undefined
     return consumed
       ? { clientMessageId, submission: { ...consumed } }
@@ -45,7 +47,7 @@ export function queuedSendAnswer(
         }
   }
   // Missing cards with rejected handoffs were deleted; replay withdrawn rather than a refused send.
-  const handoff = latestHandoff(journal, clientMessageId)
+  const handoff = await latestHandoff(journal, clientMessageId)
   if (handoff?.dispatchState === 'rejected') {
     return {
       clientMessageId,
@@ -56,29 +58,19 @@ export function queuedSendAnswer(
 }
 
 /** What became of one send, answered by the host that admitted it. */
-export type StructuredSendAnswer =
-  /** Still the chat's to hand over: a card waiting, paused or returned, or a handoff not yet answered. */
-  | { kind: 'waiting' }
-  /** Its card was deleted before handover. */
-  | { kind: 'withdrawn' }
-  | { kind: 'accepted' }
-  /** Sent at once and proven never delivered. `cancelled`: someone stopped it on purpose.
-   *  `recovered`: a different turn was handed over and accepted, or the context cleared, after it settled. */
-  | { kind: 'rejected'; cancelled: boolean; recovered: boolean }
-  /** It may have reached the agent: admitted, with nothing left to say whether it did. */
-  | { kind: 'unknown' }
-  /** Refused before admission; its id would replay that refusal. */
-  | { kind: 'refused' }
-  /** A complete read, receipts included, proves it was never admitted. */
-  | { kind: 'absent' }
-  | { kind: 'unreadable' }
+export type { StructuredSendAnswer } from '../../agent-session-journal/journal-mail-observation'
+import type { StructuredSendAnswer } from '../../agent-session-journal/journal-mail-observation'
 
-function submissionAnswer(
-  journal: Pick<AgentSessionJournal, 'item' | 'inputOrder'> & {
-    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'inputState'>
+async function submissionAnswer(
+  journal: {
+    reads: Pick<AgentSessionJournal['reads'], 'item' | 'submission' | 'input'>
+    queuedMessages: Pick<
+      AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages,
+      'clearedThrough'
+    >
   },
   submission: AgentJournalSubmission
-): StructuredSendAnswer {
+): Promise<StructuredSendAnswer> {
   switch (submission.dispatchState) {
     case 'accepted':
       return { kind: 'accepted' }
@@ -90,13 +82,14 @@ function submissionAnswer(
         return { kind: 'waiting' }
       }
       // A proven rejection is placed at its settlement row; journal order, never clocks.
-      const at = journal.item(agentJournalSubmissionKey(submission.clientMessageId))?.sequence
-      const cleared = journal.queuedMessages.inputState().queuePauseMarks.cleared?.sequence ?? 0
+      const at = (await journal.reads.item(agentJournalSubmissionKey(submission.clientMessageId)))
+        ?.sequence
+      const cleared = await journal.queuedMessages.clearedThrough()
+      const accepted = (await journal.reads.input({ kind: 'latest-accepted-handover' })).sequence
       return {
         kind: 'rejected',
         cancelled: dispatchWasWithdrawn(submission),
-        recovered:
-          at !== undefined && (journal.inputOrder.links.acceptedHandover() > at || cleared > at)
+        recovered: at !== undefined && (accepted > at || cleared > at)
       }
     }
     case 'unknown':
@@ -106,16 +99,19 @@ function submissionAnswer(
 
 /** One keyed read per send: the card first, then the send itself, then a gone card's handoff, and only
  *  then the admission receipt, which alone can prove nothing was admitted. */
-export function structuredSendAnswer(
-  journal: SendAnswerJournal &
-    Pick<AgentSessionJournal, 'item'> & {
-      queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'inputState'>
-    },
-  readReceipt: (operationId: string) => CommandReceiptRead,
+export async function structuredSendAnswer(
+  journal: {
+    reads: Pick<AgentSessionJournal['reads'], 'item' | 'submission' | 'input'>
+    queuedMessages: Pick<
+      AgentSessionJournal['queuedMessages'] | SqlJournalQueuedMessages,
+      'get' | 'clearedThrough'
+    >
+  },
+  readReceipt: (operationId: string) => CommandReceiptRead | Promise<CommandReceiptRead>,
   sessionId: string,
   operationId: string
-): StructuredSendAnswer {
-  const card = journal.queuedMessages.get(operationId)
+): Promise<StructuredSendAnswer> {
+  const card = await journal.queuedMessages.get(operationId)
   if (card) {
     if (card.state === 'withdrawn') {
       return { kind: 'withdrawn' }
@@ -123,18 +119,19 @@ export function structuredSendAnswer(
     if (card.state !== 'dispatched' || card.consumedAs === null) {
       return { kind: 'waiting' }
     }
-    const handoff = journal.submission(card.consumedAs)
+    const handoff = await journal.reads.submission(card.consumedAs)
     // Handed over, and its handoff's detail is gone: it may have reached the agent.
     return handoff ? submissionAnswer(journal, handoff) : { kind: 'unknown' }
   }
-  const sent = journal.submission(operationId) ?? latestHandoff(journal, operationId)
+  const sent =
+    (await journal.reads.submission(operationId)) ?? (await latestHandoff(journal, operationId))
   if (sent) {
     if (sent.clientMessageId !== operationId && sent.dispatchState === 'rejected') {
       return { kind: 'withdrawn' }
     }
     return submissionAnswer(journal, sent)
   }
-  const receipt = readReceipt(operationId)
+  const receipt = await readReceipt(operationId)
   switch (receipt.verdict) {
     case 'absent':
       return { kind: 'absent' }

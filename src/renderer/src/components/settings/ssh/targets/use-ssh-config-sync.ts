@@ -2,13 +2,15 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { formatSshUserFacingError } from './ssh-user-facing-error'
 
 /** Only explicit restoreRemoved lifts tombstones; plain config sync must preserve removals. */
 export function useSshConfigSync(onSynced: () => Promise<void>): {
   syncing: boolean
   sync: (options?: { restoreRemoved?: boolean }) => Promise<void>
 } {
+  const t = useTranslate()
   const mountedRef = useMountedRef()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [syncing, setSyncing] = useState(false)
@@ -24,14 +26,11 @@ export function useSshConfigSync(onSynced: () => Promise<void>): {
       if (mountedRef.current) {
         if (result.targets.length === 0) {
           toast(
-            translate(
-              'auto.components.settings.SshPane.alreadyInSync',
-              '~/.ssh/config already in sync'
-            )
+            t('auto.components.settings.SshPane.alreadyInSync', '~/.ssh/config already in sync')
           )
         } else {
           toast.success(
-            translate(
+            t(
               result.targets.length === 1
                 ? 'auto.components.settings.SshPane.syncedServerSingular'
                 : 'auto.components.settings.SshPane.syncedServerPlural',
@@ -46,8 +45,8 @@ export function useSshConfigSync(onSynced: () => Promise<void>): {
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
-            : translate('auto.components.settings.SshPane.f495689b82', 'Import failed')
+            ? formatSshUserFacingError(err.message)
+            : t('auto.components.settings.SshPane.f495689b82', 'Import failed')
         )
       }
     } finally {

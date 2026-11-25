@@ -1,9 +1,9 @@
 import { Layers } from 'lucide-react'
 import { sortCollectionsByOrder } from '../../../../shared/collections'
 import type { Collection } from '../../../../shared/collection-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/sections/group-keys'
 import type { Row } from '../../../../shared/sidebar-list/row-types'
 
 export const COLLECTION_GROUP_META = {

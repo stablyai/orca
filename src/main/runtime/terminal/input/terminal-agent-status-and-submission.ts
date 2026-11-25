@@ -1,6 +1,6 @@
 import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
@@ -76,13 +76,14 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
 
   protected async recheckHookAgentPresenceForPty(
     ptyId: string,
-    exitedSince?: number
+    exitedSince?: number,
+    paneKeys: Iterable<string> = this.collectAgentStatusPaneKeysForPty(ptyId)
   ): Promise<'live' | 'unverifiable' | 'exited' | null> {
     if (!this.checkHookAgentPresenceFn) {
       return null
     }
     const verdicts = await Promise.all(
-      Array.from(this.collectAgentStatusPaneKeysForPty(ptyId), (paneKey) =>
+      Array.from(paneKeys, (paneKey) =>
         // SAFETY: Keep the original TypeError if collecting pane keys invalidates this callback.
         exitedSince === undefined
           ? this.checkHookAgentPresenceFn!(paneKey)
@@ -101,12 +102,16 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   protected confirmPtyAgentExit(ptyId: string, recoverCompletedHook = false): void {
     const current = this.ptysById.get(ptyId)
     const incarnation = current?.incarnationId
-    void this.recheckHookAgentPresenceForPty(ptyId).then((verdict) => {
+    const paneKeys = [...this.collectAgentStatusPaneKeysForPty(ptyId)]
+    void this.recheckHookAgentPresenceForPty(ptyId, undefined, paneKeys).then((verdict) => {
       if (this.ptysById.get(ptyId) !== current || current?.incarnationId !== incarnation) {
         return
       }
-      // No identified owner keeps legacy rules; an unverifiable owned process cannot be declared exited from silence.
-      if (verdict === null || verdict === 'unverifiable') {
+      const suspended = () =>
+        paneKeys.some((paneKey) => this.readPaneAgentIdentity(paneKey)?.suspended === true)
+      if (verdict === 'unverifiable' && suspended()) {
+        this.ptyTitleTrackersByPtyId.get(ptyId)?.tracker.restoreLastAgentExit()
+      } else if (verdict === null || verdict === 'unverifiable') {
         this.confirmLegacyPtyAgentExit(ptyId, recoverCompletedHook, verdict === 'unverifiable')
       } else if (verdict === 'exited' && !recoverCompletedHook) {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
@@ -239,15 +244,11 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   protected getFreshExplicitAgentStatusForHandle(
     handle: string,
     ptyId: string
-  ): {
-    status: NonNullable<RuntimeTerminalAgentStatus['status']>
-    updatedAt: number
-    stateStartedAt: number
-  } | null {
+  ): ReturnType<typeof selectFreshExplicitAgentStatus> {
     return selectFreshExplicitAgentStatus({
       handle,
       paneKey: this.getPaneKeyForTerminalHandle(handle),
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookRows: this.publicPaneStatusFn?.(this.getPaneKeyForTerminalHandle(handle) ?? '') ?? [],
       screenMayHoldDialog: () => this.screenMayHoldAgentDialog(ptyId)
     })
   }
@@ -297,7 +298,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: nativeLifecycle?.workingSequence ?? 0,
-      explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
+      // A prompt starts the main agent's turn; child work can hold the row working across it.
+      explicitWorkingStartedAt:
+        explicit?.status === 'working' ? explicit.mainAgentWorkingStartedAt : null,
       outputSequence,
       status
     }

@@ -1,6 +1,6 @@
 import type { RefinementCtx } from 'zod'
 import { isPluginCommandAliasActionId } from '../contributions/plugin-command-actions'
-import { getKeybindingConflictIdentity } from '../../keybindings'
+import { getKeybindingConflictIdentity } from '../../keybindings/matching-key'
 import {
   PLUGIN_EVENT_CAPABILITY,
   type PluginEventName
@@ -28,11 +28,13 @@ type ContributionValidationManifest = {
     themes: IdentifiedContribution[]
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
+    fonts: { family: string }[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
     settings: { key: string }[]
     statusBarItems: { id: string; command?: string }[]
+    mcpServers: { name: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -118,6 +120,13 @@ export function validatePluginManifestContributions(
     ctx
   )
   rejectDuplicateValues(
+    manifest.contributes.fonts.map((font) => font.family.toLowerCase()),
+    String,
+    'fonts',
+    'font family',
+    ctx
+  )
+  rejectDuplicateValues(
     manifest.contributes.settings.map((setting) => setting.key),
     String,
     'settings',
@@ -134,6 +143,13 @@ export function validatePluginManifestContributions(
       message: 'needs the "settings:own" capability, which is how the plugin reads them'
     })
   }
+  rejectDuplicateValues(
+    manifest.contributes.mcpServers.map((server) => server.name),
+    String,
+    'mcpServers',
+    'MCP server name',
+    ctx
+  )
   rejectDuplicateValues(
     manifest.contributes.vmRecipes,
     (entry) => (entry as PathContribution).path,
@@ -221,7 +237,10 @@ export function validatePluginManifestContributions(
   }
   for (const [index, subscription] of manifest.contributes.events.entries()) {
     const required = PLUGIN_EVENT_CAPABILITY[subscription.on]
-    if (!manifest.capabilities.some((capability) => capability.kind === required)) {
+    if (
+      required !== null &&
+      !manifest.capabilities.some((capability) => capability.kind === required)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['contributes', 'events', index, 'on'],

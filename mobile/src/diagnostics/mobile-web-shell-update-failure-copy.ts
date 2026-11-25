@@ -1,12 +1,12 @@
 import type { MobileWebBundleErrorCode } from '../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
-import { BUILD_ID_PREFIX_LENGTH } from '../mobile-web-shell/mobile-web-shell-dev-facts'
+import { BUILD_ID_PREFIX_LENGTH } from '../mobile-web-shell/diagnostics/mobile-web-shell-dev-facts'
 import type {
   MobileWebShellUpdateFailure,
   MobileWebShellUpdateFailureOutcome,
   MobileWebShellUpdateFailureReason,
   MobileWebShellUpdateFailureWall
-} from '../mobile-web-shell/mobile-web-shell-update-failure'
-import { formatTimeAgo } from '../worktree/agent-row-display'
+} from '../mobile-web-shell/update-recovery/mobile-web-shell-update-failure'
+import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { translate } from '../i18n/mobile-i18n'
 
 // Describe only the recorded code; this row has no further evidence about the failure.

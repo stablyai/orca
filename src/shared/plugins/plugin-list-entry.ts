@@ -1,5 +1,7 @@
+import type { PluginBlockNotice } from './catalog/plugin-kill-list'
 import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import type { PluginExecutionProfile } from './contributions/plugin-execution-profile'
+import type { ResolvedPluginPanelPathIcon } from './contributions/plugin-panel-path-icon'
 import type { PluginHostImages } from './images/plugin-image-url'
 import type { PluginStatusBarItemContribution } from './contributions/plugin-status-bar-item-contribution'
 
@@ -11,6 +13,9 @@ export type PluginHostPanel = {
   title: string
   /** Lucide icon name declared in the plugin manifest. */
   icon?: string
+  /** Inline SVG path icon, defaults applied. Absent on older hosts; older clients ignore it and
+   *  show `puzzle`, which is why it does not reuse `icon`. */
+  iconPath?: ResolvedPluginPanelPathIcon
   tabKey: `plugin:${string}`
 }
 
@@ -47,12 +52,24 @@ export type PluginHostNewFile = {
   icon?: string
 }
 
+export type PluginHostFont = {
+  /** The manifest's family name; clients register it as `pluginFontFamilyName`. */
+  family: string
+  faces: {
+    /** orca-plugin-image URL main serves while the plugin is enabled. */
+    url: string
+    weight: string
+    style: 'normal' | 'italic'
+  }[]
+}
+
 export type PluginHostListEntry = {
   pluginKey: string
   consentFingerprint: string | null
   name: string
   version: string
   publisher: string
+  managedByTeams?: string[]
   description?: string
   /** The verified execution profile from the installed manifest; absent for invalid entries and
    *  on hosts that predate it. Never infer it from the plugin's contents. */
@@ -67,6 +84,7 @@ export type PluginHostListEntry = {
   repository?: string
   status: PluginHostStatus
   needsReconsent: boolean
+  requiredByTeam?: true
   error?: string
   isDev: boolean
   /** Dev folders: file changes the host had seen when it last loaded the folder, so a client can
@@ -80,6 +98,8 @@ export type PluginHostListEntry = {
   customEditors?: PluginHostCustomEditor[]
   /** Absent on hosts that predate new-file templates. */
   newFiles?: PluginHostNewFile[]
+  /** Absent on hosts that predate plugin fonts. */
+  fonts?: PluginHostFont[]
   commands: {
     id: string
     title: string
@@ -98,6 +118,8 @@ export type PluginHostListEntry = {
    *  hosts. */
   hooks?: string[]
   hasWorker: boolean
+  /** The MCP servers its manifest adds, each with its URL or command line. Absent on older hosts. */
+  mcpServers?: { name: string; detail: string }[]
   vmRecipes?: {
     id: string
     name: string
@@ -108,10 +130,15 @@ export type PluginHostListEntry = {
     }[]
   }[]
   restarts: number
-  blockedByKillList?: { reason: string; advisoryUrl?: string }
+  blockedByKillList?: PluginBlockNotice
   source?: {
     kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
     reference: string
+    /** Structured install location; absent on older hosts and non-Git installs. */
+    url?: string
+    path?: string
+    /** The catalog's repository claim for this release; not verified authorship. */
+    authorRepository?: string
     resolvedCommit: string | null
     contentHash: string
     /** `ref` is the catalog's ref, so a client can join to the exact catalog source. */

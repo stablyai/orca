@@ -1,7 +1,12 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { isZcodeUsageCredentialCurrent } from '../zcode-usage-credentials'
-import { settleSiblingProviderResult } from './service-sibling-provider-result'
-import type { ProviderRateLimits } from './service-types'
+import { isZcodeUsageCredentialCurrent } from '../providers/zcode/zcode-usage-credentials'
+import {
+  settleSiblingProviderResult,
+  type SettledProviderResult
+} from './service-sibling-provider-result'
+import { disabledUsageSnapshot } from './disabled-usage-snapshot'
+import { prepareMuseUsageFetch } from './service-muse-usage-fetch'
+import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 function hasKnownProvenanceChange(
   previous: ProviderRateLimits | null,
@@ -21,6 +26,8 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     signal: AbortSignal,
     options?: { force?: boolean }
   ): Promise<void> {
+    const museBeforeFetch = this.state.muse
+    const museResultPromise = this.startMuseUsageFetch(signal)
     const prepared = await this.prepareFetchAllCycle(signal, options)
     if (!prepared) {
       return
@@ -43,14 +50,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       zcodeGeneration,
       antigravityGeneration,
       claudeFetchGated,
-      results: [
-        claudeResult,
-        codexResult,
-        geminiResult,
-        opencodeGoResult,
-        kimiResult,
-        miniMaxResult
-      ],
+      results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
@@ -83,19 +83,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             updatedAt: Date.now(),
             error:
               codexResult.reason instanceof Error ? codexResult.reason.message : 'Unknown error',
-            status: 'error'
-          } satisfies ProviderRateLimits)
-
-    const gemini =
-      geminiResult.status === 'fulfilled'
-        ? geminiResult.value
-        : ({
-            provider: 'gemini',
-            session: null,
-            weekly: null,
-            updatedAt: Date.now(),
-            error:
-              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
 
@@ -167,11 +154,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
+      const home = prepared.claudeAuthPreparation?.configDir
+      this.rememberUsageReadingAccount('claude', claudeTarget, home, claudeProvenance)
     }
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
+      const home = prepared.codexHomePath
+      this.rememberUsageReadingAccount('codex', codexTarget, home, codexProvenance)
     }
-    this.trackActiveFailureStreak('gemini', gemini)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
     }
@@ -191,7 +181,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
           ? opencodeGo
@@ -264,5 +253,28 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           ? antigravity
           : this.applyStalePolicy(antigravity, previousState.antigravity)
     })
+
+    // Published separately so a slow Muse CLI never delays the sibling batch above.
+    const museSettled = await museResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const muse = settleSiblingProviderResult('muse', museSettled)
+    this.trackActiveFailureStreak('muse', muse)
+    this.updateState({
+      ...this.state,
+      muse: this.applyStalePolicy(muse, museBeforeFetch)
+    })
+  }
+
+  // Started before the shared preparation awaits; hidden meters skip the CLI spawn entirely.
+  private startMuseUsageFetch(signal: AbortSignal): Promise<SettledProviderResult> {
+    const enabled = this.museUsageEnabledResolver?.() ?? true
+    const previous = this.state.muse
+    const beforeFetch = enabled
+      ? this.withFetchingStatus(previous, 'muse')
+      : (previous ?? disabledUsageSnapshot('muse'))
+    this.updateState({ ...this.state, muse: beforeFetch })
+    return prepareMuseUsageFetch(signal, enabled, beforeFetch)
   }
 }

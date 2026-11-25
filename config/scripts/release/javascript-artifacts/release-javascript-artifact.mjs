@@ -16,7 +16,7 @@ import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { DESKTOP_RC_TAG, DESKTOP_STABLE_TAG } from '../versioning/release-tag-patterns.mjs'
-import { getTarProgram } from '../../../../src/shared/zip-extractor-command.ts'
+import { getTarProgram } from '../../../../src/shared/archives/zip-extractor-command.ts'
 
 const REQUIRED_FILES = [
   'cli/index.js',

@@ -1,4 +1,3 @@
-import '../../../../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import type { KeybindingOverrides } from '../../../../../../shared/keybindings/types'
 

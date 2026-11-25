@@ -1,34 +1,64 @@
-import { pathEnvRelativeTo } from '../../../../shared/node-cli-command-resolution'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import {
+  codexBotToolsThreadConfig,
+  readCodexInheritedToolNames,
+  readCodexStdioToolNames
+} from '../../../bots/bot-tools-codex'
+import { deliverHostMcpServers } from '../../../mcp-servers/session-host-mcp-delivery'
+import { agentOwnMcpServerNames } from '../../../mcp-servers/agent-own-mcp-server-names'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
+import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
   type StructuredAgentCommand,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 // How a durable session record becomes a Codex process launch.
 //
-// Every input is read back from the record the store already made durable, not
-// from the call that triggered spawn. A client that attaches twice must
-// land in the same working directory under the same account home, and a resume
-// must name the thread this session actually proved — never one a caller asks
-// for, which is how a resume becomes a fork wearing a resume's name.
+// Every input except the account is read back from the record the store already made durable,
+// not from the call that triggered spawn. A client that attaches twice must land in the same
+// working directory, and a resume must name the thread this session actually proved — never one
+// a caller asks for, which is how a resume becomes a fork wearing a resume's name. The account
+// follows the selection, as Claude chats do.
 
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import {
+  agentSessionAccountHome,
+  agentSessionAccountHomesEqual,
+  requireLegacyAgentSessionAccountHome,
+  type AgentSessionAccountHome
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { moveCodexThreadIntoAccountHome } from '../../history/resume/codex-thread-account-move'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { resolveCodexCommand } from '../../../codex-cli/command'
+import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
-import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
+import { codexArgsMcpServerNames, codexStructuredLaunchArgs } from './codex-structured-launch-args'
+import { codexReadOnlyThreadConfig } from '../prompts/codex-structured-read-only'
+import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
+import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
+import {
+  nothingExchangedOn,
+  type SavedProviderTurnReads
+} from '../../../native-chat/agent-session-journal/journal-provider-turn-saved'
 
 export type CodexStructuredLaunchPartDeps = {
   resolveLaunchArgs: () => Promise<string[]> | string[]
+  savedSession: SavedProviderTurnReads
+  /** The selected account's home, prepared for this start in `launchDirectory`; null keeps the record's. */
+  prepareLaunchAccountHome?: (
+    record: AgentSessionRecord,
+    launchDirectory: string
+  ) => Promise<AgentSessionAccountHome | null>
   resolveCommand?: (options?: {
     pathEnv?: string | null
     homePath?: string
@@ -49,9 +79,8 @@ export type CodexStructuredInvocationDeps = Pick<
   resolveWorkingDirectory?: () => Promise<string> | string
 }
 
-export type CodexStructuredInvocation = {
-  command: string
-  prefixArgs: string[]
+/** The resolver's own shape, so a renamed field can't silently read as absent. */
+export type CodexStructuredInvocation = StructuredAgentCommand & {
   environment: NodeJS.ProcessEnv | undefined
 }
 
@@ -98,14 +127,23 @@ async function readCodexStructuredInvocation(
   return { ...invocation, environment }
 }
 
-/** Derive resume identity and account home from the durable record. */
+/** The host compares this with the selection to move an idle chat to a newly picked account. */
+export function codexLaunchedAccountHome(launch: Pick<CodexStructuredLaunch, 'codexHome'>): {
+  accountHome?: AgentSessionAccountHome
+} {
+  return launch.codexHome
+    ? { accountHome: agentSessionAccountHome(CODEX_STRUCTURED_AGENT, launch.codexHome) }
+    : {}
+}
+
+/** Derive resume identity from the durable record and the account from the selection. */
 export function codexStructuredLaunchPart(
   deps: CodexStructuredLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<CodexStructuredLaunch> {
   return async (basis) => {
     const { record } = basis
-    const accountHome = requireLegacyAgentSessionAccountHome(record.accountHome)
-    const { command, prefixArgs } = await resolveCodexStructuredInvocation({
+    const recordHome = requireLegacyAgentSessionAccountHome(record.accountHome)
+    const { command, prefixArgs, configuredProgram } = await resolveCodexStructuredInvocation({
       ...(deps.resolveCommand ? { resolveCommand: deps.resolveCommand } : {}),
       refreshEnvironmentAfterMiss: basis.refreshAfterMissingProgram,
       resolveWorkingDirectory: basis.launchDirectory,
@@ -118,27 +156,93 @@ export function codexStructuredLaunchPart(
     // Match the first turn's model to avoid duplicate prompt injection on a model switch.
     const model = record.options?.model
     const visuals = await basis.visuals()
-    await basis.launchDirectory()
+    const launchDirectory = await basis.launchDirectory()
+    const selectedHome = await deps.prepareLaunchAccountHome?.(record, launchDirectory)
+    const accountHome = selectedHome
+      ? requireLegacyAgentSessionAccountHome(selectedHome)
+      : recordHome
+    if (
+      resumeThreadId &&
+      selectedHome &&
+      !agentSessionAccountHomesEqual(selectedHome, record.accountHome)
+    ) {
+      await moveCodexThreadIntoAccountHome({
+        threadId: resumeThreadId,
+        fromHome: recordHome.path,
+        toHome: accountHome.path
+      })
+    }
+    const linkedSkills = await basis.linkedSkills()
+    const developerInstructions = await basis.instructions(
+      linkedSkillsSection(linkedSkills.projects, [])
+    )
+    const codexHome = accountHome.path || environment?.CODEX_HOME || getSystemCodexHomePath()
+    // Codex merges a same-named server from Orca into one of its own, so that one runs alone.
+    const tools = await deliverHostMcpServers(
+      record.sessionId,
+      'Codex',
+      await basis.toolServers(),
+      async () => [
+        ...(await readCodexInheritedToolNames(codexHome)),
+        ...(await agentOwnMcpServerNames('codex', environment, launchDirectory)),
+        ...codexArgsMcpServerNames(args)
+      ]
+    )
+    const threadConfig = basis.readOnly
+      ? codexReadOnlyThreadConfig(basis.readOnly)
+      : tools.servers.length > 0
+        ? codexBotToolsThreadConfig(tools, await readCodexStdioToolNames(codexHome))
+        : null
+    // Codex saves a thread at its first turn; one that exchanged a turn lost its history, not nothing.
+    // Turns written since this thread's creation fence ran on it, even before Codex echoed the send.
+    const supersedeIfUnsaved =
+      resumeThreadId !== null &&
+      head?.origin === 'created' &&
+      (await nothingExchangedOn(
+        deps.savedSession,
+        record.sessionId,
+        resumeThreadId,
+        head.mintedAtFence
+      ))
     return {
       launch: {
         command,
         prefixArgs,
-        args: [...prefixArgs, ...args, 'app-server'],
+        // A custom command may be a wrapper that depends on its folder; it never shares a server.
+        ...(configuredProgram ? { customCommand: true } : {}),
+        // Before the user's args: a later -c table replaces this one, so their hooks.state wins.
+        args: [...prefixArgs, ...codexOrcaHooksOffArgs(codexHome), ...args, 'app-server'],
         codexHome: accountHome.path,
         resumeThreadId,
-        // Only created threads may be unsaved; resumed, forked and adopted threads were persisted.
-        ...(resumeThreadId && head?.origin === 'created' ? { supersedeIfUnsaved: true } : {}),
+        ...(supersedeIfUnsaved ? { supersedeIfUnsaved } : {}),
         // Own settings leaves a new thread to config and a resumed thread to its saved policy.
         ...(basis.permissionMode === 'own'
           ? {}
           : { permissionPolicy: codexStructuredPermissionPolicy(basis.permissionMode ?? 'ask') }),
         ...(model ? { model } : {}),
-        ...(visuals ? { visuals } : {})
+        ...(developerInstructions ? { developerInstructions } : {}),
+        ...(visuals ? { visuals } : {}),
+        // Refused even empty: a project linked later must then reach it as a list with paths.
+        ...(linkedSkills.root
+          ? {
+              linkedSkillsRoot: linkedSkills.root.skillsRoot,
+              linkedSkillsRefused: () =>
+                basis.linkedSkillsRefused(
+                  linkedSkillsSection(linkedSkills.projects, linkedSkills.projects)
+                )
+            }
+          : {}),
+        ...(threadConfig ? { threadConfig } : {}),
+        ...(basis.readOnly && threadConfig ? { readOnly: basis.readOnly } : {})
       },
       env: withNativeChatVisualsEnv(
-        { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
+        withSessionMcpToolsEnv(
+          { ...environment, ...(accountHome.path ? { CODEX_HOME: accountHome.path } : {}) },
+          tools
+        ),
         visuals
       ),
+      commandEnv: tools.commandEnv,
       // Clear inherited scratch paths that may belong to another chat.
       inheritedEnvToDelete: [
         ...(visuals ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),

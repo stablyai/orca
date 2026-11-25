@@ -1,9 +1,10 @@
 import { Copy, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const EMULATOR_EXAMPLE_PROMPTS = [
   'Using Orca CLI, attach to the active iPhone simulator, sign in with the test account, complete onboarding, and tell me where the flow feels confusing.',
@@ -36,6 +37,7 @@ type MobileEmulatorExamplesProps = {
 export function MobileEmulatorExamples({
   variant = 'card'
 }: MobileEmulatorExamplesProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -45,14 +47,14 @@ export function MobileEmulatorExamples({
       <div className="flex items-center gap-2">
         <Sparkles className="size-3.5 text-muted-foreground" />
         <p className="text-sm font-medium">
-          {translate(
+          {t(
             'auto.components.settings.MobileEmulatorExamples.0820b3f84f',
             'Try it — example prompts'
           )}
         </p>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.MobileEmulatorExamples.4daa95f25a',
           'Paste any of these into Claude Code, Codex, or another agent in a project where the Orca CLI skill is installed.'
         )}
@@ -64,18 +66,18 @@ export function MobileEmulatorExamples({
             className="flex items-start gap-2 rounded-lg border border-border bg-background px-3 py-2"
           >
             <p className="flex-1 text-[11px] leading-relaxed text-foreground/90">
-              {translate('auto.components.settings.MobileEmulatorExamples.b525ff2b12', '"')}
+              {t('auto.components.settings.MobileEmulatorExamples.b525ff2b12', '"')}
               {prompt}
-              {translate('auto.components.settings.MobileEmulatorExamples.d151e25078', '"')}
+              {t('auto.components.settings.MobileEmulatorExamples.d151e25078', '"')}
             </p>
-            <TooltipProvider delayDuration={250}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="icon-xs"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.MobileEmulatorExamples.c12b253997',
                       'Copy example prompt'
                     )}
@@ -85,7 +87,7 @@ export function MobileEmulatorExamples({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="left" sideOffset={6}>
-                  {translate('auto.components.settings.MobileEmulatorExamples.edf13dd03b', 'Copy')}
+                  {t('auto.components.settings.MobileEmulatorExamples.edf13dd03b', 'Copy')}
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

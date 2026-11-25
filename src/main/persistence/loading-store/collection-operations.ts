@@ -6,8 +6,8 @@ import {
   sortCollectionsByOrder
 } from '../../../shared/collections'
 import type { StoreRuntimeState } from './store-runtime-state'
-import type { WriteSchedulingOperations } from './write-scheduling'
-import { scheduleSave } from './write-scheduling'
+import type { WriteSchedulingOperations } from './profile-writing/write-scheduling'
+import { scheduleSave } from './profile-writing/write-scheduling'
 import { pruneCollectionMemberships } from './worktree-collection-membership'
 
 type CollectionOperationsRuntime = Pick<StoreRuntimeState, 'state'>

@@ -1,0 +1,63 @@
+import { createContext, useContext, type ReactNode } from 'react'
+
+// Keep the context component-free so Fast Refresh preserves its identity.
+
+export type ConfirmationDialogField = {
+  id: string
+  label: string
+  type?: 'text' | 'password'
+  autoComplete?: string
+  defaultValue?: string
+}
+
+export type ConfirmationDialogOptions = {
+  title: string
+  /** Beside the title and subtitle, e.g. a tinted tile that sets a trust decision's tone. Decorative. */
+  media?: ReactNode
+  /** One muted line under the title that is not the description, e.g. who and where. */
+  subtitle?: ReactNode
+  description?: string
+  descriptionClassName?: string
+  /** Shown under the description, for facts the decision rests on. Without a `description`, it may
+   *  hold the dialog's own `DialogDescription`, so the dialog is described by that line. */
+  details?: ReactNode
+  /** The verb the button performs ("Delete", "Restart"); there is no generic default. */
+  confirmLabel: string
+  cancelLabel?: string
+  confirmVariant?: 'default' | 'destructive'
+  surface?: 'security'
+  /** Asked while a menu stays open under it, e.g. a picker that commits on a tab, so it sits above menus. */
+  aboveMenus?: boolean
+  /** A notice, not a question: only the confirm button shows, and it settles true. */
+  acknowledgeOnly?: boolean
+  /** Focus starts on Cancel (or the first field); `confirm` starts on the verb instead. */
+  initialFocus?: 'confirm' | 'cancel'
+  /** Ignore repeated Enter and the opening double-click’s second click; fresh presses and Escape still settle the prompt.
+   *  `true` also ignores a press outside; `'buttons'` lets it dismiss, for a prompt whose dismissal answers nothing. */
+  ignoresOpeningGesture?: boolean | 'buttons'
+  /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
+  dontAskAgain?: { label?: string; onConfirmed: () => void }
+  /** Runs when the cancel button settles the prompt, unlike Esc, an outside press or an abort. */
+  onCancelClicked?: () => void
+  /** Renders text inputs; Enter in one confirms. `onConfirmed` gets their values, only on confirm. */
+  fields?: {
+    inputs: ConfirmationDialogField[]
+    onConfirmed: (values: Record<string, string>) => void
+  }
+  /** Aborting dismisses the prompt, queued or showing, and resolves it as cancelled. */
+  signal?: AbortSignal
+}
+
+export type ConfirmationDialogContextValue = (
+  options: ConfirmationDialogOptions
+) => Promise<boolean>
+
+export const ConfirmationDialogContext = createContext<ConfirmationDialogContextValue | null>(null)
+
+export function useConfirmationDialog(): ConfirmationDialogContextValue {
+  const confirm = useContext(ConfirmationDialogContext)
+  if (!confirm) {
+    throw new Error('useConfirmationDialog must be used inside ConfirmationDialogProvider')
+  }
+  return confirm
+}

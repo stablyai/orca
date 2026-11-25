@@ -24,6 +24,18 @@ export const BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL: BrowserNetworkTunnel
   connectionWindow: { toClientBytes: 16 * 1024 * 1024, toSessionBytes: 4 * 1024 * 1024 }
 }
 
+// Every relay stream shares one stdio pipe; the connection windows bound what either side queues on it.
+export const BROWSER_NETWORK_RELAY_FLOW_CONTROL: BrowserNetworkTunnelFlowControl = {
+  streamWindowBytes: 2 * 1024 * 1024,
+  connectionWindow: { toClientBytes: 4 * 1024 * 1024, toSessionBytes: 4 * 1024 * 1024 }
+}
+
+// Room for a full connection window plus frame headers and control frames, so a slow pipe backs up instead of failing.
+export const BROWSER_NETWORK_RELAY_WRITER_LIMITS = {
+  maxQueuedBytes: 8 * 1024 * 1024,
+  maxQueuedFrames: 65_536
+}
+
 // One chunk per KiB of window keeps tiny-frame floods bounded while a full window of 1 KiB frames fits.
 export function browserNetworkTunnelMaxPendingChunks(windowBytes: number): number {
   return windowBytes / 1024
@@ -94,4 +106,4 @@ export type BrowserNetworkTunnelSessionOptions = {
   now?: () => number
   claimAggregateRetainedBytes?: (bytes: number) => (() => void) | null
 }
-import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser-network-tunnel-protocol'
+import type { BrowserNetworkTunnelOpen } from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'

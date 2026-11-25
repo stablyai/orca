@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
-import { writeFileAtomically } from '../../codex-accounts/fs-utils'
-import { upsertOrcaCreatedProjectTrustLevel } from '../../codex/trust/toml/config-toml-trust'
+import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { grantCodexProjectTrustOffMain } from '../../codex/trust/project-trust/codex-project-trust-worker-client'
 import { runExclusivelyForCodexTrustConfig } from '../../codex/trust/toml/codex-trust-config-mutation-queue'
+import { canonicalizeAgentTrustPath as canonicalize } from './agent-trust-path-canonicalization'
 import { recordOrcaCreatedAntigravityTrust } from './antigravity-workspace-trust-ownership'
 import type { TuiAgentConfig } from '../../../shared/agent-launch/catalog/tui-agent-config-types'
 
@@ -138,33 +139,18 @@ export function markCodexProjectTrusted(
   workspacePath: string,
   configFiles: readonly string[]
 ): Promise<void> {
-  // Codex checks the starting folder before its repository root; no Git-layout lookup is needed.
-  const absPath = canonicalize(workspacePath)
   // Serialize with hook installs so their capture/restore cannot overwrite the trust grant (#16441).
   const write = configFiles.reduceRight<() => Promise<void>>(
     (inner, configFile) => () => runExclusivelyForCodexTrustConfig(configFile, inner),
-    async () => {
-      for (const configFile of configFiles) {
-        upsertOrcaCreatedProjectTrustLevel(configFile, absPath, 'trusted')
-      }
-    }
+    () => grantCodexProjectTrustOffMain(configFiles, workspacePath)
   )
   return write()
 }
 
-function canonicalize(p: string): string {
-  // Match agent trust lookups that compare realpaths, including macOS /tmp symlinks.
-  try {
-    if (existsSync(p)) {
-      return realpathSync.native(p)
-    }
-  } catch {}
-  return p
-}
-
 function cursorWorkspaceSlug(absPath: string): string {
-  const stripped = absPath.replace(/^[\\/]+/, '')
-  // Windows paths contain characters forbidden in Cursor’s project-directory names.
-  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
-  return slug
+  // Mirrors cursor-agent's project-directory name; any mismatch leaves the trust menu up.
+  return absPath
+    .replace(/[^a-zA-Z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }

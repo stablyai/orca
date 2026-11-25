@@ -1,8 +1,8 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import { createFallbackProxy } from './web-fallback-api'
-import { callRuntimeResult } from './web-runtime-calls'
-import { mapRepoPathArg } from '@/runtime/runtime-repo-selector-params'
-import { repoHooksCheckWakeParams } from '../../../../shared/repo-hooks-check-wake'
+import { callRuntimeResult } from '../runtime/client/web-runtime-calls'
+import { mapRepoPathArg } from '@/runtime/source-control/forge/runtime-repo-selector-params'
+import { repoHooksCheckWakeParams } from '../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 
 export function createRuntimeNamespaceApi(prefix: string): never {
   return createFallbackProxy([prefix], (path, args) => {
@@ -13,10 +13,11 @@ export function createRuntimeNamespaceApi(prefix: string): never {
 
 export function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
   return {
-    check: async ({ repoId, background }) =>
+    check: async ({ repoId, background, createSource }) =>
       callRuntimeResult('repo.hooksCheck', {
         repo: repoId,
-        ...repoHooksCheckWakeParams(background)
+        ...repoHooksCheckWakeParams(background),
+        ...(createSource ? { createSource } : {})
       }),
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),

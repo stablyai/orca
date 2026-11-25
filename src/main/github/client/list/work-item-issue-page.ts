@@ -1,8 +1,10 @@
 import { z } from 'zod'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
-import { ghExecFileAsync, type LocalGitExecOptions, type OwnerRepo } from '../../gh-utils'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
-import type { GitHubRepoExecOptions } from '../../github-api-repository'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
+import type { GitHubRepoExecOptions } from '../../repositories/github-api-repository'
 import { fetchIssueWorkItem } from '../fetch/work-item-fetch'
 import { mapIssueWorkItem } from '../map/work-item'
 import { restIssueActor } from '../map/issue-actor'
@@ -18,13 +20,14 @@ type IssueNode = {
   title: string
   state: string
   url: string
+  createdAt: string
   updatedAt: string
   author: Actor | null
   labels: { nodes: { name: string }[]; pageInfo: { hasNextPage: boolean } }
   assignees: { nodes: Actor[]; pageInfo: { hasNextPage: boolean } }
 }
 const ISSUE_NODE_SELECTION = `__typename ... on Issue {
-  number title state url updatedAt
+  number title state url createdAt updatedAt
   author { __typename login avatarUrl }
   labels(first: 100) { nodes { name } pageInfo { hasNextPage } }
   assignees(first: 100) { nodes { __typename login avatarUrl } pageInfo { hasNextPage } }

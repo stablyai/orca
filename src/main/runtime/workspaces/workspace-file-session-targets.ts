@@ -1,15 +1,15 @@
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
 import type { ResolvedWorktree } from './catalog/runtime-worktree-path-identity'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
-import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceSelector } from '../../../shared/workspace/identity/floating-workspace-worktree'
 import { RuntimeMarkdownTabOperations } from '../files/paths/runtime-markdown-tab-operations'
 export abstract class RuntimeWorkspaceFileTargets extends RuntimeMarkdownTabOperations {
   protected abstract floatingWorkspaceToResolvedWorktree(

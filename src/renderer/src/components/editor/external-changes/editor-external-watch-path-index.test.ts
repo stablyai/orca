@@ -2,80 +2,57 @@ import { describe, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { indexEditorExternalWatchBatchPaths } from './editor-external-watch-path-index'
 
-const wslScope = {
-  worktreeId: 'wt-wsl',
-  worktreePath: '\\\\wsl.localhost\\Ubuntu\\workspace\\repo',
-  runtimeEnvironmentId: null,
-  allowLocalWindowsWslAliases: true as const
-}
+const root = '/repo'
+// One name: precomposed as Git reports it (NFC), and decomposed jamo as APFS stores a Finder-made name (NFD).
+const composedName = '노트.md'
+const decomposedName = composedName.normalize('NFD')
 
-function file(overrides: Partial<OpenFile> & Pick<OpenFile, 'id' | 'filePath'>): OpenFile {
+function openFile(overrides: Partial<OpenFile> & Pick<OpenFile, 'id'>): OpenFile {
   return {
-    relativePath: 'file.ts',
-    worktreeId: 'wt-wsl',
-    mode: 'edit',
+    filePath: `${root}/${composedName}`,
+    relativePath: composedName,
+    worktreeId: 'wt',
+    language: 'markdown',
     isDirty: false,
-    content: '',
-    language: 'typescript',
+    mode: 'edit',
     ...overrides
-  } as OpenFile
+  }
 }
 
-describe('editor external watch path batch index', () => {
-  it('filters owners and preserves open-file ordering across edit and diff matches', () => {
-    const edit = file({ id: 'edit', filePath: 'C:\\Repo\\file.ts' })
-    const runtime = file({
-      id: 'runtime',
-      filePath: 'C:\\Repo\\file.ts',
-      runtimeEnvironmentId: 'env-1'
-    })
-    const diff = file({
-      id: 'diff',
-      filePath: 'C:\\Repo\\file.ts',
-      mode: 'diff',
-      diffSource: 'unstaged'
-    })
-    const index = indexEditorExternalWatchBatchPaths(
-      {
-        worktreePath: 'C:\\Repo',
-        events: [{ kind: 'update', absolutePath: 'c:\\repo\\file.ts' }]
-      },
-      [diff, runtime, edit],
-      { ...wslScope, worktreePath: 'C:\\Repo' }
-    )
+function matchingIds(files: OpenFile[], changedName: string, worktreePath = root): string[] {
+  const absolutePath = `${worktreePath}/${changedName}`
+  const index = indexEditorExternalWatchBatchPaths(
+    { worktreePath, events: [{ kind: 'update', absolutePath }] },
+    files,
+    { worktreeId: 'wt', worktreePath, runtimeEnvironmentId: null }
+  )
+  return index.changes.flatMap((change) => index.matchingOpenFiles(change).map((file) => file.id))
+}
 
-    expect(index.matchingOpenFiles(index.changes[0]).map(({ id }) => id)).toEqual(['diff', 'edit'])
+describe('indexEditorExternalWatchBatchPaths', () => {
+  it('matches clean composed tabs and diffs, but not dirty ones, to a decomposed watcher path', () => {
+    const files = [
+      openFile({ id: 'clean' }),
+      openFile({ id: 'dirty', isDirty: true }),
+      openFile({ id: 'diff', mode: 'diff', diffSource: 'unstaged' }),
+      openFile({ id: 'dirty-diff', mode: 'diff', diffSource: 'unstaged', isDirty: true })
+    ]
+    expect(matchingIds(files, decomposedName)).toEqual(['clean', 'diff'])
   })
 
-  it('deduplicates repeated events and detects only working-tree combined diffs', () => {
-    const index = indexEditorExternalWatchBatchPaths(
-      {
-        worktreePath: 'C:\\Repo',
-        events: [
-          { kind: 'create', absolutePath: 'C:\\Repo\\file.ts' },
-          { kind: 'update', absolutePath: 'C:\\Repo\\file.ts' },
-          { kind: 'update', absolutePath: 'C:\\Repo\\folder', isDirectory: true }
-        ]
-      },
-      [
-        file({
-          id: 'combined',
-          filePath: 'C:\\Repo',
-          mode: 'diff',
-          diffSource: 'combined-uncommitted'
-        }),
-        file({
-          id: 'branch',
-          filePath: 'C:\\Repo',
-          mode: 'diff',
-          diffSource: 'combined-branch'
-        })
-      ],
-      { ...wslScope, worktreePath: 'C:\\Repo' }
-    )
+  it('matches a clean decomposed tab to a composed watcher path', () => {
+    const files = [
+      openFile({ id: 'clean', filePath: `${root}/${decomposedName}` }),
+      openFile({ id: 'dirty', filePath: `${root}/${decomposedName}`, isDirty: true })
+    ]
+    expect(matchingIds(files, composedName)).toEqual(['clean'])
+  })
 
-    expect(index.changes.map(({ relativePath }) => relativePath)).toEqual(['file.ts'])
-    expect(index.createOrUpdatePaths.size).toBe(1)
-    expect(index.hasCombinedDiffConsumer).toBe(true)
+  it('matches a clean composed tab when the worktree root itself is decomposed', () => {
+    const decomposedRoot = `/${decomposedName}`
+    const files = [
+      openFile({ id: 'clean', filePath: `/${composedName}/a.md`, relativePath: 'a.md' })
+    ]
+    expect(matchingIds(files, 'a.md', decomposedRoot)).toEqual(['clean'])
   })
 })

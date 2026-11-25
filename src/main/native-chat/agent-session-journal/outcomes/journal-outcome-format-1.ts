@@ -1,6 +1,7 @@
+import type { JournalKeyedMap, JournalKeyedSet } from '../journal-keyed-storage'
 import { z } from 'zod'
 import { AgentJournalTurnScopeSchema } from '../../../../shared/agent-session/journal/agent-session-journal-schemas'
-import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalHistoryOrigin } from '../context-epochs/journal-history-origin'
@@ -140,7 +141,12 @@ function checked<T>(schema: z.ZodType): z.ZodType<T> {
 }
 
 type State = JournalReducerState
-type Stored<F> = F extends Map<infer K, infer V> ? [K, V] : F extends Set<infer T> ? [T, T] : never
+type Stored<F> =
+  F extends JournalKeyedMap<infer K, infer V>
+    ? [K, V]
+    : F extends JournalKeyedSet<infer T>
+      ? [T, T]
+      : never
 type Cards = State['queue']['cards']
 const s = outcomeFormat1Stored
 const scalar = outcomeFormat1StoredScalars.shape
@@ -250,13 +256,19 @@ type Collection = (typeof OUTCOME_FORMAT_1_COLLECTIONS)[number]
 type StoredIn<F> = F extends 'items'
   ? AgentJournalRenderItem
   : F extends 'queue.cards'
-    ? [string, Omit<Cards extends Map<string, infer V> ? V : never, 'recovers'>]
+    ? [
+        string,
+        Omit<
+          Cards extends JournalKeyedMap<string, infer V> ? V : never,
+          'recovers' | 'deliveryMode' | 'unattended'
+        >
+      ]
     : F extends keyof State
       ? Stored<State[F]>
       : never
 type Marks = State['queuePauseMarks']
 // Live Stop settlement is never stored (durableQueuePauseMarks).
-type StoredMarks = Omit<Marks, 'latestStop'> & {
+type StoredMarks = Omit<Marks, 'latestStop' | 'manualStop'> & {
   latestStop: { sequence: number; event: JournalStopEvent } | null
 }
 type Scalars = z.output<typeof outcomeFormat1StoredScalars>

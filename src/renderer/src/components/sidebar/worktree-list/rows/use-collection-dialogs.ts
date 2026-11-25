@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { Collection } from '../../../../../../shared/collection-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeMetaBatchUpdate } from '@/store/slices/worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from '@/store/slices/worktrees/metadata/worktree-meta-update-options'
 import { assignCollectionMembership } from '../../../../../../shared/collections'
 
 export type CollectionDialogs = ReturnType<typeof useCollectionDialogs>

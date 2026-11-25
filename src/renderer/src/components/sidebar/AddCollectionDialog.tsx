@@ -15,7 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useAppStore } from '@/store'
 import { assignCollectionMembership } from '../../../../shared/collections'
 import type { Collection } from '../../../../shared/collection-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 

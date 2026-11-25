@@ -1,4 +1,4 @@
-import { normalizeTypedName } from '../../typed-name-normalization'
+import { normalizeTypedName } from '../../text/typed-name-normalization'
 
 /** Typed-name normalization makes Build/build collide; reject saves that would make both names unresolvable. */
 export function findCollidingEnvironmentName<T extends { name: string }>(

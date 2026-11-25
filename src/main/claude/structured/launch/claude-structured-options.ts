@@ -1,4 +1,4 @@
-import { ClaudeControlRequestError } from '../../claude-agent-sdk-control-requests'
+import { ClaudeControlRequestError } from '../../sdk-transport/claude-agent-sdk-control-requests'
 import {
   AgentSessionOptionRejectedError,
   ClaudeEffortValidationError
@@ -9,14 +9,15 @@ import {
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
-import { beginClaudeOptionMutation } from '../claude-structured-execution-observations'
+import { beginClaudeOptionMutation } from '../turns/claude-structured-execution-observations'
 import {
   CLAUDE_APPLY_FLAG_SETTINGS_CONTROL,
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS
-} from '../../claude-cli-flag-support'
+} from '../../cli-capabilities/claude-cli-flag-support'
 
 const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
@@ -59,7 +60,7 @@ export function restoredClaudeStructuredSessionOptions(
   )
 }
 
-const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode'])
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode', 'interactionMode'])
 
 export function isClaudeStructuredOptionKey(key: string): boolean {
   return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)
@@ -100,6 +101,26 @@ export async function claudeTakesFlagSettings(
     )
   }
   return session.flagSettingsControl !== 'unsupported'
+}
+
+/** A model pick, even of the unchanged saved value, asks Claude to leave its fallback at the next turn. */
+export function noteClaudeModelPick(
+  sessions: ReadonlyMap<string, ClaudeSession>,
+  { sessionId, fence }: { sessionId: string; fence: number },
+  emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
+): void {
+  const session = sessions.get(sessionId)
+  if (session?.fence !== fence || !session.modelFallback || session.modelFallback.picked) {
+    return
+  }
+  session.modelFallback = { ...session.modelFallback, picked: true }
+  emit(session, {
+    type: 'options-reported',
+    sessionId,
+    fence,
+    acquisitionGeneration: session.acquisitionGeneration,
+    reportedOptions: { fallbackModel: undefined }
+  })
 }
 
 /** A client's write to a live session. */
@@ -176,6 +197,7 @@ export async function setClaudeStructuredOption(
     }
     if (input.key === 'model') {
       session.translator?.modelWritten(input.value)
+      delete session.modelFallback
     }
   } catch (error) {
     if (error instanceof ClaudeControlRequestError) {

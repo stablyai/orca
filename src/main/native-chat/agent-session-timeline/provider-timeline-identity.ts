@@ -66,11 +66,15 @@ export function spellProviderTimelineKey(
     : `m:${providerTimelineKeyPart(key.value)}`
 }
 
+/** Read the encoded provider key from the exact turn spelling; never decode bounded IDs. */
+export function providerTimelineTurnKeyPart(turnId: string): string | null {
+  const parts = turnId.split(':')
+  return parts.length === 3 && parts[0] === 'p' ? parts[2]! : null
+}
+
 export function isProviderTimelineTurnInNamespace(turnId: string, namespace: string): boolean {
   return turnId.startsWith(`p:${providerTimelineKeyPart(namespace)}:`)
 }
-
-export { spelledProviderTimelineItemKey } from '../../../shared/provider-timeline-item-key'
 
 /** Preserve legacy turn-lifecycle prefixes and separate provider namespaces from minted keys. */
 export function createLegacyProviderTimelineIdentityScheme(input: {

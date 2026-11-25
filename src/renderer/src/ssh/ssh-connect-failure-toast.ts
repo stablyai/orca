@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   canOfferMoveAnywayToast,
   toastSshHostMoveRefused
-} from '@/hooks/ipc-events/ssh-managed-server-refusal-toast'
+} from '@/hooks/ipc-events/direct-ssh/ssh-managed-server-refusal-toast'
 import { sshTargetConnectFailureText } from './ssh-host-server-status-copy'
 import { nodeMirrorRecoveryLabel } from './ssh-host-node-download-copy'
 import { runNodeMirrorRecovery, thisComputerNodeMirrorRecovery } from './node-dist-mirror-recovery'

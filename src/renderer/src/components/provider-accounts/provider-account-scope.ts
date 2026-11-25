@@ -1,8 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { defaultScopeHost } from '@/lib/default-creation-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { Translate } from '@/i18n/use-translate'
+import { getLocalExecutionHostLabel } from '../../../../shared/execution-host/execution-host'
+import { translateLocalExecutionHostLabel } from '../../runtime/hosts/display/execution-host-label'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Which host a provider card or budget belongs to, and how to change it. */
 export type ProviderHostScope = {
@@ -10,32 +10,34 @@ export type ProviderHostScope = {
   description: string
 }
 
-function remoteServerScopeLabel(name: string): string {
-  return translate(
-    'auto.components.settings.providerAccountScope.remoteServer',
-    'Remote server: {{value0}}',
-    { value0: name }
-  )
+/** Unloaded or removed servers get a bare label: the environment ID is a UUID, not a name. */
+function remoteServerScopeLabel(serverName: string | null, t: Translate): string {
+  const name = serverName?.trim()
+  return name
+    ? t('auto.components.settings.providerAccountScope.remoteServer', 'Remote server: {{value0}}', {
+        value0: name
+      })
+    : t('auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed', 'Remote server')
 }
 
-function providerHostScopeLabel(target: RuntimeClientTarget): string {
+function providerHostScopeLabel(
+  target: RuntimeClientTarget,
+  serverName: string | null,
+  t: Translate
+): string {
   return target.kind === 'environment'
-    ? remoteServerScopeLabel(target.environmentId)
-    : getLocalExecutionHostLabel()
+    ? remoteServerScopeLabel(serverName, t)
+    : translateLocalExecutionHostLabel(getLocalExecutionHostLabel())
 }
 
 /** Accounts-pane scope while a remote server owns the roster (#8186). */
-export function getRemoteAccountsPaneScope(serverName: string | null): ProviderHostScope {
-  const name = serverName?.trim()
+export function getRemoteAccountsPaneScope(
+  serverName: string | null,
+  t: Translate = translate
+): ProviderHostScope {
   return {
-    // Unloaded server names need bare fallback labels; interpolation would repeat Remote server.
-    label: name
-      ? remoteServerScopeLabel(name)
-      : translate(
-          'auto.components.settings.AccountsPane.accountScopeRemoteServerUnnamed',
-          'Remote server'
-        ),
-    description: translate(
+    label: remoteServerScopeLabel(serverName, t),
+    description: t(
       'auto.components.settings.AccountsPane.remoteScopeLocalAccountsKeptHostPicker',
       'Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.'
     )
@@ -43,18 +45,19 @@ export function getRemoteAccountsPaneScope(serverName: string | null): ProviderH
 }
 
 export function getProviderAccountScope(
-  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  target: RuntimeClientTarget,
+  serverName: string | null,
+  t: Translate = translate
 ): ProviderHostScope {
-  const target = defaultScopeHost(settings)
   return {
-    label: providerHostScopeLabel(target),
+    label: providerHostScopeLabel(target, serverName, t),
     description:
       target.kind === 'environment'
-        ? translate(
+        ? t(
             'auto.components.settings.providerAccountScope.remoteServerCredentialsNewProjects',
             'Credentials and account checks for this provider are owned by this remote server. To use another host, change Settings > Remote Orca Servers > New projects open on.'
           )
-        : translate(
+        : t(
             'auto.components.settings.providerAccountScope.localCredentialsNewProjects',
             'Credentials and account checks for this provider are owned by this desktop client. To use a server, change Settings > Remote Orca Servers > New projects open on.'
           )
@@ -63,18 +66,20 @@ export function getProviderAccountScope(
 
 export function getProviderRateLimitScope(
   target: RuntimeClientTarget,
-  providerLabel: string
+  serverName: string | null,
+  providerLabel: string,
+  t: Translate = translate
 ): ProviderHostScope {
   return {
-    label: providerHostScopeLabel(target),
+    label: providerHostScopeLabel(target, serverName, t),
     description:
       target.kind === 'environment'
-        ? translate(
+        ? t(
             'auto.components.settings.providerAccountScope.remoteServerRateLimit',
             '{{value0}} API budget is fetched from the CLI on this remote server. Choose another host in the Host menu at the top of Settings to see its budget.',
             { value0: providerLabel }
           )
-        : translate(
+        : t(
             'auto.components.settings.providerAccountScope.localRateLimit',
             '{{value0}} API budget is fetched from the CLI on this desktop client. Choose a server in the Host menu at the top of Settings to see its budget.',
             { value0: providerLabel }

@@ -1,27 +1,25 @@
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../../../claude/structured/launch/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claude-structured-session-adapter'
-import type {
-  ClaudeStructuredSessionAdapterDeps,
-  ClaudeStructuredSessionEvent
-} from '../../../claude/structured/claude-structured-session-state'
-import { claudeProviderHandleLink } from '../../../claude/structured/claude-structured-owner-identity'
+import type { ClaudeStructuredSessionAdapterDeps } from '../../../claude/structured/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../../claude/structured/lifecycle/claude-structured-session-event'
+import { claudeProviderHandleLink } from '../../../claude/structured/lifecycle/claude-structured-owner-identity'
 import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
-import {
-  recordAgentSessionProviderHandle,
-  reviseAgentSessionProviderResumePoint
-} from '../ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
-} from '../../../claude/claude-at-rest-commands'
-import type { ClaudeCommandCatalogProbe } from '../../../claude/claude-command-catalog-probe'
+} from '../../../claude/command-catalog/claude-at-rest-commands'
+import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
-import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
-import { prewarmClaudeCliFlags } from '../../../claude/claude-cli-flag-prewarm'
+import {
+  CLAUDE_MCP_CONFIG_FLAG,
+  claudeManagedSettingsRefuse,
+  type ClaudeCliFlagSupport
+} from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import { noteClaudeMcpConfigRefused } from '../../../mcp-servers/mcp-agent-problems'
+import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
@@ -36,12 +34,15 @@ export type StructuredClaudeRuntimeAdapterDeps = {
   resolveClaudeInheritedEnv?: () => Promise<Record<string, string>>
   /** Asks Claude for a chat's `/` menu while it isn't running; absent reads the folders. */
   atRestCommandProbe?: ClaudeCommandCatalogProbe
+  /** The resting chat's discovery flags, so the probe lists what its launch would load. */
+  atRestDiscovery?: ClaudeAtRestCommandsDeps['discovery']
   /** Which version-gated flags a Claude CLI takes; absent never passes one. */
   claudeCliFlags?: ClaudeCliFlagSupport
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
   readProcessStartTime?: ClaudeStructuredSessionAdapterDeps['readProcessStartTime']
   onLifecycleEvent: (event: StructuredAgentSessionLifecycleEvent) => void
   onDispatchSettledLate?: ClaudeStructuredSessionAdapterDeps['onDispatchSettledLate']
+  onUserRenamed?: ClaudeStructuredSessionAdapterDeps['onUserRenamed']
   onChildWorkEvidence?: ClaudeStructuredSessionAdapterDeps['onChildWorkEvidence']
   logger?: ClaudeStructuredSessionAdapterDeps['logger']
 }
@@ -96,7 +97,8 @@ export function createStructuredClaudeRuntimeAdapter(
     atRestCommands: new ClaudeAtRestCommandCatalog({
       resolveWorkspacePath: deps.resolveWorkspacePath,
       ...(deps.resolveAccountHome ? { resolveAccountHome: deps.resolveAccountHome } : {}),
-      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {})
+      ...(deps.atRestCommandProbe ? { probe: deps.atRestCommandProbe } : {}),
+      ...(deps.atRestDiscovery ? { discovery: deps.atRestDiscovery } : {})
     }),
     resolveLaunch: deps.resolveLaunch,
     ...(deps.namingInputs
@@ -108,9 +110,9 @@ export function createStructuredClaudeRuntimeAdapter(
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence
       const observedAt = Date.now()
-      await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
-        recordAgentSessionProviderHandle({
-          record,
+      await store.updateRecord(sessionId, {
+        kind: 'provider-handle',
+        args: {
           fence: currentFence,
           link: claudeProviderHandleLink({
             sessionId: providerSessionId,
@@ -120,18 +122,18 @@ export function createStructuredClaudeRuntimeAdapter(
             observedAt
           }),
           now: observedAt
-        })
-      )
+        }
+      })
     },
     persistResumePoint: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
-      await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
-        reviseAgentSessionProviderResumePoint({
-          record,
+      await store.updateRecord(sessionId, {
+        kind: 'resume-point',
+        args: {
           fence,
           handle: claudeProviderHandle(providerSessionId, leafUuid),
           now: Date.now()
-        })
-      )
+        }
+      })
     },
     onEvent: (event) => {
       const lifecycle = structuredClaudeLifecycleEvent(event)
@@ -140,6 +142,7 @@ export function createStructuredClaudeRuntimeAdapter(
       }
     },
     ...(deps.onDispatchSettledLate ? { onDispatchSettledLate: deps.onDispatchSettledLate } : {}),
+    ...(deps.onUserRenamed ? { onUserRenamed: deps.onUserRenamed } : {}),
     ...(deps.onChildWorkEvidence ? { onChildWorkEvidence: deps.onChildWorkEvidence } : {}),
     ...(deps.logger ? { logger: deps.logger } : {}),
     ...openClaudeConnectionOf(deps),
@@ -168,10 +171,14 @@ export function openClaudeConnectionOf(
               {
                 command: launch.pathToClaudeCodeExecutable,
                 prefixArgs: launch.prefixArgs,
-                cwd: launch.cwd
+                cwd: launch.cwd,
+                env: launch.env ?? {}
               },
               args[0]
             )
+            if (claudeManagedSettingsRefuse(args[0], CLAUDE_MCP_CONFIG_FLAG.option)) {
+              noteClaudeMcpConfigRefused(true)
+            }
             handlers.onExit?.(...args)
           }
         },

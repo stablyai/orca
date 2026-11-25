@@ -30,3 +30,28 @@ export class CodexAppServerRequestError extends Error {
 export function isCodexAppServerRequestError(error: unknown): error is CodexAppServerRequestError {
   return error instanceof Error && error.name === 'CodexAppServerRequestError'
 }
+
+/** Missing app-server subcommand or RPC method; only this class marks capability caches unsupported. */
+export class CodexAppServerUnsupportedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodexAppServerUnsupportedError'
+  }
+}
+
+export class CodexAppServerTimeoutError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CodexAppServerTimeoutError'
+  }
+}
+
+/** This Codex has no such RPC: method-not-found, or serde's unknown-variant refusal. */
+export function isCodexMethodRefusal(error: unknown): boolean {
+  return (
+    (error instanceof Error && error.name === 'CodexAppServerUnsupportedError') ||
+    (isCodexAppServerRequestError(error) &&
+      error.code === -32600 &&
+      error.message.includes('unknown variant'))
+  )
+}

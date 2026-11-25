@@ -3,7 +3,7 @@ import {
   decodeBrowserNetworkTunnelWindowUpdate,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { dispatchBrowserNetworkTunnelClientFrame } from './browser-network-tunnel-client-frame-dispatch'
 import type { BrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-stream'
 import {

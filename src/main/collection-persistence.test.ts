@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { PersistedState } from '../shared/persisted-state-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
+import type { PersistedState } from '../shared/orca-profiles/persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host/execution-host'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
@@ -15,6 +15,8 @@ import {
   testState,
   writeDataFile
 } from './persistence/persistence-test-harness'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
+import { mergeWorktree } from './ipc/worktrees/metadata/worktree-metadata-merge'
 
 function localTarget(id: string): HostWorktreeTarget {
   return hostWorktreeTarget({ id, hostId: LOCAL_EXECUTION_HOST_ID })
@@ -157,5 +159,32 @@ describe('Store collections', () => {
     expect(reloaded.getWorktreeMeta('repo-api::/wt/ptal')?.collectionIds).toBeUndefined()
     reloaded.flush()
     expect('collectionIds' in readDataFile().worktreeMeta['repo-api::/wt/ptal']).toBe(false)
+  })
+})
+
+describe('mergeWorktree collection projection', () => {
+  it('carries collection membership onto the merged worktree', () => {
+    const git: GitWorktreeInfo = {
+      path: '/workspace/feature',
+      head: 'abc123',
+      branch: 'refs/heads/feature',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const worktree = mergeWorktree('repo-1', git, {
+      displayName: 'feature',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0,
+      collectionIds: ['c1', 'c2']
+    })
+
+    expect(worktree.collectionIds).toEqual(['c1', 'c2'])
   })
 })

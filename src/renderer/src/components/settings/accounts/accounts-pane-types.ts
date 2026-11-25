@@ -1,18 +1,21 @@
+import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-account-plans'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
+  ClaudeAccountSelectResult,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget
-} from '../../../../../shared/rate-limit-types'
-import type { CodexConfigSyncStatus } from '../../../../../shared/codex-config-sync-types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { ProviderAccountRuntimeView } from '../../provider-accounts/provider-account-visibility'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import type { LocalAccountRuntime } from '../../../lib/provider-accounts/account-runtime-label'
 
 export type AccountsPaneProps = {
   settings: GlobalSettings
@@ -30,23 +33,23 @@ export type AccountsPaneProps = {
   wslHostDistro?: string | null
 }
 
-export type LocalAccountRuntime = {
-  runtime: 'host' | 'wsl'
-  wslDistro?: string | null
-  label: string
-}
-
-export type CodexAccountAction =
+export type ProviderAccountAction =
   | 'idle'
   | 'adding'
   | `reauth:${string}`
   | `remove:${string}`
   | `select:${string}`
 
-export type ClaudeAccountAction = CodexAccountAction
-
 export type RemoveAccountTarget = {
   id: string
+  runtime: ProviderAccountRuntimeView
+}
+
+export type RenameAccountTarget = {
+  provider: 'claude' | 'codex'
+  id: string
+  email: string
+  displayName: string | null
   runtime: ProviderAccountRuntimeView
 }
 
@@ -56,14 +59,16 @@ export type ProviderAccountVisibilityOptions = {
 }
 
 export type CodexAccountActionRunner = (
-  action: CodexAccountAction,
+  action: ProviderAccountAction,
   operation: () => Promise<CodexRateLimitAccountsState>,
-  actionRuntime?: ProviderAccountRuntimeView
+  /** Several lanes when one System default clears host and WSL slots together. */
+  actionRuntime?: ProviderAccountRuntimeView | readonly ProviderAccountRuntimeView[]
 ) => Promise<void>
 
 export type ClaudeAccountActionRunner = (
-  action: ClaudeAccountAction,
-  operation: () => Promise<ClaudeRateLimitAccountsState>,
+  action: ProviderAccountAction,
+  /** A switch on a server also reports what it did with its running sessions. */
+  operation: () => Promise<ClaudeAccountSelectResult>,
   actionRuntime?: ProviderAccountRuntimeView
 ) => Promise<void>
 
@@ -90,13 +95,17 @@ export type AccountsPaneSectionModel = {
   accountRuntimeUnavailable: boolean
   accountVisibilityOptions: ProviderAccountVisibilityOptions
   claudeAccounts: ClaudeRateLimitAccountsState
-  claudeAction: ClaudeAccountAction
+  claudeAction: ProviderAccountAction
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
+  setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
+  renameAccount: (target: RenameAccountTarget, displayName: string) => Promise<void>
+  /** `provider:id` of accounts with a rename in flight. */
+  renamingAccountKeys: ReadonlySet<string>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
-  codexAction: CodexAccountAction
+  codexAction: ProviderAccountAction
   visibleCodexAccounts: CodexRateLimitAccountsState['accounts']
   systemCodexActive: boolean
   systemCodexNeedsSignIn: boolean
@@ -113,6 +122,9 @@ export type AccountsPaneSectionModel = {
     | null
   codexRateLimits: ProviderRateLimits | null
   codexRateLimitTarget: RateLimitRuntimeTarget
+  /** Plans by the saved account each reading names; see `getObservedAccountPlan`. */
+  claudeAccountPlans: ObservedAccountPlans
+  codexAccountPlans: ObservedAccountPlans
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void

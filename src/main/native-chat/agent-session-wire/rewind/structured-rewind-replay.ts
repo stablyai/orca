@@ -1,7 +1,7 @@
 import type {
   AgentSessionRewindRecord,
   AgentSessionRewindResult
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+} from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 
 export function completedStructuredRewind(
   prior: AgentSessionRewindRecord | undefined,

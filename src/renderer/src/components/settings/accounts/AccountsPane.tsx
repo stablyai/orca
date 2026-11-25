@@ -1,23 +1,26 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { withManagedAccountDisplayNames } from '../../../../../shared/agent-accounts/managed-account-display-names'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
-import type { CodexConfigSyncStatus } from '../../../../../shared/codex-config-sync-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
+import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
+import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { useObservedAccountPlans } from './use-observed-account-plans'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   emptyClaudeAccountsState,
   emptyCodexAccountsState,
   getProviderAccountsOwnerKey,
   watchProviderAccounts
-} from '@/runtime/runtime-provider-accounts-client'
+} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { getAccountsClaudeSearchEntries } from './accounts-claude-search'
 import {
   getAccountsCodexSearchEntries,
-  getAccountsGeminiSearchEntries,
   getAccountsCursorSearchEntries,
   getAccountsGrokSearchEntries,
   getAccountsAntigravitySearchEntries,
@@ -34,39 +37,31 @@ import { getCodexAccountAuthWarning } from './codex/codex-account-auth-warning'
 import { getCodexConfigSyncWarning } from './codex/codex-config-sync-warning'
 import {
   getProviderAccountActiveIdForView,
-  providerAccountIsActiveInView,
   providerAccountMatchesView
 } from '../../provider-accounts/provider-account-visibility'
 import { GrokAccountsSection } from './providers/GrokAccountsSection'
 import { AntigravityAccountsSection } from './providers/AntigravityAccountsSection'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
-  ClaudeAccountAction,
-  CodexAccountAction,
-  RemoveAccountTarget
+  ProviderAccountAction,
+  RemoveAccountTarget,
+  RenameAccountTarget
 } from './accounts-pane-types'
-import {
-  EMPTY_WSL_DISTROS,
-  getRuntimeSentenceLabel,
-  getSelectedAccountRuntime
-} from './scope/accounts-pane-runtime'
+import { AccountRenameDialog } from './account-rename-dialog'
+import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './scope/accounts-pane-runtime'
+import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-runtime-label'
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
-import {
-  createClaudeAccountActionRunner,
-  createCodexAccountActionRunner
-} from './accounts-pane-account-actions'
+import { createAccountsPaneRunners } from './accounts-pane-account-actions'
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
+import { isSystemDefaultActive } from './scope/system-default-lanes'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
-import {
-  renderGeminiAccountsSection,
-  renderOpenCodeAccountsSection
-} from './providers/accounts-pane-provider-setting-sections'
+import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
 import { MiniMaxAccountsSection } from './usage/MiniMaxAccountsSection'
 import { useUsageHostSettings } from './usage/use-usage-host-settings'
 import { ManagedDataAccountsSection } from './providers/ManagedDataAccountsSection'
@@ -86,6 +81,8 @@ export function AccountsPane({
   accountOwnerPlatform = null,
   wslHostDistro = null
 }: AccountsPaneProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
@@ -102,7 +99,8 @@ export function AccountsPane({
     wslAvailable,
     wslDistros,
     wslCapabilitiesLoading,
-    wslHostDistro
+    wslHostDistro,
+    t
   )
   // Route all account actions to the Settings-selected owner, independent of focused host (#7973).
   const accountOwner = hostScope.target
@@ -122,7 +120,7 @@ export function AccountsPane({
     : null
   const remoteServerLabel = isRemoteAccountScope
     ? (remoteServerName ??
-      translate('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
+      t('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
     : null
   const accountRuntime = isRemoteAccountScope
     ? { runtime: 'host' as const, label: remoteServerLabel ?? '' }
@@ -135,25 +133,52 @@ export function AccountsPane({
   const remoteAccountScopeNotice =
     isRemoteAccountScope && !isWebClientLocation() ? (
       <ProviderHostScopeControl
-        labelPrefix={translate(
-          'auto.components.settings.AccountsPane.accountScopePrefix',
-          'Account scope'
-        )}
-        scope={getRemoteAccountsPaneScope(remoteServerName)}
+        labelPrefix={t('auto.components.settings.AccountsPane.accountScopePrefix', 'Account scope')}
+        scope={getRemoteAccountsPaneScope(remoteServerName, t)}
         className="text-xs"
       />
     ) : null
 
-  const [codexAccounts, setCodexAccounts] =
+  const [ownerCodexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
-  const [codexAction, setCodexAction] = useState<CodexAccountAction>('idle')
-  const [claudeAccounts, setClaudeAccounts] =
+  const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
+  const [ownerClaudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
-  const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
+  const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
+  // A remote host's usage comes only from its own stream; this desktop's polls describe other logins.
+  const [ownerUsage, setOwnerUsage] = useState<{
+    environmentId: string
+    rateLimits: RateLimitState | null
+  } | null>(null)
+  const claudeSectionShown = matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
+  const codexSectionShown = matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
+  const { claudeAccountPlans, codexAccountPlans } = useObservedAccountPlans({
+    isRemoteAccountScope,
+    ownerUsage:
+      scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
+        ? ownerUsage.rateLimits
+        : null,
+    claudeShown: claudeSectionShown,
+    codexShown: codexSectionShown
+  })
+  // This desktop's names change with its settings, e.g. a rename in another window.
+  const localNames = isRemoteAccountScope ? undefined : settings.managedAccountDisplayNames
+  const codexAccounts = useMemo(
+    () => withManagedAccountDisplayNames(ownerCodexAccounts, localNames, 'codex'),
+    [ownerCodexAccounts, localNames]
+  )
+  const claudeAccounts = useMemo(
+    () => withManagedAccountDisplayNames(ownerClaudeAccounts, localNames, 'claude'),
+    [ownerClaudeAccounts, localNames]
+  )
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
+  const [renameTarget, setRenameTarget] = useState<RenameAccountTarget | null>(null)
+  const [renamingAccountKeys, setRenamingAccountKeys] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
   const accountVisibilityOptions = {
     remoteOwner: isRemoteAccountScope,
     ownerPlatform: accountOwnerPlatform
@@ -165,17 +190,17 @@ export function AccountsPane({
     providerAccountMatchesView(account, accountRuntime, accountVisibilityOptions)
   )
   const activeCodexAccountId = getProviderAccountActiveIdForView(codexAccounts, accountRuntime)
-  // Unknown remote platforms hide WSL rows; check the full roster before marking System default active.
-  const ownerPlatformUnknown = isRemoteAccountScope && accountOwnerPlatform === null
-  const systemCodexActive = !(
-    ownerPlatformUnknown ? codexAccounts.accounts : visibleCodexAccounts
-  ).some((account) =>
-    providerAccountIsActiveInView(account, codexAccounts, accountRuntime, accountVisibilityOptions)
+  const systemCodexActive = isSystemDefaultActive(
+    codexAccounts,
+    visibleCodexAccounts,
+    accountRuntime,
+    accountVisibilityOptions
   )
-  const systemClaudeActive = !(
-    ownerPlatformUnknown ? claudeAccounts.accounts : visibleClaudeAccounts
-  ).some((account) =>
-    providerAccountIsActiveInView(account, claudeAccounts, accountRuntime, accountVisibilityOptions)
+  const systemClaudeActive = isSystemDefaultActive(
+    claudeAccounts,
+    visibleClaudeAccounts,
+    accountRuntime,
+    accountVisibilityOptions
   )
   // System identity reflects the host’s ~/.codex; per-distro WSL uses generic copy.
   const systemCodexIdentity =
@@ -240,7 +265,11 @@ export function AccountsPane({
         if (!snapshot.failedProviders?.includes('claude')) {
           setClaudeAccounts(snapshot.claude)
         }
+        if (scopeEnvironmentId) {
+          setOwnerUsage({ environmentId: scopeEnvironmentId, rateLimits: snapshot.rateLimits })
+        }
       },
+      onClosedAfterSnapshot: () => setOwnerUsage(null),
       onError: (error) => {
         toast.error(
           translate(
@@ -256,30 +285,26 @@ export function AccountsPane({
     }
   }, [scopeEnvironmentId])
 
-  const runCodexAccountAction = createCodexAccountActionRunner({
-    settings,
-    accountOwner,
-    isCurrentAccountOwner,
-    accountRuntime,
-    isRemoteAccountScope,
-    codexAccounts,
-    setCodexAccounts,
-    setCodexAccountsLoaded,
-    setCodexAction,
-    fetchSettings,
-    recordFeatureInteraction
-  })
-  const runClaudeAccountAction = createClaudeAccountActionRunner({
-    accountOwner,
-    isCurrentAccountOwner,
-    accountRuntime,
-    isRemoteAccountScope,
-    claudeAccounts,
-    setClaudeAccounts,
-    setClaudeAction,
-    fetchSettings,
-    recordFeatureInteraction
-  })
+  // One construction site: each runner reads the owner ref only when its action settles.
+  const { runCodexAccountAction, runClaudeAccountAction, renameAccount } =
+    createAccountsPaneRunners({
+      settings,
+      accountOwner,
+      hostLabel: accountRuntimeSentenceLabel,
+      isCurrentAccountOwner,
+      accountRuntime,
+      isRemoteAccountScope,
+      codexAccounts,
+      setCodexAccounts,
+      setCodexAccountsLoaded,
+      setCodexAction,
+      claudeAccounts,
+      setClaudeAccounts,
+      setClaudeAction,
+      setRenamingAccountKeys,
+      fetchSettings,
+      recordFeatureInteraction
+    })
   const model: AccountsPaneSectionModel = {
     settings,
     accountOwner,
@@ -306,6 +331,9 @@ export function AccountsPane({
     visibleClaudeAccounts,
     systemClaudeActive,
     setRemoveClaudeTarget,
+    setRenameTarget,
+    renameAccount,
+    renamingAccountKeys,
     runClaudeAccountAction,
     codexAccounts,
     codexAction,
@@ -320,10 +348,14 @@ export function AccountsPane({
     codexConfigSyncWarning,
     codexRateLimits,
     codexRateLimitTarget,
+    claudeAccountPlans,
+    codexAccountPlans,
     setRemoveCodexTarget,
     runCodexAccountAction,
     recordOpenCodeSettingEdit
   }
+  // A desktop reads Grok/Cursor from its own files; the web client gets its server's meter.
+  const readsOwnerGrokCursor = !isRemoteAccountScope || isWebClientLocation()
   const visibleSections = [
     !searchQuery || /opencode|devin|account/i.test(searchQuery) ? (
       <div key={accountOwnerKey} className="space-y-8">
@@ -335,17 +367,10 @@ export function AccountsPane({
     !isRemoteAccountScope &&
     !wslHostDistro &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
-      ? renderAccountsLocationSection(model)
+      ? renderAccountsLocationSection(model, t)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
-      ? renderClaudeAccountsSection(model)
-      : null,
-    matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
-      ? renderCodexAccountsSection(model)
-      : null,
-    matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
-      ? renderGeminiAccountsSection(model)
-      : null,
+    claudeSectionShown ? renderClaudeAccountsSection(model, t, intlLocale) : null,
+    codexSectionShown ? renderCodexAccountsSection(model, t, intlLocale) : null,
     matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
       <AntigravityAccountsSection
         key={`antigravity:${accountOwnerKey}:${accountRuntime.runtime}:${accountRuntime.wslDistro ?? ''}`}
@@ -356,7 +381,7 @@ export function AccountsPane({
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
-      ? renderOpenCodeAccountsSection(model)
+      ? renderOpenCodeAccountsSection(model, t)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
       <MiniMaxAccountsSection
@@ -367,10 +392,10 @@ export function AccountsPane({
         recordFeatureInteraction={recordFeatureInteraction}
       />
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
+    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
-    matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
+    readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
@@ -384,8 +409,9 @@ export function AccountsPane({
 
   return (
     <div className="space-y-8">
-      {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
-      <SettingsSectionStack sections={visibleSections} spacing="group" />
+      {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget, t)}
+      <AccountRenameDialog model={model} target={renameTarget} />
+      <SettingsSectionStack sections={visibleSections} />
     </div>
   )
 }

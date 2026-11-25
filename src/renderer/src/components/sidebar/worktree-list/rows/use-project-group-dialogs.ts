@@ -4,18 +4,20 @@ import { useAppStore } from '@/store'
 import { projectRemovalTargets } from '../../workspace-actions/deletion/removal-unsaved-files'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { translate } from '@/i18n/i18n'
-import { selectProjectGroupRemovalTargets } from '@/store/slices/project-group-removal-targets'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import { selectProjectGroupRemovalTargets } from '@/store/project-groups/project-group-removal-targets'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { Worktree } from '../../../../../../shared/worktree/types'
+import { useCollectionDialogs } from './use-collection-dialogs'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { refreshFolderProjectGroup } from './project-group-folder-refresh'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type ProjectGroupNameDialogState =
   | { type: 'create-from-repo'; repo: Repo }
@@ -82,8 +84,11 @@ export function useProjectGroupDialogs(args: {
   repos: readonly Repo[]
   repoMap: Map<string, Repo>
   projectGroups: readonly ProjectGroup[]
+  worktreeMap: Map<string, Worktree>
 }) {
-  const { repos, repoMap, projectGroups } = args
+  const { repos, repoMap, projectGroups, worktreeMap } = args
+  // Why: collection rename reuses this name dialog, so the collection dialogs live beside it.
+  const collections = useCollectionDialogs({ worktreeMap })
   const moveProjectToGroup = useAppStore((s) => s.moveProjectToGroup)
   const createProjectGroup = useAppStore((s) => s.createProjectGroup)
   const updateProjectGroup = useAppStore((s) => s.updateProjectGroup)
@@ -289,6 +294,13 @@ export function useProjectGroupDialogs(args: {
     handleRefreshProjectGroup,
     handleRenameProjectGroup,
     handleRenameCollection,
+    collections,
+    collectionViewportProps: {
+      handleRenameCollection,
+      handleDeleteCollection: collections.handleDeleteCollection,
+      handleAddWorktreesToCollection: collections.handleAddWorktreesToCollection,
+      onDropWorktreesOnCollection: collections.handleDropWorktreesOnCollection
+    },
     handleSubmitProjectGroupName,
     handleDeleteProjectGroup,
     handleConfirmDeleteProjectGroup

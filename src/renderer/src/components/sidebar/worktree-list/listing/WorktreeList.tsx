@@ -1,28 +1,30 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, { useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
+import { selectSidebarChildrenByParentIdentity } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useShallow } from 'zustand/react/shallow'
 import {
   useAllWorktrees,
-  useProjectHostSetupProjection,
-  useRepoMap,
   useWorktreeMap
-} from '@/store/selectors'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { useRepoMap } from '@/store/repos/use-repository-catalog'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { openHeaderCreateComposer } from '../rows/header-create-workspace-target'
 import {
   getRepoExecutionHostId,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
-import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/execution-host/execution-host'
+import { getActiveSidebarWorkspaceId } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import {
   getProjectGroupHeaderKey,
   isProjectSectionGroupKey
-} from '../../../../../../shared/sidebar-list/group-keys'
+} from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
-import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
+import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
 import { SidebarWorktreeListDialogs } from '../rows/ProjectGroupDialogs'
 import { SidebarWorktreeListEmptyState } from './EmptyState'
 import { VirtualizedWorktreeViewport } from '../viewport/VirtualizedWorktreeViewport'
@@ -31,14 +33,13 @@ import { EMPTY_PROJECT_GROUPS } from '../viewport/viewport-props'
 import { NOOP_WORKSPACE_BOARD_DRAG_PREVIEW_CALLBACK } from '../drag/drop-commit-context'
 import { useAgentSendTargetWorktreeId } from './use-agent-send-target'
 import { useProjectGroupDialogs } from '../rows/use-project-group-dialogs'
-import { useCollectionDialogs } from '../rows/use-collection-dialogs'
 import { useSidebarRevealRequests } from '../navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './use-filters'
 import { useSidebarWorktreeSelection } from '../navigation/use-selection'
 import { useWindowSidebarListModel } from './use-window-list-model'
 import { useMainSidebarListModel } from './use-main-list-model'
-import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { useWorktreeStatusMutations } from '../drag/use-status-mutations'
 import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
 import { buildWorktreeManualOrderCatalog } from '../drag/worktree-manual-order-catalog'
@@ -54,7 +55,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -88,7 +89,9 @@ const WorktreeList = React.memo(function WorktreeList({
   const worktreeMap = useWorktreeMap()
   const repos = useAppStore((s) => s.repos)
   const worktreeLineageById = useAppStore((s) => s.worktreeLineageById)
-  const workspaceLineageByChildKey = useAppStore((s) => s.workspaceLineageByChildKey)
+  const childrenByParentIdentity = useAppStoreWithHostStatuses(
+    selectSidebarChildrenByParentIdentity
+  )
   const detectedWorktreesByRepo = useAppStore((s) => selectDetectedWorktreesByRepo(s))
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
   const activeWorkspaceExecutionHostId = useAppStore((s) => s.activeWorkspaceExecutionHostId)
@@ -201,8 +204,7 @@ const WorktreeList = React.memo(function WorktreeList({
     workspaceStatuses: boardStatuses,
     sortBy
   })
-  const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
-  const collectionDialogs = useCollectionDialogs({ worktreeMap })
+  const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups, worktreeMap })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
     // Update the active row directly on pointer input to avoid virtualized rerender latency; store state reconciles afterward.
@@ -301,7 +303,6 @@ const WorktreeList = React.memo(function WorktreeList({
         : null}
       <SidebarWorktreeListDialogs
         dialogs={projectGroupDialogs}
-        collectionDialogs={collectionDialogs}
         repos={repos}
         settings={settings}
         suppressExternalWorktreeInboxRepoId={
@@ -335,7 +336,7 @@ const WorktreeList = React.memo(function WorktreeList({
         pinnedDisplayPolicy={pinnedDisplayPolicy}
         projectOrderBy={projectOrderBy}
         toggleGroup={handleToggleGroup}
-        onToggleAllProjects={handleToggleAllProjects}
+        onToggleAllProjects={projectCollapseKeys.length > 0 ? handleToggleAllProjects : undefined}
         collapsedGroups={effectiveCollapsedGroups}
         handleCreateForRepo={openHeaderCreateComposer}
         handleOpenRepoSettings={handleOpenRepoSettings}
@@ -355,10 +356,7 @@ const WorktreeList = React.memo(function WorktreeList({
         handleRemoveProjectFromGroup={projectGroupDialogs.handleRemoveProjectFromGroup}
         handleRenameProjectGroup={projectGroupDialogs.handleRenameProjectGroup}
         handleDeleteProjectGroup={projectGroupDialogs.handleDeleteProjectGroup}
-        handleRenameCollection={projectGroupDialogs.handleRenameCollection}
-        handleDeleteCollection={collectionDialogs.handleDeleteCollection}
-        handleAddWorktreesToCollection={collectionDialogs.handleAddWorktreesToCollection}
-        onDropWorktreesOnCollection={collectionDialogs.handleDropWorktreesOnCollection}
+        {...projectGroupDialogs.collectionViewportProps}
         handleRefreshProjectGroup={projectGroupDialogs.handleRefreshProjectGroup}
         handleCreateFolderWorkspace={handleCreateFolderWorkspace}
         activeModal={activeModal}
@@ -371,6 +369,9 @@ const WorktreeList = React.memo(function WorktreeList({
         folderWorkspaces={folderWorkspaces}
         selectedWorktreeIds={selection.selectedWorktreeIds}
         selectedWorktrees={selection.selectedWorktrees}
+        focusedWorktree={selection.focusedWorktree}
+        focusedWorkspaceExecutionHostId={selection.focusedWorkspaceExecutionHostId}
+        onKeyboardSelect={selection.selectWorktree}
         onSelectionGesture={selection.updateSelectionForGesture}
         onImmediateWorktreeActivate={handleImmediateWorktreeActivate}
         onContextMenuSelect={selection.selectForContextMenu}
@@ -378,7 +379,7 @@ const WorktreeList = React.memo(function WorktreeList({
         defaultHostId={defaultHostId}
         worktreeMap={worktreeMap}
         worktreeLineageById={worktreeLineageById}
-        workspaceLineageByChildKey={workspaceLineageByChildKey}
+        childrenByParentIdentity={childrenByParentIdentity}
         allRepoIds={rowModel.allRepoIds}
         onReorderHostSections={rowModel.handleReorderHostSections}
         onHostDragActiveChange={rowModel.setHostDragActive}

@@ -1,16 +1,19 @@
 // Share/cache this host's agent health independently of readers. Probe each registration in server home; launches recheck in their workspace.
 
 import { homedir } from 'node:os'
-import { delimiter, isAbsolute } from 'node:path'
-import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-session-agent-availability'
+import { posix, win32 } from 'node:path'
+import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
-import { onAgentsRefreshedOnHost } from '../../../preflight/workspace-agent-detection'
+import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
+import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import {
   observeStructuredAgentLaunch,
-  resolveHostStructuredAgentLaunchEnvironment
+  resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostAlternativeReady,
+  type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
   STRUCTURED_AGENT_RUNTIME_METADATA,
@@ -18,7 +21,9 @@ import {
 } from '../installation/structured-agent-runtime-metadata'
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
+import { normalizePathEntry } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]
@@ -32,6 +37,9 @@ const HEALTH_SETTINGS = [
   'agentDefaultEnv',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
+  // Why: the saved method picks the home new Antigravity chats run agy in (hostAlternative).
+  'antigravityChatAuth',
+  'antigravityManagedAgyEnabled',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
@@ -46,11 +54,20 @@ const HOST_LOCATION: AgentSessionExecutionLocation = {
 type HealthRuntime = Parameters<typeof observeStructuredAgentLaunch>[2]
 
 async function observeHostAgent(
-  { definition: { agent }, supportsLocation }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, supportsLocation, chatProgram }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<AgentSessionAgentAvailability> {
-  if (!supportsLocation(HOST_LOCATION)) {
-    return { agent, state: 'refused', reason: 'agent' }
+  if (chatProgram?.onlyHostAlternative?.() && supportsLocation(HOST_LOCATION)) {
+    const ready = await structuredAgentHostAlternativeReady(agent, runtime).catch(() => null)
+    if (ready !== false) {
+      return { agent, state: ready ? 'available' : 'unknown' }
+    }
+  }
+  if (!supportsLocation(HOST_LOCATION) || chatProgram?.onlyHostAlternative?.()) {
+    const reason = structuredChatUnavailableOnPlatform(agent, process.platform)
+      ? 'windows'
+      : 'agent'
+    return { agent, state: 'refused', reason }
   }
   // A failed probe or an unrunnable Command setting says nothing about the installed release.
   const seen = await observeStructuredAgentLaunch(
@@ -69,25 +86,42 @@ async function observeHostAgent(
 
 /** Resolve chat program without spawn; bare names miss unless relative PATH entries require workspace resolution. */
 async function observeChatProgram(
-  { definition: { agent }, chatProgram }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, chatProgram, supportsLocation }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<NonNullable<AgentSessionAgentAvailability['chatProgram']>> {
   if (!chatProgram) {
     return 'unknown'
   }
+  let shellEnv: Record<string, string>
+  let settings: LaunchEnvironmentSettings
   try {
-    const settings = runtime.requireStore().getSettings()
-    const shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+    settings = runtime.requireStore().getSettings()
+    shellEnv = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
     const { command, env } = chatProgram.resolve(shellEnv, settings)
+    const { delimiter, isAbsolute } = process.platform === 'win32' ? win32 : posix
     if (isAbsolute(command)) {
       return 'available'
     }
     const path = (env.PATH ?? env.Path ?? '').split(delimiter)
-    if (/[\\/]/.test(command) || path.some((entry) => entry.trim() && !isAbsolute(entry.trim()))) {
+    // A literal `~` entry (e.g. macOS /etc/paths.d/dotnet-cli-tools) practically never names a
+    // workspace dir: execvp/libuv never expand it.
+    if (
+      /[\\/]/.test(command) ||
+      path.some((rawEntry) => {
+        const entry = normalizePathEntry(process.platform, rawEntry.trim())
+        return entry && !isAbsolute(entry) && !/^~(?:[\\/]|$)/.test(entry)
+      })
+    ) {
       return 'unknown'
     }
   } catch {
     return 'unknown'
+  }
+  if (
+    supportsLocation(HOST_LOCATION) &&
+    (await chatProgram.hostAlternative?.(shellEnv, settings))
+  ) {
+    return 'available'
   }
   return chatProgram.installable?.() ? 'installable' : 'missing'
 }
@@ -142,6 +176,8 @@ export function installStructuredAgentAvailability(
   })
   onAgentsRefreshedOnHost(() => derive(false))
   onManagedRuntimeReleasesChanged(() => derive(false))
+  // A host program's new answer (e.g. agy found incompatible at a chat start) changes its chat program.
+  ACP_LAUNCH_SPECS.forEach((spec) => spec.hostBackend?.onSelectionChanged?.(() => derive(false)))
   derive()
   return {
     /** Reads the latest snapshot and every later one; returns the release. */

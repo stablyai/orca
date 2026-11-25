@@ -1,8 +1,8 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { useTranslate } from '@/i18n/use-translate'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { ProjectGroupNameDialog } from './ProjectGroupNameDialog'
 import { ProjectGroupDeleteDialog } from './ProjectGroupDeleteDialog'
 import { CollectionDeleteDialog } from '../../CollectionDeleteDialog'
@@ -10,11 +10,9 @@ import { AddCollectionDialog } from '../../AddCollectionDialog'
 import SuppressExternalWorktreeInboxDialog from '../listing/SuppressExternalWorktreeInboxDialog'
 import type { NewExternalWorktreesInboxActionState } from '../listing/new-external-worktrees-inbox-actions'
 import type { ProjectGroupDialogs } from './use-project-group-dialogs'
-import type { CollectionDialogs } from './use-collection-dialogs'
 
 export function SidebarWorktreeListDialogs({
   dialogs,
-  collectionDialogs,
   repos,
   settings,
   suppressExternalWorktreeInboxRepoId,
@@ -24,7 +22,6 @@ export function SidebarWorktreeListDialogs({
   onOpenWorktreeVisibility
 }: {
   dialogs: ProjectGroupDialogs
-  collectionDialogs: CollectionDialogs
   repos: readonly Repo[]
   settings: AppState['settings']
   suppressExternalWorktreeInboxRepoId: string | null
@@ -33,33 +30,32 @@ export function SidebarWorktreeListDialogs({
   onConfirmSuppressExternalWorktreeInbox: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { nameDialog, setNameDialog, deleteDialog, setDeleteDialog } = dialogs
+  const collectionDialogs = dialogs.collections
   return (
     <>
       <ProjectGroupNameDialog
         open={nameDialog !== null}
         title={
           nameDialog?.type === 'collection-rename'
-            ? translate(
-                'auto.components.sidebar.WorktreeList.collectionRenameTitle',
-                'Rename Collection'
-              )
+            ? t('auto.components.sidebar.WorktreeList.collectionRenameTitle', 'Rename Collection')
             : nameDialog?.type === 'rename'
-              ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
-              : translate('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
+              ? t('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
+              : t('auto.components.sidebar.WorktreeList.13757c053c', 'New Project Group')
         }
         description={
           nameDialog?.type === 'collection-rename'
-            ? translate(
+            ? t(
                 'auto.components.sidebar.WorktreeList.collectionRenameDescription',
                 'Update the collection name shown in the sidebar.'
               )
             : nameDialog?.type === 'rename'
-              ? translate(
+              ? t(
                   'auto.components.sidebar.WorktreeList.bc1460beb3',
                   'Update the group name shown in the sidebar.'
                 )
-              : translate(
+              : t(
                   'auto.components.sidebar.WorktreeList.d880ea0744',
                   'Create a group and move this project into it.'
                 )
@@ -68,7 +64,7 @@ export function SidebarWorktreeListDialogs({
           nameDialog?.type === 'rename' || nameDialog?.type === 'collection-rename'
             ? nameDialog.currentName
             : nameDialog
-              ? translate(
+              ? t(
                   'auto.components.sidebar.ProjectGroupNameDialog.defaultGroupName',
                   '{{name}} group',
                   { name: nameDialog.repo.displayName }
@@ -77,8 +73,8 @@ export function SidebarWorktreeListDialogs({
         }
         confirmLabel={
           nameDialog?.type === 'rename' || nameDialog?.type === 'collection-rename'
-            ? translate('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
-            : translate('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
+            ? t('auto.components.sidebar.ProjectGroupNameDialog.rename', 'Rename')
+            : t('auto.components.sidebar.ProjectGroupNameDialog.create', 'Create')
         }
         onOpenChange={(open) => {
           if (!open) {

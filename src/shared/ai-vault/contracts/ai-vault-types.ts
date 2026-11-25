@@ -1,7 +1,7 @@
 import type { AiVaultScanIssueText } from '../scanning/ai-vault-scan-issue-copy'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
-import type { AgentSessionAccountHome } from '../../agent-session/lifecycle/agent-session-account-home'
-import type { ExecutionHostId, ExecutionHostScope } from '../../execution-host'
+import type { AgentSessionAccountHome } from '../../agent-session/lifecycle/accounts/agent-session-account-home'
+import type { ExecutionHostId, ExecutionHostScope } from '../../execution-host/execution-host'
 
 export const AI_VAULT_AGENTS = [
   'claude',
@@ -13,7 +13,6 @@ export const AI_VAULT_AGENTS = [
   'omp',
   'prime-agent',
   'cursor',
-  'gemini',
   'antigravity',
   'rovo',
   'copilot',
@@ -33,6 +32,9 @@ export const AI_VAULT_AGENTS = [
 
 // RPC clamps scopePaths to this bound because paths only widen discovery; matching producer-side caps are optional.
 export const AI_VAULT_SCOPE_PATHS_MAX_COUNT = 64
+
+// One host's list scan can take minutes on a busy server, far past the default remote RPC timeout.
+export const AI_VAULT_SINGLE_HOST_LIST_TIMEOUT_MS = 150_000
 
 // IPC drops Error.name; recognize cancelled scans by this shared message literal.
 export const AI_VAULT_SCAN_CANCELLED_MESSAGE = 'Agent Session History scan was cancelled'
@@ -73,7 +75,6 @@ export const AI_VAULT_AGENT_LABELS = {
   omp: 'OMP',
   'prime-agent': 'Prime Agent',
   cursor: 'Cursor',
-  gemini: 'Gemini',
   antigravity: 'Antigravity',
   rovo: 'Rovo Dev',
   copilot: 'GitHub Copilot',
@@ -139,6 +140,8 @@ export type AiVaultSession = {
   previewMessagesTruncated?: boolean
   /** Bounded opening-prompt identity for Antigravity history joins; never a rolling preview. */
   antigravityOpeningPrompt?: { hash: string; timestamp: string | null }
+  /** One top-level artifact file in the agy conversation folder; revealing it opens that folder. */
+  antigravityArtifactPath?: string
   /** Full first non-injected prompt only on on-demand getFirstUserPrompt reparses; list scans omit it for payload/cost. */
   firstUserPrompt?: string | null
   /** Latest provider-authenticated user prompt; absent when the transcript has no trustworthy signal. */
@@ -235,8 +238,25 @@ export type AiVaultListArgs = {
   force?: boolean
   // Scope paths preserve older relevant sessions outside the globally recency-capped result.
   scopePaths?: readonly string[]
+  /** Return only scopePaths sessions, without the global recency pass. Older hosts ignore it; clients still filter. */
+  scopeOnly?: boolean
   executionHostScope?: ExecutionHostScope
   requestToken?: string
+}
+
+/** Cap scope paths for a host; a capped scope can't answer alone, so it drops scopeOnly. */
+export function boundedAiVaultScopeArgs(
+  scopePaths: readonly string[] | undefined,
+  scopeOnly: boolean | undefined
+): Pick<AiVaultListArgs, 'scopePaths' | 'scopeOnly'> {
+  if (!scopePaths) {
+    return {}
+  }
+  return scopeOnly === true &&
+    scopePaths.length > 0 &&
+    scopePaths.length <= AI_VAULT_SCOPE_PATHS_MAX_COUNT
+    ? { scopePaths, scopeOnly: true }
+    : { scopePaths: scopePaths.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT) }
 }
 
 export type AiVaultListResult = {

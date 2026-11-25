@@ -27,8 +27,8 @@ import {
 import { RUNTIME_STORE_LOCK_NAME } from './remote-node-runtime-store-lock'
 import { RUNTIME_REF_NODE_PREFIX } from './remote-node-runtime-store-inventory'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
-import { unusedSshConnection } from '../../ssh/unused-host-transport.test-fixture'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
+import { unusedSshConnection } from '../testing/managed-host-transport.test-fixture'
 
 const conn = unusedSshConnection()
 const host = getRemoteHostPlatform('linux-x64')
@@ -155,24 +155,15 @@ posixOnly('gcRemoteNodeRuntimeStore (real shell)', () => {
     expect(existsSync(join(root, 'runtimes', `node-${sha('e')}`, 'bin', 'node'))).toBe(true)
   })
 
-  it('skips the pass while an installer holds the store lock', async () => {
+  it('keeps the store locked across passes after an unconfirmed termination', async () => {
     runtime('a')
     runtime('b')
-    runtime('e')
-    mkdirSync(join(root, 'runtimes', RUNTIME_STORE_LOCK_NAME))
-
-    const result = await gcRemoteNodeRuntimeStore(conn, host, home, { currentPins: [sha('a')] })
-
-    expect(result.state).toBe('skipped')
-    expect(existsSync(join(root, 'runtimes', `node-${sha('e')}`))).toBe(true)
-    expect(existsSync(join(root, 'runtimes', RUNTIME_STORE_LOCK_NAME))).toBe(true)
-  })
-
-  it('keeps the store lock when the pass ends in an unconfirmed termination', async () => {
-    runtime('a')
+    const candidate = runtime('e')
+    const lockPath = join(root, 'runtimes', RUNTIME_STORE_LOCK_NAME)
     const lost = Object.assign(new Error('lost'), { sshChannelCloseConfirmed: false })
+    let unconfirmed = true
     mockExec.mockImplementation(async (_conn, command) => {
-      if (command.includes('__ORCA_RUNTIME_STORE__OK')) {
+      if (unconfirmed && command.includes('__ORCA_RUNTIME_STORE__OK')) {
         throw lost
       }
       return execFileSync('/bin/sh', ['-c', command], { encoding: 'utf8' })
@@ -181,7 +172,13 @@ posixOnly('gcRemoteNodeRuntimeStore (real shell)', () => {
     await expect(
       gcRemoteNodeRuntimeStore(conn, host, home, { currentPins: [sha('a')] })
     ).rejects.toBe(lost)
-    expect(existsSync(join(root, 'runtimes', RUNTIME_STORE_LOCK_NAME))).toBe(true)
+    expect(existsSync(lockPath)).toBe(true)
+
+    unconfirmed = false
+    const next = await gcRemoteNodeRuntimeStore(conn, host, home, { currentPins: [sha('a')] })
+    expect(next.state).toBe('skipped')
+    expect(existsSync(candidate)).toBe(true)
+    expect(existsSync(lockPath)).toBe(true)
   })
 
   it('sweeps only upload stages nothing has written to within the stale rule', async () => {

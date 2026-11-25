@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { test, expect } from './helpers/orca-app'
+import { test, expect } from './desktop/electron-fixtures/orca-app'
 
 function createDisposableRepo(): { repoPath: string; worktreePath: string } {
   const repoPath = mkdtempSync(path.join(os.tmpdir(), 'orca-collections-e2e-repo-'))

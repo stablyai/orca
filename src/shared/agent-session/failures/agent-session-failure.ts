@@ -3,11 +3,11 @@ import {
   readAttachmentProblem,
   type AgentSessionAttachmentProblem
 } from './agent-session-failure-details'
-import type { AgentSessionAccountKind } from '../agent-session-availability'
+import type { AgentSessionAccountKind } from './agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
   type AgentSessionArgumentProblem
-} from '../agent-session-argument-problem'
+} from './agent-session-argument-problem'
 import {
   readAgentSessionUsageLimit,
   type AgentSessionUsageLimit
@@ -15,8 +15,8 @@ import {
 import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
-} from '../agent-session-request-timeout'
-import { structuralValuesEqualIgnoringUndefined } from '../../structural-value-equality'
+} from './agent-session-request-timeout'
+import { structuralValuesEqualIgnoringUndefined } from '../../collections/structural-value-equality'
 import {
   readAgentSessionRefusalReference,
   type AgentSessionRefusalReference
@@ -45,6 +45,10 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'runtimeNotInstalled',
   /** The agent refuses Full access while it runs as root. */
   'fullAccessAsRoot',
+  /** A bot's tools would run without its limits: Orca's plugin for the agent is off. */
+  'botToolsNeedStatusHooks',
+  /** A bot's tools would run without its limits: the agent's shared process kept an older plugin. */
+  'botToolsGatewayOutdated',
   /** Orca's own launch preparation on the host failed before any agent process was spawned. */
   'launchPreparationFailed',
   'conversationOpenInTerminal',
@@ -52,6 +56,9 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerExited',
   'restartFailed',
   'providerRejected',
+  'providerUnavailable',
+  'providerSafetyStopped',
+  'providerResponseFailed',
   'pluginInputRequired',
   'modelUnavailable',
   /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
@@ -101,6 +108,9 @@ export function isAgentSessionFailureKind(value: unknown): value is AgentSession
 
 /** Kinds only a status row reports: none is ever why a message was not sent. */
 const STATUS_ROW_ONLY_FAILURE_KINDS = [
+  'providerUnavailable',
+  'providerSafetyStopped',
+  'providerResponseFailed',
   'compactionFailed',
   'compactionUnconfirmed',
   'cancelUnconfirmed',

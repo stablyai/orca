@@ -1,27 +1,27 @@
-import type { RuntimeDeviceGrant } from '../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
+import type { DeviceScope } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
-import type { E2EEKeypair } from '../../e2ee-keypair'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { E2EEKeypair } from './pairing/e2ee-keypair'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutbox
-} from '../../mobile-cloud-relay/relay-revoke-outbox'
+} from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import type { RuntimePairingReach } from '../../../../shared/runtime-pairing-reach'
-import { resolveAdvertisedPairingEndpoint } from '../../pairing-endpoint'
+import type { RuntimePairingReach } from '../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
+import { resolveAdvertisedPairingEndpoint } from './pairing/network/pairing-endpoint'
 import { RuntimeRpcNetworkExposure } from './runtime-rpc-network-exposure'
 import { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand-server-worktree-rows'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/delegated-mobile-device-contract'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../methods/terminal/terminal-subscription-stream-id'
-import { isStructuredNativeChatDefaultFor } from '../methods/structured-agent-session-policy'
+import { isStructuredNativeChatDefaultFor } from '../methods/structured-sessions/structured-agent-session-policy'
 import {
   createWebClientUrl,
   DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE,
@@ -30,6 +30,10 @@ import {
   type MobileRelayPairingProvider,
   type PairingOfferUnavailable
 } from './runtime-rpc-pairing-types'
+import {
+  pendingVmCheckouts,
+  publishPendingVmCheckoutRepoChanges
+} from '../../../ephemeral-vm/pending-vm-checkouts'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   getDeviceRegistry(): DeviceRegistry | null {
@@ -86,6 +90,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.onUnpairedDeviceAuthFailure = callback
   }
 
+  // Registry instances are replaced on restart, so the listener lives here and is rebound per instance.
+  setOnPairedDevicesChanged(callback: (() => void) | null): void {
+    this.onPairedDevicesChanged = callback
+  }
+
   setMobileRelayPairingProvider(provider: MobileRelayPairingProvider | null): void {
     this.mobileRelayPairingProvider = provider
   }
@@ -103,6 +112,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent),
+          sourceControlAiSettings: () => this.runtime.requireStore().getSettings(),
           prepareBrowserHost: async (host) => {
             if (this.runtime.getStatus().capabilities?.includes('browser.screencast.v1')) {
               const placement = await hosts.prepareBrowserHost?.(
@@ -124,9 +134,33 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
           serverRows: pairedServerRows ?? new OnDemandServerWorktreeRows(hosts),
           hostLabelOverrides: () =>
             getHostDisplayLabelOverrides(this.runtime.requireStore().getSettings()),
-          getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId)
+          getWorkspaceSession: (hostId) => this.runtime.getWorkspaceSessionForHost(hostId),
+          recipeEnvironmentsFor: (hostId) =>
+            this.runtime.describeRecipeWorkspaceEnvironments(hostId),
+          pendingVmCheckouts: () => pendingVmCheckouts.current()
         })
       : null
+    this.detachRelayHostsChanges?.()
+    const detachListChanges =
+      this.mobileRelayHostCatalog?.publishListChanges({
+        onClientEvent: (listener) =>
+          this.runtime.onClientEvent(listener, { consumesTerminalSideEffects: false }),
+        changed: () => this.runtime.notifyRelayHostsChanged()
+      }) ?? null
+    // Phones filter pending VM checkouts when they read; a change makes them read again.
+    const detachPendingVmChanges = this.mobileRelayHostCatalog
+      ? publishPendingVmCheckoutRepoChanges(pendingVmCheckouts, (repoId) =>
+          this.runtime.notifyWorktreesChangedForRemoteClients(repoId)
+        )
+      : null
+    this.detachRelayHostsChanges =
+      detachListChanges || detachPendingVmChanges
+        ? () => {
+            detachListChanges?.()
+            detachPendingVmChanges?.()
+          }
+        : null
+    this.runtime.setPairedWorkspaceContextSource(this.mobileRelayHostCatalog)
   }
 
   private listRelayedPhones(): { phoneKey: string; name: string }[] {
@@ -157,6 +191,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     reach?: RuntimePairingReach
     // Grant administrative permissions only at pairing, never as later device upgrades.
     grants?: readonly RuntimeDeviceGrant[]
+    // Desktop UI only; absent keeps headless offers valid until scanned.
+    offerTtlMs?: number
+    // The paired client whose terminal asked; revoking it revokes the offer and whoever paired with it.
+    createdByDeviceId?: string
   }):
     | PairingOfferUnavailable
     | {
@@ -165,6 +203,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
         endpoint: string
         deviceId: string
         webClientUrl: string | null
+        offerExpiresAt: number | null
       } {
     if (this.pairingInitializationFailure) {
       return this.pairingInitializationFailure
@@ -195,9 +234,10 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     try {
       const reach = args.reach ?? 'network'
       const grants = args.grants ?? []
+      const options = { offerTtlMs: args.offerTtlMs, createdByDeviceId: args.createdByDeviceId }
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach, grants, options)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach, grants, options)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -219,7 +259,8 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       endpoint,
       deviceId: device.deviceId,
       webClientUrl:
-        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null
+        this.webClientRoot && scope === 'runtime' ? createWebClientUrl(endpoint, pairingUrl) : null,
+      offerExpiresAt: device.offerExpiresAt ?? null
     }
   }
 

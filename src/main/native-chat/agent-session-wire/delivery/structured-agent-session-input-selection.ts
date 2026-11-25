@@ -1,88 +1,37 @@
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import type { QueuedMessageRow } from '../../agent-session-journal/queued-messages/queued-message-table'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
+import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isWithheldOpeningMessage } from '../acquisition/structured-agent-session-opening-withdrawal'
 
-export type StructuredInputSelection =
-  | { kind: 'card'; card: QueuedMessageRow }
-  | { kind: 'submission'; submission: AgentJournalSubmission }
-  | { kind: 'none' }
-
-/** One live checkpoint owns automatic input order; debt alone is not execution. */
-export function selectStructuredAgentSessionInput(
-  journal: AgentSessionJournal,
-  currentInput?: string,
-  unanswerable = false,
-  steer = false
-): StructuredInputSelection {
-  const queued = journal.inputOrder.firstQueued()
-  const current = currentInput ? journal.submission(currentInput) : undefined
-  const selected =
-    current?.dispatchState === 'pending' &&
-    (!queued || current.submittedSequence! < queued.submittedSequence!)
-      ? current
-      : queued
-  // Read only where a card can be chosen: the queue's rule may ask mail authority.
-  const nextCard = (): StructuredInputSelection => {
-    const card = journal.queuedMessages.nextInputCard(true, steer)
-    return card ? { kind: 'card', card } : { kind: 'none' }
-  }
-  if (!selected) {
-    return nextCard()
-  }
-  // Explicit card Send intentionally overrides the automatic queue place.
-  const override = journal.inputOrder.explicitSend()
-  if (override) {
-    return { kind: 'submission', submission: override }
-  }
-  if (unanswerable) {
-    return { kind: 'submission', submission: selected }
-  }
-  const predecessors = journal.inputOrder.predecessors(
-    journal.queuedMessages.inputState(),
-    selected.clientMessageId
-  )
-  const handoff = predecessors.handoff?.consumedAs
-  if (handoff) {
-    const submission = journal.submission(handoff)
-    if (submission) {
-      return { kind: 'submission', submission }
-    }
-  }
-  if (predecessors.head) {
-    return nextCard()
-  }
-  return { kind: 'submission', submission: selected }
-}
-
-export function selectedStructuredSubmission(
+export async function selectedStructuredSubmission(
   journal: AgentSessionJournal
-): AgentJournalSubmission | undefined {
-  if (!journal.inputOrder.firstQueued()) {
-    return undefined
-  }
-  const selected = selectStructuredAgentSessionInput(journal)
-  return selected.kind === 'submission' ? selected.submission : undefined
+): Promise<AgentJournalSubmission | undefined> {
+  return (await journal.reads.input({ kind: 'first-queued' })).submission
 }
 
-export function selectableStructuredSubmission(
+export async function selectableStructuredSubmission(
   journal: AgentSessionJournal,
-  work: StructuredAgentSessionCurrentWork | null,
+  work: Pick<
+    StructuredAgentSessionObservedWork,
+    'actionablePrompts' | 'hasActionablePrompt'
+  > | null,
   currentInput?: string
-): AgentJournalSubmission | undefined {
-  if (!journal.inputOrder.firstQueued() && currentInput === undefined) {
+): Promise<AgentJournalSubmission | undefined> {
+  const submission =
+    (await selectedStructuredSubmission(journal)) ??
+    (currentInput ? await journal.reads.submission(currentInput) : undefined)
+  if (submission?.dispatchState !== 'pending') {
     return undefined
   }
   const unanswerable = work !== null && pendingPromptsAllUnanswerableHere(work.actionablePrompts())
-  const selected = selectStructuredAgentSessionInput(journal, currentInput, unanswerable)
-  if (selected.kind !== 'submission') {
+  // Refused by its caller at delivery: never handed over, even if the refusal wasn't saved.
+  if (isWithheldOpeningMessage(submission.clientMessageId)) {
     return undefined
   }
-  const { submission } = selected
-  const body = journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
+  const body = await journal.reads.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
   if (
     !unanswerable &&
     submission.origin === 'host' &&
@@ -92,37 +41,5 @@ export function selectableStructuredSubmission(
   ) {
     return undefined
   }
-  if (unanswerable) {
-    return submission
-  }
-  return journal.inputOrder.forced(submission.clientMessageId) &&
-    work &&
-    structuredInputExecutionWorking(journal, work, currentInput)
-    ? undefined
-    : submission
-}
-
-/** Provider-held/uncertain work still blocks cards; deferred, proven-unhanded inputs do not. */
-export function structuredInputExecutionWorking(
-  journal: AgentSessionJournal,
-  work: StructuredAgentSessionCurrentWork,
-  currentInput?: string
-): boolean {
-  if (work.activeTurnId() !== null) {
-    return true
-  }
-  return structuredInputHandoverWorking(journal, work, currentInput)
-}
-
-export function structuredInputHandoverWorking(
-  journal: AgentSessionJournal,
-  work: StructuredAgentSessionCurrentWork,
-  currentInput?: string
-): boolean {
-  for (const entry of journal.inputOrder.enteredSubmissions()) {
-    if (entry.clientMessageId !== currentInput && work.owesSend(entry)) {
-      return true
-    }
-  }
-  return false
+  return submission
 }

@@ -1,7 +1,7 @@
-import { isFolderRepo } from '../../shared/repo-kind'
-import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
+import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
 import { captureHostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
 import {
@@ -9,14 +9,15 @@ import {
   getSshTargetIdForExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import {
   findFolderWorkspaceCandidateRepos,
-  resolveFolderWorkspaceHost
+  resolveFolderWorkspaceHost,
+  type QualifiedFolderWorkspaceSelection
 } from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../shared/project-group-types'
-import type { Repo } from '../../shared/repo-types'
+import type { ProjectGroup } from '../../shared/project/groups/project-group-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   resolveLocalWorkspaceRuntime,
   type ProjectRuntimeResolutionStore
@@ -24,16 +25,23 @@ import {
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
-} from '../ipc/preflight-runtime-target'
-import { resolveWorktreeHostRouting } from '../runtime/workspaces/catalog/worktree-launch-host-repo'
+} from '../ipc/preflight/preflight-runtime-target'
+import {
+  resolveWorktreeHostRouting,
+  type WorktreeHostRouting
+} from '../runtime/workspaces/catalog/worktree-launch-host-repo'
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import {
   detectInstalledAgentsWithShellPathHydration,
   refreshShellPathAndDetectAgents,
   type RefreshAgentsResult
 } from './agent-detection'
-import type { InstalledAgentDetectionOptions } from './installed-agent-detection'
+import {
+  agentCommandOverrideDetectionOptions,
+  type InstalledAgentDetectionOptions
+} from './installed-agent-detection'
 import { assertWslDistroRunningForExec } from '../wsl/discovery/wsl-background-exec-gate'
+import { notifyAgentsRefreshedOnHost } from './agents-refreshed-on-host'
 
 export type AgentDetectionHost =
   | { kind: 'local'; context?: PreflightRuntimeContext }
@@ -48,7 +56,11 @@ export type WorkspaceAgentDetectionStore = ProjectRuntimeResolutionStore & {
 export const HOST_DEFAULT_AGENT_DETECTION: AgentDetectionHost = { kind: 'local' }
 
 export type AgentDetectionWorkspace =
-  | { kind: 'folder'; folderWorkspaceId: string }
+  | {
+      kind: 'folder'
+      folderWorkspaceId: string
+      selected?: QualifiedFolderWorkspaceSelection
+    }
   | { kind: 'worktree'; repoId: string; path: string; hostId?: string | null }
 
 type ResolvedWorkspace =
@@ -58,12 +70,13 @@ type ResolvedWorkspace =
 /** Resolve from host-owned workspace settings; unplaced workspaces retain the legacy host default. */
 export function resolveWorkspaceAgentDetectionHost(
   store: WorkspaceAgentDetectionStore,
-  workspace: AgentDetectionWorkspace
+  workspace: AgentDetectionWorkspace,
+  worktreeRouting?: WorktreeHostRouting<Repo>
 ): AgentDetectionHost {
   const resolved =
     workspace.kind === 'folder'
-      ? resolveFolderWorkspace(store, workspace.folderWorkspaceId)
-      : resolveWorktree(store, workspace)
+      ? resolveFolderWorkspace(store, workspace.folderWorkspaceId, workspace.selected)
+      : resolveWorktree(store, workspace, worktreeRouting)
   if (!resolved) {
     return HOST_DEFAULT_AGENT_DETECTION
   }
@@ -78,10 +91,11 @@ export function resolveWorkspaceAgentDetectionHost(
 
 function resolveWorktree(
   store: WorkspaceAgentDetectionStore,
-  worktree: Extract<AgentDetectionWorkspace, { kind: 'worktree' }>
+  worktree: Extract<AgentDetectionWorkspace, { kind: 'worktree' }>,
+  resolvedRouting?: WorktreeHostRouting<Repo>
 ): ResolvedWorkspace | null {
   // Same repo IDs can exist on several hosts; resolve the worktree owner rather than take the first.
-  const routing = resolveWorktreeHostRouting(store.getRepos?.() ?? [], worktree)
+  const routing = resolvedRouting ?? resolveWorktreeHostRouting(store.getRepos?.() ?? [], worktree)
   if (routing.kind === 'ambiguous') {
     throw new Error('worktree_execution_host_unresolved')
   }
@@ -103,14 +117,23 @@ function resolveWorktree(
 
 function resolveFolderWorkspace(
   store: WorkspaceAgentDetectionStore,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  selected?: QualifiedFolderWorkspaceSelection
 ): ResolvedWorkspace | null {
+  if (selected && selected.workspace.id !== folderWorkspaceId) {
+    throw new Error('worktree_execution_host_unresolved')
+  }
   const state = {
-    folderWorkspaces: store.getFolderWorkspaces?.() ?? [],
+    folderWorkspaces: selected ? [selected.workspace] : (store.getFolderWorkspaces?.() ?? []),
     projectGroups: store.getProjectGroups?.() ?? [],
     repos: store.getRepos?.() ?? []
   }
-  const host = resolveFolderWorkspaceHost(state, folderWorkspaceId)
+  const host = selected
+    ? parseExecutionHostId(selected.hostId)
+    : resolveFolderWorkspaceHost(state, folderWorkspaceId)
+  if (!host) {
+    throw new Error('worktree_execution_host_unresolved')
+  }
   if (host.kind === 'ssh') {
     return { kind: 'ssh', connectionId: host.targetId }
   }
@@ -151,16 +174,10 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
   }
 }
 
-const agentRefreshListeners = new Set<() => void>()
-
-export function onAgentsRefreshedOnHost(listener: () => void): () => void {
-  agentRefreshListeners.add(listener)
-  return () => agentRefreshListeners.delete(listener)
-}
-
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  userInitiated = false
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
@@ -172,7 +189,7 @@ export async function refreshAgentsOnHost(
         ? refreshShellPathAndDetectAgents(host.context, options)
         : refreshShellPathAndDetectAgents(host.context)
     const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
-    agentRefreshListeners.forEach((listener) => listener())
+    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)
@@ -193,7 +210,8 @@ export async function detectProjectLaunchContext(
     throw new Error('worktree_execution_host_unresolved')
   }
   const agents = await detectAgentsOnHost(
-    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } }
+    ssh ? { kind: 'ssh', connectionId: ssh } : { kind: 'local', context: { projectRuntime } },
+    agentCommandOverrideDetectionOptions(store.getSettings?.().agentCmdOverrides)
   )
   return {
     agents: agents.filter(isTuiAgent),

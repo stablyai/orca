@@ -1,21 +1,19 @@
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
-import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { nativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
+import { structuredLaunchSlotTabId } from './launch/structured-agent-session-launch-slot'
+import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type {
   AgentSessionLaunchPlan,
   AgentSessionLaunchTarget
-} from '@/lib/agent-session-launch-plan'
+} from './launch/routing/agent-session-launch-plan'
 import type {
   StructuredAgentLaunchHandle,
   StructuredAgentLaunchHooks
-} from '@/lib/structured-agent-launch-settlement'
+} from './launch/continuation/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   beginHostAdmittedStructuredLaunch,
   type DeclinedStructuredLaunchTerminalOptions,
@@ -25,15 +23,15 @@ import {
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   openTerminalForDeclinedChat,
   openDeclinedTerminal,
   opensAtAction
 } from './launch/structured-agent-session-action-launch'
-import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
-import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
+import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import type { OpenedAgentSessionTab } from './launch/pane/structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
@@ -207,7 +205,7 @@ function beginLocalProvisionalLaunch(
   }
   const draft = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(handle.sessionId))
   const position = nativeChatDraftPositions.get(draft)
-  const retirePosition = (target = structuredAgentSessionTabId(handle.sessionId)) => {
+  const retirePosition = (target = structuredLaunchSlotTabId(handle.sessionId)) => {
     if (position?.at === 'end' && position.target === target) {
       position.pending = false
     }

@@ -1,5 +1,5 @@
 import { JIRA_ISSUE_KEY_PATTERN, parseJiraIssueUrl } from './jira-issue-url'
-import { escapeRegex } from '../string-utils'
+import { escapeRegex } from '../text/regex-escaping'
 import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachmentMetadata } from '../workspace-attachments/workspace-attachment-legacy'
 import type { WorkspaceAttachment } from '../worktree/types'

@@ -1,8 +1,8 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Collection } from '../../../../shared/collection-types'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
-import { defaultScopeHost } from '../../lib/default-creation-host'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { defaultScopeHost } from '../../runtime/hosts/selection/default-creation-host'
 import type { RepoSlice } from '../repos/repo-state'
 
 export function createCollectionMutationActions(

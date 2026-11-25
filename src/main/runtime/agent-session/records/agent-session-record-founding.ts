@@ -1,13 +1,10 @@
-import {
-  AGENT_SESSION_FOUNDING_FENCE,
-  agentSessionNeverStarted
-} from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { AGENT_SESSION_FOUNDING_FENCE } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
+import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,
@@ -47,9 +44,6 @@ export function agentSessionRecordIdentityFields(
     updatedAt: now
   }
 }
-
-/** No reservation, owner or provider handle means no agent ever started. */
-export const structuredSessionNeverStarted = agentSessionNeverStarted
 
 /** An empty handle chain starts a fresh conversation on first send rather than resuming one. */
 export function foundAgentSessionRecord(

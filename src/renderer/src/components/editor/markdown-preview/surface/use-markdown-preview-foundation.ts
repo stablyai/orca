@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   formatMarkdownReviewNotes,
   sortMarkdownReviewNotes,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
-import type { MarkdownDocument } from '../../../../../../shared/filesystem-entry-types'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
+import type { MarkdownDocument } from '../../../../../../shared/file-listing/file-document'
 import { createMarkdownDocumentIndex } from '../../markdown/documents/markdown-doc-links'
 import { exceedsMarkdownRichModeSizeLimit } from '../../markdown/render-mode/markdown-rich-size-limit'
 import { previewHasAnnotationBlockKey } from '../review/markdown-preview-annotation-shortcut'
@@ -35,6 +35,7 @@ export function useMarkdownPreviewFoundation({
   largePreview?: boolean
   markdownAnnotationsEnabled: boolean
 }) {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const source = useMarkdownPreviewSourceFoundation({
     content,
@@ -107,13 +108,13 @@ export function useMarkdownPreviewFoundation({
     () => [
       {
         id: 'all',
-        label: translate('auto.components.editor.MarkdownPreview.ddf087d12e', 'All unsent notes'),
+        label: t('auto.components.editor.MarkdownPreview.ddf087d12e', 'All unsent notes'),
         notes: unsentMarkdownReviewNotes,
         formatPrompt: (notes) => formatMarkdownReviewNotes(notes, renderedContent)
       }
     ],
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-    [renderedContent, unsentMarkdownReviewNotes, languageRevision]
+    [renderedContent, unsentMarkdownReviewNotes, languageRevision, t]
   )
   const canShowReviewTools = Boolean(
     markdownAnnotationsEnabled && sourceWorktree && sourceRelativePath !== null

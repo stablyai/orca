@@ -1,6 +1,14 @@
-import type { MessageRow } from '../../../../orchestration/types'
+import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
-import { formatMessageBanner } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
+import { getMessagesByIds } from '../../../../orchestration/db/messages/messages-by-id'
+import { replyFollowUp } from './reply-follow-up'
+import { botItemOfReport } from '../../../../../bots/bot-item-report-fact'
+import type { BotItemReportFact } from '../../../../../../shared/bots/bot-item-report-hint'
+import type { ReportFollowUpAction } from '../../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
@@ -31,12 +39,34 @@ export function exposeMessages(messages: MessageRow[]): MailboxMessageReceipt[] 
 
 /** The one shape a consuming check returns, and the receipt its take commits. */
 export function deliveryReceipt(args: {
+  db?: OrchestrationDb
   mailbox: { runId: string; dispatchId?: string }
   batch: MailboxDeliveryBatch | undefined
   acknowledged: string | undefined
   format: boolean
 }) {
   const { batch } = args
+  if (batch?.finalResponse) {
+    const saved = batch.finalResponse
+    const response = {
+      ...saved,
+      replayed: batch.replayed,
+      acknowledged: args.acknowledged ?? null
+    }
+    if (args.format) {
+      response.formatted = batch.messages
+        .map((message, index) =>
+          formatMessageBanner(message, {
+            peerMail: args.db,
+            followUp: saved.messages[index]?.follow_up
+          })
+        )
+        .join('\n\n')
+    } else {
+      delete response.formatted
+    }
+    return response
+  }
   return {
     ...args.mailbox,
     deliveryId: batch?.delivery.id ?? null,
@@ -49,7 +79,12 @@ export function deliveryReceipt(args: {
     cancelled: false,
     connectionLost: false,
     ...(args.format
-      ? { formatted: batch?.messages.map(formatMessageBanner).join('\n\n') ?? '' }
+      ? {
+          formatted:
+            batch?.messages
+              .map((message) => formatMessageBanner(message, { peerMail: args.db }))
+              .join('\n\n') ?? ''
+        }
       : {})
   }
 }
@@ -73,6 +108,120 @@ export function handsOverBatch(result: unknown): boolean {
     'deliveryAcknowledged' in result &&
     result.deliveryAcknowledged === true
   )
+}
+
+/** Adds what each message offers instead of `[Reply:]` for this reader, so every check view prints the same. */
+export function withReplyFollowUps<T>(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  reader: OrchestrationSessionCaller | undefined,
+  result: T
+): T {
+  if (typeof result !== 'object' || result === null || !('messages' in result)) {
+    return result
+  }
+  const { messages } = result
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return result
+  }
+  const formatted = 'formatted' in result && typeof result.formatted === 'string'
+  let changed = false
+  const lineageCache = new Map()
+  const party = reader ? { party: reader, sessionId: reader.sessionId } : undefined
+  const stored = getMessagesByIds(
+    db,
+    messages.map((message: MailboxMessageReceipt) => message.id)
+  )
+  const rows = messages.map((message: MailboxMessageReceipt) => {
+    const row = stored.get(message.id)
+    const followUp = row ? replyFollowUp(runtime, db, row, party, lineageCache) : undefined
+    changed ||= followUp !== undefined
+    return { message, row, followUp }
+  })
+  if (!changed) {
+    return result
+  }
+  return {
+    ...result,
+    messages: rows.map(({ message, followUp }) =>
+      followUp ? { ...message, follow_up: followUp } : message
+    ),
+    ...(formatted
+      ? {
+          formatted: rows
+            .flatMap(({ row, followUp }) =>
+              row ? [formatMessageBanner(row, { peerMail: db, followUp })] : []
+            )
+            .join('\n\n')
+        }
+      : {})
+  }
+}
+
+type ReportReceipt = MailboxMessageReceipt & { follow_up?: ReportFollowUpAction }
+
+/** Names the open item each finished worker's report was started for, read now. A failed read leaves
+ *  that report as it was. */
+export async function withReportItems<T>(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  result: T
+): Promise<T> {
+  if (typeof result !== 'object' || result === null || !('messages' in result)) {
+    return result
+  }
+  const { messages } = result
+  if (!Array.isArray(messages)) {
+    return result
+  }
+  const reports = messages.filter((message: ReportReceipt) => message.type === 'worker_done')
+  if (reports.length === 0) {
+    return result
+  }
+  const rows = getMessagesByIds(
+    db,
+    messages.map((message: ReportReceipt) => message.id)
+  )
+  const items = new Map<string, BotItemReportFact>()
+  const readItem = botItemOfReport(runtime.botItems)
+  await Promise.all(
+    reports.map(async (message: ReportReceipt) => {
+      const row = rows.get(message.id)
+      const item = row ? await readItem(db, row).catch(() => null) : null
+      if (item) {
+        items.set(message.id, item)
+      }
+    })
+  )
+  if (items.size === 0) {
+    return result
+  }
+  const formatted = 'formatted' in result && typeof result.formatted === 'string'
+  return {
+    ...result,
+    messages: messages.map((message: ReportReceipt) => {
+      const item = items.get(message.id)
+      return item ? { ...message, for_item: item } : message
+    }),
+    ...(formatted
+      ? {
+          formatted: messages
+            .flatMap((message: ReportReceipt) => {
+              const row = rows.get(message.id)
+              return row
+                ? [
+                    formatMessageBanner(row, {
+                      peerMail: db,
+                      followUp: message.follow_up,
+                      reportItem: items.get(message.id)
+                    })
+                  ]
+                : []
+            })
+            .join('\n\n')
+        }
+      : {})
+  }
 }
 
 /** The mailboxes a consuming check took mail from: its messages' own, and the one an acknowledgement

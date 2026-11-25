@@ -1,9 +1,23 @@
-import { writeFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
-import { JsonTextStructureCapacityError } from '../../../../shared/json-text-structure-limit'
-import { NodeFileReadTooLargeError } from '../../../../shared/node-bounded-file-reader'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
+import { JsonTextStructureCapacityError } from '../../../../shared/json-stream/json-text-structure-limit'
+import { NodeFileReadTooLargeError } from '../../../../shared/file-content/node-bounded-file-reader'
 import { join } from 'node:path'
-import { readAgentStateFileSync, readAgentStateJsonFileSync } from '../agent-state-file-reader'
+import {
+  MAX_AGENT_STATE_FILE_BYTES,
+  readAgentStateFileSync,
+  readAgentStateJsonFileSync
+} from '../agent-state-file-reader'
+import {
+  writeFileAtomically,
+  writeFileAtomicallyIfUnchanged
+} from '../../../filesystem/atomic-file-publication'
+import {
+  EMPTY_GUEST_CARRY_FORWARD,
+  isGuestCarryForwardEmpty,
+  type CodexGuestCarriedRegistration,
+  type CodexGuestCarryForward
+} from './codex-config-guest-carry-forward'
+import type { CodexRegistrationPromotion } from './config-plugin-registration-promotion'
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 
@@ -20,6 +34,17 @@ export type CodexSettingsBaseline = {
   /** MCP server names the last mirror copied from the canonical source. */
   mcpServers: ReadonlySet<string>
   mcpServerRoot: boolean
+  /** False for baselines from before Orca recorded which plugin tables it mirrored. */
+  tracksRegistrations?: boolean
+  /** Set once a WSL distro config regenerated this home; absent on homes an older Orca mirrored. */
+  guestCarryForward?: CodexGuestCarryForward
+  /** Set once a pass found ~/.codex outside any WSL distro, so clean passes need not resolve it again. */
+  nativeSource?: boolean
+}
+
+type StoredGuestCarryForward = {
+  settings?: Record<string, { raw: string; system: string | null }>
+  registrations?: CodexGuestCarriedRegistration[]
 }
 
 type StoredSettingsBaseline = {
@@ -29,6 +54,8 @@ type StoredSettingsBaseline = {
   registrations?: Record<string, Record<string, string>>
   mcpServers?: string[]
   mcpServerRoot?: boolean
+  guestCarryForward?: StoredGuestCarryForward
+  nativeSource?: boolean
 }
 
 /** Unreadable baselines stall the mirror; absent or invalid baselines can be rebuilt. */
@@ -83,11 +110,57 @@ function readParsedCodexSettingsBaseline(
       registrations: readStoredRegistrations(parsed.registrations),
       mcpServers: readStoredMcpServers(parsed.mcpServers),
       // Older mirrors owned the whole MCP root; retain that removal policy for one pass.
-      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true
+      mcpServerRoot: parsed.mcpServers === undefined || parsed.mcpServerRoot === true,
+      // Version 3 came with registration tracking.
+      tracksRegistrations: parsed.version === 3,
+      nativeSource: parsed.nativeSource === true,
+      ...(parsed.guestCarryForward !== undefined && {
+        guestCarryForward: readStoredGuestCarryForward(parsed.guestCarryForward)
+      })
     }
   } catch (error) {
     return isDefinitiveAbsence(error) || isRebuildableBaselineError(error) ? null : 'unreadable'
   }
+}
+
+// A malformed record still marks the home as regenerated, so nothing is carried twice.
+function readStoredGuestCarryForward(stored: unknown): CodexGuestCarryForward {
+  if (!isRecord(stored)) {
+    return EMPTY_GUEST_CARRY_FORWARD
+  }
+  const { settings, registrations } = stored
+  return {
+    settings: new Map(
+      Object.entries(isRecord(settings) ? settings : {}).filter(
+        (entry): entry is [string, { raw: string; system: string | null }] =>
+          isRecord(entry[1]) &&
+          typeof entry[1].raw === 'string' &&
+          (typeof entry[1].system === 'string' || entry[1].system === null)
+      )
+    ),
+    registrations: (Array.isArray(registrations) ? registrations : []).filter(
+      (entry: unknown): entry is CodexGuestCarriedRegistration =>
+        isRecord(entry) &&
+        (typeof entry.system === 'string' || entry.system === null) &&
+        (typeof entry.identity === 'string' || entry.identity === null) &&
+        isStoredRegistrationPromotion(entry.promotion)
+    )
+  }
+}
+
+function isStoredRegistrationPromotion(value: unknown): value is CodexRegistrationPromotion {
+  if (!isRecord(value) || typeof value.key !== 'string') {
+    return false
+  }
+  return value.kind === 'append'
+    ? typeof value.block === 'string'
+    : value.kind === 'field' &&
+        typeof value.field === 'string' &&
+        (typeof value.raw === 'string' || value.raw === null)
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
 }
 
 function readStoredMcpServers(stored: string[] | undefined): ReadonlySet<string> {
@@ -143,8 +216,29 @@ export function writeCodexSettingsBaseline(
   if (baseline.mcpServerRoot) {
     file.mcpServerRoot = true
   }
+  if (baseline.guestCarryForward) {
+    file.guestCarryForward = {
+      settings: Object.fromEntries(baseline.guestCarryForward.settings),
+      registrations: [...baseline.guestCarryForward.registrations]
+    }
+  }
+  if (baseline.nativeSource) {
+    file.nativeSource = true
+  }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
-  const serialized = `${JSON.stringify(file, null, 2)}\n`
+  let serialized = `${JSON.stringify(file, null, 2)}\n`
+  // Kept values live only here, so never write a file the reader would drop as too large.
+  if (
+    baseline.guestCarryForward &&
+    !isGuestCarryForwardEmpty(baseline.guestCarryForward) &&
+    Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES
+  ) {
+    // A home regenerated from a distro reads only its kept values and MCP names back.
+    serialized = `${JSON.stringify({ ...file, settings: {}, conflicts: undefined, registrations: undefined }, null, 2)}\n`
+    if (Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES) {
+      throw new Error('Codex settings baseline with kept values exceeds the readable size')
+    }
+  }
   let existing: string | null = null
   try {
     existing = readAgentStateFileSync(baselinePath)
@@ -158,7 +252,34 @@ export function writeCodexSettingsBaseline(
   if (existing === serialized) {
     return
   }
-  writeFileSync(baselinePath, serialized, { encoding: 'utf-8', mode: 0o600 })
+  // Atomic: kept tab edits live only here, so a cut-off write must leave the previous file whole.
+  writeFileAtomically(baselinePath, serialized, { mode: 0o600 })
+}
+
+/**
+ * Drop the native-source mark a clean pass trusted once a later check finds otherwise. `regenerated`
+ * also records what a regeneration from the distro would have: no kept values. Skipped unless the
+ * baseline still carries that mark and no kept values, so a newer pass's record always wins.
+ */
+export function retireCodexNativeSourceMark(runtimeHomePath: string, regenerated: boolean): void {
+  const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
+  const existing = readAgentStateFileSync(baselinePath)
+  const parsed: unknown = JSON.parse(existing)
+  if (
+    !isStoredSettingsBaseline(parsed) ||
+    parsed.nativeSource !== true ||
+    parsed.guestCarryForward
+  ) {
+    return
+  }
+  const { nativeSource: _retired, ...rest } = parsed
+  const next: StoredSettingsBaseline = regenerated
+    ? { ...rest, guestCarryForward: { settings: {}, registrations: [] } }
+    : rest
+  // Its content comes from this read, so a baseline another thread saved since must win.
+  writeFileAtomicallyIfUnchanged(baselinePath, existing, `${JSON.stringify(next, null, 2)}\n`, {
+    mode: 0o600
+  })
 }
 
 export function getCodexSettingsBaselinePath(runtimeHomePath: string): string {

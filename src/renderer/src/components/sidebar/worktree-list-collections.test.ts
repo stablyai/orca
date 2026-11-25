@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { makeWorktree as makeStoreWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree as makeStoreWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { buildCollectionRows, insertCollectionRowsAfterPinned } from './worktree-list-collections'
 import type { Row } from '../../../../shared/sidebar-list/row-types'
 import type { Collection } from '../../../../shared/collection-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 function makeRepo(id: string, displayName: string): Repo {

@@ -1,5 +1,5 @@
 import type { Collection } from './collection-types'
-import { createNonSecureContextUuid } from './non-secure-context-uuid'
+import { createNonSecureContextUuid } from './identifiers/non-secure-context-uuid'
 
 export function normalizeCollectionName(name: string, fallback = 'Untitled collection'): string {
   const trimmed = name.trim()

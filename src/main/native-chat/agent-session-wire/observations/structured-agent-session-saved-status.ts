@@ -1,12 +1,13 @@
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type {
   StructuredAgentSessionStatusPublisher,
   StructuredAgentSessionStatusSink
 } from './structured-agent-session-status-ownership'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   AGENT_SESSION_TURN_PREVIEW_CHARS,
   type AgentSessionLastTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-last-turn'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-last-turn'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { StatusPublication } from './structured-agent-session-status-feed-deps'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -15,7 +16,10 @@ import type {
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
-import { structuredSummaryConversationNaming } from './structured-agent-session-status-summary'
+import {
+  structuredSummaryConversationNaming,
+  structuredSummaryHostProgram
+} from './structured-agent-session-status-summary'
 import { agentSessionPinnedLaunchDirectory } from '../../../runtime/agent-session/records/agent-session-record-launch-directory'
 import {
   normalizeOptionalField,
@@ -33,6 +37,7 @@ export function savedStructuredAgentSessionStatus(
   const outcome =
     turn?.state === 'open' || (!turn && markerAt !== undefined) ? 'cancellation' : turn?.outcome
   const model = normalizeOptionalField(record.options?.model, AGENT_MODEL_MAX_LENGTH)
+  const interactionMode = record.options?.interactionMode
   const launchDirectory = agentSessionPinnedLaunchDirectory(record)
   return {
     sessionId: record.sessionId,
@@ -45,10 +50,12 @@ export function savedStructuredAgentSessionStatus(
     ...(outcome ? { turnOutcome: outcome } : {}),
     ...(at !== undefined ? { statusStartedAt: at } : {}),
     ...(model ? { model } : {}),
+    ...(isAgentSessionInteractionMode(interactionMode) ? { interactionMode } : {}),
     ...(isAgentChatPermissionMode(record.permissionMode)
       ? { permissionMode: record.permissionMode }
       : {}),
     ...(launchDirectory ? { launchDirectory } : {}),
+    ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, undefined),
     ...(typeof record.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
     updatedAt: at ?? record.createdAt
@@ -102,10 +109,7 @@ export class StructuredAgentSessionSavedStatus {
     const entry = { edge }
     this.queued.set(sessionId, entry)
     const write = this.deps()
-      .store.transitionHandoff(sessionId, (record) => {
-        const { lastTurn: _previous, ...rest } = record
-        return lastTurn ? { ...rest, lastTurn } : _previous ? rest : record
-      })
+      .store.updateRecord(sessionId, { kind: 'last-turn', lastTurn })
       .then(
         () => {},
         (error: unknown) => {
@@ -162,7 +166,9 @@ export function createSavedStructuredStatusGroup(
     }
     const summary = savedStructuredAgentSessionStatus(record, markerAt)
     published.set(record.sessionId, { summary, firstInputSubmissionKey: null })
-    sink(summary, record.location, publisher)
+    if (summary.status !== null) {
+      sink(summary, record.location, publisher)
+    }
     broadcast({ type: 'status', session: summary })
   }
   return (visit) => {
