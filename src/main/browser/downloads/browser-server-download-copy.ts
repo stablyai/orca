@@ -38,6 +38,8 @@ type RunningCopy = {
   // Aborts on Cancel, a retired connection or the window going away, whichever comes first.
   signal: AbortSignal
   finishing: boolean
+  // The stream stopped on a failure; the copy is only waiting for its file to settle.
+  failed: boolean
   // Set only when Cancel is what stopped it: its own reason, so nothing else is taken for it.
   cancelReason: Error | null
 }
@@ -59,7 +61,13 @@ export async function copyBrowserServerDownloadHere(
   }
   const controller = new AbortController()
   const signal = AbortSignal.any([controller.signal, rendererGone])
-  const running: RunningCopy = { controller, signal, finishing: false, cancelReason: null }
+  const running: RunningCopy = {
+    controller,
+    signal,
+    finishing: false,
+    failed: false,
+    cancelReason: null
+  }
   runningCopies.set(copyId, running)
   const isCancel = (error: unknown): boolean =>
     running.cancelReason !== null && error === running.cancelReason
@@ -110,6 +118,7 @@ export async function copyBrowserServerDownloadHere(
       const fail = (error: Error): void => {
         if (!settled) {
           settled = true
+          running.failed = true
           clearTimeout(stall)
           reject(error)
         }
@@ -289,13 +298,13 @@ export async function copyBrowserServerDownloadHere(
 }
 
 /**
- * Cancel: stops the copy and removes what it wrote here. False when there is nothing to cancel,
- * something else already stopped it, or the file is already being moved into Downloads; the copy
- * then ends saved or failed as usual.
+ * Cancel: stops the copy and removes what it wrote here. False when there is nothing to cancel, it
+ * already stopped (a failure, a retired connection, the window closing, an earlier Cancel), or the
+ * file is already being moved into Downloads; the copy then ends saved or failed as usual.
  */
 export function cancelBrowserServerDownloadCopy(copyId: string): boolean {
   const running = runningCopies.get(copyId)
-  if (!running || running.finishing || running.signal.aborted) {
+  if (!running || running.finishing || running.failed || running.signal.aborted) {
     return false
   }
   running.cancelReason = new Error('Canceled.')

@@ -284,18 +284,20 @@ describe('Save to this computer for a download on a paired server', () => {
           // The copy writes (bytes, offset, length).
           write: async (bytes: Uint8Array, offset?: number, length?: number) => {
             writesStarted.count += 1
-            if (writesStarted.count === 1) {
-              try {
+            const held = writesStarted.count === 1
+            try {
+              if (held) {
                 await write.pass()
-              } finally {
+              }
+              const result = await realWrite(bytes, offset, length)
+              // A short write: only part of the frame landed, so the rest would be written next.
+              return options.shortWrite && held ? { ...result, bytesWritten: 1 } : result
+            } finally {
+              // Once the write has fully settled, landed or failed.
+              if (held) {
                 order.push('write done')
               }
             }
-            const result = await realWrite(bytes, offset, length)
-            // A short write: only part of the frame landed, so the rest would be written next.
-            return options.shortWrite && writesStarted.count === 1
-              ? { ...result, bytesWritten: 1 }
-              : result
           },
           close: async () => {
             order.push('close')
@@ -371,7 +373,8 @@ describe('Save to this computer for a download on a paired server', () => {
       await write.entered
 
       server.callbacks?.onEvent({ type: 'error', code: 'gone', message: 'The server went away.' })
-      cancelBrowserServerDownloadCopy('copy-11')
+      // The copy has already stopped; Cancel is refused rather than reported accepted.
+      expect(cancelBrowserServerDownloadCopy('copy-11')).toBe(false)
       write.release()
 
       await expect(result).rejects.toThrow('The server went away.')
