@@ -68,7 +68,7 @@ On the computer that should keep the sessions running:
 
 1. Open the Orca desktop app.
 1. Open **Settings → Remote Orca Servers**.
-1. Under **This computer**, click **Share** beside **Share this computer**.
+1. Under **This computer**, click **Share** beside **Share this computer**. Once links exist, the button reads **Manage**.
 1. Under **Who will open the link**, choose **Another device**.
 1. For **Address**, select the Tailscale address. It usually looks like `100.x.y.z`.
 1. Click **Create link**.
@@ -92,7 +92,7 @@ On the computer you want to use as the client:
 1. Click **Add server**.
 1. If the saved server shows **Disconnected**, click **Connect**.
 
-You can also add it from the sidebar: in the add-project menu, open the project host picker, choose **Add remote host… → Add remote server**, and paste the same link.
+You can also add it from the sidebar: in the add-project menu, open the project host picker and choose **Add remote host… → Add remote server**. That dialog requires a **Name in Orca**. Paste the same link into **Access link** and click **Save**.
 
 <ImagePlaceholder
   src="/docs/remote-server-add-client.png"
@@ -104,7 +104,7 @@ You can also add it from the sidebar: in the add-project menu, open the project 
   caption="Share an Orca desktop runtime with another client over a private network."
 />
 
-Adding a server saves it without forcing every new project onto it. Open **Advanced → Default host for new projects** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
+Adding a server saves it without forcing every new project onto it. Change **New projects open on** in **Settings → Remote Orca Servers** only when you want server-routed projects, terminals, provider checks, and browser or mobile handoff to use that server by default.
 
 ## Use the remote server
 
@@ -323,11 +323,9 @@ Update Orca on both computers if the server row reports an incompatible protocol
 
 ### A Windows server is not reachable
 
-If the client times out and the server is a Windows PC, Windows Defender Firewall may be blocking incoming connections to Orca. On the server:
+If the client times out and the server is a Windows PC, Windows Defender Firewall may be blocking incoming connections to Orca. On the server, open **Windows Security → Firewall & network protection → Allow an app through firewall** and check that Orca is allowed for the network type the client connects through.
 
-1. Open **Windows Security → Firewall & network protection → Allow an app through firewall**.
-1. Make sure Orca is allowed on the network type the client connects through, usually **Private**.
-1. If the network the client uses is set to **Public**, change it to **Private** in Windows network settings, or allow Orca on **Public** as well.
+Only allow Orca on networks you trust, such as your home network or your tailnet. Don't mark a public network, such as café or airport Wi-Fi, as **Private**, and don't allow Orca on **Public** networks just to make pairing work: every device on that network could then try to connect to Orca. When the two computers don't share a network you trust, connect them with Tailscale instead. Microsoft's [Windows Firewall overview](https://learn.microsoft.com/windows/security/operating-system-security/network-security/windows-firewall/) explains network profiles and app rules.
 
 Keep the Orca desktop app open and the PC awake while you use it as a server. `orca serve service` is not available on Windows yet.
 
