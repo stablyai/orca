@@ -1,11 +1,7 @@
 // What the relay asks for each call: the real address and headers for one bot credential, from saved
 // headers, a source Orca fills (a hub's key), or Orca's own sign-in, which it refreshes here.
 import { createHash } from 'node:crypto'
-import {
-  readBotToolCredential,
-  readBotToolOAuth,
-  type BotToolCredential
-} from '../bot-tool-credentials'
+import { botToolCredentialsReader, type BotToolCredential } from '../bot-tool-credentials'
 import { botToolUrlOf } from '../bot-tools-path'
 import type { BotToolOAuthKey } from './bot-tool-oauth'
 import {
@@ -67,7 +63,8 @@ export function botToolCredentialSource(
     const key: BotToolOAuthKey = { folder: request.folder, credentialId: request.credentialId }
     // The store opens only entries sealed for this folder and id; the address must also be the tool's.
     const toolUrl = await botToolUrlOf(request.folder, request.credentialId)
-    const signIn = readBotToolOAuth(request.folder, request.credentialId)
+    const stored = botToolCredentialsReader(request.folder)
+    const signIn = stored.oauth(request.credentialId)
     if (signIn && signIn.url !== toolUrl) {
       return { kind: 'missing' }
     }
@@ -95,7 +92,7 @@ export function botToolCredentialSource(
         bearer: grant.token
       }
     }
-    const credential = readBotToolCredential(request.folder, request.credentialId)
+    const credential = stored.credential(request.credentialId)
     if (!credential || credential.url !== toolUrl) {
       return { kind: 'missing' }
     }

@@ -85,28 +85,34 @@ const parseJson = (text: string): unknown => {
 }
 
 /**
- * The file's entries. A file in the older layout, with plaintext addresses beside separately sealed
- * values, is never opened: nothing vouches for its addresses, so its tools need signing in again.
+ * The file's envelopes, still sealed. A file in the older layout, with plaintext addresses beside
+ * separately sealed values, is never opened: nothing vouches for its addresses, so its tools need
+ * signing in again.
  */
-function parseStored(folder: string, text: string | null): Stored {
+function parseEnvelopes(text: string | null): Record<string, string> {
   if (text === null) {
     return {}
   }
   const json = parseJson(text)
   const parsed = CredentialsFile.safeParse(json)
   if (parsed.success) {
-    return Object.fromEntries(
-      Object.entries(parsed.data.credentials).map(([id, envelope]) => [
-        id,
-        { envelope, entry: openEntry(folder, id, envelope) }
-      ])
-    )
+    return parsed.data.credentials
   }
   if (OlderLayout.safeParse(json).success) {
     warnOnce(text, '[bot-tool-credentials] ignored credentials saved in the older layout')
     return {}
   }
   throw new BotFailureError('toolCredentialsUnreadable')
+}
+
+/** The file's entries, every one opened. */
+function parseStored(folder: string, text: string | null): Stored {
+  return Object.fromEntries(
+    Object.entries(parseEnvelopes(text)).map(([id, envelope]) => [
+      id,
+      { envelope, entry: openEntry(folder, id, envelope) }
+    ])
+  )
 }
 
 const readSealed = (folder: string): Stored =>
@@ -175,12 +181,20 @@ type BotToolCredentialsReader = {
 }
 
 /**
- * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, which opens
- * every entry; taken on the first id asked for, so a caller with none reads nothing.
+ * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, taken on
+ * the first id asked for, so a caller with none reads nothing. Only the entries asked for are opened.
  */
 export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
-  let sealed: Stored | undefined
-  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
+  let envelopes: Record<string, string> | undefined
+  const opened = new Map<string, Entry | null>()
+  const entry = (id: string): Entry | null => {
+    envelopes ??= parseEnvelopes(readFileText(botToolCredentialsPath(folder)))
+    if (!opened.has(id)) {
+      const envelope = Object.hasOwn(envelopes, id) ? envelopes[id] : undefined
+      opened.set(id, envelope === undefined ? null : openEntry(folder, id, envelope))
+    }
+    return opened.get(id) ?? null
+  }
   return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
 }
 

@@ -69,15 +69,15 @@ it('opens each credential twice per list, however many servers hold one', async 
   expect(await opensFor(100, list)).toBe(200)
 })
 
-// The write's read, its sign-in check, and the read and sign-in of the answer it gives back.
-it('opens each credential four times per switch', async () => {
+// The write's read, its sign-in check and the answer's read; the answer's sign-in opens only its own.
+it('opens each credential three times per switch, plus the switched one', async () => {
   const flip = async (folder: string) => {
     const [first] = await listMcpServers(folder)
     opened = 0
     await setMcpServerAgentEnabled(first!.id, 'claude', false, folder)
   }
-  expect(await opensFor(10, flip)).toBe(40)
-  expect(await opensFor(100, flip)).toBe(400)
+  expect(await opensFor(10, flip)).toBe(31)
+  expect(await opensFor(100, flip)).toBe(301)
 })
 
 // A bot with no agent CLI of its own, so nothing outside the test folders is read or started.

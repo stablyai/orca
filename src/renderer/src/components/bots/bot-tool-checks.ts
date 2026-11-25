@@ -36,11 +36,16 @@ let listeningForHost = false
 
 /**
  * The host says its bots changed (in any window, or on its own: a sign-in ended, couldn't start):
- * every bot's tools are read again, and the checks under way keep running.
+ * every shown bot's tools are read again, and the checks under way keep running. A bot no view
+ * shows is forgotten instead, so the next view to open reads it fresh.
  */
 function rereadToolLists(hostId: ExecutionHostId): void {
   for (const [key, read] of reads) {
     if (read.bot.hostId !== hostId) {
+      continue
+    }
+    if (!listReaders.has(key)) {
+      reads.delete(key)
       continue
     }
     const tools = callBotRpc<BotTools>(read.bot, 'bots.tools.list', { botId: read.bot.id })
