@@ -104,6 +104,13 @@ export class AcpToolTimeline {
     return { events, tasks }
   }
 
+  /** A task an earlier app made of a call, still running: the call's updates report it again. */
+  restateBackgrounded(task: { taskId: string; parentToolUseId?: string }): void {
+    if (task.parentToolUseId === task.taskId && !this.backgrounded.has(task.taskId)) {
+      this.backgrounded.set(task.taskId, true)
+    }
+  }
+
   /** The call with its whole input; a running journal copy holds only a preview. */
   wholeCall(toolCallId: string, body: AgentJournalToolCallItem): AgentJournalToolCallItem {
     const input = this.whole.get(toolCallId)?.input

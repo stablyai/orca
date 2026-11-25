@@ -28,12 +28,20 @@ export type ProviderRelayRequest =
         /** Which agent integration runs here; a build that can't reattach it ends it at launch. */
         agent?: string
         policy?: ProviderRelayDetachPolicy
+        /** Only sent to a daemon advertising `providerRelayKeep`; older ones ignore it. */
+        keep?: ProviderRelayKeepSpec
       }
     }
   | {
       id: string
       type: 'relayAttach'
-      payload: { relayId: string; fromSeq: number; policy?: ProviderRelayDetachPolicy }
+      payload: {
+        relayId: string
+        fromSeq: number
+        policy?: ProviderRelayDetachPolicy
+        /** Send the kept lines (`relayKept`): the app's first reattach is the one that reads them. */
+        kept?: true
+      }
     }
   /**
    * Must be a request, never a notification: a full agent input refuses it, and only a reply can say
@@ -104,6 +112,34 @@ export type ProviderRelayWorkMarker = {
   list?: string[]
 }
 
+/**
+ * Agent lines kept on the relay record for the next attach, one per name, so session state the
+ * spool has long since acked (a session's start answer, its latest config update) is not lost.
+ */
+export type ProviderRelayKeepSpec = {
+  /** Client request `method`s whose latest answer is kept. */
+  answers: string[]
+  /** Substrings; the latest agent line containing each is kept. */
+  lines: string[]
+  /** Client request `method`s still awaiting an answer are listed on attach, and count as work. */
+  outstanding: string[]
+  /** Client request `method`s whose latest accepted request is kept (its answer says nothing). */
+  requests?: string[]
+}
+
+/** A kept line's seq and the name it was kept under (`a:<method>`, `q:<method>` or `l:<marker>`). */
+export type ProviderRelayKeptLine = { seq: number; name: string }
+
+/** A client request the agent has not answered yet, or `answered` in the replay that follows;
+ *  its id is from the client that sent it. */
+export type ProviderRelayOutstandingRequest = {
+  id: number | string
+  method: string
+  answered?: true
+  /** Every agent line since the request is in this attach's replay. */
+  replayedWhole?: true
+}
+
 /** Why the daemon ended an agent itself; output stopped, so the chat says so instead of hanging. */
 export type ProviderRelayFailure =
   | 'line-too-large'
@@ -148,6 +184,9 @@ export type ProviderRelayAttachResult = {
    * keep. Older clients ignore it.
    */
   truncatedThrough?: number
+  /** Sent as `relayKept` events before this reply; absent from daemons without `providerRelayKeep`. */
+  kept?: ProviderRelayKeptLine[]
+  outstanding?: ProviderRelayOutstandingRequest[]
 }
 
 export type ProviderRelayInfo = {
@@ -170,11 +209,12 @@ export type ProviderRelayListResult = { relays: ProviderRelayInfo[] }
 export type ProviderRelayDataEvent = {
   type: 'event'
   /**
-   * `relayInitialize` and `relayPending` are sent on attach; `relayData` is the spool, in seq order.
-   * On a binary-framed stream each piece is a DATA frame carrying the raw line bytes, and the frame
+   * `relayInitialize`, `relayKept` and `relayPending` are sent on attach, in that order; `relayData`
+   * is the spool, in seq order, and a kept line carries the seq it was spooled at. On a
+   * binary-framed stream each piece is a DATA frame carrying the raw line bytes, and the frame
    * reader restores `payload.line`; an NDJSON stream gets the JSON event.
    */
-  event: 'relayData' | 'relayPending' | 'relayInitialize'
+  event: 'relayData' | 'relayPending' | 'relayInitialize' | 'relayKept'
   sessionId: string
   payload: { seq: number; line: string; more?: true }
 }

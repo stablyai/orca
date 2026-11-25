@@ -9,6 +9,7 @@ import type {
   ProviderTimelineJoin
 } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import type { AcpBackgroundTaskUpdate } from '../acp-dialects/acp-dialect'
+import type { AcpToolTimeline } from './acp-tool-timeline'
 
 /** Retain running snapshots and bounded settled labels; the assembler owns durable placement. */
 export class AcpBackgroundTaskTimeline {
@@ -19,7 +20,23 @@ export class AcpBackgroundTaskTimeline {
     sizeOf: (block, key) => Buffer.byteLength(key) + Buffer.byteLength(JSON.stringify(block))
   })
 
-  constructor(private readonly toolJoin: (callId: string) => ProviderTimelineJoin) {}
+  constructor(private readonly tools: Pick<AcpToolTimeline, 'join' | 'restateBackgrounded'>) {}
+
+  /** Tasks still running, by the id their agent names them. */
+  get runningIds(): string[] {
+    return [...this.running.keys()]
+  }
+
+  /** A task an earlier app saw start, as it saved it, still running; one Orca made of a call ends
+   *  with that call again. Returns its update for the live work view; no row is written. */
+  restate(block: NativeChatBackgroundTaskBlock, thread: string): ProviderTimelineEvent | null {
+    if (this.running.has(block.taskId) || isSettledBackgroundTaskState(block.state)) {
+      return null
+    }
+    this.running.set(block.taskId, block)
+    this.tools.restateBackgrounded(block)
+    return this.event(block, { thread })
+  }
 
   reconcile(taskId: string, thread: string): ProviderTimelineEvent[] {
     return this.translate([{ taskId, state: 'unverifiable', summary: '', error: '' }], { thread })
@@ -47,13 +64,20 @@ export class AcpBackgroundTaskTimeline {
         this.settled.delete(block.taskId)
         this.running.set(block.taskId, block)
       }
-      const parent = block.parentToolUseId ? this.toolJoin(block.parentToolUseId) : {}
-      return {
-        type: 'item.update',
-        item: `background-task:${block.taskId}`,
-        body: backgroundTaskJournalBody(block),
-        join: { ...join, ...parent }
-      }
+      return this.event(block, join)
     })
+  }
+
+  private event(
+    block: NativeChatBackgroundTaskBlock,
+    join: ProviderTimelineJoin
+  ): ProviderTimelineEvent {
+    const parent = block.parentToolUseId ? this.tools.join(block.parentToolUseId) : {}
+    return {
+      type: 'item.update',
+      item: `background-task:${block.taskId}`,
+      body: backgroundTaskJournalBody(block),
+      join: { ...join, ...parent }
+    }
   }
 }

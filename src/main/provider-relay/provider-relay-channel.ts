@@ -9,7 +9,8 @@ import type {
   ProviderRelayListResult,
   ProviderRelaySpawnResult,
   ProviderRelaySpawnSpec,
-  ProviderRelayDetachPolicy
+  ProviderRelayDetachPolicy,
+  ProviderRelayKeepSpec
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 
 const RELAY_REQUEST_TIMEOUT_MS = 10_000
@@ -36,6 +37,7 @@ function isRelayEvent(raw: unknown): raw is ChannelEvent {
       name === 'relayPending' ||
       name === 'relayInitialize' ||
       name === 'relayAckWanted' ||
+      name === 'relayKept' ||
       name === 'relayExit')
   )
 }
@@ -72,11 +74,16 @@ export class ProviderRelayChannel {
     spec: ProviderRelaySpawnSpec,
     chatKey: string,
     policy: ProviderRelayDetachPolicy,
-    agent: string
+    agent: string,
+    keep?: ProviderRelayKeepSpec
   ): Promise<ProviderRelaySpawnResult> {
+    // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
+    if (keep && !this.client.getDaemonIdentity()?.providerRelayKeep) {
+      return Promise.resolve({ refused: 'unavailable' })
+    }
     return this.client.request(
       'relaySpawn',
-      { spec, chatKey, agent, policy },
+      keep ? { spec, chatKey, agent, policy, keep } : { spec, chatKey, agent, policy },
       RELAY_SPAWN_TIMEOUT_MS
     )
   }
@@ -84,12 +91,14 @@ export class ProviderRelayChannel {
   attach(
     relayId: string,
     fromSeq: number,
-    policy: ProviderRelayDetachPolicy
+    policy: ProviderRelayDetachPolicy,
+    /** Ask for the kept lines; only a reattach at launch reads them. */
+    kept = false
   ): Promise<ProviderRelayAttachResult> {
     this.partial.delete(relayId)
     return this.client.request(
       'relayAttach',
-      { relayId, fromSeq, policy },
+      kept ? { relayId, fromSeq, policy, kept } : { relayId, fromSeq, policy },
       RELAY_REQUEST_TIMEOUT_MS
     )
   }

@@ -128,6 +128,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     return this.output.initializeLine
   }
 
+  /** Lines the daemon kept for this relay, by the seq they were spooled at; names are in `attachResult.kept`. */
+  get kept(): Pick<RelayedProviderOutput, 'keptLines' | 'dropKeptLines'> {
+    return this.output
+  }
+
   get handedOff(): boolean {
     return this.state === 'detached'
   }
@@ -142,8 +147,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
       disconnected: () => void this.reattach()
     })
     try {
-      const result = await this.options.channel.attach(this.relayId, fromSeq, this.options.policy())
-      await this.output.awaitPreamble(result.initializeResultSent, result.pending, PREAMBLE_WAIT_MS)
+      const { channel } = this.options
+      const kept = this.output.wantsKeptLines
+      const result = await channel.attach(this.relayId, fromSeq, this.options.policy(), kept)
+      const keptSeqs = kept ? (result.kept ?? []).map((line) => line.seq) : []
+      await this.output.awaitPreamble(result, PREAMBLE_WAIT_MS, keptSeqs)
       this.attachResult = result
       const { continuation } = this.options
       if (continuation) {

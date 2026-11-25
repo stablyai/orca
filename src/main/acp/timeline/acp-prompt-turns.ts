@@ -20,7 +20,16 @@ export type AcpPromptTurn = {
   compaction?: AcpCompaction
 }
 
-export const acpPromptTurnId = (clientMessageId: string): string => `prompt:${clientMessageId}`
+/**
+ * `compactionTurn`: the host's `/compact` turn, already begun. `adopted`: an earlier app's prompt a
+ * kept agent still runs, its turn saved already. `renumber`: the replay lacks that turn's first
+ * lines, so its unnumbered messages take rows of their own.
+ */
+export type AcpPromptOpening = [compactionTurn?: string, adopted?: boolean, renumber?: boolean]
+
+export const ACP_PROMPT_TURN_PREFIX = 'prompt:'
+export const acpPromptTurnId = (clientMessageId: string): string =>
+  `${ACP_PROMPT_TURN_PREFIX}${clientMessageId}`
 
 export class AcpPromptTurns {
   current?: AcpPromptTurn
@@ -49,11 +58,13 @@ export class AcpPromptTurns {
     return ending
   }
 
-  /** Reuse the host's already-open command turn for compaction. */
+  /** `compactionTurn`: reuse the host's already-open command turn for compaction. `adopted`: an
+   *  earlier app's prompt a kept agent still runs; the chat shows its turn already. */
   open(
     clientMessageId: string,
     at: number,
-    compactionTurn?: string
+    compactionTurn?: string,
+    adopted = false
   ): { promptId: string; events: ProviderTimelineEvent[] } {
     if (this.current) {
       throw new Error('ACP prompt overlaps a prompt or load')
@@ -69,9 +80,9 @@ export class AcpPromptTurns {
       return { promptId: compactionTurn, events: [] }
     }
     const turn = acpPromptTurnId(clientMessageId)
-    this.current = { clientMessageId, turn, requestedAt: at, opened: false }
+    this.current = { clientMessageId, turn, requestedAt: at, opened: adopted }
     const injected = this.dialect.injectedPromptIdentity === true
-    return { promptId: turn, events: injected ? [] : this.start(turn, at) }
+    return { promptId: turn, events: injected || adopted ? [] : this.start(turn, at) }
   }
 
   /** Hook refusal ends immediately; normal completion waits for the prompt reply. */

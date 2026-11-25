@@ -17,17 +17,21 @@ import {
   AcpConnectionClosedError
 } from '../transport/acp-errors'
 import { acpPromptRejection } from './acp-prompt-failure'
-import type { ContentBlock } from '../generated/acp-protocol.generated'
+import type { ContentBlock, PromptResponse } from '../generated/acp-protocol.generated'
+import { AcpTurnIdleWaiters } from './acp-turn-idle-waiters'
+import type { AcpPromptOpening } from '../timeline/acp-prompt-turns'
 
 type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
 
 export class AcpStructuredTurns {
   private active: Send | null = null
+  /** The earlier app's prompt this kept agent still runs: a send waits for it, never cancels it. */
+  private adopted: Send | null = null
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
   private readonly steers: Send[] = []
   private readonly unsettled = new Set<string>()
-  private readonly idleWaiters = new Set<() => void>()
+  private readonly idleWaiters = new AcpTurnIdleWaiters()
   private ended = false
   private stopAt: number | null = null
   // Steers still preparing their controls; they hold their place like queued steers.
@@ -104,18 +108,7 @@ export class AcpStructuredTurns {
   }
 
   whenIdle(signal?: AbortSignal): Promise<void> {
-    if (!this.active || signal?.aborted) {
-      return Promise.resolve()
-    }
-    return new Promise((resolve) => {
-      const wake = (): void => {
-        this.idleWaiters.delete(wake)
-        signal?.removeEventListener('abort', wake)
-        resolve()
-      }
-      this.idleWaiters.add(wake)
-      signal?.addEventListener('abort', wake, { once: true })
-    })
+    return !this.active || signal?.aborted ? Promise.resolve() : this.idleWaiters.wait(signal)
   }
 
   /** A steer whose controls must run as a prompt first holds its place until released: Stop
@@ -212,7 +205,25 @@ export class AcpStructuredTurns {
     }
     this.active = null
     this.steerCancelled = null
-    this.notifyIdle()
+    this.idleWaiters.wake()
+  }
+
+  /** The prompt an earlier app sent a kept agent: its answer ends the chat's open turn as usual.
+   *  Not `adopted` (no turn saved yet), it opens as usual and its send is settled here. */
+  adoptEarlier(
+    clientMessageId: string,
+    answered: () => Promise<PromptResponse>,
+    ...opening: AcpPromptOpening
+  ): void {
+    if (!this.active && !this.ended) {
+      const at = this.deps.now()
+      const { lane } = this.deps
+      const opened = lane.translator.openPrompt(clientMessageId, at, ...opening)
+      lane.apply(opened.events)
+      this.unsettled.add(clientMessageId)
+      this.active = this.adopted = { clientMessageId, prompt: [], requestedAt: at }
+      this.run(this.active, opened.promptId, answered())
+    }
   }
 
   private start(send: Send): void {
@@ -226,13 +237,13 @@ export class AcpStructuredTurns {
     this.run(send, opened.promptId)
   }
 
-  private run(send: Send, promptId: string): void {
+  private run(send: Send, promptId: string, earlier?: Promise<PromptResponse>): void {
     const { lane } = this.deps
     // Inject identity only for dialects that echo it on turn events.
     const meta = lane.translator.injectsPromptIdentity
       ? { promptId, requestId: promptId }
       : undefined
-    const answered = this.deps.connection.prompt(send.prompt, meta)
+    const answered = earlier ?? this.deps.connection.prompt(send.prompt, meta)
     if (this.steers.length > 0 || this.preparingSteers > 0) {
       this.cancelForSteer()
     }
@@ -307,14 +318,15 @@ export class AcpStructuredTurns {
     if (next) {
       this.start(next)
     } else if (!this.active) {
-      this.notifyIdle()
+      this.idleWaiters.wake()
     }
   }
 
   /** Steering waits indefinitely for cancellation; Stop can still end the child. */
   private cancelForSteer(): void {
     const send = this.active
-    if (!send) {
+    // An earlier app's prompt runs to its end; Stop still cancels it.
+    if (!send || send === this.adopted) {
       return
     }
     this.deps.withdrawRequests()
@@ -328,13 +340,6 @@ export class AcpStructuredTurns {
         this.steerCancelled = null
       }
     })
-  }
-
-  private notifyIdle(): void {
-    for (const wake of this.idleWaiters) {
-      wake()
-    }
-    this.idleWaiters.clear()
   }
 
   private reject(clientMessageId: string, fact: SubmissionRejectionFact): void {

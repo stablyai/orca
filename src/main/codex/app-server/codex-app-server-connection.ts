@@ -1,4 +1,5 @@
 import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
+import { isJsonRpcAnswerAbove as isCodexAnswerAbove } from '../../provider-relay/relayed-json-rpc-lines'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
@@ -23,9 +24,8 @@ import type {
 } from './codex-app-server-connection-types'
 import { launchRelayedProviderProcess } from '../../provider-relay/app-provider-relays'
 import {
-  codexConnectionRelay,
   CODEX_RELAY_WORK_MARKERS,
-  isCodexAnswerAbove,
+  codexConnectionRelay,
   keptInitializeResult
 } from './codex-app-server-relay'
 

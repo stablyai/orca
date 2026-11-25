@@ -4,7 +4,11 @@ import {
 } from '../../antigravity/antigravity-chat-auth-environment'
 import { checkAcpLaunchVersion } from './acp-launch-version'
 import type { McpServer } from '../generated/acp-protocol.generated'
-import { botToolsOffInstruction, withBotLaunchToolsEnv } from '../../bots/bot-launch-tools'
+import {
+  BotLaunchTools,
+  botToolsOffInstruction,
+  withBotLaunchToolsEnv
+} from '../../bots/bot-launch-tools'
 import { acpBotMcpServers } from '../../bots/bot-tools-acp'
 import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
@@ -76,6 +80,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   release?: AcpInstructionsLaunch['release']
   /** The bot's own tools and `spec.ownMcpServers`, opened with each session; absent: none. */
   mcpServers?: McpServer[]
+  /** Carries grants that end with this app (a bot's tool-relay token), so it can't outlive it. */
+  appBoundGrants?: true
   /** The saved model the launch line carries. */
   launchModel?: string
   /** The launched program's version, when its check or managed release names it. */
@@ -296,6 +302,8 @@ export function acpStructuredLaunchPart(
           : {}),
         ...(instructions?.release ? { release: instructions.release } : {}),
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
+        // Every bot launch gets the bot's token, which this app's tool relay issued for this run.
+        ...(tools === BotLaunchTools.none ? {} : { appBoundGrants: true as const }),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
         resume: head

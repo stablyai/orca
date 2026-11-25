@@ -28,7 +28,7 @@ export type ProviderRelayStream = {
   framing?: DaemonStreamFraming
 }
 
-export type ProviderRelayLineEvent = 'relayData' | 'relayPending' | 'relayInitialize'
+export type ProviderRelayLineEvent = 'relayData' | 'relayPending' | 'relayInitialize' | 'relayKept'
 
 /** One client's hold on a relay. Once released (detach or takeover) it sends nothing and waits on nothing. */
 export class ProviderRelayAttachment {
@@ -94,10 +94,13 @@ export class ProviderRelayAttachment {
     return true
   }
 
-  /** Unanswered requests, in seq order; false once released. */
-  async sendPending(records: ProviderRelayRecord[]): Promise<boolean> {
+  /** Kept lines or unanswered requests, in seq order; false once released. */
+  async sendRecords(
+    event: ProviderRelayLineEvent,
+    records: ProviderRelayRecord[]
+  ): Promise<boolean> {
     for (const { seq, line } of records) {
-      if (!(await this.sendPieces('relayPending', seq, line))) {
+      if (!(await this.sendPieces(event, seq, line))) {
         return false
       }
     }

@@ -12,6 +12,11 @@ import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
 import { writeFolderContextFile } from './acp-folder-context-file'
 import {
+  listProviderRelaysAtLaunch,
+  liveProviderRelayChats
+} from '../../provider-relay/app-provider-relays'
+import { keptProviderRelaysComplete } from '../../provider-relay/provider-relay-launch-inventory'
+import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
   writeOpenCodeInstructionsConfigDir
@@ -209,14 +214,33 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
 }
 
 const cleared = new Map<string, Promise<void>>()
+/** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
+const REMOVE_BATCH = 16
 
-/** Stdio children never outlive the host, and one host holds a profile, so the folder is cleared
- *  on its first use in a run. */
+/** An earlier run's leftovers go on first use in a run, except those of chats whose agent the
+ *  terminal host kept running: that agent still reads them. One host holds a profile. */
+async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
+  await listProviderRelaysAtLaunch()
+  // A daemon that didn't answer may still run agents reading these; they wait for a later run.
+  if (!keptProviderRelaysComplete()) {
+    return
+  }
+  // Every chat's folder name has the same length; its entries are it, `<it>.md` or `<it>-<uuid>`.
+  const kept = new Set([...liveProviderRelayChats()].map(nativeChatScratchFolderName))
+  const length = nativeChatScratchFolderName('').length
+  const keptBy = (name: string): boolean =>
+    kept.has(name.slice(0, length)) && ['', '.', '-'].includes(name.charAt(length))
+  const gone = (await readdir(root).catch(() => [])).filter((name) => !keptBy(name))
+  for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
+    await Promise.all(gone.slice(at, at + REMOVE_BATCH).map((name) => remove(join(root, name))))
+  }
+}
+
 async function instructionsRoot(dataDirectory: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
   let clearing = cleared.get(root)
   if (!clearing) {
-    clearing = rm(root, { recursive: true, force: true }).catch(() => undefined)
+    clearing = clearEarlierRuns(root, (path) => rm(path, { recursive: true, force: true }))
     cleared.set(root, clearing)
   }
   await clearing
@@ -286,7 +310,7 @@ export async function makeAcpInstructionsFolder(
   const root = join(dataDirectory, 'acp-instructions-folders')
   let clearing = clearedFolders.get(root)
   if (!clearing) {
-    clearing = removeTreeKeepingLinkTargets(root)
+    clearing = clearEarlierRuns(root, removeTreeKeepingLinkTargets)
     clearedFolders.set(root, clearing)
   }
   await clearing

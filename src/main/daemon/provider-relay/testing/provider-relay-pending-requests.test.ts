@@ -5,6 +5,7 @@ import { PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ManagedProviderProcess } from '../../../provider-process/managed-provider-process'
 import { ProviderRelay } from '../provider-relay'
+import { ProviderRelayPendingRequests } from '../provider-relay-pending-requests'
 
 function fakeManaged(): {
   managed: ManagedProviderProcess
@@ -261,5 +262,99 @@ describe('provider relay pending requests', () => {
       })
     expect(dataSeqs).toEqual([2])
     await relay.dispose()
+  })
+})
+
+/** One JSON-RPC line as the agent or client writes it. */
+type RpcLine = Record<string, unknown>
+
+describe('provider relay kept lines', () => {
+  const agent = (pending: ProviderRelayPendingRequests, seq: number, message: RpcLine): void =>
+    pending.observeAgentLine({ seq, line: JSON.stringify(message) })
+  const client = (pending: ProviderRelayPendingRequests, message: RpcLine): void => {
+    pending.releaseAnswered(pending.observeClientData(`${JSON.stringify(message)}\n`))
+  }
+  const configUpdate = (value: string): RpcLine => ({
+    method: 'session/update',
+    params: { update: { sessionUpdate: 'config_option_update', configOptions: [value] } }
+  })
+
+  it('keeps the latest start answer and state line, and lists unanswered work requests', () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: ['session/new', 'session/load'],
+      lines: ['"config_option_update"'],
+      outstanding: ['session/prompt']
+    })
+    pending.workMethods = new Set(['session/prompt'])
+    // The attaching app's first reattach asks for kept lines.
+    pending.kept.sendOnAttach = true
+    client(pending, { id: 1, method: 'session/new', params: {} })
+    agent(pending, 1, { id: 1, result: { sessionId: 's1' } })
+    agent(pending, 2, configUpdate('a'))
+    agent(pending, 3, configUpdate('b'))
+    // A refused reload leaves the start that stands.
+    client(pending, { id: 2, method: 'session/load', params: {} })
+    agent(pending, 4, { id: 2, error: { code: -32000, message: 'no' } })
+    client(pending, { id: 3, method: 'session/prompt', params: {} })
+
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+    expect(pending.kept.attachDetails(0)).toEqual({
+      kept: [
+        { seq: 1, name: 'a:session/new' },
+        { seq: 3, name: 'l:"config_option_update"' }
+      ],
+      // Every line since the prompt is in a replay after seq 4; once one is acked, not.
+      outstanding: [{ id: 3, method: 'session/prompt', replayedWhole: true }]
+    })
+    expect(pending.kept.attachDetails(5).outstanding).toEqual([{ id: 3, method: 'session/prompt' }])
+    expect(pending.working.size).toBe(1)
+    // Kept lines are never held requests, so spool acks and answers can't release them.
+    expect(pending.size).toBe(0)
+
+    agent(pending, 5, { id: 3, result: { stopReason: 'end_turn' } })
+    expect(pending.working.size).toBe(0)
+    // Answered within the replay after seq 4, so the next app can wait on it by id.
+    expect(pending.kept.attachDetails(4).outstanding).toEqual([
+      { id: 3, method: 'session/prompt', answered: true, replayedWhole: true }
+    ])
+    expect(pending.kept.attachDetails(5).outstanding).toBeUndefined()
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+    // The agent's exit clears held requests, never what the next app needs to open it.
+    pending.clear()
+    expect(pending.kept.records().map((record) => record.seq)).toEqual([1, 3])
+  })
+
+  it('keeps nothing for a malformed spec, and drops a kept line its too-large successor replaced', () => {
+    const malformed = new ProviderRelayPendingRequests()
+    malformed.kept.configure({ answers: ['session/new'], lines: 'config' })
+    malformed.kept.sendOnAttach = true
+    client(malformed, { id: 1, method: 'session/new', params: {} })
+    agent(malformed, 1, { id: 1, result: { sessionId: 's1' } })
+    expect(malformed.kept.records()).toEqual([])
+
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({ answers: [], lines: ['"config_option_update"'], outstanding: [] })
+    pending.kept.sendOnAttach = true
+    agent(pending, 1, configUpdate('a'))
+    agent(pending, 2, configUpdate('x'.repeat(1024 * 1024 + 1)))
+    expect(pending.kept.records()).toEqual([])
+  })
+  it('keeps an accepted request whose answer says nothing, at its answer', () => {
+    const pending = new ProviderRelayPendingRequests()
+    pending.kept.configure({
+      answers: [],
+      lines: [],
+      outstanding: [],
+      requests: ['session/set_model']
+    })
+    pending.kept.sendOnAttach = true
+    client(pending, { id: 1, method: 'session/set_model', params: { modelId: 'refused' } })
+    agent(pending, 1, { id: 1, error: { code: -32000, message: 'no' } })
+    client(pending, { id: 2, method: 'session/set_model', params: { modelId: 'picked' } })
+    agent(pending, 2, { id: 2, result: {} })
+    expect(pending.kept.records().map(({ seq, line }) => [seq, JSON.parse(line).params])).toEqual([
+      [2, { modelId: 'picked' }]
+    ])
   })
 })

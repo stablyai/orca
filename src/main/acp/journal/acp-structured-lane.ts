@@ -36,6 +36,8 @@ export type AcpStructuredLaneDeps = {
   agent: string
   agentName: string
   generation: string
+  /** A relayed agent's requests are its process's: a reattach keeps their cards. */
+  requestGeneration?: string
   providerSessionId: string
   dialect: AcpDialect
   logger: StructuredAgentSessionLogger
@@ -72,13 +74,15 @@ export class AcpStructuredLane {
       sessionId: deps.providerSessionId,
       dialect: deps.dialect,
       agentName: deps.agentName,
-      onTextDropped: (drop) => this.reportTextDrop(drop)
+      onTextDropped: (drop) => this.reportTextDrop(drop),
+      numbersMessages: deps.requestGeneration !== undefined
     })
     this.assembler = createProviderTimelineAssembler({
       sink: deps.sink,
       sessionId: deps.sessionId,
       agent: deps.agent,
       generation: deps.generation,
+      ...(deps.requestGeneration ? { requestGeneration: deps.requestGeneration } : {}),
       namespace: deps.providerSessionId
     })
   }
@@ -158,11 +162,8 @@ export class AcpStructuredLane {
     if (identity?.provider !== 'legacy' || identity.sessionId !== this.deps.sessionId) {
       return false
     }
-    const first = this.requestIdentity.request({
-      generation: this.deps.generation,
-      key: requestKey,
-      incarnation: 1
-    })
+    const generation = this.deps.requestGeneration ?? this.deps.generation
+    const first = this.requestIdentity.request({ generation, key: requestKey, incarnation: 1 })
     const prefix = first.provider === 'legacy' ? first.recordId : null
     return identity.recordId === prefix || identity.recordId.startsWith(`${prefix}#`)
   }
@@ -239,7 +240,8 @@ export class AcpStructuredLane {
     this.notifyTurnWatchers()
   }
 
-  private publishChildWork(event: ProviderTimelineEvent): void {
+  /** A background task's live state for the host's work view (also a restated one's, rowless). */
+  publishChildWork(event: ProviderTimelineEvent): void {
     const at = this.deps.now?.() ?? Date.now()
     const stoppable = this.deps.childStops?.().backgroundTasks === true
     const synthetic = this.translator.isSyntheticBackgroundTask

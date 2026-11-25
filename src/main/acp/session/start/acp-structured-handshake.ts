@@ -240,7 +240,8 @@ export async function initializeAcpStructuredSession(
   assertStarting()
   liveLane.apply(liveLane.translator.contextModels(started.response.models, now()))
   const mode = spec.permissionModeConfig
-  if (mode && acquire.permissionMode !== 'own') {
+  // A kept agent runs with the mode it had; a mid-turn change could be refused and end it.
+  if (mode && acquire.permissionMode !== 'own' && !connection.kept) {
     // Fail startup rather than silently use a different permission mode.
     const wanted = acquire.permissionMode ?? 'ask'
     const requested = child.permissionModes?.[wanted]
