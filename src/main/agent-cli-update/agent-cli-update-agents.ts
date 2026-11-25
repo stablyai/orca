@@ -156,7 +156,9 @@ const AGENT_CLI_UPDATE_DEFINITIONS: Record<AgentCliUpdateAgent, AgentCliUpdateDe
   devin: {
     latest: () => ({ kind: 'acp-registry', id: 'devin' }),
     plan: () => ({ runnable: false, command: 'devin update' })
-  }
+  },
+  // `codebuddy update` follows how it was installed (npm, Homebrew or its native installer).
+  codebuddy: { latest: () => npm('@tencent-ai/codebuddy-code'), plan: selfUpdate('update') }
 }
 
 export function agentCliUpdateDefinition(agent: AgentCliUpdateAgent): AgentCliUpdateDefinition {

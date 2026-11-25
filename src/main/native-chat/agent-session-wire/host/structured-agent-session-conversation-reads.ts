@@ -23,6 +23,7 @@ import {
   queuedSendAnswer,
   structuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
+import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
@@ -34,6 +35,7 @@ type ReadContext = {
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
   publishStatus: (id: string) => void
+  runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
@@ -204,6 +206,19 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         : child?.accountHome
     },
     holdsSessions: () => context().deps.store.holdsRecords(),
+    openConversationCount: () => context().sessions.size,
+    /** Its agent is still starting: acquiring its process, or attached but not yet answering. */
+    agentStarting: (id: string): boolean => {
+      const { runtimeState, sessions } = context()
+      return runtimeState.startFlights.has(id) || sessions.get(id)?.child?.phase === 'starting'
+    },
+    /** A decided start's acquire is still out, and no later start's child is attached. */
+    startWindingDown: (id: string): boolean => {
+      const { runtimeState, sessions } = context()
+      return !sessions.get(id)?.child && runtimeState.startFlights.attempting(id)
+    },
+    /** A cancelled start's provider work, including releasing what it acquired, has ended. */
+    startAttemptsEnded: (id: string) => context().runtimeState.startFlights.attemptsEnded(id),
     onSessionsHeld: (listener: () => void) => context().deps.store.onHeldChange(listener),
     prospectiveAccountHome: (id: string) => {
       const { deps, serialize } = context()

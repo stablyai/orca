@@ -114,6 +114,8 @@
       "accepted": "Accepted by Orca’s push service. Check for the notification.",
       "rateLimited": "Too many notifications. Try again later.",
       "pushServiceFailed": "Could not send through Orca’s push service. Try again.",
+      "hostClockSkew": "The clock on {{host}} is off by {{seconds}} seconds, so Orca’s push service refused it. Set its clock to the correct time and try again.",
+      "hostClockSkewDuration": "The clock on {{host}} is off by {{duration}}, so Orca’s push service refused it. Set its clock to the correct time and try again.",
       "sendFailed": "Could not send push test.",
       "troubleReceivingAlerts": "Having trouble receiving alerts?",
       "description": "Test push delivery, or a local notification when push is unavailable.",
@@ -423,7 +425,10 @@
     },
     "claude": {
       "usageSignInLabel": "Sign in again",
-      "usageSignInMessage": "The selected Claude account needs you to sign in again. Open Settings > AI Provider Accounts, or choose System default."
+      "usageSignInMessage": "This account needs you to sign in again."
+    },
+    "codex": {
+      "usageSignInLabel": "Signed out"
     },
     "usage": {
       "percentLeft": "{{value}}% left"
@@ -825,7 +830,17 @@
       "offOneBody": "To turn them on, open Orca on {{host}} and go to Settings › Bots › Enable bots.",
       "offServerBody": "To turn them on, open Orca on {{desktop}} and go to Settings › Bots › Enable bots on {{host}}.",
       "offManyTitle": "Bots are off on your computers",
-      "offManyBody": "To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots."
+      "offManyBody": "To turn them on, open Orca on each computer and go to Settings › Bots › Enable bots.",
+      "waits": {
+        "questions_one": "question",
+        "questions_other": "{{count}} questions",
+        "access_one": "access request",
+        "access_other": "{{count}} access requests",
+        "workers_one": "worker",
+        "workers_other": "{{count}} workers",
+        "items_one": "item",
+        "items_other": "{{count}} items"
+      }
     }
   },
   "hooks": {
@@ -991,7 +1006,7 @@
       "workspaceOptions": "Workspace options",
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)",
-      "searchWorkspaces": "Search workspaces",
+      "search": "Search",
       "newWorkspace": "New workspace"
     },
     "identity": {
@@ -1012,6 +1027,13 @@
       "connectToDownload": "Connect to this host to download the latest app",
       "openingWorkspace": "Opening workspace",
       "checkingHost": "Checking host"
+    },
+    "pageRouteUnavailable": {
+      "updateTitle": "Update Orca",
+      "updateMessage": "This screen needs a newer Orca on your phone or on {{host}}.",
+      "updateMessageNoHost": "This screen needs a newer Orca.",
+      "serverTitle": "Can’t reach this server",
+      "serverMessage": "Your phone can’t reach this workspace’s server through {{host}}."
     }
   },
   "navigation": {
@@ -1075,7 +1097,7 @@
       "signInDetail": "Sign in to Orca on your desktop to reconnect",
       "hostOffline": "{{host}} is offline",
       "hostOfflineDetail": "Check it's awake, Orca is running, and you're signed in",
-      "relayAccessExpired": "Relay access expired for {{host}}",
+      "relayAccessRefused": "Relay refused access for {{host}}",
       "rePairDetail": "Re-pair with your desktop",
       "relayUnreachable": "Can't reach Relay",
       "checkConnection": "Check your connection",
@@ -1144,7 +1166,6 @@
     "hostWorkspaceListStates": {
       "checkHost": "Check that your computer is awake and Orca is running",
       "loadFailed": "Could not load workspaces from this host",
-      "noMatches": "No matching workspaces",
       "noFilterMatches": "No workspaces match filters",
       "empty": "No workspaces",
       "reopen": "Reopen to update",
@@ -1673,7 +1694,24 @@
       "composer": {
         "planMode": "Plan",
         "exitPlanMode": "Exit plan mode",
-        "pastedTextLabel": "Pasted text"
+        "pastedTextLabel": "Pasted text",
+        "botChats": "Chats",
+        "backToBots": "Back to bots",
+        "loadingBotChats": "Loading {{name}}'s chats…",
+        "noOtherChats": "No other chats",
+        "noMatchingChats": "No matching chats",
+        "retryChats": "Retry",
+        "permissionAsk": "Ask for approval",
+        "permissionAcceptEdits": "Accept edits",
+        "permissionAuto": "Approve for me",
+        "permissionFullAccess": "Full access",
+        "permissionAskDescription": "Asks before edits and commands your settings don't allow",
+        "permissionAskSharedDescription": "Asks before edits or commands it isn't already allowed to make",
+        "permissionAcceptEditsAntigravityDescription": "Approves file edits; asks for the rest",
+        "permissionAcceptEditsDescription": "Approves file edits and file commands; asks for the rest",
+        "permissionAutoDescription": "Reviews approval requests for you",
+        "permissionFullAccessCodexDescription": "Never asks; can edit any file and use the network",
+        "permissionFullAccessDescription": "Never asks before edits or commands"
       },
       "goal": {
         "sentAsGoal": "Sent as goal"
@@ -1719,12 +1757,30 @@
         "loading": "Loading Codex usage…",
         "account": "Account used by this chat",
         "retry": "Retry"
+      },
+      "workerDock": {
+        "coordinator": "Waiting on coordinator",
+        "starting": "Starting",
+        "idle": "Idle",
+        "saving": "Saving result…",
+        "failed": "Failed",
+        "unexpected": "Stopped unexpectedly",
+        "stopping": "Stopping…",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers",
+        "taskCount_one": "{{count}} task",
+        "taskCount_other": "{{count}} tasks",
+        "failedCount": "{{count}} failed",
+        "needsYouCount": "{{count}} needs you",
+        "runningCount": "{{count}} running",
+        "workersRegion": "Workers",
+        "stopOnComputer": "Stop or clear workers on the computer they run on"
       }
     },
     "hostOfflineBanner": {
-      "offline": "{{host}} is offline",
+      "offline": "Can’t reach {{host}}",
       "reconnecting": "Reconnecting to {{host}}…",
-      "asOf": "Showing what was here as of {{time}}"
+      "asOf": "As of {{time}}"
     },
     "offlineAsOfTime": {
       "yesterday": "yesterday, {{time}}"
@@ -2099,9 +2155,18 @@
       "newName": "New branch name",
       "automaticName": "Automatic name",
       "hostUpdateRequired": "Update Orca on the workspace host to reuse a branch or explicitly create a separate branch."
+    },
+    "activity": {
+      "permission": "Needs permission"
     }
   },
   "browser": {
+    "clientHost": {
+      "openOnNamed": "Open on {{device}}",
+      "openOn": "Open on another computer",
+      "offlineNamed": "{{device}} is offline",
+      "offline": "The computer showing this page is offline"
+    },
     "addressField": {
       "urlPlaceholder": "URL"
     },
@@ -2115,7 +2180,9 @@
       "sendText": "Send text to browser",
       "dialogTitleWithOrigin": "{{origin}} says",
       "dialogTitleNoOrigin": "This page says",
-      "dialogAnswer": "Answer"
+      "dialogAnswer": "Answer",
+      "stop": "Stop",
+      "reconnect": "Reconnect"
     },
     "pointerModifiers": {
       "clickModifier": "{{key}} click modifier"
@@ -2134,7 +2201,8 @@
       "hostCannotStream": "This host can't stream browser tabs here.",
       "checking": "Checking desktop browser streaming support.",
       "pageUnavailable": "Browser page is not available yet.",
-      "timedOut": "Browser stream timed out."
+      "timedOut": "Browser stream timed out.",
+      "stopped": "Stream stopped"
     },
     "loadFailure": {
       "retry": "Retry",
@@ -2150,6 +2218,41 @@
       "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
       "certificateProceedNeedsHostUpdate": "Update Orca on this host to accept certificate warnings from your phone."
+    },
+    "pagePrompt": {
+      "downloadStarted": "Downloading to {{path}} on the host",
+      "downloadSaved": "Saved to {{path}} on the host",
+      "downloadCanceled": "Download canceled.",
+      "downloadFailed": "Couldn't finish the download.",
+      "answerFailed": "That answer did not reach the page.",
+      "openFailed": "Couldn't open an app for this {{scheme}} link.",
+      "localFiles": "Local files",
+      "ask": {
+        "camera": "Use your camera",
+        "microphone": "Use your microphone",
+        "location": "Know your location",
+        "notifications": "Show notifications",
+        "clipboard": "See text and images copied to the clipboard",
+        "midi": "Use your MIDI devices",
+        "windowManagement": "Manage windows on all your displays",
+        "idleDetection": "Know when you are actively using this device",
+        "localNetwork": "Access apps on this device and devices on your local network"
+      },
+      "fileTitle": "This file wants to",
+      "permissionTitle": "{{site}} wants to",
+      "block": "Block",
+      "allow": "Allow",
+      "signInTitle": "Sign in",
+      "signInDescription": "{{origin}} is asking for a username and password.",
+      "signInInsecure": "Your connection to this site isn't private.",
+      "signInRetry": "That username or password didn't work.",
+      "signIn": "Sign in",
+      "openLinkTitle": "Open this {{scheme}} link?",
+      "openLinkDescription": "{{origin}} wants to open another application.",
+      "openLinkAnonymous": "A page in the browser wants to open another application.",
+      "openLink": "Open link",
+      "username": "Username",
+      "password": "Password"
     }
   },
   "files": {
@@ -2265,7 +2368,8 @@
     "browserTabActionSheet": {
       "title": "Browser",
       "forward": "Forward",
-      "reload": "Reload"
+      "reload": "Reload",
+      "hardReload": "Hard reload"
     },
     "terminalLiveInputStatus": {
       "listening": "Listening",
@@ -2442,7 +2546,9 @@
       "shellGitBash": "Git Bash",
       "shellWsl": "WSL",
       "terminalWithShell": "Terminal: {{shell}}",
-      "more": "More"
+      "more": "More",
+      "linkCopied": "Link copied",
+      "copyLinkFailed": "Couldn't copy link"
     },
     "tabStrip": {
       "newTab": "New tab",
@@ -2994,6 +3100,8 @@
       "agentCommandFailed": "{{agent}}'s Command in Settings → Agents didn't start {{agent}}: {{detail}}. Change it or reset it.",
       "runtimeNotInstalled": "{{agent}} isn't installed on the computer running this chat. Install it from the chat in a current version of Orca.",
       "fullAccessAsRoot": "{{agent}} won't use Full access while it runs as root. Choose another permission for {{agent}} in Settings → Agents for the computer running this chat, then start a new chat.",
+      "botToolsNeedStatusHooks": "{{agent}} bots need Agent status hooks: they are how a bot's tools act as the bot. Turn them on for {{agent}} in Settings → Agents, then start a new chat.",
+      "botToolsGatewayOutdated": "{{agent}}'s gateway is still running an older copy of Orca's plugin, so this bot's tools can't act as the bot. Run `hermes gateway stop`, then start a new chat.",
       "launchPreparationFailed": "Orca couldn't prepare {{agent}} to start on the computer running this chat.",
       "conversationOpenElsewhere": "Codex is still holding this conversation open. Try again in a moment, or close other Codex terminals.",
       "conversationOpenInTerminal": "{{agent}} is already running this conversation in another terminal. Quit {{agent}} there or close that terminal to continue here.",
@@ -3025,6 +3133,8 @@
       "historyUnreadable": "Orca couldn't read this chat's saved history.",
       "historyUnusable": "Unable to load this chat.",
       "historyUnavailable": "Orca couldn't open this chat's history right now.",
+      "diskFull": "The disk on the computer running this chat is full.",
+      "freeDiskSpace": "Free up space on that disk, then try again.",
       "savedInOtherFolder": "This conversation was saved in another folder.",
       "savedByNewerOrca": "Chats were saved by a newer Orca.",
       "updateOrcaToKeepUsing": "Update Orca to keep using them.",
@@ -3135,6 +3245,7 @@
       "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
       "paneUnavailable": "Agent's pane is no longer available.",
       "worktreeDeleted": "The worktree was deleted.",
+      "projectRemoved": "The project was removed from Orca.",
       "folderWorkspaceRemoved": "The folder workspace was removed."
     },
     "nativeChatView": {
@@ -3188,8 +3299,12 @@
       "needsYou": "Needs you",
       "working": "Working",
       "everythingElse": "Everything else",
-      "open": "Open",
-      "closeTab": "Close {{title}}"
+      "closeTab": "Close {{title}}",
+      "panes_one": "{{count}} pane",
+      "panes_other": "{{count}} panes"
+    },
+    "tabMenu": {
+      "closeTab": "Close Tab"
     },
     "tabRows": {
       "browser": "Browser",
@@ -3260,7 +3375,8 @@
       "attachFailed": "Attach failed"
     },
     "ask": {
-      "submit": "Submit",
+      "send": "Send",
+      "notNow": "Not now",
       "next": "Next",
       "skip": "Skip",
       "step": "Step {{step}}",
@@ -3285,14 +3401,6 @@
     },
     "promptStrip": {
       "expand": "Expand"
-    },
-    "question": {
-      "submitSelectedOptions": "Submit selected options",
-      "submitCount": "Submit ({{count}})",
-      "submit": "Submit",
-      "otherReplyPlaceholder": "Or type a reply…",
-      "replyPlaceholder": "Type your reply…",
-      "sendReply": "Send reply"
     },
     "queuedMessages": {
       "deleteAll": "Delete all",
@@ -3392,7 +3500,9 @@
       "sessionOptions": "Session options",
       "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · next message",
-      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}",
+      "modelsLoading": "Loading models…",
+      "signInForModels": "Sign in to see the models you can use."
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",
@@ -3645,7 +3755,23 @@
       "cancelledBy": "Cancelled on {{device}}",
       "thisPhone": "this phone",
       "computer": "the computer",
-      "otherDevice": "another device"
+      "otherDevice": "another device",
+      "questionCancelled": "Question cancelled",
+      "youAnswered": "You answered: <answer>{{answer}}</answer>",
+      "answeredCount_one": "You answered <answer>{{count}} question</answer>",
+      "answeredCount_other": "You answered <answer>{{count}} questions</answer>",
+      "answeredCount": "You answered <answer>{{count}} questions</answer>"
+    },
+    "approvalRecord": {
+      "cancelled": "Request for <tool>{{tool}}</tool> cancelled",
+      "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool>",
+      "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool>",
+      "allowedUnnamed": "Allowed <tool>{{tool}}</tool>",
+      "deniedUnnamed": "Denied <tool>{{tool}}</tool>",
+      "youAllowed": "You allowed <tool>{{tool}}</tool>",
+      "youAllowedForSession": "You allowed <tool>{{tool}}</tool> for this session",
+      "youDenied": "You denied <tool>{{tool}}</tool>",
+      "youAnswered": "You answered <tool>{{tool}}</tool>: <answer>{{answer}}</answer>"
     },
     "subagentGroup": {
       "stateCompleted": "completed",
@@ -3698,7 +3824,15 @@
         "handedOff": "Handed off to",
         "task": "Task from",
         "update": "Update from",
-        "message": "Message from"
+        "message": "Message from",
+        "notSentYet": "not sent yet"
+      },
+      "kind": {
+        "started": "Started",
+        "reopened": "Reopened",
+        "followedUp": "Follow-up",
+        "handedOff": "Handed off",
+        "task": "Task"
       }
     },
     "fork": {
@@ -3807,7 +3941,8 @@
         "needsAuth_other": "{{count}} need sign-in",
         "failed": "{{count}} failed"
       },
-      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here.",
+      "manage": "Manage MCP servers"
     },
     "selectionQuote": {
       "action": "Quote",
@@ -3821,13 +3956,10 @@
         "paused": "{{bot}} is paused.",
         "botsOff": "Bots are off.",
         "couldNotTake": "{{bot}} couldn't take it.",
-        "answered": "✓ answered",
-        "done": "✓ done",
-        "notAnswered": "not answered",
-        "waitingOnYou": "waiting on you",
-        "working": "working…",
-        "hasIt": "has it",
-        "openChat": "Open its chat"
+        "pairedComputer": "Paired computer",
+        "notConnected": "Wasn’t connected",
+        "declined": "Declined",
+        "waitingOn": "Waiting for approval on {{computer}}"
       },
       "offer": {
         "unknownAgent": "{{bot}} runs an agent this app doesn’t know. Edit to pick one.",
@@ -3850,6 +3982,7 @@
         "edit": "Edit",
         "create": "Create bot",
         "open": "Open",
+        "openBot": "Open {{name}}",
         "origin": "Proposed by {{bot}}",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
         "watches": "Watches",
@@ -3864,7 +3997,7 @@
         "heading": "New bot"
       },
       "toolAdded": {
-        "heading": "Added a tool",
+        "added": "Added",
         "removed": "Removed",
         "remove": "Remove"
       },
@@ -3888,7 +4021,8 @@
         "added": "Added",
         "removed": "Removed",
         "noteChanged": "Note changed",
-        "indexChanged": "MEMORY.md changed"
+        "indexChanged": "MEMORY.md changed",
+        "openMemory": "Open memory"
       },
       "google": {
         "ended": "This Google setup ended.",
@@ -3900,7 +4034,8 @@
           "signedInAs": "✓ Signed in as {{email}}",
           "signedIn": "✓ Signed in",
           "done": "✓ Done",
-          "takeOver": "✓ {{bot}} takes over from here"
+          "takeOver": "✓ {{bot}} takes over from here",
+          "stopped": "Setup stopped"
         },
         "heading": "Connect Google",
         "path": {
@@ -3919,7 +4054,9 @@
           "done": "Done",
           "waiting": "Waiting for you",
           "working": "Working",
-          "you": "You"
+          "stopped": "Stopped",
+          "doneCount": "{{count}} steps done",
+          "more": "+ {{count}} more steps"
         },
         "account": {
           "title": "Which Google account should I use?",
@@ -3935,7 +4072,8 @@
         "connect": {
           "titleAccount": "Sign in to connect {{email}}",
           "title": "Sign in to connect",
-          "onComputer": "Sign in to Google in Orca on your computer."
+          "onComputer": "Sign in to Google in Orca on your computer.",
+          "signIn": "Sign in to Google"
         },
         "movedDown": "Continued further down.",
         "connected": {
@@ -4110,7 +4248,23 @@
         "goneDetail": "Set it up again from the bot’s Tools.",
         "readyAs": "As {{label}}. Your app sign-ins are held by Composio.",
         "custody": "Your app sign-ins are held by Composio.",
-        "browseOnComputer": "Browse more apps from the bot’s Tools in Orca on your computer."
+        "browseOnComputer": "Browse more apps from the bot’s Tools in Orca on your computer.",
+        "browse": "Browse more apps"
+      },
+      "webhookSetup": {
+        "heading": "Set up a webhook",
+        "on": "On",
+        "hint": "Point your service at this URL",
+        "gettingUrl": "Getting the URL…",
+        "keyAndSecret": "Key and signing secret",
+        "headerKey": "Header key",
+        "copy": "Copy",
+        "signingSecret": "Signing secret",
+        "noSecret": "None",
+        "sampleCall": "Sample call",
+        "sampleNote": "Starts a real run",
+        "send": "Send",
+        "copiedReceipt": "✓ URL copied"
       }
     },
     "eventRow": {
@@ -4118,15 +4272,39 @@
       "failed": "Failed"
     },
     "workerApproval": {
+      "allowFor": "Allow {{tool}} for {{worker}}?",
       "title": "{{worker}} · {{title}}",
       "allow": "Allow",
       "deny": "Deny",
       "waiting": "{{count}} workers waiting · oldest first",
       "countdown": "Claude denies it on its own in {{time}} if nobody answers.",
-      "openWorker": "Open worker"
+      "openWorker": "Open worker",
+      "record": {
+        "youAllowedFor": "You allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "youDeniedFor": "You denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorAllowed": "Coordinator allowed <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "coordinatorDenied": "Coordinator denied <tool>{{tool}}</tool> for <task>{{task}}</task>",
+        "allowedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its terminal",
+        "deniedInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its terminal",
+        "allowedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> allowed in its chat",
+        "deniedInChat": "<tool>{{tool}}</tool> for <task>{{task}}</task> denied in its chat",
+        "timedOut": "<tool>{{tool}}</tool> for <task>{{task}}</task> timed out",
+        "waitsInTerminal": "<tool>{{tool}}</tool> for <task>{{task}}</task> waits in its terminal",
+        "workerEnded": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed: the worker ended",
+        "closedUnnamed": "<tool>{{tool}}</tool> for <task>{{task}}</task> closed without a recorded answer",
+        "reasonSentAsMessage": "Reason, sent as a message",
+        "coordinatorReason": "Coordinator's reason"
+      }
     },
     "messageTime": {
       "yesterday": "Yesterday {{time}}"
+    },
+    "pairedServerAsk": {
+      "title": "{{from}} wants to message {{to}} on this computer",
+      "once": "Allow once",
+      "always": "Always allow {{server}}",
+      "deny": "Deny",
+      "thisServer": "this server"
     }
   },
   "sourceControl": {
@@ -5371,12 +5549,12 @@
       "runNow": "Run now",
       "pause": "Pause {{name}}",
       "resume": "Resume {{name}}",
-      "empty": "Ask in chat to set up an automation.",
       "newAutomation": "New automation",
       "runQueued": "Automation run queued.",
       "runFailed": "Couldn’t start the run",
-      "emptyTitle": "No automations yet",
-      "viewRuns": "View runs"
+      "viewRuns": "View runs",
+      "paused": "Paused",
+      "newDraft": "Set up an automation that "
     },
     "settings": {
       "remove": "Remove",
@@ -5419,7 +5597,6 @@
       "access": "Access",
       "whoCanAsk": "Who can ask",
       "deleteBot": "Delete bot…",
-      "agentDetail": "Used for bot conversations and automations. A new model applies to new conversations; the Home Chat keeps its current one.",
       "accountChecking": "Checking…",
       "signedOut": "Signed out of Orca",
       "computerFoot": "Its connectors, tools and files live on {{host}}.",
@@ -5429,13 +5606,8 @@
       "copyPath": "Copy path",
       "pathCopied": "Path copied",
       "copyFailed": "Couldn’t copy",
-      "off": "Off",
-      "lastLooked": "last looked {{when}}",
       "tidyNightLine": "Each night after 3 AM",
       "tidyWeekLine": "Once a week, after 3 AM",
-      "today": "today",
-      "yesterday": "yesterday",
-      "lastTidied": "last tidied {{when}}",
       "withAccess": "{{service}} {{people}} with access",
       "requests_one": "{{count}} request",
       "requests_other": "{{count}} requests",
@@ -5444,7 +5616,6 @@
       "model": "Model",
       "effort": "Effort",
       "backToAgent": "Back to Agent and model",
-      "chatDefaultNote": "Using your chat default. Background runs use your Agents setting.",
       "useChatDefaults": "Use chat defaults",
       "modelDefault": "Default",
       "signInChanged": "Orca sign-in changed",
@@ -5454,7 +5625,9 @@
       "soulAndMemory": "Soul and memory",
       "memoryFiles_one": "{{count}} file",
       "memoryFiles_other": "{{count}} files",
-      "none": "None"
+      "none": "None",
+      "readFailed": "Couldn’t load",
+      "usingChatDefault": "Using your chat default."
     },
     "saveFailed": "Couldn’t save",
     "sheet": {
@@ -5531,7 +5704,6 @@
     },
     "lookAround": {
       "title": "Look around",
-      "detail": "Reads connected apps and projects to suggest next steps. Read-only. Each look uses your agent plan, and Orca must be running on the host.",
       "on": "Suggest next steps",
       "every": "How often",
       "weekdaysOnly": "Weekdays only",
@@ -5545,7 +5717,8 @@
       "focusDetail": "Optional. Leave it empty and it looks for anything waiting on you.",
       "save": "Save",
       "back": "Back to Settings",
-      "backToLookAround": "Back to Look around"
+      "backToLookAround": "Back to Look around",
+      "footer": "Read-only. Each look uses your agent plan."
     },
     "new": {
       "failed": "Couldn’t create the bot",
@@ -5553,6 +5726,8 @@
       "runsOnHost": "Runs on {{host}}.",
       "shuffle": "Another picture",
       "namePlaceholder": "Name your bot",
+      "purposeLabel": "Identity",
+      "purposePlaceholder": "Who it is and what it does",
       "create": "Create",
       "fromTemplate": "Use template",
       "takesOverList": "Takes over {{names}}. Their agents keep running.",
@@ -5563,6 +5738,8 @@
       "computer": "Computer",
       "computerMessage": "Where the bot runs.",
       "agentOn": "On {{host}}.",
+      "noAgent": "None",
+      "noChatAgents": "No chat agents available on {{host}}.",
       "botsOffOn": "Bots are off on {{host}}",
       "updateDesktopFirst": "Update Orca on {{host}} first",
       "checking": "Checking…"
@@ -5577,7 +5754,8 @@
       "google": "Let the bot work in your Gmail, Calendar and Drive, and start automations on new mail.",
       "linear": "Hand the bot issues by @mentioning or assigning it, and start automations on Linear events.",
       "github": "Hand the bot work by @mentioning it, and start automations on GitHub events.",
-      "heading": "Connect a service"
+      "heading": "Connect a service",
+      "connect": "Connect {{service}}"
     },
     "workspaces": {
       "show": "Show {{name}}’s workspaces",
@@ -5603,9 +5781,7 @@
       "manageMembersMenu": "Manage members…",
       "allBots": "All bots",
       "onlyWhenMentioned": "Only when mentioned",
-      "stopValue": "Stop {{value0}}",
       "replyToValue": "Reply to {{value0}}",
-      "waitingForTheNativeSession": "Waiting for the native session…",
       "create": "Create",
       "removingDefault": "Removing {{name}} changes Replies to Only when mentioned.",
       "loadEarlierMessages": "Load earlier messages",
@@ -5617,7 +5793,6 @@
       "peerTold": "{{from}} told {{to}}",
       "peerFollowedUp": "{{bot}} followed up",
       "handoffsPaused": "Paused after {{count}} hand-offs. Reply to continue.",
-      "peerReplyRead": "{{reader}} read {{peer}}'s reply",
       "deleteTitle": "Delete {{name}}?",
       "deleteDescription": "Its bots are not deleted.",
       "deleteConfirm": "Delete group",
@@ -5633,35 +5808,49 @@
       "suggestMore": "{{a}}, {{b}} & {{count}} more",
       "pickOne": "Pick a bot",
       "needsTwoBots": "Needs 2 bots on {{host}}",
-      "startAConversationWithThisGroupMentionBots": "Start a conversation with this group. Mention bots with @Name or @everyone.",
       "items": {
-        "thisGroup": "This group",
-        "thread": "Thread",
-        "all": "All their work",
-        "orNames": "{{names}} or {{last}}",
-        "outsideRoom_one": "{{count}} more outside this room",
-        "outsideRoom_other": "{{count}} more outside this room",
-        "outsideThread_one": "{{count}} more outside this thread",
-        "outsideThread_other": "{{count}} more outside this thread",
-        "outside_one": "{{count}} more outside this group",
-        "outside_other": "{{count}} more outside this group",
         "emptyTitle": "No items from this group yet",
-        "emptyBody": "When {{names}} take something on in this group, it shows up here.",
         "needsYouCount_one": "{{count}} needs you",
         "needsYouCount_other": "{{count}} needs you",
         "workingCount_one": "{{count}} working",
         "workingCount_other": "{{count}} working",
         "filterBot": "Bot",
-        "outsideRoom": "{{count}} more outside this room",
-        "outsideThread": "{{count}} more outside this thread",
-        "outside": "{{count}} more outside this group",
         "needsYouCount": "{{count}} needs you",
         "workingCount": "{{count}} working"
       },
       "newThreadTab": "New thread",
       "newThreadHint": "starts fresh",
       "newThread": "New thread in {{name}}",
-      "peerReadItems": "{{bot}} read an update to its items"
+      "peerReadItems": "{{bot}} read an update to its items",
+      "remoteReplied": "Replied on {{computer}}",
+      "remoteNotice": "Didn't answer on {{computer}}",
+      "remoteNotSent": "Not sent to {{computer}}",
+      "remoteUnknown": "Delivery unknown",
+      "remoteStopped": "Stopped here",
+      "remoteSending": "Asking on {{computer}}…",
+      "remoteAsked": "Asked on {{computer}}",
+      "remoteMayAnswer": "May still answer on {{computer}}.",
+      "remoteShortened": "Shortened. Full answer is on {{computer}}.",
+      "needsLocalBot": "This group needs at least one bot on this computer.",
+      "remoteOnComputer": "Add or remove bots from other computers in Orca on {{host}}.",
+      "stopCouldNotBeConfirmed": "Stop could not be confirmed.",
+      "notStarted": "Not started",
+      "workingCount_one": "{{count}} working",
+      "workingCount_other": "{{count}} working",
+      "workingCount": "{{count}} working",
+      "memberCount_one": "{{count}} bot",
+      "memberCount_other": "{{count}} bots",
+      "memberCount": "{{count}} bots",
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "moreCount": "{{count}} more",
+      "andNames": "{{names}} and {{last}}",
+      "membersHere_one": "{{names}} is here.",
+      "membersHere_other": "{{names}} are here.",
+      "membersHere": "{{names}} are here.",
+      "starting": "Starting…",
+      "peerReadReplyFrom": "{{reader}} read the reply from {{peer}}",
+      "stopValue": "Stop {{value0}}"
     },
     "templates": {
       "title": "Bot templates",
@@ -5688,7 +5877,398 @@
         "ops": "Ops",
         "personal": "Personal assistant"
       },
-      "allCategories": "All"
+      "allCategories": "All",
+      "pr-review": {
+        "name": "Pull request review",
+        "line": "Reviews pull requests you’re asked to review and lists risky changes.",
+        "firstChat": "Asks which repos to cover, then reviews the open pull requests waiting on your review and posts its findings here, with file and line. It doesn’t comment on GitHub until you say it can.",
+        "watches": "Pull requests waiting on your review, in the repos you pick",
+        "does": "Reviews each one and lists risky changes and missing tests, with file and line.",
+        "reports": "Here, when a review is requested",
+        "example1": "#4121: the retry counter is never reset, so a second outage stops retries.",
+        "example2": "No test covers the new timeout path.",
+        "events": {
+          "review-requested": {
+            "trigger": "When you’re asked to review a pull request",
+            "action": "Review it and post here"
+          }
+        }
+      },
+      "bug-investigation": {
+        "name": "Bug investigation",
+        "line": "Reproduces a reported bug and finds where it starts.",
+        "firstChat": "Give it a bug report or an issue link. It starts an agent in a new workspace that writes down how to reproduce it, then reports the cause. It writes a fix only after you agree.",
+        "watches": "Bug reports you hand it, and Linear issues assigned to you",
+        "does": "Reproduces the bug in a new workspace, finds where it starts, and proposes a fix.",
+        "reports": "Here, when it has a repro and a cause",
+        "example1": "Reproduced ORC-640 on Windows: paste drops the last line when it has no newline.",
+        "example2": "Cause: the paste end marker goes out before the final chunk. Start a fix?",
+        "events": {
+          "linear-assigned": {
+            "trigger": "When a Linear issue is assigned to you",
+            "action": "Investigate it"
+          }
+        }
+      },
+      "dependency-updates": {
+        "name": "Dependency updates",
+        "line": "Checks for outdated and vulnerable packages and proposes upgrades.",
+        "firstChat": "Lists outdated and vulnerable packages in a repo you pick, most urgent first. After you agree, an agent opens one pull request per group.",
+        "watches": "Packages in the repos you pick",
+        "does": "Lists advisories and outdated packages, most urgent first; upgrades one group per pull request once agreed.",
+        "reports": "Here, Mondays at 9 AM",
+        "example1": "1 advisory: http-client 6.19 has a high-severity fix in 6.21.",
+        "example2": "4 minor upgrades can go in one pull request.",
+        "schedules": {
+          "weekly-check": {
+            "when": "Mondays at 9 AM",
+            "what": "New advisories and major versions"
+          }
+        }
+      },
+      "unreviewed-work": {
+        "name": "Unreviewed agent work",
+        "line": "A daily list of finished agent work nobody has looked at yet.",
+        "firstChat": "Lists workspaces whose agent finished with changes you haven’t reviewed or turned into a pull request. Orca already tells you when an agent is waiting on you; this covers what’s done.",
+        "watches": "Your Orca workspaces",
+        "does": "Lists workspaces whose agent finished with changes nobody reviewed or opened a pull request for.",
+        "reports": "Here, weekdays at 9 AM",
+        "example1": "mobile-pairing finished yesterday with a 340-line diff, no pull request.",
+        "example2": "2 more finished this week.",
+        "schedules": {
+          "daily-list": {
+            "when": "Weekdays at 9 AM",
+            "what": "Finished work waiting for review"
+          }
+        }
+      },
+      "workspace-cleanup": {
+        "name": "Workspace cleanup",
+        "line": "Finds finished or abandoned workspaces and offers to remove them.",
+        "firstChat": "Lists workspaces whose pull request merged or that haven’t changed in two weeks, with any uncommitted changes. It removes only the ones you pick.",
+        "watches": "Your Orca workspaces and their pull requests",
+        "does": "Lists workspaces that are done or abandoned, with uncommitted changes; removes only the ones you pick.",
+        "reports": "Here, Fridays at 4 PM",
+        "example1": "6 workspaces are done: their pull requests merged this week.",
+        "example2": "2 folders haven’t changed since Oct 20.",
+        "schedules": {
+          "weekly-list": {
+            "when": "Fridays at 4 PM",
+            "what": "Workspaces ready to remove"
+          }
+        }
+      },
+      "security-check": {
+        "name": "Security check",
+        "line": "Looks at merged changes for leaked secrets and risky code.",
+        "firstChat": "Reviews last week’s merged pull requests in a repo you pick and lists anything that needs a second look, with file and line.",
+        "watches": "Merged pull requests in the repos you pick",
+        "does": "Checks them for leaked secrets, injection, missing auth and unsafe defaults.",
+        "reports": "Here, Mondays at 9 AM and when a pull request merges",
+        "example1": "#4133 logs the full request headers, including the auth token.",
+        "example2": "Nothing else this week.",
+        "schedules": {
+          "weekly-review": {
+            "when": "Mondays at 9 AM",
+            "what": "The week’s merged changes"
+          }
+        },
+        "events": {
+          "pr-merged": {
+            "trigger": "When a pull request merges",
+            "action": "Check it"
+          }
+        }
+      },
+      "release": {
+        "name": "Release readiness",
+        "line": "Tracks what’s blocking the next release.",
+        "firstChat": "Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.",
+        "watches": "Pull requests, checks and workspaces",
+        "does": "Keeps a short readiness list: failing checks, pull requests waiting for review, open blockers.",
+        "reports": "Here, weekday mornings",
+        "example1": "1.5 is blocked by one failing check: typecheck on #4121.",
+        "example2": "Two pull requests still need a review: #4108, #4130.",
+        "schedules": {
+          "readiness-list": {
+            "when": "Weekdays at 9 AM",
+            "what": "Readiness list"
+          }
+        }
+      },
+      "release-notes": {
+        "name": "Release notes",
+        "line": "Drafts the next release’s notes from merged pull requests.",
+        "firstChat": "Finds the last release tag and drafts notes in three groups: new, fixed, changed. You edit them here.",
+        "watches": "Pull requests merged since the last release",
+        "does": "Drafts release notes for users in three groups: new, fixed, changed.",
+        "reports": "Here, when you ask",
+        "example1": "Draft for 1.5: 4 new, 9 fixed, 2 changed.",
+        "example2": "Biggest change: bots can share skills."
+      },
+      "ci-failures": {
+        "name": "CI failures",
+        "line": "Explains failed checks and keeps a list of flaky ones.",
+        "firstChat": "Reads the last two weeks of check runs and lists the flaky ones, then explains each failing check on your open pull requests. It starts a fix only after you agree.",
+        "watches": "Check runs in the repos you pick",
+        "does": "Tells flaky checks from real failures, explains each failure, and keeps a list of flaky checks.",
+        "reports": "Here, Mondays at 9 AM and when a check fails",
+        "needsSetup": "GitHub can’t filter failures by branch yet, so the bot looks at every failure in the repo and skips the ones that don’t matter. Each one costs a turn.",
+        "example1": "#4130 typecheck: a renamed export, two call sites missed. Fix is one commit.",
+        "example2": "Flakiest this week: terminal-resize test, 4 of 30 runs.",
+        "schedules": {
+          "flaky-list": {
+            "when": "Mondays at 9 AM",
+            "what": "Flaky checks"
+          }
+        },
+        "events": {
+          "check-failed": {
+            "trigger": "When a check fails",
+            "action": "Say whether it’s flaky or real"
+          }
+        }
+      },
+      "deploy-watch": {
+        "name": "Deploy watch",
+        "line": "Posts what changed in each deploy and flags failed ones.",
+        "firstChat": "Gives you an automation address for your deploy tool to call, then summarizes each deploy from the pull requests it shipped.",
+        "watches": "Calls from your deploy tool",
+        "does": "Summarizes each deploy from the pull requests it shipped, and flags failed ones.",
+        "reports": "Here, after each deploy",
+        "needsSetup": "No deploy-tool connector: you add the automation’s address to your deploy tool by hand.",
+        "example1": "Production deploy 14:02: 5 pull requests, including the relay retry fix.",
+        "example2": "Staging deploy failed at migrate: column already exists.",
+        "events": {
+          "deploy-called": {
+            "trigger": "When your deploy tool calls",
+            "action": "Summarize the deploy"
+          }
+        }
+      },
+      "support": {
+        "name": "Support triage",
+        "line": "Keeps a list of questions nobody has answered.",
+        "firstChat": "Lists unanswered questions in the Slack channels you pick, with links, and notes which already have an issue.",
+        "watches": "Slack channels you pick",
+        "does": "Lists unanswered questions with links, and notes which already have a Linear issue.",
+        "reports": "Here, every 2 hours on weekdays",
+        "example1": "3 new questions in #help since 11 AM. Oldest: SSH remote keeps disconnecting, 2 hours.",
+        "example2": "“Can I export a bot?” already has SUP-212.",
+        "schedules": {
+          "unanswered": {
+            "when": "Weekdays, every 2 hours from 9 AM to 5 PM",
+            "what": "Unanswered questions"
+          }
+        }
+      },
+      "feedback": {
+        "name": "Feedback digest",
+        "line": "Turns feedback into a weekly list of themes.",
+        "firstChat": "Groups the last month of feedback in the channels you pick into themes, with counts and quotes.",
+        "watches": "Slack feedback channels",
+        "does": "Groups feedback into themes with quotes and counts, and links existing Linear issues.",
+        "reports": "Here, Mondays at 9 AM",
+        "example1": "Top theme: pasting in the Windows terminal, 7 people, linked ORC-640.",
+        "example2": "New this week: 3 people asked to export a bot.",
+        "schedules": {
+          "weekly-themes": {
+            "when": "Mondays at 9 AM",
+            "what": "Themes of the week"
+          }
+        }
+      },
+      "bug-intake": {
+        "name": "Bug report intake",
+        "line": "Turns bug reports in Slack into tracked issues with repro steps.",
+        "firstChat": "Reads the channel you pick and drafts an issue for each new bug report. It files them only after you approve.",
+        "watches": "The Slack channel where bugs are reported",
+        "does": "Drafts a Linear issue with repro steps for each bug report; files it once approved.",
+        "reports": "Here, when a bug is reported",
+        "example1": "Drafted: “Terminal freezes after sleep on macOS 27”, steps from the thread.",
+        "example2": "Possible duplicate of ORC-702.",
+        "events": {
+          "bug-posted": {
+            "trigger": "When someone posts in your bugs channel",
+            "action": "Draft an issue"
+          }
+        }
+      },
+      "issue-triage": {
+        "name": "GitHub issue triage",
+        "line": "Labels new issues, finds duplicates and asks for missing details.",
+        "firstChat": "Goes through the last week of new issues in a repo you pick and proposes labels and duplicates here.",
+        "watches": "New issues in the repos you pick",
+        "does": "Proposes labels and duplicates, and lists missing details, for each new issue.",
+        "reports": "Here, when an issue is opened",
+        "example1": "#2210: bug, windows, duplicate of #2188.",
+        "example2": "#2214 has no version or steps. Ask for them?",
+        "events": {
+          "issue-opened": {
+            "trigger": "When an issue is opened",
+            "action": "Propose labels and duplicates"
+          }
+        }
+      },
+      "briefing": {
+        "name": "Project briefing",
+        "line": "A weekly brief on the projects you pick.",
+        "firstChat": "Writes what changed, what’s blocked and what needs a decision for the projects you pick.",
+        "watches": "Linear projects and GitHub repos",
+        "does": "Writes what changed, what’s blocked and what needs a decision.",
+        "reports": "Here, Fridays at 3 PM",
+        "example1": "Mobile v2: 6 issues closed, 2 waiting on design.",
+        "example2": "Needs a decision: ORC-902, push permission copy.",
+        "schedules": {
+          "weekly-brief": {
+            "when": "Fridays at 3 PM",
+            "what": "The brief"
+          }
+        }
+      },
+      "docs-upkeep": {
+        "name": "Docs upkeep",
+        "line": "Flags docs that no longer match merged code.",
+        "firstChat": "Reads last week’s merged pull requests and lists docs pages that now say something wrong.",
+        "watches": "Merged pull requests and the docs in the repos you pick",
+        "does": "Lists docs pages that no longer match what merged, with the line that is now wrong.",
+        "reports": "Here, Wednesdays at 10 AM",
+        "example1": "docs/remote.md still says SSH needs a restart; #4108 removed that.",
+        "example2": "1 more page mentions the old setting name.",
+        "schedules": {
+          "weekly-docs": {
+            "when": "Wednesdays at 10 AM",
+            "what": "Docs to update"
+          }
+        }
+      },
+      "spec-drafts": {
+        "name": "Spec drafting",
+        "line": "Turns a discussion into a short spec you can share.",
+        "firstChat": "Give it a Slack thread or a doc. It drafts a one-page spec and asks about anything left open.",
+        "watches": "Slack threads and docs you hand it",
+        "does": "Drafts a one-page spec: problem, decision, scope, open questions.",
+        "reports": "Here, when you ask",
+        "example1": "Draft: “Bot sharing v2”. 3 decisions, 2 open questions.",
+        "example2": "Saved to your Drive as a doc."
+      },
+      "backlog-cleanup": {
+        "name": "Backlog cleanup",
+        "line": "Finds stale, duplicate and unowned issues.",
+        "firstChat": "Lists issues untouched for 60 days, likely duplicates and issues with no owner, for a team you pick.",
+        "watches": "Linear issues for the team you pick",
+        "does": "Lists stale issues, likely duplicates and issues with no owner.",
+        "reports": "Here, on the 1st of each month",
+        "example1": "14 issues untouched since August.",
+        "example2": "ORC-511 and ORC-688 look like the same bug.",
+        "schedules": {
+          "monthly-list": {
+            "when": "1st of each month at 9 AM",
+            "what": "Cleanup list"
+          }
+        }
+      },
+      "incident-notes": {
+        "name": "Incident notes",
+        "line": "Keeps a timeline in an incident channel and drafts the write-up.",
+        "firstChat": "Follows the incident channel you pick and its threads, keeps a timestamped timeline, and drafts a blameless write-up when it’s over.",
+        "watches": "The incident channel you pick, and its threads",
+        "does": "Keeps a timestamped timeline, then drafts a blameless write-up.",
+        "reports": "Here, during and after an incident",
+        "example1": "14:02 alert fired; 14:09 rollback started; 14:21 errors back to normal.",
+        "example2": "Write-up draft ready.",
+        "events": {
+          "incident-posted": {
+            "trigger": "When someone posts in an incident channel",
+            "action": "Add it to the timeline"
+          }
+        }
+      },
+      "oncall-handoff": {
+        "name": "On-call handoff",
+        "line": "A weekly summary of alerts, incidents and open follow-ups.",
+        "firstChat": "Reads your alert channel and incident issues from the past week and writes the handoff.",
+        "watches": "Your alert channel and incident issues",
+        "does": "Summarizes the week’s alerts and incidents, and lists open follow-ups.",
+        "reports": "Here, Fridays at 4 PM",
+        "needsSetup": "No paging-tool connector: it reads alerts only where they’re posted in Slack.",
+        "example1": "12 alerts, 2 incidents. Disk alert on cell-3 fired 5 times.",
+        "example2": "3 follow-ups still open.",
+        "schedules": {
+          "weekly-handoff": {
+            "when": "Fridays at 4 PM",
+            "what": "Handoff"
+          }
+        }
+      },
+      "followup": {
+        "name": "Replies you owe",
+        "line": "Reminds you of replies you still owe.",
+        "firstChat": "Finds questions to you with no reply, and things you said you’d do, in Slack threads and issue comments.",
+        "watches": "Slack threads and Linear comments",
+        "does": "Finds questions to you with no reply, and things you said you’d do.",
+        "reports": "Here, daily at 4 PM",
+        "example1": "You told a teammate “I’ll check tomorrow” in #design, 2 days ago.",
+        "example2": "ORC-881 has a question for you from yesterday.",
+        "schedules": {
+          "daily-owed": {
+            "when": "Daily at 4 PM",
+            "what": "What you still owe"
+          }
+        }
+      },
+      "standup": {
+        "name": "Daily standup notes",
+        "line": "What you and your agents did yesterday, and what’s next.",
+        "firstChat": "Writes yesterday’s notes from your workspaces, merged pull requests and moved issues. You copy them where your team reads them.",
+        "watches": "Your workspaces, pull requests and issues",
+        "does": "Writes yesterday’s notes and today’s plan.",
+        "reports": "Here, weekdays at 9 AM",
+        "example1": "Yesterday: merged #4121, relay retry. Agents finished 2 workspaces.",
+        "example2": "Today: ORC-702, review #4130.",
+        "schedules": {
+          "daily-notes": {
+            "when": "Weekdays at 9 AM",
+            "what": "Standup notes"
+          }
+        }
+      },
+      "email-digest": {
+        "name": "Email digest",
+        "line": "Twice a day, the emails that need a reply from you.",
+        "firstChat": "Reads today’s inbox and lists emails that need your reply, newest first. It never sends email.",
+        "watches": "Your inbox",
+        "does": "Lists emails that need a reply from you, newest first. Never sends email.",
+        "reports": "Here, weekdays at 9 AM and 2 PM",
+        "example1": "2 need a reply: the security review date, and an invoice question.",
+        "example2": "14 newsletters skipped.",
+        "schedules": {
+          "morning": {
+            "when": "Weekdays at 9 AM",
+            "what": "Emails that need you"
+          },
+          "afternoon": {
+            "when": "Weekdays at 2 PM",
+            "what": "Emails that need you"
+          }
+        }
+      },
+      "meeting-prep": {
+        "name": "Meeting prep",
+        "line": "Before each meeting, the issues, pull requests and docs it’s about.",
+        "firstChat": "Looks at today’s calendar and writes a short prep note for each meeting.",
+        "watches": "Your calendar",
+        "does": "Before each meeting, lists the issues, pull requests and docs it is about.",
+        "reports": "Here, before each meeting",
+        "example1": "Mobile sync at 11: ORC-902 needs a decision; #4130 is waiting on you.",
+        "example2": "Doc: “Push permission copy”.",
+        "events": {
+          "meeting-soon": {
+            "trigger": "15 minutes before a meeting",
+            "action": "Prep note"
+          }
+        }
+      }
     },
     "tidyUp": {
       "nowRunning": "Already tidying.",
@@ -5706,7 +6286,6 @@
       "never": "Not yet",
       "tidying": "Tidying…",
       "now": "Tidy now",
-      "footer": "Changes memory files only. Uses your agent plan, like a short chat. Orca must be running on your computer.",
       "merged": "Merged {{count}} repeated lines",
       "replaced": "Marked replaced: {{fact}}",
       "filed": "Filed {{count}} lines into memory/{{topic}}.md",
@@ -5717,11 +6296,16 @@
       "tidied": "Tidied",
       "undone": "Undone",
       "undoAll": "Undo this tidy-up",
-      "undo": "Undo",
-      "undoNote": "Undo puts MEMORY.md back as it was before this tidy-up, all at once. Full history and memory editing are on your computer, in Settings → Memory.",
       "summaryTitle": "Last tidy-up",
       "undoStale": "A newer tidy-up ran since. Review it before undoing.",
-      "backToTidyUp": "Back to Memory upkeep"
+      "backToTidyUp": "Back to Memory upkeep",
+      "footerShort": "Changes memory files only. Uses your agent plan.",
+      "undoNoteShort": "Puts MEMORY.md back as it was before this tidy-up."
+    },
+    "search": {
+      "pausedMatches_one": "{{count}} paused match",
+      "pausedMatches_other": "{{count}} paused matches",
+      "showPausedAction": "Show paused"
     },
     "list": {
       "updateOrcaOn": "Update Orca on {{host}}",
@@ -5730,7 +6314,7 @@
       "offline": "Offline",
       "updateToSee": "Update Orca on {{host}} to see its bots.",
       "offEnd": "Bots are off on {{host}}.",
-      "updateToCreate": "Update Orca on {{host}} to make bots from your phone."
+      "readFailed": "Couldn’t load the bots on {{host}}."
     },
     "chats": {
       "replying": "Replying…",
@@ -5763,7 +6347,6 @@
       "terminalRunDesktopOnly": "Terminal run · open it in Automations on the computer",
       "searchFailed": "Couldn't search this bot's chats.",
       "searchRetry": "Try again",
-      "loadingChats": "Loading chats",
       "handedOverInline": "handed over",
       "fromClosedChatInline": "from closed chat",
       "statusUnknown": "Status unknown",
@@ -5779,8 +6362,10 @@
       "moreMatches_one": "{{count}} more match. Search for more of a name to narrow it.",
       "moreMatches_other": "{{count}} more matches. Search for more of a name to narrow it.",
       "readFailedTitle": "Couldn’t load chats",
-      "waitingCount": "{{count}} waiting",
-      "runningCount": "{{count}} running"
+      "runningCount": "{{count}} running",
+      "needsYouCount": "{{count}} needs you",
+      "open": "Open",
+      "delete": "Delete chat"
     },
     "row": {
       "replyingIn": "Replying in {{place}}",
@@ -5790,7 +6375,8 @@
       "replying": "Replying",
       "waitingCount": "Waiting on {{count}} events",
       "waitingFor": "Waiting for {{label}}",
-      "waitingForUntil": "Waiting for {{label}} · until {{time}}"
+      "waitingForUntil": "Waiting for {{label}} · until {{time}}",
+      "idle": "Idle"
     },
     "panel": {
       "needYou_one": "{{count}} needs you",
@@ -5841,11 +6427,13 @@
           "linkedMany": "{{chat}} linked {{count}} links to {{items}}",
           "linked": "{{chat}} linked {{link}} to {{items}}"
         },
-        "anotherChat": "Another chat"
+        "anotherChat": "Another chat",
+        "anotherAgent": "Another agent"
       },
       "status": {
         "planned": "Planned",
         "working": "In progress",
+        "waiting": "Waiting",
         "needsYou": "Needs you",
         "done": "Done",
         "canceled": "Canceled"
@@ -5857,10 +6445,8 @@
       "filter": {
         "needsYou": "Needs you only",
         "label": "Filter items",
-        "remove": "Remove filter {{name}}",
         "clear": "Clear filter",
-        "clearAll": "Clear filters",
-        "chat": "Chat"
+        "clearAll": "Clear filters"
       },
       "tab": "Items",
       "field": {
@@ -5892,7 +6478,8 @@
         "notSent": "Not sent.",
         "retry": "Retry",
         "discard": "Discard",
-        "mayHaveArrived": "May have arrived."
+        "mayHaveArrived": "May have arrived.",
+        "replyingTo": "Replying to: {{question}}. Go to the question"
       },
       "comment": {
         "offline": "{{host}} is offline. Your comment is kept; Comment works again when it’s back.",
@@ -5903,7 +6490,8 @@
         "replyTo": "Reply to {{name}}…",
         "replyingTo": "Replying to:",
         "showLess": "Show less",
-        "fileOnComputer": "Open {{name}} on your computer."
+        "fileOnComputer": "Open {{name}} on your computer.",
+        "hideReplyingTo": "Hide"
       },
       "link": {
         "notRead": "Not read yet",
@@ -5920,7 +6508,10 @@
         "openInBrowser": "Open in browser",
         "copyLink": "Copy link",
         "copyPath": "Copy path",
-        "fileOutside": "{{path}} isn't in this bot's folder"
+        "fileOutside": "{{path}} isn't in this bot's folder",
+        "automation": "Automation",
+        "automationOn": "Will wake the agent for this item",
+        "automationEnded": "Ended"
       },
       "open": {
         "failed": "Couldn’t open this item.",
@@ -5931,7 +6522,6 @@
       "loading": "Loading items…",
       "view": {
         "title": "Item",
-        "subWhere": "Item {{number}} · {{chat}}",
         "canceledNote": "Canceled:",
         "doneNote": "Done:",
         "links": "Links",
@@ -5971,16 +6561,15 @@
       },
       "cancel": {
         "keep": "Keep",
-        "confirmMany": "Cancel {{count}}",
-        "titleMany": "Cancel {{count}} items?",
-        "titleOne": "Cancel {{title}}?",
-        "why": "The bot sees the reason. Nothing is deleted.",
-        "placeholder": "Reason",
-        "confirmOne": "Cancel item",
-        "offline": "{{host}} is offline. Your reason is kept; {{action}} works again when it’s back."
+        "confirmMany": "Cancel {{count}}"
       },
-      "strip": {
-        "view": "View"
+      "wait": {
+        "titleOne": "What is {{title}} waiting on?",
+        "titleMany": "What are {{count}} items waiting on?",
+        "placeholder": "Waiting on",
+        "keep": "Cancel",
+        "confirm": "Set Waiting",
+        "offline": "{{host}} is offline. What you typed is kept; Set Waiting works again when it’s back."
       },
       "group": {
         "stale": "Stale",
@@ -5993,6 +6582,7 @@
         "title": "No items yet",
         "body": "When {{bot}} takes on something for you, it shows up here with what it is doing and what it needs from you.",
         "needsYou": "Nothing needs you.",
+        "allClear": "Nothing needs you",
         "filtered": "No items match."
       },
       "toast": {
@@ -6028,24 +6618,165 @@
       },
       "readFailedTitle": "Couldn’t load items",
       "ask": {
-        "recommended": "Recommended",
+        "replaced": "The agent asked a new question. Read it, then reply.",
+        "replacedByNewer": "Replaced by a newer question",
+        "skipped": "Skipped",
         "notNow": "Not now"
       },
-      "readFailedClosedPage": "Couldn’t read more closed items."
+      "readFailedClosedPage": "Couldn’t read more closed items.",
+      "skillLimit": "Message not sent. Keep at most {{limit}} selected skill files and try again."
     },
     "needs": {
-      "permissionTool": "Permission · {{tool}}",
       "permission": "Permission needed",
       "waiting": "Waiting for you",
       "whereItRuns": "{{need}} · open it where it runs",
-      "worker": "Worker: {{name}}",
       "actionFor": "{{action}}: {{title}}",
       "open": "Open",
       "chat": "Your chat with {{name}}",
-      "access": "{{person}} asked for access"
+      "access": "{{person}} asked for access",
+      "fixConnector": "Open {{name}}",
+      "pairedAsk": "{{from}} wants to message {{name}}",
+      "connectorFix": "Sign in or fix it",
+      "questions": "{{count}} questions",
+      "signInApps": "Sign in to {{count}} apps",
+      "listSeparator": ", "
     },
     "chat": {
-      "nothingToReport": "Nothing to report"
+      "nothingToReport": "Nothing to report",
+      "mentionOwnChats": "Your other chats",
+      "mentionPaused": "Paused",
+      "mentionPlaceholder": "Ask anything, @ to mention bots or files, / for commands",
+      "mentionChatsLoadFailed": "Couldn't load chats"
+    },
+    "access": {
+      "titleOne": "Give {{person}} access to {{name}}?",
+      "titleMany": "Give {{count}} people access to {{name}}?",
+      "place": "{{connector}} ({{workspace}})",
+      "confirmWarning": "They’ll act as you on {{computer}}.",
+      "confirmComputer": "Run commands and change files",
+      "confirmNoApprovals": "Acts without asking first",
+      "confirmMaySkipApprovals": "May act without asking first",
+      "confirmApproveOne": "{{person}} can approve its prompts",
+      "confirmApproveMany": "They can approve its prompts",
+      "confirmGoogle": "Use your Google account",
+      "confirmGitHub": "Comment and push on GitHub as you",
+      "confirmLinear": "Update Linear issues as you",
+      "descriptionOne": "{{person}} will be able to ask {{name}} from {{place}} and, through it, work on {{computer}} as you: run commands, open and change files, use your connected accounts, and approve its requests.",
+      "account": "Their {{connector}} account: {{identity}}",
+      "yourAccess": "Their requests use your access, not their own. Anything {{name}} can do {{there}}, they can ask it to do.",
+      "removeAnyTime": "You can remove them from Who can ask at any time.",
+      "thisComputer": "this computer",
+      "here": "here",
+      "thisServer": "this server",
+      "executionComputer": "the computer this agent runs on",
+      "there": "there",
+      "confirm": "Give access",
+      "heading": "Asking for access",
+      "decline": "Decline",
+      "review": "Review…",
+      "full": "Remove someone before adding {{person}}.",
+      "decideFailed": "Couldn’t save your answer. Try again.",
+      "whoCanAsk": "Who can ask {{name}}",
+      "summaryOnlyYou": "Only you can ask {{name}}.",
+      "summaryOne": "You and {{person}} can ask {{name}}.",
+      "summarySome": "You, {{people}} and {{last}} can ask {{name}}.",
+      "summaryMany": "You and {{count}} other people can ask {{name}}.",
+      "controlNone": "Anyone you add can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlOne": "{{person}} can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "controlMany": "They can use {{name}} to work on {{computer}} as you: run commands, open and change files, and use your connected accounts.",
+      "reachHeading": "What {{name}} can reach",
+      "reachComputer": "Your files, commands and accounts on {{computer}}",
+      "reachComputerDetail": "As you, as far as the permission below allows.",
+      "reachPermission": "New conversations start in {{mode}}",
+      "reachPermissionUnknown": "New conversations start from your chat permission setting",
+      "permissionFellBack": "{{agent}} has no {{mode}} mode, so {{name}} uses Ask for approval.",
+      "codexAsk": "Codex sandbox: read-only until a request is approved.",
+      "codexOwnSandbox": "Codex uses its configured sandbox.",
+      "codexNoSandbox": "No Codex sandbox.",
+      "whoeverAskedApproves": "If it asks, whoever asked can approve.",
+      "reachLinear": "Comment on, update and create Linear issues as you",
+      "reachSlack": "Post in Slack as {{name}}",
+      "reachGitHub": "Comment, review and push on GitHub as you",
+      "reachGoogleEmail": "Read and send your email",
+      "reachGoogleCalendar": "Use your calendar",
+      "reachGoogleDrive": "Use your Drive files",
+      "reachGoogleDocs": "Read and edit your Docs",
+      "reachGoogleSheets": "Read and edit your Sheets",
+      "reachGoogleUnknown": "Your Google account, as far as you allowed it when you signed in",
+      "trust": "Add only people you’d trust at your keyboard.",
+      "adviceHeading": "Before you share",
+      "fixOnlyMe": "Keep {{name}} to yourself",
+      "fixOnlyMeDetail": "Removes the people you added here.",
+      "fixOnlyMeAction": "Keep only me",
+      "fixGoogle": "Turn off Google for {{name}}",
+      "fixGoogleDetail": "For everyone, you included, from its next Google request.",
+      "fixGoogleAction": "Turn off",
+      "fixGoogleDone": "Google is off for {{name}}.",
+      "fixAsk": "Start new conversations in Ask for approval",
+      "fixAskDetail": "{{name}} asks before more of its work. Whoever asked can still approve. Conversations already open keep their permission.",
+      "fixAskDetailCodex": "Codex then works read-only until a request is approved. Whoever asked can still approve. Conversations already open keep their permission.",
+      "fixAskAction": "Switch",
+      "fixOnlyMeConfirm": "Keep {{name}} to yourself?",
+      "fixOnlyMeConfirmDetail": "{{people}} can no longer ask {{name}}. Giving them access again asks you first.",
+      "fixAskConfirm": "Start new conversations in Ask for approval?",
+      "fixOnlyMeFailed": "Couldn’t remove {{names}}. Try again.",
+      "fixAskDone": "New conversations start in Ask for approval.",
+      "undo": "Undo",
+      "separateBot": "A separate bot for the team gets its own permission, Google switch and tools. It still runs on {{computer}} as you.",
+      "newBot": "New bot…",
+      "whatTheyCanDo": "What {{person}} can do",
+      "reject": "Reject",
+      "controlBrief": "They can act as you here.",
+      "controlBriefIfAdded": "Anyone you add can act as you here.",
+      "controlBriefOnHost": "They can act as you on {{computer}}.",
+      "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "yourComputer": "your computer"
+    },
+    "accessDecide": {
+      "expired": "This request was already answered or has expired.",
+      "grantedNotAdded": "Access was given, but {{person}} isn’t listed yet. Orca will add them.",
+      "signedOut": "Sign in to Orca on your computer to answer requests.",
+      "whatTheyCanDoMany": "What they can do"
+    },
+    "tabs": {
+      "homeTitle": "Home"
+    },
+    "lookAroundEvery": {
+      "every4h": "Every 4 hours, 8 AM to 8 PM",
+      "every2h": "Every 2 hours, 8 AM to 8 PM",
+      "twiceDaily": "Twice a day, 8 AM and 1 PM",
+      "mornings": "Each morning at 8 AM"
+    },
+    "templateSkills": {
+      "nameWithFolder": "{{name}} ({{folder}})",
+      "prReviewChecklist": "pr-review-checklist",
+      "bugReproduction": "bug-reproduction",
+      "ciFailureTriage": "ci-failure-triage",
+      "releaseReadiness": "release-readiness",
+      "releaseNotesStyle": "release-notes-style",
+      "dependencyUpgrade": "dependency-upgrade",
+      "securityChecklist": "security-checklist",
+      "issueTriage": "issue-triage",
+      "feedbackThemes": "feedback-themes",
+      "statusBrief": "status-brief",
+      "specFormat": "spec-format",
+      "incidentTimeline": "incident-timeline",
+      "workspaceHygiene": "workspace-hygiene",
+      "lines": {
+        "pr-review-checklist": "Read a diff for behaviour changes, missing tests and risky edits; cite each finding.",
+        "bug-reproduction": "Write down the exact steps that show the bug before looking for its cause.",
+        "ci-failure-triage": "Tell a flaky check from a real failure or broken infrastructure, and find the commit that started it.",
+        "release-readiness": "What blocks a release and how to list it: checks, reviews, open blockers.",
+        "release-notes-style": "Notes for users: new, fixed, changed; leave out refactors and code names.",
+        "dependency-upgrade": "Upgrade one group at a time, read the changelog, run the tests, one pull request each.",
+        "security-checklist": "Secrets, injection, auth checks and unsafe defaults to look for in a change.",
+        "issue-triage": "Label, find duplicates, ask for missing repro details in one comment.",
+        "feedback-themes": "Group feedback into themes with counts and short quotes; link existing issues.",
+        "status-brief": "Changed, blocked, needs a decision: a brief in under ten lines.",
+        "spec-format": "A one-page spec: problem, decision, scope, open questions.",
+        "incident-timeline": "Keep a timestamped timeline, then draft a blameless write-up.",
+        "workspace-hygiene": "When a workspace is done or abandoned, and what to check before removing it."
+      }
     },
     "waits": {
       "cancel": "Cancel",
@@ -6077,7 +6808,6 @@
       },
       "rotate": {
         "open": "Rotate key…",
-        "title": "Rotate the key for “{{automation}}”?",
         "confirm": "Rotate key",
         "note": "The URL gets a new key. Update every sender with it.",
         "overlap": "Keep the old key working for 24 hours",
@@ -6086,29 +6816,29 @@
         "stopCancels_one": "For a leaked key. {{count}} waiting call it let in is cancelled.",
         "stopCancels_other": "For a leaked key. {{count}} waiting calls it let in are cancelled.",
         "stopNote": "For a leaked key.",
-        "done": "Key rotated. Copy the new URL."
+        "done": "Key rotated. Copy the new URL.",
+        "action": "Rotate"
       },
       "secret": {
         "changeOpen": "Change signing secret…",
         "add": "Add signing secret…",
         "generatedTitle": "Signing secret ready",
         "done": "Done",
-        "generatedNote": "Copy it into {{sender}}’s webhook settings. From now on, calls must carry its signature.",
         "copy": "Copy secret",
         "copied": "Secret copied",
         "changeTitle": "Change signing secret",
         "addTitle": "Add signing secret",
-        "note": "Orca then accepts only calls signed with this secret, so a leaked URL alone can’t start “{{automation}}”.",
         "sender": "Sender",
         "modeGenerate": "Orca makes one",
         "modePaste": "Paste the sender’s",
         "generateNote": "Orca makes this secret. You copy it into {{sender}} next.",
         "paste": "{{sender}} secret",
-        "pasteNote": "Use this when the sender gives you its own secret.",
-        "generate": "Generate secret",
         "save": "Save",
         "back": "Back to signing secret",
-        "saved": "Signing secret saved"
+        "saved": "Signing secret saved",
+        "copyInto": "Copy it into {{sender}}’s webhook settings.",
+        "title": "Signing secret",
+        "create": "Create"
       },
       "delete": {
         "open": "Delete hook…",
@@ -6138,8 +6868,6 @@
       "hookCount_one": "{{count}} hook",
       "hookCount_other": "{{count}} hooks",
       "name": "Webhooks",
-      "howToCallShort": "Any tool or script can POST to a hook’s URL. Each hook starts one automation.",
-      "hooks": "Hooks",
       "addInChat": "Add in chat",
       "setUpDraft": "Set up a webhook that ",
       "resumed": "Webhook resumed",
@@ -6204,7 +6932,8 @@
         "failed": "Failed",
         "unverifiable": "Unverifiable",
         "unverifiableDetail": "{{bot}}’s computer can’t be reached"
-      }
+      },
+      "copiedKey": "Key copied"
     },
     "errors": {
       "generic": "Something went wrong. Try again."
@@ -6268,11 +6997,22 @@
       "nameLabel": "Bot name",
       "mascot": "Mascot",
       "mascotN": "Mascot {{n}} of {{total}}",
-      "background": "Background color",
+      "outfit": "Outfit",
+      "outfitNone": "No outfit",
+      "outfitTie": "Tie",
+      "outfitDetective": "Detective",
+      "outfitHardHat": "Hard hat",
+      "outfitReviewer": "Reviewer",
+      "outfitNightShift": "Night shift",
+      "outfitArtist": "Artist",
+      "outfitScientist": "Scientist",
+      "outfitParty": "Party",
+      "outfitSecurity": "Security",
       "choosePhoto": "Choose from Photos",
       "slackToo": "Changes your bot’s picture in Slack too.",
       "tooBig": "That image is over 10 MB.",
-      "tooSmall": "Too small. Use an image at least 128 px."
+      "tooSmall": "Too small. Use an image at least 128 px.",
+      "color": "Color"
     },
     "agentSwitch": {
       "title": "Switch {{name}} to {{agent}}?",
@@ -6287,9 +7027,7 @@
       "addButton": "Add",
       "sourceLabel": "Server URL or start command",
       "sourcePlaceholder": "https://… or npx …",
-      "scope": "Only {{name}} gets it, in addition to your own tools.",
       "details": "Details",
-      "commandWarning": "The command runs in this bot’s home folder on {{host}}. Adding or saving can start it during the native check. Only add software you trust.",
       "serverType": "Server type",
       "urlMode": "Connect to a URL",
       "commandMode": "Run a command",
@@ -6298,7 +7036,6 @@
       "removeTitle": "Remove {{app}}?",
       "removeNote": "{{bot}} can no longer use {{app}}. You can add it again any time.",
       "remove": "Remove",
-      "signInOrca": "Works with Claude and Codex",
       "signInMissing": "{{agent}} isn’t signed in",
       "signInHeld": "Held by {{agent}}",
       "back": "Back to Tools",
@@ -6345,7 +7082,53 @@
       "title": "Tools",
       "readOnly": "Read-only here. Change them in {{agent}}.",
       "fromYours": "{{count}} from your {{agent}}",
-      "tryAgain": "Try again"
+      "tryAgain": "Try again",
+      "edit": "Edit",
+      "editTitle": "Edit tool",
+      "save": "Save",
+      "reading": "Reading tool details…",
+      "url": "Server URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "headers": "Headers",
+      "executable": "Executable",
+      "commandPlaceholder": "npx",
+      "args": "Arguments",
+      "addArg": "Add argument",
+      "env": "Environment variables",
+      "keyPlaceholder": "Name",
+      "valuePlaceholder": "Value",
+      "savedPlaceholder": "Saved value · enter to replace",
+      "addHeader": "Add header",
+      "addVariable": "Add variable",
+      "show": "Show",
+      "hide": "Hide",
+      "nameTaken": "A tool named {{name}} already exists. Choose another name.",
+      "useName": "Use {{name}}",
+      "checkUnfinished": "The native check did not finish. Check again to retry.",
+      "input": {
+        "invalid": "Enter a valid server name and URL or executable.",
+        "namesRepeat": "Each header or environment name must be unique.",
+        "rowInvalid": "Enter a valid name and value for every row, or remove the row."
+      },
+      "signInFailure": {
+        "unsupported": "This app isn’t supported yet.",
+        "unavailable": "Can’t reach this app. Check the address, then try again.",
+        "noTool": "This bot no longer has that tool.",
+        "desktopOnly": "Sign in from Orca on {{host}}.",
+        "denied": "Access wasn’t allowed.",
+        "expired": "The sign-in expired. Try again.",
+        "couldNotSignIn": "Couldn’t sign in. Try again."
+      },
+      "trust": "Only add software you trust.",
+      "argument": "Argument",
+      "removeArgument": "Remove argument",
+      "header": "Header",
+      "variable": "Variable",
+      "removeHeaderRow": "Remove header",
+      "removeVariableRow": "Remove variable",
+      "emptyArgument": "Empty",
+      "valueNew": "New value",
+      "valueSaved": "Saved"
     },
     "handToBot": {
       "menu": "Hand to bot…",
@@ -6382,15 +7165,12 @@
       "lookingOn": "Looking on {{host}}…",
       "foundOn": "{{count}} found on {{host}}",
       "otherApp": "Another app…",
-      "otherAppNote": "Your old bot copies its files for you",
       "noneFoundNote": "No bots found in OpenClaw (~/.openclaw), Hermes (~/.hermes) or OpenBot.",
       "sendStep": "Send your old bot this message",
-      "copiedNote": "Copied. Paste it to your old bot wherever you chat with it.",
       "copyAgain": "Copy again",
       "copyMessage": "Copy message",
       "seeMessage": "See the message",
       "addStep": "Add the folder it made",
-      "addStepNote": "It saves a folder ending in -export in Downloads on {{host}}.",
       "folderItems_one": "{{count}} item",
       "folderItems_other": "{{count}} items",
       "removePath": "Remove {{name}}",
@@ -6400,14 +7180,15 @@
       "replyLabel": "Its reply",
       "title": "Import from another app",
       "newBot": "New bot",
-      "exportDescription": "Ask your old bot for a copy of itself, then give the copy to your new bot.",
-      "description": "Your new bot reads the old one and sets itself up.",
       "nameAnother": "Name a new bot",
-      "importedBefore": "{{bot}} came from this bot",
+      "update": "Update {{bot}}",
+      "updateDraft": "Bring over anything new from {{name}} in {{app}}.",
       "keysStay": "Keys and logins stay behind",
       "nudgeOne": "We found a bot in {{app}}.",
       "nudgeMany": "We found {{count}} bots in {{app}}.",
-      "noFolders": "No folders"
+      "noFolders": "No folders",
+      "more": "More actions",
+      "makeNew": "Make a new bot instead"
     },
     "host": {
       "errors": {
@@ -6438,17 +7219,21 @@
         "reconnectShort": "Reconnect",
         "createShort": "Create",
         "settingUp": "Setting up your Slack app…",
-        "reconnect": "Slack no longer accepts this workspace’s token. Paste a new one to reconnect.",
         "readyTitle": "Your Slack app is ready",
         "readyDetail": "Approve it in Slack to finish. If your workspace needs an admin to approve new apps, {{name}} joins once they do.",
         "approve": "Approve in Slack",
         "waiting": "Waiting for Slack…",
-        "expired": "The install link expired.",
-        "otherUser": "Another Slack account approved it. Get a new link and approve as yourself.",
         "newLink": "Get a new link",
         "uncertain": "Slack may have created an app named {{name}} that Orca cannot use. Delete it in Slack app settings if it is there, then set up again.",
         "uncertainChecked": "I checked Slack: there is no such app, or I deleted it",
-        "again": "Set up again"
+        "again": "Set up again",
+        "tryIt": "Try it in any channel or DM",
+        "openInSlack": "Message it in Slack",
+        "preview": {
+          "askPlain": "@{{name}} summarize this thread"
+        },
+        "pick": "Choose a Slack workspace.",
+        "another": "Connect another workspace"
       },
       "connection": {
         "installedBy": "installed by {{installer}}",
@@ -6468,7 +7253,14 @@
       "replies": "Replies",
       "postAs": {
         "title": "Post as",
-        "changeOn": "Change it on {{host}}"
+        "changeOn": "Change it on {{host}}",
+        "orcaUser": "Orca user",
+        "viaOrca": "{{name}} (via Orca)",
+        "sample": "Ship it after that",
+        "linePlain": "When you reply to a Slack thread from Orca, it posts as {{name}}.",
+        "approve": "Approve in Slack",
+        "waitingOn": "Switching to {{name}} needs {{installer}} to approve in Slack.",
+        "waiting": "Switching to {{name}} needs approval in Slack."
       },
       "token": {
         "open": "Get config token",
@@ -6478,7 +7270,23 @@
         "label": "Configuration refresh token",
         "paste": "Paste",
         "accessPasted": "That is the Access Token. Copy the Refresh Token, the one next to it.",
-        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click."
+        "kept": "Orca Cloud keeps this token encrypted, so your next bots in this workspace need one click.",
+        "step2Title": "Pick the workspace",
+        "step3Title": "Paste the Refresh Token"
+      },
+      "problem": {
+        "otherUser": "A different Slack account approved the connection.",
+        "otherUserNext": "Someone signed in to another Slack account approved the Slack link, so {{bot}} can’t act as you. Get a new link and approve it while signed in to your own Slack account.",
+        "expired": "Slack sign-in didn’t finish.",
+        "expiredNext": "The Slack link expired before anyone approved the connection.",
+        "code": "Code",
+        "computer": "Computer",
+        "workspace": "Workspace"
+      },
+      "reconnect": {
+        "whyNeeded": "Orca has no working Slack token for this workspace.",
+        "continue": "Continue",
+        "stopped": "Slack stopped accepting the token {{host}} uses."
       }
     },
     "cloudSignIn": {
@@ -6490,7 +7298,26 @@
         "slack": "Messages and mentions",
         "github": "Mentions and events on issues and PRs",
         "linear": "Assigned issues and mentions",
-        "google": "Gmail, Calendar and Drive, as you"
+        "google": "Gmail, Calendar and Drive, as you",
+        "vercel": "Check deployments and read their logs",
+        "sentry": "Look into errors and the events behind them",
+        "datadog": "Search logs, metrics and monitors",
+        "posthog": "Query product analytics and feature flags",
+        "cloudflare": "Manage Workers, DNS and the rest of an account",
+        "supabase": "Query databases and manage projects",
+        "neon": "Run SQL and manage Postgres branches",
+        "netlify": "Deploy sites and check their builds",
+        "gitlab": "Read and update issues and merge requests",
+        "context7": "Current docs and examples for code libraries",
+        "atlassian": "Jira issues and Confluence pages",
+        "notion": "Search, read and edit pages",
+        "stripe": "Look up payments, customers and subscriptions",
+        "clickup": "Manage tasks, lists and docs",
+        "airtable": "Query and edit bases, tables and records",
+        "todoist": "Add, sort and complete tasks",
+        "zapier": "Run actions in the apps you set up in Zapier",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles"
       },
       "webhooks": {
         "line": "Events from any tool or script"
@@ -6499,34 +7326,63 @@
         "coding": "Coding",
         "chat": "Chat",
         "docs": "Docs and projects",
-        "mail": "Mail and meetings"
+        "mail": "Mail and meetings",
+        "monitoring": "Monitoring",
+        "sales": "Sales and support",
+        "design": "Design"
       },
       "search": "Search apps",
-      "allShort": "All",
       "onBot": "On {{bot}}",
       "noMatch": "No app matches “{{query}}”.",
       "connectors": "Connectors",
-      "add": "Add",
       "composio": {
         "connectTitle": "Connect Composio",
         "once": "Once, for all your bots",
-        "thenApp": "Then you sign in to {{app}} on Composio’s page.",
-        "keyStoredOnHost": "Stored on {{host}}; bots never see it. Composio holds your app sign-ins.",
-        "addKey": "Add key and continue",
-        "browseAll": "Browse Composio apps"
+        "browseAll": "Browse Composio apps",
+        "keyOnHost": "Stored on {{host}}; bots never see it."
       },
       "close": "Close",
       "couldNotSignIn": "Couldn’t sign in to {{app}}",
       "signingIn": "Signing in",
       "openPageAgain": "Open page again",
-      "closeKeepsSigningIn": "Sign-in continues in your browser if you close this."
+      "closeKeepsSigningIn": "Sign-in continues in your browser if you close this.",
+      "appsCaption": "Apps",
+      "addByUrl": "Add by URL",
+      "composioLine": {
+        "outlook": "Mail, calendar and contacts",
+        "microsoft_teams": "Chats, channels and meetings",
+        "notion": "Pages, databases and comments",
+        "jira": "Issues, projects and sprints",
+        "hubspot": "Contacts, companies, deals and tickets",
+        "salesforce": "Accounts, leads and opportunities",
+        "asana": "Tasks, projects and comments",
+        "airtable": "Bases, tables and records",
+        "zendesk": "Tickets, users and help center articles",
+        "figma": "Files, comments and components",
+        "stripe": "Payments, customers and invoices",
+        "dropbox": "Files and folders",
+        "one_drive": "Files and folders",
+        "confluence": "Pages, spaces and comments",
+        "clickup": "Tasks, lists and docs",
+        "monday": "Boards, items and updates",
+        "intercom": "Conversations, contacts and articles",
+        "zoom": "Meetings, recordings and transcripts",
+        "calendly": "Events, invitees and booking links",
+        "trello": "Boards, lists and cards",
+        "sentry": "Issues, events and releases",
+        "box": "Files and folders",
+        "miro": "Boards, sticky notes and frames",
+        "reddit": "Posts, comments and subreddits"
+      },
+      "added": "Added",
+      "filter": "Filter",
+      "filterActive": "Filter, {{filter}}",
+      "all": "All apps"
     },
     "connectors": {
       "back": "Back to Connectors",
       "addOrg": "Add org",
       "addWorkspace": "Add workspace",
-      "manage": "Manage",
-      "emptyNote": "Let people reach {{name}} in Slack, GitHub and Linear, and let it work in your Google and other apps.",
       "addAnotherWorkspace": "Add another workspace",
       "backShort": "Back",
       "addGitHubAccess": "Add repositories or organizations",
@@ -6546,8 +7402,7 @@
       "key": {
         "label": "Composio API key",
         "placeholder": "Paste your key",
-        "getKey": "Get a key",
-        "checking": "Checking…"
+        "getKey": "Get a key"
       },
       "signInEnded": "The sign-in was turned down, failed, or took too long.",
       "signInOnComposio": "Sign in to {{app}} on Composio’s page.",
@@ -6568,10 +7423,16 @@
       "added": "{{bot}} can now use {{app}}",
       "signedOut": "Signed out · {{via}}",
       "unreadShort": "Couldn’t load Composio’s apps.",
-      "reading": "Reading Composio…"
+      "reading": "Reading Composio…",
+      "keyRejected": "Key not accepted",
+      "fixKey": "Fix key",
+      "signInsUnreadShort": "Couldn’t read sign-ins",
+      "checkAgain": "Check again",
+      "toolName": "Composio apps"
     },
     "setup": {
-      "for": "for {{name}}"
+      "for": "for {{name}}",
+      "copyHowToAsk": "Copy {{text}}"
     },
     "share": {
       "receive": {
@@ -6582,9 +7443,6 @@
         "full": "Full access",
         "fullDetail": "Runs commands without asking",
         "chatsDetail": "Starts from your chat permission setting",
-        "askLine": "Asks before running commands. Your own allow rules still apply.",
-        "fullLine": "Runs commands without asking.",
-        "chatsLine": "Asks as your chats do.",
         "origin": "From {{who}}’s link",
         "originAnonymous": "From a shared link",
         "back": "Back",
@@ -6658,7 +7516,6 @@
         "none": "None",
         "byline": "{{who}} · {{date}} · Not reviewed",
         "someone": "Someone",
-        "oneFlag": "{{summary}}: {{flag}} in {{where}}",
         "oneNote": "1 note",
         "notes": "{{count}} notes",
         "updated": "{{who}} updated this bot. Review it again.",
@@ -6669,7 +7526,8 @@
         "flagLine": "{{flag}}, line {{line}}",
         "off": "Off",
         "suggested": "Suggested · {{when}}",
-        "memoryIndex": "Its memory index, with the shared notes"
+        "memoryIndex": "Its memory index, with the shared notes",
+        "flagIn": "{{flag}} in {{where}}"
       },
       "lines": "{{count}} lines",
       "backToSharing": "Back to Sharing",
@@ -6718,14 +7576,26 @@
       "tooLargeNotShared": "Too large · not shared",
       "unreadableNotShared": "Can’t be read · not shared",
       "overLimitNotShared": "Over the skill limit · not shared",
-      "linkNoLongerAvailable": "This share link is no longer available."
+      "linkNoLongerAvailable": "This share link is no longer available.",
+      "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened.",
+      "original": {
+        "sharedBy": "Shared by {{who}}",
+        "viewOriginal": "View original",
+        "originalGone": "No longer available"
+      },
+      "sameLinkShort": "Copies already made stay as they are."
     },
     "settingsView": {
       "sharing": "Sharing",
       "sharingOn": "On"
     },
     "settingsPage": {
-      "off": "Off"
+      "off": "Off",
+      "lastLooked": "last looked {{when}}",
+      "yesterdayAt": "yesterday {{time}}",
+      "today": "today",
+      "yesterday": "yesterday",
+      "lastTidied": "last tidied {{when}}"
     },
     "memory": {
       "source": "From {{source}}",
@@ -6760,9 +7630,6 @@
     "skills": {
       "count_one": "{{count}} skill",
       "count_other": "{{count}} skills",
-      "showMore": "Show {{count}} more",
-      "remote": "On another host. {{bot}} runs on {{host}}, so it can’t load these yet.",
-      "missing": "This project is no longer in Orca.",
       "none": "No skills in this project yet",
       "own": "{{bot}}’s own skills",
       "title": "Skills",
@@ -6776,7 +7643,11 @@
       "noneShort": "No skills",
       "back": "Back to Skills",
       "search": "Search projects",
-      "noMatch": "No projects match your search."
+      "noMatch": "No projects match your search.",
+      "remoteShort": "On another host",
+      "missingShort": "No longer in Orca",
+      "remove": "Remove",
+      "removeProject": "Remove {{project}}"
     },
     "whoCanAsk": {
       "cap": "{{count}} people is the most here.",
@@ -6784,23 +7655,18 @@
       "addFailed": "Couldn’t add {{names}}.",
       "fullBot": "Nobody was added: {{names}} would go past the {{count}} people a bot can have.",
       "fullWorkspace": "Nobody was added: {{names}} would go past the {{count}} people this workspace can have.",
-      "canAsk": "Can ask",
       "retry": "Try again",
       "searching": "Searching…",
       "cancel": "Cancel",
       "selectedHeading": "Selected",
-      "you": "You",
-      "owner": "Owner",
-      "addedCount": "{{count}} of {{max}} added",
       "incomplete": "Not everyone is listed. Search by name to find someone.",
-      "selected": "{{count}} selected",
-      "addOne": "Add 1 person",
-      "addMany": "Add {{count}} people",
       "searchIn": "Search people in {{workspace}}",
       "peopleIn": "People in {{workspace}}",
       "noOneNamed": "No one named “{{query}}” in {{workspace}}",
       "needsSlack": "Add {{name}} to Slack first to pick people from your workspace.",
-      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you."
+      "noMatchDetail": "Members, guests and people from other organizations in {{workspace}}’s Slack can be added. Anyone else gets a private note to ask you.",
+      "add": "Add",
+      "allAdded": "They can already ask"
     },
     "linear": {
       "whoCanAsk": {
@@ -6811,7 +7677,7 @@
         "off": "Linear is coming soon.",
         "replaced": "Linear didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
         "wrongAccount": "This sign-in was started from another Orca account. Connect Linear again from this one.",
-        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it in Settings › Bots › Linear first.",
+        "alreadyLinked": "This Orca account is linked to another Linear user in that workspace. Unlink it from ⋯ on the Linear page first.",
         "notAMember": "Only full members of the Linear workspace can pick people from it.",
         "rateLimited": "Too many tries. Wait a minute, then try again.",
         "unavailable": "Linear did not answer. Try again."
@@ -6831,20 +7697,23 @@
         "installing": "Waiting for the install…",
         "copied": "Link copied.",
         "connectTitle": "Connect Linear",
-        "close": "Close"
+        "close": "Close",
+        "tryIt": "Try it on any Linear issue",
+        "orLabelLine": "Or add the label {{label}}."
       },
       "connect": {
         "another": "Use another workspace",
-        "who": "{{name}} in {{workspace}}",
-        "pickWorkspace": "Sign in and pick the Linear workspace {{name}} works in.",
-        "button": "Connect Linear",
-        "handoff": "Linear’s sign-in is open in Orca’s browser there. Pick the workspace and choose Authorize; this updates when you finish.",
-        "waitingOn": "Finish signing in to Linear on {{host}}…",
         "stuck": "Stuck on a Linear page that says “Could not find OAuth client”? Orca’s Linear app isn’t open to this workspace yet. An admin of the workspace that owns the app must make it public.",
         "pick": "Choose a Linear workspace.",
-        "turnOn": "Turn on {{name}}"
+        "handoffPick": "Pick the workspace and choose Authorize.",
+        "signIn": "Sign in to Linear",
+        "pickSubtitle": "Pick the workspace {{name}} works in"
       },
-      "address": "linear.app/{{urlKey}}"
+      "address": "linear.app/{{urlKey}}",
+      "account": {
+        "unlink": "Unlink Linear account",
+        "reconnect": "Reconnect"
+      }
     },
     "github": {
       "whoCanAsk": {
@@ -6859,7 +7728,7 @@
         "off": "GitHub is coming soon.",
         "replaced": "GitHub didn’t finish. A newer Linear or GitHub connect may have replaced it. Start again.",
         "wrongAccount": "This sign-in was started from another Orca account. Sign in with GitHub again from this one.",
-        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it in Settings › Bots › GitHub first.",
+        "alreadyLinked": "This Orca account is linked to another GitHub user. Unlink it from ⋯ on the GitHub page first.",
         "unavailable": "GitHub did not answer. Try again."
       },
       "setup": {
@@ -6871,29 +7740,35 @@
         "install": "Install the Orca app",
         "finish": "Done",
         "connectTitle": "Connect GitHub",
-        "close": "Close"
+        "close": "Close",
+        "tryIt": "Try it on any issue or PR",
+        "preview": {
+          "ask": "review this PR"
+        },
+        "pushesOnHost": "{{name}} pushes code from {{host}} with its git login."
       },
       "connection": {
         "removeNote": "People can no longer ask it on GitHub, and its GitHub people are cleared. The Orca app stays installed.",
         "removeConfirm": "Remove",
-        "finishSetup": "Finish setup"
+        "finishSetup": "Finish setup",
+        "refresh": "Refresh",
+        "addAnotherAccount": "Add another account"
       },
       "allRepositories": "All repositories of {{account}}",
       "account": {
-        "unlink": "Unlink GitHub account"
+        "unlink": "Unlink GitHub account",
+        "reconnect": "Reconnect"
       },
       "howToAskPlain": "Mention {{mention}} {{handle}} … on an issue or pull request.",
       "addMore": "Add repositories or an organization",
       "checkingInstalls": "Checking GitHub for changes…",
       "connect": {
-        "pickRepositories": "Sign in and choose which repositories {{name}} can work in.",
         "readsOnly": "Orca only reads your GitHub username and id.",
-        "button": "Connect GitHub",
-        "handoff": "GitHub’s sign-in is open in Orca’s browser there. Sign in and choose the repositories; this updates when you finish.",
-        "waitingOn": "Finish signing in to GitHub on {{host}}…",
         "requested": "An owner of the organization has been asked to approve the Orca app.",
         "notInstalled": "The Orca app is not on any of your repositories yet.",
-        "turnOn": "Turn on {{name}}"
+        "handoffPick": "Sign in and choose the repositories.",
+        "signIn": "Sign in to GitHub",
+        "pickSubtitle": "Choose the repositories it can work in"
       },
       "allRepositoriesShort": "all repositories"
     },
@@ -6907,7 +7782,11 @@
       "opensOnHost": "Opens in Orca’s browser on {{host}}.",
       "signedInAs": "Signed in as {{who}}",
       "continueOn": "Continue on {{host}}",
-      "cancel": "Cancel"
+      "openSignInPage": "Open sign-in page",
+      "cancel": "Cancel",
+      "signInTo": "Sign in to {{app}}",
+      "updatesWhenDone": "This updates when you finish.",
+      "turnOnShort": "Turn on"
     },
     "google": {
       "isOn": "Google is on for {{name}}",
@@ -6927,14 +7806,10 @@
         "continue": "Continue",
         "description": "Choose how {{bot}} signs in to your Gmail, Calendar and Drive.",
         "self": "Self hosted",
-        "selfNote": "You make your own Google Cloud app, so your sign-in stays on your computer. About 10 minutes.",
+        "selfNote": "Your own Google app.",
         "orca": "Orca hosted",
-        "orcaNote": "Sign in with Google. Nothing to set up.",
-        "comingSoon": "Coming soon",
-        "steps": "Steps",
-        "stepApp": "{{bot}} opens Google Cloud and sets up the app",
-        "stepSignIn": "You tick Google’s terms box and sign in",
-        "stepCheck": "{{bot}} checks that Gmail, Calendar and Drive work"
+        "orcaNote": "Sign in with Google.",
+        "soon": "Soon"
       },
       "importFromTeam": "Import a setup file from your team",
       "service": {
@@ -6946,32 +7821,171 @@
         "removeConfirm": "Remove",
         "signedOutOnHost": "Not connected on {{host}}",
         "uses": "What it can use",
-        "who": "Who can use it",
         "whoNote": "Anyone who can ask {{name}} can have it read and send your email, calendar and files.",
         "removeFrom": "Remove Google from {{name}}…"
       },
       "fix": {
         "turnOn": "Turn on",
         "copyForAdmin": "Copy for your admin",
-        "checkAgain": "Check again"
+        "checkAgain": "Check again",
+        "allowAgain": "Allow again"
       },
       "adminRequest": "Please mark this Google app as Trusted in the Admin console (Security › API controls › Manage third-party app access): {{clientId}}",
       "copied": "Copied. Send it to your Google admin.",
       "state": {
         "ready": "Ready",
         "apiOff": "Turned off in Google Cloud",
-        "notAllowed": "You didn’t allow it",
         "adminBlocked": "Your company’s Google admin blocked it",
-        "error": "Couldn’t check"
+        "error": "Couldn’t check",
+        "notAllowed": "You didn’t allow it",
+        "allowOnHost": "Allow again on {{host}}"
       },
       "headline": {
-        "ended": "Google access ended. Reconnect.",
         "connected": "Google is connected",
         "toFixOne": "Almost there: 1 thing to fix",
-        "toFix": "Almost there: {{count}} things to fix"
+        "toFix": "Almost there: {{count}} things to fix",
+        "noDefault": "Choose a default account",
+        "ended": "Google access ended.",
+        "endedOnHost": "Google access ended. Sign in again on {{host}}."
       },
-      "signInOnHost": "Sign in to Google again on {{host}}",
-      "moreOnHost": "Add a service or share the setup in Orca on {{host}}."
+      "defaultBadge": "Default",
+      "setDefault": "Set as default",
+      "shareButton": "Share setup",
+      "share": {
+        "copied": "Copied. Send it to your teammates."
+      },
+      "disconnect": {
+        "title": "Disconnect {{email}}?",
+        "revokeNote": "Bots stop using this account here, and Google cancels Orca’s access everywhere it was allowed.",
+        "removeOneNote": "Bots stop using this account here.",
+        "removeNote": "Bots stop using this account here. Bot settings stay, so Connect Google turns it back on.",
+        "promotes": "{{email}} becomes the default.",
+        "confirm": "Disconnect",
+        "removeFromHost": "Remove from {{host}}",
+        "revoke": "Remove and revoke at Google"
+      },
+      "accounts": "Accounts",
+      "row": {
+        "signedOut": "Signed out by Google"
+      },
+      "reconnect": "Reconnect",
+      "addAccount": "Add another account",
+      "signIn": "Sign in to Google",
+      "handoff": "Pick your account and choose Allow.",
+      "signInWarning": "Google will show a warning because this app is yours and brand new. Choose Advanced, then Go to Orca, and tick every box on the next screen.",
+      "signInRun": {
+        "failed": "The Google sign-in failed. Try again."
+      }
+    },
+    "failures": {
+      "lookUnfinished": "The last look didn't finish.",
+      "lookTimedOut": "The last look was stopped after {{minutes}} min.",
+      "lookInterrupted": "Orca stopped during the last look.",
+      "lookCouldNotStart": "The last look couldn't start.",
+      "lookAsleep": "The last look was missed because this computer was asleep.",
+      "tidyUpUnfinished": "The last tidy-up didn't finish.",
+      "tidyUpTimedOut": "The last tidy-up was stopped after {{minutes}} min.",
+      "tidyUpCouldNotStart": "The last tidy-up couldn't start.",
+      "tidyUpAsleep": "The last tidy-up was missed because this computer was asleep.",
+      "tidyUpUnreadChats": "The last tidy-up couldn't read its chats, so it didn't run.",
+      "tidyUpNoDraft": "The last tidy-up didn't reply with a new MEMORY.md.",
+      "tidyUpNoOps": "The last tidy-up's reply wasn't a list of changes Orca could read.",
+      "tidyUpAllSkipped": "Orca skipped every change the last tidy-up asked for, so nothing changed. ({{detail}})",
+      "tidyUpNotListLines": "The last tidy-up didn't run: MEMORY.md has more than a few lines that aren't list lines, and ops Tidy-up reads only list lines.",
+      "tidyUpMovedOnly": "The last tidy-up moved status lines to memory/journal/, but Orca could not use the rest of its reply. ({{detail}})",
+      "tidyUpBadTopic": "The last tidy-up named a topic file Orca can't write, so nothing changed.",
+      "tidyUpTooLong": "The last tidy-up's MEMORY.md was over {{max}} lines and no shorter, so nothing changed.",
+      "tidyUpTooManyRemoved": "The last tidy-up took out too many lines at once, so nothing changed.",
+      "tidyUpTooManyAdded": "The last tidy-up added too many new lines at once, so nothing changed.",
+      "tidyUpNotCopied": "The last tidy-up filed a line MEMORY.md doesn't have; new facts go in MEMORY.md, so nothing changed.",
+      "tidyUpTooManyFiled": "The last tidy-up filed more than {{max}} lines at once, so nothing changed.",
+      "tidyUpChanged": "MEMORY.md changed during the last tidy-up, so nothing changed.",
+      "tidyUpNotApplied": "The last tidy-up's changes couldn't be saved, so nothing changed.",
+      "toolGone": "This bot no longer has that tool.",
+      "toolDetailsInvalid": "Tool details are invalid. Check the name, URL or executable and values.",
+      "toolDestinationChanged": "The credential destination changed. Re-enter saved values or remove their rows.",
+      "toolSavedValueGone": "That saved value is no longer available. Re-enter it or remove its row.",
+      "toolValueMissing": "Enter a value for each row, or remove the row.",
+      "toolCredentialsUnreadable": "The bot’s saved tool credentials are unreadable. Re-enter the tool’s values.",
+      "toolSignInManaged": "Orca signs in to this tool. Sign it in or out instead.",
+      "toolCredentialsRaced": "The bot’s tool credentials changed in another Orca. Try again.",
+      "toolSourceManaged": "Orca manages this tool. Change it where you set it up.",
+      "toolValuesUnmoved": "A tool still holds its saved values. Reopen the bot’s tools to move them.",
+      "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
+      "toolCodexCheckFailed": "Codex could not check or connect the tools. Check its setup and try again.",
+      "toolCodexNoThread": "Codex started no thread to check the tools in.",
+      "toolSignInFolderFailed": "Couldn't prepare the sign-in folder: {{detail}}",
+      "toolClaudePrepareFailed": "Couldn't prepare {{name}} in Claude Code. Check its tool configuration.",
+      "toolNameTaken": "This bot already has a tool named {{name}}.",
+      "toolNameTakenByAgent": "Your {{agent}} already has a tool named {{name}}, which this bot gets too. Pick another name with --name.",
+      "toolNameTakenByCodexStdio": "Your Codex already has a local tool named {{name}}, so this bot's {{name}} can't run. Rename this bot's tool.",
+      "toolNotUpdated": "The tool was not updated.",
+      "toolSignInAddressIncomplete": "Paste the whole address the sign-in page ended on.",
+      "toolSignInAddressWrong": "That isn't the address this sign-in ends on. Start it again with Connect, sign in, then paste the address your browser shows.",
+      "toolSignInEnded": "The sign-in had already ended or timed out. Start it again with Connect.",
+      "toolNotFound": "This bot has no tool named {{name}}.",
+      "toolNeedsNoSignIn": "{{name}} uses its saved values and needs no sign-in.",
+      "toolSignInAgentUnsupported": "Orca signs {{name}} in only for Claude Code and Codex. Add it with its sign-in values instead.",
+      "toolCodexNoSignInPage": "Codex gave no sign-in page for {{name}}.",
+      "toolClaudeSignInFailed": "Claude couldn't start signing in to {{name}}.",
+      "toolClaudeNoSignInPage": "Claude didn't open a sign-in page for {{name}}.",
+      "groupMessageIdReused": "Message identity was already used.",
+      "groupChangedBeforeSend": "The group changed. Review the current members before sending.",
+      "groupEmptyBeforeSend": "Every bot has left this group. Add a bot before sending.",
+      "groupRequestUnverifiable": "The original queued group request cannot be verified.",
+      "groupTurnInactive": "This group request or member is no longer active.",
+      "groupBotUnavailable": "This bot is paused or unavailable. No other bot was substituted.",
+      "groupBotTwice": "Choose each bot once.",
+      "groupBotGone": "A selected bot is no longer available.",
+      "groupLocalOnly": "Groups currently support bots on this local execution host only.",
+      "groupChanged": "The group changed. Reopen this dialog and try again.",
+      "groupReplierGone": "Choose a current member in Room replies.",
+      "groupEmptyBeforeThread": "Every bot has left this group. Add a bot before starting a thread.",
+      "groupNeedsLocalBot": "This group needs at least one bot on this computer.",
+      "groupNameTaken": "{{name}} is already in this group. Members need different names so mentions stay unambiguous.",
+      "groupPostFromHost": "To post in a group with bots on other computers, use {{host}}.",
+      "groupPeerTooOld": "Update Orca on {{host}} to add its bots to a group.",
+      "attachmentUnreadable": "{{name}} can't be read.",
+      "attachmentTooLarge": "{{name}} is over {{maxMb}} MB.",
+      "attachmentUploading": "{{name}} is still uploading.",
+      "attachmentExpired": "{{names}}: this attachment expired. Attach it again.",
+      "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
+      "commentImageNotStored": "Only pasted or attached images can go on a comment.",
+      "commentAttachmentsUnavailable": "This computer can't take attachments right now. Comment again in a moment.",
+      "commentFileNotAbsolute": "{{path}}: name the file by its full path.",
+      "commentFilesTooMany": "Comments take up to {{max}} files besides images.",
+      "commentChatDeleted": "This item's chat was deleted, so files can't be attached here.",
+      "commentAttachFailed": "Couldn't attach the files. Comment again in a moment.",
+      "groupImagesTooMany": "Group messages take up to {{max}} images.",
+      "groupImagesTooLarge": "These images add up to {{totalMb}} MB. A group message takes up to {{maxMb}} MB.",
+      "groupImageNotStored": "Only pasted or attached images can go in a group message.",
+      "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
+      "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
+      "groupMentionAmbiguous": "Correct the ambiguous bot mention before sending.",
+      "groupMentionUnavailable": "Correct the unavailable or ambiguous bot mention before sending.",
+      "groupReplierNotMember": "Choose a current room member in Room replies.",
+      "groupMailNeverStarted": "This mail never started a turn.",
+      "groupRemoteUnreachable": "Couldn't reach {{host}}. {{detail}}",
+      "groupRemoteUnreachableRetry": "Couldn't reach {{host}}. {{detail}} Post again to retry."
+    },
+    "pairedServers": {
+      "heading": "Paired servers",
+      "remove": "Remove",
+      "removeServer": "Remove {{server}}",
+      "unnamed": "Paired server",
+      "footer": "Their agents can ask without your approval."
+    },
+    "usageLimit": {
+      "continuesAt": "Continues at {{time}}",
+      "continues": "Continues {{time}}",
+      "hitLimit": "Hit limit · resets {{time}}"
+    },
+    "upcoming": {
+      "needsSignIn": "Needs sign-in"
+    },
+    "memoryHistory": {
+      "tidyUp": "Tidy-up"
     }
   },
   "mobileWebShell": {
@@ -7002,7 +8016,6 @@
       "allAutomations": "All automations",
       "runOnSchedule": "Run {{name}} on schedule",
       "schedule": "Schedule",
-      "nextRun": "Next run",
       "noNextScheduledRun": "No next scheduled run",
       "agent": "Agent",
       "project": "Project",
@@ -7012,7 +8025,6 @@
       "instructions": "Instructions",
       "runNow": "Run now",
       "edit": "Edit",
-      "viewAllRuns": "View all runs",
       "deleteAutomation": "Delete automation",
       "savedAgent": "{{agent}} (saved)",
       "chooseAProjectSetUpOnThisHost": "Choose a project set up on this host.",
@@ -7043,9 +8055,6 @@
       "letYourAgentsWorkOnASchedule": "Let your agents work on a schedule",
       "createAnAutomationToRunATaskOnThisHost": "Create an automation to run a task on this host.",
       "nextDate": "Next: {{date}}",
-      "lastResult": "Last: {{status}} · {{date}}",
-      "latestResultNotReported": "Latest result not reported",
-      "sshTarget": " · SSH {{target}}",
       "automations": "Automations",
       "runs": "Runs",
       "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnect to this host to refresh or make changes. Saved information remains available below.",
@@ -7081,7 +8090,6 @@
       "retryFullOutput": "Retry",
       "loadingRuns": "Loading runs…",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
-      "noMatchingRunsYet": "No matching runs yet.",
       "runSummary": "{{title}}, {{status}}, {{date}}",
       "scheduled": "Scheduled",
       "loading": "Loading…",
@@ -7135,7 +8143,16 @@
       "discardChangesTitle": "Discard changes?",
       "discardChangesMessage": "Unsaved edits to this automation will be lost.",
       "discard": "Discard",
-      "keepEditing": "Keep editing"
+      "keepEditing": "Keep editing",
+      "on": "On",
+      "repeats": "Repeats",
+      "newOnePerRun": "New one per run",
+      "moreActions": "More actions",
+      "noRunsYet": "No runs yet",
+      "nextRunToday": "Next run today at {{time}}",
+      "nextRunTomorrow": "Next run tomorrow at {{time}}",
+      "nextRunWeekday": "Next run {{day}} at {{time}}",
+      "nextRunDate": "Next run {{date}}"
     },
     "orphanIssues": {
       "hostReselection": "Edit this automation and reselect its host before running it.",
@@ -7179,7 +8196,12 @@
         "error": "Project setup failed on the selected automation host.",
         "unsupported": "The selected automation host does not support this project."
       },
-      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs."
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
+      "botsOff": "Bots are turned off in Settings, so Orca skipped this run.",
+      "botsOffByTeam": "Bots are turned off by your team, so Orca skipped this run.",
+      "botMissing": "The bot this automation runs as no longer exists.",
+      "botFolderMissing": "The bot's folder is no longer available.",
+      "botPaused": "{{bot}} is paused, so Orca skipped this run."
     },
     "botTarget": {
       "fieldLabel": "Bot or project",
@@ -7193,14 +8215,13 @@
       "onEvents": "When something happens…",
       "runsIn": "Runs in",
       "runsInNew": "A new conversation each time",
-      "chat": "{{name}}'s Chat",
+      "chat": "{{name}}’s Chat",
       "runsInUntitledChat": "An untitled chat",
       "agent": "Agent",
       "agentSameAsBot": "Same as {{name}}",
-      "agentInChat": "This chat's agent",
-      "agentInChatHelp": "A run in a chat continues on that chat's agent.",
+      "agentInChat": "This chat’s agent",
       "resultsTo": "Send results to",
-      "resultsToThread": "The event's thread",
+      "resultsToThread": "The event’s thread",
       "resultsToChannel": "A channel",
       "resultsToLinear": "A Linear issue",
       "resultsToNone": "Nowhere",
@@ -7212,19 +8233,18 @@
       "linearIssueInvalid": "Enter the Linear issue to send results to, like ENG-123.",
       "letBotReact": "Let {{name}} react",
       "letBotReactHelp": "Each result starts a turn so {{name}} can act on it.",
-      "threadNeedsEvents": "Only events, new conversation",
-      "threadUnsupported": "Orca Cloud doesn't support this yet",
-      "channelNeedsSlack": "Connect Slack first",
-      "linearNeedsLinear": "Connect Linear first",
       "time": "Time",
-      "minute": "Minute"
+      "minute": "Minute",
+      "runs": "Runs"
     },
     "botEvents": {
       "label": "Events",
       "editInChat": "Edit in chat",
       "editDraft": "Change the automation “{{name}}”: ",
       "addDraft": "Change the automation “{{name}}” so it also runs when "
-    }
+    },
+    "eventsWontFire": "Runs on its schedule only: needs the {{connectors}} connector",
+    "wontFire": "Won’t run: needs the {{connectors}} connector"
   },
   "auto": {
     "components": {
@@ -7389,10 +8409,6 @@
           "grokBillingUsageMissing": "Grok billing response did not include credit usage",
           "grokUsageUnauthorizedHttp": "Grok usage request unauthorized (HTTP {{status}})",
           "grokUsageFailedHttp": "Grok usage request failed (HTTP {{status}})",
-          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
-          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
-          "geminiProjectIdNotFound": "Gemini project ID not found",
-          "tokenRefreshFailed": "Token refresh failed",
           "codexNotSignedIn": "Codex not signed in",
           "codexHomeUnavailable": "Codex home unavailable",
           "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
@@ -7411,9 +8427,6 @@
           "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
           "cliExitedBeforeUsage": "CLI exited before /usage rendered",
           "cliExitedBeforeStatus": "CLI exited before status was available",
-          "quotaFetchFailed": "Quota fetch failed ({{status}})",
-          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
           "minimaxUsageFetchFailed": "MiniMax usage fetch failed ({{status}})",
           "minimaxReturnedError": "MiniMax returned an error",
           "minimaxInvalidUsageResponse": "Invalid MiniMax usage response",
@@ -7530,6 +8543,22 @@
     "activity": {
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
+    }
+  },
+  "sidebar": {
+    "cardSlot": {
+      "working": "Working"
+    }
+  },
+  "chats": {
+    "delete": {
+      "title": "Delete this chat?",
+      "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",
+      "action": "Delete",
+      "failed": "Couldn't delete the chat",
+      "groupRoom": "A group room's chat can't be deleted",
+      "home": "A managed agent's Home Chat can't be deleted",
+      "workerOwed": "An orchestration still waits on this chat"
     }
   }
 }

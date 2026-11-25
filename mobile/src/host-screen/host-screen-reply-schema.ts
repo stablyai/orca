@@ -33,6 +33,7 @@ const WORKSPACE_AGENT_ACTIVITY_LAYOUT_ARMS = hostUnionArms<
 const repoIconBranches = {
   lucide: z.looseObject({ type: z.literal('lucide'), name: z.string() }),
   emoji: z.looseObject({ type: z.literal('emoji'), emoji: z.string() }),
+  letters: z.looseObject({ type: z.literal('letters'), text: z.string() }),
   image: z.looseObject({
     type: z.literal('image'),
     src: z.string(),
@@ -42,6 +43,7 @@ const repoIconBranches = {
 const mobileRepoIconSchema = z.union([
   repoIconBranches.lucide,
   repoIconBranches.emoji,
+  repoIconBranches.letters,
   repoIconBranches.image
 ])
 

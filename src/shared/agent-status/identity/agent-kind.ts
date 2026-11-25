@@ -20,7 +20,6 @@ const TUI_AGENT_KIND_BY_AGENT = {
   'prime-agent': 'prime-agent',
   qoder: 'qoder',
   'qoder-cn': 'qoder-cn',
-  gemini: 'gemini',
   antigravity: 'antigravity',
   aider: 'aider',
   goose: 'goose',

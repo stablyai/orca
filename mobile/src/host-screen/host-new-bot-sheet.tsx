@@ -30,9 +30,9 @@ export function HostNewBotSheet({ controller }: { controller: HostScreenControll
       clientFor={clientFor}
       pairedClientFor={() => clientFor(LOCAL_EXECUTION_HOST_ID)}
       onClose={() => newBot.open(null)}
-      onOpenBot={(bot, computer) => {
+      onOpenBot={(bot, computer, homeDraft) => {
         newBot.open(null)
-        openBotHome({ pairedHostId: hostId, executionHost: computer.hostId }, bot)
+        openBotHome({ pairedHostId: hostId, executionHost: computer.hostId }, bot, homeDraft)
       }}
       onCreated={(bot, computer) => {
         newBot.open(null)

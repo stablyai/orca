@@ -97,8 +97,7 @@ const ENTRIES: AgentPickerEntry[] = [
   entry('claude-agent-teams', 'Claude agent teams', ['terminal'], claudeModels),
   entry('codex', 'Codex', ['chat', 'terminal'], codexModels),
   entry('grok', 'Grok', ['terminal']),
-  entry('opencode', 'OpenCode', []),
-  entry('gemini', 'Gemini', ['terminal'])
+  entry('opencode', 'OpenCode', [])
 ]
 
 function menuModel(entries: AgentPickerEntry[]): NewTabAgentMenuModel {
@@ -198,6 +197,62 @@ export const dropdownModelsFailed = defineFixture({
     click('[role="tab"][aria-label="Antigravity"]')
     await settle()
   }
+})
+
+const AGY_LEVELS = [level('low', 'low'), level('medium', 'medium'), level('high', 'high')]
+// Rows a live agy chat reported, kept beside a shorter `agy models` run; Refresh lists again.
+const AGY_ENTRIES: AgentPickerEntry[] = [
+  ENTRIES[0],
+  {
+    ...entry(
+      'antigravity',
+      'Antigravity',
+      ['chat', 'terminal'],
+      [
+        ['gemini-4-neon', 'Gemini 4 Neon'],
+        ['gemini-4-argon', 'Gemini 4 Argon'],
+        ['gemini-4-hydrogen', 'Gemini 4 Hydrogen'],
+        ['gemini-3.8-flash', 'Gemini 3.8 Flash'],
+        ['claude-opus-5-5', 'Claude Opus 5.5'],
+        ['claude-sonnet-5-5', 'Claude Sonnet 5.5'],
+        ['gpt-oss-120b-medium', 'GPT-OSS 120B (Medium)']
+      ].map(([id, label]) => model(id, label, id.startsWith('gpt') ? [] : AGY_LEVELS))
+    ),
+    ownerKey: 'fixture'
+  }
+]
+
+export const dropdownAntigravityRefresh = defineFixture({
+  width: 460,
+  render: () => <HandOffField entries={AGY_ENTRIES} />,
+  interact: async () => {
+    await openDropdown()
+    click('[role="tab"][aria-label="Antigravity"]')
+    await settle()
+  }
+})
+
+// Hand off from a conversation saved in a workspace sub-folder: no agent starts a chat there.
+function chatInSubfolder(
+  agent: TuiAgent,
+  label: string,
+  models: AgentSessionModelOption[]
+): AgentPickerEntry {
+  const base = entry(agent, label, ['terminal'], models)
+  return { ...base, rows: [...base.rows, { kind: 'chat-unavailable', agent, reason: 'subfolder' }] }
+}
+
+export const dropdownChatInSubfolder = defineFixture({
+  width: 460,
+  render: () => (
+    <HandOffField
+      entries={[
+        chatInSubfolder('claude', 'Claude', claudeModels),
+        chatInSubfolder('codex', 'Codex', codexModels)
+      ]}
+    />
+  ),
+  interact: openDropdown
 })
 
 export const dropdownSearch = defineFixture({

@@ -210,7 +210,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     // Renderer webviews keep their own icon. An offscreen page's icon arriving publishes; later
     // swaps (animated or status icons) ride the page's next publish instead of one per frame.
     const faviconUpdatedHandler = (_event: Electron.Event, favicons: string[]): void => {
-      if (!this.offscreenGuestIds.has(guest.id)) {
+      if (!this.isListedAsServerPage(guest.id)) {
         return
       }
       const next = remoteTabFaviconUrl(pickDisplayableFaviconUrl(favicons))
@@ -227,7 +227,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
 
     // Offscreen pages have no renderer; titles parse after commit and loads finish later.
     const offscreenStateChangedHandler = (): void => {
-      if (this.offscreenGuestIds.has(guest.id)) {
+      if (this.isListedAsServerPage(guest.id)) {
         this.offscreenGuestStateNotices.schedule(String(guest.id))
       }
     }

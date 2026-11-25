@@ -38,11 +38,9 @@ const HEALTH_SETTINGS = [
   'agentDefaultEnv',
   'nativeChatInheritShellEnvironment',
   'nativeChatShellEnvironmentVariables',
-  // Why: a saved Gemini Enterprise choice keeps chats off the host's agy (hostAlternative).
+  // Why: the saved method picks the home new Antigravity chats run agy in (hostAlternative).
   'antigravityChatAuth',
   'antigravityManagedAgyEnabled',
-  // Why: choosing Orca's Google sign-in moves new chats off a signed-in agy (hostAlternative).
-  'antigravityGoogleSignIn',
   ...SHELL_SETTINGS
 ] as const satisfies readonly (keyof GlobalSettings)[]
 

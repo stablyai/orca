@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,11 +6,15 @@ import * as esbuild from 'esbuild'
 import { buildMobileWebAppBundle } from './build-mobile-web-app-bundle.mjs'
 import { isDirectInvocation } from '../../tool-invocation/script-entry-detection.mjs'
 import { assertNoCarriageReturnsInSource } from './mobile-web-source-line-endings.mjs'
-import { contentAssetName } from './mobile-web-bundle-manifest.mjs'
 import {
   MOBILE_WEB_BUNDLE_DIR as defaultBundleDir,
   assertMobileWebBundleBuilt
 } from '../../desktop-distribution/runtime-verification/verify-packaged-mobile-web-bundle.cjs'
+import {
+  contentAssetName,
+  MOBILE_WEB_BUNDLE_ENTRYPOINT,
+  sha256Hex
+} from './mobile-web-bundle-manifest.mjs'
 
 const projectDir = fileURLToPath(new URL('../../../..', import.meta.url))
 const manifestContract = join(
@@ -30,18 +34,63 @@ export function mobileWebAppBundleMaxAssets(routeCount, imageCount, catalogChunk
 // fetched only for the active language, never before the first route. Code keeps its own fence.
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_CHUNKS = 10
 export const MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES = 3 * 1024 * 1024
-// The host sends a catalog's JSON in one reply, which must fit a 1 MiB relay frame once encrypted.
-export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 384 * 1024
+// A budget, not a frame limit: the host sends a catalog as plain JSON in one reply (gzipped when the phone
+// reads compressed frames) under the 4 MiB REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES. This keeps the first-paint
+// read short and the page's gzipped stored copy under DEVICE_STORE_MAX_VALUE_LENGTH.
+export const MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES = 1024 * 1024
 
 // Our own fence on the page's code, well inside the phone contract (32 MiB total, 10 MiB per asset in
 // manifest-contract.ts); routes are split and the entry is capped below, so no one asset nears 10 MiB.
-// 10.75 MiB: dropping duplicate package builds took the page to 10,815,616 bytes (2026-11-19). The fence
-// drops with it so those 198 KiB stay saved; the 446 KiB left is about what the phone parity round had.
-// 11 MiB (2026-11-21): the phone parity round's last pages (connectors, automations, memory, sharing) need
-// about 200 KiB more; a size pass follows the round.
-// 10.90625 MiB: that pass took the page to 11,252,196 bytes (2026-11-22). The fence drops by the 94 KiB saved
-// and keeps the 180 KiB main had left, so the parity follow-ups in flight fit as before.
-export const MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES = 10.90625 * 1024 * 1024
+// Split by startup cost vs assets loaded on use: the eager budget holds everything the page may load
+// to open (all code, fonts outside the terminal allowance, images the document names); the on-demand
+// budget holds only files outfitSheetsOnDemand proves are fetched when used, and any that the document
+// names count as eager. The phone shell still downloads each on-demand file to disk once per bundle
+// update (shellDownloadedAssets), so this budget also bounds that download.
+// Eager: main's own fence. 11 MiB since reverting #48282 put the diagram engine back in it, at 11,479,156
+// bytes (2026-11-24).
+export const MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES = 11 * 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES = 1024 * 1024
+export const MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES = 128 * 1024
+
+const OUTFIT_SHEET_DIR = join(projectDir, 'src', 'shared', 'bot-mascots', 'outfits')
+
+// Each outfit's sheet ships as its own image, fetched only when a picture wears that outfit, never
+// inlined in code. Returns the sheets the page document never names, so a page with no outfits loads none.
+export async function outfitSheetsOnDemand(manifest, bundleDir) {
+  const document = await readFile(join(bundleDir, MOBILE_WEB_BUNDLE_ENTRYPOINT), 'utf8')
+  const sheets = (await readdir(OUTFIT_SHEET_DIR)).filter((name) => name.endsWith('.webp'))
+  const onDemand = []
+  for (const name of sheets) {
+    const file = contentAssetName(sha256Hex(await readFile(join(OUTFIT_SHEET_DIR, name))), 'webp')
+    const asset = manifest.assets.find((entry) => entry.path === `assets/${file}`)
+    if (!asset) {
+      fail(`outfit sheet ${name} is not its own image in the bundle, so it was inlined or dropped`)
+    }
+    if (!document.includes(file)) {
+      onDemand.push({ name, byteLength: asset.byteLength })
+    }
+  }
+  return onDemand
+}
+
+export function assertOnDemandFits(onDemand) {
+  const tooBig = onDemand.find(
+    (file) => file.byteLength > MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES
+  )
+  if (tooBig) {
+    fail(
+      `on-demand file ${tooBig.name} is ${String(tooBig.byteLength)} bytes, over the per-file budget of ` +
+        `${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_FILE_BYTES)}`
+    )
+  }
+  const bytes = onDemand.reduce((total, file) => total + file.byteLength, 0)
+  if (bytes > MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES) {
+    fail(
+      `on-demand files are ${String(bytes)} bytes, over the budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)}`
+    )
+  }
+  return bytes
+}
 
 // Only these licensed terminal fonts have their own allowance; other fonts (KaTeX's) and code count.
 // The page fetches each only when the terminal draws with it, so none weighs on first open.
@@ -222,14 +271,15 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (oversized) {
     fail(
       `the ${oversized.locale} host catalog is ${String(oversized.byteLength)} bytes, over the ` +
-        `${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)} one reply carries`
+        `host catalog budget of ${String(MOBILE_WEB_APP_HOST_CATALOG_MAX_BYTES)}`
     )
   }
-  const budgetBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes
-  if (budgetBytes > MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES) {
+  const onDemandBytes = assertOnDemandFits(await outfitSheetsOnDemand(manifest, bundleDir))
+  const eagerBytes = mobileWebAppBundleBudgetBytes(manifest) - first.catalogBytes - onDemandBytes
+  if (eagerBytes > MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES) {
     fail(
-      `bundle excluding the approved fonts and locale catalogs is ${String(budgetBytes)} bytes, over the Phase C budget of ` +
-        `${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)}`
+      `bundle excluding the approved fonts, locale catalogs and on-demand files is ${String(eagerBytes)} bytes, ` +
+        `over the Phase C eager budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)}`
     )
   }
   // Read chunk/entry bounds and image count from fresh verified build: they are not manifest fields, while buildId binds on-disk bytes.
@@ -260,7 +310,7 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
         `budget of ${String(MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES)}`
     )
   }
-  return { ...manifest, catalogBytes: first.catalogBytes }
+  return { ...manifest, catalogBytes: first.catalogBytes, eagerBytes, onDemandBytes }
 }
 
 if (isDirectInvocation(import.meta.url, process.argv[1])) {
@@ -269,7 +319,8 @@ if (isDirectInvocation(import.meta.url, process.argv[1])) {
     console.log(
       `[verify-mobile-web-app-bundle] OK — ${String(manifest.assets.length)} asset(s), ` +
         `${String(manifest.totalBytes)} total bytes, ` +
-        `${String(mobileWebAppBundleBudgetBytes(manifest) - manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES)} bytes excluding the approved fonts, ` +
+        `${String(manifest.eagerBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_EAGER_BYTES)} eager bytes excluding the approved fonts, ` +
+        `${String(manifest.onDemandBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_ON_DEMAND_BYTES)} on-demand bytes, ` +
         `${String(manifest.catalogBytes)}/${String(MOBILE_WEB_APP_BUNDLE_MAX_CATALOG_BYTES)} bytes of language catalogs, ` +
         `reproducible buildId ${manifest.buildId}`
     )

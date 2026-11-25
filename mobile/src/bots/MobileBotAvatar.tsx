@@ -6,6 +6,14 @@ import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { useBotAvatarUpload } from './bot-avatar-uploads'
 import { mobileBotMascotAsset, mobileBotMascotRimAsset } from './mobile-bot-mascot-assets'
 import {
+  mobileBotOutfitAsset,
+  mobileBotOutfitReplacesPicture,
+  OUTFIT_SHEET_COLUMNS,
+  OUTFIT_SHEET_ROWS
+} from './mobile-bot-outfit-assets'
+import type { BotMascotId } from '../../../src/shared/bot-avatar'
+import type { BotAvatarOutfit } from '../../../src/shared/bots/bot-avatar-outfit'
+import {
   DEFAULT_BOT_AVATAR_COLOR,
   isDarkBotAvatarColor
 } from '../../../src/shared/bots/bot-avatar-color'
@@ -42,7 +50,8 @@ export function MobileBotAvatar({
       </View>
     )
   }
-  // The mascot pictures are transparent: their tile color goes behind, and on a dark one the light rim.
+  // The mascot pictures are transparent: their tile color goes behind, on a dark one the light rim, and
+  // any outfit on top.
   const color = avatar.color ?? DEFAULT_BOT_AVATAR_COLOR
   // A bundled picture keeps its own pixel size unless told otherwise.
   const layer = { width: size, height: size }
@@ -55,9 +64,40 @@ export function MobileBotAvatar({
           accessibilityIgnoresInvertColors
         />
       ) : null}
+      {avatar.outfit && mobileBotOutfitReplacesPicture(avatar.outfit) ? null : (
+        <Image
+          source={mobileBotMascotAsset(avatar.id)}
+          style={[StyleSheet.absoluteFill, layer]}
+          accessibilityIgnoresInvertColors
+        />
+      )}
+      {avatar.outfit ? <OutfitLayer outfit={avatar.outfit} id={avatar.id} size={size} /> : null}
+    </View>
+  )
+}
+
+/** The mascot's cell of its outfit's sheet: the sheet drawn at `size` per cell, shifted under a `size` window. */
+function OutfitLayer({
+  outfit,
+  id,
+  size
+}: {
+  outfit: BotAvatarOutfit
+  id: BotMascotId
+  size: number
+}) {
+  const { sheet, column, row } = mobileBotOutfitAsset(outfit, id)
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.window]}>
       <Image
-        source={mobileBotMascotAsset(avatar.id)}
-        style={[StyleSheet.absoluteFill, layer]}
+        source={sheet}
+        style={{
+          position: 'absolute',
+          left: -column * size,
+          top: -row * size,
+          width: size * OUTFIT_SHEET_COLUMNS,
+          height: size * OUTFIT_SHEET_ROWS
+        }}
         accessibilityIgnoresInvertColors
       />
     </View>
@@ -69,6 +109,9 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgRaised,
+    overflow: 'hidden'
+  },
+  window: {
     overflow: 'hidden'
   },
   letter: {

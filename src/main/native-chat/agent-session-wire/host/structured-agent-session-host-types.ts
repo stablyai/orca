@@ -1,4 +1,5 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { WorkerDockPresence } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentModelCatalogSource,
   AgentModelCatalogService
@@ -30,7 +31,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
+import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-scope'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
@@ -166,6 +167,7 @@ export type StructuredAgentSessionHostSession = {
 }
 
 export type StructuredAgentSessionHostDeps = {
+  readWorkerDockPresence?: (sessionId: string) => WorkerDockPresence | undefined
   store: AgentSessionRecordStore
   adapter: StructuredAgentSessionAdapter
   /** Capabilities come from registry declarations, never adapters. */
@@ -249,8 +251,8 @@ export type StructuredAgentSessionHostDeps = {
     record: AgentSessionRecord,
     purpose?: 'read' | 'identity'
   ) => Promise<AgentSessionAccountHome | null>
-  /** The tools a chat's agent launched with, against what its next launch would get; absent or a
-   *  chat that launched none (not a bot's, or look-around) never refreshes for tools. */
+  /** A bot chat's own tools as its agent launched with them, against what its next launch would
+   *  get; any other chat (the host list applies to new sessions only) never refreshes for tools. */
   launchTools?: {
     /** Rereads the tools, so it also sees edits made outside Orca. */
     changed: (sessionId: string) => Promise<boolean>

@@ -1,6 +1,6 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { nativeChatAppearanceStyle } from '../../appearance/native-chat-appearance-style'
-import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
+import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { AgentSessionBackgroundTask } from '../../../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import {
   crewSummary,
@@ -56,7 +56,7 @@ const workers: OrchestrationCrewRow[] = [
       sequence: 2
     }
   }),
-  row('w3', 'perf-audit', 'gemini', 'waiting', {
+  row('w3', 'perf-audit', 'antigravity', 'waiting', {
     task: { title: 'Profile token refresh under load', state: 'dispatched' },
     approvals: [
       {
@@ -129,7 +129,7 @@ const workerRows: OrchestrationCrewSnapshot = {
           sequence: 5
         }
       }),
-      row('p3', 'perf-audit', 'gemini', 'working', {
+      row('p3', 'perf-audit', 'antigravity', 'working', {
         role: 'peer',
         sendAddress: undefined,
         latest: {
@@ -190,7 +190,7 @@ function strip(props: {
   return (
     // The chat's own font rules apply inside the strip, as in a real chat pane.
     <div className="native-chat-appearance bg-chat-canvas" style={nativeChatAppearanceStyle({})}>
-      <NativeChatBackgroundTasksStatus
+      <NativeChatCrewBackgroundTasksStatus
         tasks={props.tasks ?? tasks}
         settledTasks={[]}
         supportsTaskStop

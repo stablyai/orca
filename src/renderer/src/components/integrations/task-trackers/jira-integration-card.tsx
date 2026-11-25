@@ -10,13 +10,14 @@ import {
   getProviderRuntimeContextKey,
   hasRemoteProviderRuntime
 } from '@/runtime/hosts/observations/provider-runtime-context'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,
   IntegrationCardShell
 } from '../presentation/integration-card-shell'
 import { useIntegrationSubordinateRowClass } from '../presentation/integration-card-presentation'
-import { getProviderAccountScope } from '../../provider-accounts/provider-account-scope'
+import { useProviderAccountScope } from '../../provider-accounts/use-provider-host-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { JIRA_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 import { useTranslate } from '@/i18n/use-translate'
@@ -43,7 +44,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const connected = contextMatches && jiraStatus.connected
   const sites = jiraStatus.sites ?? []
   const siteCount = sites.length || (connected ? 1 : 0)
-  const accountScope = getProviderAccountScope(settings, t)
+  const accountScope = useProviderAccountScope(defaultScopeHost(settings))
   const credentialCopy = hasRemoteProviderRuntime(settings)
     ? t(
         'auto.components.settings.task.tracker.integration.cards.2d60ec7921',

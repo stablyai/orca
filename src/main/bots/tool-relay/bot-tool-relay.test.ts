@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { _resetSecretStoreForTests } from '../../../shared/secure-storage/secret-store'
 import { changeBotToolCredentials, useBotToolCredentialsRoot } from '../bot-tool-credentials'
 import { botToolCredentialSource } from '../tool-oauth/bot-tool-credential-source'
-import { BotToolRelay } from './bot-tool-relay'
+import { BotToolRelay, MCP_HOST_LIST_RELAY_OWNER } from './bot-tool-relay'
 import {
   call,
   closeUpstreams,
@@ -20,12 +20,17 @@ const SECRET = 'sk-live-secret-value'
 const dirs: string[] = []
 let relay: BotToolRelay
 
-async function botWith(url: string, botId = 'scout', id = 'cred-notion', secret = SECRET) {
+function toolsFolder(url: string, id: string, secret = SECRET): string {
   const folder = mkdtempSync(join(tmpdir(), 'relay-bot-'))
   dirs.push(folder)
   changeBotToolCredentials(folder, new Map([[id, { url, headers: { 'x-api-key': secret } }]]))
   writeToolsFile(folder, { [id]: url })
-  const { origin, token } = await relay.grant(botId, folder)
+  return folder
+}
+
+async function botWith(url: string, botId = 'scout', id = 'cred-notion', secret = SECRET) {
+  const folder = toolsFolder(url, id, secret)
+  const { origin, token } = await relay.grant(botId, { bot: folder })
   return { folder, token, address: `${origin}/bot-tools/${id}/mcp` }
 }
 
@@ -55,16 +60,26 @@ describe("Orca's tool relay", () => {
     })
     const bot = await botWith(tool.url)
     const answer = await call(bot.address, {
-      headers: { ...json, authorization: `Bearer ${bot.token}`, cookie: 'c=1' },
-      body: '{"jsonrpc":"2.0","id":1,"method":"initialize"}'
+      headers: {
+        ...json,
+        authorization: `Bearer ${bot.token}`,
+        cookie: 'c=1',
+        'mcp-method': 'tools/call',
+        'mcp-name': 'search',
+        'mcp-param-region': 'us-west1'
+      },
+      body: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"region":"us-west1"}}}'
     })
     expect(answer.status).toBe(200)
     expect(answer.headers['mcp-session-id']).toBe('s1')
     expect(answer.body).toContain('"result"')
     expect(tool.seen[0]?.headers['x-api-key']).toBe(SECRET)
+    expect(tool.seen[0]?.headers['mcp-method']).toBe('tools/call')
+    expect(tool.seen[0]?.headers['mcp-name']).toBe('search')
+    expect(tool.seen[0]?.headers['mcp-param-region']).toBe('us-west1')
     expect(tool.seen[0]?.headers.authorization).toBeUndefined()
     expect(tool.seen[0]?.headers.cookie).toBeUndefined()
-    expect(tool.seen[0]?.body).toContain('initialize')
+    expect(tool.seen[0]?.body).toContain('tools/call')
   })
 
   it('refuses a call without the token, with another bot’s token, or from a browser page', async () => {
@@ -104,7 +119,7 @@ describe("Orca's tool relay", () => {
     const bot = await botWith(tool.url)
     relay.close()
     relay = new BotToolRelay((url, init) => fetch(url, init))
-    const { origin } = await relay.grant('scout', bot.folder)
+    const { origin } = await relay.grant('scout', { bot: bot.folder })
     const answer = await call(`${origin}/bot-tools/cred-notion/mcp`, {
       headers: { ...json, authorization: `Bearer ${bot.token}` },
       body: '{}'
@@ -198,6 +213,30 @@ describe("Orca's tool relay", () => {
       body: '{}'
     })
     expect(answer.status).toBe(401)
+  })
+
+  it('lets a token reach only the folders its grant names, and the host’s names no bot', async () => {
+    const tool = await upstream((_seen, res) => res.end('{}'))
+    const hostFolder = toolsFolder(tool.url, 'cred-host-1')
+    const botFolder = toolsFolder(tool.url, 'cred-bot-1')
+    const host = await relay.grant(MCP_HOST_LIST_RELAY_OWNER, { host: hostFolder })
+    const alone = await relay.grant('scout', { bot: botFolder })
+    const reach = (token: string, path: string) =>
+      call(`${host.origin}${path}`, {
+        headers: { ...json, authorization: `Bearer ${token}` },
+        body: '{}'
+      }).then((answer) => answer.status)
+
+    expect(relay.botOf(host.token)).toBeNull()
+    expect(await reach(host.token, '/mcp-servers/cred-host-1/mcp')).toBe(200)
+    expect(await reach(host.token, '/bot-tools/cred-bot-1/mcp')).toBe(404)
+    expect(await reach(alone.token, '/mcp-servers/cred-host-1/mcp')).toBe(404)
+    // A bot that takes the host list reaches both with its one token.
+    const both = await relay.grant('scout', { bot: botFolder, host: hostFolder })
+    expect(both.token).toBe(alone.token)
+    expect(await reach(both.token, '/mcp-servers/cred-host-1/mcp')).toBe(200)
+    expect(await reach(both.token, '/bot-tools/cred-bot-1/mcp')).toBe(200)
+    expect(relay.botOf(both.token)).toBe('scout')
   })
 
   it('never follows a redirect with saved values, and passes a refusal on as 403', async () => {
@@ -306,7 +345,7 @@ describe('a tool whose headers come from a source', () => {
       new Map([['cred-hub-1', { url: tool.url, headers: {}, source: 'hub' }]])
     )
     writeToolsFile(folder, { 'cred-hub-1': tool.url })
-    const { origin, token } = await relay.grant('scout', folder)
+    const { origin, token } = await relay.grant('scout', { bot: folder })
     const address = `${origin}/bot-tools/cred-hub-1/mcp`
     const headers = { ...json, authorization: `Bearer ${token}` }
     await call(address, { headers, body: '{}' })

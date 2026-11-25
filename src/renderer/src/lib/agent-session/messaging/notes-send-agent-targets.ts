@@ -56,7 +56,7 @@ function detectTitleHintPaneEvidence(
   return status ? { status, title: tabTitle } : null
 }
 
-/** Add live title-backed terminals and first-turn chats that lack hook status. launchAgent gives stronger ownership than manual title hints; hints expose targets only, while runtime independently verifies guarded writes. */
+/** Add live title-backed terminals and chats the host has not published yet. launchAgent gives stronger ownership than manual title hints; hints expose targets only, while runtime independently verifies guarded writes. */
 export function deriveNotesSendAgentTargets(
   state: NotesSendAgentTargetState,
   worktreeId: string,
