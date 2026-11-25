@@ -95,6 +95,8 @@ function BotHomeTabsFixture({
       activeTabType="agent-session"
       worktreeId={WORKSPACE_ID}
       groupId={GROUP_ID}
+      // A focused group, as after a click into it: the +N list closes in an unfocused one.
+      isGroupFocused
       expandedPaneByTabId={{}}
       showAgentLaunchItems={false}
       onActivate={setActiveTabId}
