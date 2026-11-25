@@ -112,7 +112,8 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
   awaits(key: string): boolean {
     let session: unknown
     try {
-      session = (JSON.parse(key) as unknown[])[0]
+      const parts: unknown = JSON.parse(key)
+      session = Array.isArray(parts) ? parts[0] : undefined
     } catch {
       // Keys are opaque to the daemon; one this app didn't write names no session.
     }
