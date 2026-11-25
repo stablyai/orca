@@ -139,6 +139,14 @@ describe('IM step text', () => {
     expect(step.summary).not.toContain('synthetic-bearer-value')
     const env = imStep('Bash', { command: 'OPENAI_API_KEY=synthetic-env-value node x.js' }, 'done')
     expect(env.summary).not.toContain('synthetic-env-value')
+    for (const command of [
+      'export PLAIN=synthetic-plain-value && MY_VAR="synthetic quoted" node x.js',
+      'psql postgresql://admin:synthetic-userinfo@db.test:5432/x',
+      `${'cd /tmp/a && '.repeat(5)}DB_URL=postgres://u:synthetic-userinfo@h/db?sslkey=synthetic-query pnpm test`
+    ]) {
+      const masked = JSON.stringify(imStep('Bash', { command }, 'done'))
+      expect(masked).not.toMatch(/synthetic-(plain|quoted|userinfo|query)|synthetic quoted/)
+    }
     const long = imStep('Read', { file_path: `/tmp/${'a'.repeat(300)}.ts` }, 'done')
     expect(long.summary.length).toBeLessThanOrEqual(80)
     expect(maskImText('refresh_token=synthetic-refresh harness')).not.toContain('synthetic-refresh')

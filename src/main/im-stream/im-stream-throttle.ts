@@ -2,6 +2,12 @@
 // waiting, and no write starts while the previous one is unanswered (platforms ack each in order).
 export const IM_STREAM_MIN_GAP_MS = 1000
 
+/** The gap: `ORCA_IM_STREAM_MIN_GAP_MS` when set to 250 ms through 60 s, else one second. */
+export function imStreamGapMs(env: NodeJS.ProcessEnv = process.env): number {
+  const set = Number(env.ORCA_IM_STREAM_MIN_GAP_MS)
+  return Number.isFinite(set) && set >= 250 && set <= 60_000 ? set : IM_STREAM_MIN_GAP_MS
+}
+
 export type ImStreamTimer = (run: () => void, ms: number) => () => void
 
 const realTimer: ImStreamTimer = (run, ms) => {
@@ -26,7 +32,7 @@ export class ImStreamThrottle<T> {
     private readonly onFailure: (error: unknown) => void,
     options: { gapMs?: number; now?: () => number; timer?: ImStreamTimer } = {}
   ) {
-    this.gapMs = options.gapMs ?? IM_STREAM_MIN_GAP_MS
+    this.gapMs = options.gapMs ?? imStreamGapMs()
     this.now = options.now ?? Date.now
     this.timer = options.timer ?? realTimer
   }
