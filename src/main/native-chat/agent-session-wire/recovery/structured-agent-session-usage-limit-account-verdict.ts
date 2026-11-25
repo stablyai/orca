@@ -104,10 +104,12 @@ export function accountHoldVerdict({
       hold.unknownReset = false
     }
   }
+  // Room too old to schedule from never replaces the reset; the normal reading wait asks again.
   const room =
     movedCut &&
     reading &&
     fresh(cut.turnEndedAt ?? Number.NEGATIVE_INFINITY) &&
+    now - reading.updatedAt <= NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS &&
     rateLimitShowsRoom(reading)
       ? reading.updatedAt
       : roomAt(account?.key, reading)

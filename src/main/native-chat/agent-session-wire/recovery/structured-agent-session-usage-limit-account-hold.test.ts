@@ -377,3 +377,40 @@ it.each([
     expect(known.holds.verdict('chat', known.cut, resetsAt + 200_000).resetsAt).toBe(spentUntil)
   }
 )
+
+it('keeps a moved cut schedulable when the only room reading is older than a day', async () => {
+  const now = ENDED + 3 * NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS
+  let refreshes = 0
+  const holds = new UsageLimitAccountHolds()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 3, accountHome: HIT },
+        lease: { runtimeFence: 3 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: NEXT.path,
+        account: {
+          key: NEXT.path,
+          read: () => ({
+            ...reading({ usedPercent: 10, resetsAt: now + 3_600_000 }),
+            updatedAt: now - NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS - 3_600_000
+          }),
+          refresh: () => (++refreshes, true)
+        }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  const limited = { ...CUT, resetsAt: now + 3_600_000 }
+  await holds.attribute('chat', host, limited, now)
+  const cut = holds.withSwitchReset('chat', limited)
+  expect(holds.schedulable('chat', cut, now + 20_000)).toBe(true)
+  expect(holds.ready('chat', cut, now + 20_000)).toBe(false)
+  expect(refreshes).toBe(1)
+})
