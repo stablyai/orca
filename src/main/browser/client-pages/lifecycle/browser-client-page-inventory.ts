@@ -20,6 +20,11 @@ export function createBrowserClientPageInventory(
   if (event.command.type !== 'createPage') {
     throw new BrowserClientPageCommandError('browser_client_page_command_invalid')
   }
+  // Redaction re-serializes the URL and can lengthen it, so the limit applies to what is stored.
+  const initialUrl =
+    event.command.initialUrl === undefined
+      ? undefined
+      : redactKagiSessionToken(event.command.initialUrl)
   return Object.freeze({
     authorityRuntimeId: event.authorityRuntimeId,
     authorityEpoch: event.authorityEpoch,
@@ -30,10 +35,10 @@ export function createBrowserClientPageInventory(
     browserProfileId: event.command.browserProfileId,
     executionHostKey: event.command.executionHostKey,
     state,
-    ...(event.command.initialUrl === undefined ||
-    event.command.initialUrl.length > BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH
+    ...(initialUrl === undefined ||
+    initialUrl.length > BROWSER_CLIENT_HOST_PAGE_INVENTORY_URL_MAX_LENGTH
       ? {}
-      : { currentUrl: redactKagiSessionToken(event.command.initialUrl) }),
+      : { currentUrl: initialUrl }),
     ...(event.command.workspaceId ? { workspaceId: event.command.workspaceId } : {})
   })
 }

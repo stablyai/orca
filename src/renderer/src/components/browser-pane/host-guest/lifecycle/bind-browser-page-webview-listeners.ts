@@ -257,7 +257,11 @@ export function bindBrowserPageWebviewListeners({
   return () => {
     webview.removeEventListener('did-finish-load', attachedNavigationReady)
     webview.removeEventListener('did-fail-load', attachedNavigationReady)
-    discardKagiPrivateInitialNavigation(browserTabId)
+    // A parked page still waiting to attach opens its latest address when main answers; keep the
+    // private request it queued for that. Close and purge discard it, and it expires on its own.
+    if (!isBrowserPageAttachWaiting(webview)) {
+      discardKagiPrivateInitialNavigation(browserTabId)
+    }
     unsubscribeMetadata()
     webview.removeEventListener('did-attach', handleDidAttach)
     webview.removeEventListener('dom-ready', handleDomReady)

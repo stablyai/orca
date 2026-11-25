@@ -175,6 +175,18 @@ export function normalizeKagiSessionLink(rawLink: string): string | null {
 }
 
 export function redactKagiSessionToken(rawUrl: string): string {
+  return withoutKagiSessionToken(rawUrl, true)
+}
+
+/**
+ * A Kagi URL without its token, in the query spelling redaction writes (a space becomes `+`), so
+ * an address compares equal to its redacted form whether or not it carried a token.
+ */
+export function comparableKagiSessionUrl(rawUrl: string): string {
+  return withoutKagiSessionToken(rawUrl, false)
+}
+
+function withoutKagiSessionToken(rawUrl: string, onlyWithToken: boolean): string {
   if (!rawUrl.includes('?')) {
     return rawUrl
   }
@@ -184,7 +196,7 @@ export function redactKagiSessionToken(rawUrl: string): string {
     if (
       parsed.protocol === 'https:' &&
       (hostname === 'kagi.com' || hostname === 'www.kagi.com') &&
-      parsed.searchParams.has('token')
+      (!onlyWithToken || parsed.searchParams.has('token'))
     ) {
       // Strip Kagi bearer tokens before display, history or persisted tab state.
       parsed.searchParams.delete('token')

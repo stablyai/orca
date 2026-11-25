@@ -8,7 +8,10 @@ import {
   type BrowserExpectedUrlMismatch
 } from '../../../../shared/browser/client-hosting/browser-expected-url'
 import { BrowserError } from '../../browser-error'
-import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
+import {
+  comparableKagiSessionUrl,
+  redactKagiSessionToken
+} from '../../../../shared/browser/navigation/browser-url'
 
 export function redactBrowserExpectedUrlMismatch(
   mismatch: BrowserExpectedUrlMismatch
@@ -44,9 +47,11 @@ export class ExpectedPageUrlGuard {
   verify(liveUrls: readonly string[]): void {
     const anchor = this.checkedUrl ?? liveUrls[0]
     const expected = redactKagiSessionToken(this.expectedUrl)
+    // Redaction re-serializes a Kagi query, so compare both sides in that one spelling.
+    const comparableExpected = comparableKagiSessionUrl(this.expectedUrl)
     const actualUrl = liveUrls.find(
       (url) =>
-        !isSameBrowserUrl(redactKagiSessionToken(url), expected) ||
+        !isSameBrowserUrl(comparableKagiSessionUrl(url), comparableExpected) ||
         (expected !== this.expectedUrl && !isSameBrowserUrl(url, this.expectedUrl)) ||
         (anchor !== undefined && !isSameBrowserUrl(url, anchor))
     )

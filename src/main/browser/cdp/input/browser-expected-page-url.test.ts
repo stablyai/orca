@@ -25,3 +25,13 @@ it('accepts safe discovery, returns a safe receipt, and rejects a private-docume
     ])
   ).toThrow()
 })
+
+it('matches a live token-bearing Kagi address however the expected query spells a space', () => {
+  const guard = new ExpectedPageUrlGuard('https://kagi.com/search?q=hello%20world', 'page')
+  expect(() => guard.verify(['https://kagi.com/search?q=hello%20world&token=secret'])).not.toThrow()
+  expect(() =>
+    new ExpectedPageUrlGuard('https://kagi.com/search?q=hello%20world', 'page').verify([
+      'https://kagi.com/search?q=other&token=secret'
+    ])
+  ).toThrow()
+})
