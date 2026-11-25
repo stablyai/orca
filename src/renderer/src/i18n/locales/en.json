@@ -1426,6 +1426,7 @@
           "spaces": "spaces",
           "link": "link",
           "tabs": "tabs",
+          "tab_characters": "tab characters",
           "trim": "trim",
           "root": "root",
           "word_wrap": "word wrap",

@@ -1572,6 +1572,7 @@
           "claude": "Claude",
           "gsd": "GSD",
           "tabs": "sekmeler",
+          "tab_characters": "sekme karakterleri",
           "command_line": "komut satırı",
           "about": "hakkında",
           "update": "güncelleme",
