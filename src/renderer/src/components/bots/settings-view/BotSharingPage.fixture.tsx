@@ -8,10 +8,10 @@ import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmat
 import { BotSharingPage } from './BotSharingPage'
 
 const builder: Bot = {
-  id: 'bot-builder',
-  name: 'Bot builder',
+  id: 'release-helper',
+  name: 'Release helper',
   hostId: 'local',
-  folder: 'bot-builder',
+  folder: 'release-helper',
   agent: 'claude',
   avatar: null,
   paused: false,
