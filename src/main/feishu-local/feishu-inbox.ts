@@ -3,6 +3,10 @@ import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import type { FeishuMessage, FeishuProfile } from './feishu-cli'
 import { binding, type Binding } from './feishu-binding'
+
+const inReplyWindow = (first: number, now: number): boolean =>
+  now >= first && now - first < 55 * 60_000
+
 /** One database per installation. A CLI app can belong to just one Orca profile and bot. */
 export class FeishuInbox {
   private db: Database.Database
@@ -13,6 +17,8 @@ export class FeishuInbox {
       CREATE TABLE IF NOT EXISTS inbox(account TEXT NOT NULL REFERENCES bindings(account) ON DELETE CASCADE,mid TEXT NOT NULL,event TEXT NOT NULL,body TEXT,first_post INTEGER,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),UNIQUE(account,event));
       CREATE INDEX IF NOT EXISTS pending_feishu_messages ON inbox(account) WHERE body IS NOT NULL AND review=0;
       CREATE TABLE IF NOT EXISTS reply_files(account TEXT NOT NULL,mid TEXT NOT NULL,name TEXT NOT NULL,bytes BLOB,file_key TEXT,posted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,mid),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
+      CREATE TABLE IF NOT EXISTS text_replies(account TEXT NOT NULL,id TEXT NOT NULL,mid TEXT NOT NULL,text TEXT NOT NULL,first_post INTEGER,message_id TEXT,review INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(account,id),FOREIGN KEY(account,mid) REFERENCES inbox(account,mid) ON DELETE CASCADE);
+      CREATE INDEX IF NOT EXISTS pending_feishu_replies ON text_replies(account) WHERE message_id IS NULL AND review=0;
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
     if (!columns.some((c) => c.name === 'progress')) {
@@ -164,12 +170,65 @@ export class FeishuInbox {
       .prepare('UPDATE inbox SET body=NULL,stored_path=NULL WHERE account=? AND mid=?')
       .run(account, mid)
   }
+  queueReply(account: string, mid: string, id: string, text: string) {
+    const row = this.db
+      .prepare('SELECT mid,text,message_id,review FROM text_replies WHERE account=? AND id=?')
+      .get(account, id)
+    if (row) {
+      if (row.mid !== mid || row.text !== text || row.review) {
+        throw new Error('The Feishu reply id was reused or needs review')
+      }
+      return typeof row.message_id === 'string'
+        ? { status: 'posted' as const, messageId: row.message_id }
+        : { status: 'queued' as const }
+    }
+    this.db
+      .prepare('INSERT INTO text_replies(account,mid,id,text) VALUES(?,?,?,?)')
+      .run(account, mid, id, text)
+    return { status: 'queued' as const }
+  }
+  pendingReplies(account: string) {
+    return this.db
+      .prepare(
+        'SELECT id,mid,text FROM text_replies WHERE account=? AND message_id IS NULL AND review=0 ORDER BY rowid LIMIT 32'
+      )
+      .all(account)
+      .map((row) => z.object({ id: z.string(), mid: z.string(), text: z.string() }).parse(row))
+  }
+  mayPostReply(account: string, id: string, now: number): boolean {
+    this.db
+      .prepare(
+        'UPDATE text_replies SET first_post=? WHERE account=? AND id=? AND first_post IS NULL'
+      )
+      .run(now, account, id)
+    const row = this.db
+      .prepare('SELECT first_post,message_id,review FROM text_replies WHERE account=? AND id=?')
+      .get(account, id)
+    if (!row || row.message_id || row.review || typeof row.first_post !== 'number') {
+      return false
+    }
+    if (!inReplyWindow(row.first_post, now)) {
+      this.db.prepare('UPDATE text_replies SET review=1 WHERE account=? AND id=?').run(account, id)
+      return false
+    }
+    return true
+  }
+  replyPosted(account: string, id: string, messageId: string): void {
+    this.db
+      .prepare(
+        'UPDATE text_replies SET message_id=? WHERE account=? AND id=? AND message_id IS NULL'
+      )
+      .run(messageId, account, id)
+  }
   review(account: string, mid: string): void {
     this.db.prepare('UPDATE inbox SET review=1 WHERE account=? AND mid=?').run(account, mid)
   }
   needsReview(account: string): boolean {
     return Boolean(
-      this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account)
+      this.db.prepare('SELECT 1 FROM inbox WHERE account=? AND review=1 LIMIT 1').get(account) ||
+      this.db
+        .prepare('SELECT 1 FROM text_replies WHERE account=? AND review=1 LIMIT 1')
+        .get(account)
     )
   }
   /** A reply whose outcome was lost must only be retried within Feishu's one-hour UUID window. */
@@ -184,8 +243,7 @@ export class FeishuInbox {
       !!row &&
       !row.review &&
       typeof row.first_post === 'number' &&
-      now >= row.first_post &&
-      now - row.first_post < 55 * 60_000
+      inReplyWindow(row.first_post, now)
     )
   }
 }

@@ -16,6 +16,7 @@ import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { connectorPostAttempts } from '../../../../external-conversations/connector-post-attempts'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
 import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
+import { replyToFeishu } from './connector-reply-feishu'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -28,7 +29,7 @@ export function requireSeam(
 }
 
 export const CONNECTOR_METHODS = [
-  // `orca bot reply`: the calling pane names its cloud conversation and turn; Orca Cloud posts it.
+  // `orca bot reply`: the linked conversation chooses its transport.
   defineMethod({
     name: 'connector.reply',
     permission: 'workspace',
@@ -47,6 +48,9 @@ export const CONNECTOR_METHODS = [
       )
       if (botRefusal) {
         throw new Error(botRefusal)
+      }
+      if (target.key.source === 'feishu-local') {
+        return replyToFeishu(params, context, target)
       }
       const conversation = cloudConversation(target.key)
       if (!conversation) {

@@ -3,6 +3,7 @@ import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sent
 import { dmKey, type Binding } from './feishu-binding'
 import { replyFeishu, finalFeishuMessage, uploadFeishuFile } from './feishu-replies'
 import type { FeishuStore } from './feishu-store-ops'
+import { drainFeishuTextOutbox } from './feishu-text-outbox'
 
 /** Only the delivery named by the native turn's stamps owns the answer. */
 export async function drainFeishuOutbox(
@@ -17,6 +18,7 @@ export async function drainFeishuOutbox(
   if (!b.chat) {
     return
   }
+  await drainFeishuTextOutbox(inbox, b, signal, active, checkProfile, changed)
   let after: string | null = null
   do {
     const rows = await journal.readOwed(b.account, after, 32)

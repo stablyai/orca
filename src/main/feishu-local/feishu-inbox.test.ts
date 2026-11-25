@@ -82,3 +82,61 @@ it('keeps the pairing, actor, original DM and both replay keys bound across a re
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+it('persists explicit replies and stops uncertain retries before the provider forgets their keys', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-replies-'))
+  const path = join(dir, 'inbox.sqlite')
+  let inbox = new FeishuInbox(path)
+  try {
+    const b = inbox.add('first', 'bot', profile)
+    inbox.pair('first', b, event)
+    const [bound] = inbox.bindings('first')
+    inbox.accept(bound, {
+      ...event,
+      create_time: '1800000000100',
+      message_id: 'om_next',
+      event_id: 'next'
+    })
+    inbox.admitted(b.account, 'om_next')
+    expect(() => inbox.queueReply(b.account, 'om_foreign', 'foreign', 'No')).toThrow(/FOREIGN KEY/)
+    expect(inbox.queueReply(b.account, 'om_next', 'progress', 'Working')).toEqual({
+      status: 'queued'
+    })
+    expect(inbox.mayPostReply(b.account, 'progress', 1000)).toBe(true)
+    inbox.close()
+    inbox = new FeishuInbox(path)
+    expect(inbox.queueReply(b.account, 'om_next', 'progress', 'Working')).toEqual({
+      status: 'queued'
+    })
+    expect(inbox.pendingReplies(b.account)).toEqual([
+      { id: 'progress', mid: 'om_next', text: 'Working' }
+    ])
+    expect(() => inbox.queueReply(b.account, 'om_next', 'progress', 'Changed')).toThrow(
+      /reply id was reused/
+    )
+    expect(inbox.mayPostReply(b.account, 'progress', 2000)).toBe(true)
+    expect(inbox.mayPostReply(b.account, 'progress', 3_301_000)).toBe(false)
+    expect(inbox.pendingReplies(b.account)).toEqual([])
+    expect(inbox.needsReview(b.account)).toBe(true)
+    expect(() => inbox.queueReply(b.account, 'om_next', 'progress', 'Working')).toThrow(
+      /needs review/
+    )
+    expect(inbox.queueReply(b.account, 'om_next', 'answer', 'Done')).toEqual({ status: 'queued' })
+    expect(inbox.mayPostReply(b.account, 'answer', 3_302_000)).toBe(true)
+    inbox.replyPosted(b.account, 'answer', 'om_posted')
+    inbox.close()
+    inbox = new FeishuInbox(path)
+    expect(inbox.queueReply(b.account, 'om_next', 'answer', 'Done')).toEqual({
+      status: 'posted',
+      messageId: 'om_posted'
+    })
+    expect(inbox.mayPostReply(b.account, 'answer', 3_303_000)).toBe(false)
+    expect(inbox.pendingReplies(b.account)).toEqual([])
+    inbox.remove('first', 'bot', b.account)
+    expect(inbox.needsReview(b.account)).toBe(false)
+    expect(() => inbox.queueReply(b.account, 'om_next', 'answer', 'Done')).toThrow(/FOREIGN KEY/)
+  } finally {
+    inbox.close()
+    await rm(dir, { recursive: true, force: true })
+  }
+})

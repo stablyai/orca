@@ -9,9 +9,9 @@ export async function replyFeishu(
   original: string,
   chat: string,
   message: { type: 'text' | 'post' | 'file'; content: unknown },
-  part: 'final' | 'file',
+  part: 'final' | 'file' | `reply:${string}`,
   signal: AbortSignal
-): Promise<void> {
+): Promise<string> {
   const uuid = createHash('sha256')
     .update(JSON.stringify(part === 'final' ? [account, original] : [account, original, part]))
     .digest('hex')
@@ -32,14 +32,16 @@ export async function replyFeishu(
     signal,
     JSON.stringify({ msg_type: message.type, content: JSON.stringify(message.content), uuid })
   )
-  z.object({
-    ok: z.literal(true),
-    identity: z.literal('bot'),
-    data: z.object({
-      chat_id: z.literal(chat),
-      message_id: z.string().regex(/^om_[a-zA-Z0-9_-]+$/)
+  return z
+    .object({
+      ok: z.literal(true),
+      identity: z.literal('bot'),
+      data: z.object({
+        chat_id: z.literal(chat),
+        message_id: z.string().regex(/^om_[a-zA-Z0-9_-]+$/)
+      })
     })
-  }).parse(response)
+    .parse(response).data.message_id
 }
 
 /** Raw post content never invokes the CLI Markdown helper's URL fetcher. */

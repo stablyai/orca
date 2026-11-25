@@ -150,6 +150,22 @@ export class FeishuLocalHost {
     }
     await this.inbox.stageFile(c.binding.account, mid, name, bytes)
   }
+  async reply(botId: string, externalId: string, mid: string, replyId: string, text: string) {
+    const c = this.active.get(botId)
+    if (
+      this.stopping ||
+      this.retiring.has(botId) ||
+      !c?.binding.owner ||
+      dmKey(c.binding).externalId !== externalId ||
+      !this.runtime.bots.enabled() ||
+      !this.runtime.bots.list().some((b) => b.id === botId && !b.paused)
+    ) {
+      throw new Error('not_this_bots_conversation')
+    }
+    const result = await this.inbox.queueReply(c.binding.account, mid, replyId, text)
+    c.wake()
+    return result
+  }
   repliesFilled(): void {
     for (const c of this.active.values()) {
       c.wake()
