@@ -58,8 +58,12 @@ export async function seedKeptCodexTurnOrdinals(input: {
       continue
     }
     seen.add(threadId)
+    // Unnumbered, the chat's replay would take its saved messages' rows, so its open fails instead.
     const turn = await latestTurn(input.connection, threadId, input.timeoutMs).catch(
       (error: unknown) => {
+        if (threadId === input.threadId) {
+          throw error
+        }
         input.onError?.(threadId, error)
         return null
       }
@@ -122,8 +126,8 @@ export async function seedKeptCodexCommandOutput(
     for (const { itemId, identity } of running) {
       const body = await journal!.reads.itemBody(agentJournalItemKey(identity)).catch(() => null)
       const output = body?.kind === 'tool-call' ? body.output : undefined
-      if (output && !output.truncated) {
-        translator.seedRunningOutput(threadId, itemId, output.head)
+      if (output) {
+        translator.seedRunningOutput(threadId, itemId, output.truncated ? null : output.head)
       }
     }
   }

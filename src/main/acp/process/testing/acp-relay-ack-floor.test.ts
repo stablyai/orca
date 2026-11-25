@@ -18,6 +18,7 @@ const chunk = (text: string, messageId?: string): string =>
 function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
   const acks: number[] = []
   const cuts: number[] = []
+  const cutKeys: unknown[] = []
   const turns = new AcpRelayTurns()
   const output = new RelayedProviderOutput({
     stdout: new Readable({ read() {} }),
@@ -28,6 +29,7 @@ function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
     ack: async (seq, keepFrom, flags) => {
       if (flags?.cut) {
         cuts.push(seq)
+        cutKeys.push(flags.cutKeys)
       }
       const replayedFrom = (keepFrom ?? seq + 1) - 1
       if (replayedFrom > (acks.at(-1) ?? 0)) {
@@ -56,7 +58,7 @@ function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
   }
   /** The connection's parse of a line it was handed. */
   const parsed = (line: string) => turns.observeSessionUpdate(JSON.parse(line).params)
-  return { output, acks, cuts, send, prompt, parsed }
+  return { output, acks, cuts, cutKeys, send, prompt, parsed }
 }
 
 describe('ACP relay ack floor', () => {
@@ -112,18 +114,19 @@ describe('ACP relay ack floor', () => {
   })
 
   it('cuts every ack while a message a forced ack released still streams, so its tail continues apart', async () => {
-    const { output, cuts, send, prompt } = rig()
+    const { output, cuts, cutKeys, send, prompt } = rig()
     prompt()
     await send(chunk('a', 'm1'), chunk('b', 'm1'))
     await output.settle(true)
     await send(chunk('c', 'm1'))
     expect(cuts).toEqual([2, 3])
-    // A plan or call pauses the cut (a replay past it starts whole); the message resuming its id
-    // re-arms it, and the next message ends it.
+    // Each cut names the message it splits, so a reattach moves exactly that one.
+    expect(cutKeys[0]).toEqual([JSON.stringify(['s', 'm1'])])
+    // A plan or call doesn't end it (it may resume under its id); the next message does.
     await send(update('plan', { entries: [] }))
     await send(chunk('c2', 'm1'))
     await send(chunk('d', 'm2'))
-    expect(cuts).toEqual([2, 3, 5])
+    expect(cuts).toEqual([2, 3, 4, 5])
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {

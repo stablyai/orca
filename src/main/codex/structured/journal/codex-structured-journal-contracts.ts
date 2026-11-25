@@ -76,7 +76,7 @@ export type CodexJournalTranslator = {
     items: readonly CodexThreadItem[]
   ) => AgentJournalItemIdentity[]
   /** The output a kept command's row already saved, so what streams next continues after it. */
-  seedRunningOutput: (threadId: string, itemId: string, output: string) => void
+  seedRunningOutput: (threadId: string, itemId: string, output: string | null) => void
   dispose: () => void
 }
 

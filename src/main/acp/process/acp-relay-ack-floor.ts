@@ -233,8 +233,21 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     }
   }
 
+  /** Until each cut message ends, even past a call (it may resume under its id), acks are cuts. */
   tookCut(): boolean {
-    return this.cutMessages.size > 0
+    return this.cutMessages.size > 0 || this.pausedCuts.size > 0
+  }
+
+  /** The messages a cut now splits, keyed as the continuation keys them: a reattach moves exactly
+   *  these, whatever comes before them in its replay. */
+  cutKeys(): string[] {
+    const keys = new Set<string>()
+    for (const open of [this.messages, this.cutMessages, this.pausedCuts]) {
+      for (const [id, item] of open) {
+        keys.add(JSON.stringify([item.session, id]))
+      }
+    }
+    return [...keys]
   }
 
   /** The call reported its final status. */

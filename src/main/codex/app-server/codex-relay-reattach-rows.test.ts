@@ -336,6 +336,57 @@ describe('codex rows across a reattach', () => {
     expect(rows.get(saved![0])).toContain('3')
   })
 
+  it('keeps a running command from its start; once the daemon let it go, later items still keep', () => {
+    const floor = createCodexRelayAckFloor()
+    const command = (method: string, status = 'inProgress') =>
+      JSON.stringify({
+        method,
+        params: { threadId: 't', item: { type: 'commandExecution', id: 'cmd', status } }
+      })
+    floor.observe(1, command('item/started'))
+    floor.observe(2, '{"method":"item/commandExecution/outputDelta","params":{"itemId":"cmd"}}')
+    // Its row is saved only at checkpoints, so a crash replays it from its start.
+    expect(floor.floor(2)).toBe(1)
+    floor.observe(3, item('item/started', 'b'))
+    // The daemon released through 2 (its ask at the memory cap): the command no longer holds b back.
+    expect(floor.floor(3, 2)).toBe(3)
+    floor.observe(4, item('item/completed', 'b', 'completed'))
+    floor.observe(5, command('item/completed', 'completed'))
+    expect(floor.floor(5, 2)).toBeNull()
+  })
+
+  it('a replay from the command start rebuilds its row once, not onto the seeded output', async () => {
+    const rows = new Map<string, string>()
+    const translator = createCodexJournalTranslator({
+      sink: {
+        appendItem: (identity, body) =>
+          rows.set(agentJournalItemKey(identity), JSON.stringify(body)),
+        appendTombstone: (identity) => rows.delete(agentJournalItemKey(identity)),
+        publish: () => {}
+      }
+    })
+    const command = { type: 'commandExecution', id: 'cmd', command: 'seq 1 9', cwd: '/w' }
+    const send = (method: string, params: Record<string, unknown>) =>
+      translator.handle({
+        type: 'notification',
+        sessionId: 's',
+        threadId: 't',
+        method,
+        params: { threadId: 't', turnId: 'turn-a', ...params }
+      })
+    const running = readCodexThreadItem({ ...command, status: 'inProgress' })
+    translator.seedRunningItems('t', 'turn-a', running ? [running] : [])
+    translator.seedRunningOutput('t', 'cmd', 'line-one\n')
+    send('turn/started', { turn: { id: 'turn-a' } })
+    send('item/started', { item: { ...command, status: 'inProgress' } })
+    send('item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-one\n' })
+    send('item/commandExecution/outputDelta', { itemId: 'cmd', delta: 'line-two\n' })
+    translator.flush()
+    const row = [...rows.values()].find((body) => body.includes('line-two'))
+    expect(row).toContain('line-one\\nline-two')
+    expect(row).not.toContain('line-one\\nline-one')
+  })
+
   it("numbers a kept chat's and its subagents' running turns as the live run did", async () => {
     const turns: Record<string, unknown> = {
       main: {

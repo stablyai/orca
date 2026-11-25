@@ -32,10 +32,14 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
   /** `childSessions`: the agent's subagents are child sessions (OpenCode) that report their end. */
   constructor(private readonly childSessions = false) {}
 
+  /** The messages this attach's cut split, as the client named them; null: unnamed, so guessed. */
+  private cutKeys: ReadonlySet<string> | null = null
+
   /** Each attach's replay is read from its own first line. */
   reset(): void {
     this.seen.clear()
     this.started.clear()
+    this.cutKeys = null
   }
 
   item(line: string): { key: string; start: boolean; end: boolean } | null {
@@ -55,8 +59,9 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     if (this.seen.has(key)) {
       return { key, start: false, end: false }
     }
-    // Per session, as the floor cuts: only a session's first message a replay meets was cut.
-    const start = this.started.has(update.sessionId)
+    // Named by the cut, exactly those moved; else, as the floor cuts, a session's first message a
+    // replay meets before a boundary.
+    const start = this.cutKeys ? !this.cutKeys.has(key) : this.started.has(update.sessionId)
     const full = this.seen.size >= MAX_SEEN_MESSAGES
     if (!full) {
       this.seen.add(key)
@@ -84,6 +89,7 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
   /** The earlier app's prompts whose turn starts before the daemon's cut: the cursor may be inside
    *  one of their messages, so the continuation reads until each is answered. */
   openAt(result: ProviderRelayAttachResult): string[] | null {
+    this.cutKeys = result.cutKeys ? new Set(result.cutKeys) : null
     const cut = (result.outstanding ?? []).filter(
       (request) => request.method === PROMPT && !request.replayedWhole
     )

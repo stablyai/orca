@@ -37,7 +37,7 @@ export class AcpKeptSession {
     const { child } = relayed
     this.child = child
     this.kept = acpKeptAgent(child)
-    child.kept.dropKeptLines()
+    child.kept.drop()
     calls.startAbove(this.kept.requestFloor)
   }
 

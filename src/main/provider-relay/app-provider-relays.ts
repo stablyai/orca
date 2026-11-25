@@ -224,18 +224,17 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     return null
   }
   const { channel, info } = relay
+  let endedSince = false
   if (
     keptProviderRelayOutstanding(info) &&
     info.pid !== null &&
     (await connected(channel.client))
   ) {
     const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
-    // An agent that ended during the attach still counts: its last output reaches the chat first.
-    const started = await child.start(info.ackedSeq).then(
-      () => true,
-      () => false
-    )
-    if (started) {
+    const attached = await child.start(info.ackedSeq).catch(() => null)
+    // An agent that ended since the listing can't answer the chat's open; it recovers as ended.
+    endedSince = (attached?.exit ?? null) !== null
+    if (attached && !endedSince) {
       forgetKeptProviderRelay(launch.chatKey, relay)
       reattachedChildren.add(child)
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
@@ -245,7 +244,9 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
     }
   }
   const verdict =
-    info.exit === null ? await recheckKeptProviderRelay(launch.chatKey, relay) : 'gone'
+    info.exit === null && !endedSince
+      ? await recheckKeptProviderRelay(launch.chatKey, relay)
+      : 'gone'
   if (verdict !== 'gone') {
     throw new KeptProviderRelayUnreachableError(launch.chatKey)
   }

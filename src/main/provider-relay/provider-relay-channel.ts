@@ -1,5 +1,6 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { jsonProperty } from '../../shared/json-stream/json-value-property'
+import type { ProviderRelayAckFlags } from './relayed-provider-output'
 import type {
   ProviderRelayAckWantedEvent,
   ProviderRelayAttachResult,
@@ -122,7 +123,7 @@ export class ProviderRelayChannel {
     relayId: string,
     seq: number,
     keepFrom?: number,
-    flags: { cut?: true; held?: true } = {}
+    flags: ProviderRelayAckFlags = {}
   ): Promise<unknown> {
     const payload = { relayId, seq, ...(keepFrom === undefined ? {} : { keepFrom }), ...flags }
     return this.client.request('relayAck', payload, RELAY_REQUEST_TIMEOUT_MS)
