@@ -13,12 +13,21 @@ export function readHomeBotLookup(worktreeId: string): HomeBotLookup {
   return (hostId) => findBotByWorkspace(bots, worktreeId, hostId)
 }
 
-/** `tabOrder` as the tab bar shows it: shortcuts and drops count the pinned Home first wherever it is stored. */
+/**
+ * `tabOrder` as the tab bar shows it, for shortcuts, drops and side closes: tabs the stored order misses follow it, as
+ * the bar appends them, and the pinned Home leads wherever it is stored (or missing).
+ */
 export function displayedTabOrder(
   tabOrder: string[],
   groupTabs: readonly Tab[],
   worktreeId: string,
   homeBotFor: HomeBotLookup = readHomeBotLookup(worktreeId)
 ): string[] {
-  return withBotHomeFirstTabIds(tabOrder, groupTabs, homeBotFor)
+  const listed = new Set(tabOrder)
+  const unlisted = groupTabs.filter((tab) => !listed.has(tab.id)).map((tab) => tab.id)
+  return withBotHomeFirstTabIds(
+    unlisted.length === 0 ? tabOrder : [...tabOrder, ...unlisted],
+    groupTabs,
+    homeBotFor
+  )
 }
