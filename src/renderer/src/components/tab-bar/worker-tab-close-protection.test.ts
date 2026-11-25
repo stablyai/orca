@@ -32,7 +32,11 @@ vi.mock('@/runtime/workspace-layout/commands/layout-apply-send', () => ({
 }))
 
 import { useAppStore } from '@/store'
-import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import {
+  makeStructuredChatTab,
+  makeTabGroup,
+  makeUnifiedTab
+} from '@/store/slices/tabs/tab-group.test-fixture'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import {
   handleWorkerTabUserClose,
@@ -41,8 +45,12 @@ import {
 } from './worker-tab-user-close'
 import { selectWorkerTabPeekId } from './worker-tab-presentation'
 import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
-import { stampedTaskTitleForRow } from '../../../../shared/orchestration/workers/worker-tab-stamp'
+import {
+  stampedTaskTitleForRow,
+  workerTabStampSchema
+} from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import { workerTabCloseKind } from './worker-tab-view-actions'
+import { selectFoldedWorkerTabIds } from './worker-tab-folding'
 import { CoordinatorWorkerIndex } from './coordinator-worker-index'
 import { admitBulkWorkerClose } from './worker-tab-close-target'
 import { registerEditorFrameFlush } from '../editor/save/flush/editor-pending-flush'
@@ -149,6 +157,69 @@ const tabIds = () => useAppStore.getState().unifiedTabsByWorktree[WT]?.map((tab)
 const groupOf = (id: string) =>
   useAppStore.getState().unifiedTabsByWorktree[WT]?.find((tab) => tab.id === id)?.groupId
 const groupIds = () => useAppStore.getState().groupsByWorktree[WT]?.map((group) => group.id)
+
+it('keeps an unbound restored chat visible while bound retained workers can still hide', () => {
+  const unbound = workerTabStampSchema.parse({
+    ...workerTab('legacy', 'pane').workerTab,
+    agentIdentity: { agentType: 'claude' }
+  })
+  const bound = workerTabStampSchema.parse({
+    ...unbound,
+    structuredSessionLineageRootId: 'original-session'
+  })
+  const chats = [
+    makeStructuredChatTab({
+      id: 'legacy',
+      worktreeId: WT,
+      groupId: 'pane',
+      entityId: 'unrelated-session',
+      agentSessionAgent: 'claude',
+      workerTab: unbound
+    }),
+    makeStructuredChatTab({
+      id: 'retained',
+      worktreeId: WT,
+      groupId: 'pane',
+      entityId: 'original-session',
+      agentSessionAgent: 'claude',
+      workerTab: bound
+    }),
+    makeStructuredChatTab({
+      id: 'cleared',
+      worktreeId: WT,
+      groupId: 'pane',
+      entityId: 'cleared-session',
+      agentSessionLineageRootId: 'original-session',
+      agentSessionAgent: 'claude',
+      workerTab: bound
+    })
+  ]
+  const order = ['anchor', 'legacy', 'retained', 'cleared']
+  seed(
+    [ordinary('anchor'), ...chats],
+    [{ id: 'pane', activeTabId: 'anchor', tabOrder: order }],
+    {},
+    ['legacy']
+  )
+  const folded = () => selectFoldedWorkerTabIds(useAppStore.getState(), WT, 'pane')
+  expect(folded().has('legacy')).toBe(false)
+  useAppStore.getState().setWorkerTabStripChoice(WT, 'legacy', 'kept')
+
+  for (const { id } of chats) {
+    dispatchWorkspaceTabCommand({
+      type: 'close',
+      target: { kind: 'tab', worktreeId: WT, tabId: id }
+    })
+  }
+
+  expect(tabIds()).toEqual(order)
+  expect(useAppStore.getState().workerTabStripChoiceByWorktree[WT]).toEqual({
+    legacy: 'kept',
+    retained: 'hidden',
+    cleared: 'hidden'
+  })
+  expect(folded()).toEqual(new Set(['retained', 'cleared']))
+})
 
 it('classifies a tab from its current leaves', () => {
   const state = (roots: Record<string, TerminalPaneLayoutNode>) => {

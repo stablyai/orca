@@ -104,10 +104,22 @@ export function workerCloseKindOf(
   return target.kind === 'protected' ? 'mixed' : workerTabCloseKind(state, target.tab)
 }
 
-export function notifyMixedWorkerTabKept(key: string): void {
+function keptWorkerTabsMessage(count: number): string {
+  return translate('workerTabs.closeKept.bulk', 'Kept {{count}} tabs with workers', {
+    count,
+    defaultValue_one: 'Kept {{count}} tab with a worker'
+  })
+}
+
+export function notifyMixedWorkerTabKept(key: string, isChat: boolean): void {
   // One id per tab: repeated Cmd/Ctrl+W refreshes the same note instead of stacking more.
   toast(
-    translate('workerTabs.closeKept.tab', 'This tab has a worker · close your terminal pane first'),
+    isChat
+      ? keptWorkerTabsMessage(1)
+      : translate(
+          'workerTabs.closeKept.tab',
+          'This tab has a worker · close your terminal pane first'
+        ),
     { id: `worker-tab-kept:${key}` }
   )
 }
@@ -128,13 +140,9 @@ export function admitBulkWorkerClose(
     }
   }
   if (keptTabs.size > 0) {
-    toast(
-      translate('workerTabs.closeKept.bulk', 'Kept {{count}} tabs with workers', {
-        count: keptTabs.size,
-        defaultValue_one: 'Kept {{count}} tab with a worker'
-      }),
-      { id: `worker-tabs-kept:${createNonSecureContextUuid()}` }
-    )
+    toast(keptWorkerTabsMessage(keptTabs.size), {
+      id: `worker-tabs-kept:${createNonSecureContextUuid()}`
+    })
   }
   return kept
 }

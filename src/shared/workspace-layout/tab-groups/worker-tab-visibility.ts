@@ -25,14 +25,14 @@ type WorkerChatIdentity = Pick<
 >
 type WorkerTabSurface = WorkerChatIdentity & Pick<Tab, 'contentType'>
 
-/** A stamped chat is the worker's only while the bound agent is the one the stamp names. */
+/** A stamped chat needs a durable session binding before worker-only actions can use it. */
 export function isWorkerChatIdentityConsistent(tab: WorkerChatIdentity): boolean {
   const stamp = tab.workerTab
   if (!stamp || workerTabHasNewAgent(stamp)) {
     return false
   }
   const root = stamp.structuredSessionLineageRootId
-  if (root !== undefined && root !== (tab.agentSessionLineageRootId ?? tab.entityId)) {
+  if (!root || root !== (tab.agentSessionLineageRootId ?? tab.entityId)) {
     return false
   }
   const stamped = stamp.agentIdentity?.agentType

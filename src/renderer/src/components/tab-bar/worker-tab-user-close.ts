@@ -27,7 +27,8 @@ export function handleWorkerTabUserClose(id: string, bulk = false): boolean {
   if (kind === 'mixed' || target?.kind !== 'tab') {
     // A bulk close already said how many it kept, once, when it chose its targets.
     if (!bulk) {
-      notifyMixedWorkerTabKept(target?.kind === 'tab' ? target.tab.id : id)
+      const tab = target?.kind === 'tab' ? target.tab : undefined
+      notifyMixedWorkerTabKept(tab?.id ?? id, tab?.contentType === 'agent-session')
     }
     return true
   }
