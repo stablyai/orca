@@ -76,6 +76,9 @@ export function moveWorktreeCreationDraftToTarget(
  * draft change. A moved draft alone proves nothing, and an undelivered send to a stale chat keeps them
  * for Retry; dismissing the pending creation, or deleting the draft that now holds them, releases them.
  * An unconfirmed send that the host records later, by reply or journal, is a recorded delivery too.
+ * After a confirmed move, a send that has already been handed back into the chat's composer, or whose
+ * recipient chat was discarded, has no custody left to wait for: the lease ends at once and the draft
+ * keeps only what it references. That holds even when the discard came before this result.
  */
 export function releaseFirstSendFilesWhenHeld(
   delivery: Promise<StructuredPromptDeliveryResult> | undefined,
@@ -88,6 +91,10 @@ export function releaseFirstSendFilesWhenHeld(
       return
     }
     if (draftTransferred()) {
+      if (result.inComposer || result.recipientOwned) {
+        files.release()
+        return
+      }
       files.releaseWhenHeld()
     }
     void result.whenRecorded?.then(() => files.release())

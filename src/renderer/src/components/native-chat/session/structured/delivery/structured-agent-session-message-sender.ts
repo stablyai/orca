@@ -32,11 +32,13 @@ import {
 import {
   beginSend,
   finish,
+  forgetStructuredAgentSessionSendRecorded,
   handBack,
   handBackRefused,
   retainUnconfirmed,
   runtimes,
   settleRecorded,
+  structuredAgentSessionSendRecorded,
   STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS,
   type StructuredAgentSessionSendOutcome,
   type StructuredAgentSessionSent
@@ -78,6 +80,8 @@ export type StructuredAgentSessionReservedSend = {
   clientMessageId: string
   fail: (notice: string) => void
   outcome: Promise<StructuredAgentSessionSendOutcome>
+  /** Resolves once the host records this send, even after an `unconfirmed` outcome. */
+  recorded: Promise<void>
   /** Older creates wait for acquisition; their send budget still begins at send. */
   legacy: () => void
   active: () => boolean
@@ -113,9 +117,14 @@ export function reserveStructuredAgentSessionSend(
   // Once sent, the entry is the send's: what it keeps after settling is not the reservation's.
   let sent = false
   let settleReservation = (_outcome: StructuredAgentSessionSendOutcome): void => {}
+  // Made with the reservation, so whoever holds it hears of a recording however the send reports it.
+  const recorded = structuredAgentSessionSendRecorded(entry.clientMessageId)
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     settleReservation = (outcome) => {
       reservations.delete(entry.clientMessageId)
+      if (outcome === 'returned' || outcome === 'dropped') {
+        forgetStructuredAgentSessionSendRecorded(entry.clientMessageId)
+      }
       resolve(outcome)
     }
   })
@@ -158,6 +167,7 @@ export function reserveStructuredAgentSessionSend(
       }
     },
     outcome,
+    recorded,
     active: () => held() !== undefined,
     legacy: () => clearTimeout(deadline),
     prepare: (input) => {
@@ -284,6 +294,8 @@ export function dropStructuredAgentSessionSends(sessionId: string): void {
   for (const entry of getStructuredAgentSessionPendingSends(sessionId)) {
     const runtime = runtimes.get(entry.clientMessageId)
     reservations.get(entry.clientMessageId)?.drop()
+    // Dropped sends are never recorded: their signal ends with them, live runtime or not.
+    forgetStructuredAgentSessionSendRecorded(entry.clientMessageId)
     runtime?.abort.abort()
     if (runtime) {
       runtime.activity.settle(false)

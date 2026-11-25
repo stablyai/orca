@@ -33,16 +33,26 @@ type SendRuntime = {
 }
 
 export const runtimes = new Map<string, SendRuntime>()
-// A send whose first outcome was `unconfirmed` can still be recorded later, by its reply or the journal.
-const recordedLater = new Map<string, Set<() => void>>()
+// One per send operation, made when the send (or its reservation) is: resolves once the host records it,
+// even after an `unconfirmed` first outcome and with the live runtime gone. Holders get it from the
+// send itself, so a recording can never land before they subscribe.
+const recordedSignals = new Map<string, { promise: Promise<void>; resolve: () => void }>()
 
-/** Resolves if this send, first reported unconfirmed, is later recorded; never if it ends otherwise. */
-export function whenStructuredAgentSessionSendRecorded(clientMessageId: string): Promise<void> {
-  return new Promise((resolve) => {
-    const waiting = recordedLater.get(clientMessageId) ?? new Set()
-    recordedLater.set(clientMessageId, waiting)
-    waiting.add(resolve)
-  })
+/** The send operation's recorded signal; the same promise for every call until the send ends. */
+export function structuredAgentSessionSendRecorded(clientMessageId: string): Promise<void> {
+  let signal = recordedSignals.get(clientMessageId)
+  if (!signal) {
+    let resolve = (): void => {}
+    const promise = new Promise<void>((done) => (resolve = done))
+    signal = { promise, resolve }
+    recordedSignals.set(clientMessageId, signal)
+  }
+  return signal.promise
+}
+
+/** The send ended without a recording (returned, dropped, released): its signal will never resolve. */
+export function forgetStructuredAgentSessionSendRecorded(clientMessageId: string): void {
+  recordedSignals.delete(clientMessageId)
 }
 
 export function finish(
@@ -50,12 +60,11 @@ export function finish(
   outcome: StructuredAgentSessionSendOutcome,
   keep?: Partial<StructuredAgentSessionPendingSend>
 ): void {
+  if (outcome === 'recorded') {
+    recordedSignals.get(entry.clientMessageId)?.resolve()
+  }
   if (outcome !== 'unconfirmed') {
-    const waiting = recordedLater.get(entry.clientMessageId)
-    recordedLater.delete(entry.clientMessageId)
-    if (outcome === 'recorded') {
-      waiting?.forEach((resolve) => resolve())
-    }
+    forgetStructuredAgentSessionSendRecorded(entry.clientMessageId)
   }
   const runtime = runtimes.get(entry.clientMessageId)
   if (runtime) {
@@ -179,6 +188,8 @@ function onDeadline(sessionId: string, clientMessageId: string): void {
 export type StructuredAgentSessionSent = {
   clientMessageId: string
   outcome: Promise<StructuredAgentSessionSendOutcome>
+  /** Resolves once the host records this send, including after an `unconfirmed` outcome. */
+  recorded: Promise<void>
 }
 
 export function beginSend(
@@ -191,6 +202,7 @@ export function beginSend(
   updateStructuredAgentSessionPendingSend(sessionId, clientMessageId, {
     afterSequence: owner.getSnapshot().state.cursor?.sequence
   })
+  const recorded = structuredAgentSessionSendRecorded(clientMessageId)
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     runtimes.set(clientMessageId, {
       activity: owner.trackSend(clientMessageId),
@@ -200,5 +212,5 @@ export function beginSend(
       resolve
     })
   })
-  return { clientMessageId, outcome }
+  return { clientMessageId, outcome, recorded }
 }

@@ -79,10 +79,13 @@ export function returnMessageToComposer(
   // Not this draft's yet (a first send refused before its draft moved in): repaired when they arrive.
   noteNativeChatUnrestoredExpiredUploads(
     composerScopeKey,
-    blocks.flatMap((block, index) =>
-      block.type === 'image-ref' && block.path && expired(block.path) && !restored.has(block.path)
-        ? [[`${attachmentIdPrefix}-${index}`, block.path] as const]
-        : []
+    images,
+    new Map(
+      blocks.flatMap((block, index) =>
+        block.type === 'image-ref' && block.path && expired(block.path) && !restored.has(block.path)
+          ? [[`${attachmentIdPrefix}-${index}`, block.path] as const]
+          : []
+      )
     ),
     nativeChatTextAttachmentParts(messageText, true, expired).flatMap((part) =>
       part.path && !restored.has(part.path) ? [part.path] : []

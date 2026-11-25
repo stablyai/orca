@@ -38,7 +38,8 @@ vi.mock('../attachments/uploads/native-chat-session-attachment-upload', () => ({
 const { reconcileNativeChatStagedDraft, stageNativeChatDraftFile } =
   await import('./native-chat-draft-attachment-staging')
 const { captureNativeChatStagedInput } = await import('./native-chat-staged-input')
-const { readNativeChatComposerDraft } = await import('./native-chat-composer-draft-store')
+const { appendToNativeChatComposerDraft, readNativeChatComposerDraft } =
+  await import('./native-chat-composer-draft-store')
 const { deleteNativeChatComposerDraft } = await import('./native-chat-composer-draft-removal')
 const { structuredAgentSessionDraftScopeKey } = await import('./native-chat-draft-scope')
 const { handBackStructuredAgentSessionMessage } =
@@ -187,4 +188,49 @@ it('releases a moved first send waiting for custody when its provisional chat is
   discardStructuredAgentSessionChatSends(sessionId)
 
   expect(released).toContain('blob:provisional')
+})
+
+// The repair follows the unresolved reference, not the chip id: if the user put a newer image of the
+// same name in the unavailable slot before the draft moved in, that image stays. The expired text
+// reference is still repaired, and the stored rich document (its selected skill) survives the rewrite.
+it('keeps a newer image put in the unavailable slot and the draft document when repairing', async () => {
+  const sessionId = 'staged-replaced-before-handoff'
+  const source = 'pending-creation:staged-replaced-before-handoff'
+  const recipient = structuredAgentSessionDraftScopeKey(sessionId)
+  const [image, text] = ['blob:replaced-image', 'blob:replaced-text']
+  ;[image, text].forEach((path) => stageNativeChatDraftFile(source, path))
+  const input = { text: formatNativeChatFileReference(text), attachments: [{ path: image }] }
+  const send = captureNativeChatStagedInput(source, input)
+  reconcileNativeChatStagedDraft(source, { text: '', images: [] })
+  const prepared = await send.prepare(input, { ...session, sessionId })
+  const imageHost = prepared.attachments![0].path
+  const textHost = [...uploadedHosts.entries()].find(([, from]) => from === text)![0]
+  const skill = { name: 'review-skill', path: '/skills/review/SKILL.md' }
+  const refused: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [
+      { type: 'text', text: `/review-skill ${prepared.text}` },
+      { type: 'image-ref', path: imageHost }
+    ],
+    skills: [skill]
+  }
+  const expired = [imageHost, textHost].map((host) => agentSessionAttachmentUploadIdOfPath(host)!)
+  handBackStructuredAgentSessionMessage(sessionId, 'replaced', refused, undefined, new Set(expired))
+  const newer = '/picked/again/file.png'
+  appendToNativeChatComposerDraft(recipient, {
+    images: [{ id: 'picked', path: newer }],
+    fromUser: true
+  })
+  expect(readNativeChatComposerDraft(recipient).images.map(({ path }) => path)).toEqual([newer])
+
+  moveNativeChatComposerDraft(source, recipient, { workspaceId: 'wt', executionHostId: 'local' })
+
+  const repaired = readNativeChatComposerDraft(recipient)
+  expect(repaired.images.map(({ path }) => path)).toEqual([newer])
+  expect(repaired.text).toContain(formatNativeChatFileReference(text))
+  const document = JSON.stringify(repaired.document)
+  expect(document).toContain(skill.path)
+  expect(document).toContain(text)
+  expect(document).not.toContain(textHost)
 })

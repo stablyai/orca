@@ -13,6 +13,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type { StructuredAgentSessionSendInput } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-slot'
 import type { StructuredPromptDeliveryResult } from './structured-agent-session-launch-callers'
 import { abandonNativeChatPendingStagedLeases } from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
+import type { StructuredAgentSessionSendOutcome } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime'
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 type LaunchMessage = Pick<StructuredAgentSessionSendInput, 'text' | 'attachments' | 'skills'>
@@ -23,6 +24,20 @@ export type StagedDelivery = Omit<
 > & {
   inComposer: boolean
   failureNotified?: boolean
+}
+
+/**
+ * An unconfirmed send can still be recorded later. Every launch result carries that send operation's
+ * own recorded signal, whichever path (reservation, create, plain send) reports it first.
+ */
+export function unconfirmedStructuredLaunchDelivery(
+  outcome: StructuredAgentSessionSendOutcome,
+  recorded: Promise<void> | undefined
+): Pick<StructuredPromptDeliveryResult, 'unconfirmed' | 'whenRecorded'> {
+  if (outcome !== 'unconfirmed') {
+    return {}
+  }
+  return { unconfirmed: true, ...(recorded ? { whenRecorded: recorded } : {}) }
 }
 
 export type StructuredLaunchPromptOptions = {
@@ -98,7 +113,7 @@ export function stageStructuredLaunchPrompt(
     const result: StagedDelivery = {
       delivered: outcome === 'recorded',
       inComposer: !prompt.callerKeepsText && outcome === 'returned',
-      ...(outcome === 'unconfirmed' ? { unconfirmed: true } : {})
+      ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
     }
     if (!prompt.delivery) {
       prompt.delivery = Promise.resolve(result)
@@ -183,7 +198,7 @@ export function prepareStructuredLaunchPromptForCreate(
         return {
           delivered: outcome === 'recorded',
           inComposer: !prompt.callerKeepsText && outcome === 'returned',
-          ...(outcome === 'unconfirmed' ? { unconfirmed: true as const } : {})
+          ...unconfirmedStructuredLaunchDelivery(outcome, sent.recorded)
         }
       })
     : Promise.resolve({ delivered: false, inComposer: !prompt.callerKeepsText }).then((outcome) => {

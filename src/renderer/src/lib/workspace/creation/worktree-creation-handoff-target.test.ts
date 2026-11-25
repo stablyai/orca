@@ -8,6 +8,21 @@ vi.mock('@/store/index', () => ({
 vi.mock('@/lib/agent-session/launch/structured-agent-session-launch-registry', () => ({
   getStructuredAgentSessionLaunchOwner: () => undefined
 }))
+// The host transport is the stand-in: a dispatched send gets its real recorded signal and no reply.
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-send-dispatch',
+  async () => {
+    const runtime =
+      await import('@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime')
+    return {
+      dispatchStructuredAgentSessionSend: (entry: StructuredAgentSessionPendingSend) => ({
+        clientMessageId: entry.clientMessageId,
+        outcome: new Promise(() => {}),
+        recorded: runtime.structuredAgentSessionSendRecorded(entry.clientMessageId)
+      })
+    }
+  }
+)
 
 const {
   confirmWorktreeCreationHandoffTarget,
@@ -53,39 +68,89 @@ it('releases the first send files on delivery, waits for custody after a move, e
   expect(await outcome(false, false)).toBe('kept')
 })
 
-// A first send first reported unconfirmed and later recorded by the journal is a recorded delivery:
-// its files are released then, even though the original delivery promise already settled.
-it('releases the first send files when an unconfirmed send is later recorded', async () => {
-  const { retainUnconfirmed, settleRecorded, whenStructuredAgentSessionSendRecorded } =
-    await import('@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime')
-  const entry: StructuredAgentSessionPendingSend = {
-    clientMessageId: 'late-recorded-send',
-    sessionId: 'late-recorded-session',
-    body: { kind: 'message', role: 'user', blocks: [] },
-    previewUris: [],
-    queuedAt: 0,
-    phase: 'sending',
-    issued: true
-  }
-  const calls: string[] = []
-  const delivery = Promise.resolve({
-    delivered: false,
-    failureNotified: false,
-    unconfirmed: true as const,
-    whenRecorded: whenStructuredAgentSessionSendRecorded(entry.clientMessageId)
-  })
-  releaseFirstSendFilesWhenHeld(delivery, () => true, {
-    release: () => calls.push('release'),
-    releaseWhenHeld: () => calls.push('when-held')
-  })
-  retainUnconfirmed(entry)
-  await delivery
-  await Promise.resolve()
-  expect(calls).toEqual(['when-held'])
+const { reserveStructuredAgentSessionSend, dropStructuredAgentSessionSends } =
+  await import('@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender')
+const { retainUnconfirmed, settleRecorded, structuredAgentSessionSendRecorded } =
+  await import('@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime')
+const { findStructuredAgentSessionPendingSend } =
+  await import('@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends')
+const { unconfirmedStructuredLaunchDelivery, discardStructuredAgentSessionChatSends } =
+  await import('@/lib/agent-session/launch/structured-agent-session-staged-prompt')
+const { captureNativeChatStagedInput } =
+  await import('@/components/native-chat/drafts/native-chat-staged-input')
+const { hasNativeChatStagedFiles, reconcileNativeChatStagedDraft, stageNativeChatDraftFile } =
+  await import('@/components/native-chat/drafts/native-chat-draft-attachment-staging')
+const { structuredAgentSessionDraftScopeKey } =
+  await import('@/components/native-chat/drafts/native-chat-draft-scope')
 
+const pendingOf = (
+  sessionId: string,
+  clientMessageId: string
+): StructuredAgentSessionPendingSend => {
+  const entry = findStructuredAgentSessionPendingSend(sessionId, clientMessageId)
+  expect(entry).toBeDefined()
+  return entry!
+}
+
+// The paired launch's reserved send reports `unconfirmed`, and the journal records that exact send
+// before anyone subscribes: the recorded signal belongs to the send itself, so the first-send files are
+// still released once the lease owner listens.
+it('releases the first send files when a reserved send is recorded after unconfirmed', async () => {
+  const slot = reserveStructuredAgentSessionSend({ sessionId: 'late-reserved', text: 'hi' })!
+  const entry = pendingOf('late-reserved', slot.clientMessageId)
+  retainUnconfirmed(entry)
   settleRecorded(entry, null, 'journal')
-  await Promise.resolve()
-  await Promise.resolve()
+
+  const calls: string[] = []
+  releaseFirstSendFilesWhenHeld(
+    Promise.resolve({
+      delivered: false,
+      failureNotified: false,
+      ...unconfirmedStructuredLaunchDelivery('unconfirmed', slot.recorded)
+    }),
+    () => true,
+    { release: () => calls.push('release'), releaseWhenHeld: () => calls.push('when-held') }
+  )
+  for (let tick = 0; tick < 4; tick += 1) {
+    await Promise.resolve()
+  }
 
   expect(calls).toEqual(['when-held', 'release'])
+  slot.release()
+})
+
+// Dropping a chat's sends ends their recorded signals, even for a send already out of its reservation
+// whose live runtime is gone after an `unconfirmed` outcome.
+it('ends a dropped unconfirmed send recorded signal', () => {
+  const slot = reserveStructuredAgentSessionSend({ sessionId: 'late-dropped', text: 'hi' })!
+  slot.send({ kind: 'local' })
+  retainUnconfirmed(pendingOf('late-dropped', slot.clientMessageId))
+
+  dropStructuredAgentSessionSends('late-dropped')
+
+  expect(structuredAgentSessionSendRecorded(slot.clientMessageId)).not.toBe(slot.recorded)
+})
+
+// After a confirmed move, a recipient discarded before the lease owner heard the result (or a send
+// already handed back to the composer) leaves no custody to wait for: the first-send files go now.
+it('releases moved first-send files when the recipient was discarded before the result', async () => {
+  for (const settled of [{ recipientOwned: true as const }, { inComposer: true as const }]) {
+    const sessionId = `discard-first-${Object.keys(settled)[0]}`
+    const scope = structuredAgentSessionDraftScopeKey(sessionId)
+    stageNativeChatDraftFile(scope, `blob:${sessionId}`)
+    const files = captureNativeChatStagedInput(scope, {
+      text: '',
+      attachments: [{ path: `blob:${sessionId}` }]
+    })
+    reconcileNativeChatStagedDraft(scope, { text: '', images: [] })
+    discardStructuredAgentSessionChatSends(sessionId)
+    expect(hasNativeChatStagedFiles(scope)).toBe(true)
+
+    const delivery = Promise.resolve({ delivered: false, failureNotified: true, ...settled })
+    releaseFirstSendFilesWhenHeld(delivery, () => true, files)
+    await delivery
+    await Promise.resolve()
+
+    expect(hasNativeChatStagedFiles(scope)).toBe(false)
+  }
 })
