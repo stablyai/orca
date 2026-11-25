@@ -11,14 +11,13 @@ import { paneIsCoveredByNativeChat } from '@/components/terminal-pane/chat/nativ
 import type { GlyphAtlasLike } from './terminal-webgl-atlas-sampling'
 
 type WebglInternals = {
-  _renderer?: { _charAtlas?: unknown; _gl?: { isContextLost?: () => boolean } }
+  _renderer?: { _charAtlas?: GlyphAtlasLike; _gl?: { isContextLost?: () => boolean } }
 }
 
 export function atlasOfPane(pane: ManagedPaneInternal): GlyphAtlasLike | undefined {
   try {
-    const atlas = (pane.webglAddon as unknown as WebglInternals | null)?._renderer?._charAtlas as
-      | GlyphAtlasLike
-      | undefined
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned addon stores its atlas on the private renderer; check the pages array before use.
+    const atlas = (pane.webglAddon as unknown as WebglInternals | null)?._renderer?._charAtlas
     return atlas && Array.isArray(atlas.pages) ? atlas : undefined
   } catch {
     return undefined
@@ -36,8 +35,9 @@ export function isEligibleOwner(
   manager?: RegisteredPaneManager
 ): boolean {
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned addon's renderer holds the GL context privately; verify the liveness method before calling it.
     const renderer = (pane.webglAddon as unknown as WebglInternals | null)?._renderer
-    const terminalElement = (pane.terminal as { element?: { isConnected?: boolean } }).element
+    const terminalElement = pane.terminal.element
     return (
       !!pane.webglAddon &&
       !pane.webglDisabledAfterContextLoss &&

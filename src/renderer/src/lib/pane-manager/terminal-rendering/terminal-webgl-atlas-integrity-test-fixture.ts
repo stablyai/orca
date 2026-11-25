@@ -89,7 +89,7 @@ export function fakePane(
     _renderer: renderer,
     clearTextureAtlas: vi.fn(() => evict(renderer._charAtlas))
   }
-  return {
+  const pane = {
     id: 1,
     terminal,
     container,
@@ -98,16 +98,20 @@ export function fakePane(
     addon,
     webglDisabledAfterContextLoss: false,
     webglAddon: addon
-  } as unknown as FakePane
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake supplies the connection, context, atlas and viewport operations used by recovery.
+  return pane as unknown as FakePane
 }
 
 export function setupAtlasIntegrityFixture() {
+  const timers: { callback: () => void; ms: number }[] = []
+  const events: Record<string, unknown>[] = []
   const fixture = {
     clock: 0,
-    timers: [] as { callback: () => void; ms: number }[],
+    timers,
     windowPresented: true,
     state: createAtlasIntegrityState(),
-    events: [] as Record<string, unknown>[],
+    events,
     deps(read: GlyphInkReader): AtlasIntegrityDeps {
       return {
         now: () => fixture.clock,

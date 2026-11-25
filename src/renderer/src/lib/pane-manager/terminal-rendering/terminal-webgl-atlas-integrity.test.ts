@@ -252,13 +252,14 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
   it('hands a deferred check to another eligible owner when the requester is covered', () => {
     const shared = atlas()
     const first = fakePane(shared)
-    const second = fakePane(shared)
+    const requester = { covered: false }
+    const second = fakePane(shared, requester)
     register(true, [first, second])
 
     verifyPaneWebglAtlasIntegrity(first, 'attach', deps(ink))
     fixture.clock += 100
     verifyPaneWebglAtlasIntegrity(second, 'reveal', deps(blank))
-    ;(second.container as unknown as { querySelector: () => object }).querySelector = () => ({})
+    requester.covered = true
     runTimers()
 
     expect(first.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)

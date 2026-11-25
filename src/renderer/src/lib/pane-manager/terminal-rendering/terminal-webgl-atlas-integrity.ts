@@ -240,6 +240,7 @@ function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): 
   const pending = deps.state.pending
   if (![...pending.keys()].some((ref) => ref.deref() === atlas)) {
     if (pending.size >= MAX_PENDING_ATLASES) {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a map at the positive capacity has a first key.
       pending.delete(pending.keys().next().value as WeakRef<GlyphAtlasLike>)
     }
     pending.set(new WeakRef(atlas), Date.now())

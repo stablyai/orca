@@ -50,6 +50,7 @@ function readOnce(
   ctx.clearRect(0, 0, SCRATCH_WIDTH, height)
   // Source-over onto transparent pixels reproduces the source's alpha.
   ctx.drawImage(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm atlas pages supply HTMLCanvasElements; the sampler's structural type only needs dimensions.
     canvas as unknown as CanvasImageSource,
     rect.x,
     rect.y,

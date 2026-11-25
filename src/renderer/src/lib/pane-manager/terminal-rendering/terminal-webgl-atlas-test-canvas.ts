@@ -47,6 +47,7 @@ export function fakeKit(options: ScratchState = {}) {
       return { data }
     }
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake supplies the reader's canvas operations and recognizes its control token in drawImage.
   return { ctx: ctx as unknown as CanvasRenderingContext2D, control: {} as HTMLCanvasElement }
 }
 

@@ -18,6 +18,10 @@ import { checkAtlasIntegrity, type GlyphInkReader } from './terminal-webgl-atlas
 const fixture = setupAtlasIntegrityFixture()
 const { advanceServiceClock, deps, events, register, takeScheduledWake } = fixture
 const traversal = () => ({ layoutVersion: undefined, cursors: [], startPage: 0 })
+const throwingRead: GlyphInkReader = (_canvas, _rect, onReadIssued) => {
+  onReadIssued()
+  throw new Error('readback failed')
+}
 
 function lateControlFailure(availableCredits: number) {
   const prepareControl = vi.fn().mockImplementationOnce(() => {
@@ -72,11 +76,7 @@ describe('terminal WebGL atlas work limits', () => {
   })
 
   it('counts unreadable and throwing reads and respects the read budget', () => {
-    const throwing: GlyphInkReader = (_canvas, _rect, onReadIssued) => {
-      onReadIssued()
-      throw new Error('readback failed')
-    }
-    expect(checkAtlasIntegrity(atlas(), throwing, traversal(), 16)).toEqual({
+    expect(checkAtlasIntegrity(atlas(), throwingRead, traversal(), 16)).toEqual({
       outcome: 'inconclusive',
       reads: 1
     })
@@ -370,26 +370,22 @@ describe('terminal WebGL atlas work limits', () => {
 
   it.each([
     ['an invalid read', fakeReader(() => 'unreadable'), true],
-    [
-      'a throwing read',
-      ((_canvas, _rect, onReadIssued) => {
-        onReadIssued()
-        throw new Error('readback failed')
-      }) as GlyphInkReader,
-      true
-    ],
-    ['an unavailable scratch', (() => 'unavailable') as GlyphInkReader, false]
-  ])('charges the shared read budget for %s only if a read was issued', (_name, read, charged) => {
-    const spender = fakePane(atlas())
-    const third = fakePane(atlas())
-    register(true, [spender, third])
-    fixture.state.readTimes.push(...Array.from({ length: 15 }, () => fixture.clock))
+    ['a throwing read', throwingRead, true],
+    ['an unavailable scratch', fakeReader(() => 'unavailable'), false]
+  ] as const)(
+    'charges the shared read budget for %s only if a read was issued',
+    (_name, read, charged) => {
+      const spender = fakePane(atlas())
+      const third = fakePane(atlas())
+      register(true, [spender, third])
+      fixture.state.readTimes.push(...Array.from({ length: 15 }, () => fixture.clock))
 
-    verifyPaneWebglAtlasIntegrity(spender, 'reveal', deps(read))
-    fixture.clock += 100
-    verifyPaneWebglAtlasIntegrity(third, 'reveal', deps(blank))
+      verifyPaneWebglAtlasIntegrity(spender, 'reveal', deps(read))
+      fixture.clock += 100
+      verifyPaneWebglAtlasIntegrity(third, 'reveal', deps(blank))
 
-    expect(third.addon.clearTextureAtlas).toHaveBeenCalledTimes(charged ? 0 : 1)
-    expect(fixture.timers).toHaveLength(charged ? 1 : 0)
-  })
+      expect(third.addon.clearTextureAtlas).toHaveBeenCalledTimes(charged ? 0 : 1)
+      expect(fixture.timers).toHaveLength(charged ? 1 : 0)
+    }
+  )
 })

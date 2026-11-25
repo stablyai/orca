@@ -9,6 +9,7 @@ export type AtlasCheckTraceStage =
 
 /** Session-only observation hook (unset in normal use); content-free stages. */
 export function trace(entry: AtlasCheckTraceStage): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the optional session hook is installed outside the module and checked for callability below.
   const hook = (globalThis as { __orcaAtlasIntegrityTrace?: (entry: AtlasCheckTraceStage) => void })
     .__orcaAtlasIntegrityTrace
   if (typeof hook === 'function') {
