@@ -5,9 +5,13 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AcpStructuredTurnsDeps, AcpTurnSend } from './acp-turn-dispatch-contract'
+import type {
+  AcpSteerMode,
+  AcpStructuredTurnsDeps,
+  AcpTurnSend
+} from './acp-turn-dispatch-contract'
 
-type Steer = { send: AcpTurnSend; mode: 'inject' | 'cancel' | 'wait' }
+type Steer = { send: AcpTurnSend; mode: AcpSteerMode | 'wait' }
 const steeringReply = z.looseObject({ outcome: z.enum(['injected', 'promptRequired', 'failed']) })
 
 /** The provider keeps custody from admission through injection or the next prompt. */
@@ -28,6 +32,7 @@ export class AcpPendingSteers {
       joinableTurn: () => AgentJournalItemIdentity | null
       start: (send: AcpTurnSend) => void
       cancel: () => void
+      onSettled: () => void
     }
   ) {}
 
@@ -35,8 +40,9 @@ export class AcpPendingSteers {
     return this.queue.length > 0 || this.inFlight !== null
   }
 
-  submit(send: AcpTurnSend, inject: boolean): void {
-    const mode = inject && this.deps.steeringSessionId !== undefined ? 'inject' : 'cancel'
+  submit(send: AcpTurnSend, steer: AcpSteerMode): void {
+    const mode =
+      this.deps.steeringSessionId === undefined ? (steer === 'mail' ? 'wait' : 'cancel') : steer
     this.queue.push({ send, mode })
     if (mode === 'cancel' && this.turns.running()) {
       this.turns.cancel()
@@ -55,13 +61,13 @@ export class AcpPendingSteers {
       this.turns.start(next.send)
     } else if (next.mode === 'cancel') {
       this.turns.cancel()
-    } else if (next.mode === 'inject') {
+    } else if (next.mode !== 'wait') {
       const turn = this.turns.joinableTurn()
       const sessionId = this.deps.steeringSessionId
       if (turn && sessionId !== undefined) {
         this.queue.shift()
         this.inFlight = next.send
-        void this.inject(next.send, sessionId, turn)
+        void this.inject(next.send, next.mode, sessionId, turn)
       }
     }
   }
@@ -116,6 +122,7 @@ export class AcpPendingSteers {
 
   private async inject(
     send: AcpTurnSend,
+    mode: 'mail' | 'steer',
     sessionId: string,
     turn: AgentJournalItemIdentity
   ): Promise<void> {
@@ -147,8 +154,12 @@ export class AcpPendingSteers {
       }
     } else {
       // Keep the same submission ahead of newer steers, even if its prompt ended mid-request.
-      this.queue.unshift({ send, mode: outcome === 'promptRequired' ? 'wait' : 'cancel' })
+      this.queue.unshift({
+        send,
+        mode: mode === 'mail' || outcome === 'promptRequired' ? 'wait' : 'cancel'
+      })
     }
     this.advance()
+    this.turns.onSettled()
   }
 }

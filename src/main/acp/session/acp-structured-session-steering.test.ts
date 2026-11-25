@@ -83,8 +83,8 @@ async function openChat(meta: unknown, provider: 'omp' | 'cursor' = 'omp') {
   })
   host = rig.host
   disposals.push(async () => {
-    await rig.dispose()
     await router.closeAll()
+    await rig.dispose()
     agent.close()
   })
   const request = async (method: string, index = 0) => {
@@ -135,7 +135,7 @@ async function openChat(meta: unknown, provider: 'omp' | 'cursor' = 'omp') {
     agent.frames
       .map(({ method }) => method)
       .filter((method) => method === PROMPT || method === CANCEL || method === EXTENSION)
-  return { rig, agent, request, finish, mail, submissions, methods }
+  return { rig, agent, adapter, request, finish, mail, submissions, methods }
 }
 
 describe('ACP orchestration mail steering', () => {
@@ -204,19 +204,22 @@ describe('ACP orchestration mail steering', () => {
     }
   )
 
-  it.each(['failed', 'rpc-error'] as const)(
-    'falls back to one cancel and one prompt on %s',
+  it.each(['failed', 'malformed', 'rpc-error'] as const)(
+    'waits for the original turn before prompting once on %s',
     async (failure) => {
       const chat = await openChat(STEERING)
       const draft = await chat.mail()
       const steer = await chat.request(EXTENSION)
       if (failure === 'failed') {
         chat.agent.reply(steer, { outcome: 'failed', reason: 'not admitted' })
+      } else if (failure === 'malformed') {
+        chat.agent.reply(steer, { outcome: 'unexpected' })
       } else {
         chat.agent.fail(steer, -32601, 'Method not found')
       }
-      await chat.request(CANCEL)
-      await chat.finish('cancelled')
+      await chat.submissions(draft)
+      expect(chat.methods()).toEqual([PROMPT, EXTENSION])
+      await chat.finish()
       const next = await chat.request(PROMPT, 1)
       expect(next.params).toEqual({
         sessionId: SESSION,
@@ -226,9 +229,36 @@ describe('ACP orchestration mail steering', () => {
       await eventually(async () => {
         expect(await chat.submissions(draft)).toMatchObject([{ dispatchState: 'accepted' }])
       })
-      expect(chat.methods()).toEqual([PROMPT, EXTENSION, CANCEL, PROMPT])
+      expect(chat.methods()).toEqual([PROMPT, EXTENSION, PROMPT])
     }
   )
+
+  it('refuses to switch permissions while the old child still holds steering mail', async () => {
+    const chat = await openChat(STEERING)
+    const draft = await chat.mail()
+    const steer = await chat.request(EXTENSION)
+    await chat.finish()
+
+    expect(
+      await chat.adapter.settlePermissionTransition({
+        sessionId: HOST_TEST_SESSION,
+        fence: 1,
+        mode: 'full-access'
+      })
+    ).toBe(false)
+
+    chat.agent.reply(steer, { outcome: 'promptRequired' })
+    const next = await chat.request(PROMPT, 1)
+    expect(next.params).toEqual({
+      sessionId: SESSION,
+      prompt: [{ type: 'text', text: MAIL_TEXT }]
+    })
+    chat.agent.reply(next, { stopReason: 'end_turn' })
+    await eventually(async () => {
+      expect(await chat.submissions(draft)).toMatchObject([{ dispatchState: 'accepted' }])
+    })
+    expect(chat.methods()).toEqual([PROMPT, EXTENSION, PROMPT])
+  })
 
   it('admits mail mid-turn only for OMP with initialize support', async () => {
     const supported = await openChat(STEERING)

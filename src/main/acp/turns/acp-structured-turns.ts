@@ -1,4 +1,8 @@
-import type { AcpStructuredTurnsDeps, AcpTurnSend as Send } from './acp-turn-dispatch-contract'
+import type {
+  AcpSteerMode,
+  AcpStructuredTurnsDeps,
+  AcpTurnSend as Send
+} from './acp-turn-dispatch-contract'
 import { AcpPendingSteers } from './acp-pending-steers'
 import type {
   AgentSessionCommandAdmission,
@@ -41,7 +45,8 @@ export class AcpStructuredTurns {
         return deps.lane.openTurnId === turnId ? deps.lane.openTurnIdentity : null
       },
       start: (send) => this.start(send),
-      cancel: () => this.cancelForSteer()
+      cancel: () => this.cancelForSteer(),
+      onSettled: () => this.notifyIdle()
     })
   }
 
@@ -102,7 +107,9 @@ export class AcpStructuredTurns {
       }
     }
     this.withdrawals += 1
-    return this.steers.stop()
+    const withdrawn = this.steers.stop()
+    this.notifyIdle()
+    return withdrawn
   }
 
   /** Earlier admitted steers retain their native queue and settlement while the host holds new input. */
@@ -116,19 +123,25 @@ export class AcpStructuredTurns {
     }
   }
 
-  whenIdle(signal?: AbortSignal): Promise<void> {
-    if (!this.active || signal?.aborted) {
+  whenIdle(signal?: AbortSignal, scope: 'all' | 'prompt' = 'all'): Promise<void> {
+    const promptOnly = scope === 'prompt'
+    if (this.ended || signal?.aborted || (!this.active && (promptOnly || !this.holdsSteers))) {
       return Promise.resolve()
     }
-    return new Promise((resolve) => {
-      const wake = (): void => {
-        this.idleWaiters.delete(wake)
-        signal?.removeEventListener('abort', wake)
-        resolve()
+    const { promise, resolve } = Promise.withResolvers<void>()
+    const finish = (): void => {
+      this.idleWaiters.delete(wake)
+      signal?.removeEventListener('abort', finish)
+      resolve()
+    }
+    const wake = (): void => {
+      if (this.ended || promptOnly || !this.holdsSteers) {
+        finish()
       }
-      this.idleWaiters.add(wake)
-      signal?.addEventListener('abort', wake, { once: true })
-    })
+    }
+    this.idleWaiters.add(wake)
+    signal?.addEventListener('abort', finish, { once: true })
+    return promise
   }
 
   /** A steer whose controls must run as a prompt first holds its place until released: Stop
@@ -136,7 +149,10 @@ export class AcpStructuredTurns {
   holdSteer(): () => void {
     this.preparingSteers += 1
     this.cancelForSteer()
-    return () => void this.preparingSteers--
+    return () => {
+      this.preparingSteers -= 1
+      this.notifyIdle()
+    }
   }
 
   /** A Stop or teardown since `epoch` withdraws a preparing steer like any held steer. */
@@ -144,13 +160,13 @@ export class AcpStructuredTurns {
     return this.ended ? 'ended' : this.withdrawals === epoch ? null : 'stopped'
   }
 
-  dispatch(send: Send, inject: boolean): void {
+  dispatch(send: Send, mode: AcpSteerMode): void {
     this.steers.unsettled.add(send.clientMessageId)
     if (!this.active && !this.steers.held) {
       this.start(send)
       return
     }
-    this.steers.submit(send, inject)
+    this.steers.submit(send, mode)
   }
 
   /** The host owns compaction-message settlement; reuse its open command turn. */
@@ -237,9 +253,8 @@ export class AcpStructuredTurns {
           return
         }
         const cancelled = this.stopAt !== null || this.steerCancelled === send
-        const { clientMessageId } = send
         lane.apply(
-          lane.translator.promptResult(clientMessageId, result, this.deps.now(), cancelled)
+          lane.translator.promptResult(send.clientMessageId, result, this.deps.now(), cancelled)
         )
         this.accept(send.clientMessageId)
         this.finishAndRetireIfLost(send, lane.translator.failures.takeSessionLoss())
@@ -301,9 +316,7 @@ export class AcpStructuredTurns {
     if (!this.ended) {
       this.steers.advance()
     }
-    if (!this.active) {
-      this.notifyIdle()
-    }
+    this.notifyIdle()
   }
 
   /** Steering waits indefinitely for cancellation; Stop can still end the child. */
@@ -326,9 +339,10 @@ export class AcpStructuredTurns {
   }
 
   private notifyIdle(): void {
-    for (const wake of this.idleWaiters) {
-      wake()
+    if (!this.active) {
+      for (const wake of this.idleWaiters) {
+        wake()
+      }
     }
-    this.idleWaiters.clear()
   }
 }

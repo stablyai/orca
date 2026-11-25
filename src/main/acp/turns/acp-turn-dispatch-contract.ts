@@ -17,6 +17,7 @@ export type AcpDispatchSettlement = { clientMessageId: string } & (
 )
 
 export type AcpTurnSend = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: number }
+export type AcpSteerMode = 'mail' | 'steer' | 'cancel'
 
 export type AcpStructuredTurnsDeps = {
   connection: Pick<AcpStructuredConnection, 'prompt' | 'cancel' | 'requestExtension'>
