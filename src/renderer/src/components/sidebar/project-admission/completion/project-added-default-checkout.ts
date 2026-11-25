@@ -33,6 +33,19 @@ type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handof
 
 let handoffGeneration = 0
 
+function captureProjectCheckoutReveal() {
+  const generation = ++handoffGeneration
+  const initial = useAppStore.getState()
+  return captureBrowserLinkReveal(useAppStore.getState, useAppStore.subscribe, () => {
+    const state = useAppStore.getState()
+    return (
+      generation === handoffGeneration &&
+      state.activeModal === initial.activeModal &&
+      state.modalData === initial.modalData
+    )
+  })
+}
+
 function findProjectRepo(repoId: string, executionHostId?: ExecutionHostId): Repo | null {
   const matches = useAppStore
     .getState()
@@ -156,13 +169,7 @@ export async function openProjectDefaultCheckout({
   selectedPath?: string
   executionHostId?: ExecutionHostId
 }): Promise<void> {
-  const generation = ++handoffGeneration
-  const initialModal = useAppStore.getState().activeModal
-  const reveal = captureBrowserLinkReveal(
-    useAppStore.getState,
-    useAppStore.subscribe,
-    () => generation === handoffGeneration && useAppStore.getState().activeModal === initialModal
-  )
+  const reveal = captureProjectCheckoutReveal()
   try {
     const repo = findProjectRepo(repoId, executionHostId)
     const ownerHostId = executionHostId ?? (repo ? getRepoExecutionHostId(repo) : undefined)
@@ -257,7 +264,15 @@ export async function finishProjectAddWithDefaultCheckout({
   closeModal: () => void
   executionHostId?: ExecutionHostId
 }): Promise<void> {
-  await markOnboardingProjectAdded('addedRepo')
+  const reveal = captureProjectCheckoutReveal()
+  try {
+    await markOnboardingProjectAdded('addedRepo')
+    if (!reveal.canReveal()) {
+      return
+    }
+  } finally {
+    reveal.dispose()
+  }
   closeModal()
   await openProjectDefaultCheckout({
     repoId,

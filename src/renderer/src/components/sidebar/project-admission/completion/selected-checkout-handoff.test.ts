@@ -6,7 +6,10 @@ import type { DetectedWorktree } from '../../../../../../shared/worktree/types'
 import { createRepoUpdateActions } from '@/store/repos/repo-update'
 import { keepImportedWorktreesHiddenCard } from '../../worktree-list/listing/imported-worktrees-card-actions'
 import { importNewExternalWorktreeInboxPaths } from '../../worktree-list/listing/new-external-worktrees-inbox-actions'
-import { openProjectDefaultCheckout } from './project-added-default-checkout'
+import {
+  finishProjectAddWithDefaultCheckout,
+  openProjectDefaultCheckout
+} from './project-added-default-checkout'
 
 const harness: {
   state: AppState | null
@@ -14,12 +17,14 @@ const harness: {
   persist: ReturnType<typeof vi.fn>
   subscribe: ReturnType<typeof vi.fn>
   error: ReturnType<typeof vi.fn>
+  onboarding: ReturnType<typeof vi.fn>
 } = vi.hoisted(() => ({
   state: null,
   activate: vi.fn(),
   persist: vi.fn(),
   subscribe: vi.fn(),
-  error: vi.fn()
+  error: vi.fn(),
+  onboarding: vi.fn()
 }))
 vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => harness.state!, subscribe: harness.subscribe }
@@ -30,7 +35,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
 }))
 vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: vi.fn() }))
 vi.mock('@/components/onboarding/onboarding-project-checklist', () => ({
-  markOnboardingProjectAdded: vi.fn()
+  markOnboardingProjectAdded: harness.onboarding
 }))
 vi.mock('@/store/projects/project-host-routing', () => ({
   getProjectSetupRuntimeTarget: () => ({ kind: 'local' })
@@ -94,6 +99,7 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
         projectHostSetups: [],
         settings: {},
         activeModal: 'none',
+        modalData: {},
         activeView: 'terminal',
         activeWorktreeId: null,
         activeWorkspaceExecutionHostId: null,
@@ -149,9 +155,59 @@ async function open(selectedPath: string, executionHostId?: 'local') {
 afterEach(() => vi.unstubAllGlobals())
 beforeEach(() => {
   vi.clearAllMocks()
+  harness.onboarding.mockResolvedValue(undefined)
 })
 
 describe('selected checkout handoff', () => {
+  it('preserves newer modal and workspace navigation while onboarding is pending', async () => {
+    const { store } = setup([checkout('/repo'), checkout('/selected')])
+    const gate = deferred<void>()
+    harness.onboarding.mockReturnValueOnce(gate.promise)
+    store.setState({
+      activeModal: 'confirm-add-project-from-folder',
+      modalData: { folderPath: '/selected' }
+    })
+    const handoff = finishProjectAddWithDefaultCheckout({
+      repoId: 'project',
+      source: 'local_folder_picker',
+      selectedPath: '/selected',
+      executionHostId: 'local',
+      closeModal: () => store.setState({ activeModal: 'none', modalData: {} }),
+      setHideDefaultBranchWorkspace: store.getState().setHideDefaultBranchWorkspace
+    })
+    store.setState({
+      activeWorktreeId: 'other::/newer',
+      activeModal: 'new-workspace-composer',
+      modalData: { initialRepoId: 'other' }
+    })
+    gate.resolve()
+    await handoff
+    expect(store.getState().activeModal).toBe('new-workspace-composer')
+    expect(store.getState().modalData).toEqual({ initialRepoId: 'other' })
+    expect(store.getState().activeWorktreeId).toBe('other::/newer')
+    expect(harness.activate).not.toHaveBeenCalled()
+    expect(harness.error).not.toHaveBeenCalled()
+  })
+
+  it('does not let an older onboarding completion supersede a newer handoff', async () => {
+    const { store } = setup([checkout('/repo'), checkout('/selected'), checkout('/newer')])
+    const gate = deferred<void>()
+    harness.onboarding.mockReturnValueOnce(gate.promise)
+    const handoff = finishProjectAddWithDefaultCheckout({
+      repoId: 'project',
+      source: 'local_folder_picker',
+      selectedPath: '/selected',
+      executionHostId: 'local',
+      closeModal: () => store.setState({ activeModal: 'none', modalData: {} }),
+      setHideDefaultBranchWorkspace: store.getState().setHideDefaultBranchWorkspace
+    })
+    await open('/newer', 'local')
+    harness.activate.mockClear()
+    gate.resolve()
+    await handoff
+    expect(harness.activate).not.toHaveBeenCalled()
+  })
+
   it('opens the deepest hidden checkout and preserves unrelated hidden siblings', async () => {
     const { store, persisted } = setup([
       checkout('/repo'),
