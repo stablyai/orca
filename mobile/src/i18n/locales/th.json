@@ -98,7 +98,7 @@
       "spacingRelaxed": "ผ่อนคลาย",
       "reset": "รีเซ็ตการตั้งค่าข้อความ",
       "previewQuestion": "เหตุใดการทดสอบเรซูเม่จึงไม่สม่ำเสมอ",
-      "previewTools": "อ่าน 3 ไฟล์ · ทดสอบ pnpm",
+      "previewTools": "อ่าน 3 ไฟล์ · รัน pnpm test",
       "previewAnswer": "การทดสอบจะรอบน `setTimeout(0)` ขณะที่สตรีมยังคงฟลัชอยู่ ดังนั้นการทดสอบจะผ่านเมื่อฟลัชชนะเท่านั้น"
     },
     "nativeNotificationDeliverySettings": {
@@ -1234,7 +1234,7 @@
       "label": "ป้ายกำกับ",
       "labelPlaceholder": "เช่น สร้าง",
       "command": "คำสั่ง",
-      "commandPlaceholder": "เช่น การสร้าง pnpm",
+      "commandPlaceholder": "เช่น pnpm build",
       "pressEnter": "กด Enter"
     },
     "dragReorderRow": {
@@ -1374,27 +1374,27 @@
     },
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
-      "pairingInvalid": "Pairing invalid",
-      "pairingTemporarilyUnavailable": "Pairing temporarily unavailable",
+      "pairingInvalid": "การจับคู่ไม่ถูกต้อง",
+      "pairingTemporarilyUnavailable": "การจับคู่ไม่พร้อมใช้งานชั่วคราว",
       "sameNetworkOnlyHint": "เชื่อมต่อบน Wi-Fi หรือ Tailscale เดียวกันเท่านั้น หากต้องการเชื่อมต่อจากทุกที่ ให้ลงชื่อเข้าใช้บนเดสก์ท็อปแล้วจับคู่อีกครั้ง",
-      "repairHint": "Tap to re-pair with your desktop",
+      "repairHint": "แตะเพื่อจับคู่กับเดสก์ท็อปของคุณอีกครั้ง",
       "unlockHint": "ปลดล็อกโทรศัพท์ของคุณ จากนั้นแตะเพื่อลองอีกครั้ง",
       "openHost": "เปิด {{title}}",
-      "hostActions": "Actions for {{title}}",
+      "hostActions": "การดำเนินการสำหรับ {{title}}",
       "needsYou_one": "{{count}} ต้องการคุณ",
       "needsYou_other": "{{count}} ต้องการคุณ"
     },
     "htmlPreview": {
-      "previewRenderedHtml": "Preview rendered HTML",
+      "previewRenderedHtml": "ดูตัวอย่าง HTML ที่เรนเดอร์",
       "preview": "ดูตัวอย่าง",
-      "viewHtmlSource": "View HTML source",
+      "viewHtmlSource": "ดูซอร์สโค้ด HTML",
       "source": "แหล่งที่มา",
       "title": "ตัวอย่าง HTML"
     },
     "prSidebar": {
-      "loading": "Loading pull request…",
+      "loading": "กำลังโหลด Pull Request…",
       "notPermitted": "ไม่ได้รับอนุญาต — บัญชี GitHub ของคุณไม่ได้เชื่อมต่อ",
-      "retryLoading": "Retry loading pull request"
+      "retryLoading": "ลองโหลด Pull Request อีกครั้ง"
     },
     "richMarkdownEditor": {
       "linkUrl": "URL ลิงก์",
@@ -1423,7 +1423,7 @@
     },
     "sourceCopyButton": {
       "copyFailed": "การคัดลอกล้มเหลว",
-      "clipboardRejected": "The clipboard rejected the text.",
+      "clipboardRejected": "คลิปบอร์ดปฏิเสธข้อความ",
       "failed": "ล้มเหลว",
       "copiedLoaded": "คัดลอกที่โหลดแล้ว",
       "copyLoaded": "คัดลอกที่โหลด",
@@ -2524,7 +2524,7 @@
       "copyPath": "คัดลอกเส้นทาง",
       "file": "ไฟล์",
       "chat": "แชท",
-      "cli": "คลี",
+      "cli": "CLI",
       "cliOnly": "CLI เท่านั้น",
       "unsavedMarkdown": "การเปลี่ยนแปลงมาร์กดาวน์ที่ไม่ได้บันทึก",
       "draftsHint": "คัดลอกหรือทิ้งร่างโทรศัพท์ก่อนออกเดินทาง",
