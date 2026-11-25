@@ -30,7 +30,7 @@ import { openCreatedBot } from './bot-create-open'
 import { NewBotPictureButton } from './NewBotPictureButton'
 import { useNewBotHostLooks, useNewBotPicture } from './use-new-bot-picture'
 import { followedByPicture, useNewBotDialogPicture } from './use-new-bot-generate-face'
-import { useBotAgentMenu } from './use-bot-agent-choices'
+import { useNewBotAgentMenu } from './use-bot-agent-choices'
 import { useBotCreateHost } from './bot-create-hosts'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -138,7 +138,7 @@ export function NewBotDialog({
   const { hostId, blocked, label } = hostChoice.host
   const hostBots = useHostBots(hostId)
   const name = typedName ?? (fromShare ? freeBotName(fromShare.review.bot.name, hostBots) : '')
-  const { model, choices } = useBotAgentMenu(hostId, open)
+  const { model, choices } = useNewBotAgentMenu(hostId, open)
   // A bot from someone else's link starts on Ask, whatever the owner's chats do.
   const agentSetup = useBotAgentSetup(choices, hostId, initialAgent, fromShare && 'ask')
   const [creating, setCreating] = useState(false)
@@ -191,7 +191,7 @@ export function NewBotDialog({
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault()
-    if (createInFlight.current) {
+    if (createInFlight.current || hostChoice.busy) {
       return
     }
     if (!trimmedName || purposeTooLong || blocked || !choices.length || intake.reading) {
@@ -425,7 +425,7 @@ export function NewBotDialog({
               </Button>
             ) : null}
             {fromShare ? <NewBotShareBack source={fromShare} disabled={creating} /> : null}
-            <BotCreateButton type="submit" busy={creating} disabled={creating}>
+            <BotCreateButton type="submit" busy={creating} disabled={creating || hostChoice.busy}>
               {t('bots.new.create', 'Create')}
             </BotCreateButton>
           </DialogFooter>
