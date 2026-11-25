@@ -12,6 +12,9 @@ export type BotChatTreeWorker = {
   state: 'running' | 'needs-you' | 'asking-bot' | 'unreachable' | 'done' | 'failed'
   startedAt: number
   settledAt?: number
+  /** `settledAt` is a stand-in (when it was created): its record has no completion time. It orders the
+   *  list and pages it; it dates nothing. Absent from older hosts. */
+  settledUndated?: true
   worktreeId?: string
   paneKey?: string
   note?: 'handed-over' | 'from-closed-chat' | 'automation-terminal'

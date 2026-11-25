@@ -53,6 +53,7 @@ const workerSchema = z.looseObject({
   state: z.enum(WORKER_STATES),
   startedAt: z.number(),
   settledAt: salvagedOptional('settledAt', z.number()),
+  settledUndated: salvagedOptional('settledUndated', z.literal(true)),
   worktreeId: salvagedOptional('worktreeId', z.string()),
   paneKey: salvagedOptional('paneKey', z.string()),
   note: salvagedOptional('note', z.enum(WORKER_NOTES)),
