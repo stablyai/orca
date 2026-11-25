@@ -23110,8 +23110,7 @@
       "noEmailNotSaved": "agy n’a pas indiqué d’adresse e-mail · non enregistrée",
       "saveShort": "Enregistrer",
       "readAt": "Relevé {{time}}",
-      "active": "Actif",
-      "chatDescriptionKeyOnAgy": "Les nouveaux chats s’exécutent sur agy avec la connexion ci-dessous, distincte de celle d’agy dans le terminal."
+      "active": "Actif"
     },
     "claude": {
       "added": "Compte ajouté. Sélectionnez-le pour l'utiliser pour le prochain Claude que vous démarrez.",

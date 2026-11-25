@@ -22818,8 +22818,7 @@
       "noEmailNotSaved": "agy hat keine E-Mail-Adresse gemeldet · nicht gespeichert",
       "saveShort": "Speichern",
       "readAt": "Ausgelesen {{time}}",
-      "active": "Aktiv",
-      "chatDescriptionKeyOnAgy": "Neue Chats laufen auf agy mit der unten stehenden Anmeldung, getrennt von agy im Terminal."
+      "active": "Aktiv"
     },
     "claude": {
       "added": "Konto hinzugefügt. Das Konto auswählen, um es beim nächsten Start von Claude zu verwenden.",

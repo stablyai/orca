@@ -24791,7 +24791,6 @@
       "terminalTitle": "终端中的 agy",
       "terminalDescription": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话",
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击“保存”",
-      "chatDescriptionKeyOnAgy": "新聊天会使用下方的登录信息在 agy 上运行，与终端中的 agy 相互独立",
       "apiKeyGet": "获取 API 密钥"
     },
     "claude": {

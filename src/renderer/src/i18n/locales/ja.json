@@ -23641,7 +23641,6 @@
       "saveShort": "保存",
       "readAt": "{{time}} に取得",
       "active": "アクティブ",
-      "chatDescriptionKeyOnAgy": "新規チャットは、下のサインインを使って agy 上で実行されます。ターミナルの agy とは別に管理されます。",
       "apiKeyGet": "APIキーを取得する"
     },
     "claude": {

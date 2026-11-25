@@ -22374,8 +22374,7 @@
       "noEmailNotSaved": "agy no indicó ningún correo electrónico · sin guardar",
       "saveShort": "Guardar",
       "readAt": "Consultado {{time}}",
-      "active": "Activa",
-      "chatDescriptionKeyOnAgy": "Los chats nuevos se ejecutan en agy con el inicio de sesión de abajo, separado de agy en el terminal."
+      "active": "Activa"
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",

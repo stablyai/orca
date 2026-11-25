@@ -22480,8 +22480,7 @@
       "noEmailNotSaved": "agy 未提供電子郵件地址 · 尚未儲存",
       "saveShort": "儲存",
       "readAt": "讀取於 {{time}}",
-      "active": "使用中",
-      "chatDescriptionKeyOnAgy": "新聊天會使用下方的登入資訊在 agy 上執行，與終端機中的 agy 分開。"
+      "active": "使用中"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於您下次啟動的 Claude。",

@@ -23778,8 +23778,7 @@
       "noEmailNotSaved": "agy não informou um e-mail · não salvo",
       "saveShort": "Salvar",
       "readAt": "Lido {{time}}",
-      "active": "Ativo",
-      "chatDescriptionKeyOnAgy": "Novos chats são executados no agy com o login abaixo, separado do agy no terminal."
+      "active": "Ativo"
     },
     "claude": {
       "added": "Conta adicionada. Selecione-a para usar no próximo Claude que iniciar.",
