@@ -525,6 +525,38 @@ describe('KeybindingService Search shortcut opt-in', () => {
     })
   })
 
+  it('promises the legacy Search chord only when the opt-in keeps it', () => {
+    expect(planSearchShortcutOptInForSnapshot(openLegacy().reload())).toEqual({
+      kind: 'eligible',
+      keepsLegacyKey: true
+    })
+    write({ platforms: { darwin: { 'tab.close': ['Mod+J'] } } })
+    expect(planSearchShortcutOptInForSnapshot(openLegacy().reload())).toEqual({
+      kind: 'eligible',
+      keepsLegacyKey: false
+    })
+  })
+
+  it('saves again before reporting a repeated request after an unconfirmed save', async () => {
+    const saves: string[] = []
+    let failNext = true
+    const service = openLegacy({
+      persist: async (choice) => {
+        saves.push(choice)
+        stored = choice
+        if (failNext) {
+          failNext = false
+          throw new Error('writer exited before acknowledging')
+        }
+      }
+    })
+    expect((await service.setSearchShortcutChoice('accepted')).outcome).toBe('unconfirmed')
+    expect((await service.setSearchShortcutChoice('accepted')).outcome).toBe('applied')
+    expect(saves).toEqual(['accepted', 'accepted'])
+    expect((await service.setSearchShortcutChoice('accepted')).outcome).toBe('applied')
+    expect(saves).toEqual(['accepted', 'accepted'])
+  })
+
   it('keeps legacy shortcuts when the save is rejected before commit', async () => {
     const service = openLegacy({
       persist: async () => {

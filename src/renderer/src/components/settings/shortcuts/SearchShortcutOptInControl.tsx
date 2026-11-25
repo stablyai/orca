@@ -137,18 +137,27 @@ function describeOffer(
         'searchShortcutOptIn.fileError',
         "Your keybindings file couldn't be read. Fix it or restart Orca, then try again."
       )
-    case 'eligible':
-      return state.platform === 'darwin'
-        ? t(
-            'searchShortcutOptIn.detailMac',
-            'Open Search with {{key}}, like new profiles. {{key}} in terminals will stop clearing. {{legacyKey}} keeps working. Only this profile changes; your custom shortcuts are kept.',
-            keys
-          )
-        : t(
-            'searchShortcutOptIn.detailOther',
-            'Open Search with {{key}}, like new profiles. In terminals {{key}} will open Search instead of clearing, and the shell no longer gets {{key}} (delete to end of line) unless Shortcuts in terminal is Terminal first. {{legacyKey}} keeps working. Only this profile changes.',
-            keys
-          )
+    case 'eligible': {
+      const detail =
+        state.platform === 'darwin'
+          ? t(
+              'searchShortcutOptIn.detailMac',
+              'Open Search with {{key}}, like new profiles. {{key}} in terminals will stop clearing.',
+              keys
+            )
+          : t(
+              'searchShortcutOptIn.detailOther',
+              'Open Search with {{key}}, like new profiles. In terminals {{key}} will open Search instead of clearing, and the shell no longer gets {{key}} (delete to end of line) unless Shortcuts in terminal is Terminal first.',
+              keys
+            )
+      const legacy = state.offer.keepsLegacyKey
+        ? ` ${t('searchShortcutOptIn.legacyKeeps', '{{legacyKey}} keeps working.', keys)}`
+        : ''
+      return `${detail}${legacy} ${t(
+        'searchShortcutOptIn.profileOnly',
+        'Only this profile changes; your custom shortcuts are kept.'
+      )}`
+    }
   }
 }
 

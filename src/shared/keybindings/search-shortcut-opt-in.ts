@@ -23,7 +23,8 @@ export type SearchShortcutPluginOwner = {
 export type SearchShortcutOwner = { actionId: KeybindingActionId; title?: string }
 
 export type SearchShortcutOffer =
-  | { kind: 'eligible' }
+  // keepsLegacyKey: an explicit binding may already hold the legacy chord, so copy must not promise it.
+  | { kind: 'eligible'; keepsLegacyKey: boolean }
   // Later edits may win over an accepted choice; report what Search actually got.
   | { kind: 'accepted'; searchOnModK: boolean; owners: SearchShortcutOwner[] }
   | { kind: 'custom-search' }
@@ -95,9 +96,17 @@ export function planSearchShortcutOptInForSnapshot(
 }
 
 function searchHasModK(platform: NodeJS.Platform, overrides: KeybindingOverrides): boolean {
-  const identity = getKeybindingConflictIdentity(SEARCH_BINDING, platform)
+  return searchHasBinding(platform, overrides, SEARCH_BINDING)
+}
+
+function searchHasBinding(
+  platform: NodeJS.Platform,
+  overrides: KeybindingOverrides,
+  binding: string
+): boolean {
+  const identity = getKeybindingConflictIdentity(binding, platform)
   return getEffectiveKeybindingsForAction(SEARCH_ACTION, platform, overrides).some(
-    (binding) => getKeybindingConflictIdentity(binding, platform) === identity
+    (candidate) => getKeybindingConflictIdentity(candidate, platform) === identity
   )
 }
 
@@ -153,12 +162,21 @@ function planSearchShortcutOptIn(
   if (Object.hasOwn(explicitOverrides, SEARCH_ACTION)) {
     return { kind: 'custom-search' }
   }
-  const searchOnModK = searchHasModK(
+  const optedIn = resolveKeybindingOverrides(
     platform,
-    resolveKeybindingOverrides(platform, explicitOverrides, getSearchOptInBindings(platform))
+    explicitOverrides,
+    getSearchOptInBindings(platform)
   )
+  const searchOnModK = searchHasModK(platform, optedIn)
   const owners = findModKOwners(platform, explicitOverrides, pluginOwners)
-  return owners.length > 0 || !searchOnModK ? { kind: 'conflict', owners } : { kind: 'eligible' }
+  if (owners.length > 0 || !searchOnModK) {
+    return { kind: 'conflict', owners }
+  }
+  const legacyChords = getLegacySearchBindings(platform)[SEARCH_ACTION] ?? []
+  return {
+    kind: 'eligible',
+    keepsLegacyKey: legacyChords.every((chord) => searchHasBinding(platform, optedIn, chord))
+  }
 }
 
 /** True when an accepted choice actually gave Search Mod+K with no other owner. */

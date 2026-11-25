@@ -99,7 +99,8 @@ function SearchShortcutOfferPrompt({
       aria-label={t('searchShortcutOptIn.groupLabel', 'Search shortcut')}
       className="flex min-w-0 flex-1 items-center gap-2"
     >
-      <span className="min-w-0 truncate" aria-live="polite">
+      {/* Wraps instead of truncating: the terminal-clear cost must stay visible next to the button. */}
+      <span className="min-w-0 leading-snug" aria-live="polite">
         {failed ? (
           <span className="text-destructive">
             {t('searchShortcutOptIn.failed', "Couldn't switch. Your shortcuts are unchanged.")}
@@ -111,9 +112,12 @@ function SearchShortcutOfferPrompt({
             </span>{' '}
             {t(
               'searchShortcutOptIn.footerDetail',
-              '{{key}} in terminals will stop clearing. {{legacyKey}} keeps working.',
+              '{{key}} in terminals will stop clearing.',
               keys
             )}
+            {state.offer.kind === 'eligible' && state.offer.keepsLegacyKey
+              ? ` ${t('searchShortcutOptIn.legacyKeeps', '{{legacyKey}} keeps working.', keys)}`
+              : null}
           </>
         )}
       </span>
@@ -122,6 +126,7 @@ function SearchShortcutOfferPrompt({
         size="xs"
         disabled={pending}
         onMouseDown={(event) => event.preventDefault()}
+        onKeyDown={keepButtonKeysFromPalette}
         onClick={() => void choose('accepted')}
       >
         {t('searchShortcutOptIn.use', 'Use {{key}}', keys)}
@@ -131,6 +136,7 @@ function SearchShortcutOfferPrompt({
         variant="ghost"
         disabled={pending}
         onMouseDown={(event) => event.preventDefault()}
+        onKeyDown={keepButtonKeysFromPalette}
         onClick={() => void choose('dismissed')}
       >
         {t('searchShortcutOptIn.notNow', 'Not now')}
@@ -171,4 +177,11 @@ function showUnconfirmedToast(t: ReturnType<typeof useTranslate>): void {
       'Settings › Shortcuts shows which Search shortcut is active.'
     )
   })
+}
+
+// The palette root treats Enter/Space as "open the highlighted result"; a focused footer button must activate itself.
+function keepButtonKeysFromPalette(event: React.KeyboardEvent): void {
+  if (event.key === 'Enter' || event.key === ' ') {
+    event.stopPropagation()
+  }
 }

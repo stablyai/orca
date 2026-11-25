@@ -41,6 +41,7 @@ export class KeybindingService {
   private readonly persistSearchShortcutChoice?: (choice: SearchShortcutChoice) => Promise<void>
   private readonly getSearchShortcutPluginOwners: () => readonly SearchShortcutPluginOwner[]
   private searchShortcutChoice: SearchShortcutChoice | null
+  private searchShortcutSaveUnconfirmed = false
   private searchShortcutWrite: Promise<unknown> = Promise.resolve()
   private defaultOverrides: KeybindingOverrides
   private fallbackOverrides: KeybindingOverrides = {}
@@ -146,9 +147,11 @@ export class KeybindingService {
       }
     }
     let failed = false
-    if (choice !== this.searchShortcutChoice) {
+    // A failed save may have left the choice only in memory, so a repeat must save again before claiming success.
+    if (choice !== this.searchShortcutChoice || this.searchShortcutSaveUnconfirmed) {
       try {
         await this.persistSearchShortcutChoice(choice)
+        this.searchShortcutSaveUnconfirmed = false
       } catch (error) {
         failed = true
         console.error('Failed to save Search shortcut choice:', error)
@@ -163,6 +166,7 @@ export class KeybindingService {
     }
     if (failed) {
       // Possibly committed; the UI must not claim the shortcut works, only point to Settings.
+      this.searchShortcutSaveUnconfirmed = true
       return { snapshot, outcome: 'unconfirmed' }
     }
     // Action and plugin edits aren't serialized behind the save, so judge the live result, not the preflight.
