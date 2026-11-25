@@ -265,7 +265,7 @@ export const MCP_SERVER_METHODS = [
     permission: 'workspace',
     params: McpServerMove,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params, moveAgentMcpServer), 'written')
+      onHost(context, () => importAgentMcpServer(context, params, moveAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.copy',
