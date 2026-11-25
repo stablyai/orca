@@ -32,8 +32,11 @@ export function startCodexNativeSourceCheck(
         return
       }
       const current = observeAgentStateFile(join(runtimeHomePath, 'config.toml'))
+      // An unreadable copy counts as changed, so its pending edits are kept.
       const unchanged =
-        current.kind === 'present' ? current.value === runtimeConfig : runtimeConfig === null
+        current.kind === 'present'
+          ? current.value === runtimeConfig
+          : current.kind === 'absent' && runtimeConfig === null
       retireCodexNativeSourceMark(runtimeHomePath, outcome === 'guest' && unchanged)
     })
     .catch((error: unknown) => {
