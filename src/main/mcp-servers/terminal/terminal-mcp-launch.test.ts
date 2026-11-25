@@ -167,12 +167,17 @@ describe('the host list in an agent terminal', () => {
       const input = launch('claude', 'claude --teammate-mode auto')
       Object.assign(input.env, team.env)
       await withTerminalMcpServers(input, { relay, hostFolder })
-      service.shareLeadMcpRelayEnv(input.env)
-      const env = await teammateSplitEnv(service, team)
       if (enabled) {
-        expect(env).toMatchObject({ ORCA_MCP_TOKEN: TOKEN, NO_PROXY: expect.any(String) })
+        service.shareLeadMcpRelayEnv(input.env)
+        expect(await teammateSplitEnv(service, team)).toMatchObject({
+          ORCA_MCP_TOKEN: TOKEN,
+          NO_PROXY: expect.any(String)
+        })
       } else {
         expect(input.env).not.toHaveProperty('ORCA_MCP_TOKEN')
+        // Even a lead env that holds a token shares nothing while the switch is off.
+        service.shareLeadMcpRelayEnv({ ...input.env, ORCA_MCP_TOKEN: TOKEN, NO_PROXY: '127.0.0.1' })
+        const env = await teammateSplitEnv(service, team)
         expect(env).not.toHaveProperty('ORCA_MCP_TOKEN')
         expect(env).not.toHaveProperty('NO_PROXY')
       }
