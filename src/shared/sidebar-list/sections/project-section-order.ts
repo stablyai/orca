@@ -30,7 +30,7 @@ export function withRepoSectionDisplayLabels<
 }
 
 /** Visible activity always beats placeholder addedAt; within each tier, newest timestamps rank first. */
-type RecentRank = { hasActivity: boolean; ts: number }
+export type RecentRank = { hasActivity: boolean; ts: number }
 
 export function recentRankForEntry(
   entry: readonly [string, ProjectSectionEntry<ActivityItem, ProjectSectionRepo>]

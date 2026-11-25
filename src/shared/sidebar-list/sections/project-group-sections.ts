@@ -24,15 +24,21 @@ export function appendProjectGroupSections(
   const { result, collapsedGroups } = ctx
   // Folder membership is already resolved above grouping; only count here (#15362).
   const folderCountByGroupId = new Map<string, number>()
+  const folderActivityByGroupId = new Map<string, number>()
   for (const pair of args.folderWorkspaces) {
     const groupId = pair.folderWorkspace.projectGroupId
     folderCountByGroupId.set(groupId, (folderCountByGroupId.get(groupId) ?? 0) + 1)
+    const activity = pair.folderWorkspace.lastActivityAt
+    if (activity > (folderActivityByGroupId.get(groupId) ?? Number.NEGATIVE_INFINITY)) {
+      folderActivityByGroupId.set(groupId, activity)
+    }
   }
   walkProjectGroupTree(
     {
       entries: args.orderedGroups,
       projectGroups: args.projectGroups,
       folderCountByGroupId,
+      folderActivityByGroupId,
       projectOrderBy: args.projectOrderBy,
       repoOrder: args.repoOrder
     },

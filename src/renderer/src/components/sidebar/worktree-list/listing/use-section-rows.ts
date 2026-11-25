@@ -24,6 +24,7 @@ import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { useEmptyProjectPlaceholderRepoIds } from './use-empty-project-placeholders'
+import { useHiddenMainCheckouts } from './use-hidden-main-checkouts'
 import {
   deferHostSectionCollapse,
   scopeHostSectionCollapse
@@ -143,6 +144,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     args.workspaceHostScope !== 'all' || args.visibleWorkspaceHostIds !== null
   // Same-id registrations on two hosts: each row and project header needs its own host's.
   const repoOfWorktree = useMemo(() => createHostScopedRepoOf(repos, repoMap), [repos, repoMap])
+  const hiddenMainCheckouts = useHiddenMainCheckouts(repos, worktrees)
   const rowPlan = useMemo(
     () =>
       planSidebarRows({
@@ -170,7 +172,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         defaultHostId,
         pinnedDisplayPolicy: args.pinnedDisplayPolicy,
         filterRepoIds: args.filterRepoIds,
-        hiddenProjects: indexHiddenProjects(repos, defaultHostId)
+        hiddenProjects: indexHiddenProjects(repos, defaultHostId),
+        activityOnlyWorktrees: hiddenMainCheckouts
       }),
     [
       args.groupBy,
@@ -196,7 +199,8 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
       pendingCreations,
       hostLabelById,
       args.pinnedDisplayPolicy,
-      args.filterRepoIds
+      args.filterRepoIds,
+      hiddenMainCheckouts
     ]
   )
   const effectiveCollapsedGroups = useEffectiveCollapsedGroups({

@@ -12,10 +12,13 @@ import {
   compareRecentRank,
   createRecentRankLookup,
   withRepoSectionDisplayLabels,
-  type ActivityItem
+  type ActivityItem,
+  type RecentRank
 } from './project-section-order'
 import { compareRootProjectEntries } from './root-project-order'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
+
+const NO_RECENT_ACTIVITY: RecentRank = { hasActivity: false, ts: Number.NEGATIVE_INFINITY }
 
 type GroupedProjectEntry = ProjectSectionEntry<
   ActivityItem,
@@ -34,6 +37,8 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     projectGroups: readonly ProjectGroup[]
     /** Folder workspaces per group; they count toward its header. */
     folderCountByGroupId: ReadonlyMap<string, number>
+    /** Newest folder workspace activity per group; ranks the group under recent order. */
+    folderActivityByGroupId?: ReadonlyMap<string, number>
     projectOrderBy: ProjectOrderBy
     repoOrder: ReadonlyMap<string, number> | undefined
   },
@@ -49,12 +54,12 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
     groupByProjectGroupId.set(projectGroupId, list)
   }
 
+  const getRecentRank = createRecentRankLookup<[string, V]>()
   const sortRepoEntriesWithinGroup = (list: [string, V][]): [string, V][] => {
     if (projectOrderBy === 'recent') {
       if (list.length < 2) {
         return [...list]
       }
-      const getRecentRank = createRecentRankLookup<[string, V]>()
       return [...list].sort((left, right) =>
         compareRecentRank(getRecentRank(left), getRecentRank(right))
       )
@@ -85,6 +90,37 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
         compareCodePoints(left.executionHostId ?? '', right.executionHostId ?? '') ||
         compareCodePoints(left.id, right.id)
     )
+  }
+
+  // A group is as recent as the newest project, nested group or folder workspace under it.
+  const groupRecentRanks = new Map<string, RecentRank>()
+  const getGroupRecentRank = (groupId: string): RecentRank => {
+    const known = groupRecentRanks.get(groupId)
+    if (known) {
+      return known
+    }
+    // Seed before recursing so a parentGroupId cycle cannot loop forever.
+    groupRecentRanks.set(groupId, NO_RECENT_ACTIVITY)
+    const folderActivity = args.folderActivityByGroupId?.get(groupId)
+    const candidates = [
+      ...(groupByProjectGroupId.get(groupId) ?? []).map(getRecentRank),
+      ...(childGroupsByParentId.get(groupId) ?? []).map((child) => getGroupRecentRank(child.id)),
+      ...(folderActivity === undefined ? [] : [{ hasActivity: true, ts: folderActivity }])
+    ]
+    const rank = candidates.reduce(
+      (best, next) => (compareRecentRank(next, best) < 0 ? next : best),
+      NO_RECENT_ACTIVITY
+    )
+    groupRecentRanks.set(groupId, rank)
+    return rank
+  }
+  if (projectOrderBy === 'recent') {
+    // Stable sort: groups with equal rank keep the manual order above.
+    for (const groups of childGroupsByParentId.values()) {
+      groups.sort((left, right) =>
+        compareRecentRank(getGroupRecentRank(left.id), getGroupRecentRank(right.id))
+      )
+    }
   }
 
   const getProjectGroupSubtreeCount = (groupId: string): number => {
@@ -122,7 +158,14 @@ export function walkProjectGroupTree<V extends GroupedProjectEntry>(
       (repoEntry) => ({ repoEntry })
     )
   ]
-  if (projectOrderBy === 'manual') {
+  if (projectOrderBy === 'recent') {
+    // Groups compete with ungrouped projects instead of always sitting above them.
+    const rankOf = (entry: (typeof rootEntries)[number]): RecentRank =>
+      'projectGroup' in entry
+        ? getGroupRecentRank(entry.projectGroup.id)
+        : getRecentRank(entry.repoEntry)
+    rootEntries.sort((left, right) => compareRecentRank(rankOf(left), rankOf(right)))
+  } else {
     rootEntries.sort((left, right) => {
       const leftEntry =
         'projectGroup' in left
