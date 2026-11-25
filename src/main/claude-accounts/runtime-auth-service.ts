@@ -55,15 +55,6 @@ export class ClaudeRuntimeAuthService {
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
-    // Why: a WSL target with no WSL route (e.g. off Windows) must not read the host's account.
-    if (!wsl && target?.runtime === 'wsl') {
-      return {
-        configDir: '',
-        envPatch: {},
-        provenance: 'profile:unavailable',
-        usageError: 'WSL is not available on this device.'
-      }
-    }
     // Background quota polls must not boot stopped distros.
     if (wsl && !(await this.isDistroRunning(wsl.distro))) {
       return {

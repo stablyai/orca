@@ -51,6 +51,9 @@ vi.mock('@/runtime/provider-accounts/observations/runtime-provider-accounts-clie
     }
   }
 }))
+vi.mock('@/attention/orca-window-foreground-focus', () => ({
+  isOrcaWindowForegroundFocused: () => true
+}))
 vi.mock('../../../store/index', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({ settings: mocks.settings, runtimeEnvironments: [{ id: 'mini', name: 'Mac Mini' }] })
@@ -235,6 +238,25 @@ describe('useOwnerUsageRateLimits', () => {
       { runtime: 'wsl', wslDistro: 'Gentoo' },
       ['codex']
     )
+  })
+
+  it('re-reads a provider whose reading main could not attribute', async () => {
+    vi.useFakeTimers()
+    try {
+      mocks.distro = 'Void'
+      mocks.readUsageForRuntimeTarget.mockResolvedValue({})
+      const { result } = renderHook(() => useOwnerUsageRateLimits(local))
+      await act(async () => {})
+      expect(result.current.rateLimits.claude?.session).toBeNull()
+      const reading = provider('claude', 44)
+      mocks.readUsageForRuntimeTarget.mockResolvedValue({ claude: { accountId: null, reading } })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(6_000)
+      })
+      expect(result.current.rateLimits.claude?.session?.usedPercent).toBe(44)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keeps a provider the desktop already fetches for the distro live while the other reads', () => {

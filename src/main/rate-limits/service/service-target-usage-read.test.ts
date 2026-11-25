@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { ClaudeRuntimeAuthPreparation } from '../../claude-accounts/runtime-auth/runtime-auth-types'
 import { RateLimitService } from './rate-limit-service'
@@ -43,6 +43,14 @@ const preparation: ClaudeRuntimeAuthPreparation = {
 
 const ubuntu = { runtime: 'wsl', wslDistro: 'Ubuntu' } as const
 const both = ['claude', 'codex'] as const
+const realPlatform = process.platform
+
+function setPlatform(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true })
+}
+
+beforeEach(() => setPlatform('win32'))
+afterEach(() => setPlatform(realPlatform))
 
 it('reads a WSL distro usage without switching the desktop fetch target or publishing state', async () => {
   claudeFetch.mockResolvedValue(ok('claude', 42))
@@ -95,4 +103,26 @@ it('labels a reading taken across a switch with the account actually read, or dr
   expect(read.claude?.accountId).toBe('b')
   // Codex names no reading account, so a reading across the switch belongs to nobody.
   expect(read.codex).toBeUndefined()
+})
+
+it('fails a WSL read closed off Windows but leaves a Windows distro-less target to the resolvers', async () => {
+  claudeFetch.mockResolvedValue(ok('claude', 42))
+  const claudeTargets: unknown[] = []
+  const service = new RateLimitService()
+  service.setClaudeAuthPreparationResolver(async (target) => {
+    claudeTargets.push(target)
+    return preparation
+  })
+  const selection = () => ({ claude: null, codex: null })
+  const anyDistro = { runtime: 'wsl', wslDistro: null } as const
+
+  const windows = await service.readUsageForRuntimeTarget(anyDistro, ['claude'], selection)
+  expect(windows.claude?.reading?.session?.usedPercent).toBe(42)
+  expect(claudeTargets).toEqual([anyDistro])
+
+  setPlatform('darwin')
+  const mac = await service.readUsageForRuntimeTarget(ubuntu, ['claude'], selection)
+  expect(mac.claude?.reading?.status).toBe('error')
+  expect(mac.claude?.reading?.session).toBeNull()
+  expect(claudeTargets).toHaveLength(1)
 })

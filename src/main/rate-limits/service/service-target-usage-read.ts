@@ -20,6 +20,8 @@ import { RateLimitServiceAccountRefresh } from './service-account-refresh'
 // Why: a hung WSL probe must not pin the renderer's owner usage read forever.
 const TARGET_USAGE_READ_TIMEOUT_MS = 30_000
 
+const PROVIDERS: readonly RuntimeTargetUsageProvider[] = ['claude', 'codex']
+
 type ProviderRead = { reading: ProviderRateLimits | null; readingAccountId?: string }
 
 export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAccountRefresh {
@@ -29,18 +31,19 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
     providers: readonly RuntimeTargetUsageProvider[],
     readSelection: () => Record<RuntimeTargetUsageProvider, string | null>
   ): Promise<RuntimeTargetUsageRead> {
+    // Why: the list arrives over IPC, so only known providers are read.
+    const wanted = PROVIDERS.filter((p) => Array.isArray(providers) && providers.includes(p))
     const before = readSelection()
     const signal = AbortSignal.timeout(TARGET_USAGE_READ_TIMEOUT_MS)
     const readOne = (provider: RuntimeTargetUsageProvider): Promise<ProviderRead> =>
-      (provider === 'claude'
-        ? this.readClaudeUsageForTarget(normalizeClaudeAccountSelectionTarget(target), signal)
-        : this.readCodexUsageForTarget(normalizeCodexAccountSelectionTarget(target), signal)
-      ).catch((error): ProviderRead => ({ reading: usageReadError(provider, error) }))
+      this.readProviderForTarget(provider, target, signal).catch((error): ProviderRead => ({
+        reading: usageReadError(provider, error)
+      }))
     // Each provider fails alone: one resolver's rejection must not discard the other's reading.
-    const reads = await Promise.all(providers.map(readOne))
+    const reads = await Promise.all(wanted.map(readOne))
     const after = readSelection()
     const result: RuntimeTargetUsageRead = {}
-    providers.forEach((provider, index) => {
+    wanted.forEach((provider, index) => {
       const { reading, readingAccountId } = reads[index]
       // Why: the resolver's own account wins; otherwise only an unchanged selection proves whose reading it is.
       const accountId =
@@ -50,6 +53,20 @@ export abstract class RateLimitServiceTargetUsageRead extends RateLimitServiceAc
       }
     })
     return result
+  }
+
+  private async readProviderForTarget(
+    provider: RuntimeTargetUsageProvider,
+    target: RateLimitRuntimeTarget,
+    signal: AbortSignal
+  ): Promise<ProviderRead> {
+    // Why: off Windows there is no WSL route, and the resolvers would fall back to the host's account.
+    if (target.runtime === 'wsl' && process.platform !== 'win32') {
+      throw new Error('WSL is not available on this device.')
+    }
+    return provider === 'claude'
+      ? this.readClaudeUsageForTarget(normalizeClaudeAccountSelectionTarget(target), signal)
+      : this.readCodexUsageForTarget(normalizeCodexAccountSelectionTarget(target), signal)
   }
 
   private async readClaudeUsageForTarget(

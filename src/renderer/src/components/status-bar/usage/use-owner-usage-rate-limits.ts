@@ -88,11 +88,7 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   return useAccountOwnerUsage(owner, local, visibleHostLabel)
 }
 
-/**
- * One owner's accounts and usage: this device's store, the host's own accounts stream, or — for
- * a WSL host this desktop stands in for — a direct read of that distro's runtime. A null
- * (unproven) owner has no account transport, so it shows unavailable usage.
- */
+/** One owner's usage: this device's store, a host's accounts stream, or a WSL host's distro read; null shows unavailable. */
 export function useAccountOwnerUsage(
   owner: AccountOwner | null,
   local: RateLimitState,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
+import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import {
   readWslProviderUsage,
   requestWslOwnerUsage,
@@ -11,7 +12,8 @@ import {
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget,
-  RateLimitState
+  RateLimitState,
+  RuntimeTargetUsageProvider
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useAppStore } from '../../../store/index'
@@ -22,28 +24,33 @@ import { wslOwnerRateLimits, type WslProviderState } from './wsl-owner-rate-limi
 
 // Why: a timer firing a hair early must still find the reading due.
 const EXPIRY_SLACK_MS = 50
-// Why: a longer delay overflows setTimeout and fires at once.
-const MAX_TIMER_MS = 2 ** 31 - 1
 
 function isDistroTarget(target: RateLimitRuntimeTarget, distro: string): boolean {
   return target.runtime === 'wsl' && target.wslDistro?.toLowerCase() === distro.toLowerCase()
 }
 
-function selectedClaude(settings: GlobalSettings | null, distro: string): string | null {
-  const state = {
-    accounts: [],
-    activeAccountId: settings?.activeClaudeManagedAccountId ?? null,
-    activeAccountIdsByRuntime: settings?.activeClaudeManagedAccountIdsByRuntime
-  }
-  return getClaudeStatusActiveId(state, { runtime: 'wsl', wslDistro: distro }) ?? null
-}
-
-function selectedCodex(settings: GlobalSettings | null, distro: string): string | null {
-  const state = {
-    activeAccountId: settings?.activeCodexManagedAccountId ?? null,
-    activeAccountIdsByRuntime: settings?.activeCodexManagedAccountIdsByRuntime
-  }
-  return getCodexStatusActiveId(state, { runtime: 'wsl', wslDistro: distro })
+function selectedAccount(
+  settings: GlobalSettings | null,
+  distro: string,
+  provider: RuntimeTargetUsageProvider
+): string | null {
+  const target = { runtime: 'wsl', wslDistro: distro } as const
+  return provider === 'claude'
+    ? (getClaudeStatusActiveId(
+        {
+          accounts: [],
+          activeAccountId: settings?.activeClaudeManagedAccountId ?? null,
+          activeAccountIdsByRuntime: settings?.activeClaudeManagedAccountIdsByRuntime
+        },
+        target
+      ) ?? null)
+    : getCodexStatusActiveId(
+        {
+          activeAccountId: settings?.activeCodexManagedAccountId ?? null,
+          activeAccountIdsByRuntime: settings?.activeCodexManagedAccountIdsByRuntime
+        },
+        target
+      )
 }
 
 function useEntry(key: string | null): WslProviderUsageEntry | null {
@@ -59,7 +66,7 @@ function providerState(
   if (live) {
     return { kind: 'value', reading: liveReading }
   }
-  if (!entry) {
+  if (!entry || entry.usage.kind === 'pending') {
     return { kind: 'pending' }
   }
   return entry.usage.kind === 'failed'
@@ -75,8 +82,12 @@ export function useWslOwnerUsage(
 ): { state: OwnerUsageState | null; refresh: () => Promise<void> } {
   const t = useTranslate()
   // Why: a switch changes these, so the distro re-reads without any switcher calling in.
-  const claudeAccount = useAppStore((s) => (distro ? selectedClaude(s.settings, distro) : null))
-  const codexAccount = useAppStore((s) => (distro ? selectedCodex(s.settings, distro) : null))
+  const claudeAccount = useAppStore((s) =>
+    distro ? selectedAccount(s.settings, distro, 'claude') : null
+  )
+  const codexAccount = useAppStore((s) =>
+    distro ? selectedAccount(s.settings, distro, 'codex') : null
+  )
   // Why: a provider the desktop already fetches for this distro uses its live state, not a copy.
   const claudeLive = distro !== null && isDistroTarget(local.claudeTarget, distro)
   const codexLive = distro !== null && isDistroTarget(local.codexTarget, distro)
@@ -109,8 +120,14 @@ export function useWslOwnerUsage(
     if (!distro || !Number.isFinite(expiresAt)) {
       return
     }
-    const delay = Math.min(Math.max(0, expiresAt - Date.now()) + EXPIRY_SLACK_MS, MAX_TIMER_MS)
-    const timer = setTimeout(() => void requestWslOwnerUsage(distro, selection), delay)
+    const delay = Math.max(0, expiresAt - Date.now()) + EXPIRY_SLACK_MS
+    // Why skip in the background: the focus listener re-reads when the window comes back.
+    const reread = (): void => {
+      if (isOrcaWindowForegroundFocused()) {
+        void requestWslOwnerUsage(distro, selection)
+      }
+    }
+    const timer = setTimeout(reread, delay)
     return () => clearTimeout(timer)
   }, [distro, selection, expiresAt])
 

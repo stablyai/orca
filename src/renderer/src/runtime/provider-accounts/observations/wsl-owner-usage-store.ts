@@ -7,6 +7,8 @@ import type {
 export type WslProviderUsage =
   | { kind: 'read'; reading: ProviderRateLimits | null }
   | { kind: 'failed'; reason: 'unreachable' | 'unsupported-owner' }
+  /** Requested, but main could not say whose reading it took. */
+  | { kind: 'pending' }
 
 export type WslProviderUsageEntry = { usage: WslProviderUsage; expiresAt: number; retryAt: number }
 
@@ -15,6 +17,10 @@ export type WslProviderSelection = Partial<Record<RuntimeTargetUsageProvider, st
 
 // Why: this read bypasses the poller, so it owns its cadence and honours the provider's Retry-After.
 const TTL_MS = 90_000
+// Why: a reading main could not attribute (switch mid-read) re-reads soon rather than never.
+const UNATTRIBUTED_RETRY_MS = 5_000
+// Why: a bogus Retry-After must not block forced refreshes or overflow the expiry timer.
+const MAX_RETRY_AFTER_MS = 6 * 60 * 60 * 1000
 const PROVIDERS: readonly RuntimeTargetUsageProvider[] = ['claude', 'codex']
 
 const entries = new Map<string, WslProviderUsageEntry>()
@@ -43,8 +49,24 @@ export function readWslProviderUsage(key: string | null): WslProviderUsageEntry 
 
 function store(key: string, usage: WslProviderUsage): void {
   const now = Date.now()
-  const retryAt = usage.kind === 'read' ? (usage.reading?.usageMetadata?.retryAtMs ?? 0) : 0
-  entries.set(key, { usage, expiresAt: Math.max(now + TTL_MS, retryAt), retryAt })
+  const header = usage.kind === 'read' ? (usage.reading?.usageMetadata?.retryAtMs ?? 0) : 0
+  const retryAt = Math.min(header, now + MAX_RETRY_AFTER_MS)
+  // Why never: a client that cannot read the distro (web) will not gain the ability by polling.
+  const expiresAt =
+    usage.kind === 'failed' && usage.reason === 'unsupported-owner'
+      ? Infinity
+      : Math.max(now + TTL_MS, retryAt)
+  entries.set(key, { usage, expiresAt, retryAt })
+}
+
+/** Keeps any current reading but makes it due soon, so an unattributed read is retried. */
+function markUnattributed(key: string): void {
+  const existing = entries.get(key)
+  const expiresAt = Date.now() + UNATTRIBUTED_RETRY_MS
+  entries.set(
+    key,
+    existing ? { ...existing, expiresAt } : { usage: { kind: 'pending' }, expiresAt, retryAt: 0 }
+  )
 }
 
 /** Reads the wanted providers that are due; a forced read still waits out an active Retry-After. */
@@ -75,12 +97,17 @@ export function requestWslOwnerUsage(
       (read) => {
         for (const provider of due) {
           const attributed = read?.[provider]
+          const requested = wslProviderUsageKey(distro, provider, selection[provider] ?? null)
           if (!read) {
-            const key = wslProviderUsageKey(distro, provider, selection[provider] ?? null)
-            store(key, { kind: 'failed', reason: 'unsupported-owner' })
+            store(requested, { kind: 'failed', reason: 'unsupported-owner' })
           } else if (attributed) {
             const key = wslProviderUsageKey(distro, provider, attributed.accountId)
             store(key, { kind: 'read', reading: attributed.reading })
+            if (key !== requested) {
+              markUnattributed(requested)
+            }
+          } else {
+            markUnattributed(requested)
           }
         }
       },
