@@ -3,6 +3,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import AiVaultPanel from './ai-vault/panel/AiVaultPanel'
+import type * as AiVaultViewOptionsModule from './ai-vault/scope/use-persisted-ai-vault-view-options'
 import { conversationSessions } from '../sidebar/ProjectConversationList.test-fixture'
 import type { AiVaultSessionListGroup } from './ai-vault/session-list/ai-vault-session-filters'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
@@ -62,9 +63,7 @@ vi.mock('./ai-vault/scanning/ai-vault-session-refresh', () => ({
   }
 }))
 vi.mock('./ai-vault/scope/use-persisted-ai-vault-view-options', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('./ai-vault/scope/use-persisted-ai-vault-view-options')
-  >()),
+  ...(await importOriginal<typeof AiVaultViewOptionsModule>()),
   usePersistedAiVaultViewOptions: () => ({
     agents: [],
     sort: 'updated',
