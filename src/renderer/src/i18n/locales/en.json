@@ -1052,6 +1052,12 @@
           "browse": "Chrome Web Store",
           "openFailed": "Open a workspace to browse the Chrome Web Store."
         },
+        "failure": {
+          "supportDisabled": "Turn on browser extensions in Settings › Browser › Extensions",
+          "invalidWebStoreInput": "Paste a Chrome Web Store link or a 32-letter extension ID",
+          "profileUnavailable": "Browser profile is not available for extensions",
+          "alreadyAdded": "{{name}} is already added"
+        },
         "enabledToggleLabel": "Turn browser extensions on or off"
       },
       "passwords": {
