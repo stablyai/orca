@@ -20023,6 +20023,12 @@
       },
       "reasoning": "Рассуждения",
       "failureWords": {
+        "forkOriginalMissing": "{{agent}} не удалось найти этот ответ в исходном чате. Откройте его и создайте ответвление оттуда.",
+        "forkOriginalUnavailable": "{{agent}} не может создать ответвление от этого ответа в исходном чате. Откройте его и создайте ответвление оттуда.",
+        "forkOriginalMissingNamed": "{{agent}} не удалось найти этот ответ в чате «{{detail}}». Откройте этот чат и создайте ответвление оттуда.",
+        "forkOriginalUnavailableNamed": "{{agent}} не может создать ответвление от этого ответа в чате «{{detail}}». Откройте этот чат и создайте ответвление оттуда.",
+        "forkOriginalLatestOnly": "{{agent}} может создать ответвление только от последнего ответа в исходном чате. Откройте этот чат и создайте ответвление от его последнего ответа, когда он завершится.",
+        "forkOriginalLatestOnlyNamed": "{{agent}} может создать ответвление только от последнего ответа в чате «{{detail}}». Откройте этот чат и создайте ответвление от его последнего ответа, когда он завершится.",
         "theAgent": "Агент",
         "providerStartFailed": "{{agent}} остановился до завершения запуска.",
         "savedConversationMissing": "{{agent}} не удалось найти сохранённую беседу этого чата.",
@@ -20031,6 +20037,7 @@
         "sendAgainToTryOnceMore": "Отправьте сообщение снова, чтобы повторить попытку.",
         "couldNotStart": "Не удалось запустить {{agent}}.",
         "couldNotRestart": "Не удалось перезапустить {{agent}}.",
+        "cliTooOld": "Версия CLI {{agent}} на {{host}}: {{installedVersion}}. Для чатов нужна версия {{minimumVersion}} или новее.",
         "startTimedOut": "{{agent}} запускается слишком долго: нет ответа на {{method}} за {{seconds}} с.",
         "startTimedOutKeepsHappening": "Если это повторяется, возможно, компьютер с этим чатом перегружен.",
         "notSignedIn": "Вход в {{agent}} не выполнен.",
@@ -20039,6 +20046,7 @@
         "codexSystemNotSignedIn": "Вход в Codex не выполнен. Выполните `{{loginCommand}}`.",
         "codexManagedNotSignedIn": "Вход в эту учётную запись Codex не выполнен. Войдите снова в настройках учётных записей Codex.",
         "antigravityNotSignedIn": "Вход в Antigravity не выполнен. Выполните вход в разделе «Настройки → Учётные записи → Antigravity». Затем отправьте сообщение снова.",
+        "antigravitySystemNotSignedIn": "Вход в Antigravity не выполнен. Выполните `agy` на компьютере с этим чатом, затем отправьте сообщение снова.",
         "cliMissing": "{{agent}} не найден на компьютере с этим чатом. Установите его или проверьте поле «Команда» в разделе «Настройки → Агенты».",
         "cliMissingInWslDistro": "{{agent}} не установлен в дистрибутиве WSL {{distro}}. Установите его внутри {{distro}} или проверьте поле «Команда» в разделе «Настройки → Агенты».",
         "signInFirst": "Сначала выполните вход.",
@@ -20067,6 +20075,7 @@
         "providerExitedRow": "{{agent}} остановился во время ответа. Вы можете продолжить этот разговор.",
         "providerExitedRejection": "{{agent}} остановился до отправки этого сообщения.",
         "providerExitedAnswer": "{{agent}} остановился, поэтому ваш ответ не отправлен. Отправьте сообщение, чтобы продолжить.",
+        "claudeEffortInvalid": "Недопустимое усилие Claude: выберите low, medium, high, xhigh или max и отправьте снова.",
         "providerUnavailable": "{{agent}} не смог ответить, поскольку сервис занят. Выберите другую модель или немного подождите и отправьте сообщение снова.",
         "providerSafetyStopped": "{{agent}} остановил этот ответ после проверки безопасности. Проверьте запрос и отправьте его снова.",
         "providerResponseFailed": "{{agent}} не удалось завершить этот ответ. Откройте подробности, чтобы узнать больше.",
@@ -20095,6 +20104,7 @@
         "cancelled": "Сообщение отозвано до начала работы агента над ним.",
         "chatClosed": "Чат закрылся до отправки сообщения.",
         "hostRestarted": "Orca перезапустилась до отправки сообщения.",
+        "unconfirmed": "Не удалось подтвердить, отправлено ли это. Повторно оно не отправлялось.",
         "notDelivered": "Это сообщение не доставлено.",
         "notDeliveredSendAgain": "Это сообщение не доставлено. Отправьте его снова, чтобы продолжить.",
         "commandRefused": "Эта команда не выполнена.",
@@ -20183,6 +20193,7 @@
         "attachmentExpired": "Срок хранения вложения истёк.",
         "reattachFile": "Удалите его и прикрепите снова.",
         "reattachFiles": "Удалите их и прикрепите снова.",
+        "mailOwnerUnconfirmed": "Orca не удалось подтвердить, что это сообщение по-прежнему предназначено для этого чата.",
         "conversationCleared": "Этот разговор очищен.",
         "openCurrentConversation": "Откройте текущий разговор, чтобы продолжить.",
         "clearUnfinished": "Последняя команда /clear не завершилась.",
@@ -20252,6 +20263,7 @@
         "changedFiles_few": "Изменено {{count}} файла",
         "changedFiles_many": "Изменено {{count}} файлов",
         "changedFiles_other": "Изменено {{count}} файла",
+        "showMoreFiles": "Показать ещё: {{count}}",
         "hide": "Скрыть",
         "hidden": "Orca больше не будет показывать изменения за ход"
       },
@@ -20284,9 +20296,20 @@
         "orcaStopRemote": "Во время ответа Orca на {{machine}} остановилась.",
         "orcaStopCanContinue": "Вы можете продолжить этот разговор.",
         "orcaStopUnnamedServer": "удалённом сервере",
+        "restartContinued": "После перезапуска Orca попросила этого агента продолжить работу. Ваш запрос повторно не отправлялся.",
+        "restartContinueRefused": "Orca не удалось продолжить этот чат после перезапуска. Отправьте сообщение, чтобы продолжить.",
+        "restartContinueUnconfirmed": "После перезапуска Orca попросила этого агента продолжить работу, но не смогла подтвердить, что он продолжил. Проверьте его последний ответ, прежде чем отправлять новое сообщение.",
+        "restartNotConnected": "Orca не удалось заново подключить этот чат после перезапуска, поэтому агента не просили продолжить работу.",
         "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
         "safetyReviewApproved": "{{agent}} одобрил это действие. Подробнее.",
         "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
+        "autoReviewDenied": "Автоматическая проверка ({{agent}}) отклонила: {{action}}",
+        "autoReviewNoReason": "Причина не указана.",
+        "autoReviewApprove": "Одобрить один раз",
+        "autoReviewApproved": "Одобрено",
+        "autoReviewApproveNotRunning": "{{agent}} не запущен. Отправьте сообщение, чтобы запустить его, затем одобрите снова.",
+        "autoReviewApproveFailed": "Не удалось записать ваше одобрение. Повторите попытку.",
+        "autoReviewApproveHint": "{{agent}} может один раз повторить именно это действие. Его проверка всё равно оценит повтор.",
         "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
         "forkedFrom": "Ответвление от",
@@ -20305,6 +20328,16 @@
         "placeholder": "Задайте вопрос; @ — файлы, / — команды",
         "loadingFiles": "Загрузка файлов…",
         "noFiles": "Подходящих файлов нет",
+        "noBots": "Нет ботов",
+        "noBotsMatch": "Нет ботов по запросу «{{query}}»",
+        "botCount_one": "{{count}} бот",
+        "botCount_few": "{{count}} бота",
+        "botCount_many": "{{count}} ботов",
+        "botCount_other": "{{count}} бота",
+        "fileCount_one": "{{count}} файл",
+        "fileCount_few": "{{count}} файла",
+        "fileCount_many": "{{count}} файлов",
+        "fileCount_other": "{{count}} файла",
         "filesLoadFailed": "Не удалось загрузить файлы",
         "attach": "Прикрепить файл",
         "startDictation": "Начать диктовку",
@@ -20370,6 +20403,7 @@
         "optionValue": {
           "none": "Нет",
           "off": "Выключено",
+          "ultracode": "Ultracode",
           "fast": "Быстро",
           "minimal": "Минимальный",
           "low": "Низкий",
@@ -20417,10 +20451,26 @@
           "xhigh": "Очень выс."
         },
         "imageUnavailable": "Предпросмотр недоступен",
+        "agents": "Агенты",
+        "recent": "Недавние",
         "exitPlanMode": "Выйти из режима планирования",
         "moreControls": "Другие элементы управления чатом",
         "permissionAppliesNextMessage": "{{saved}} применяется со следующего сообщения; сейчас используется: {{active}}",
-        "bots": "Боты"
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "Модель и усилие",
+        "modelsLoading": "Загрузка моделей…",
+        "signInForModels": "Войдите, чтобы увидеть доступные вам модели.",
+        "bots": "Боты",
+        "files": "Файлы",
+        "skillPillLabel": "Навык: {{name}}",
+        "filePillLabel": "Файл: {{name}}",
+        "agentPillLabel": "Агент: {{name}}",
+        "backToBots": "Назад к ботам",
+        "chatsHint": "Стрелка вправо — чаты",
+        "loadingBotChats": "Загрузка чатов: {{name}}…",
+        "noMatchingChats": "Подходящих чатов нет",
+        "noOtherChats": "Других чатов нет",
+        "retryChats": "Повторить"
       },
       "tool": {
         "exitCode": "код {{value0}}",
@@ -20730,6 +20780,8 @@
       "scrollMessageToTop": "Прокрутить к началу сообщения",
       "loadingEarlier": "Загрузка…",
       "loadEarlier": "Загрузить предыдущие сообщения",
+      "loadEarlierFailed": "Не удалось загрузить предыдущие сообщения.",
+      "loadEarlierRetry": "Повторить",
       "loadingEarlierMessages": "Загрузка предыдущих сообщений…",
       "railLabel": "Ваши сообщения",
       "railImageMessage": "Вложенное изображение",
@@ -20767,6 +20819,7 @@
         "awaitingUnnamed": "Ждёт вашего ответа",
         "asked": "Вопрос:",
         "questionCount_one": "{{count}} вопрос",
+        "questionCount": "Вопросов: {{value0}}",
         "questionCount_few": "{{count}} вопроса",
         "questionCount_many": "{{count}} вопросов",
         "questionCount_other": "{{count}} вопроса"
@@ -20777,15 +20830,55 @@
         "deny": "Отклонить",
         "cancel": "Отмена",
         "reason": "Причина",
+        "reasonSentAsMessage": "Причина (отправляется сообщением)",
         "needsAccess": "Требуется доступ к",
         "needsNewerOrca": "Для этого запроса нужна более новая версия Orca.",
+        "folderTrust": {
+          "title": "Доверять этой папке?",
+          "hint": "Агент спросит разрешение, прежде чем читать, изменять и запускать файлы в этой папке.",
+          "trust": "Доверять папке",
+          "exit": "Выйти"
+        },
+        "startupMenu": {
+          "title": "{{value0}} ждёт выбора в терминале"
+        },
         "plan": {
           "file": "Файл плана",
           "reviewTitle": "Проверить предложенный план",
           "refineHint": "Уточнение плана закрывает просмотр, чтобы вы могли описать нужные изменения."
         },
+        "worker": "Исполнитель · {{name}}",
+        "openWorker": "Открыть исполнителя",
+        "answerFailed": "{{name}}: {{detail}}",
         "answerNotApplied": "{{name}}: ответ не дошёл до этого запроса",
-        "answerWorkerEnded": "{{name}} завершил работу, поэтому этот запрос закрыт"
+        "answerWorkerEnded": "{{name}} завершил работу, поэтому этот запрос закрыт",
+        "countdown": "Если никто не ответит, Claude сам отклонит запрос через {{time}}.",
+        "record": {
+          "showLess": "Свернуть",
+          "showMore": "Развернуть",
+          "cancelled": "Запрос отменён: <tool>{{tool}}</tool>",
+          "youAllowed": "Вы разрешили: <tool>{{tool}}</tool>",
+          "youAllowedForSession": "Вы разрешили на эту сессию: <tool>{{tool}}</tool>",
+          "youDenied": "Вы отклонили: <tool>{{tool}}</tool>",
+          "youAnswered": "Ваш ответ на запрос <tool>{{tool}}</tool>: {{answer}}",
+          "youAllowedFor": "Вы разрешили: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "youDeniedFor": "Вы отклонили: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "coordinatorAllowed": "Координатор разрешил: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "coordinatorDenied": "Координатор отклонил: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "allowedInTerminal": "Разрешено в его терминале: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "deniedInTerminal": "Отклонено в его терминале: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "allowedInChat": "Разрешено в его чате: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "deniedInChat": "Отклонено в его чате: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "autoDenied": "Автоматически отклонено через 2:00: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "waitsInTerminal": "Ожидает ответа в его терминале: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "workerEnded": "Закрыто, исполнитель завершил работу: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "closedUnnamed": "Закрыто без записанного ответа: <tool>{{tool}}</tool> (задача: <task>{{task}}</task>)",
+          "coordinatorReason": "Причина координатора",
+          "coordinatorAllowedHere": "Координатор разрешил: <tool>{{tool}}</tool>",
+          "coordinatorDeniedHere": "Координатор отклонил: <tool>{{tool}}</tool>",
+          "allowedUnnamed": "Разрешено: <tool>{{tool}}</tool>",
+          "deniedUnnamed": "Отклонено: <tool>{{tool}}</tool>"
+        }
       },
       "launchPromptNotDelivered": "Не доставлено — проверьте терминал",
       "subagents": {
@@ -20892,10 +20985,30 @@
       },
       "agentMessage": {
         "unnamedSender": "агента",
+        "goToAgent": "Перейти к агенту",
         "senderReplaced": "{{name}} больше не работает в своём терминале; теперь там работает другой агент. При необходимости откройте этот терминал через боковую панель.",
         "senderAmbiguous": "Orca не может определить, в каком терминале работает {{name}}. Откройте его через боковую панель.",
         "senderNotRunning": "{{name}} больше не работает. Запустите нового агента через боковую панель, чтобы продолжить работу.",
-        "unnamedSenderSubject": "Агент"
+        "unnamedSenderSubject": "Агент",
+        "open": "Открыть: {{name}}",
+        "row": {
+          "started": "Запущено",
+          "forItems": "для",
+          "reopened": "Открыто снова",
+          "followedUp": "Отправлено уточнение:",
+          "handedOff": "Передано:",
+          "task": "Задача от:",
+          "update": "Обновление от:",
+          "message": "Сообщение от:",
+          "notSentYet": "ещё не отправлено"
+        },
+        "kind": {
+          "started": "Запущено",
+          "reopened": "Открыто снова",
+          "followedUp": "Уточнение",
+          "handedOff": "Передано",
+          "task": "Задача"
+        }
       },
       "goal": {
         "placeholder": "Опишите цель и укажите измеримые результаты",
@@ -20922,7 +21035,8 @@
       "fileLinks": {
         "notFound": "Файл не найден: {{value0}}",
         "unverifiable": "Не удалось проверить {{value0}}: {{value1}}",
-        "unresolved": "Не удалось найти {{value0}} в этом рабочем пространстве"
+        "unresolved": "Не удалось найти {{value0}} в этом рабочем пространстве",
+        "folderUnavailable": "Этот компьютер не может открыть папку {{value0}}"
       },
       "contextUsage": {
         "label": "Контекст: {{used}} из {{window}} токенов, использовано {{percent}}%",
@@ -20934,9 +21048,11 @@
         "copyOrcaSessionId": "Копировать ID сессии Orca",
         "orcaSessionIdCopied": "ID сессии Orca скопирован",
         "orcaSessionIdCopyFailed": "Не удалось скопировать ID сессии Orca",
-        "orcaSessionIdTooltip": "ID этого чата в Orca. У самого агента в CLI свой ID сессии. Агенты используют ID Orca, чтобы обращаться друг к другу через Orca."
+        "orcaSessionIdTooltip": "ID этого чата в Orca. У самого агента в CLI свой ID сессии. Агенты используют ID Orca, чтобы обращаться друг к другу через Orca.",
+        "noSessionContext": "Контекст чата недоступен."
       },
       "dismissDeliveryNotice": "Скрыть",
+      "editDeliveryNotice": "Изменить",
       "addSelectionToChat": "Добавить в чат",
       "messageNotSent": "Сообщение не отправлено",
       "messageSending": "Отправка…",
@@ -20995,6 +21111,9 @@
       "thought": "Размышлял",
       "thoughtForDuration": "Размышлял {{duration}}",
       "explicitChatWsl": "Чат недоступен в WSL. Откройте агента в терминале.",
+      "explicitChatWslAddHost": "Чат недоступен в папке WSL, открытой из Windows. Добавьте дистрибутив как сервер WSL («Добавить проект» → «Добавить удалённый сервер» → «Добавить дистрибутив WSL»), чтобы вести там чат, или откройте агента в терминале.",
+      "explicitChatWslMoveToHost": "Чат недоступен в папке WSL, открытой из Windows. Запустите проект на сервере WSL, чтобы вести там чат, или откройте агента в терминале.",
+      "explicitChatWslRunAsHost": "Запустить {{distro}} как сервер",
       "explicitChatSsh": "Чат недоступен по SSH. Откройте агента в терминале.",
       "explicitChatUnavailable": "В этом рабочем пространстве нельзя запустить чат. Проверьте установку агента или откройте его в терминале.",
       "structuredSessionHostDeclined": "{{value0}} открыт в терминале",
@@ -21009,6 +21128,7 @@
         "stopped": "{{distro}} остановлен",
         "start": "Запустить",
         "connecting": "Подключение к {{distro}}…",
+        "startFailed": "Не удалось запустить {{distro}}. Проверьте его в разделе «Настройки → Удалённые серверы Orca».",
         "unverifiable": "Orca не удалось проверить, запущен ли {{distro}}",
         "startToSend": "Запустите {{distro}}, чтобы отправить.",
         "startDistro": "Запустить {{distro}}"
@@ -21016,7 +21136,8 @@
       "interruptedContinue": {
         "continue": "Продолжить",
         "failed": "Не удалось продолжить чат. Повторите попытку или отправьте сообщение.",
-        "explanation": "При продолжении агент сначала проверит, завершился ли его последний шаг."
+        "explanation": "При продолжении агент сначала проверит, завершился ли его последний шаг.",
+        "usageLimitExplanation": "Просит агента продолжить с того места, где он остановился. Используйте после сброса лимита."
       },
       "signIn": {
         "title": "Войдите в {{agent}}, чтобы начать чат"
@@ -21044,7 +21165,15 @@
         "linkActions": "Действия со ссылкой"
       },
       "imageGallery": {
-        "loadFailed": "Не удалось загрузить {{name}}"
+        "scopeHelp": "Изображения рядом с этим местом чата на момент открытия предпросмотра. Изображения выше и ниже не включены. Закройте и откройте снова, чтобы обновить.",
+        "description": "Изображения в этом представлении: {{position}} из {{count}}. {{help}}",
+        "stepAnnouncement": "Изображение {{position}} из {{count}} в этом представлении: {{title}}.",
+        "firstImage": "Первое изображение.",
+        "lastImage": "Последнее изображение.",
+        "loading": "Загрузка изображения…",
+        "loadFailed": "Не удалось загрузить {{name}}",
+        "closedImageChanged": "Предпросмотр закрыт, потому что изображение изменилось. Откройте миниатюру, чтобы получить текущий набор.",
+        "closedChatChanged": "Предпросмотр закрыт, потому что чат изменился. Откройте миниатюру, чтобы получить текущий набор."
       },
       "goalControl": {
         "settingsRejected": "Codex не смог применить выбранные модель и усилие. Изменение цели не отправлено. Проверьте выбор и повторите попытку.",
@@ -21093,6 +21222,22 @@
         "help": "Показать доступные команды",
         "hooks": "Просмотреть хуки жизненного цикла",
         "hotkeys": "Показать сочетания клавиш в терминале",
+        "mcpManage": "Управлять серверами MCP",
+        "agentsTerminal": "Выбрать агента в терминале",
+        "sessionsTerminal": "Переключить сессии в терминале",
+        "skillsTerminal": "Просмотреть навыки в терминале",
+        "mcpsTerminal": "Управлять серверами MCP в терминале",
+        "connectTerminal": "Подключить провайдера в терминале",
+        "statusTerminal": "Посмотреть статус в терминале",
+        "themesTerminal": "Выбрать тему в терминале",
+        "diffTerminal": "Открыть просмотр различий в терминале",
+        "editorTerminal": "Открыть редактор в терминале",
+        "debugTerminal": "Посмотреть отладочную информацию в терминале",
+        "helpTerminal": "Показать справку в терминале",
+        "forkSessionTerminal": "Создать ответвление сессии в терминале",
+        "renameSessionTerminal": "Переименовать сессию в терминале",
+        "timelineTerminal": "Просмотреть хронологию сессии в терминале",
+        "exportTerminal": "Экспортировать сессию в терминале",
         "ide": "Включить контекст IDE",
         "import": "Импортировать настройки из Claude Code",
         "initAgents": "Создать файл AGENTS.md",
@@ -21239,6 +21384,7 @@
         "turnWorking": "Агент этого чата работает. Переключите ветку после завершения его хода.",
         "worktree": "Рабочее дерево"
       },
+      "creationChatNotOpened": "Рабочее дерево готово, но чат не удалось открыть. Нажмите «Повторить», чтобы открыть его с вашим сообщением.",
       "explicitChatWindows": "Чат этого агента пока недоступен в Windows. Откройте его в терминале.",
       "fork": {
         "action": "Создать ответвление от этого ответа",
@@ -21281,10 +21427,39 @@
         "unchanged": "В {{app}} ничего не изменено.",
         "paused": "Автоматизации приостановлены, чтобы ничего не запускалось дважды. Включите их, когда старый бот будет отключён в {{app}}."
       },
+      "botCreateOffer": {
+        "openBot": "Открыть: {{name}}"
+      },
+      "usage": {
+        "description": "Показать использование для учётной записи Codex этого чата",
+        "loading": "Загрузка использования Codex…",
+        "failed": "Не удалось загрузить использование Codex. Повторите попытку.",
+        "codexVersion": "Эта версия Codex не сообщает об использовании. Обновите Codex.",
+        "apiKeyAuth": "Использование Codex недоступно при входе с API-ключом. Войдите в Codex с учётной записью ChatGPT, чтобы увидеть использование.",
+        "title": "Использование Codex",
+        "account": "Учётная запись этого чата",
+        "retry": "Повторить",
+        "resetFailed": "Не удалось сбросить лимиты Codex. Повторите попытку.",
+        "confirmReset": "Будет израсходован один кредит сброса лимитов Codex (учётная запись: {{account}}), и все подходящие окна использования сбросятся сразу.",
+        "sharedAccount": "Текущая общая учётная запись",
+        "outcome": {
+          "reset": "Лимиты Codex сброшены.",
+          "nothingToReset": "Сейчас сбрасывать нечего.",
+          "noCredit": "На этой учётной записи не осталось кредитов сброса Codex.",
+          "alreadyRedeemed": "Этот кредит сброса уже использован."
+        }
+      },
       "cardKindHidden": {
         "description": "Вы можете изменить это в любое время в разделе",
         "settingsLink": "Настройки > Интерфейс чата > Активность за ход",
         "failed": "Не удалось сохранить. Это можно отключить в разделе Настройки > Интерфейс чата > Активность за ход."
+      },
+      "ciResultLine": {
+        "failingLead": "CI не проходит:",
+        "greenLead": "CI пройден:",
+        "at": "на коммите",
+        "hide": "Не показывать строки с результатами CI",
+        "hidden": "Orca больше не будет показывать строки с результатами CI"
       },
       "openedPullRequests": {
         "one": "Создан запрос на слияние {{name}}",
@@ -21582,6 +21757,7 @@
         "dismiss": "Скрыть",
         "openWorker": "Открыть исполнителя",
         "remoteOwner": "Остановите или очистите это на компьютере, где оно выполняется",
+        "workspaceRemoved": "Рабочее пространство этого исполнителя удалено",
         "restore": "Снова показать на панели",
         "alreadyStopped": "Уже остановлено",
         "cantStop": "Сейчас остановить нельзя",
@@ -21692,7 +21868,43 @@
         "added": "Добавлено"
       },
       "usageLimitActions": {
-        "handOff": "Передать агенту"
+        "switchAccount": "Сменить учётную запись",
+        "addAccount": "Добавить учётную запись…",
+        "accountUnavailable": "Этот чат нельзя перенести в другую учётную запись. Передайте его другому агенту.",
+        "copyTruncated": "Скопированный текст сокращён до {{count}} символов.",
+        "copyFailed": "Не удалось скопировать ошибку.",
+        "cancelAt": "Не продолжать в {{time}}",
+        "wontContinue": "Автоматически продолжаться не будет",
+        "autoContinueSettings": "Настройки автопродолжения",
+        "hideDetails": "Скрыть подробности",
+        "showDetails": "Показать подробности",
+        "copyError": "Копировать ошибку",
+        "settingsMenu": "Настройки автопродолжения…",
+        "handOff": "Передать агенту",
+        "more": "Другие действия",
+        "statusUnknown": "Время сброса неизвестно.",
+        "statusCanContinueAtAuto": "Вы можете продолжить в {{time}}. Orca продолжит этот чат в {{autoTime}}.",
+        "statusCanContinueAtNoAuto": "Вы можете продолжить в {{time}}. Orca не будет продолжать этот чат автоматически.",
+        "statusCanContinueAt": "Вы можете продолжить в {{time}}.",
+        "resetUnknown": "Время сброса неизвестно",
+        "continuesAt": "Продолжится в {{time}}",
+        "autoContinuesAt": "Автопродолжение в {{time}}",
+        "srSummary": "{{sentence}} {{status}}",
+        "canContinueAt": "Можно продолжить в {{time}}",
+        "titleWeeklyReached": "{{agent}} достиг недельного лимита",
+        "titleExtraUsageReached": "{{agent}} достиг лимита дополнительного использования",
+        "titleUsageReached": "{{agent}} достиг лимита использования",
+        "statusHasUsageAuto": "Использование {{agent}} снова доступно. Orca продолжит этот чат в {{time}}.",
+        "statusHasUsage": "Использование {{agent}} снова доступно.",
+        "titleHasUsage": "Использование {{agent}} снова доступно",
+        "statusCanContinueNowAuto": "{{agent}} может продолжить работу сейчас. Orca продолжит этот чат в {{time}}.",
+        "statusCanContinueNow": "{{agent}} может продолжить работу сейчас.",
+        "titleCanContinueNow": "{{agent}} может продолжить работу сейчас",
+        "turnOnAutoContinue": "Автопродолжение после сброса"
+      },
+      "usageLimitAutoContinue": {
+        "cancelFailed": "Не удалось отменить автопродолжение. Повторите попытку.",
+        "scheduled": "Orca продолжит этот чат в {{time}}."
       },
       "mcp": {
         "status": {
