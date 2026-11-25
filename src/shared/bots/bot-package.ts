@@ -8,7 +8,7 @@ import { BOT_MASCOT_IDS, BOT_AVATAR_FILE, mascotAvatar } from '../bot-avatar'
 import { BotAvatarColorSchema } from './bot-avatar-color'
 import { BotStoredOutfitSchema } from './bot-avatar-outfit'
 import { BOT_TOOL_HEADER_NAME_PATTERN, BOT_TOOL_NAME_PATTERN, BotToolUrl } from '../bot-tools'
-import { BOT_AGENTS, BotNameSchema, type BotAgent } from '../bot-types'
+import { BotAgentReadSchema, BotNameSchema, type BotAgent } from '../bot-types'
 import { validateSkillPackageName } from '../skills/packages/skill-package-manifest'
 import type { BotTextFlagKind } from './bot-text-scan'
 
@@ -72,7 +72,7 @@ export const BotPackageV1Schema = z.object({
     .optional(),
   purpose: z.string().max(BOT_PACKAGE_PURPOSE_MAX),
   /** The sharer's agent; the recipient picks their own. */
-  agentHint: z.enum(BOT_AGENTS),
+  agentHint: BotAgentReadSchema,
   skills: z.array(z.object({ name: PartName })).max(BOT_PACKAGE_SKILLS_MAX),
   tools: z
     .array(

@@ -121,7 +121,7 @@ const signedInNotion = async () => {
     folder,
     signInFolder: folder,
     otherBotFolders: [],
-    agent: 'gemini'
+    agent: 'droid'
   }
   const id = newBotToolCredentialId()
   await addBotTool(
@@ -196,7 +196,7 @@ describe('an edited tool', () => {
       folder,
       signInFolder: folder,
       otherBotFolders: [],
-      agent: 'gemini'
+      agent: 'droid'
     }
     await writeBotToolServers(folder, [{ ...notion, headers: { authorization: SECRET } }])
     const [before] = await readBotToolServers(folder)

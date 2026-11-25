@@ -15,16 +15,16 @@ describe('botNewChatAgents', () => {
     const model = settled(
       [
         { kind: 'chat', agent: 'claude' },
-        { kind: 'cli', agent: 'gemini', chat: true },
+        { kind: 'cli', agent: 'droid', chat: true },
         { kind: 'chat-unavailable', agent: 'cursor', reason: 'not-on-host' },
         // Offers to install the agent first: not one the user has.
         { kind: 'chat', agent: 'grok', setup: true },
         { kind: 'chat', agent: 'kimi', setup: true }
       ],
-      ['claude', 'gemini', 'cursor']
+      ['claude', 'droid', 'cursor']
     )
-    expect(botNewChatAgents({ agent: 'gemini' }, model)).toEqual([
-      { agent: 'gemini' },
+    expect(botNewChatAgents({ agent: 'droid' }, model)).toEqual([
+      { agent: 'droid' },
       { agent: 'claude' },
       { agent: 'cursor', unavailable: 'not-on-host' }
     ])

@@ -29,13 +29,14 @@ import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
+import { assertNotFromPlugin, pluginViewOf } from './mcp-plugin-server-mark'
 
 const AgentFilesSchema = z.record(z.string(), z.unknown())
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
 // An entry whose workspaces Orca can't read is on nowhere, never everywhere.
 const NO_WORKSPACES: McpServerWorkspaces = { later: false, on: [], off: [] }
 
-type HostEntry = BotToolEntry & { id: string }
+export type HostEntry = BotToolEntry & { id: string }
 
 const gone = (): McpServersError =>
   new McpServersError('mcp_server_gone', 'This server is no longer on this host.')
@@ -71,7 +72,8 @@ function viewOf(entry: HostEntry, folder: string): McpServer {
     detail: tool.detail,
     transport: 'url' in entry.server ? 'http' : 'command',
     remote: tool.remote,
-    ...(signIn ? { signIn } : {})
+    ...(signIn ? { signIn } : {}),
+    ...pluginViewOf(entry.extras)
   }
 }
 
@@ -93,7 +95,7 @@ function withIds(entries: readonly BotToolEntry[]): { entries: HostEntry[]; assi
   return { entries: out, assigned }
 }
 
-function changeHostEntries(
+export function changeHostEntries(
   folder: string,
   change: (entries: HostEntry[]) => HostEntry[],
   options?: Parameters<typeof changeBotToolEntries>[2]
@@ -103,7 +105,7 @@ function changeHostEntries(
 
 type HostList = { entries: HostEntry[]; file: Readonly<Record<string, unknown>> }
 
-async function readHostEntries(folder: string): Promise<HostList> {
+export async function readHostEntries(folder: string): Promise<HostList> {
   const snapshot = await readBotToolsSnapshot(folder)
   const read = withIds(botToolEntries(snapshot))
   if (!read.assigned) {
@@ -207,6 +209,7 @@ export async function updateMcpServer(
   // Resolved against this read; the version check inside the write proves it still holds, so the
   // rename (which keeps a header server's credential id) and any new sign-in fit the stored entry.
   const before = await entryById(folder, id)
+  assertNotFromPlugin(before.extras)
   const resolved = resolveBotToolInput(input, withSavedBotToolHeaders(folder, before.server))
   // A new address with no saved values is sorted as add sorts one: it may need Orca's sign-in.
   const newAddress =
@@ -224,6 +227,7 @@ export async function updateMcpServer(
       if (!previous) {
         throw gone()
       }
+      assertNotFromPlugin(previous.extras)
       if (serverVersion(folder, previous.server) !== version) {
         throw new McpServersError(
           'mcp_server_stale',
@@ -243,13 +247,16 @@ export async function updateMcpServer(
   return storedView(folder, id)
 }
 
-/** Removing a server Orca signs in to revokes that sign-in with it (bot-tools-file's write). */
+/** Removing a server Orca signs in to revokes that sign-in with it (bot-tools-file's write). A
+ *  plugin's server goes only with the plugin, or the next sync would bring it back. */
 export async function removeMcpServer(id: string, folder = mcpHostListFolder()): Promise<void> {
   await changeHostEntries(folder, (entries) => {
-    if (!entries.some((entry) => entry.id === id)) {
+    const entry = entries.find((candidate) => candidate.id === id)
+    if (!entry) {
       throw gone()
     }
-    return entries.filter((entry) => entry.id !== id)
+    assertNotFromPlugin(entry.extras)
+    return entries.filter((candidate) => candidate !== entry)
   })
 }
 

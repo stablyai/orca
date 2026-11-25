@@ -1374,7 +1374,7 @@
       "pairingInvalid": "Pareamento inválido — pareie novamente com seu desktop",
       "rePairDetail": "Pareie novamente com seu desktop",
       "reconnecting": "Reconectando…",
-      "relayAccessExpired": "Acesso ao Relay expirado para {{host}}",
+      "relayAccessRefused": "O Relay recusou o acesso para {{host}}",
       "relayConnectFailed": "Não foi possível conectar via Relay",
       "relayUnreachable": "Não foi possível acessar o Relay",
       "signInDetail": "Entre no Orca no seu desktop para se reconectar",
