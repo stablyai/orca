@@ -62,6 +62,7 @@ export function StructuredAgentWorkingGate({
 
 const EMPTY_IDS: ReadonlySet<string> = new Set()
 const NO_ROWS: readonly string[] = []
+type SendingRows = { rowIds: readonly string[]; waitingIds: readonly string[] }
 
 export function useSendingRowIds<Row>(rows: readonly Row[], idOf: (row: Row) => string) {
   const committed = useRef(NO_ROWS)
@@ -83,7 +84,7 @@ export function useDisplayedSendingIds(
   rows: readonly string[],
   waiting: readonly string[],
   window?: { first: number; heldFrom: number; heldAt: number },
-  frozen?: { rowIds: readonly string[]; waitingIds: readonly string[] } | null
+  frozen?: SendingRows | null
 ): ReadonlySet<string> {
   const { first = 0, heldFrom = Infinity, heldAt = 0 } = window ?? {}
   const held = frozen?.rowIds ?? NO_ROWS
@@ -100,4 +101,24 @@ export function useDisplayedSendingIds(
         .filter((id) => candidates.has(id))
     )
   }, [candidates, rows, footer, first, held, heldFrom, heldAt])
+}
+
+export function useSendingListHold<Hold extends SendingRows>(
+  frozen: Hold | null,
+  source: StructuredAgentSendingSource | undefined,
+  rows: readonly string[],
+  waiting: readonly string[]
+): Hold | null {
+  return useMemo(() => {
+    if (
+      !frozen ||
+      !source?.candidates.size ||
+      (frozen.rowIds === rows && frozen.waitingIds === waiting)
+    ) {
+      return frozen
+    }
+    const held = new Set(frozen.rowIds.concat(frozen.waitingIds))
+    const enters = (id: string) => source.candidates.has(id) && !held.has(id) && source.getId(id)
+    return rows.some(enters) || waiting.some(enters) ? null : frozen
+  }, [frozen, source, rows, waiting])
 }

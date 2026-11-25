@@ -10,7 +10,11 @@ import type {
 } from '../journal/agent-session-journal-types'
 import type { AgentSessionQueuedMessage } from '../requests/agent-session-queued-message-wire'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'
-import { structuredAgentSessionSendingItemIds } from './structured-agent-session-sending'
+import { projectQueuedMessageCards } from './structured-agent-session-queued-cards'
+import {
+  pendingSendsOutsideQueuedCards,
+  structuredAgentSessionSendingItemIds
+} from './structured-agent-session-sending'
 import { splitStructuredAgentSubmissions } from './structured-agent-session-submissions'
 import {
   reconcileQueuedSteerIntents,
@@ -115,6 +119,21 @@ it('agrees with the transcript about which pending submissions are held', () => 
     revision: 0,
     observedAt: 1,
     body: draft.body
+  }
+  const ordinary = { ...attempt, queuedMessageId: undefined }
+  const pending = pendingSendsOutsideQueuedCards(
+    [{ clientMessageId: draft.messageId, body: draft.body, queuedAt: 1 }],
+    [draft.messageId],
+    session.agentWorking
+  )
+  for (const record of [ordinary, { ...ordinary, handedOverAt: 20 }]) {
+    const cards = projectQueuedMessageCards([draft], [record], session)
+    const rows = projectStructuredAgentSessionMessages([item], pending, [record])
+    const sending = structuredAgentSessionSendingItemIds(pending, [record], new Map())
+    expect(cards.map(({ messageId }) => messageId)).toEqual([draft.messageId])
+    expect([...sending]).toEqual([item.itemId])
+    expect(rows).toMatchObject([{ id: item.itemId, deliveryState: 'pending' }])
+    expect(rows[0]?.queued).toBeUndefined()
   }
   for (const dispatchState of ['pending', 'accepted', 'rejected', 'unknown'] as const) {
     for (const queuedMessageId of [undefined, 'draft']) {

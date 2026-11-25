@@ -44,9 +44,15 @@ type Props = Pick<
   pinchGesture: LegacyComposedGesture
 }
 
-export function MobileNativeChatRowList(props: Props): ReactElement {
-  const { tail, rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = props
-  const { header, emptyStateView, waitingRows, sending } = props
+export function MobileNativeChatRowList({
+  tail,
+  waitingRows,
+  pinchGesture,
+  hasHeader,
+  ...page
+}: Props): ReactElement {
+  const { rowKeys, rows, renderItem, contentContainerStyle, onScroll, footer } = page
+  const { header, emptyStateView, sending } = page
   const rowIds = useSendingRowIds(rows, rowId)
   const waitingIds = useSendingRowIds(waitingRows, waitingId)
   const nativeIds = useDisplayedSendingIds(
@@ -55,32 +61,22 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
     waitingIds
   )
   if (Platform.OS === 'web') {
-    const { roots, runs, layoutKey, onNearTop, itemJump } = props
     return (
-      <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+      <MobileNativeChatPinchZoom gesture={pinchGesture}>
         {/* Only the page list draws row keys to scroll to. */}
         <MobileNativeChatScrollRowToTopContext value={tail.scrollRowToTop}>
           <MobileNativeChatPageList
             {...tail.pageListProps}
-            {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
-            {...{
-              header,
-              footer,
-              emptyStateView,
-              onScroll,
-              onNearTop,
-              itemJump,
-              rowIds,
-              waitingIds,
-              sending
-            }}
+            {...page}
+            rowIds={rowIds}
+            waitingIds={waitingIds}
           />
         </MobileNativeChatScrollRowToTopContext>
       </MobileNativeChatPinchZoom>
     )
   }
   return (
-    <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
+    <MobileNativeChatPinchZoom gesture={pinchGesture}>
       <StructuredAgentSendingScope source={sending} displayedIds={nativeIds}>
         <FlatList
           {...tail.listProps}
@@ -99,7 +95,7 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
           scrollEventThrottle={32}
           onContentSizeChange={tail.pinToTailAfterContentResize}
           onLayout={tail.pinToTail}
-          maintainVisibleContentPosition={mobileNativeChatRowAnchor(props.hasHeader)}
+          maintainVisibleContentPosition={mobileNativeChatRowAnchor(hasHeader)}
           ListHeaderComponent={header ?? undefined}
           ListFooterComponent={footer ?? undefined}
           ListEmptyComponent={emptyStateView ?? undefined}

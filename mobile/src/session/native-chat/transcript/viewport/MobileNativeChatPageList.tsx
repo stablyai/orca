@@ -1,6 +1,7 @@
 import {
   StructuredAgentSendingScope,
-  useDisplayedSendingIds
+  useDisplayedSendingIds,
+  useSendingListHold
 } from '../sending/structured-agent-sending-scope'
 import type { StructuredAgentSendingSource } from '../../../../../../src/shared/agent-session/view/structured-agent-sending-source'
 import type { MobileNativeChatItemJump } from './use-mobile-native-chat-item-navigation'
@@ -29,10 +30,13 @@ import type { MobileNativeChatRowKeys } from '../projection/mobile-native-chat-r
 import { MobileNativeChatPageScroll } from './MobileNativeChatPageScroll'
 import {
   DRAW_AHEAD_SCREENS,
+  isMobileNativeChatElement,
+  isMobileNativeChatScroller,
   mobileNativeChatRowAbove,
   mobileNativeChatDrawnRows,
   mobileNativeChatRowBoxProps,
   mobileNativeChatRowOffset,
+  type MobileNativeChatScroller,
   type MobileNativeChatScrollNode
 } from './mobile-native-chat-reading-place'
 import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
@@ -59,24 +63,8 @@ const FETCH_REACH_SCREENS = 10
 const REST_MS = 300
 
 type Row = { item: NativeChatMessage; index: number }
-type Listen = (type: string, listener: () => void, options: AddEventListenerOptions) => void
-type Scroller = MobileNativeChatScrollNode & {
-  addEventListener: Listen
-  removeEventListener: Listen
-}
-// RN 0.88 types these handles as native tags; on web they are the DOM nodes this list observes.
-function isScroller(node: unknown): node is Scroller {
-  return typeof node === 'object' && node !== null && 'addEventListener' in node
-}
-function domElementOf(node: unknown): Element | null {
-  return typeof Element !== 'undefined' && node instanceof Element ? node : null
-}
-type Held = Pick<Props, 'rowIds' | 'waitingIds'> & {
-  rows: readonly NativeChatMessage[]
-  footer: ReactElement | null
-  // Freeze renderItem too: grouping/turn context changes a row even if its message is unchanged.
-  renderItem: (row: Row) => ReactElement
-}
+// Freeze renderItem too: grouping/turn context changes a row even if its message is unchanged.
+type Held = Pick<Props, 'rows' | 'rowIds' | 'footer' | 'waitingIds' | 'renderItem'>
 
 type Props = {
   itemJump?: MobileNativeChatItemJump
@@ -127,15 +115,17 @@ export function MobileNativeChatPageList({
   onNearTop
 }: Props): ReactElement {
   const scroll = useRef<ScrollViewInstance>(null)
-  const scroller = useCallback((): Scroller | null => {
+  const scroller = useCallback((): MobileNativeChatScroller | null => {
     const node: unknown = scroll.current?.getScrollableNode()
-    return isScroller(node) ? node : null
+    return isMobileNativeChatScroller(node) ? node : null
   }, [])
 
   // Hold below-reader growth during a fling: correcting scroll mid-fling stops iOS momentum. Keep the hold in a ref to avoid a render until release.
   const heldRef = useRef<Held | null>(null)
   const [, release] = useState(0)
-  const held = heldRef.current
+  const frozen = heldRef.current
+  const held = useSendingListHold(frozen, sending, rowIds, waitingIds)
+  const [growth] = useState(createMobileNativeChatGrowthHold)
   const { rows, heldFrom, heldAt } = useMemo(
     () => mobileNativeChatDrawnRows(liveRows, held?.rows, rowKeys.keyOf, runs),
     [held, liveRows, rowKeys.keyOf, runs]
@@ -167,6 +157,19 @@ export function MobileNativeChatPageList({
   const touching = useRef(false)
   const readerScrolledAt = useRef(0)
   const settleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const unhold = useCallback(
+    (renderedLive?: Held) => {
+      if (heldRef.current && (!renderedLive || heldRef.current === renderedLive)) {
+        heldRef.current = null
+        clearTimeout(settleTimer.current)
+        growth.set(false)
+        if (!renderedLive) {
+          release((n) => n + 1)
+        }
+      }
+    },
+    [growth]
+  )
   const live = useRef<Held>({ rows: liveRows, footer: liveFooter, rowIds, waitingIds, renderItem })
   const ask = useRef(onNearTop)
   // Read latest committed geometry from event handlers between renders.
@@ -175,6 +178,9 @@ export function MobileNativeChatPageList({
     latest.current = { first, opening, n, keys, indexOf, layoutKey, rowKeys }
     ask.current = onNearTop
     live.current = { rows: liveRows, footer: liveFooter, rowIds, waitingIds, renderItem }
+    if (frozen && !held) {
+      unhold(frozen)
+    }
   })
 
   const write = useCallback((s: MobileNativeChatScrollNode, to: number) => {
@@ -202,14 +208,6 @@ export function MobileNativeChatPageList({
   })
 
   const settle = useRef(() => {})
-  const [growth] = useState(createMobileNativeChatGrowthHold)
-  const unhold = useCallback(() => {
-    if (heldRef.current) {
-      heldRef.current = null
-      growth.set(false)
-      release((n) => n + 1)
-    }
-  }, [])
   const hold = useCallback(() => {
     if (!isFollowing()) {
       heldRef.current ??= live.current
@@ -239,7 +237,7 @@ export function MobileNativeChatPageList({
   }, [])
 
   const drawAndFetch = useCallback(
-    (s: Scroller) => {
+    (s: MobileNativeChatScroller) => {
       const { first: at, opening, keys: drawnKeys, indexOf: rowAt, n: total } = latest.current
       const screens = (s.scrollHeight - s.clientHeight + s.scrollTop) / s.clientHeight
       let next = at
@@ -322,9 +320,12 @@ export function MobileNativeChatPageList({
   // Content and viewport resizes (e.g. the composer growing) bypass commits; restore nested scroll boxes first.
   useEffect(() => {
     const s = scroller()
-    const viewport = domElementOf(scroll.current?.getScrollableNode())
-    const content = domElementOf(scroll.current?.getInnerViewNode())
-    if (!s || !viewport || !content || typeof ResizeObserver === 'undefined') {
+    const viewport: unknown = scroll.current?.getScrollableNode()
+    const content: unknown = scroll.current?.getInnerViewNode()
+    if (typeof ResizeObserver === 'undefined' || !s) {
+      return
+    }
+    if (!isMobileNativeChatElement(viewport) || !isMobileNativeChatElement(content)) {
       return
     }
     const observer = new ResizeObserver(() => {
@@ -400,7 +401,6 @@ export function MobileNativeChatPageList({
     { first, heldFrom, heldAt },
     held
   )
-  const drawnRows = rows.slice(first)
   return (
     <MobileNativeChatPageScroll
       ref={scroll}
@@ -419,7 +419,7 @@ export function MobileNativeChatPageList({
           ) : (
             // Key by chat to reset rows; persist disclosures above windowed rows. Block flow avoids relaying out every row for each streamed token.
             <div key={rowKeys.scope} {...mobileNativeChatRowBoxProps}>
-              {drawnRows.map((item, at) => {
+              {rows.slice(first).map((item, at) => {
                 const index = first + at
                 return (
                   <Fragment key={keys[index]}>

@@ -22,6 +22,15 @@ export type MobileNativeChatScrollNode = Tagged & {
   querySelector: (selector: string) => RowBox | null
 }
 
+type Listen = (type: string, listener: () => void, options: AddEventListenerOptions) => void
+export type MobileNativeChatScroller = MobileNativeChatScrollNode &
+  Record<'addEventListener' | 'removeEventListener', Listen>
+
+// RN types these handles as native tags; on web they are the DOM nodes this list observes.
+export function isMobileNativeChatScroller(node: unknown): node is MobileNativeChatScroller {
+  return typeof node === 'object' && node !== null && 'addEventListener' in node
+}
+
 type Keys = Pick<MobileNativeChatRowKeys, 'current' | 'placement'>
 
 export type MobileNativeChatReadingUnit = {
@@ -62,6 +71,10 @@ function onScreen(box: Box, view: Box): boolean {
   return box.bottom > view.top && box.top < view.bottom
 }
 
+export function isMobileNativeChatElement(node: unknown): node is Element {
+  return typeof Element !== 'undefined' && node instanceof Element
+}
+
 // Prefer visible tool lines, then a visible run header, then the row as reading anchors.
 function unitsOf(
   row: Tagged,
@@ -69,16 +82,15 @@ function unitsOf(
   self: MobileNativeChatReadingUnit
 ): MobileNativeChatReadingUnit[] {
   const shown: MobileNativeChatReadingUnit[] = []
-  const parts =
-    typeof Element !== 'undefined' && row instanceof Element
-      ? mobileNativeChatReadingParts(row).map((node) => ({
-          node,
-          id:
-            mobileNativeChatScrollRootKey(node) !== undefined
-              ? `root:${mobileNativeChatScrollRootKey(node)}`
-              : (node.getAttribute('data-testid')?.slice(MEMBER.length) ?? '')
-        }))
-      : tagged(row, MEMBER)
+  const parts = isMobileNativeChatElement(row)
+    ? mobileNativeChatReadingParts(row).map((node) => ({
+        node,
+        id:
+          mobileNativeChatScrollRootKey(node) !== undefined
+            ? `root:${mobileNativeChatScrollRootKey(node)}`
+            : (node.getAttribute('data-testid')?.slice(MEMBER.length) ?? '')
+      }))
+    : tagged(row, MEMBER)
   for (const { id, node } of parts) {
     const box = node.getBoundingClientRect()
     if (box.top >= view.bottom) {

@@ -4,7 +4,6 @@ import {
   type StructuredAgentSubmission,
   type SubmissionReceipts
 } from './structured-agent-session-submissions'
-import { agentJournalSubmissionDrawnAsHeld } from '../requests/agent-session-queued-submission'
 
 export function nativeChatIsWorking(
   working: boolean,
@@ -49,10 +48,7 @@ export function structuredAgentSessionSendingMembers(
 ): ReadonlyMap<string, string> {
   let candidates = sendingCandidates.get(submissions)
   if (!candidates) {
-    candidates = submissions.filter(
-      (submission) =>
-        submission.dispatchState === 'pending' && !agentJournalSubmissionDrawnAsHeld(submission)
-    )
+    candidates = submissions.filter((submission) => submission.dispatchState === 'pending')
     sendingCandidates.set(submissions, candidates)
   }
   const recorded = structuredAgentSubmissionIndex(submissions)

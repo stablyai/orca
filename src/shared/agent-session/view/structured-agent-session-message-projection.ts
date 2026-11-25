@@ -6,10 +6,7 @@ import type {
 } from '../journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
-import {
-  agentJournalSubmissionReturnedToCard,
-  agentJournalSubmissionDrawnAsHeld
-} from '../requests/agent-session-queued-submission'
+import { agentJournalSubmissionReturnedToCard } from '../requests/agent-session-queued-submission'
 import { collapseProviderRetryRuns } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
@@ -144,7 +141,7 @@ export type StructuredAgentSessionItemProjector = (
 
 export type StructuredAgentSessionMessageRows = {
   output: NativeChatMessage[]
-  /** Rows before the held cards and optimistic echoes. */
+  /** Rows before optimistic echoes. */
   conversationEnd: number
   hasStoppedSends: boolean
 }
@@ -197,7 +194,6 @@ export function projectStructuredAgentSessionMessageRows(
   )
   const marks = automationResultMarks(visibleItems)
   const delivered: NativeChatMessage[] = []
-  const held: NativeChatMessage[] = []
   const shownStopped = new Set<string>()
   let moved = false
   for (const row of projectItems(visibleItems)) {
@@ -212,10 +208,7 @@ export function projectStructuredAgentSessionMessageRows(
         : submission?.queuedMessageId && row.from
           ? deliveredAgentMailRow(row, submission.queuedMessageId)
           : row
-    // Until handover, queued sends have no conversation position.
-    if (submission && agentJournalSubmissionDrawnAsHeld(submission)) {
-      held.push({ ...message, queued: true })
-    } else if (!placement || !stoppedBeforeStart.has(message.id)) {
+    if (!placement || !stoppedBeforeStart.has(message.id)) {
       delivered.push(withAutomationResultMarks(message, marks))
     } else {
       const { opensTurn, position } = placement(message.id)
@@ -249,8 +242,6 @@ export function projectStructuredAgentSessionMessageRows(
       : conversation
   const output = [
     ...placed,
-    // Held cards follow the conversation outside its runs.
-    ...held,
     // Host rows supersede client echoes under either client or provider IDs.
     ...structuredAgentSessionEchoRows(optimistic, journalled, submissionsByItemId)
   ]

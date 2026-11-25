@@ -6,6 +6,14 @@ import {
   viewRenders
 } from './mobile-native-chat-view-receipt.test-fixture'
 import { createMobileNativeChatTailViewport } from './transcript/viewport/mobile-native-chat-tail-viewport'
+import { MobileNativeChatPageList } from './transcript/viewport/MobileNativeChatPageList'
+import { MobileNativeChatMessageTime } from './transcript/messages/MobileNativeChatMessageTime'
+import { StructuredAgentWorkingGate } from './transcript/sending/structured-agent-sending-scope'
+import { useMobileStructuredSends } from './composer/delivery/use-mobile-structured-sends'
+import {
+  EMPTY_STRUCTURED_AGENT_SESSION,
+  reduceStructuredAgentSession
+} from '../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { Platform } from 'react-native'
 import { MobileNativeChatRowList } from './transcript/MobileNativeChatRowList'
 import { createStructuredAgentSendingSource } from '../../../../src/shared/agent-session/view/structured-agent-sending-source'
@@ -487,3 +495,231 @@ it.each([
     }
   }
 )
+
+it.each(['list', 'footer'])(
+  'draws a steer added during a page hold in the %s',
+  async (location) => {
+    vi.useFakeTimers()
+    const prior: NativeChatMessage = {
+      id: 'old-row',
+      role: 'assistant',
+      blocks: [],
+      timestamp: 1000,
+      source: 'transcript'
+    }
+    const steer: NativeChatMessage = { ...prior, role: 'user', id: 'orca:steer' }
+    const row = (item: NativeChatMessage) =>
+      createElement(MobileNativeChatMessageTime, {
+        timestamp: 1000,
+        fontScale: 1,
+        submissionItemId: item.id
+      })
+    const working = createElement(
+      StructuredAgentWorkingGate,
+      null,
+      createElement('span', null, 'Working')
+    )
+    const noop = () => {}
+    const viewport = {
+      addEventListener: noop,
+      removeEventListener: noop,
+      scrollTop: -20,
+      scrollHeight: 1000,
+      clientHeight: 640,
+      getBoundingClientRect: () => ({ top: 0, bottom: 640 }),
+      querySelector: () => null
+    }
+    const props: ComponentProps<typeof MobileNativeChatPageList> = {
+      ref: noop,
+      isFollowing: () => false,
+      onEndDistance: noop,
+      onPlaceRestored: noop,
+      rows: [prior],
+      rowIds: [prior.id],
+      waitingIds: [],
+      rowKeys: {
+        scope: location,
+        keyOf: (message) => message.id,
+        current: (key) => key,
+        placement: (key) => key
+      },
+      renderItem: ({ item }) => row(item),
+      layoutKey: 'test',
+      contentContainerStyle: {},
+      header: null,
+      footer: working,
+      emptyStateView: null,
+      onScroll: noop
+    }
+    let tree!: ReactTestRenderer
+    let receipts = new Map<string, number>()
+    const listeners = new Set<() => void>()
+    const sending = createStructuredAgentSendingSource(
+      {
+        getSnapshot: () => receipts,
+        subscribe(listener) {
+          listeners.add(listener)
+          return () => {
+            listeners.delete(listener)
+          }
+        }
+      },
+      [{ clientMessageId: 'steer' }],
+      []
+    )
+    try {
+      await act(() => {
+        tree = create(createElement(MobileNativeChatPageList, props), {
+          createNodeMock: (node) =>
+            node.props.onScroll
+              ? {
+                  getScrollableNode: () => viewport,
+                  getInnerViewNode: () => null
+                }
+              : null
+        })
+      })
+      expect(shows(tree, 'Working')).toBe(true)
+      const scroll = tree.root.findAllByType('div').find((node) => node.props.onScroll)!
+      await act(() => scroll.props.onScroll({ nativeEvent: {} }))
+      const next =
+        location === 'list'
+          ? { ...props, sending, rows: [prior, steer], rowIds: [prior.id, steer.id] }
+          : {
+              ...props,
+              sending,
+              waitingIds: [steer.id],
+              footer: createElement('div', null, working, row(steer))
+            }
+      await act(() => tree.update(createElement(MobileNativeChatPageList, next)))
+      expect(shows(tree, 'Sending…')).toBe(true)
+      expect(shows(tree, 'Working')).toBe(false)
+
+      await act(() => scroll.props.onScroll({ nativeEvent: {} }))
+      const updateTail = (text: string) =>
+        act(() =>
+          tree.update(
+            createElement(MobileNativeChatPageList, {
+              ...next,
+              rows: next.rows.map((item) =>
+                item === prior ? { ...item, blocks: [{ type: 'text', text }] } : item
+              ),
+              footer: createElement('div', null, next.footer, createElement('span', null, text))
+            })
+          )
+        )
+      await updateTail('new tail')
+      const membershipCheck = vi.spyOn(sending.candidates, 'has')
+      await updateTail('live tail')
+      expect(membershipCheck).not.toHaveBeenCalled()
+      expect(shows(tree, 'live tail')).toBe(false)
+      expect(shows(tree, 'Sending…')).toBe(true)
+      expect(shows(tree, 'Working')).toBe(false)
+
+      await act(() => {
+        receipts = new Map([['steer', 1100]])
+        listeners.forEach((listener) => listener())
+      })
+      expect(shows(tree, 'Sending…')).toBe(false)
+      expect(shows(tree, 'Working')).toBe(true)
+      await act(() => {
+        vi.advanceTimersByTime(300)
+      })
+      expect(shows(tree, 'live tail')).toBe(true)
+    } finally {
+      await act(() => tree?.unmount())
+      vi.useRealTimers()
+    }
+  }
+)
+
+it('keeps an idle phone send pending through admission, handover and receipt', async () => {
+  const started = reduceStructuredAgentSession(
+    EMPTY_STRUCTURED_AGENT_SESSION,
+    {
+      type: 'history-page',
+      page: { ...page([], []), queuedMessages: [] }
+    },
+    1000
+  )
+  const body = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: 'Idle send' }]
+  } satisfies Extract<AgentJournalRenderItem['body'], { kind: 'message' }>
+  const message = { itemId: 'orca:opener', sequence: 2, revision: 0, observedAt: 1200, body }
+  const admitted = { ...SEND, handoverRecorded: true as const, handedOverAt: undefined }
+  const saved = reduceStructuredAgentSession(started, batch(2, [admitted], [message]), 1200)
+  const handedOver = reduceStructuredAgentSession(saved, batch(3, [SEND]), 1400)
+  const received = reduceStructuredAgentSession(
+    handedOver,
+    batch(4, [{ ...SEND, writtenAt: 1500 }]),
+    1500
+  )
+  let accept!: ReturnType<typeof useMobileStructuredSends>['accept']
+  function Idle({ state }: { state: typeof started }) {
+    const sends = useMobileStructuredSends({
+      sessionKey: 'idle',
+      cursor: state.cursor,
+      submissions: state.submissions,
+      queuedMessages: state.queuedMessages,
+      onSendError: () => {}
+    })
+    accept = sends.accept
+    const { messages, sending } = useMobileStructuredTranscript(
+      {
+        agent: 'claude',
+        sessionKey: 'idle',
+        turnId: null,
+        optimistic: sends.optimistic,
+        read: {
+          state,
+          submissionReceipts: { getSnapshot: () => state.writtenAtById, subscribe: noSubscription }
+        }
+      },
+      false
+    )
+    return createElement(MobileNativeChatPageList, {
+      ref: () => {},
+      isFollowing: () => true,
+      onEndDistance: () => {},
+      onPlaceRestored: () => {},
+      rows: messages,
+      rowIds: messages.map(({ id }) => id),
+      waitingIds: [],
+      rowKeys: {
+        scope: 'idle',
+        keyOf: (row) => row.id,
+        current: (key) => key,
+        placement: (key) => key
+      },
+      header: null,
+      footer: null,
+      emptyStateView: null,
+      layoutKey: 'test',
+      contentContainerStyle: {},
+      onScroll: () => {},
+      sending,
+      renderItem: ({ item }) =>
+        createElement(MobileNativeChatMessageTime, {
+          timestamp: item.timestamp,
+          submissionItemId: item.id,
+          fontScale: 1
+        })
+    })
+  }
+  let mounted!: ReactTestRenderer
+  try {
+    await act(() => {
+      mounted = create(createElement(Idle, { state: started }))
+    })
+    await act(() => accept({ clientMessageId: 'opener', body, queuedAt: 1100 }))
+    expect(shows(mounted, 'Sending…')).toBe(true)
+    for (const state of [saved, handedOver, received]) {
+      await act(() => mounted.update(createElement(Idle, { state })))
+      expect(shows(mounted, 'Sending…')).toBe(state !== received)
+    }
+  } finally {
+    await act(() => mounted?.unmount())
+  }
+})

@@ -77,7 +77,7 @@ function withRowIndex(
   }
 }
 
-/** Revised rows replace their own; appended rows join the conversation before held cards and echoes. */
+/** Revised rows replace their own; appended rows join the conversation before echoes. */
 function reuseMessages(
   previous: MessageStream,
   items: readonly AgentJournalRenderItem[],
