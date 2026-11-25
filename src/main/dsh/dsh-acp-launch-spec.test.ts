@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
-import { deliverDshInstructions } from '../acp/launch/acp-instructions'
+import { acpLaunchInstructions } from '../acp/launch/acp-instructions'
 import { DSH_LAUNCH_SPEC } from './dsh-acp-launch-spec'
 import { discardDshListingSession } from './dsh-listing-session-discard'
 import { isNativeChatAgent } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
@@ -42,20 +42,46 @@ describe('DSH ACP launch spec', () => {
     expect(resolved).toEqual({ variable: 'DSH_HOME', path: '/tmp/custom-dsh' })
   })
 
-  it('writes standing instructions to AGENTS.local.md in the workspace', async () => {
+  it('writes standing instructions to AGENTS.local.md and removes them when a launch has none', async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'dsh-instructions-'))
-    const result = await deliverDshInstructions({
+    const result = await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-1',
       text: 'Follow Orca bot rules.',
-      cwd: tempDir,
       env: {},
-      file: async () => tempDir,
-      folder: async () => tempDir,
-      emptyFolder: async () => tempDir,
-      version: null
+      cwd: tempDir
     })
     expect(result).toEqual({})
-    const content = await readFile(join(tempDir, 'AGENTS.local.md'), 'utf8')
+    const instructionsPath = join(tempDir, 'AGENTS.local.md')
+    const content = await readFile(instructionsPath, 'utf8')
     expect(content).toContain('Follow Orca bot rules.')
+
+    // A subsequent launch without instructions removes Orca's file so old rules do not linger.
+    await expect(
+      acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+        sessionId: 'dsh-session-2',
+        text: null,
+        env: {},
+        cwd: tempDir
+      })
+    ).resolves.toBeNull()
+    await expect(stat(instructionsPath)).rejects.toThrow()
+
+    // User-authored text in AGENTS.local.md is preserved when Orca's block is removed.
+    await writeFile(instructionsPath, 'User rules.\n')
+    await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-3',
+      text: 'Bot rules.',
+      env: {},
+      cwd: tempDir
+    })
+    expect(await readFile(instructionsPath, 'utf8')).toContain('Bot rules.')
+    await acpLaunchInstructions(DSH_LAUNCH_SPEC, tempDir, {
+      sessionId: 'dsh-session-4',
+      text: null,
+      env: {},
+      cwd: tempDir
+    })
+    expect(await readFile(instructionsPath, 'utf8')).toBe('User rules.\n')
   })
 
   it('discards temporary model-listing sessions without touching sibling sessions', async () => {

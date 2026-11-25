@@ -10,7 +10,7 @@ import type { AcpLaunchSpec } from './acp-launch-contract'
 import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
-import { writeFolderContextFile } from './acp-folder-context-file'
+import { removeFolderContextBlock, writeFolderContextFile } from './acp-folder-context-file'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -190,9 +190,14 @@ export const deliverCodeBuddyInstructions: AcpInstructionsDelivery = async ({ te
 }
 
 // DSH reads the folder's AGENTS.local.md at session creation and keeps it with the session.
-export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
-  await writeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness', text)
-  return {}
+// Refuses to start when AGENTS.local.md cannot be written (a link or unreadable file).
+export const deliverDshInstructions: AcpInstructionsDelivery = async ({ text, cwd }) =>
+  (await writeFolderContextFile(cwd, 'AGENTS.local.md', 'DeepSeek Harness', text)) ? {} : null
+
+/** DSH reads the folder's AGENTS.local.md at session creation, so a launch that brings no
+ *  instructions removes the block an earlier one left behind. */
+export const undoDshInstructions = async ({ cwd }: { cwd: string }): Promise<void> => {
+  await removeFolderContextBlock(cwd, 'AGENTS.local.md', 'DeepSeek Harness')
 }
 
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
@@ -304,7 +309,7 @@ export async function makeAcpInstructionsFolder(
 /** Null for a session without instructions; throws when the agent cannot take them, so the session
  *  never starts without them. */
 export async function acpLaunchInstructions(
-  spec: Pick<AcpLaunchSpec, 'agent' | 'instructions'>,
+  spec: Pick<AcpLaunchSpec, 'agent' | 'instructions' | 'undoInstructions'>,
   dataDirectory: string,
   input: {
     sessionId: string
@@ -316,6 +321,7 @@ export async function acpLaunchInstructions(
 ): Promise<AcpInstructionsLaunch | null> {
   const { text } = input
   if (!text) {
+    await spec.undoInstructions?.({ cwd: input.cwd })
     return null
   }
   const delivered = await spec.instructions?.({

@@ -98,6 +98,8 @@ export type AcpLaunchSpec = {
   /** How a session's standing instructions reach the agent's system prompt; absent, a session
    *  with any cannot start. */
   instructions?: AcpInstructionsDelivery
+  /** Takes what an earlier `instructions` wrote back out of the folder; a launch with none runs it. */
+  undoInstructions?: (input: { cwd: string }) => Promise<void>
   /** `instructions` writes into the chat's own folder, so Orca never adds any just for visuals. */
   instructionsInWorkspace?: true
   transcriptImport: StructuredAgentTranscriptImport | null
