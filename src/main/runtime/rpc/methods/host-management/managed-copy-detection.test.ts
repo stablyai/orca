@@ -5,6 +5,7 @@ import { expect, it, vi } from 'vitest'
 import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { readHostManagedAgentCommands } from './managed-copy-detection'
 import { alignManagedAgentLaunchAtSpawn } from '../../../../managed-agent-cli/managed-agent-spawn-program'
+import { rememberManagedAgentRelease } from '../../../../managed-agent-cli/managed-agent-cli-registry'
 
 vi.mock('../../../../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/data/orca'
@@ -61,6 +62,7 @@ it.runIf(process.platform === 'win32')(
     const a = join(dir, 'A')
     const b = join(dir, 'B')
     const exe = join(b, 'codex.exe')
+    const managed = join(dir, 'managed')
     const launch = (queuedPath: string) =>
       alignManagedAgentLaunchAtSpawn(
         {
@@ -77,7 +79,25 @@ it.runIf(process.platform === 'win32')(
       await writeFile(exe, '')
       expect(await launch(`${a};${b}`)).toBe('codex.exe --version')
       expect(await launch(`${a};"${b}"`)).toBe(`& '${exe}' --version`)
+
+      await mkdir(join(managed, 'bin'), { recursive: true })
+      await writeFile(join(managed, 'bin', 'codex.exe'), '')
+      rememberManagedAgentRelease('codex', managed)
+      vi.stubEnv('USERPROFILE', dir)
+      expect(
+        await alignManagedAgentLaunchAtSpawn(
+          {
+            launchCommand: '.\\B\\codex --version',
+            cwd: dir,
+            queuedPath: '',
+            getSettings: () => ({})
+          },
+          'powershell'
+        )
+      ).toBe('.\\B\\codex --version')
     } finally {
+      rememberManagedAgentRelease('codex', null)
+      vi.unstubAllEnvs()
       await rm(dir, { recursive: true, force: true })
     }
   }

@@ -11,7 +11,6 @@ import {
 export {
   getVersionManagerBinPaths,
   resolveCliCommand,
-  resolveCliCommands,
   resolveExecutableCommand,
   withCliRuntimeOnPath
 } from '../../shared/shell/command-resolution/node-cli-command-resolution'

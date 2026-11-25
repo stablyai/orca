@@ -258,13 +258,6 @@ export function isSpawnableCommand(platform: NodeJS.Platform, command: string): 
   return platform !== 'win32' || /\.(exe|com|cmd|bat)$/i.test(command)
 }
 
-export function resolveCliCommands(
-  commandNames: readonly string[],
-  options: ResolveCommandOptions = {}
-): Map<string, string> {
-  return runCliFsReadsSync(cliCommandsLookup(commandNames, options))
-}
-
 export function* cliCommandsLookup(
   commandNames: readonly string[],
   options: ResolveCommandOptions = {}

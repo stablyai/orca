@@ -278,6 +278,7 @@ export async function readHostManagedAgentCommands(
     pathEnv?: string
     shell?: AgentStartupShell
     forDelivery?: boolean
+    /** A bare executable name with an explicit Windows extension. */
     explicitExecutable?: string
   } = {}
 ): Promise<ManagedAgentCommands> {
@@ -298,25 +299,21 @@ export async function readHostManagedAgentCommands(
   const env = options.pathEnv === undefined ? await resolveLoginShellEnvironment() : undefined
   const pathEnv = options.pathEnv ?? env?.PATH ?? env?.Path ?? ''
   const preferUnquotedPath =
-    process.platform === 'win32' && options.forDelivery && !acceptsQuotedPathEntries(options.shell)
+    process.platform === 'win32' &&
+    options.forDelivery === true &&
+    !acceptsQuotedPathEntries(options.shell)
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
         const ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
         const explicit = options.explicitExecutable
         if (explicit) {
-          if (isAbsolute(explicit)) {
-            if (await resolveExecutableCommandAsync(explicit)) {
-              return
+          const own = await lookUpTerminalProgram(explicit, ownPath, preferUnquotedPath)
+          if (isAbsolute(own)) {
+            if (!onTerminalPath(own, pathEnv, options.shell)) {
+              commands[agent] = own
             }
-          } else {
-            const own = await lookUpTerminalProgram(explicit, ownPath, preferUnquotedPath)
-            if (isAbsolute(own)) {
-              if (!onTerminalPath(own, pathEnv, options.shell)) {
-                commands[agent] = own
-              }
-              return
-            }
+            return
           }
         }
         const own = await lookUpTerminalProgram(program, ownPath, preferUnquotedPath)

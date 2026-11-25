@@ -1,4 +1,3 @@
-import { homedir } from 'node:os'
 import { basename, delimiter, isAbsolute, resolve } from 'node:path'
 import {
   renderCmdLaunchForPowerShell,
@@ -151,19 +150,6 @@ function nativeShellPath(path: string, shell: AgentStartupShell): string {
   return process.platform === 'win32' && shell === 'posix' ? msysDrivePathToWindows(path) : path
 }
 
-async function effectiveLaunchCwd(
-  spawn: SpawnLaunch,
-  shell: AgentStartupShell,
-  cwd: string | undefined
-): Promise<string> {
-  const launchCwd = nativeShellPath(cwd ?? '.', shell)
-  if (isAbsolute(launchCwd)) {
-    return launchCwd
-  }
-  const base = (await spawn.readCwd?.()) || spawn.cwd || process.cwd()
-  return resolve(nativeShellPath(base, shell), launchCwd)
-}
-
 async function effectiveSearchPath(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
@@ -211,7 +197,13 @@ async function effectiveSearchPath(
   if (!searchesCwd && directories.every(isAbsolute)) {
     return preserveQuotes(directories).join(delimiter)
   }
-  const cwd = await effectiveLaunchCwd(spawn, shell, launch.cwd)
+  const launchCwd = nativeShellPath(launch.cwd ?? '.', shell)
+  const cwd = isAbsolute(launchCwd)
+    ? launchCwd
+    : resolve(
+        nativeShellPath((await spawn.readCwd?.()) || spawn.cwd || process.cwd(), shell),
+        launchCwd
+      )
   const absoluteDirectories = preserveQuotes(directories.map((entry) => resolve(cwd, entry)))
   return (searchesCwd ? [cwd, ...absoluteDirectories] : absoluteDirectories).join(delimiter)
 }
@@ -296,26 +288,19 @@ async function resolveLaunchExecutable(
   if (spawn.sshTarget || spawn.codexRuntime === 'wsl') {
     return managedAgent ? render(stockLaunchProgram(agent, 'linux', true)) : command
   }
-  if (!settings && !managedAgent) {
+  // The shell resolves explicit paths, including home prefixes and Windows executable suffixes.
+  if (!managedAgent && (program !== name || !settings)) {
     return render(launch.executable)
   }
   const stock = stockLaunchProgram(agent, process.platform)
   const usesExplicitProgram =
-    !managedAgent &&
-    (program !== name || (process.platform === 'win32' && name.toLowerCase() !== programKey))
-  let executable = usesExplicitProgram ? program : stock
-  if (usesExplicitProgram && program !== name && !isAbsolute(executable)) {
-    executable =
-      sourceShell !== 'cmd' && command.startsWith('~/', launch.start)
-        ? resolve(homedir(), executable.slice(2))
-        : resolve(await effectiveLaunchCwd(spawn, sourceShell, launch.cwd), executable)
-  }
+    !managedAgent && process.platform === 'win32' && name.toLowerCase() !== programKey
   const pathEnv = await effectiveSearchPath(spawn, shell, launch)
   const paths = await readHostManagedAgentCommands(settings ?? {}, [agent], {
     pathEnv,
     shell,
     forDelivery: true,
-    ...(usesExplicitProgram ? { explicitExecutable: executable } : {})
+    ...(usesExplicitProgram ? { explicitExecutable: name } : {})
   })
   return render(paths[agent] ?? (usesExplicitProgram ? launch.executable : stock))
 }
