@@ -57,11 +57,9 @@ export const CONNECTOR_METHODS = [
       }
       const turnFor =
         'sessionId' in params
-          ? await botTurnFor(
-              context.runtime,
-              params.sessionId,
-              sessionCallerOf(context.orchestrationCaller)?.sessionId
-            )
+          ? await botTurnFor(context.runtime, params.sessionId, {
+              verifiedSessionId: sessionCallerOf(context.orchestrationCaller)?.sessionId
+            })
           : // A terminal pane's reply names no chat whose turn Orca can read.
             'someone_else'
       const cloud = context.runtime.getConnectorCloud()
