@@ -17,11 +17,12 @@ const wslAccount = {
 const host = { runtime: 'host' as const, label: 'server' }
 
 function state(wslActive: string | null): CodexRateLimitAccountsState {
-  return {
+  const value: CodexRateLimitAccountsState = {
     accounts: [hostAccount, wslAccount],
     activeAccountId: null,
     activeAccountIdsByRuntime: { host: null, wsl: { Ubuntu: wslActive } }
-  } as CodexRateLimitAccountsState
+  }
+  return value
 }
 
 describe('System default lanes', () => {
@@ -46,9 +47,11 @@ describe('System default lanes', () => {
 
   it('sends one targeted select per lane through the pane runner', async () => {
     const select = vi.fn().mockResolvedValue(state(null))
-    const run = vi.fn(async (_action: string, operation: () => Promise<unknown>) => {
-      await operation()
-    })
+    const run = vi.fn(
+      async (_action: string, operation: () => Promise<unknown>, _lane: unknown) => {
+        await operation()
+      }
+    )
     const owner = { kind: 'environment' as const, environmentId: 'paired' }
     const lanes = [
       { runtime: 'host' as const, wslDistro: null },
