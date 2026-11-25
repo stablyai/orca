@@ -30412,7 +30412,8 @@
     "navigationLabel": "应用导航",
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
-    "more": "更多"
+    "more": "更多",
+    "customize": "自定义"
   },
   "chats": {
     "delete": {
