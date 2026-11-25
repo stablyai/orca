@@ -1,4 +1,5 @@
 // `orca bot item`: one short line per write, one row per item, and an item with its activity.
+import { formatLocalTime } from '../output/local-time'
 import {
   botItemCommentImages,
   BOT_ITEM_STATUSES,
@@ -95,16 +96,6 @@ function age(at: number, now: number): string {
   return hours < 48 ? `${hours}h` : `${Math.round(hours / 24)}d`
 }
 
-/** `2026-11-19 09:00 (-05:00)`: this computer's time, with its offset so it reads anywhere. */
-export function formatSnoozeTime(at: number): string {
-  const date = new Date(at)
-  const two = (value: number) => String(value).padStart(2, '0')
-  const offset = -date.getTimezoneOffset()
-  const sign = offset < 0 ? '-' : '+'
-  const zone = `${sign}${two(Math.floor(Math.abs(offset) / 60))}:${two(Math.abs(offset) % 60)}`
-  return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())} ${two(date.getHours())}:${two(date.getMinutes())} (${zone})`
-}
-
 /** What the bot reads on a snoozed item, in list and show: it carries the guidance, not the Rules. */
 function snoozedWords(until: string): string {
   return `by your owner until ${until}: don't ask about it before then; comments and worker results stay hidden from them until then, and setting it to Needs you or closing it brings it back now`
@@ -113,7 +104,7 @@ function snoozedWords(until: string): string {
 /** When the owner's snooze ends, while it lasts. */
 function snoozedUntil(item: BotItem, now: number): string | null {
   return isBotItemSnoozed(item, now) && item.snoozedUntil !== null
-    ? formatSnoozeTime(item.snoozedUntil)
+    ? formatLocalTime(item.snoozedUntil)
     : null
 }
 
@@ -174,7 +165,7 @@ function eventLine(event: BotItemEvent): string {
         return `linked ${Array.isArray(data.links) ? data.links.join(', ') : ''}`
       case 'snoozed':
         return typeof data.until === 'number'
-          ? `snoozed until ${formatSnoozeTime(data.until)}`
+          ? `snoozed until ${formatLocalTime(data.until)}`
           : 'snoozed'
       case 'unsnoozed':
         return data.early ? 'back from snooze early' : 'unsnoozed'

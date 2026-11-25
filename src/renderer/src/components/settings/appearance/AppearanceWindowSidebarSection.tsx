@@ -59,7 +59,6 @@ function recordStatusBarToggleInteraction(
   } else if (
     id === 'claude' ||
     id === 'codex' ||
-    id === 'gemini' ||
     id === 'opencode-go' ||
     id === 'kimi' ||
     id === 'antigravity' ||

@@ -6,6 +6,7 @@ import {
   buildFolderStatusMap,
   buildIgnoredSet,
   buildStatusMap,
+  getPathDecoration,
   shouldShowIgnoredDecoration
 } from '../../../../src/shared/git/status/git-path-decoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host/execution-host'
@@ -127,9 +128,9 @@ export function useMobileFileExplorerDecorations(args: {
 
   return useCallback(
     (relativePath, isDirectory) => {
-      const rowStatus =
-        (isDirectory ? folderStatusByPath.get(relativePath) : statusByPath.get(relativePath)) ??
-        null
+      const rowStatus = isDirectory
+        ? getPathDecoration(folderStatusByPath, relativePath)
+        : getPathDecoration(statusByPath, relativePath)
       const rowIgnored = shouldShowIgnoredDecoration(rowStatus, ignored, relativePath)
       return rowStatus === null && !rowIgnored
         ? NO_DECORATION

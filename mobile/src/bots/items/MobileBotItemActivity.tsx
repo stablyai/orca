@@ -1,5 +1,5 @@
-// An item's Activity on the phone, in the desktop's order and words: comments as cards (an agent's
-// question with its question footer and quick replies), and one muted line per other event; comments
+// An item's Activity on the phone, in the desktop's order and words: comments as chat-style rows (an
+// agent's question with its question lines), and one muted line per other event; comments
 // sent from the box that the host's read doesn't show yet come last, as sent. A reply's quote shows its
 // question: scrolled to the middle and briefly lit, as the desktop's comment box does (a tap has no focus ring).
 import { useCallback, useRef, useState } from 'react'
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native'
 import {
   botItemActivity,
+  botItemLiveAskKey,
   botItemWaitEntryKey,
   botItemWorkerStopReason,
   type BotItemActivityEntry
@@ -29,7 +30,7 @@ import {
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
 import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
-import type { BotItemQuickReplyActions } from '../../../../src/shared/bots/use-bot-item-question-steps'
+import type { BotItemSentAnswers } from '../../../../src/shared/bots/use-bot-item-question-steps'
 import {
   mobileBotItemCommentWords,
   type MobileBotItemAttachmentSource
@@ -43,7 +44,6 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { MobileBotItemCommentCard } from './MobileBotItemCommentCard'
 import { MobileBotItemStatusIcon } from './MobileBotItemStatusIcon'
-import { MobileBotItemWaitCard } from './MobileBotItemWaitCard'
 import { useMobileMessageTime } from '../../session/native-chat/transcript/messages/use-mobile-message-time'
 
 const ICON = 13
@@ -254,9 +254,9 @@ export function MobileBotItemActivity({
   attachments,
   pending,
   onReveal,
-  itemScope,
-  quickReplies,
-  repliesDisabled
+  sent,
+  asking,
+  onQuote
 }: {
   item: BotItem
   events: readonly BotItemEvent[]
@@ -265,12 +265,12 @@ export function MobileBotItemActivity({
   attachments: MobileBotItemAttachmentSource
   /** Scrolls the page to a span measured in the window. */
   onReveal: (y: number, height: number, animated: boolean) => void
-  /** The item on its host, which an ask's held answers are kept under. */
-  itemScope: string
-  /** What the waiting question's quick replies do. */
-  quickReplies: BotItemQuickReplyActions
-  /** The host can't take a comment now (offline). */
-  repliesDisabled: boolean
+  /** Answers just posted as one comment. */
+  sent: BotItemSentAnswers | null
+  /** The docked answer card asks the waiting question now, so its comment doesn't repeat it. */
+  asking: boolean
+  /** Quotes a comment's words into the comment box. */
+  onQuote: (text: string) => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -280,8 +280,9 @@ export function MobileBotItemActivity({
   const [flash, setFlash] = useState<{ id: string; at: number } | null>(null)
   const endFlash = useCallback(() => setFlash(null), [])
   const entries = botItemActivity(item, events)
-  // Its move shows last, as its card, while the item waits.
+  // Its move shows as the Status row's subtitle while the item waits.
   const waitKey = botItemWaitEntryKey(item, entries)
+  const liveAsk = botItemLiveAskKey(entries)
   const comments = new Set(
     entries.flatMap((entry) => (entry.kind === 'comment' ? [entry.key] : []))
   )
@@ -301,7 +302,7 @@ export function MobileBotItemActivity({
   return (
     <View>
       {entries.map((entry) =>
-        // Its wait shows last, as its card; an answer reads on its question's lines.
+        // Its wait shows under Status; an answer reads on its question's lines.
         entry.key === waitKey ? null : entry.kind === 'comment' ? (
           entry.onAsk ? null : (
             <MobileBotItemCommentCard
@@ -317,9 +318,14 @@ export function MobileBotItemActivity({
                 }
               }}
               onShowQuestion={showQuestion(entry.replyTo?.eventId)}
-              itemScope={itemScope}
-              quickReplies={quickReplies}
-              repliesDisabled={repliesDisabled}
+              onShowLive={
+                entry.ended === 'replaced' && liveAsk !== entry.key
+                  ? showQuestion(liveAsk ?? undefined)
+                  : null
+              }
+              sent={sent}
+              asking={asking}
+              onQuote={onQuote}
               {...(flash?.id === entry.key
                 ? { flash: { at: flash.at, still, end: endFlash } }
                 : {})}
@@ -343,12 +349,9 @@ export function MobileBotItemActivity({
           </View>
         )
       )}
-      {item.status === 'waiting' && item.wait ? (
-        <MobileBotItemWaitCard text={item.wait.text} at={item.wait.at} />
-      ) : null}
       {pending.shown.map(({ event, failed, mayHaveArrived }) =>
         // Answers posted as one comment show on their lines already.
-        !failed && event.data.text === quickReplies.sent?.text ? null : (
+        !failed && event.data.text === sent?.text ? null : (
           <MobileBotItemCommentCard
             key={event.id}
             item={item}
@@ -362,10 +365,11 @@ export function MobileBotItemActivity({
                   }
                 : undefined
             }
+            onQuote={failed ? undefined : onQuote}
           />
         )
       )}
-      {entries.some((entry) => entry.kind === 'comment') || pending.shown.length > 0 ? null : (
+      {entries.length > 0 || pending.shown.length > 0 ? null : (
         <Text style={[styles.line, styles.none]}>
           {t('bots.items.activity.noComments', 'No comments yet.')}
         </Text>

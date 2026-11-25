@@ -11,6 +11,10 @@ import { resetBotToolSignInsForTest } from './bot-tools-client'
 import { retryBotToolCheck } from './bot-tools-revision'
 import type { Bot } from '../../../../shared/bot-types'
 import type { BotOwnTool } from '../../../../shared/bot-tools'
+import type {
+  WebhookCallRow,
+  WebhookSummary
+} from '../../../../shared/rpc-contract/webhooks-params'
 import { mascotAvatar } from '../../../../shared/bot-avatar'
 import { BotConnectorsSection } from '../settings/bots/BotConnectorsSection'
 
@@ -98,6 +102,8 @@ export type StubOptions = {
   /** A web or phone window, whose bots run on its paired server: `paste` signs in there by paste;
    *  `finishing` has the pasted address being exchanged; `old-host` runs an Orca that can't. */
   host?: 'paste' | 'finishing' | 'old-host'
+  /** The bot's hooks and the calls each one lists; none by default. */
+  webhooks?: { hooks: WebhookSummary[]; calls: WebhookCallRow[] }
 }
 
 const HOST_PAGE = 'https://mcp.acme-notes.example/authorize?client_id=orca&state=fixture'
@@ -228,7 +234,8 @@ export function stub(options: StubOptions): void {
       bots: []
     }),
     'bots.list': () => ({ bots }),
-    'webhooks.list': () => ({ hooks: [] }),
+    'webhooks.list': () => ({ hooks: options.webhooks?.hooks ?? [] }),
+    'webhooks.calls': () => ({ calls: options.webhooks?.calls ?? [] }),
     'bots.tools.list': () => ({
       agent: 'claude',
       own: options.owned
@@ -379,9 +386,14 @@ export async function clickWhenShown(match: (button: HTMLElement) => boolean): P
 }
 export const named = (name: string) => (button: HTMLElement) => button.textContent?.trim() === name
 
-export const Panel = ({ bot }: { bot: Bot }): React.JSX.Element => (
+/** The Connectors tab, at a sidebar `width` when given. */
+export const Panel = ({ bot, width }: { bot: Bot; width?: number }): React.JSX.Element => (
   <ConfirmationDialogProvider>
-    <div className="bg-sidebar px-2 py-3 text-sidebar-foreground">
+    {/* Its own container, as BotConnectorsPanel draws it. */}
+    <div
+      style={{ width }}
+      className="@container/connectors-panel bg-sidebar px-2 py-3 text-sidebar-foreground"
+    >
       <BotConnectorsSection bot={bot} />
     </div>
   </ConfirmationDialogProvider>

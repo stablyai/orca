@@ -13,6 +13,12 @@ import {
 } from './dock/WorkerDockFailureStrip'
 import { WorkerDockResultDialogSlot } from './dock/WorkerDockResultDialogSlot'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import {
+  ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
@@ -61,7 +67,15 @@ export function NativeChatStructuredSessionStatus(props: {
   const { backgroundTasks, stop } = props
 
   const target = props.target ?? LOCAL
-  const ownerActionsAvailable = target.kind === 'local'
+  // A paired host takes Clear and Stop from a client it counts as a person once it says it does; an
+  // older host or another client is refused, so its rows keep pointing to the computer they run on.
+  const pairedOwnerActions = useRuntimeEnvironmentCapability(
+    target.kind === 'environment' && pairedHostCountsThisClientAsPerson()
+      ? target.environmentId
+      : null,
+    ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY
+  )
+  const ownerActionsAvailable = target.kind === 'local' || pairedOwnerActions
   const expandedHere = expanded?.sessionId === props.sessionId && expanded.expanded
   const feed = useWorkerDockFeed(
     target,
@@ -280,6 +294,11 @@ export function NativeChatStructuredSessionStatus(props: {
 }
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+
+/** The host's owner check passes a paired client only when its handshake says it is a person's. */
+function pairedHostCountsThisClientAsPerson(): boolean {
+  return pairedHostClientCapabilities().includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY)
+}
 
 /** The identity is the current lifecycle; a cached detail can lag it (a metadata-only update
  *  moves the identity alone). The row shows, and Stop is checked against, the identity's state. */

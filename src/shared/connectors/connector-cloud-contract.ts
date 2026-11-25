@@ -23,8 +23,9 @@ export const CONNECTOR_CONTRACT_VERSION = 1
 
 export { CONNECTOR_PATHS } from './connector-cloud-paths'
 
-/** The shared-app services an owner connects in one browser trip. */
-export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github'] as const
+/** The services a person connects in one browser trip (connect-messages.ts in the cloud contract;
+ *  connector-mirrored-constants.test.ts keeps them equal). */
+export const CONNECTOR_CONNECT_SOURCES = ['linear', 'github', 'slack'] as const
 export type ConnectorConnectSource = (typeof CONNECTOR_CONNECT_SOURCES)[number]
 
 export const CONNECTOR_FEATURES = [
@@ -178,6 +179,8 @@ export const ConnectorDelivery = z.discriminatedUnion('kind', [
     text: z.string().min(1),
     asker: OptionalAsker,
     automations: OptionalTurnAutomations,
+    // The reply @mentioned the bot, which unmutes a muted thread; absent from an older cloud.
+    mentioned: z.literal(true).optional().catch(undefined),
     // A mention of the bot with no words of its own; its text is the cloud's stand-in.
     bareMention: z.literal(true).optional(),
     askedAt: OptionalAskedAt,
@@ -373,6 +376,8 @@ export type ConnectorEvent =
       failure?: ConnectorFailure
       links?: ConnectorWorkLink[]
       turnId?: number
+      /** A no_answer turn that ran a tool call that may have acted; an older cloud ignores it. */
+      toolsRan?: true
     } & { /** How long an answered turn ran. */ tookMs?: number })
   /** Whether workers its agent started still run; only to a cloud that lists `workers`. */
   | (PaneEvent & { kind: 'workers'; running: boolean })

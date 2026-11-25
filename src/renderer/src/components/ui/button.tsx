@@ -57,6 +57,8 @@ const buttonVariants = cva(
         // A quiet secondary link, such as a dialog footer's "Manual steps".
         'link-muted':
           'text-muted-foreground underline-offset-4 hover:text-foreground hover:underline',
+        // A link-style action on an error line, e.g. "Delete anyway" under a failed row.
+        'destructive-link': 'text-destructive underline-offset-4 hover:underline',
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
@@ -93,6 +95,7 @@ const buttonVariants = cva(
         sm: 'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5',
         'responsive-sm':
           'h-8 gap-1.5 rounded-md px-3 has-[>svg]:px-2.5 @max-xs:gap-1 @max-xs:px-1.5 @max-xs:text-xs @max-xs:has-[>svg]:px-1.5',
+        pill: "h-7 gap-1.5 rounded-full px-3 text-xs [&_svg:not([class*='size-'])]:size-3",
         menu: 'h-8 gap-2 px-2 py-1.5 text-xs leading-5',
         // A launch-menu row's label segment, matching DropdownMenuItem's `launch` rows.
         'menu-launch': 'h-9 gap-2 px-2 text-[13px] leading-4',

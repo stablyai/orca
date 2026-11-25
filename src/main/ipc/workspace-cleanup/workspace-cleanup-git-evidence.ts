@@ -36,9 +36,17 @@ export type WorkspaceCleanupGitEvidence = {
   upstreamAhead: number | null
   upstreamBehind: number | null
   checkedAt: number | null
+  dirtyFileCount?: number | null
   merge?: WorkspaceCleanupMergeEvidence
   atRiskLocalFiles: WorktreeAtRiskLocalFiles | null
   blockers: WorkspaceCleanupBlocker[]
+}
+
+/** Unique changed paths; null when the status read was capped, since the total is then unknown. */
+export function countWorkspaceCleanupDirtyFiles(
+  status: Pick<GitStatusResult, 'entries' | 'didHitLimit'>
+): number | null {
+  return status.didHitLimit ? null : new Set(status.entries.map((entry) => entry.path)).size
 }
 
 export function createEmptyWorkspaceCleanupGitEvidence(): WorkspaceCleanupGitEvidence {
@@ -149,6 +157,7 @@ export async function readWorkspaceCleanupGitEvidence(
     upstreamAhead,
     upstreamBehind,
     checkedAt,
+    dirtyFileCount: countWorkspaceCleanupDirtyFiles(status),
     ...(merge ? { merge } : {}),
     atRiskLocalFiles,
     blockers: uniqueWorkspaceCleanupGitBlockers(blockers)

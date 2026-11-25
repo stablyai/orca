@@ -364,7 +364,7 @@ function RightSidebarInner({
                 reserveWindowControls && 'right-sidebar-header-side-inset'
               )}
             >
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
+              <span className="min-w-0 truncate text-[11px] font-semibold uppercase tracking-wider text-foreground">
                 {orderedItems.find((item) => item.id === effectiveTab)?.title ?? ''}
               </span>
               <TooltipProvider>

@@ -6,6 +6,7 @@ import {
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
@@ -125,6 +126,10 @@ function runTouchesScope(run: AutomationRun, scope: OrcadMigrationSourceScope): 
 }
 
 function automationCanTransfer(automation: Automation, scope: OrcadMigrationSourceScope): boolean {
+  // One on a removed agent (Gemini CLI) would fail the host's import, so it stays behind.
+  if (!isTuiAgent(automation.agentId)) {
+    return false
+  }
   if (scope.kind === 'local-wsl') {
     // This desktop schedules it today; the host's scheduler takes over, re-enabled after commit.
     return (
