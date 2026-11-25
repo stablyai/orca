@@ -5,7 +5,9 @@
 // in the comment box to add to first; Type your answer leads to the box. Several: every line at once
 // (BotItemQuestionStep), picks held until Send. Answered, a line reads "Question → answer", muted,
 // and the answer's own card is not drawn again.
+import { useContext } from 'react'
 import { Pencil } from 'lucide-react'
+import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import {
@@ -35,6 +37,7 @@ import {
 import { BotItemHeldAnswerAttachments, botItemShownAnswer } from './BotItemFoldedAnswer'
 import { useBotItemHeldAnswers } from './bot-item-held-answers'
 import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
+import { BotItemQuickAnswerContext } from './bot-item-quick-answer'
 
 const NO_ANSWERS: readonly (BotItemEvent | null)[] = []
 const NO_HELD_SCOPE = 'bot-item-answers:none'
@@ -75,6 +78,8 @@ export function BotItemQuestionLines({
   const recommended = t('bots.items.ask.recommended', 'Recommended')
   const steps = actions?.steps?.askId === askId ? actions.steps : null
   const several = shape.decisions.length > 1
+  // Beside a list that answers by digit (the Needs you inbox), each reply digits can pick shows its digit.
+  const digitList = useContext(BotItemQuickAnswerContext) !== null
   // Answers held for an ask the agent no longer waits on (it asked again): its draft, until sent.
   const stored = useBotItemHeldAnswers(heldScope ?? NO_HELD_SCOPE, shape)
   // Its sends on their way: shown on their lines until the host's read has them.
@@ -156,7 +161,7 @@ export function BotItemQuestionLines({
               </div>
               {open && actions && decision.replies.length > 0 ? (
                 <div className="mt-2.5 flex flex-wrap gap-2">
-                  {decision.replies.map((reply) => (
+                  {decision.replies.map((reply, at) => (
                     <button
                       key={reply.label}
                       type="button"
@@ -164,6 +169,7 @@ export function BotItemQuestionLines({
                       className={cn(
                         BOT_ITEM_CHIP,
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring/50',
+                        digitList && 'flex items-center gap-1.5',
                         reply.recommended
                           ? BOT_ITEM_CHIP_RECOMMENDED
                           : 'text-foreground hover:bg-foreground/5'
@@ -177,6 +183,9 @@ export function BotItemQuestionLines({
                         }
                       }}
                     >
+                      {digitList && !several && !decision.multi && at < 9 ? (
+                        <ShortcutKeyCombo keys={[String(at + 1)]} size="compact" />
+                      ) : null}
                       <BotItemChipWords reply={reply} />
                     </button>
                   ))}

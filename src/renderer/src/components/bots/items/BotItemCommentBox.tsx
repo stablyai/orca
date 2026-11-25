@@ -376,7 +376,7 @@ function BotItemCommentField({
         ) : null}
         <div className={cn('flex flex-wrap items-end gap-0.5', nav && BOT_ITEM_TOOL_ROW_TOUCH_FIT)}>
           {access.session ? <NativeChatAttachButton onAttach={fileDrops.pickAttachments} /> : null}
-          <div ref={field} className={cn('min-w-0 flex-1', layout.slot)}>
+          <div ref={field} className={cn('min-w-0', layout.slot)}>
             <NativeChatPromptEditor
               key={scopeKey}
               scopeKey={scopeKey}
