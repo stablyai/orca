@@ -107,6 +107,8 @@ export type UISlicePreferences = {
   setAgentsReadFilter: (v: ThreadReadFilter) => void
   agentsGroupBy: ActivityGroupBy
   setAgentsGroupBy: (v: ActivityGroupBy) => void
+  agentsCollapsedGroups: ReadonlySet<string>
+  toggleAgentsCollapsedGroup: (key: string) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   setCollapsedGroups: (keys: Set<string>) => void

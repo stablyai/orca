@@ -18,10 +18,7 @@ import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/
 import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
 import { normalizeAgentActivityDisplayMode } from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
-import {
-  normalizeActivityGroupBy,
-  normalizeThreadReadFilter
-} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
+import { hydrateAgentsViewPresentation } from './ui-slice-agents-view-preference-actions'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -176,11 +173,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           agentsHideAutomationGeneratedWorkspaces:
             ui.agentsHideAutomationGeneratedWorkspaces === true,
           agentsHideCliCreatedWorkspaces: ui.agentsHideCliCreatedWorkspaces === true,
-          agentsShowChildAgents: ui.agentsShowChildAgents === true,
-          agentsCompactMode: ui.agentsCompactMode !== false,
-          agentsShowSearch: ui.agentsShowSearch !== false,
-          agentsReadFilter: normalizeThreadReadFilter(ui.agentsReadFilter),
-          agentsGroupBy: normalizeActivityGroupBy(ui.agentsGroupBy),
+          ...hydrateAgentsViewPresentation(ui),
           collapsedGroups: new Set(ui.collapsedGroups ?? []),
           uiZoomLevel: ui.uiZoomLevel ?? 0,
           editorFontZoomLevel: ui.editorFontZoomLevel ?? 0,

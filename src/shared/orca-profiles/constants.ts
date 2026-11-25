@@ -166,6 +166,7 @@ export function getDefaultUIState(): PersistedUIState {
     agentsShowSearch: true,
     agentsReadFilter: DEFAULT_AGENTS_READ_FILTER,
     agentsGroupBy: DEFAULT_AGENTS_GROUP_BY,
+    agentsCollapsedGroups: [],
     collapsedGroups: [],
     uiZoomLevel: 0,
     editorFontZoomLevel: 0,

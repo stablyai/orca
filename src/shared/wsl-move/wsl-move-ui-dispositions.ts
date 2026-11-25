@@ -119,6 +119,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'agentsShowSearch',
   'agentsReadFilter',
   'agentsGroupBy',
+  'agentsCollapsedGroups',
   'uiZoomLevel',
   'editorFontZoomLevel',
   'worktreeCardProperties',

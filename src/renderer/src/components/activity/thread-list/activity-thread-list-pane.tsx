@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef } from 'react'
 import {
   defaultRangeExtractor,
   measureElement as measureVirtualElementSize,
@@ -23,7 +23,7 @@ import {
   getActivityHeaderItemIndexes,
   getActivityVirtualItemKey
 } from './activity-thread-virtual-items'
-import { ActivityThreadCollapseContext } from './activity-thread-collapse-context'
+import { useAppStore } from '@/store'
 import { useActivityThreadSelection } from './use-activity-thread-selection'
 import type {
   ActivityGroupBy,
@@ -75,8 +75,6 @@ export function ActivityThreadListPane({
   showFilterControls = true,
   showOptionsMenu = true,
   showInlineActions = true,
-  collapsedGroupKeys,
-  onToggleGroupCollapse,
   scrollTopRef
 }: {
   threadListRef?: React.RefObject<HTMLDivElement | null>
@@ -113,35 +111,13 @@ export function ActivityThreadListPane({
   showFilterControls?: boolean
   showOptionsMenu?: boolean
   showInlineActions?: boolean
-  collapsedGroupKeys?: ReadonlySet<string>
-  onToggleGroupCollapse?: (groupKey: string) => void
   /** Optional view-local scroll memory; updated without triggering React renders. */
   scrollTopRef?: React.MutableRefObject<number>
 }): React.JSX.Element {
   const t = useTranslate()
-  const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
-    () => new Set()
-  )
-  // Prefer explicit collapse props, then retained caller context, then pane-local state.
-  const contextCollapse = useContext(ActivityThreadCollapseContext)
-  const isControlled = collapsedGroupKeys !== undefined && onToggleGroupCollapse !== undefined
-  const effectiveCollapsedGroupKeys = isControlled
-    ? collapsedGroupKeys
-    : (contextCollapse?.collapsedGroupKeys ?? internalCollapsedGroupKeys)
-  const handleToggleGroup = isControlled
-    ? onToggleGroupCollapse
-    : (contextCollapse?.onToggleGroupCollapse ??
-      ((groupKey: string) => {
-        setInternalCollapsedGroupKeys((prev) => {
-          const next = new Set(prev)
-          if (next.has(groupKey)) {
-            next.delete(groupKey)
-          } else {
-            next.add(groupKey)
-          }
-          return next
-        })
-      }))
+  // Why: the store, not the pane, owns folds so they survive sidebar remounts, Activity visits and restarts.
+  const effectiveCollapsedGroupKeys = useAppStore((s) => s.agentsCollapsedGroups)
+  const handleToggleGroup = useAppStore((s) => s.toggleAgentsCollapsedGroup)
 
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const hasRestoredScrollRef = useRef(false)

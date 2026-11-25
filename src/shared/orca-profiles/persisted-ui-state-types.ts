@@ -125,6 +125,8 @@ export type PersistedUIState = {
   agentsReadFilter?: ThreadReadFilter
   /** Agents-view thread grouping. Absent means 'status'. */
   agentsGroupBy?: ActivityGroupBy
+  /** Agents-view folded thread groups, by group key; kept while a group is empty. Absent means none. */
+  agentsCollapsedGroups?: string[]
   collapsedGroups: string[]
   uiZoomLevel: number
   editorFontZoomLevel: number
