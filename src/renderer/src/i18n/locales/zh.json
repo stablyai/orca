@@ -28539,7 +28539,21 @@
         "avatarRefused": "Orca Cloud 拒绝了 bot 的头像。请换一个头像后重试",
         "tooLarge": "此 bot 太大，无法分享。请去掉部分记忆或技能后重试"
       },
-      "duplicateSkill": "同名，位于 {{folder}} · 不会分享"
+      "duplicateSkill": "同名，位于 {{folder}} · 不会分享",
+      "invite": {
+        "invitedYou": "{{owner}} 邀请了你",
+        "view": "查看邀请",
+        "sharedWithYou": "{{owner}} 与你共享了它",
+        "runsOn": "{{owner}} 的智能体，运行在 {{owner}} 的电脑上。",
+        "chatFrom": "你可以在自己的 Orca 和手机上与它聊天。",
+        "ownChats": "你只能看到自己的聊天。",
+        "ownerSees": "{{owner}} 可以看到你与它的聊天。",
+        "actsAs": "它可以在 {{owner}} 的电脑上使用 {{owner}} 的账号执行操作。",
+        "pauses": "{{owner}} 的电脑关机时它会暂停。",
+        "messagesWait": "消息会等它恢复后再处理。",
+        "leave": "你可以随时退出。",
+        "uses": "使用"
+      }
     },
     "automations": {
       "paused": "已暂停",

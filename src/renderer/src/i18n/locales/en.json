@@ -29761,11 +29761,22 @@
       "sharedWith": "Shared with {{names}}",
       "ownersComputer": "{{name}}’s computer",
       "requestFailed": "Couldn’t answer the request. Try again.",
-      "requestLine": "{{owner}} shared {{agent}} with you",
       "accept": "Accept",
       "decline": "Decline",
-      "requestPageTitle": "{{owner}} shared {{agent}} with you",
-      "requestRunsOn": "Runs on {{owner}}’s computer"
+      "invite": {
+        "invitedYou": "{{owner}} invited you",
+        "view": "View invite",
+        "sharedWithYou": "{{owner}} shared it with you",
+        "runsOn": "{{owner}}’s agent. It runs on {{owner}}’s computer.",
+        "chatFrom": "You chat with it from your Orca and your phone.",
+        "ownChats": "You see only your own chats.",
+        "ownerSees": "{{owner}} can see your chats with it.",
+        "actsAs": "It can act on {{owner}}’s computer, with {{owner}}’s accounts.",
+        "pauses": "It pauses while {{owner}}’s computer is off.",
+        "messagesWait": "Messages wait until it’s back.",
+        "leave": "You can leave anytime.",
+        "uses": "Uses"
+      }
     },
     "apps": {
       "title": "Add to {{bot}}",

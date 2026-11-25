@@ -24314,7 +24314,21 @@
       "receive": {
         "fromLinkMenu": "來自連結…"
       },
-      "duplicateSkill": "名稱相同，位於 {{folder}} · 未分享"
+      "duplicateSkill": "名稱相同，位於 {{folder}} · 未分享",
+      "invite": {
+        "invitedYou": "{{owner}} 邀請了你",
+        "view": "查看邀請",
+        "sharedWithYou": "{{owner}} 與你分享了它",
+        "runsOn": "{{owner}} 的代理程式，在 {{owner}} 的電腦上執行。",
+        "chatFrom": "你可以在自己的 Orca 和手機上與它聊天。",
+        "ownChats": "你只能看到自己的聊天。",
+        "ownerSees": "{{owner}} 可以看到你與它的聊天。",
+        "actsAs": "它可以在 {{owner}} 的電腦上使用 {{owner}} 的帳號執行操作。",
+        "pauses": "{{owner}} 的電腦關機時它會暫停。",
+        "messagesWait": "訊息會等它恢復後再處理。",
+        "leave": "你可以隨時離開。",
+        "uses": "使用"
+      }
     },
     "host": {
       "botWorkspaceUnavailable": "此代理程式的工作區目前無法在這裡使用，因此無法在該工作區開啟此頁面。",

@@ -24649,7 +24649,21 @@
       "receive": {
         "fromLinkMenu": "Aus einem Link…"
       },
-      "duplicateSkill": "Gleicher Name, in {{folder}} · nicht geteilt"
+      "duplicateSkill": "Gleicher Name, in {{folder}} · nicht geteilt",
+      "invite": {
+        "invitedYou": "{{owner}} hat dich eingeladen",
+        "view": "Einladung ansehen",
+        "sharedWithYou": "{{owner}} hat ihn mit dir geteilt",
+        "runsOn": "Agent von {{owner}}. Er läuft auf dem Computer von {{owner}}.",
+        "chatFrom": "Du chattest mit ihm in deinem Orca und auf deinem Telefon.",
+        "ownChats": "Du siehst nur deine eigenen Chats.",
+        "ownerSees": "{{owner}} kann deine Chats mit ihm sehen.",
+        "actsAs": "Er kann auf dem Computer von {{owner}} handeln, mit den Konten von {{owner}}.",
+        "pauses": "Er pausiert, solange der Computer von {{owner}} aus ist.",
+        "messagesWait": "Nachrichten warten, bis er zurück ist.",
+        "leave": "Du kannst jederzeit austreten.",
+        "uses": "Nutzt"
+      }
     },
     "host": {
       "botWorkspaceUnavailable": "Der Arbeitsbereich dieses Agenten ist hier gerade nicht verfügbar. Deshalb kann die Seite darin nicht geöffnet werden.",
