@@ -30,6 +30,8 @@ export class MobileEndpointSupervisor {
   private stopped = false
   private operationInFlight = false
   private pendingReplace = false
+  // A forced race queued behind a relay operation; that operation's finally replays it.
+  private replaceQueuedBehindRecovery = false
   private readonly nudgeRouter: MobileEndpointNudgeRouter
   private credentialRotationInFlight = false
   private relayRotationPending = false
@@ -208,15 +210,14 @@ export class MobileEndpointSupervisor {
       return
     }
     if (this.operationInFlight) {
-      // Queue handoff intent while a direct probe holds the mutex; afterProbe replays it.
+      // Queue handoff intent while a direct probe or relay operation holds the mutex; afterProbe or finally replays it.
       this.pendingReplace ||= forceReplacement && ownsRecovery
+      this.replaceQueuedBehindRecovery ||= forceReplacement && ownsRecovery
       return
     }
-    if (this.pendingReplace) {
-      this.pendingReplace = false
-      forceReplacement = true
-      ownsRecovery = true
-    }
+    forceReplacement ||= this.pendingReplace
+    ownsRecovery ||= this.pendingReplace
+    this.pendingReplace = false
     // Give connecting/handshaking direct its grace period before unforced relay recovery.
     if (!forceReplacement && !this.relayReconnect.needsRecovery(this.logical.getState())) {
       return
@@ -224,14 +225,13 @@ export class MobileEndpointSupervisor {
     // Share cooldown across overlapping resume, revival and lease failures to prevent reconnect churn.
     const deferral = this.relayReconnect.deferral()
     if (deferral) {
-      if (ownsRecovery) {
-        // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
-        this.pendingReplace = true
-      }
+      // Without a dial, no session was disproven; keep intent queued for forced recovery after cooldown.
+      this.pendingReplace ||= ownsRecovery
       this.logDeferral(deferral)
       return
     }
     this.operationInFlight = true
+    this.replaceQueuedBehindRecovery = false
     let retryAfterOperation = false
     try {
       const selection = await selectDialableRelayCredentials({
@@ -282,8 +282,11 @@ export class MobileEndpointSupervisor {
       if (forceReplacement && this.relayRotationPending && this.isActive()) {
         this.leaseRotation.armRetry(this.relayReconnect.retryDelayMs(5000))
       }
+      // Why: an unforced operation that skipped its dial (direct redialing) or was aborted
+      // schedules no retry, so a direct-grace race queued behind it would wait for the next state change.
+      const replayQueuedReplace = this.replaceQueuedBehindRecovery && this.pendingReplace
       // Why: the active relay can drop while migration follow-up still owns the mutex.
-      if (retryAfterOperation && this.isActive()) {
+      if ((retryAfterOperation || replayQueuedReplace) && this.isActive()) {
         void this.recoverRelay()
       }
     }
