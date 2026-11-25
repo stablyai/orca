@@ -9,6 +9,8 @@ import Database from '../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { recoverBotGroupReplies } from './bot-group-completed-replies'
 import { BotGroupStore } from './bot-group-store'
+import { BoundedMap } from '../../shared/collections/bounded-map'
+import type { RecoveredGroupReply } from './bot-group-listing'
 
 it('keeps each bot’s newest timeline reply and its original address across a reopen', async () => {
   const db = new Database(':memory:')
@@ -212,4 +214,79 @@ it('chooses a legacy reply by journal completion time even when the parent post 
   } finally {
     db.close()
   }
+})
+
+it('overlaps recovery windows and keeps cache order when they finish out of order', async () => {
+  const first = Promise.withResolvers<void>()
+  const lastStarted = Promise.withResolvers<void>()
+  const started: string[] = []
+  const cache = new BoundedMap<string, RecoveredGroupReply>({ maxEntries: 1 })
+  const messages: BotGroupMessage[] = [
+    {
+      id: 'post',
+      groupId: 'studio',
+      sequence: 1,
+      createdAt: 1,
+      author: { kind: 'owner' },
+      text: 'Status?',
+      turns: Array.from({ length: 129 }, (_, index): BotGroupTurn => ({
+        botId: 'scout',
+        botName: 'Scout',
+        avatar: null,
+        agent: 'codex',
+        operationId: `mail-${index}`,
+        sessionId: 'studio-scout'
+      }))
+    }
+  ]
+  const recovery = recoverBotGroupReplies(
+    messages,
+    {
+      turnItems: async (_sessionId, turns) => {
+        const id = turns[0].operationId
+        started.push(id)
+        if (id === 'mail-0') {
+          await first.promise
+        }
+        if (id === 'mail-128') {
+          lastStarted.resolve()
+        }
+        const rows: AgentJournalRenderItem[] = [
+          {
+            itemId: 'turn',
+            sequence: 1,
+            revision: 1,
+            observedAt: 2,
+            body: { kind: 'turn', turnId: 'turn', state: 'completed', completedAt: 2 }
+          },
+          {
+            itemId: `reply-${id}`,
+            sequence: 2,
+            revision: 1,
+            observedAt: 2,
+            body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Done.' }] }
+          }
+        ]
+        return new Map([[id, rows]])
+      }
+    },
+    cache
+  )
+  try {
+    expect([...started]).toEqual(['mail-0', 'mail-64'])
+    await lastStarted.promise
+  } finally {
+    first.resolve()
+    await recovery
+  }
+  expect(cache.peek('mail-128')).toEqual({
+    text: 'Done.',
+    completedAt: 2,
+    messageId: 'reply-mail-128'
+  })
+  expect(
+    (await recovery).messages[0].turns
+      .filter(({ replyAt }) => replyAt !== undefined)
+      .map(({ operationId }) => operationId)
+  ).toEqual(['mail-0', 'mail-64', 'mail-128'])
 })

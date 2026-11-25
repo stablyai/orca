@@ -9,9 +9,13 @@ import {
 } from '../../shared/bots/bot-group'
 import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { BoundedMap } from '../../shared/collections/bounded-map'
+import { mapWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import { botChatReads, type BotChatReads } from './bot-chat-reads'
 import type { BotGroupRuntime } from './bot-group-runtime'
 import type { RecoveredGroupReplies, RecoveredGroupReply } from './bot-group-listing'
+
+const LEGACY_REPLY_WINDOW_TURNS = 64
+const LEGACY_REPLY_READ_CONCURRENCY = 2
 
 /** Recover metadata from the same operation windows room history reads, including pre-preview turns. */
 export async function recoverBotGroupReplies(
@@ -43,25 +47,41 @@ export async function recoverBotGroupReplies(
     ({ sessionId }) => sessionId
   )
   let complete = true
-  for (const [sessionId, turns] of missing) {
-    for (let index = 0; index < turns.length; index += 64) {
+  const windows = [...missing].flatMap(([sessionId, turns]) =>
+    Array.from({ length: Math.ceil(turns.length / LEGACY_REPLY_WINDOW_TURNS) }, (_, index) => ({
+      sessionId,
+      turns: turns.slice(index * LEGACY_REPLY_WINDOW_TURNS, (index + 1) * LEGACY_REPLY_WINDOW_TURNS)
+    }))
+  )
+  const replies = await mapWithConcurrency(
+    windows,
+    LEGACY_REPLY_READ_CONCURRENCY,
+    async ({ sessionId, turns }) => {
       const window = await reads
-        .turnItems(sessionId, turns.slice(index, index + 64), { throughAnchoredTurns: true })
+        .turnItems(sessionId, turns, { throughAnchoredTurns: true })
         .catch((error: unknown) => {
           complete = false
           console.warn('[bot-groups] could not recover a member reply window', error)
           return undefined
         })
+      // Keep only reply metadata while other windows finish.
+      const found = new Map<string, RecoveredGroupReply>()
       for (const [operationId, items] of window ?? []) {
         const reply = botGroupCompletedReply(items)
         if (reply) {
           const { text, completedAt, messageId } = reply
-          const result = { text, completedAt, messageId }
-          recovered.set(operationId, result)
-          if (completedAt !== undefined) {
-            cache.set(operationId, result)
-          }
+          found.set(operationId, { text, completedAt, messageId })
         }
+      }
+      return found
+    }
+  )
+  for (const window of replies) {
+    // Preserve cache order across reads that finish out of order.
+    for (const [operationId, reply] of window) {
+      recovered.set(operationId, reply)
+      if (reply.completedAt !== undefined) {
+        cache.set(operationId, reply)
       }
     }
   }
