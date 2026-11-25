@@ -20,10 +20,19 @@ export function pruneClosedOpenFileAcrossPartitions(
   },
   args: ClosedOpenFilePruneArgs
 ): void {
+  // A refused local write (frozen store) must not leave the remote partitions' rows behind.
+  const failures: unknown[] = []
   for (const hostId of io.hostIds) {
-    const pruned = pruneClosedOpenFileFromSlice(io.read(hostId), args)
-    if (pruned) {
-      io.write(pruned, hostId)
+    try {
+      const pruned = pruneClosedOpenFileFromSlice(io.read(hostId), args)
+      if (pruned) {
+        io.write(pruned, hostId)
+      }
+    } catch (error) {
+      failures.push(error)
     }
+  }
+  if (failures.length > 0) {
+    throw failures[0]
   }
 }

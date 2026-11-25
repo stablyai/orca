@@ -114,9 +114,7 @@ describe('pruneClosedOpenFileAcrossPartitions', () => {
     const store = partitionStore({
       local: sessionSlice([]),
       'ssh:legacy': sessionSlice([persistedOpenFile({ dirtyDraftContent: 'unsaved' })]),
-      'runtime:env': sessionSlice([
-        persistedOpenFile({ mirroredFromRuntimeSession: true })
-      ])
+      'runtime:env': sessionSlice([persistedOpenFile({ mirroredFromRuntimeSession: true })])
     })
 
     pruneClosedOpenFileAcrossPartitions(store.io, { worktreeId: WORKTREE, filePath: FILE_A })
@@ -124,5 +122,24 @@ describe('pruneClosedOpenFileAcrossPartitions', () => {
     expect(store.writes.map((write) => write.hostId).sort()).toEqual(['runtime:env', 'ssh:legacy'])
     expect(store.writes[0]?.state.openFilesByWorktree?.[WORKTREE]).toBeUndefined()
     expect(store.writes[1]?.state.openFilesByWorktree?.[WORKTREE]).toBeUndefined()
+  })
+
+  it('still prunes later partitions when one write is refused, then rethrows', () => {
+    const store = partitionStore({
+      local: sessionSlice([persistedOpenFile({})]),
+      'ssh:legacy': sessionSlice([persistedOpenFile({})])
+    })
+    const write = store.io.write
+    store.io.write = (state, hostId) => {
+      if (hostId === 'local') {
+        throw new Error('store frozen')
+      }
+      write(state, hostId)
+    }
+
+    expect(() =>
+      pruneClosedOpenFileAcrossPartitions(store.io, { worktreeId: WORKTREE, filePath: FILE_A })
+    ).toThrow('store frozen')
+    expect(store.writes.map((entry) => entry.hostId)).toEqual(['ssh:legacy'])
   })
 })
