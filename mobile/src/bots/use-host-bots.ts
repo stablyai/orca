@@ -10,6 +10,7 @@ import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import {
+  markHostBotListingRefreshing,
   mergeHostBotListing,
   newBotRefusal,
   shownHostBotListings,
@@ -101,7 +102,8 @@ export async function readHostBotListing(
     ...(createRefusal ? { createRefusal } : {}),
     takesTemplates: bots.takesTemplates,
     // Groups read on their own: a failed read leaves them out, and the list reads again.
-    ...(groups ? { groups, groupsFresh: true } : {})
+    ...(groups ? { groups } : {}),
+    ...(groups && bots.enabled ? { homesComplete: true } : {})
   }
 }
 
@@ -157,6 +159,7 @@ function startBotListingReads(args: {
     do {
       askedAgain.set(host.hostId, false)
       const withThreads = threadsOwed.delete(host.hostId)
+      setListings((previous) => markHostBotListingRefreshing(previous, host.hostId))
       const listing = await readHostBotListing(
         host,
         host.hostId !== LOCAL_EXECUTION_HOST_ID,

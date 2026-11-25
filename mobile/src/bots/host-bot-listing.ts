@@ -68,10 +68,13 @@ export type ListedHostBots = {
   takesTemplates?: boolean
   /** Its groups, which list as their rooms among its bots, never as folders; absent while their read fails. */
   groups?: readonly BotGroup[]
-  /** The groups came from this listing's own read, not kept from an earlier one. */
-  groupsFresh?: true
+  /** This read itself proved every Home: Bots on (off, the host lists no groups, though it keeps
+   *  them) and its groups read answered. Kept groups or a failed groups read leave it unset. */
+  homesComplete?: true
   /** A later read of this host failed; these are its last-read bots. */
   stale?: true
+  /** A newer read of this host is out; until it lands, these may miss a Home made since. */
+  refreshing?: true
   /** The host's word while it is down (e.g. "Disconnected"): its last-read bots stay, dimmed. */
   offline?: string
 }
@@ -165,4 +168,15 @@ export function mergeHostBotListing(
     ...previous.filter((entry) => entry.hostId !== hostId),
     { ...listing, ...threadFacts, ...(groups ? { groups } : {}) }
   ]
+}
+
+/** Marks a host's listing as superseded by a read now out; the read's own answer replaces it. */
+export function markHostBotListingRefreshing(
+  previous: readonly HostBotListing[],
+  hostId: ExecutionHostId
+): readonly HostBotListing[] {
+  const last = previous.find((entry) => entry.hostId === hostId)
+  return last && last.kind === 'listed' && last.refreshing !== true
+    ? previous.map((entry) => (entry === last ? { ...last, refreshing: true } : entry))
+    : previous
 }

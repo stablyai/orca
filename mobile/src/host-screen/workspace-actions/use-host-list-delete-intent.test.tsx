@@ -40,6 +40,7 @@ type Seen = {
   actionError: string
   setActionError: (value: string) => void
   setShowWorkspaceOptions: (value: boolean) => void
+  setSearch: (value: string) => void
   retire: () => boolean
 }
 let seen: Seen
@@ -50,13 +51,13 @@ function List({ rows }: { rows: readonly Worktree[] }) {
   const [confirmDelete, setConfirmDelete] = useState<Worktree | null>(null)
   const [actionError, setActionError] = useState('')
   const [showWorkspaceOptions, setShowWorkspaceOptions] = useState(false)
+  const [search, setSearch] = useState('')
   const retire = useHostListDeleteIntent({
     embedded: false,
     hostId: 'desk',
     connected: true,
     rows,
     bots: [],
-    groupsSupported: false,
     newBotOpen: false,
     state: {
       actionTarget,
@@ -64,6 +65,7 @@ function List({ rows }: { rows: readonly Worktree[] }) {
       confirmRemoveHost: false,
       showWorkspaceOptions,
       showNewWorktree: false,
+      search,
       setActionTarget,
       setConfirmDelete,
       setActionError
@@ -75,6 +77,7 @@ function List({ rows }: { rows: readonly Worktree[] }) {
     actionError,
     setActionError,
     setShowWorkspaceOptions,
+    setSearch,
     retire
   }
   return null
@@ -109,6 +112,18 @@ describe('useHostListDeleteIntent', () => {
     await rowsArrive()
     expect(seen.confirmDelete).toBeNull()
     expect(seen.actionTarget).toBeNull()
+  })
+
+  it('drops a held claim once the search is typed in, with no touch on the list', async () => {
+    await mount()
+    // The search bar's onChangeText is the list state's own setSearch.
+    await act(async () => seen.setSearch('other'))
+    await rowsArrive()
+    expect(seen.confirmDelete).toBeNull()
+    await act(async () => {
+      vi.advanceTimersByTime(11_000)
+    })
+    expect(seen.actionError).toBe('')
   })
 
   it('drops a held claim on any touch on the list', async () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Keyboard } from 'react-native'
+import { useNavigation } from 'expo-router'
 import type { DirtyMarkdownDraft } from './session-document-state'
 
 /** A leave that goes its own way (the menu's Delete) once drafts are settled; `valid` rechecks its origin. */
@@ -16,9 +17,10 @@ type LeaveRequest = {
   settling: boolean
 }
 
-/** One revocable leave behind the unsaved-drafts sheet. Copy or Discard settles only the request the
- *  sheet showed, and only while the drafts are still those revisions; an edit, a newer leave, closing
- *  the sheet, or leaving the screen revokes it, and a second press on it does nothing. */
+/** One revocable leave behind the unsaved-drafts sheet, bound to this screen entry. Copy or Discard
+ *  settles only the request the sheet showed, and only while the drafts are still those revisions; an
+ *  edit, a newer leave, closing the sheet, the screen losing focus (a pushed panel, even one popped
+ *  again) or unmounting revokes it, and a second press on it does nothing. */
 export function useSessionLeaveRequest(args: {
   readDrafts: () => DirtyMarkdownDraft[]
   /** The dirty drafts' tab ids and revisions, as one comparable value. */
@@ -39,12 +41,17 @@ export function useSessionLeaveRequest(args: {
       requestRef.current = null
     }
   })
-  useEffect(
-    () => () => {
+  const navigation = useNavigation()
+  useEffect(() => {
+    const revoke = () => {
       requestRef.current = null
-    },
-    []
-  )
+    }
+    const unsubscribe = navigation.addListener('blur', revoke)
+    return () => {
+      unsubscribe()
+      revoke()
+    }
+  }, [navigation])
 
   const requestLeave = useCallback(
     (handoff: LeaveHandoff | null = null) => {
@@ -105,10 +112,13 @@ export function useSessionLeaveRequest(args: {
     [setLeaveDrafts]
   )
 
-  const abandonLeave = useCallback((ticket: LeaveTicket) => {
-    if (requestRef.current?.id === ticket.id) {
-      requestRef.current = null
+  /** A failed settle: true only while its request is still the current one, so stale feedback stays quiet. */
+  const abandonLeave = useCallback((ticket: LeaveTicket): boolean => {
+    if (requestRef.current?.id !== ticket.id) {
+      return false
     }
+    requestRef.current = null
+    return true
   }, [])
 
   /** The sheet closing: a request no press is settling is revoked. */

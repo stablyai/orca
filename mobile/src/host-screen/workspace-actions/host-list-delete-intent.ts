@@ -24,7 +24,12 @@ export type HostListDeleteTarget = {
 }
 
 /** A list's hold on an intent: valid only on the route it was taken on, until the tap's deadline. */
-export type HostListDeleteClaim = HostListDeleteTarget & { deadline: number; pathname: string }
+export type HostListDeleteClaim = HostListDeleteTarget & {
+  deadline: number
+  pathname: string
+  /** The list's search when the claim was taken; typing in it moves the user on. */
+  search: string
+}
 
 type PendingIntent = HostListDeleteTarget & { token: string; deadline: number }
 
@@ -44,7 +49,8 @@ export function takeHostListDeleteIntent(
   token: string,
   hostId: string,
   pathname: string,
-  now = Date.now()
+  now = Date.now(),
+  search = ''
 ): HostListDeleteClaim | null {
   const intent = pending
   if (!token || intent === null || intent.token !== token) {
@@ -59,7 +65,8 @@ export function takeHostListDeleteIntent(
     owner: intent.owner,
     worktreeId: intent.worktreeId,
     deadline: intent.deadline,
-    pathname
+    pathname,
+    search
   }
 }
 
@@ -77,12 +84,9 @@ export function findHostListDeleteRow<Row extends Pick<Worktree, 'worktreeId' | 
 /** This desktop's bot and group homes as last read, and whether that read proves no other exists. */
 export type HostListBotHomes = { homes: ReadonlySet<string>; complete: boolean }
 
-/** Any listed home refuses, even from an old read; only a current read of bots and of groups (where the
- *  host keeps groups) proves a folder is none. */
-export function hostListBotHomes(
-  listings: readonly HostBotListing[],
-  groupsSupported: boolean
-): HostListBotHomes {
+/** Any listed home refuses, even from an old read. Only this host's latest read, with Bots on, its
+ *  groups answered and no newer read out, proves a folder is none; anything less keeps folders out. */
+export function hostListBotHomes(listings: readonly HostBotListing[]): HostListBotHomes {
   const local = listings.find((listing) => listing.hostId === LOCAL_EXECUTION_HOST_ID)
   if (local?.kind === 'update-needed') {
     return { homes: new Set(), complete: true }
@@ -96,7 +100,7 @@ export function hostListBotHomes(
         folderWorkspaceKey(home.folderWorkspaceId)
       )
     ),
-    complete: local.stale !== true && (!groupsSupported || local.groupsFresh === true)
+    complete: local.homesComplete === true && local.stale !== true && local.refreshing !== true
   }
 }
 
@@ -119,6 +123,7 @@ export type HostListDeleteView<Row> = {
   token: string
   hostId: string | undefined
   pathname: string
+  search: string
   connected: boolean
   /** Another list action is under way: the user is doing something else. */
   busy: boolean
@@ -144,12 +149,17 @@ export function advanceHostListDeleteClaim<
 ): { claim: HostListDeleteClaim | null; step: HostListDeleteStep<Row> } {
   const claim =
     view.token && view.hostId
-      ? takeHostListDeleteIntent(view.token, view.hostId, view.pathname, view.now)
+      ? takeHostListDeleteIntent(view.token, view.hostId, view.pathname, view.now, view.search)
       : held
   if (!claim) {
     return { claim: null, step: { kind: 'none' } }
   }
-  if (claim.hostId !== view.hostId || claim.pathname !== view.pathname || view.busy) {
+  if (
+    claim.hostId !== view.hostId ||
+    claim.pathname !== view.pathname ||
+    claim.search !== view.search ||
+    view.busy
+  ) {
     return { claim: null, step: { kind: 'none' } }
   }
   if (view.now > claim.deadline) {

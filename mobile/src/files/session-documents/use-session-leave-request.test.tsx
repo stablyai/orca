@@ -3,6 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DirtyMarkdownDraft } from './session-document-state'
 
 vi.mock('react-native', () => ({ Keyboard: { dismiss: () => {} } }))
+// The session screen's navigation entry: a pushed panel blurs it, popping back focuses it again.
+const listeners = new Map<string, Set<() => void>>()
+const navigation = {
+  addListener: (event: string, listener: () => void) => {
+    const set = listeners.get(event) ?? new Set()
+    set.add(listener)
+    listeners.set(event, set)
+    return () => set.delete(listener)
+  }
+}
+const emit = (event: string) => listeners.get(event)?.forEach((listener) => listener())
+vi.mock('expo-router', () => ({ useNavigation: () => navigation }))
 const { useSessionLeaveRequest } = await import('./use-session-leave-request')
 
 type Leave = ReturnType<typeof useSessionLeaveRequest>
@@ -91,6 +103,39 @@ describe('useSessionLeaveRequest', () => {
     expect(sheet).toEqual(drafts)
     expect(dropDrafts).not.toHaveBeenCalled()
     expect(handoff.run).not.toHaveBeenCalled()
+  })
+
+  it('revokes a held Copy when a panel is pushed over the session, even once it pops back', async () => {
+    const handoff = { run: vi.fn(), valid: () => true }
+    act(() => leave.requestLeave(handoff))
+    const ticket = leave.beginLeave()!
+    emit('blur')
+    emit('focus')
+    act(() => leave.finishLeave(ticket))
+    expect(dropDrafts).not.toHaveBeenCalled()
+    expect(handoff.run).not.toHaveBeenCalled()
+    // Its clipboard failure, landing late, says nothing either.
+    expect(leave.abandonLeave(ticket)).toBe(false)
+  })
+
+  it('revokes a held Copy when the session unmounts', async () => {
+    const handoff = { run: vi.fn(), valid: () => true }
+    act(() => leave.requestLeave(handoff))
+    const ticket = leave.beginLeave()!
+    act(() => renderer?.unmount())
+    renderer = undefined
+    act(() => leave.finishLeave(ticket))
+    expect(dropDrafts).not.toHaveBeenCalled()
+    expect(handoff.run).not.toHaveBeenCalled()
+  })
+
+  it('settles an uncontested Discard, and reports a current Copy failure', async () => {
+    act(() => leave.requestLeave())
+    act(() => leave.finishLeave(leave.beginLeave()!))
+    expect(dropDrafts).toHaveBeenCalledTimes(1)
+    expect(leaveSession).toHaveBeenCalledTimes(1)
+    act(() => leave.requestLeave())
+    expect(leave.abandonLeave(leave.beginLeave()!)).toBe(true)
   })
 
   it('arms nothing after the sheet is closed or the origin is gone', async () => {

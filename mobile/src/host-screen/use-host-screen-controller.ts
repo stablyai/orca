@@ -37,7 +37,6 @@ import { classifyConnection } from '../transport/connection/connection-health'
 import { useHostBots } from '../bots/use-host-bots'
 import type { BotsChangeScope } from '../worktree/execution-hosts/host-worktree-refresh'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
-import { BOTS_GROUPS_RUNTIME_CAPABILITY } from '../../../src/shared/bot-runtime-capabilities'
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -160,7 +159,6 @@ export function useHostScreenController({
     connected: connState === 'connected',
     rows: displayWorktrees,
     bots,
-    groupsSupported: hostCapabilities.includes(BOTS_GROUPS_RUNTIME_CAPABILITY),
     newBotOpen: newBotHostId !== null,
     state
   })

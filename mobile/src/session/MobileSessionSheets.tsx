@@ -282,7 +282,10 @@ export function MobileSessionSheets({ controller }: { controller: MobileSessionC
                 .writeText(combined)
                 .then(() => leaveRequest.finishLeave(ticket))
                 .catch(() => {
-                  leaveRequest.abandonLeave(ticket)
+                  // A leave revoked meanwhile (an edit, a newer Back, a pushed panel) says nothing.
+                  if (!leaveRequest.abandonLeave(ticket)) {
+                    return
+                  }
                   triggerError()
                   showToast(t('session.sheets.copyDraftsFailed', "Couldn't copy drafts"), 1500)
                 })

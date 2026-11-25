@@ -21,6 +21,7 @@ export type HostListDeleteIntentState = Pick<
   | 'confirmRemoveHost'
   | 'showWorkspaceOptions'
   | 'showNewWorktree'
+  | 'search'
   | 'setActionTarget'
   | 'setConfirmDelete'
   | 'setActionError'
@@ -34,12 +35,12 @@ export function useHostListDeleteIntent(args: {
   connected: boolean
   rows: readonly Worktree[]
   bots: readonly HostBotListing[]
-  groupsSupported: boolean
   /** The New bot sheet, which lives outside the list state. */
   newBotOpen: boolean
   state: HostListDeleteIntentState
 }): () => boolean {
-  const { embedded, hostId, connected, rows, bots, groupsSupported, newBotOpen, state } = args
+  const { embedded, hostId, connected, rows, bots, newBotOpen, state } = args
+  const { search } = state
   const { setActionTarget, setConfirmDelete, setActionError } = state
   // Every sheet the list opens of its own: a claim never opens over, or after, another action.
   const busy =
@@ -73,10 +74,11 @@ export function useHostListDeleteIntent(args: {
       token: presented,
       hostId,
       pathname,
+      search,
       connected,
       busy,
       rows,
-      homes: hostListBotHomes(bots, groupsSupported),
+      homes: hostListBotHomes(bots),
       now: Date.now()
     })
     claimRef.current = claim
@@ -112,11 +114,11 @@ export function useHostListDeleteIntent(args: {
     busy,
     connected,
     deadlineTick,
-    groupsSupported,
     hostId,
     pathname,
     router,
     rows,
+    search,
     setActionError,
     setActionTarget,
     setConfirmDelete,
