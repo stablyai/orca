@@ -2,6 +2,8 @@
 // credential, then resumes. Requests and streams share the link, as the phone's do.
 import { randomBytes, randomUUID } from 'node:crypto'
 import nacl from 'tweetnacl'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
+import { remoteRuntimeClientCapabilities } from '../../../shared/remote-runtime/remote-runtime-client-capabilities'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { RelayOuterError } from '../../../shared/remote-runtime/relay/client/relay-e2ee-link'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
@@ -27,6 +29,10 @@ export type SharedBotHostLinkDeps = {
 }
 
 type Settled = Exclude<SharedBotLink, 'connecting'>
+
+const SHARED_HOST_CLIENT_CAPABILITIES = remoteRuntimeClientCapabilities(
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+)
 
 // A host found away isn't dialed again sooner than this, however many calls ask for it.
 const REDIAL_AFTER_OFFLINE_MS = 15_000
@@ -116,7 +122,9 @@ export class SharedBotHostLink {
             deviceId: offer.deviceId,
             relayCredential: credential
           },
-          sign: async (message) => nacl.sign.detached(message, secretKey)
+          sign: async (message) => nacl.sign.detached(message, secretKey),
+          // This desktop reads a shared host's chats as it reads a paired server's.
+          clientCapabilities: SHARED_HOST_CLIENT_CAPABILITIES
         },
         {
           onAuthenticated: () => {

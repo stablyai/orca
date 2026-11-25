@@ -27,6 +27,8 @@ export function connectSharedHost(
     connection: SharedHostConnection
     // Signs the host's auth proof with this device's key; the private key never leaves the caller.
     sign: (message: Uint8Array) => Promise<Uint8Array>
+    // As a paired client declares them: without them the host refuses every chat call.
+    clientCapabilities: readonly string[]
     requestTimeoutMs?: number
   },
   events: RelayRpcClientEvents = {}
@@ -45,6 +47,7 @@ export function connectSharedHost(
             expectedResumeVersion: relayCredential.version
           }),
       authCredential: { kind: 'device-key', deviceId: connection.deviceId, sign: args.sign },
+      clientCapabilities: args.clientCapabilities,
       desktopPublicKeyB64: connection.hostPublicKeyB64,
       requestTimeoutMs: args.requestTimeoutMs
     },

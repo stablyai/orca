@@ -39,6 +39,7 @@ export function connectRelayRpcClient(
     // A resume dial refuses a hello that accepted another version of this device's credential.
     expectedResumeVersion?: number
     authCredential: PairedE2EEClientCredential
+    clientCapabilities?: readonly string[]
     desktopPublicKeyB64: string
     requestTimeoutMs?: number
   },
@@ -70,6 +71,7 @@ export function connectRelayRpcClient(
     credential: args.credential,
     expectedCredentialKind: args.expectedCredentialKind,
     authCredential: args.authCredential,
+    clientCapabilities: args.clientCapabilities,
     desktopPublicKeyB64: args.desktopPublicKeyB64,
     onOpen: events.onOpen,
     onHello: (hello) => {

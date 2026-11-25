@@ -34,6 +34,8 @@ export class PairedE2EEV2PhysicalChannel {
       handshake: PairedE2EEClientHandshake
       socket: Pick<RelayClientSocket, 'OPEN' | 'readyState' | 'bufferedAmount' | 'send'>
       credential: PairedE2EEClientCredential
+      // What this client reads, declared in its auth: the host gates methods on them.
+      clientCapabilities?: readonly string[]
       decodeBinary: (raw: unknown) => Promise<Uint8Array | null>
       inflateFrame: (frame: Uint8Array) => InflatedFrame | null
       onReadyAccepted?: () => void
@@ -146,7 +148,12 @@ export class PairedE2EEV2PhysicalChannel {
   private async sendAuth(generation: number): Promise<void> {
     let frame: string
     try {
-      frame = await this.args.handshake.sealAuth(this.args.credential)
+      frame = await this.args.handshake.sealAuth(
+        this.args.credential,
+        this.args.clientCapabilities
+          ? { clientCapabilities: this.args.clientCapabilities }
+          : undefined
+      )
     } catch (error) {
       if (generation === this.generation) {
         this.args.onError(asError(error))
