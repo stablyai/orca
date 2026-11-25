@@ -1,64 +1,29 @@
-import type { AgentMessageSender } from '../journal/agent-session-message-source'
-import type { OrchestrationPartyLocationResult } from '../../orchestration/orchestration-caller-status'
-import type { AgentSessionWorkspaceKind } from '../lifecycle/agent-session-record'
 import { workspaceKindForWorktreeId } from '../../agent-launch/contracts/workspace-launch-kind'
 import * as openFailure from './structured-session-open-failure-detail'
-
-/** `project`: the repo itself left the catalog, so its files may still be on disk. */
-export type StructuredSessionRemovedWorkspaceKind = AgentSessionWorkspaceKind | 'project'
+import type {
+  StructuredSessionOpenDeps,
+  StructuredSessionOpenFailure,
+  StructuredSessionOpenInventoryRecheck,
+  StructuredSessionOpenResult,
+  StructuredSessionOpenSource,
+  StructuredSessionOpenTarget
+} from './structured-session-open-types'
 
 export {
   readStructuredSessionWorkspaceRemovedDetails,
   type StructuredSessionWorkspaceRemovedDetails
 } from './structured-session-open-failure-detail'
 
-export type StructuredSessionOpenTarget = { sessionId: string; worktreeId: string; agent?: string }
-export type StructuredSessionOpenSource =
-  | {
-      kind: 'history'
-      structuredSession: { sessionId: string; workspaceId: string }
-      agent?: string
-    }
-  | ({ kind: 'notification' } & StructuredSessionOpenTarget)
-  | {
-      kind: 'sender'
-      party: AgentMessageSender['party']
-      messageIds: readonly string[]
-      fallback?: StructuredSessionOpenTarget
-      displayName?: string
-    }
-export type StructuredSessionOpenFailure = {
-  reason: 'gone' | 'workspace-missing' | 'unknown' | 'unsupported' | 'unreachable'
-  beforeEffects: boolean
-  code?: string
-  surface?: 'terminal'
-  workspaceKind?: StructuredSessionRemovedWorkspaceKind
-  detail?: string // Raw cause for a details disclosure; never decides a remedy.
-}
-export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
-export type StructuredSessionOpenResult =
-  | { kind: 'opened'; target: StructuredSessionOpenTarget; tab: StructuredSessionOpenTab }
-  /** `environmentId`: another paired server's terminal, as the answering host names that server. */
-  | { kind: 'terminal'; handle: string; environmentId?: string }
-  | { kind: 'failed'; failure: StructuredSessionOpenFailure }
-  | { kind: 'superseded' }
-
-type Located = OrchestrationPartyLocationResult | StructuredSessionOpenFailure
-export type StructuredSessionOpenDeps = {
-  locate: (address: string, messageIds: readonly string[]) => Promise<Located>
-  /** A sender's lookup that may also open a closed worker's conversation; older hosts lack it. */
-  open?: (address: string, messageIds: readonly string[]) => Promise<Located>
-  tabs: (target: StructuredSessionOpenTarget) => readonly StructuredSessionOpenTab[]
-  refresh: (target: StructuredSessionOpenTarget) => Promise<void>
-  activate: (
-    tab: StructuredSessionOpenTab,
-    target: StructuredSessionOpenTarget
-  ) => boolean | Promise<boolean>
-  reveal: (
-    target: StructuredSessionOpenTarget
-  ) => Promise<StructuredSessionOpenTarget | StructuredSessionOpenFailure>
-  current?: () => boolean
-}
+export type {
+  StructuredSessionOpenDeps,
+  StructuredSessionOpenFailure,
+  StructuredSessionOpenInventoryRecheck,
+  StructuredSessionOpenResult,
+  StructuredSessionOpenSource,
+  StructuredSessionOpenTab,
+  StructuredSessionOpenTarget,
+  StructuredSessionRemovedWorkspaceKind
+} from './structured-session-open-types'
 
 /** Only explicit unsupported responses prove that a fallback cannot duplicate an applied operation. */
 export function structuredSessionOpenFailure(error: unknown): StructuredSessionOpenFailure {
@@ -87,7 +52,9 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
 export async function resolveStructuredSessionOpenSource(
   source: StructuredSessionOpenSource,
   locate: StructuredSessionOpenDeps['locate']
-): Promise<StructuredSessionOpenTarget | StructuredSessionOpenResult> {
+): Promise<
+  StructuredSessionOpenTarget | StructuredSessionOpenResult | StructuredSessionOpenInventoryRecheck
+> {
   const seed =
     source.kind === 'history'
       ? {
@@ -100,11 +67,14 @@ export async function resolveStructuredSessionOpenSource(
         : source.fallback
   const address =
     source.kind === 'sender' ? source.party.address : `orca_session_id:${seed?.sessionId}`
-  let found: Located
+  let found: Awaited<ReturnType<typeof locate>>
   try {
     found = await locate(address, source.kind === 'sender' ? source.messageIds : [])
   } catch (error) {
     found = structuredSessionOpenFailure(error)
+  }
+  if ('recheck' in found) {
+    return found
   }
   if ('reason' in found) {
     if (source.kind !== 'sender' && found.reason === 'unsupported' && seed) {
@@ -167,6 +137,21 @@ export async function openStructuredAgentSession(
       /* Inventory reads are advisory. */
     }
   }
+  const recheckInventory = async (
+    reply: StructuredSessionOpenInventoryRecheck
+  ): Promise<StructuredSessionOpenResult> => {
+    await refreshKnown(reply.recheck)
+    try {
+      const opened = await known(reply.recheck)
+      return !current()
+        ? { kind: 'superseded' }
+        : (opened ?? { kind: 'failed', failure: reply.failure })
+    } catch (error) {
+      return current()
+        ? { kind: 'failed', failure: structuredSessionOpenFailure(error) }
+        : { kind: 'superseded' }
+    }
+  }
   if (!current()) {
     return { kind: 'superseded' }
   }
@@ -197,6 +182,9 @@ export async function openStructuredAgentSession(
   )
   if (!current()) {
     return { kind: 'superseded' }
+  }
+  if ('recheck' in resolved) {
+    return recheckInventory(resolved)
   }
   if ('kind' in resolved) {
     if (
@@ -270,6 +258,9 @@ export async function openStructuredAgentSession(
         const reply = await deps.reveal(target)
         if (!current()) {
           return { kind: 'superseded' }
+        }
+        if ('recheck' in reply) {
+          return recheckInventory(reply)
         }
         if ('reason' in reply) {
           return { kind: 'failed', failure: failure(reply) }

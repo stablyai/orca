@@ -1,6 +1,7 @@
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenDeps,
+  type StructuredSessionOpenInventoryRecheck,
   type StructuredSessionOpenTarget
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
@@ -43,20 +44,33 @@ const pendingReveals = new Map<string, Pending<RevealResult>>()
 export function pairedBotThreadRecovery(
   owner: Owner,
   workspaceId: string,
-  sessionId: string,
+  linkedSessionId: string,
   signal: AbortSignal
 ) {
   const { environmentId } = owner
-  const key = `${environmentId}\0${workspaceId}\0${sessionId}`
+  const key = `${environmentId}\0${workspaceId}\0${linkedSessionId}`
   const registration = getRuntimeEnvironmentRegistration(environmentId)
   const generation = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  const isSamePairing = (): boolean =>
+    getRuntimeEnvironmentRegistration(environmentId) === registration
   const isSameConnection = (): boolean =>
-    getRuntimeEnvironmentRegistration(environmentId) === registration &&
-    getRuntimeEnvironmentConnectionGeneration(environmentId) === generation
+    isSamePairing() && getRuntimeEnvironmentConnectionGeneration(environmentId) === generation
   const checkConnection = (): void => {
     if (!isSameConnection()) {
       throw createRuntimeRpcAbortError()
     }
+  }
+  const recoveryFailure = (error: unknown) => {
+    const failure = structuredSessionOpenFailure(error)
+    // A replacement runtime can already list the chat independently of its predecessor's reply.
+    if (
+      !signal.aborted &&
+      isSamePairing() &&
+      getRuntimeEnvironmentConnectionGeneration(environmentId) !== generation
+    ) {
+      return { recheck: { worktreeId: workspaceId, sessionId: linkedSessionId }, failure }
+    }
+    return failure
   }
   let minimumReceivedFrame: number | undefined
   let completedReveal: RevealResult | undefined
@@ -166,7 +180,7 @@ export function pairedBotThreadRecovery(
         checkConnection()
         return result
       } catch (error) {
-        return structuredSessionOpenFailure(error)
+        return recoveryFailure(error)
       }
     },
     reveal: async ({
@@ -175,7 +189,7 @@ export function pairedBotThreadRecovery(
     }: {
       worktreeId: string
       sessionId: string
-    }): Promise<StructuredSessionRevealOutcome> => {
+    }): Promise<StructuredSessionRevealOutcome | StructuredSessionOpenInventoryRecheck> => {
       const target = { worktreeId, sessionId }
       try {
         checkConnection()
@@ -196,7 +210,7 @@ export function pairedBotThreadRecovery(
         recordReveal(result)
         return result.outcome
       } catch (error) {
-        return structuredSessionOpenFailure(error)
+        return recoveryFailure(error)
       }
     }
   }

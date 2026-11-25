@@ -6,6 +6,7 @@ import type {
   StructuredSessionOpenSource,
   StructuredSessionOpenResult,
   StructuredSessionOpenDeps,
+  StructuredSessionOpenInventoryRecheck,
   StructuredSessionOpenTarget,
   StructuredSessionOpenTab
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
@@ -41,7 +42,7 @@ export type StructuredSessionOpenAdapterDeps = {
     worktreeId: string
     sessionId: string
     target?: RuntimeClientTarget
-  }) => Promise<StructuredSessionRevealOutcome>
+  }) => Promise<StructuredSessionRevealOutcome | StructuredSessionOpenInventoryRecheck>
   current?: () => boolean
   signal?: AbortSignal
 }
