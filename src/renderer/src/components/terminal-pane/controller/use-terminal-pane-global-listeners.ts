@@ -1,6 +1,7 @@
 import { useWebClientTerminalResize } from '../viewport/use-web-client-terminal-resize'
 import { useRegularTerminalInputFocus } from '../input/focus/use-regular-terminal-input-focus'
 import { useTerminalFontZoom } from '../appearance/useTerminalFontZoom'
+import { useTerminalCopyMode } from '../copy-mode/use-terminal-copy-mode'
 import { useTerminalKeyboardShortcuts } from '../input/keyboard/terminal-keyboard-hook'
 import { useTerminalPaneGlobalEffects } from '../viewport/visibility/use-terminal-pane-global-effects'
 import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
@@ -49,6 +50,7 @@ export function useTerminalPaneGlobalListeners(controller: TerminalPaneMountedCo
   } = controller
 
   useTerminalFontZoom({ isActive, containerRef, managerRef, settingsRef })
+  useTerminalCopyMode({ tabId, isActive, isVisible, managerRef, containerRef })
   useTerminalKeyboardShortcuts({
     tabId,
     worktreeId,

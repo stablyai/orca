@@ -8,6 +8,7 @@ import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { resolveTerminalPasteRuntime } from '../paste/terminal-paste-runtime'
 import { isTerminalPanePasteTargetCurrent } from '../paste/terminal-paste-target-state'
 import { pasteTextIntoTerminalPane } from '../paste/terminal-pane-paste-dispatch'
+import { paneHasTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 import { formatTerminalPasteExecutionError } from '../paste/terminal-paste-errors'
 import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import type { TerminalPaneContextController } from '../../controller/use-terminal-pane-context-actions'
@@ -84,8 +85,9 @@ export function useTerminalPrimarySelectionActions({
       // Arm suppression for Chromium’s mouseup paste whenever Orca may paste; forward tracking-mode reports unless the selection modifier makes Orca the sole paste owner.
       armPrimarySelectionNativePasteSuppression()
       if (
-        targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
-        !terminalForcesSelectionForClick(event)
+        paneHasTerminalCopyMode(targetPane) ||
+        (targetPane.terminal.modes.mouseTrackingMode !== 'none' &&
+          !terminalForcesSelectionForClick(event))
       ) {
         return
       }
