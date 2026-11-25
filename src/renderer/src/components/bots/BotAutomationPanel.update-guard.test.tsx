@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 // When the Automation screen says its computer needs an update to edit here: only once that host
 // answered without the write-time guard, or refused a save for it.
+import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -169,8 +170,10 @@ describe('the old-host save guard on a paired computer', () => {
     })
     render(panel())
     expect(await screen.findByRole('button', { name: 'Open chat' })).toBeTruthy()
-    expect(screen.getByText('Running')).toBeTruthy()
-    expect(screen.queryByText(EDIT_NOTICE)).toBeNull()
+    expect(screen.getByText('Running')).toBeVisible()
+    // Folded under "+1 more"; kept in the DOM, hidden, for Edit's aria-describedby.
+    expect(screen.getByRole('button', { name: '+1 more' })).toBeVisible()
+    expect(screen.getByText(EDIT_NOTICE)).not.toBeVisible()
   })
 
   it('says beside Save when the host refuses it, and drops that once the host answers anew', async () => {
