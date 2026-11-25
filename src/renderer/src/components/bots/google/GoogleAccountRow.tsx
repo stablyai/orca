@@ -153,9 +153,7 @@ export function GoogleAccountRow({
           <p className="truncate text-xs text-muted-foreground">{servicesLine}</p>
         )}
         {!connected && account.googleError ? (
-          <p className="truncate text-xs text-muted-foreground" title={account.googleError}>
-            {account.googleError}
-          </p>
+          <p className="text-xs break-words text-muted-foreground">{account.googleError}</p>
         ) : null}
       </div>
       {!connected ? (
