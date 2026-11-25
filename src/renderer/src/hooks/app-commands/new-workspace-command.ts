@@ -1,6 +1,7 @@
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { getIndexedWorktreesById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { getHeaderCreateWorkspaceTarget } from '@/components/sidebar/worktree-list/rows/header-create-workspace-target'
@@ -40,11 +41,10 @@ function resolveShortcutSeed(
     return folder ? { initialProjectGroupId: folder.projectGroupId } : null
   }
   const rows = getIndexedWorktreesById(state.worktreesByRepo, focused.workspaceId)
-  const worktree =
-    rows.find((row) => getWorktreeHostIdentity(row) === focused.hostIdentity) ?? rows[0] ?? null
+  const worktree = rows.find((row) => getWorktreeHostIdentity(row) === focused.hostIdentity)
   const repo = worktree
     ? findRepoForHost(state.repos, worktree.repoId, {
-        hostId: worktree.hostId ?? null,
+        hostId: worktree.hostId ?? LOCAL_EXECUTION_HOST_ID,
         settings: state.settings
       })
     : null
