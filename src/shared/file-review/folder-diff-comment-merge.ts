@@ -61,6 +61,8 @@ export type FolderDiffCommentReceipt =
       createdAt: number
       updatedAt: number
       verdict: FolderDiffCommentVerdict
+      // Touched ids this write appended (absent before it): where the host placed them.
+      added?: string[]
       // The row's whole note list, only when it fits the reply budget.
       snapshot?: DiffComment[]
     }

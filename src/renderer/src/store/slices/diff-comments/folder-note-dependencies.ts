@@ -20,8 +20,11 @@ function holdsAnyway(
   id: string,
   earlier: FolderNoteAction
 ): boolean {
-  // Only host evidence counts: a floor or the display cannot show what the host holds.
-  const accepted = copy ? acceptedNote(copy, id) : ({ known: false } as const)
+  // Only host evidence counts: a floor or the display cannot show what the host holds. The earlier
+  // action's own verdict comes first (it outlives the copy, and a version it saw win outranks an
+  // older sample); without one, the copy's evidence, which a later observation may supply.
+  const accepted =
+    earlier.held?.get(id) ?? (copy ? acceptedNote(copy, id) : ({ known: false } as const))
   if (!accepted.known) {
     return false
   }
@@ -70,6 +73,10 @@ export async function awaitProtectedFolderNoteDependency(
   const shown = new Map((copy.shown ?? []).map((note) => [note.id, note]))
   const borrowed = latestQueuedActionsTouching(copyKey, scope, { shown })
   await Promise.all([...borrowed.values()].map((action) => action.outcome))
-  // A copy released or retired meanwhile has no evidence left: only confirmed results count then.
+  // A row replaced meanwhile is not the one the user acted on. A copy merely released keeps only
+  // what each earlier action's own verdict said.
+  if (copy.retired) {
+    return false
+  }
   return unmetDependencies(isCurrentCopy(copy) ? copy : null, borrowed, scope).length === 0
 }

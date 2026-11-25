@@ -68,6 +68,7 @@ export function mergeFolderDiffCommentsOnHost(
   } catch {
     return refuse('refused')
   }
+  const storedIds = new Set(stored.map((note) => note.id))
   const updated = host.update(folderWorkspaceId, {
     diffComments: request.diffComments,
     diffCommentsBase: request.diffCommentsBase
@@ -83,6 +84,7 @@ export function mergeFolderDiffCommentsOnHost(
     createdAt: updated.createdAt,
     updatedAt: updated.updatedAt,
     verdict: verdictFor(notes, ids),
+    added: ids.filter((id) => !storedIds.has(id) && notes.some((note) => note.id === id)),
     snapshot: snapshotWithinBudget(notes)
   }
   host.notify()

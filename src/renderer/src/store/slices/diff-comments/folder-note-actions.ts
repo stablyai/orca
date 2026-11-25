@@ -4,6 +4,7 @@ import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/fo
 import { diffCommentVersion } from '../../../../../shared/file-review/folder-diff-comment-merge'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
+import type { HeldNote } from './folder-note-receipt'
 
 export type FolderOwner = Extract<DiffCommentOwner, { kind: 'folder' }>
 
@@ -35,6 +36,9 @@ export type FolderNoteAction = {
   outcome: Promise<ReadonlySet<string>>
   // The same ids, readable without waiting once the action settled.
   satisfied?: ReadonlySet<string>
+  // What its verdict said the host holds for each id, kept with the action so a dependent can
+  // still judge by it after the copy is released. Absent when no verdict arrived.
+  held?: ReadonlyMap<string, HeldNote>
   resolveOutcome: (satisfied: ReadonlySet<string>) => void
   // Settled without ever being sent (backlog bound, or its folder row was replaced): why.
   refusedUnsent?: string
@@ -166,8 +170,13 @@ export function settleFolderNoteAction(
 
 export const NOTHING_SATISFIED: ReadonlySet<string> = new Set()
 
-/** What the host confirmed for one id: its version, or absence; `relocated` once it was absent. */
+/**
+ * What the host confirmed for one id: its version or absence (`known`), or that some other version
+ * won (not known: shown from the base, but it overrides that base as evidence). `relocated`: the
+ * host appended it.
+ */
 export type ConfirmedNote = {
+  known: boolean
   note: DiffComment | undefined
   relocated: boolean
   generation: number
@@ -212,7 +221,9 @@ export function overlayFolderNotes(
   const changed = new Map<string, Change>()
   const appendOrder: string[] = []
   for (const [id, entry] of confirmed) {
-    applyChange(changed, appendOrder, inBase, id, entry.note, entry.relocated)
+    if (entry.known) {
+      applyChange(changed, appendOrder, inBase, id, entry.note, entry.relocated)
+    }
   }
   for (const action of pending) {
     for (const [id, note] of action.delta) {

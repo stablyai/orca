@@ -9,7 +9,7 @@ import {
   forgetFolderNotesFence,
   recordFolderNotesFence
 } from './folder-note-fence'
-import { projectFolderNoteVerdict } from './folder-note-receipt'
+import { projectFolderNoteVerdict, type CheckedFolderNoteReceipt } from './folder-note-receipt'
 import {
   NOTHING_SATISFIED,
   overlayFolderNotes,
@@ -19,7 +19,6 @@ import {
   type FolderNoteAction,
   type FolderOwner
 } from './folder-note-actions'
-import type { FolderDiffCommentVerdict } from '../../../../../shared/file-review/folder-diff-comment-merge'
 
 export type Set = Parameters<StateCreator<AppState>>[0]
 export type EnqueueFolderNoteRead = (task: () => Promise<void>) => void
@@ -61,6 +60,8 @@ export type ProtectedCopy = {
   readToken: number
   actionSeq: number
   reportedNoSnapshot: boolean
+  // Ended because its row was replaced, removed or re-paired (not merely released at a quiet tail).
+  retired?: boolean
 }
 
 // Why a bound: a host refusing every write must not grow an unbounded backlog of retained actions.
@@ -86,35 +87,38 @@ export function adoptHostList(
   recordFolderNotesFence(get, copy.owner)
 }
 
-/** Keeps what an acknowledged receipt says the host holds, projecting absence as absence. */
+/**
+ * Keeps what an acknowledged receipt says the host holds: absence as absence, another version as
+ * unknown (it outranks an older sample), and placement as the host reports it. Also kept on the
+ * action, for dependents judged after this copy is gone.
+ */
 export function recordConfirmed(
   copy: ProtectedCopy,
   get: () => AppState,
   action: FolderNoteAction,
-  verdict: FolderDiffCommentVerdict
+  receipt: CheckedFolderNoteReceipt
 ): ReadonlySet<string> {
-  const { satisfied, held } = projectFolderNoteVerdict(action, verdict)
+  const { satisfied, held } = projectFolderNoteVerdict(action, receipt.verdict)
+  action.held = held
   const generation = catalogGenerationOf(copy, get)
   for (const [id, entry] of held) {
     const prior = copy.confirmed.get(id)
     if (!entry.known) {
       // Another version won and this client has no copy of it: show the base until a host list.
       copy.confirmed.delete(id)
+      copy.confirmed.set(id, { known: false, note: undefined, relocated: false, generation })
       copy.dirty = true
       continue
     }
-    if (entry.note && prior?.note) {
-      // An edit keeps the note where it is, as the host does; Map.set keeps the entry's place.
-      copy.confirmed.set(id, { note: entry.note, relocated: prior.relocated, generation })
+    if (receipt.added.has(id)) {
+      // The host appended it: last, behind every earlier confirmation.
+      copy.confirmed.delete(id)
+      copy.confirmed.set(id, { known: true, note: entry.note, relocated: true, generation })
       continue
     }
-    // Only a note added (or re-added after a delete) goes last, behind every earlier confirmation;
-    // an add the accepted host list already holds landed earlier and stays where the host has it.
-    const heldAlready = copy.baseFromHost && !!copy.authoritative?.some((note) => note.id === id)
-    const added =
-      !!entry.note && (prior ? true : action.before.get(id) === undefined && !heldAlready)
-    copy.confirmed.delete(id)
-    copy.confirmed.set(id, { note: entry.note, relocated: added, generation })
+    // Not appended: the host kept it where it was (an edit, or an add it already held).
+    const relocated = !!entry.note && !!prior?.known && !!prior.note && prior.relocated
+    copy.confirmed.set(id, { known: true, note: entry.note, relocated, generation })
   }
   return satisfied
 }
@@ -131,7 +135,7 @@ export function acceptedNote(
 ): { known: true; note: DiffComment | undefined } | { known: false } {
   const confirmed = copy.confirmed.get(id)
   if (confirmed) {
-    return { known: true, note: confirmed.note }
+    return confirmed.known ? { known: true, note: confirmed.note } : { known: false }
   }
   if (!copy.baseFromHost || !copy.authoritative) {
     return { known: false }
@@ -159,6 +163,7 @@ export function retireProtectedCopy(copy: ProtectedCopy, reason: string): void {
     return
   }
   protectedCopies.delete(copy.key)
+  copy.retired = true
   forgetFolderNotesFence(copy.owner)
   for (const action of copy.pending) {
     if (!action.refusedUnsent && !sentActions.has(action)) {

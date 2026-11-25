@@ -41,6 +41,7 @@ export function createModelHost(kind: HostKind, saved: DiffComment[]) {
     /** Next reads, consumed in order: 'fail' never reaches the host. */
     nextReads: [] as ('ok' | 'fail')[],
     requests: [] as FolderDiffCommentMergeRequest[],
+    receipts: [] as FolderDiffCommentReceipt[],
     /** Modes for the next ordinary updates, consumed before `nextOrdinary`. */
     nextOrdinaryModes: [] as ('ok' | 'refuse' | 'drop-ack')[],
     /** Paired catalog lists waiting to be answered, each sampled when its fetch started. */
@@ -103,6 +104,7 @@ export function createModelHost(kind: HostKind, saved: DiffComment[]) {
       if (mode === 'drop-ack') {
         throw new Error('connection lost')
       }
+      host.receipts.push(receipt)
       return receipt
     },
     /** Another device's save, merged on the host. */

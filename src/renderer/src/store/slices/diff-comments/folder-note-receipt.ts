@@ -26,6 +26,7 @@ const HostReceiptSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
   verdict: z.array(z.object({ id: z.string(), version: NoteVersionSchema })),
+  added: z.array(z.string()).optional(),
   snapshot: z.unknown().optional()
 })
 
@@ -48,6 +49,8 @@ const SnapshotSchema = z.array(DiffCommentSchema)
 /** A receipt this client checked: it answers this request, for this row incarnation. */
 export type CheckedFolderNoteReceipt = {
   verdict: FolderDiffCommentVerdict
+  /** Touched ids the host appended with this write; a note it already held keeps its place. */
+  added: ReadonlySet<string>
   /** The row's whole note list; absent when the host left it out or it disagreed with the verdict. */
   snapshot: DiffComment[] | undefined
 }
@@ -120,8 +123,19 @@ export function checkFolderNoteReceipt(
   ) {
     return null
   }
+  // Placement names touched ids the host now holds, each once; a read places nothing.
+  const added = new Set(receipt.added ?? [])
+  const held = new Map(receipt.verdict.map((entry) => [entry.id, entry.version]))
+  if (
+    added.size !== (receipt.added ?? []).length ||
+    (request.mode === 'read' && added.size > 0) ||
+    [...added].some((id) => !named.has(id) || held.get(id) === ABSENT_NOTE_VERSION)
+  ) {
+    return null
+  }
   return {
     verdict: receipt.verdict,
+    added,
     // An inconsistent snapshot is dropped; the verdict alone still settles the action.
     snapshot: consistentSnapshot(receipt.snapshot, touched, receipt.verdict)
   }
@@ -150,6 +164,9 @@ function onlySentAtChanged(before: DiffComment | undefined, after: DiffComment |
   )
 }
 
+/** What a verdict says the host holds for one id: a note or absence, or another version unseen. */
+export type HeldNote = { known: true; note: DiffComment | undefined } | { known: false }
+
 /**
  * Per id, what the host holds as far as this action knows: its intended note, confirmed absence,
  * or unknown (another version won; this client has no copy of it). `satisfied` are the ids where
@@ -160,11 +177,11 @@ export function projectFolderNoteVerdict(
   verdict: FolderDiffCommentVerdict
 ): {
   satisfied: ReadonlySet<string>
-  held: Map<string, { known: true; note: DiffComment | undefined } | { known: false }>
+  held: Map<string, HeldNote>
 } {
   const versions = new Map(verdict.map((entry) => [entry.id, entry.version]))
   const satisfied = new Set<string>()
-  const held = new Map<string, { known: true; note: DiffComment | undefined } | { known: false }>()
+  const held = new Map<string, HeldNote>()
   for (const [id, intended] of action.delta) {
     const version = versions.get(id)
     if (version === diffCommentVersion(intended)) {

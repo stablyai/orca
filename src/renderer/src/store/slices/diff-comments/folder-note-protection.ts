@@ -272,7 +272,7 @@ export async function runProtectedFolderNoteAction(args: {
   }
   // A row replaced while this was out shows nothing more, but the caller still learns what the host did.
   const showing = isCurrentCopy(copy) && noticeOutsideReplacement(copy, get)
-  const satisfied = recordConfirmed(copy, get, action, receipt.verdict)
+  const satisfied = recordConfirmed(copy, get, action, receipt)
   if (showing) {
     copy.lastRunAcknowledged = true
     copy.ackGeneration = catalogGenerationOf(copy, get)
