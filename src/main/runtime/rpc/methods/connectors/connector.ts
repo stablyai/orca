@@ -14,6 +14,7 @@ import { botTurnFor } from '../../../../bots/bot-turn-for'
 import { sessionCallerOf } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { CONNECTOR_ACT_METHOD } from '../connector-act'
 import { CONNECTOR_REACT_METHOD } from '../connector-react'
+import { CONNECTOR_LEAVE_THREAD_METHOD } from '../connector-leave-thread'
 
 export function requireSeam(
   runtime: Pick<OrcaRuntimeService, 'getExternalConversationSeam'>
@@ -91,5 +92,6 @@ export const CONNECTOR_METHODS = [
     }
   }),
   CONNECTOR_ACT_METHOD,
-  CONNECTOR_REACT_METHOD
+  CONNECTOR_REACT_METHOD,
+  CONNECTOR_LEAVE_THREAD_METHOD
 ]

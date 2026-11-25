@@ -257,7 +257,7 @@ export function AppRail({
         onKeyDownCapture={handleKeyDown}
         onFocus={handleFocus}
       >
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-2.5">
           <RailItem tooltip={workspacesLabel}>
             <AppRailButton
               itemId="workspaces"
@@ -304,12 +304,14 @@ export function AppRail({
                 label: destinationLabel(id),
                 icon: destinationIcon(id, 14),
                 current: destinationActive(id),
+                // Automations focuses its own title when opened.
+                ownsFocusOnOpen: id === 'automations',
                 onSelect: () => activateRailDestination(id)
               }))}
             />
           ) : null}
         </div>
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-2.5">
           {partition.helpInMore ? null : (
             <HelpMenuView
               controller={help}

@@ -1,6 +1,9 @@
 import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
-import { upstreamOnlyCommitsArePatchEquivalent } from '../../../../shared/git/remotes/git-upstream-status'
+import {
+  type DivergedUpstreamProbe,
+  parseDivergedUpstreamProbe
+} from '../../../../shared/git/remotes/git-upstream-status'
 import {
   isNoUpstreamError,
   normalizeGitErrorMessage
@@ -32,18 +35,20 @@ function gitExecOptions(
   }
 }
 
-async function getBehindCommitsArePatchEquivalent(
+async function probeDivergedUpstream(
   worktreePath: string,
   upstreamName: string,
   options: GitExecOptions = {}
-): Promise<boolean> {
+): Promise<DivergedUpstreamProbe> {
   try {
     const { stdout } = await gitExecFileAsync(
       [
         'log',
         '--no-show-signature',
         '--no-color',
-        '--format=%m',
+        // Topo order lists the upstream tip first, giving its OID without another process.
+        '--format=%m %H',
+        '--topo-order',
         '--cherry-mark',
         '--right-only',
         `HEAD...${upstreamName}`,
@@ -51,10 +56,10 @@ async function getBehindCommitsArePatchEquivalent(
       ],
       gitExecOptions(worktreePath, options)
     )
-    return upstreamOnlyCommitsArePatchEquivalent(stdout)
+    return parseDivergedUpstreamProbe(stdout)
   } catch {
     // Failed patch-equivalence probes retain the conservative pull-first behavior.
-    return false
+    return { behindCommitsArePatchEquivalent: false }
   }
 }
 
@@ -69,12 +74,12 @@ async function readUpstreamStatus(
       return await getPublishTargetStatus(
         (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
         target,
-        (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
+        (upstreamName) => probeDivergedUpstream(worktreePath, upstreamName, options)
       )
     }
     return await getEffectiveGitUpstreamStatus(
       (args) => gitExecFileAsync(args, gitExecOptions(worktreePath, options)),
-      (upstreamName) => getBehindCommitsArePatchEquivalent(worktreePath, upstreamName, options)
+      (upstreamName) => probeDivergedUpstream(worktreePath, upstreamName, options)
     )
   } catch (error) {
     // Suppress only proven no-upstream errors; auth, corruption and unavailable repos must surface.

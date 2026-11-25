@@ -39,7 +39,9 @@ export function NativeChatWorkerDockFrame({ children }: { children: ReactNode })
     <GestureContext.Provider value={held}>
       <div
         data-native-chat-worker-dock=""
-        className="mx-auto w-full max-w-(--chat-content-max-width) shrink-0 px-3 pt-2 sm:px-4 [&:not(:has([data-native-chat-background-tasks],[data-native-chat-worker-approvals]))]:hidden"
+        // A tab strip (the goal) pads nothing above itself, so the dock's 8px row gap comes from here.
+        // Capped like the message box: its content, not its padding, is the chat's column width.
+        className="relative mx-auto w-full max-w-[calc(var(--chat-content-max-width)+var(--spacing)*6)] shrink-0 px-3 pt-2 sm:max-w-[calc(var(--chat-content-max-width)+var(--spacing)*8)] sm:px-4 [&:has(+[data-native-chat-composer-tab-strip])]:pb-2 [&:not(:has([data-native-chat-background-tasks],[data-native-chat-worker-approvals]))]:hidden"
         onPointerDownCapture={(event) => {
           if (event.button === 0) {
             pointer.current = event.pointerId

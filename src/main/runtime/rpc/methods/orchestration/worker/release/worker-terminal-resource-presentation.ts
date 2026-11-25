@@ -1,7 +1,8 @@
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import {
   liveWorkerTerminalAutoReleaseAt,
-  type WorkerTerminalResourceRow
+  type WorkerTerminalResourceRow,
+  type WorkerTerminalRetainedReason
 } from '../../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { WorkerReleaseReceipt } from './worker-release-completion'
 
@@ -96,4 +97,52 @@ export function exposeWorkerRetainReceipt(
     processAction: 'none',
     archive: archiveSummary(retained.resource)
   }
+}
+
+/** Why a retained row is held, for its receipt. */
+export function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
+  if (resource.retained_reason) {
+    return resource.retained_reason as WorkerTerminalRetainedReason
+  }
+  if (resource.ownership_state === 'user_owned') {
+    return 'user_takeover'
+  }
+  return 'identity_unproven'
+}
+
+/**
+ * The receipt of a release that did not make its own transition, from the row as it now is. Another
+ * dispatch's custody (or no row) reads as such, never as that owner's state, hold or output.
+ */
+export function receiptForUnchangedRelease(
+  dispatchId: string,
+  row: WorkerTerminalResourceRow | null | undefined,
+  processAction: WorkerReleaseReceipt['processAction'] = 'none'
+): WorkerReleaseReceipt {
+  if (!row || row.owner_dispatch_id !== dispatchId) {
+    return {
+      dispatchId,
+      state: 'retained',
+      reason: row ? 'ownership_transferred' : 'no_owned_resource',
+      processAction,
+      archive: null
+    }
+  }
+  return row.release_state === 'released'
+    ? { dispatchId, state: 'already_released', processAction, archive: archiveSummary(row) }
+    : {
+        dispatchId,
+        state: 'retained',
+        reason: retainedReason(row),
+        processAction,
+        archive: archiveSummary(row)
+      }
+}
+
+/**
+ * Whether this dispatch's own release_unknown write landed. An owner-fenced write that was refused still
+ * returns the row, which may be another owner's that is unknown for its own reasons.
+ */
+export function unknownWriteApplied(row: WorkerTerminalResourceRow, dispatchId: string): boolean {
+  return row.owner_dispatch_id === dispatchId && row.release_state === 'unknown'
 }

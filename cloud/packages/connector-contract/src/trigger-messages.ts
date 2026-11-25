@@ -2,10 +2,11 @@ import { EpochMsSchema } from '@orca-cloud/push-contract'
 import { z } from 'zod'
 import type { BotAskers } from './bot-askers.js'
 import { CONNECTOR_LIMITS } from './connector-limits.js'
-import { CONNECTOR_SOURCES } from './connector-wire-scalars.js'
+import { CONNECTOR_PLACE_SOURCES } from './connector-wire-scalars.js'
 import { isWorkspaceRef, parseConnectorRef } from './action-messages.js'
 import { ConnectorWebhookTriggerSchema, WebhookTriggerEventSchema } from './webhook-messages.js'
 import { hookIdOfActor, hookIdOfRule } from './webhook-names.js'
+import { ViaAccountSchema } from './share-messages.js'
 
 const Id = z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength)
 const FilterText = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
@@ -17,7 +18,7 @@ export const ConnectorEventTriggerSchema = z.object({
   id: Id,
   automationId: Id,
   botId: Id,
-  source: z.enum(CONNECTOR_SOURCES).exclude(['webhook']),
+  source: z.enum(CONNECTOR_PLACE_SOURCES),
   event: z.string().min(1).max(64),
   // Places as refs (slack:T1:C1, github:<installation>:<repoId>, linear:<org>:team:<teamId>, or a whole
   // workspace: linear:<org>:workspace, sent only to a cloud listing `places`), or as a machine wrote
@@ -109,6 +110,8 @@ export const SourceTriggerEventSchema = z.object({
     .min(1)
     .max(CONNECTOR_LIMITS.maxBotIdLength)
     .refine((id) => hookIdOfActor(id) === null),
+  // Asked through a share (share-messages.ts ViaAccountSchema).
+  viaAccount: ViaAccountSchema,
   // The bot's owner did it; the machine doesn't know the owner's id in each source.
   fromOwner: z.literal(true).optional(),
   // A reaction on a message the owner wrote, for a rule that asks for only those.

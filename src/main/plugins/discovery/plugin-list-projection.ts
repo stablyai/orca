@@ -1,3 +1,5 @@
+import { resolvePluginPanelPathIcon } from '../../../shared/plugins/contributions/plugin-panel-path-icon'
+import type { PluginPanelContribution } from '../../../shared/plugins/contributions/plugin-panel-contribution'
 import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { needsReconsent } from '../../../shared/plugins/approval/plugin-consent-state'
 import { pluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
@@ -22,6 +24,7 @@ import { pluginCatalogTypes } from '../../../shared/plugins/catalog/plugin-catal
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type {
   PluginHostListEntry,
+  PluginHostPanel,
   PluginHostStatus
 } from '../../../shared/plugins/plugin-list-entry'
 import {
@@ -83,6 +86,17 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
   plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
+
+/** A name stays in `icon`; a path icon goes to `iconPath` so older clients never see an object. */
+export function projectPluginPanelIcon(
+  icon: PluginPanelContribution['icon']
+): Pick<PluginHostPanel, 'icon' | 'iconPath'> {
+  if (typeof icon === 'string') {
+    return { icon }
+  }
+  const iconPath = icon ? resolvePluginPanelPathIcon(icon) : null
+  return iconPath ? { iconPath } : {}
+}
 
 export async function buildPluginList(
   service: PluginService,
@@ -205,7 +219,7 @@ export async function buildPluginList(
         panels: plugin.manifest.contributes.panels.map((panel) => ({
           id: panel.id,
           title: panel.title,
-          ...(panel.icon ? { icon: panel.icon } : {}),
+          ...projectPluginPanelIcon(panel.icon),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({

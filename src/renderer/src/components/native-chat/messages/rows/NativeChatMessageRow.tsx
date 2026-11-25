@@ -157,6 +157,7 @@ function MessageRowContent(props: MessageRowProps): React.JSX.Element | null {
           automation={message.automationSaved.automation}
           once={message.automationSaved.automation.once}
           ended={message.savedWaitEnded}
+          endedOn={message.savedWaitEndedOn}
           timestamp={message.timestamp}
         />
       </div>

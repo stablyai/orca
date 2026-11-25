@@ -175,7 +175,7 @@ export function signedIn(answer: 'item' | 'fail' | 'failOnce' = 'item'): () => v
 }
 
 // Room below for the card, which opens under the chip as tooltips do.
-export const header = (links: BotItemLinkView[] = LINKS) => (
+export const header = (links: BotItemLinkView[] = LINKS.slice(0, 1)) => (
   <div className="flex flex-col gap-1.5 px-3 pb-44 pt-6">
     <div className="text-sm font-semibold text-foreground">#1385 Share dialog follow-up</div>
     <BotItemLinkChips bot={fixtureCos} links={links} chat="Home Chat" />

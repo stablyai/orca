@@ -11,7 +11,14 @@ import {
   useWorkerDockFailureFocusHandoff,
   WorkerDockFailureStrip
 } from './dock/WorkerDockFailureStrip'
+import { WorkerDockResultDialogSlot } from './dock/WorkerDockResultDialogSlot'
 import { useLatestHandler } from '@/lib/use-latest-handler'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import {
+  ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY,
+  ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { pairedHostClientCapabilities } from '@/runtime/rpc/targets/paired-host-client-capabilities'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { NativeChatCrewBackgroundTasksStatus } from './NativeChatCrewBackgroundTasksStatus'
 import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
@@ -23,11 +30,6 @@ import {
   useNativeChatCrew
 } from '../../../orchestration-crew/use-native-chat-crew'
 
-const WorkerDockResultDialog = lazy(() =>
-  import('./dock/WorkerDockResultDialog').then((module) => ({
-    default: module.WorkerDockResultDialog
-  }))
-)
 const WorkerDockProviderDetailsDialog = lazy(() =>
   import('./dock/WorkerDockProviderDetailsDialog').then((module) => ({
     default: module.WorkerDockProviderDetailsDialog
@@ -65,7 +67,15 @@ export function NativeChatStructuredSessionStatus(props: {
   const { backgroundTasks, stop } = props
 
   const target = props.target ?? LOCAL
-  const ownerActionsAvailable = target.kind === 'local'
+  // A paired host takes Clear and Stop from a client it counts as a person once it says it does; an
+  // older host or another client is refused, so its rows keep pointing to the computer they run on.
+  const pairedOwnerActions = useRuntimeEnvironmentCapability(
+    target.kind === 'environment' && pairedHostCountsThisClientAsPerson()
+      ? target.environmentId
+      : null,
+    ORCHESTRATION_PAIRED_WORKER_DOCK_OWNER_RUNTIME_CAPABILITY
+  )
+  const ownerActionsAvailable = target.kind === 'local' || pairedOwnerActions
   const expandedHere = expanded?.sessionId === props.sessionId && expanded.expanded
   const feed = useWorkerDockFeed(
     target,
@@ -232,6 +242,8 @@ export function NativeChatStructuredSessionStatus(props: {
         onWorkerAction={owner.action}
         onClearAll={owner.clearAll}
         loadWindow={feed.loadWindow}
+        incomplete={backgroundTasks.incomplete}
+        unavailable={!feed.available}
         tasks={backgroundTasks.tasks}
         settledTasks={backgroundTasks.settledTasks}
         {...(backgroundTasks.children
@@ -240,7 +252,6 @@ export function NativeChatStructuredSessionStatus(props: {
         indicatorActive={backgroundTasks.isMonitoring}
         supportsTaskStop={backgroundTasks.supportsStop}
         offersStopAll={backgroundTasks.offersStopAll}
-        incomplete={backgroundTasks.incomplete || !feed.available}
         stoppingTaskIds={new Set([...stop.stoppingTaskIds, ...owner.pending])}
         stoppingAll={stop.stoppingAll}
         expanded={expandedHere}
@@ -271,37 +282,23 @@ export function NativeChatStructuredSessionStatus(props: {
           focusHandoff={failureFocus}
         />
       ) : null}
-      {dialog ? (
-        <Suspense fallback={null}>
-          <WorkerDockResultDialog
-            ownerActionsAvailable={
-              ownerActionsAvailable && dialog.result?.ownerActionsAvailable !== false
-            }
-            result={dialog.result}
-            error={dialog.error}
-            onClose={() => {
-              const { opener } = dialog
-              owner.close()
-              if (opener.isConnected) {
-                opener.focus()
-              } else {
-                document
-                  .querySelector<HTMLButtonElement>(
-                    '[data-native-chat-background-tasks] button[aria-expanded]'
-                  )
-                  ?.focus()
-              }
-            }}
-            onOpen={() => workerOpen(dialog.row)}
-            onRestore={owner.restore}
-          />
-        </Suspense>
-      ) : null}
+      <WorkerDockResultDialogSlot
+        dialog={dialog}
+        ownerActionsAvailable={ownerActionsAvailable}
+        onClose={owner.close}
+        onOpen={workerOpen}
+        onRestore={owner.restore}
+      />
     </WorkerDockFeedLossesContext.Provider>
   )
 }
 
 const LOCAL: RuntimeClientTarget = { kind: 'local' }
+
+/** The host's owner check passes a paired client only when its handshake says it is a person's. */
+function pairedHostCountsThisClientAsPerson(): boolean {
+  return pairedHostClientCapabilities().includes(ORCHESTRATION_PERSON_APPROVALS_CLIENT_CAPABILITY)
+}
 
 /** The identity is the current lifecycle; a cached detail can lag it (a metadata-only update
  *  moves the identity alone). The row shows, and Stop is checked against, the identity's state. */

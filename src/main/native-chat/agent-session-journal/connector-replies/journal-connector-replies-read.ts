@@ -21,10 +21,28 @@ export function readJournalConnectorReplies(
   return rows.map(replyRowOf)
 }
 
+/** Whether a turn's answer to one conversation may still be unsent: one indexed probe. A row with
+ *  no turn yet (not filled, or filled by recovery, which can't name it) may be that answer. */
+export function hasUnsentJournalConnectorReply(
+  db: Database.Database,
+  sessionId: string,
+  conversation: { source: string; externalId: string },
+  turnStartedAt: number
+): boolean {
+  return (
+    db
+      .prepare(
+        `SELECT 1 FROM journal_connector_replies WHERE session_id=? AND sent_at IS NULL
+          AND source=? AND external_id=? AND (turn_started_at=? OR turn_started_at IS NULL) LIMIT 1`
+      )
+      .get(sessionId, conversation.source, conversation.externalId, turnStartedAt) !== undefined
+  )
+}
+
 // Every column a row reads but prose, which a page reads bounded.
 const OWED_COLUMNS = `account,delivery_id,source,external_id,session_id,epoch,message_id,queued,
   outcome,answer_delivery_id,turn_item_id,failure_json,links_json,took_ms,turn_started_at,filled_at,cut_turn_id,
-  cut_kind,claim_message_id`
+  cut_kind,claim_message_id,tools_ran`
 
 /** One page of an account's filled, unsent rows after a delivery id, in key order: what the outbox
  *  sends. Paged so a backlog never outgrows one reader reply. A prose over the cap (kept whole by
@@ -74,6 +92,7 @@ function replyRowOf(row: Record<string, unknown>): JournalConnectorReplyRow {
     ...(row.claim_message_id === null || row.claim_message_id === undefined
       ? {}
       : { claimMessageId: String(row.claim_message_id) }),
+    ...(row.quiet_rule === 'trailing' ? { quietRule: 'trailing' as const } : {}),
     // An unfilled row's failure is its usage-limit cut's, kept for that cut's close.
     ...(outcome === undefined && row.failure_json !== null && row.failure_json !== undefined
       ? { cutFailure: JSON.parse(String(row.failure_json)) }
@@ -94,6 +113,7 @@ function replyRowOf(row: Record<string, unknown>): JournalConnectorReplyRow {
             ...(row.turn_started_at === null || row.turn_started_at === undefined
               ? {}
               : { turnStartedAt: Number(row.turn_started_at) }),
+            ...(Number(row.tools_ran) === 1 ? { toolsRan: true as const } : {}),
             filledAt: Number(row.filled_at)
           }
         })
