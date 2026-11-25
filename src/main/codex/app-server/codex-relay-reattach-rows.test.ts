@@ -434,13 +434,16 @@ describe('codex rows across a reattach', () => {
       // Running, but its metadata read fails: still followed by its turns.
       lost: { id: 'turn-l', status: 'inProgress', items: [] },
       // Running, but its metadata read runs out of time: one turns-only read still finds it.
-      slow: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's0' }] }
+      slow: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's0' }] },
+      // A review's thread whose first metadata read runs out of time: never taken for a child.
+      late: { id: 'turn-r', status: 'inProgress', items: [] }
     }
+    let lateReads = 0
     const request = async (method: string, params?: unknown) => {
       const threadId = String(readRecord(params).threadId)
       // Only the app-server's loaded threads name the child: no carried work does.
       if (method === 'thread/loaded/list') {
-        return { data: ['main', 'child', 'grand', 'done', 'old', 'review', 'lost', 'slow'] }
+        return { data: ['main', 'child', 'grand', 'done', 'old', 'review', 'lost', 'slow', 'late'] }
       }
       // Loaded, but not a spawned agent: never one of the chat's children.
       if (method === 'thread/read' && threadId === 'review') {
@@ -449,7 +452,10 @@ describe('codex rows across a reattach', () => {
       if (method === 'thread/read' && (threadId === 'grand' || threadId === 'lost')) {
         throw new Error('timed out')
       }
-      if (method === 'thread/read' && threadId === 'slow') {
+      if (method === 'thread/read' && threadId === 'late' && lateReads++ > 0) {
+        return { thread: { id: threadId, source: { subAgent: 'review' } } }
+      }
+      if (method === 'thread/read' && (threadId === 'slow' || threadId === 'late')) {
         throw new CodexAppServerTimeoutError('thread/read timed out')
       }
       if (method === 'thread/read') {
@@ -485,11 +491,15 @@ describe('codex rows across a reattach', () => {
     })
     restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
     expect(turns.map(({ threadId }) => threadId)).not.toContain('review')
-    expect(tracker.subagentStopTargets(['lost', 'slow']).turns).toEqual([
-      { threadId: 'slow', turnId: 'turn-s' },
-      { threadId: 'lost', turnId: 'turn-l' }
-    ])
+    expect(tracker.subagentStopTargets(['lost', 'slow']).turns).toEqual(
+      expect.arrayContaining([
+        { threadId: 'slow', turnId: 'turn-s' },
+        { threadId: 'lost', turnId: 'turn-l' }
+      ])
+    )
     expect(turns.map(({ threadId }) => threadId)).toContain('slow')
+    expect(turns.map(({ threadId }) => threadId)).not.toContain('late')
+    expect(tracker.subagentStopTargets(['late']).turns).toEqual([])
     expect(evidence).not.toContainEqual(
       expect.objectContaining({
         type: 'live',

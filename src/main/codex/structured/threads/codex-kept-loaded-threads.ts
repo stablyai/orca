@@ -14,7 +14,7 @@ const MAX_LOADED_THREADS = 512
 const LOADED_READ_CONCURRENCY = 8
 /** The whole loaded phase's budget: past it no read starts, and what is in flight is let go. */
 const LOADED_PHASE_BUDGET_MS = 5_000
-/** Past the budget, threads it skipped get this long for one turns-only read. */
+/** After the named children, threads the budget skipped get this long for one more read. */
 export const SKIPPED_READ_GRACE_MS = 2_000
 /** A short bound for reads that only add to the snapshot (and for the chat thread's retry). */
 export const SOFT_READ_TIMEOUT_MS = 5_000
@@ -113,12 +113,11 @@ export async function loadedChildren(input: {
 }): Promise<{
   children: { threadId: string; source: ChildSource | null }[]
   skipped: string[]
-  deadline: number
 }> {
-  const deadline = Date.now() + LOADED_PHASE_BUDGET_MS
   if (input.room <= 0 || input.ids.length === 0) {
-    return { children: [], skipped: [], deadline }
+    return { children: [], skipped: [] }
   }
+  const deadline = Date.now() + LOADED_PHASE_BUDGET_MS
   const newestFirst = [...input.ids].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
   const read = await readBounded(
     newestFirst,
@@ -146,5 +145,5 @@ export async function loadedChildren(input: {
     .sort((a, b) => b.source.updatedAt - a.source.updatedAt)
     .slice(0, MAX_IDLE_LOADED_CHILDREN)
   const children = [...active, ...unknown, ...idle].slice(0, Math.max(0, input.room))
-  return { children, skipped, deadline }
+  return { children, skipped }
 }

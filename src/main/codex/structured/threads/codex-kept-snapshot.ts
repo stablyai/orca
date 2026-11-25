@@ -233,16 +233,18 @@ export async function readKeptCodexSnapshot(input: {
       item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE ? readReceiverThreadIds(item) : []
     )
   }
-  // Loaded threads the budget skipped get one turns-only read past it, so a running child among
-  // them still keeps its numbering and Stop target; one that answers nothing is left out.
-  const readSkipped = async (skipped: readonly string[], deadline: number) => {
+  // Loaded threads the budget skipped get one short read after every named child's, so a running
+  // child among them still keeps its numbering and Stop target. One whose turn doesn't come back,
+  // or that is known not to be a spawned agent (a review's thread), is left out.
+  const readSkipped = async (skipped: readonly string[]) => {
+    const deadline = Date.now() + SKIPPED_READ_GRACE_MS
     await readBounded(skipped, SKIPPED_READ_CONCURRENCY, deadline, async (threadId, ms) => {
       if (seen.has(threadId) || seen.size >= MAX_SNAPSHOT_THREADS) {
         return
       }
       seen.add(threadId)
-      const read = await readThread(threadId, ms, null)
-      if (read.turn) {
+      const read = await readThread(threadId, ms)
+      if (read.turn && read.source?.spawned !== false) {
         record(threadId, read)
       }
     })
@@ -260,13 +262,12 @@ export async function readKeptCodexSnapshot(input: {
       room: MAX_SNAPSHOT_THREADS - seen.size,
       onError: input.onError
     })
-    const following = readSkipped(loaded.skipped, loaded.deadline + SKIPPED_READ_GRACE_MS)
     // Children only the inventory found are read on a short leash: they hold this chat's launch slot.
     wave = loaded.children
     while (wave.length > 0) {
       wave = await readWave(wave, Math.min(input.timeoutMs, LOADED_TURN_TIMEOUT_MS))
     }
-    await following
+    await readSkipped(loaded.skipped)
   }
   // A spawn in a read turn names the real parent (restated with that turn); a guess must not win.
   const spawned = new Set(
