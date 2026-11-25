@@ -13,7 +13,8 @@ const NAMES_BY_CATALOG = new WeakMap<
   AppState['runtimeEnvironments'],
   Readonly<Record<string, string>>
 >()
-let lastNames: Readonly<Record<string, string>> = Object.freeze({})
+const NO_HOST_NAMES: Readonly<Record<string, string>> = Object.freeze({})
+let lastNames = NO_HOST_NAMES
 
 /** Host names by id, built once per catalog array so unrelated store writes cost one lookup. */
 function hostNames(state: AppState): Readonly<Record<string, string>> {
@@ -25,27 +26,39 @@ function hostNames(state: AppState): Readonly<Record<string, string>> {
     )
     // Equal names keep one object, so a catalog change that keeps every name (a last-used time) re-renders no reader.
     names = shallow(built, lastNames) ? lastNames : built
-    lastNames = names
     NAMES_BY_CATALOG.set(catalog, names)
   }
+  lastNames = names
   return names
+}
+
+function noHostNames(): Readonly<Record<string, string>> {
+  // Lets go of the last catalog's names while none are needed.
+  lastNames = NO_HOST_NAMES
+  return NO_HOST_NAMES
 }
 
 /** Every host's offered or running CLI updates, this computer first, labelled once another host is added. */
 export function useAgentCliUpdateGroups(): AgentCliUpdateGroup[] {
   const t = useTranslate()
   const hosts = useAppStore((s) => s.agentCliUpdates)
-  const names = useAppStore(hostNames)
+  const listed = useMemo(
+    () =>
+      [...hosts]
+        .map(([hostKey, host]) => ({ hostKey, rows: agentCliUpdateRows(hostKey, host) }))
+        .filter((group) => group.rows.length > 0)
+        .sort((a, b) => (a.hostKey === '' ? -1 : b.hostKey === '' ? 1 : 0)),
+    [hosts]
+  )
+  const hasRemote = listed.some((group) => group.hostKey !== '')
+  // Only another host's rows need a label, so the always-mounted status segment never reads the catalog for none.
+  const names = useAppStore(hasRemote ? hostNames : noHostNames)
   const hasOtherHosts = useAppStore(
     (s) => !isPairedWebClientWindow() && s.runtimeEnvironments.length > 0
   )
   return useMemo((): AgentCliUpdateGroup[] => {
-    const listed = [...hosts]
-      .map(([hostKey, host]) => ({ hostKey, rows: agentCliUpdateRows(hostKey, host) }))
-      .filter((group) => group.rows.length > 0)
-      .sort((a, b) => (a.hostKey === '' ? -1 : b.hostKey === '' ? 1 : 0))
     // With any other host added (server, WSL host or VM), a local-only list still names this computer.
-    const showHostHeadings = hasOtherHosts || listed.some((group) => group.hostKey !== '')
+    const showHostHeadings = hasOtherHosts || hasRemote
     return listed.map((group) => ({
       ...group,
       label: !showHostHeadings
@@ -56,5 +69,5 @@ export function useAgentCliUpdateGroups(): AgentCliUpdateGroup[] {
             ? names[group.hostKey]
             : group.hostKey
     }))
-  }, [hosts, names, hasOtherHosts, t])
+  }, [listed, hasRemote, names, hasOtherHosts, t])
 }
