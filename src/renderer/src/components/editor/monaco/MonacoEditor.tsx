@@ -206,7 +206,8 @@ export default function MonacoEditor({
     mountedEditor,
     fileId,
     passiveMirror,
-    inlineEnabled: settings?.editorInlineBlame === true
+    inlineEnabled: settings?.editorInlineBlame === true,
+    columnEnabled: settings?.editorBlameColumn === true
   })
 
   const decorations = useMonacoEditorDecorations({

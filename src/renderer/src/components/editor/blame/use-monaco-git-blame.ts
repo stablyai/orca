@@ -11,6 +11,7 @@ import {
   publishFocusedLineBlame,
   type LineBlame
 } from './git-blame-line-store'
+import { createBlameColumn } from './monaco-blame-column'
 import { blameHoverMarkdown, formatLineBlameSummary } from './git-blame-presentation'
 import { openFileById, resolveGitBlameTarget, type GitBlameTarget } from './git-blame-target'
 
@@ -40,15 +41,17 @@ function commitIndexForHeadLine(ranges: number[], headLine: number): number {
 
 /**
  * Blame for the cursor line: an inline annotation when enabled, and the focused-line store the
- * status bar reads. Git runs once per HEAD; edits remap the buffer onto the HEAD text instead.
+ * status bar reads. With `columnEnabled`, every line also shows its blame beside the line number.
+ * Git runs once per HEAD; edits remap the buffer onto the HEAD text instead.
  */
 export function useMonacoGitBlame(params: {
   mountedEditor: editor.IStandaloneCodeEditor | null
   fileId: string
   passiveMirror: boolean | undefined
   inlineEnabled: boolean
+  columnEnabled: boolean
 }): void {
-  const { mountedEditor, fileId, passiveMirror, inlineEnabled } = params
+  const { mountedEditor, fileId, passiveMirror, inlineEnabled, columnEnabled } = params
   const eligible = useAppStore((state) => {
     const file = openFileById(state.openFiles, fileId)
     return !!file && canUseChangesModeForFile(file)
@@ -56,7 +59,7 @@ export function useMonacoGitBlame(params: {
   const statusBarEnabled = useAppStore(
     (state) => state.statusBarVisible && state.statusBarItems.includes('git-blame')
   )
-  const enabled = eligible && !passiveMirror && (inlineEnabled || statusBarEnabled)
+  const enabled = eligible && !passiveMirror && (inlineEnabled || columnEnabled || statusBarEnabled)
 
   // Survives inline-toggle reruns; a different file or HEAD replaces it on the next load.
   const loadedRef = useRef<LoadedBlame | null>(null)
@@ -77,11 +80,10 @@ export function useMonacoGitBlame(params: {
     // Blame owed while inactive; the pane loads it once it becomes active.
     let loadOwed = false
 
-    const lineBlameAtCursor = (): LineBlame | null => {
+    const lineBlameAt = (lineNumber: number): LineBlame | null => {
       const loaded = loadedRef.current
       const model = ed.getModel()
-      const position = ed.getPosition()
-      if (!loaded || !model || !position) {
+      if (!loaded || !model) {
         return null
       }
       const versionId = model.getAlternativeVersionId()
@@ -91,7 +93,7 @@ export function useMonacoGitBlame(params: {
           lines: mapBufferLinesToHead(loaded.headLines, model.getLinesContent())
         }
       }
-      const headLine = mapping.lines?.[position.lineNumber - 1]
+      const headLine = mapping.lines?.[lineNumber - 1]
       if (headLine === undefined) {
         return null
       }
@@ -101,6 +103,15 @@ export function useMonacoGitBlame(params: {
       const commit = loaded.blame.commits[commitIndexForHeadLine(loaded.blame.ranges, headLine)]
       return commit ? { kind: 'commit', commit } : null
     }
+
+    const lineBlameAtCursor = (): LineBlame | null => {
+      const position = ed.getPosition()
+      return position ? lineBlameAt(position.lineNumber) : null
+    }
+
+    const blameColumn = columnEnabled
+      ? createBlameColumn(ed, { loaded: () => loadedRef.current, lineBlameAt })
+      : null
 
     // The status bar shows blame only for the front editor tab; a terminal or browser in front keeps
     // the remembered file id.
@@ -133,6 +144,7 @@ export function useMonacoGitBlame(params: {
     }
 
     const update = (): void => {
+      blameColumn?.sync()
       // Inactive panes do no work: a split of the same file would otherwise remap per keystroke.
       if (!isActivePane()) {
         decorations.clear()
@@ -283,8 +295,9 @@ export function useMonacoGitBlame(params: {
       }
       unsubscribeHead()
       decorations.clear()
+      blameColumn?.dispose()
       // Dimmed, not cleared: the next active editor takes it over without the status bar shifting.
       releaseFocusedLineBlame(ownerId)
     }
-  }, [mountedEditor, enabled, fileId, inlineEnabled])
+  }, [mountedEditor, enabled, fileId, inlineEnabled, columnEnabled])
 }

@@ -13,6 +13,7 @@ import type { NativeChatIdleStopSettings } from '../native-chat/settings/native-
 import type { SharedCodexServersSettings } from '../native-chat/settings/native-chat-shared-codex-servers'
 import type { NativeChatUsageLimitAutoContinueSettings } from '../native-chat/settings/native-chat-usage-limit-auto-continue'
 import type { EditorTypographySettings } from '../editor/appearance/editor-typography-settings-types'
+import type { EditorBlameColumnSettings } from '../editor/appearance/editor-blame-column-settings-types'
 import type { PluginAppearanceSettings } from '../plugins/appearance/plugin-appearance-settings-types'
 import type { PluginFileTypeSuggestionSettings } from '../plugins/contributions/plugin-file-type'
 import type { PluginUpdatePolicySettings } from '../plugins/catalog/plugin-update-policy'
@@ -61,6 +62,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
   EditorTypographySettings &
+  EditorBlameColumnSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
   PluginSystemSettings &

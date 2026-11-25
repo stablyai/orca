@@ -3395,6 +3395,35 @@ html.native-shell .app-layout {
   margin-left: 3em;
 }
 
+/* Blame column in the line-number gutter; width must match BLAME_CELL_CH in git-blame-column.ts. */
+.monaco-editor .orca-git-blame-cell {
+  position: absolute;
+  left: 0;
+  width: 22ch;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
+}
+
+.monaco-editor .orca-git-blame-cell-uncommitted {
+  font-style: italic;
+}
+
+/* Newer commits get a stronger tint; the oldest level (3) stays untinted. */
+.monaco-editor .orca-git-blame-age-0 {
+  background-color: color-mix(in srgb, var(--chart-2) 24%, transparent);
+}
+
+.monaco-editor .orca-git-blame-age-1 {
+  background-color: color-mix(in srgb, var(--chart-2) 14%, transparent);
+}
+
+.monaco-editor .orca-git-blame-age-2 {
+  background-color: color-mix(in srgb, var(--chart-2) 7%, transparent);
+}
+
 .monaco-editor .orca-conflict-marker-label {
   color: var(--destructive);
   font-family: var(--font-sans, system-ui, sans-serif);

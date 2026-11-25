@@ -1489,7 +1489,11 @@
       "inlineBlameKeywordBlame": "blame",
       "inlineBlameKeywordGit": "git",
       "inlineBlameKeywordAuthor": "author",
-      "inlineBlameKeywordAnnotation": "annotation"
+      "inlineBlameKeywordAnnotation": "annotation",
+      "blameColumnTitle": "Git blame column",
+      "blameColumnDescription": "Show who last changed each line, and when, beside the line numbers.",
+      "blameColumnKeywordAnnotate": "annotate",
+      "blameColumnKeywordGutter": "gutter"
     },
     "openInApp": {
       "preset": {
