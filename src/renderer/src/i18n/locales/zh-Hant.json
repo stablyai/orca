@@ -1724,6 +1724,7 @@
           "spaces": "空格",
           "link": "連結",
           "tabs": "分頁",
+          "tab_characters": "定位字元",
           "trim": "去除空白",
           "root": "根目錄",
           "word_wrap": "自動換行",

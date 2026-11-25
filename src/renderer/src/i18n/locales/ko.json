@@ -1005,6 +1005,7 @@
           "spaces": "공백",
           "link": "링크",
           "tabs": "탭",
+          "tab_characters": "탭 문자",
           "trim": "다듬기",
           "root": "루트",
           "word_wrap": "자동 줄 바꿈",

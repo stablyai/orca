@@ -922,6 +922,7 @@
           "spaces": "空格",
           "link": "链接",
           "tabs": "标签页",
+          "tab_characters": "制表符",
           "trim": "去除",
           "root": "根目录",
           "word_wrap": "自动换行",

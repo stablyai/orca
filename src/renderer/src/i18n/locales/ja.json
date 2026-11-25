@@ -658,6 +658,7 @@
           "spaces": "スペース",
           "link": "リンク",
           "tabs": "タブ",
+          "tab_characters": "タブ文字",
           "trim": "トリム",
           "root": "ルート",
           "word_wrap": "行の折り返し",
