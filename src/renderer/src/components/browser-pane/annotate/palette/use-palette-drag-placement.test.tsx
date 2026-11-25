@@ -91,11 +91,11 @@ describe('annotate palette resting place', () => {
     act(() => controls.setMinTop(8))
     fireEvent.pointerUp(grip, { pointerId: 1, clientX: 300, clientY: 10 })
 
-    expect(controls.top).toBeCloseTo(22.4)
+    expect.soft(controls.top).toBeCloseTo(22.4)
     // (22.4 - 8) / (400 - 38 - 16)
-    expect(controls.saved.y).toBeCloseTo(0.04162, 5)
-    expect(controls.saved.x).toBe(0.5)
-    expect(controls.shownY).toBeCloseTo(0.04162, 5)
+    expect.soft(controls.saved.y).toBeCloseTo(0.04162, 5)
+    expect.soft(controls.saved.x).toBe(0.5)
+    expect.soft(controls.shownY).toBeCloseTo(0.04162, 5)
   })
 
   it('keeps a saved height behind an anchored edge when the key against the edge moves nothing', () => {
@@ -111,18 +111,18 @@ describe('annotate palette resting place', () => {
     expect(controls.saved.y).toBe(1)
 
     fireEvent.keyDown(grip, { key: 'ArrowUp' })
-    expect(controls.top).toBe(52)
-    expect(controls.saved.y).toBe(1)
+    expect.soft(controls.top).toBe(52)
+    expect.soft(controls.saved.y).toBe(1)
     // Closing find shows the saved bottom: 8 + (136 - 38 - 16) * 1.
     act(() => controls.setMinTop(8))
-    expect(controls.top).toBe(90)
+    expect.soft(controls.top).toBe(90)
   })
 
   it('saves the top when a key does move the palette up to it', () => {
     const grip = mount({ x: 0.5, y: 0.05 }, 8)
     fireEvent.keyDown(grip, { key: 'ArrowUp' })
-    expect(controls.saved.y).toBe(0)
-    expect(controls.top).toBe(8)
+    expect.soft(controls.saved.y).toBe(0)
+    expect.soft(controls.top).toBe(8)
   })
 
   it('leaves the height where it rests on a sideways drag that snaps back to the saved centre', () => {
@@ -140,8 +140,8 @@ describe('annotate palette resting place', () => {
     fireEvent.pointerMove(grip, { pointerId: 1, clientX: 305, clientY: 50, buttons: 1 })
     fireEvent.pointerUp(grip, { pointerId: 1, clientX: 305, clientY: 50 })
 
-    expect(controls.saved).toEqual({ x: 0.5, y: 0.5 })
-    expect(controls.top).toBe(162)
-    expect(controls.shownY).toBe(shownY)
+    expect.soft(controls.saved).toEqual({ x: 0.5, y: 0.5 })
+    expect.soft(controls.top).toBe(162)
+    expect.soft(controls.shownY).toBe(shownY)
   })
 })
