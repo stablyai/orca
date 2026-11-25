@@ -60,14 +60,6 @@ export function noteKeptClaudeAgentReplaced(session: {
   session.events?.publish()
 }
 
-/** Chats whose kept agent this app read to its end, so the journal already holds its transcript. */
-const readToEnd = new Set<string>()
-
-/** True once after a chat's kept agent ended here: the next start has nothing to catch up on. */
-export function takeKeptClaudeAgentReadToEnd(chatKey: string): boolean {
-  return readToEnd.delete(chatKey)
-}
-
 function isKeptConnection(
   connection: ClaudeStreamJsonConnection
 ): connection is ClaudeKeptAgentConnection {
@@ -114,7 +106,12 @@ export function claudeChatConnectionOpener(
 
 /** The agent had already ended, or the daemon answered with a refusal; a lost reply proves nothing. */
 function relayWriteNeverReachedAgent(error: Error): boolean {
-  return ('code' in error && error.code === 'EPIPE') || !(error instanceof DaemonProtocolError)
+  return (
+    ('code' in error && error.code === 'EPIPE') ||
+    !(error instanceof DaemonProtocolError) ||
+    // The daemon refused before writing: the relay is gone or no longer this app's.
+    /^Relay not (found|attached to this client)$/.test(error.message)
+  )
 }
 
 /** Lines the SDK consumes itself and never yields as messages. */
@@ -237,11 +234,6 @@ export async function openKeptClaudeAgentConnection(
     readingBarrier?.resolve()
     readingBarrier = null
     responder.dispose()
-    // Only an agent Orca itself ended is known read to its end: one that ended on its own may have
-    // left output a lost daemon or an unreadable spool never relayed.
-    if (closing && child.outcomeLost !== true) {
-      readToEnd.add(chatKey)
-    }
     terminalError = withLostProviderOutcome(
       claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus),
       child

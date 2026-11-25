@@ -131,7 +131,9 @@ export async function beginStructuredAgentSessionInputHandover(
           const mode = await waitForPromiseWithSignal(
             deps.serialize(sessionId, async () => {
               await validate(signal)
-              return reason === 'tools' ? null : deps.immediatePermission?.(sessionId)
+              return reason === 'tools' || reason === 'replaced'
+                ? null
+                : deps.immediatePermission?.(sessionId)
             }),
             signal
           )
@@ -178,7 +180,8 @@ export async function beginStructuredAgentSessionInputHandover(
                 (!!latest &&
                   (deps.adapter.permissionModeRequiresAcquisition?.(sessionId, latest) ??
                     latest !== binding.permissionMode))
-              const acquire = reason === 'tools' ? await toolsDue() : permissionAcquire
+              const acquire =
+                reason === 'tools' ? await toolsDue() : reason === 'replaced' || permissionAcquire
               if (!acquire) {
                 return null
               }

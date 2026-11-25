@@ -3,7 +3,8 @@ import type { AgentJournalMessageItem } from '../../../../shared/agent-session/j
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 
 /** Why an unwritten input needs a new child: its permission mode, or tools changed since launch. */
-export type StructuredAgentSessionAcquireReason = 'permission' | 'auto' | 'tools'
+/** `replaced`: the agent ended under this message, which a fresh agent takes as is. */
+export type StructuredAgentSessionAcquireReason = 'permission' | 'auto' | 'tools' | 'replaced'
 
 export type StructuredAgentSessionInputAdmission =
   | { kind: 'prepare' }

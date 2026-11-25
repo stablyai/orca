@@ -290,5 +290,5 @@ async function replaceKeptClaudeAgent(
     return { state: 'rejected', ...claudeWriteFailureRejection(error) }
   }
   noteKeptClaudeAgentReplaced(session)
-  throw new StructuredAgentSessionInputNotAdmitted(undefined, 'auto')
+  throw new StructuredAgentSessionInputNotAdmitted(undefined, 'replaced')
 }
