@@ -1349,6 +1349,36 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "mcpServers": {
+      "agents": {
+        "all": "所有智能体",
+        "allOff": "全部关闭",
+        "allOn": "全部开启",
+        "none": "没有智能体",
+        "some": "{{on}}/{{total}} 个智能体",
+        "someOff": "{{count}} 个智能体已关闭",
+        "title": "智能体"
+      },
+      "connection": {
+        "headers": "请求头",
+        "title": "连接"
+      },
+      "fileAgent": {
+        "allow": "允许",
+        "line": "Orca 会把你的 MCP 服务器写入 {{agent}} 的设置文件（{{file}}），你自己添加的条目不会被改动。",
+        "title": "允许 Orca 修改 {{agent}} 的 MCP 文件吗？"
+      },
+      "launch": {
+        "args": "参数",
+        "command": "命令",
+        "env": "环境变量",
+        "title": "启动"
+      },
+      "shared": {
+        "line": "占用更少内存。服务器在工作区文件夹之外运行。",
+        "title": "多个智能体共用一个进程"
+      }
     }
   },
   "menu": {
