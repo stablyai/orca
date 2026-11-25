@@ -2,6 +2,7 @@ import { extname } from 'node:path'
 import type { ConnectorAsker } from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorActionResponse } from '../../shared/connector-action-contract'
 import type { ConnectorResult } from '../connector-cloud/connector-cloud-request'
+import { connectorFileLines } from '../../shared/connectors/connector-file-lines'
 
 /** The images on a request, saved where a chat's attachments live; each path is one the agent can
  *  read as an image. Never throws: an image that can't be had is left to the agent's own download. */
@@ -17,22 +18,12 @@ export const MAX_ASKER_IMAGE_BYTES = 10 * 1024 * 1024
 /** Short of the cloud's lease on the delivery, which resends one not taken in time. */
 export const ASKER_IMAGES_BUDGET_MS = 10_000
 
-// A file the request lists under its words, as Orca Cloud writes one: `[image: name, file F0123]`.
-const IMAGE_LINE = /^\[image: .+, file ([A-Za-z0-9]{1,64})\]$/
-const FILE_LINE = /^\[(?:image|file): .+, file [A-Za-z0-9]{1,64}\]$|^\[file Slack does not show\]$/
-
-/** The ids of the images a request lists, in order, up to the most a turn takes. Only the lines at
- *  its very end are a list: the same words typed higher up are the person's own. */
+/** The ids of the images a request lists, in order, up to the most a turn takes. */
 export function askerImageIds(text: string): string[] {
-  const lines = text.trimEnd().split('\n')
-  const ids: string[] = []
-  for (let index = lines.length - 1; index >= 0 && FILE_LINE.test(lines[index]!); index -= 1) {
-    const id = IMAGE_LINE.exec(lines[index]!)?.[1]
-    if (id) {
-      ids.unshift(id)
-    }
-  }
-  return ids.slice(0, MAX_ASKER_IMAGES)
+  return connectorFileLines(text)
+    .filter((file) => file.image)
+    .slice(0, MAX_ASKER_IMAGES)
+    .map((file) => file.id)
 }
 
 // What an image's first bytes say it is; the agent is told this, never the name Slack gave.
