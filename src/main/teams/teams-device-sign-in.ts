@@ -206,7 +206,12 @@ export async function runTeamsDeviceSignIn(
   }
   // A disconnect or cancel before the save finishes wins: the grant is not kept.
   await saveTeamsAccount(record, { signal }).catch((error: unknown) => {
-    throw signal.aborted ? new Error('The Microsoft sign-in was cancelled.') : error
+    if (!signal.aborted || error === signal.reason) {
+      throw signal.aborted ? new Error('The Microsoft sign-in was cancelled.') : error
+    }
+    // The flow still reads cancelled; the grant left on disk shows in `orca teams status`.
+    console.warn('[teams] a cancelled sign-in could not remove its saved grant', error)
+    throw error
   })
   return record
 }
