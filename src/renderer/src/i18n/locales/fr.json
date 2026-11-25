@@ -20296,6 +20296,12 @@
       "copyCode": "Copier le code",
       "wrapLines": "Retour à la ligne",
       "disableLineWrap": "Désactiver le retour à la ligne",
+      "runInTerminal": "Exécuter",
+      "runRunning": "Exécution…",
+      "runExited": "Sortie {{code}}",
+      "runTimedOut": "Arrêté après 5 minutes",
+      "runClosed": "Le terminal s’est fermé avant la fin",
+      "runFailed": "Impossible de l’exécuter",
       "context": {
         "unavailable": "L'utilisation du contexte n'est pas encore connue. Elle sera disponible après la prochaine réponse de l'agent.",
         "summary": "Contexte : {{used}} / {{window}} tokens ({{percent}} %), estimation basée sur la dernière réponse.",

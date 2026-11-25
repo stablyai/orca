@@ -21515,6 +21515,12 @@
       "copyCode": "複製程式碼",
       "wrapLines": "自動換行",
       "disableLineWrap": "停用自動換行",
+      "runInTerminal": "執行",
+      "runRunning": "執行中…",
+      "runExited": "結束代碼 {{code}}",
+      "runTimedOut": "5 分鐘後已停止",
+      "runClosed": "終端機在完成前關閉了",
+      "runFailed": "無法執行",
       "context": {
         "unavailable": "上下文用量暫時未知，將在代理程式下次回應後提供。",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根據上一次回應的估算值。",

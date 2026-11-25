@@ -21822,6 +21822,12 @@
       },
       "wrapLines": "Quebrar linhas",
       "disableLineWrap": "Desativar quebra de linha",
+      "runInTerminal": "Executar",
+      "runRunning": "Executando…",
+      "runExited": "Saída {{code}}",
+      "runTimedOut": "Interrompido após 5 minutos",
+      "runClosed": "O terminal fechou antes de terminar",
+      "runFailed": "Não foi possível executar",
       "context": {
         "unavailable": "O uso de contexto ainda não é conhecido. Ele fica disponível após a próxima resposta do agente.",
         "summary": "Contexto: {{used}} / {{window}} tokens ({{percent}}%), estimado a partir da última resposta.",

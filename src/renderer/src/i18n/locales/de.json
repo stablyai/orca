@@ -20299,6 +20299,12 @@
       "copyCode": "Code kopieren",
       "wrapLines": "Zeilen umbrechen",
       "disableLineWrap": "Zeilenumbruch deaktivieren",
+      "runInTerminal": "Ausführen",
+      "runRunning": "Läuft…",
+      "runExited": "Exit {{code}}",
+      "runTimedOut": "Nach 5 Minuten gestoppt",
+      "runClosed": "Das Terminal wurde vor dem Ende geschlossen",
+      "runFailed": "Konnte nicht ausgeführt werden",
       "context": {
         "unavailable": "Die Kontextnutzung ist noch nicht bekannt. Nach der nächsten Antwort des Agenten ist sie verfügbar.",
         "summary": "Kontext: {{used}} / {{window}} Token ({{percent}} %), anhand der letzten Antwort geschätzt.",

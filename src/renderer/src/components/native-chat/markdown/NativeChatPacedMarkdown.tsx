@@ -12,6 +12,7 @@ export function NativeChatPacedMarkdown({
   content,
   streaming,
   savedRevision,
+  renderSettledCodeBlock,
   ...props
 }: Omit<
   ComponentProps<typeof NativeChatMarkdown>,
@@ -21,13 +22,17 @@ export function NativeChatPacedMarkdown({
   streaming: boolean
   /** The row's saved journal revision, where it has one. */
   savedRevision?: number
+  /** Replaces `renderCodeBlock` once the whole reply is drawn, so a block never acts on part of its text. */
+  renderSettledCodeBlock?: ComponentProps<typeof NativeChatMarkdown>['renderCodeBlock']
 }): React.JSX.Element {
   const root = useRef<HTMLDivElement | null>(null)
   const paced = useNativeChatPacedText(rowKey, content, streaming, root, savedRevision)
   useKeptMathSelection(root, streaming || paced.revealing)
+  const settled = !streaming && !paced.revealing && paced.text === content
   return (
     <PacedMarkdownBody
       {...props}
+      {...(settled && renderSettledCodeBlock ? { renderCodeBlock: renderSettledCodeBlock } : {})}
       ref={root}
       rowKey={rowKey}
       content={paced.text}
