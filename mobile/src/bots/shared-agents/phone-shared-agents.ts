@@ -4,6 +4,7 @@
 import nacl from 'tweetnacl'
 import {
   SHARED_BOT_HOST_ERRORS,
+  sharedBotHostView,
   type SharedBotHostView
 } from '../../../../src/shared/bots/shared-bot-hosts'
 import type {
@@ -17,9 +18,11 @@ import {
 } from '../../../../src/shared/remote-runtime/relay/client/shared-host-relay-link'
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
 import { MOBILE_RELAY_CLIENT_PLATFORM } from '../../transport/encryption/mobile-relay-client-platform'
+import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../transport/connection/mobile-runtime-client-capabilities'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { PhoneSharedAgentHeld } from './phone-shared-agent-held'
+import { sharedBotHeldRefusal } from '../../../../src/shared/bots/shared-bot-held-routing'
 import {
   awaitingKeyView,
   readComputerShares,
@@ -167,17 +170,14 @@ export class PhoneSharedAgents {
     return this.store
       .list()
       .filter((entry) => entry.pairedHostId === pairedHostId)
-      .map((entry): SharedBotHostView => ({
-        environmentId: entry.environmentId,
-        shareId: entry.shareId,
-        botId: entry.botId,
-        botName: entry.botName,
-        ownerName: entry.ownerName,
-        homeWorkspaceId: null,
-        link: this.linkFor(entry).current(),
-        holds: true,
-        held: this.held.views(entry)
-      }))
+      .map((entry) =>
+        sharedBotHostView(entry, {
+          homeWorkspaceId: null,
+          link: this.linkFor(entry).current(),
+          holds: true,
+          held: this.held.views(entry)
+        })
+      )
       .concat((this.awaitingKey.get(pairedHostId) ?? []).map(awaitingKeyView))
   }
 
@@ -245,29 +245,13 @@ export class PhoneSharedAgents {
       return send || link === 'live' ? null : this.offline(entry, 'agentSession.send')
     }
     const result = await this.held.hold(entry, send)
-    const method = 'agentSession.send'
-    if (result === 'held') {
-      return failure(
-        method,
-        SHARED_BOT_HOST_ERRORS.held,
-        `Waiting for ${entry.ownerName}’s computer`
-      )
-    }
     if (result === 'unshared') {
       this.forget(entry.shareId)
-      return failure(
-        method,
-        SHARED_BOT_HOST_ERRORS.unshared,
-        `${entry.ownerName} no longer shares this agent with you`
-      )
     }
-    return result === 'too-large'
-      ? failure(
-          method,
-          SHARED_BOT_HOST_ERRORS.tooLarge,
-          `Too large to hold; send it when ${entry.ownerName}’s computer is online`
-        )
-      : this.offline(entry, method)
+    const refusal = sharedBotHeldRefusal(result, entry.ownerName)
+    return refusal
+      ? failure('agentSession.send', ...refusal)
+      : this.offline(entry, 'agentSession.send')
   }
 
   private offline(entry: PhoneSharedAgent, method: string): RpcFailure {
@@ -290,6 +274,7 @@ export class PhoneSharedAgents {
     if (!link) {
       link = new SharedHostRelayLink<PhoneSharedAgent>({
         platform: MOBILE_RELAY_CLIENT_PLATFORM,
+        clientCapabilities: MOBILE_RUNTIME_CLIENT_CAPABILITIES,
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),
         onLinkChanged: (next) => {

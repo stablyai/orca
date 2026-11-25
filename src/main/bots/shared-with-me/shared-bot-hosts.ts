@@ -3,7 +3,7 @@
 import type { SharedBotHostFailures } from './shared-bot-host-failures'
 import {
   SHARED_BOT_HOST_ERRORS,
-  SHARED_HOSTS_HOLD_WHILE_AWAY,
+  sharedBotHostView,
   type SharedBotHostsState
 } from '../../../shared/bots/shared-bot-hosts'
 import type { RelayClientPlatform } from '../../../shared/remote-runtime/relay/client/relay-client-platform'
@@ -112,17 +112,14 @@ export class SharedBotHosts {
   }
 
   views(): SharedBotHostsState['hosts'] {
-    return this.listed().map((entry) => ({
-      environmentId: entry.environmentId,
-      shareId: entry.shareId,
-      botId: entry.botId,
-      botName: entry.botName,
-      ownerName: entry.ownerName,
-      homeWorkspaceId: entry.homeWorkspaceId ?? null,
-      link: this.linkFor(entry).current(),
-      holds: SHARED_HOSTS_HOLD_WHILE_AWAY && entry.hostKey !== undefined,
-      held: SHARED_HOSTS_HOLD_WHILE_AWAY ? this.held.views(entry) : []
-    }))
+    return this.listed().map((entry) =>
+      sharedBotHostView(entry, {
+        homeWorkspaceId: entry.homeWorkspaceId ?? null,
+        link: this.linkFor(entry).current(),
+        holds: entry.hostKey !== undefined,
+        held: this.held.views(entry)
+      })
+    )
   }
 
   /** The kept shares, but for those the cloud's last answer no longer lists. */

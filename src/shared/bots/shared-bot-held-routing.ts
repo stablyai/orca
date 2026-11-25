@@ -3,6 +3,7 @@
 import type { SharedHostLink } from '../remote-runtime/relay/client/shared-host-relay-link'
 import {
   isSharedBotNewChatId,
+  SHARED_BOT_HOST_ERRORS,
   SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHeldState
 } from './shared-bot-hosts'
@@ -54,4 +55,28 @@ export function sendsHeldTo(
       sharedBotHeldChatId(message) === chatId &&
       (heldStates.get(message.clientMessageId) ?? 'waiting') === 'waiting'
   )
+}
+
+/** How a held send ended, as the device that tried it tells the chat. */
+export type SharedBotHoldOutcome = 'held' | 'too-large' | 'unshared' | 'failed'
+
+/** The error code and words a hold answers the send with; null for a failed hold, which reads as
+ *  the host being offline. */
+export function sharedBotHeldRefusal(
+  outcome: SharedBotHoldOutcome,
+  ownerName: string
+): readonly [code: string, message: string] | null {
+  switch (outcome) {
+    case 'held':
+      return [SHARED_BOT_HOST_ERRORS.held, `Waiting for ${ownerName}’s computer`]
+    case 'too-large':
+      return [
+        SHARED_BOT_HOST_ERRORS.tooLarge,
+        `Too large to hold; send it when ${ownerName}’s computer is online`
+      ]
+    case 'unshared':
+      return [SHARED_BOT_HOST_ERRORS.unshared, `${ownerName} no longer shares this agent with you`]
+    case 'failed':
+      return null
+  }
 }

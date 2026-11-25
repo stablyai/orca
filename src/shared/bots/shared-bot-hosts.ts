@@ -38,6 +38,26 @@ export type SharedBotHostView = {
   held: SharedBotHeldView[]
 }
 
+/** A share as a device lists it, with how that device reaches it; nothing holds while held sends
+ *  are off. */
+export function sharedBotHostView(
+  share: Pick<SharedBotHostView, 'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName'>,
+  reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'holds' | 'held'>
+): SharedBotHostView {
+  const { environmentId, shareId, botId, botName, ownerName } = share
+  const holds = SHARED_HOSTS_HOLD_WHILE_AWAY && reach.holds
+  return {
+    environmentId,
+    shareId,
+    botId,
+    botName,
+    ownerName,
+    ...reach,
+    holds,
+    held: holds ? reach.held : []
+  }
+}
+
 /** What main publishes: the shared agents, and whether this account's Orca Cloud takes shares
  *  (its shares route answers); null until it first answers either way. */
 export type SharedBotHostsState = {

@@ -25,7 +25,13 @@ import {
   openBotTeamShareHeldMessage,
   sealBotTeamShareOffer
 } from '../../../../src/shared/bots/bot-team-share-seal'
-import { SHARED_BOT_HOST_ERRORS } from '../../../../src/shared/bots/shared-bot-hosts'
+import {
+  SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY
+} from '../../../../src/shared/bots/shared-bot-hosts'
+
+// Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: their tests run again when it is on.
+const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
 import { structuredAgentSessionMessageSendMutation } from '../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { hashRelayCredential } from '../../../../src/shared/remote-runtime/relay/relay-credential-hash'
 import type { RpcResponse } from '../../../../src/shared/remote-runtime/rpc/rpc-response-shape'
@@ -137,54 +143,61 @@ beforeEach(() => {
 })
 
 describe('a page’s call to a shared agent', () => {
-  it('holds a send with the share credential, sealed to the pinned host, and queues the next behind it', async () => {
-    let now = 1_000
-    const agents = new PhoneSharedAgents(() => now)
-    const desktop = computer()
-    const held = cloud()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
-    const page = routeSharedAgentCalls(desktop.client as unknown as RpcClient, 'computer-1', agents)
-    await agents.syncComputer('computer-1', desktop.client)
+  heldIt(
+    'holds a send with the share credential, sealed to the pinned host, and queues the next behind it',
+    async () => {
+      let now = 1_000
+      const agents = new PhoneSharedAgents(() => now)
+      const desktop = computer()
+      const held = cloud()
+      const page = routeSharedAgentCalls(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+        desktop.client as unknown as RpcClient,
+        'computer-1',
+        agents
+      )
+      await agents.syncComputer('computer-1', desktop.client)
 
-    const first = await page.sendRequest('agentSession.send', send('m1'), SHARED)
-    expect(first.ok ? null : first.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
-    expect(desktop.desktopCalls).toEqual([])
-    const [hold] = held.calls
-    const credential = hold?.authorization.replace('Bearer ', '') ?? ''
-    expect(hold).toMatchObject({
-      url: 'https://cloud.example/v1/shares/share-1/messages',
-      method: 'POST'
-    })
-    expect(hashRelayCredential(credential)).toBe(desktop.asks[0]?.credentialHash)
-    const opened = openBotTeamShareHeldMessage(PRIMITIVES, {
-      hostSecretKey: HOST.secretKey,
-      hostKey: HOST_KEY,
-      sealed: ConnectorShareHoldRequestBody.parse(hold?.body).sealed,
-      expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
-    })
-    expect(opened?.devicePublicKey).toBe(desktop.asks[0]?.devicePublicKey)
+      const first = await page.sendRequest('agentSession.send', send('m1'), SHARED)
+      expect(first.ok ? null : first.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+      expect(desktop.desktopCalls).toEqual([])
+      const [hold] = held.calls
+      const credential = hold?.authorization.replace('Bearer ', '') ?? ''
+      expect(hold).toMatchObject({
+        url: 'https://cloud.example/v1/shares/share-1/messages',
+        method: 'POST'
+      })
+      expect(hashRelayCredential(credential)).toBe(desktop.asks[0]?.credentialHash)
+      const opened = openBotTeamShareHeldMessage(PRIMITIVES, {
+        hostSecretKey: HOST.secretKey,
+        hostKey: HOST_KEY,
+        sealed: ConnectorShareHoldRequestBody.parse(hold?.body).sealed,
+        expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
+      })
+      expect(opened?.devicePublicKey).toBe(desktop.asks[0]?.devicePublicKey)
 
-    // Still waiting: the next send joins the queue behind it.
-    held.setStates([{ clientMessageId: 'm1', state: 'waiting' }])
-    await agents.refreshHeld()
-    await page.sendRequest('agentSession.send', send('m2'), SHARED)
-    expect(held.calls.filter((call) => call.method === 'POST')).toHaveLength(2)
-    expect(held.calls.find((call) => call.method === 'GET')?.authorization).toBe(
-      `Bearer ${credential}`
-    )
+      // Still waiting: the next send joins the queue behind it.
+      held.setStates([{ clientMessageId: 'm1', state: 'waiting' }])
+      await agents.refreshHeld()
+      await page.sendRequest('agentSession.send', send('m2'), SHARED)
+      expect(held.calls.filter((call) => call.method === 'POST')).toHaveLength(2)
+      expect(held.calls.find((call) => call.method === 'GET')?.authorization).toBe(
+        `Bearer ${credential}`
+      )
 
-    // Orca Cloud says the first landed; the second, never read again, reads Not sent past its wait.
-    held.setStates([
-      { clientMessageId: 'm1', state: 'delivered' },
-      { clientMessageId: 'm2', state: 'waiting' }
-    ])
-    await agents.refreshHeld()
-    now += HELD_WAIT_MS
-    expect(agents.views('computer-1')[0]?.held.map((message) => message.state)).toEqual([
-      'delivered',
-      'not_sent'
-    ])
-  })
+      // Orca Cloud says the first landed; the second, never read again, reads Not sent past its wait.
+      held.setStates([
+        { clientMessageId: 'm1', state: 'delivered' },
+        { clientMessageId: 'm2', state: 'waiting' }
+      ])
+      await agents.refreshHeld()
+      now += HELD_WAIT_MS
+      expect(agents.views('computer-1')[0]?.held.map((message) => message.state)).toEqual([
+        'delivered',
+        'not_sent'
+      ])
+    }
+  )
 
   it('goes to the computer when it names no shared agent of this phone', async () => {
     const agents = new PhoneSharedAgents(() => 1_000)
@@ -207,40 +220,43 @@ describe('a page’s call to a shared agent', () => {
     expect(namesPhoneSharedAgent(agents, 'computer-2', SHARED.envelope)).toBe(false)
   })
 
-  it('keeps reading held states while one waits, backing off while Orca Cloud does not answer', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    try {
-      const agents = new PhoneSharedAgents(() => 1_000)
-      const desktop = computer()
-      const held = cloud(1)
-      const page = routeSharedAgentCalls(
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
-        desktop.client as unknown as RpcClient,
-        'computer-1',
-        agents
-      )
-      await agents.syncComputer('computer-1', desktop.client)
-      await page.sendRequest('agentSession.send', send('m1'), SHARED)
-      const reads = () => held.calls.filter((call) => call.method === 'GET').length
+  heldIt(
+    'keeps reading held states while one waits, backing off while Orca Cloud does not answer',
+    async () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+      try {
+        const agents = new PhoneSharedAgents(() => 1_000)
+        const desktop = computer()
+        const held = cloud(1)
+        const page = routeSharedAgentCalls(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: routing reads only sendRequest and subscribe of the computer's client.
+          desktop.client as unknown as RpcClient,
+          'computer-1',
+          agents
+        )
+        await agents.syncComputer('computer-1', desktop.client)
+        await page.sendRequest('agentSession.send', send('m1'), SHARED)
+        const reads = () => held.calls.filter((call) => call.method === 'GET').length
 
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(reads()).toBe(1)
-      held.setStates([{ clientMessageId: 'm1', state: 'delivered' }])
-      // The failed read waits twice as long before the next.
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(reads()).toBe(1)
-      await vi.advanceTimersByTimeAsync(30_000)
-      expect(reads()).toBe(2)
-      expect(agents.views('computer-1')[0]?.held.map((message) => message.state)).toEqual([
-        'delivered'
-      ])
-      // Nothing waits, so nothing reads again.
-      await vi.advanceTimersByTimeAsync(10 * 60_000)
-      expect(reads()).toBe(2)
-    } finally {
-      vi.useRealTimers()
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(reads()).toBe(1)
+        held.setStates([{ clientMessageId: 'm1', state: 'delivered' }])
+        // The failed read waits twice as long before the next.
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(reads()).toBe(1)
+        await vi.advanceTimersByTimeAsync(30_000)
+        expect(reads()).toBe(2)
+        expect(agents.views('computer-1')[0]?.held.map((message) => message.state)).toEqual([
+          'delivered'
+        ])
+        // Nothing waits, so nothing reads again.
+        await vi.advanceTimersByTimeAsync(10 * 60_000)
+        expect(reads()).toBe(2)
+      } finally {
+        vi.useRealTimers()
+      }
     }
-  })
+  )
 })
 
 describe('a page frame before the phone’s shared agents are loaded', () => {

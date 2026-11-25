@@ -15,7 +15,10 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RpcResponse } from '../../../shared/remote-runtime/rpc/rpc-response-shape'
 import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
-import { sharedBotHeldChat } from '../../../shared/bots/shared-bot-held-routing'
+import {
+  sharedBotHeldChat,
+  sharedBotHeldRefusal
+} from '../../../shared/bots/shared-bot-held-routing'
 import { handOffSharedBotMessage, type HandOffResult } from './shared-bot-hand-off'
 import {
   sharedBotHostKey,
@@ -149,31 +152,15 @@ export class SharedBotHeldSends {
     if (result?.kind === 'held' && content) {
       this.uploads.release(content.paths)
     }
-    if (result?.kind === 'held') {
-      return sharedBotFailure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.held,
-        `Waiting for ${entry.ownerName}’s computer`
-      )
-    }
-    if (result?.kind === 'too-large') {
-      return sharedBotFailure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.tooLarge,
-        `Too large to hold; send it when ${entry.ownerName}’s computer is online`
-      )
-    }
-    if (result?.kind === 'failed' && result.failure.error === UNKNOWN_SHARE_REFUSAL) {
+    const unshared = result?.kind === 'failed' && result.failure.error === UNKNOWN_SHARE_REFUSAL
+    if (unshared) {
       // Revoked: the cloud's list drops it now, not at the next idle read.
       this.deps.changed()
-      return sharedBotFailure(
-        'agentSession.send',
-        SHARED_BOT_HOST_ERRORS.unshared,
-        `${entry.ownerName} no longer shares this agent with you`
-      )
     }
+    const refusal =
+      result && sharedBotHeldRefusal(unshared ? 'unshared' : result.kind, entry.ownerName)
     // Not held (refused, unsupported, no cloud): still never sent live ahead of the queue.
-    return sharedBotOffline(entry)
+    return refusal ? sharedBotFailure('agentSession.send', ...refusal) : sharedBotOffline(entry)
   }
 
   /**
