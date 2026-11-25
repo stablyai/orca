@@ -22318,6 +22318,7 @@
         "openFullPage": "페이지 열기",
         "onAgent": "{{name}}에서",
         "open": "열기",
+        "openNamed": "{{name}} 열기",
         "savedWhen": "저장됨: {{when}}"
       },
       "botContext": {

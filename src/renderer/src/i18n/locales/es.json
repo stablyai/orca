@@ -22201,6 +22201,7 @@
         "openFullPage": "Abrir página",
         "onAgent": "con {{name}}",
         "open": "Abrir",
+        "openNamed": "Abrir {{name}}",
         "savedWhen": "Guardada: {{when}}"
       },
       "connectorOffer": {

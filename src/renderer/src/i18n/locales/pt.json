@@ -24075,6 +24075,7 @@
         "openFullPage": "Abrir página",
         "onAgent": "em {{name}}",
         "open": "Abrir",
+        "openNamed": "Abrir {{name}}",
         "savedWhen": "Salva: {{when}}"
       },
       "connectorOffer": {

@@ -1,11 +1,17 @@
 import { defineFixture, type ComponentFixture } from '../../../component-fixtures/component-fixture'
-import { EVENT_ONLY_SCHEDULE } from '../../../../../shared/automation-event-triggers'
+import {
+  EVENT_ONLY_SCHEDULE,
+  type AutomationEventTrigger
+} from '../../../../../shared/automation-event-triggers'
 import { botAutomationFacts } from '../../../../../shared/bots/bot-automation-rows'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import { makeAutomation } from '../../automations/automations-page-fixtures'
 import { NativeChatAutomationSavedRow } from './NativeChatAutomationSavedRow'
 import { NativeChatWaitRow } from './NativeChatWaitRow'
-import { NativeChatVisualOwnerContext } from '../media/visuals/native-chat-visual-owner'
+import {
+  NativeChatVisualOwnerContext,
+  type NativeChatVisualOwner
+} from '../media/visuals/native-chat-visual-owner'
 import { nativeChatAppearanceStyle } from '../appearance/native-chat-appearance-style'
 import {
   NativeChatDisclosureContext,
@@ -55,6 +61,39 @@ const scenarios = {
     id: 'long-name',
     name: 'A longer automation name for reviewing the release checklist and following up on every unresolved item'
   },
+  // Several rooms fill the Saved line; it is cut before "paused", which stays in view.
+  pausedLong: {
+    ...base,
+    id: 'paused-long',
+    name: 'Incident triage',
+    enabled: false,
+    ...EVENT_ONLY_SCHEDULE,
+    on: ['incidents', 'oncall-escalations', 'customer-support-urgent', 'release-war-room'].map(
+      (room): AutomationEventTrigger => ({
+        id: room,
+        source: 'slack',
+        event: 'message',
+        in: [`slack:T1:${room}`],
+        names: { [`slack:T1:${room}`]: `#${room}` }
+      })
+    )
+  },
+  // One unbroken saved place name: opened Details wrap it rather than cut it.
+  longFacts: {
+    ...base,
+    id: 'long-facts',
+    name: 'Watch the long channel',
+    ...EVENT_ONLY_SCHEDULE,
+    on: [
+      {
+        id: 's',
+        source: 'slack',
+        event: 'message',
+        in: ['slack:T1:C9'],
+        names: { 'slack:T1:C9': `#${'customer-escalations-'.repeat(6)}archive` }
+      }
+    ]
+  },
   wait: {
     ...base,
     id: 'wait',
@@ -67,12 +106,12 @@ const scenarios = {
 
 type Scenario = keyof typeof scenarios
 
-const OWNER = {
+const OWNER: NativeChatVisualOwner = {
   target: { kind: 'local' },
   sessionId: 'fixture-chat',
   worktreeId: 'folder:fixture',
   tabId: 'fixture-tab'
-} as const
+}
 
 function stubHost(): void {
   const runtime: unknown = window.api.runtime
@@ -159,5 +198,9 @@ export const longNameWide = transcriptFixture('longName', 640)
 export const longNameNarrow = transcriptFixture('longName', 380)
 export const waitWide = transcriptFixture('wait', 640)
 export const waitNarrow = transcriptFixture('wait', 380)
+export const pausedLongWide = transcriptFixture('pausedLong', 640)
+export const pausedLongNarrow = transcriptFixture('pausedLong', 380)
+export const longFactsWide = transcriptFixture('longFacts', 640, true)
+export const longFactsNarrow = transcriptFixture('longFacts', 380, true)
 export const expandedWide = transcriptFixture('schedule', 640, true)
 export const expandedNarrow = transcriptFixture('schedule', 380, true)

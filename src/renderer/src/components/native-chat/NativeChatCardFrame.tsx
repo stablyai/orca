@@ -8,7 +8,6 @@ export function NativeChatCardFrame({
   status,
   trailing,
   className,
-  headingClassName,
   title,
   footer,
   label,
@@ -21,7 +20,6 @@ export function NativeChatCardFrame({
   status?: ReactNode
   trailing?: ReactNode
   className?: string
-  headingClassName?: string
   title?: ReactNode
   /** The action bar, as `NativeChatCardActions`. */
   footer?: ReactNode
@@ -44,12 +42,7 @@ export function NativeChatCardFrame({
         <div className="min-w-0 flex-1">
           {heading || status || trailing ? (
             // A long state or translation wraps under the kind line rather than being cut off.
-            <div
-              className={cn(
-                'flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground',
-                headingClassName
-              )}
-            >
+            <div className="flex flex-wrap items-baseline gap-x-2 text-xs text-muted-foreground">
               <span className="min-w-0 [overflow-wrap:anywhere]">{heading}</span>
               {status || trailing ? (
                 <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-1.5">

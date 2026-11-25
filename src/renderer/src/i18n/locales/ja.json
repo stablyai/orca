@@ -21703,6 +21703,7 @@
         "openFullPage": "ページを開く",
         "onAgent": "{{name}} で実行",
         "open": "開く",
+        "openNamed": "{{name}} を開く",
         "savedWhen": "保存時: {{when}}"
       },
       "connectorOffer": {

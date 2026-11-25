@@ -1,8 +1,9 @@
-import { useRef } from 'react'
+import { useContext, useId, useRef } from 'react'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
 import { botAutomationWhen } from '@/components/bots/bot-automation-when'
@@ -26,8 +27,12 @@ import { requestNativeChatComposerFocus } from '../composer/focus/native-chat-co
 import { ROW_NOTE } from './NativeChatAutomationRowFrame'
 import { NativeChatAutomationMark } from './NativeChatAutomationMark'
 import { NativeChatCardAvatar, NativeChatCardFrame } from '../NativeChatCardFrame'
-import { NativeChatMessageTimestamp } from '../messages/rows/NativeChatMessageTimestamp'
-import { NativeChatExpandable } from '../messages/disclosure/NativeChatExpandable'
+import {
+  NativeChatMessageTimestamp,
+  useNativeChatMessageTimeLabel
+} from '../messages/rows/NativeChatMessageTimestamp'
+import { NativeChatToolRunWindowContext } from '../tools/runs/native-chat-tool-run-window-context'
+import { RUN_LINK_BUTTON } from './automation-run-link-button'
 import { NativeChatWebhookSetupCard } from './NativeChatWebhookSetupCard'
 
 // Every automation card in a chat shares this prefix, so opening one closes the rest.
@@ -99,15 +104,19 @@ export function NativeChatAutomationSavedRow({
     ...(automation.enabled ? [] : [t('components.native-chat.automationSaved.paused', 'paused')])
   ].filter(Boolean)
   const label = wording.say(saved.change === 'updated' ? 'updatedAutomation' : 'createdAutomation')
-  // One folded line: the trigger as saved, and that it was saved paused.
-  const saving = [
-    when
-      ? t('components.native-chat.automationSaved.savedWhen', 'Saved: {{when}}', { when })
-      : null,
-    automation.enabled ? null : t('components.native-chat.automationSaved.paused', 'paused')
-  ]
-    .filter(Boolean)
-    .join(' · ')
+  const paused = !automation.enabled
+  const savedWhen = when
+    ? t('components.native-chat.automationSaved.savedWhen', 'Saved: {{when}}', { when })
+    : null
+  const pausedWord = savedWhen
+    ? t('components.native-chat.automationSaved.paused', 'paused')
+    : wording.say('paused')
+  const time = useNativeChatMessageTimeLabel(timestamp)
+  // Find searches drawn, unclipped text: while it has a query the saved facts are drawn whole, as
+  // the row did before; the live Details still wait for a real open.
+  const { findActive } = useContext(NativeChatToolRunWindowContext)
+  const shown = open || findActive
+  const detailsId = useId()
   if (hookId && owner) {
     // Its URL is what the user needs next, so a webhook automation is a card, not a folded row.
     return (
@@ -119,7 +128,13 @@ export function NativeChatAutomationSavedRow({
       />
     )
   }
-  const Chevron = open ? ChevronUp : ChevronDown
+  const openAutomation = (): void =>
+    openBotAutomation(
+      getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
+      automation.id,
+      null
+    )
+  const Chevron = shown ? ChevronUp : ChevronDown
   return (
     <div
       onKeyDown={(event) => {
@@ -131,66 +146,92 @@ export function NativeChatAutomationSavedRow({
         }
       }}
     >
-      <NativeChatCardFrame
-        className="native-chat-automation-saved"
-        headingClassName="mb-0.5 text-2xs"
-        avatar={
-          <NativeChatCardAvatar className="native-chat-automation-saved-avatar">
+      <NativeChatCardFrame className="native-chat-automation-saved">
+        <div className="relative flex gap-3">
+          {/* The whole header opens Details, as the row did; only Open sits above it. */}
+          <button
+            ref={toggle}
+            type="button"
+            aria-expanded={shown}
+            aria-controls={shown ? detailsId : undefined}
+            aria-label={[label, automation.name, savedWhen, paused ? pausedWord : null, time]
+              .filter(Boolean)
+              .join(', ')}
+            title={automation.name}
+            onClick={() => setOpen(!open)}
+            className="absolute -inset-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+          <NativeChatCardAvatar className="native-chat-automation-saved-avatar pointer-events-none">
             <NativeChatAutomationMark
               mark={automationRowMark(automation)}
               className="size-4 text-foreground"
             />
           </NativeChatCardAvatar>
-        }
-        heading={label}
-        trailing={
-          <NativeChatMessageTimestamp
-            timestamp={timestamp}
-            className="text-2xs text-muted-foreground"
-          />
-        }
-      >
-        <div className="flex items-end justify-between gap-3">
-          <button
-            ref={toggle}
-            type="button"
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-            className="flex min-w-0 flex-1 items-end justify-between gap-2 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <span className="min-w-0">
-              <span
-                className="block truncate text-sm font-semibold text-foreground"
-                title={automation.name}
+          <div className="pointer-events-none min-w-0 flex-1">
+            <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2 text-2xs text-muted-foreground">
+              <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+              <NativeChatMessageTimestamp
+                timestamp={timestamp}
+                className="ml-auto text-2xs text-muted-foreground"
+              />
+            </div>
+            <div className="flex items-end justify-between gap-3">
+              <div className="flex min-w-0 flex-1 items-end justify-between gap-2">
+                <div className="min-w-0">
+                  <span
+                    className={cn(
+                      'block text-sm font-semibold text-foreground',
+                      findActive ? '[overflow-wrap:anywhere]' : 'truncate'
+                    )}
+                  >
+                    {automation.name}
+                  </span>
+                  {savedWhen || paused ? (
+                    // A long trigger is cut before "paused", never the other way round.
+                    <span className="flex min-w-0 items-end gap-1 text-2xs text-muted-foreground">
+                      {savedWhen ? (
+                        <span
+                          data-saved-when
+                          className={cn(
+                            'min-w-0 [overflow-wrap:anywhere]',
+                            !findActive && 'line-clamp-2'
+                          )}
+                        >
+                          {savedWhen}
+                        </span>
+                      ) : null}
+                      {paused ? (
+                        <span data-saved-paused className="shrink-0 whitespace-nowrap">
+                          {savedWhen ? `· ${pausedWord}` : pausedWord}
+                        </span>
+                      ) : null}
+                    </span>
+                  ) : null}
+                </div>
+                <Chevron className="mb-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                className="pointer-events-auto relative"
+                aria-label={t('components.native-chat.automationSaved.openNamed', 'Open {{name}}', {
+                  name: automation.name
+                })}
+                onClick={openAutomation}
               >
-                {automation.name}
-              </span>
-              {saving ? (
-                <span className="line-clamp-2 text-2xs text-muted-foreground">{saving}</span>
-              ) : null}
-            </span>
-            <Chevron className="mb-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-          </button>
-          <Button
-            type="button"
-            variant="outline"
-            size="xs"
-            aria-label={wording.say('openAutomation')}
-            onClick={() =>
-              openBotAutomation(
-                getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
-                automation.id,
-                null
-              )
-            }
-          >
-            {t('components.native-chat.automationSaved.open', 'Open')}
-          </Button>
+                {t('components.native-chat.automationSaved.open', 'Open')}
+              </Button>
+            </div>
+          </div>
         </div>
-        <NativeChatExpandable open={open}>
-          {open ? (
-            <div className="mt-2 border-t border-border pt-2">
-              <p className={ROW_NOTE}>{facts.join(' · ')}</p>
+        {shown ? (
+          <div
+            id={detailsId}
+            className="mt-2 ml-11 border-t border-border pt-2 [overflow-wrap:anywhere]"
+          >
+            <p className={ROW_NOTE}>{facts.join(' · ')}</p>
+            {open ? (
               <NativeChatAutomationCardDetails
                 automationId={automation.id}
                 environmentId={
@@ -198,9 +239,14 @@ export function NativeChatAutomationSavedRow({
                 }
                 onEditInChat={owner ? () => draftChangeInChat(owner, automation.name) : null}
               />
+            ) : null}
+            <div className="mt-2">
+              <button type="button" className={RUN_LINK_BUTTON} onClick={openAutomation}>
+                {wording.say('openAutomation')}
+              </button>
             </div>
-          ) : null}
-        </NativeChatExpandable>
+          </div>
+        ) : null}
       </NativeChatCardFrame>
     </div>
   )

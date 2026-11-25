@@ -23032,6 +23032,7 @@
         "openFullPage": "Sayfayı aç",
         "onAgent": "{{name}} üzerinde",
         "open": "Aç",
+        "openNamed": "{{name}} öğesini aç",
         "savedWhen": "Kaydedildi: {{when}}"
       },
       "usageLimitActions": {

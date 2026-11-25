@@ -21964,6 +21964,7 @@
         "openFullPage": "打开页面",
         "onAgent": "由 {{name}} 运行",
         "open": "打开",
+        "openNamed": "打开 {{name}}",
         "savedWhen": "已保存：{{when}}"
       },
       "botContext": {
