@@ -5914,7 +5914,7 @@
           "preservedTitle": "{{value0}} に加えた編集内容は別に保存されました",
           "preservedDescription": "Orca はスキルを更新し、編集内容を {{value0}} に保存しました。",
           "uncertainTitle": "{{value0}} でのスキルの更新を確認できませんでした",
-          "uncertainDescription": "Orca は {{value0}} 上のスキルを更新した可能性がありますが、結果を確認できませんでした。更新中にスキルを編集した場合、そのコピーは {{value1}} にあります。"
+          "uncertainDescriptionKept": "Orca は {{value0}} 上のスキルを更新した可能性がありますが、結果を確認できませんでした。更新中にスキルを編集した場合、そのコピーは {{value1}} にあるか、スキルフォルダーに残っています。"
         },
         "SkillBackupPathLine": {
           "movedTo": "古いコピーの移動先:",
@@ -20800,7 +20800,7 @@
         "monitor": "モニター",
         "task": "タスク",
         "workerCount_other": "{{count}} 件のワーカー",
-        "stoppedByYou": "手動で停止しました",
+        "stopped": "停止済み",
         "finished": "完了",
         "failedCount": "失敗 {{count}} 件",
         "needsYouCount": "対応待ち {{count}} 件",
@@ -26141,7 +26141,8 @@
       "startFromScratch": "最初から作成"
     },
     "errors": {
-      "unsavedDrafts": "ボットのフォルダーに未保存の編集内容があります。保存するかエディターを閉じてから、もう一度削除してください。"
+      "unsavedDrafts": "ボットのフォルダーに未保存の編集内容があります。保存するかエディターを閉じてから、もう一度削除してください。",
+      "purposeTooLongForHost": "{{host}} の Orca では、用途は 200 文字までです。短くするか、{{host}} の Orca を更新してください。"
     },
     "automations": {
       "paused": "一時停止中",

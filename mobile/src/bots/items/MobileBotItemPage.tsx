@@ -13,6 +13,7 @@ import {
   type BotItem
 } from '../../../../src/shared/bots/bot-items'
 import { botItemStatusName } from '../../../../src/shared/bots/bot-item-status-name'
+import { isBotItemReplyingTo } from '../../../../src/shared/bots/bot-item-replying'
 import type { BotChatTreeWorker } from '../../../../src/shared/bots/bot-chat-tree'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
 import { MobileEdgeFade } from '../../components/list/MobileEdgeFade'
@@ -128,13 +129,16 @@ export function MobileBotItemPage({
     pending.shown,
     boxEmpty
   )
-  // A reply already on its way answers the question, before the host's read says so.
-  const replying = pending.shown.some(({ failed }) => !failed)
+  const openAsk = view.item ? botItemOpenAsk(view.item, view.events) : null
+  // A reply already on its way answers its question, before the host's read says so.
+  const replying = pending.shown.some((entry) => isBotItemReplyingTo(entry, openAsk?.askId ?? null))
   const { askOpen, askShown, ...ask } = useMobileBotItemAskSlot({
-    ask: view.item ? botItemOpenAsk(view.item, view.events) : null,
+    itemKey,
+    ask: openAsk,
     online: online && !view.failed,
     replying,
     loaded: view.item !== null,
+    host: view.item ? { item: view.item, events: view.events } : null,
     onOpenWithCard: jump.top,
     send: quick
   })

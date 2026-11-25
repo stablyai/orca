@@ -9,18 +9,20 @@ export function appRailSlotCapacity(contentHeightPx: number): number {
 export type AppRailPartition = {
   /** Destinations kept on the rail, from the top; the rest go into More in order. */
   shownDestinations: number
+  /** The "…" slot is More (folded items plus Customize) rather than Customize alone. */
   more: boolean
   helpInMore: boolean
   settingsInMore: boolean
 }
 
 /**
- * Fit Workspaces, the destinations, Help and Settings into `capacity` slots. When they don't all fit, More takes a
- * slot and things fold into it from the bottom of the top group up: destinations first, then Help, then Settings.
- * Workspaces and More always stay (the floor); the rail never scrolls.
+ * Fit Workspaces, the destinations, the "…" slot, Help and Settings into `capacity` slots. The "…" slot is Customize
+ * when everything fits; otherwise it becomes More (which also holds Customize) and things fold into it from the bottom
+ * of the top group up: destinations first, then Help, then Settings. Workspaces and "…" always stay (the floor); the
+ * rail never scrolls.
  */
 export function partitionAppRail(destinationCount: number, capacity: number): AppRailPartition {
-  if (1 + destinationCount + 2 <= capacity) {
+  if (1 + destinationCount + 1 + 2 <= capacity) {
     return {
       shownDestinations: destinationCount,
       more: false,

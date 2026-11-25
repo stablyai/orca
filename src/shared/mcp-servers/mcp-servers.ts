@@ -86,6 +86,16 @@ export type McpServer = {
   plugin?: { key: string; name: string }
 }
 
+/**
+ * What `orca mcp connect` bridges an agent's stdio to: nothing (off for that agent, workspace or
+ * caller), an HTTP address with the headers to send (Orca's relay and its token when Orca holds the
+ * sign-in), or the command that starts it. It carries a token and secret env, so it's never logged.
+ */
+export type McpServerConnection =
+  | { on: false }
+  | { on: true; url: string; headers: Record<string, string> }
+  | { on: true; command: string; args: string[]; env: Record<string, string> }
+
 /** A server set up in an agent's own config or a repo's files, merged across agents by URL or command. */
 export type DiscoveredMcpServer = {
   /** Opaque; names this entry to mcpServers.move and mcpServers.copy. */
@@ -116,6 +126,8 @@ export type McpServerTypedFailureCode =
   | 'mcp_server_not_command'
   /** A plugin's server: only its switches change here; the plugin owns the rest. */
   | 'mcp_server_from_plugin'
+  /** The calling session may not use the host's servers (Look around, a bot that hasn't opted in). */
+  | 'mcp_server_not_for_caller'
   /** Declared by the contract; a later host fills it in. */
   | 'mcp_servers_not_yet'
 

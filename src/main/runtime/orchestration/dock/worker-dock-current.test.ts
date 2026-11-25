@@ -69,7 +69,7 @@ it('shows a failure from the last four hours and drops an older one', () => {
   settle(stopped, 'stopped', 2 * HOUR)
   const abandoned = dispatch()
   settle(abandoned, 'abandoned', HOUR)
-  expect(new Set(current())).toEqual(new Set([recent, stopped]))
+  expect(new Set(current())).toEqual(new Set([recent]))
 })
 
 it('drops an acknowledged failure', () => {
@@ -81,17 +81,6 @@ it('drops an acknowledged failure', () => {
     settlements: [{ dispatchId: failed, settlement: settlementOf(failed) }],
     acknowledged: true
   })
-  expect(current()).toEqual([])
-})
-
-it('drops a failure the owner stopped', () => {
-  const stopped = dispatch()
-  settle(stopped, 'stopped', HOUR)
-  expect(current()).toEqual([stopped])
-  db.db
-    .prepare(`INSERT INTO worker_dock_owner_stops(request_id, source, dispatch_id, confirmed, settlement)
-      VALUES('stop-1', ?, ?, 1, ?)`)
-    .run(session, stopped, settlementOf(stopped))
   expect(current()).toEqual([])
 })
 

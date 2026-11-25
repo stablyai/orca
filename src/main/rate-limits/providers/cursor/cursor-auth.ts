@@ -1,7 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { stat } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import { readKeychainPassword } from '../../../macos-keychain/generic-password'
+import { unprotectWindowsDpapiCurrentUser } from '../../../windows-dpapi/current-user-unprotect'
 import { readCursorLinuxKeyringSecret, type CursorLinuxKeyringRead } from './cursor-linux-keyring'
 import {
   getCursorCliAuthPath,
@@ -50,8 +52,15 @@ const cliConfigSchema = z.object({
   authInfo: z.object({ email: z.unknown(), displayName: z.unknown() }).partial().optional()
 })
 
-// Linux cursor-agent keeps this shape in the keyring and leaves only `storedIn` in auth.json.
+// Linux/Windows cursor-agent keep this shape in the OS secret store; auth.json keeps only `storedIn`.
 const cliAuthFileSchema = z.object({ accessToken: z.unknown(), storedIn: z.unknown() }).partial()
+
+// Windows cursor-agent's secret store: `auth.dpapi` next to auth.json, holding a current-user DPAPI blob.
+const dpapiFileSchema = z.object({
+  version: z.literal(1),
+  dpapi: z.string().regex(/^[A-Za-z0-9+/]+={0,2}$/)
+})
+const DPAPI_ERROR = 'Unable to decrypt the Cursor CLI login'
 
 /** `cli-config.json` carries the signed-in identity for keychain-backed CLI sessions. */
 export function readCursorCliIdentity(configPath = getCursorCliConfigPath()): CursorIdentity {
@@ -99,16 +108,17 @@ let linuxKeyringRead: {
   result: Promise<TokenReadResult>
 } | null = null
 
-function tokenFromKeyringRead(read: CursorLinuxKeyringRead): TokenReadResult {
-  if (read.status !== 'ok') {
-    return read
-  }
+function tokenFromSecret(secret: string): TokenReadResult {
   try {
-    const parsed = parseCliCredentials(read.secret)
+    const parsed = parseCliCredentials(secret)
     return parsed.status === 'ok' ? parsed : { status: 'missing' }
   } catch {
     return { status: 'missing' }
   }
+}
+
+function tokenFromKeyringRead(read: CursorLinuxKeyringRead): TokenReadResult {
+  return read.status === 'ok' ? tokenFromSecret(read.secret) : read
 }
 
 async function readLinuxKeyringToken(
@@ -134,6 +144,52 @@ async function readLinuxKeyringToken(
     }
   }
   return linuxKeyringRead.result
+}
+
+type WindowsDpapiRead = { blob: string; result: Promise<TokenReadResult> }
+
+// cursor-agent re-encrypts on every write, so the blob versions the token: one PowerShell run per login
+// change, shared by concurrent reads. A run that never finished is not cached, so the next poll retries.
+let windowsDpapiRead: WindowsDpapiRead | null = null
+
+async function readWindowsDpapiToken(
+  authPath: string,
+  cliFile: CliFileReadResult
+): Promise<CliFileReadResult> {
+  if (cliFile.status !== 'in-keyring') {
+    return cliFile
+  }
+  let blob: string
+  try {
+    const parsed = dpapiFileSchema.safeParse(
+      JSON.parse(await readFile(join(dirname(authPath), 'auth.dpapi'), 'utf8'))
+    )
+    if (!parsed.success) {
+      return { status: 'missing' }
+    }
+    blob = parsed.data.dpapi
+  } catch {
+    return { status: 'missing' }
+  }
+  if (windowsDpapiRead?.blob !== blob) {
+    const read: WindowsDpapiRead = {
+      blob,
+      result: unprotectWindowsDpapiCurrentUser(blob).then(
+        (plaintext): TokenReadResult =>
+          plaintext
+            ? tokenFromSecret(plaintext.toString('utf8'))
+            : { status: 'error', error: DPAPI_ERROR },
+        (): TokenReadResult => {
+          if (windowsDpapiRead === read) {
+            windowsDpapiRead = null
+          }
+          return { status: 'error', error: DPAPI_ERROR }
+        }
+      )
+    }
+    windowsDpapiRead = read
+  }
+  return windowsDpapiRead.result
 }
 
 async function readKeychainToken(): Promise<TokenReadResult> {
@@ -191,7 +247,7 @@ export type CursorAuthReadOptions = {
   desktopStateDbPath?: string
 }
 
-/** Prefer live CLI sessions (OS keychain, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
+/** Prefer live CLI sessions (OS secret store, then legacy auth.json), then IDE sessions; never refresh or write credentials. */
 export async function readCursorAuthSession(
   options: CursorAuthReadOptions = {}
 ): Promise<CursorAuthReadResult> {
@@ -230,7 +286,10 @@ export async function readCursorAuthSession(
     }
   }
 
-  const cliRead = readCliFile()
+  const cliRead =
+    process.platform === 'win32'
+      ? await readWindowsDpapiToken(cliAuthPath, readCliFile())
+      : readCliFile()
   if (cliRead.status === 'error') {
     errors.push(cliRead.error)
   }

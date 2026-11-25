@@ -141,3 +141,22 @@ it('clears all only the settled failures this owner can acknowledge', () => {
     new Set(['home/source/worker/a', 'home/source/worker/c'])
   )
 })
+
+it('closes the card for good when the dock reads another host, so switching back cannot reopen it', async () => {
+  rpc.calls = []
+  type Target = Parameters<typeof useWorkerDockOwnerActions>[0]
+  const hostA: Target = { kind: 'local' }
+  const hostB: Target = { kind: 'environment', environmentId: 'env-b' }
+  const initialProps: { target: Target } = { target: hostA }
+  const hook = renderHook(
+    ({ target }) => useWorkerDockOwnerActions(target, party, undefined, () => {}),
+    { initialProps }
+  )
+  act(() => hook.result.current.open(row('a'), document.createElement('button')))
+  const read = last('orchestration.workerDockResult')
+  hook.rerender({ target: hostB })
+  expect(hook.result.current.dialog).toBeNull()
+  await settle(() => read.resolve(result('a')))
+  hook.rerender({ target: hostA })
+  expect(hook.result.current.dialog).toBeNull()
+})

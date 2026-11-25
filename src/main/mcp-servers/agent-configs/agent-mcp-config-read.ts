@@ -73,7 +73,8 @@ export function valueAtKeyPath(root: unknown, path: readonly string[]): unknown 
 export function agentMcpConfigServersIn(
   location: AgentMcpConfigLocation,
   text: string,
-  skipProject: (projectPath: string) => boolean = () => false
+  skipProject: (projectPath: string) => boolean = () => false,
+  withOrcaOwned = false
 ): AgentMcpConfigServer[] | null {
   const parsed = parseAgentMcpConfigText(text, location.format)
   if (!parsed) {
@@ -82,7 +83,11 @@ export function agentMcpConfigServersIn(
   return agentMcpServerBlocks(location, parsed, skipProject).flatMap((block) =>
     Object.entries(record(valueAtKeyPath(parsed, block.path)) ?? {}).flatMap(([name, raw]) => {
       const entry = agentMcpConfigEntry(name, raw, block.dialect)
-      if (!entry || isOrcaOwnedAgentMcpServer(entry.server) || block.restrictedNames?.has(name)) {
+      if (
+        !entry ||
+        (!withOrcaOwned && isOrcaOwnedAgentMcpServer(entry.server)) ||
+        block.restrictedNames?.has(name)
+      ) {
         return []
       }
       const source: AgentMcpConfigSource = {
@@ -98,7 +103,8 @@ export function agentMcpConfigServersIn(
 
 async function readLocation(
   location: AgentMcpConfigLocation,
-  skipProject?: (projectPath: string) => boolean
+  skipProject?: (projectPath: string) => boolean,
+  withOrcaOwned?: boolean
 ): Promise<AgentMcpConfigServer[]> {
   let text: string
   try {
@@ -109,7 +115,7 @@ async function readLocation(
     }
     return []
   }
-  const servers = agentMcpConfigServersIn(location, text, skipProject)
+  const servers = agentMcpConfigServersIn(location, text, skipProject, withOrcaOwned)
   if (!servers) {
     console.warn(`[mcp-servers] ${location.path} doesn't parse; its servers aren't listed`)
   }
@@ -118,16 +124,20 @@ async function readLocation(
 
 /**
  * The servers one agent loads from its own config: its user files, and with `projectPath` that
- * repo's files too. Orca's own bridge entries are left out.
+ * repo's files too. Orca's own bridge entries are left out unless `withOrcaOwned`.
  */
 export async function readAgentMcpServers(
   agent: McpConfigAgent,
   context: AgentMcpConfigContext,
-  options: { projectPath?: string; skipProject?: (projectPath: string) => boolean } = {}
+  options: {
+    projectPath?: string
+    skipProject?: (projectPath: string) => boolean
+    withOrcaOwned?: boolean
+  } = {}
 ): Promise<AgentMcpConfigServer[]> {
   const locations = await agentMcpConfigLocations(agent, context, options.projectPath)
   const read = await Promise.all(
-    locations.map((location) => readLocation(location, options.skipProject))
+    locations.map((location) => readLocation(location, options.skipProject, options.withOrcaOwned))
   )
   return read.flat()
 }

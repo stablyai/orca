@@ -12,6 +12,8 @@ export function ignoresRemoteSelection(commandPath: readonly string[]): boolean 
     commandPath[0] === 'serve' ||
     // `agent hooks` configures this machine; launch and the ID commands act on the selected host.
     (commandPath[0] === 'agent' && commandPath[1] === 'hooks') ||
+    // The bridge reaches the Orca its entry pins; an agent's inherited selection must not reroute it.
+    commandPath[0] === 'mcp' ||
     commandPath[0] === 'vm' ||
     commandPath[0] === 'agent-context' ||
     commandPath[0] === 'profile' ||

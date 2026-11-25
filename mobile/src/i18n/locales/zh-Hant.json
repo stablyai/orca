@@ -5169,6 +5169,9 @@
       "continuesAt": "將於 {{time}} 繼續",
       "continues": "將於 {{time}} 繼續",
       "hitLimit": "已達上限 · {{time}} 重設"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 個字元的用途說明。請縮短內容，或更新 {{host}} 上的 Orca。"
     }
   },
   "sidebar": {
