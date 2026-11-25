@@ -1,5 +1,6 @@
 import type { ComposerModalData } from './composer-modal-data'
 import { toast } from 'sonner'
+import { agentPickerChatLaunchRefusal } from '@/components/agent/agent-launch-picker-chat-model-refusal'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -233,6 +234,14 @@ function QuickTabBody({
 
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
+      return
+    }
+    const refusal =
+      pickerDraft?.surface === 'chat' && quickAgentPick.entry
+        ? agentPickerChatLaunchRefusal(quickAgentPick.entry, pickerDraft)
+        : null
+    if (refusal) {
+      toast.error(refusal)
       return
     }
     await submitQuick(quickAgent, {

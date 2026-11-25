@@ -27,15 +27,17 @@ function ownDescription(chatOwnSupported: boolean, t: Translate = translate): st
 /** A choice's name as the chat picker shows it; own gets a terminal icon. */
 export function AgentPermissionChoiceName({
   choice,
+  agent,
   ownLabel,
   truncate
 }: {
   choice: AgentPermissionChoice
+  agent?: string
   ownLabel: string
   truncate?: boolean
 }): React.JSX.Element {
   if (choice !== 'own') {
-    return <NativeChatPermissionModeName mode={choice} truncate={truncate} />
+    return <NativeChatPermissionModeName mode={choice} agent={agent} truncate={truncate} />
   }
   return (
     <span className="flex min-w-0 items-center gap-1.5">

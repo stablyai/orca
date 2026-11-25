@@ -35,12 +35,13 @@ import { PermissionChoiceRadioItem } from './PermissionChoiceRadioItem'
 
 export function NativeChatPermissionModeName(props: {
   mode: AgentChatPermissionMode
+  agent?: string | null
   truncate?: boolean
   label?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const Icon = NATIVE_CHAT_PERMISSION_MODE_ICONS[props.mode]
-  const label = props.label ?? nativeChatPermissionModeLabel(props.mode, t)
+  const label = props.label ?? nativeChatPermissionModeLabel(props.mode, t, props.agent)
   const body = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />
@@ -80,7 +81,7 @@ export function NativeChatPermissionModeItems({
           disabled={disabled}
           onSelect={() => onSelect(mode)}
         >
-          <NativeChatPermissionModeName mode={mode} />
+          <NativeChatPermissionModeName mode={mode} agent={agent} />
         </PermissionChoiceRadioItem>
       ))}
     </>
@@ -134,7 +135,7 @@ function NativeChatPermissionModePickerInner({
     }
   )
   const selectedLabel = isAgentChatPermissionMode(shown)
-    ? nativeChatPermissionModeLabel(shown, t)
+    ? nativeChatPermissionModeLabel(shown, t, agent)
     : ownPlan
       ? t('components.native-chat.composer.planMode', 'Plan')
       : own
@@ -142,7 +143,7 @@ function NativeChatPermissionModePickerInner({
         : (currentLabel ?? inherit?.label ?? title)
   const Icon = ownPlan ? PencilRuler : Settings2
   const activeLabel = isAgentChatPermissionMode(activeValue)
-    ? nativeChatPermissionModeLabel(activeValue, t)
+    ? nativeChatPermissionModeLabel(activeValue, t, agent)
     : activeValue === 'own'
       ? ownSettings
       : null

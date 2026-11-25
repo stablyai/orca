@@ -26,11 +26,14 @@ export const NATIVE_CHAT_PERMISSION_MODE_ICONS = {
 
 export function nativeChatPermissionModeLabel(
   mode: AgentChatPermissionMode,
-  t: Translate = translate
+  t: Translate = translate,
+  agent?: string | null
 ): string {
   switch (mode) {
     case 'ask':
-      return t('components.native-chat.composer.permissionAsk', 'Ask for approval')
+      return agent === 'dima'
+        ? t('components.native-chat.composer.permissionReadOnly', 'Read-only')
+        : t('components.native-chat.composer.permissionAsk', 'Ask for approval')
     case 'accept-edits':
       return t('components.native-chat.composer.permissionAcceptEdits', 'Accept edits')
     case 'auto':
@@ -52,7 +55,7 @@ export function nativeChatPermissionModeDescription(
       if (agent === 'dima') {
         return t(
           'components.native-chat.composer.permissionAskReadOnlyDescription',
-          'Only reads; refuses edits and commands instead of asking'
+          'Allows reads. Declines edits and commands.'
         )
       }
       if (agent !== 'claude') {

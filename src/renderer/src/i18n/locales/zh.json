@@ -20334,6 +20334,8 @@
         "tooManyAttachments": "每次最多附加 {{value0}} 个文件",
         "permissions": "权限",
         "permissionAsk": "请求批准",
+        "permissionReadOnly": "只读",
+        "permissionAskReadOnlyDescription": "允许读取，拒绝编辑和执行命令。",
         "permissionAskDescription": "在设置未允许的编辑和命令前询问",
         "permissionAskSharedDescription": "在执行尚未获准的编辑或命令前询问",
         "permissionAcceptEdits": "接受编辑",
@@ -26242,6 +26244,9 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
+    "chatModelShared": "多个提供商都提供 {{model}}，{{agent}} 的聊天无法区分它们。请选择其他模型，或在终端启动。",
+    "chatModelUnlisted": "{{agent}} 的模型列表中找不到 {{model}}。请选择其他模型。",
+    "chatModelUnproven": "{{agent}} 的模型列表仍在加载，暂时无法确认 {{model}}。请稍后重试，或在终端启动。",
     "refreshModels": "刷新模型",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
     "catalogLoadFailed": "无法加载 {{agent}} 模型",
