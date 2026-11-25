@@ -30,6 +30,7 @@ import {
   setSelectedCodexAccountIdForTarget
 } from './runtime-selection'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
+import { hostSystemDefaultUsageId } from '../../../shared/agent-accounts/host-system-default-usage'
 
 type CodexAccountRegistrationDependencies = {
   store: Store
@@ -271,7 +272,10 @@ export class CodexAccountRegistration {
 
     const outgoingAccountId = getSelectedCodexAccountIdForTarget(settings, targetSelection)
     // Cache outgoing usage without delaying the already-persisted account addition.
-    this.startQuotaRefresh(outgoingAccountId, targetSelection)
+    this.startQuotaRefresh(
+      outgoingAccountId ?? hostSystemDefaultUsageId('codex', targetSelection),
+      targetSelection
+    )
     return this.dependencies.selection.snapshot()
   }
 

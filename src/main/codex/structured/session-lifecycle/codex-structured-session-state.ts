@@ -136,6 +136,8 @@ export type CodexStructuredSessionAdapterDeps = {
     verifiedOnly?: boolean
   ) => ReturnType<AgentModelCatalogStore['get']>
   demandModelCatalog?: (sessionId: string, legacy?: boolean) => Promise<unknown>
+  /** The host's Suggested prompts setting; off means no `thread/sample` requests. */
+  promptSuggestions?: () => boolean
 }
 
 export type CodexSession = Pick<CodexBotLaunchOptions, 'readOnly'> & {

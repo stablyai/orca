@@ -19,7 +19,6 @@ export const YOLO_TUI_AGENT_ARGS: Partial<Record<TuiAgent, string>> = {
   codex: '--dangerously-bypass-approvals-and-sandbox',
   qoder: '--dangerously-skip-permissions',
   'qoder-cn': '--dangerously-skip-permissions',
-  gemini: '--yolo',
   antigravity: '--dangerously-skip-permissions',
   aider: '--yes-always',
   amp: '--dangerously-allow-all',

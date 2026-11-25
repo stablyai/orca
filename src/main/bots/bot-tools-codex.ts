@@ -1,6 +1,6 @@
 // A Codex bot's own tools reach its threads as thread config, so they need no folder trust, and a
 // thread started anywhere else never sees them.
-import type { BotLaunchTools } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -22,7 +22,7 @@ export function isTakenByCodexStdio(
  * server stops every thread from starting, so such a server is left out and theirs runs instead.
  */
 export function codexBotToolsThreadConfig(
-  tools: BotLaunchTools,
+  tools: SessionMcpTools,
   ownerStdioNames: readonly string[]
 ): Record<string, unknown> {
   return Object.fromEntries(

@@ -38,6 +38,12 @@ export const MOBILE_WEB_PAGE_ROUTES = [
     grants: ['navigate', 'storage', 'externalLink', 'haptics'],
     optionalGrants: [DEVICE_STORE_GRANT]
   },
+  // MCP servers needs navigate/storage for Back and the shared layout wall, externalLink for a server's sign-in page.
+  {
+    pathname: '/h/[hostId]/mcp',
+    grants: ['navigate', 'storage', 'externalLink', 'haptics'],
+    optionalGrants: [DEVICE_STORE_GRANT]
+  },
   // Create Workspace overlay needs navigate to close/open session; shared form/layout supply other grants.
   {
     pathname: '/h/[hostId]/new-workspace',

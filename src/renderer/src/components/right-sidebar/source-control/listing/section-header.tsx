@@ -12,6 +12,7 @@ export function SectionHeader({
   conflictCount = 0,
   isCollapsed,
   onToggle,
+  buttonRef,
   actions
 }: {
   label: string
@@ -21,6 +22,7 @@ export function SectionHeader({
   conflictCount?: number
   isCollapsed: boolean
   onToggle: () => void
+  buttonRef?: React.Ref<HTMLButtonElement>
   actions?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
@@ -31,6 +33,7 @@ export function SectionHeader({
     <div className={cn('pl-1 pr-3 pt-3', compact ? 'pb-0' : 'pb-1')}>
       <div className="group/section flex items-center gap-x-1 rounded-md pr-1 hover:bg-accent hover:text-accent-foreground">
         <Button
+          ref={buttonRef}
           type="button"
           variant="ghost"
           size={compact ? 'chip' : 'xs'}
