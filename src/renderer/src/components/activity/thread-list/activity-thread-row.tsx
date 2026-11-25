@@ -103,9 +103,12 @@ export const ActivityThreadRow = React.memo(function ActivityThreadRow({
   const agentLabel = formatAgentTypeLabel(thread.agentType)
   const sendTarget = useActivityThreadSendTarget(thread.paneKey)
   const sendStatus = sendTarget?.target.status
-  // While the send picker is open, a click anywhere on a target row picks it instead of opening the thread.
+  // While the send picker is open, a click on a target row picks it instead of opening the thread; row controls keep their own action.
   const handleSendTargetClickCapture = (event: React.MouseEvent) => {
-    if (!sendTarget) {
+    if (
+      !sendTarget ||
+      (event.target instanceof Element && event.target.closest('[data-activity-thread-control]'))
+    ) {
       return
     }
     event.preventDefault()
