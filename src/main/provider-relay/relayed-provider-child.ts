@@ -210,7 +210,7 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
   /** Everything handed on is durable and acked, so a later attach replays nothing twice. */
   async settle(handingOff = false): Promise<void> {
     await this.writing
-    await (handingOff ? this.output.flush() : this.output.settle())
+    await (handingOff ? this.output.flush(EXIT_AFTER_OUTPUT_WAIT_MS) : this.output.settle())
   }
 
   /** The agent keeps running under the daemon; this app stops seeing it. */
