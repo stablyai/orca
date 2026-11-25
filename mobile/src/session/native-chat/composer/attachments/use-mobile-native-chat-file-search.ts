@@ -231,7 +231,9 @@ export function useMobileNativeChatFileSearch(args: {
     },
     [client, inventory, limit, maxAgeMs, setNativeChatFilePaths, worktreeId]
   )
-  loadRef.current = loadNativeChatFiles
+  useEffect(() => {
+    loadRef.current = loadNativeChatFiles
+  }, [loadNativeChatFiles])
 
   return {
     nativeChatFilePaths: answer.paths,
