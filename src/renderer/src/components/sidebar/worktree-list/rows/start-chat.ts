@@ -12,6 +12,7 @@ import {
 } from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { resolveTerminalAgentTabShortcut } from '@/components/terminal/keyboard-shortcuts/terminal-agent-tab-shortcut'
 import { launchAgentTabShortcut } from '@/components/terminal/keyboard-shortcuts/agent-tab-shortcut-launch'
@@ -65,7 +66,7 @@ export async function startGroupChat(
       return
     }
     const state = useAppStore.getState()
-    const previousActiveId = state.activeWorktreeId
+    const createdSession: { key: string | null } = { key: null }
     const created = await submitFolderWorkspaceCreate({
       projectGroup,
       name: '',
@@ -75,13 +76,17 @@ export async function startGroupChat(
       quickAgent: null,
       autoRenameBranchFromWork: undefined,
       agentCmdOverrides: state.settings?.agentCmdOverrides,
-      createFolderWorkspace: (input) =>
-        state.createFolderWorkspace(input, { runtimeEnvironmentId: null }),
+      createFolderWorkspace: async (input) => {
+        const result = await state.createFolderWorkspace(input, { runtimeEnvironmentId: null })
+        createdSession.key = result ? folderWorkspaceKey(result.folderWorkspace.id) : null
+        return result
+      },
       onOpenChange: () => {}
     })
-    // The submit activates the new session; only a changed active id proves it opened.
-    const sessionId = useAppStore.getState().activeWorktreeId
-    if (created && sessionId && sessionId !== previousActiveId) {
+    // The submit returns true even when activation fails, and the user may have switched
+    // meanwhile: start only in the session this created, once it is the active one.
+    const sessionId = createdSession.key
+    if (created && sessionId && useAppStore.getState().activeWorktreeId === sessionId) {
       startProjectChat({ id: sessionId, hostId })
     }
   } catch (error) {
