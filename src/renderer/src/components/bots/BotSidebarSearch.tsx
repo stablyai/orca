@@ -279,7 +279,7 @@ function BotSidebarSearchPanel({
       {hasQuery ? (
         <div
           className={cn(
-            'bot-sidebar-scrollbar flex min-h-0 flex-col overflow-y-auto overscroll-y-contain pb-1 pl-1',
+            'bot-sidebar-scrollbar flex min-h-0 flex-col overflow-y-auto overscroll-y-contain pb-1 px-1',
             // Results start at the top as a list; a no-match line sits in the middle of the held box.
             empty && 'grow justify-center-safe'
           )}
