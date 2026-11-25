@@ -170,6 +170,7 @@ function SessionWorktreeLine({
         <RepoBadgeLabel
           name={worktreeInfo.label}
           color={resolveRepoBadgeColor(repo?.badgeColor)}
+          repo={repo}
           className="min-w-0 max-w-full"
           badgeClassName="size-1.5"
         />

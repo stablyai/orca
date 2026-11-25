@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { ClaudeAgentTeamsTmuxDispatcher } from './claude-agent-teams-tmux-dispatcher'
 import { resolvePathEnvKey } from '../../../pty/environment/windows-path-segment-merge'
+import { teammateMcpRelayEnv } from '../../../mcp-servers/terminal/agent-teams-teammate-mcp-env'
 import type {
   AgentTeam,
   AgentTeamsLaunchEnv,
@@ -55,6 +56,7 @@ export class ClaudeAgentTeamsService {
     if (args.baseEnv.ORCA_ENVIRONMENT) {
       env.ORCA_ENVIRONMENT = args.baseEnv.ORCA_ENVIRONMENT
     }
+    Object.assign(env, teammateMcpRelayEnv(args.baseEnv))
 
     const leader: TeamPane = { fakePaneId: leaderPane, handle: args.leaderHandle, index: 0 }
     this.teams.set(teamId, {

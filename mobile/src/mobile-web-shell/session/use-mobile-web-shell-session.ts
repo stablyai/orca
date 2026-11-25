@@ -73,7 +73,6 @@ export type MobileWebShellSessionView = {
   readonly pageFrame: ShellPageFrame
   // Project Back claims so claim-only events still rerender.
   readonly backClaimed: boolean
-  readonly store: GenerationStore
 }
 
 // Run reducer effects behind an epoch fence so unmount/host change/retry cannot apply abandoned results to the replacement session.
@@ -102,7 +101,8 @@ export function useMobileWebShellSession(args: {
   const runtimeRef = useRef<MobileWebShellRuntime | null>(null)
   runtimeRef.current ??= args.runtime ?? createMobileWebShellRuntime()
   const runtime = runtimeRef.current
-  const [store] = useState(() => runtime.createStore())
+  const [initialStore] = useState(() => runtime.createStore())
+  const storeRef = useRef<GenerationStore | null>(initialStore)
 
   const clientRef = useRef(client)
   clientRef.current = client
@@ -174,11 +174,12 @@ export function useMobileWebShellSession(args: {
       const next = stepped.session.state
       // Take the hold before any effect runs, so another shell's open-cache cannot commit under this one.
       if (next.kind === 'ready' || next.kind === 'activating') {
-        holdRef.current ??= store.holdGeneration(deriveHostCacheKey(hostIdRef.current), {
-          swap: () => dispatch(epoch, { type: 'update-swap' }),
-          askAgain: () => askPagesAgain(hostIdRef.current),
-          latestRound: latestAppResumeRound
-        })
+        holdRef.current ??=
+          storeRef.current?.holdGeneration(deriveHostCacheKey(hostIdRef.current), {
+            swap: () => dispatch(epoch, { type: 'update-swap' }),
+            askAgain: () => askPagesAgain(hostIdRef.current),
+            latestRound: latestAppResumeRound
+          }) ?? null
       } else {
         releaseHold()
       }
@@ -197,7 +198,7 @@ export function useMobileWebShellSession(args: {
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
-    [cancelPending, downloadProgress, releaseHold, store]
+    [cancelPending, downloadProgress, releaseHold]
   )
 
   const invalidate = useCallback((): void => {
@@ -210,21 +211,24 @@ export function useMobileWebShellSession(args: {
 
   const runEffect = useCallback(
     async (epoch: number, flow: number, effect: MobileWebShellSessionEffect): Promise<void> => {
-      await runShellEffect(effect, {
-        store,
-        client,
-        hostId,
-        hostKey,
-        runtime,
-        flow,
-        startedAt: startedAtRef.current,
-        downloads: downloadsRef.current,
-        deadline,
-        manifest: manifestRef,
-        send: (event) => dispatch(epoch, event)
-      })
+      const store = storeRef.current
+      if (store !== null) {
+        await runShellEffect(effect, {
+          store,
+          client,
+          hostId,
+          hostKey,
+          runtime,
+          flow,
+          startedAt: startedAtRef.current,
+          downloads: downloadsRef.current,
+          deadline,
+          manifest: manifestRef,
+          send: (event) => dispatch(epoch, event)
+        })
+      }
     },
-    [client, deadline, dispatch, hostId, hostKey, runtime, store]
+    [client, deadline, dispatch, hostId, hostKey, runtime]
   )
   useEffect(() => {
     runEffectRef.current = (epoch, flow, effect) => void runEffect(epoch, flow, effect)
@@ -414,7 +418,6 @@ export function useMobileWebShellSession(args: {
     reportPagePainted,
     reportPageBackClaim,
     reportSwapSafe,
-    backClaimed,
-    store
+    backClaimed
   }
 }

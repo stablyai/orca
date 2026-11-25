@@ -52,6 +52,9 @@ function readBoundWorker(value: unknown): BoundWorker | null {
     : null
 }
 
+/** How long after a temporary worker finishes its host closes it; the banner's copy and progress follow it. */
+export const WORKER_AUTO_CLOSE_GRACE_MS = 2 * 60_000
+
 /** m:ss until the host's deadline, never below 0:00. */
 export function formatWorkerAutoCloseCountdown(closesAt: string, nowMs: number): string {
   const seconds = Math.max(0, Math.ceil((Date.parse(closesAt) - nowMs) / 1000))

@@ -61,7 +61,8 @@ export const GOOGLE_WRITE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['gmail', 'archive'],
     summary: 'Archive mail (take it out of the inbox)',
-    usage: 'orca gmail archive <gmail:thread:…|gmail:msg:…>... [--account <email>] [--json]',
+    usage:
+      'orca gmail archive <gmail:thread:…|gmail:msg:…|Gmail link>... [--account <email>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'ref', 'account'],
     positionalArgs: ['ref'],
     variadicPositional: true,
@@ -73,7 +74,7 @@ export const GOOGLE_WRITE_COMMAND_SPECS: CommandSpec[] = [
     path: ['gmail', 'label'],
     summary: 'Add or take off Gmail labels by name',
     usage:
-      'orca gmail label <gmail:thread:…|gmail:msg:…>... [--add <label>] [--remove <label>] [--account <email>] [--json]',
+      'orca gmail label <gmail:thread:…|gmail:msg:…|Gmail link>... [--add <label>] [--remove <label>] [--account <email>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'ref', 'add', 'remove', 'account'],
     positionalArgs: ['ref'],
     variadicPositional: true,
@@ -88,7 +89,8 @@ export const GOOGLE_WRITE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['gmail', 'mark-read'],
     summary: 'Mark mail as read',
-    usage: 'orca gmail mark-read <gmail:thread:…|gmail:msg:…>... [--account <email>] [--json]',
+    usage:
+      'orca gmail mark-read <gmail:thread:…|gmail:msg:…|Gmail link>... [--account <email>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'ref', 'account'],
     positionalArgs: ['ref'],
     variadicPositional: true,

@@ -2,20 +2,21 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { isEquivalentPaneKey } from '../../../../../orchestration/db/pane-key-match'
 import {
-  isFailedSetupBinding,
   listWorkerBoundTerminals,
+  setupBindingOutlivesWorker,
   unbindWorkerTerminal,
   type WorkerBoundTerminalRow
 } from '../../../../../orchestration/db/worker-terminal/worker-bound-terminals'
 
 type BoundTerminalCloseRuntime = Pick<
   OrcaRuntimeService,
-  'getTerminalPaneKey' | 'getTerminalHandleForPaneKey' | 'closeTerminal'
+  'getTerminalPaneKey' | 'getTerminalHandleForPaneKey' | 'closeTerminal' | 'isSetupTerminalRunning'
 >
 
 /** After a worker closed: close the terminals bound to it. A failed setup stays open, and bound, to
- *  show its error until the user closes it or a retry succeeds (`closeRetriedFailedSetup`). Never
- *  rejects: the worker's own close has settled, and a row left bound closes on the next release call. */
+ *  show its error until the user closes it or a retry succeeds (`closeRetriedFailedSetup`). A setup
+ *  still running leaves the worker and keeps running, as an ordinary terminal. Never rejects: the
+ *  worker's own close has settled, and a row left bound closes on the next release call. */
 export async function closeWorkerBoundTerminals(
   runtime: BoundTerminalCloseRuntime,
   db: OrchestrationDb,
@@ -24,7 +25,11 @@ export async function closeWorkerBoundTerminals(
   try {
     for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
       // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
-      if (isFailedSetupBinding(db, bound)) {
+      const outlives = setupBindingOutlivesWorker(db, runtime, bound)
+      if (outlives === 'running') {
+        unbindWorkerTerminal(db, bound.terminal_handle)
+      }
+      if (outlives) {
         continue
       }
       await closeBound(runtime, db, bound)
@@ -47,7 +52,7 @@ export async function closeRetriedFailedSetup(
     seen.add(attempt)
     const origin = db.getWorkerTerminalResourceByOwner(attempt)?.origin_dispatch_id ?? attempt
     for (const bound of listWorkerBoundTerminals(db, origin)) {
-      if (isFailedSetupBinding(db, bound)) {
+      if (setupBindingOutlivesWorker(db, runtime, bound) === 'failed') {
         await closeBound(runtime, db, bound)
       }
     }
