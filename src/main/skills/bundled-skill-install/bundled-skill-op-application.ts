@@ -255,10 +255,11 @@ export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<Applie
     primaryDone ||= Boolean(strandedPath)
     // Publication and a recheck are distinct: only the first may be reported as an update.
     const contentApplied = primaryDone && bundledSkillOpKindPublishes(kind)
-    // A cleanup failing beside an already-current copy leaves that copy in place; prove it still is.
+    // A cleanup or retirement failing beside a kept copy leaves that copy in place. It can change
+    // while the later step runs, so recheck it now rather than trust the check made before.
+    const ownKeep = isOwnNameKeep(run, op)
     const currentConfirmed =
-      isOwnNameKeep(run, op) &&
-      (primaryDone || (await verifier(run, op.path, op.observed)().catch(() => false)))
+      ownKeep && (await verifier(run, op.path, op.observed)().catch(() => false))
     const partial = {
       path,
       kind,
@@ -268,7 +269,8 @@ export async function applyOp(run: SkillRun, op: BundledSkillOp): Promise<Applie
       ...backupFields(progress.backups)
     }
     const verified = (primaryDone && kind !== 'keep') || currentConfirmed
-    const satisfiesDependents = primaryDone || currentConfirmed
+    // Links to a kept copy may follow only if it still is as planned.
+    const satisfiesDependents = ownKeep ? currentConfirmed : primaryDone
     if (failure instanceof BundledSkillChangedError) {
       return {
         outcome: { ...partial, status: 'changed' },

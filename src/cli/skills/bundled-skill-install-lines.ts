@@ -71,8 +71,11 @@ function describeOutcomeOp(op: BundledSkillOpOutcome, listPublished: boolean): s
         : 'Changed since it was planned; nothing was written. Run it again to re-plan.'
     case 'skipped':
       return 'Skipped: the shared copy it depends on did not land.'
-    case 'failed':
-      return `Failed: ${op.error ?? 'unknown error'}`
+    case 'failed': {
+      // A later step can fail after the new copy landed; name the copy before the failure.
+      const published = op.contentApplied && listPublished ? PUBLISHED_TEXT[op.kind] : undefined
+      return `${published ? `${published} Failed afterward` : 'Failed'}: ${op.error ?? 'unknown error'}`
+    }
   }
 }
 

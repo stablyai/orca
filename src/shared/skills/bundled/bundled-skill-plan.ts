@@ -138,7 +138,10 @@ export type BundledSkillOpOutcome = {
   strandedPath?: string
   /** The op published its new copy or link before a later check or backup failed. */
   contentApplied?: true
-  /** A kept copy was checked to hold this build's bytes before a later backup failed; nothing was written. */
+  /**
+   * After a later step failed, the kept place was rechecked and still matches the plan: a folder's
+   * bytes, or a link's target (not the bytes it points to). Nothing was written there.
+   */
   currentConfirmed?: true
   /** The refused cross-drive backup's source, including copies moved aside before the attempt. */
   backupRefusal?: BundledSkillBackupRefusal

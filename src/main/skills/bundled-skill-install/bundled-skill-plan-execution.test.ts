@@ -417,43 +417,57 @@ describe('cross-drive backup refusal', () => {
     expect(await readFile(join(backups, backup, 'SKILL.md'), 'utf8')).toBe(`${OLD_TEXT}Late edit\n`)
   })
 
-  it('reports a rechecked keep, not an update, when its forwarded retirement is refused', async () => {
-    const home = await makeSkillHome()
-    const alias = 'former-skill'
-    const former = join(dirname(home.shared), alias)
-    // A current SKILL.md beside an agent's own file is kept, not swapped, so retiring the former
-    // name is the op's only write.
-    await writeCopy(home.shared, NEW_TEXT)
-    await writeFile(join(home.shared, 'notes.md'), 'agent notes\n')
-    await writeCopy(former, OLD_TEXT)
-    const backups = join(home.home, '.agents', '.orca-skill-backups')
-    const late = lateEditingFilesystem(backups, former)
-    const input = {
-      ...serviceInput(home, { agents: ['claude'] }),
-      sources: [{ ...NEW_SOURCE, aliases: [alias] }]
+  it.each(['stable', 'changed'] as const)(
+    'reports a rechecked keep, not an update, when its forwarded retirement is refused (%s copy)',
+    async (kept) => {
+      const home = await makeSkillHome()
+      const alias = 'former-skill'
+      const former = join(dirname(home.shared), alias)
+      // A current SKILL.md beside an agent's own file is kept, not swapped, so retiring the former
+      // name is the op's only write.
+      await writeCopy(home.shared, NEW_TEXT)
+      await writeFile(join(home.shared, 'notes.md'), 'agent notes\n')
+      await writeCopy(former, OLD_TEXT)
+      const backups = join(home.home, '.agents', '.orca-skill-backups')
+      // The kept copy can change while its former name is being retired.
+      const late = lateEditingFilesystem(backups, former, async () => {
+        if (kept === 'changed') {
+          await writeFile(join(home.shared, 'SKILL.md'), 'edited during the retirement\n')
+        }
+      })
+      const input = {
+        ...serviceInput(home, { agents: ['claude'] }),
+        sources: [{ ...NEW_SOURCE, aliases: [alias] }]
+      }
+      const plan = await previewBundledSkillInstall(input)
+      expect(plan.skills[0].ops[0]).toMatchObject({
+        path: home.shared,
+        kind: 'keep',
+        previous: [{ path: former, forward: true }]
+      })
+      const result = await installBundledSkills(
+        { ...input, filesystem: late.filesystem },
+        plan.planDigest
+      )
+      const [shared, link] = result.skills[0].ops
+      expect(shared).toEqual({
+        path: home.shared,
+        kind: 'keep',
+        status: 'failed',
+        error: 'EXDEV',
+        ...(kept === 'stable' && { currentConfirmed: true }),
+        backupRefusal: { path: late.oldPath(), source: 'moved-aside' }
+      })
+      if (kept === 'stable') {
+        expect(link.status).toBe('done')
+        expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
+      } else {
+        // No agent link may point at a copy that changed after its check.
+        expect(link.status).toBe('skipped')
+        expect(await snapshot(home.claude)).toBe('missing')
+      }
     }
-    const plan = await previewBundledSkillInstall(input)
-    expect(plan.skills[0].ops[0]).toMatchObject({
-      path: home.shared,
-      kind: 'keep',
-      previous: [{ path: former, forward: true }]
-    })
-    const result = await installBundledSkills(
-      { ...input, filesystem: late.filesystem },
-      plan.planDigest
-    )
-    const [shared, link] = result.skills[0].ops
-    expect(shared).toEqual({
-      path: home.shared,
-      kind: 'keep',
-      status: 'failed',
-      error: 'EXDEV',
-      currentConfirmed: true,
-      backupRefusal: { path: late.oldPath(), source: 'moved-aside' }
-    })
-    expect(link.status).toBe('done')
-    expect(await readFile(join(home.claude, 'SKILL.md'), 'utf8')).toBe(NEW_TEXT)
-  })
+  )
 })
 
 function refusingFilesystem(
