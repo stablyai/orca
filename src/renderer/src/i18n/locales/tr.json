@@ -23021,7 +23021,13 @@
         "zoomOut": "Uzaklaştır",
         "saveFailed": "Notların kaydedilemedi. Hâlâ burada.",
         "keptUnsaved": "Notlar tutuldu ama kaydedilemedi; yeniden başlatınca kaybolur.",
-        "imageChanged": "Bu görsel mesaj kutusundan çıktı. Notların hâlâ burada."
+        "imageChanged": "Bu görsel mesaj kutusundan çıktı. Notların hâlâ burada.",
+        "goalHeld": "Mesaj kutunuz bir hedef belirliyor ve hedef görsel içeremez. Önce bitirin ya da çıkın.",
+        "keptNoMessageBox": "Notlar {{name}} ile tutuldu. Bu sohbetin mesaj kutusu şu anda kullanılamıyor.",
+        "keptWhileEditing": "Notlar {{name}} ile tutuldu. Eklemek için sıradaki mesajı düzenlemeyi bitirin.",
+        "keptWhileGoal": "Notlar {{name}} ile tutuldu. Mesaj kutunuz bir hedef belirliyor.",
+        "annotateTooLarge": "Bu görsel not çizmek için çok büyük (33 megapikselden fazla).",
+        "sendWhileEditing": "Notlarını düzenlediğiniz görseli kapatın, sonra gönderin."
       }
     },
     "tab": {

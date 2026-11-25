@@ -190,6 +190,22 @@ it('notes on a draft’s images, and notes held for its chat, follow the draft t
   expect(readNativeChatAttachmentNotes(launch, 'img-3') !== null).toBe(deferredRemovals.has(launch))
 })
 
+it('a moved draft’s held notes join the notes its new chat already holds for the same media', () => {
+  const launch = 'native-chat-launch:pane-held'
+  holdNativeChatNotes(SCOPE, '/tmp/dashboard.png', [note(1, 'mine')])
+  holdNativeChatNotes(launch, '/tmp/dashboard.png', [
+    { ...note(1, 'moved'), id: 'moved-1' },
+    { ...note(2, 'moved too'), id: 'moved-2' }
+  ])
+  moveNativeChatComposerDraft(launch, SCOPE)
+  const held = readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')
+  expect(held?.map(({ number, text }) => `${number}:${text}`)).toEqual([
+    '1:mine',
+    '2:moved',
+    '3:moved too'
+  ])
+})
+
 it('a batch that fails part-way takes back the images it already attached', async () => {
   let attached = 0
   const attachGeneratedImage = vi.fn(async () => {

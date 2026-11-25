@@ -1,7 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
 import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
 import { showNativeChatNotesNotice } from './native-chat-notes-notice'
+import {
+  nativeChatNotesBlockedReason,
+  nativeChatNotesKeptText,
+  type NativeChatNotesBlocked
+} from './native-chat-notes-reasons'
 import { NATIVE_CHAT_NOTES_ERROR_ID } from './NativeChatMediaNotesPanel'
 import { useTranslate } from '@/i18n/use-translate'
 import type { PanZoomSize } from '../../../../../../shared/document-preview/pan-zoom-view'
@@ -10,12 +14,12 @@ import type { NativeChatNotesSource } from './native-chat-attachment-notes'
 import type { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import {
   afterComposerRender,
+  announceNativeChatNotesHandOff,
   attachNativeChatNotes,
   detachNativeChatNotes,
   nativeChatNotesComposer,
   nativeChatNotesScopeKey,
   nativeChatNotesStillInDraft,
-  watchNativeChatNotesLeaveDraft,
   NativeChatNotesSupersededError,
   NativeChatNotesUnsavedError,
   type NativeChatNotesComposer
@@ -108,7 +112,7 @@ export function useNativeChatNotesDelivery({
     'Couldn’t save your notes. They’re still here.'
   )
   // A message box that can't say (no notesBlocked) is treated as holding a command; null means admitted.
-  const blocked = !composer
+  const blocked: NativeChatNotesBlocked = !composer
     ? 'unavailable'
     : composer.handle.notesBlocked
       ? composer.handle.notesBlocked()
@@ -123,24 +127,11 @@ export function useNativeChatNotesDelivery({
     ? t('components.native-chat.notes.addFirst', 'Add or discard note {{number}} first', {
         number: editor.pending?.number ?? editor.editing?.number ?? 0
       })
-    : blocked === 'unavailable'
-      ? t(
-          'components.native-chat.notes.noMessageBox',
-          'This chat’s message box isn’t available right now.'
-        )
-      : blocked === 'editing'
-        ? t(
-            'components.native-chat.notes.editingQueued',
-            'Finish editing the queued message first.'
-          )
-        : blocked === 'command'
-          ? t(
-              'components.native-chat.notes.commandHeld',
-              'Your message box holds a command. Send or clear it first.'
-            )
-          : includesMessage
-            ? t('components.native-chat.notes.includesMessage', 'Includes your message')
-            : null
+    : blocked !== null
+      ? nativeChatNotesBlockedReason(t, blocked)
+      : includesMessage
+        ? t('components.native-chat.notes.includesMessage', 'Includes your message')
+        : null
   // Until the image is read there is nothing to draw the marks on, so Send waits for it.
   const canSend =
     notes.length > 0 &&
@@ -282,14 +273,8 @@ export function useNativeChatNotesDelivery({
         showError(unsavedMessage)
         return
       }
-      if (!admitted) {
-        showNativeChatNotesNotice(scopeKey, {
-          text: t(
-            'components.native-chat.notes.keptWithImage',
-            'Notes kept with {{name}}. Your message box holds a command.',
-            { name: title }
-          )
-        })
+      if (blocked !== null) {
+        showNativeChatNotesNotice(scopeKey, { text: nativeChatNotesKeptText(t, blocked, title) })
       }
     } else if (notes.length === 0 && heldIn.current) {
       // Every held note was removed: the hold ends with them.
@@ -306,28 +291,4 @@ export function useNativeChatNotesDelivery({
     }
   }
   return { busy, canSend, sendReason, close, send }
-}
-
-/** "N notes added to your message" with Undo in the message box, live only while those images are
- *  still in the draft. */
-function announceNativeChatNotesHandOff(
-  scopeKey: string,
-  ids: string[],
-  undo: () => void,
-  count: number
-): void {
-  const dismiss = showNativeChatNotesNotice(scopeKey, {
-    text: translate(
-      'components.native-chat.notes.addedToMessage',
-      '{{count}} notes added to your message',
-      { defaultValue_one: '{{count}} note added to your message', count }
-    ),
-    undo: () => {
-      if (nativeChatNotesStillInDraft(scopeKey, ids)) {
-        detachNativeChatNotes(scopeKey, ids)
-        undo()
-      }
-    }
-  })
-  watchNativeChatNotesLeaveDraft(scopeKey, ids, dismiss)
 }

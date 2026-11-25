@@ -20730,7 +20730,13 @@
         "zoomOut": "Zoom arrière",
         "saveFailed": "Impossible d’enregistrer vos notes. Elles sont toujours là.",
         "keptUnsaved": "Notes conservées, mais elles n’ont pas pu être enregistrées et seront perdues au redémarrage.",
-        "imageChanged": "Cette image n’est plus dans la zone de message. Vos notes sont toujours là."
+        "imageChanged": "Cette image n’est plus dans la zone de message. Vos notes sont toujours là.",
+        "goalHeld": "Votre zone de message définit un objectif, qui ne peut pas inclure d’images. Terminez-le ou quittez-le d’abord.",
+        "keptNoMessageBox": "Notes conservées avec {{name}}. La zone de message de cette discussion n’est pas disponible pour le moment.",
+        "keptWhileEditing": "Notes conservées avec {{name}}. Terminez la modification du message en attente pour les ajouter.",
+        "keptWhileGoal": "Notes conservées avec {{name}}. Votre zone de message définit un objectif.",
+        "annotateTooLarge": "Cette image est trop grande pour y dessiner des notes (plus de 33 mégapixels).",
+        "sendWhileEditing": "Fermez l’image dont vous modifiez les notes, puis envoyez."
       }
     },
     "tab": {

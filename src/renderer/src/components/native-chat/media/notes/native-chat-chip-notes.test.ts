@@ -35,6 +35,17 @@ it('a reopened marked chip waits for its original, then reports when it can’t 
   expect(result.current.failed).toBe(true)
 })
 
+it('a reopened marked chip whose notes are on a URL, with no file to read, opens view-only', () => {
+  const { result } = renderHook(() =>
+    useNativeChatNotesOriginal(
+      { ...NOTES, source: { url: 'https://example.test/a.png' } },
+      true,
+      undefined
+    )
+  )
+  expect(result.current).toEqual({ src: undefined, failed: true })
+})
+
 it('reads a drawn image’s bytes before it starts a chip, so a failed read leaves none (F19)', async () => {
   const startImageChip = vi.fn(() => ({ id: 'pending-1', reveal: () => {} }))
   const saveClipboardImage = vi.fn(async () => true)

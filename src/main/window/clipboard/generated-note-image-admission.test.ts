@@ -1,5 +1,8 @@
 import { expect, it } from 'vitest'
-import { isAdmissibleGeneratedNoteImage } from './generated-note-image-admission'
+import {
+  isAdmissibleGeneratedNoteImage,
+  queueGeneratedNoteImageSave
+} from './generated-note-image-admission'
 
 // A whole 2x3 RGBA PNG.
 const PNG_2x3 = Uint8Array.from([
@@ -20,4 +23,33 @@ it('admits a notes PNG only when its image data decodes to exactly its rows', ()
   expect(isAdmissibleGeneratedNoteImage(PNG_2x3)).toBe(true)
   expect(isAdmissibleGeneratedNoteImage(PNG_2x3_TWO_ROWS)).toBe(false)
   expect(isAdmissibleGeneratedNoteImage(PNG_2x3.subarray(0, 60))).toBe(false)
+})
+
+it('saves notes images one at a time, even when one fails', async () => {
+  const order: string[] = []
+  let releaseFirst = (): void => {}
+  const first = queueGeneratedNoteImageSave(
+    () =>
+      new Promise<void>((resolve) => {
+        order.push('first start')
+        releaseFirst = () => {
+          order.push('first end')
+          resolve()
+        }
+      })
+  )
+  const failing = queueGeneratedNoteImageSave(async () => {
+    order.push('second')
+    throw new Error('refused')
+  })
+  const third = queueGeneratedNoteImageSave(async () => {
+    order.push('third')
+  })
+  await Promise.resolve()
+  expect(order).toEqual(['first start'])
+  releaseFirst()
+  await first
+  await expect(failing).rejects.toThrow('refused')
+  await third
+  expect(order).toEqual(['first start', 'first end', 'second', 'third'])
 })

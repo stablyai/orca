@@ -5,7 +5,11 @@ import type { NativeChatComposerNotice } from '../../composer/controls/native-ch
 // The one line a chat's message box shows about notes just added, kept or removed, with its Undo.
 // In the message box rather than a corner toast, so it sits beside what it talks about.
 
-type NotesNotice = { text: string; undo?: () => void }
+/** `ids`: the draft images the line is about. */
+type NotesNotice = { text: string; undo?: () => void; ids?: readonly string[] }
+
+/** A line with Undo goes after this long, and its Undo with it. */
+export const NATIVE_CHAT_NOTES_UNDO_MS = 8000
 
 const notices = new Map<string, NotesNotice>()
 const listeners = new Map<string, Set<() => void>>()
@@ -20,7 +24,11 @@ function notify(scopeKey: string): void {
 export function showNativeChatNotesNotice(scopeKey: string, notice: NotesNotice): () => void {
   notices.set(scopeKey, notice)
   notify(scopeKey)
-  return () => dismissNativeChatNotesNotice(scopeKey, notice)
+  const dismiss = (): void => dismissNativeChatNotesNotice(scopeKey, notice)
+  if (notice.undo) {
+    setTimeout(dismiss, NATIVE_CHAT_NOTES_UNDO_MS)
+  }
+  return dismiss
 }
 
 /** Removes the line, only while it is still `notice` when given, so a newer line survives. */
@@ -30,6 +38,14 @@ export function dismissNativeChatNotesNotice(scopeKey: string, notice?: NotesNot
   }
   if (notices.delete(scopeKey)) {
     notify(scopeKey)
+  }
+}
+
+/** Removes the line about this draft image: reopening it for editing ends that line's Undo. */
+export function dismissNativeChatNotesNoticeFor(scopeKey: string, id: string): void {
+  const notice = notices.get(scopeKey)
+  if (notice?.ids?.includes(id)) {
+    dismissNativeChatNotesNotice(scopeKey, notice)
   }
 }
 
@@ -73,8 +89,11 @@ export function useNativeChatNotesNotice(
             action: {
               label: t('components.native-chat.notes.undo', 'Undo'),
               onClick: () => {
-                dismissNativeChatNotesNotice(scopeKey, notice)
-                undo()
+                // Only the line still showing undoes: an expired or replaced one does nothing.
+                if (notices.get(scopeKey) === notice) {
+                  dismissNativeChatNotesNotice(scopeKey, notice)
+                  undo()
+                }
               }
             }
           }

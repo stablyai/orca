@@ -137,10 +137,15 @@ export function nativeChatSentNotesNumberMax(text: string): number {
   return max
 }
 
+/** `dashboard.png` gives `dashboard-notes.png`; notes on that copy give `dashboard-notes-2.png`, then
+ *  `-3`, so a copy of a copy never reads `-notes-notes`. */
 export function nativeChatNotesImageName(mediaName: string, time: number | undefined): string {
-  const base = mediaName.replace(/\.[^.]+$/, '').replace(/-notes(-\d+)?$/, '')
+  const stem = mediaName.replace(/\.[^.]+$/, '')
+  const marked = /^(.+)-notes(?:-(\d+))?$/.exec(stem)
+  const base = marked ? marked[1] : stem
+  const generation = marked ? Number(marked[2] ?? 1) + 1 : 1
   const frame = time === undefined ? '' : `-${time.toFixed(2).replace('.', '_')}s`
-  return `${base}${frame}-notes.png`
+  return `${base}${frame}-notes${generation > 1 ? `-${generation}` : ''}.png`
 }
 
 /** Output size within the edge limit, keeping the aspect ratio. */

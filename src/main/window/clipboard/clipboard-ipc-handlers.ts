@@ -1,7 +1,10 @@
 import { app, clipboard, ipcMain, nativeImage } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { open, stat } from 'node:fs/promises'
-import { isAdmissibleGeneratedNoteImage } from './generated-note-image-admission'
+import {
+  isAdmissibleGeneratedNoteImage,
+  queueGeneratedNoteImageSave
+} from './generated-note-image-admission'
 import { runProcess } from '@orca/process-host'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesystem-auth'
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
@@ -171,11 +174,13 @@ export function registerClipboardHandlers(
       assertTrustedClipboardSender(event)
       // Notes images arrive as bytes, so the user's clipboard is never read or overwritten.
       if (args?.png !== undefined) {
-        if (!isAdmissibleGeneratedNoteImage(args.png)) {
-          throw new Error('Notes image is not a PNG Orca can save.')
-        }
         const { png, ...target } = args
-        return saveClipboardImageBufferForTarget(Buffer.from(png), target, handlerOptions)
+        return queueGeneratedNoteImageSave(async () => {
+          if (!isAdmissibleGeneratedNoteImage(png)) {
+            throw new Error('Notes image is not a PNG Orca can save.')
+          }
+          return saveClipboardImageBufferForTarget(Buffer.from(png), target, handlerOptions)
+        })
       }
       const source = readClipboardImageSource(clipboard)
       if (!source) {

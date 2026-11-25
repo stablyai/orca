@@ -8,8 +8,8 @@ import {
 
 // Notes a closed viewer could not hand to the message box (it held a command), kept with their chat
 // and media so reopening that media brings them back, across reloads too. They are never sent from
-// here, and leave only when the viewer takes them back or the chat's draft is deleted. Bounded:
-// oldest dropped first.
+// here, and leave only once a viewer hands them to the message box or all of them are removed, or
+// the chat's draft is deleted. Bounded: oldest dropped first.
 
 const STORAGE_KEY = 'orca.nativeChat.heldNotes.v1'
 export const NATIVE_CHAT_HELD_NOTES_MAX = 60
@@ -106,11 +106,36 @@ export function clearNativeChatHeldNotesWhere(matches: (scopeKey: string) => boo
   })
 }
 
-/** Held notes follow their chat's draft when it moves to another scope. */
+/** Held notes follow their chat's draft when it moves to another scope. Where that chat already
+ *  holds notes for the same media, both sets stay: the moved notes go after its own, numbered on. */
 export function moveNativeChatHeldNotes(from: string, to: string, keepSource = false): void {
   storage.update((held) =>
-    moveNativeChatNotesEntries(held, from, to, (entry) => ({ ...entry, scopeKey: to }), keepSource)
+    moveNativeChatNotesEntries(
+      held,
+      from,
+      to,
+      (entry) => ({ ...entry, scopeKey: to }),
+      keepSource,
+      combineHeldNotes
+    )
   )
+}
+
+function combineHeldNotes(existing: HeldEntry, moved: HeldEntry): HeldEntry {
+  const kept = new Set(existing.notes.map(({ id }) => id))
+  // A copy moved again brings nothing new.
+  const added = moved.notes.filter(({ id }) => !kept.has(id))
+  if (added.length === 0) {
+    return existing
+  }
+  const last = existing.notes.reduce((max, note) => Math.max(max, note.number), 0)
+  return {
+    ...existing,
+    notes: [
+      ...existing.notes,
+      ...added.map((note, index) => ({ ...note, number: last + index + 1 }))
+    ]
+  }
 }
 
 /** How many notes this chat holds for this media, for the "Notes kept" mark on its tile. */

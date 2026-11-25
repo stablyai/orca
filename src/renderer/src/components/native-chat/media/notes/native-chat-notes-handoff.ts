@@ -14,6 +14,8 @@ import {
   type NativeChatNotesSource
 } from './native-chat-attachment-notes'
 import { drawNativeChatNotesImage } from './native-chat-media-notes-draw'
+import { showNativeChatNotesNotice } from './native-chat-notes-notice'
+import { translate } from '@/i18n/i18n'
 import { groupNativeChatNotesByFrame, type NativeChatMediaNote } from './native-chat-media-notes'
 
 export type NativeChatNotesComposer = { scopeKey: string; handle: NativeChatComposerHandle }
@@ -161,4 +163,29 @@ export function afterComposerRender(): Promise<void> {
   return new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
   )
+}
+
+/** "N notes added to your message" with Undo in the message box, live only while those images are
+ *  still in the draft and not reopened. */
+export function announceNativeChatNotesHandOff(
+  scopeKey: string,
+  ids: string[],
+  undo: () => void,
+  count: number
+): void {
+  const dismiss = showNativeChatNotesNotice(scopeKey, {
+    text: translate(
+      'components.native-chat.notes.addedToMessage',
+      '{{count}} notes added to your message',
+      { defaultValue_one: '{{count}} note added to your message', count }
+    ),
+    ids,
+    undo: () => {
+      if (nativeChatNotesStillInDraft(scopeKey, ids)) {
+        detachNativeChatNotes(scopeKey, ids)
+        undo()
+      }
+    }
+  })
+  watchNativeChatNotesLeaveDraft(scopeKey, ids, dismiss)
 }

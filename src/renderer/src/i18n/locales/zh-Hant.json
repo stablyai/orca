@@ -20388,7 +20388,13 @@
         "zoomOut": "縮小",
         "saveFailed": "無法儲存你的備註。備註仍在這裡。",
         "keptUnsaved": "備註已保留，但無法儲存，重新啟動後會遺失。",
-        "imageChanged": "這張圖片已不在訊息框中。你的備註仍在這裡。"
+        "imageChanged": "這張圖片已不在訊息框中。你的備註仍在這裡。",
+        "goalHeld": "訊息框正在設定目標，目標不能包含圖片。請先完成或離開。",
+        "keptNoMessageBox": "備註已隨 {{name}} 保留。此聊天的訊息框目前無法使用。",
+        "keptWhileEditing": "備註已隨 {{name}} 保留。完成佇列中訊息的編輯後即可加入。",
+        "keptWhileGoal": "備註已隨 {{name}} 保留。訊息框正在設定目標。",
+        "annotateTooLarge": "這張圖片太大，無法繪製備註（超過 3300 萬像素）。",
+        "sendWhileEditing": "請先關閉正在編輯備註的圖片，再傳送。"
       }
     },
     "tab": {

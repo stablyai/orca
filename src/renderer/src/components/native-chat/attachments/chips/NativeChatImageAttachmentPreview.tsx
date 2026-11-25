@@ -7,12 +7,16 @@ import { useLocalImageSrc } from '@/components/editor/document-images/useLocalIm
 import { NativeChatMediaViewer } from '../../media/notes/NativeChatMediaViewer'
 import { useNativeChatAttachmentNotes } from '../../media/notes/native-chat-attachment-notes'
 import {
+  markNativeChatNotedImageEditing,
   replaceNativeChatNotedImage,
   restoreNativeChatCleanImage,
   takeNativeChatNotedImage,
   useNativeChatNotesOriginal
 } from '../../media/notes/native-chat-chip-notes'
-import { showNativeChatNotesNotice } from '../../media/notes/native-chat-notes-notice'
+import {
+  dismissNativeChatNotesNoticeFor,
+  showNativeChatNotesNotice
+} from '../../media/notes/native-chat-notes-notice'
 import { nativeChatNotesImageName } from '../../media/notes/native-chat-media-notes'
 import {
   nativeChatNotesMediaKey,
@@ -255,6 +259,14 @@ function NativeChatImageThumbnail({
       : null
   // Reopened in the viewer: these notes are being edited and are replaced when it closes.
   const editing = isOpen && notes !== null
+  useEffect(() => {
+    if (!editing || !notesScopeKey) {
+      return undefined
+    }
+    // Reopened, the group is no longer the one its "added" line can undo, and it sits out Send.
+    dismissNativeChatNotesNoticeFor(notesScopeKey, attachment.id)
+    return markNativeChatNotedImageEditing(notesScopeKey, attachment.id)
+  }, [attachment.id, editing, notesScopeKey])
   const remove = (): void => {
     if (!notes || !notesScopeKey) {
       onRemove(attachment.id)
@@ -332,6 +344,8 @@ function NativeChatImageThumbnail({
         source={notes?.source ?? plainSource}
         opener={thumbnailRef}
         initialNotes={notes && original.src ? notes.notes : undefined}
+        // Numbering goes on from the copy these notes were first drawn on.
+        offset={notes?.offset}
         // Without its clean original a marked image can only be viewed: new marks would land on old ones.
         annotatable={!notes || Boolean(original.src)}
         replacesAttachmentId={attachment.id}

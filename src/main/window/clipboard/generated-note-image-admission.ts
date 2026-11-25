@@ -27,3 +27,14 @@ export function isAdmissibleGeneratedNoteImage(bytes: unknown): bytes is Uint8Ar
   }
   return true
 }
+
+// One notes image is checked and saved at a time, across every window: at most one decoded check and
+// one write are in flight however many viewers send at once.
+let saves: Promise<unknown> = Promise.resolve()
+
+/** Runs `work` after every earlier notes-image save has finished. */
+export function queueGeneratedNoteImageSave<T>(work: () => Promise<T>): Promise<T> {
+  const run = saves.then(work)
+  saves = run.catch(() => undefined)
+  return run
+}

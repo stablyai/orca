@@ -110,13 +110,15 @@ export function createNativeChatNotesStorage<T>(
 }
 
 /** Moves (or, with `keepSource`, copies) every entry keyed `${from}\0…` to `${to}\0…`, as a draft
- *  moves to another scope. */
+ *  moves to another scope. Where the destination already has that entry, `combine` decides what it
+ *  keeps; without one the destination's own entry stays. */
 export function moveNativeChatNotesEntries<T>(
   entries: Map<string, T>,
   from: string,
   to: string,
   rescope: (value: T) => T = (value) => value,
-  keepSource = false
+  keepSource = false,
+  combine: (existing: T, moved: T) => T = (existing) => existing
 ): boolean {
   if (from === to) {
     return false
@@ -128,7 +130,12 @@ export function moveNativeChatNotesEntries<T>(
       if (!keepSource) {
         entries.delete(key)
       }
-      entries.set(`${to}\0${key.slice(from.length + 1)}`, rescope(value))
+      const destination = `${to}\0${key.slice(from.length + 1)}`
+      const existing = entries.get(destination)
+      entries.set(
+        destination,
+        existing === undefined ? rescope(value) : combine(existing, rescope(value))
+      )
       moved = true
     }
   }

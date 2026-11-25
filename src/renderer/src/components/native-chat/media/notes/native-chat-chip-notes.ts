@@ -40,6 +40,32 @@ export function replaceNativeChatNotedImage(scopeKey: string, id: string): (() =
     : false
 }
 
+// Marked images reopened in a viewer, per chat. They stay in the draft, so a reload keeps them, but
+// the message box doesn't send them until the viewer swaps in the edited copy or closes.
+const editingImages = new Map<string, Set<string>>()
+
+/** Flags a reopened marked image as being edited; the returned function ends that. */
+export function markNativeChatNotedImageEditing(scopeKey: string, id: string): () => void {
+  const ids = editingImages.get(scopeKey) ?? new Set<string>()
+  ids.add(id)
+  editingImages.set(scopeKey, ids)
+  return () => {
+    ids.delete(id)
+    if (ids.size === 0 && editingImages.get(scopeKey) === ids) {
+      editingImages.delete(scopeKey)
+    }
+  }
+}
+
+/** Whether the draft holds a marked image whose notes are open for editing. */
+export function nativeChatDraftHasEditingImage(scopeKey: string): boolean {
+  const ids = editingImages.get(scopeKey)
+  return (
+    Boolean(ids?.size) &&
+    readNativeChatComposerDraft(scopeKey).images.some(({ id }) => ids!.has(id))
+  )
+}
+
 let cleanSequence = 0
 
 /** A marked image whose notes were all deleted goes back to the clean original it was made from. */
@@ -98,5 +124,7 @@ export function useNativeChatNotesOriginal(
       live = false
     }
   }, [connectionId, path, readContext])
-  return { src, failed: path !== undefined && failedPath === path && !src }
+  // Notes on media with no file path (a URL) have no original to read: the marked copy is view-only.
+  const noOriginal = active && notes !== null && !notes.source.path
+  return { src, failed: noOriginal || (path !== undefined && failedPath === path && !src) }
 }

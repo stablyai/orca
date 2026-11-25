@@ -3,6 +3,8 @@ import type { PanZoomViewport } from '@/components/editor/viewer-viewport/use-pa
 import type { NativeChatNoteMark } from './native-chat-media-notes'
 
 const PAN_STEP_PX = 60
+/** Shift+arrow pans this many ordinary steps at once. */
+const LARGE_PAN_STEPS = 5
 const ARROWS: Record<string, [number, number]> = {
   ArrowLeft: [-1, 0],
   ArrowRight: [1, 0],
@@ -30,11 +32,12 @@ export function handleNativeChatMediaViewportKey(
   }
   const arrow = ARROWS[event.key]
   if (arrow && !panZoom.isFitted) {
+    const step = event.shiftKey ? PAN_STEP_PX * LARGE_PAN_STEPS : PAN_STEP_PX
     // The viewport's own wheel handling pans and keeps the image in bounds.
     event.currentTarget.dispatchEvent(
       new WheelEvent('wheel', {
-        deltaX: arrow[0] * PAN_STEP_PX,
-        deltaY: arrow[1] * PAN_STEP_PX,
+        deltaX: arrow[0] * step,
+        deltaY: arrow[1] * step,
         cancelable: true
       })
     )

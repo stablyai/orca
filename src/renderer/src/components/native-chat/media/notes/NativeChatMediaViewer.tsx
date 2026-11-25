@@ -17,14 +17,17 @@ import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import { nativeChatNoteTimesNeedTenths, type NativeChatMediaNote } from './native-chat-media-notes'
 import type { NativeChatNotesSource } from './native-chat-attachment-notes'
 import { useNativeChatNotesDelivery } from './use-native-chat-notes-delivery'
+import { nativeChatAnnotateReason } from './native-chat-notes-reasons'
+import { useNativeChatMediaViewerNarrow } from './use-native-chat-media-viewer-narrow'
+import {
+  useNativeChatMediaViewerFocus,
+  useNativeChatMediaViewerFocusSession
+} from './use-native-chat-media-viewer-focus'
 import { useViewerZoomCommands } from '@/components/editor/viewer-viewport/use-viewer-zoom-commands'
 import {
   focusNativeChatMediaViewportSoon,
   handleNativeChatMediaViewportKey
 } from './native-chat-media-viewport-keys'
-
-/** Below this width the notes panel becomes a bottom sheet. */
-const NARROW_WIDTH = 720
 
 export type NativeChatMediaViewerProps = {
   open: boolean
@@ -62,10 +65,17 @@ export type NativeChatMediaViewerProps = {
 
 /** Full-window image viewer with notes: Annotate, numbered pins and boxes, a Notes panel and Send. */
 export function NativeChatMediaViewer(props: NativeChatMediaViewerProps): React.JSX.Element {
+  const focusSession = useNativeChatMediaViewerFocusSession()
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       {/* Each image starts fresh: its size, zoom and notes are its own. */}
-      {props.open ? <ViewerBody key={props.source.path ?? props.source.url} {...props} /> : null}
+      {props.open ? (
+        <ViewerBody
+          key={props.source.path ?? props.source.url}
+          {...props}
+          focusSession={focusSession}
+        />
+      ) : null}
     </Dialog>
   )
 }
@@ -88,39 +98,41 @@ function ViewerBody({
   copySrc,
   onPrevious,
   onNext,
-  position
-}: NativeChatMediaViewerProps): React.JSX.Element {
+  position,
+  focusSession
+}: NativeChatMediaViewerProps & {
+  focusSession: ReturnType<typeof useNativeChatMediaViewerFocusSession>
+}): React.JSX.Element {
   const editor = useNativeChatNotesEditor({ notes: initialNotes ?? [], offset })
-  const [annotating, setAnnotating] = useState(
+  const [wantsAnnotating, setAnnotating] = useState(
     Boolean(initialNotes?.length) || (startAnnotating && annotatable)
   )
   const [panelHidden, setPanelHidden] = useState(false)
-  const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_WIDTH)
+  const narrow = useNativeChatMediaViewerNarrow()
   const [loaded, setLoaded] = useState<{ size: PanZoomSize; image: HTMLImageElement } | null>(null)
-  const panZoom = usePanZoomViewport({ content: loaded?.size ?? null, contain: true })
+  const panZoom = usePanZoomViewport({
+    content: loaded?.size ?? null,
+    contain: true,
+    metaWheelZooms: true
+  })
   // ⌘+ ⌘− ⌘0 zoom here as in Orca's other image viewers.
   useViewerZoomCommands(panZoom, 'popup')
   const [broken, setBroken] = useState(false)
-  const openerFocus = useRef<Element | null>(null)
   // Set when the close or Clear prompt is answered: it goes on once the answered note is settled.
   const afterPrompt = useRef<'close' | 'clear' | null>(null)
   const { setCanvas, canvasHandlers, cursor, scale, offset: viewOffset } = panZoom
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const t = useTranslate()
-  useEffect(() => {
-    const onResize = (): void => setNarrow(window.innerWidth < NARROW_WIDTH)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
   // Phones view sent notes; making notes needs a pointer and a keyboard, so they get no Annotate.
   const phone = window.matchMedia('(pointer: coarse)').matches
-  const canAnnotate = annotatable && Boolean(loaded) && !phone
-  const annotateReason = annotatable
-    ? null
-    : t('components.native-chat.notes.annotateUnavailable', 'Notes can’t be drawn on this image.')
+  const annotateReason = nativeChatAnnotateReason(t, annotatable, loaded?.size)
+  const canAnnotate = annotateReason === null && Boolean(loaded) && !phone
+  // An image too large to draw on, found once it loads, stays view-only even when opened to annotate.
+  const annotating = wantsAnnotating && annotateReason === null
   const { notes } = editor
   // The unzoomed viewport takes focus, so its ring always shows whole, at any zoom.
   const focusMedia = (): void => viewportRef.current?.focus({ preventScroll: true })
+  const focusHandlers = useNativeChatMediaViewerFocus(focusSession, focusMedia)
   const resumeAnnotating = useCallback(() => setAnnotating(true), [])
   const showPanel = useCallback(() => setPanelHidden(false), [])
   const { busy, canSend, sendReason, close, send } = useNativeChatNotesDelivery({
@@ -189,19 +201,8 @@ function ViewerBody({
       onInteractOutside={onInteractOutside}
       data-native-chat-copy-image-src={copySrc}
       surface="media-canvas"
-      onOpenAutoFocus={(event) => {
-        // Focus starts on the media, not on the first toolbar button, and returns to the opener.
-        openerFocus.current = document.activeElement
-        event.preventDefault()
-        focusMedia()
-      }}
-      onCloseAutoFocus={(event) => {
-        const previous = openerFocus.current
-        if (previous instanceof HTMLElement && previous.isConnected) {
-          event.preventDefault()
-          previous.focus({ preventScroll: true })
-        }
-      }}
+      // Focus starts on the media, not on the first toolbar button, and returns to the opener.
+      {...focusHandlers}
       onEscapeKeyDown={(event) => {
         // Esc steps back one layer: the prompt, the note editor, annotating, then the viewer.
         event.preventDefault()

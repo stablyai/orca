@@ -22,11 +22,12 @@ export function settleView(view: PanZoomView, geometry: PanZoomGeometry): PanZoo
   return geometry.contain ? containPanZoomView(view, geometry) : view
 }
 
-/** Wheel pans and pinch (Ctrl+wheel) zooms at the cursor. */
+/** Wheel pans and pinch (Ctrl+wheel) zooms at the cursor; with `metaZooms`, ⌘+wheel zooms too. */
 export function usePanZoomWheel(
   canvas: HTMLDivElement | null,
   geometry: PanZoomGeometry | null,
-  setManualView: React.Dispatch<React.SetStateAction<PanZoomView | null>>
+  setManualView: React.Dispatch<React.SetStateAction<PanZoomView | null>>,
+  metaZooms = false
 ): void {
   useEffect(() => {
     if (!canvas || !geometry) {
@@ -35,8 +36,8 @@ export function usePanZoomWheel(
     const onWheel = (event: WheelEvent): void => {
       event.preventDefault()
       const fitted = getFittedPanZoomView(geometry.content)
-      // Pinch arrives as Ctrl+wheel; ⌘+wheel zooms too, as macOS image viewers do.
-      if (event.ctrlKey || event.metaKey) {
+      // Pinch arrives as Ctrl+wheel.
+      if (event.ctrlKey || (metaZooms && event.metaKey)) {
         const rect = canvas.getBoundingClientRect()
         const anchor = { x: event.clientX - rect.left, y: event.clientY - rect.top }
         setManualView((current) => {
@@ -69,5 +70,5 @@ export function usePanZoomWheel(
     // Non-passive so pinch can cancel browser zoom.
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
-  }, [canvas, geometry, setManualView])
+  }, [canvas, geometry, metaZooms, setManualView])
 }
