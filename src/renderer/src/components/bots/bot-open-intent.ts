@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 
-/** Whether the user moved to another workspace, view or host since a bot open was asked for. */
+/** Whether the user moved to another workspace, view or host, or picked a workspace still being
+ *  created, since a bot open was asked for. */
 export type BotOpenIntent = {
   /** True once any such move happened, even if the window later came back. */
   moved: () => boolean
@@ -12,13 +13,16 @@ type WorkspaceSelection = {
   activeWorkspaceKey: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: string | null
+  /** A pending-creation row shows its own panel over the workspace selection, which stays put. */
+  activePendingCreationId: string | null
 }
 
 function workspaceKey(state: WorkspaceSelection): string {
   return [
     state.activeView,
     state.activeWorkspaceKey ?? state.activeWorktreeId,
-    state.activeWorkspaceExecutionHostId
+    state.activeWorkspaceExecutionHostId,
+    state.activePendingCreationId
   ].join('\0')
 }
 

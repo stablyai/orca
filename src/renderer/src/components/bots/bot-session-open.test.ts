@@ -7,12 +7,16 @@ const mocks = vi.hoisted(() => {
     activeWorkspaceKey: string | null
     activeWorktreeId: string | null
     activeWorkspaceExecutionHostId: string | null
+    activePendingCreationId: string | null
+    unifiedTabsByWorktree: Record<string, readonly string[]>
     fetchFolderWorkspaces: (args: unknown) => Promise<void>
   } = {
     activeView: 'terminal',
     activeWorkspaceKey: 'folder:elsewhere',
     activeWorktreeId: 'folder:elsewhere',
     activeWorkspaceExecutionHostId: null,
+    activePendingCreationId: null,
+    unifiedTabsByWorktree: {},
     fetchFolderWorkspaces: async () => {}
   }
   return {
@@ -29,7 +33,17 @@ const mocks = vi.hoisted(() => {
       state.activeWorktreeId = workspace
       listeners.forEach((listener) => listener())
     },
-    /** A store write that changes no workspace selection, like a catalog read or a tab frame. */
+    /** The pending-creation row's click: setActivePendingWorktreeCreation writes only this field. */
+    pickPending: (creationId: string | null): void => {
+      state.activePendingCreationId = creationId
+      listeners.forEach((listener) => listener())
+    },
+    /** A server tab frame: tabs change inside a workspace; which workspace is shown does not. */
+    tabFrame: (workspace: string, tabs: readonly string[]): void => {
+      state.unifiedTabsByWorktree = { ...state.unifiedTabsByWorktree, [workspace]: tabs }
+      listeners.forEach((listener) => listener())
+    },
+    /** A store write that changes no workspace selection, like a catalog read. */
     touch: (): void => listeners.forEach((listener) => listener())
   }
 })
@@ -104,6 +118,8 @@ function reset(): void {
   mocks.listeners.clear()
   mocks.state.activeWorkspaceKey = 'folder:elsewhere'
   mocks.state.activeWorktreeId = 'folder:elsewhere'
+  mocks.state.activePendingCreationId = null
+  mocks.state.unifiedTabsByWorktree = {}
   mocks.state.fetchFolderWorkspaces = mocks.fetchFolderWorkspaces
   mocks.fetchFolderWorkspaces.mockResolvedValue(undefined)
   mocks.activate.mockResolvedValue(true)
@@ -205,6 +221,40 @@ describe('openBotChatTab', () => {
     expect(mocks.activate).not.toHaveBeenCalled()
   })
 
+  it('stays put when the user picks a workspace still being created while the Home list loads', async () => {
+    mocks.admit.mockReturnValue(missing)
+    const list = heldFolderList()
+    const open = openBotChatTab(serverBot, 'chat-1')
+    mocks.pickPending('creation-1')
+    list.answer()
+    await expect(open).resolves.toBe(false)
+    expect(mocks.admit).toHaveBeenCalledTimes(1)
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(mocks.state.activePendingCreationId).toBe('creation-1')
+  })
+
+  it('stays put when the user picks a pending workspace and leaves it while the Home list loads', async () => {
+    mocks.admit.mockReturnValue(missing)
+    const list = heldFolderList()
+    const open = openBotChatTab(serverBot, 'chat-1')
+    mocks.pickPending('creation-1')
+    mocks.pickPending(null)
+    list.answer()
+    await expect(open).resolves.toBe(false)
+    expect(mocks.admit).toHaveBeenCalledTimes(1)
+    expect(mocks.activate).not.toHaveBeenCalled()
+  })
+
+  it('still opens when a server tab frame lands while the Home list loads', async () => {
+    mocks.admit.mockReturnValue(missing)
+    const list = heldFolderList()
+    const open = openBotChatTab(serverBot, 'chat-1')
+    mocks.tabFrame('folder:elsewhere', ['agent-session:chat-2'])
+    list.answer()
+    await expect(open).resolves.toBe(true)
+    expect(mocks.activate).toHaveBeenCalledTimes(1)
+  })
+
   it('still opens when only the catalog changes while the Home list loads', async () => {
     mocks.admit.mockReturnValue(missing)
     const list = heldFolderList()
@@ -247,6 +297,25 @@ describe('startAndOpenBotChat', () => {
     expect(mocks.admit).not.toHaveBeenCalled()
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(mocks.state.activeWorkspaceKey).toBe('folder:other')
+  })
+
+  it('leaves a pending workspace the user picked while the host started the chat in front', async () => {
+    let started = (_sessionId: string): void => {}
+    startAndOpenBotChat(
+      serverBot,
+      () =>
+        new Promise<string>((resolve) => {
+          started = resolve
+        }),
+      vi.fn()
+    )
+    mocks.pickPending('creation-1')
+    started('chat-1')
+    await vi.waitFor(() => expect(mocks.listeners.size).toBe(0))
+    await Promise.resolve()
+    expect(mocks.admit).not.toHaveBeenCalled()
+    expect(mocks.activate).not.toHaveBeenCalled()
+    expect(mocks.state.activePendingCreationId).toBe('creation-1')
   })
 
   it('reports a failed start and stops watching', async () => {
