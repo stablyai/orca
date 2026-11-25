@@ -221,7 +221,47 @@ describe("a bot's memory history", () => {
     const made = await quickAdd('releases go out Tuesdays')
     expect(made.added.map(({ line }) => line)).toEqual(['- 2026-11-06 releases go out Tuesdays'])
     expect(read()).toBe(written)
-    expect((await rows())[0].by).toEqual({ kind: 'owner' })
+  })
+
+  it('never lets Undo take out a fact the file had before a Quick add of it', async () => {
+    const { quickAdd, read, reopened, rows, turnEnded, write } = bot(OLD)
+    // A chat wrote two copies mid-turn, which the owner then added too.
+    const written = `# Memory\n- 2026-11-06 releases go out Tuesdays\n- 2026-11-01 owner fact\n## Later\n- releases go out Tuesdays\n`
+    write(written)
+    await quickAdd('releases go out Tuesdays')
+    await turnEnded()
+
+    // Nothing changed on disk, so no row offers an Undo that would delete either copy.
+    expect(read()).toBe(written)
+    expect(await rows()).toEqual([])
+    expect(await reopened().list('bot-1')).toEqual([])
+    // Orca's record has it, so a later turn that drops both copies gets it back.
+    write(OLD)
+    await turnEnded()
+    expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toContain(
+      'releases go out Tuesdays'
+    )
+  })
+
+  it('puts an older row without an occurrence back after the last copy outside a fence', async () => {
+    const legacyUndo = async (memory: string): Promise<string> => {
+      const { history, read, rows, undo } = bot(memory)
+      await history.append(
+        'bot-1',
+        { kind: 'owner' },
+        { added: [], removed: [{ line: '- target', after: '## Deploy' }] }
+      )
+      expect(await undo((await rows())[0].id)).toBe(true)
+      return read()
+    }
+    // As before occurrences were recorded: after the last copy.
+    expect(await legacyUndo('## Deploy\n- a\n## Deploy\n- b\n')).toBe(
+      '## Deploy\n- a\n## Deploy\n- target\n- b\n'
+    )
+    // A copy inside a code fence is never one a fact followed.
+    expect(await legacyUndo('## Deploy\n- a\n```md\n## Deploy\n```\n')).toBe(
+      '## Deploy\n- target\n- a\n```md\n## Deploy\n```\n'
+    )
   })
 
   it('rejects a blank Quick add, saving nothing', async () => {

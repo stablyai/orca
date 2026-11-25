@@ -117,7 +117,13 @@ export function createBotMemoryRecord(
               botMemoryChange(base, next),
               text === null ? NO_CHANGE : botMemoryChange(text, recorded)
             )
-            noted(botId, by, made)
+            // The record taking a fact the file already stated changed nothing on disk; a row for
+            // it would let Undo delete that fact, which predates the change.
+            const stated = botMemoryFactKeys(base)
+            noted(botId, by, {
+              added: made.added.filter((line) => !stated.has(botMemoryLineKey(line) ?? '')),
+              removed: made.removed
+            })
             return recorded
           }
         }

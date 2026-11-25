@@ -1,27 +1,65 @@
+// Where a fact put back into MEMORY.md goes: after the line it followed, never inside a code fence.
+import { botMemoryFenceOpeners, insertBotMemoryNonFenceLine } from './bot-memory-fences'
+
 /** The non-blank line a fact followed (null: the top of the file). */
 export type BotMemoryAnchor = {
   after: string | null
-  /** The anchor's 1-based occurrence. Older history rows keep only its text. */
+  /** The anchor's 1-based occurrence among the lines a fact can follow. Older history rows keep
+   *  only its text. */
   afterOccurrence?: number
 }
 
-/** Where the fact belongs by its anchor: after the copy of the line it followed, else the last
- *  copy left before it, else the end when no copy is left. A row without an occurrence takes the
- *  first, so a later copy of the line (one in a code fence, say) never pulls the fact further down. */
-export function botMemoryInsertionIndex(
-  lines: readonly string[],
-  { after, afterOccurrence = 1 }: BotMemoryAnchor
-): number {
-  if (after === null) {
-    return 0
-  }
-  let anchor = -1
-  for (let seen = 0; seen < afterOccurrence; seen += 1) {
-    const next = lines.indexOf(after, anchor + 1)
-    if (next === -1) {
-      break
+/** Whether a fact can come right after line `index`: no fence opener and no line inside a fence,
+ *  since the place after either is in the fence. `openers` (botMemoryFenceOpeners) is null for a
+ *  file with no fence. */
+export function isBotMemoryAnchorLine(openers: readonly number[] | null, index: number): boolean {
+  return openers === null || openers[index + 1] === -1
+}
+
+/**
+ * Puts facts back into `lines`, in place and one by one: after the copy of the line a fact
+ * followed; after the last copy for an older row without an occurrence, or when fewer copies are
+ * left; at the end when none is; above a fence that place is in. Searches run from the end, so
+ * putting back facts a write cut from the end never reads the unchanged start of the file.
+ */
+export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMemoryAnchor) => void {
+  const found = botMemoryFenceOpeners(lines)
+  // A fact line is no fence, so a file with none keeps none and needs no tracking.
+  const openers = found.some((opener) => opener !== -1) ? found : null
+  const counts = new Map<string, number>()
+  const count = (index: number): void => {
+    const raw = lines[index]
+    if (raw.trim() !== '' && isBotMemoryAnchorLine(openers, index)) {
+      counts.set(raw, (counts.get(raw) ?? 0) + 1)
     }
-    anchor = next
   }
-  return anchor === -1 ? lines.findLastIndex((raw) => raw.trim() !== '') + 1 : anchor + 1
+  lines.forEach((_raw, index) => count(index))
+  const place = ({ after, afterOccurrence }: BotMemoryAnchor): number => {
+    if (after === null) {
+      return 0
+    }
+    const copies = counts.get(after) ?? 0
+    if (copies === 0) {
+      return lines.findLastIndex((raw) => raw.trim() !== '') + 1
+    }
+    let fromEnd = afterOccurrence === undefined ? 1 : Math.max(1, copies - afterOccurrence + 1)
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      if (lines[index] === after && isBotMemoryAnchorLine(openers, index)) {
+        fromEnd -= 1
+        if (fromEnd === 0) {
+          return index + 1
+        }
+      }
+    }
+    return lines.length
+  }
+  return (line, anchor) => {
+    const wanted = place(anchor)
+    const at = openers === null || openers[wanted] === -1 ? wanted : openers[wanted]
+    lines.splice(at, 0, line)
+    if (openers !== null) {
+      insertBotMemoryNonFenceLine(openers, at)
+    }
+    count(at)
+  }
 }
