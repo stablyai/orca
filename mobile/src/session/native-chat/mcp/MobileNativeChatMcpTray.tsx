@@ -14,7 +14,7 @@ const useAgentSessionMcpPanel = createAgentSessionMcpPanelHook({
 })
 
 // Of the chat's visible height, which shrinks while the keyboard is up.
-const LIST_SHARE = 0.4
+const LIST_SHARE = 0.5
 
 /** The `/mcp` tray on the composer's top edge; each opening reads the servers afresh. */
 export function MobileNativeChatMcpTray({
@@ -37,6 +37,7 @@ function McpTrayContent({ panel }: { panel: MobileStructuredMcpPanel }) {
       retry={() => void state.retry()}
       openUrl={openExternalLink}
       onClose={panel.close}
+      onManage={panel.manage}
       listMaxHeight={Math.round(visibleHeight * LIST_SHARE)}
     />
   )

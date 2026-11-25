@@ -2,6 +2,9 @@
 // same file format, with which agents and workspaces each server is on for.
 import * as z from 'zod'
 import type { BotToolSignInStatus } from '../bot-tool-sign-in'
+import { isFloatingWorkspaceId } from '../workspace/identity/floating-workspace-worktree'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../workspace/identity/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../worktree/id'
 
 // Host advertises mcpServers.* only while its MCP servers switch is on; clients hide the feature otherwise.
 export const MCP_SERVERS_RUNTIME_CAPABILITY = 'mcp-servers.v1' as const
@@ -45,6 +48,22 @@ export const MCP_FILE_AGENTS = ['grok', 'cursor', 'droid'] as const
 export type McpFileAgent = (typeof MCP_FILE_AGENTS)[number]
 /** Per agent, whether the user let Orca keep its servers in that agent's file. */
 export type McpAgentFiles = Record<McpFileAgent, boolean>
+
+/** Why no server from Orca reaches an agent's sessions, whichever server it is. */
+export type McpAgentProblem = {
+  /** `blocked`: the agent's own (organization) settings refuse them; `terminal-off`: its terminal
+   *  sessions can't take them. */
+  kind: 'blocked' | 'terminal-off'
+  detail: string
+}
+
+/** What mcpServers.list answers. */
+export type McpHostList = {
+  servers: McpServer[]
+  agentFiles: McpAgentFiles
+  /** By agent id; an agent with no problem is absent. */
+  agentProblems?: Record<string, McpAgentProblem>
+}
 
 /** One server in a host's list, as a client shows it. */
 export type McpServer = {
@@ -95,3 +114,29 @@ export type McpServerTypedFailureCode =
   | 'mcp_server_not_command'
   /** Declared by the contract; a later host fills it in. */
   | 'mcp_servers_not_yet'
+
+/**
+ * The key a session's workspace has in a server's Workspaces: the repo of its worktree, or the
+ * folder workspace itself; null for a chat in no workspace (the floating one).
+ */
+export function mcpServerWorkspaceKeyOf(workspaceId: string): string | null {
+  const id = normalizeWorkspaceSessionKeyToWorkspaceId(workspaceId)
+  if (isFloatingWorkspaceId(id)) {
+    return null
+  }
+  return id.startsWith('folder:') ? id : getRepoIdFromWorktreeId(id)
+}
+
+/** Whether a server is on in the workspace with this key; one named nowhere follows `later`. */
+export function isMcpServerOnInWorkspace(
+  workspaces: McpServerWorkspaces,
+  key: string | null
+): boolean {
+  if (key !== null && workspaces.on.includes(key)) {
+    return true
+  }
+  if (key !== null && workspaces.off.includes(key)) {
+    return false
+  }
+  return workspaces.later
+}

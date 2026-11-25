@@ -42,7 +42,8 @@ import { piTitlebarExtensionService } from '../../managed-extensions/titlebar-ex
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
 import { writeAcpInstructionsFile } from '../../../acp/launch/acp-instructions'
-import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import { deliverHostMcpServersBesideConfig } from '../../../mcp-servers/session-host-mcp-delivery'
+import { withSessionMcpToolsEnv } from '../../../mcp-servers/session-mcp-tools'
 import {
   PI_BOT_TOOLS_EXTENSION_FILE,
   PI_BOT_TOOLS_EXTENSION_SOURCE,
@@ -212,7 +213,8 @@ export function piRpcLaunchPart(
       ? await writeAcpInstructionsFile(deps.dataDirectory, identity.sessionId, instructions)
       : undefined
     const tools = piToolLimit(basis.readOnly, launchVersion)
-    const botTools = await basis.toolServers()
+    // Pi registers each server beside its own; a host-list server named like one of them stays out.
+    const botTools = await deliverHostMcpServersBesideConfig(basis, 'pi', { env, cwd })
     const botServers = piBotToolsConfig(botTools)
     // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
     if (deps.managedExtensionsEnabled?.()) {
@@ -261,7 +263,7 @@ export function piRpcLaunchPart(
           ? { shrinksImages: true as const }
           : {})
       },
-      ...withPiVisualsEnv(withBotLaunchToolsEnv(withoutPiCallerEnv(env), botTools), visuals)
+      ...withPiVisualsEnv(withSessionMcpToolsEnv(withoutPiCallerEnv(env), botTools), visuals)
     }
   }
 }

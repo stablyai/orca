@@ -38,6 +38,7 @@ import {
 } from '../../../mcp-servers/mcp-host-list'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
+import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { defineMethod, type RpcContext } from '../core'
 import { botToolServerOf, toolsHomeFor } from './bots-tools'
 
@@ -68,7 +69,8 @@ export const MCP_SERVER_METHODS = [
     name: 'mcpServers.list',
     permission: 'workspace',
     params: McpServersList,
-    handler: (_params, context) => onHost(context, () => readMcpHostList())
+    handler: (_params, context) =>
+      onHost(context, async () => withMcpAgentProblems(await readMcpHostList()))
   }),
   defineMethod({
     name: 'mcpServers.add',
