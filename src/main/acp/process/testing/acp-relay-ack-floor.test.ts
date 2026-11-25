@@ -15,14 +15,14 @@ const chunk = (text: string, messageId?: string): string =>
     ...(messageId ? { messageId } : {})
   })
 
-function rig() {
+function rig(durable: (force: boolean) => Promise<boolean> = async () => true) {
   const acks: number[] = []
   const cuts: number[] = []
   const turns = new AcpRelayTurns()
   const output = new RelayedProviderOutput({
     stdout: new Readable({ read() {} }),
     ackFloor: turns.ackFloor(),
-    durable: async () => true,
+    durable,
     // Where a reattach would replay from, less one: the daemon keeps lines from `keepFrom` on, and
     // never gets back lines it already dropped.
     ack: async (seq, keepFrom, flags) => {
@@ -122,6 +122,15 @@ describe('ACP relay ack floor', () => {
     await send(update('plan', { entries: [] }))
     await send(chunk('d', 'm2'))
     expect(cuts).toEqual([2, 3, 4])
+  })
+
+  it('acks every line handed on at a hand-off, saving streamed text first', async () => {
+    // Streamed text is saved only on a forced flush; a plain settle can't ack past it.
+    const { output, acks, send } = rig(async (force) => force)
+    await send(chunk('a'), chunk('b'))
+    expect(acks).toEqual([])
+    await output.flush()
+    expect(acks).toEqual([2])
   })
 
   it("holds an OpenCode child's open message until its session reports a status", async () => {
