@@ -221,6 +221,14 @@ export const BOT_MCP_APPS: readonly BotMcpApp[] = [
     category: 'coding'
   },
   {
+    id: 'treg',
+    name: 'Treg',
+    line: 'Live data for AI agents - pay per call',
+    url: 'https://treg.to/mcp/',
+    signIn: 'browser',
+    category: 'coding'
+  },
+  {
     id: 'atlassian',
     name: 'Atlassian',
     line: 'Jira issues and Confluence pages',
