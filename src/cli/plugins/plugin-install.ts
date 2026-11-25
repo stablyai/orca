@@ -16,6 +16,7 @@ import { parsePluginGitInstallInput } from '../../shared/plugins/installation/pl
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
 import {
   pluginInstallSourceLines,
+  requestedSourceLine,
   type PluginInstallSourceInfo
 } from '../../shared/plugins/installation/plugin-install-source-info'
 import {
@@ -40,6 +41,8 @@ type InstallResult = {
   previousVersion: string | null
   approval: string
   source: PluginInstallSourceInfo
+  /** Set when identical bytes kept an installed record from another source than the one requested. */
+  requestedSource?: PluginInstallSourceInfo
   plugin?: PluginHostListEntry | null
 }
 
@@ -147,6 +150,7 @@ function formatInstall(result: InstallResult, verb: string): string {
   return [
     `${verb} ${result.pluginKey} ${result.version}${from}: ${approvalText(result.approval)}.`,
     ...pluginInstallSourceLines(result.source),
+    ...(result.requestedSource ? [requestedSourceLine(result.requestedSource)] : []),
     result.plugin ? formatPluginRow(result.plugin) : ''
   ]
     .filter(Boolean)

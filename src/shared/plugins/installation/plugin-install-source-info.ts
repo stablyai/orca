@@ -59,15 +59,29 @@ function trustee(source: PluginInstallSourceInfo): string {
   return owner ?? source.publisher ?? source.repository ?? source.url ?? 'its author'
 }
 
+/** A Git source as `repository (ref) at commit abc123`, the part the source line and the requested line share. */
+function gitSourceDescription(source: PluginInstallSourceInfo): string {
+  const at = source.commit ? ` at commit ${source.commit.slice(0, 12)}` : ''
+  const ref = source.ref && source.ref !== source.commit ? ` (${source.ref})` : ''
+  return `${source.repository ?? source.url ?? 'unknown repository'}${ref}${at}`
+}
+
+/** The source a request named when the install kept the installed record's source instead. */
+export function requestedSourceLine(source: PluginInstallSourceInfo): string {
+  const from =
+    source.kind === 'local-path'
+      ? `the folder ${source.path ?? '(unknown)'} on the Orca host`
+      : gitSourceDescription(source)
+  return `Requested from ${from}. Its files match the installed copy, so the installed source above was kept.`
+}
+
 /** Lines naming the source; non-official ones add the same warning the install dialog gives. */
 export function pluginInstallSourceLines(source: PluginInstallSourceInfo): string[] {
   const lines: string[] = []
   if (source.kind === 'local-path') {
     lines.push(`Source: the folder ${source.path ?? '(unknown)'} on the Orca host.`)
   } else {
-    const at = source.commit ? ` at commit ${source.commit.slice(0, 12)}` : ''
-    const ref = source.ref && source.ref !== source.commit ? ` (${source.ref})` : ''
-    lines.push(`Source: ${source.repository ?? source.url ?? 'unknown repository'}${ref}${at}.`)
+    lines.push(`Source: ${gitSourceDescription(source)}.`)
   }
   if (source.catalog) {
     lines.push(

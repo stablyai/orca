@@ -1,13 +1,17 @@
 import {
   isSameGitRepository,
   isSamePluginSource,
-  pluginSourceLabel
+  pluginSourceLabel,
+  splitQualifiedPluginKey
 } from '../../../shared/plugins/catalog/plugin-marketplace'
+import { pluginRepositoryOrigin } from '../../../shared/plugins/catalog/plugin-repository-link'
 import type {
   PluginInstallSource,
   PluginLockEntry,
   PluginLockfile
 } from '../../../shared/plugins/installation/plugin-install-lockfile'
+import type { PluginInstallSourceInfo } from '../../../shared/plugins/installation/plugin-install-source-info'
+import { gitUrlPluginPublisher } from '../../../shared/plugins/installation/plugin-publisher-derivation'
 import type {
   PluginCliInstallCandidate,
   PluginInstallLocation
@@ -79,4 +83,55 @@ export function installedRecordOf(
     return null
   }
   return entry
+}
+
+/** Where the durable record says its bytes came from; null for a bundled record, which names no source. */
+export function recordedSourceInfo(entry: PluginLockEntry): PluginInstallSourceInfo | null {
+  const { source } = entry
+  const repository = (url: string, ref: string, path?: string): PluginInstallSourceInfo => ({
+    kind: 'git',
+    official: false,
+    publisher: gitUrlPluginPublisher(url),
+    repository: pluginRepositoryOrigin(url, path)?.repository ?? null,
+    url,
+    ref,
+    commit: entry.resolvedCommit,
+    path: null,
+    catalog: null
+  })
+  switch (source.kind) {
+    case 'bundled':
+      return null
+    case 'local-path':
+      return {
+        kind: 'local-path',
+        official: false,
+        publisher: null,
+        repository: null,
+        url: null,
+        ref: null,
+        commit: null,
+        path: source.path,
+        catalog: null
+      }
+    case 'git':
+      return repository(source.url, source.ref)
+    case 'marketplace':
+      return {
+        ...repository(source.plugin.url, source.plugin.ref, source.plugin.path),
+        kind: 'catalog',
+        publisher: splitQualifiedPluginKey(entry.pluginKey)?.publisher ?? null
+      }
+  }
+}
+
+/** True when the record names another repository or commit than the requested install did. */
+export function recordDiffersFromRequest(
+  entry: PluginLockEntry,
+  candidate: PluginCliInstallCandidate
+): boolean {
+  return (
+    pluginInstallMove(entry.source, candidate.location) !== null ||
+    entry.resolvedCommit !== candidate.resolvedCommit
+  )
 }

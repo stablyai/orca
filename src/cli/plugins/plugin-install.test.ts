@@ -117,6 +117,34 @@ describe('orca plugin update --all', () => {
     })
   })
 
+  it('names the installed source and the requested source apart when the record kept its source', async () => {
+    const kept = {
+      ...UPDATED,
+      source: {
+        ...UPDATED.source,
+        repository: 'github.com/other/good',
+        url: 'https://github.com/other/good.git',
+        commit: 'e'.repeat(40)
+      },
+      requestedSource: {
+        ...UPDATED.source,
+        repository: 'github.com/acme/good',
+        url: 'https://github.com/acme/good.git',
+        commit: 'd'.repeat(40)
+      }
+    }
+    const result = { updates: [kept], approvals: [], failed: [] }
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)
+
+    expect(await updateAll(async () => ({ result }))).toBeNull()
+    const output = String(write.mock.calls[0]?.[0])
+    expect(output).toContain(`Source: github.com/other/good (v1.1.0) at commit ${'e'.repeat(12)}.`)
+    expect(output).toContain(
+      `Requested from github.com/acme/good (v1.1.0) at commit ${'d'.repeat(12)}. Its files match the installed copy, so the installed source above was kept.`
+    )
+    expect(output).not.toContain(`Source: github.com/acme/good`)
+  })
+
   it('prints every row when nothing failed', async () => {
     const result = { updates: [UPDATED, PINNED], approvals: [], failed: [] }
     const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true)

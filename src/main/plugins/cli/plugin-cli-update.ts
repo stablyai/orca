@@ -7,7 +7,8 @@ import {
   PLUGIN_NOT_FOUND_CODE,
   PluginApprovalRequiredError,
   PluginCliError,
-  type PluginApprovalRequest
+  type PluginApprovalRequest,
+  updateLines
 } from '../../../shared/plugins/approval/plugin-cli-approval'
 import {
   PLUGIN_COMMIT_PATTERN,
@@ -181,18 +182,40 @@ export async function updateAllPluginsFromCli(
   return result
 }
 
+/** Why an approval is still owed: the update's own change when it has one, else the request's reason. */
+function approvalReasonOf(request: PluginApprovalRequest): string {
+  const changes = request.update ? updateLines(request.update, request.version) : []
+  return changes.length > 0 ? changes.join(' ') : request.why
+}
+
 /** `--all` exits like a single update: approval_required when any plugin waits on approval. */
 export function updateAllApprovalError(result: PluginCliUpdateAllResult): PluginCliError | null {
   if (result.approvals.length === 0) {
     return null
   }
+  // Why split: an install that landed but still owes approval is not "waiting before it installs".
+  const landed = result.approvals.filter((request) => request.installed)
+  const waiting = result.approvals.filter((request) => !request.installed)
   const updated = result.updates.filter((outcome) => outcome.status === 'updated')
   const lines = [
-    `${result.approvals.length} plugin update(s) need approval before they install:`,
-    ...result.approvals.map(
-      (request) =>
-        `- ${request.pluginKey} ${request.version}: ${request.grants.executionDescription} Fingerprint: ${request.approvalFingerprint}`
-    ),
+    ...(waiting.length > 0
+      ? [
+          `${waiting.length} plugin update(s) need approval before they install:`,
+          ...waiting.map(
+            (request) =>
+              `- ${request.pluginKey} ${request.version}: ${request.grants.executionDescription} Fingerprint: ${request.approvalFingerprint}`
+          )
+        ]
+      : []),
+    ...(landed.length > 0
+      ? [
+          `${landed.length} plugin update(s) installed, but their approval is still pending:`,
+          ...landed.map(
+            (request) =>
+              `- ${request.pluginKey} ${request.installed?.version ?? request.version} is installed. ${approvalReasonOf(request)} Fingerprint: ${request.approvalFingerprint}`
+          )
+        ]
+      : []),
     ...(updated.length > 0
       ? [
           `Updated: ${updated.map((outcome) => `${outcome.pluginKey} ${outcome.version}`).join(', ')}.`

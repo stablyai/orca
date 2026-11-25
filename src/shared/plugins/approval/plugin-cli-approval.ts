@@ -208,7 +208,7 @@ export function buildPluginApprovalRequest(
   }
 }
 
-function updateLines(update: PluginApprovalUpdateInfo, version: string): string[] {
+export function updateLines(update: PluginApprovalUpdateInfo, version: string): string[] {
   const lines: string[] = []
   const growth = update.growth
   if (growth) {

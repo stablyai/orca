@@ -44,6 +44,8 @@ type InstalledFixture = {
   contentHash: string
   /** Where the lockfile says the installed bytes came from; defaults to the candidate's repository. */
   url?: string
+  /** The commit the lockfile recorded; defaults to a commit that differs from the candidate's. */
+  commit?: string
 }
 
 function lockOf(installed: InstalledFixture | null) {
@@ -54,7 +56,7 @@ function lockOf(installed: InstalledFixture | null) {
             pluginKey: PLUGIN_KEY,
             version: installed.version,
             contentHash: installed.contentHash,
-            resolvedCommit: 'a'.repeat(40),
+            resolvedCommit: installed.commit ?? 'a'.repeat(40),
             source: { kind: 'git', url: installed.url ?? URL, ref: 'main' }
           }
         }
@@ -215,5 +217,42 @@ describe('settlePluginCliCandidate after a failure', () => {
     )
     // Why: the lockfile's install is not this candidate, so the approval error must not claim it.
     expect(failure).toBe(original)
+  })
+})
+
+describe('settlePluginCliCandidate when the bytes match an installed record', () => {
+  it('reports the record source and keeps the requested source apart when another repository published them', async () => {
+    vi.mocked(installCatalogReleaseWithApproval).mockResolvedValueOnce(landedInstall(false))
+    const outcome = await settle(
+      { version: '1.1.0', contentHash: NEW_HASH, url: OTHER_URL },
+      { action: 'install' }
+    )
+    expect(outcome.source).toMatchObject({
+      kind: 'git',
+      url: OTHER_URL,
+      repository: 'github.com/other/demo',
+      commit: 'a'.repeat(40)
+    })
+    expect(outcome.requestedSource).toMatchObject({ url: URL })
+    expect(outcome.resolvedCommit).toBe('a'.repeat(40))
+  })
+
+  it('reports the recorded commit and keeps the requested commit apart when the same repository published the bytes at another commit', async () => {
+    vi.mocked(installCatalogReleaseWithApproval).mockResolvedValueOnce(landedInstall(false))
+    const outcome = await settle({ version: '1.1.0', contentHash: NEW_HASH }, { action: 'install' })
+    expect(outcome.source).toMatchObject({ url: URL, commit: 'a'.repeat(40) })
+    expect(outcome.requestedSource).toMatchObject({ url: URL })
+    expect(outcome.resolvedCommit).toBe('a'.repeat(40))
+  })
+
+  it('reports the requested source and no separate request when the record matches the request', async () => {
+    vi.mocked(installCatalogReleaseWithApproval).mockResolvedValueOnce(landedInstall(false))
+    const outcome = await settle(
+      { version: '1.1.0', contentHash: NEW_HASH, commit: 'b'.repeat(40) },
+      { action: 'install' }
+    )
+    expect(outcome.source).toMatchObject({ url: URL, ref: 'main' })
+    expect(outcome.requestedSource).toBeUndefined()
+    expect(outcome.resolvedCommit).toBe('b'.repeat(40))
   })
 })

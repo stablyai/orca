@@ -19,7 +19,12 @@ import {
   readPreviewAccessGrowth
 } from '../catalog/plugin-update-approval'
 import { catalogInstallCandidate, type PluginCliCatalogs } from './plugin-cli-catalog-candidates'
-import { installedRecordOf, pluginInstallMove } from './plugin-cli-install-identity'
+import {
+  installedRecordOf,
+  pluginInstallMove,
+  recordDiffersFromRequest,
+  recordedSourceInfo
+} from './plugin-cli-install-identity'
 import {
   gitInstallCandidate,
   installFailed,
@@ -64,7 +69,10 @@ export type PluginCliInstallOutcome = {
   contentHash: string
   resolvedCommit: string | null
   approval: PluginCliInstallApproval
+  /** The source the installed bytes came from, as the durable record names it. */
   source: PluginInstallSourceInfo
+  /** Set only when the record kept bytes from another repository or commit than the request named. */
+  requestedSource?: PluginInstallSourceInfo
 }
 
 export function candidateHost(deps: PluginCliInstallDeps): PluginCliCandidateHost {
@@ -233,14 +241,24 @@ export async function settlePluginCliCandidate(
           }).catch(async (error: unknown) => {
             throw await afterInstallFailure(deps, candidate, error)
           })
+  // Why: identical bytes keep the record they were first published under, so the report names that source.
+  const record = (await deps.catalogs.installer.readInstallLockfile().catch(() => null))?.plugins[
+    pluginKey
+  ]
+  const recorded = record?.contentHash === outcome.contentHash ? recordedSourceInfo(record) : null
+  const kept =
+    record && recorded && recordDiffersFromRequest(record, candidate)
+      ? { commit: record.resolvedCommit, source: recorded }
+      : null
   return {
     pluginKey,
     version: outcome.version,
     previousVersion: previous?.version ?? null,
     contentHash: outcome.contentHash,
-    resolvedCommit: outcome.resolvedCommit,
+    resolvedCommit: kept ? kept.commit : outcome.resolvedCommit,
     approval,
-    source: candidate.source
+    source: kept ? kept.source : candidate.source,
+    ...(kept ? { requestedSource: candidate.source } : {})
   }
 }
 
