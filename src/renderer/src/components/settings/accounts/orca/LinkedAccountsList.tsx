@@ -32,8 +32,7 @@ const ROW_HOVER =
   'hover:bg-accent/50 focus-within:bg-accent/50 has-[[data-state=open]]:bg-accent/50'
 // Kept focusable while hidden so keyboard users reach it; focus inside the row reveals it.
 const REVEAL =
-  'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-[state=open]:opacity-100'
-const ACTION = 'text-muted-foreground hover:text-foreground'
+  'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 has-[[data-state=open]]:opacity-100'
 
 function connectorOf(source: ConnectorLinkSource): {
   label: string
@@ -61,51 +60,55 @@ function UnlinkButton({
   const name = link.name || link.userId
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button size="sm" variant="ghost-on-accent" className={cn(ACTION, REVEAL)}>
-          {t('settings.linkedAccounts.unlink', 'Unlink')}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 space-y-3 p-3.5">
-        <div className="space-y-1">
-          <p className="text-sm font-medium">
-            {link.workspaceName
-              ? t('settings.linkedAccounts.unlinkTitleIn', 'Unlink {{name}} in {{workspace}}?', {
-                  name,
-                  workspace: link.workspaceName
-                })
-              : t('settings.linkedAccounts.unlinkTitle', 'Unlink {{name}} on {{service}}?', {
-                  name,
-                  service: label
-                })}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {link.workspaceName
-              ? t(
-                  'settings.linkedAccounts.unlinkNoteWorkspace',
-                  'Bots shared with you won’t know it’s you in that workspace.'
-                )
-              : t(
-                  'settings.linkedAccounts.unlinkNote',
-                  'Bots shared with you won’t know it’s you on {{service}}.',
-                  { service: label }
-                )}
-          </p>
-        </div>
-        <div className="flex justify-end gap-2">
-          <Button size="sm" variant="outline" onClick={() => setOpen(false)}>
-            {t('settings.linkedAccounts.cancel', 'Cancel')}
-          </Button>
-          <Button
-            size="sm"
-            variant="destructive"
-            onClick={() => {
-              setOpen(false)
-              onUnlink(link)
-            }}
-          >
+      <span className={REVEAL}>
+        <PopoverTrigger asChild>
+          <Button size="sm" variant="muted-field-icon">
             {t('settings.linkedAccounts.unlink', 'Unlink')}
           </Button>
+        </PopoverTrigger>
+      </span>
+      <PopoverContent align="end" className="w-72">
+        <div className="space-y-3 p-3.5">
+          <div className="space-y-1">
+            <p className="text-sm font-medium">
+              {link.workspaceName
+                ? t('settings.linkedAccounts.unlinkTitleIn', 'Unlink {{name}} in {{workspace}}?', {
+                    name,
+                    workspace: link.workspaceName
+                  })
+                : t('settings.linkedAccounts.unlinkTitle', 'Unlink {{name}} on {{service}}?', {
+                    name,
+                    service: label
+                  })}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {link.workspaceName
+                ? t(
+                    'settings.linkedAccounts.unlinkNoteWorkspace',
+                    'Bots shared with you won’t know it’s you in that workspace.'
+                  )
+                : t(
+                    'settings.linkedAccounts.unlinkNote',
+                    'Bots shared with you won’t know it’s you on {{service}}.',
+                    { service: label }
+                  )}
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={() => setOpen(false)}>
+              {t('settings.linkedAccounts.cancel', 'Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => {
+                setOpen(false)
+                onUnlink(link)
+              }}
+            >
+              {t('settings.linkedAccounts.unlink', 'Unlink')}
+            </Button>
+          </div>
         </div>
       </PopoverContent>
     </Popover>
@@ -150,7 +153,7 @@ function LinkedAccountsSourceRows({
           <p className="min-w-0 flex-1 truncate text-sm">
             {t('settings.linkedAccounts.waiting', 'Waiting for {{service}}…', { service: label })}
           </p>
-          <Button size="sm" variant="ghost" className={ACTION} onClick={() => onCancel(source)}>
+          <Button size="sm" variant="muted-field-icon" onClick={() => onCancel(source)}>
             {t('settings.linkedAccounts.cancel', 'Cancel')}
           </Button>
         </div>
@@ -169,14 +172,11 @@ function LinkedAccountsSourceRows({
               {t('settings.linkedAccounts.none', 'Not linked')}
             </p>
             {canStartLink(trip) ? (
-              <Button
-                size="sm"
-                variant="ghost-on-accent"
-                className={cn('col-start-1 row-start-1', ACTION, REVEAL)}
-                onClick={() => onLink(source)}
-              >
-                {t('settings.linkedAccounts.link', 'Link')}
-              </Button>
+              <span className={cn('col-start-1 row-start-1', REVEAL)}>
+                <Button size="sm" variant="muted-field-icon" onClick={() => onLink(source)}>
+                  {t('settings.linkedAccounts.link', 'Link')}
+                </Button>
+              </span>
             ) : null}
           </div>
         </div>
@@ -210,12 +210,7 @@ function LinkAccountMenu({
       <Tooltip>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              aria-label={label}
-              className="mr-2 text-muted-foreground"
-            >
+            <Button variant="muted-field-icon" size="icon-xs" aria-label={label} className="mr-2">
               <Plus className="size-4" />
             </Button>
           </DropdownMenuTrigger>
