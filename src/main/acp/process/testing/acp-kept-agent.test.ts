@@ -59,6 +59,10 @@ function keptAgent(exits: boolean) {
       return {}
     },
     ack: async () => ({}),
+    scheduleAck: (run: () => void) => {
+      const timer = setTimeout(run, 1_000)
+      return () => clearTimeout(timer)
+    },
     close: async () => ({}),
     detach: async () => ({})
   } as unknown as ProviderRelayChannel
