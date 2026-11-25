@@ -11,6 +11,7 @@ import {
   enabledAiVaultAgents,
   readAiVaultViewOptions,
   writeAiVaultViewOptions,
+  AI_VAULT_PINNED_SESSIONS_MAX,
   type AiVaultViewOptions
 } from './ai-vault-view-options-persistence'
 import type { AiVaultSessionLimit } from '../session-list/ai-vault-session-limit'
@@ -84,11 +85,13 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
   group: AiVaultGroup
   hideEmptySessions: boolean
   sessionLimit: AiVaultSessionLimit
+  pinnedSessions: readonly string[]
   setSort: (sort: AiVaultSort) => void
   setSearchSort: (sort: AiVaultSearchSort) => void
   setGroup: (group: AiVaultGroup) => void
   setHideEmptySessions: (hide: boolean) => void
   setSessionLimit: (limit: AiVaultSessionLimit) => void
+  togglePinnedSession: (id: string) => void
   setAgentEnabled: (agent: AiVaultAgent, enabled: boolean) => void
   setAllAgentsEnabled: (enabled: boolean) => void
   resetViewOptions: () => void
@@ -129,6 +132,21 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
       ),
     []
   )
+  // Newest pin first so the Pinned group lists recency and the cap drops the oldest.
+  const togglePinnedSession = useCallback(
+    (id: string) =>
+      updateOptions((current) => {
+        const without = current.pinnedSessions.filter((pinned) => pinned !== id)
+        if (without.length === current.pinnedSessions.length) {
+          return {
+            ...current,
+            pinnedSessions: [id, ...without].slice(0, AI_VAULT_PINNED_SESSIONS_MAX)
+          }
+        }
+        return { ...current, pinnedSessions: without }
+      }),
+    []
+  )
   const [localDisabledAgents, setLocalDisabledAgents] = useState(() =>
     localAgents ? AI_VAULT_AGENTS.filter((agent) => !localAgents.includes(agent)) : null
   )
@@ -152,6 +170,7 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
   const resetViewOptions = useCallback(() => {
     updateOptions((current) => ({
       ...createDefaultAiVaultViewOptions(),
+      pinnedSessions: current.pinnedSessions,
       ...(local ? { disabledAgents: current.disabledAgents } : {})
     }))
     if (local) {
@@ -168,11 +187,13 @@ export function usePersistedAiVaultViewOptions(localAgents?: readonly AiVaultAge
     group: options.group,
     hideEmptySessions: options.hideEmptySessions,
     sessionLimit: options.sessionLimit,
+    pinnedSessions: options.pinnedSessions,
     setSort,
     setSearchSort,
     setGroup,
     setHideEmptySessions,
     setSessionLimit,
+    togglePinnedSession,
     setAgentEnabled,
     setAllAgentsEnabled,
     resetViewOptions

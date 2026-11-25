@@ -69,6 +69,8 @@ type AiVaultVirtualRowProps = {
   onResumeInNewCli: (session: AiVaultSession, worktreeId: string) => void
   onCopyResume: (session: AiVaultSession, worktreeId?: string | null) => void
   onCopyId: (session: AiVaultSession) => void
+  pinnedSessions: readonly string[]
+  onTogglePin: (session: AiVaultSession) => void
   onCopyPath: (session: AiVaultSession) => void
   onOpenLog: (session: AiVaultSession) => void
   onRevealLog: (session: AiVaultSession) => void
@@ -119,6 +121,8 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
   onResumeInNewCli,
   onCopyResume,
   onCopyId,
+  pinnedSessions,
+  onTogglePin,
   onCopyPath,
   onOpenLog,
   onRevealLog,
@@ -297,6 +301,8 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
               : undefined
           }
           onCopyId={() => onCopyId(row.session)}
+          pinned={pinnedSessions.includes(row.session.id)}
+          onTogglePin={onPickSession ? undefined : () => onTogglePin(row.session)}
           onCopyPath={searchPathAllowed ? () => onCopyPath(row.session) : undefined}
           onOpenLog={
             searchPathAllowed && canOpenLogInOrca ? () => onOpenLog(row.session) : undefined

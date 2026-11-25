@@ -65,6 +65,8 @@ export function VaultSessionRow({
   onResumeInNewTab,
   subagentResume,
   onCopyResume,
+  pinned = false,
+  onTogglePin,
   onCopyId,
   onCopyPath,
   onOpenLog,
@@ -100,6 +102,9 @@ export function VaultSessionRow({
   onResumeInNewTab: () => void
   subagentResume?: AiVaultSubagentResumeActions
   onCopyResume?: () => void
+  /** Whether the session lists in the panel's Pinned group. */
+  pinned?: boolean
+  onTogglePin?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
   onOpenLog?: () => void
@@ -233,6 +238,8 @@ export function VaultSessionRow({
           onResumeInNewChat={onResumeInNewChat}
           onResumeInNewCli={onResumeInNewCli}
           onCopyResume={onCopyResume}
+          pinned={pinned}
+          onTogglePin={onTogglePin}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}
           onOpenLog={onOpenLog}
@@ -313,6 +320,8 @@ export function VaultSessionRow({
           onResumeInNewChat={onResumeInNewChat}
           onResumeInNewCli={onResumeInNewCli}
           onCopyResume={onCopyResume}
+          pinned={pinned}
+          onTogglePin={onTogglePin}
           onCopyId={onCopyId}
           onCopyPath={onCopyPath}
           onOpenLog={onOpenLog}

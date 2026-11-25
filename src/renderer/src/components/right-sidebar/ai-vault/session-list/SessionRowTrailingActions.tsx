@@ -55,6 +55,8 @@ export function SessionRowTrailingActions({
   onResumeInNewChat,
   onResumeInNewCli,
   onCopyResume,
+  pinned = false,
+  onTogglePin,
   onCopyId,
   onCopyPath,
   onOpenLog,
@@ -83,6 +85,8 @@ export function SessionRowTrailingActions({
   onResumeInNewChat?: () => void
   onResumeInNewCli?: () => void
   onCopyResume?: () => void
+  pinned?: boolean
+  onTogglePin?: () => void
   onCopyId: () => void
   onCopyPath?: () => void
   onOpenLog?: () => void
@@ -292,6 +296,8 @@ export function SessionRowTrailingActions({
               jumpWorkspaceId={worktreeInfo?.worktreeId}
               onJumpToWorktree={onJumpToWorktree}
               onCopyResume={onCopyResume}
+              pinned={pinned}
+              onTogglePin={onTogglePin}
               onCopyId={onCopyId}
               onCopyPath={onCopyPath}
               onOpenLog={onOpenLog}
