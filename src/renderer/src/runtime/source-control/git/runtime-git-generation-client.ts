@@ -15,6 +15,10 @@ import {
 } from './runtime-git-client-context'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
+import { DOUBAO_SSH_MODEL_DISCOVERY_CAPABILITY } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
+import { translate } from '@/i18n/i18n'
 
 export async function generateRuntimeCommitMessage(
   context: RuntimeGitContext,
@@ -64,9 +68,41 @@ export async function generateRuntimeCommitMessage(
 
 export async function discoverRuntimeCommitMessageModels(
   context: RuntimeGitContext,
-  agentId: string
+  agentId: string,
+  signal?: AbortSignal
 ): Promise<RuntimeDiscoverCommitMessageModelsResult> {
   const target = context.target
+  if (agentId === 'doubao' && context.connectionId && context.worktreeId) {
+    const expectedEnvironmentPairingRevision =
+      target.kind === 'environment'
+        ? getRuntimeEnvironmentRevision(target.environmentId)
+        : undefined
+    if (
+      target.kind === 'environment' &&
+      !(await runtimeEnvironmentSupportsCapability(
+        target.environmentId,
+        DOUBAO_SSH_MODEL_DISCOVERY_CAPABILITY
+      ))
+    ) {
+      return {
+        success: false,
+        error: translate(
+          'agentLaunch.updateServer',
+          'Update Orca on this workspace’s server, then try again.'
+        )
+      }
+    }
+    return callRuntimeRpc<RuntimeDiscoverCommitMessageModelsResult>(
+      target,
+      'git.discoverCommitMessageModels',
+      {
+        worktree: toRuntimeWorktreeSelector(context.worktreeId),
+        agentId,
+        expectedConnectionId: context.connectionId
+      },
+      { timeoutMs: TEXT_GENERATION_CLIENT_TIMEOUT_MS, expectedEnvironmentPairingRevision, signal }
+    )
+  }
   if (target.kind === 'local' || !context.worktreeId) {
     return window.api.git.discoverCommitMessageModels({
       agentId,

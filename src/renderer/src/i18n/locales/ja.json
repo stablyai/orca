@@ -25110,6 +25110,12 @@
     "waitForImageUploads": "画像のアップロードが完了するまで待ってから、もう一度 [PR を作成] を実行してください。"
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Doubao のモデルを表示…",
+      "title": "この SSH ホストの Doubao モデル",
+      "failed": "Doubao のモデル一覧を取得できませんでした。SSH 接続とこのホストの Doubao CLI を確認してから、もう一度お試しください。",
+      "empty": "Doubao CLI からモデルが返されませんでした。"
+    },
     "refreshModels": "モデルを更新",
     "catalogUnsupportedLaunch": "このホストでは{{agent}}のモデルを利用できません。現在の選択はそのまま適用されます。",
     "catalogEmpty": "{{agent}}に利用可能なモデルはありません。",

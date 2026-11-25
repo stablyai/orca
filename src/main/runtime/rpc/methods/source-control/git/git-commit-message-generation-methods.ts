@@ -84,7 +84,7 @@ export const GIT_COMMIT_MESSAGE_GENERATION_METHODS = [
       if (params.agentId === 'doubao') {
         return discoverDoubaoLaunchModels(
           runtime,
-          { worktree: params.worktree },
+          { worktree: params.worktree, expectedConnectionId: params.expectedConnectionId },
           params.agentCmdOverrides?.doubao
         )
       }

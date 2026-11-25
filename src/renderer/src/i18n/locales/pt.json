@@ -25011,6 +25011,12 @@
     }
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Ver modelos do Doubao…",
+      "title": "Modelos do Doubao neste host SSH",
+      "failed": "Não foi possível listar os modelos do Doubao. Verifique a conexão SSH e a CLI do Doubao neste host e tente novamente.",
+      "empty": "A CLI do Doubao não retornou nenhum modelo."
+    },
     "refreshModels": "Atualizar modelos",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogEmpty": "{{agent}} não tem modelos disponíveis.",

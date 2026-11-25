@@ -214,6 +214,7 @@ export const GitGenerateCommitMessage = WorktreeSelector.extend({
 
 export const GitDiscoverCommitMessageModels = WorktreeSelector.extend({
   agentId: z.string().min(1, 'Missing agent id'),
+  expectedConnectionId: z.string().trim().min(1).max(1024).optional(),
   agentCmdOverrides: z.record(z.string(), z.string()).optional()
 })
 

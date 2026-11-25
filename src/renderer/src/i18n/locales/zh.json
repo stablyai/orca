@@ -26250,6 +26250,12 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "查看豆包模型…",
+      "title": "此 SSH 主机上的豆包模型",
+      "failed": "无法列出豆包模型。请检查 SSH 连接和此主机上的豆包 CLI，然后重试。",
+      "empty": "豆包 CLI 未返回任何模型。"
+    },
     "refreshModels": "刷新模型",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
     "catalogLoadFailed": "无法加载 {{agent}} 模型",

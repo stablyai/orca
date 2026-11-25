@@ -26451,6 +26451,12 @@
     "waitForImageUploads": "이미지 업로드가 끝날 때까지 기다린 뒤 PR 만들기를 다시 시도하세요."
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Doubao 모델 보기…",
+      "title": "이 SSH 호스트의 Doubao 모델",
+      "failed": "Doubao 모델 목록을 가져올 수 없습니다. SSH 연결과 이 호스트의 Doubao CLI를 확인한 후 다시 시도하세요.",
+      "empty": "Doubao CLI가 반환한 모델이 없습니다."
+    },
     "refreshModels": "모델 새로고침",
     "catalogUnsupportedLaunch": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택은 그대로 적용됩니다.",
     "catalogLoadFailed": "{{agent}} 모델을 불러올 수 없습니다.",

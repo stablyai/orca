@@ -39,6 +39,11 @@ import {
 } from './worktree-context-menu-policy'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { WorktreeHandToBotMenuItem } from '@/components/bots/hand-to-bot/WorktreeHandToBotMenuItem'
+import {
+  DoubaoSshModelsDialog,
+  DoubaoSshModelsMenuItem
+} from '@/components/agent/DoubaoSshModelsDialog'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 
 export default function WorktreeContextMenuView({ model }: { model: WorktreeContextMenuModel }) {
   const {
@@ -84,6 +89,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   const t = useTranslate()
   const portalScope = useId()
   const [openedFromAgentRow, setOpenedFromAgentRow] = useState(false)
+  const [sshModelWorkspace, setSshModelWorkspace] = useState<RuntimeGitContext | null>(null)
   const sleepItems = (
     <WorkspaceSleepMenuItems
       isMultiContext={isMultiContext}
@@ -240,6 +246,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 disabled={isDeleting}
               />
               <WorktreeCopySubMenu model={model} />
+              {!openedFromAgentRow && !isDeleting && (
+                <DoubaoSshModelsMenuItem worktree={worktree} onOpen={setSshModelWorkspace} />
+              )}
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
               {folderWorkspaceId ? (
@@ -266,6 +275,12 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
         </DropdownMenuContent>
       </DropdownMenu>
       <WorktreeContextMenuOverlays model={model} />
+      {sshModelWorkspace && (
+        <DoubaoSshModelsDialog
+          workspace={sshModelWorkspace}
+          onClose={() => setSshModelWorkspace(null)}
+        />
+      )}
     </div>
   )
 }

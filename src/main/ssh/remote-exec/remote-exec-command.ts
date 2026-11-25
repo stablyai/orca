@@ -1,4 +1,5 @@
 import type { Readable } from 'node:stream'
+import { StringDecoder } from 'node:string_decoder'
 import type {
   RemoteCommandChannel,
   RemoteInstallTransport
@@ -21,6 +22,8 @@ const MAX_EXEC_OUTPUT_CHARS = 1024 * 1024
 
 type ExecCommandOptions = SshExecOptions & {
   timeoutMs?: number
+  /** Stop probes that need complete machine-readable output rather than a diagnostic tail. */
+  maxOutputBytes?: number
   // Log stderr separately: zero-exit probes can need diagnostics, but mixing them into stdout could match probe tokens or OpenSSH noise.
   onStderr?: (stderr: string) => void
   /** Streamed into the command's stdin, then EOF. A read error terminates the command. */
@@ -154,7 +157,13 @@ async function execCommandOnce(
   command: string,
   options?: ExecCommandOptions
 ): Promise<string> {
-  const { timeoutMs = EXEC_TIMEOUT_MS, onStderr, stdin, ...execOptions } = options ?? {}
+  const {
+    timeoutMs = EXEC_TIMEOUT_MS,
+    maxOutputBytes,
+    onStderr,
+    stdin,
+    ...execOptions
+  } = options ?? {}
   const signal = options?.signal
   if (signal?.aborted) {
     throw createSshOperationAbortError()
@@ -179,6 +188,9 @@ async function execCommandOnce(
   return new Promise((resolve, reject) => {
     let stdout = ''
     let stderr = ''
+    const stdoutDecoder = new StringDecoder('utf8')
+    const stderrDecoder = new StringDecoder('utf8')
+    let outputBytes = 0
     let settled = false
     let terminationError: SshCommandTerminationError | null = null
     let closeGraceTimer: ReturnType<typeof setTimeout> | null = null
@@ -241,13 +253,26 @@ async function execCommandOnce(
       requestTermination(err)
     }
     const onAbort = (): void => requestTermination(createSshOperationAbortError())
+    const appendOutput = (previous: string, decoder: StringDecoder, data: Buffer): string => {
+      if (maxOutputBytes === undefined) {
+        return appendExecOutputTail(previous, decoder.write(data))
+      }
+      outputBytes += data.byteLength
+      if (outputBytes > maxOutputBytes) {
+        requestTermination(new Error('Remote command output exceeded its size limit.'))
+        return previous
+      }
+      return previous + decoder.write(data)
+    }
     const onStdoutData = (data: Buffer): void => {
-      stdout = appendExecOutputTail(stdout, data.toString('utf-8'))
+      stdout = appendOutput(stdout, stdoutDecoder, data)
     }
     const onStderrData = (data: Buffer): void => {
-      stderr = appendExecOutputTail(stderr, data.toString('utf-8'))
+      stderr = appendOutput(stderr, stderrDecoder, data)
     }
     const onClose = (code: number): void => {
+      stdout += stdoutDecoder.end()
+      stderr += stderrDecoder.end()
       if (
         !terminationError &&
         openedWithSystemSsh &&

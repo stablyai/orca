@@ -164,11 +164,12 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   /** `wslUserAct`: the user's start, so its folder check may start a stopped WSL distro (E9). */
   protected async resolveFolderWorkspaceLaunchScope(
     selector: string,
-    options: { wslUserAct?: boolean } = {},
+    options: { wslUserAct?: boolean; requiredHostId?: ExecutionHostId } = {},
     resolvedFolder?: FolderWorkspace,
     checkPath = true
   ): Promise<(TerminalWorkspaceLaunchScope & { folderWorkspace: FolderWorkspace }) | null> {
-    const workspace = resolvedFolder ?? this.resolveFolderWorkspaceSelector(selector)
+    const workspace =
+      resolvedFolder ?? this.resolveFolderWorkspaceSelector(selector, options.requiredHostId)
     if (!workspace) {
       return null
     }

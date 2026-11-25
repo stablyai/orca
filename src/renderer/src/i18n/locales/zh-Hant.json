@@ -24856,6 +24856,12 @@
     }
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "檢視豆包模型…",
+      "title": "這部 SSH 主機上的豆包模型",
+      "failed": "無法列出豆包模型。請檢查 SSH 連線和這部主機上的豆包 CLI，然後再試一次。",
+      "empty": "豆包 CLI 沒有傳回任何模型。"
+    },
     "refreshModels": "重新整理模型",
     "catalogUnsupportedLaunch": "此主機上無法使用 {{agent}} 模型。目前的選擇仍會套用。",
     "catalogEmpty": "{{agent}} 沒有可用模型。",

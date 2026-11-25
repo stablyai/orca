@@ -32,7 +32,7 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { resolveTerminalStartupCwd } from '../../../../shared/shell/launch/terminal-startup-cwd'
 
-import type { ResolvedTerminalWorkspaceLaunchTarget } from './terminal-workspace-launch-target'
+import type * as Launch from './terminal-workspace-launch-target'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { homedir } from 'node:os'
 import { getExplicitWorktreeIdSelector } from '../../workspaces/catalog/runtime-worktree-selection'
@@ -137,7 +137,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   async resolveTerminalWorkspaceLaunchScope(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
+    options: Launch.LaunchScopeOptions = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace
   ): Promise<TerminalWorkspaceLaunchScope> {
@@ -155,11 +155,11 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
   protected async resolveTerminalWorkspaceLaunchTarget(
     selector: string,
     createdWorktree?: Worktree,
-    options: { wslUserAct?: boolean; readOnly?: boolean } = {},
+    options: Launch.LaunchScopeOptions = {},
     resolvedWorktree?: ResolvedWorktree,
     resolvedFolder?: FolderWorkspace,
     checkPath = true
-  ): Promise<ResolvedTerminalWorkspaceLaunchTarget> {
+  ): Promise<Launch.ResolvedTerminalWorkspaceLaunchTarget> {
     if (isFloatingWorkspaceSelector(selector)) {
       // Why no managed worktree: the floating sentinel has no repo or worktree record behind it.
       return {
@@ -192,7 +192,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     const worktree =
       resolvedWorktree ??
       resolveCreatedWorktreeTerminalTarget(this.store, selector, createdWorktree) ??
-      (await this.resolveGitWorktreeSelector(worktreeSelector))
+      (await this.resolveGitWorktreeSelector(worktreeSelector, options.requiredHostId))
     // Repo ids are host-blind; resolve the worktree owner or refuse as unresolved rather than spawn locally with a remote cwd (#11163).
     const resolution = resolveWorktreeLaunchHost(this.store?.getRepos() ?? [], worktree)
     if (resolution.kind === 'ambiguous') {

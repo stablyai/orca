@@ -30637,6 +30637,12 @@
     }
   },
   "agentPicker": {
+    "doubaoSshModels": {
+      "action": "Doubao modellerini görüntüle…",
+      "title": "Bu SSH sunucusundaki Doubao modelleri",
+      "failed": "Doubao modelleri listelenemedi. SSH bağlantısını ve bu sunucudaki Doubao CLI aracını kontrol edip tekrar deneyin.",
+      "empty": "Doubao CLI hiçbir model döndürmedi."
+    },
     "refreshModels": "Modelleri yenile",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogEmpty": "{{agent}} için kullanılabilir model yok.",
