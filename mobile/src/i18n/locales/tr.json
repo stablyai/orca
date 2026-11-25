@@ -8429,6 +8429,7 @@
       "shuffle": "Başka bir görsel",
       "namePlaceholder": "Botunuza ad verin",
       "purposeLabel": "Kimlik",
+      "purposeTooLongForHost": "O bilgisayardaki Orca, amaç için en fazla 200 karakter kabul ediyor. Kısaltın veya oradaki Orca'yı güncelleyin.",
       "purposePlaceholder": "Kim olduğu ve ne yaptığı",
       "create": "Oluştur",
       "fromTemplate": "Şablon kullan",

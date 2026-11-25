@@ -25454,7 +25454,8 @@
       "startFromScratch": "Empezar de cero"
     },
     "errors": {
-      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo."
+      "unsavedDrafts": "Su carpeta tiene cambios sin guardar en el editor. Guarda los cambios o cierra los archivos y vuelve a intentar eliminarlo.",
+      "purposeTooLongForHost": "Orca en ese equipo admite hasta 200 caracteres para el propósito. Acórtalo o actualiza Orca allí."
     },
     "automations": {
       "paused": "En pausa",

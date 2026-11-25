@@ -28674,6 +28674,7 @@
     "errors": {
       "unsavedDrafts": "Klasöründe kaydedilmemiş düzenleyici değişiklikleri var. Bunları kaydedin veya kapatın, ardından silmeyi tekrar deneyin.",
       "nameTaken": "Bu ad başka bir bot tarafından kullanılıyor.",
+      "purposeTooLongForHost": "O bilgisayardaki Orca, amaç için en fazla 200 karakter kabul ediyor. Kısaltın veya oradaki Orca'yı güncelleyin.",
       "generic": "Bir sorun oluştu. Tekrar deneyin.",
       "avatarHomeUnreadable": "Kaydedilen resim okunamadı. Resmi yeniden seçin.",
       "folderNotOwned": "Bu botun klasörü doğrulanamadı.",

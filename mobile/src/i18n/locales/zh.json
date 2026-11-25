@@ -6000,6 +6000,7 @@
       "shuffle": "换一张头像",
       "namePlaceholder": "为你的 bot 命名",
       "purposeLabel": "身份",
+      "purposeTooLongForHost": "该电脑上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或在那台电脑上更新 Orca。",
       "purposePlaceholder": "它是谁，负责做什么",
       "create": "创建",
       "fromTemplate": "使用模板",

@@ -24874,7 +24874,8 @@
       "startFromScratch": "Ohne Vorlage starten"
     },
     "errors": {
-      "unsavedDrafts": "In seinem Ordner gibt es ungespeicherte Änderungen im Editor. Speichere sie oder schließe die betroffenen Dateien und versuche dann erneut, den Bot zu löschen."
+      "unsavedDrafts": "In seinem Ordner gibt es ungespeicherte Änderungen im Editor. Speichere sie oder schließe die betroffenen Dateien und versuche dann erneut, den Bot zu löschen.",
+      "purposeTooLongForHost": "Orca auf diesem Computer erlaubt höchstens 200 Zeichen für den Zweck. Kürze ihn oder aktualisiere Orca dort."
     },
     "automations": {
       "paused": "Pausiert",

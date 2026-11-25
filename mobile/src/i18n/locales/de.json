@@ -5175,6 +5175,9 @@
       "continuesAt": "Fortsetzung um {{time}}",
       "continues": "Fortsetzung um {{time}}",
       "hitLimit": "Limit erreicht · Reset {{time}}"
+    },
+    "new": {
+      "purposeTooLongForHost": "Orca auf diesem Computer erlaubt höchstens 200 Zeichen für den Zweck. Kürze ihn oder aktualisiere Orca dort."
     }
   },
   "sidebar": {
