@@ -164,6 +164,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
         number: number
         type: 'issue' | 'pr'
         preview?: boolean
+        allowSameHost?: boolean
       }
     ) => {
       const repo = assertRegisteredGitHubRepo(args, store)
@@ -174,7 +175,10 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
         args.type,
         getGitHubRepoConnectionId(repo),
         getGitHubLocalGitOptionArgs(store, repo)[0],
-        { preview: args.preview === true }
+        {
+          preview: args.preview === true,
+          ...(args.allowSameHost === true ? { allowSameHost: true } : {})
+        }
       )
     }
   )

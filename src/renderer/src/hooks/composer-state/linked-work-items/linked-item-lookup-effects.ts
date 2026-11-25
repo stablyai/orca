@@ -169,7 +169,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
 
     let cancelled = false
     setLinkDirectLoading(true)
-    // Preserve a full URL’s issue/PR route instead of ambiguously probing its number.
+    // Preserve an addressed item's repository and type instead of probing its number.
     const lookupRepoId = selectedRepo.id
     const lookup =
       normalizedLinkQuery.directLink !== undefined
@@ -177,13 +177,10 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
             repoPath: selectedRepo.path,
             repoId: selectedRepo.id,
             sourceContext: selectedRepoGitHubSourceContext,
-            owner: normalizedLinkQuery.directLink.slug.owner,
-            repo: normalizedLinkQuery.directLink.slug.repo,
-            ...(normalizedLinkQuery.directLink.slug.host
-              ? { host: normalizedLinkQuery.directLink.slug.host }
-              : {}),
+            ...normalizedLinkQuery.directLink.slug,
             number: normalizedLinkQuery.directLink.number,
-            type: normalizedLinkQuery.directLink.type
+            type: normalizedLinkQuery.directLink.type,
+            ...(normalizedLinkQuery.isIssueShorthand ? { allowSameHost: true } : {})
           })
         : lookupGitHubWorkItemForSource({
             repoPath: selectedRepo.path,
@@ -217,6 +214,7 @@ export function useLinkedItemLookupEffects(input: LinkedItemLookupEffectsInput) 
     normalizedLinkQuery.directLink,
     linkPopoverOpen,
     normalizedLinkQuery.directNumber,
+    normalizedLinkQuery.isIssueShorthand,
     selectedRepo,
     selectedRepoGitHubSourceContext,
     selectedRepoIsGit,

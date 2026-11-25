@@ -3,7 +3,9 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
+import { WorkItemByOwnerRepo } from '../../../shared/rpc-contract/github/github-repo-work-item-params'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
+import { getWorkItemByOwnerRepo } from '../client/fetch/get-work-item'
 import { getWorkItemDetails } from './work-item-details'
 
 vi.mock('../../git/command-runner/hosted-cli/gh-exec-file', () => ({
@@ -22,8 +24,15 @@ it('only reads an addressed issue from a host configured on the checkout', async
       if (args[0] === 'auth' && args[1] === 'status') {
         return { stdout: 'Logged in to github.example.test account team-member', stderr: '' }
       }
-      if (args[0] === 'api' && args.some((arg) => arg.startsWith('repos/team/planning/'))) {
-        return { stdout: '', stderr: '' }
+      if (args[0] === 'api' && args[1] === 'repos/team/planning/issues/42') {
+        return {
+          stdout: JSON.stringify({
+            number: 42,
+            title: 'Track next release',
+            html_url: `https://${options?.host}/team/planning/issues/42`
+          }),
+          stderr: ''
+        }
       }
       if (
         args[0] === 'api' &&
@@ -58,6 +67,33 @@ it('only reads an addressed issue from a host configured on the checkout', async
     await expect(issueDetails('github.com')).resolves.toMatchObject({
       item: { url: 'https://github.com/team/planning/issues/42', title: 'Track next release' },
       body: 'Release checklist'
+    })
+
+    const issueLookup = (host: string, allowSameHost?: boolean) => {
+      const params = WorkItemByOwnerRepo.parse({
+        repo: repoPath,
+        owner: 'team',
+        ownerRepo: 'planning',
+        host,
+        number: 42,
+        type: 'issue',
+        allowSameHost
+      })
+      return getWorkItemByOwnerRepo(
+        repoPath,
+        { owner: params.owner, repo: params.ownerRepo, host: params.host },
+        params.number,
+        params.type,
+        undefined,
+        {},
+        { allowSameHost: params.allowSameHost }
+      )
+    }
+    await expect(issueLookup('github.example.test', true)).resolves.toBeNull()
+    await expect(issueLookup('github.com')).resolves.toBeNull()
+    await expect(issueLookup('github.com', true)).resolves.toMatchObject({
+      url: 'https://github.com/team/planning/issues/42',
+      title: 'Track next release'
     })
   } finally {
     rmSync(repoPath, { recursive: true, force: true })

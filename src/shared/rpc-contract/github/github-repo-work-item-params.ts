@@ -26,7 +26,8 @@ export const WorkItemByOwnerRepo = RepoSelector.extend({
   number: z.number().int().positive(),
   type: z.enum(['issue', 'pr']),
   // Older hosts strip it and answer with the full lookup.
-  preview: z.boolean().optional()
+  preview: z.boolean().optional(),
+  allowSameHost: z.boolean().optional()
 })
 
 export const WorkItemDetails = WorkItem.extend({

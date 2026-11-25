@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { CaseSensitive, LoaderCircle, Search } from 'lucide-react'
+import { parseGitHubIssueReference } from '../../../../../shared/github/repositories/github-issue-reference'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { parseGitLabIssueOrMRLink } from '../../../../../shared/new-workspace/gitlab-links'
 import {
@@ -187,7 +188,12 @@ export function useWorkItemSourcePresentation(
     if (jiraSource.intent) {
       return 'jira'
     }
-    if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
+    if (
+      /^#\d+$/.test(trimmed) ||
+      parseGitHubIssueOrPRLink(trimmed) !== null ||
+      ((mode === 'smart' || mode === 'github') &&
+        parseGitHubIssueReference(trimmed)?.kind === 'shorthand')
+    ) {
       return 'github'
     }
     if (parseGitLabIssueOrMRLink(trimmed) !== null) {
@@ -206,7 +212,7 @@ export function useWorkItemSourcePresentation(
       }
     }
     return null
-  }, [jiraSource.intent, linearAvailable, rows, value])
+  }, [jiraSource.intent, linearAvailable, mode, rows, value])
   // Why: a slow host status read must not let Enter accept a pasted Linear URL as plain text.
   const unresolvedLinearUrlIntent =
     linearUrlIntentOwnsInput &&

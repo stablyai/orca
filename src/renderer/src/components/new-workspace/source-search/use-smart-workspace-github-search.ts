@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { normalizeGitHubLinkQuery } from '../../../../../shared/new-workspace/github-links'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
@@ -44,10 +43,6 @@ export function useSmartWorkspaceGithubSearch({
     () => normalizeGitHubLinkQuery(sourceQueryWithinLimit ? debouncedQuery : ''),
     [debouncedQuery, sourceQueryWithinLimit]
   )
-  const parsedGhLink = useMemo(
-    () => (sourceQueryWithinLimit ? parseGitHubIssueOrPRLink(debouncedQuery) : null),
-    [debouncedQuery, sourceQueryWithinLimit]
-  )
 
   useEffect(() => {
     if (disabled || !shouldQueryGithub) {
@@ -62,11 +57,18 @@ export function useSmartWorkspaceGithubSearch({
       setGithubItems([])
     }
     const directNumber = normalizedGhQuery.directNumber
-    const directLink = parsedGhLink
-    if (directLink !== null && handledCrossRepoUrlRef.current !== debouncedQuery.trim()) {
+    const { directLink, isIssueShorthand } = normalizedGhQuery
+    if (
+      directLink &&
+      (isIssueShorthand || handledCrossRepoUrlRef.current !== debouncedQuery.trim())
+    ) {
+      if (isIssueShorthand) {
+        setGithubItems([])
+      }
       setGithubLoading(true)
       void resolveSmartWorkspaceGithubDirectLink({
         directLink,
+        isIssueShorthand,
         crossRepoSwitchTarget,
         repoBackedSearchTargets,
         selectedRepo,
@@ -101,17 +103,16 @@ export function useSmartWorkspaceGithubSearch({
     }
     if (directNumber !== null) {
       setGithubLoading(true)
-      const intent =
-        directLink !== null
-          ? {
-              kind: 'link' as const,
-              owner: directLink.slug.owner,
-              repo: directLink.slug.repo,
-              ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
-              number: directLink.number,
-              type: directLink.type
-            }
-          : { kind: 'hash-number' as const, number: directNumber }
+      const intent = directLink
+        ? {
+            kind: 'link' as const,
+            owner: directLink.slug.owner,
+            repo: directLink.slug.repo,
+            ...(directLink.slug.host ? { host: directLink.slug.host } : {}),
+            number: directLink.number,
+            type: directLink.type
+          }
+        : { kind: 'hash-number' as const, number: directNumber }
       const request = Promise.all(
         repoBackedSearchTargets.map((target) =>
           lookupSmartGitHubSubmitItem({
@@ -237,7 +238,6 @@ export function useSmartWorkspaceGithubSearch({
     fetchWorkItemsAcrossRepos,
     getCachedWorkItems,
     normalizedGhQuery,
-    parsedGhLink,
     repos,
     repoBackedSearchTargets,
     githubSourceContext,

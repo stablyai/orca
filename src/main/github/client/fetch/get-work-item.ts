@@ -8,6 +8,7 @@ import { classifyGhError } from '../../api/gh-error-classification'
 import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
 
 import { resolveIssueGitHubApiRepositorySource } from '../../repositories/github-api-repository'
+import { isValidGitHubApiRepository } from '../../repositories/github-api-repository-validation'
 import { resolveGitHubWorkItemLinkRepository } from '../../repositories/github-work-item-link-repository'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { MainWorkItem } from './../map/work-item-field-coercion'
@@ -162,8 +163,12 @@ export async function getWorkItemByOwnerRepo(
   type: 'issue' | 'pr',
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { preview?: boolean } = {}
+  options: { preview?: boolean; allowSameHost?: boolean } = {}
 ): Promise<MainWorkItem | null> {
+  const allowSameHost = type === 'issue' && options.allowSameHost === true
+  if (allowSameHost && !isValidGitHubApiRepository(ownerRepo)) {
+    return null
+  }
   const { item } = await getWorkItemWithExactRepository(
     repoPath,
     ownerRepo,
@@ -171,7 +176,7 @@ export async function getWorkItemByOwnerRepo(
     type,
     connectionId,
     localGitOptions,
-    options
+    { ...options, allowSameHost }
   )
   return item
 }

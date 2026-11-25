@@ -85,7 +85,7 @@ export class RuntimeGitHubRepositoryQueryCommands {
     ownerRepo: { owner: string; repo: string; host?: string },
     number: number,
     type: 'issue' | 'pr',
-    options: { preview?: boolean } = {}
+    options: Parameters<typeof getWorkItemByOwnerRepo>[6] = {}
   ): Promise<Awaited<ReturnType<typeof getWorkItemByOwnerRepo>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getWorkItemByOwnerRepo(

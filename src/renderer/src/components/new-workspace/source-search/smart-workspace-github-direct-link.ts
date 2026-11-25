@@ -1,5 +1,6 @@
 import type React from 'react'
-import type { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import type { GitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import { normalizeGitHubLinkQuery } from '../../../../../shared/new-workspace/github-links'
 import {
   lookupGitHubWorkItemByOwnerRepoForSource,
   lookupGitHubWorkItemForSource
@@ -17,10 +18,9 @@ import type {
 } from '../name-field/smart-workspace-name-field-model'
 import { findMatchingRepoForSlug, getRepoSlugCached, sameSlug } from './smart-workspace-repo-slug'
 
-type DirectLink = NonNullable<ReturnType<typeof parseGitHubIssueOrPRLink>>
-
 export async function resolveSmartWorkspaceGithubDirectLink({
   directLink,
+  isIssueShorthand,
   crossRepoSwitchTarget,
   repoBackedSearchTargets,
   selectedRepo,
@@ -30,16 +30,37 @@ export async function resolveSmartWorkspaceGithubDirectLink({
   handledCrossRepoUrlRef,
   query
 }: {
-  directLink: DirectLink
+  directLink: GitHubIssueOrPRLink
+  isIssueShorthand?: boolean
   crossRepoSwitchTarget: 'project' | 'task-source'
   repoBackedSearchTargets: readonly RepoBackedSearchTarget[]
   selectedRepo: RepoOption | null
   githubSourceContext: TaskSourceContext | null
   repos: readonly RepoOption[]
-  repoSlugCache: Map<string, DirectLink['slug']>
+  repoSlugCache: Map<string, GitHubIssueOrPRLink['slug']>
   handledCrossRepoUrlRef: React.RefObject<string | null>
   query: string
 }): Promise<{ items: GitHubWorkItem[]; prompt: CrossRepoPrompt | null }> {
+  if (isIssueShorthand) {
+    if (!selectedRepo?.path) {
+      return { items: [], prompt: null }
+    }
+    const selectedSlug = await getRepoSlugCached(selectedRepo, githubSourceContext, repoSlugCache)
+    const link = normalizeGitHubLinkQuery(query, selectedSlug?.host).directLink
+    if (!link) {
+      return { items: [], prompt: null }
+    }
+    const item = await lookupGitHubWorkItemByOwnerRepoForSource({
+      repoPath: selectedRepo.path,
+      repoId: selectedRepo.id,
+      sourceContext: githubSourceContext,
+      ...link.slug,
+      number: link.number,
+      type: link.type,
+      allowSameHost: true
+    })
+    return { items: item ? [item] : [], prompt: null }
+  }
   if (crossRepoSwitchTarget === 'task-source') {
     const matchingTarget = await findMatchingRepoForSlug(
       repoBackedSearchTargets.map((target) => ({

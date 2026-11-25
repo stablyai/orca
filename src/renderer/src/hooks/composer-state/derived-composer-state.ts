@@ -203,8 +203,8 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
   }, [issueCommandTemplate, linkedWorkItem, shouldApplyLinkedOnlyTemplate])
 
   const normalizedLinkQuery = useMemo(
-    () => normalizeGitHubLinkQuery(linkDebouncedQuery),
-    [linkDebouncedQuery]
+    () => normalizeGitHubLinkQuery(linkDebouncedQuery, selectedRepoSlug?.host),
+    [linkDebouncedQuery, selectedRepoSlug?.host]
   )
 
   const filteredLinkItems = useMemo(() => {
