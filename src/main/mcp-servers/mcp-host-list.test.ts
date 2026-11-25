@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { _resetSecretStoreForTests, setSecretStore } from '../../shared/secure-storage/secret-store'
 import { readBotToolCredential, useBotToolCredentialsRoot } from '../bots/bot-tool-credentials'
 import { botToolsPath, changeBotToolServers } from '../bots/bot-tools-file'
-import { darkSwitchRuntimeCapabilities } from '../runtime/construction/dark-switch-runtime-capabilities'
 import {
   addMcpServer,
   listMcpServers,
@@ -16,7 +15,6 @@ import {
   setMcpServerWorkspaces,
   updateMcpServer
 } from './mcp-host-list'
-import { assertMcpServersFeatureEnabled } from './mcp-servers-feature'
 
 const SECRET = 'sk-live-secret-value'
 const dirs: string[] = []
@@ -25,7 +23,6 @@ const tempDir = (prefix: string): string => {
   dirs.push(dir)
   return dir
 }
-const switchBefore = process.env.ORCA_MCP_SERVERS
 const stored = (folder: string) => JSON.parse(readFileSync(botToolsPath(folder), 'utf8'))
 
 beforeEach(() => {
@@ -40,11 +37,6 @@ beforeEach(() => {
 afterEach(() => {
   useBotToolCredentialsRoot(null)
   _resetSecretStoreForTests()
-  if (switchBefore === undefined) {
-    delete process.env.ORCA_MCP_SERVERS
-  } else {
-    process.env.ORCA_MCP_SERVERS = switchBefore
-  }
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -128,19 +120,5 @@ describe("a host's MCP server list", () => {
       docs?.id
     ])
     expect((await listMcpServers(folder)).map((server) => server.id)).toEqual([pg?.id, docs?.id])
-  })
-})
-
-describe('the MCP servers switch', () => {
-  it('advertises nothing and refuses every call while off', () => {
-    delete process.env.ORCA_MCP_SERVERS
-    expect(darkSwitchRuntimeCapabilities()).not.toContain('mcp-servers.v1')
-    expect(assertMcpServersFeatureEnabled).toThrow(
-      expect.objectContaining({ code: 'mcp_servers_off' })
-    )
-
-    process.env.ORCA_MCP_SERVERS = '1'
-    expect(darkSwitchRuntimeCapabilities()).toContain('mcp-servers.v1')
-    expect(assertMcpServersFeatureEnabled).not.toThrow()
   })
 })
