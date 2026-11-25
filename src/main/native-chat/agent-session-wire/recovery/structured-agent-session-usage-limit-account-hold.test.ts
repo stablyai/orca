@@ -332,3 +332,43 @@ it('releases a relaunched known-reset cut on room read after earlier unknown spe
   })
   expect(holds.ready('chat', cut, SWITCHED + 140_000)).toBe(true)
 })
+
+it('does not let a live-session spent reading strand a relaunched known-reset cut', async () => {
+  const resetsAt = SWITCHED + 60_000
+  const holds = new UsageLimitAccountHolds()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: attribution reads only these fields
+  const host = {
+    store: {
+      getRecord: () => ({
+        provider: 'codex',
+        location: { wslDistro: null },
+        launchedAccount: { fence: 4, accountHome: NEXT },
+        lease: { runtimeFence: 4 }
+      })
+    },
+    launchAccountHome: async () => NEXT,
+    usageLimitAutoContinue: {
+      accountUsage: async () => ({
+        scope: NEXT.path,
+        account: {
+          key: NEXT.path,
+          read: (): ProviderRateLimits => ({
+            ...reading({ usedPercent: 100, resetsAt }),
+            session: {
+              usedPercent: 100,
+              windowMinutes: 300,
+              resetsAt: null,
+              resetDescription: null
+            },
+            usageMetadata: { source: 'live-session' }
+          }),
+          refresh: () => false
+        }
+      })
+    }
+  } as unknown as Parameters<UsageLimitAccountHolds['attribute']>[1]
+  const cut = { ...CUT, resetsAt }
+  await holds.attribute('chat', host, cut, SWITCHED)
+  expect(holds.verdict('chat', cut, resetsAt + 200_000).unknownReset).toBe(false)
+  expect(holds.ready('chat', cut, resetsAt + 200_000)).toBe(true)
+})
