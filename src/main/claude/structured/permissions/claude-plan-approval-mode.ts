@@ -46,6 +46,14 @@ export function claudeBuildPermissionMode(
   })
 }
 
+/** Sessions whose approved plan's exit is in flight: Plan is being left already. */
+const exitingPlan = new WeakSet<object>()
+
+/** A live pick made now goes out behind the exit instead of waiting for Plan to be left. */
+export function claudeLeavingPlanOnApproval(session: object): boolean {
+  return exitingPlan.has(session)
+}
+
 function logPlanExitFailure(error: unknown): void {
   try {
     console.warn('[claude] leaving Plan mode after an approved plan failed:', error)
@@ -89,20 +97,24 @@ export function leaveClaudePlanModeOnApproval(
       return undefined
     })
   try {
+    exitingPlan.add(session)
     const asked = askFirst?.()
     ;(asked
       ? asked.then(() => leave(claudePlanApprovalMode(session)))
       : leave(claudePlanApprovalMode(session))
-    ).catch((error: unknown) => {
-      // Claude accepted a step out of Plan before a later one went unanswered: the chat has
-      // left Plan, and its fallback is owed again.
-      if (error instanceof ClaudePermissionModeUnsettled) {
-        session.appliedInputOptions?.set('interactionMode', 'default')
-        session.appliedInputOptions?.delete('buildPermissionMode')
-      }
-      logPlanExitFailure(error)
-    })
+    )
+      .catch((error: unknown) => {
+        // Claude accepted a step out of Plan before a later one went unanswered: the chat has
+        // left Plan, and its fallback is owed again.
+        if (error instanceof ClaudePermissionModeUnsettled) {
+          session.appliedInputOptions?.set('interactionMode', 'default')
+          session.appliedInputOptions?.delete('buildPermissionMode')
+        }
+        logPlanExitFailure(error)
+      })
+      .finally(() => exitingPlan.delete(session))
   } catch (error) {
+    exitingPlan.delete(session)
     logPlanExitFailure(error)
   }
 }

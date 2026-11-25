@@ -4,6 +4,7 @@ import type { ClaudeSession } from '../structured/claude-structured-session-stat
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { claudePermissionModeFor } from '../structured/launch/claude-structured-permission-options'
 import { claudeInPlan } from '../structured/permissions/claude-full-access-refusal'
+import { claudeLeavingPlanOnApproval } from '../structured/permissions/claude-plan-approval-mode'
 import {
   claimClaudePermissionModeRequest,
   claudeBypassRefusalOf,
@@ -72,8 +73,9 @@ async function applyBuildMode(
   // and the next reattach all read it, not the mode the agent was launched in.
   session.launchIntent = { ...session.launchIntent, permissionMode: mode }
   session.appliedInputOptions.set('buildPermissionMode', mode)
-  if (claudeInPlan(session)) {
-    // Plan stays until the user leaves it; leaving it (or a plan exit in flight) writes this mode.
+  if (claudeInPlan(session) && !claudeLeavingPlanOnApproval(session)) {
+    // Plan stays until the user leaves it; leaving it writes this mode. An approved plan's exit
+    // in flight is already leaving Plan, so the pick goes out now behind it.
     return
   }
   try {
