@@ -45,7 +45,7 @@ export function createFolderWorkspaceCatalogActions(
       return false
     }
     let applied = false
-    let observedNoteCopies: string[] = []
+    let observedNoteCopies: ReturnType<typeof observeFolderCatalogInput>['observed'] = []
     set((current) => {
       if (!isHostCatalogFenceCurrent(get, fence)) {
         return current
@@ -65,18 +65,20 @@ export function createFolderWorkspaceCatalogActions(
         current.projectGroups
       )
       const rowHostId = createFolderWorkspaceHostResolver(current.projectGroups)
-      // Why: a protected note copy counts every accepted fetch of its row, even an equal-valued one.
-      observedNoteCopies = observeFolderCatalogInput({
+      // Why: a protected note copy counts every accepted fetch of its row, even an equal-valued one,
+      // and its unsaved and confirmed notes are applied in this same commit.
+      const observation = observeFolderCatalogInput({
         catalogHostId: catalog.hostId,
         fetchGeneration: fence.generation,
         merged: folderWorkspaces,
         rowHostId
       })
+      observedNoteCopies = observation.observed
       // Why: a fetch sampled before a protected note commit must not roll those notes back.
       const fencedFolderWorkspaces = keepFencedFolderNotes({
         catalogHostId: catalog.hostId,
         fetchGeneration: fence.generation,
-        merged: folderWorkspaces,
+        merged: observation.merged,
         current: current.folderWorkspaces,
         rowHostId
       })

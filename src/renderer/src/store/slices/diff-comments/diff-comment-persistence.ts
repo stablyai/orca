@@ -17,6 +17,7 @@ import {
   trackFolderNoteAction
 } from './folder-note-protection'
 import { normalizeDiffComment } from './diff-comment-normalize'
+import type { FolderNoteScope } from './folder-note-actions'
 
 export { normalizeDiffComment }
 
@@ -44,6 +45,8 @@ export type DiffCommentMutation = {
   owner: DiffCommentOwner
   previous: DiffComment[] | undefined
   next: DiffComment[]
+  // Notes the action is about beyond those it changes (a clear's scope); folder recovery checks them.
+  scope?: FolderNoteScope
 }
 
 function folderExecutionHostIdOf(
@@ -89,7 +92,14 @@ export function enqueueDiffCommentPersist(
   lastMutationNextByQueue.set(floorKey, mutation.next)
   const folderOwner = mutation.owner.kind === 'folder' ? mutation.owner : null
   const folderAction = folderOwner
-    ? trackFolderNoteAction(floorKey, folderOwner, get, mutation.previous, mutation.next)
+    ? trackFolderNoteAction({
+        copyKey: floorKey,
+        owner: folderOwner,
+        get,
+        previous: mutation.previous,
+        next: mutation.next,
+        scope: mutation.scope
+      })
     : null
   if (folderOwner) {
     refreshProtectedFolderDisplay(floorKey, get, set)
@@ -99,16 +109,13 @@ export function enqueueDiffCommentPersist(
     const tail = persistQueueByWorktree.get(queueKey) ?? Promise.resolve()
     const read = tail.then(task, task)
     persistQueueByWorktree.set(queueKey, read)
-    const release = (): void => {
-      if (persistQueueByWorktree.get(queueKey) === read) {
-        persistQueueByWorktree.delete(queueKey)
-      }
-    }
+    const release = (): void => releaseQueueTail(queueKey, read)
     read.then(release, release)
   }
   const run = async (): Promise<void> => {
-    // Why: after a failed folder save, every queued write is one merge-only action (see folder-note-protection).
-    if (folderAction && isFolderNoteProtectionActive(floorKey)) {
+    // Why: after a failed folder save, every queued write is one merge-only action (see folder-note-protection);
+    // one refused unsent (its row replaced, or past the backlog bound) never becomes an ordinary write.
+    if (folderAction && (isFolderNoteProtectionActive(floorKey) || folderAction.refusedUnsent)) {
       return runProtectedFolderNoteAction({ copyKey: floorKey, action: folderAction, get, set })
     }
     // Capture epoch at dequeue with coalesced stateList; enqueue-time epochs would reject floors spanning chain breaks.
@@ -189,6 +196,7 @@ export function enqueueDiffCommentPersist(
           owner: folderOwner,
           failed: folderAction,
           floor: (rollbackFloor ?? []).map(normalizeDiffComment),
+          queueArrays: [rollbackFloor, lastMutationNextByQueue.get(floorKey)],
           get,
           set,
           enqueueRead
@@ -215,27 +223,32 @@ export function enqueueDiffCommentPersist(
   persistQueueByWorktree.set(queueKey, next)
   // Why: clear the queue entry only if still the tail, so later enqueues chain onto the real in-flight promise.
   // Why: then(cleanup, cleanup) not finally, so a rejection is consumed here rather than re-thrown as unhandledRejection.
-  const cleanup = (): void => {
-    if (persistQueueByWorktree.get(queueKey) === next) {
-      persistQueueByWorktree.delete(queueKey)
-      // Why: tail-guarded only; a mid-burst delete would strand the remaining writes of the burst without a floor.
-      for (const key of floorKeysByQueue.get(queueKey) ?? []) {
-        lastPersistedByQueue.delete(key)
-        lastMutationNextByQueue.delete(key)
-        floorSeedEpochByQueue.delete(key)
-      }
-      floorKeysByQueue.delete(queueKey)
-    }
-  }
+  const cleanup = (): void => releaseQueueTail(queueKey, next)
   next.then(cleanup, cleanup)
   return next
+}
+
+// Shared by writes and reads: whichever is the queue's last task frees the floors it kept.
+function releaseQueueTail(queueKey: string, task: Promise<void>): void {
+  if (persistQueueByWorktree.get(queueKey) !== task) {
+    return
+  }
+  persistQueueByWorktree.delete(queueKey)
+  // Why: tail-guarded only; a mid-burst delete would strand the remaining writes of the burst without a floor.
+  for (const key of floorKeysByQueue.get(queueKey) ?? []) {
+    lastPersistedByQueue.delete(key)
+    lastMutationNextByQueue.delete(key)
+    floorSeedEpochByQueue.delete(key)
+  }
+  floorKeysByQueue.delete(queueKey)
 }
 
 // Why: derive the next list inside the `set` updater so concurrent writes can't clobber each other via a stale closure.
 export function mutateDiffComments(
   set: Parameters<StateCreator<AppState>>[0],
   owner: DiffCommentOwner,
-  mutate: (existing: DiffComment[]) => DiffComment[] | null
+  mutate: (existing: DiffComment[]) => DiffComment[] | null,
+  scope?: FolderNoteScope
 ): DiffCommentMutation | null {
   const worktreeId = owner.worktreeId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
@@ -285,7 +298,7 @@ export function mutateDiffComments(
   if (next === null) {
     return null
   }
-  return { owner, previous, next }
+  return { owner, previous, next, ...(scope ? { scope } : {}) }
 }
 
 // Why: on IPC-write failure, roll back optimistic state so the renderer matches disk (identity-guarded below).
@@ -332,6 +345,17 @@ function rollback(
     )
     return { worktreesByRepo: { ...s.worktreesByRepo, [repoId]: nextList } }
   })
+}
+
+/** Test seam: how many queue and floor entries are still held, across every copy. */
+export function diffCommentQueueEntriesForTests(): number {
+  return (
+    persistQueueByWorktree.size +
+    floorKeysByQueue.size +
+    lastPersistedByQueue.size +
+    lastMutationNextByQueue.size +
+    floorSeedEpochByQueue.size
+  )
 }
 
 /** Test seam: forget every queue and floor between cases, since test files can share this module. */

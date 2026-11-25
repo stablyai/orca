@@ -45,7 +45,7 @@ describe('folder note recovery: what this copy shows', () => {
       ({ delta: new Map(delta), before: new Map() }) as FolderNoteAction
     const base = [note('a', 'a'), note('b', 'b'), note('c', 'c')]
 
-    const shown = overlayFolderNotes(base, [
+    const shown = overlayFolderNotes(base, new Map(), [
       action([['a', undefined]]),
       action([['d', note('d', 'd')]]),
       action([['a', note('a', 'a2')]]),
@@ -187,28 +187,22 @@ describe('folder note recovery: reads and catalog fetches', () => {
     expect(host.effects.merges).toBe(0)
   })
 
-  it('sends paired reads as background calls that never wake the host', async () => {
-    const { host, failOnce } = setupFolderNotes('paired', [note('X', 'v0')])
-    await failOnce()
-    await vi.waitFor(() => expect(host.effects.reads).toBe(1))
-    const readCall = runtimeEnvironmentCall.mock.calls.find(
-      ([args]) => args.method === 'folderWorkspace.mergeDiffComments'
-    )?.[0]
-    expect(readCall).toMatchObject({ background: true, params: { mode: 'read' } })
-    expect(readCall).not.toHaveProperty('wake')
-  })
-
-  it('sends no further automatic reads to a host without the merge method', async () => {
-    const older = setupFolderNotes('paired-older', [note('X', 'v0')])
-    await older.failOnce()
-    expect(await older.add('A2', 2)).toBeNull()
-    expect(await older.add('A3', 3)).toBeNull()
-    const mergeCalls = runtimeEnvironmentCall.mock.calls.filter(
-      ([args]) => args.method === 'folderWorkspace.mergeDiffComments'
-    )
-    // One read learns the method is missing; after that only the user's own saves are tried.
-    expect(mergeCalls.map(([args]) => args.params.mode)).toEqual(['read', 'merge', 'merge'])
-  })
+  // Why: a paired route's preparation can rebuild an SSH tunnel or restart a stopped server.
+  it.each(['paired', 'paired-older'] as const)(
+    'never reads a %s host on its own; only the user\'s saves go out',
+    async (kind) => {
+      const { add, failOnce, startCatalogFetch } = setupFolderNotes(kind, [note('X', 'v0')])
+      await failOnce()
+      await add('A2', 2)
+      await startCatalogFetch().deliver()
+      await add('A3', 3)
+      const modes = runtimeEnvironmentCall.mock.calls
+        .filter(([args]) => args.method === 'folderWorkspace.mergeDiffComments')
+        .map(([args]) => args.params.mode)
+      // An older host refuses both; a current one ends protection with the first acknowledged save.
+      expect(modes).toEqual(kind === 'paired' ? ['merge'] : ['merge', 'merge'])
+    }
+  )
 
   it('confirms a small edit on a row too large to return, and says once that it could not show it', async () => {
     const huge = note('H', 'h'.repeat(3 * 1024 * 1024))
@@ -228,21 +222,41 @@ describe('folder note recovery: reads and catalog fetches', () => {
 })
 
 describe('folder note recovery: bounded backlog', () => {
-  it('refuses an action beyond the protected backlog bound without sending it', async () => {
-    const { host, add, failOnce } = setupFolderNotes('local', [])
+  it('refuses an action beyond the protected backlog bound before showing or sending it', async () => {
+    const { host, add, failOnce, shown } = setupFolderNotes('local', [])
     await failOnce()
     await vi.waitFor(() => expect(host.effects.reads).toBe(1))
     const gate = deferred()
     host.mergeGate = gate.promise
-    const queued = Array.from({ length: MAX_PENDING_FOLDER_NOTE_ACTIONS + 1 }, (_, index) =>
+    const queued = Array.from({ length: MAX_PENDING_FOLDER_NOTE_ACTIONS }, (_, index) =>
+      add(`n${index}`, index + 1)
+    )
+    const beyond = add('beyond', 999)
+    expect(bodies(shown())).not.toContain('beyond')
+    gate.resolve()
+
+    const results = await Promise.all(queued)
+
+    expect(results.every((result) => result !== null)).toBe(true)
+    expect(await beyond).toBeNull()
+    expect(host.effects.merges).toBe(MAX_PENDING_FOLDER_NOTE_ACTIONS)
+  })
+
+  it('keeps the bound when an ordinary backlog crosses into protection', async () => {
+    const { host, add } = setupFolderNotes('local', [])
+    const gate = deferred()
+    host.ordinaryGate = gate.promise
+    host.nextOrdinary = 'refuse'
+    const queued = Array.from({ length: MAX_PENDING_FOLDER_NOTE_ACTIONS + 5 }, (_, index) =>
       add(`n${index}`, index + 1)
     )
     gate.resolve()
 
     const results = await Promise.all(queued)
 
-    expect(results.slice(0, -1).every((result) => result !== null)).toBe(true)
-    expect(results.at(-1)).toBeNull()
+    expect(results[0]).toBeNull()
+    // The failed save and the four past the bound; the bound's worth are sent merge-only.
+    expect(results.filter((result) => result === null)).toHaveLength(5)
     expect(host.effects.merges).toBe(MAX_PENDING_FOLDER_NOTE_ACTIONS)
   })
 })
@@ -255,15 +269,21 @@ describe('folder note recovery: replies it cannot trust', () => {
     ],
     ['names another row', () => ({ folderWorkspaceId: 'folder-2' })],
     ['comes from a recreated row', () => ({ createdAt: 99 })],
-    ['has a malformed verdict', () => ({ verdict: [{ id: 1 }] })]
+    ['has a malformed verdict', () => ({ verdict: [{ id: 1 }] })],
+    [
+      'names a note it did not touch',
+      (_request: { requestId: string }, receipt: { verdict: unknown[] }) => ({
+        verdict: [...receipt.verdict, { id: 'extra', version: '' }]
+      })
+    ]
   ])('treats a receipt that %s as unconfirmed and stays protected', async (_name, corrupt) => {
     const { host, add, failOnce } = setupFolderNotes('local', [note('X', 'v0')])
     await failOnce()
     await vi.waitFor(() => expect(host.effects.reads).toBe(1))
-    folderWorkspacesApi.mergeDiffComments.mockImplementationOnce(async (request) => ({
-      ...(await host.merge(request)),
-      ...corrupt(request)
-    }))
+    folderWorkspacesApi.mergeDiffComments.mockImplementationOnce(async (request) => {
+      const receipt = await host.merge(request)
+      return { ...receipt, ...corrupt(request, receipt as { verdict: unknown[] }) }
+    })
 
     expect(await add('Y', 2)).toBeNull()
 

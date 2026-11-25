@@ -121,10 +121,17 @@ describe('folder notes after a failed save', () => {
   it('orders this copy’s own acknowledged writes causally even when the host clock steps back', async () => {
     const { host, add, failOnce, shown } = setupFolderNotes('local')
     await failOnce()
+    await vi.waitFor(() => expect(host.effects.reads).toBe(1))
+    let release: () => void = () => {}
+    host.mergeGate = new Promise((resolve) => {
+      release = resolve
+    })
+    // Both writes are in one protected burst; each host commit carries an earlier clock.
     host.clock = 100
-    expect(await add('first')).not.toBeNull()
-    host.clock = 90
-    expect(await add('second', 2)).not.toBeNull()
+    const writes = [add('first'), add('second', 2)]
+    release()
+    expect(await Promise.all(writes)).toEqual([expect.anything(), expect.anything()])
+    expect(host.row.updatedAt).toBeLessThan(100)
 
     await vi.waitFor(() =>
       expect(shown().map((entry) => entry.split('=')[1])).toEqual(['first', 'second'])

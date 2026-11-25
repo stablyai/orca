@@ -1,35 +1,37 @@
 import type { AppState } from '../../types'
 import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
-import { findOwnedFolder, diffCommentOwnerKey, type DiffCommentOwner } from './diff-comment-owner'
+import { diffCommentOwnerKey, type DiffCommentOwner } from './diff-comment-owner'
 import {
   FolderNoteWriteNotSentError,
   isDefinitiveFolderNoteRefusal,
-  isUnsupportedFolderNoteMerge,
   mergeFolderDiffComments
 } from './folder-note-merge-call'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
-  awaitFolderNoteActionsTouching,
+  borrowedTookEffect,
   createFolderNoteAction,
+  latestQueuedActionsTouching,
+  NOTHING_SATISFIED,
+  ownedFolderRow,
   resetFolderNoteActionsForTests,
   settleFolderNoteAction,
   unsettledFolderNoteActions,
   type FolderNoteAction,
+  type FolderNoteScope,
   type FolderOwner
 } from './folder-note-actions'
-import {
-  checkFolderNoteReceipt,
-  folderNoteActionSatisfied,
-  folderNoteRequest,
-  isDefinitiveRefusalReply
-} from './folder-note-receipt'
+import { checkFolderNoteReceipt, folderNoteRequest, isDefinitiveRefusalReply } from './folder-note-receipt'
 import {
   adoptHostList,
+  isCurrentCopy,
   MAX_PENDING_FOLDER_NOTE_ACTIONS,
   noticeOutsideReplacement,
   observe,
   protectedCopies,
   publish,
+  recordConfirmed,
+  retireIfReplaced,
+  sentActions,
   settle,
   type EnqueueFolderNoteRead,
   type ProtectedCopy,
@@ -48,46 +50,60 @@ export class FolderNoteNotSavedError extends Error {
   }
 }
 
+/**
+ * Whether a new action on this copy may be made at all. Checked before the optimistic change is
+ * shown, so a full protected backlog never shows a note it will not try to save.
+ */
+export function admitFolderNoteAction(owner: DiffCommentOwner): boolean {
+  const copyKey = diffCommentOwnerKey(owner)
+  return (
+    owner.kind !== 'folder' ||
+    !protectedCopies.has(copyKey) ||
+    unsettledFolderNoteActions(copyKey).length < MAX_PENDING_FOLDER_NOTE_ACTIONS
+  )
+}
+
 /** Records an action when it is enqueued; its delta is fixed now, from the lists the user acted on. */
-export function trackFolderNoteAction(
-  copyKey: string,
-  owner: FolderOwner,
-  get: () => AppState,
-  previous: readonly DiffComment[] | undefined,
+export function trackFolderNoteAction(args: {
+  copyKey: string
+  owner: FolderOwner
+  get: () => AppState
+  previous: readonly DiffComment[] | undefined
   next: readonly DiffComment[]
-): FolderNoteAction {
-  const action = createFolderNoteAction(copyKey, owner, get, previous, next)
-  const copy = protectedCopies.get(copyKey)
-  if (copy) {
+  scope?: FolderNoteScope
+}): FolderNoteAction {
+  const action = createFolderNoteAction(args)
+  const copy = protectedCopies.get(args.copyKey)
+  // Why not noticeOutsideReplacement: state already holds this action's own optimistic list.
+  if (copy && retireIfReplaced(copy, args.get)) {
     // The user acted on what state showed; a list the queue did not put there is a newer observation.
-    if (previous !== copy.shown) {
-      observe(copy, previous)
+    if (args.previous !== copy.shown || copy.authoritative === undefined) {
+      observe(copy, args.previous)
     }
-    action.overflow = copy.pending.length >= MAX_PENDING_FOLDER_NOTE_ACTIONS
     copy.pending.push(action)
     copy.actionSeq += 1
-    copy.shown = next as DiffComment[]
+    copy.shown = args.next as DiffComment[]
   }
   return action
 }
 
 export function settleOrdinaryFolderNoteAction(copyKey: string, action: FolderNoteAction): void {
-  settleFolderNoteAction(copyKey, action, true)
+  settleFolderNoteAction(copyKey, action, new Set(action.delta.keys()))
 }
 
 /**
- * For a protected copy, whether the queued actions that make a no-op look like one took effect;
- * true at once when nothing queued touches what `matches` selects (a genuinely empty scope).
+ * For a protected copy, whether the queued actions that make a no-op look like one took effect,
+ * judged per id by the latest queued action that changed it; true at once for an empty scope.
  */
-export function awaitProtectedFolderNoteDependency(
+export async function awaitProtectedFolderNoteDependency(
   owner: DiffCommentOwner,
-  matches: (id: string, note: DiffComment | undefined) => boolean
+  scope: FolderNoteScope
 ): Promise<boolean> {
   const copyKey = diffCommentOwnerKey(owner)
   if (owner.kind !== 'folder' || !protectedCopies.has(copyKey)) {
-    return Promise.resolve(true)
+    return true
   }
-  return awaitFolderNoteActionsTouching(copyKey, matches)
+  return borrowedTookEffect(latestQueuedActionsTouching(copyKey, scope))
 }
 
 /** After a new action on a protected copy, shows the derived list (it differs from the optimistic one after a refresh). */
@@ -102,40 +118,78 @@ export function refreshProtectedFolderDisplay(
   }
 }
 
-/** Starts protection after an ordinary write failed; the queued actions behind it become protected. */
+/**
+ * Starts protection after an ordinary write failed; the queued actions behind it become protected.
+ * `queueArrays` are the lists the queue itself put in state: anything else there is an observation
+ * newer than the floor (a catalog fetch while the write was out), and it is kept.
+ */
 export function enterFolderNoteProtection(args: {
   copyKey: string
   owner: FolderOwner
   failed: FolderNoteAction
   floor: readonly DiffComment[]
+  queueArrays: readonly (readonly DiffComment[] | undefined)[]
   get: () => AppState
   set: Set
   enqueueRead: EnqueueFolderNoteRead
 }): void {
   const { copyKey, owner, get, set } = args
-  settleFolderNoteAction(copyKey, args.failed, false)
+  settleFolderNoteAction(copyKey, args.failed, NOTHING_SATISFIED)
+  const row = ownedFolderRow(get(), owner)
+  const queued = unsettledFolderNoteActions(copyKey)
   const copy: ProtectedCopy = {
+    key: copyKey,
     owner,
+    createdAt: row?.createdAt,
+    pairingRevision: owner.runtimeEnvironmentId
+      ? getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId)
+      : undefined,
     enqueueRead: args.enqueueRead,
     failed: true,
     lastRunAcknowledged: false,
     authoritative: [...args.floor],
     provisional: true,
-    pending: [...unsettledFolderNoteActions(copyKey)],
-    acknowledged: [],
-    shown: findOwnedFolder(get(), owner)?.diffComments,
+    pending: [...queued.slice(0, MAX_PENDING_FOLDER_NOTE_ACTIONS)],
+    confirmed: new Map(),
+    shown: row?.diffComments,
     observationGeneration: 0,
     dirty: true,
     readAttempts: 0,
     readInFlight: false,
+    readToken: 0,
     actionSeq: 0,
-    mergeUnsupported: false,
     reportedNoSnapshot: false
+  }
+  // The ordinary backlog crosses into protection bounded: the excess is refused, never sent.
+  for (const action of queued.slice(MAX_PENDING_FOLDER_NOTE_ACTIONS)) {
+    action.refusedUnsent = 'backlog'
+    settleFolderNoteAction(copyKey, action, NOTHING_SATISFIED)
+  }
+  if (!args.queueArrays.includes(copy.shown)) {
+    observe(copy, copy.shown)
   }
   protectedCopies.set(copyKey, copy)
   publish(copy, get, set)
   // Nothing queued behind the failure: reconcile the display now (whether the failed write landed).
-  afterSettle(copyKey, copy, get, set)
+  afterSettle(copy, get, set)
+}
+
+function failRun(
+  copy: ProtectedCopy,
+  action: FolderNoteAction,
+  get: () => AppState,
+  set: Set,
+  reason: string,
+  unverifiable: boolean
+): never {
+  copy.failed = true
+  copy.lastRunAcknowledged = false
+  copy.dirty ||= unverifiable
+  copy.readAttempts = 0
+  settle(copy, action, NOTHING_SATISFIED)
+  publish(copy, get, set)
+  afterSettle(copy, get, set)
+  throw new FolderNoteNotSavedError(reason)
 }
 
 /** Runs one queued action of a protected copy; rejects when the action did not take effect. */
@@ -147,47 +201,37 @@ export async function runProtectedFolderNoteAction(args: {
 }): Promise<void> {
   const { copyKey, action, get, set } = args
   const copy = protectedCopies.get(copyKey)
-  if (!copy) {
-    return
+  if (!copy || !copy.pending.includes(action) || !noticeOutsideReplacement(copy, get)) {
+    // Retired with its copy (the row was replaced) or past the backlog bound: never sent.
+    settleFolderNoteAction(copyKey, action, NOTHING_SATISFIED)
+    throw new FolderNoteNotSavedError(action.refusedUnsent ?? 'host changed')
   }
-  const fail = (reason: string, unverifiable: boolean): never => {
-    copy.failed = true
-    copy.lastRunAcknowledged = false
-    copy.dirty ||= unverifiable
-    copy.readAttempts = 0
-    settle(copyKey, copy, action, false)
-    publish(copy, get, set)
-    afterSettle(copyKey, copy, get, set)
-    throw new FolderNoteNotSavedError(reason)
+  const fail = (reason: string, unverifiable: boolean): never =>
+    failRun(copy, action, get, set, reason, unverifiable)
+  // Ids it rests on settled before it ran; it only took effect if they did.
+  if (!(await borrowedTookEffect(action.borrowed))) {
+    return fail('unconfirmed', false)
   }
   if (action.delta.size === 0) {
-    // Nothing of its own to send: it took effect only if what it rested on did (all settled by now).
-    const outcomes = await Promise.all(action.dependsOn.map((entry) => entry.outcome))
-    if (!outcomes.every(Boolean)) {
-      return fail('unconfirmed', false)
-    }
-    settle(copyKey, copy, action, true)
-    afterSettle(copyKey, copy, get, set)
+    settle(copy, action, NOTHING_SATISFIED)
+    afterSettle(copy, get, set)
     return
   }
-  if (action.overflow) {
-    return fail('backlog', false)
-  }
-  const owner = copy.owner
   if (
     action.expectedCreatedAt === undefined ||
-    (owner.runtimeEnvironmentId &&
-      getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId) !== action.pairingRevision)
+    action.expectedCreatedAt !== copy.createdAt ||
+    (copy.owner.runtimeEnvironmentId &&
+      getRuntimeEnvironmentRevision(copy.owner.runtimeEnvironmentId) !== action.pairingRevision)
   ) {
     return fail('host changed', false)
   }
-  const request = folderNoteRequest(owner, action, 'merge', action.expectedCreatedAt)
+  const request = folderNoteRequest(copy.owner, action, 'merge', action.expectedCreatedAt)
   const generationAtSend = copy.observationGeneration
   let reply: unknown
+  sentActions.add(action)
   try {
-    reply = await mergeFolderDiffComments(owner, request)
+    reply = await mergeFolderDiffComments(copy.owner, request)
   } catch (err) {
-    copy.mergeUnsupported = isUnsupportedFolderNoteMerge(err)
     return fail(
       err instanceof FolderNoteWriteNotSentError ? err.message : 'no answer',
       !isDefinitiveFolderNoteRefusal(err)
@@ -198,24 +242,25 @@ export async function runProtectedFolderNoteAction(args: {
     const refusal = isDefinitiveRefusalReply(reply, request)
     return fail(refusal ?? 'unverifiable reply', refusal === null)
   }
-  copy.lastRunAcknowledged = true
-  copy.mergeUnsupported = false
-  const satisfied = folderNoteActionSatisfied(action, receipt.verdict)
-  noticeOutsideReplacement(copy, get)
-  if (receipt.snapshot && copy.observationGeneration === generationAtSend) {
-    // Committed after the send, so newer than every observation made before it.
-    adoptHostList(copy, get, receipt.snapshot)
-  } else {
-    copy.dirty = true
-    if (satisfied) {
-      copy.acknowledged.push(action)
+  // A row replaced while this was out shows nothing more, but the caller still learns what the host did.
+  const showing = isCurrentCopy(copy) && noticeOutsideReplacement(copy, get)
+  const satisfied = recordConfirmed(copy, get, action, receipt.verdict)
+  if (showing) {
+    copy.lastRunAcknowledged = true
+    if (receipt.snapshot && copy.observationGeneration === generationAtSend) {
+      // Committed after the send, so newer than every observation made before it.
+      adoptHostList(copy, get, receipt.snapshot)
+    } else {
+      copy.dirty = true
     }
+    copy.readAttempts = 0
   }
-  copy.readAttempts = 0
-  settle(copyKey, copy, action, satisfied)
-  publish(copy, get, set)
-  afterSettle(copyKey, copy, get, set)
-  if (!satisfied) {
+  settle(copy, action, satisfied)
+  if (showing) {
+    publish(copy, get, set)
+    afterSettle(copy, get, set)
+  }
+  if (![...action.delta.keys()].every((id) => satisfied.has(id))) {
     throw new FolderNoteNotSavedError('another change won')
   }
 }

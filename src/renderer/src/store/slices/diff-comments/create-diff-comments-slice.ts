@@ -13,7 +13,10 @@ import {
 import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
 import { readOwnedDiffComments, type DiffCommentOwner } from './diff-comment-owner'
 // Why: on a protected folder copy a no-op can only look like one because of queued actions; it takes their outcome.
-import { awaitProtectedFolderNoteDependency as settledNoop } from './folder-note-protection'
+import {
+  admitFolderNoteAction,
+  awaitProtectedFolderNoteDependency as settledNoop
+} from './folder-note-protection'
 
 export type DiffCommentsSlice = {
   getDiffComments: (worktreeId: string | null | undefined) => DiffComment[]
@@ -77,6 +80,15 @@ function recordReviewNoteInteraction(get: () => AppState): void {
   }
 }
 
+// Why: refused before the change is shown, so a full recovery backlog never displays a note it won't send.
+function backlogFull(owner: DiffCommentOwner): boolean {
+  if (admitFolderNoteAction(owner)) {
+    return false
+  }
+  console.error('Review notes were not changed: too many unsaved changes are still waiting.')
+  return true
+}
+
 // Why: a copy gone since the user acted fails once, never on another copy. Add and clear callers already report their failures.
 function reportLostDiffCommentOwner(action: 'save' | 'clear'): void {
   console.error('Review notes were not changed: the workspace copy they belong to is gone.')
@@ -98,7 +110,11 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   getDiffComments: (worktreeId) => selectWorktreeDiffCommentsOrEmpty(get(), worktreeId),
 
   addDiffComment: async (owner, input) => {
-    if (!readOwnedDiffComments(get(), owner) || owner.worktreeId !== input.worktreeId) {
+    if (
+      !readOwnedDiffComments(get(), owner) ||
+      owner.worktreeId !== input.worktreeId ||
+      backlogFull(owner)
+    ) {
       return null
     }
     const comment: DiffComment = normalizeDiffComment({
@@ -129,7 +145,7 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     const worktreeId = owner.worktreeId
     // Why: reject an empty edit so we never save a note that renders as a blank card; false means "not committed", keep the editor open.
     const trimmed = body.trim()
-    if (!trimmed) {
+    if (!trimmed || backlogFull(owner)) {
       return false
     }
 
@@ -178,17 +194,26 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (comments.length === 0) {
       return true
     }
+    if (backlogFull(owner)) {
+      return false
+    }
     const snapshotsById = new Map(comments.map((comment) => [comment.id, comment]))
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = existing.filter((comment) => {
-        const snapshot = snapshotsById.get(comment.id)
-        // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
-        return !snapshot || !deliverySnapshotMatches(comment, snapshot)
-      })
-      return next.length === existing.length ? null : next
-    })
+    const inScope = (id: string) => snapshotsById.has(id)
+    const result = mutateDiffComments(
+      set,
+      owner,
+      (existing) => {
+        const next = existing.filter((comment) => {
+          const snapshot = snapshotsById.get(comment.id)
+          // Why: delivery is async; a note edited after its snapshot was sent is a fresh pending note that must stay visible.
+          return !snapshot || !deliverySnapshotMatches(comment, snapshot)
+        })
+        return next.length === existing.length ? null : next
+      },
+      inScope
+    )
     if (!result) {
-      return settledNoop(owner, (id) => snapshotsById.has(id))
+      return settledNoop(owner, inScope)
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -208,20 +233,29 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
     if (commentIds.length === 0) {
       return true
     }
+    if (backlogFull(owner)) {
+      return false
+    }
     const ids = new Set(commentIds)
-    const result = mutateDiffComments(set, owner, (existing) => {
-      let changed = false
-      const next = existing.map((comment) => {
-        if (!ids.has(comment.id) || comment.sentAt === sentAt) {
-          return comment
-        }
-        changed = true
-        return { ...comment, sentAt }
-      })
-      return changed ? next : null
-    })
+    const inScope = (id: string) => ids.has(id)
+    const result = mutateDiffComments(
+      set,
+      owner,
+      (existing) => {
+        let changed = false
+        const next = existing.map((comment) => {
+          if (!ids.has(comment.id) || comment.sentAt === sentAt) {
+            return comment
+          }
+          changed = true
+          return { ...comment, sentAt }
+        })
+        return changed ? next : null
+      },
+      inScope
+    )
     if (!result) {
-      return settledNoop(owner, (id) => ids.has(id))
+      return settledNoop(owner, inScope)
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -236,6 +270,9 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   deleteDiffComment: async (owner, commentId) => {
     if (!readOwnedDiffComments(get(), owner)) {
       reportLostDiffCommentOwner('clear')
+      return
+    }
+    if (backlogFull(owner)) {
       return
     }
     const worktreeId = owner.worktreeId
@@ -255,19 +292,23 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   clearDiffComments: async (owner, options) => {
-    if (!readOwnedDiffComments(get(), owner)) {
+    if (!readOwnedDiffComments(get(), owner) || backlogFull(owner)) {
       return false
     }
     const worktreeId = owner.worktreeId
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = options?.keepMarkdownNotes ? existing.filter(isMarkdownComment) : []
-      return next.length === existing.length ? null : next
-    })
+    const inScope = (_id: string, note: DiffComment | undefined) =>
+      !options?.keepMarkdownNotes || (!!note && !isMarkdownComment(note))
+    const result = mutateDiffComments(
+      set,
+      owner,
+      (existing) => {
+        const next = options?.keepMarkdownNotes ? existing.filter(isMarkdownComment) : []
+        return next.length === existing.length ? null : next
+      },
+      inScope
+    )
     if (!result) {
-      return settledNoop(
-        owner,
-        (_id, note) => !options?.keepMarkdownNotes || (!!note && !isMarkdownComment(note))
-      )
+      return settledNoop(owner, inScope)
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)
@@ -279,24 +320,27 @@ export const createDiffCommentsSlice: StateCreator<AppState, [], [], DiffComment
   },
 
   clearDiffCommentsForFile: async (owner, filePath, options) => {
-    if (!readOwnedDiffComments(get(), owner)) {
+    if (!readOwnedDiffComments(get(), owner) || backlogFull(owner)) {
       return false
     }
     const worktreeId = owner.worktreeId
-    const result = mutateDiffComments(set, owner, (existing) => {
-      const next = existing.filter(
-        (c) =>
-          c.filePath !== filePath || (options?.keepMarkdownNotes === true && isMarkdownComment(c))
-      )
-      return next.length === existing.length ? null : next
-    })
+    const inScope = (_id: string, note: DiffComment | undefined) =>
+      note?.filePath === filePath &&
+      !(options?.keepMarkdownNotes === true && isMarkdownComment(note))
+    const result = mutateDiffComments(
+      set,
+      owner,
+      (existing) => {
+        const next = existing.filter(
+          (c) =>
+            c.filePath !== filePath || (options?.keepMarkdownNotes === true && isMarkdownComment(c))
+        )
+        return next.length === existing.length ? null : next
+      },
+      inScope
+    )
     if (!result) {
-      return settledNoop(
-        owner,
-        (_id, note) =>
-          note?.filePath === filePath &&
-          !(options?.keepMarkdownNotes === true && isMarkdownComment(note))
-      )
+      return settledNoop(owner, inScope)
     }
     try {
       await enqueueDiffCommentPersist(set, worktreeId, get, result)

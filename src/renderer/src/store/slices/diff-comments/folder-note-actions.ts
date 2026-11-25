@@ -7,6 +7,9 @@ import { findOwnedFolder, type DiffCommentOwner } from './diff-comment-owner'
 
 export type FolderOwner = Extract<DiffCommentOwner, { kind: 'folder' }>
 
+/** Which notes a user action is about, beyond the ids it changes itself (a clear's whole scope). */
+export type FolderNoteScope = (id: string, note: DiffComment | undefined) => boolean
+
 /** One user action on a folder copy's notes: the ids it changed and what it changed them to. */
 export type FolderNoteAction = {
   seq: number
@@ -16,13 +19,14 @@ export type FolderNoteAction = {
   // Captured when the user acted, so a write never reaches another row or machine.
   expectedCreatedAt: number | undefined
   pairingRevision: number | undefined
-  // An action with nothing of its own to send rests on the outcome of what was queued before it.
-  dependsOn: FolderNoteAction[]
-  /** Resolves once with whether the action took effect (true) or was reported not saved. */
-  outcome: Promise<boolean>
-  resolveOutcome: (saved: boolean) => void
-  // Enqueued while the protected backlog was full: refused without a write.
-  overflow?: boolean
+  // Ids in the action's scope that look done only because an earlier queued action changed them:
+  // id → that latest earlier action. The action took effect only if those did too.
+  borrowed: Map<string, FolderNoteAction>
+  /** Resolves once with the ids whose intended version the host holds (empty: not saved). */
+  outcome: Promise<ReadonlySet<string>>
+  resolveOutcome: (satisfied: ReadonlySet<string>) => void
+  // Settled without ever being sent (backlog bound, or its folder row was replaced): why.
+  refusedUnsent?: string
 }
 
 // Actions enqueued but not settled, kept in ordinary mode too, so protection knows what is queued.
@@ -45,16 +49,51 @@ function versionsDiffer(a: DiffComment | undefined, b: DiffComment | undefined):
   return a !== b && diffCommentVersion(a) !== diffCommentVersion(b)
 }
 
-/** Builds an action from the lists the user acted on; its delta is fixed from now on. */
-export function createFolderNoteAction(
+function touches(action: FolderNoteAction, id: string, scope: FolderNoteScope): boolean {
+  return action.delta.has(id) && (scope(id, action.delta.get(id)) || scope(id, action.before.get(id)))
+}
+
+/** For each id `scope` selects among queued actions, the latest queued action that changed it. */
+export function latestQueuedActionsTouching(
   copyKey: string,
-  owner: FolderOwner,
-  get: () => AppState,
-  previous: readonly DiffComment[] | undefined,
+  scope: FolderNoteScope,
+  except?: ReadonlySet<string>
+): Map<string, FolderNoteAction> {
+  const latest = new Map<string, FolderNoteAction>()
+  for (const action of unsettledByCopy.get(copyKey) ?? []) {
+    for (const id of action.delta.keys()) {
+      if (!except?.has(id) && touches(action, id, scope)) {
+        latest.set(id, action)
+      }
+    }
+  }
+  return latest
+}
+
+/** Whether every borrowed id ended as its latest queued action meant it to (they settle first). */
+export async function borrowedTookEffect(
+  borrowed: ReadonlyMap<string, FolderNoteAction>
+): Promise<boolean> {
+  for (const [id, action] of borrowed) {
+    if (!(await action.outcome).has(id)) {
+      return false
+    }
+  }
+  return true
+}
+
+/** Builds an action from the lists the user acted on; its delta is fixed from now on. */
+export function createFolderNoteAction(args: {
+  copyKey: string
+  owner: FolderOwner
+  get: () => AppState
+  previous: readonly DiffComment[] | undefined
   next: readonly DiffComment[]
-): FolderNoteAction {
-  const beforeById = new Map((previous ?? []).map((note) => [note.id, note]))
-  const afterById = new Map(next.map((note) => [note.id, note]))
+  scope?: FolderNoteScope
+}): FolderNoteAction {
+  const { copyKey, owner, get } = args
+  const beforeById = new Map((args.previous ?? []).map((note) => [note.id, note]))
+  const afterById = new Map(args.next.map((note) => [note.id, note]))
   const delta = new Map<string, DiffComment | undefined>()
   const before = new Map<string, DiffComment | undefined>()
   for (const id of new Set([...beforeById.keys(), ...afterById.keys()])) {
@@ -63,11 +102,12 @@ export function createFolderNoteAction(
       before.set(id, beforeById.get(id))
     }
   }
-  let resolveOutcome: (saved: boolean) => void = () => {}
-  const outcome = new Promise<boolean>((resolve) => {
+  let resolveOutcome: (satisfied: ReadonlySet<string>) => void = () => {}
+  const outcome = new Promise<ReadonlySet<string>>((resolve) => {
     resolveOutcome = resolve
   })
-  const queued = unsettledByCopy.get(copyKey) ?? []
+  // An action with no scope of its own (or nothing to send) rests on everything queued before it.
+  const scope = args.scope ?? (delta.size === 0 ? () => true : undefined)
   const action: FolderNoteAction = {
     seq: nextFolderNoteSeq(),
     delta,
@@ -76,11 +116,11 @@ export function createFolderNoteAction(
     pairingRevision: owner.runtimeEnvironmentId
       ? getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId)
       : undefined,
-    dependsOn: delta.size === 0 ? [...queued] : [],
+    borrowed: scope ? latestQueuedActionsTouching(copyKey, scope, new Set(delta.keys())) : new Map(),
     outcome,
     resolveOutcome
   }
-  unsettledByCopy.set(copyKey, [...queued, action])
+  unsettledByCopy.set(copyKey, [...(unsettledByCopy.get(copyKey) ?? []), action])
   return action
 }
 
@@ -88,11 +128,11 @@ export function unsettledFolderNoteActions(copyKey: string): readonly FolderNote
   return unsettledByCopy.get(copyKey) ?? []
 }
 
-/** Retires an action from the queue bookkeeping and reports its outcome to anything waiting on it. */
+/** Retires an action from the queue bookkeeping and reports which of its ids took effect. */
 export function settleFolderNoteAction(
   copyKey: string,
   action: FolderNoteAction,
-  saved: boolean
+  satisfied: ReadonlySet<string>
 ): void {
   const remaining = (unsettledByCopy.get(copyKey) ?? []).filter((entry) => entry !== action)
   if (remaining.length === 0) {
@@ -100,53 +140,58 @@ export function settleFolderNoteAction(
   } else {
     unsettledByCopy.set(copyKey, remaining)
   }
-  action.resolveOutcome(saved)
+  action.resolveOutcome(satisfied)
+}
+
+export const NOTHING_SATISFIED: ReadonlySet<string> = new Set()
+
+/** What the host confirmed for one id: its version, or absence; `relocated` once it was absent. */
+export type ConfirmedNote = { note: DiffComment | undefined; relocated: boolean; generation: number }
+
+type Change = { note: DiffComment | undefined; appended: number | null }
+
+function applyChange(
+  changed: Map<string, Change>,
+  appendOrder: string[],
+  inBase: ReadonlySet<string>,
+  id: string,
+  note: DiffComment | undefined,
+  relocate: boolean
+): void {
+  const prior = changed.get(id)
+  const present = prior ? prior.note !== undefined : inBase.has(id)
+  if (!note) {
+    changed.set(id, { note: undefined, appended: null })
+  } else if (present && !relocate) {
+    changed.set(id, { note, appended: prior?.appended ?? null })
+  } else {
+    appendOrder.push(id)
+    changed.set(id, { note, appended: appendOrder.length })
+  }
 }
 
 /**
- * Whether every queued action touching a note `matches` selects took effect, once they settle.
- * A same-value edit or an apparently empty clear can only look like a no-op because of them.
- */
-export async function awaitFolderNoteActionsTouching(
-  copyKey: string,
-  matches: (id: string, note: DiffComment | undefined) => boolean
-): Promise<boolean> {
-  const touching = (unsettledByCopy.get(copyKey) ?? []).filter((action) =>
-    [...action.delta].some(
-      ([id, after]) => matches(id, after) || matches(id, action.before.get(id))
-    )
-  )
-  const outcomes = await Promise.all(touching.map((action) => action.outcome))
-  return outcomes.every(Boolean)
-}
-
-/**
- * The base list with each unsettled action applied in call order, the way the host applies them:
- * an edit stays in place, an add or a re-add after a delete goes last. O(notes + delta entries).
+ * The base list with the confirmed notes, then each unsettled action in call order, applied the way
+ * the host applies them: an edit stays in place, an add or a re-add after a delete goes last.
+ * O(notes + confirmed + delta entries), no sort.
  */
 export function overlayFolderNotes(
   base: readonly DiffComment[],
+  confirmed: ReadonlyMap<string, ConfirmedNote>,
   pending: readonly FolderNoteAction[]
 ): DiffComment[] {
-  if (pending.every((action) => action.delta.size === 0)) {
+  if (confirmed.size === 0 && pending.every((action) => action.delta.size === 0)) {
     return [...base]
   }
   const inBase = new Set(base.map((note) => note.id))
-  // id → its final version, and its append position when it is no longer where the base had it.
-  const changed = new Map<string, { note: DiffComment | undefined; appended: number | null }>()
-  let appendSeq = 0
+  const changed = new Map<string, Change>()
+  const appendOrder: string[] = []
+  for (const [id, entry] of confirmed) {
+    applyChange(changed, appendOrder, inBase, id, entry.note, entry.relocated)
+  }
   for (const action of pending) {
     for (const [id, note] of action.delta) {
-      const prior = changed.get(id)
-      const present = prior ? prior.note !== undefined : inBase.has(id)
-      if (!note) {
-        changed.set(id, { note: undefined, appended: null })
-      } else if (present) {
-        changed.set(id, { note, appended: prior?.appended ?? null })
-      } else {
-        appendSeq += 1
-        changed.set(id, { note, appended: appendSeq })
-      }
+      applyChange(changed, appendOrder, inBase, id, note, false)
     }
   }
   const result: DiffComment[] = []
@@ -158,14 +203,13 @@ export function overlayFolderNotes(
       result.push(change.note)
     }
   }
-  const appended = [...changed.values()].filter(
-    (change): change is { note: DiffComment; appended: number } =>
-      change.note !== undefined && change.appended !== null
-  )
-  appended.sort((a, b) => a.appended - b.appended)
-  for (const change of appended) {
-    result.push(change.note)
-  }
+  appendOrder.forEach((id, index) => {
+    const change = changed.get(id)
+    // Only the id's last append counts; an earlier one was superseded.
+    if (change?.note && change.appended === index + 1) {
+      result.push(change.note)
+    }
+  })
   return result
 }
 

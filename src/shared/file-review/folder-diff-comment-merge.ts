@@ -112,7 +112,9 @@ export function verdictFor(
 }
 
 /** A copy of the notes for the receipt, or none when they would not fit the reply. */
+// Why measure first: an oversized row is never copied just to be dropped.
 export function snapshotWithinBudget(notes: readonly DiffComment[]): DiffComment[] | undefined {
-  const copy = notes.map((note) => ({ ...note }))
-  return utf8JsonByteLength(copy) <= FOLDER_DIFF_COMMENT_SNAPSHOT_MAX_BYTES ? copy : undefined
+  return utf8JsonByteLength(notes) <= FOLDER_DIFF_COMMENT_SNAPSHOT_MAX_BYTES
+    ? notes.map((note) => ({ ...note }))
+    : undefined
 }

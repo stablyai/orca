@@ -16,7 +16,7 @@ type FolderOwner = Extract<DiffCommentOwner, { kind: 'folder' }>
  */
 const fencedNotes = new Map<string, { catalogHostId: ExecutionHostId; generation: number }>()
 
-function catalogTargetOf(owner: FolderOwner): RuntimeClientTarget {
+export function catalogTargetOf(owner: FolderOwner): RuntimeClientTarget {
   return owner.runtimeEnvironmentId
     ? { kind: 'environment', environmentId: owner.runtimeEnvironmentId }
     : { kind: 'local' }
@@ -56,6 +56,14 @@ export function recordFolderNotesFence(get: () => AppState, owner: FolderOwner):
     catalogHostId: getRuntimeTargetHostId(target),
     generation: peekHostCatalogGeneration(get, 'folder-workspaces', target)
   })
+}
+
+/** Drops the fence of a copy whose row was replaced or removed: its notes are no longer that row's. */
+export function forgetFolderNotesFence(owner: FolderOwner): void {
+  const folderWorkspaceId = folderWorkspaceIdOf(owner)
+  if (folderWorkspaceId) {
+    fencedNotes.delete(fenceKey(owner.executionHostId, folderWorkspaceId))
+  }
 }
 
 /**

@@ -71,6 +71,8 @@ export function createModelHost(kind: HostKind, saved: DiffComment[]) {
     effects: { ordinary: 0, merges: 0, reads: 0 },
     /** Next ordinary update: 'refuse' never reaches the host; 'drop-ack' lands, reply lost. */
     nextOrdinary: 'ok' as 'ok' | 'refuse' | 'drop-ack',
+    /** An ordinary update waits here before it reaches the host. */
+    ordinaryGate: undefined as Promise<void> | undefined,
     /** Next merge-method calls, consumed in order. */
     nextMerges: [] as ('ok' | 'drop-ack' | 'refuse')[],
     mergeGate: undefined as Promise<void> | undefined,
@@ -218,7 +220,10 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
   const hostId = kind === 'local' ? 'local' : 'runtime:env-owner'
   if (kind === 'local') {
     folderWorkspacesApi.list.mockImplementation(async () => [{ ...host.row }])
-    folderWorkspacesApi.update.mockImplementation(async ({ updates }) => host.ordinary(updates))
+    folderWorkspacesApi.update.mockImplementation(async ({ updates }) => {
+      await host.ordinaryGate
+      return host.ordinary(updates)
+    })
     folderWorkspacesApi.mergeDiffComments.mockImplementation((request) => host.merge(request))
   } else {
     runtimeEnvironmentCall.mockImplementation(async (args: RuntimeEnvironmentCallRequest) => {
@@ -264,6 +269,7 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
   return {
     host,
     store,
+    owner,
     shown,
     add: (body: string, lineNumber = 1) =>
       store.getState().addDiffComment(owner(), {
@@ -277,6 +283,7 @@ export function setupFolderNotes(kind: HostKind, saved: DiffComment[] = []) {
     edit: (id: string, body: string) => store.getState().updateDiffComment(owner(), id, body),
     remove: (id: string) => store.getState().deleteDiffComment(owner(), id),
     clear: () => store.getState().clearDiffComments(owner()),
+    markSent: (ids: string[]) => store.getState().markDiffCommentsSent(owner(), ids, 5),
     /** A catalog refresh replacing this copy's row with what the host holds now. */
     refresh: () =>
       store.setState((state) => ({
