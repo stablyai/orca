@@ -40,6 +40,7 @@ const SHARED_PACKAGE_PREFIXES = [
   'electron.vite.config.ts',
   'config/electron-builder',
   'config/packaged-runtime',
+  'config/scripts/runtime-verification/packaged-main/',
   'config/packaged-native-build-entries',
   'config/dark-build-switches.',
   'config/build-plugins/',
