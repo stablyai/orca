@@ -70,7 +70,9 @@ export function retireBotItemAskCardDraft(
     (named !== null
       ? (parseBotItemEventId(named) ?? 0) > (parseBotItemEventId(draft.askId) ?? 0)
       : botItemQuestionPairing(item, events).questions.get(draft.askId)?.waiting === false)
-  if (over) {
-    drafts.delete(itemKey)
+  drafts.delete(itemKey)
+  if (!over) {
+    // Still waiting, on a page open now: it counts as just used, so it isn't the one that goes.
+    drafts.set(itemKey, draft)
   }
 }
