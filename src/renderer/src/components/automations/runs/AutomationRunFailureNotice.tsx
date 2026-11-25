@@ -23,6 +23,7 @@ export function AutomationRunFailureNotice({
   isRerunPending,
   isModelFixPending,
   errorText,
+  errorTitle,
   modelPicker: ModelPicker,
   onPickModel
 }: {
@@ -35,6 +36,8 @@ export function AutomationRunFailureNotice({
   isRerunPending: boolean
   isModelFixPending: boolean
   errorText: string | null
+  /** The whole error when `errorText` shortened a long model name. */
+  errorTitle?: string
   modelPicker: typeof AutomationRunModelPicker
   onPickModel?: (model: AutomationRunModelOption) => void
 }) {
@@ -57,6 +60,7 @@ export function AutomationRunFailureNotice({
       action={action}
       compactError={action || recoveryUnsupported ? compactModelError : undefined}
       busy={isModelFixPending}
+      errorTitle={errorTitle}
       label={
         modelReadUnavailable
           ? ''

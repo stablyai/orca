@@ -29,6 +29,8 @@ import {
 import { updateAutomation } from '../../../persistence/scheduling-automations/automation-definition-update'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
 import { botBackgroundStartOptions, botStartPermission } from '../../../bots/bot-start-options'
+import { captureStructuredExecutionOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-execution-options'
+import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import {
   readAutomationRecoverySelection,
   recoverAutomationModel
@@ -476,6 +478,43 @@ it('admits a newer inherited model when its effective non-model settings are equ
   expect(pending.target).toEqual(inheritedTarget)
   expect(pending.queued().map((run) => run.id)).toEqual(['queued'])
 })
+
+it.each([
+  { length: 256, queued: true },
+  { length: 257, queued: false }
+])(
+  'queues an inherited $length-character model only when the opening send accepts it',
+  async ({ length, queued }) => {
+    const inheritedTarget = { botId: 'bot-1', runsIn: 'new', resultsTo: 'none' } as const
+    const settingsModel = 'm'.repeat(length)
+    const pending = beginRecovery({
+      settingsModel,
+      settingsOptions: { effort: 'high' },
+      target: {
+        agentSetup: { agent: 'codex', launch: { model: 'old-model', options: { effort: 'high' } } }
+      }
+    })
+    pending.editWithOwnerWriter(inheritedTarget)
+    expect(pending.backgroundSettings()).toEqual({ model: settingsModel, effort: 'high' })
+    pending.acceptSave()
+
+    await expect(pending.recovery).resolves.toEqual(
+      queued
+        ? { status: 'queued', runId: 'queued', newerModel: true }
+        : { status: 'saved', rerun: 'skipped' }
+    )
+    expect(pending.target).toEqual(inheritedTarget)
+    expect(pending.queued()).toHaveLength(queued ? 1 : 0)
+    // The opening message merges these persisted options and applies its own model limit.
+    const capture = captureStructuredExecutionOptions({
+      agent: 'codex',
+      // The real Codex declaration; its adapters never run.
+      agents: claudeAndCodexDeclared(),
+      persistedOptions: pending.backgroundSettings()
+    })
+    expect('options' in capture).toBe(queued)
+  }
+)
 
 it('preserves an inheritance reset without an effective model and skips automatic queueing', async () => {
   const target = { botId: 'bot-1', runsIn: 'new', resultsTo: 'none' } as const

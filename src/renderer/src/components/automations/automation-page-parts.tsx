@@ -141,10 +141,13 @@ export function AutomationRunErrorNotice({
   action,
   compactError,
   busy,
+  errorTitle,
   className
 }: {
   label: string
   error: string
+  /** Shown on hover when `error` is shortened. */
+  errorTitle?: string
   /** The one step that fixes this failure, when there is one. */
   action?: React.ReactNode
   compactError?: string
@@ -171,7 +174,7 @@ export function AutomationRunErrorNotice({
         )}
       >
         {compactError ? <span className="@min-[33rem]:hidden">{compactError}</span> : null}
-        <span className={compactError ? '@max-[33rem]:hidden' : undefined}>
+        <span className={compactError ? '@max-[33rem]:hidden' : undefined} title={errorTitle}>
           <span className="font-medium">{label}</span> {error}
         </span>
       </span>

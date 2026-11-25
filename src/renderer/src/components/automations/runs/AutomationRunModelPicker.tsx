@@ -10,6 +10,7 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import { useTranslate } from '@/i18n/use-translate'
+import { MiddleEllipsisLabel } from '@/components/new-workspace/run-target/MiddleEllipsisLabel'
 import { agentPickerModels } from '../../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { isFailedAutomationRunModel } from '../../../../../shared/automations/history/automation-run-model-failure'
@@ -54,6 +55,43 @@ function useAutomationRunModelOptions(
   return menu.choices.includes(agent) ? automationRunModelOptions(entries, agent) : null
 }
 
+/** One menu row: the label loses its middle when it doesn't fit; a failed row keeps "Failed" visible
+ *  and is disabled. The full name stays in the title and the accessible name. */
+function ModelOption({
+  value,
+  label,
+  failedText
+}: {
+  value: string
+  label: string
+  failedText?: string
+}): React.JSX.Element {
+  return (
+    <SelectItem
+      value={value}
+      disabled={failedText !== undefined}
+      textValue={label}
+      title={label}
+      aria-label={failedText ? `${label} ${failedText}` : label}
+      className="*:[span]:last:min-w-0 *:[span]:last:flex-1"
+    >
+      {/* Why: a disabled row ignores the pointer, so the label opts back in to show its title. The
+          hidden copy sizes the menu by the full name, so shortening the label can't shrink the menu
+          and re-shorten the label in a loop. */}
+      <span
+        className="pointer-events-auto grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)]"
+        title={label}
+      >
+        <MiddleEllipsisLabel text={label} />
+        <span aria-hidden="true" className="invisible h-0 overflow-hidden whitespace-pre">
+          {label}
+        </span>
+      </span>
+      {failedText ? <span className="shrink-0 text-foreground">{failedText}</span> : null}
+    </SelectItem>
+  )
+}
+
 export function AutomationRunModelSelect({
   options,
   currentModel,
@@ -83,9 +121,7 @@ export function AutomationRunModelSelect({
     !models.some((option) => isFailedAutomationRunModel(option.id, failureParams))
       ? failureParams.model
       : null
-  const failedSuffix = (
-    <span className="text-foreground">{t('automations.runModelFix.failed', 'Failed')}</span>
-  )
+  const failedText = t('automations.runModelFix.failed', 'Failed')
   return (
     <Select
       value={currentModel ? `model:${currentModel}` : ''}
@@ -119,21 +155,26 @@ export function AutomationRunModelSelect({
           {currentLabel}
         </SelectValue>
       </SelectTrigger>
-      <SelectContent position="popper" side="bottom" align="end">
+      <SelectContent
+        position="popper"
+        side="bottom"
+        align="end"
+        // Why: a long model id would otherwise stretch the menu far past the run page.
+        className="max-w-[min(24rem,calc(100vw-16px))]"
+      >
         {historicalLabel ? (
-          <SelectItem value="historical" disabled>
-            {historicalLabel} {failedSuffix}
-          </SelectItem>
+          <ModelOption value="historical" label={historicalLabel} failedText={failedText} />
         ) : null}
-        {models.map((option) => {
-          const failed = isFailedAutomationRunModel(option.id, failureParams)
-          return (
-            <SelectItem key={option.id} value={`model:${option.id}`} disabled={failed}>
-              {option.label}
-              {failed ? <> {failedSuffix}</> : null}
-            </SelectItem>
-          )
-        })}
+        {models.map((option) => (
+          <ModelOption
+            key={option.id}
+            value={`model:${option.id}`}
+            label={option.label}
+            failedText={
+              isFailedAutomationRunModel(option.id, failureParams) ? failedText : undefined
+            }
+          />
+        ))}
       </SelectContent>
     </Select>
   )

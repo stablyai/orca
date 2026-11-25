@@ -14,6 +14,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { isFailedAutomationRunModel } from '../../../../shared/automations/history/automation-run-model-failure'
 import { BotLaunchSchema } from '../../../../shared/bots/bot-launch'
+import { AgentSessionExecutionOptionsSchema } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { botAutomationSetup, botOnSetup } from '../../../../shared/bots/bot-agent-setup'
 import { resolveBotAutomationRunTarget } from '../../../automations/bot-run-target'
 import {
@@ -24,6 +25,10 @@ import {
 import type { AutomationService } from '../../../automations/automation-service'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
+
+// Why: the rerun's opening message carries the model under the session send schema, which is
+// narrower than what Settings accept; a longer model would be refused there after queueing.
+const openingSendModel = AgentSessionExecutionOptionsSchema.shape.model.unwrap()
 
 type RecoveryStore = Pick<
   RuntimeStore,
@@ -172,6 +177,7 @@ export async function recoverAutomationModel(
       if (
         !currentModel ||
         !isReadableAutomationRecoveryModel(currentModel) ||
+        !openingSendModel.safeParse(currentModel).success ||
         // A concurrent edit can restore the failed model without changing any other setting.
         isFailedAutomationRunModel(currentModel, failed.errorParams) ||
         Object.keys(savedOptions).length !== Object.keys(currentOptions).length ||

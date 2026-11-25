@@ -25,6 +25,7 @@ import {
 } from '../automation-page-parts'
 import { AutomationRunStatusLabel } from './AutomationRunStatusDot'
 import { AutomationRunToolbar } from './AutomationRunToolbar'
+import { AutomationRunModelConfirmationNotice } from './AutomationRunModelConfirmationNotice'
 import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
 import {
   RUN_START_DRIFT_LABEL_MS,
@@ -110,7 +111,9 @@ export function AutomationRunDetailsPage({
   const startedLate =
     startedAt !== null && Math.abs(startedAt - run.scheduledFor) >= RUN_START_DRIFT_LABEL_MS
   const agentLabel = automation ? getAgentLabel(automation.agentId) : undefined
-  const savedError = automationRunErrorText(run, agentLabel)
+  // Why: a long model id would fill the banner; the sentence shortens it, the title keeps it whole.
+  const savedError = automationRunErrorText(run, agentLabel, { maxModelLength: 40 })
+  const fullError = automationRunErrorText(run, agentLabel)
   const errorText =
     run.status === 'dispatch_failed' &&
     run.sessionKind === 'chat' &&
@@ -324,19 +327,7 @@ export function AutomationRunDetailsPage({
             ) : null}
           </div>
         ) : modelConfirmation ? (
-          <div
-            role="status"
-            className="rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground"
-          >
-            {modelConfirmation.newerModel
-              ? t(
-                  'automations.runModelFix.queuedWithNewerModel',
-                  "Run queued with the automation's latest model."
-                )
-              : t('automations.runModelFix.saved', 'Model set to {{model}} for this automation.', {
-                  model: modelConfirmation.model
-                })}
-          </div>
+          <AutomationRunModelConfirmationNotice confirmation={modelConfirmation} />
         ) : failed ? (
           <AutomationRunFailureNotice
             run={run}
@@ -348,6 +339,7 @@ export function AutomationRunDetailsPage({
             isRerunPending={isRerunPending}
             isModelFixPending={isModelFixPending}
             errorText={errorText}
+            errorTitle={fullError !== savedError ? (fullError ?? undefined) : undefined}
             modelPicker={ModelPicker}
             onPickModel={
               onPickModel
