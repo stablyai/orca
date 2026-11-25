@@ -29209,9 +29209,9 @@
       },
       "notIncluded": "Dahil değil",
       "copy": {
-        "sharedBy": "Paylaşan: {{who}}",
         "viewOriginal": "Özgün sürümü görüntüle",
-        "originalGone": "Artık kullanılamıyor"
+        "originalGone": "Artık kullanılamıyor",
+        "copiedFrom": "Kopyalandığı kişi: {{who}}"
       },
       "error": {
         "blocked": "Paylaşılacak içerikte gizli bilgi bulundu. Bu bilgiyi kaldırıp yeniden deneyin.",
@@ -30604,6 +30604,16 @@
         "incident-timeline": "Gelişmeleri saatleriyle kaydedin, ardından kişileri suçlamadan süreci açıklayan bir rapor taslağı hazırlayın.",
         "workspace-hygiene": "Bir çalışma alanının tamamlandığı veya terk edildiği nasıl anlaşılır ve kaldırılmadan önce neler kontrol edilir?"
       }
+    },
+    "teamShare": {
+      "shareWithTeammates": "Ekip arkadaşlarıyla paylaş…"
+    },
+    "sharingPage": {
+      "teammates": "Ekip arkadaşları",
+      "teammatesFoot": "{{host}} üzerinde senin hesaplarınla çalışır. Onların sohbetlerini görebilirsin; her ekip arkadaşı yalnızca kendi sohbetlerini görür.",
+      "add": "Ekle",
+      "copyLink": "Kopya bağlantısı",
+      "noCopyLink": "Kopya bağlantısı yok"
     }
   },
   "plugins": {

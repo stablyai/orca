@@ -26563,6 +26563,9 @@
         "messagesWait": "メッセージは再開まで待機します。",
         "leave": "いつでも退出できます。",
         "uses": "使用サービス"
+      },
+      "copy": {
+        "copiedFrom": "{{who}} からコピー"
       }
     },
     "host": {
@@ -26739,6 +26742,16 @@
         "expired": "サインインの有効期限が切れました。もう一度お試しください。",
         "couldNotSignIn": "サインインできませんでした。もう一度お試しください。"
       }
+    },
+    "teamShare": {
+      "shareWithTeammates": "チームメイトと共有…"
+    },
+    "sharingPage": {
+      "teammates": "チームメイト",
+      "teammatesFoot": "{{host}} 上で、あなたのアカウントを使って動作します。チームメイトのチャットはあなたも見られますが、各チームメイトが見られるのは自分のチャットだけです。",
+      "add": "追加",
+      "copyLink": "コピー用リンク",
+      "noCopyLink": "コピー用リンクなし"
     }
   },
   "speechModelUpdate": {

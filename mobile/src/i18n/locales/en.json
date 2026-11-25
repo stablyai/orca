@@ -7595,9 +7595,9 @@
       "linkNoLongerAvailable": "This share link is no longer available.",
       "signInOtherSite": "The computer sent a sign-in link for another site, so it wasn’t opened.",
       "original": {
-        "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
-        "originalGone": "No longer available"
+        "originalGone": "No longer available",
+        "copiedFrom": "Copied from {{who}}"
       },
       "sharedBy": "Shared by {{name}}",
       "requestFailed": "Couldn’t answer the request. Try again.",

@@ -26509,6 +26509,9 @@
         "messagesWait": "As mensagens esperam até ele voltar.",
         "leave": "Você pode sair quando quiser.",
         "uses": "Usa"
+      },
+      "copy": {
+        "copiedFrom": "Copiado de {{who}}"
       }
     },
     "upNext": {
@@ -26661,6 +26664,16 @@
         "expired": "O login expirou. Tente novamente.",
         "couldNotSignIn": "Não foi possível fazer login. Tente novamente."
       }
+    },
+    "teamShare": {
+      "shareWithTeammates": "Compartilhar com colegas…"
+    },
+    "sharingPage": {
+      "teammates": "Colegas",
+      "teammatesFoot": "Roda em {{host}} com suas contas. Você vê as conversas deles com ele, e cada colega vê só as próprias.",
+      "add": "Adicionar",
+      "copyLink": "Link de cópia",
+      "noCopyLink": "Sem link de cópia"
     }
   },
   "speechModelUpdate": {

@@ -7830,9 +7830,9 @@
       "linkNoLongerAvailable": "此分享链接已不可用",
       "signInOtherSite": "电脑发来的是其他网站的登录链接，因此没有打开。",
       "original": {
-        "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
-        "originalGone": "已不可用"
+        "originalGone": "已不可用",
+        "copiedFrom": "复制自 {{who}}"
       },
       "invite": {
         "invitedYou": "{{owner}} 邀请了你",

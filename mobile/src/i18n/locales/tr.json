@@ -8218,9 +8218,9 @@
         "uses": "Kullanır"
       },
       "original": {
-        "sharedBy": "Paylaşan: {{who}}",
         "viewOriginal": "Orijinali görüntüle",
-        "originalGone": "Artık kullanılamıyor"
+        "originalGone": "Artık kullanılamıyor",
+        "copiedFrom": "Kopyalandığı kişi: {{who}}"
       },
       "sameLinkShort": "Daha önce oluşturulan kopyalar olduğu gibi kalır.",
       "receive": {

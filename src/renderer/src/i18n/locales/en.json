@@ -29971,9 +29971,9 @@
       },
       "notIncluded": "Not included",
       "copy": {
-        "sharedBy": "Shared by {{who}}",
         "viewOriginal": "View original",
-        "originalGone": "No longer available"
+        "originalGone": "No longer available",
+        "copiedFrom": "Copied from {{who}}"
       },
       "error": {
         "blocked": "A secret was found in what would be shared. Remove it, then try again.",
@@ -30967,7 +30967,6 @@
       "remove": "Remove",
       "removePerson": "Remove {{name}}",
       "resendInvite": "Resend invite",
-      "share": "Share…",
       "slackLine": "{{handle}} on Slack · {{workspace}}",
       "slackOnly": "Slack only",
       "slackPlace": "Slack · {{workspace}}",
@@ -30986,7 +30985,15 @@
       "discard": "Discard",
       "keepEditing": "Keep editing",
       "discardTitleOne": "Discard invite?",
-      "discardTitleMany": "Discard {{count}} invites?"
+      "discardTitleMany": "Discard {{count}} invites?",
+      "shareWithTeammates": "Share with teammates…"
+    },
+    "sharingPage": {
+      "teammates": "Teammates",
+      "teammatesFoot": "Runs on {{host}} with your accounts. You can see their chats with it, and each teammate sees only their own.",
+      "add": "Add",
+      "copyLink": "Copy link",
+      "noCopyLink": "No copy link"
     }
   },
   "plugins": {

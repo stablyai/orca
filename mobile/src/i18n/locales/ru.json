@@ -8087,9 +8087,9 @@
       "unreadableNotShared": "Не удаётся прочитать · не передаётся",
       "overLimitNotShared": "Превышен лимит навыков · не передаётся",
       "original": {
-        "sharedBy": "Автор ссылки: {{who}}",
         "viewOriginal": "Открыть оригинал",
-        "originalGone": "Больше недоступен"
+        "originalGone": "Больше недоступен",
+        "copiedFrom": "Источник копии: {{who}}"
       },
       "sameLinkShort": "Уже сделанные копии не изменятся."
     },

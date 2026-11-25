@@ -1,4 +1,4 @@
-// Settings' View original, for an agent made from a link: who shared it and when, and the original it was
+// Settings' View original, for an agent made from a copy link: whose copy it is and when, and the original it was
 // made from, read-only while the link still serves it. The desktop's BotSharedFromLine.
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { View } from 'react-native'
@@ -40,7 +40,7 @@ export function useBotSharedFromSettings(
   if (!from) {
     return { rows: [], page: null }
   }
-  const by = t('bots.share.original.sharedBy', 'Shared by {{who}}', {
+  const by = t('bots.share.original.copiedFrom', 'Copied from {{who}}', {
     who: from.sharedBy ?? t('bots.share.review.someone', 'Someone')
   })
   const sharedAt = new Date(from.sharedAt)

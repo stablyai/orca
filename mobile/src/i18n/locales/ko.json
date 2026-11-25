@@ -5781,6 +5781,9 @@
         "messagesWait": "메시지는 다시 켜질 때까지 대기합니다.",
         "leave": "언제든지 나갈 수 있습니다.",
         "uses": "사용"
+      },
+      "original": {
+        "copiedFrom": "복사한 곳: {{who}}"
       }
     },
     "settingsPage": {

@@ -5184,6 +5184,9 @@
         "messagesWait": "Nachrichten warten, bis er zurück ist.",
         "leave": "Du kannst jederzeit austreten.",
         "uses": "Nutzt"
+      },
+      "original": {
+        "copiedFrom": "Kopiert von {{who}}"
       }
     },
     "settingsPage": {

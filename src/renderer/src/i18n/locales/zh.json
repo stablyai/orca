@@ -29145,9 +29145,9 @@
       },
       "notIncluded": "未包含",
       "copy": {
-        "sharedBy": "由 {{who}} 分享",
         "viewOriginal": "查看原始版本",
-        "originalGone": "已不可用"
+        "originalGone": "已不可用",
+        "copiedFrom": "复制自 {{who}}"
       },
       "error": {
         "blocked": "要分享的内容中发现了密钥。请移除后重试",
@@ -30587,6 +30587,16 @@
       "removeServer": "移除 {{server}}",
       "search": "搜索已配对的服务器",
       "tooltip": "这些服务器上的 bot 和智能体可以向 {{name}} 提问，无需每次征得你的同意。"
+    },
+    "teamShare": {
+      "shareWithTeammates": "与队友分享…"
+    },
+    "sharingPage": {
+      "teammates": "队友",
+      "teammatesFoot": "在 {{host}} 上使用你的账户运行。你能看到队友与它的聊天，每位队友只能看到自己的聊天。",
+      "add": "添加",
+      "copyLink": "副本链接",
+      "noCopyLink": "没有副本链接"
     }
   },
   "speechModelUpdate": {
