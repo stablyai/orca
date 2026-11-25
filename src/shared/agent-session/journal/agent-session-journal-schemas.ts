@@ -8,7 +8,7 @@
 import { BOT_JOURNAL_ITEM_BODIES } from './agent-session-journal-bot-item-schemas'
 import { BoundedPayload, ProviderFrame } from './agent-session-journal-bounded-payload-schema'
 import * as z from 'zod'
-import { AgentSessionContextUsageSchema } from '../conversation-context/agent-session-context-usage-schema'
+import * as ContextUsage from '../conversation-context/agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
 import { knownTags, openDiscriminatedUnion } from './agent-session-journal-open-union'
@@ -152,6 +152,8 @@ const ApprovalMatchedAskRule = z.object({
 
 const MessageBody = z.object({
   kind: z.literal('message'),
+  usage: ContextUsage.AgentSessionTokenUsageSchema.optional(),
+  usageContext: ContextUsage.AgentSessionContextUsageSchema.optional(),
   role: z.string().min(1),
   blocks: z.array(Block),
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
@@ -262,7 +264,7 @@ const KnownItemBody = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('turn'),
     ...TurnLifecycleFields,
-    contextUsage: AgentSessionContextUsageSchema.optional(),
+    contextUsage: ContextUsage.AgentSessionContextUsageSchema.optional(),
     providerTurnId: z.string().min(1).optional()
   }),
   ...BOT_JOURNAL_ITEM_BODIES

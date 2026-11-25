@@ -4,6 +4,8 @@ import type {
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { NativeChatBlock } from '../../../../shared/native-chat/native-chat-types'
+import type { AgentSessionTokenUsage } from '../../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import { claudeTokenUsage } from '../../context-usage/claude-context-usage'
 import { journalPayload } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { isClaudeInjectedUserMessage } from './claude-internal-message-content'
 import {
@@ -14,6 +16,7 @@ import {
 } from '../../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export type ClaudeMessageEnvelope = {
+  usage?: AgentSessionTokenUsage
   sessionId: string
   uuid: string
   role: 'assistant' | 'user'
@@ -47,6 +50,7 @@ export function readClaudeMessageEnvelope(
   const sessionId = claudeText(frame.session_id)
   const uuid = claudeText(frame.uuid)
   const role = message?.role
+  const usage = role === 'assistant' ? claudeTokenUsage(message?.usage) : null
   const isInjectedUserTurn = isClaudeInjectedUserMessage(frame)
   return sessionId && uuid && (role === 'assistant' || role === 'user')
     ? {
@@ -56,6 +60,7 @@ export function readClaudeMessageEnvelope(
         content: messageContent(message?.content),
         isInjectedUserTurn,
         messageId: claudeText(message?.id),
+        ...(usage ? { usage } : {}),
         parentToolUseId: claudeText(frame.parent_tool_use_id)
       }
     : null
@@ -107,7 +112,14 @@ function messageBlocks(envelope: ClaudeMessageEnvelope): NativeChatBlock[] {
 
 export function claudeMessageBody(envelope: ClaudeMessageEnvelope): AgentJournalMessageItem | null {
   const blocks = messageBlocks(envelope)
-  return blocks.length > 0 ? { kind: 'message', role: envelope.role, blocks } : null
+  return blocks.length > 0
+    ? {
+        kind: 'message',
+        role: envelope.role,
+        blocks,
+        ...(envelope.usage ? { usage: envelope.usage } : {})
+      }
+    : null
 }
 
 export function claudeHasReplayContent(envelope: ClaudeMessageEnvelope): boolean {

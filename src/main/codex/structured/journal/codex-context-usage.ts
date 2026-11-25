@@ -18,7 +18,7 @@ function tokenCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
 }
 
-function readTotalUsage(value: unknown): AgentSessionTokenUsage | null {
+export function readCodexTokenUsage(value: unknown): AgentSessionTokenUsage | null {
   const total = readRecord(value)
   const input = tokenCount(total.inputTokens)
   const output = tokenCount(total.outputTokens)
@@ -46,7 +46,7 @@ export function readCodexContextUsage(
     return null
   }
   const windowTokens = positiveCount(usage.modelContextWindow)
-  const totalUsage = readTotalUsage(usage.total)
+  const totalUsage = readCodexTokenUsage(usage.total)
   if (windowTokens === null) {
     // The reading the journal already holds may be measured against another model's window.
     return { used: { kind: 'unknown', capturedAt } }
