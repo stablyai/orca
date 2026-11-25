@@ -5,6 +5,7 @@ import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/per
 import { claudePermissionModeFor } from '../structured/launch/claude-structured-permission-options'
 import { claudeInPlan } from '../structured/permissions/claude-full-access-refusal'
 import {
+  claimClaudePermissionModeRequest,
   claudeBypassRefusalOf,
   setClaudeAllowedPermissionMode
 } from '../structured/permissions/claude-permission-mode-ladder'
@@ -39,6 +40,8 @@ const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice):
  *  the ladder (which reads an Ask launch's first init as a refusal). A refusal makes the next send
  *  start a flagged agent; acceptance proves Full access for this process. */
 async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefined): Promise<void> {
+  // A newer write than any older ladder's: that ladder's late fallback stays unsent.
+  claimClaudePermissionModeRequest(session)
   try {
     await session.connection.setPermissionMode('bypassPermissions', { timeoutMs })
     session.bypassAccepted = true
@@ -55,7 +58,9 @@ async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefin
   }
 }
 
-/** Writes a Build mode and records the one Claude accepted; a failed switch records none. */
+/** Writes a Build mode and records the one Claude accepted; a failed switch records none. Each
+ *  write goes out at the pick, so Claude answers picks in order and the last one wins; a pick a
+ *  newer one replaced records nothing and writes nothing more after its answer. */
 async function applyBuildMode(
   session: ClaudeSession,
   mode: PermissionMode,
@@ -64,48 +69,48 @@ async function applyBuildMode(
 ): Promise<void> {
   if (mode === 'bypassPermissions' && !claudeInPlan(session)) {
     await askKeptBypass(session, timeoutMs)
-    if (!current()) {
-      return
+    if (current()) {
+      session.launchIntent = { ...session.launchIntent, permissionMode: mode }
+      session.appliedInputOptions.set('buildPermissionMode', mode)
     }
+    return
   }
   // The chat now wants this mode from this process: leaving Plan, a refused Full access and the
   // next reattach all read it, not the mode the agent was launched in.
   session.launchIntent = { ...session.launchIntent, permissionMode: mode }
   if (claudeInPlan(session)) {
-    // Plan stays until the user leaves it; leaving it returns to this mode.
+    // Plan stays until the user leaves it; leaving it (or a plan exit in flight) writes this mode.
     session.appliedInputOptions.set('buildPermissionMode', mode)
     return
   }
   try {
     const applied = await setClaudeAllowedPermissionMode(session, mode, { timeoutMs })
-    session.appliedInputOptions.set('buildPermissionMode', applied)
+    if (current()) {
+      session.appliedInputOptions.set('buildPermissionMode', applied)
+    }
   } catch (error) {
-    session.appliedInputOptions.delete('buildPermissionMode')
+    if (current()) {
+      session.appliedInputOptions.delete('buildPermissionMode')
+    }
     throw error
   }
 }
 
-/** Picks run without waiting on each other; each writes after the one before it, so the last
- *  pick is the mode Claude ends in, and a pick a newer one already replaced writes nothing. */
-function applyInOrder(
+/** A live pick: auto-approval follows it at once (Claude's report of Full access grants it), and
+ *  its write goes out now, ahead of any later pick's. */
+function applyPick(
   session: ClaudeSession,
   mode: PermissionMode,
   timeoutMs: number | undefined
 ): Promise<void> {
-  // Auto-approval follows the pick at once; Claude's report of Full access grants it.
   if (mode === 'bypassPermissions') {
     session.liveFullAccess?.picked()
   } else {
     session.liveFullAccess?.unpicked()
   }
-  const before = session.keptModeWrites
-  const turn = (before?.turn ?? 0) + 1
-  const current = (): boolean => session.keptModeWrites?.turn === turn
-  const done = (before?.done ?? Promise.resolve())
-    .catch(() => {})
-    .then(() => (current() ? applyBuildMode(session, mode, timeoutMs, current) : undefined))
-  session.keptModeWrites = { turn, done }
-  return done
+  const turn = (session.keptModeTurn ?? 0) + 1
+  session.keptModeTurn = turn
+  return applyBuildMode(session, mode, timeoutMs, () => session.keptModeTurn === turn)
 }
 
 /** Full access picked in Plan wasn't asked of Claude (asking leaves Plan), so leaving Plan asks it
@@ -148,7 +153,7 @@ export async function applyKeptClaudeModeOwed(
   const owed = session.keptModeOwed
   session.keptModeOwed = undefined
   if (isBuildMode(owed) && !claudeInPlan(session) && session.savedPlan !== true) {
-    await applyInOrder(session, owed, timeoutMs)
+    await applyPick(session, owed, timeoutMs)
   }
 }
 
@@ -178,6 +183,6 @@ export function applyLive(
     if (mode === 'own' || bypassRefused(session, mode)) {
       return
     }
-    await applyInOrder(session, claudePermissionModeFor(mode), timeoutMs())
+    await applyPick(session, claudePermissionModeFor(mode), timeoutMs())
   }
 }

@@ -74,22 +74,28 @@ export function leaveClaudePlanModeOnApproval(
   if (prompt.toolName !== 'ExitPlanMode' || reply.behavior !== 'allow' || mode !== 'plan') {
     return
   }
-  try {
-    setClaudeAllowedPermissionMode(session, claudePlanApprovalMode(session)).then(
-      (restored) => {
-        session.appliedInputOptions?.set('interactionMode', 'default')
-        session.appliedInputOptions?.set('buildPermissionMode', restored)
-      },
-      (error: unknown) => {
-        // Claude accepted a step out of Plan before a later one went unanswered: the chat has
-        // left Plan, and its fallback is owed again.
-        if (error instanceof ClaudePermissionModeUnsettled) {
-          session.appliedInputOptions?.set('interactionMode', 'default')
-          session.appliedInputOptions?.delete('buildPermissionMode')
-        }
-        logPlanExitFailure(error)
+  const leave = (requested: PermissionMode): Promise<void> =>
+    setClaudeAllowedPermissionMode(session, requested).then((restored) => {
+      session.appliedInputOptions?.set('interactionMode', 'default')
+      // A kept agent's pick made while this was in flight was only recorded (the chat still
+      // looked in Plan), so it goes out now rather than leaving the older mode running.
+      const wanted = claudePlanApprovalMode(session)
+      if (wanted !== requested) {
+        return leave(wanted)
       }
-    )
+      session.appliedInputOptions?.set('buildPermissionMode', restored)
+      return undefined
+    })
+  try {
+    leave(claudePlanApprovalMode(session)).catch((error: unknown) => {
+      // Claude accepted a step out of Plan before a later one went unanswered: the chat has
+      // left Plan, and its fallback is owed again.
+      if (error instanceof ClaudePermissionModeUnsettled) {
+        session.appliedInputOptions?.set('interactionMode', 'default')
+        session.appliedInputOptions?.delete('buildPermissionMode')
+      }
+      logPlanExitFailure(error)
+    })
   } catch (error) {
     logPlanExitFailure(error)
   }

@@ -167,8 +167,8 @@ export type ClaudeSession = {
   savedPlan?: boolean
   /** A kept agent's mode for its next message: picked since it launched, or never written yet. */
   keptModeOwed?: string
-  /** A kept agent's latest live pick and the write chain that applies picks in order. */
-  keptModeWrites?: { turn: number; done: Promise<void> }
+  /** Counts a kept agent's live picks, so an older pick's late answer records nothing. */
+  keptModeTurn?: number
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean
