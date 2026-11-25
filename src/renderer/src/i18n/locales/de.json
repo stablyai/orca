@@ -24441,6 +24441,7 @@
     "row": {
       "runsOn": "Läuft auf {{host}}",
       "disconnected": "Getrennt",
+      "connecting": "Verbindung wird hergestellt…",
       "idle": "Inaktiv",
       "paused": "Pausiert",
       "reading": "Liest deine Nachricht",

@@ -27748,6 +27748,7 @@
     "row": {
       "runsOn": "{{host}}에서 실행 중",
       "disconnected": "연결 끊김",
+      "connecting": "연결 중…",
       "idle": "유휴 상태",
       "paused": "일시 중지됨",
       "reading": "메시지를 읽는 중",

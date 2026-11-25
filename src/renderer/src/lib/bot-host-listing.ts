@@ -98,7 +98,7 @@ export function computeBotHostListing(
   for (const shared of input.sharedBotHosts) {
     hosts.push({
       hostId: toRuntimeExecutionHostId(shared.environmentId),
-      state: shared.link === 'live' ? 'live' : 'offline'
+      state: shared.link === 'live' ? 'live' : shared.accepting ? 'connecting' : 'offline'
     })
   }
   return { hosts, updateNeeded }

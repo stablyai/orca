@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useBotHostOffline } from '@/lib/bot-host-views'
-import { readBotHostIds, readBotHostState } from '@/lib/bot-catalog-snapshot'
+import { isBotHostDown, useBotHostDown } from '@/lib/bot-host-views'
+import { readBotHostIds } from '@/lib/bot-catalog-snapshot'
 import { cn } from '@/lib/class-names'
 import { HighlightedText } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import type { Bot } from '../../../../shared/bot-types'
@@ -12,9 +12,7 @@ import { BotRowLineText, useBotRowLine } from './BotRowActivityLine'
 
 /** Which bot servers are unreachable, as one string so a catalog rebuilds only when that changes. */
 export function readOfflineHostKey(): string {
-  return readBotHostIds()
-    .filter((hostId) => readBotHostState(hostId) === 'offline')
-    .join('\n')
+  return readBotHostIds().filter(isBotHostDown).join('\n')
 }
 
 /** A bot's palette line: offline, then waiting on you, then why it matched, then what it last did. */
@@ -33,7 +31,8 @@ export function BotPaletteLine({
   const t = useTranslate()
   const { line, now, needsYou } = useBotRowLine(bot, home)
   // Says so while its server is down, as its sidebar row does.
-  const offline = useBotHostOffline(bot.hostId)
+  const down = useBotHostDown(bot.hostId)
+  const offline = down !== null
   const matchedPurpose = purposeRanges !== null && purposeRanges.length > 0 && purpose !== ''
   // Read whenever the purpose matched, even when offline or waiting shows instead.
   const matchNote = matchedPurpose ? (
@@ -60,7 +59,7 @@ export function BotPaletteLine({
   }
   return (
     <span className={cn(home.isUnread && !offline && 'text-foreground')}>
-      <BotRowLineText line={line} now={now} disconnected={offline} />
+      <BotRowLineText line={line} now={now} down={down} />
       {matchNote}
     </span>
   )

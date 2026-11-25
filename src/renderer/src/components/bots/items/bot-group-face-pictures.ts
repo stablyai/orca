@@ -5,11 +5,8 @@
 // is offline (asked once either comes back); a failed read is tried again on Back from an item or when
 // the panel reopens.
 import { createContext, useEffect, useState } from 'react'
-import {
-  readBotHostState,
-  readLiveBotHostIds,
-  subscribeToBotChanges
-} from '@/lib/bot-catalog-snapshot'
+import { readLiveBotHostIds, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { isBotHostDown } from '@/lib/bot-host-views'
 import { botRefKey, type BotRef } from '@/lib/bot-hosts'
 import {
   getWindowParkVisible,
@@ -57,8 +54,7 @@ export type BotGroupFacePictures = {
 
 export const BotGroupFacePicturesContext = createContext<BotGroupFacePictures | null>(null)
 
-const hostOffline = (picture: Picture): boolean =>
-  readBotHostState(picture.bot.hostId) === 'offline'
+const hostOffline = (picture: Picture): boolean => isBotHostDown(picture.bot.hostId)
 
 function createFacePictures(): BotGroupFacePictures {
   // One per member asked for, its latest version, and each face's handle on it.
@@ -172,7 +168,7 @@ function createFacePictures(): BotGroupFacePictures {
     }
     liveHosts = now
     for (const [hostId, host] of waiting) {
-      const offline = readBotHostState(hostId) === 'offline'
+      const offline = isBotHostDown(hostId)
       if (offline !== host.offline) {
         host.offline = offline
         host.pictures.forEach(admit)
