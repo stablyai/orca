@@ -29871,7 +29871,8 @@
         "context7": "Current docs and examples for code libraries",
         "atlassian": "Jira issues and Confluence pages",
         "notion": "Search, read and edit pages",
-        "stripe": "Look up payments, customers and subscriptions"
+        "stripe": "Look up payments, customers and subscriptions",
+        "treg": "Live data for AI agents - pay per call"
       },
       "mcp": {
         "adding": "Adding {{app}}…",
