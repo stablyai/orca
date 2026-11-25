@@ -58,10 +58,7 @@ export async function mcpServersForLaunch(
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
 ): Promise<BotToolServer[]> {
-  // Read only: a launch never writes the list, even to give an entry edited outside Orca its id.
-  return botToolEntries(await readBotToolsSnapshot(folder)).flatMap(({ server, extras }) =>
-    isOnForLaunch(extras, agent, workspace) ? [server] : []
-  )
+  return (await launchEntries(agent, workspace, folder)).map(({ server }) => server)
 }
 
 /** The server with `id` as a session of `agent` in `workspace` gets it; null when it's off there or gone. */
@@ -71,8 +68,15 @@ export async function mcpServerForLaunch(
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
 ): Promise<BotToolServer | null> {
-  const entry = botToolEntries(await readBotToolsSnapshot(folder)).find(
+  const entry = (await launchEntries(agent, workspace, folder)).find(
     (candidate) => candidate.extras.id === id
   )
-  return entry && isOnForLaunch(entry.extras, agent, workspace) ? entry.server : null
+  return entry?.server ?? null
+}
+
+async function launchEntries(agent: string, workspace: LaunchWorkspace, folder: string) {
+  // Read only: a launch never writes the list, even to give an entry edited outside Orca its id.
+  return botToolEntries(await readBotToolsSnapshot(folder)).filter(({ extras }) =>
+    isOnForLaunch(extras, agent, workspace)
+  )
 }

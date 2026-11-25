@@ -11,6 +11,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, type JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js'
 import { spawnProcess } from '@orca/process-host'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
 
 type Connect = () => Promise<McpServerConnection>
 type HttpConnection = Extract<McpServerConnection, { url: string }>
@@ -82,8 +83,7 @@ function neverReachedServer(error: unknown): boolean {
   if (error instanceof StreamableHTTPError) {
     return error.code === 401 || error.code === 403 || error.code === 404
   }
-  const cause = error instanceof Error ? (error.cause as { code?: unknown } | undefined) : undefined
-  return cause?.code === 'ECONNREFUSED'
+  return error instanceof Error && errnoCodeOrUnknown(error.cause) === 'ECONNREFUSED'
 }
 
 const isRequest = (

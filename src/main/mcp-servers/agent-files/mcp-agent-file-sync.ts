@@ -7,6 +7,7 @@ import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { MCP_FILE_AGENTS, type McpFileAgent } from '../../../shared/mcp-servers/mcp-servers'
 import { prependOrcaCliDirToChildPath } from '../../cli/launchers/orca-cli-child-path'
 import {
@@ -213,7 +214,7 @@ async function publish(
       await writeFile(path, next ?? '', { flag: 'wx', mode: 0o600 })
       return true
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      if (errnoCodeOrUnknown(error) === 'EEXIST') {
         return false
       }
       throw error
@@ -248,10 +249,12 @@ function thisAppLauncher(userDataPath: string): string | null {
 export function startMcpAgentFileSync(): () => void {
   const folder = mcpHostListFolder()
   const userDataPath = getAppEnvironment().getPath('userData')
+  // Once: this run of Orca's launcher doesn't move.
+  const launcher = thisAppLauncher(userDataPath)
   const deps = (): McpAgentFileSyncDeps => ({
     folder,
     userDataPath,
-    launcher: thisAppLauncher(userDataPath),
+    launcher,
     context: { homeDir: homedir(), env: process.env, platform: process.platform },
     ledger: new McpAgentFileLedger(join(folder, '.orca', 'agent-files-ledger.json')),
     log: (message) => console.warn(message)

@@ -18,9 +18,9 @@ import { bridgeMcpServer } from './mcp-connect-bridge'
 
 /**
  * The session's workspace: the Orca pane's own (WSL forwards it), else the one holding cwd; null
- * outside every workspace, `unknown` when cwd can't be pinned to one (two repos claim it).
+ * outside every workspace, undefined when cwd can't be pinned to one (two repos claim it).
  */
-async function workspaceOf(client: RuntimeClient, cwd: string): Promise<string | null | 'unknown'> {
+async function workspaceOf(client: RuntimeClient, cwd: string): Promise<string | null | undefined> {
   const own = process.env.ORCA_WORKSPACE_ID?.trim()
   if (own) {
     return own
@@ -32,7 +32,7 @@ async function workspaceOf(client: RuntimeClient, cwd: string): Promise<string |
       throw error
     }
     // Outside every workspace, the server follows its "workspaces added later" choice.
-    return error.code === 'selector_not_found' ? null : 'unknown'
+    return error.code === 'selector_not_found' ? null : undefined
   }
 }
 
@@ -50,7 +50,7 @@ async function readConnection(
   const callerSessionId = readInjectedAgentSessionId()
   try {
     const workspaceId = await workspaceOf(client, params.cwd)
-    if (workspaceId === 'unknown') {
+    if (workspaceId === undefined) {
       // A server may be off in one of the workspaces: offer none rather than guess.
       return { on: false }
     }
