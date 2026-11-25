@@ -49,20 +49,23 @@ export async function readPairedChatTab(args: {
     scope: { registration, connectionGeneration, timeoutMs: args.timeoutMs },
     minimumReceivedFrame: args.minimumReceivedFrame,
     signal,
-    load: async (hasWaiters) => {
-      const beforeSend = (): void => {
-        if (!isSameConnection() || !hasWaiters()) {
-          throw createRuntimeRpcAbortError()
-        }
+    load: async (admission) => {
+      if (!isSameConnection()) {
+        throw createRuntimeRpcAbortError()
       }
-      beforeSend()
       const response = await callRuntimeRpcResponse<RuntimeMobileSessionTabsResult>(
         { kind: 'environment', environmentId },
         'session.tabs.list',
         { worktree: toRuntimeWorktreeSelector(worktreeId) },
         {
           timeoutMs: args.timeoutMs,
-          beforeSend,
+          admissionSignal: admission.signal,
+          beforeSend: () => {
+            if (!isSameConnection()) {
+              throw createRuntimeRpcAbortError()
+            }
+            admission.beforeSend()
+          },
           expectedEnvironmentPairingRevision: registration?.revision
         }
       )

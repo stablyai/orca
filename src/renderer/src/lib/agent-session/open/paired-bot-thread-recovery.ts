@@ -5,6 +5,10 @@ import {
 } from '../../../../../shared/agent-session/view/open-structured-agent-session'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { createRuntimeRpcAbortError } from '@/runtime/rpc/calls/abortable-runtime-environment-call'
+import {
+  createSharedRuntimeRpcAdmission,
+  type SharedRuntimeRpcAdmission
+} from '@/runtime/rpc/calls/shared-runtime-rpc-admission'
 import { getRuntimeEnvironmentRegistration } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { abortSignalReason } from '../../../../../shared/concurrency/abort-signal-reason'
 import { sharedPromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
@@ -23,7 +27,11 @@ type Scope = {
   generation: number
 }
 type LocateResult = Awaited<ReturnType<StructuredSessionOpenDeps['locate']>>
-type Pending<T> = Scope & { targetKey: string; request: Promise<T> }
+type Pending<T> = Scope & {
+  targetKey: string
+  request: Promise<T>
+  admission: SharedRuntimeRpcAdmission
+}
 type RevealResult = {
   target: { worktreeId: string; sessionId: string }
   outcome: StructuredSessionRevealOutcome
@@ -53,52 +61,65 @@ export function pairedBotThreadRecovery(
   const find = <T>(
     pending: Map<string, Pending<T>>,
     targetKey?: string
-  ): Promise<T> | undefined => {
+  ): Pending<T> | undefined => {
     const entry = pending.get(key)
     return entry &&
       entry.registration === registration &&
       entry.generation === generation &&
       (targetKey === undefined || entry.targetKey === targetKey)
-      ? entry.request
+      ? entry
       : undefined
   }
-  const observe = <T>(request: Promise<T>): Promise<T> =>
+  const observe = <T>({ request, admission }: Pending<T>): Promise<T> =>
     sharedPromiseSettlementWaiters(request).wait({
       signal,
       timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
       createAbortError: () => abortSignalReason(signal),
-      createTimeoutError: () => new Error('structured_session_restore_timeout')
+      createTimeoutError: () => new Error('structured_session_restore_timeout'),
+      onAbandon: admission.onAbandon
     })
   const wait = <T>(
     pending: Map<string, Pending<T>>,
     targetKey: string,
-    load: (beforeSend: () => void) => Promise<T>
+    load: (options: { beforeSend: () => void; admissionSignal: AbortSignal }) => Promise<T>
   ): Promise<T> => {
     const existing = find(pending, targetKey)
     if (existing) {
       return observe(existing)
     }
+    const forget = (): void => {
+      if (pending.get(key)?.request === request) {
+        pending.delete(key)
+      }
+    }
+    const admission = createSharedRuntimeRpcAdmission(
+      () => sharedPromiseSettlementWaiters(request).waiterCount > 0,
+      forget
+    )
+    const checkConnection = (): void => {
+      if (
+        getRuntimeEnvironmentRegistration(environmentId) !== registration ||
+        getRuntimeEnvironmentConnectionGeneration(environmentId) !== generation
+      ) {
+        throw createRuntimeRpcAbortError()
+      }
+    }
     const request: Promise<T> = Promise.resolve()
       .then(() => {
-        const beforeSend = (): void => {
-          if (
-            !sharedPromiseSettlementWaiters(request).waiterCount ||
-            getRuntimeEnvironmentRegistration(environmentId) !== registration ||
-            getRuntimeEnvironmentConnectionGeneration(environmentId) !== generation
-          ) {
-            throw createRuntimeRpcAbortError()
-          }
-        }
-        beforeSend()
-        return load(beforeSend)
+        checkConnection()
+        admission.check()
+        return load({
+          beforeSend: () => {
+            checkConnection()
+            admission.beforeSend()
+          },
+          admissionSignal: admission.signal
+        })
       })
-      .finally(() => {
-        if (pending.get(key)?.request === request) {
-          pending.delete(key)
-        }
-      })
-    pending.set(key, { registration, generation, targetKey, request })
-    return observe(request)
+      .finally(forget)
+    const entry = { registration, generation, targetKey, request, admission }
+    pending.set(key, entry)
+    return observe(entry)
   }
   return {
     resumePending: async (): Promise<boolean> => {
@@ -119,10 +140,14 @@ export function pairedBotThreadRecovery(
         return { location: { kind: 'chat', ...chat } }
       }
       try {
-        return await wait(pendingLocations, JSON.stringify([address, messageIds]), (beforeSend) =>
-          callStructuredSessionParty(owner, 'orchestration.partyLocation', address, messageIds, {
-            beforeSend
-          })
+        return await wait(pendingLocations, JSON.stringify([address, messageIds]), (options) =>
+          callStructuredSessionParty(
+            owner,
+            'orchestration.partyLocation',
+            address,
+            messageIds,
+            options
+          )
         )
       } catch (error) {
         return structuredSessionOpenFailure(error)
@@ -146,9 +171,9 @@ export function pairedBotThreadRecovery(
         const result = await wait(
           pendingReveals,
           `${target.worktreeId}\0${target.sessionId}`,
-          async (beforeSend) => ({
+          async (options) => ({
             target,
-            outcome: await revealStructuredSession({ ...target, target: owner, beforeSend })
+            outcome: await revealStructuredSession({ ...target, target: owner, ...options })
           })
         )
         recordReveal(result)

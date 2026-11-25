@@ -3,9 +3,13 @@ import {
   recordBrowserInitializationReceipt
 } from '../tab-projection/browser-initialization-presentation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
+import { abortSignalReason } from '../../../../../shared/concurrency/abort-signal-reason'
 import { sharedPromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
 import type { RuntimeEnvironmentRegistration } from '../../rpc/environment-revisions/runtime-environment-revision'
+import {
+  createSharedRuntimeRpcAdmission,
+  type SharedRuntimeRpcAdmission
+} from '../../rpc/calls/shared-runtime-rpc-admission'
 import { nextReceivedSessionTabsFrame } from '../state'
 
 /** Share request identity with joiners. A fresh join-time receipt could rank a pre-close list above the retraction that overtook it; joiners never run load themselves. */
@@ -21,14 +25,14 @@ type ChatLinkReadScope = {
   timeoutMs: number
 }
 
-const inFlightBySession = new Map<
-  string,
-  {
-    request: Promise<RemoteRuntimeSessionTabsAnswer>
-    receivedFrame: number
-    scope?: ChatLinkReadScope
-  }
->()
+type SessionTabsRead = {
+  request: Promise<RemoteRuntimeSessionTabsAnswer>
+  receivedFrame: number
+  scope?: ChatLinkReadScope
+  admission?: SharedRuntimeRpcAdmission
+}
+
+const inFlightBySession = new Map<string, SessionTabsRead>()
 
 type RemoteRuntimeSessionTabsLoad = {
   environmentId: string
@@ -43,13 +47,21 @@ function remoteRuntimeSessionTabsKey(args: { environmentId: string; worktreeId: 
 export function listRemoteRuntimeSessionTabsDeduped(
   args: RemoteRuntimeSessionTabsLoad
 ): Promise<RemoteRuntimeSessionTabsAnswer> {
-  return shareSessionTabsRead(remoteRuntimeSessionTabsKey(args), undefined, (receivedFrame) => {
-    const delivery = captureBrowserInitializationDelivery(args.environmentId)
-    return args.load().then(({ snapshot, runtimeId }) => {
-      recordBrowserInitializationReceipt(args.environmentId, snapshot, receivedFrame, delivery)
-      return { snapshot, receivedFrame, ...(runtimeId ? { runtimeId } : {}) }
+  const key = remoteRuntimeSessionTabsKey(args)
+  const read =
+    findSessionTabsRead(key) ??
+    startSessionTabsRead(key, (receivedFrame, forget) => {
+      const delivery = captureBrowserInitializationDelivery(args.environmentId)
+      const request = args
+        .load()
+        .then(({ snapshot, runtimeId }) => {
+          recordBrowserInitializationReceipt(args.environmentId, snapshot, receivedFrame, delivery)
+          return { snapshot, receivedFrame, ...(runtimeId ? { runtimeId } : {}) }
+        })
+        .finally(forget)
+      return { request, receivedFrame }
     })
-  })
+  return read.request
 }
 
 export function waitForChatLinkSessionTabs(args: {
@@ -58,31 +70,40 @@ export function waitForChatLinkSessionTabs(args: {
   scope: ChatLinkReadScope
   minimumReceivedFrame?: number
   signal: AbortSignal
-  load: (hasWaiters: () => boolean) => ReturnType<RemoteRuntimeSessionTabsLoad['load']>
+  load: (admission: SharedRuntimeRpcAdmission) => ReturnType<RemoteRuntimeSessionTabsLoad['load']>
 }): Promise<RemoteRuntimeSessionTabsAnswer> {
   const { scope } = args
   // A short, chat-only read must not set the deadline or browser receipt of a full refresh.
   const key = `${remoteRuntimeSessionTabsKey(args)}\u0000chat-link`
-  const request: Promise<RemoteRuntimeSessionTabsAnswer> = shareSessionTabsRead(
-    key,
-    scope,
-    async (receivedFrame) => {
+  const read =
+    findSessionTabsRead(key, scope, args.minimumReceivedFrame) ??
+    startSessionTabsRead(key, (receivedFrame, forget) => {
+      const admission = createSharedRuntimeRpcAdmission(
+        () => sharedPromiseSettlementWaiters(request).waiterCount > 0,
+        forget
+      )
       // Joiners attach before dispatch starts, and can leave without canceling each other.
-      await Promise.resolve()
-      const answer = await args.load(() => sharedPromiseSettlementWaiters(request).waiterCount > 0)
-      return { ...answer, receivedFrame }
-    },
-    args.minimumReceivedFrame
-  )
-  return waitForPromiseWithSignal(request, args.signal)
+      const request: Promise<RemoteRuntimeSessionTabsAnswer> = Promise.resolve()
+        .then(async () => {
+          admission.check()
+          return { ...(await args.load(admission)), receivedFrame }
+        })
+        .finally(forget)
+      return { request, receivedFrame, scope, admission }
+    })
+  return sharedPromiseSettlementWaiters(read.request).wait({
+    signal: args.signal,
+    deferSettled: true,
+    createAbortError: () => abortSignalReason(args.signal),
+    onAbandon: read.admission?.onAbandon
+  })
 }
 
-function shareSessionTabsRead(
+function findSessionTabsRead(
   key: string,
-  scope: ChatLinkReadScope | undefined,
-  load: (receivedFrame: number) => Promise<RemoteRuntimeSessionTabsAnswer>,
+  scope?: ChatLinkReadScope,
   minimumReceivedFrame = 0
-): Promise<RemoteRuntimeSessionTabsAnswer> {
+): SessionTabsRead | undefined {
   const existing = inFlightBySession.get(key)
   if (
     existing &&
@@ -91,16 +112,21 @@ function shareSessionTabsRead(
     existing.scope?.connectionGeneration === scope?.connectionGeneration &&
     existing.scope?.timeoutMs === scope?.timeoutMs
   ) {
-    return existing.request
+    return existing
   }
-  const receivedFrame = nextReceivedSessionTabsFrame()
-  const request = load(receivedFrame).finally(() => {
-    if (inFlightBySession.get(key)?.request === request) {
+}
+
+function startSessionTabsRead(
+  key: string,
+  load: (receivedFrame: number, forget: () => void) => SessionTabsRead
+): SessionTabsRead {
+  const read = load(nextReceivedSessionTabsFrame(), () => {
+    if (inFlightBySession.get(key) === read) {
       inFlightBySession.delete(key)
     }
   })
-  inFlightBySession.set(key, { request, receivedFrame, scope })
-  return request
+  inFlightBySession.set(key, read)
+  return read
 }
 
 export async function listRemoteRuntimeSessionTabsAfterCurrentInFlight(

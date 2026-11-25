@@ -10,6 +10,7 @@ import {
   runtimeCompatibilityChecks
 } from './runtime-compatibility-cache'
 import { RUNTIME_IDLE_STOPPED_ERROR_CODE } from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-stop-signal'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 
 function isIdleStopRefusal(error: unknown): boolean {
   return (
@@ -26,6 +27,7 @@ export async function ensureRuntimeEnvironmentCompatible(
     timeoutMs?: number
     reuseRecentCompatibilityFailure?: boolean
     expectedEnvironmentPairingRevision?: number
+    admissionSignal?: AbortSignal
     /** The caller's own wake intent: the probe is what reaches an idle-stopped WSL host first. */
     wake?: boolean
   } = {}
@@ -33,7 +35,7 @@ export async function ensureRuntimeEnvironmentCompatible(
   const cached = getCachedRuntimeCompatibilityCheck(environmentId, options)
   if (cached) {
     try {
-      await cached.check
+      await waitForPromiseWithSignal(cached.check, options.admissionSignal)
       return cached.status
     } catch (error) {
       // A probe that met the idle stop proves nothing about compatibility; a wake probes afresh.

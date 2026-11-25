@@ -35,7 +35,7 @@ export function callStructuredSessionParty(
   method: 'orchestration.partyLocation' | 'orchestration.partyOpen',
   address: string,
   messageIds: readonly string[],
-  options?: { beforeSend?: () => void }
+  options?: { beforeSend?: () => void; admissionSignal?: AbortSignal }
 ): Promise<OrchestrationPartyLocationResult> {
   return callRuntimeRpc<OrchestrationPartyLocationResult>(
     owner,
@@ -51,6 +51,7 @@ export async function revealStructuredSession(target: {
   sessionId: string
   target?: RuntimeClientTarget
   signal?: AbortSignal
+  admissionSignal?: AbortSignal
   beforeSend?: () => void
 }): Promise<StructuredSessionRevealOutcome> {
   const host =
@@ -62,15 +63,16 @@ export async function revealStructuredSession(target: {
   if (host.kind === 'environment') {
     let supported: boolean
     try {
-      target.beforeSend?.()
+      throwIfSignalAborted(target.admissionSignal)
       // Race even cached probe promises: an older unbounded probe must not hold the session’s in-flight guard forever.
       supported = await withStructuredSessionRestoreTimeout(
         runtimeEnvironmentSupportsCapability(
           host.environmentId,
           STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY,
-          STRUCTURED_SESSION_RESTORE_TIMEOUT_MS
+          STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+          target.admissionSignal
         ),
-        { signal: target.signal }
+        { signal: target.admissionSignal ?? target.signal }
       )
     } catch (error) {
       // Only a version block proves age; other probe failures say nothing about the chat (as in remote-agent-session-launch).
@@ -88,6 +90,7 @@ export async function revealStructuredSession(target: {
       { sessionId: target.sessionId },
       {
         timeoutMs: STRUCTURED_SESSION_RESTORE_TIMEOUT_MS,
+        admissionSignal: target.admissionSignal,
         beforeSend:
           target.beforeSend ??
           (target.signal ? () => throwIfSignalAborted(target.signal) : undefined)

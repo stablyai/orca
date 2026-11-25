@@ -1,4 +1,5 @@
 import { expect, it } from 'vitest'
+import { waitForPromiseWithSignal } from '../../../../../shared/concurrency/abort-signal-reason'
 import { makeSnapshot, ENV, WT } from '../testing/web-session-tabs-sync.test-fixture'
 import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
@@ -14,8 +15,8 @@ it('shares a pending reply with a replacement link while fencing a new pairing',
   const first = waitForChatLinkSessionTabs({
     ...target,
     signal: original.signal,
-    load: async (hasWaiters) => {
-      expect(hasWaiters()).toBe(true)
+    load: async (admission) => {
+      admission.beforeSend()
       return oldReply.promise
     }
   })
@@ -48,4 +49,46 @@ it('shares a pending reply with a replacement link while fencing a new pairing',
   expect(newAnswer.snapshot).toBe(newSnapshot)
   expect(newAnswer.receivedFrame).toBeGreaterThan(oldAnswer.receivedFrame)
   await expect(secondForNewPairing).resolves.toBe(newAnswer)
+})
+
+it('a new link can leave the abandoned compatibility wait behind', async () => {
+  const original = new AbortController()
+  const expired = new Error('The link timed out')
+  const preflight = Promise.withResolvers<void>()
+  const started = Promise.withResolvers<void>()
+  const firstSnapshot = makeSnapshot([], { snapshotVersion: 1 })
+  const newSnapshot = makeSnapshot([], { snapshotVersion: 2 })
+  const target = {
+    environmentId: ENV,
+    worktreeId: WT,
+    scope: { registration: { revision: 1 }, connectionGeneration: 0, timeoutMs: 5_000 }
+  }
+  const first = waitForChatLinkSessionTabs({
+    ...target,
+    signal: original.signal,
+    load: async (admission) => {
+      started.resolve()
+      await waitForPromiseWithSignal(preflight.promise, admission.signal)
+      admission.beforeSend()
+      return { snapshot: firstSnapshot }
+    }
+  })
+  const canceled = expect(first).rejects.toBe(expired)
+  await started.promise
+  original.abort(expired)
+  await canceled
+
+  try {
+    const next = await waitForChatLinkSessionTabs({
+      ...target,
+      signal: new AbortController().signal,
+      load: async (admission) => {
+        admission.beforeSend()
+        return { snapshot: newSnapshot }
+      }
+    })
+    expect(next.snapshot).toBe(newSnapshot)
+  } finally {
+    preflight.resolve()
+  }
 })
