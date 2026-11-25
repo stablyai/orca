@@ -4,7 +4,7 @@ import '../../../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../../../orchestration/db/dispatch-row-writer'
 import '../../../../../../orchestration/db/attempt-outcome-projection'
 import { createWorkerReleaseFixture } from '../../release/worker-release.test-fixture'
-import { nameRefusingComputer } from './worker-agent-host-preflight'
+import { nameRefusingComputer, preflightWorkerAgentOnHost } from './worker-agent-host-preflight'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -43,4 +43,28 @@ it('refuses a worker whose agent its computer lacks before any terminal or Dispa
     message: expect.stringContaining("Codex isn't installed on g16")
   })
   db.close()
+})
+
+it("refuses a new workspace's chat worker whose agent is missing when no checkout can stand in", async () => {
+  const runtime = {
+    // The repo's own checkout isn't one Orca manages, so the chat check has nowhere to run.
+    resolveRepoMainWorktreeId: async () => 'repo::/src/repo',
+    showManagedWorktree: async () => {
+      throw new Error('selector_not_found')
+    },
+    getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
+    detectProjectLaunchContext: async () => ({
+      agents: ['claude' as const],
+      workspaceKind: 'git-worktree' as const,
+      executionContext: { kind: 'ssh' as const }
+    })
+  }
+  const refused = await preflightWorkerAgentOnHost({
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the preflight reads only these runtime methods.
+    runtime: runtime as never,
+    mode: { mode: 'structured', preferred: 'structured', reason: 'requested', detail: 'chat' },
+    agent: 'codex',
+    creationTarget: { repoSelector: 'repo' }
+  }).catch((error: unknown) => error)
+  expect(refused).toMatchObject({ code: 'worker_agent_unavailable' })
 })

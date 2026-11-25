@@ -4,6 +4,7 @@ import type { AgentJournalRenderItem } from '../../../../shared/agent-session/jo
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
+import { claudeAuthRetryStatus } from './claude-assistant-failures'
 
 const SESSION = 'claude-session-1'
 
@@ -43,10 +44,11 @@ function claudeChat() {
   return { items, send }
 }
 
-const retry = (status: number) => ({
+// Claude refreshes the login before attempt 2; a 401 still retried at attempt 3 is the blind loop.
+const retry = (status: number, attempt = 3) => ({
   type: 'system',
   subtype: 'api_retry',
-  attempt: 1,
+  attempt,
   max_retries: 10,
   error_status: status,
   error: 'authentication_failed'
@@ -101,4 +103,44 @@ it("never fails a later turn with an earlier turn's credential retry", () => {
   )
   send(interrupted)
   expect(failureKinds(items)).toEqual([])
+})
+
+it("leaves Claude its own login refresh: a 401 is stopped only once it outlives Claude's refresh", () => {
+  expect(claudeAuthRetryStatus(retry(401, 1))).toBeNull()
+  expect(claudeAuthRetryStatus(retry(401, 2))).toBeNull()
+  expect(claudeAuthRetryStatus(retry(401, 3))).toBe(401)
+  expect(claudeAuthRetryStatus(retry(403, 1))).toBe(403)
+})
+
+it("words a later turn's own sign-in failure, not an earlier turn's denial", () => {
+  const { items, send } = claudeChat()
+  send(retry(403))
+  send({ type: 'system', subtype: 'session_state_changed', state: 'idle' })
+  send(
+    {
+      type: 'user',
+      uuid: 'prompt-2',
+      message: { role: 'user', content: [{ type: 'text', text: 'again' }] }
+    },
+    true
+  )
+  // Claude's own verdict on a dead login, as it streams it.
+  send({
+    type: 'assistant',
+    error: 'authentication_failed',
+    api_error_status: 401,
+    uuid: 'assistant-2',
+    message: {
+      id: 'msg_2',
+      role: 'assistant',
+      model: '<synthetic>',
+      content: [
+        {
+          type: 'text',
+          text: 'Failed to authenticate. API Error: 401 OAuth access token is invalid.'
+        }
+      ]
+    }
+  })
+  expect(failureKinds(items)).toEqual(['notSignedIn'])
 })

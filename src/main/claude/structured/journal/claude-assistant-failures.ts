@@ -11,12 +11,21 @@ import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import { isRootClaudeFrame } from '../turns/claude-turn-opening'
 
-/** A root api_retry for a rejected credential: waiting never clears a 401 or 403, so Orca stops it. */
+/** Claude refreshes a rejected login before its second attempt, and on a dead login it gives up
+ *  itself after that attempt (`authentication_failed`, about 2 s). A 401 still retried at a
+ *  third attempt is the blind retry loop, which never clears. */
+const CLAUDE_BLIND_AUTH_RETRY_ATTEMPT = 3
+
+/** A root api_retry for a credential no retry will fix: a 403 denial, or a 401 past Claude's refresh. */
 export function claudeAuthRetryStatus(message: Record<string, unknown>): 401 | 403 | null {
   if (message.type !== 'system' || message.subtype !== 'api_retry' || !isRootClaudeFrame(message)) {
     return null
   }
-  return message.error_status === 401 || message.error_status === 403 ? message.error_status : null
+  if (message.error_status === 403) {
+    return 403
+  }
+  const attempt = typeof message.attempt === 'number' ? message.attempt : 0
+  return message.error_status === 401 && attempt >= CLAUDE_BLIND_AUTH_RETRY_ATTEMPT ? 401 : null
 }
 
 type ClaudeFailureRow = AgentSessionFailureRowWords & { kind: 'status'; tone: 'error' }
@@ -31,18 +40,15 @@ export class ClaudeAssistantFailures {
     private readonly model?: () => string | undefined
   ) {}
 
-  assistant(message: Record<string, unknown>) {
+  assistant(message: Record<string, unknown>, turnId: string | null) {
     const notice = this.notice(message)
-    // Claude ended the turn on its own credential error first: the retry's row says which (a 403
+    // Claude ended this turn on its own credential error first: the retry's row says which (a 403
     // is also labelled authentication_failed), and the result has nothing left to add.
     const pending =
       notice && isRootClaudeFrame(message) && message.error === 'authentication_failed'
-        ? this.authFailure
+        ? this.takeAuthFailure(turnId)
         : null
-    if (pending) {
-      this.authFailure = null
-    }
-    const row = pending?.row ?? notice
+    const row = pending ?? notice
     if (row) {
       this.shown.set(this.scopeKey(message), claudeText(message.user_message_uuid))
     } else if (message.type === 'user' || message.type === 'assistant') {
@@ -79,6 +85,7 @@ export class ClaudeAssistantFailures {
   }
 
   /** Record a turn's first credential retry; its result ends the turn with this failure. */
+  /** `turnId` is the open ordinary turn; a command turn reads its failure from Claude's notice. */
   authRetry(message: Record<string, unknown>, turnId: string | null): void {
     const status = claudeAuthRetryStatus(message)
     // Without an open turn there is no result to end, so nothing waits on this retry.

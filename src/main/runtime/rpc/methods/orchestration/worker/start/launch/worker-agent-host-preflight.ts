@@ -69,10 +69,11 @@ export async function preflightWorkerAgentOnHost(args: {
   const hostWorktreeId =
     args.resolvedWorktree?.id ??
     (creationTarget ? await repoCheckoutStandIn(runtime, creationTarget.repoSelector) : undefined)
-  // The chat check owns "installed and new enough" for chats; a too-old CLI falls back or refuses there.
+  // The chat check adds "new enough" for chats; a too-old CLI falls back or refuses there.
   const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, hostWorktreeId, agent)
   const repoSelector = creationTarget?.repoSelector ?? args.resolvedWorktree?.repoId
-  if (mode.mode === 'structured' || !agent || args.terminal || !repoSelector) {
+  // Installed is checked for every mode: a chat check without a checkout to run in proves nothing.
+  if (!agent || args.terminal || !repoSelector) {
     return mode
   }
   // An unreadable host (an unserved SSH target, a folder without one repo) is left to the launch.
