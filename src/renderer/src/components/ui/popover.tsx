@@ -24,7 +24,7 @@ const popoverToneVariants = cva('', {
         'overflow-hidden rounded-md border border-black/14 bg-floating-surface text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]',
       // The callout arrow sits outside the box.
       inverted:
-        'overflow-visible rounded-lg bg-foreground p-2.5 text-xs text-background shadow-floating',
+        'overflow-visible rounded-lg border border-border bg-popover p-2.5 text-xs text-popover-foreground shadow-floating',
       menu: cn('overflow-hidden backdrop-blur-2xl', MENU_SURFACE_CLASS)
     }
   }
@@ -216,17 +216,13 @@ function PopoverContent({
 function PopoverArrow({
   className,
   style,
-  tone = 'default',
+  tone: _tone = 'default',
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Arrow> & { tone?: PopoverTone }) {
   return (
     <PopoverPrimitive.Arrow
       data-slot="popover-arrow"
-      className={cn(
-        tone === 'inverted' ? 'fill-foreground' : 'fill-popover',
-        '!visible block overflow-visible',
-        className
-      )}
+      className={cn('fill-popover', '!visible block overflow-visible', className)}
       style={{ visibility: 'visible', ...style }}
       {...props}
     />
