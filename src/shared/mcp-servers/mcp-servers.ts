@@ -35,9 +35,13 @@ export const McpServerWorkspacesSchema = z
     on: z.array(McpServerWorkspaceKey).max(1000),
     off: z.array(McpServerWorkspaceKey).max(1000)
   })
-  .refine((workspaces) => {
-    const off = new Set(workspaces.off)
-    return !workspaces.on.some((key) => off.has(key))
+  .refine(({ on, off }) => {
+    // Every launch parses each server's choice, and the usual one has an empty side.
+    if (on.length === 0 || off.length === 0) {
+      return true
+    }
+    const offKeys = new Set(off)
+    return !on.some((key) => offKeys.has(key))
   }, 'A workspace is either on or off')
 export type McpServerWorkspaces = z.infer<typeof McpServerWorkspacesSchema>
 
