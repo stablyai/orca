@@ -5,6 +5,7 @@ import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtim
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
 import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
+import { emitMcpServersChangedWindowEvent } from '@/lib/mcp-servers-changed-window-event'
 import { installBotHostListing } from '@/lib/bot-host-listing'
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
@@ -99,6 +100,12 @@ export function installAppLifetimeIpcEvents(): () => void {
   )
   if (stopPeerMailReturns) {
     unsubs.push(stopPeerMailReturns)
+  }
+  const stopMcpServerChanges = window.api.runtime.onMcpServersChanged?.(() =>
+    emitMcpServersChangedWindowEvent(LOCAL_EXECUTION_HOST_ID)
+  )
+  if (stopMcpServerChanges) {
+    unsubs.push(stopMcpServerChanges)
   }
   unsubs.push(
     window.api.workspaceCleanup.onRunFinished((run) =>

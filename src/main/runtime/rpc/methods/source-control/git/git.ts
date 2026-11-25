@@ -12,6 +12,7 @@ import {
   GitCheckout,
   GitCommit,
   GitCommitCompare,
+  GitContinueRebase,
   GitFilePath,
   GitResolveConflict,
   GitForkSync,
@@ -52,6 +53,7 @@ export const GIT_METHODS = [
         limit: params.limit,
         baseRef: params.baseRef,
         branchOnly: params.branchOnly,
+        branchListOnly: params.branchListOnly,
         refs: params.refs,
         historyToken: params.historyToken,
         skip: params.skip
@@ -84,6 +86,23 @@ export const GIT_METHODS = [
     share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitRebase(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.continueRebase',
+    permission: 'workspace',
+    share: 'not-shared',
+    params: GitContinueRebase,
+    handler: async (params, { runtime }) =>
+      runtime.continueRuntimeGitRebase(params.worktree, params.action, {
+        expected: params.expected
+      })
+  }),
+  defineMethod({
+    name: 'git.rebaseAutoStash',
+    permission: 'workspace',
+    share: 'not-shared',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.readRuntimeGitRebaseAutoStash(params.worktree)
   }),
   ...GIT_COMMIT_ACTION_METHODS,
   defineMethod({

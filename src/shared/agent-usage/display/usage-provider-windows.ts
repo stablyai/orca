@@ -23,7 +23,6 @@ export type UsageWindowSection =
 const PROVIDER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
   claude: 'Claude',
   codex: 'Codex',
-  gemini: 'Gemini',
   'opencode-go': 'OpenCode Go',
   kimi: 'Kimi',
   antigravity: 'Antigravity',

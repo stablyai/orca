@@ -48,6 +48,8 @@ const ExternalConversationLinkSchema = z.object({
     .array(z.object({ event: z.unknown(), waiting: z.array(z.string()) }))
     .optional()
     .catch(undefined),
+  muted: z.literal(true).optional().catch(undefined),
+  leaveLine: z.number().optional().catch(undefined),
   createdAt: z.number()
 })
 

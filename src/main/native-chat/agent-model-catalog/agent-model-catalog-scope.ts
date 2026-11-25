@@ -13,11 +13,16 @@ import type {
   AgentModelCatalogResolvedProbe
 } from './agent-model-catalog-discovery'
 import { sessionWorkspacePath, type AgentModelCatalogRecord } from './agent-model-catalog-workspace'
+import type { AgentSessionUnavailable } from '../../../shared/agent-session/failures/agent-session-availability'
+import { agentModelCatalogCommandRefusal } from './agent-model-catalog-failures'
 
 /** Discovery follows launch configuration, never session picks. */
 export async function resolveAgentModelCatalogScope(
   deps: AgentModelCatalogServiceDeps,
-  params: Parameters<AgentModelCatalogService['read']>[0],
+  params: Omit<Parameters<AgentModelCatalogService['read']>[0], 'relist'> & {
+    /** Read once the lookup settles, so a Refresh pressed during it still rechecks. */
+    relistRequested: () => boolean
+  },
   record: AgentModelCatalogRecord | undefined,
   base: string,
   home: AgentSessionAccountHome | null,
@@ -30,6 +35,7 @@ export async function resolveAgentModelCatalogScope(
   accountListing?: boolean
   cwd?: string
   resolved?: AgentModelCatalogResolvedProbe
+  unavailable?: AgentSessionUnavailable
 } | null> {
   if (!current()) {
     return null
@@ -116,8 +122,14 @@ export async function resolveAgentModelCatalogScope(
   if (!cwd) {
     return { base, fingerprint: base, exact: false, cwd: listIn }
   }
+  // A relative PATH entry can refuse one folder's Command and not another's.
+  const refusedKey = agentModelCatalogScopeFingerprint(base, listIn, { refusedIn: cwd })
+  let failure: unknown
   const resolve = (lookup: AgentModelCatalogLookup) =>
-    probe?.resolve?.(home, listIn, lookup, operation, cwd).catch(() => null)
+    probe?.resolve?.(home, listIn, lookup, operation, cwd).catch((error: unknown) => {
+      failure = error
+      return null
+    })
   const scopeKey = (resolved: AgentModelCatalogResolvedProbe | null | undefined) =>
     agentModelCatalogScopeFingerprint(base, listIn, resolved?.identity)
   let resolved = await resolve(savedOnly() ? 'saved' : 'snapshot')
@@ -127,12 +139,29 @@ export async function resolveAgentModelCatalogScope(
   if (resolved?.inputStamp !== undefined) {
     deps.store.observeInputs(scopeKey(resolved), resolved.inputStamp)
   }
-  // Rerun shells only for reads due to list; saved-only reads must remain passive.
-  if (!savedOnly() && (!resolved || deps.store.probeDue(scopeKey(resolved)))) {
+  // Rerun shells only for reads due to list or refresh; saved-only reads must remain passive.
+  const recovering =
+    !savedOnly() &&
+    (resolved
+      ? deps.store.probeDue(scopeKey(resolved))
+      : params.relistRequested() || !deps.store.hasActiveFailure(refusedKey))
+  if (recovering) {
     resolved = await resolve('recover')
   }
-  if (!current() || (probe?.resolve && !resolved)) {
+  if (!current()) {
     return null
+  }
+  if (probe?.resolve && !resolved) {
+    const refusal = agentModelCatalogCommandRefusal(failure)
+    // Only a recheck records a refusal; a held one stands while this lookup still gives it.
+    const unavailable =
+      refusal && (recovering || deps.store.failure(refusedKey)?.unavailable) ? refusal : null
+    if (recovering && unavailable) {
+      deps.store.probeFailed(refusedKey, params.agent, failure)
+    }
+    return unavailable
+      ? { base, fingerprint: refusedKey, exact: false, cwd: listIn, unavailable }
+      : null
   }
   if (resolved?.inputStamp !== undefined) {
     deps.store.observeInputs(scopeKey(resolved), resolved.inputStamp)

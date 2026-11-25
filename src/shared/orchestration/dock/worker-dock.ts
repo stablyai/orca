@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { CrewParty } from '../orchestration-crew'
 
 export const WorkerDockSource = z.object({ party: CrewParty })
@@ -90,7 +90,9 @@ export const WorkerDockResult = z.object({
   at: z.number().nullable(),
   settlement: z.string(),
   acknowledged: z.boolean(),
-  ownerActionsAvailable: z.boolean().default(true)
+  ownerActionsAvailable: z.boolean().default(true),
+  /** The worker's workspace on its host, so the card can say when it was removed. Older hosts omit it. */
+  workspaceId: z.string().optional()
 })
 export type WorkerDockResult = z.infer<typeof WorkerDockResult>
 /** A failed row this owner can acknowledge; Clear all sends exactly these. */
@@ -121,4 +123,7 @@ export function compareWorkerDockEntries(
 }
 
 export const WorkerDockResultRead = WorkerDockSource.extend({ dispatch: z.string() })
-export const WorkerDockStop = WorkerDockResultRead.extend({ requestId: z.string().min(1) })
+/** `requestId` is unread here; clients keep sending it because older hosts still require it. */
+export const WorkerDockStop = WorkerDockResultRead.extend({
+  requestId: z.string().min(1).optional()
+})

@@ -8,6 +8,7 @@ import {
   PLUGIN_HOST_ACTIONS_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_PANEL_UI_SINCE,
+  PLUGIN_PANEL_PATH_ICON_SINCE,
   PLUGIN_SCHEMA_SINCE_V1,
   PLUGIN_THEME_VIDEO_BACKGROUND_SINCE
 } from '../manifest/plugin-schema-field-docs'
@@ -15,6 +16,7 @@ import { PLUGIN_STATUS_BAR_SINCE } from '../contributions/plugin-status-bar-item
 import { PLUGIN_COMMAND_REPLACES_SINCE } from '../contributions/plugin-command-contribution'
 import { PLUGIN_APPEARANCE_SINCE } from '../workers/plugin-host-api-appearance'
 import { PLUGIN_FONTS_SINCE } from '../contributions/plugin-font-contribution'
+import { PLUGIN_MCP_SERVERS_SINCE } from '../contributions/plugin-mcp-server-contribution'
 import { PLUGIN_EDITOR_TYPOGRAPHY_SINCE } from '../workers/plugin-host-api-editor-typography'
 import { PLUGIN_HOST_API_1_7_SINCE } from '../workers/plugin-host-api-workspace-methods'
 import { PLUGIN_HOST_API_1_8_SINCE } from '../workers/plugin-host-api-1-8'
@@ -28,6 +30,7 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_HOST_ACTIONS_SINCE,
   PLUGIN_PANEL_UI_SINCE,
+  PLUGIN_PANEL_PATH_ICON_SINCE,
   PLUGIN_COMPONENTS_CATALOG_2_SINCE,
   PLUGIN_COMPONENTS_CATALOG_4_SINCE,
   PLUGIN_EDITOR_FRAME_SINCE,
@@ -42,7 +45,8 @@ export const PLUGIN_SCHEMA_NEWEST_SINCE = [
   PLUGIN_HOST_API_1_7_SINCE,
   PLUGIN_HOST_API_1_8_SINCE,
   PLUGIN_HOST_API_1_9_SINCE,
-  PLUGIN_HOST_API_1_10_SINCE
+  PLUGIN_HOST_API_1_10_SINCE,
+  PLUGIN_MCP_SERVERS_SINCE
 ].reduce((newest, version) => (satisfiesOrcaEngineRange(version, `>=${newest}`) ? version : newest))
 
 /**

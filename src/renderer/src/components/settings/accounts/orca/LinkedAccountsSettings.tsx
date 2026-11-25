@@ -2,11 +2,9 @@
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { SettingsSubsectionHeader } from '@/components/settings/form-controls/SettingsFormControls'
-import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import { BOT_CONNECTORS } from '@/components/bots/bot-connectors'
 import { connectorTripErrorMessage } from '@/components/bots/connector-trip-copy'
 import { connectorLinksCalls } from '@/lib/bot-connector-host-calls'
 import { refreshBotGitHub } from '@/lib/bot-github-state'
@@ -87,7 +85,6 @@ function LinkedAccountsSection({
   hostName
 }: LinkedAccountsProps): React.JSX.Element | null {
   const t = useTranslate()
-  const confirm = useConfirmationDialog()
   const view = useConnectorLinks(hostId)
   const trips = {
     slack: useTrip(hostId, 'slack', hostName),
@@ -120,35 +117,8 @@ function LinkedAccountsSection({
     void startConnectorConnect(hostId, source, { switchAccount: another })
   }
   const cancel = (source: ConnectorLinkSource): void => cancelConnectorConnect(hostId, source)
+  // The list confirms in place before it asks to unlink.
   const unlink = async (entry: ConnectorLink): Promise<void> => {
-    const service =
-      BOT_CONNECTORS.find((connector) => connector.id === entry.source)?.label ?? entry.source
-    const confirmed = await confirm({
-      title: entry.workspaceName
-        ? t('settings.linkedAccounts.unlinkTitleIn', 'Unlink {{name}} in {{workspace}}?', {
-            name: entry.name || entry.userId,
-            workspace: entry.workspaceName
-          })
-        : t('settings.linkedAccounts.unlinkTitle', 'Unlink {{name}} on {{service}}?', {
-            name: entry.name || entry.userId,
-            service
-          }),
-      description: entry.workspaceName
-        ? t(
-            'settings.linkedAccounts.unlinkNoteWorkspace',
-            'Bots shared with you won’t know it’s you in that workspace.'
-          )
-        : t(
-            'settings.linkedAccounts.unlinkNote',
-            'Bots shared with you won’t know it’s you on {{service}}.',
-            { service }
-          ),
-      confirmLabel: t('settings.linkedAccounts.unlink', 'Unlink'),
-      confirmVariant: 'destructive'
-    })
-    if (!confirmed) {
-      return
-    }
     const result = await connectorLinksCalls(hostId).unlink({
       source: entry.source,
       workspaceId: entry.workspaceId,

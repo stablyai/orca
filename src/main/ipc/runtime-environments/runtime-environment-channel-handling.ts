@@ -54,6 +54,7 @@ const SHARED_HOST_HANDLING = {
   'runtimeEnvironments:addPortForward': 'no-host',
   'runtimeEnvironments:updatePortForward': 'no-host',
   'runtimeEnvironments:removePortForward': 'no-host',
+  'runtimeEnvironments:takeRestoredPortForwardMoves': 'no-host',
   'runtimeEnvironments:deployOrcad': 'no-host',
   'runtimeEnvironments:convertSshHostToManagedOrcad': 'no-host',
   'runtimeEnvironments:listPendingOrcadMigrations': 'no-host',
