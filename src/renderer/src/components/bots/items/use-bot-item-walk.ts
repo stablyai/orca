@@ -1,5 +1,6 @@
-// The open item and the walk it steps through. Stepping onto a Closed item not paged in yet reads the
-// next page first; the current item stays up meanwhile, and a failed read keeps the place for Retry.
+// The open item and the walk it steps through: the section it opened from. Stepping onto a Closed item not
+// paged in yet reads the next page first; the current item stays up meanwhile, and a failed read keeps the
+// place for Retry.
 import { useEffect, useRef, useState } from 'react'
 import {
   botItemWalkDrop,
@@ -13,7 +14,7 @@ import type { BotItemsShownList } from './use-bot-items-shown-list'
 
 type Open = {
   uid: string
-  /** Null when the item isn't in the list it opened over (a chat chip's item not loaded or filtered out). */
+  /** Null when no section of the list it opened over holds it (a chat chip's item not loaded or filtered out). */
   walk: BotItemWalk | null
   /** Deleted while open: it leaves the walk once stepped away from. */
   gone: boolean
@@ -72,10 +73,8 @@ export function useBotItemWalk(list: BotItemWalkList, botKey: string): BotItemWa
     setFailed(null)
   }
 
-  const open = (uid: string): void => {
-    const walk = botItemWalkOf(list.groups, list.closedTotal)
-    settle({ uid, walk: botItemWalkIndex(walk, uid) === null ? null : walk, gone: false })
-  }
+  const open = (uid: string): void =>
+    settle({ uid, walk: botItemWalkOf(list.groups, list.closedTotal, uid), gone: false })
 
   const move = (from: Open, walk: BotItemWalk, to: string): void =>
     settle({ uid: to, walk: from.gone ? botItemWalkDrop(walk, from.uid) : walk, gone: false })

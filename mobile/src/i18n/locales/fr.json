@@ -5287,6 +5287,9 @@
       "continuesAt": "Reprend à {{time}}",
       "continues": "Reprend à {{time}}",
       "hitLimit": "Limite atteinte · réinitialisation à {{time}}"
+    },
+    "new": {
+      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}."
     }
   },
   "sidebar": {

@@ -177,19 +177,27 @@ function linkRowsWithRecency(links: readonly BotItemLinkView[]): {
     map.set(key, Math.max(map.get(key) ?? -1, index))
   }
   const indexOf = new Map(links.map((link, index) => [link, index]))
-  // A worker's row stands for every step of its chain.
-  const chainAt = new Map<string, number>()
-  links.forEach((link, index) => {
-    if (link.kind === 'dispatch') {
-      seen(chainAt, link.latest ?? link.ref, index)
-    }
-  })
   const prs = new Map<string, Extract<BotItemPullRequest, { shown: true }>>()
   const prAt = new Map<string, number>()
   const unread = new Map<string, string>()
+  let serverPr = false
   let serverPrAt = -1
+  // A worker's row, and its PR's, stand for every step of its chain, read before the chain collapses.
+  const chainAt = new Map<string, number>()
+  links.forEach((link, index) => {
+    if (link.kind !== 'dispatch') {
+      return
+    }
+    seen(chainAt, link.latest ?? link.ref, index)
+    if (link.pr?.shown) {
+      seen(prAt, prKey(botItemPrRefOfUrl(link.pr.url) ?? link.pr.ref), index)
+    } else if (link.pr) {
+      serverPrAt = Math.max(serverPrAt, index)
+    }
+  })
   const addPr = (pr: BotItemPullRequest, index: number): void => {
     if (!pr.shown) {
+      serverPr = true
       serverPrAt = Math.max(serverPrAt, index)
       return
     }
@@ -266,7 +274,7 @@ function linkRowsWithRecency(links: readonly BotItemLinkView[]): {
       push(row ? { ...row, key: `pr:${key}` } : webRow(ref), prAt.get(key) ?? -1)
     }
   }
-  if (serverPrAt >= 0) {
+  if (serverPr) {
     push({ kind: 'server-pr', key: 'server-pr' }, serverPrAt)
   }
   markOtherRepos(rows)

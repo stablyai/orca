@@ -3240,7 +3240,8 @@
         "projectRemoved": "O projeto foi removido do Orca.",
         "folderWorkspaceRemoved": "O espaço de trabalho de pasta foi removido.",
         "chatStillStarting": "O chat ainda está iniciando. Tente em breve.",
-        "chatOpenFailed": "Não foi possível abrir este chat.",
+        "chatOpenFailed": "Não foi possível abrir este chat",
+        "chatOpenDismiss": "Descartar",
         "chatOpenRetry": "Tentar novamente",
         "chatOpenShowDetails": "Mostrar detalhes",
         "chatOpenHideDetails": "Ocultar detalhes"
@@ -14938,7 +14939,7 @@
           "preservedTitle": "Suas edições em {{value0}} foram salvas separadamente",
           "preservedDescription": "O Orca atualizou a skill e salvou suas edições em {{value0}}.",
           "uncertainTitle": "O Orca não conseguiu confirmar a atualização da skill em {{value0}}",
-          "uncertainDescription": "O Orca pode ter atualizado as skills em {{value0}}, mas não conseguiu confirmar o resultado. Se você editou uma skill durante a atualização, sua cópia está em {{value1}}."
+          "uncertainDescriptionKept": "O Orca pode ter atualizado as skills em {{value0}}, mas não conseguiu confirmar o resultado. Se você editou uma skill durante a atualização, sua cópia está em {{value1}} ou ainda na pasta de skills."
         },
         "SkillBackupPathLine": {
           "movedTo": "Cópia antiga movida para:",
@@ -22343,7 +22344,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Parado por você",
+        "stopped": "Parado",
         "finished": "Concluído",
         "failedCount": "{{count}} com falha",
         "needsYouCount": "{{count}} aguardando você",
@@ -23307,9 +23308,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Manter aberto",
-        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
-        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
-        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve",
+        "bannerRunning": "Fecha {{minutes}} min após terminar",
+        "bannerFinished": "Concluído · fecha em {{countdown}}",
+        "bannerFinishedStatus": "Worker concluído · fecha em breve",
         "boundRunning": "Fecha com {{worker}}",
         "boundFinished": "{{worker}} concluído · Fecha em {{countdown}}",
         "boundFallbackName": "seu worker"
@@ -25967,7 +25968,9 @@
       "untitled": "Novo chat",
       "loading": "Carregando chats…",
       "readFailed": "Não foi possível ler os chats deste bot.",
-      "searchRetry": "Tentar novamente"
+      "searchRetry": "Tentar novamente",
+      "older": "Mostrar {{count}} mais antigos",
+      "hideOlder": "Ocultar mais antigos"
     },
     "needs": {
       "chat": "Seu chat com {{name}}",
@@ -26038,7 +26041,8 @@
       "webhooksNotReaching": "O Orca Cloud não está chegando a {{name}}, então ainda não pode criar webhooks."
     },
     "errors": {
-      "unsavedDrafts": "A pasta dele tem alterações não salvas no editor. Salve ou feche os arquivos e tente excluir novamente."
+      "unsavedDrafts": "A pasta dele tem alterações não salvas no editor. Salve ou feche os arquivos e tente excluir novamente.",
+      "purposeTooLongForHost": "O Orca em {{host}} aceita até 200 caracteres para a finalidade. Encurte o texto ou atualize o Orca em {{host}}."
     },
     "groups": {
       "handoffsPaused": "Pausado após {{count}} repasses. Responda para continuar.",

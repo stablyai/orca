@@ -2198,6 +2198,7 @@
         "folderWorkspaceRemoved": "文件夹工作区已移除。",
         "chatStillStarting": "此聊天仍在启动，请稍后重试",
         "chatOpenFailed": "无法打开此聊天",
+        "chatOpenDismiss": "忽略",
         "chatOpenRetry": "重试",
         "chatOpenShowDetails": "显示详情",
         "chatOpenHideDetails": "隐藏详情"
@@ -6343,7 +6344,7 @@
           "preservedTitle": "你对 {{value0}} 的修改已单独保存",
           "preservedDescription": "Orca 已更新该技能，并将你的修改保存到 {{value0}}",
           "uncertainTitle": "Orca 无法确认 {{value0}} 上的技能更新",
-          "uncertainDescription": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}"
+          "uncertainDescriptionKept": "Orca 可能已更新 {{value0}} 上的技能，但无法确认结果；如果你在更新期间编辑过技能，你的副本位于 {{value1}}，或仍在技能文件夹中"
         },
         "SkillBackupPathLine": {
           "movedTo": "旧副本已移动到：",
@@ -7688,8 +7689,8 @@
           "stopped": "已停止",
           "unverifiable": "未知",
           "title": "添加 WSL 发行版",
-          "descriptionMoveFromSidebar": "Orca 会在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。你通过 \\\\wsl.localhost 打开的此发行版中的项目会留在这台电脑上，直到你从其侧边栏菜单中移动它们。位于 Windows 驱动器（/mnt/…）上的项目也会留在这里。你可以从侧边栏将已移动的项目移回",
-          "descriptionAutoMove": "Orca 会在发行版内运行其服务器，因此 git、文件和终端都在 Linux 中原生运行。你通过 \\\\wsl.localhost 打开的此发行版中的项目会在其终端空闲后自动移到此主机。位于 Windows 驱动器（/mnt/…）上的项目会留在这台电脑上。你可以从侧边栏将已移动的项目移回",
+          "descriptionMoveFromSidebar": "git、文件和终端在 Linux 中原生运行。现有的 WSL 项目会留在 Windows 上，直到你在其项目菜单中选择“移到 … 主机”。",
+          "descriptionAutoMove": "git、文件和终端在 Linux 中原生运行。WSL 项目会在其终端空闲后移到这里。",
           "distro": "发行版",
           "loading": "正在查找 WSL 发行版…",
           "placeholder": "选择发行版",
@@ -13433,7 +13434,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "切换“WSL 发行版作为主机”",
           "title": "WSL 发行版作为主机",
-          "description": "将 WSL 2 发行版添加为主机，Orca 在发行版内运行其服务器，因此其中新项目里的 git、文件和终端都在 Linux 中原生运行",
+          "description": "在 WSL 2 发行版内运行 Orca 的服务器，让 git、文件和终端在 Linux 中原生运行。",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "发行版"
@@ -13441,17 +13442,17 @@
         "wslHosts": {
           "title": "WSL 主机",
           "experimental": "实验性",
-          "description": "Orca 在每个发行版内运行一个服务器。打开项目不会启动已停止的发行版：请点击“启动”、打开新终端，或在此连接它。",
+          "description": "Orca 在每个发行版内运行一个服务器。要启动已停止的发行版，请点击“启动”、打开终端或在此处连接。",
           "add": "添加 WSL 发行版",
           "connect": "连接",
           "turnOn": "打开实验功能",
           "forceUpdate": "强制更新",
           "chip": "WSL",
-          "notStartedAsWslHost": "此主机的服务器是由 SSH 主机启动的，而不是作为 WSL 主机启动，因此无法将项目移到这里。请将其作为 WSL 主机重启以解决此问题",
+          "notStartedAsWslHost": "此服务器由 SSH 主机启动，因此无法将项目移到这里。请将其作为 WSL 主机重启以解决此问题。",
           "restartAsWslHost": {
             "button": "作为 WSL 主机重启",
             "title": "要作为 WSL 主机重启吗？",
-            "description": "这会结束 {{host}} 上运行的所有终端和智能体，包括 SSH 主机在那里打开的终端和智能体。随后 Orca 会作为 WSL 主机重新启动其服务器，以便将项目移到该主机",
+            "description": "结束 {{host}} 上的所有终端和代理（包括 SSH 主机打开的），然后将 Orca 的服务器作为 WSL 主机重启。",
             "cancel": "取消",
             "action": "结束终端并重启"
           }
@@ -21316,7 +21317,7 @@
         "monitor": "监控任务",
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
-        "stoppedByYou": "已由你停止",
+        "stopped": "已停止",
         "finished": "已完成",
         "failedCount": "{{count}} 个失败",
         "needsYouCount": "{{count}} 个等待你处理",
@@ -23033,9 +23034,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "保持打开",
-        "bannerRunning": "编排工作代理 · 完成后 2 分钟关闭",
-        "bannerFinished": "编排工作代理已完成 · {{countdown}}后关闭",
-        "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭",
+        "bannerRunning": "完成后 {{minutes}} 分钟关闭",
+        "bannerFinished": "已完成 · {{countdown}}后关闭",
+        "bannerFinishedStatus": "工作代理已完成 · 即将关闭",
         "boundRunning": "随 {{worker}} 一同关闭",
         "boundFinished": "{{worker}} 已完成 · {{countdown}}后关闭",
         "boundFallbackName": "其工作代理"
@@ -28010,7 +28011,8 @@
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",
       "open": "打开",
-      "actions": "聊天操作"
+      "actions": "聊天操作",
+      "hideOlder": "隐藏更早的"
     },
     "items": {
       "view": {
@@ -29810,6 +29812,7 @@
     },
     "errors": {
       "nameTaken": "已有其他 bot 使用此名称",
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
       "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"
@@ -30416,7 +30419,8 @@
     "navigationLabel": "应用导航",
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
-    "more": "更多"
+    "more": "更多",
+    "customize": "自定义"
   },
   "chats": {
     "delete": {

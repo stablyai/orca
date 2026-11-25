@@ -69,13 +69,16 @@ export function botCreateHostRows(
     return {
       host,
       group: ready ? 'ready' : 'unavailable',
-      meta:
-        [
-          hostPlatformDisplayName(host.platform),
-          account ? t('bots.new.hostAs', 'as {{account}}', { account }) : null
-        ]
-          .filter(Boolean)
-          .join(' · ') || null,
+      meta: host.waking
+        ? t('bots.new.hostWaking', 'Waking…')
+        : host.sleeping
+          ? t('bots.new.hostSleeping', 'Sleeping · wakes when used')
+          : [
+              hostPlatformDisplayName(host.platform),
+              account ? t('bots.new.hostAs', 'as {{account}}', { account }) : null
+            ]
+              .filter(Boolean)
+              .join(' · ') || null,
       action: null,
       hint: null
     }

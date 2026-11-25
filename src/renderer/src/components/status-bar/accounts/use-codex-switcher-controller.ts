@@ -4,10 +4,8 @@ import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-
 import { useAppStore } from '../../../store/index'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import {
-  emptyCodexAccountsState,
-  selectCodexProviderAccount
-} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { emptyCodexAccountsState } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { useProviderAccountList } from './use-provider-account-list'
 import { useTranslate } from '@/i18n/use-translate'
 import {

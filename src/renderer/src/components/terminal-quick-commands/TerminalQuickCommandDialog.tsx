@@ -28,6 +28,7 @@ import {
 } from '@/lib/keyboard/screen-submit-shortcut'
 import { isSelectAllShortcut } from '@/lib/text-input/focus/editable-target'
 import { TerminalQuickCommandActionToggle } from './TerminalQuickCommandActionToggle'
+import type { RepoMarkRepo } from '@/components/repo/RepoMark'
 import { TerminalQuickCommandAdvancedSection } from './TerminalQuickCommandAdvancedSection'
 import { TerminalQuickCommandContentSection } from './TerminalQuickCommandContentSection'
 import { TerminalQuickCommandDialogFooter } from './TerminalQuickCommandDialogFooter'
@@ -44,7 +45,7 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
-  repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
+  repos?: readonly (RepoMarkRepo & Pick<Repo, 'path'>)[]
   /** Settings has no ambient workspace to imply scope from, so it opens the
    *  Advanced section up front. In-workspace entry points leave it collapsed. */
   defaultAdvancedOpen?: boolean
@@ -57,7 +58,7 @@ type TerminalQuickCommandDialogProps = {
   onCloseAutoFocus?: (event: Event) => void
 }
 
-const EMPTY_REPOS: Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[] = []
+const EMPTY_REPOS: (RepoMarkRepo & Pick<Repo, 'path'>)[] = []
 
 export function createTerminalQuickCommandDraft(
   scope: TerminalQuickCommandScope = { type: 'global' }

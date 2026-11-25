@@ -2053,7 +2053,8 @@
         "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
         "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt.",
         "chatStillStarting": "Chat startet noch. Versuche es gleich erneut.",
-        "chatOpenFailed": "Chat konnte nicht geöffnet werden.",
+        "chatOpenFailed": "Chat konnte nicht geöffnet werden",
+        "chatOpenDismiss": "Verwerfen",
         "chatOpenRetry": "Erneut versuchen",
         "chatOpenShowDetails": "Details anzeigen",
         "chatOpenHideDetails": "Details ausblenden"
@@ -20764,7 +20765,7 @@
         "task": "Aufgabe",
         "workerCount_one": "{{count}} Worker",
         "workerCount_other": "{{count}} Worker",
-        "stoppedByYou": "Von dir gestoppt",
+        "stopped": "Gestoppt",
         "finished": "Abgeschlossen",
         "failedCount": "{{count}} fehlgeschlagen",
         "needsYouCount": "{{count}} mit Rückfrage",
@@ -21686,9 +21687,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Offen halten",
-        "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen",
+        "bannerRunning": "Schließt {{minutes}} Min. nach Abschluss",
+        "bannerFinished": "Abgeschlossen · schließt in {{countdown}}",
+        "bannerFinishedStatus": "Worker abgeschlossen · schließt bald",
         "boundRunning": "Schließt mit {{worker}}",
         "boundFinished": "{{worker}} abgeschlossen · Schließt in {{countdown}}",
         "boundFallbackName": "Worker"
@@ -24849,7 +24850,9 @@
       "untitled": "Neuer Chat",
       "searchRetry": "Erneut versuchen",
       "loading": "Chats werden geladen…",
-      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden."
+      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden.",
+      "older": "{{count}} ältere anzeigen",
+      "hideOlder": "Ältere ausblenden"
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",
@@ -24879,7 +24882,8 @@
       "startFromScratch": "Ohne Vorlage starten"
     },
     "errors": {
-      "unsavedDrafts": "In seinem Ordner gibt es ungespeicherte Änderungen im Editor. Speichere sie oder schließe die betroffenen Dateien und versuche dann erneut, den Bot zu löschen."
+      "unsavedDrafts": "In seinem Ordner gibt es ungespeicherte Änderungen im Editor. Speichere sie oder schließe die betroffenen Dateien und versuche dann erneut, den Bot zu löschen.",
+      "purposeTooLongForHost": "Orca auf {{host}} erlaubt höchstens 200 Zeichen für den Zweck. Kürze ihn oder aktualisiere Orca auf {{host}}."
     },
     "automations": {
       "paused": "Pausiert",

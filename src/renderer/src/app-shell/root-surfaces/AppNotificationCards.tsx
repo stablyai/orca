@@ -24,6 +24,9 @@ const UnexpectedSignoutCard = lazy(() =>
   }))
 )
 
+// Temporarily disabled while fixing a bug where the card can stay stuck open.
+const AGENT_CLI_UPDATE_CARD_ENABLED = false
+
 /** The bottom-right notification stack and every card that shares it. */
 export function AppNotificationCards({
   activeView,
@@ -45,9 +48,11 @@ export function AppNotificationCards({
           </OverlayBoundary>
         </Suspense>
       ) : null}
-      <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
-        <AgentCliUpdateCard />
-      </OverlayBoundary>
+      {AGENT_CLI_UPDATE_CARD_ENABLED ? (
+        <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+          <AgentCliUpdateCard />
+        </OverlayBoundary>
+      ) : null}
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>

@@ -32,7 +32,7 @@ function eventMsg(payload: Record<string, unknown>): object {
   return { type: 'event_msg', payload }
 }
 
-function subAgentActivity(kind: string): object {
+function subAgentActivity(kind: string, id = CHILD_ID): object {
   return eventMsg({
     type: 'item_completed',
     thread_id: '019a8f4b-2c1d-7e00-9a00-000000000000',
@@ -43,7 +43,7 @@ function subAgentActivity(kind: string): object {
       reasoning_effort: null,
       id: `call-${kind}`,
       kind,
-      agent_thread_id: CHILD_ID,
+      agent_thread_id: id,
       agent_path: '/root/researcher'
     },
     started_at_ms: 1_700_000_000_000,
@@ -221,4 +221,40 @@ it('stops reading a re-tasked child that started no turn within the grace', () =
   appendFileSync(parentPath, jsonl([subAgentActivity('interacted')]))
   reconcileCodexSubagentTranscript(state, roster, parentPath)
   expect(roster.get(CHILD_ID)?.state).toBe('working')
+})
+
+it('drops cursor payloads and bounds retained interrupted children per parent session', () => {
+  const { parentPath, childPath } = rollouts([], [childTurn])
+  const roster: CodexSubagentRoster = new Map()
+  const state = createCodexSubagentTranscriptState()
+  upsertCodexSubagent(roster, CHILD_ID, { state: 'working' }, Date.now())
+  // Trailing partial JSONL line populates cursor.carry before the parent interrupts the child.
+  appendFileSync(childPath, `{"partial":"${'x'.repeat(1024)}`)
+  reconcileCodexSubagentTranscript(state, roster, parentPath)
+  expect(state.subagents.get(CHILD_ID)?.carry.length).toBeGreaterThan(1024)
+
+  appendFileSync(parentPath, jsonl([subAgentActivity('interrupted')]))
+  reconcileCodexSubagentTranscript(state, roster, parentPath)
+  expect(state.interruptedSubagents.get(CHILD_ID)).toEqual({
+    filePath: childPath,
+    description: undefined,
+    model: undefined
+  })
+
+  // Interrupting many distinct children bounds the retired map and evicts the oldest entries.
+  const childId = (index: number) => `019a8f4b-2c1d-7e00-9a00-${String(index).padStart(12, '0')}`
+  const interrupts: object[] = []
+  for (let i = 2; i <= 70; i += 1) {
+    const id = childId(i)
+    upsertCodexSubagent(roster, id, { state: 'working' }, Date.now())
+    interrupts.push(subAgentActivity('interrupted', id))
+  }
+  appendFileSync(parentPath, jsonl(interrupts))
+  reconcileCodexSubagentTranscript(state, roster, parentPath)
+
+  expect(state.interruptedSubagents.size).toBe(64)
+  expect(state.interruptedSubagents.has(CHILD_ID)).toBe(false)
+  expect(state.interruptedSubagents.has(childId(6))).toBe(false)
+  expect(state.interruptedSubagents.has(childId(7))).toBe(true)
+  expect(state.interruptedSubagents.has(childId(70))).toBe(true)
 })

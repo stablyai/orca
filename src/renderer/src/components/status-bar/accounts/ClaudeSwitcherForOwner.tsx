@@ -8,10 +8,11 @@ import React, { useCallback, useState } from 'react'
 import { useAppStore } from '../../../store/index'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { emptyClaudeAccountsState } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
-  selectClaudeProviderAccount,
-  emptyClaudeAccountsState
-} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+  claudeRemoteWslDefaultUnavailableMessage,
+  selectClaudeProviderAccount
+} from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../../../lib/provider-accounts/provider-account-action-errors'
 import { useTranslate } from '@/i18n/use-translate'
@@ -47,6 +48,7 @@ import { AccountSwitchSection, AccountSwitchSignedOutHeading } from './AccountSw
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { ProviderDetailsMenu } from '../usage/ProviderDetailsMenu'
 import { claudeInactiveUsageId } from '../../../../../shared/agent-accounts/claude/claude-system-default-usage'
+import { claudeSwitcherScope } from './claude-switcher-scope'
 import { getOwnerAccountRows } from './owner-account-rows'
 import {
   claudeAccountCardSignIn,
@@ -77,9 +79,8 @@ export function ClaudeSwitcherForOwner({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
-  const runtimeTarget = chatAction?.target ?? owner.target
+  const { runtimeTarget, wslHostDistro, chatOnHost } = claudeSwitcherScope(chatAction, owner)
   const openAccountSettings = useOpenClaudeAccountSettings(runtimeTarget, Boolean(chatAction))
-  const wslHostDistro = chatAction ? null : owner.wslHostDistro
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
   const { settings, ownHostName, accountSettings, claudeAccountSyncKey } = useClaudeSwitcherState(
@@ -101,7 +102,7 @@ export function ClaudeSwitcherForOwner({
       runtimeTarget,
       claudeAccountSyncKey,
       EMPTY_CLAUDE_ACCOUNTS,
-      !ownerUsage.remoteOwner
+      !ownerUsage.remoteOwner || wslHostDistro !== null
     )
   const { signingInId, handleSignIn } = useClaudeAccountSignIn(loadAccounts, mountedRef)
   const {
@@ -114,7 +115,7 @@ export function ClaudeSwitcherForOwner({
     ? { runtime: 'wsl' as const, wslDistro: wslHostDistro }
     : usageTarget
   // Why: a chat's local list loads on its own; a remote roster rides the owner's stream.
-  const rosterLoaded = ownerUsage.remoteOwner ? rosterKnown : accountsLoaded
+  const rosterLoaded = ownerUsage.remoteOwner && !wslHostDistro ? rosterKnown : accountsLoaded
   const accountState = resolveClaudeStatusAccountState(
     accountSettings,
     roster,
@@ -225,7 +226,7 @@ export function ClaudeSwitcherForOwner({
       hostLabel: providerAccountHostLabel
     }
   )
-  const selectedGroup = chatAction
+  const selectedGroup = chatOnHost
     ? switchGroups.find((group) => group.runtimeTarget.runtime === 'host')
     : (switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0])
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
@@ -246,7 +247,7 @@ export function ClaudeSwitcherForOwner({
     // Why: accounts.selectClaude takes no runtime, so clearing a remote WSL slot would clear the host's.
     target:
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
-        ? { ...target, disabled: true }
+        ? { ...target, disabled: true, detail: claudeRemoteWslDefaultUnavailableMessage() }
         : target,
     inactiveUsage: inactiveClaudeAccounts.find((a) => a.accountId === claudeRowUsageId(target)),
     // Why local only: the hidden sign-in runs on this device, not a remote server.

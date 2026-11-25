@@ -1770,7 +1770,8 @@
         "projectRemoved": "Le projet a été retiré d’Orca.",
         "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré.",
         "chatStillStarting": "Le chat démarre encore. Réessayez bientôt.",
-        "chatOpenFailed": "Impossible d'ouvrir ce chat.",
+        "chatOpenFailed": "Impossible d'ouvrir ce chat",
+        "chatOpenDismiss": "Ignorer",
         "chatOpenRetry": "Réessayer",
         "chatOpenShowDetails": "Afficher les détails",
         "chatOpenHideDetails": "Masquer les détails"
@@ -20776,7 +20777,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Arrêté par vous",
+        "stopped": "Arrêté",
         "finished": "Terminé",
         "failedCount": "{{count}} en échec",
         "needsYouCount": "En attente de votre réponse : {{count}}",
@@ -21785,9 +21786,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Garder ouvert",
-        "bannerRunning": "Worker d’orchestration · Se ferme 2 minutes après sa fin",
-        "bannerFinished": "Worker d’orchestration terminé · Fermeture dans {{countdown}}",
-        "bannerFinishedStatus": "Worker d’orchestration terminé · Fermeture prochaine",
+        "bannerRunning": "Se ferme {{minutes}} min après la fin",
+        "bannerFinished": "Terminé · fermeture dans {{countdown}}",
+        "bannerFinishedStatus": "Worker terminé · fermeture prochaine",
         "boundRunning": "Se ferme avec {{worker}}",
         "boundFinished": "{{worker}} terminé · Fermeture dans {{countdown}}",
         "boundFallbackName": "son worker"
@@ -25448,7 +25449,9 @@
       "untitled": "Nouveau chat",
       "searchRetry": "Réessayer",
       "loading": "Chargement des chats…",
-      "readFailed": "Impossible de lire les chats de ce bot."
+      "readFailed": "Impossible de lire les chats de ce bot.",
+      "older": "Afficher {{count}} plus anciens",
+      "hideOlder": "Masquer les plus anciens"
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
@@ -25480,7 +25483,8 @@
       "startFromScratch": "Partir de zéro"
     },
     "errors": {
-      "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer."
+      "unsavedDrafts": "Son dossier contient des modifications non enregistrées dans l’éditeur. Enregistrez-les ou fermez les fichiers concernés, puis réessayez de le supprimer.",
+      "purposeTooLongForHost": "Orca sur {{host}} accepte jusqu’à 200 caractères pour l’objectif. Raccourcissez-le ou mettez Orca à jour sur {{host}}."
     },
     "automations": {
       "paused": "En pause",
