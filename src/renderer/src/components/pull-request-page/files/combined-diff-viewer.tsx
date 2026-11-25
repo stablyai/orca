@@ -316,25 +316,27 @@ export function PRFilesCombinedDiffViewer({
                 if (!ok || generationRef.current !== generation) {
                   return
                 }
-                const sectionIndex = prev.findIndex((s) => s.path === file.path)
-                const alreadyLoaded =
-                  sectionIndex !== -1 && loadedIndicesRef.current.has(sectionIndex)
-                return prev.map((s) =>
-                  s.path === file.path
-                    ? {
-                        ...s,
-                        collapsed: !viewed,
-                        loading: viewed && !alreadyLoaded ? true : s.loading
-                      }
-                    : s
-                )
+                setSections((prev) => {
+                  const sectionIndex = prev.findIndex((s) => s.path === file.path)
+                  const alreadyLoaded =
+                    sectionIndex !== -1 && loadedIndicesRef.current.has(sectionIndex)
+                  return prev.map((s) =>
+                    s.path === file.path
+                      ? {
+                          ...s,
+                          collapsed: !viewed,
+                          loading: viewed && !alreadyLoaded ? true : s.loading
+                        }
+                      : s
+                  )
+                })
               })
             }
           }}
         />
       )
     },
-    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, loadedIndicesRef]
+    [fileByPath, onViewedChange, pendingViewedPaths, generationRef, loadedIndicesRef, setSections]
   )
 
   return (
