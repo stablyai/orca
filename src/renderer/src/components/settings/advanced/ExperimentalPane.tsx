@@ -1,3 +1,7 @@
+import {
+  savedNewWorktreeCards,
+  worktreeCardStyleUpdates
+} from '@/store/appearance/worktree-card-style'
 import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Label } from '../../ui/label'
 import { Switch } from '../../ui/switch'
@@ -290,13 +294,13 @@ export function ExperimentalPane({
               </div>
               <SettingsSegmentedControl<'classic' | 'experimental'>
                 size="sm"
-                value={
-                  settings.experimentalNewWorktreeCardStyle === true ? 'experimental' : 'classic'
-                }
+                value={savedNewWorktreeCards(settings) ? 'experimental' : 'classic'}
                 onChange={(style) => {
                   const experimental = style === 'experimental'
                   void Promise.resolve(
-                    updateSettings({ experimentalNewWorktreeCardStyle: experimental })
+                    updateSettings(
+                      worktreeCardStyleUpdates(experimental, useAppStore.getState().settings)
+                    )
                   ).then(() => {
                     const state = useAppStore.getState()
                     if (

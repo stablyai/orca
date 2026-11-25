@@ -1,7 +1,5 @@
-import {
-  createAgentMenuTerminalPendingSelector,
-  useAgentMenuLaunchFacts
-} from './agent-menu-launch-facts'
+import { useNewTabAgentMenuHostFacts } from '../../tab-bar/new-tab-agent-menu-host-facts'
+import { createAgentMenuTerminalPendingSelector } from './agent-menu-launch-facts'
 import { buildRouteInputForStatuses } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   useAppViewExternalStore,
@@ -104,7 +102,7 @@ export function useAgentMenuObservation(
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
-  const facts = useAgentMenuLaunchFacts(workspace)
+  const facts = useNewTabAgentMenuHostFacts(workspace)
   const prospective = typeof target === 'string' ? undefined : target?.workspace
   const repoId = prospective?.repoId
   const repoHostId = prospective?.executionHostId
@@ -116,7 +114,7 @@ export function useAgentMenuObservation(
   const terminalPending = useAppStateValueWithHostStatuses(terminalPendingSelector)
   const input = buildRouteInputForStatuses(state, hostStatuses, { agent: 'claude', workspace })
   const hostPreferences = useHostAgentMenuSettings(
-    unresolvedTarget ? null : facts,
+    unresolvedTarget ? null : { ...facts, executionHostId: facts.inventoryExecutionHostId },
     desktopSettings,
     viewActive && (open || shown),
     viewActive && open
@@ -259,6 +257,7 @@ export function useAgentMenuObservation(
           workspace,
           launchCwd,
           executionHostId: facts.executionHostId,
+          inventoryExecutionHostId: facts.inventoryExecutionHostId,
           pairingRevision: facts.pairingRevision,
           runtimeId: facts.runtimeId,
           settings,

@@ -99,6 +99,7 @@ export type WorkspaceCardFacts = {
   }
   options: {
     style: WorkspaceCardStyle
+    compactHeader?: boolean
     show: WorkspaceCardShowOptions
     /** Card display's "Details row": the new style draws its row under the name only when on. */
     detailsRow: boolean

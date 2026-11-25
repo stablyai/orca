@@ -1,3 +1,4 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import {
@@ -177,23 +178,42 @@ export function createBrowserTabActions(
       return browserTab
     },
 
-    openNewBrowserTabInActiveWorkspace: async (groupId, splitDirection) => {
+    openNewBrowserTabInActiveWorkspace: async (
+      groupId,
+      splitDirection,
+      targetWorktreeId,
+      executionHostId
+    ) => {
       const state = get()
       // Why: the invoking group owns its workspace; global selection may already point elsewhere.
       const worktreeId =
-        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ?? state.activeWorktreeId
+        targetWorktreeId ??
+        findGroupAndWorktree(state.groupsByWorktree, groupId)?.worktreeId ??
+        state.activeWorktreeId
       if (!worktreeId) {
         return
       }
-      const browserAvailability = getClientCreationActionPolicy(state, worktreeId)[
-        'managed-browser'
-      ]
+      const browserAvailability = getClientCreationActionPolicy(
+        state,
+        worktreeId,
+        undefined,
+        executionHostId
+      )['managed-browser']
       if (browserAvailability.state !== 'enabled') {
         throw new Error(browserAvailability.reason)
       }
       const defaultUrl = state.browserDefaultUrl ?? 'about:blank'
       const split = splitDirection ? { sourceGroupId: groupId, splitDirection } : undefined
-      const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
+      const owner = executionHostId
+        ? runtimeEnvironmentIdForWorkspaceOwner(state, {
+            workspaceId: worktreeId,
+            hostId: executionHostId
+          })
+        : undefined
+      const runtimeEnvironmentId =
+        owner?.kind === 'resolved'
+          ? owner.environmentId
+          : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
       if (browserAvailability.provider === 'paired-runtime') {
         if (!runtimeEnvironmentId) {
           throw new Error('The paired runtime browser provider is unavailable.')
@@ -229,6 +249,7 @@ export function createBrowserTabActions(
       get().createBrowserTab(worktreeId, defaultUrl, {
         title: translate('auto.store.slices.browser.d175274b6d', 'New Browser Tab'),
         focusAddressBar: true,
+        ...(executionHostId ? { executionHostId } : {}),
         browserRuntimeEnvironmentId: null,
         ...(split ? { split } : { targetGroupId: groupId })
       })

@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from '../terminal/layout/terminal-tab-menu'
 import { test } from '../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import {
@@ -38,7 +39,7 @@ test('opens a clean live shell after an agent exits', async ({ orcaPage }) => {
   await waitForTerminalOutput(orcaPage, GOLDEN_STUB_EXIT_MARKER, 15_000)
 
   const tabsBeforeShell = await orcaPage.locator('[data-testid="sortable-tab"]').count()
-  await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+  await (await tabCreateMenuTrigger(orcaPage)).click({ force: true })
   await orcaPage
     .getByRole('menu')
     .getByRole('button', { name: /New Terminal/i })

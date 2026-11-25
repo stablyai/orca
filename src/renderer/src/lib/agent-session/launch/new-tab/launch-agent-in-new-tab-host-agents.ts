@@ -1,3 +1,4 @@
+import { notifyAgentLaunchFailure } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import type { AgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import { useAppStore } from '@/store/index'
 import { agentTabLaunchStore } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
@@ -147,5 +148,22 @@ export function launchOnceHostAnswered(
           )
         }
       : {})
+  }
+}
+
+export function runAgentTabLaunch(
+  args: LaunchAgentInNewTabArgs,
+  notifyFailure: boolean,
+  launch: (notify: () => void) => AgentTabLaunchOutcome
+): AgentTabLaunchOutcome {
+  const notify = () => notifyAgentLaunchFailure(args.agent)
+  try {
+    return launch(notify)
+  } catch {
+    args.focusIntent?.cancel()
+    if (notifyFailure) {
+      notify()
+    }
+    return { refused: { delivered: false, failureNotified: notifyFailure } }
   }
 }

@@ -23,6 +23,7 @@ import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
+import { WorktreeCreateButton } from '../surface/WorktreeCreateButton'
 import {
   useWorktreeCardRolledUpUnread,
   WorktreeCardTitleStatus
@@ -46,24 +47,33 @@ function CardTitle({
   // Bold and the unread dot are one signal: any unread the card speaks for, its own or a hidden one.
   const rolledUpUnread = useWorktreeCardRolledUpUnread()
   return (
-    <WorktreeTitleInlineRename
-      displayName={card.visibleCardTitle}
-      disabled={card.isDeleting || affiliateListMode}
-      showUnreadEmphasis={card.showUnreadEmphasis || rolledUpUnread}
-      dimReadTitle={props.dimWhenRead === true && !card.isActiveSurface}
-      className="text-[13px] leading-5"
-      editingClassName="flex-1"
-      titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}
-      onEditingChange={affiliateListMode ? undefined : card.setTitleRenaming}
-      onRename={card.handleRenameTitle}
-      beginEditing={
-        !affiliateListMode &&
-        shouldBeginWorktreeRename(card.renamingWorktreeId, worktree.id, card.renameRowKey)
-      }
-      onBeginEditingConsumed={
-        affiliateListMode ? undefined : () => card.setRenamingWorktreeId(null)
-      }
-    />
+    <>
+      <WorktreeTitleInlineRename
+        displayName={card.visibleCardTitle}
+        disabled={card.isDeleting || affiliateListMode}
+        showUnreadEmphasis={card.showUnreadEmphasis || rolledUpUnread}
+        dimReadTitle={props.dimWhenRead === true && !card.isActiveSurface}
+        className="text-[13px] leading-5"
+        editingClassName="flex-1"
+        titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}
+        onEditingChange={affiliateListMode ? undefined : card.setTitleRenaming}
+        onRename={card.handleRenameTitle}
+        beginEditing={
+          !affiliateListMode &&
+          shouldBeginWorktreeRename(card.renamingWorktreeId, worktree.id, card.renameRowKey)
+        }
+        onBeginEditingConsumed={
+          affiliateListMode ? undefined : () => card.setRenamingWorktreeId(null)
+        }
+      />
+      {!affiliateListMode && !card.titleRenaming ? (
+        <WorktreeCreateButton
+          worktreeId={worktree.id}
+          executionHostId={getWorktreeExecutionHostId(worktree, card.repo)}
+          disabled={card.isDeleting || card.isRuntimeDisconnected || card.isSshDisconnected}
+        />
+      ) : null}
+    </>
   )
 }
 

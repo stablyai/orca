@@ -8,7 +8,7 @@ import path from 'node:path'
 import { seedFreshProfile } from './onboarding-profile.mjs'
 import { isPidAlive } from './daemon-processes.mjs'
 
-const NEW_TAB_BUTTON = { role: 'button', name: 'New tab' }
+const NEW_TAB_BUTTON = '[data-contextual-tour-target="tab-create-menu"]'
 const NEW_TERMINAL_ITEM = /New Terminal/i
 const NEW_WORKSPACE_BUTTON = { role: 'button', name: 'New workspace' }
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
@@ -207,7 +207,7 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
     await waitForTerminalReady(page, timeoutMs)
     return
   }
-  const newTab = page.getByRole(NEW_TAB_BUTTON.role, { name: NEW_TAB_BUTTON.name }).first()
+  const newTab = page.locator(NEW_TAB_BUTTON).first()
   if (await newTab.isVisible().catch(() => false)) {
     await createTerminalTab(page)
     return
@@ -313,10 +313,7 @@ export async function dismissOverlays(page, rounds = 3) {
 export async function createTerminalTab(page) {
   await dismissOverlays(page, 1)
   const before = await page.locator(SORTABLE_TAB).count()
-  await page
-    .getByRole(NEW_TAB_BUTTON.role, { name: NEW_TAB_BUTTON.name })
-    .first()
-    .click({ force: true })
+  await page.locator(NEW_TAB_BUTTON).first().click({ force: true })
   await page.getByRole('menuitem', { name: NEW_TERMINAL_ITEM }).first().click({ force: true })
   await page.waitForFunction(
     ({ selector, prev }) => document.querySelectorAll(selector).length > prev,

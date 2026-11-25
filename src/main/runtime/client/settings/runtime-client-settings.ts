@@ -44,7 +44,7 @@ import type {
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { hostNativeChatDefaults } from '../../../../shared/native-chat/settings/native-chat-providers'
 import { getDefaultNotificationSettings } from '../../../../shared/notifications/notification-settings-defaults'
-import type { NotificationSettings } from '../../../../shared/notifications/notification-settings-types'
+import { projectHostNotificationSettings } from './runtime-client-notification-settings'
 import { projectSourceControlLaunchRecipes } from './runtime-client-source-control-ai-projection'
 import { projectHostOwnedSettings } from '../../../../shared/settings/host-owned-settings'
 
@@ -104,6 +104,7 @@ export class RuntimeClientSettingsController {
       experimentalNewWorktreeCardStyle: settings.experimentalNewWorktreeCardStyle === true,
       worktreeCardDetailsRow: settings.worktreeCardDetailsRow !== false,
       compactWorktreeCards: settings.compactWorktreeCards === true,
+      compactWorktreeHeader: settings.compactWorktreeHeader === true,
       minimaxGroupId: settings.minimaxGroupId ?? '',
       minimaxUsageModels: settings.minimaxUsageModels ?? 'general',
       minimaxEndpoint: settings.minimaxEndpoint ?? 'overseas',
@@ -164,6 +165,12 @@ export class RuntimeClientSettingsController {
     this.store.updateSettings(
       {
         ...otherUpdates,
+        // An older client's layout picker cannot name the compact-header flag.
+        ...(beforeSettings.compactWorktreeHeader === true &&
+        updates.compactWorktreeCards !== undefined &&
+        updates.compactWorktreeHeader === undefined
+          ? { compactWorktreeHeader: false }
+          : {}),
         ...(hostNotifications
           ? {
               notifications: {
@@ -319,11 +326,4 @@ export class RuntimeClientSettingsController {
     this.reconciliationTail = reconciliation.catch(() => {})
     return reconciliation
   }
-}
-
-function projectHostNotificationSettings(
-  settings: NotificationSettings = getDefaultNotificationSettings()
-): RuntimeClientSettings['hostNotifications'] {
-  const { enabled, agentTaskComplete, agentNeedsInput, terminalBell } = settings
-  return { enabled, agentTaskComplete, agentNeedsInput, terminalBell }
 }

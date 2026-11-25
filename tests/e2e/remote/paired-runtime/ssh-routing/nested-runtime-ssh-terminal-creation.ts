@@ -1,3 +1,4 @@
+import { tabCreateMenuTrigger } from '../../../terminal/layout/terminal-tab-menu'
 import '../../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import type { PairedElectronClient } from '../client-hosts/paired-electron-client'
@@ -20,7 +21,7 @@ export async function assertPairedTerminalCreation(
     const worktreeId = state?.activeWorktreeId
     return worktreeId ? (state?.tabsByWorktree[worktreeId] ?? []).map((tab) => tab.id) : []
   })
-  await client.page.getByRole('button', { name: 'New tab' }).click({ force: true })
+  await (await tabCreateMenuTrigger(client.page)).click({ force: true })
   await client.page
     .getByRole('menu')
     .getByRole('button', { name: /New Terminal/i })

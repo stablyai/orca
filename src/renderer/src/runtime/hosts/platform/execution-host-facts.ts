@@ -1,3 +1,7 @@
+import { worktreeExecutionHostTarget as targetOnHost } from '@/lib/execution-host-platform-target'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
+import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
@@ -10,16 +14,11 @@ import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
-import {
-  getConnectionIdForWorktreeCopy,
-  getConnectionIdFromState
-} from '../../../lib/workspace/ownership/connection-owner-resolution'
 import { getLocalProjectExecutionRuntimeContext } from '../preflight/local-preflight-context'
 import { CLIENT_PLATFORM } from '../../../lib/workspace/creation/new-workspace'
 import {
   getExecutionHostIdForWorktree,
-  getResourceExecutionHostIdForWorktree,
-  runtimeEnvironmentIdOrLocalUnlessTwin
+  getResourceExecutionHostIdForWorktree
 } from '../../../lib/workspace/ownership/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
@@ -30,7 +29,7 @@ import type { ExecutionHostPlatformFact } from './execution-host-platform-fact'
 
 type HostFactsState = Pick<AppState, 'sshConnectionStates' | 'sshStateByEnvironment'>
 
-type WorktreeHostFactsState = HostFactsState &
+export type WorktreeHostFactsState = HostFactsState &
   Pick<
     AppState,
     | 'activeRepoId'
@@ -219,9 +218,20 @@ export function resolveWorktreeExecutionHostPlatform(
   workspacePath: string | null | undefined,
   executionHostId?: ExecutionHostId
 ): ExecutionHostPlatformFact {
+  const owner = executionHostId
+    ? resolveOwner(state, { workspaceId: worktreeId, hostId: executionHostId })
+    : undefined
+  if (executionHostId && owner?.kind !== 'resolved') {
+    return { kind: 'withheld', reason: hostUnresolvedWithheld(), recovery: 'refreshProjects' }
+  }
+  const selectedWorktree = executionHostId
+    ? findKnownWorktreeById({ ...state, floatingWorkspacePath: null }, worktreeId, executionHostId)
+    : undefined
+  const selectedRepo =
+    selectedWorktree && executionHostId
+      ? findIndexedRepoOwnerForHost(state.repos, selectedWorktree.repoId, executionHostId)
+      : undefined
   return resolveHostPlatform(state, statuses, {
-    // Why the routing default: an owner-less row launches where routing sends it, and a row-less
-    // setup terminal on the focused default, so read that host.
     ...targetOnHost(
       state,
       worktreeId,
@@ -229,39 +239,26 @@ export function resolveWorktreeExecutionHostPlatform(
       executionHostId
     ),
     workspacePath,
-    projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, worktreeId)
+    projectRuntime: () =>
+      executionHostId && !(selectedWorktree && selectedRepo)
+        ? undefined
+        : getLocalProjectExecutionRuntimeContext(
+            state,
+            worktreeId,
+            undefined,
+            undefined,
+            selectedWorktree && selectedRepo
+              ? { worktree: selectedWorktree, repo: selectedRepo }
+              : undefined
+          )
   })
 }
 
-/**
- * An existing workspace's terminal host, from its resource owner alone (ownership slices, never
- * settings or connection facts), for observers that must not re-derive on a focus change.
- */
 export function resolveWorktreeResourceTarget(
   state: Omit<WorktreeHostFactsState, 'settings'>,
   worktreeId: string
 ): ExecutionHostTarget {
   return targetOnHost(state, worktreeId, getResourceExecutionHostIdForWorktree(state, worktreeId))
-}
-
-function targetOnHost(
-  state: Omit<WorktreeHostFactsState, 'settings'>,
-  worktreeId: string,
-  hostId: string,
-  executionHostId?: ExecutionHostId
-): ExecutionHostTarget {
-  const host = parseExecutionHostId(hostId)
-  return {
-    host,
-    nestedSshTargetId:
-      host?.kind === 'runtime'
-        ? ((executionHostId
-            ? getConnectionIdForWorktreeCopy(state, worktreeId, executionHostId)
-            : getConnectionIdFromState(state, worktreeId)) ?? null)
-        : null,
-    sshOwnerEnvironmentId:
-      host?.kind === 'ssh' ? runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId) : null
-  }
 }
 
 export type KnownExecutionHostPlatform = Extract<ExecutionHostPlatformFact, { kind: 'known' }>

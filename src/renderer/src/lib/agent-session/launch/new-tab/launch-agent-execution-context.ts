@@ -1,3 +1,9 @@
+import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../../../../shared/agent-launch/startup/agent-launch-remote'
@@ -6,7 +12,6 @@ import {
   getConnectionIdFromState,
   getConnectionIdForWorktreeCopy
 } from '@/lib/workspace/ownership/connection-owner-resolution'
-import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import {
   refineLocalLaunchPlatform,
   resolveExecutionHostAgentStartupShell,
@@ -27,13 +32,17 @@ export type AgentLaunchExecutionContext = {
 /** Scope the ordinary owner resolvers without changing the user's live selection. */
 export function agentTabLaunchStore(
   store: ReturnType<typeof useAppStore.getState>,
-  args: Pick<LaunchAgentInNewTabArgs, 'worktreeId' | 'workspaceExecutionHostId'>
+  args: Pick<
+    LaunchAgentInNewTabArgs,
+    'worktreeId' | 'workspaceExecutionHostId' | 'selectedExecutionHostId'
+  >
 ): ReturnType<typeof useAppStore.getState> {
-  return args.workspaceExecutionHostId
+  const executionHostId = args.selectedExecutionHostId ?? args.workspaceExecutionHostId
+  return executionHostId
     ? {
         ...store,
         activeWorktreeId: args.worktreeId,
-        activeWorkspaceExecutionHostId: args.workspaceExecutionHostId
+        activeWorkspaceExecutionHostId: executionHostId
       }
     : store
 }
@@ -41,18 +50,31 @@ export function agentTabLaunchStore(
 /** Preparation returns facts; the launch action owns failure presentation. */
 export function resolveAgentLaunchExecutionContext(
   store: ReturnType<typeof useAppStore.getState>,
-  args: Pick<LaunchAgentInNewTabArgs, 'worktreeId' | 'launchPlatform' | 'workspaceExecutionHostId'>
+  args: Pick<
+    LaunchAgentInNewTabArgs,
+    'worktreeId' | 'launchPlatform' | 'workspaceExecutionHostId'
+  > & { executionHostId?: ExecutionHostId }
 ):
   | AgentLaunchExecutionContext
   | { unavailable: Extract<ExecutionHostPlatformFact, { kind: 'withheld' }> } {
+  const executionHostId = args.executionHostId ?? args.workspaceExecutionHostId
   // Why: `undefined` (rival host rows disagree) is not evidence of a remote; main rejects it anyway.
-  const worktreeSshConnectionId = args.workspaceExecutionHostId
-    ? getConnectionIdForWorktreeCopy(store, args.worktreeId, args.workspaceExecutionHostId)
+  const worktreeSshConnectionId = executionHostId
+    ? getConnectionIdForWorktreeCopy(store, args.worktreeId, executionHostId)
     : getConnectionIdFromState(store, args.worktreeId)
   // Why getKnownWorktreeById: folder workspaces are not in allWorktrees, and their path marks WSL.
+  const selectedWorktree = executionHostId
+    ? selectWorkspaceByHostTarget(
+        store,
+        hostWorktreeTarget({ id: args.worktreeId, hostId: executionHostId })
+      )
+    : undefined
   const workspacePath = (
-    store.getKnownWorktreeById?.(args.worktreeId, args.workspaceExecutionHostId) ??
-    store.allWorktrees?.().find((entry) => entry.id === args.worktreeId)
+    selectedWorktree ??
+    store.getKnownWorktreeById?.(args.worktreeId, executionHostId) ??
+    (executionHostId
+      ? undefined
+      : store.allWorktrees?.().find((entry) => entry.id === args.worktreeId))
   )?.path
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
   const fact = resolveWorktreeExecutionHostPlatform(
@@ -60,7 +82,7 @@ export function resolveAgentLaunchExecutionContext(
     readRuntimeStatuses(),
     args.worktreeId,
     workspacePath,
-    args.workspaceExecutionHostId
+    executionHostId
   )
   if (fact.kind === 'withheld') {
     return { unavailable: fact }
@@ -75,4 +97,22 @@ export function resolveAgentLaunchExecutionContext(
       store.settings?.terminalWindowsShell
     )
   }
+}
+
+export function agentTabLaunchRuntimeEnvironmentId(
+  store: ReturnType<typeof useAppStore.getState>,
+  args: Pick<LaunchAgentInNewTabArgs, 'worktreeId' | 'selectedExecutionHostId'>
+) {
+  const worktreeId = args.worktreeId
+  const selectedOwner = args.selectedExecutionHostId
+    ? runtimeEnvironmentIdForWorkspaceOwner(store, {
+        workspaceId: worktreeId,
+        hostId: args.selectedExecutionHostId
+      })
+    : undefined
+  const runtimeEnvironmentId =
+    selectedOwner?.kind === 'resolved'
+      ? selectedOwner.environmentId
+      : runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
+  return runtimeEnvironmentId
 }

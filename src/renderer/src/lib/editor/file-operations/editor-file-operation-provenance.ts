@@ -13,14 +13,13 @@ import type { WorktreeOperationGenerationSnapshot } from '../../workspace/owners
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
-  resolveWorktreeOperationRouteResultForHost
-} from '../../workspace/ownership/worktree-operation-route'
-import type {
-  WorktreeOperationRoute,
-  WorktreeOperationRouteResolution,
-  WorktreeOperationRouteState
-} from '../../workspace/ownership/worktree-operation-route'
-import { resolveExplicitWorktreeOperationRouteResult } from '../../workspace/ownership/worktree-operation-catalog-route'
+  resolveWorktreeOperationRouteResultForHost,
+  type WorktreeOperationRoute,
+  type WorktreeOperationRouteResolution,
+  type WorktreeOperationRouteState
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import { resolveQualifiedEditorOwnerRoute } from '@/lib/editor-file-qualified-owner-route'
+import { resolveExplicitWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-catalog-route'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,
@@ -33,6 +32,7 @@ import type { HostAuthority } from '../../../../../shared/execution-host/host-au
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot
   ownershipProjection: 'explicit' | 'qualified' | 'legacy'
+  workspaceExecutionHostId?: ExecutionHostId
   childRepo?: { id: string; path: string }
   expectedSshConnectionGeneration?: number
 }
@@ -65,12 +65,13 @@ export function captureEditorFileOperationProvenance(
   ownerHintProvided: boolean,
   executionHostId?: ExecutionHostId
 ): EditorFileOperationProvenance {
-  const owner = resolveEditorOwnerRoute(
-    state,
-    worktreeId,
-    executionHostId ??
-      (state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null)
-  )
+  const owner = executionHostId
+    ? resolveQualifiedEditorOwnerRoute(focusFreeRouteStateOf(state), worktreeId, executionHostId)
+    : resolveEditorOwnerRoute(
+        state,
+        worktreeId,
+        state.activeWorktreeId === worktreeId ? state.activeWorkspaceExecutionHostId : null
+      )
   const ownershipProjection = owner.ownershipProjection
   const hintedRuntimeEnvironmentId = ownerHint?.trim() || null
   const route =
@@ -91,7 +92,7 @@ export function captureEditorFileOperationProvenance(
   if (!route || (ownerHintProvided && (ownerHint?.trim() || null) !== route.runtimeEnvironmentId)) {
     throw new Error(OWNER_CHANGED_MESSAGE)
   }
-  const authority = resolveEditorOperationAuthority(state, worktreeId, route)
+  const authority = resolveEditorOperationAuthority(state, worktreeId, route, executionHostId)
   const expectedSshConnectionGeneration = getExpectedSshConnectionGeneration(
     state,
     route,
@@ -100,6 +101,7 @@ export function captureEditorFileOperationProvenance(
   return {
     generation: captureWorktreeOperationGenerationSnapshot(route, authority),
     ownershipProjection,
+    ...(executionHostId ? { workspaceExecutionHostId: executionHostId } : {}),
     ...(expectedSshConnectionGeneration === undefined ? {} : { expectedSshConnectionGeneration })
   }
 }
@@ -107,7 +109,8 @@ export function captureEditorFileOperationProvenance(
 function resolveEditorOperationAuthority(
   state: EditorOwnerState,
   worktreeId: string,
-  route: WorktreeOperationRoute
+  route: WorktreeOperationRoute,
+  executionHostId?: ExecutionHostId
 ): HostAuthority | undefined {
   if (!route.executionHostId) {
     return undefined
@@ -123,18 +126,16 @@ function resolveEditorOperationAuthority(
       return undefined
     }
   } else if (worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-    const explicit = resolveWorktreeOperationRouteResultForHost(
-      state,
-      worktreeId,
-      route.executionHostId
-    )
+    const explicit = executionHostId
+      ? resolveQualifiedEditorOwnerRoute(focusFreeRouteStateOf(state), worktreeId, executionHostId)
+      : resolveExplicitWorktreeOperationRouteResult(state, worktreeId)
     if (explicit.kind !== 'resolved' || JSON.stringify(explicit.route) !== JSON.stringify(route)) {
       return undefined
     }
   }
   const match = resolveOwner(focusFreeRouteStateOf(state), {
     workspaceId: worktreeId,
-    ...(route.executionHostId ? { hostId: route.executionHostId } : {})
+    hostId: executionHostId ?? route.executionHostId
   })
   if (match.kind !== 'resolved') {
     return undefined
@@ -229,7 +230,13 @@ export function assertEditorFileOperationCurrent(
     provenance.generation,
     () => new Error(OWNER_CHANGED_MESSAGE),
     () => resolveCurrentEditorRoute(state, worktreeId, provenance),
-    () => resolveEditorOperationAuthority(state, worktreeId, provenance.generation.route)
+    () =>
+      resolveEditorOperationAuthority(
+        state,
+        worktreeId,
+        provenance.generation.route,
+        provenance.workspaceExecutionHostId
+      )
   )
   const currentGeneration = getExpectedSshConnectionGeneration(
     state,
@@ -247,6 +254,14 @@ function resolveCurrentEditorRoute(
   worktreeId: string,
   provenance: EditorFileOperationProvenance
 ): WorktreeOperationRoute | null {
+  if (provenance.workspaceExecutionHostId) {
+    const selected = resolveQualifiedEditorOwnerRoute(
+      focusFreeRouteStateOf(state),
+      worktreeId,
+      provenance.workspaceExecutionHostId
+    )
+    return selected.kind === 'resolved' ? selected.route : null
+  }
   const owner = resolveEditorOwnerRoute(
     state,
     worktreeId,

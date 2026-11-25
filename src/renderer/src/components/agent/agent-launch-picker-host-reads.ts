@@ -1,3 +1,4 @@
+import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
@@ -91,4 +92,21 @@ export async function readAgentPickerLaunchSupport(
     options,
     ...(isAgentChatPermissionChoice(permissionMode) ? { permissionMode } : {})
   }
+}
+
+export function agentPickerCatalogUnsupported(
+  entry: AgentPickerEntry,
+  target: RuntimeClientTarget | null,
+  cliDiscoveryRuntime: RuntimeGitContext | null,
+  registeredAgents: readonly { agent: string }[] | null | undefined
+): boolean {
+  return (
+    (!target && !(cliDiscoveryRuntime && agentPickerListsCliModels(entry))) ||
+    !entry.surfaces.length ||
+    Boolean(
+      registeredAgents &&
+      !registeredAgents.some(({ agent }) => agent === entry.agent) &&
+      !getAgentSessionOptionLaunchCatalog(entry.agent)
+    )
+  )
 }

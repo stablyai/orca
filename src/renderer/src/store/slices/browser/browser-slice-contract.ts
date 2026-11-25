@@ -166,7 +166,9 @@ export type BrowserSlice = {
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (
     groupId: string,
-    splitDirection?: TabSplitDirection
+    splitDirection?: TabSplitDirection,
+    targetWorktreeId?: string,
+    executionHostId?: ExecutionHostId
   ) => Promise<void>
   /** `profileId: null` uses the workspace default profile. */
   openBrowserProfileTabInActiveWorkspace: (

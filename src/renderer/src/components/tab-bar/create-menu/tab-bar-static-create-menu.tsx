@@ -8,10 +8,8 @@ import { useAppStore } from '@/store/index'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
-import {
-  isMacOs,
-  type resolveWindowsPowerShellImplementationSetting
-} from '../model/use-tab-bar-runtime-model'
+import { isMacOs } from '../model/use-tab-bar-runtime-model'
+import type { resolveWindowsPowerShellImplementationSetting } from '../model/tab-bar-windows-shell-settings'
 import type { TabBarProps } from '../tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { TabBarCreateRow } from './TabBarCreateRow'
@@ -26,6 +24,7 @@ const ICON_CLASS = 'size-4'
 
 export function TabBarStaticCreateMenu({
   groupId,
+  onNewPluginFile,
   terminalOnly,
   mobileEmulatorEnabled,
   managedBrowserCreationEnabled,
@@ -39,6 +38,7 @@ export function TabBarStaticCreateMenu({
   queueNewActiveTerminalFocusAfterNewTabMenuClose
 }: {
   props: TabBarProps
+  onNewPluginFile?: (file: ReturnType<typeof usePluginNewFiles>[number]) => void
   groupId: string
   terminalOnly: boolean
   mobileEmulatorEnabled: boolean
@@ -135,7 +135,11 @@ export function TabBarStaticCreateMenu({
               />
             ),
             run: () => {
-              void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+              if (onNewPluginFile) {
+                onNewPluginFile(newFile)
+              } else {
+                void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+              }
             }
           }))
         ]

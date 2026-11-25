@@ -37,7 +37,11 @@ import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
 import { HideBotCreatedFilterRow } from '@/components/bots/HideBotCreatedFilterRow'
 import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
-import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+import {
+  selectDrawsNewWorktreeCards,
+  savedNewWorktreeCards,
+  worktreeCardStyleUpdates
+} from '@/store/appearance/worktree-card-style'
 import { trackWorktreeCardStyleChanged } from '../../workspace-card/template/worktree-card-style-telemetry'
 
 export function useWorkspaceOptionsFilterBadge(): {
@@ -68,7 +72,7 @@ type OptionItemProps = {
 
 function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
   const t = useTranslate()
-  const experimental = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
+  const experimental = useAppStore((s) => savedNewWorktreeCards(s.settings))
   const updateSettings = useAppStore((s) => s.updateSettings)
   const classicLabel = t(
     'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
@@ -98,9 +102,11 @@ function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.E
           value={experimental ? 'experimental' : 'classic'}
           onValueChange={(value) => {
             const next = value === 'experimental'
-            void updateSettings({ experimentalNewWorktreeCardStyle: next }).then(() => {
+            void updateSettings(
+              worktreeCardStyleUpdates(next, useAppStore.getState().settings)
+            ).then(() => {
               const state = useAppStore.getState()
-              if ((state.settings?.experimentalNewWorktreeCardStyle === true) !== next) {
+              if (savedNewWorktreeCards(state.settings) !== next) {
                 return
               }
               state.setWorktreeCardsIntroChoice(null)

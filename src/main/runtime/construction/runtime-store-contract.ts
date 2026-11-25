@@ -191,6 +191,7 @@ export type RuntimeStore = {
     botsEnabled?: GlobalSettings['botsEnabled']
     worktreeCardDetailsRow?: GlobalSettings['worktreeCardDetailsRow']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
+    compactWorktreeHeader?: GlobalSettings['compactWorktreeHeader']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
     minimaxEndpoint?: GlobalSettings['minimaxEndpoint']

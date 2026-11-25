@@ -1,3 +1,8 @@
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import {
+  resolveOwner,
+  runtimeEnvironmentIdForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../../shared/browser/runtime/browser-runtime-capabilities'
@@ -75,10 +80,11 @@ export function resolveClientCreationActionPolicy(args: {
 export function getClientCreationActionPolicy(
   state: AppState,
   worktreeId: string | null,
-  statuses: RuntimeStatuses = readAppRuntimeStatuses()
+  statuses: RuntimeStatuses = readAppRuntimeStatuses(),
+  executionHostId?: ExecutionHostId
 ): ClientCreationActionPolicy {
   return worktreeId
-    ? getWorkspaceClientCreationActionPolicy(state, worktreeId, statuses)
+    ? getWorkspaceClientCreationActionPolicy(state, worktreeId, statuses, executionHostId)
     : creationPolicyForRuntime(
         state,
         state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
@@ -90,12 +96,26 @@ export function getClientCreationActionPolicy(
 export function getWorkspaceClientCreationActionPolicy(
   state: AppState,
   worktreeId: string,
-  statuses: RuntimeStatuses = readAppRuntimeStatuses()
+  statuses: RuntimeStatuses = readAppRuntimeStatuses(),
+  executionHostId?: ExecutionHostId
 ): ClientCreationActionPolicy {
+  const ownerRef = { workspaceId: worktreeId, hostId: executionHostId }
+  if (executionHostId && resolveOwner(state, ownerRef).kind !== 'resolved') {
+    const unavailable = {
+      state: 'hidden' as const,
+      reason: 'The selected workspace host is unavailable.'
+    }
+    return { 'managed-browser': unavailable, 'mobile-emulator': unavailable }
+  }
+  const owner = executionHostId ? runtimeEnvironmentIdForWorkspaceOwner(state, ownerRef) : undefined
   const floatingWorkspace = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
   return creationPolicyForRuntime(
     state,
-    floatingWorkspace ? null : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
+    floatingWorkspace
+      ? null
+      : owner?.kind === 'resolved'
+        ? owner.environmentId
+        : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
     floatingWorkspace,
     statuses
   )
@@ -157,9 +177,15 @@ export function runtimeHostsPagesOnThisDesktop(
 export function assertClientCreationActionAvailable(
   state: AppState,
   worktreeId: string | null,
-  action: ClientCreationAction
+  action: ClientCreationAction,
+  executionHostId?: ExecutionHostId
 ): void {
-  const availability = getClientCreationActionPolicy(state, worktreeId)[action]
+  const availability = getClientCreationActionPolicy(
+    state,
+    worktreeId,
+    readAppRuntimeStatuses(),
+    executionHostId
+  )[action]
   if (availability.state !== 'enabled') {
     throw new Error(availability.reason)
   }

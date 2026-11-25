@@ -34,6 +34,7 @@ type CompactAgentSummaryButtonProps = {
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
+  inline?: boolean
   unreadByPaneKey?: Readonly<Record<string, boolean>>
 }
 
@@ -89,6 +90,7 @@ export function CompactAgentSummaryButton({
   subjectLabel,
   expanded,
   onToggle,
+  inline = false,
   unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
@@ -150,6 +152,24 @@ export function CompactAgentSummaryButton({
     },
     [onToggle]
   )
+  if (inline) {
+    return (
+      <button
+        type="button"
+        className="ml-auto inline-flex h-5 shrink-0 items-center gap-1 rounded-sm px-1 text-[11px] tabular-nums text-muted-foreground hover:bg-worktree-sidebar-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+        aria-label={subjectLabel}
+        aria-expanded={expanded}
+        title={subjectLabel}
+        onClick={handleToggle}
+        onKeyDown={stopActivationKeyPropagation}
+        onMouseDown={stopPointerPropagation}
+        onPointerDown={stopPointerPropagation}
+      >
+        <span>{groups.reduce((count, group) => count + group.count, 0)}</span>
+        <ChevronDown className={cn('size-3', !expanded && '-rotate-90')} aria-hidden />
+      </button>
+    )
+  }
   return (
     <button
       type="button"
