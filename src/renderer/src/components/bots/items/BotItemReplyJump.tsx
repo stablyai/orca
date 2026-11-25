@@ -6,7 +6,7 @@ import { ArrowDown, ArrowUp, LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BotItemNeedsYouMark } from './BotItemNeedsYouMark'
-import type { BotItemCommentBoxHandle } from './BotItemCommentBox'
+import type { BotItemCommentBoxHandle } from './use-bot-item-comment-box-handle'
 import {
   createBotItemNeedsYouWatch,
   type BotItemNeedsYouPlace,
