@@ -52,12 +52,13 @@ export function botItemClearDeliveredAnswers(scopeKey: string, intent: BotItemPe
 }
 
 /** A held answer back in a comment box's draft (`boxScope`), after its words, as chat hands back a
- *  message it didn't send: its [Image #N] become chips of its images again, its skills pills. */
+ *  message it didn't send: its [Image #N] become chips of its images again, its skills pills. True
+ *  once the draft is saved: only then may the held copy go, or a reload could lose the answer. */
 export function returnBotItemHeldAnswer(
   boxScope: string,
   { words, images, skills }: BotItemHeldAnswer
-): void {
-  returnMessageToComposer(
+): boolean {
+  return returnMessageToComposer(
     boxScope,
     `held-${createNonSecureContextUuid()}`,
     [

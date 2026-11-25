@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import {
   botItemHeldAnswer,
@@ -335,6 +335,22 @@ it('puts unsent held answers back in the box with their images and skills, as on
   const [first, second] = box.images.map(({ id }) => imageReferenceToken(id))
   expect(box.text).toBe(`${HOSTS} → ${first} first\n${GO} → ${second} then /review`)
   expect(JSON.stringify(box.document)).toContain(skill.path)
+})
+
+it('says a held answer put back in the box is not saved while storage refuses it', () => {
+  const answer = botItemHeldAnswer('[Image #1] first', ['/tmp/a.png'])
+  expect(returnBotItemHeldAnswer(botItemCommentDraftScope(bot, 'restore-saved'), answer)).toBe(true)
+  // A full localStorage: the draft lives in memory only, so its held copy must stay.
+  const setItem = vi.spyOn(localStorage, 'setItem').mockImplementation(() => {
+    throw new DOMException('full', 'QuotaExceededError')
+  })
+  try {
+    expect(returnBotItemHeldAnswer(botItemCommentDraftScope(bot, 'restore-refused'), answer)).toBe(
+      false
+    )
+  } finally {
+    setItem.mockRestore()
+  }
 })
 
 it('gives back the words of a refused send that its held picks do not keep', () => {

@@ -69,8 +69,9 @@ export type BotItemQuickReplyActions = {
   send: (text: string) => void
   edit: (text: string) => void
   /** A held answer back into the box, its files and skills too, to change and hold again; `plain`:
-   *  answers held for an earlier ask, as a comment of its own answering no line. */
-  restore: (answer: BotItemHeldAnswer, plain?: boolean) => void
+   *  answers held for an earlier ask, as a comment of its own answering no line. True once the box's
+   *  draft is saved, when the held copy may go. */
+  restore: (answer: BotItemHeldAnswer, plain?: boolean) => boolean
   /** Type your answer: the comment box takes focus, glowing once. */
   type: () => void
   /** The waiting ask of several questions, all its lines at once. */

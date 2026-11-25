@@ -123,7 +123,7 @@ const askOf = (id: string, prompts: string[], at: number): BotItemEvent => ({
 const NO_ACTIONS = {
   send: () => {},
   edit: () => {},
-  restore: () => {},
+  restore: () => true,
   type: () => {}
 }
 const replacedLabel = (): HTMLElement[] =>

@@ -265,7 +265,7 @@ export function BotItemBody({
               // A comment of its own answers no line, whatever the box names next.
               const bind = plain ? answerNone : answerWaiting
               bind()
-              comment.current?.restore(answer, plain)
+              return comment.current?.restore(answer, plain) ?? false
             },
             type: () => {
               answerWaiting()

@@ -89,7 +89,7 @@ const ownWords: BotItemQuestionShape = {
 const actions: BotItemQuickReplyActions = {
   send: () => {},
   edit: () => {},
-  restore: () => {},
+  restore: () => true,
   type: () => {}
 }
 

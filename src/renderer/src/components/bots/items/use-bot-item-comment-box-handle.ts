@@ -19,8 +19,8 @@ export type BotItemCommentBoxHandle = ReturnType<typeof composerQuoteTarget> & {
    *  of its own, with "Replying to" hidden; else as the answer, naming the question. */
   fill: (text: string, plain?: boolean) => void
   /** Put a held answer back after the box's words, its images and skills too, as chat hands back a
-   *  message it didn't send; `plain` as for `fill`. */
-  restore: (answer: BotItemHeldAnswer, plain?: boolean) => void
+   *  message it didn't send; `plain` as for `fill`. True once the box's draft is saved. */
+  restore: (answer: BotItemHeldAnswer, plain?: boolean) => boolean
   /** Focus the box to answer the waiting question in your own words: it glows once, naming it. */
   answer: () => void
 }
@@ -72,9 +72,10 @@ export function useBotItemCommentBoxHandle(
       show(`${text} `, plain)
     },
     restore: (answer, plain) => {
-      returnBotItemHeldAnswer(scopeKey, answer)
+      const saved = returnBotItemHeldAnswer(scopeKey, answer)
       // The editor takes the store's draft whole, its image and skill pills too.
       show(readNativeChatComposerDraft(scopeKey).text, plain)
+      return saved
     }
   }))
   return caretToEnd

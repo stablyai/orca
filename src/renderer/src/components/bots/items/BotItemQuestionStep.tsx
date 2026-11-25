@@ -199,14 +199,19 @@ export function BotItemQuestionStep({
     }
   }
   const ownWords = (index: number, words: BotItemHeldAnswer | string | null): void => {
-    // Your words for this line, in the box: they take over its pick, and Enter answers it.
+    // Your words for this line, in the box: they take over its pick, and Enter answers it. A held
+    // answer stays held until the box's draft is saved, so a reload can't lose it.
+    if (words !== null && typeof words !== 'string') {
+      if (actions.restore(words)) {
+        steps.bind(index)
+      }
+      return
+    }
     steps.bind(index)
     if (words === null) {
       actions.type()
-    } else if (typeof words === 'string') {
-      actions.edit(words)
     } else {
-      actions.restore(words)
+      actions.edit(words)
     }
   }
   const send = (): void => {

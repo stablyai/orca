@@ -125,8 +125,10 @@ export function BotItemQuestionLines({
                   // Not sent: into the box, its files and skills too, to send as a comment.
                   onClick={() => {
                     const { text, paths, skills } = botItemHeldAnswersComment(shape, unsent)
-                    actions.restore({ words: text, images: paths, skills }, true)
-                    stored.hold(stored.held.map((entry, index) => (sent?.[index] ? entry : null)))
+                    // Held until the box's draft is saved, so a reload can't lose them.
+                    if (actions.restore({ words: text, images: paths, skills }, true)) {
+                      stored.hold(stored.held.map((entry, index) => (sent?.[index] ? entry : null)))
+                    }
                   }}
                 />
                 <BotItemHeldAnswerAttachments images={shown.images} files={shown.files} />
