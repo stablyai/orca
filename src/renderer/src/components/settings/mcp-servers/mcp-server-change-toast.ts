@@ -25,14 +25,16 @@ export async function showMcpServerChangeToast(
 /**
  * After a host starts: its agent terminals still on an older list. Those that outlived its restart
  * lost every server that goes through its relay with the old run. Nothing when there are none.
+ * False when the host couldn't be asked.
  */
 export async function showMcpStaleTerminalsToast(
   target: RuntimeClientTarget,
-  hostName: string | null
-): Promise<void> {
+  hostName: string | null,
+  current: () => boolean
+): Promise<boolean> {
   const stale = await readStaleMcpSessions(target).catch(() => null)
-  if (!stale || stale.count === 0) {
-    return
+  if (!current() || !stale || stale.count === 0) {
+    return stale !== null
   }
   const count = stale.count
   const title =
@@ -52,7 +54,7 @@ export async function showMcpStaleTerminalsToast(
           }
         )
   toast(title, {
-    id: `mcp-stale-terminals:${target.kind === 'local' ? 'local' : target.environmentId}`,
+    id: mcpStaleTerminalsToastId(target),
     description: translate(
       'settings.mcpServers.toast.staleTerminalsRestart',
       'Restart them to reconnect Orca’s MCP servers.',
@@ -63,7 +65,11 @@ export async function showMcpStaleTerminalsToast(
     closeButton: true,
     ...restartAction(target, stale.restartable)
   })
+  return true
 }
+
+export const mcpStaleTerminalsToastId = (target: RuntimeClientTarget): string =>
+  `mcp-stale-terminals:${target.kind === 'local' ? 'local' : target.environmentId}`
 
 function restartAction(target: RuntimeClientTarget, restartable: number) {
   if (restartable === 0) {
@@ -72,7 +78,8 @@ function restartAction(target: RuntimeClientTarget, restartable: number) {
   return {
     action: {
       label: translate('settings.mcpServers.toast.restart', 'Restart {{count}} sessions', {
-        count: restartable
+        count: restartable,
+        defaultValue_one: 'Restart {{count}} session'
       }),
       onClick: () => {
         void restartStaleMcpSessions(target).catch((error: unknown) =>

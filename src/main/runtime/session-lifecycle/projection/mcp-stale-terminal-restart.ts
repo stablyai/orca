@@ -7,6 +7,7 @@ import {
   type AgentProviderSessionMetadata
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess
@@ -21,6 +22,15 @@ type StaleTerminal = {
   pane: TerminalMcpPaneLaunch
   /** Its agent's conversation, which a restart resumes; null when none is known. */
   session: { agent: TuiAgent; providerSession: AgentProviderSessionMetadata } | null
+}
+
+/** The agent the pane launched. A terminal that outlived the host's restart has no launch record
+ *  until its pane reattaches, so the MCP record (which names the CLI it runs) stands in. */
+function mcpTerminalAgent(
+  pty: RuntimePtyWorktreeRecord,
+  pane: TerminalMcpPaneLaunch
+): TuiAgent | null {
+  return pty.launchAgent ?? (isTuiAgent(pane.agent) ? pane.agent : null)
 }
 
 // Each restart stops one terminal and starts its replacement; a few at a time keeps the host responsive.
@@ -53,12 +63,13 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
         continue
       }
       // After a main restart its launch evidence is unknown: only its foreground says the agent runs.
-      const running = await this.mcpTerminalAgentRunning(pty)
+      const agent = mcpTerminalAgent(pty, pane)
+      const running = await this.mcpTerminalAgentRunning(pty, agent)
       if (running !== false) {
         stale.push({
           pty,
           pane,
-          session: running === true ? await this.mcpTerminalSession(pty) : null
+          session: running === true ? await this.mcpTerminalSession(pty, agent) : null
         })
       }
     }
@@ -67,27 +78,29 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
 
   /** Whether the pane's foreground process is the agent it launched; unchecked when unreadable. */
   private async mcpTerminalAgentRunning(
-    pty: RuntimePtyWorktreeRecord
+    pty: RuntimePtyWorktreeRecord,
+    agent: TuiAgent | null
   ): Promise<boolean | 'unchecked'> {
     const controller = this.ptyController
-    if (!controller || !pty.launchAgent) {
+    if (!controller || !agent) {
       return 'unchecked'
     }
     const name = await controller.getForegroundProcess(pty.ptyId).catch(() => null)
-    const fresh =
-      name === null || isAgentForegroundWrapperProcess(name)
-        ? ((await controller.confirmForegroundProcess?.(pty.ptyId).catch(() => null)) ?? name)
-        : name
-    if (fresh === null) {
+    if (recognizeAgentProcess(name)?.agent === agent) {
+      return true
+    }
+    // The cached name can lag the program in front, so anything else is read again before it counts.
+    const fresh = (await controller.confirmForegroundProcess?.(pty.ptyId).catch(() => null)) ?? null
+    if (fresh === null && (name === null || isAgentForegroundWrapperProcess(name))) {
       return 'unchecked'
     }
-    return recognizeAgentProcess(fresh)?.agent === pty.launchAgent
+    return recognizeAgentProcess(fresh ?? name)?.agent === agent
   }
 
   private async mcpTerminalSession(
-    pty: RuntimePtyWorktreeRecord
+    pty: RuntimePtyWorktreeRecord,
+    agent: TuiAgent | null
   ): Promise<StaleTerminal['session']> {
-    const agent = pty.launchAgent
     const recorded = this.paneOfPty(pty).paneKey
     if (!agent || !isResumableTuiAgent(agent) || !recorded) {
       return null
@@ -137,14 +150,15 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
         // or move to another conversation, and the list can change back.
         const result = await this.restartAgentPaneInPlace(pty.ptyId, session!, async () => {
           const current = this.ptysById.get(pty.ptyId)
+          const agent = current ? mcpTerminalAgent(current, pane) : null
           if (
             !current?.connected ||
             current.launchEvidence?.kind === 'gone' ||
-            (await this.mcpTerminalAgentRunning(current)) !== true
+            (await this.mcpTerminalAgentRunning(current, agent)) !== true
           ) {
             return false
           }
-          const live = await this.mcpTerminalSession(current)
+          const live = await this.mcpTerminalSession(current, agent)
           // An unreadable list gives no replacement config, so the agent keeps running as it is.
           const now = (await currentTerminalMcpFingerprints([pane])).get(pane) ?? null
           return (
