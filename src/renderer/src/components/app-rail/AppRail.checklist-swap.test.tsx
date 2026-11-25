@@ -15,9 +15,28 @@ import { APP_RAIL_SLOT_PX } from './app-rail-overflow'
 
 const initial = useAppStore.getState()
 // Workspaces, two pages, "…" and the account button is one slot too many: a second page folds the rail.
-const CAPACITY = 4
+const FULL_RAIL = 4
+let capacity = FULL_RAIL
+const resizeCallbacks = new Set<(entries: readonly unknown[]) => void>()
 
-function start(shown: Partial<GlobalSettings>): void {
+/** The rail's toolbar now has room for `slots` buttons, as after a window resize. */
+async function resize(slots: number): Promise<void> {
+  capacity = slots
+  await act(async () => {
+    for (const callback of resizeCallbacks) {
+      callback([])
+    }
+  })
+  await settle()
+}
+
+function start(
+  shown: Partial<GlobalSettings>,
+  write: (updates: Partial<GlobalSettings>) => Promise<void> = async (updates) => {
+    await Promise.resolve()
+    applySettings(updates)
+  }
+): void {
   useAppStore.setState({
     settings: {
       ...(initial.settings ?? getDefaultSettings('/fixture-home')),
@@ -29,13 +48,8 @@ function start(shown: Partial<GlobalSettings>): void {
       showMobileButton: false,
       ...shown
     },
-    // The write lands a tick later, as it does through the settings bridge.
-    updateSettings: async (updates) => {
-      await Promise.resolve()
-      useAppStore.setState((state) =>
-        state.settings ? { settings: { ...state.settings, ...updates } } : {}
-      )
-    }
+    // By default the write lands a tick later, as it does through the settings bridge.
+    updateSettings: write
   })
   render(
     <StrictMode>
@@ -43,6 +57,12 @@ function start(shown: Partial<GlobalSettings>): void {
         <AppRail listVisible />
       </TooltipProvider>
     </StrictMode>
+  )
+}
+
+function applySettings(updates: Partial<GlobalSettings>): void {
+  useAppStore.setState((state) =>
+    state.settings ? { settings: { ...state.settings, ...updates } } : {}
   )
 }
 
@@ -93,13 +113,29 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
     this: HTMLElement
   ) {
-    const height = this.getAttribute('role') === 'toolbar' ? CAPACITY * APP_RAIL_SLOT_PX : 0
+    const height = this.getAttribute('role') === 'toolbar' ? capacity * APP_RAIL_SLOT_PX : 0
     return DOMRect.fromRect({ x: 0, y: 0, width: 40, height })
   })
+  capacity = FULL_RAIL
+  resizeCallbacks.clear()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly callback: (entries: readonly unknown[]) => void) {}
+      observe(): void {
+        resizeCallbacks.add(this.callback)
+      }
+      unobserve(): void {}
+      disconnect(): void {
+        resizeCallbacks.delete(this.callback)
+      }
+    }
+  )
 })
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   useAppStore.setState(initial, true)
 })
 
@@ -195,5 +231,66 @@ it('leaves More hovering as usual when a keyboard toggle reopens the checklist',
 
   hover(screen.getByRole('menuitem', { name: 'Automations' }))
   await settle()
+  expect(checklistOpen()).toBe(false)
+})
+
+async function openCustomize(): Promise<void> {
+  fireEvent.pointerDown(railItem('customize')!, { button: 0, ctrlKey: false })
+  await settle()
+}
+
+it('does not reopen on a toggle that kept the rail in place once a resize later folds it', async () => {
+  capacity = 5
+  start({})
+  await openCustomize()
+  // Tasks and Automations still fit five slots: no swap, so nothing is carried.
+  await toggle('Automations', 'space')
+  expect(railItem('customize')).not.toBeNull()
+  expectChecklistOn('Automations', true)
+  fireEvent.keyDown(document.activeElement!, { key: 'ArrowDown' })
+  await settle()
+  expect(document.activeElement).toBe(row('Artifacts'))
+
+  await resize(4)
+  expect(railItem('more')).not.toBeNull()
+  expect(checklistOpen()).toBe(false)
+})
+
+it('does not reopen for a toggle whose write did not land, even when the same change arrives later', async () => {
+  start({}, async () => {})
+  await openCustomize()
+  await toggle('Automations', 'click')
+  expect(railItem('customize')).not.toBeNull()
+  expect(row('Automations').getAttribute('aria-checked')).toBe('false')
+
+  await act(async () => {
+    applySettings({ showAutomationsButton: true })
+  })
+  await settle()
+  expect(railItem('more')).not.toBeNull()
+  expect(checklistOpen()).toBe(false)
+})
+
+it('does not reopen when the checklist is dismissed before its write lands', async () => {
+  let land: () => void = () => {}
+  start(
+    {},
+    (updates) =>
+      new Promise<void>((resolve) => {
+        land = () => {
+          applySettings(updates)
+          resolve()
+        }
+      })
+  )
+  await openCustomize()
+  await toggle('Automations', 'click')
+  fireEvent.keyDown(row('Automations'), { key: 'Escape' })
+  await settle()
+  expect(checklistOpen()).toBe(false)
+
+  await act(async () => land())
+  await settle()
+  expect(railItem('more')).not.toBeNull()
   expect(checklistOpen()).toBe(false)
 })

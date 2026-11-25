@@ -19,6 +19,7 @@ import {
   refocusTriggerIfFocusLost,
   useAppRailCustomizeLabel,
   useMenuHeldInPlace,
+  useTakeChecklistCarry,
   type AppRailChecklistCarry,
   type AppRailCustomizeRow
 } from './AppRailCustomizeMenu'
@@ -56,12 +57,14 @@ export function AppRailMoreMenu({
   const customizeLabel = useAppRailCustomizeLabel()
   const customizeTriggerRef = useRef<HTMLDivElement>(null)
   // A swap from "…" mounts More already open on its Customize checklist, on the row that was toggled.
-  const [open, setOpen] = useState(checklist.reopenOn !== null)
+  const reopenOn = useTakeChecklistCarry(checklist)
+  const [underPointer] = useState(checklist.reopenedUnderPointer)
+  const [open, setOpen] = useState(reopenOn !== null)
   const [customizeOpen, setCustomizeOpen] = useState(false)
-  const [focusRow, setFocusRow] = useState(checklist.reopenOn)
+  const [focusRow, setFocusRow] = useState(reopenOn)
   // Why the checklist opens once its trigger attaches, not at mount: Radix closes a submenu from its mount effect's
   // cleanup, which StrictMode runs once on mount, so a submenu mounted open would close straight away in development.
-  const reopenOnAttachRef = useRef(checklist.reopenOn !== null)
+  const reopenOnAttachRef = useRef(reopenOn !== null)
   const attachCustomizeTrigger = useCallback((node: HTMLDivElement | null) => {
     customizeTriggerRef.current = node
     if (node && reopenOnAttachRef.current) {
@@ -73,7 +76,7 @@ export function AppRailMoreMenu({
   // Radix closes a submenu as soon as the pointer moves over or off a sibling row, so until the pointer reaches the
   // checklist those rows ignore it; hovering them would otherwise close the checklist on the way to it. A keyboard
   // toggle leaves the pointer wherever it was, so More's rows keep their usual hover then.
-  const holdChecklistRef = useRef(checklist.reopenOn !== null && checklist.reopenedUnderPointer)
+  const holdChecklistRef = useRef(reopenOn !== null && underPointer)
   const holdChecklist = (event: React.PointerEvent): void => {
     if (holdChecklistRef.current) {
       event.preventDefault()
@@ -85,7 +88,7 @@ export function AppRailMoreMenu({
     if (!next && customizeOpen) {
       holdChecklistRef.current = false
       setFocusRow(null)
-      checklist.onChecklistClose()
+      checklist.release()
     }
   }
   // Toggling a page on while folded adds a row above Customize; keep its submenu put.

@@ -1,4 +1,4 @@
-import React, { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, Ellipsis } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
@@ -130,7 +130,20 @@ export type AppRailChecklistCarry = {
   reopenOn: string | null
   /** The toggle was a pointer click, so the pointer rests where the old checklist was. */
   reopenedUnderPointer: boolean
-  onChecklistClose: () => void
+  /** Stable. Called once the new form has taken the row, and when its checklist closes. */
+  release: () => void
+}
+
+/** The new form takes the carried row once, at mount; releasing it keeps any later mount from reopening on it. */
+export function useTakeChecklistCarry(checklist: AppRailChecklistCarry): string | null {
+  const [taken] = useState(checklist.reopenOn)
+  const { release } = checklist
+  useEffect(() => {
+    if (taken !== null) {
+      release()
+    }
+  }, [taken, release])
+  return taken
 }
 
 /** The rail's "…": which pages the rail shows, in rail order. Becomes More's Customize submenu when the rail folds. */
@@ -145,15 +158,16 @@ export function AppRailCustomizeMenu({
 }): React.JSX.Element {
   const label = useAppRailCustomizeLabel()
   const triggerRef = useRef<HTMLButtonElement>(null)
-  const [open, setOpen] = useState(checklist.reopenOn !== null)
+  const reopenOn = useTakeChecklistCarry(checklist)
+  const [open, setOpen] = useState(reopenOn !== null)
   // Only the opening this form mounted with starts on the carried row; later openings start as usual.
-  const [focusRow, setFocusRow] = useState(checklist.reopenOn)
+  const [focusRow, setFocusRow] = useState(reopenOn)
   const heldInPlace = useMenuHeldInPlace(open, triggerRef, rows)
   const handleOpenChange = (next: boolean): void => {
     setOpen(next)
     if (!next) {
       setFocusRow(null)
-      checklist.onChecklistClose()
+      checklist.release()
     }
   }
   return (

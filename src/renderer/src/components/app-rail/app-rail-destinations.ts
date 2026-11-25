@@ -39,9 +39,12 @@ const DESTINATION_SETTING: Record<
   mobile: 'showMobileButton'
 }
 
-/** Show or hide a rail page. Like Settings' switch, hiding the current page leaves it open; only the button goes. */
-export function setRailDestinationShown(id: AppRailDestinationId, shown: boolean): void {
-  void useAppStore.getState().updateSettings({ [DESTINATION_SETTING[id]]: shown })
+/**
+ * Show or hide a rail page. Like Settings' switch, hiding the current page leaves it open; only the button goes.
+ * Settles once the write has been tried; a failed write is logged by the store, not rejected.
+ */
+export function setRailDestinationShown(id: AppRailDestinationId, shown: boolean): Promise<void> {
+  return useAppStore.getState().updateSettings({ [DESTINATION_SETTING[id]]: shown })
 }
 
 const DESTINATION_OPEN: Record<AppRailDestinationId, (state: AppState) => void> = {
