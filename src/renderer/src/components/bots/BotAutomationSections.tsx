@@ -37,7 +37,6 @@ import type { AutomationDetailsController } from '../automations/details/automat
 import { updateAutomationForOwner } from '../automations/hosts/automation-scoped-list-client'
 import { showAutomationForOwner } from '../automations/hosts/automation-owner-reads'
 import { AutomationHostScopeUnsupportedError } from '../automations/hosts/automation-capability-probe'
-import { discardBotAutomationDraft } from './bot-automation-drafts'
 import type { Editing } from './use-bot-automation-editing'
 
 function EditButton({
@@ -98,7 +97,7 @@ function SectionEditor({
   editRef: React.RefObject<HTMLButtonElement | null>
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const { editing, setEditing, controller, automation, bot, screenKey } = props
+  const { editing, setEditing, controller, automation, bot } = props
   const saveRef = useRef<HTMLButtonElement>(null)
   const saveMineRef = useRef<HTMLButtonElement>(null)
   const errorId = useId()
@@ -110,10 +109,19 @@ function SectionEditor({
   if (!editing || editing.section !== section) {
     return null
   }
+  // A save the host refused as too old is said beside Save until a newer answer lets Edit back on.
+  const refusal = t(
+    'bots.automationPanel.updateOrcaToSave',
+    'Update Orca on {{host}} to save here.',
+    {
+      host: props.hostName
+    }
+  )
+  const error = editing.error === refusal && !props.editState.unavailable ? null : editing.error
   const change = (updater: (current: AutomationDraft) => AutomationDraft): void =>
     setEditing((current) => (current ? { ...current, draft: updater(current.draft) } : current))
   const close = (): void => {
-    discardBotAutomationDraft(screenKey)
+    // Discards the kept draft too, unless this editor already closed and a newer one holds it.
     setEditing(null)
     requestAnimationFrame(() => editRef.current?.focus())
   }
@@ -173,12 +181,9 @@ function SectionEditor({
         if (error instanceof AutomationHostScopeUnsupportedError) {
           props.onUnsupported()
           // Said beside Save, not only in the notice above: the press that failed is here.
-          const error = t(
-            'bots.automationPanel.updateOrcaToSave',
-            'Update Orca on {{host}} to save here.',
-            { host: props.hostName }
+          setEditing((current) =>
+            current ? { ...current, saving: false, error: refusal } : current
           )
-          setEditing((current) => (current ? { ...current, saving: false, error } : current))
           requestAnimationFrame(() => saveRef.current?.focus())
           return
         }
@@ -285,10 +290,10 @@ function SectionEditor({
             aria-busy={saveState.pending || undefined}
             onClick={() => save(false)}
             aria-describedby={
-              editing.error ? errorId : saveState.unavailable ? saveState.describedBy : undefined
+              error ? errorId : saveState.unavailable ? saveState.describedBy : undefined
             }
           >
-            {editing.error
+            {error
               ? t('bots.automationPanel.tryAgain', 'Try again')
               : editing.saving
                 ? t('bots.automationPanel.saving', 'Saving…')
@@ -299,9 +304,9 @@ function SectionEditor({
           </Button>
         </div>
       )}
-      {editing.error ? (
+      {error ? (
         <p id={errorId} role="alert" className="text-xs text-destructive [overflow-wrap:anywhere]">
-          {editing.error}
+          {error}
         </p>
       ) : null}
     </div>

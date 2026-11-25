@@ -193,5 +193,7 @@ describe('the old-host save guard on a paired computer', () => {
     host.guard = 'supported'
     view.rerender(panel())
     await waitFor(() => expect(screen.queryByText(EDIT_NOTICE)).toBeNull())
+    expect(screen.queryByText('Update Orca on Studio Mac to save here.')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Save' })).toBeVisible()
   })
 })
