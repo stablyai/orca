@@ -50,6 +50,13 @@ export async function routeBotMail(
     assertNewChatAddress(to, mail.params.type)
   } else if (chat) {
     to = await botChatAddress(context.runtime, to, chat)
+    // The item's chat may close while its files are read; its mail goes to the Home Chat then.
+    if (
+      input.params.item !== undefined &&
+      !(await itemChatTakingMail(context.runtime, mail.to, chat))
+    ) {
+      to = mail.to
+    }
   }
   // Checked first so other mail keeps sending without a pause before it is stored.
   const toBot =
@@ -87,7 +94,11 @@ async function chatForItem(
     )
   }
   const owning = runtime.botItems.owningChat(record)
-  return owning.gone || !(await botChatTakingMail(runtime, bot, owning.id)) ? undefined : owning.id
+  return owning.gone || !(await itemChatTakingMail(runtime, to, owning.id)) ? undefined : owning.id
+}
+
+async function itemChatTakingMail(runtime: OrcaRuntimeService, to: string, chatId: string) {
+  return (await botChatTakingMail(runtime, addressedBot(runtime, to, '--item'), chatId)) !== null
 }
 
 function addressedBot(runtime: OrcaRuntimeService, to: string, flag: string): Bot {
