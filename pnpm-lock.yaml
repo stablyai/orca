@@ -197,7 +197,7 @@ patchedDependencies:
   picomatch@4.0.4: 76f93480db68f4e3e460f56ccd209911ee596325ff3ae5fcf356a454d36536f8
   picomatch@4.0.7: 7c143f96c9f5a7cdcd18331c90fbedd016aef8b782982a2a6a015fa4087bf28c
   prosemirror-view@1.42.3: 3340ccbcc4e3302f3ae1c0eda3911015966add2e7e0df76abd89fbef4f3902f7
-  serve-sim@0.1.47: 74d8ae5e09dffe165821872741c68bc298b4abe40252da305c76da15e9240d34
+  serve-sim@0.1.47: b0336be2c2476c840c3e6d7e4f127ca5f580a90b2209bef4c720c5f8f2cadba5
   sprintf-js@1.1.3: 05316a8b01f155fe19a1e0cb4042c81d43d798a76755c407684e1199a18b1e08
   vitest@5.1.0: 957d1d635d13350266bce54094e8197e86da1931a62d0caf7d5339c72040d9d9
   ws@8.22.0: 9393e04dd9a90b01eb7aa35fcd5b1431b5038ce999fbbd82651136193ba51f14
@@ -265,7 +265,7 @@ importers:
         version: 7.8.6
       serve-sim:
         specifier: 0.1.47
-        version: 0.1.47(patch_hash=74d8ae5e09dffe165821872741c68bc298b4abe40252da305c76da15e9240d34)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
+        version: 0.1.47(patch_hash=b0336be2c2476c840c3e6d7e4f127ca5f580a90b2209bef4c720c5f8f2cadba5)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2)
       smol-toml:
         specifier: 1.9.1
         version: 1.9.1
@@ -15152,7 +15152,7 @@ snapshots:
       type-fest: 0.13.1
     optional: true
 
-  serve-sim@0.1.47(patch_hash=74d8ae5e09dffe165821872741c68bc298b4abe40252da305c76da15e9240d34)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2):
+  serve-sim@0.1.47(patch_hash=b0336be2c2476c840c3e6d7e4f127ca5f580a90b2209bef4c720c5f8f2cadba5)(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)(typescript@7.0.2):
     dependencies:
       inspect-webkit: 0.0.5(typescript@7.0.2)
       sonner: 2.0.8(@types/react-dom@19.2.7(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.9(@types/react@19.2.18)(react@19.2.9))(react@19.2.9)
