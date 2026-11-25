@@ -15,7 +15,7 @@ import {
   X,
   type LucideIcon
 } from 'lucide-react'
-import { useContext, type MouseEvent, type ReactNode } from 'react'
+import { useContext, useState, type MouseEvent, type ReactNode } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -38,6 +38,7 @@ import { BotAppBrandLogo } from '../apps/BotAppBrandLogo'
 import { BotChatTreeWorkerRow } from '../BotChatTreeWorkerRow'
 import { useBotGroupFileContexts } from '../BotGroupTranscriptOwner'
 import {
+  BOT_ITEM_LINK_ROWS,
   botItemLinkRows,
   botItemWorkerRow,
   type BotItemGitHubRow,
@@ -380,12 +381,25 @@ export function BotItemLinkRowList({
   rows: readonly BotItemLinkRow[]
   chat: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const fileContext = useBotItemFileContext(bot)
+  const [shown, setShown] = useState(BOT_ITEM_LINK_ROWS)
+  // Each Show more draws the next page, never the rest at once.
+  const more = Math.min(rows.length - Math.min(shown, rows.length), BOT_ITEM_LINK_ROWS)
   return (
     <div className="flex flex-col">
-      {rows.map((row) => (
+      {rows.slice(0, shown).map((row) => (
         <Row key={row.key} bot={bot} chat={chat} row={row} fileContext={fileContext} />
       ))}
+      {more > 0 ? (
+        <button
+          type="button"
+          className="self-start px-2 py-0.5 text-xs text-muted-foreground hover:text-foreground"
+          onClick={() => setShown(shown + BOT_ITEM_LINK_ROWS)}
+        >
+          {t('bots.items.group.showMore', 'Show {{count}} more', { count: more })}
+        </button>
+      ) : null}
     </div>
   )
 }

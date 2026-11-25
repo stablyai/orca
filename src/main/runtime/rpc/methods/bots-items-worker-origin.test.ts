@@ -27,7 +27,8 @@ describe('worker-start --item', () => {
     store.close(closed, 'done', undefined, actor)
     const remote = {
       byNumber: async (n: number) => store.byNumber(n),
-      get: async (uid: string) => store.get(uid)
+      get: async (uid: string) => store.get(uid),
+      links: async (uid: string) => store.links(uid)
     }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only these fields of the context.
     const context = {
@@ -41,6 +42,12 @@ describe('worker-start --item', () => {
       origin: `bot-item:${open}`
     })
     await expect(checkedWorkerOrigin('bot-item:2', context)).rejects.toThrow(/is done/)
+    // A full item refuses before the worker starts, as `item link` does.
+    const refs = Array.from({ length: 1000 }, (_, i) => ({ kind: 'url', ref: `u:${i}` }) as const)
+    store.link(open, refs, actor)
+    await expect(checkedWorkerOrigin('bot-item:1', context)).rejects.toThrow(
+      'An item takes up to 1000 links.'
+    )
     store.dispose()
   })
 })

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react-native'
 import { Text, View } from 'react-native'
 import {
+  BOT_ITEM_LINK_ROWS,
   botItemLinkRows,
   botItemWorkerRow,
   type BotItemGitHubRow,
@@ -144,6 +145,9 @@ export function MobileBotItemLinks({
   const clipboard = useClipboardWriter()
   const [pressed, setPressed] = useState<LongPress | null>(null)
   const rows = botItemLinkRows(links)
+  const [shown, setShown] = useState(BOT_ITEM_LINK_ROWS)
+  // Each Show more draws the next page: an item holds up to 1,000 links.
+  const more = Math.min(rows.length - Math.min(shown, rows.length), BOT_ITEM_LINK_ROWS)
   const row = (entry: BotItemLinkRow): React.JSX.Element => {
     switch (entry.kind) {
       case 'worker': {
@@ -266,7 +270,21 @@ export function MobileBotItemLinks({
     : []
   return (
     <>
-      <ListGroup separatorInset={LIST_LEADING_INSET}>{rows.map(row)}</ListGroup>
+      <ListGroup separatorInset={LIST_LEADING_INSET}>
+        {[
+          ...rows.slice(0, shown).map(row),
+          ...(more > 0
+            ? [
+                <ListRow
+                  key="more"
+                  title={t('bots.items.group.showMore', 'Show {{count}} more', { count: more })}
+                  leading={<View />}
+                  onPress={() => setShown(shown + BOT_ITEM_LINK_ROWS)}
+                />
+              ]
+            : [])
+        ]}
+      </ListGroup>
       <ActionSheetModal
         visible={pressed !== null}
         title={pressed?.title}

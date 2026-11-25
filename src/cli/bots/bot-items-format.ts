@@ -72,6 +72,9 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
   return lines.join('\n')
 }
 
+/** A list row stays one line: past this many PRs, the newest and a count. */
+const ROW_PRS = 5
+
 function linkSummary(links: readonly BotItemLinkView[]): string[] {
   const workers = links.filter((link) => link.kind === 'dispatch')
   const parts =
@@ -84,7 +87,15 @@ function linkSummary(links: readonly BotItemLinkView[]): string[] {
       parts.push('PR not shown for server work yet')
     }
   }
-  return [...new Set(parts)]
+  const unique = [...new Set(parts)]
+  const prs = unique.length - (workers.length > 0 ? 1 : 0)
+  return prs <= ROW_PRS
+    ? unique
+    : [
+        ...unique.slice(0, unique.length - prs),
+        ...unique.slice(-ROW_PRS),
+        `${prs - ROW_PRS} more PRs`
+      ]
 }
 
 function age(at: number, now: number): string {
@@ -146,6 +157,17 @@ function linkLine(link: BotItemLinkView): string {
   }
 }
 
+/** Links `show` prints: the newest page, so a busy item's 1,000 never flood each read. */
+const SHOWN_LINKS = 50
+
+function shownLinkLines(links: readonly BotItemLinkView[]): string[] {
+  const earlier = links.length - SHOWN_LINKS
+  return [
+    ...(earlier > 0 ? [`  ${earlier} earlier links; --json lists them all`] : []),
+    ...links.slice(-SHOWN_LINKS).map((link) => `  ${linkLine(link)}`)
+  ]
+}
+
 function eventLine(event: BotItemEvent): string {
   const who = event.actor.kind === 'bot' ? '' : event.actor.kind === 'owner' ? 'Owner: ' : 'Orca: '
   const data = event.data
@@ -185,7 +207,7 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
     ...(item.question ? [`Asks your owner: ${item.question.text}`] : []),
     ...(item.wait ? [`Waits on: ${item.wait.text}`] : []),
     ...(item.closeNote ? [`Closed: ${item.closeNote}`] : []),
-    ...item.links.map((link) => `  ${linkLine(link)}`),
+    ...shownLinkLines(item.links),
     '',
     ...view.events.map(eventLine),
     ...(view.nextCursor ? [`More: --after ${view.nextCursor}`] : [])

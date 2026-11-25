@@ -139,6 +139,9 @@ function prKey(ref: string): string {
   return ref.trim().toLowerCase()
 }
 
+/** Rows a Links list draws at first and adds per Show more: an item holds up to 1,000 links. */
+export const BOT_ITEM_LINK_ROWS = 50
+
 export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkRow[] {
   const rows: BotItemLinkRow[] = []
   const prs = new Map<string, Extract<BotItemPullRequest, { shown: true }>>()

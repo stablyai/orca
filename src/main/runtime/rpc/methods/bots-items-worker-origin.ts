@@ -3,6 +3,7 @@
 // `bot-item:<uid>`, and the items host links it from orchestration's own record.
 import { isOpenBotItemStatus } from '../../../../shared/bots/bot-items'
 import { BotItemError } from '../../../bots/bot-item-error'
+import { assertBotItemLinkRoom } from '../../../bots/bot-items-input'
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { itemsWriter } from './bots-items-caller'
@@ -25,10 +26,8 @@ export async function checkedWorkerOrigin(
   const sessionId = sessionCallerOf(context.orchestrationCaller)?.sessionId ?? undefined
   // The caller's session comes from its credentials, not its say-so.
   const writer = itemsWriter(sessionId, { runtime: context.runtime, pairedDeviceId: undefined })
-  const item = await resolveItem(
-    context.runtime.botItems.store(),
-    origin.slice(BOT_ITEM_ORIGIN_PREFIX.length)
-  )
+  const store = context.runtime.botItems.store()
+  const item = await resolveItem(store, origin.slice(BOT_ITEM_ORIGIN_PREFIX.length))
   if (!isOpenBotItemStatus(item.status)) {
     const closed = item.status === 'done' ? 'done' : 'canceled'
     throw new BotItemError(
@@ -38,6 +37,8 @@ export async function checkedWorkerOrigin(
         : `Item ${item.number} is ${closed}. Ask its bot.`
     )
   }
+  // Refused before the worker starts: a full item would leave it running unlinked.
+  assertBotItemLinkRoom((await store.links(item.uid)).length)
   return {
     origin: `${BOT_ITEM_ORIGIN_PREFIX}${item.uid}`,
     itemUid: item.uid,
