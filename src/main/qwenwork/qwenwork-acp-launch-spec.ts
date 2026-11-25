@@ -2,7 +2,11 @@ import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/pro
 import { GENERIC_ACP_DIALECT } from '../acp/acp-dialects/acp-dialect'
 import { directoryAccountBinding } from '../acp/launch/acp-account-binding'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
-import { findQwenWorkDesktopEngine } from './qwenwork-desktop-engine'
+import {
+  defaultQwenWorkMacProfile,
+  findQwenWorkDesktopEngine,
+  QWENWORK_DESKTOP_PROFILE
+} from './qwenwork-desktop-engine'
 
 export const QWENWORK_LAUNCH_SPEC: AcpLaunchSpec = {
   agent: 'qwenwork',
@@ -11,7 +15,9 @@ export const QWENWORK_LAUNCH_SPEC: AcpLaunchSpec = {
     const program = await findQwenWorkDesktopEngine(env)
     if (!program) {
       throw new AgentSessionPreSpawnError(
-        'No compatible QwenWork desktop engine was found on this host.',
+        process.platform === 'darwin'
+          ? 'Start QwenWork desktop with local control enabled before opening its Orca chat.'
+          : 'No compatible QwenWork desktop engine was found on this host.',
         { reason: 'runtimeNotInstalled' }
       )
     }
@@ -22,7 +28,10 @@ export const QWENWORK_LAUNCH_SPEC: AcpLaunchSpec = {
   dialect: GENERIC_ACP_DIALECT,
   loginCommand: [],
   authMethod: ({ advertised }) => advertised.find((method) => method === 'qwenwork-login'),
-  account: directoryAccountBinding('USERPROFILE', (home) => home),
+  account:
+    process.platform === 'darwin'
+      ? directoryAccountBinding(QWENWORK_DESKTOP_PROFILE, defaultQwenWorkMacProfile)
+      : directoryAccountBinding('USERPROFILE', (home) => home),
   installDirectories: () => [],
   modelDiscovery: { kind: 'unavailable', reason: 'QwenWork desktop manages its session models' },
   keepsEverySession: true,

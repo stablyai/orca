@@ -338,6 +338,7 @@ module.exports = {
     '!resources/onboarding/feature-wall/**',
     '!resources/skills/**',
     '!resources/native-chat-visuals/**',
+    '!resources/qwenwork/desktop-acp.cjs',
     // extraResources already ships plugin bytes; exclude source duplicates.
     '!resources/plugins/launch/**',
     // afterPack copies the target's speech engine to resources/node_modules; asar would duplicate it and ship other variants.
@@ -710,6 +711,10 @@ module.exports = {
     extraResources: [
       ...commonExtraResources,
       ...createPackagedRuntimeNodeModuleResources('darwin'),
+      {
+        from: 'resources/qwenwork/desktop-acp.cjs',
+        to: 'qwenwork/desktop-acp.cjs'
+      },
       {
         from: 'resources/darwin/bin/orca',
         to: 'bin/orca'
