@@ -277,7 +277,9 @@ export async function launchRelayedProviderProcess(
   }
   const client = await connected(await route.current().catch(() => null))
   const spec = client ? spawnSpec(launch, client) : null
-  if (!client || !spec || !(await daemonReadsFolder(client, spec.cwd))) {
+  // Without kept state a reattach would have nothing to restore, so such a launch goes as today.
+  const keeps = !relay.keep || client?.getDaemonIdentity()?.providerRelayKeep === true
+  if (!client || !spec || !keeps || !(await daemonReadsFolder(client, spec.cwd))) {
     return null
   }
   const channel = providerRelayChannel(client)

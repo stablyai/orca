@@ -130,7 +130,9 @@ export class ProviderRelayKeptState {
       lines.filter((marker) => head.includes(marker)).forEach((marker) => this.keep(marker, record))
       return
     }
-    for (let at = head.indexOf(prefix); at !== -1; at = head.indexOf(prefix, at + 1)) {
+    // Only the first: the update's own kind precedes its payload, which may quote another's.
+    const at = head.indexOf(prefix)
+    if (at !== -1) {
       lines.filter((marker) => head.startsWith(marker, at)).forEach((m) => this.keep(m, record))
     }
   }
