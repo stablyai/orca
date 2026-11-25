@@ -116,11 +116,18 @@ export function useStructuredAgentSessionHostProgram(
   sessionId: string,
   target: RuntimeClientTarget
 ): boolean {
+  return useStructuredAgentSessionHostProgramStatus(sessionId, target) === true
+}
+
+export function useStructuredAgentSessionHostProgramStatus(
+  sessionId: string,
+  target: RuntimeClientTarget
+): boolean | undefined {
   const { feed, subscribe } = useSessionFeed(sessionId, target)
   return useSyncExternalStore(
     subscribe,
-    () => feed.getSnapshot().get(sessionId)?.hostProgram === true,
-    () => false
+    () => feed.getSnapshot().get(sessionId)?.hostProgram,
+    () => undefined
   )
 }
 

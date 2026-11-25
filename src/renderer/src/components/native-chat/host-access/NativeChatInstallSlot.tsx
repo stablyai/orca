@@ -20,7 +20,7 @@ import {
   antigravityChatSignInPrompt,
   antigravityOrcaRuntimeSignsIn
 } from '@/components/provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import { useStructuredAgentSessionHostProgram } from '../session/status/structured-agent-session-status-hooks'
+import { useStructuredAgentSessionHostProgramStatus } from '../session/status/structured-agent-session-status-hooks'
 import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
 import type { NativeChatAntigravityAuthTarget } from '../antigravity-auth/native-chat-antigravity-auth'
 
@@ -54,7 +54,11 @@ export function useNativeChatInstallSlot(
   antigravityAuth: NativeChatAntigravityAuthTarget | null
 } {
   const t = useTranslate()
-  const hostProgram = useStructuredAgentSessionHostProgram(props.sessionId, props.target)
+  const hostProgramStatus = useStructuredAgentSessionHostProgramStatus(
+    props.sessionId,
+    props.target
+  )
+  const hostProgram = hostProgramStatus === true
   // Chats on the host program follow it too: Orca's copy of agy may be what they need installed.
   const observation = useManagedRuntimeInstall(props.target, props.agent, props.isVisible)
   const slot = nativeChatInstallSlotState(observation, layout, hostProgram)
@@ -70,6 +74,8 @@ export function useNativeChatInstallSlot(
   const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
   const signIn =
     prompt === null ? null : { prompt, view: signInView, agent: props.agent, host: props.target }
+  const pinnedAntigravityServer =
+    props.agent === 'antigravity' && props.isVisible && hostProgramStatus === false && !signsIn
   const unavailableHint =
     slot.kind === 'install'
       ? managedRuntimeInstallCard(slot.state, agentLabel, slot.layout, undefined, t).title
@@ -101,7 +107,9 @@ export function useNativeChatInstallSlot(
               observation.kind === 'pending' ||
               (observation.kind === 'active' && observation.snapshot.kind === 'unknown')
           }
-        : null
+        : pinnedAntigravityServer
+          ? { backend: 'pinned-server' }
+          : null
   }
 }
 
