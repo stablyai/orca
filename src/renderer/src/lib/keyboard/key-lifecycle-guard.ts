@@ -41,7 +41,8 @@ export function armKeyLifecycleGuard(consumed: GuardedKey): () => void {
     removeAppKeyListener('keyup', onKeyUp)
     window.removeEventListener('blur', disarm)
   }
-  addAppKeyListener('keydown', onKeyDown, { first: true })
+  // The held key stays owned even if a new Escape owner appears before its release.
+  addAppKeyListener('keydown', onKeyDown, { gesture: true })
   addAppKeyListener('keyup', onKeyUp)
   window.addEventListener('blur', disarm)
   return disarm

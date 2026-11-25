@@ -78,10 +78,15 @@ export function createPaneDOM(
 
   const dragHandle = document.createElement('div')
   dragHandle.className = 'pane-drag-handle'
-  dragHandle.title = translate(
-    'components.terminalPane.paneDragHandle.tooltip',
-    'Drag to move to a new tab'
-  )
+  // Read on hover, before the native tooltip shows, so a language switch reaches a pane that stays open.
+  const setDragHandleTooltip = (): void => {
+    dragHandle.title = translate(
+      'components.terminalPane.paneDragHandle.tooltip',
+      'Drag to move to a new tab'
+    )
+  }
+  setDragHandleTooltip()
+  dragHandle.addEventListener('pointerenter', setDragHandleTooltip)
   container.appendChild(dragHandle)
   const paneDragCleanup = attachPaneDrag(dragHandle, id, dragState, dragCallbacks)
 

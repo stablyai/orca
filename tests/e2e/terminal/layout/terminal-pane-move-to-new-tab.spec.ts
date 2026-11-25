@@ -10,11 +10,28 @@ import type { Page } from '@stablyai/playwright-test'
 import { test } from '../../desktop/electron-fixtures/orca-app'
 import { expect } from '@stablyai/playwright-test'
 import { focusActiveTerminalInput, waitForPaneIdentitySnapshot } from '../input/terminal'
-import { waitForPaneCount } from './terminal-pane-operations'
-import { registerTerminalPaneMountReadiness } from './terminal-pane-mount-readiness'
+import { waitForActiveTerminalManager, waitForPaneCount } from './terminal-pane-operations'
 import { dragPaneOutToTabStrip } from '../../layout/publication/terminal-layout-journeys'
-import { waitForTerminalOutputForPtyId } from '../performance/artificial-opencode-pane-interactions'
 import { getTerminalContentForPtyId } from '../lifecycle/terminal-pty-readiness'
+import {
+  ensureTerminalVisible,
+  waitForActiveWorktree,
+  waitForSessionReady
+} from '../../desktop/renderer-probes/store'
+
+async function waitForTerminalOutputForPtyId(
+  page: Page,
+  ptyId: string,
+  expected: string,
+  timeoutMs: number
+): Promise<void> {
+  await expect
+    .poll(async () => (await getTerminalContentForPtyId(page, ptyId, 8000)).includes(expected), {
+      timeout: timeoutMs,
+      message: `Terminal PTY ${ptyId} did not contain "${expected}"`
+    })
+    .toBe(true)
+}
 
 const SPLIT_RIGHT_CHORD = process.platform === 'darwin' ? 'Meta+d' : 'Control+Shift+d'
 
@@ -93,7 +110,13 @@ async function expectMovedToOwnTab(
 // Why: keep the suite serial so headful pane tests never open multiple Electron windows at once.
 test.describe.configure({ mode: 'serial' })
 test.describe('Move a terminal pane to a new tab', () => {
-  registerTerminalPaneMountReadiness()
+  test.beforeEach(async ({ orcaPage }) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveWorktree(orcaPage)
+    await ensureTerminalVisible(orcaPage)
+    await waitForActiveTerminalManager(orcaPage, 30_000)
+    await waitForPaneCount(orcaPage, 1, 30_000)
+  })
 
   test('dragging a pane onto the tab strip moves its live shell into a new tab', async ({
     orcaPage

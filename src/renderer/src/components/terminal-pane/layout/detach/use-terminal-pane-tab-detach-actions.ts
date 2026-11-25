@@ -2,7 +2,7 @@ import { useCallback, useEffect } from 'react'
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '../../../../store/index'
 import { detachTerminalPaneToTab } from './terminal-pane-tab-detach'
-import type { TerminalPaneNewTabTarget } from './terminal-pane-tab-detach-steps'
+import { firstUnpinnedIndex, type TerminalPaneNewTabTarget } from './terminal-pane-tab-detach-steps'
 import {
   isTerminalTabStripDropTarget,
   resolveTerminalTabStripDropTarget
@@ -52,28 +52,41 @@ export function useTerminalPaneTabDetachActions(controller: TerminalPaneBindingC
       ) {
         return null
       }
+      const state = useAppStore.getState()
       return resolveTerminalTabStripDropTarget({
         clientX,
         clientY,
-        groupsByWorktree: useAppStore.getState().groupsByWorktree,
-        worktreeId
+        groupsByWorktree: state.groupsByWorktree,
+        worktreeId,
+        // The preview only offers gaps the new (unpinned) tab can take.
+        firstUnpinnedIndex: (groupId) => firstUnpinnedIndex(state, worktreeId, groupId)
       })
     },
     [getPaneMoveReadiness, worktreeId, managerRef]
   )
   const detachPaneToNewTab = useCallback(
     (sourcePaneId: number, target: TerminalPaneNewTabTarget) => {
-      const sourceTransport = paneTransportsRef.current.get(sourcePaneId)
-      const livePtyId = sourceTransport?.getPtyId() ?? null
-      const sourcePaneCwd = paneCwdRef.current.get(sourcePaneId)
+      // Re-read at every step of the move: its pane id can change, and a reconnect can rebind it.
+      const readSource = (leafId: string) => {
+        const manager = managerRef.current
+        const paneId = manager?.getPanes().find((pane) => manager.getLeafId(pane.id) === leafId)?.id
+        if (paneId === undefined) {
+          return null
+        }
+        const transport = paneTransportsRef.current.get(paneId)
+        const sourcePaneCwd = paneCwdRef.current.get(paneId)
+        return {
+          livePtyId: transport?.getPtyId() ?? null,
+          ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
+          connectPending: transport?.isConnectPending?.() ?? false
+        }
+      }
       return detachTerminalPaneToTab({
-        livePtyId,
+        readSource,
         getStore: useAppStore.getState,
         manager: managerRef.current,
         persistLayoutSnapshot,
         sourcePaneId,
-        ...(sourcePaneCwd ? { sourcePaneCwd } : {}),
-        sourceConnectPending: sourceTransport?.isConnectPending?.() ?? false,
         sourceTabId: tabId,
         targetGroupId: target.groupId,
         targetIndex: target.index,

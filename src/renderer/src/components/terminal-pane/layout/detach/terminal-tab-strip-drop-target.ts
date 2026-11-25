@@ -55,6 +55,8 @@ function resolveTabStripInsertion(args: {
   clientX: number
   clientY: number
   groupTabOrderLength: number
+  /** The first slot a new (unpinned) tab may take; pinned tabs come first. */
+  minIndex: number
   strip: HTMLElement
   stripRect: DOMRect
 }): { index: number; rect: DOMRect } | null {
@@ -63,6 +65,10 @@ function resolveTabStripInsertion(args: {
     return null
   }
   const tabRects = tabs.map((tab) => tab.getBoundingClientRect())
+  const at = (index: number) => {
+    const legal = Math.max(index, Math.min(args.minIndex, args.groupTabOrderLength))
+    return { index: legal, rect: getInsertionMarkerRect(tabRects, legal, args.stripRect) }
+  }
 
   for (let index = 0; index < tabRects.length; index += 1) {
     const tabRect = tabRects[index]
@@ -70,29 +76,19 @@ function resolveTabStripInsertion(args: {
       continue
     }
     if (args.clientX < tabRect.left) {
-      const insertionIndex = clampIndex(index, args.groupTabOrderLength)
-      return {
-        index: insertionIndex,
-        rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect)
-      }
+      return at(clampIndex(index, args.groupTabOrderLength))
     }
     if (pointWithinRect(args.clientX, args.clientY, tabRect)) {
-      const insertionIndex = clampIndex(
-        index + (args.clientX < tabRect.left + tabRect.width / 2 ? 0 : 1),
-        args.groupTabOrderLength
+      return at(
+        clampIndex(
+          index + (args.clientX < tabRect.left + tabRect.width / 2 ? 0 : 1),
+          args.groupTabOrderLength
+        )
       )
-      return {
-        index: insertionIndex,
-        rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect)
-      }
     }
   }
 
-  const insertionIndex = args.groupTabOrderLength
-  return {
-    index: insertionIndex,
-    rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect)
-  }
+  return at(args.groupTabOrderLength)
 }
 
 function getElementsFromPoint(clientX: number, clientY: number): Element[] {
@@ -112,6 +108,8 @@ export function resolveTerminalTabStripDropTarget(args: {
   clientY: number
   groupsByWorktree: AppState['groupsByWorktree']
   worktreeId: string
+  /** The first slot a new tab may take in a group (after its pinned tabs); 0 when absent. */
+  firstUnpinnedIndex?: (groupId: string) => number
 }): TerminalTabStripDropTarget | null {
   const groups = args.groupsByWorktree[args.worktreeId] ?? []
   const groupById = new Map(groups.map((group) => [group.id, group]))
@@ -137,6 +135,7 @@ export function resolveTerminalTabStripDropTarget(args: {
           clientX: args.clientX,
           clientY: args.clientY,
           groupTabOrderLength: group.tabOrder?.length ?? 0,
+          minIndex: args.firstUnpinnedIndex?.(groupId) ?? 0,
           strip,
           stripRect: rect
         })

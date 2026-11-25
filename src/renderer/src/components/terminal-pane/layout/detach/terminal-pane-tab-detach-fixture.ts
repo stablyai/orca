@@ -30,9 +30,11 @@ function createTerminalTab(id: string, ptyId: string | null): TerminalTab {
 export function createStore(layout: TerminalLayoutSnapshot): TerminalPaneTabDetachStore {
   const store: TerminalPaneTabDetachStore = {
     activeTabId: SOURCE_TAB_ID,
+    activeTabType: 'terminal',
+    activeWorktreeId: WORKTREE_ID,
     closeTab: vi.fn(),
     createTab: vi.fn<AppState['createTab']>((_worktreeId, _targetGroupId, _shell, options) => {
-      const tab = createTerminalTab('tab-detached', options?.initialPtyId ?? null)
+      const tab = createTerminalTab(options?.id ?? 'tab-detached', options?.initialPtyId ?? null)
       const group = store.groupsByWorktree[WORKTREE_ID]?.find(
         (candidate) => candidate.id === TARGET_GROUP_ID
       )

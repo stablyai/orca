@@ -11,6 +11,7 @@ import {
   toWebTerminalSurfaceTabId
 } from '../../../../../../shared/workspace-layout/terminal-surface-id'
 import {
+  isCurrentPairing,
   moveWebRuntimeLeafToNewTab,
   resolvePaneMoveHost,
   settleHostPaneMove
@@ -18,6 +19,9 @@ import {
 import { resolveHostTabDropTarget } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move'
 import {
   canMoveNow,
+  currentSourcePane,
+  isSourceTabShown,
+  sourcePtyId,
   indexAfterPinnedTabs,
   moveCreatedTabToIndex,
   nameTabAfterPane,
@@ -53,13 +57,10 @@ async function moveLeafToNewTab(
   leafId: string
 ): Promise<DetachedTerminalPaneTab | null> {
   // The user was looking at the source tab when they asked; the move follows the pane only if they still are.
-  const sourceShownAtInvocation = args.getStore().activeTabId === args.sourceTabId
+  const sourceShownAtInvocation = isSourceTabShown(args)
   if (!canMoveNow(args, leafId)) {
     return null
   }
-  const persistedPtyId =
-    args.getStore().terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[leafId]
-  const livePtyId = args.livePtyId ?? persistedPtyId ?? null
   // A move another client asked for reports to that client; only this window's user gets a toast.
   const userInitiated = !args.targetTabId
   const hostRoute =
@@ -67,7 +68,10 @@ async function moveLeafToNewTab(
       ? await resolvePaneMoveHost(args.worktreeId)
       : ({ kind: 'window' } as const)
   // Why: the host owns these tabs, so a window-only move would be undone by its next snapshot.
-  if (hostRoute.kind === 'unavailable' || (hostRoute.kind === 'host' && livePtyId === null)) {
+  if (
+    hostRoute.kind === 'unavailable' ||
+    (hostRoute.kind === 'host' && sourcePtyId(args, leafId) === null)
+  ) {
     if (userInitiated) {
       reportMoveFailed()
     }
@@ -77,7 +81,7 @@ async function moveLeafToNewTab(
   if (!canMoveNow(args, leafId)) {
     return null
   }
-  const paneMoveHost = hostRoute.kind === 'host' ? hostRoute.environmentId : null
+  const paneMoveHost = hostRoute.kind === 'host' ? hostRoute.authority : null
   const targetIndex = indexAfterPinnedTabs(
     args.getStore(),
     args.worktreeId,
@@ -85,29 +89,32 @@ async function moveLeafToNewTab(
     args.targetIndex
   )
   const placed = { ...args, targetIndex }
-  const followPane = (): boolean =>
-    sourceShownAtInvocation && args.getStore().activeTabId === args.sourceTabId
+  const followPane = (): boolean => sourceShownAtInvocation && isSourceTabShown(args)
+  // Why: a mirrored host tab's local id derives from the host id, so the next snapshot finds this tab.
+  const targetTabId = paneMoveHost
+    ? toWebTerminalSurfaceTabId(createBrowserUuid())
+    : (args.targetTabId ?? createBrowserUuid())
+  const placement = paneMoveHost
+    ? await resolveHostTabDropTarget(paneMoveHost.environmentId, {
+        worktreeId: args.worktreeId,
+        tabId: targetTabId,
+        targetGroupId: args.targetGroupId,
+        ...(targetIndex !== undefined ? { index: targetIndex } : {})
+      })
+    : null
+  // Built after the last await, so it carries the PTY the pane is bound to now.
+  if (!canMoveNow(args, leafId) || (paneMoveHost && !isCurrentPairing(paneMoveHost))) {
+    return null
+  }
   args.persistLayoutSnapshot()
   const request: TerminalLeafMoveRequest = {
     worktreeId: args.worktreeId,
     sourceTabId: args.sourceTabId,
-    // Why: a mirrored host tab's local id derives from the host id, so the next snapshot finds this tab.
-    targetTabId: paneMoveHost
-      ? toWebTerminalSurfaceTabId(createBrowserUuid())
-      : (args.targetTabId ?? createBrowserUuid()),
+    targetTabId,
     leafId,
-    ptyId: livePtyId
+    ptyId: sourcePtyId(args, leafId)
   }
-  if (paneMoveHost) {
-    const placement = await resolveHostTabDropTarget(paneMoveHost, {
-      worktreeId: args.worktreeId,
-      tabId: request.targetTabId,
-      targetGroupId: args.targetGroupId,
-      ...(targetIndex !== undefined ? { index: targetIndex } : {})
-    })
-    if (!canMoveNow(args, leafId)) {
-      return null
-    }
+  if (paneMoveHost && placement) {
     // Why: the host's snapshot push can land before its reply and would leave nothing to detach, so
     // the window moves first. The call is dispatched before the move's layout pushes, so the host
     // sees the move first.
@@ -123,7 +130,7 @@ async function moveLeafToNewTab(
         settleHostPaneMove(paneMoveHost, request, outcome, applied !== null, {
           ...(userInitiated ? { onRefused: reportMoveFailed } : {}),
           // The tab is the host's only once it commits, so its name waits for that.
-          onCommitted: () => applied && nameTabAfterPane(args.getStore(), applied, args)
+          onCommitted: () => nameTabAfterPane(args.getStore(), request, args)
         })
       )
       .catch((error: unknown) => console.warn('[terminal-pane-detach] move not settled', error))
@@ -135,7 +142,7 @@ async function moveLeafToNewTab(
       ? moveLeafThroughLayoutOwner(
           request,
           { groupId: args.targetGroupId, index: targetIndex },
-          args.sourcePaneCwd?.cwd
+          currentSourcePane(args, leafId)?.sourcePaneCwd?.cwd
         )
       : window.api.pty.moveLeafToNewTab(request)
   ).catch((error: unknown) => {
@@ -182,6 +189,8 @@ function applyMove(
 ): DetachedTerminalPaneTab | null {
   const { mainMoved, ptyId } = options
   const { leafId, sourceTabId, targetTabId, worktreeId } = request
+  // Read before the pane leaves this layout; an unbound pane's new shell starts in its folder.
+  const startupCwd = currentSourcePane(args, leafId)?.sourcePaneCwd?.cwd
   const { manager } = args
   const panes = manager?.getPanes() ?? []
   const paneId = panes.find((pane) => manager?.getLeafId(pane.id) === leafId)?.id
@@ -232,7 +241,7 @@ function applyMove(
       ...(!ptyId
         ? {
             pendingActivationSpawn: true,
-            ...(args.sourcePaneCwd?.cwd ? { startupCwd: args.sourcePaneCwd.cwd } : {})
+            ...(startupCwd ? { startupCwd } : {})
           }
         : { initialLeafId: leafId }),
       recordInteraction: true
@@ -282,7 +291,7 @@ function nameAfterPane(
   args: DetachTerminalPaneToTabArgs
 ): DetachedTerminalPaneTab | null {
   if (moved) {
-    nameTabAfterPane(args.getStore(), moved, args)
+    nameTabAfterPane(args.getStore(), { targetTabId: moved.tab.id, leafId: moved.leafId }, args)
   }
   return moved
 }

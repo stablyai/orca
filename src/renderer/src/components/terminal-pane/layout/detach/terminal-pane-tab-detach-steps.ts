@@ -7,6 +7,8 @@ import { paneMoveReadiness } from './terminal-pane-move-readiness'
 export type TerminalPaneTabDetachStore = Pick<
   AppState,
   | 'activeTabId'
+  | 'activeTabType'
+  | 'activeWorktreeId'
   | 'closeTab'
   | 'createTab'
   | 'groupsByWorktree'
@@ -29,6 +31,13 @@ export type TerminalPaneTabDetachManager = {
 
 type SourcePaneCwd = Pick<PaneCwdEntry, 'cwd' | 'deferredSplitSpawn' | 'pendingCwd'> &
   Partial<Pick<PaneCwdEntry, 'confirmed'>>
+
+/** The source pane's live state, read fresh at each step: a reconnect can rebind it mid-move. */
+export type SourcePaneState = {
+  livePtyId: string | null
+  sourcePaneCwd?: SourcePaneCwd
+  connectPending: boolean
+}
 
 export type DetachedTerminalPaneTab = {
   tab: TerminalTab
@@ -62,6 +71,41 @@ export type DetachTerminalPaneToTabArgs = {
   /** The new tab's id when another client already drew the tab; else one is minted. */
   targetTabId?: string
   worktreeId: string
+  /** Reads the leaf's pane as it is now; without it the values above, captured at invocation, are used. */
+  readSource?: (leafId: string) => SourcePaneState | null
+}
+
+export function currentSourcePane(
+  args: DetachTerminalPaneToTabArgs,
+  leafId: string
+): SourcePaneState | null {
+  if (args.readSource) {
+    return args.readSource(leafId)
+  }
+  return {
+    livePtyId: args.livePtyId ?? null,
+    ...(args.sourcePaneCwd ? { sourcePaneCwd: args.sourcePaneCwd } : {}),
+    connectPending: args.sourceConnectPending ?? false
+  }
+}
+
+/** The PTY the move carries: the pane's live binding, else the saved one. */
+export function sourcePtyId(args: DetachTerminalPaneToTabArgs, leafId: string): string | null {
+  return (
+    currentSourcePane(args, leafId)?.livePtyId ??
+    args.getStore().terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[leafId] ??
+    null
+  )
+}
+
+/** The user has this worktree's source terminal tab in front of them (not a browser or editor tab). */
+export function isSourceTabShown(args: DetachTerminalPaneToTabArgs): boolean {
+  const store = args.getStore()
+  return (
+    store.activeWorktreeId === args.worktreeId &&
+    store.activeTabType === 'terminal' &&
+    store.activeTabId === args.sourceTabId
+  )
 }
 
 export function moveCreatedTabToIndex(args: {
@@ -83,7 +127,12 @@ export function moveCreatedTabToIndex(args: {
     return
   }
   const orderWithoutCreatedTab = (group.tabOrder ?? []).filter((id) => id !== args.tabId)
-  const insertionIndex = Math.min(Math.max(args.targetIndex, 0), orderWithoutCreatedTab.length)
+  // Re-read at write time: a tab pinned while the move was in flight still comes first.
+  const pinnedEnd = firstUnpinnedIndex(args.store, args.worktreeId, args.groupId, args.tabId)
+  const insertionIndex = Math.min(
+    Math.max(args.targetIndex, pinnedEnd),
+    orderWithoutCreatedTab.length
+  )
   const nextOrder = [...orderWithoutCreatedTab]
   nextOrder.splice(insertionIndex, 0, args.tabId)
   args.store.reorderUnifiedTabs(args.groupId, nextOrder, {
@@ -92,45 +141,50 @@ export function moveCreatedTabToIndex(args: {
   })
 }
 
-/** The moved pane's tab is never pinned, so it lands no earlier than the first unpinned slot. */
+/** Where a group's unpinned tabs begin; the moved pane's tab is never pinned, so it goes no earlier. */
+export function firstUnpinnedIndex(
+  store: Pick<TerminalPaneTabDetachStore, 'groupsByWorktree' | 'unifiedTabsByWorktree'>,
+  worktreeId: string,
+  groupId: string,
+  excludeTabId?: string
+): number {
+  const order = (
+    store.groupsByWorktree[worktreeId]?.find((group) => group.id === groupId)?.tabOrder ?? []
+  ).filter((id) => id !== excludeTabId)
+  const pinnedIds = new Set(
+    (store.unifiedTabsByWorktree[worktreeId] ?? [])
+      .filter((tab) => tab.isPinned)
+      .map((tab) => tab.id)
+  )
+  const first = order.findIndex((id) => !pinnedIds.has(id))
+  return first === -1 ? order.length : first
+}
+
 export function indexAfterPinnedTabs(
   store: TerminalPaneTabDetachStore,
   worktreeId: string,
   groupId: string,
   index: number | undefined
 ): number | undefined {
-  if (index === undefined) {
-    return undefined
-  }
-  const order =
-    store.groupsByWorktree[worktreeId]?.find((group) => group.id === groupId)?.tabOrder ?? []
-  const pinnedIds = new Set(
-    (store.unifiedTabsByWorktree[worktreeId] ?? [])
-      .filter((tab) => tab.isPinned)
-      .map((tab) => tab.id)
-  )
-  const firstUnpinned = order.findIndex((id) => !pinnedIds.has(id))
-  return Math.max(index, firstUnpinned === -1 ? order.length : firstUnpinned)
+  return index === undefined
+    ? undefined
+    : Math.max(index, firstUnpinnedIndex(store, worktreeId, groupId))
 }
 
-/**
- * The pane's own name is what made it findable, so its new tab starts with it (copied, not linked).
- * The client that asked for the move names the tab; its rename reaches this window through the owner.
- * Switch point: main's rename frame redraws the moved pane without its title; main should name the tab.
- */
 export function nameTabAfterPane(
   store: TerminalPaneTabDetachStore,
-  moved: DetachedTerminalPaneTab,
+  moved: { targetTabId: string; leafId: string },
   args: Pick<DetachTerminalPaneToTabArgs, 'targetTabId' | 'worktreeId'>
 ): void {
   if (ORCA_LAYOUT_OWNER_IS_MAIN || args.targetTabId) {
     return
   }
   const tab = store.tabsByWorktree[args.worktreeId]?.find(
-    (candidate) => candidate.id === moved.tab.id
+    (candidate) => candidate.id === moved.targetTabId
   )
   const paneTitle =
-    store.terminalLayoutsByTabId[moved.tab.id]?.titlesByLeafId?.[moved.leafId]?.trim()
+    store.terminalLayoutsByTabId[moved.targetTabId]?.titlesByLeafId?.[moved.leafId]?.trim()
+  // Idempotent: a tab already named (by this or by the user since) keeps its name.
   if (tab && paneTitle && !tab.customTitle) {
     store.setTabCustomTitle(tab.id, paneTitle, { recordInteraction: false })
   }
@@ -144,16 +198,17 @@ export function canMoveNow(args: DetachTerminalPaneToTabArgs, leafId: string): b
   const targetGroupExists =
     store.groupsByWorktree[args.worktreeId]?.some((group) => group.id === args.targetGroupId) ??
     false
-  if (!manager || paneId === undefined || !targetGroupExists) {
+  const source = currentSourcePane(args, leafId)
+  if (!manager || paneId === undefined || !targetGroupExists || !source) {
     return false
   }
   return (
     paneMoveReadiness({
       paneCount: manager.getPanes().length,
-      livePtyId: args.livePtyId,
+      livePtyId: source.livePtyId,
       persistedPtyId: store.terminalLayoutsByTabId[args.sourceTabId]?.ptyIdsByLeafId?.[leafId],
-      sourcePaneCwd: args.sourcePaneCwd,
-      connectPending: args.sourceConnectPending ?? false
+      sourcePaneCwd: source.sourcePaneCwd,
+      connectPending: source.connectPending
     }) === 'ready'
   )
 }

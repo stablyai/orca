@@ -155,7 +155,7 @@ describe('Escape during a pane drag', () => {
     expect(nextKeys).toEqual(['Escape'])
   })
 
-  it('lets an Escape owner that appears mid-drag take the key; the drag then ends on release', () => {
+  it('still cancels on Escape when another Escape owner appears mid-drag', () => {
     const handle = startDrag()
     const lateOwner = vi.fn((event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -169,10 +169,10 @@ describe('Escape during a pane drag', () => {
       removeAppKeyListener('keydown', lateOwner)
     }
 
-    expect(lateOwner).toHaveBeenCalledTimes(1)
-    expect(root.querySelector('.is-drag-source')).not.toBeNull()
+    expect(lateOwner).not.toHaveBeenCalled()
+    expect(root.querySelector('.is-drag-source')).toBeNull()
     handle.dispatchEvent(pointer('pointerup', { clientX: 40, clientY: 20 }))
-    expect(onExternalPaneDrop).toHaveBeenCalledTimes(1)
+    expect(onExternalPaneDrop).not.toHaveBeenCalled()
     expect(terminalKeys).toEqual([])
   })
 

@@ -2,7 +2,7 @@
 
 type AppKeyEventType = 'keydown' | 'keyup'
 type AppKeyListener = (event: KeyboardEvent) => void
-type Registration = { listener: AppKeyListener; active: boolean }
+type Registration = { listener: AppKeyListener; active: boolean; gesture?: boolean }
 
 const registrations: Record<AppKeyEventType, Registration[]> = { keydown: [], keyup: [] }
 let installedOn: Window | null = null
@@ -57,19 +57,26 @@ export function replayAppKeyDown(event: KeyboardEvent): void {
   dispatch('keydown', event)
 }
 
-/** `first` runs the owner ahead of every other one, for a key that must win wherever focus is. */
+/**
+ * `first` runs the owner ahead of every other one, for a key that must win wherever focus is.
+ * `gesture` is for a pointer gesture in progress (a pane drag): it stays ahead even of `first`
+ * owners registered after it, since the gesture owns the keyboard until the pointer is released.
+ */
 export function addAppKeyListener(
   type: AppKeyEventType,
   listener: AppKeyListener,
-  options: { first?: boolean } = {}
+  options: { first?: boolean; gesture?: boolean } = {}
 ): void {
   installAppKeyboardRouter(installedOn ?? window)
   const list = registrations[type]
   if (list.some((registration) => registration.active && registration.listener === listener)) {
     return
   }
-  if (options.first) {
-    list.unshift({ listener, active: true })
+  if (options.gesture) {
+    list.unshift({ listener, active: true, gesture: true })
+  } else if (options.first) {
+    const afterGestures = list.findIndex((registration) => !registration.gesture)
+    list.splice(afterGestures === -1 ? list.length : afterGestures, 0, { listener, active: true })
   } else {
     list.push({ listener, active: true })
   }

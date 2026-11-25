@@ -139,8 +139,8 @@ export function beginPaneDragFromPointerDown(
     const dy = ev.clientY - startY
     if (!dragging && Math.hypot(dx, dy) >= DRAG_THRESHOLD) {
       dragging = true
-      // First owner while dragging, ahead of dictation and pane/xterm listeners.
-      addAppKeyListener('keydown', onKeyDown, { first: true })
+      // Ahead of every other owner while dragging, even one that registers mid-drag.
+      addAppKeyListener('keydown', onKeyDown, { gesture: true })
       state.dragSourcePaneId = paneId
       callbacks.getRoot().classList.add('is-pane-dragging')
       document.body.classList.add('is-pane-drag-grabbing')
