@@ -46,7 +46,10 @@ export function isMixedWorkerTabInLayout(state: AppState, tab: Tab): boolean {
 export type WorkerTabCloseKind = 'none' | 'pure' | 'mixed'
 
 /** Read at action time from this window's current layout; a stamped terminal with no layout stays open. */
-export function workerTabCloseKind(state: AppState, tab: Tab): WorkerTabCloseKind {
+export function workerTabCloseKind(
+  state: Pick<AppState, 'terminalLayoutsByTabId'>,
+  tab: Tab
+): WorkerTabCloseKind {
   const stamp = tab.workerTab
   if (!stamp) {
     return 'none'

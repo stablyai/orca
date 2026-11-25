@@ -35,6 +35,9 @@ export function useTerminalBulkCloseActions(
       const tabs = state.unifiedTabsByWorktree[activeWorktreeId] ?? []
       const byId = new Map(tabs.map((tab) => [tab.id, tab]))
       const byEntity = new Map(tabs.map((tab) => [tab.entityId, tab]))
+      const legacyTabIds = new Set(
+        (state.tabsByWorktree[activeWorktreeId] ?? []).map((tab) => tab.id)
+      )
       const selectedEditors = [
         ...new Set(
           tabIds.flatMap((id) => {
@@ -95,7 +98,7 @@ export function useTerminalBulkCloseActions(
           state.closeUnifiedTab(unifiedTab.id)
           continue
         }
-        if ((state.tabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)) {
+        if (legacyTabIds.has(id)) {
           closeTab(id)
         } else if (
           (state.browserTabsByWorktree[activeWorktreeId] ?? []).some((tab) => tab.id === id)

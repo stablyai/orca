@@ -1,10 +1,11 @@
 import { workerTabStripOrder } from '../../../../../shared/workspace-layout/tab-groups/worker-tab-strip-order'
 import { selectWorkerTabPeekId } from '@/components/tab-bar/worker-tab-presentation'
+import { hideWorkerTabInStore } from '@/components/tab-bar/worker-tab-view-actions'
 import {
-  hideWorkerTabInStore,
-  workerTabCloseKind
-} from '@/components/tab-bar/worker-tab-view-actions'
-import { admitBulkWorkerClose } from '@/components/tab-bar/worker-tab-close-target'
+  admitBulkWorkerClose,
+  workerCloseKindOf,
+  workerCloseTargetForTab
+} from '@/components/tab-bar/worker-tab-close-target'
 import { selectFoldedWorkerTabIds } from '@/components/tab-bar/worker-tab-folding'
 import {
   afterPendingTabs,
@@ -77,7 +78,7 @@ export function createTabsBulkCloseActions(
         if (!current) {
           continue
         }
-        const kind = workerTabCloseKind(live, current)
+        const kind = workerCloseKindOf(live, workerCloseTargetForTab(live, current, tab.worktreeId))
         if (kind === 'mixed') {
           continue
         }

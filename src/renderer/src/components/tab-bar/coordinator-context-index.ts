@@ -10,7 +10,17 @@ import type {
 type PaneContext = {
   context: AgentStatusOrchestrationContext
   tabId: string | undefined
+  leafId: string | undefined
   order: number
+}
+
+function paneContext(
+  key: string,
+  context: AgentStatusOrchestrationContext,
+  order: number
+): PaneContext {
+  const address = parsePaneKey(key)
+  return { context, tabId: address?.tabId, leafId: address?.leafId, order }
 }
 
 export class CoordinatorContextIndex<T> {
@@ -77,7 +87,7 @@ export class CoordinatorContextIndex<T> {
             }
           }
         } else {
-          const next = { context, tabId: parsePaneKey(key)?.tabId, order }
+          const next = paneContext(key, context, order)
           this.panes.set(key, next)
           if (next.tabId) {
             let entries = this.byTab.get(next.tabId)
@@ -143,7 +153,7 @@ export class CoordinatorContextIndex<T> {
       }
       const order = count++
       if (!previous) {
-        const pane = { context, tabId: parsePaneKey(key)?.tabId, order }
+        const pane = paneContext(key, context, order)
         this.panes.set(key, pane)
         if (pane.tabId) {
           let entries = this.byTab.get(pane.tabId)
@@ -196,6 +206,7 @@ export class CoordinatorContextIndex<T> {
           pane.context.coordinatorIdentity &&
           pane.tabId &&
           identities.byAlias(pane.tabId) === entry &&
+          (!entry.root || (pane.leafId !== undefined && entry.leaves.includes(pane.leafId))) &&
           (!first || pane.order < first.order)
         ) {
           first = pane
