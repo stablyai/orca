@@ -74,7 +74,6 @@ export class RelayedProviderOutput {
   /** The floor the last ack kept from (the daemon keeps lines from it on for a later attach). */
   private keptFrom: number | null = null
   /** A forced ack released lines through here; a floor at or below it was already given up. */
-  private cutKeys: string[] | null = null
   private releasedThrough = 0
   /**
    * The daemon's ask covers through here. A first answer can fall short (lines still on their way),
@@ -358,22 +357,20 @@ export class RelayedProviderOutput {
         // Giving up an open kept span: the next attach must know its replay starts inside an item.
         this.pendingCut ||= this.options.ackFloor?.tookCut?.() === true
         const cut = this.pendingCut || (force && keepFrom === null && this.keptFrom !== null)
-        // Named when the cut is taken, so a retried ack names the same items.
-        this.cutKeys = cut
-          ? (this.cutKeys ??
-            boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined))
+        // Named on each try: a retry after a failed ack may carry a different cut.
+        const cutKeys = cut
+          ? boundedCutKeys(this.options.ackFloor, keepFrom === null ? target : undefined)
           : null
         const flags = {
           ...(cut ? { cut: true as const } : {}),
           ...(heldFrom !== null ? { held: true as const } : {}),
-          ...(this.cutKeys ? { cutKeys: this.cutKeys } : {})
+          ...(cutKeys ? { cutKeys } : {})
         }
         const reply = await (keepFrom === null && !cut
           ? this.options.ack(target)
           : this.options.ack(target, keepFrom ?? undefined, flags))
         this.ackedSeq = Math.max(this.ackedSeq, target)
         this.pendingCut = false
-        this.cutKeys = null
         this.keptFrom = keepFrom
         if (force && keepFrom === null) {
           this.releasedThrough = Math.max(this.releasedThrough, target)
