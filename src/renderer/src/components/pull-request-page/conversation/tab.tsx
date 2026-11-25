@@ -168,9 +168,12 @@ export function ConversationTab({
 
   const bodySlug = useMemo(() => parseOwnerRepoFromItemUrl(item.url), [item.url])
   const prRepo = useMemo(() => resolvePullRequestRepo(item, projectOrigin), [item, projectOrigin])
+  const itemRepo = projectOrigin
+    ? { owner: projectOrigin.owner, repo: projectOrigin.repo, host: projectOrigin.host }
+    : bodySlug
   const markdownGitHubRepo = useGitHubWorkItemMarkdownRepo(
     { repoId: repoId ?? item.repoId, repoHostId: sourceContext?.hostId ?? item.repoHostId },
-    projectOrigin ?? bodySlug
+    itemRepo
   )
   const canEditBody =
     item.type === 'pr'
@@ -289,7 +292,7 @@ export function ConversationTab({
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationDescription
           imageUploadAddress={() => {
-            const slug = item.type === 'pr' ? (prRepo ?? bodySlug) : markdownGitHubRepo
+            const slug = item.type === 'pr' ? (prRepo ?? bodySlug) : itemRepo
             return (item.type === 'pr' || projectOrigin) && slug
               ? {
                   runtime:

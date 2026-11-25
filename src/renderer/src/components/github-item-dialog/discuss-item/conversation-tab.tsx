@@ -295,7 +295,7 @@ export function ConversationTab({
       <div className="flex min-w-0 flex-col gap-4">
         <ConversationTabDescription
           imageUploadAddress={() => {
-            const slug = prRepo ?? markdownGitHubRepo
+            const slug = prRepo ?? bodySlug
             return (item.type === 'pr' || projectOrigin) && slug
               ? {
                   runtime:
