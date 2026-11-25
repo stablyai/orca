@@ -31,7 +31,7 @@ function RailShell({
   milestones?: SetupMilestones | null
   height?: number
 }): React.JSX.Element {
-  const help = useHelpMenuController(null)
+  const help = useHelpMenuController(null, 'grouped')
   return (
     <div className="flex" style={{ height }}>
       <div className="flex w-10 shrink-0 flex-col items-center justify-end border-r border-worktree-sidebar-border bg-worktree-sidebar pb-1">
