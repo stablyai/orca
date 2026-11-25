@@ -23303,9 +23303,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Manter aberto",
-        "bannerRunning": "Worker de orquestração · Fecha 2 minutos após terminar",
-        "bannerFinished": "Worker de orquestração concluído · Fecha em {{countdown}}",
-        "bannerFinishedStatus": "Worker de orquestração concluído · Fecha em breve",
+        "bannerRunning": "Worker · fecha {{minutes}} min após terminar",
+        "bannerFinished": "Worker concluído · fecha em {{countdown}}",
+        "bannerFinishedStatus": "Worker concluído · fecha em breve",
         "boundRunning": "Fecha com {{worker}}",
         "boundFinished": "{{worker}} concluído · Fecha em {{countdown}}",
         "boundFallbackName": "seu worker"

@@ -24170,9 +24170,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Keep open",
-        "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
-        "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
-        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
+        "bannerRunning": "Worker · closes {{minutes}} min after finishing",
+        "bannerFinished": "Worker finished · closes in {{countdown}}",
+        "bannerFinishedStatus": "Worker finished · closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"

@@ -24074,9 +24074,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Açık tut",
-        "bannerRunning": "Orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
-        "bannerFinished": "Orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
-        "bannerFinishedStatus": "Orkestrasyon çalışanı tamamlandı · Yakında kapanır",
+        "bannerRunning": "Çalışan · tamamlandıktan {{minutes}} dk sonra kapanır",
+        "bannerFinished": "Çalışan tamamlandı · {{countdown}} içinde kapanır",
+        "bannerFinishedStatus": "Çalışan tamamlandı · yakında kapanır",
         "boundRunning": "{{worker}} ile birlikte kapanır",
         "boundFinished": "{{worker}} tamamlandı · {{countdown}} içinde kapanır",
         "boundFallbackName": "ilgili çalışan"

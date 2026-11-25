@@ -21682,9 +21682,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Offen halten",
-        "bannerRunning": "Orchestrierungs-Worker · Wird 2 Minuten nach Abschluss geschlossen",
-        "bannerFinished": "Orchestrierungs-Worker abgeschlossen · Schließt in {{countdown}}",
-        "bannerFinishedStatus": "Orchestrierungs-Worker abgeschlossen · Wird bald geschlossen",
+        "bannerRunning": "Worker · schließt {{minutes}} Min. nach Abschluss",
+        "bannerFinished": "Worker abgeschlossen · schließt in {{countdown}}",
+        "bannerFinishedStatus": "Worker abgeschlossen · schließt bald",
         "boundRunning": "Schließt mit {{worker}}",
         "boundFinished": "{{worker}} abgeschlossen · Schließt in {{countdown}}",
         "boundFallbackName": "Worker"

@@ -24,6 +24,28 @@ function layoutPaneTopBanners(pane: HTMLElement, leaving?: HTMLElement): void {
   }
 }
 
+/** A pane without a title bar floats its controls over its top row, from a separate overlay layer. */
+function floatingPaneControls(pane: HTMLElement): HTMLElement | null {
+  const tabId =
+    pane.parentElement?.closest<HTMLElement>('[data-terminal-tab-id]')?.dataset.terminalTabId
+  const leafId = pane.dataset.leafId
+  if (!tabId || !leafId) {
+    return null
+  }
+  return document.querySelector<HTMLElement>(
+    `.pane-title-bar[data-chromeless][data-terminal-tab-id="${CSS.escape(tabId)}"][data-leaf-id="${CSS.escape(leafId)}"] .pane-title-actions`
+  )
+}
+
+/** How far those controls reach in from the pane's right edge, so a quiet banner's action can clear them. */
+function measureControlsInset(banner: HTMLElement, controls: HTMLElement | null): void {
+  const bar = controls?.closest('.pane-title-bar')
+  // Why from the bar's own edge: the overlay repositions after the pane resizes, so page coordinates can be a frame stale.
+  const inset =
+    controls && bar ? bar.getBoundingClientRect().right - controls.getBoundingClientRect().left : 0
+  banner.style.setProperty('--orca-pane-top-banner-controls-inset', `${Math.ceil(inset)}px`)
+}
+
 /** Reserves the banner's height at the top of its pane so the terminal refits below it. */
 function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
   const ref = useRef<HTMLDivElement>(null)
@@ -34,11 +56,24 @@ function useReservePaneTopSpace(): React.RefObject<HTMLDivElement | null> {
       return
     }
     // Why the whole pane: two banners can share it, so each one's height moves the ones below.
-    const reserve = (): void => layoutPaneTopBanners(pane)
-    reserve()
+    const reserve = (): void => {
+      layoutPaneTopBanners(pane)
+      measureControlsInset(banner, floatingPaneControls(pane))
+    }
     const observer = new ResizeObserver(reserve)
     observer.observe(banner)
+    reserve()
+    // Why a frame later: the overlay mounts and positions its controls after this commit. Why observe
+    // them: Hand off and Continue in chat appear once the agent is detected.
+    const frame = requestAnimationFrame(() => {
+      const controls = floatingPaneControls(pane)
+      if (controls) {
+        observer.observe(controls)
+      }
+      reserve()
+    })
     return () => {
+      cancelAnimationFrame(frame)
       observer.disconnect()
       // Why exclude this banner: React runs this before it takes the node out of the pane.
       layoutPaneTopBanners(pane, banner)
@@ -60,9 +95,13 @@ export function PaneBannerLearnMore({ onClick }: { onClick: () => void }): React
   )
 }
 
-type PaneTopBannerTone = 'warning' | 'neutral' | 'accent'
+/** `quiet` is one muted line on the pane's own background, for state the user may ignore. */
+type PaneTopBannerTone = 'warning' | 'neutral' | 'accent' | 'quiet'
 
-const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: string }> = {
+const TONE_CLASSES: Record<
+  Exclude<PaneTopBannerTone, 'quiet'>,
+  { stripClass: string; iconClass: string }
+> = {
   warning: {
     stripClass:
       'border-status-warning-border bg-background bg-[linear-gradient(var(--status-warning-background),var(--status-warning-background))]',
@@ -90,6 +129,8 @@ export type PaneTopBannerProps = {
   /** A short label set before the title, e.g. what kind of pane this is. */
   badge?: string
   primaryAction: React.ReactNode
+  /** Quiet tone only: the share of time left, drawn as a line along the bottom edge. */
+  progress?: number
   onDismiss?: () => void
   onDontShowAgain?: () => void
   onShown?: () => void
@@ -132,6 +173,7 @@ export function PaneTopBanner({
   icon,
   badge,
   primaryAction,
+  progress,
   onDismiss,
   onDontShowAgain,
   onShown,
@@ -145,6 +187,31 @@ export function PaneTopBanner({
   useEffect(() => {
     onShown?.()
   }, [onShown])
+  if (tone === 'quiet') {
+    return (
+      <div
+        ref={ref}
+        role={announcement === undefined ? 'status' : undefined}
+        className={cn(
+          // Why these insets: the text starts at the terminal's first column, and the action ends where the terminal's last
+          // column does or, under floating pane controls, a gap before them.
+          'relative flex h-8 items-center gap-2 border-b border-border bg-background pr-[max(var(--pane-padding-x,4px),calc(var(--orca-pane-top-banner-controls-inset,0px)+0.5rem))] pl-(--pane-padding-x,4px) text-xs',
+          className
+        )}
+      >
+        {announcement === undefined ? null : <BannerLiveRegion announcement={announcement} />}
+        <p className="min-w-0 flex-1 truncate text-muted-foreground">{title}</p>
+        {primaryAction}
+        {progress === undefined ? null : (
+          <span
+            aria-hidden="true"
+            className="absolute -bottom-px left-0 h-0.5 w-full origin-left bg-theme-accent opacity-70 transition-transform duration-1000 ease-linear motion-reduce:transition-none"
+            style={{ transform: `scaleX(${Math.min(1, Math.max(0, progress))})` }}
+          />
+        )}
+      </div>
+    )
+  }
   const Icon = icon ?? (tone === 'warning' ? TriangleAlert : null)
   const toneClasses = TONE_CLASSES[tone]
 
