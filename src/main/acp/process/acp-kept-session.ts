@@ -97,6 +97,11 @@ export class AcpKeptSession {
     }
   }
 
+  /** The agent ended while no app was attached: only its output is left, so nothing is written to it. */
+  get agentExited(): boolean {
+    return (this.child.exited ?? this.child.attachResult?.exit ?? null) !== null
+  }
+
   /** The earlier app's prompt is still owed, or answered in the held replay. */
   get owesPrompt(): boolean {
     return this.kept.earlierPromptId !== null

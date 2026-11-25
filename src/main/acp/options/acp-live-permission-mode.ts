@@ -34,6 +34,20 @@ export function acpRunningPermission(
   return isAgentChatPermissionMode(reported) ? reported : null
 }
 
+/** A kept agent switches to `mode` live, as written at reattach or before a send, never by a restart. */
+export function acpKeptModeTakesLive(
+  session: LivePermissionSession,
+  mode: AgentChatPermissionChoice
+): boolean {
+  const { kept } = session.connection
+  if (!kept || kept.agentExited || mode === 'own' || unansweredModes.has(session)) {
+    return false
+  }
+  return session.spec.permissionModeConfig
+    ? session.permissionModes?.[mode] !== undefined
+    : !session.launchArgsGrantFullAccess
+}
+
 /** Settles once every mode write already asked of this chat has been answered or given up. */
 export function acpPermissionWritesSettled(session: LivePermissionSession): Promise<void> {
   return modeWrites.get(session) ?? Promise.resolve()
