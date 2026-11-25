@@ -11,10 +11,8 @@ import {
 } from './terminal-webgl-atlas-integrity-test-fixture'
 import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
 import { fakeKit } from './terminal-webgl-atlas-test-canvas'
-import {
-  requestAtlasChangeIntegrityCheck,
-  verifyPaneWebglAtlasIntegrity
-} from './terminal-webgl-atlas-integrity'
+import { requestAtlasChangeIntegrityCheck } from './terminal-webgl-atlas-change-hints'
+import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
 import { admittedRect, checkAtlasIntegrity, type InkRead } from './terminal-webgl-atlas-sampling'
 
 const fixture = setupAtlasIntegrityFixture()
@@ -303,6 +301,20 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(events[0]).toMatchObject({ trigger: 'atlas-change', outcome: 'reset', pageSize: 1024 })
   })
 
+  it('handles an admitted hint through a visible sibling when the publisher is covered', () => {
+    const shared = atlas()
+    const covered = fakePane(shared, { covered: true })
+    const visible = fakePane(shared)
+    register(true, [covered, visible])
+
+    requestAtlasChangeIntegrityCheck(covered, covered.webglAddon, deps(blank))
+    runTimers()
+
+    expect(covered.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(visible.addon.clearTextureAtlas).toHaveBeenCalled()
+    expect(events[0]).toMatchObject({ trigger: 'atlas-change', outcome: 'reset' })
+  })
+
   it.each(['before', 'after'])(
     'retires a hint when its publisher is replaced %s queueing',
     (when) => {
@@ -413,7 +425,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(fixture.state.readTimes.at(-1)).toBe(start + 100)
     expect(second.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(fixture.state.pending.size).toBe(0)
-    expect(fixture.state.timerArmed).toBe(false)
+    expect(fixture.state.serviceTimer).toBeNull()
     expect(fixture.timers).toHaveLength(0)
   })
 
@@ -456,7 +468,7 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(fixture.state.readTimes).toEqual([start, start + 50, start + 100])
     expect(pending.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
     expect(fixture.state.pending.size).toBe(0)
-    expect(fixture.state.timerArmed).toBe(false)
+    expect(fixture.state.serviceTimer).toBeNull()
     expect(fixture.timers).toHaveLength(0)
   })
 

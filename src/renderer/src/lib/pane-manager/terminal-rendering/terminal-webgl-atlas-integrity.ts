@@ -29,7 +29,7 @@ export type AtlasCheckTrigger = 'reveal' | 'attach' | 'atlas-change' | 'deferred
 export type AtlasIntegrityDeps = {
   now: () => number
   read: GlyphInkReader
-  setTimer: (callback: () => void, ms: number) => unknown
+  setTimer: (callback: () => void, ms: number) => () => void
   isWindowPresented: () => boolean
   state: AtlasIntegrityState
 }
@@ -44,7 +44,7 @@ type AtlasState = {
 export type AtlasIntegrityState = {
   atlases: WeakMap<GlyphAtlasLike, AtlasState>
   pending: Map<WeakRef<GlyphAtlasLike>, number>
-  timerArmed: boolean
+  serviceTimer: { at: number; cancel: () => void } | null
   readTimes: number[]
   lastAttemptAt: number
   resets: number
@@ -54,7 +54,7 @@ export function createAtlasIntegrityState(): AtlasIntegrityState {
   return {
     atlases: new WeakMap(),
     pending: new Map(),
-    timerArmed: false,
+    serviceTimer: null,
     readTimes: [],
     lastAttemptAt: Number.NEGATIVE_INFINITY,
     resets: 0
@@ -64,7 +64,10 @@ export function createAtlasIntegrityState(): AtlasIntegrityState {
 const defaultDeps: AtlasIntegrityDeps = {
   now: () => performance.now(),
   read: createGlyphInkReader(),
-  setTimer: (callback, ms) => setTimeout(callback, ms),
+  setTimer: (callback, ms) => {
+    const timer = setTimeout(callback, ms)
+    return () => clearTimeout(timer)
+  },
   isWindowPresented,
   state: createAtlasIntegrityState()
 }
@@ -215,9 +218,6 @@ function maintainPending(deps: AtlasIntegrityDeps): void {
 
 /** Arms one timer for the next time both the renderer-wide gates and some pending atlas's cooldown allow work. */
 function armService(deps: AtlasIntegrityDeps, now: number): void {
-  if (deps.state.timerArmed) {
-    return
-  }
   let earliestCooldown = Number.POSITIVE_INFINITY
   for (const ref of deps.state.pending.keys()) {
     const atlas = ref.deref()
@@ -229,9 +229,15 @@ function armService(deps: AtlasIntegrityDeps, now: number): void {
   if (earliestCooldown === Number.POSITIVE_INFINITY) {
     return
   }
-  deps.state.timerArmed = true
   const at = Math.max(globalReadyAt(deps, now), earliestCooldown)
-  deps.setTimer(() => service(deps), Math.max(0, at - now))
+  const current = deps.state.serviceTimer
+  if (current && current.at <= at) {
+    return
+  }
+  current?.cancel()
+  deps.state.serviceTimer = null
+  const cancel = deps.setTimer(() => service(deps), Math.max(0, at - now))
+  deps.state.serviceTimer = { at, cancel }
 }
 
 /** Deduplicated by atlas; when full the oldest entry is dropped (best effort). */
@@ -250,7 +256,7 @@ function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): 
 
 /** Per firing: maintenance, the gate, <= 8 selection checks, <= 1 discovery walk, <= 1 attempt, then one re-arm. */
 function service(deps: AtlasIntegrityDeps): void {
-  deps.state.timerArmed = false
+  deps.state.serviceTimer = null
   try {
     maintainPending(deps)
     const now = deps.now()
@@ -314,29 +320,16 @@ export function verifyPaneWebglAtlasIntegrity(
     trace({ stage: 'admit', trigger })
     // An admitted unit is charged even if the requester turns out ineligible.
     deps.state.lastAttemptAt = now
-    const eligible = isEligibleOwner(pane, atlas)
-    trace({ stage: 'owner', trigger, pane: eligible ? pane.id : null })
-    if (eligible) {
-      attempt(pane, atlas, trigger, deps, now)
+    const owner = isEligibleOwner(pane, atlas)
+      ? pane
+      : trigger === 'atlas-change'
+        ? findEligibleOwner(atlas)
+        : undefined
+    trace({ stage: 'owner', trigger, pane: owner?.id ?? null })
+    if (owner) {
+      attempt(owner, atlas, trigger, deps, now)
     }
   } catch {
     // Diagnostics-only path: a failed check must never fail its caller.
-  }
-}
-
-/** xterm reports an atlas change before assigning it; act next task only if the publishing addon is current. */
-export function requestAtlasChangeIntegrityCheck(
-  pane: ManagedPaneInternal,
-  origin: NonNullable<ManagedPaneInternal['webglAddon']>,
-  deps: AtlasIntegrityDeps = defaultDeps
-): void {
-  try {
-    deps.setTimer(() => {
-      if (pane.webglAddon === origin) {
-        verifyPaneWebglAtlasIntegrity(pane, 'atlas-change', deps)
-      }
-    }, 0)
-  } catch {
-    // Same containment as the direct check.
   }
 }

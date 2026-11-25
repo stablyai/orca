@@ -33,10 +33,8 @@ import {
   trackTerminalWebglAtlasPane,
   untrackTerminalWebglAtlasPane
 } from './terminal-webgl-atlas-memory-rebuild'
-import {
-  requestAtlasChangeIntegrityCheck,
-  verifyPaneWebglAtlasIntegrity
-} from './terminal-webgl-atlas-integrity'
+import { requestAtlasChangeIntegrityCheck } from './terminal-webgl-atlas-change-hints'
+import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
 
 export const ENABLE_WEBGL_RENDERER = true
 let suggestedRendererType: 'dom' | undefined

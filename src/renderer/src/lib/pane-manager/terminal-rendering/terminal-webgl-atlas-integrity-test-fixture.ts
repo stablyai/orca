@@ -116,7 +116,16 @@ export function setupAtlasIntegrityFixture() {
       return {
         now: () => fixture.clock,
         read,
-        setTimer: (callback, ms) => fixture.timers.push({ callback, ms }),
+        setTimer: (callback, ms) => {
+          const timer = { callback, ms }
+          fixture.timers.push(timer)
+          return () => {
+            const index = fixture.timers.indexOf(timer)
+            if (index !== -1) {
+              fixture.timers.splice(index, 1)
+            }
+          }
+        },
         isWindowPresented: () => fixture.windowPresented,
         state: fixture.state
       }
@@ -149,7 +158,7 @@ export function setupAtlasIntegrityFixture() {
 
   function takeScheduledWake(delay: number): () => void {
     expect(fixture.timers).toEqual([{ callback: expect.any(Function), ms: delay }])
-    expect(fixture.state.timerArmed).toBe(true)
+    expect(fixture.state.serviceTimer).not.toBeNull()
     const [{ callback }] = fixture.timers.splice(0, 1)
     return callback
   }

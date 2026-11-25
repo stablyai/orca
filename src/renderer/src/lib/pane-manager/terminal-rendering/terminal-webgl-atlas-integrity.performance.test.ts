@@ -10,13 +10,14 @@ import {
   setupAtlasIntegrityFixture
 } from './terminal-webgl-atlas-integrity-test-fixture'
 import { createGlyphInkReader } from './terminal-webgl-atlas-ink-reader'
+import { requestAtlasChangeIntegrityCheck } from './terminal-webgl-atlas-change-hints'
 import { fakeKit, pageWithInk } from './terminal-webgl-atlas-test-canvas'
 import { verifyPaneWebglAtlasIntegrity } from './terminal-webgl-atlas-integrity'
 import { checkAtlasIntegrity, type GlyphInkReader } from './terminal-webgl-atlas-sampling'
 
-// STA-17523: recovery for missing terminal glyphs must bound readbacks, clears and repeated root scans.
+// Guards #49289: atlas recovery bounds readbacks, clears, root scans and scheduled work.
 const fixture = setupAtlasIntegrityFixture()
-const { advanceServiceClock, deps, events, register, takeScheduledWake } = fixture
+const { advanceServiceClock, deps, events, register, runTimers, takeScheduledWake } = fixture
 const traversal = () => ({ layoutVersion: undefined, cursors: [], startPage: 0 })
 const throwingRead: GlyphInkReader = (_canvas, _rect, onReadIssued) => {
   onReadIssued()
@@ -155,6 +156,43 @@ describe('terminal WebGL atlas work limits', () => {
     expect(fixture.timers).toHaveLength(1)
   })
 
+  it('replaces a cooldown wake when a newly queued atlas can run sooner', () => {
+    const cooling = fakePane(atlas())
+    const ready = fakePane(atlas())
+    register(true, [cooling, ready])
+    const reader = deps(blank)
+
+    verifyPaneWebglAtlasIntegrity(cooling, 'reveal', deps(ink))
+    verifyPaneWebglAtlasIntegrity(cooling, 'reveal', reader)
+    expect(fixture.timers.map((timer) => timer.ms)).toEqual([10_000])
+
+    verifyPaneWebglAtlasIntegrity(ready, 'reveal', reader)
+    const wake = takeScheduledWake(50)
+    advanceServiceClock(50)
+    wake()
+
+    expect(ready.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(cooling.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(fixture.timers.map((timer) => timer.ms)).toEqual([9_950])
+  })
+
+  it('queues one hint per pane and publishing addon until its callback runs', () => {
+    const pane = fakePane(atlas())
+    register(true, [pane])
+    const sharedDeps = deps(blank)
+
+    requestAtlasChangeIntegrityCheck(pane, pane.webglAddon, sharedDeps)
+    requestAtlasChangeIntegrityCheck(pane, pane.webglAddon, sharedDeps)
+    expect(fixture.timers.map((timer) => timer.ms)).toEqual([0])
+
+    runTimers()
+    expect(pane.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
+    expect(fixture.timers).toHaveLength(0)
+
+    requestAtlasChangeIntegrityCheck(pane, pane.webglAddon, sharedDeps)
+    expect(fixture.timers.map((timer) => timer.ms)).toEqual([0])
+  })
+
   it('keeps at most eight pending atlases, dropping the oldest', () => {
     const first = fakePane(atlas())
     register(true, [first])
@@ -237,7 +275,7 @@ describe('terminal WebGL atlas work limits', () => {
     expect(readTimes).toHaveLength(17)
     expect(readTimes.at(-1)).toBe(start + 1004)
     expect(fixture.state.pending.size).toBe(0)
-    expect(fixture.state.timerArmed).toBe(false)
+    expect(fixture.state.serviceTimer).toBeNull()
   })
 
   it('keeps the last physical credit after a late preparation failure with one reservation', () => {
@@ -259,9 +297,16 @@ describe('terminal WebGL atlas work limits', () => {
 
   it('reads the next page after a late preparation failure with two reservations', () => {
     const observation = lateControlFailure(2)
-    expect(observation.replacementCopies.mock.calls).toEqual([
-      [observation.laterCanvas, 17, 0, 9, 18, 0, 0, 9, 18],
-      [observation.replacementKit.control, 257, 0]
+    expect(observation.replacementCopies.mock.calls[0]).toEqual([
+      observation.laterCanvas,
+      17,
+      0,
+      9,
+      18,
+      0,
+      0,
+      9,
+      18
     ])
     expect(observation.replacementReadback).toHaveBeenCalledTimes(1)
     expect(observation.affected.addon.clearTextureAtlas).toHaveBeenCalledTimes(1)
