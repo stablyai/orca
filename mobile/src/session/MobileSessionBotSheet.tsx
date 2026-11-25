@@ -2,7 +2,7 @@ import { appendReturnedDraftText } from '../../../src/shared/native-chat/input/d
 import { openBotChatTab } from './bot-chat-tab-open'
 import { setMobileNativeChatDraftText } from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { mobileNativeChatScopeKey } from './native-chat/conversation/mobile-native-chat-scope-key'
-import { useContext, useEffect, useEffectEvent, useMemo, useRef } from 'react'
+import { useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useSessionRouteRequest } from './use-session-route-request'
 import { loadMobileNativeChatDrafts } from './native-chat/composer/drafts/mobile-native-chat-draft-persistence'
 import { MobileBotPanel } from '../bots/MobileBotPanel'
@@ -32,9 +32,19 @@ import { useOpenMobileAutomations } from '../automations/use-open-mobile-automat
 import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
 import {
   PhoneConnectTripContext,
-  usePhoneConnectTrips,
-  type ConnectSignInPage
+  usePhoneConnectTrips
 } from '../bots/connectors/use-phone-connect-trip'
+import type { ConnectSignInPage } from '../bots/connectors/connect-host-trip'
+import { MobileConnectSignInSheet } from '../bots/connectors/MobileConnectSignInSheet'
+import type { MobileBrowserTab, MobileSessionTab } from './tabs/mobile-session-tabs'
+
+const browserTabOf = (tabs: readonly MobileSessionTab[], browserPageId: string | null) =>
+  browserPageId
+    ? tabs.find(
+        (tab): tab is MobileBrowserTab =>
+          tab.type === 'browser' && tab.browserPageId === browserPageId
+      )
+    : undefined
 
 export function MobileSessionBotSheet({ controller }: { controller: MobileSessionController }) {
   const {
@@ -139,27 +149,31 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
   }, [homeDraft, homeTabId, hostId, worktreeId])
   const openInOrca = useOpenUrlInOrca(controller)
   const { sessionTabsRef, fetchSessionTabs, openBotPanel } = controller
-  // A Connect's sign-in shows as the trip's own tab, or a new one when the computer closed it.
+  // A Connect's sign-in shows in a sheet of its own, or as a new tab when the computer closed the trip's.
+  const [signInPageId, setSignInPageId] = useState<string | null>(null)
   const showSignIn = async (page: ConnectSignInPage) => {
     closePanel()
-    const find = () =>
-      sessionTabsRef.current.find(
-        (tab) => tab.type === 'browser' && tab.browserPageId === page.browserPageId
-      )
-    if (page.browserPageId && !find()) {
+    if (page.browserPageId && !browserTabOf(sessionTabsRef.current, page.browserPageId)) {
       await fetchSessionTabs()
     }
-    const tab = page.browserPageId ? find() : undefined
-    if (tab) {
-      switchSessionTab(tab)
+    if (browserTabOf(sessionTabsRef.current, page.browserPageId)) {
+      setSignInPageId(page.browserPageId)
     } else {
       openInOrca?.(page.url)
     }
   }
   const connectTrips = usePhoneConnectTrips(client, worktreeId, {
     show: openInOrca ? (page) => void showSignIn(page) : null,
-    reopen: (back) => openBotPanel({ settings: back })
+    reopen: (back) => {
+      setSignInPageId(null)
+      openBotPanel({ settings: back })
+    }
   })
+  const trip = connectTrips.current
+  // Only the waiting trip's own page: one that ended or was replaced meanwhile never shows.
+  const signInTrip =
+    trip?.trip.status === 'waiting' && trip.trip.page?.browserPageId === signInPageId ? trip : null
+  const signInTab = (signInTrip && browserTabOf(sessionTabs, signInPageId)) || null
   if (!routeBot || !itemsOnPhone || !hostId) {
     return null
   }
@@ -272,6 +286,17 @@ export function MobileSessionBotSheet({ controller }: { controller: MobileSessio
               home={home}
               onAskInChat={startSuggestion}
               onViewRuns={viewRuns}
+              signIn={
+                <MobileConnectSignInSheet
+                  tab={signInTab}
+                  source={signInTrip?.source ?? 'linear'}
+                  client={client}
+                  worktreeId={worktreeId}
+                  screencastSupported={controller.browserScreencastSupported}
+                  hostSupport={controller.browserHostSupport}
+                  onCancel={connectTrips.cancelSignIn}
+                />
+              }
             />
           </PhoneConnectTripContext.Provider>
         </BotItemCommentMicContext.Provider>

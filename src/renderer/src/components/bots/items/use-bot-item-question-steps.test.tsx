@@ -13,14 +13,11 @@ import type {
   BotItemPendingComment,
   BotItemPendingIntent
 } from '../../../../../shared/bots/bot-item-pending-comments'
+import { botItemRefusedReplyText } from '../../../../../shared/bots/bot-item-refused-reply'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
 import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
 import { botItemCommentDraftScope } from './bot-item-comment-draft'
-import {
-  botItemClearDeliveredAnswers,
-  botItemHeldAnswersScope,
-  botItemRefusedAnswerWords
-} from './bot-item-held-answers'
+import { botItemClearDeliveredAnswers, botItemHeldAnswersScope } from './bot-item-held-answers'
 import { useBotItemQuestionSteps } from './use-bot-item-question-steps'
 
 afterEach(cleanup)
@@ -359,26 +356,26 @@ it('gives back the words of a refused send that its held picks do not keep', () 
   updateNativeChatComposerDraft(scope, { text: `${HOSTS} → Yes` }, 'immediate')
   // Picks alone: they stay held on the card, and nothing goes back.
   expect(
-    botItemRefusedAnswerWords(
-      scope,
+    botItemRefusedReplyText(
       { askId: 'e2', shape: two, answers: ['Yes', null] },
-      `${HOSTS} → Yes`
+      `${HOSTS} → Yes`,
+      readNativeChatDraftCache(scope)
     )
   ).toBe('')
   // A line's words posted with files: they were never held.
   expect(
-    botItemRefusedAnswerWords(
-      scope,
+    botItemRefusedReplyText(
       { askId: 'e2', shape: two, answers: ['Yes', 'see the shot'] },
-      `${HOSTS} → Yes\n${GO} → see the shot`
+      `${HOSTS} → Yes\n${GO} → see the shot`,
+      readNativeChatDraftCache(scope)
     )
   ).toBe('see the shot')
   // Images alone give back no words.
   expect(
-    botItemRefusedAnswerWords(
-      scope,
+    botItemRefusedReplyText(
       { askId: 'e2', shape: two, answers: ['Yes', '[Image #1]'] },
-      `${HOSTS} → Yes\n${GO} → [Image #1]`
+      `${HOSTS} → Yes\n${GO} → [Image #1]`,
+      readNativeChatDraftCache(scope)
     )
   ).toBe('')
 })
@@ -393,5 +390,7 @@ it('restores the exact freeform draft after a refused send with a held answer', 
   expect(post?.text).toBe(`${HOSTS} → Yes\n> ${GO} → later\n> Keep this quote`)
   const scope = botItemHeldAnswersScope(bot, uid, 'e2')
   expect(readNativeChatDraftCache(scope)).toBe(`${HOSTS} → Yes`)
-  expect(botItemRefusedAnswerWords(scope, post!.intent!, post!.text)).toBe(text)
+  expect(botItemRefusedReplyText(post!.intent!, post!.text, readNativeChatDraftCache(scope))).toBe(
+    text
+  )
 })

@@ -4113,7 +4113,6 @@
       "empty": "ワークスペースがありません",
       "loadFailed": "このホストからワークスペースを読み込めませんでした。",
       "noFilterMatches": "フィルターに一致するワークスペースがありません",
-      "noMatches": "一致するワークスペースがありません",
       "reopen": "開き直して更新",
       "reopenDetail": "このページは、このホストのワークスペース一覧の形式にまだ対応していません。"
     },
@@ -4542,10 +4541,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "左にスクロール · 非表示 {{amount}} 件",
-      "scrollRight": "右にスクロール · 非表示 {{amount}} 件"
-    },
+    "section": {},
     "link": {
       "pairTitle": "コンピュータをペアリング",
       "pairRequired": "このリンクを開くには、このスマートフォンをコンピュータとペアリングしてから、もう一度リンクを開いてください。",
@@ -4623,7 +4619,6 @@
     "lookAround": {
       "looking": "見回り中…",
       "save": "保存",
-      "detail": "接続済みのアプリとプロジェクトを読んで次のステップを提案します。読み取り専用です。見回りのたびに Agent のプランを使います。ホストで Orca が起動している必要があります。",
       "lookNow": "今すぐ見回り",
       "notYet": "まだ",
       "backToLookAround": "見回りに戻る"
@@ -4638,7 +4633,6 @@
     "groups": {
       "group": "グループ",
       "peerTold": "{{from}} が {{to}} に伝えました",
-      "startAConversationWithThisGroupMentionBots": "このグループで会話を始めましょう。@名前 または @everyone でボットをメンションできます。",
       "items": {
         "emptyTitle": "このグループの項目はまだありません",
         "needsYouCount_one": "{{count}} 件が対応待ち",
@@ -4677,8 +4671,6 @@
     "tidyUp": {
       "title": "メモリーのメンテナンス",
       "never": "まだ",
-      "footer": "変更するのはメモリーファイルだけです。短いチャットと同様に Agent のプランを使います。コンピュータで Orca が起動している必要があります。",
-      "undoNote": "元に戻すと、MEMORY.md がこの整理の前の状態に一括で戻ります。履歴全体の確認とメモリーの編集は、コンピュータの「設定 → メモリー」で行えます。",
       "backToTidyUp": "メモリーのメンテナンスに戻る"
     },
     "items": {
@@ -4699,8 +4691,7 @@
         "title": "アイテム",
         "placeOf": "{{total}} 件中 {{index}} 件目",
         "previous": "前の項目",
-        "next": "次の項目",
-        "subWhere": "項目 {{number}} · {{chat}}"
+        "next": "次の項目"
       },
       "write": {
         "offline": "{{host}} はオフラインです。"
@@ -4709,7 +4700,6 @@
       "readFailedClosedPage": "クローズ済みの項目をこれ以上読み込めませんでした。",
       "skillLimit": "メッセージは送信されませんでした。選択するスキルファイルを {{limit}} 個以内にして、もう一度お試しください。",
       "ask": {
-        "notSentYet": "まだ送信されていません",
         "replaced": "Agent が新たな質問をしました。確認してから返信してください。",
         "replacedByNewer": "新しい質問に置き換えられました",
         "skipped": "スキップ済み"
@@ -4748,7 +4738,6 @@
       },
       "rotate": {
         "open": "キーを更新…",
-        "title": "「{{automation}}」のキーを更新しますか？",
         "confirm": "キーを更新",
         "note": "URL に新規キーが付きます。すべての送信元をこのキーで更新してください。",
         "overlap": "古いキーを 24 時間有効のままにする",
@@ -4763,19 +4752,15 @@
         "add": "署名シークレットを追加…",
         "generatedTitle": "署名シークレットの準備ができました",
         "done": "完了",
-        "generatedNote": "{{sender}} の Webhook 設定に貼り付けてください。今後、呼び出しにはこの署名が必要です。",
         "copy": "シークレットをコピー",
         "copied": "シークレットをコピーしました",
         "changeTitle": "署名シークレットを変更",
         "addTitle": "署名シークレットを追加",
-        "note": "Orca はこのシークレットで署名された呼び出しのみを受け付けるため、URL が漏えいしただけでは「{{automation}}」を開始できません。",
         "sender": "送信元",
         "modeGenerate": "Orca が作成",
         "modePaste": "送信元のものを貼り付け",
         "generateNote": "このシークレットは Orca が作成します。次に {{sender}} にコピーします。",
         "paste": "{{sender}} のシークレット",
-        "pasteNote": "送信元が独自のシークレットを提供する場合に使います。",
-        "generate": "シークレットを生成",
         "save": "保存",
         "saved": "署名シークレットを保存しました",
         "changeOpen": "署名シークレットを変更…",
@@ -4809,7 +4794,6 @@
       "hookCount_one": "フック {{count}} 件",
       "hookCount_other": "フック {{count}} 件",
       "name": "Webhooks",
-      "hooks": "フック",
       "addInChat": "チャットで追加",
       "setUpDraft": "次のような Webhook を設定してください: ",
       "resumed": "Webhook を再開しました",
@@ -4875,8 +4859,7 @@
         "unverifiable": "検証できません",
         "unverifiableDetail": "{{bot}} のコンピュータに接続できません"
       },
-      "back": "Webhooks に戻る",
-      "howToCallShort": "どのツールやスクリプトからでも Webhook の URL に POST できます。各 Webhook は 1 つのオートメーションを開始します。"
+      "back": "Webhooks に戻る"
     },
     "errors": {
       "generic": "問題が発生しました。再試行してください。"
@@ -5265,6 +5248,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}} に再開",
+      "continues": "{{time}} に再開",
       "hitLimit": "上限に到達 · {{time}} にリセット"
     }
   },

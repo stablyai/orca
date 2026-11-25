@@ -454,7 +454,13 @@
             "discardFailed_one": "Failed to discard {{count}} file",
             "discardFailed_other": "Failed to discard {{count}} files",
             "noteCount_one": "{{count}} note",
-            "noteCount_other": "{{count}} notes"
+            "noteCount_other": "{{count}} notes",
+            "rebaseConflictCount_one": "{{count}} conflict",
+            "rebaseConflictCount_other": "{{count}} conflicts",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeFileCount_one": "{{count}} file",
+            "scopeFileCount_other": "{{count}} files"
           },
           "checks": {
             "panel": {
@@ -1506,6 +1512,7 @@
   },
   "bots": {
     "access": {
+      "actsAsYou": "They act as you on {{computer}}.",
       "adviceHeading": "Before you share",
       "codexAsk": "Codex sandbox: read-only until a request is approved.",
       "codexNoSandbox": "No Codex sandbox.",
@@ -1657,6 +1664,7 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
       "groupBotGone": "A selected bot is no longer available.",
@@ -1741,7 +1749,11 @@
         "addedRepositories_other": "Added {{count}} repositories"
       },
       "repositoryCount_one": "{{count}} repository in {{accounts}}",
-      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}",
+      "setup": {
+        "repoCount_one": "{{count}} repo",
+        "repoCount_other": "{{count}} repos"
+      }
     },
     "groups": {
       "allBotsCount": "All bots · {{count}}",
@@ -2543,6 +2555,7 @@
         "someMemberAccess": "Someone on Who can ask sent this when it ran.",
         "someoneWrote": "Someone wrote",
         "startError": "Error",
+        "thenAt": "Runs once at {{time}}",
         "thenLine": "Then",
         "thenOnce": "Runs once, when it happens",
         "thenOnceBy": "Runs once; at {{time}} if nothing came",
@@ -2683,6 +2696,7 @@
         "edit": "Edit",
         "nameTaken": "You already have a bot named {{name}}.",
         "open": "Open",
+        "openBot": "Open {{name}}",
         "origin": "Proposed by {{bot}}",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
         "rename": "Rename",
@@ -3115,26 +3129,12 @@
         "changedFiles_other": "{{count}} changed files"
       },
       "workerDock": {
-        "agentCount_one": "{{count}} agent",
-        "agentCount_other": "{{count}} agents",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
-        "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers",
-        "commandCount_one": "{{count}} command",
-        "commandCount_other": "{{count}} commands",
-        "monitorCount_one": "{{count}} monitor",
-        "monitorCount_other": "{{count}} monitors",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
-        "pillLabel_one": "{{count}} worker, latest: {{title}}",
-        "pillLabel_other": "{{count}} workers, latest: {{title}}",
-        "taskCount_one": "{{count}} task",
-        "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
-        "workerCount_other": "{{count}} workers",
-        "workflowCount_one": "{{count}} workflow",
-        "workflowCount_other": "{{count}} workflows"
+        "workerCount_other": "{{count}} workers"
       },
       "writeNotice": {
         "agentRefused": "The agent turned this down.",
@@ -3583,7 +3583,7 @@
         "addedMany": "Added {{count}} lines",
         "bot": "Forget, from {{chat}}",
         "changedMany": "Changed {{count}} lines",
-        "chat": "Chat \"{{title}}\"",
+        "chat": "Chat “{{title}}”",
         "chatFrom": "{{chat}} · from {{source}}",
         "edited": "Edited: {{fact}}",
         "forgot": "Forgot: {{fact}}",

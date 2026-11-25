@@ -112,7 +112,8 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     handle: string,
     signal?: AbortSignal
   ): Promise<{ exitCode: number | null }> {
-    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    // Why: once the window adopts the setup pane, the handle names its leaf, not a pty: record.
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
     }
@@ -162,9 +163,11 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         scanner.scan(replay)
       }
       if (!settled) {
+        // Why outlivesRenderer: a window closing or reloading (an app quit) must not read as Setup ending.
         void this.waitForTerminal(handle, {
           condition: 'exit',
-          signal: exitAbort.signal
+          signal: exitAbort.signal,
+          outlivesRenderer: true
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {

@@ -4116,7 +4116,6 @@
       "empty": "Keine Arbeitsbereiche",
       "loadFailed": "Arbeitsbereiche von diesem Host konnten nicht geladen werden.",
       "noFilterMatches": "Keine Arbeitsbereiche entsprechen den Filtern",
-      "noMatches": "Keine passenden Arbeitsbereiche",
       "reopen": "Zum Aktualisieren erneut öffnen",
       "reopenDetail": "Dieser Host listet Arbeitsbereiche in einem Format auf, das diese Seite noch nicht unterstützt."
     },
@@ -4461,10 +4460,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "Nach links scrollen · {{amount}} ausgeblendet",
-      "scrollRight": "Nach rechts scrollen · {{amount}} ausgeblendet"
-    },
+    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",
@@ -4542,7 +4538,6 @@
     "lookAround": {
       "looking": "Sucht…",
       "save": "Speichern",
-      "detail": "Liest verbundene Apps und Projekte, um nächste Schritte vorzuschlagen. Nur Lesen. Jedes Umsehen nutzt deinen Agenten-Plan, und Orca muss auf dem Host laufen.",
       "lookNow": "Jetzt umsehen",
       "notYet": "Noch nicht",
       "backToLookAround": "Zurück zum Umsehen"
@@ -4557,7 +4552,6 @@
     "groups": {
       "group": "Gruppe",
       "peerTold": "{{from}} hat {{to}} Bescheid gegeben",
-      "startAConversationWithThisGroupMentionBots": "Starte eine Unterhaltung mit dieser Gruppe. Erwähne Bots mit @Name oder @everyone.",
       "items": {
         "emptyTitle": "Noch keine Elemente aus dieser Gruppe",
         "needsYouCount_one": "{{count}} braucht dich",
@@ -4596,8 +4590,6 @@
     "tidyUp": {
       "title": "Gedächtnispflege",
       "never": "Noch nicht",
-      "footer": "Ändert nur Gedächtnisdateien. Nutzt deinen Agenten-Tarif wie ein kurzer Chat. Orca muss auf deinem Computer laufen.",
-      "undoNote": "Beim Rückgängigmachen wird MEMORY.md in einem Schritt auf den Stand vor diesem Aufräumen zurückgesetzt. Den vollständigen Verlauf und die Gedächtnisbearbeitung findest du auf deinem Computer unter Einstellungen → Gedächtnis.",
       "backToTidyUp": "Zurück zur Gedächtnispflege"
     },
     "items": {
@@ -4618,8 +4610,7 @@
         "title": "Element",
         "placeOf": "{{index}} von {{total}}",
         "previous": "Vorheriges Element",
-        "next": "Nächstes Element",
-        "subWhere": "Element {{number}} · {{chat}}"
+        "next": "Nächstes Element"
       },
       "write": {
         "offline": "{{host}} ist offline."
@@ -4628,7 +4619,6 @@
       "readFailedClosedPage": "Weitere geschlossene Elemente konnten nicht gelesen werden.",
       "skillLimit": "Nachricht nicht gesendet. Wähle höchstens {{limit}} Skill-Dateien aus und versuche es erneut.",
       "ask": {
-        "notSentYet": "noch nicht gesendet",
         "replaced": "Der Agent hat eine neue Frage gestellt. Lies sie und antworte dann.",
         "replacedByNewer": "Durch eine neuere Frage ersetzt",
         "skipped": "Übersprungen"
@@ -4667,7 +4657,6 @@
       },
       "rotate": {
         "open": "Schlüssel rotieren…",
-        "title": "Schlüssel für „{{automation}}“ rotieren?",
         "confirm": "Schlüssel rotieren",
         "note": "Die URL bekommt einen neuen Schlüssel. Aktualisiere damit jeden Absender.",
         "overlap": "Alten Schlüssel 24 Stunden weiter gültig lassen",
@@ -4682,19 +4671,15 @@
         "add": "Signatur-Secret hinzufügen…",
         "generatedTitle": "Signatur-Secret bereit",
         "done": "Erledigt",
-        "generatedNote": "Kopiere es in die Webhook-Einstellungen von {{sender}}. Ab jetzt müssen Aufrufe seine Signatur tragen.",
         "copy": "Secret kopieren",
         "copied": "Secret kopiert",
         "changeTitle": "Signatur-Secret ändern",
         "addTitle": "Signatur-Secret hinzufügen",
-        "note": "Orca akzeptiert dann nur Aufrufe, die mit diesem Secret signiert sind, sodass eine geleakte URL allein „{{automation}}“ nicht starten kann.",
         "sender": "Absender",
         "modeGenerate": "Orca erzeugt eins",
         "modePaste": "Das des Absenders einfügen",
         "generateNote": "Orca erzeugt dieses Secret. Als Nächstes kopierst du es in {{sender}}.",
         "paste": "{{sender}}-Secret",
-        "pasteNote": "Verwende dies, wenn der Absender dir sein eigenes Secret gibt.",
-        "generate": "Secret erzeugen",
         "save": "Speichern",
         "saved": "Signatur-Secret gespeichert",
         "changeOpen": "Signatur-Secret ändern…",
@@ -4728,7 +4713,6 @@
       "hookCount_one": "{{count}} Hook",
       "hookCount_other": "{{count}} Hooks",
       "name": "Webhooks",
-      "hooks": "Hooks",
       "addInChat": "Im Chat hinzufügen",
       "setUpDraft": "Richte einen Webhook ein, der ",
       "resumed": "Webhook fortgesetzt",
@@ -4794,8 +4778,7 @@
         "unverifiable": "Nicht überprüfbar",
         "unverifiableDetail": "Der Computer von {{bot}} ist nicht erreichbar"
       },
-      "back": "Zurück zu den Webhooks",
-      "howToCallShort": "Jedes Tool oder Skript kann per POST an die URL eines Hooks senden. Jeder Hook startet eine Automatisierung."
+      "back": "Zurück zu den Webhooks"
     },
     "errors": {
       "generic": "Etwas ist schiefgelaufen. Versuche es erneut."
@@ -5184,6 +5167,7 @@
     },
     "usageLimit": {
       "continuesAt": "Fortsetzung um {{time}}",
+      "continues": "Fortsetzung um {{time}}",
       "hitLimit": "Limit erreicht · Reset {{time}}"
     }
   },

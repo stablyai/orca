@@ -72,12 +72,14 @@ export type ListedHostBots = {
   offline?: string
 }
 
-/** One host's bots as the phone read them; `update-needed` is a host too old to serve them, and
- *  `unreachable` a server down since before this screen read it. */
+/** One host's bots as the phone read them; `update-needed` is a host too old to serve them,
+ *  `unreachable` a server down since before this screen read it, and `read-failed` this computer's
+ *  first read failing. */
 export type HostBotListing =
   | ListedHostBots
   | { kind: 'update-needed'; hostId: ExecutionHostId; hostLabel: string }
   | { kind: 'unreachable'; hostId: ExecutionHostId; hostLabel: string }
+  | { kind: 'read-failed'; hostId: ExecutionHostId; hostLabel: string }
 
 /** A down server's word, as its workspace pill says it; a computer that's simply away is "Offline",
  *  the one word bots use for it everywhere. */

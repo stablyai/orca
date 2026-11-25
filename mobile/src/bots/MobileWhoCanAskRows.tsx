@@ -44,7 +44,12 @@ export function whoCanAskName(member: Pick<BotMember, 'id' | 'name' | 'kind'>): 
 }
 
 /** A picture, else initials on the person's tint; an app or the owner, a mark on a grey disc. */
-function Face(props: { id: string; name: string; picture?: string; mark?: LucideIcon }) {
+export function MobilePersonFace(props: {
+  id: string
+  name: string
+  picture?: string
+  mark?: LucideIcon
+}) {
   useMobileColorScheme()
   const [failed, setFailed] = useState<string | null>(null)
   if (props.mark) {
@@ -73,7 +78,7 @@ function Face(props: { id: string; name: string; picture?: string; mark?: Lucide
 /** A person's face, or an app's mark. */
 export function MobileWhoCanAskMemberFace({ member }: { member: BotMember }) {
   return (
-    <Face
+    <MobilePersonFace
       id={member.id}
       name={whoCanAskName(member)}
       picture={botMemberAvatarUrl(member) ?? undefined}
@@ -84,7 +89,7 @@ export function MobileWhoCanAskMemberFace({ member }: { member: BotMember }) {
 
 /** The "You" row's face, on a connector's own page. */
 export function MobileWhoCanAskOwnerFace() {
-  return <Face id="" name="" mark={UserRound} />
+  return <MobilePersonFace id="" name="" mark={UserRound} />
 }
 
 type RowAction = {
@@ -219,9 +224,9 @@ export function MobileWhoCanAskServerRow(props: {
         <ListRow
           {...press}
           leading={
-            <View style={styles.slot}>
+            <MobileFaceSlot>
               <Server size={20} color={colors.textSecondary} />
-            </View>
+            </MobileFaceSlot>
           }
           title={props.name}
           busy={props.busy}
@@ -265,7 +270,7 @@ export function MobileWhoCanAskRequestRow(props: {
         <ListRow
           {...press}
           leading={
-            <Face
+            <MobilePersonFace
               id={request.requester.id}
               name={person}
               picture={request.requester.avatarUrl ?? undefined}
@@ -316,15 +321,20 @@ export function MobileWhoCanAskReview(props: {
   )
 }
 
-/** Add people, its icon centred under the faces so the names line up. */
+/** An icon in a face's place, centred under the faces so the titles line up. */
+export function MobileFaceSlot({ children }: { children: ReactNode }) {
+  return <View style={styles.slot}>{children}</View>
+}
+
+/** Add people, its icon in a face's place. */
 export function MobileWhoCanAskAddRow(props: { disabled: boolean; onPress: () => void }) {
   const t = useMobileTranslation()
   return (
     <ListRow
       leading={
-        <View style={styles.slot}>
+        <MobileFaceSlot>
           <UserPlus size={20} color={colors.textPrimary} />
-        </View>
+        </MobileFaceSlot>
       }
       title={t('bots.whoCanAsk.addPeople', 'Add people')}
       disabled={props.disabled}

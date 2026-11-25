@@ -390,6 +390,9 @@
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
     },
+    "claimedDownload": {
+      "saved": "Saved to {{place}}"
+    },
     "serverPage": {
       "download": {
         "started": "Downloading to {{path}} on {{host}}",
@@ -732,8 +735,7 @@
         "title": "Providers",
         "searchAgents": "agents",
         "searchCli": "CLI",
-        "searchTerminal": "terminal",
-        "antigravityAccount": "Account"
+        "searchTerminal": "terminal"
       },
       "permissionsDescriptionOwnAgents": "New chats follow each agent’s permission in Settings → Agents.",
       "launch": {
@@ -1554,7 +1556,7 @@
         "addedMany": "Added {{count}} lines",
         "forgotMany": "Forgot {{count}} lines",
         "changedMany": "Changed {{count}} lines",
-        "chat": "Chat \"{{title}}\"",
+        "chat": "Chat “{{title}}”",
         "aChat": "A chat",
         "chatFrom": "{{chat}} · from {{source}}",
         "kept": "Orca · {{chat}} wrote over it",
@@ -2729,7 +2731,9 @@
             "forwarded": "Forwarded port {{port}} from {{host}}",
             "opened": "Opened {{address}} in your default browser.",
             "otherMachine": "Couldn't forward port {{port}}: this workspace doesn't run on {{host}} itself.",
-            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again."
+            "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
+            "restoredMoved": "Forwarded port {{port}} from {{host}} to localhost:{{localPort}}",
+            "restoredMovedReason": "localhost:{{previousPort}} is in use on this computer."
           }
         }
       },
@@ -15108,13 +15112,6 @@
             "c76693e456": "Could not load files for this workspace:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "No commits yet",
-            "d0fb0f4bf2": "Refresh commits",
-            "9f7535d22b": "Refs are branch or tag names pointing at that exact commit. They only appear where Git has a named ref for the commit.",
-            "9289ba0cb9": "What are refs?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Open commit {{value0}}: {{value1}}",
-            "e5e81e59a6": "Resize commits",
             "6d1e0a7c3b": "Failed to load commit files"
           },
           "HostedReviewActions": {
@@ -15487,7 +15484,59 @@
             "markResolved": "Mark as resolved",
             "keepFile": "Keep file",
             "keepDeletion": "Keep deletion",
-            "refreshAll": "Refresh all"
+            "refreshAll": "Refresh all",
+            "baseUpToDate": "Up to date",
+            "rebaseOperationInProgress": "Wait for the current Git operation to finish",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} conflict",
+            "rebaseConflictCount_other": "{{count}} conflicts",
+            "rebasePaused": "Rebase paused",
+            "rebaseResolveConflictsFirst": "Resolve conflicts first",
+            "rebaseAbort": "Abort",
+            "rebaseContinue": "Continue",
+            "continueRebasePausedAgain": "Rebase paused at the next conflict",
+            "continueRebaseFailed": "Continue rebase failed",
+            "rebaseAutostashConflict": "Rebased. Your uncommitted changes didn't reapply cleanly; they're saved in the stash.",
+            "rebaseStoppedByGit": "Git paused the rebase",
+            "continueRebaseUnconfirmed": "Couldn't confirm the result. Source Control refreshed to show the current state.",
+            "noRebaseInProgress": "No rebase is in progress",
+            "rebaseStopMovedOn": "The rebase already moved on. Check the panel and try again.",
+            "rebaseEmptyStep": "Nothing to commit in this step. Abort the rebase or finish it in a terminal.",
+            "rebaseStepUnreadableShort": "Check failed",
+            "rebaseCheckAgain": "Check again",
+            "rebaseRetryInspect": "Retry",
+            "rebaseRetryInspectLabel": "Retry checking the rebase step",
+            "rebaseStoppedFinishInTerminal": "Git paused this step. Finish it in a terminal or abort.",
+            "rebaseCheckingStep": "Checking the rebase step",
+            "rebaseEmptyStepShort": "Empty step",
+            "rebaseAbortLabel": "Abort rebase",
+            "scopeFileCount_one": "{{count}} file",
+            "scopeFileCount_other": "{{count}} files",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeUncommitted": "Uncommitted",
+            "scopeAllChanges": "All changes",
+            "scopeNone": "None",
+            "scopeOpenDiff": "Open diff",
+            "scopeShowAll": "Show all changes",
+            "scopeLoadingBranchChanges": "Loading branch changes…",
+            "scopeBranchCommits": "Commits on this branch",
+            "scopeRecentCommits": "Recent commits",
+            "scopeCompareTo": "Compare to {{ref}}",
+            "scopeFilterCommits": "Filter commits",
+            "scopeCommitsFailed": "Couldn't load commits.",
+            "scopeFilesFailed": "Couldn't load files.",
+            "scopeLoadingFiles": "Loading files…",
+            "scopeNoSharedHistory": "No shared history with {{ref}}",
+            "scopeRetryCommits": "Retry",
+            "scopeLoadingCommits": "Loading commits…",
+            "scopeNoMatchingCommits": "No matching commits",
+            "scopeNoBranchCommitsYet": "No commits on this branch yet",
+            "scopeNoCommitsYet": "No commits yet",
+            "scopeOlderHistory": "Older history in Git Graph",
+            "scopeNoUncommitted": "No uncommitted changes.",
+            "scopeCommitFiles": "Files",
+            "gitGraphButton": "Graph"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
@@ -15922,10 +15971,8 @@
                   "titlePublishBranchFirst": "Publish the branch first to sync commits",
                   "titleUseForcePush": "Use Commit & Force Push — remote only has older copies of local commits",
                   "titleCommitThenPullPush": "Commit, then pull and push",
-                  "rebaseFromNamedBase": "Rebase from {{baseRef}}",
                   "rebaseFromBase": "Rebase from Base",
                   "rebaseChooseRemoteBase": "Choose a remote base branch to rebase from",
-                  "rebaseDirtyHint": "Try rebasing; git may require committing or stashing local changes first",
                   "rebaseWithLatestFrom": "Rebase current branch with latest commits from {{baseRef}}",
                   "blockedCommitFirst": "Commit changes first",
                   "blockedCheckOutBranchFirst": "Check out a branch first",
@@ -15947,7 +15994,6 @@
                   "titleCommitAndPush": "Commit staged changes and push",
                   "commitForcePush": "Commit & Force Push",
                   "commitPush": "Commit & Push",
-                  "titleOperationInProgress": "Operation in progress…",
                   "titleAbortRebaseInProgress": "Abort the rebase in progress",
                   "titleAbortMergeInProgress": "Abort the merge in progress",
                   "titleNothingToPushTo": "Nothing to push to {{upstreamName}}",
@@ -16008,7 +16054,6 @@
                   "statusSetsUpstream": "Sets upstream",
                   "statusMayFail": "May fail",
                   "statusPublished": "Published",
-                  "statusStashFirst": "Stash first",
                   "statusReplaces": "Replaces ↓{{behind}}",
                   "statusCommitFirst": "Commit first",
                   "statusReviewOpen": "{{shortLabel}} open",
@@ -16019,7 +16064,14 @@
                   "statusPushFirst": "Push first",
                   "statusForcePushFirst": "Force push first",
                   "statusSyncFirst": "Sync first",
-                  "statusUnsupported": "Unsupported"
+                  "statusUnsupported": "Unsupported",
+                  "rebaseOntoNamedBase": "Rebase onto {{base}}",
+                  "rebaseCommitOrStashFirst": "Commit or stash changes first",
+                  "continueRebase": "Continue rebase",
+                  "titleContinueRebase": "Continue the paused rebase",
+                  "rebaseFromNamedBase": "Rebase from {{baseRef}}",
+                  "rebaseDirtyHint": "Try rebasing; git may require committing or stashing local changes first",
+                  "statusStashFirst": "Stash first"
                 }
               },
               "primary": {
@@ -16062,7 +16114,8 @@
                   "e9b5d1f470": "Check out a branch before creating a {{value0}}.",
                   "f0c6e2a581": "This branch is not ready for a {{value0}} yet.",
                   "8f9a0b1c2d": "Nothing to commit. Branch is up to date.",
-                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…"
+                  "h3i4j5k607": "Checking whether this branch can create a {{value0}}…",
+                  "nothingToCommit": "Nothing to commit"
                 }
               },
               "branch": {
@@ -16357,12 +16410,7 @@
             "f8a2c4d1e0": "Explorer search mode"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "No file changes in this commit",
-            "c3d4e5f6a7": "Open all changes"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Show files in commit {{value0}}: {{value1}}",
-            "4a8d9e0c1f": "Hide files in commit {{value0}}: {{value1}}"
+            "b2c3d4e5f6": "No file changes in this commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Open commit in browser",
@@ -20798,7 +20846,8 @@
         "transitionFieldsNeedsUpdate": "Update the remote Orca server to submit required transition fields, or complete the transition in Jira."
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Completing a merge needs a newer Orca on this host. Update Orca on that host."
+        "completeMergeNeedsNewerHost": "Completing a merge needs a newer Orca on this host. Update Orca on that host.",
+        "continueRebaseNeedsNewerHost": "Continuing a rebase needs a newer Orca on this host. Update Orca on that host."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Resolving conflicts needs a newer Orca on this host. Update Orca on that host."
@@ -21445,7 +21494,6 @@
           "xhigh": "XHigh"
         },
         "imageUnavailable": "Preview unavailable",
-        "botFor": "For: {{detail}}",
         "agents": "Agents",
         "recent": "Recent",
         "bots": "Bots",
@@ -21465,7 +21513,9 @@
         "retryChats": "Retry",
         "permissionAppliesNextMessage": "{{saved}} applies to your next message; currently using {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
-        "modelAndEffort": "Model and effort"
+        "modelAndEffort": "Model and effort",
+        "modelsLoading": "Loading models…",
+        "signInForModels": "Sign in to see the models you can use."
       },
       "tool": {
         "exitCode": "exit {{value0}}",
@@ -22425,6 +22475,7 @@
         "template": "Template",
         "nameTaken": "You already have a bot named {{name}}.",
         "open": "Open",
+        "openBot": "Open {{name}}",
         "edit": "Edit",
         "rename": "Rename",
         "create": "Create bot",
@@ -22682,6 +22733,7 @@
         "paused": "Paused",
         "replied": "{{actor}} replied",
         "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenAt": "Runs once at {{time}}",
         "thenLine": "Then",
         "thenOnce": "Runs once, when it happens",
         "thenOnceBy": "Runs once; at {{time}} if nothing came",
@@ -22747,7 +22799,8 @@
         "signIn": "Sign in",
         "signsInClaudeAccount": "Signs in this Claude account",
         "runsCommand": "Runs {{command}} in a terminal",
-        "thenSlashCommand": "Sign in, then type {{slashCommand}}."
+        "thenSlashCommand": "Sign in, then type {{slashCommand}}.",
+        "signsInAgy": "Signs agy in with Google in your browser"
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity signs in with {{method}}. Change",
@@ -22764,11 +22817,8 @@
         "otherWays": "You can sign in with an API key or gcloud instead.",
         "moreOptions": "More options…",
         "useApiKey": "Use your Gemini API key",
-        "useGcloud": "Use gcloud ({{project}})",
         "useGoogle": "Use your Google sign-in",
-        "apiKeyFromEnvironment": "Found GEMINI_API_KEY in your environment",
         "apiKeySaved": "Saved in Orca",
-        "gcloudFound": "Found your gcloud login (Application Default Credentials)",
         "googleFound": "You signed in with Google on this host before",
         "askApiKeyEnvironment": "Use the Gemini API key found in your environment instead?",
         "askApiKeySaved": "Use the Gemini API key saved in Orca instead?",
@@ -22779,19 +22829,21 @@
         "signedOut": "Antigravity isn't signed in.",
         "refused": "Google refused this chat's credentials.",
         "usageLimit": "This sign-in reached its usage limit.",
-        "foundLead": "Orca found credentials on this host you can use instead:",
         "signInGoogle": "Sign in with Google",
-        "useKeyOrGcloud": "API key or gcloud",
         "yourAgy": "Your agy",
         "yourAgyVersion": "Your agy · v{{version}}",
-        "orcaCopy": "Orca's copy",
-        "orcaCopyVersion": "Orca's copy · v{{version}}",
         "orcasAgy": "Orca's agy",
         "orcasAgyVersion": "Orca's agy · v{{version}}",
         "runsOn": "Runs on: {{program}}",
-        "agyItem": "agy's own login",
-        "agyHint": "This chat runs the Antigravity CLI on this host. Another method applies to new chats.",
-        "confirmSignIn": "Sign in with Google?"
+        "keepsOwnLogin": "This chat keeps agy's own Google login. New chats use {{method}}.",
+        "apiKeyEnvironment": "From your environment",
+        "foundGcloud": "Your gcloud login also works.",
+        "foundKey": "Your Gemini API key also works.",
+        "foundKeyAndGcloud": "Your Gemini API key and gcloud login also work.",
+        "gcloudProject": "Project {{project}}",
+        "otherWaysMenu": "Other ways to sign in…",
+        "useGcloudLogin": "Use your gcloud login",
+        "otherWaysLabel": "Other ways to sign in"
       },
       "pairedServerAsk": {
         "always": "Always allow {{server}}",
@@ -22857,18 +22909,8 @@
         "workflow": "Workflow",
         "monitor": "Monitor",
         "task": "Task",
-        "taskCount_one": "{{count}} task",
-        "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "commandCount_one": "{{count}} command",
-        "commandCount_other": "{{count}} commands",
-        "workflowCount_one": "{{count}} workflow",
-        "workflowCount_other": "{{count}} workflows",
-        "monitorCount_one": "{{count}} monitor",
-        "monitorCount_other": "{{count}} monitors",
-        "agentCount_one": "{{count}} agent",
-        "agentCount_other": "{{count}} agents",
         "stoppedByYou": "Stopped by you",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
@@ -22882,16 +22924,13 @@
         "showQuestion": "Show {{name}} question",
         "show": "Show",
         "runningCount": "{{count}} running",
-        "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers",
         "stopAll": "Stop all",
         "clearFailed": "Clear failed",
-        "pillLabel_one": "{{count}} worker, latest: {{title}}",
-        "pillLabel_other": "{{count}} workers, latest: {{title}}",
         "unlistedDetail": "Some background work isn’t listed here",
         "unlisted": "Background work running",
         "unread": "Workers couldn’t load",
-        "unreadDetail": "Workers will show here once they load"
+        "unreadDetail": "Workers will show here once they load",
+        "chipLabel": "{{label}}, latest: {{title}}"
       },
       "webhookSetup": {
         "heading": "Set up a webhook",
@@ -23441,7 +23480,7 @@
         "turnDiffsSearchChangedFiles": "changed files",
         "turnDiffsSearchEdits": "edits",
         "promptSuggestionsTitle": "Suggested prompts",
-        "promptSuggestionsCopy": "After Claude replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward your Claude usage.",
+        "promptSuggestionsCopy": "After Claude or Codex replies, its guess at your next message shows in the empty message box. Press Tab to use it. Each guess is an extra request that counts toward that agent's usage.",
         "promptSuggestionsSearchNext": "next prompt",
         "promptSuggestionsSearchGhost": "ghost text"
       },
@@ -25298,22 +25337,16 @@
       "description": "Agents there use the distro's default Claude and Codex accounts until Orca in WSL is updated."
     },
     "antigravity": {
-      "chatSignIn": "Sign in",
-      "chatChangeAccount": "Change account",
-      "chatRetry": "Retry sign-in",
       "chatCancel": "Cancel",
       "chatCopyLink": "Copy sign-in link",
       "chatCopyFailed": "Could not copy the link.",
       "chatStarting": "Starting sign-in…",
-      "chatWaiting": "Finish signing in in your browser.",
       "chatOpenFailed": "Copy the link and open it in your browser.",
       "chatVerifying": "Finishing sign-in…",
-      "chatPasteHelp": "If the last page after signing in doesn't load, copy its full address from your browser and paste it here.",
       "chatContinue": "Continue",
       "chatCancelled": "Sign-in cancelled.",
       "chatExpired": "Sign-in timed out. Try again.",
       "chatFailed": "Sign-in failed. Try again.",
-      "chatOtherClient": "Sign-in is in progress in another client.",
       "chatReadFailed": "Could not check the sign-in on {{host}}.",
       "retry": "Retry",
       "changed": "The native account changed. Select a saved account again before launching agy.",
@@ -25343,14 +25376,6 @@
       "settingsSaveFailed": "Orca couldn't save your Antigravity sign-in settings. Try again.",
       "lastReading": "{{reading}} · Read {{time}}",
       "noReading": "Usage unknown: not read yet",
-      "chatSeparate": "Separate from your agy terminal account.",
-      "chatBadgeSigningIn": "Signing in",
-      "chatBadgeSignedIn": "Signed in",
-      "chatBadgeSignedOut": "Not signed in",
-      "chatSignInWith": "Sign in with {{method}}",
-      "chatPasteOpen": "Browser page didn't load?",
-      "chatSwitchMethod": "Sign in again to switch to {{method}}.",
-      "enterpriseFieldsNeeded": "Enter a Google Cloud project and location.",
       "fd47b5a5dd": "Antigravity accounts",
       "personalOption": "Your personal Google AI plan",
       "enterpriseOption": "Your organization's license",
@@ -25371,8 +25396,6 @@
       "apiKeyRemove": "Remove",
       "apiKeyGet": "Get API key",
       "location": "Location",
-      "enterpriseFieldsShort": "Enter a project and location.",
-      "chatUseMethod": "Sign in again to use {{method}}",
       "signInEllipsis": "Sign in…",
       "loadFailed": "Couldn't load agy accounts",
       "loading": "Loading accounts…",
@@ -25385,32 +25408,24 @@
       "saveShort": "Save",
       "readAt": "Read {{time}}",
       "active": "Active",
-      "account": "Account",
       "runtime": "Runtime",
       "chatTitle": "Antigravity Chat",
-      "chatDescription": "Signs in through your browser, so Chat works without agy installed.",
-      "chatDescriptionAgy": "agy is signed in here, so new chats use agy's account below. This sign-in is used when agy isn't.",
-      "chatDescriptionAgyVersion": "New chats run on your agy (v{{version}}) and its account below. This sign-in is used when agy isn't.",
-      "chatDescriptionManagedVersion": "New chats run on Orca's copy (v{{version}}), so Chat works without agy installed.",
-      "chatDescriptionAgySignedOut": "New chats use agy, which isn't signed in yet. Run agy on this host to sign in.",
-      "chatDescriptionOrcaAgy": "Chats run on Orca's copy of agy and use agy's own sign-in.",
-      "chatDescriptionAgyOwnSignIn": "Chats run on agy and use agy's own sign-in.",
-      "chatDescriptionInstallAgy": "Install agy below to use Chat. It signs in with its own account.",
-      "chatDescriptionOrcaAgyVersion": "Chats run on Orca's agy (v{{version}}) and use agy's own sign-in.",
-      "chatDescriptionAgyOwnSignInVersion": "Chats run on your agy (v{{version}}) and use agy's own sign-in.",
       "terminalTitle": "agy in the terminal",
-      "terminalDescriptionWindows": "Uses agy's own saved accounts. Switching applies to the host default agy credential.",
       "terminalDescription": "Uses agy's own saved accounts. Switching applies to new agy sessions.",
-      "terminalDescriptionChats": "Uses agy's own saved accounts. Switching applies to new agy sessions and to Antigravity chats.",
-      "terminalDescriptionNoChats": "Uses agy's own saved accounts. Switching applies to new agy sessions, not to Antigravity chats.",
       "addAccountHelp": "To add an account, run /logout in agy, sign in again, then Save it here.",
-      "googleSignIn": "Google account sign-in",
-      "googleSignInAgy": "agy's own sign-in",
-      "googleSignInAgyOption": "Sign in by running agy",
-      "googleSignInOrca": "Orca's built-in sign-in",
-      "googleSignInOrcaOption": "Sign in through your browser here; no agy needed",
-      "googleSignInUpdateFailed": "Couldn't change how Antigravity signs in with Google.",
-      "chatDescriptionKeyOnAgy": "New chats run on agy with the sign-in below, kept apart from agy in the terminal."
+      "description": "Chats and agy in the terminal share agy's Google accounts. Chats can sign in with a Gemini API key or gcloud instead.",
+      "descriptionWindows": "Chats and agy in the terminal share agy's Google accounts. Switching applies to the host default agy credential. Chats can sign in with a Gemini API key or gcloud instead.",
+      "signInGoogle": "Sign in with Google",
+      "addAccount": "Add account",
+      "addAccountInApp": "Sign in to another Google account. Both stay saved here to switch between.",
+      "chatCancelSignIn": "Cancel sign-in",
+      "chatCopied": "Copied",
+      "chatCopySignInLink": "Copy the sign-in link",
+      "chatFinishInBrowser": "Finish in your browser, then paste the code.",
+      "chatOtherWindow": "Sign-in is in progress in another window.",
+      "chatPageDidntOpen": "Page didn't open?",
+      "chatPasteCode": "Paste the code",
+      "chatPasteCodeLabel": "The code Google shows after you sign in, or that page's address"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",
@@ -28115,13 +28130,11 @@
         "refresh": "Refresh"
       },
       "setup": {
-        "install": "Install the Orca app",
         "close": "Close",
         "checking": "Checking GitHub…",
         "retry": "Try again",
         "installing": "Waiting for the install, or for an owner of the organization to approve…",
         "finish": "Done",
-        "title": "Add {{name}} to GitHub",
         "pushesAsYou": "{{name}} pushes code from this computer with your own git login.",
         "addMore": "Add repositories or an organization",
         "checkingInstalls": "Checking GitHub for changes…",
@@ -28130,7 +28143,6 @@
         "repositories": "Repositories",
         "isOn": "{{name}} is on GitHub",
         "new": "New",
-        "finishInBrowser": "Finish on GitHub in your browser…",
         "openAgain": "Open again",
         "added": "Added from GitHub: {{names}}.",
         "pushesOnHost": "{{name}} pushes code from {{host}} with its git login.",
@@ -28143,7 +28155,17 @@
           "reply": "On it."
         },
         "connectTitle": "Connect GitHub",
-        "manage": "Manage"
+        "manage": "Manage",
+        "cancel": "Cancel",
+        "installApp": "Install app",
+        "add": "Add",
+        "addTitle": "Add {{name}}",
+        "addShort": "Add",
+        "allRepos": "All repos",
+        "repoCount_one": "{{count}} repo",
+        "repoCount_other": "{{count}} repos",
+        "finishInYourBrowser": "Finish in your browser…",
+        "whoCanAsk": "Who can ask"
       },
       "account": {
         "defaultBot": "Default bot for my requests",
@@ -28179,7 +28201,6 @@
         "waiting": "Finish signing in to GitHub in your browser…",
         "requested": "An owner of the organization has been asked to approve the Orca app.",
         "notInstalled": "The Orca app is not on any of your repositories yet.",
-        "turnOn": "Turn on {{name}}",
         "connected": "GitHub connected.",
         "pickRepositories": "Sign in and choose which repositories {{name}} can work in.",
         "readsOnly": "Orca only reads your GitHub username and id."
@@ -28265,7 +28286,10 @@
       "openOnPage": "Open on Automations page",
       "pauseShort": "Pause",
       "resumeShort": "Resume",
-      "nextAt": "next {{time}}"
+      "nextAt": "next {{time}}",
+      "deleting": "Deleting…",
+      "deleteFailed": "Couldn’t delete {{name}}",
+      "deleteDescription": "Delete <name/> and its run history."
     },
     "access": {
       "thisComputer": "this computer",
@@ -28295,6 +28319,7 @@
       "controlBriefIfAdded": "Anyone you add can act as you here.",
       "controlBriefOnHost": "They can act as you on {{computer}}.",
       "controlBriefIfAddedOnHost": "Anyone you add can act as you on {{computer}}.",
+      "actsAsYou": "They act as you on {{computer}}.",
       "reachHeading": "What {{name}} can reach",
       "reachComputer": "Your files, commands and accounts on {{computer}}",
       "reachComputerDetail": "As you, as far as the permission below allows.",
@@ -28733,11 +28758,10 @@
         "removeNoteOnHost": "{{name}} can no longer use your Gmail, Calendar and Drive. Google stays connected on {{host}}.",
         "signedOutOnHost": "Not connected on {{host}}",
         "account": "Account",
-        "hostDefault": "{{host}}’s default",
-        "computerDefault": "This computer’s default",
-        "changeInSettings": "Change in Settings",
-        "alsoConnected": "Also connected",
-        "settingUp": "Setting up"
+        "settingUp": "Setting up",
+        "reconnectAccount": "Reconnect {{email}}",
+        "chooseAccounts": "Choose accounts…",
+        "accounts": "Accounts"
       },
       "copied": "Copied. Send it to your Google admin.",
       "share": {
@@ -28873,7 +28897,6 @@
         }
       },
       "pasteHint": "After you click Allow, the page won’t load. Paste its address here.",
-      "addAccount": "Add another Google account",
       "defaultBadge": "Default",
       "row": {
         "signedOut": "Signed out by Google",
@@ -28900,7 +28923,14 @@
       "useAnotherSignIn": "Sign in with Google",
       "useAnotherSignInDetail": "Uses your current Google app",
       "setUpNewAppDetail": "If your current app doesn’t work for this account or organization",
-      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app."
+      "updateToSetUpNewApp": "Update Orca on {{host}} to set up a new Google app.",
+      "updateToChooseAccounts": "Update Orca on {{host}} to choose accounts.",
+      "picker": {
+        "label": "Google accounts",
+        "addAccount": "Add another account",
+        "caption": "Accounts {{bot}} can use",
+        "save": "Save"
+      }
     },
     "googleSetup": {
       "receipt": {
@@ -30563,6 +30593,7 @@
       "toolCredentialsRaced": "The bot’s tool credentials changed in another Orca. Try again.",
       "toolSourceManaged": "Orca manages this tool. Change it where you set it up.",
       "toolValuesUnmoved": "A tool still holds its saved values. Reopen the bot’s tools to move them.",
+      "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "toolCodexCheckFailed": "Codex could not check or connect the tools. Check its setup and try again.",
       "toolCodexNoThread": "Codex started no thread to check the tools in.",
       "toolSignInFolderFailed": "Couldn't prepare the sign-in folder: {{detail}}",
@@ -30805,7 +30836,8 @@
     "branchCreated": "Created {{branch}} at {{commit}}",
     "branchName": "Branch name",
     "invalidBranchName": "This branch name is invalid. Choose a different name.",
-    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again."
+    "createBranchFailed": "Orca couldn't create the branch. Check this repository in a terminal, then try again.",
+    "openDiff": "Open diff"
   },
   "macosUpdateRequirement": {
     "title": "Orca updates now need macOS {{macos}}",

@@ -4218,7 +4218,6 @@
       "empty": "워크스페이스가 없습니다.",
       "loadFailed": "이 호스트에서 워크스페이스를 불러오지 못했습니다.",
       "noFilterMatches": "필터에 맞는 워크스페이스가 없습니다.",
-      "noMatches": "일치하는 워크스페이스가 없습니다.",
       "reopen": "업데이트하려면 다시 여세요",
       "reopenDetail": "이 페이지는 아직 이 호스트의 워크스페이스 목록 형식을 지원하지 않습니다."
     },
@@ -4563,10 +4562,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "왼쪽으로 스크롤 · 숨겨진 봇 {{amount}}개",
-      "scrollRight": "오른쪽으로 스크롤 · 숨겨진 봇 {{amount}}개"
-    },
+    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
@@ -4644,7 +4640,6 @@
     "lookAround": {
       "looking": "찾는 중…",
       "save": "저장",
-      "detail": "연결된 앱과 프로젝트를 읽고 다음 단계를 제안합니다. 읽기 전용입니다. 둘러볼 때마다 에이전트 요금제를 사용하며, 호스트에서 Orca가 실행 중이어야 합니다.",
       "lookNow": "지금 둘러보기",
       "notYet": "아직 없음",
       "backToLookAround": "둘러보기로 돌아가기"
@@ -4659,7 +4654,6 @@
     "groups": {
       "group": "그룹",
       "peerTold": "{{from}}이(가) {{to}}에게 알림",
-      "startAConversationWithThisGroupMentionBots": "이 그룹과 대화를 시작하세요. @이름 또는 @everyone으로 봇을 멘션하세요.",
       "items": {
         "emptyTitle": "이 그룹의 항목이 아직 없음",
         "needsYouCount_one": "확인 필요 {{count}}개",
@@ -5089,8 +5083,6 @@
     "tidyUp": {
       "title": "메모리 관리",
       "never": "아직 없음",
-      "footer": "메모리 파일만 변경합니다. 짧은 채팅처럼 에이전트 요금제를 사용합니다. 컴퓨터에서 Orca가 실행 중이어야 합니다.",
-      "undoNote": "실행 취소하면 MEMORY.md가 이 정리 이전 상태로 한 번에 돌아갑니다. 전체 기록과 메모리 편집은 컴퓨터의 설정 → 메모리에서 이용할 수 있습니다.",
       "backToTidyUp": "메모리 관리로 돌아가기"
     },
     "items": {
@@ -5111,8 +5103,7 @@
         "title": "항목",
         "placeOf": "{{total}}개 중 {{index}}번째",
         "previous": "이전 항목",
-        "next": "다음 항목",
-        "subWhere": "항목 {{number}} · {{chat}}"
+        "next": "다음 항목"
       },
       "write": {
         "offline": "{{host}}이(가) 오프라인입니다."
@@ -5121,7 +5112,6 @@
       "readFailedClosedPage": "닫힌 항목을 더 읽지 못했습니다.",
       "skillLimit": "메시지를 보내지 않았습니다. 선택한 스킬 파일을 {{limit}}개 이하로 줄인 뒤 다시 시도하세요.",
       "ask": {
-        "notSentYet": "아직 보내지 않음",
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
         "skipped": "건너뜀"
@@ -5191,7 +5181,6 @@
       },
       "rotate": {
         "open": "키 교체…",
-        "title": "‘{{automation}}’의 키를 교체할까요?",
         "confirm": "키 교체",
         "note": "URL에 새 키가 붙습니다. 모든 발신자를 새 키로 업데이트하세요.",
         "overlap": "이전 키를 24시간 동안 계속 유효하게 두기",
@@ -5206,19 +5195,15 @@
         "add": "서명 시크릿 추가…",
         "generatedTitle": "서명 시크릿 준비됨",
         "done": "완료",
-        "generatedNote": "{{sender}}의 웹훅 설정에 복사해 넣으세요. 이제부터 호출에는 그 서명이 있어야 합니다.",
         "copy": "시크릿 복사",
         "copied": "시크릿 복사됨",
         "changeTitle": "서명 시크릿 변경",
         "addTitle": "서명 시크릿 추가",
-        "note": "그러면 Orca는 이 시크릿으로 서명된 호출만 받으므로, URL만 유출되어서는 ‘{{automation}}’을(를) 시작할 수 없습니다.",
         "sender": "발신자",
         "modeGenerate": "Orca가 생성",
         "modePaste": "발신자의 시크릿 붙여 넣기",
         "generateNote": "Orca가 이 시크릿을 만듭니다. 다음으로 {{sender}}에 복사해 넣으세요.",
         "paste": "{{sender}} 시크릿",
-        "pasteNote": "발신자가 자체 시크릿을 제공할 때 사용하세요.",
-        "generate": "시크릿 생성",
         "save": "저장",
         "saved": "서명 시크릿 저장됨",
         "changeOpen": "서명 시크릿 변경…",
@@ -5252,7 +5237,6 @@
       "hookCount_one": "훅 {{count}}개",
       "hookCount_other": "훅 {{count}}개",
       "name": "웹훅",
-      "hooks": "훅",
       "addInChat": "채팅에서 추가",
       "setUpDraft": "다음과 같은 웹훅을 설정해 주세요: ",
       "resumed": "웹훅이 재개됨",
@@ -5318,8 +5302,7 @@
         "unverifiable": "확인 불가",
         "unverifiableDetail": "{{bot}}의 컴퓨터에 연결할 수 없습니다"
       },
-      "back": "웹훅으로 돌아가기",
-      "howToCallShort": "도구나 스크립트에서 훅의 URL로 POST 요청을 보낼 수 있습니다. 각 훅은 자동화 하나를 시작합니다."
+      "back": "웹훅으로 돌아가기"
     },
     "errors": {
       "generic": "문제가 발생했습니다. 다시 시도하세요."
@@ -5708,6 +5691,7 @@
     },
     "usageLimit": {
       "continuesAt": "{{time}}에 계속",
+      "continues": "{{time}}에 계속",
       "hitLimit": "한도 도달 · {{time}}에 초기화"
     }
   },

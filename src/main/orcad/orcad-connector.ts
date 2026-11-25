@@ -26,7 +26,11 @@ export function installOrcadConnector(
         stopping = true
         runtime.getConnectorCloud()?.fence()
         host.stop()
-        await runtime.feishuLocal?.stop()
+        await Promise.all([
+          runtime.feishuLocal?.stop(),
+          // Records of which Slack drawing each bot shows get one bounded last try before exit.
+          runtime.bots.slackIcons.shownRecords.finalSave()
+        ])
       })
       runtime.getConnectorCloud()?.connect()
     }

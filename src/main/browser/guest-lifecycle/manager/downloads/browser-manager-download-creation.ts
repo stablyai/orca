@@ -21,6 +21,8 @@ export type BrowserDownloadClaim = {
 /** Where a tab's download goes when nothing claimed it, and who hears it finish. */
 export type StandingDownloadClaim = {
   savePath: string
+  /** Where the person is told it went; savePath, and its file name, stay private. */
+  label: string
   finish: (event: BrowserDownloadFinishedEvent) => void
 }
 
@@ -218,7 +220,8 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       browserTabId: null,
       rendererWebContentsId: null,
       origin,
-      filename: destination?.filename ?? requestedFilename,
+      // A standing claim's staging file name is private; show the one the page asked for.
+      filename: (standing ? null : destination?.filename) ?? requestedFilename,
       totalBytes,
       mimeType,
       item,
@@ -226,6 +229,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       reservationKey: destination?.reservationKey ?? null,
       clientRoute,
       remoteDestination: undefined,
+      claimLabel: standing?.label ?? null,
       receivedBytes: 0,
       transientState: null,
       terminalEvent: null,

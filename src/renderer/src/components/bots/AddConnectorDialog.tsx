@@ -10,6 +10,7 @@ import { openBotConnectorsTab } from './bot-settings-open'
 import type { BotConnector } from './bot-connectors'
 import { BotAppsCatalog, type BotAppsStep } from './apps/BotAppsCatalog'
 import type { Bot } from '../../../../shared/bot-types'
+import { GoogleAccountsStep, useGoogleSignedInFor } from './google/GoogleAccountsChoice'
 
 export type BotConnectorId = BotConnector['id']
 
@@ -71,6 +72,9 @@ export function AddConnectorDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const [step, setStep] = useState<BotAppsStep | null>(null)
+  // Google signed in on the bot's host: its Add continues here, on which accounts the bot may use.
+  const [googleStep, setGoogleStep] = useState(false)
+  const googleSignedIn = useGoogleSignedInFor(bot, open)
   const title = t('bots.apps.addAppsTitle', 'Add apps to {{bot}}', { bot: bot.name })
   return (
     <Dialog
@@ -79,6 +83,7 @@ export function AddConnectorDialog({
         onOpenChange(next)
         if (!next) {
           setStep(null)
+          setGoogleStep(false)
         }
       }}
     >
@@ -86,11 +91,22 @@ export function AddConnectorDialog({
         size="flush"
         showCloseButton={false}
         aria-describedby={undefined}
-        data-step={step !== null}
+        data-step={step !== null || googleStep}
         className="flex h-175 max-h-[calc(100vh-4rem)] flex-col overflow-hidden sm:max-w-[min(57.5rem,calc(100vw-4rem))] data-[step=true]:h-auto data-[step=true]:sm:max-w-115"
       >
-        {step !== null ? <DialogTitle className="sr-only">{title}</DialogTitle> : null}
-        {open ? (
+        {step !== null || googleStep ? (
+          <DialogTitle className="sr-only">{title}</DialogTitle>
+        ) : null}
+        {open && googleStep ? (
+          <GoogleAccountsStep
+            bot={bot}
+            onBack={() => setGoogleStep(false)}
+            onClose={() => {
+              onOpenChange(false)
+              setGoogleStep(false)
+            }}
+          />
+        ) : open ? (
           <BotAppsCatalog
             bot={bot}
             title={title}
@@ -105,7 +121,9 @@ export function AddConnectorDialog({
               setStep(null)
               manageConnectors(bot)
             }}
-            onAdd={onAdd}
+            onAdd={(connector) =>
+              connector === 'google' && googleSignedIn ? setGoogleStep(true) : onAdd(connector)
+            }
             step={step}
             setStep={setStep}
           />

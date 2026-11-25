@@ -4110,7 +4110,6 @@
       "empty": "沒有工作區",
       "loadFailed": "無法從此主機載入工作區",
       "noFilterMatches": "沒有符合篩選條件的工作區",
-      "noMatches": "找不到相符的工作區",
       "reopen": "重新開啟以更新",
       "reopenDetail": "此頁面尚不支援這台主機列出工作區的方式。"
     },
@@ -4455,10 +4454,7 @@
     }
   },
   "bots": {
-    "section": {
-      "scrollLeft": "向左捲動 · 隱藏 {{amount}} 個",
-      "scrollRight": "向右捲動 · 隱藏 {{amount}} 個"
-    },
+    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",
@@ -4536,7 +4532,6 @@
     "lookAround": {
       "looking": "正在查詢…",
       "save": "儲存",
-      "detail": "讀取已連線的應用程式和專案以建議下一步。唯讀。每次檢視都會使用你的代理程式方案，且主機上必須正在執行 Orca。",
       "lookNow": "立即檢視",
       "notYet": "尚未",
       "backToLookAround": "返回四處看看"
@@ -4551,7 +4546,6 @@
     "groups": {
       "group": "群組",
       "peerTold": "{{from}} 告知了 {{to}}",
-      "startAConversationWithThisGroupMentionBots": "與此群組開始對話。用 @名稱 或 @everyone 提及機器人。",
       "items": {
         "emptyTitle": "此群組還沒有事項",
         "needsYouCount_one": "{{count}} 個需要您處理",
@@ -4590,8 +4584,6 @@
     "tidyUp": {
       "title": "記憶維護",
       "never": "尚未",
-      "footer": "僅更改記憶檔案。與簡短聊天一樣，會使用你的代理程式方案。你的電腦上必須正在執行 Orca。",
-      "undoNote": "復原會一次將 MEMORY.md 恢復到此次整理之前的狀態。完整歷史記錄和記憶編輯功能位於電腦上的「設定 → 記憶」。",
       "backToTidyUp": "返回記憶維護"
     },
     "items": {
@@ -4612,8 +4604,7 @@
         "title": "項目",
         "placeOf": "第 {{index}} 個，共 {{total}} 個",
         "previous": "上一個項目",
-        "next": "下一個項目",
-        "subWhere": "事項 {{number}} · {{chat}}"
+        "next": "下一個項目"
       },
       "write": {
         "offline": "{{host}} 已離線。"
@@ -4622,7 +4613,6 @@
       "readFailedClosedPage": "無法讀取更多已關閉的事項。",
       "skillLimit": "訊息未傳送。請最多選擇 {{limit}} 個技能檔案後再試一次。",
       "ask": {
-        "notSentYet": "尚未傳送",
         "replaced": "代理程式提出了新問題。請先閱讀，再回覆。",
         "replacedByNewer": "已由較新的問題取代",
         "skipped": "已略過"
@@ -4661,7 +4651,6 @@
       },
       "rotate": {
         "open": "輪換金鑰…",
-        "title": "要輪換「{{automation}}」的金鑰嗎？",
         "confirm": "輪換金鑰",
         "note": "URL 將獲得新金鑰。請用它更新每個傳送方。",
         "overlap": "舊金鑰繼續有效 24 小時",
@@ -4676,19 +4665,15 @@
         "add": "新增簽名金鑰…",
         "generatedTitle": "簽名金鑰已就緒",
         "done": "完成",
-        "generatedNote": "把它複製到 {{sender}} 的 Webhook 設定中。今後呼叫必須帶有它的簽名。",
         "copy": "複製金鑰",
         "copied": "金鑰已複製",
         "changeTitle": "更改簽名金鑰",
         "addTitle": "新增簽名金鑰",
-        "note": "之後 Orca 只接受用此金鑰簽名的呼叫，因此僅洩露 URL 無法啟動「{{automation}}」。",
         "sender": "傳送方",
         "modeGenerate": "由 Orca 生成",
         "modePaste": "貼上傳送方的金鑰",
         "generateNote": "此金鑰由 Orca 生成。接下來請把它複製到 {{sender}}。",
         "paste": "{{sender}} 金鑰",
-        "pasteNote": "當傳送方提供自己的金鑰時使用此項。",
-        "generate": "生成金鑰",
         "save": "儲存",
         "saved": "簽名金鑰已儲存",
         "changeOpen": "更改簽名金鑰…",
@@ -4722,7 +4707,6 @@
       "hookCount_one": "{{count}} 個 Hook",
       "hookCount_other": "{{count}} 個 Hook",
       "name": "Webhooks",
-      "hooks": "Hook",
       "addInChat": "在聊天中新增",
       "setUpDraft": "設定一個這樣的 Webhook：",
       "resumed": "Webhook 已恢復",
@@ -4788,8 +4772,7 @@
         "unverifiable": "無法驗證",
         "unverifiableDetail": "無法連線 {{bot}} 的電腦"
       },
-      "back": "返回 Webhook",
-      "howToCallShort": "任何工具或指令碼都能向 Webhook 的 URL 傳送 POST 請求。每個 Webhook 會啟動一個自動化。"
+      "back": "返回 Webhook"
     },
     "errors": {
       "generic": "出了點問題。請重試。"
@@ -5178,6 +5161,7 @@
     },
     "usageLimit": {
       "continuesAt": "將於 {{time}} 繼續",
+      "continues": "將於 {{time}} 繼續",
       "hitLimit": "已達上限 · {{time}} 重設"
     }
   },

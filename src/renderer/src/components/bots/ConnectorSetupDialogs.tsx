@@ -9,7 +9,7 @@ import type { BotConnectorId } from './AddConnectorDialog'
 import { openGitHubInstallPage } from './github/github-install-page'
 import { BotLinearSetupDialog } from './linear/BotLinearSetupDialog'
 import { BotSlackSetupDialog } from './slack/BotSlackSetupDialog'
-import { useTurnOnBotGoogle } from './google/use-turn-on-bot-google'
+import { GoogleAccountsDialog } from './google/GoogleAccountsChoice'
 import { refreshGoogle } from './google/google-connect-client'
 import { GoogleHostChoiceDialog } from './google/GoogleHostChoiceDialog'
 import {
@@ -27,8 +27,7 @@ export function useConnectorSetup(bot: Bot): {
   start: (connector: BotConnectorId, options?: { workspace?: string }) => void
   dialogs: React.JSX.Element
 } {
-  const [setupOpen, setSetupOpen] = useState<BotConnectorId | null>(null)
-  const turnOnGoogle = useTurnOnBotGoogle()
+  const [setupOpen, setSetupOpen] = useState<BotConnectorId | 'google-accounts' | null>(null)
   const start = (connector: BotConnectorId, options: { workspace?: string } = {}): void => {
     if (handOffConnectorSetup(bot, connector)) {
       return
@@ -44,7 +43,7 @@ export function useConnectorSetup(bot: Bot): {
               }).host
             : 'no-app'
         if (host === 'connected') {
-          void turnOnGoogle(bot)
+          setSetupOpen('google-accounts')
         } else if (host === 'no-app') {
           setSetupOpen('google')
         } else {
@@ -89,6 +88,11 @@ export function useConnectorSetup(bot: Bot): {
         bot={bot}
         open={setupOpen === 'linear'}
         onOpenChange={(next) => setSetupOpen(next ? 'linear' : null)}
+      />
+      <GoogleAccountsDialog
+        bot={bot}
+        open={setupOpen === 'google-accounts'}
+        onOpenChange={(next) => setSetupOpen(next ? 'google-accounts' : null)}
       />
       <GoogleHostChoiceDialog
         bot={bot}

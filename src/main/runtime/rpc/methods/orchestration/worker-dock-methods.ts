@@ -22,11 +22,13 @@ import {
 import { subscribeWorkerDock } from '../../../orchestration/dock/worker-dock-stream'
 import { stopWorkerAndHelpers } from './worker/worker-stop'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { isPersonCaller } from './access/worker-approval-access'
 import type { RpcContext } from '../../core'
 
+/** Clear and Stop are the person's: this computer's Orca window, or a paired window or phone that
+ *  says it is one. The orca CLI, agents and a paired Orca's forwarded calls are refused. */
 function requireOwner({ ctx }: { ctx: RpcContext }): void {
-  const caller = ctx.caller
-  if (caller?.kind !== 'desktop') {
+  if (!isPersonCaller(ctx)) {
     throw new OrchestrationError(
       'owner_required',
       'Use Orca to clear or stop workers in this dock.'
@@ -143,7 +145,11 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
     permission: 'workspace',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockSubscribe,
-    handler: ({ party, includeRows, currentOnly }, { runtime, signal, connectionId }, emit) =>
+    handler: (
+      { party, includeRows, currentOnly },
+      { runtime, signal, connectionId, requestId },
+      emit
+    ) =>
       new Promise<void>((resolve) => {
         if (signal?.aborted) {
           resolve()
@@ -165,9 +171,13 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
           () => {
             stop()
             signal?.removeEventListener('abort', close)
+            // A relay holds a stream's id until its end frame, as crew streams send.
+            emit({ type: 'end' })
             resolve()
           },
-          connectionId
+          connectionId,
+          // A phone ends this one stream by its request id (`orchestration.workerApprovalsUnsubscribe`).
+          requestId
         )
         signal?.addEventListener('abort', close, { once: true })
         if (signal?.aborted) {

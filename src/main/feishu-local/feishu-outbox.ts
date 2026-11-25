@@ -1,5 +1,5 @@
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
-import { outcomeSentence } from '../connector-cloud/connector-reply-outbox'
+import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { dmKey, type Binding } from './feishu-binding'
 import { replyFeishu, finalFeishuMessage, uploadFeishuFile } from './feishu-replies'
 import type { FeishuStore } from './feishu-store-ops'

@@ -16,6 +16,8 @@ export type StructuredAgentDefinition = AgentSessionStoredAgent & {
   managedRuntime?: () => boolean
   /** Whether a chat pinned to `home` runs a program the host has rather than the managed runtime. */
   runsHostProgram?: (home: AgentSessionAccountHome) => boolean
+  /** Chats pinned to `home` run on the host program's own login. */
+  usesOwnLogin?: (home: AgentSessionAccountHome) => boolean
   restingOptions: {
     acceptsKey: (key: string) => boolean
     /** Null means no fallback catalog. */

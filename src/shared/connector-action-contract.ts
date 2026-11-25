@@ -9,6 +9,7 @@ export const CONNECTOR_ACTIONS_PATH = '/v1/connector/actions'
 export const CONNECTOR_POST_METHOD_NAMES = [
   'connector.act',
   'connector.reply',
+  'connector.leaveThread',
   'bots.feishuLocal.stageFile'
 ] as const
 
@@ -172,6 +173,15 @@ export const CONNECTOR_ACT_ERROR_CODES = [
   // A look-around run asked for something other than a read.
   'look_around_reads_only',
   // `bot reply --react` in a run no message woke, or where reactions aren't available.
-  'no_waking_message'
+  'no_waking_message',
+  // `bot reply --leave-thread` outside a Slack thread the bot follows, from a turn not running or not
+  // a person's, or whose leave couldn't be saved.
+  'not_a_thread',
+  'leave_refused_stale',
+  'leave_refused_mixed',
+  'leave_unavailable',
+  'thread_mute_not_saved',
+  // A leave whose save's outcome is unknown: it may have taken.
+  'leave_unconfirmed'
 ] as const
 export type ConnectorActErrorCode = (typeof CONNECTOR_ACT_ERROR_CODES)[number]
