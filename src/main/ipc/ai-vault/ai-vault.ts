@@ -1,3 +1,4 @@
+import { attributeIsolatedClaudeHistory } from '../../ai-vault/structured-sessions/isolated-claude-history-attribution'
 import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-scan'
 import {
   captureRuntimeAiVaultProjectionDependency,
@@ -241,7 +242,9 @@ export function registerAiVaultHandlers(options: AiVaultHandlerOptions = {}): vo
     try {
       await handlerOptions.ensureStructuredSessionOwnership?.()
       const result = await listAiVaultSessions(args, { signal: controller?.signal })
-      return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      return attributeIsolatedClaudeHistory(
+        projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      )
     } catch (error) {
       // Expected cancellation is a result so Electron does not log rejected IPC as an error.
       if (!isAiVaultScanCancelledError(error)) {

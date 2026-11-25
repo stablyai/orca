@@ -1,3 +1,4 @@
+import { normalizeClaudeAccountBinding } from '../../agent-accounts/claude/claude-account-binding'
 import { getDefaultRepoHookSettings } from '../../workspace-setup/repo-hook-settings-defaults'
 import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectGroup, ProjectGroupCreatedFrom } from './project-group-types'
@@ -36,6 +37,12 @@ export function createProjectGroup(input: {
   }
 }
 
+// Why: a dropped binding would silently move the group's chats back to the selected account.
+function normalizedClaudeAccountField(value: unknown): Pick<ProjectGroup, 'claudeAccount'> {
+  const claudeAccount = normalizeClaudeAccountBinding(value)
+  return claudeAccount ? { claudeAccount } : {}
+}
+
 export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
   if (!Array.isArray(value)) {
     return []
@@ -65,6 +72,7 @@ export function normalizeProjectGroups(value: unknown): ProjectGroup[] {
             }
           }
         : {}),
+      ...normalizedClaudeAccountField(raw.claudeAccount),
       parentPath: typeof raw.parentPath === 'string' ? raw.parentPath : null,
       connectionId:
         typeof raw.connectionId === 'string'

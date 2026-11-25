@@ -1,3 +1,4 @@
+import { attributeIsolatedClaudeHistory } from '../../../../ai-vault/structured-sessions/isolated-claude-history-attribution'
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { writeAiVaultSessionHandoffSnapshot } from '../../../../ai-vault/session-handoff-snapshot'
 import { prepareAiVaultSessionHandoffPrompts } from '../../../../ai-vault/session-handoff-prompt'
@@ -124,8 +125,10 @@ export const AI_VAULT_METHODS = [
         throw new Error(describeAiVaultScanError(String(error)))
       }
       // Web clients have no parent retagging, so stamp sessions with the runtime host they addressed.
-      const projected = projectStructuredAiVaultSessions(result, (agent) =>
-        clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
+      const projected = attributeIsolatedClaudeHistory(
+        projectStructuredAiVaultSessions(result, (agent) =>
+          clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
+        )
       )
       return conditionalAiVaultListResult(
         params.executionHostId

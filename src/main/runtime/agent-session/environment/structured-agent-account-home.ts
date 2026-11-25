@@ -37,7 +37,7 @@ export async function resolveStructuredClaudeAccountHomePath(
   const binding = installedClaudeAccountBinding(deps.workspaceId)
   if (binding) {
     const bound = deps.wslDistro ? undefined : getClaudeProfileRouter()
-    // Why throw: bindings name host folders, and following the selection would run another account.
+    // Why throw: bindings name host accounts, and following the selection would run another account.
     if (!bound) {
       throw claudeAccountBindingUnavailable()
     }

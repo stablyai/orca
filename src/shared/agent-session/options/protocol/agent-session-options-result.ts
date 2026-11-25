@@ -22,6 +22,9 @@ export type AgentSessionOptionsResult = {
   /** This host verified that account selection moves this chat with its history intact. */
   canSwitchAccount?: boolean
   accountUsage?: true
+  /** Claude on this host: the saved account the chat runs on; null is System default. Absent from
+   *  older hosts and other agents. */
+  claudeAccountId?: string | null
   /** Fresh host observation; absent means an older host or unknown conversation. */
   sessionNeverStarted?: boolean
   /** Saved conversation on this execution host, resolved from the record's own account store. */

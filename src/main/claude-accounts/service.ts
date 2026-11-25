@@ -150,6 +150,26 @@ export class ClaudeAccountService {
     }
   }
 
+  /** Re-runs the folder's setup, which links or separates its history to match. */
+  setHistoryIsolated(accountId: string, isolated: boolean): Promise<ClaudeRateLimitAccountsState> {
+    return this.serializeMutation(async () => {
+      if (this.selection.requireAccount(accountId).managedAuthRuntime === 'wsl') {
+        throw new Error('Separate history is available for accounts on this computer only.')
+      }
+      const accounts = this.store.getSettings().claudeManagedAccounts.map((account) => {
+        const { historyIsolated: _previous, ...rest } = account
+        return account.id !== accountId
+          ? account
+          : isolated
+            ? { ...rest, historyIsolated: true as const }
+            : rest
+      })
+      this.selection.saveSettings({ claudeManagedAccounts: accounts })
+      await this.runtimeAuth.prepareAccountFolder(accountId, { runtime: 'host' })
+      return this.selection.list()
+    })
+  }
+
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.select(accountId))

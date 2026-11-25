@@ -38,6 +38,11 @@ export function registerClaudeAccountHandlers(
       claudeAccounts.renameAccount(args.accountId, args.displayName)
   )
   ipcMain.handle(
+    'claudeAccounts:setHistoryIsolated',
+    (_event, args: { accountId: string; isolated: boolean }) =>
+      claudeAccounts.setHistoryIsolated(args.accountId, args.isolated === true)
+  )
+  ipcMain.handle(
     'claudeAccounts:select',
     (_event, args: { accountId: string | null } & ClaudeAccountSelectionTarget) =>
       args.runtime

@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { shareClaudeProfileHistory } from './claude-profile-history'
+import { separateClaudeProfileHistory } from './claude-profile-history-separation'
 import {
   claudeProfileMarkerPath,
   prepareClaudeProfileDirectory,
@@ -28,6 +29,8 @@ export async function provisionClaudeAccountProfile(args: {
   /** Runs after settings are copied so hook entries survive; null disables installation. */
   installHooks: ((target: { configDir: string }) => AgentHookInstallStatus) | null
   platform?: NodeJS.Platform
+  /** Keep the account's conversations in its own folder instead of System default's. */
+  historyIsolated?: boolean
 }): Promise<ClaudeProfileSetupReport> {
   const platform = args.platform ?? process.platform
   const report = createClaudeProfileReport()
@@ -51,7 +54,10 @@ export async function provisionClaudeAccountProfile(args: {
   const home = args.profile.home
   const shared = { profileHome: home, userHome: args.userHome, userConfigDir: args.userConfigDir }
   for (const step of [
-    () => shareClaudeProfileHistory({ ...shared, platform }),
+    () =>
+      args.historyIsolated
+        ? separateClaudeProfileHistory(shared)
+        : shareClaudeProfileHistory({ ...shared, platform }),
     () => provisionClaudeProfile({ ...shared, platform, firstSetup })
   ]) {
     try {

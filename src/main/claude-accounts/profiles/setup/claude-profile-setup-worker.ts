@@ -15,6 +15,7 @@ export type ClaudeProfileSetupJob = {
   userConfigDir: string | undefined
   hooks: boolean
   claudeVersion: string | undefined
+  historyIsolated?: boolean
 }
 
 const WORKER_FILENAME = 'claude-profile-setup-worker-entry.js'

@@ -39,14 +39,14 @@ export async function claudeRoutedHomeAsync(
   return profile.home
 }
 
-/** A project's bound folder; `identity` names it before it exists, `checked` also needs its login. */
+/** A project's bound account folder; `identity` names it before it exists, `checked` also needs
+ *  its login. */
 export async function claudeBoundHomeAsync(
   router: Pick<ClaudeProfileRouter, 'accountHome' | 'userHome'>,
   binding: ClaudeAccountBinding,
   availability: 'checked' | 'identity' = 'checked'
 ): Promise<string> {
-  const home =
-    binding.kind === 'managed' ? router.accountHome(binding.accountId) : binding.configDir
+  const home = router.accountHome(binding.accountId)
   if (availability === 'identity') {
     return home
   }

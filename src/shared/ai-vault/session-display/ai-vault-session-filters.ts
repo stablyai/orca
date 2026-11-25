@@ -22,6 +22,10 @@ import {
 } from '../contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { sessionPreviewSearchText } from './ai-vault-session-display'
+import {
+  matchesAiVaultClaudeAccountFilter,
+  type AiVaultClaudeAccountFilter
+} from './ai-vault-session-claude-account'
 
 // Move the plain descriptor type without importing renderer project-attribution runtime.
 export type AiVaultSessionProject = {
@@ -43,6 +47,8 @@ export type AiVaultSessionFilterState = {
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
+  /** Absent lists every account; see AiVaultClaudeAccountFilter. */
+  claudeAccount?: AiVaultClaudeAccountFilter
 }
 
 export type AiVaultSessionGroup = {
@@ -81,7 +87,10 @@ export function filterAiVaultSessions(
   )
 
   const filtered = sessions.filter((session) => {
-    if (!agentSet.has(session.agent)) {
+    if (
+      !agentSet.has(session.agent) ||
+      !matchesAiVaultClaudeAccountFilter(session, filters.claudeAccount)
+    ) {
       return false
     }
     // Hide only truly empty sessions; retain preview-inferred turns and queued/subagent recovery content so lost conversations remain visible.

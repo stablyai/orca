@@ -1,5 +1,4 @@
 import { CLAUDE_PROFILE_POINTER_ENV } from '../../../../shared/agent-accounts/claude/claude-profile-routing'
-import { claudeConfigDirEnvPatch } from '../../../claude/structured/launch/claude-config-dir-pin'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
 import type { ClaudeEnvPatch } from '../../runtime-auth/environment'
 import { installedClaudeAccountBinding } from '../../selection/claude-workspace-account-binding'
@@ -13,9 +12,9 @@ export type ClaudeBoundTerminalRoute = {
   preparation: ClaudeRuntimeAuthPreparation
 }
 
-/** Null leaves the terminal on the selection: no binding, no router, or a WSL lane, whose folders
- *  a host binding cannot name. Never checks the folder: a broken binding must not stop a terminal
- *  opening, and Claude asks to sign in there instead of running another account. */
+/** Null leaves the terminal on the selection: no binding, no router, or a WSL lane, which a host
+ *  account folder cannot serve. Never checks the login: a signed-out account must not stop a
+ *  terminal opening, and Claude asks to sign in there instead of running another account. */
 export function claudeBoundTerminalRoute(
   worktreeId: string | undefined,
   target: ClaudeAccountSelectionTarget | undefined
@@ -25,20 +24,13 @@ export function claudeBoundTerminalRoute(
   if (!binding || !router || target?.runtime === 'wsl') {
     return null
   }
-  const home =
-    binding.kind === 'managed' ? router.accountHome(binding.accountId) : binding.configDir
-  if (binding.kind === 'managed') {
-    // Why not awaited: setup can take seconds, and the terminal opens either way.
-    void router.prepareAccount(binding.accountId).catch((error: unknown) => {
-      console.warn('[claude-profile] Could not set up the project Claude account:', error)
-    })
-  }
+  const home = router.accountHome(binding.accountId)
+  // Why not awaited: setup can take seconds, and the terminal opens either way.
+  void router.prepareAccount(binding.accountId).catch((error: unknown) => {
+    console.warn('[claude-profile] Could not set up the project Claude account:', error)
+  })
   // Why the empty pointer: the `claude` shell function would otherwise re-read the selection.
-  const envPatch: ClaudeEnvPatch = {
-    [CLAUDE_PROFILE_POINTER_ENV]: '',
-    // Why: naming the default folder explicitly changes the CLI's Keychain identity on macOS.
-    ...claudeConfigDirEnvPatch(home, { env: { CLAUDE_CONFIG_DIR: router.systemDefaultHome() } })
-  }
+  const envPatch: ClaudeEnvPatch = { [CLAUDE_PROFILE_POINTER_ENV]: '', CLAUDE_CONFIG_DIR: home }
   return {
     envPatch,
     preparation: {
@@ -47,7 +39,7 @@ export function claudeBoundTerminalRoute(
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch,
-      provenance: binding.kind === 'managed' ? `profile:${binding.accountId}` : 'system'
+      provenance: `profile:${binding.accountId}`
     }
   }
 }

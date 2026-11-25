@@ -5,15 +5,15 @@ import {
   type ClaudeWorkspaceBindingLookup
 } from './claude-workspace-account-binding'
 
-const axion = { kind: 'folder', configDir: 'C:\\Users\\me\\.claude_axion' } as const
+const axion = { kind: 'managed', accountId: 'axion-1' } as const
 const personal = { kind: 'managed', accountId: 'personal-1' } as const
 
 const repos: Record<string, ReturnType<ClaudeWorkspaceBindingLookup['getRepo']>> = {
   'repo-own': { claudeAccount: personal, projectGroupId: 'child' },
   'repo-grouped': { projectGroupId: 'child' },
   'repo-loose': { projectGroupId: null },
-  // Stored data can hold what the type forbids; the lookup must reject it.
-  'repo-bad': JSON.parse('{"claudeAccount":{"kind":"folder","configDir":"relative"}}')
+  // Stored data can hold what the type forbids, such as a retired folder binding; it is rejected.
+  'repo-bad': JSON.parse('{"claudeAccount":{"kind":"folder","configDir":"C:/x"}}')
 }
 
 function lookup(

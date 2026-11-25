@@ -1,3 +1,4 @@
+import { useAiVaultClaudeAccountFilter } from '../scope/ai-vault-claude-account-filter'
 import { useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
@@ -223,6 +224,7 @@ export default function AiVaultPanel({
     sessionLimit
   })
 
+  const claudeAccount = useAiVaultClaudeAccountFilter()
   const { filteredSessions, groups } = useAiVaultPanelSessions(sessions, listMode, group, {
     query,
     agents,
@@ -233,6 +235,7 @@ export default function AiVaultPanel({
     sessionProjectById,
     projectLabelByKey,
     hideEmptySessions,
+    claudeAccount,
     // A group room's member rows list once, in the group's home.
     roomRows: useAiVaultGroupRoomRows()
   })

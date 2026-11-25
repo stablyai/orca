@@ -15,6 +15,7 @@ import type { ProjectGroup } from '../../../../../../shared/project/groups/proje
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getFolderProjectGroupRefreshHandler } from './project-group-folder-refresh'
+import { ProjectGroupClaudeAccountSubmenu } from './ProjectGroupClaudeAccountSubmenu'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import {
   handleRepoHeaderActionPointerDown,
@@ -75,6 +76,7 @@ export function ProjectGroupHeaderMenu({
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        <ProjectGroupClaudeAccountSubmenu groupId={groupId} hostId={hostId} />
         {onRefresh ? (
           <DropdownMenuItem onSelect={onRefresh}>
             <RefreshCw className="size-3.5" />

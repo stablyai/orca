@@ -18,6 +18,7 @@ void provisionClaudeAccountProfile({
   profile: job.profile,
   userHome: job.userHome,
   userConfigDir: job.userConfigDir,
+  historyIsolated: job.historyIsolated === true,
   installHooks: job.hooks
     ? ({ configDir }) =>
         new ClaudeHookService().install({ configDir, claudeVersion: job.claudeVersion })

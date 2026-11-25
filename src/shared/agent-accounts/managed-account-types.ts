@@ -81,6 +81,8 @@ export type ClaudeManagedAccount = {
   authMethod: 'subscription-oauth' | 'unknown'
   organizationUuid?: string | null
   organizationName?: string | null
+  /** Its conversations stay in its own folder instead of joining System default's history. */
+  historyIsolated?: true
   createdAt: number
   updatedAt: number
   lastAuthenticatedAt: number

@@ -39,6 +39,7 @@ export type ProviderAccountAction =
   | `reauth:${string}`
   | `remove:${string}`
   | `select:${string}`
+  | `history:${string}`
 
 export type RemoveAccountTarget = {
   id: string

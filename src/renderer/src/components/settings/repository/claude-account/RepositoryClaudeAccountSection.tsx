@@ -106,7 +106,7 @@ export function RepositoryClaudeAccountSection({
         <p className="text-xs text-muted-foreground">
           {t(
             'auto.components.settings.RepositoryClaudeAccountSection.longDescription',
-            'New and resumed Claude chats in this project use this account, so chats in other projects can run on another account at the same time. A folder keeps its history apart from your other accounts.'
+            'New and resumed Claude chats and terminals in this project use this account, so other projects can run on another account at the same time.'
           )}
         </p>
       </div>

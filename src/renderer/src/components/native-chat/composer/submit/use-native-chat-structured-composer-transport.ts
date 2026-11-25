@@ -156,6 +156,9 @@ export function useNativeChatStructuredComposerTransport(args: {
                 })
             }
           : undefined,
+      ...(controller.claudeAccountId !== undefined
+        ? { claudeAccountId: controller.claudeAccountId }
+        : {}),
       mcpPanel,
       fork: nativeChatForkCommand({ fork, sideChat }, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,

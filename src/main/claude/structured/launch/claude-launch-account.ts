@@ -71,23 +71,13 @@ async function prepareBoundClaudeLaunch(
   binding: ClaudeAccountBinding,
   env: Record<string, string>
 ): Promise<ClaudeAccountRecipe> {
-  if (binding.kind === 'managed') {
-    if (!router.savedAccount(binding.accountId)) {
-      throw claudeAccountBindingUnavailable()
-    }
-    await router.prepareAccount(binding.accountId).catch(() => {
-      throw claudeProfileSetupFailed()
-    })
+  if (!router.savedAccount(binding.accountId)) {
+    throw claudeAccountBindingUnavailable()
   }
+  await router.prepareAccount(binding.accountId).catch(() => {
+    throw claudeProfileSetupFailed()
+  })
   const home = await claudeBoundHomeAsync(router, binding)
-  // Why: naming the default folder explicitly changes the CLI's Keychain identity on macOS.
-  if (
-    claudeConfigDirEnvPatch(home, { env: { CLAUDE_CONFIG_DIR: router.systemDefaultHome() } })
-      .CLAUDE_CONFIG_DIR
-  ) {
-    applyClaudeEnvPatch(env, { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home })
-  }
-  return binding.kind === 'managed'
-    ? { route: 'managed', accountId: binding.accountId, home }
-    : { route: 'system', home, configDir: home }
+  applyClaudeEnvPatch(env, { CLAUDE_CONFIG_DIR: home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: home })
+  return { route: 'managed', accountId: binding.accountId, home }
 }

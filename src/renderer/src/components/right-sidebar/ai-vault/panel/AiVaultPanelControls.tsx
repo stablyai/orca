@@ -1,3 +1,4 @@
+import { AiVaultClaudeAccountFilterMenu } from './AiVaultClaudeAccountFilterMenu'
 import type React from 'react'
 import { refreshRuntimeEnvironmentCatalog } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
 import {
@@ -324,6 +325,7 @@ export function VaultViewMenu({
             {agentLabel(agent)}
           </DropdownMenuCheckboxItem>
         ))}
+        <AiVaultClaudeAccountFilterMenu />
         {!searching && (
           <>
             <DropdownMenuSeparator />
