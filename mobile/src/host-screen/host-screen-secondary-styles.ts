@@ -11,10 +11,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   list: {
     paddingBottom: spacing.lg
   },
-  offlineBanner: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm
-  },
   // The chevron sits in the rows' status-dot column, so the icon and title start at the row text.
   sectionHeader: {
     flexDirection: 'row',
@@ -46,6 +42,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginLeft: 6
   },
+  // Muted and plain, like the header's count: a fact about the section, not an action.
   sectionPendingSpinner: {
     marginLeft: spacing.sm
   },
@@ -77,12 +74,6 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
   optionSegmented: {
     marginBottom: spacing.md
   },
-  // Over the sheet header's empty leading side, centred in its 52pt row.
-  optionPageBack: {
-    position: 'absolute',
-    top: 8,
-    left: spacing.xs
-  },
   filterRepoDot: {
     width: 8,
     height: 8,
@@ -101,6 +92,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     color: colors.textSecondary,
     marginTop: spacing.xs,
     lineHeight: 20
+  },
+  // Desktop's amber loss line, as plain text: what deleting throws away.
+  confirmLoss: {
+    color: colors.statusAmber
+  },
+  confirmDetail: {
+    fontSize: typography.metaSize,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+    lineHeight: 16
   },
   confirmButtons: {
     flexDirection: 'row',

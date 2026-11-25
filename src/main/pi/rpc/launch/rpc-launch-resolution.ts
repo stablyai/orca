@@ -1,6 +1,6 @@
-import { open, realpath } from 'node:fs/promises'
-import { isAbsolute, normalize } from 'node:path'
-import { z } from 'zod'
+import { readPiSessionHeader, samePiDirectory } from './pi-session-header'
+export { readPiSessionHeader, samePiDirectory } from './pi-session-header'
+import { isAbsolute } from 'node:path'
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import {
   agentSessionProviderHandleChainHead,
@@ -29,7 +29,8 @@ import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-s
 import { isWindowsProcessStartTimeAvailable } from '../../../windows/windows-process-table'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import {
-  PI_RPC_SESSION_ENV_TO_DELETE,
+  withPiVisualsEnv,
+  piToolLimit,
   withoutPiCallerEnv,
   type PiRpcLaunchOptions
 } from './rpc-launch'
@@ -37,7 +38,17 @@ import {
   ensurePiBackgroundWorkBridge,
   type PiBackgroundWorkLaunch
 } from '../background-work/rpc-background-work-bridge'
+import { piTitlebarExtensionService } from '../../managed-extensions/titlebar-extension-service'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { linkedSkillsSection } from '../../../native-chat/native-chat-skill-roots'
+import { writeAcpInstructionsFile } from '../../../acp/launch/acp-instructions'
+import { withBotLaunchToolsEnv } from '../../../bots/bot-launch-tools'
+import {
+  PI_BOT_TOOLS_EXTENSION_FILE,
+  PI_BOT_TOOLS_EXTENSION_SOURCE,
+  piBotToolsConfig
+} from '../../../bots/bot-tools-pi'
+import { writePiExtensionFile } from './pi-extension-file'
 
 export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   previous: AgentSessionProviderHandleLink | null
@@ -52,7 +63,10 @@ export type PiRpcLaunchPartDeps = {
   probeVersion?: AgentCliVersionReader
   resolveFullAccess?: () => boolean
   ensureBackgroundWorkBridge?: () => Promise<PiBackgroundWorkLaunch | null>
+  managedExtensionsEnabled?: () => boolean
   logger?: StructuredAgentSessionLogger
+  /** Where a chat's standing instructions are written for Pi to read. */
+  dataDirectory: string
 }
 
 // RPC turns require agent_settled (Pi 0.84+); older versions remain terminal-only.
@@ -97,45 +111,6 @@ export function checkPiRpcVersion(
   )
 }
 
-const headerSchema = z.object({
-  type: z.literal('session'),
-  cwd: z.string().min(1),
-  id: z.string().optional()
-})
-
-export async function readPiSessionHeader(
-  file: string
-): Promise<{ cwd: string; id?: string } | null> {
-  let descriptor
-  try {
-    descriptor = await open(file, 'r')
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      return null
-    }
-    throw error
-  }
-  try {
-    const buffer = Buffer.alloc(64 * 1024)
-    const { bytesRead } = await descriptor.read(buffer, 0, buffer.length, 0)
-    const data = buffer.subarray(0, bytesRead).toString('utf8')
-    const lf = data.indexOf('\n')
-    if (lf === -1) {
-      throw new Error('Pi session header is incomplete or oversized')
-    }
-    return headerSchema.parse(JSON.parse(data.slice(0, lf)))
-  } finally {
-    await descriptor.close()
-  }
-}
-
-export async function samePiDirectory(left: string, right: string): Promise<boolean> {
-  const canonical = async (value: string): Promise<string> =>
-    realpath(value).catch(() => normalize(value))
-  const [a, b] = await Promise.all([canonical(left), canonical(right)])
-  return process.platform === 'win32' ? a.toLowerCase() === b.toLowerCase() : a === b
-}
-
 /** Resolve chat/catalog launches identically; refresh the environment once if Pi is missing. */
 export function resolvePiRpcInvocation(deps: {
   operation?: StructuredAgentResolutionOperation
@@ -168,7 +143,7 @@ export function resolvePiRpcInvocation(deps: {
 export function piRpcLaunchPart(
   deps: PiRpcLaunchPartDeps
 ): StructuredAgentLaunchPartResolver<PiRpcResolvedLaunch> {
-  return async (basis) => {
+  return async (basis, identity) => {
     const { record } = basis
     if (process.platform === 'win32' && !isWindowsProcessStartTimeAvailable()) {
       throw new Error('Pi structured sessions require Windows process creation-time proof')
@@ -223,6 +198,26 @@ export function piRpcLaunchPart(
     if (launchVersion.status === 'tooOld') {
       throw AgentCliInstallationError.tooOld('pi', launchVersion)
     }
+    const visuals = await basis.visuals()
+    const linked = await basis.linkedSkills()
+    // Only a folder with skills; Pi loads every SKILL.md under it, links included.
+    const linkedRoot = linked.projects.length > 0 ? linked.root : null
+    const skillDirs = [visuals?.skill, linkedRoot].flatMap((root) =>
+      root ? [root.skillsRoot] : []
+    )
+    const instructions = await basis.instructions(
+      linkedSkillsSection(linked.projects, linkedRoot ? [] : linked.projects)
+    )
+    const instructionsFile = instructions
+      ? await writeAcpInstructionsFile(deps.dataDirectory, identity.sessionId, instructions)
+      : undefined
+    const tools = piToolLimit(basis.readOnly, launchVersion)
+    const botTools = await basis.toolServers()
+    const botServers = piBotToolsConfig(botTools)
+    // Chat loads extensions from its agent dir, so subagent rows need the current status extension there.
+    if (deps.managedExtensionsEnabled?.()) {
+      piTitlebarExtensionService.installManagedExtensions(accountHome.path, 'pi')
+    }
     const backgroundWork = await (
       deps.ensureBackgroundWorkBridge ??
       (() =>
@@ -246,13 +241,27 @@ export function piRpcLaunchPart(
         ...(forkFile ? { forkFile } : {}),
         ...(replacement ? { replacement } : {}),
         ...(backgroundWork ? { backgroundWork } : {}),
+        ...(instructionsFile ? { instructionsFile } : {}),
+        ...(skillDirs.length > 0 ? { skillDirs } : {}),
+        ...(tools ? { tools } : {}),
+        ...(botServers
+          ? {
+              botTools: {
+                extension: await writePiExtensionFile(
+                  deps.dataDirectory,
+                  PI_BOT_TOOLS_EXTENSION_FILE,
+                  PI_BOT_TOOLS_EXTENSION_SOURCE
+                ),
+                servers: botServers
+              }
+            }
+          : {}),
         ...(launchVersion.status === 'ready' &&
         hasReachedAppVersion(launchVersion.version, PI_SHRINKS_EVERY_IMAGE_VERSION)
           ? { shrinksImages: true as const }
           : {})
       },
-      env: withoutPiCallerEnv(env),
-      inheritedEnvToDelete: PI_RPC_SESSION_ENV_TO_DELETE
+      ...withPiVisualsEnv(withBotLaunchToolsEnv(withoutPiCallerEnv(env), botTools), visuals)
     }
   }
 }

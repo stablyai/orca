@@ -55,7 +55,7 @@ function workRunSlot(
         hasStatus: head.status !== undefined,
         hasTurnDiff: turnDiff !== undefined,
         turnDiffFileCount: turnDiff?.files.length,
-        openedPullRequestCount: openedPullRequests?.length
+        hasOpenedPullRequests: (openedPullRequests?.length ?? 0) > 0
       },
       typography
     )

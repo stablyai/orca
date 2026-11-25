@@ -42,7 +42,7 @@ export async function loadMarkdownPreviewImage(
     throw new Error('Unsupported image location')
   }
   if (!client) {
-    throw new Error('Waiting for desktop...')
+    throw new Error('Waiting for host…')
   }
   const result = await loadMobileFilePreview(client, worktreeId, relativePath)
   if (result.status === 'ready' && result.kind === 'image') {

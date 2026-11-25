@@ -61,12 +61,13 @@ function terminalSignature(payload: unknown): TerminalSignature {
 }
 
 export class CodexTurnFailures {
-  private readonly usageLimits = new CodexUsageLimits()
+  private readonly usageLimits: CodexUsageLimits
   private readonly evidence = new Map<string, FailureEvidence>()
 
   constructor(
     private readonly deps: {
       account?: () => AgentSessionAccountKind | undefined
+      localClock?: boolean
       activeTurn: (threadId: string) => string | null
       append: (
         threadId: string,
@@ -74,7 +75,9 @@ export class CodexTurnFailures {
         frame: Omit<UnhandledProviderFrameJournalItem, 'body'> & { body: AgentJournalStatusItem }
       ) => CodexJournalTranslationAdmission
     }
-  ) {}
+  ) {
+    this.usageLimits = new CodexUsageLimits(Date.now, deps.localClock === true)
+  }
 
   appendTerminal(
     kind: string,
@@ -185,7 +188,12 @@ export class CodexTurnFailures {
       case 'serverOverloaded':
       case 'flexUnavailable':
       case 'policyCapacityUnavailable':
+      case 'rateLimitExceeded':
         return agentSessionFailureFact('providerUnavailable')
+      case 'responseTooManyFailedAttempts':
+        return agentSessionFailureFact(
+          info?.status === 429 ? 'providerUnavailable' : 'providerResponseFailed'
+        )
       case 'cyberPolicy':
       case 'misalignmentPolicyViolation':
       case 'tooManyDenials':

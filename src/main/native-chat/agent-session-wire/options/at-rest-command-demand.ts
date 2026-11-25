@@ -6,6 +6,12 @@ export class AtRestCommandDemand {
 
   constructor(public independent: boolean) {}
 
+  /** Called when an explicit read joins this work; returns the unsubscribe. */
+  onRequest(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
   request(): void {
     this.independent = true
     this.listeners.forEach((listener) => listener())

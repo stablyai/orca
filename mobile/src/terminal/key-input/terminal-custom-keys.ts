@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored, subscribeMirroredKey } from '../../storage/mirrored-storage-keys'
+import { TERMINAL_CSI_U_CTRL_ENTER_INPUT } from '../../../../src/shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 
 const CUSTOM_ACCESSORY_KEYS_STORAGE_KEY = 'orca:custom-accessory-keys'
 
@@ -27,10 +28,17 @@ function isCustomKey(value: unknown): value is CustomKey {
   )
 }
 
+// Ctrl+Enter keys saved before it had its own encoding stored CR; read them as the shortcut they name.
+function upgradeSavedCtrlEnter(key: CustomKey): CustomKey {
+  return key.label === 'Ctrl+Enter' && key.bytes === '\r'
+    ? { ...key, bytes: TERMINAL_CSI_U_CTRL_ENTER_INPUT }
+    : key
+}
+
 function parseStoredCustomKeys(raw: string | null): CustomKey[] {
   try {
     const parsed: unknown = JSON.parse(raw ?? '[]')
-    return Array.isArray(parsed) ? parsed.filter(isCustomKey) : []
+    return Array.isArray(parsed) ? parsed.filter(isCustomKey).map(upgradeSavedCtrlEnter) : []
   } catch {
     return []
   }

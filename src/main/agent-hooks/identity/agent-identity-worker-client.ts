@@ -52,7 +52,8 @@ export type AgentIdentityClient = {
 function spawnAgentIdentityWorker(): WorkerRequestTransport {
   // A missing entry fails the spawned worker, which the queue reports as unavailable.
   return spawnWorkerThread(
-    resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_ENTRY_FILENAME)
+    resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), WORKER_ENTRY_FILENAME),
+    { name: 'orca-agent-identity' }
   )
 }
 

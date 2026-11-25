@@ -1,4 +1,5 @@
-import { resolve as resolvePath } from 'node:path'
+import { resolveCallerLocalPath } from '../../shared/file-access/caller-local-path'
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 import { RuntimeClientError } from '../runtime/connection/types'
 
 function isAbsoluteServerPath(value: string): boolean {
@@ -17,7 +18,7 @@ export function resolveRepoPathArgument(
   remotePathSubject = 'Remote repo path'
 ): string {
   if (!isRemote) {
-    return resolvePath(cwd, inputPath)
+    return resolveCallerLocalPath(inputPath, cwd, getWslCallerDistro(cwd))
   }
   // The client cwd belongs to a different filesystem from a paired runtime's relative paths.
   if (!isAbsoluteServerPath(inputPath)) {

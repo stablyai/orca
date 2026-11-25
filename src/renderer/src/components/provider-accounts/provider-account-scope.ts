@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host/execution-host'
-import { translateLocalExecutionHostLabel } from '../sidebar/execution-host-label'
+import { translateLocalExecutionHostLabel } from '../../runtime/hosts/display/execution-host-label'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'

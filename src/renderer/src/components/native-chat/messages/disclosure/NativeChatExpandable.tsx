@@ -10,9 +10,7 @@ export function NativeChatExpandable({
 }): React.JSX.Element {
   return (
     <Collapsible open={open}>
-      <CollapsibleContent animation="height" data-native-chat-member-detail>
-        {children}
-      </CollapsibleContent>
+      <CollapsibleContent animation="height">{children}</CollapsibleContent>
     </Collapsible>
   )
 }

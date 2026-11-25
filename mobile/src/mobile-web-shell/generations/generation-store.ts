@@ -12,6 +12,7 @@ import { parseGenerationManifest, readWaitingStage } from './generation-manifest
 import { dropKeptAssets, keepingAssets } from './generation-kept-assets'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
+import { deferredAssetsFiller, type DeferredAssetsFiller } from './generation-deferred-assets'
 import type { GenerationFileSystem } from './generation-store-file-system'
 import {
   GENERATIONS_DIRECTORY_NAME,
@@ -61,10 +62,12 @@ export type GenerationStore = {
   // Commit later: the next readActiveGeneration for this host with no readers commits it, because commit deletes the old build.
   deferCommit(staged: StagedGeneration): void
   // A mounted page reading this host's active build; release when it stops reading it.
-  holdGeneration(hostKey: string): () => void
+  holdGeneration: ReturnType<typeof createDeferredCommits>['hold']
   // A release once this page may fetch the build for a deferred commit, after any page already fetching it; null when it already waits.
   claimUpdate(hostKey: string, buildId: string): Promise<(() => void) | null>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
+  // Put the active build's deferred code on disk the first time a page asks for it.
+  fillDeferredAssets: DeferredAssetsFiller
   deleteHostCache(hostKey: string): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
@@ -254,17 +257,11 @@ export function createGenerationStore(options: {
     return active
   }
 
-  async function commitDeferred(hostKey: string): Promise<void> {
-    const waiting = deferred.takeUnread(hostKey)
-    if (waiting === null) {
-      return
-    }
-    // A stage that cannot commit is only a missed update; the active build stays and the next entry downloads again.
-    await commit(waiting).catch(() => fs.delete(waiting.directory).catch(() => undefined))
-  }
-
   async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
-    await commitDeferred(hostKey)
+    // A stage that cannot commit is only a missed update; the active build stays and the next entry downloads again.
+    await deferred.commitUnread(hostKey, commit, (failed) =>
+      fs.delete(failed.directory).catch(() => undefined)
+    )
     const active = activeMemo.get(hostKey) ?? (await readActive(hostKey))
     // Opening counts as use even if the host’s bundle was downloaded long ago.
     if (active !== null) {
@@ -340,6 +337,9 @@ export function createGenerationStore(options: {
     claimUpdate: deferred.claim,
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
+    fillDeferredAssets: deferredAssetsFiller(fs, serialize, (hostKey) =>
+      readActive(hostKey, false)
+    ),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),

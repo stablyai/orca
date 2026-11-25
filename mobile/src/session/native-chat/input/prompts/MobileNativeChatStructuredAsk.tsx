@@ -10,12 +10,16 @@ import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 export function MobileNativeChatStructuredAsk({
   questions,
   onAnswer,
-  onCancel
+  onCancel,
+  onCollapse,
+  notice
 }: {
   questions: readonly AgentJournalQuestion[]
   /** Receives the whole answer set in the shared answer encoding. */
   onAnswer: (encodedAnswers: string) => Promise<boolean>
   onCancel?: () => Promise<boolean>
+  onCollapse?: () => void
+  notice?: string | null
 }): React.JSX.Element {
   return (
     <MobileNativeChatAsk
@@ -25,6 +29,8 @@ export function MobileNativeChatStructuredAsk({
         return answers ? onAnswer(encodeAgentSessionQuestionAnswers(answers)) : false
       }}
       onCancel={onCancel}
+      onCollapse={onCollapse}
+      notice={notice}
     />
   )
 }

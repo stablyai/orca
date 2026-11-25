@@ -129,7 +129,7 @@ export function WorkspaceDirectorySetting({
 
   const handleBrowse = async (): Promise<void> => {
     try {
-      const path = await window.api.repos.pickFolder()
+      const path = await window.api.shell.pickDirectory({})
       if (path) {
         setDraft(path)
         writeValue(path)

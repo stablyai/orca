@@ -20,10 +20,10 @@ import {
   resolveLocalListRequestPath
 } from '../access/local-file-access-resolution'
 import { isPathAbsentError } from '../../../filesystem/local-file-io/filesystem-path-containment'
-import { listMarkdownDocuments } from '../../markdown-documents'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { listMarkdownDocuments } from '../search/markdown-documents'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import { recordCrashBreadcrumb } from '../../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
-import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from '../../readdir-error-diagnostics'
+import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 import { registerFilesystemChunkReadHandler } from './filesystem-chunk-read-handler'
 import { grantRemoteFilePreview, readLocalFilePreview } from '../../../media/media-preview-protocol'
@@ -34,6 +34,7 @@ import {
   guardWslUncPathAccess
 } from '../../../wsl/filesystem/wsl-unc-access-gate'
 import { parseRemoteFilePreviewAddress } from '../../../../shared/file-preview/remote-file-preview-address'
+import { getAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import {
   readLocalFileContent,
   readLocalLogSnapshot,
@@ -116,6 +117,10 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
       return guardWslUncPathAccess(
         args.filePath,
         async () => {
+          if (args.access?.kind === 'chat-image') {
+            // A tool image's bytes may still be landing in the store; resolving would miss them.
+            await getAgentSessionAttachmentStore()?.whenWritten(args.filePath)
+          }
           const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
           const media = await readLocalFilePreview(event, args, store, {
             documents: args.rangePreview === true

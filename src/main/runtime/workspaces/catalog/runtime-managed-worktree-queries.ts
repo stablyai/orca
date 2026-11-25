@@ -33,7 +33,7 @@ import {
   resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from '../../../../shared/worktree/visibility/visibility-sources'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { pruneLineageForMissingRepoWorktrees } from '../../../workspaces/catalog/worktree-lineage-pruning'
 import {
   canPruneAuthoritativeLocalMetadata,

@@ -8,6 +8,7 @@ import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeade
 import type { VirtualItem } from '@tanstack/react-virtual'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
+import { RepoMark } from '@/components/repo/RepoMark'
 import { RepoForkIndicator } from '@/components/repo/repo-fork-indicator'
 
 import '@/store/project-groups/project-group-owner-routing'
@@ -20,7 +21,7 @@ import {
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
-import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-status-label'
+import { translateWorkspaceStatusHeaderLabel } from '../../workspace-status/presentation/workspace-board-status-label'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
@@ -311,14 +312,17 @@ export function renderWorktreeSectionHeaderRow(
           >
             <div
               className={cn(
-                'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
+                'flex shrink-0 items-center justify-center rounded-[4px]',
+                row.repo ? 'size-[18px]' : 'size-4',
                 repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
               )}
             >
-              {row.repo ? (
+              {row.repo && repoHeaderColor ? (
+                // Same resolved mark as the workspace cards, so auto colors and clash boxes match.
+                <RepoMark repo={row.repo} size="md" />
+              ) : row.repo ? (
                 <RepoIconGlyph
                   repoIcon={row.repo.repoIcon}
-                  color={repoHeaderColor}
                   className="size-4"
                   iconClassName="size-3.5"
                 />

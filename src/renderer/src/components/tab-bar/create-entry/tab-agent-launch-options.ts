@@ -8,7 +8,8 @@ import type { AgentPickerSetupIdentity } from '../../agent/agent-launch-picker-d
 import {
   rowLabel,
   rowId,
-  chatUnavailableLabel
+  rowStatusLabel,
+  entrySetupLabel
 } from '../../agent/launch-menu/agent-menu-row-presentation'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
@@ -19,6 +20,7 @@ import { normalizeMatchQuery, tokenizeMatchValue } from './query-token-match'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { Translate } from '@/i18n/use-translate'
 import type { ActiveOption } from './tab-create-entry-active-option'
+import type { Bot, BotAgent } from '../../../../../shared/bot-types'
 
 export type TabAgentLaunchOption = {
   agent: TuiAgent
@@ -32,7 +34,12 @@ export type TabAgentLaunchOption = {
   preset?: AgentPickerSetupIdentity
   pickerEntry?: AgentPickerEntry
   reason?: string
+  /** In a bot's home: a chat with that bot, its Home Chat or a side chat on `agent`, not a bare agent. */
+  botChat?: { bot: Bot; agent: BotAgent; home: boolean }
 }
+
+/** Ids of a bot home's chat results; a pinned one that drops out keeps Enter from moving on. */
+export const BOT_CHAT_OPTION_ID_PREFIX = 'bot-chat:'
 
 function normalizeAgentAlias(value: string): string {
   return value.trim().toLowerCase()
@@ -106,7 +113,7 @@ export function buildTabAgentLaunchOptionsFromRows(
       aliases: base?.aliases ?? [],
       label: rowLabel(row, t),
       disabled: row.kind === 'chat-unavailable',
-      reason: row.kind === 'chat-unavailable' ? chatUnavailableLabel(row.reason, t) : undefined,
+      reason: rowStatusLabel(row, t),
       row,
       id: row.kind === 'terminal' ? `agent:${row.agent}` : rowId(row)
     }
@@ -220,6 +227,7 @@ export function matchingAgentPickerLaunchOptions(
         kind: surface === 'chat' ? 'chat' : 'cli',
         executionHostId: setup.entry.rows[0]?.executionHostId
       },
+      ...(surface === 'chat' ? { reason: entrySetupLabel(setup.entry) } : {}),
       preset: { model: setup.model.id, effort: setup.choices.options?.effort },
       setup: { agent: setup.entry.agent, surface, choices: setup.choices },
       pickerEntry: setup.entry

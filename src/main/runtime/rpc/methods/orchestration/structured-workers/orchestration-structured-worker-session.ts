@@ -1,7 +1,7 @@
 import {
   closeStructuredAgentSessionChild,
   type StructuredAgentSessionCloseOptions
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 /** Create structured workers directly; attach is not readiness, so hold the preamble until the agent takes it.
  * Open dispatches retain agents through the idle sweep; settled workers rest and restart on mail. The preamble is a turn, never keystrokes. */
 
@@ -20,6 +20,9 @@ import type {
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { ANTIGRAVITY_LEVEL_SUFFIX } from '../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-antigravity'
+import { antigravityListedFamilySelection } from '../../../../../acp/acp-dialects/antigravity-dialect'
+import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { mintAgentSessionOperationId } from '../../../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
@@ -85,6 +88,43 @@ export function rebindReusedStructuredWorker(handle: string, db: OrchestrationDb
   }
 }
 
+/** A leveled Antigravity id names its effort, so a saved effort for the seeded model must not override it (#45701). */
+function structuredWorkerModelReplacesSavedSelection(
+  agent: TuiAgent,
+  model: string | undefined
+): boolean {
+  return agent === 'antigravity' && model !== undefined && ANTIGRAVITY_LEVEL_SUFFIX.test(model)
+}
+
+/** A chat lists a leveled id's family with a level picker, so seed that row while the chat is at
+ *  rest (#46913); without a saved listing to prove the family, the id stays. */
+async function seedListedAntigravityFamily(
+  host: StructuredAgentSessionHost,
+  record: AgentSessionRecord
+): Promise<Readonly<Record<string, string>> | undefined> {
+  const { sessionId, provider, lease, options: requested } = record
+  const listed =
+    provider === 'antigravity' ? host.deps.modelCatalog?.peek(sessionId)?.models : undefined
+  const options = requested && listed && antigravityListedFamilySelection(requested, listed)
+  if (!options) {
+    return requested
+  }
+  // agy accepts the level id too, so a refused rewrite keeps it rather than failing the start.
+  try {
+    const { options: seeded } = await host.deps.store.replaceSessionOptions({
+      sessionId,
+      fence: lease.runtimeFence,
+      options,
+      now: Date.now()
+    })
+    host.reads.publishStatus(sessionId)
+    return seeded
+  } catch (error) {
+    console.warn("[orchestration] kept a worker's Antigravity level id", sessionId, error)
+    return requested
+  }
+}
+
 export async function createStructuredWorkerSession(args: {
   runtime: OrcaRuntimeService
   worktreeId: string
@@ -97,6 +137,8 @@ export async function createStructuredWorkerSession(args: {
   host: StructuredAgentSessionHost
   /** The lease the create was admitted at. */
   fence: number
+  /** The provider options the session launches with: the dispatch's own over the seeded saved selection, or in its place for a leveled Antigravity model, which a saved listing turns into its family and effort. */
+  options?: Readonly<Record<string, string>>
 }> {
   const sessionId = randomUUID()
   // Register before attach builds child env or missing ORCA_TERMINAL_HANDLE can misroute orchestration to the coordinator.
@@ -130,6 +172,9 @@ export async function createStructuredWorkerSession(args: {
       agent: args.agent,
       // Absent, the host seeds the user's saved selection — the same fallback a chat gets.
       ...(args.options ? { options: args.options } : {}),
+      ...(structuredWorkerModelReplacesSavedSelection(args.agent, args.options?.model)
+        ? { optionsMode: 'replace-model-selection' as const }
+        : {}),
       // Dispatching a worker is background work; it must not pull the surface away from the user.
       atRest: true,
       activate: false
@@ -148,8 +193,9 @@ export async function createStructuredWorkerSession(args: {
         'A structured worker must run on the local execution host outside WSL.'
       )
     }
+    const options = await seedListedAntigravityFamily(host, record)
     ensureStructuredWorkerSessionBinding(identity)
-    return { identity, host, fence: created.value.fence }
+    return { identity, host, fence: created.value.fence, options }
   } catch (error) {
     // Failed post-create starts must retire the otherwise unowned live provider child.
     structuredWorkerIdentities.forget(identity.handle)
@@ -194,6 +240,7 @@ function reasonClause(reason: string | null | undefined): string {
 
 /** What a preamble send reads of the host. */
 type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
+  reads: Pick<StructuredAgentSessionHost['reads'], 'agentStarting'>
   deps: {
     store: Pick<
       StructuredAgentSessionHost['deps']['store'],
@@ -203,7 +250,8 @@ type StructuredWorkerPreambleHost = StructuredAgentTurnHost & {
 }
 
 /** Delivers the dispatch preamble as the worker's first turn. `pending`: the worker's agent had
- *  not taken it within the wait; the host still holds it for that agent, and never re-sends it. */
+ *  not taken it within the wait; the host still holds it for that agent, and never re-sends it.
+ *  `starting`: likewise held, because that agent is still starting. */
 export async function sendStructuredWorkerPreamble(args: {
   host: StructuredWorkerPreambleHost
   sessionId: string
@@ -213,7 +261,7 @@ export async function sendStructuredWorkerPreamble(args: {
   from: AgentMessageSource
   /** The worker start's readiness budget, which the agent's start counts against. */
   budgetMs?: number
-}): Promise<'accepted' | 'pending'> {
+}): Promise<'accepted' | 'pending' | 'starting'> {
   const body: AgentJournalMessageItem = {
     kind: 'message',
     role: 'user',
@@ -237,14 +285,11 @@ export async function sendStructuredWorkerPreamble(args: {
       expectedRuntimeFence: fence
     }
   })
-  switch (outcome.kind) {
-    case 'refused':
-      throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
-    case 'queued':
-      return 'pending'
-    case 'sent':
-      return preambleDispatchState(outcome.submission)
+  if (outcome.kind === 'refused') {
+    throw new Error(`The dispatch preamble was refused: ${outcome.refusal.message}`)
   }
+  const state = outcome.kind === 'queued' ? 'pending' : preambleDispatchState(outcome.submission)
+  return state === 'pending' && args.host.reads.agentStarting(args.sessionId) ? 'starting' : state
 }
 
 /** A sent preamble's verdict: acknowledged, or held for its agent; anything else throws. */

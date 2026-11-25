@@ -1,4 +1,14 @@
-import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import {
+  constants,
+  copyFile,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  rm,
+  stat,
+  writeFile
+} from 'node:fs/promises'
 import { dirname } from 'node:path'
 import {
   throwIfSignalAborted,
@@ -13,11 +23,11 @@ import type { resolveAuthorizedPath as ResolveAuthorizedPath } from '../../ipc/f
 import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertNotExists,
-  rethrowWithUserMessage
-} from '../../filesystem/local-file-io/filesystem-create-path-guards'
+  createLocalFile
+} from '../../filesystem/local-file-io/filesystem-create-path'
 import { classifyFilesystemDirectoryEntries } from '../../filesystem/local-file-io/filesystem-symlink-directory-entries'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/local-worktree-runtime-options'
-import { listMarkdownDocuments } from '../../ipc/markdown-documents'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../ipc/worktrees/local-worktree-runtime-options'
+import { listMarkdownDocuments } from '../../ipc/filesystem/search/markdown-documents'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import { runBundledRipgrepTextSearch } from '../../ripgrep/bundled-ripgrep-text-search'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
@@ -81,7 +91,20 @@ export function createLocalFilesystemProvider(
     const content = Buffer.from(contentBase64, 'base64')
     const authorizedPath = await authorize(filePath)
     await mkdir(dirname(authorizedPath), { recursive: true })
-    await writeFile(authorizedPath, content, { flag: append ? 'a' : 'wx' })
+    if (append) {
+      await writeFile(authorizedPath, content, { flag: 'a' })
+      return
+    }
+    // An exclusive-open failure leaves the existing file alone; only a partial this call created is removed.
+    const handle = await open(authorizedPath, 'wx')
+    try {
+      await handle.writeFile(content)
+      await handle.close()
+    } catch (error) {
+      await handle.close().catch(() => undefined)
+      await rm(authorizedPath, { force: true }).catch(() => undefined)
+      throw error
+    }
   }
   const writeTextFile = async (
     filePath: string,
@@ -131,15 +154,7 @@ export function createLocalFilesystemProvider(
     deletePath: async (targetPath, recursive) => {
       await rm(await authorizeLink(targetPath), { recursive: recursive === true, force: true })
     },
-    createFile: async (filePath) => {
-      const authorizedPath = await authorize(filePath)
-      await mkdir(dirname(authorizedPath), { recursive: true })
-      try {
-        await writeFile(authorizedPath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, authorizedPath)
-      }
-    },
+    createFile: async (filePath) => createLocalFile(await authorize(filePath)),
     createDir: async (dirPath) => {
       const authorizedPath = await authorize(dirPath)
       await assertNotExists(authorizedPath)

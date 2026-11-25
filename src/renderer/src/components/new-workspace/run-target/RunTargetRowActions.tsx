@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
-import { HostRowIcon } from '../../host-row-icon'
+import { HostRowIcon } from '../../host-picker/host-row-icon'
 
 /** Glyph for a host that can't run yet: connecting, broken, or merely dormant. */
 export function NeedsSetupHostIcon({

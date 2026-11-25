@@ -17,12 +17,18 @@ import type {
 import type { AgentSessionSendResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import { queuedMessagesQueuePause } from '../../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import {
+  composerQueuedCards,
+  createWaitingAgentMailRows
+} from '../../../../../../src/shared/agent-session/view/structured-agent-session-waiting-agent-mail'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import {
   mobileQueuedMessageCards,
   type MobileQueuedMessageCard
 } from './mobile-structured-queued-message-cards'
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import { useMobileStructuredQueuedEdit } from './use-mobile-structured-queued-edit'
+import { useMobileWaitingAgentMailArrivalAnnouncement } from '../../transcript/agent-messages/use-mobile-waiting-agent-mail-arrival-announcement'
 import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-edit-draft'
 // The host owns queued drafts; render its published cards even when it cannot queue new sends.
 
@@ -33,16 +39,29 @@ export type MobileQueuedMessageEdit = (messageId: string, onCopied?: () => void)
 
 export type MobileStructuredQueuedMessageControls = {
   cards: MobileQueuedMessageCard[]
+  /** The queue the steer shortcut presses the head of: waiting mail drawn in the transcript counts. */
+  steerOrder: readonly MobileQueuedMessageCard[]
   send: (messageId: string) => Promise<boolean>
   delete: (messageId: string) => Promise<boolean>
   clear: (messageIds: string[]) => Promise<boolean>
+  /** What Delete all deletes and holds: every message the host holds, waiting agent mail included. */
+  clearIds: readonly string[]
   edit?: MobileQueuedMessageEdit
   editor?: MobileQueuedMessageInlineEditor
   move?: (move: DragReorderMove) => Promise<boolean>
   pause: AgentSessionQueuePause | null
   resume: () => Promise<boolean>
   sessionKey: string
+  /** The host still holds this message: a card here, or another agent's mail the transcript draws. */
+  holds: (messageId: string) => boolean
+  /** Other agents' waiting mail, drawn after the chat's live activity instead of as cards. */
+  agentMail: readonly NativeChatMessage[]
+  /** Whether a waiting agent message offers Edit, which opens it in the queue's editor. */
+  agentMailEditable: (messageId: string) => boolean
 }
+
+const NO_ITEMS: readonly AgentJournalRenderItem[] = []
+const NO_ROWS: readonly NativeChatMessage[] = []
 
 export function useMobileStructuredQueuedMessageControls(args: {
   sessionKey: string
@@ -57,6 +76,10 @@ export function useMobileStructuredQueuedMessageControls(args: {
   reorderCapable?: boolean
   agentName?: string
   journalItems?: readonly AgentJournalRenderItem[]
+  /** The chat draws a transcript; an empty or loading one keeps agent mail as cards, with their controls. */
+  transcriptShown: boolean
+  /** The queue is the host's current one, not a saved or reloading copy. */
+  queueCurrent: boolean
   queuedMessages: readonly AgentSessionQueuedMessage[] | null
   queuePause: AgentSessionQueuePause | null
   submissions: readonly AgentJournalSubmission[]
@@ -86,14 +109,16 @@ export function useMobileStructuredQueuedMessageControls(args: {
   })
   const orderedMessages = composerActions.messages
   const agentWorking = args.agentWorking === true
-  const cards = useMemo(() => {
+  // Only a returned card's caption reads the transcript, so streaming leaves the cards alone otherwise.
+  const failureItems = queuedMessages?.some((draft) => draft.state === 'returned')
+    ? (args.journalItems ?? NO_ITEMS)
+    : null
+  const allCards = useMemo(() => {
     const visibleCards = mobileQueuedMessageCards(queuedMessages, submissions, {
       agentWorking,
       queuePaused: queuePause !== null,
       agentName: args.agentName,
-      statedFailures: queuedMessages?.some((draft) => draft.state === 'returned')
-        ? agentSessionVisibleFailureFacts(args.journalItems ?? [])
-        : []
+      statedFailures: failureItems ? agentSessionVisibleFailureFacts(failureItems) : []
     })
     // Preview changes display order; published membership and current handoff visibility stay intact.
     const visibleById = new Map(visibleCards.map((card) => [card.messageId, card]))
@@ -104,7 +129,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
   }, [
     agentWorking,
     args.agentName,
-    args.journalItems,
+    failureItems,
     orderedMessages,
     queuePause,
     queuedMessages,
@@ -115,7 +140,22 @@ export function useMobileStructuredQueuedMessageControls(args: {
     ...args,
     enabled: args.enabled && args.editCapable === true,
     messages: queuedMessages,
-    cards
+    cards: allCards
+  })
+  const agentMailRowsOf = useMemo(() => createWaitingAgentMailRows(), [])
+  const waitingAgentMail = useMemo(
+    () => (args.transcriptShown ? agentMailRowsOf(queuedMessages, submissions) : NO_ROWS),
+    [agentMailRowsOf, args.transcriptShown, queuedMessages, submissions]
+  )
+  // Agent mail waits in the transcript; only one being edited joins the queue, in its editor.
+  const { cards, agentMail, mailLeads } = useMemo(
+    () => composerQueuedCards(allCards, waitingAgentMail, editor?.messageId),
+    [allCards, waitingAgentMail, editor?.messageId]
+  )
+  useMobileWaitingAgentMailArrivalAnnouncement(waitingAgentMail, {
+    key: args.sessionKey,
+    listening:
+      args.chatActive && args.transcriptShown && args.queueCurrent && queuedMessages !== null
   })
   const resolved = useCallback(
     (accepted: boolean): boolean => {
@@ -209,10 +249,10 @@ export function useMobileStructuredQueuedMessageControls(args: {
         }
         return beginInlineEdit(messageId)
       }
-      const card = cards.find((candidate) => candidate.messageId === messageId)
+      const card = allCards.find((candidate) => candidate.messageId === messageId)
       // Copy before Delete so refusal or lost reply cannot lose text; failed deletion leaves both copies visible.
-      // Never delete without a copy, and never turn command text into an editable message draft.
-      if (!card || card.command || !appendComposerText?.(card.text)) {
+      // Never delete without a copy, and never turn a command or a run into the owner's draft.
+      if (!card || card.notEditable || !appendComposerText?.(card.text)) {
         return false
       }
       onCopied?.()
@@ -223,7 +263,7 @@ export function useMobileStructuredQueuedMessageControls(args: {
       args.editCapable,
       args.enabled,
       beginInlineEdit,
-      cards,
+      allCards,
       deleteQueued,
       onSendError
     ]
@@ -241,17 +281,44 @@ export function useMobileStructuredQueuedMessageControls(args: {
       ),
     [mutate, resolved]
   )
-  const pause = queuedMessagesQueuePause(cards, queuePause)
+  const pause = queuedMessagesQueuePause(cards, queuePause, waitingAgentMail.length > 0)
+  // A host without in-place edits still takes Edit: it copies the text to the composer first.
+  const editableIds = useMemo(
+    () =>
+      args.editCapable === null || (args.editCapable && editor !== undefined)
+        ? new Set<string>()
+        : new Set(allCards.filter((card) => !card.notEditable).map((card) => card.messageId)),
+    [allCards, args.editCapable, editor]
+  )
+  const agentMailEditable = useCallback(
+    (messageId: string): boolean => editableIds.has(messageId),
+    [editableIds]
+  )
+  const holds = useCallback(
+    (messageId: string): boolean => allCards.some((card) => card.messageId === messageId),
+    [allCards]
+  )
+  // Delete all also takes the waiting agent mail the transcript draws, as it did when that was a card.
+  const clearIds = useMemo(
+    () => allCards.filter((card) => card.hold !== 'sending').map((card) => card.messageId),
+    [allCards]
+  )
+
   return {
     cards,
+    steerOrder: mailLeads ? allCards : cards,
     send,
     delete: deleteDraft,
     clear,
+    clearIds,
     edit: args.editCapable === null ? undefined : edit,
     editor,
     move: composerActions.move,
     pause,
     resume,
-    sessionKey
+    sessionKey,
+    holds,
+    agentMail,
+    agentMailEditable
   }
 }

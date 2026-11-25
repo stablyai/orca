@@ -15,7 +15,6 @@ import type {
   CodexSharedRuntimeAuthProvenanceStatus,
   CodexSystemDefaultSnapshot
 } from './runtime-home-service-types'
-import type { CodexSessionBackfillDate } from '../../codex/history/backfill/codex-session-backfill-types'
 import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { LegacyWslRuntimeAuthDestination } from '../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import type { WslCodexAuthRead } from './wsl/wsl-codex-auth-batch-reader'
@@ -52,7 +51,8 @@ export abstract class CodexRuntimeHomeState {
   ): boolean | null
   abstract isHostSystemDefaultSessionMigrationEligible(): boolean
   abstract prepareHostSystemDefaultSessionMigrationPass(
-    scanDates?: readonly CodexSessionBackfillDate[]
+    fullScanRequired?: boolean,
+    newFullScanRequest?: boolean
   ): boolean
   abstract finishHostSystemDefaultSessionMigrationPass(): void
 
@@ -199,14 +199,19 @@ export abstract class CodexRuntimeHomeState {
   protected abstract isWindowsReadableLink(targetPath: string): boolean
   protected abstract migrateLegacyManagedStateIfNeeded(): void
   protected abstract getLegacyManagedHomes(): string[]
-  protected abstract migrateLegacyHistory(managedHomePath: string): void
   protected abstract migrateLegacySessions(managedHomePath: string, accountId: string): void
   protected abstract listFilesRecursively(rootPath: string): string[]
   protected abstract appendListedFiles(target: string[], source: readonly string[]): void
   protected abstract getPreservedLegacySessionPath(
     runtimeFilePath: string,
-    accountId: string
+    accountId: string,
+    attempt: number
   ): string
+  protected abstract copyLegacyFileWithoutOverwrite(
+    legacyFilePath: string,
+    targetPath: string,
+    readLegacy: () => Buffer
+  ): 'copied' | 'identical' | 'conflict'
   protected abstract appendMigrationDiagnostic(record: Record<string, string>): void
 
   protected abstract captureSystemDefaultSnapshot(options: { force: boolean }): void

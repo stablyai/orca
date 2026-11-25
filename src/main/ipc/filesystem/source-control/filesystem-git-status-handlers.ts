@@ -20,6 +20,7 @@ import { registerFilesystemGitAtRiskLocalFilesHandlers } from './filesystem-git-
 import { isGitWorktreeMutationInFlight } from '../../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../../git/source-control/ignores/check-ignored-paths'
+import { registerFilesystemGitRebaseHandlers } from './filesystem-git-rebase-handlers'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
@@ -30,7 +31,7 @@ import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalGitOptionsForRepo,
   getLocalRepoForRegisteredWorktree
-} from '../../local-worktree-runtime-options'
+} from '../../worktrees/local-worktree-runtime-options'
 import { getWorktreeSharedLinkPaths } from '../../../git/worktrees/content-paths/worktree-shared-directories'
 import { applyGitStatusUpstreamRefWatchRequest } from '../../worktrees/git/git-status-upstream-ref-watch-request'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
@@ -48,6 +49,7 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
   const { store, gitStatusCancellations } = context
   registerFilesystemGitHistoryHandlers(context)
   registerFilesystemGitAtRiskLocalFilesHandlers(context)
+  registerFilesystemGitRebaseHandlers(context)
   ipcMain.handle(
     'git:status',
     async (

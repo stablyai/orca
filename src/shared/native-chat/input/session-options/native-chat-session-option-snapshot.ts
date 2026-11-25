@@ -1,5 +1,5 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../agent-launch/permissions/agent-chat-permission-mode-option-id'
-import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
+import { unlistedModelLabel } from '../../../agent-session/options/model-catalog/model-id-label'
 import { classifyAgentModels } from '../../../agent-session/options/model-catalog/legacy-agent-models'
 import type {
   AgentSessionOptionCatalog,
@@ -18,6 +18,7 @@ import {
   type NativeChatSessionOptionRecord,
   type TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
+import { nativeChatOptionsWithoutModel } from './native-chat-session-option-values-without-model'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
 
@@ -165,7 +166,7 @@ export function sortNativeChatSessionOptions(
 export function withTrackedNativeChatModel(
   catalog: AgentSessionOptionCatalog,
   models: readonly CatalogModel[],
-  record: Pick<NativeChatSessionOptionRecord, 'model'>
+  record: Pick<NativeChatSessionOptionRecord, 'agent' | 'model'>
 ): CatalogModel[] {
   const trackedId = typeof record.model?.value === 'string' ? record.model.value : null
   if (!trackedId || models.some((model) => model.id === trackedId)) {
@@ -176,7 +177,7 @@ export function withTrackedNativeChatModel(
     ...models,
     seeded ?? {
       id: trackedId,
-      label: labelFromModelId(trackedId),
+      label: unlistedModelLabel(record.agent, trackedId),
       description: trackedId,
       options: []
     }
@@ -293,6 +294,9 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
   const model = models.find((candidate) => candidate.id === effectiveModelId)
+  const values = trackedModelId
+    ? (record.valuesByModel[trackedModelId] ?? {})
+    : (record.valuesWithoutModel ?? {})
   return nativeChatSessionOptionDescriptors({
     ...args,
     agent: record.agent,
@@ -301,8 +305,11 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       valueSource: record.model?.source ?? (defaultModelId ? 'default' : 'unknown'),
       tracked: record.model
     },
-    controls: effectiveModelId ? (model?.options ?? []) : [],
-    values: effectiveModelId ? (record.valuesByModel[effectiveModelId] ?? {}) : {},
+    controls: effectiveModelId
+      ? (model?.options ?? [])
+      : // Only held values show, so a launch without an effort gets no empty Effort row.
+        nativeChatOptionsWithoutModel(catalog).filter((option) => values[option.id] !== undefined),
+    values,
     modelIsCliDefault: effectiveModelId === defaultModelId
   })
 }

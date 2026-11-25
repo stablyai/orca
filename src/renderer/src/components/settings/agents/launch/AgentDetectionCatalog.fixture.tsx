@@ -7,6 +7,7 @@ import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { scrollSubsectionIntoView } from '../../navigation/settings-navigation-foundations'
 import { getSettingsTitleTargetId } from '../../section-layout/settings-target-highlight'
+import { revealInstalledAgentChoice } from '../surfaces/installed-agent-choice-reveal'
 
 function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   const catalog = getAgentCatalog()
@@ -15,6 +16,8 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
   )
   const [command, setCommand] = useState<string>()
   const [deferSave, setDeferSave] = useState(false)
+  const [cliMissing, setCliMissing] = useState(false)
+  const [firstEnabled, setFirstEnabled] = useState(true)
   const complete = useRef<(() => void) | null>(null)
   const shown = short ? catalog.slice(0, 2) : catalog
   const moving = shown[0]
@@ -26,7 +29,7 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     defaultArgs: '',
     defaultEnv: {},
     isDetected: agent === moving ? false : detected,
-    isEnabled: true,
+    isEnabled: agent === moving ? firstEnabled : true,
     defaultMark: null,
     isSavedDefault: false,
     cmdOverride: agent === moving ? command : undefined,
@@ -34,7 +37,9 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     envOverride: {},
     opensAs:
       agent === moving
-        ? { value: 'chat' as const, cliMissing: false, onChange: () => {} }
+        ? cliMissing
+          ? { value: 'cli' as const, cliMissing: true, onChange: () => {} }
+          : { value: 'chat' as const, cliMissing: false, onChange: () => {} }
         : undefined,
     permissionChoice:
       agent === moving
@@ -63,26 +68,34 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
     onSaveArgs: () => {},
     onSaveEnv: () => {}
   })
+  const toggleInstalled = (): void =>
+    setInstalled((previous) => {
+      const next = new Set(previous)
+      if (!next.delete(moving.id)) {
+        next.add(moving.id)
+      }
+      return next
+    })
   return (
     <StrictMode>
       <div className="settings-view-shell space-y-4">
         <div className="flex flex-wrap gap-2" data-fixture-controls="">
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() =>
-              setTimeout(() => {
-                setInstalled((previous) => {
-                  const next = new Set(previous)
-                  if (!next.delete(moving.id)) {
-                    next.add(moving.id)
-                  }
-                  return next
-                })
-              }, 0)
-            }
-          >
-            Move first agent
+          {[0, 1500].map((delay) => (
+            <Button
+              key={delay}
+              variant="outline"
+              size="xs"
+              // The delayed move leaves time to focus a field in the row, as when detection finishes.
+              onClick={() => setTimeout(toggleInstalled, delay)}
+            >
+              {delay ? 'Move first agent in 1.5s' : 'Move first agent'}
+            </Button>
+          ))}
+          <Button variant="outline" size="xs" onClick={() => setCliMissing(!cliMissing)}>
+            CLI missing: {String(cliMissing)}
+          </Button>
+          <Button variant="outline" size="xs" onClick={() => setFirstEnabled(!firstEnabled)}>
+            First agent enabled: {String(firstEnabled)}
           </Button>
           <Button variant="outline" size="xs" onClick={() => setDeferSave(!deferSave)}>
             Defer saves: {String(deferSave)}
@@ -108,6 +121,9 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
             }
           >
             Jump to last agent
+          </Button>
+          <Button variant="outline" size="xs" onClick={revealInstalledAgentChoice}>
+            Choose per agent
           </Button>
         </div>
         <div data-fixture-settings-page="" className="scrollbar-sleek h-[900px] overflow-auto p-8">
@@ -145,3 +161,17 @@ function AgentLists({ short = false }: { short?: boolean }): React.JSX.Element {
 export const overflowing = defineFixture({ width: 860, render: () => <AgentLists /> })
 export const fitting = defineFixture({ width: 860, render: () => <AgentLists short /> })
 export const narrow = defineFixture({ width: 440, render: () => <AgentLists /> })
+
+const expandSecondRow = (frame: HTMLElement): void => {
+  frame.querySelectorAll<HTMLElement>('button[aria-controls][aria-label]')[1]?.click()
+}
+export const expanded = defineFixture({
+  width: 860,
+  render: () => <AgentLists />,
+  interact: expandSecondRow
+})
+export const narrowExpanded = defineFixture({
+  width: 440,
+  render: () => <AgentLists />,
+  interact: expandSecondRow
+})

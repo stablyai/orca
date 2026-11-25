@@ -11,10 +11,10 @@ import { refused, type ConversationKey, type Delivery } from './external-convers
 export type DeliveryReceiptDb = OrchestrationDb
 
 const RecordedDelivery = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('accepted'), reopened: z.literal(true).optional() }),
+  z.object({ outcome: z.literal('accepted') }),
   z.object({
     outcome: z.literal('unknown'),
-    reason: z.enum(['launch_outcome_unknown', 'writer_failed', 'replayed_after_restart'])
+    reason: z.enum(['writer_failed', 'replayed_after_restart'])
   })
 ])
 
@@ -39,7 +39,8 @@ export class DeliveryReceipts {
   run(
     key: ConversationKey,
     deliveryId: string,
-    method: 'connector.start' | 'connector.send' | 'connector.cancel',
+    // connector.mute: a send a thread's mute held before the agent, which started no turn.
+    method: 'connector.start' | 'connector.send' | 'connector.cancel' | 'connector.mute',
     payload: unknown,
     execute: () => Promise<Delivery>
   ): Promise<Delivery> {
@@ -51,12 +52,7 @@ export class DeliveryReceipts {
     }
     const flightKey = JSON.stringify([identity.callerFingerprint, identity.requestId])
     const db = this.settledDb()
-    if (
-      !db.getMutationReceipt(identity.callerFingerprint, identity.requestId) &&
-      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) >=
-        CONNECTOR_PENDING_RECEIPT_LIMIT +
-          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
-    ) {
+    if (!this.admits(key, deliveryId, method)) {
       return Promise.resolve(refused('delivery_backlog_full'))
     }
     let begun: ReturnType<DeliveryReceiptDb['beginMutationReceipt']>
@@ -97,6 +93,55 @@ export class DeliveryReceipts {
     return delivery
   }
 
+  /** Whether `run` would take this delivery now (its receipt exists, or the backlog has room),
+   *  without writing anything. */
+  admits(
+    key: ConversationKey,
+    deliveryId: string,
+    method: 'connector.start' | 'connector.send' | 'connector.cancel' | 'connector.mute'
+  ): boolean {
+    const db = this.settledDb()
+    return (
+      Boolean(
+        db.getMutationReceipt(
+          callerFingerprint(key.source),
+          JSON.stringify([key.externalId, deliveryId])
+        )
+      ) ||
+      db.countPendingMutationReceipts(CONNECTOR_FINGERPRINTS) <
+        CONNECTOR_PENDING_RECEIPT_LIMIT +
+          (method === 'connector.cancel' ? CONNECTOR_CANCEL_RECEIPT_RESERVE : 0)
+    )
+  }
+
+  /** A send whose words another delivery's turn carried: it settles as that delivery did, and its
+   *  receipt records it, so a resend replays it rather than running it again. */
+  async carried<Result extends { outcome: string }>(
+    key: ConversationKey,
+    deliveryId: string,
+    text: string,
+    done: Promise<Result>
+  ): Promise<Result> {
+    await this.run(key, deliveryId, 'connector.send', [text], async () => {
+      const result = await done
+      // Only an accepted turn leaves a receipt; any other outcome is the carrying delivery's to say.
+      return result.outcome === 'accepted'
+        ? { outcome: 'accepted' }
+        : refused('conversation_cancelled')
+    })
+    return await done
+  }
+
+  /** Read-only: whether a receipt exists for the delivery, settled or still running. */
+  known(key: ConversationKey, deliveryId: string): boolean {
+    const requestId = JSON.stringify([key.externalId, deliveryId])
+    const fingerprint = callerFingerprint(key.source)
+    return (
+      this.inFlight.has(JSON.stringify([fingerprint, requestId])) ||
+      Boolean(this.settledDb().getMutationReceipt(fingerprint, requestId))
+    )
+  }
+
   /** Read-only: what a received delivery came to, or null when nothing was recorded (refusals and answers leave none). */
   recorded(key: ConversationKey, deliveryId: string): Promise<Delivery | null> {
     const requestId = JSON.stringify([key.externalId, deliveryId])
@@ -111,6 +156,19 @@ export class DeliveryReceipts {
     }
     const recorded = RecordedDelivery.safeParse(JSON.parse(row.receipt ?? 'null'))
     return Promise.resolve(recorded.success ? recorded.data : LOST)
+  }
+
+  /** What a send a thread's mute held came to, so a resend replays it without a turn's automations;
+   *  null for any other delivery. Another payload under its id is refused, as `run` refuses it. */
+  heldByMute(key: ConversationKey, deliveryId: string, payload: unknown): Promise<Delivery> | null {
+    const requestId = JSON.stringify([key.externalId, deliveryId])
+    const row = this.settledDb().getMutationReceipt(callerFingerprint(key.source), requestId)
+    if (row?.method !== 'connector.mute') {
+      return null
+    }
+    return row.payload_hash === hashCanonical(payload)
+      ? this.recorded(key, deliveryId).then((recorded) => recorded ?? LOST)
+      : Promise.resolve(refused('delivery_id_reused'))
   }
 
   private settledDb(): DeliveryReceiptDb {

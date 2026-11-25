@@ -50,18 +50,20 @@ function isBinaryHint(file: RESTPRFile): boolean {
   return file.patch === undefined && file.changes > 0
 }
 
+export type PRDetailMetadata = {
+  body: string
+  bodyImageUrls?: Record<string, string>
+  headSha?: string
+  baseSha?: string
+}
+
 export async function getPRMetadata(
   repoPath: string,
   prNumber: number,
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): Promise<{
-  body: string
-  bodyImageUrls?: Record<string, string>
-  headSha?: string
-  baseSha?: string
-}> {
+): Promise<PRDetailMetadata> {
   if (!repository) {
     return { body: '' }
   }
@@ -107,7 +109,8 @@ export async function getPRFiles(
   prNumber: number,
   repository: GitHubApiRepository | null,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  options: { noCache?: boolean } = {}
 ): Promise<GitHubPRFile[] | null> {
   if (!repository) {
     return null
@@ -127,8 +130,7 @@ export async function getPRFiles(
       const { stdout } = await ghExecFileAsync(
         [
           'api',
-          '--cache',
-          '60s',
+          ...(options.noCache ? [] : ['--cache', '60s']),
           `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}/files?per_page=100${pageSuffix}`
         ],
         ghOptions

@@ -1,57 +1,96 @@
-import { useState, type RefObject } from 'react'
-import { Ellipsis, X } from 'lucide-react'
+import { useId, useRef, useState, type ReactNode, type RefObject } from 'react'
+import { ArrowLeft, ArrowRight, Ellipsis, Plus, X } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatQuickCommandsMenu } from '../../native-chat/pane/actions/use-native-chat-quick-commands-menu'
+import { useAppStore } from '../../../store'
+import {
+  canGoBackWorktreeHistory,
+  canGoForwardWorktreeHistory
+} from '@/store/slices/ui/workspace-navigation-history'
+import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
+import type { TitlebarChromeFoldLevel } from '@/app-shell/chrome/titlebar-chrome-fold'
+import {
+  captureTabStripMenuFocus,
+  restoreTabStripFocus
+} from '../../tab-bar/strip/tab-strip-focus-restore'
+import { isGroupFocusedInStore } from '../../tab-bar/strip/use-tab-strip-unmount-focus-restore'
 
 type TabGroupPaneActionsMenuProps = {
   isFocused: boolean
-  onCloseGroup: () => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  /** Only split groups can close their pane. */
+  onCloseGroup?: () => void
   worktreeId: string
   groupId: string
   /** The strip's quick-command slot; when a narrow strip hides it, this menu offers quick commands instead. */
   quickCommandsSlotRef: RefObject<HTMLElement | null>
+  /** Quick-command rows from the strip, which owns their editor so Add and a draft outlive this menu. */
+  quickCommandsMenu: ReactNode
+  /** Titlebar fold level of the owner strip: >= 1 moves Back/Forward here, 2 also "+". */
+  foldLevel: TitlebarChromeFoldLevel
+  /** Opens a terminal, like the new-tab shortcut; offered once "+" folds in. */
+  onNewTab: () => void
 }
 
 function isSlotHidden(slot: HTMLElement | null): boolean {
-  return Boolean(slot && slot.childElementCount > 0 && getComputedStyle(slot).display === 'none')
+  return Boolean(
+    slot && slot.childElementCount > 0 && getComputedStyle(slot).visibility === 'hidden'
+  )
 }
 
 export function TabGroupPaneActionsMenu({
   isFocused,
+  open,
+  onOpenChange,
   onCloseGroup,
   worktreeId,
   groupId,
-  quickCommandsSlotRef
+  quickCommandsSlotRef,
+  quickCommandsMenu,
+  foldLevel,
+  onNewTab
 }: TabGroupPaneActionsMenuProps): React.JSX.Element {
   const t = useTranslate()
-  const [open, setOpen] = useState(false)
+  const menuId = useId()
+  const [openedFoldLevel, setOpenedFoldLevel] = useState(foldLevel)
+  const menuFoldLevel = open ? openedFoldLevel : foldLevel
+  const canGoBack = useAppStore(canGoBackWorktreeHistory)
+  const canGoForward = useAppStore(canGoForwardWorktreeHistory)
+  const backShortcut = useShortcutLabel('worktree.history.back')
+  const forwardShortcut = useShortcutLabel('worktree.history.forward')
+  const newTabShortcut = useShortcutLabel('tab.newTerminal')
+  const pendingNavigationRef = useRef<{ focusBefore: Element | null } | null>(null)
+  const showHistory = menuFoldLevel > 0
   const [offerQuickCommands, setOfferQuickCommands] = useState(false)
-  const quickCommands = useNativeChatQuickCommandsMenu(
-    offerQuickCommands ? { worktreeId, groupId } : undefined,
-    () => setOpen(false)
-  )
+  const quickCommands = offerQuickCommands ? quickCommandsMenu : null
   const handleOpenChange = (next: boolean): void => {
     // Why: the menu renders in a portal, so check the strip's container-query result when it opens.
     if (next) {
+      setOpenedFoldLevel(foldLevel)
       setOfferQuickCommands(isSlotHidden(quickCommandsSlotRef.current))
     }
-    setOpen(next)
-  }
-  // Why: the strip stays mounted when focus or the workspace moves away; close so it can't act on a stale group.
-  if (!isFocused && open) {
-    setOpen(false)
+    onOpenChange(next)
   }
 
+  // Why: drop ⋯ whole once it can't fit beside the tab floor (and "+", unless that folded in here); the +N chip still outlasts it.
   return (
-    <>
+    <div
+      className={
+        menuFoldLevel === 2
+          ? 'contents @max-[78px]/tab-strip:hidden'
+          : 'contents @max-[114px]/tab-strip:hidden'
+      }
+    >
       <Tooltip>
         <DropdownMenu modal={false} open={open} onOpenChange={handleOpenChange}>
           <TooltipTrigger asChild>
@@ -59,6 +98,7 @@ export function TabGroupPaneActionsMenu({
               <button
                 type="button"
                 aria-label={t('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
+                data-pane-actions-menu-trigger=""
                 onClick={(event) => {
                   event.stopPropagation()
                 }}
@@ -69,32 +109,106 @@ export function TabGroupPaneActionsMenu({
             </DropdownMenuTrigger>
           </TooltipTrigger>
           <DropdownMenuContent
+            data-tab-strip-menu={menuId}
             align="end"
             side="bottom"
             sideOffset={4}
             onCloseAutoFocus={(event) => {
+              const navigation = pendingNavigationRef.current
+              pendingNavigationRef.current = null
               if (!isFocused) {
                 event.preventDefault()
+                return
               }
+              const triggerRemoved = !onCloseGroup && foldLevel === 0
+              if (!navigation && !triggerRemoved) {
+                return
+              }
+              event.preventDefault()
+              const focusBefore = navigation
+                ? navigation.focusBefore
+                : document.activeElement === document.body
+                  ? document.body
+                  : null
+              if (!focusBefore) {
+                return
+              }
+              requestAnimationFrame(() => {
+                const strip = document.querySelector<HTMLElement>(
+                  `[data-tab-group-strip-id="${CSS.escape(groupId)}"]`
+                )
+                const activeSlot = strip?.querySelector<HTMLElement>(
+                  '[data-tab-strip-slot]:has([data-active="true"])'
+                )
+                restoreTabStripFocus({
+                  strip,
+                  slotId: activeSlot?.dataset.tabStripSlot ?? null,
+                  stillOwned: () => isGroupFocusedInStore(worktreeId, groupId),
+                  focusBefore
+                })
+              })
             }}
           >
-            {quickCommands.menu ? (
+            {showHistory ? (
               <>
-                {quickCommands.menu}
-                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  disabled={!canGoBack}
+                  onSelect={() => {
+                    pendingNavigationRef.current = {
+                      focusBefore: captureTabStripMenuFocus(null, menuId)
+                    }
+                    runBuiltInOrReplacement('worktree.history.back', () =>
+                      useAppStore.getState().goBackWorktree()
+                    )
+                  }}
+                >
+                  <ArrowLeft className="size-4" />
+                  {t('auto.App.064bd07810', 'Go back')}
+                  <DropdownMenuShortcut>{backShortcut}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!canGoForward}
+                  onSelect={() => {
+                    pendingNavigationRef.current = {
+                      focusBefore: captureTabStripMenuFocus(null, menuId)
+                    }
+                    runBuiltInOrReplacement('worktree.history.forward', () =>
+                      useAppStore.getState().goForwardWorktree()
+                    )
+                  }}
+                >
+                  <ArrowRight className="size-4" />
+                  {t('auto.App.cf9099fe98', 'Go forward')}
+                  <DropdownMenuShortcut>{forwardShortcut}</DropdownMenuShortcut>
+                </DropdownMenuItem>
+                {menuFoldLevel === 2 ? (
+                  <DropdownMenuItem onSelect={() => onNewTab()}>
+                    <Plus className="size-4" />
+                    {t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+                    <DropdownMenuShortcut>{newTabShortcut}</DropdownMenuShortcut>
+                  </DropdownMenuItem>
+                ) : null}
+                {quickCommands || onCloseGroup ? <DropdownMenuSeparator /> : null}
               </>
             ) : null}
-            <DropdownMenuItem variant="destructive" onSelect={() => onCloseGroup()}>
-              <X className="size-4" />
-              {t('auto.components.tab.group.TabGroupPanel.closePaneColumn', 'Close split pane')}
-            </DropdownMenuItem>
+            {quickCommands ? (
+              <>
+                {quickCommands}
+                {onCloseGroup ? <DropdownMenuSeparator /> : null}
+              </>
+            ) : null}
+            {onCloseGroup ? (
+              <DropdownMenuItem variant="destructive" onSelect={() => onCloseGroup()}>
+                <X className="size-4" />
+                {t('auto.components.tab.group.TabGroupPanel.closePaneColumn', 'Close split pane')}
+              </DropdownMenuItem>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
         <TooltipContent side="bottom" sideOffset={6}>
           {t('auto.components.tab.group.TabGroupPanel.9acaf92093', 'Pane Actions')}
         </TooltipContent>
       </Tooltip>
-      {quickCommands.dialog}
-    </>
+    </div>
   )
 }

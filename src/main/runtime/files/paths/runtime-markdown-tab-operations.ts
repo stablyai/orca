@@ -1,4 +1,4 @@
-import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/session-tabs-change-publication'
+import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../session-tabs/publication/session-tabs-change-publication'
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
@@ -12,7 +12,7 @@ import {
   type MarkdownTabDiskHost
 } from './markdown-tab-disk-documents'
 import { createMarkdownTabDiskHost } from './markdown-tab-disk-host'
-import { RuntimeMobileSessionTabOrder } from '../../session-tabs/mobile-session-tab-order'
+import { RuntimeMobileSessionTabOrder } from '../../session-tabs/layout/mobile-session-tab-order'
 export abstract class RuntimeMarkdownTabOperations extends RuntimeMobileSessionTabOrder {
   abstract resolveRuntimeFileTarget(worktreeSelector: string): Promise<{
     worktree: ResolvedWorktree

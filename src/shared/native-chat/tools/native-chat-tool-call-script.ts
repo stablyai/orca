@@ -69,7 +69,7 @@ export function nativeChatToolCallScript(name: string, input: unknown): string |
   if (name.trim().toLowerCase() === 'powershell') {
     return powershellAnalysisScript(command)
   }
-  // Only a whole line that is one launch is unwrapped, as the common pattern does: any other line
+  // Only a whole line that is one launch is unwrapped: any other line
   // is analyzed as written, its comments, heredocs and other commands kept as they are.
   const words = posixShellWords(command)
   const launched = words ? launchedScript(words) : undefined

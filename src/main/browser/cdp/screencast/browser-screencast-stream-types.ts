@@ -16,8 +16,12 @@ export type BrowserScreencastOptions = {
   everyNthFrame: number
   minFrameIntervalMs: number
   onFrame: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  /** True while a viewer holds frames its link cannot take yet; lowers quality during motion. */
+  isViewerBacklogged?: () => boolean
   onEvent?: (event: BrowserScreencastEvent) => void
   onError?: (message: string) => void
+  /** Why no first frame came, when the owner knows; otherwise the stream reports a plain timeout. */
+  noFrameMessage?: () => string | undefined
   holdPaint: CapturePaintHold
 }
 
@@ -31,15 +35,37 @@ export type BrowserScreencastFrameBudget = Pick<
   'quality' | 'maxWidth' | 'maxHeight' | 'everyNthFrame' | 'minFrameIntervalMs'
 >
 
+export type BrowserScreencastLaneViewers = Pick<
+  BrowserScreencastOptions,
+  'onFrame' | 'isViewerBacklogged'
+>
+
+/** One encoding of the page's frames at its own size, quality and pace, for the viewers that share them. */
+export type BrowserScreencastLane = {
+  updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
+  stop: () => void
+}
+
 export type BrowserScreencastSession = {
   stop: () => void
   done: Promise<void>
   updateViewport: (viewport: BrowserScreencastViewport) => Promise<void>
-  updateFrameBudget: (budget: BrowserScreencastFrameBudget) => Promise<void>
+  /** The lane opened from the start options. */
+  firstLane: BrowserScreencastLane
+  openLane: (
+    budget: BrowserScreencastFrameBudget,
+    viewers: BrowserScreencastLaneViewers
+  ) => Promise<BrowserScreencastLane>
 }
 
 export type BrowserScreencastEvent =
-  | { type: 'dialog'; dialogType: string; message: string }
+  | {
+      type: 'dialog'
+      dialogType: string
+      message: string
+      defaultPromptText: string
+      origin: string | null
+    }
   | { type: 'dialogClosed' }
 
 export type PendingScreencastFrame = {

@@ -27,9 +27,10 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
  * runtime serves: an SSH host, or the catalog's unresolved-owner sentinel.
  */
 export function structuredAgentSessionTargetForHost(
-  executionHostId: string | null | undefined
+  executionHostId: unknown
 ): RuntimeClientTarget | null {
-  const host = parseExecutionHostId(executionHostId)
+  // Render reads unchecked tab and wire stamps: a non-string owner has no runtime, not a crash.
+  const host = typeof executionHostId === 'string' ? parseExecutionHostId(executionHostId) : null
   return host ? runtimeRpcTargetForAuthorityKey(host.id) : null
 }
 

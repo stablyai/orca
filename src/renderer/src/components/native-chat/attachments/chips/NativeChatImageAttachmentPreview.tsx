@@ -14,7 +14,7 @@ import { isNativeChatPastedImagePath } from '../../../../../../shared/native-cha
 import type { NativeChatComposerImageAttachment } from './native-chat-image-attachment'
 import { isAgentSessionAttachmentStorePath } from '../../../../../../shared/agent-session/agent-session-attachments'
 import { chatImageAccess } from '@/lib/files/access/local-file-access'
-import { LoadingSpinner } from '@/components/LoadingSpinner'
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { nativeChatImageNumberLabel } from '../../composer/editor/NativeChatImageReferencePill'
 

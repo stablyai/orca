@@ -15,9 +15,12 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { nativeChatQueueFollowUps } from '../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import {
   nativeChatMarksNewMessages,
-  nativeChatScrollsToLatestOnSend
+  nativeChatScrollsToLatestOnSend,
+  nativeChatShowsPromptSuggestions
 } from '../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
+import type { SettingsHostScope } from '../host-scope/settings-host-scope'
+import { NativeChatUsageLimitContinueSetting } from './NativeChatUsageLimitContinueSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { getChatBehaviorEntriesByKey, getChatBehaviorTitle } from './chat-behavior-search'
 import { getChatPermissionSearchEntry } from './chat-permission-search'
@@ -29,12 +32,15 @@ const STRUCTURED_CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 type ChatBehaviorSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  /** The host picked in Settings; host-run switches read and write it. */
+  hostScope: SettingsHostScope
   forceVisible?: boolean
 }
 
 export function ChatBehaviorSetting({
   settings,
   updateSettings,
+  hostScope,
   forceVisible = false
 }: ChatBehaviorSettingProps): React.JSX.Element | null {
   const t = useTranslate()
@@ -44,7 +50,7 @@ export function ChatBehaviorSetting({
   const hostQueuesMessages = useStructuredAgentSessionHostQueuesMessages(STRUCTURED_CHAT_HOST)
   const hostContinuesUsageLimits =
     useStructuredAgentSessionHostCapabilityState(
-      STRUCTURED_CHAT_HOST,
+      hostScope.target,
       AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY
     ) === 'supported'
   const entries = getChatBehaviorEntriesByKey()
@@ -59,6 +65,8 @@ export function ChatBehaviorSetting({
     entries.scrollToLatestOnSend,
     entries.markNewMessages,
     entries.linkPreviews,
+    entries.composerSpellcheck,
+    entries.promptSuggestions,
     entries.shellEnvironment
   ]
   if (!forceVisible && !matchesSettingsSearch(query, rows)) {
@@ -66,10 +74,11 @@ export function ChatBehaviorSetting({
   }
   const resumeOnRestartEnabled = settings.nativeChatResumeWorkOnRestart === true
   const queueFollowUps = nativeChatQueueFollowUps(settings)
-  const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
   const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
+  const composerSpellcheckEnabled = settings.nativeChatComposerSpellcheck !== false
+  const promptSuggestions = nativeChatShowsPromptSuggestions(settings)
   return (
     <SettingsGroup id="chat-behavior" title={getChatBehaviorTitle(t)}>
       <ChatPermissionSetting
@@ -105,6 +114,7 @@ export function ChatBehaviorSetting({
         <NativeChatIdleStopSetting
           settings={settings}
           updateSettings={updateSettings}
+          hostScope={hostScope}
           title={entries.idleStop.title}
           description={entries.idleStop.description}
         />
@@ -116,18 +126,11 @@ export function ChatBehaviorSetting({
           forceVisible={forceVisible}
           className="max-w-none"
         >
-          <SettingsSwitchRow
+          <NativeChatUsageLimitContinueSetting
+            settings={settings}
+            hostScope={hostScope}
             label={entries.autoContinueAfterUsageLimit.title}
             description={entries.autoContinueAfterUsageLimit.description}
-            checked={autoContinueEnabled}
-            disabled={settings.nativeChatAutoContinueAfterUsageLimit === undefined}
-            ariaLabel={t(
-              'components.settings.nativeChat.usageLimitContinueToggleLabel',
-              'Toggle continuing chats when a usage limit resets'
-            )}
-            onChange={() =>
-              updateSettings({ nativeChatAutoContinueAfterUsageLimit: !autoContinueEnabled })
-            }
           />
         </SearchableSetting>
       ) : null}
@@ -193,12 +196,46 @@ export function ChatBehaviorSetting({
         />
       </SearchableSetting>
       <SearchableSetting
+        {...entries.composerSpellcheck}
+        id={entries.composerSpellcheck.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.composerSpellcheck.title}
+          description={entries.composerSpellcheck.description}
+          checked={composerSpellcheckEnabled}
+          ariaLabel={entries.composerSpellcheck.title}
+          onChange={() =>
+            updateSettings({ nativeChatComposerSpellcheck: !composerSpellcheckEnabled })
+          }
+        />
+      </SearchableSetting>
+      <SearchableSetting
+        {...entries.promptSuggestions}
+        id={entries.promptSuggestions.targetSectionId}
+        forceVisible={forceVisible}
+        className="max-w-none"
+      >
+        <SettingsSwitchRow
+          label={entries.promptSuggestions.title}
+          description={entries.promptSuggestions.description}
+          checked={promptSuggestions}
+          ariaLabel={entries.promptSuggestions.title}
+          onChange={() => updateSettings({ nativeChatPromptSuggestions: !promptSuggestions })}
+        />
+      </SearchableSetting>
+      <SearchableSetting
         {...entries.shellEnvironment}
         id={entries.shellEnvironment.targetSectionId}
         forceVisible={forceVisible}
         className="max-w-none"
       >
-        <NativeChatShellEnvironmentSetting settings={settings} updateSettings={updateSettings} />
+        <NativeChatShellEnvironmentSetting
+          settings={settings}
+          updateSettings={updateSettings}
+          hostScope={hostScope}
+        />
       </SearchableSetting>
     </SettingsGroup>
   )

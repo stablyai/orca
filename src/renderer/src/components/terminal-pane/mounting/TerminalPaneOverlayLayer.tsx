@@ -7,9 +7,9 @@ import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import {
   findActivityTerminalPortal,
   type ActivityTerminalPortalTarget
-} from '../../activity/activity-terminal-portal'
+} from '../../activity/terminal-portal/activity-terminal-portal'
 import type { HiddenTerminalPrewarm } from '../controller/terminal-pane-types'
-import { shouldMountBackgroundWorktreeTab } from '../../terminal/background-terminal-worktree-mount'
+import { shouldMountBackgroundWorktreeTab } from '../../terminal/workspace-mounting/background-terminal-worktree-mount'
 import { useNativeChatToggleShortcut } from '../../native-chat/pane/routing/use-native-chat-toggle-shortcut'
 import { RetainedPaneHost } from '../../tab-group/retained-pane/RetainedPaneHost'
 import { TerminalOverlaySlot } from './TerminalOverlaySlot'

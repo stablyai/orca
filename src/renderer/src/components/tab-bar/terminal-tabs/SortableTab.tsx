@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { structuredAgentSessionAddressTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useCallback, useEffect } from 'react'
-import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Pin } from 'lucide-react'
+import { Minimize2, Pin } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { basename } from '@/lib/path'
@@ -20,7 +20,9 @@ import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard
 import { useSortableTabRename } from './use-sortable-tab-rename'
 import { useTabRenameReturnFocus } from './use-tab-rename-return-focus'
 import { SortableTabContextMenu } from './SortableTabContextMenu'
+import { SortableTabCloseButton } from './SortableTabCloseButton'
 import { useSortableTabContextMenu } from './use-sortable-tab-context-menu'
+import { useSortableTabDrag } from './use-sortable-tab-drag'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
@@ -40,6 +42,7 @@ import {
   NativeChatNamingFailedDialog
 } from '../session-actions/NativeChatNamingFailure'
 import { ForkMarkedName } from '../../native-chat/fork/ForkMarkedName'
+import { BOT_HOME_TAB_LABEL_CLASSES, BotHomeTabAccent } from '../../bots/home-chat/BotHomeTabAccent'
 
 export default function SortableTab({
   tab,
@@ -71,19 +74,39 @@ export default function SortableTab({
   canSplitTerminal = true,
   nativeChat,
   namingFailure,
+  closable = true,
+  sizing = 'terminal',
+  canPin = true,
+  isBotHome = false,
+  canContinueInTerminal = true,
+  identityIcon,
+  identityDetail,
+  unread = false,
   fork
 }: SortableTabProps): React.JSX.Element {
   const t = useTranslate()
+  const canClose = closable && !isPinned
   const naming = useNativeChatNamingFailure(namingFailure)
+  // A chat's status and unread rows still name it by its session's pane address.
+  const statusTabId = nativeChat
+    ? structuredAgentSessionAddressTabId(tab.id, nativeChat.sessionId)
+    : tab.id
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
-  const hasUnreadActivity = useAppStore((s) =>
-    terminalTabHasUnreadActivity({
-      terminalTabId: tab.id,
-      unreadTerminalTabs: s.unreadTerminalTabs,
-      unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
-    })
+  const hasUnreadActivity = useAppStore(
+    (s) =>
+      unread ||
+      terminalTabHasUnreadActivity({
+        terminalTabId: tab.id,
+        completionTabId: statusTabId,
+        unreadTerminalTabs: s.unreadTerminalTabs,
+        unreadAgentCompletionPanes: s.unreadAgentCompletionPanes
+      })
   )
-  const { activityStatus, programProgress } = useTerminalTabActivity(tab)
+  const { activityStatus, programProgress } = useTerminalTabActivity({
+    id: statusTabId,
+    title: tab.title,
+    launchAgent: tab.launchAgent
+  })
 
   // Why: shellOverride is stamped at create time, so changing the default shell later won't repaint existing tabs.
   const shellForIcon = tab.shellOverride
@@ -92,10 +115,10 @@ export default function SortableTab({
   const displayTitle =
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
 
-  const { attributes, listeners, setNodeRef } = useSortable({
-    id: tab.id,
-    // Why: carry the resolved agent into the drag overlay so dragged tabs keep the same glyph without another store lookup.
-    data: { ...dragData, agent: tabAgent }
+  // Why: carry the resolved agent into the drag overlay so dragged tabs keep the same glyph without another store lookup.
+  const { attributes, listeners, setNodeRef } = useSortableTabDrag(tab.id, {
+    ...dragData,
+    agent: tabAgent
   })
 
   // Why: no transform/transition/opacity so tabs stay anchored during drag, only the insertion bar moves (see TabBar.tsx).
@@ -117,7 +140,8 @@ export default function SortableTab({
     tabId: tab.id,
     title: tab.title,
     customTitle: tab.customTitle,
-    onSetCustomTitle
+    onSetCustomTitle,
+    renamable: closable
   })
   const { renameOwnerRef, onRenameKeyDown } = useTabRenameReturnFocus({
     commitRename,
@@ -159,7 +183,8 @@ export default function SortableTab({
     disabled: isEditing
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
-  const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
+  const slotProps = useTabStripSlotProps(tab.id, isActive, sizing)
+  const iconOnly = slotProps['data-tab-density'] === 'icon'
   const tabTitle = tab.customTitle ?? tab.title
   const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
@@ -172,6 +197,9 @@ export default function SortableTab({
       // Expose rendered selection so E2E catches visual regressions missed by store-only assertions.
       data-active={isActive ? 'true' : 'false'}
       data-agent-activity-status={activityStatus}
+      data-bot-home={isBotHome ? '' : undefined}
+      // The drag handle's describedby owns the description, so the names join the tab's name.
+      aria-label={identityDetail ? `${tabTitle}, ${identityDetail}` : undefined}
       {...attributes}
       {...dragListeners}
       className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
@@ -198,7 +226,7 @@ export default function SortableTab({
         if (e.button === 1) {
           e.preventDefault()
           e.stopPropagation()
-          if (isPinned) {
+          if (!canClose) {
             return
           }
           onClose(tab.id)
@@ -206,6 +234,7 @@ export default function SortableTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isBotHome && <BotHomeTabAccent />}
       {showUnreadActivity && (
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
         <span aria-hidden className="pointer-events-none absolute inset-0 bg-amber-500/10" />
@@ -217,8 +246,10 @@ export default function SortableTab({
         showUnreadActivity={showUnreadActivity}
         isActive={isActive}
         progress={programProgress}
+        identity={identityIcon}
+        compact={iconOnly && !isEditing}
       />
-      {isPinned && !isEditing && (
+      {isPinned && !isEditing && !iconOnly && (
         <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />
       )}
       {isEditing ? (
@@ -247,9 +278,13 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{titleNode}</span>
+        <span
+          className={`${TAB_LABEL_WIDTH_CLASSES} mr-1 ${isBotHome ? BOT_HOME_TAB_LABEL_CLASSES : ''}`}
+        >
+          {titleNode}
+        </span>
       )}
-      {tab.color && !isEditing && (
+      {tab.color && !isEditing && !iconOnly && (
         <span
           className="mr-1.5 size-2 rounded-full shrink-0"
           style={{ backgroundColor: tab.color }}
@@ -273,37 +308,12 @@ export default function SortableTab({
           <Minimize2 className="w-3 h-3" />
         </button>
       )}
-      {!isEditing && !isPinned && (
-        <button
-          className={`relative z-10 flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
-            isActive
-              ? 'text-muted-foreground hover:text-foreground hover:bg-muted focus-visible:text-foreground focus-visible:bg-muted'
-              : 'text-transparent group-hover:text-muted-foreground hover:!text-foreground hover:!bg-muted focus-visible:!text-foreground focus-visible:!bg-muted'
-          }`}
-          // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
-          aria-label={t('auto.components.tab.bar.SortableTab.6df69d9388', 'Close tab {{value0}}', {
-            value0: fork?.markedTitle ?? tabTitle
-          })}
-          type="button"
-          data-tab-close-button="true"
-          onPointerDown={(e) => {
-            if (e.button === 0) {
-              e.stopPropagation()
-            }
-          }}
-          onMouseDown={(e) => {
-            if (e.button === 0) {
-              e.stopPropagation()
-            }
-          }}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onClose(tab.id)
-          }}
-        >
-          <X className="w-3 h-3" />
-        </button>
+      {!isEditing && canClose && (
+        <SortableTabCloseButton
+          tabTitle={fork?.markedTitle ?? tabTitle}
+          isActive={isActive}
+          onClose={() => onClose(tab.id)}
+        />
       )}
     </div>
   )
@@ -327,13 +337,16 @@ export default function SortableTab({
           ) : (
             <TabHoverCard
               title={displayTitle}
+              showWhenUnclipped={identityDetail !== undefined}
+              programNameIsProse={identityDetail !== undefined}
               {...(fork && { description: fork.describeSource, showWhenUnclipped: true })}
               programName={
-                tabAgent
+                identityDetail ??
+                (tabAgent
                   ? getAgentLabel(tabAgent)
                   : shellForIcon
                     ? basename(shellForIcon)
-                    : t('tabHoverCard.terminal', 'Terminal')
+                    : t('tabHoverCard.terminal', 'Terminal'))
               }
               icon={
                 <TerminalTabLeadingIcon
@@ -343,6 +356,7 @@ export default function SortableTab({
                   showUnreadActivity={false}
                   isActive
                   progress={programProgress}
+                  identity={identityIcon}
                 />
               }
               alert={
@@ -369,6 +383,9 @@ export default function SortableTab({
         hasTabsToRight={hasTabsToRight}
         hasTabsToLeft={hasTabsToLeft}
         isPinned={isPinned}
+        closable={closable}
+        canPin={canPin}
+        canContinueInTerminal={canContinueInTerminal}
         onActivate={onActivate}
         onClose={onClose}
         onCloseOthers={onCloseOthers}

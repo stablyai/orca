@@ -1,3 +1,7 @@
+import {
+  decodeSavedLocalTerminalIds,
+  decodeSavedLocalAutomationRun
+} from '../../restoring-sessions/saved-local-terminal-ids'
 import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   normalizeProjectHostSetupRows,
@@ -9,6 +13,7 @@ import {
   backfillAutomationRunNumbers,
   pruneAutomationRuns
 } from '../../../../shared/automations/history/automation-run-retention'
+import { repairAnsweredTogetherRun } from '../../../../shared/automations/history/automation-run-answered-together'
 import {
   parseWorkspaceSessionsByHostId,
   workspaceSessionSalvageLogDetails
@@ -35,7 +40,11 @@ export function normalizeLoadedLocalSession(
     // Persist salvaged state so corrupt entries do not recur on every launch.
     markNeedsSave()
   }
-  return { ...defaults.workspaceSession, ...result.value }
+  const session = decodeSavedLocalTerminalIds(result.value)
+  if (session !== result.value) {
+    markNeedsSave()
+  }
+  return { ...defaults.workspaceSession, ...session }
 }
 
 export function normalizeLoadedHostSessions(
@@ -67,7 +76,13 @@ export function normalizeLoadedAutomationRuns(
   if (runs.length !== parsed.automationRuns.length) {
     markNeedsSave()
   }
-  return runs
+  return runs.map((run) => {
+    const decoded = repairAnsweredTogetherRun(decodeSavedLocalAutomationRun(run))
+    if (decoded !== run) {
+      markNeedsSave()
+    }
+    return decoded
+  })
 }
 
 /** Repair untrusted catalog fields and persist them before republishing to paired clients. */

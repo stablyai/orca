@@ -7,6 +7,7 @@ import {
 } from '@/components/task-page/github/cache/task-page-github-resume-cache'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { getTaskPageRepoSourceContext } from '../../../../lib/work-items/task-repo-source-context'
+import { getTaskPageGitHubRepoArgs } from '@/components/task-page/task-page-source-context'
 import { sortWorkItemsByNumber } from '../../../../../../shared/work-items/work-item-order'
 import { taskPageToGitHubApiPage } from '../../../../../../shared/work-items/work-item-pagination'
 import {
@@ -67,7 +68,9 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
     countWorkItemsAcrossRepos,
     retryingSourceKeys,
     setRetryingSourceKeys,
-    githubWorkItemMutationQueryKey
+    githubWorkItemMutationQueryKey,
+    unreachableTaskSourceHostIds,
+    recheckUnreachableTaskSourceHosts
   } = model
   if (!taskResumeApplied) {
     return
@@ -181,22 +184,16 @@ export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefr
   const forcedFetch = (forceRefresh && taskRefreshNonce > 0) || preferenceInvalidated
   // A Refresh, Retry or search in Tasks, or Tasks opened on one repo, is a user act that may start
   // that repo's stopped WSL distro; opening a multi-repo fan-out is not (E9).
-  const wake =
-    (forceRefresh && taskRefreshNonce > 0) || selectedRepos.length === 1
-      ? { wakeWslDistro: true }
-      : {}
+  const userRefresh = forceRefresh && taskRefreshNonce > 0
+  const wake = userRefresh || selectedRepos.length === 1 ? { wakeWslDistro: true } : {}
   if (forcedFetch) {
     hardRefreshEpochRef.current += 1
   }
   const forcedFetchAuthorityGeneration = forcedFetch
     ? getOrCreateQuietRevalidateState(githubWorkItemMutationQueryKey).dirtyGeneration
     : null
-  const repoArgs = selectedRepos.map((r) => ({
-    repoId: r.id,
-    path: r.path,
-    executionHostId: r.executionHostId,
-    sourceContext: getTaskPageRepoSourceContext(r, 'github')
-  }))
+  const repoArgs = getTaskPageGitHubRepoArgs(selectedRepos, unreachableTaskSourceHostIds)
+  recheckUnreachableTaskSourceHosts(userRefresh ? { force: true } : undefined)
   const landingRefreshKey = `${repoArgs.map((r) => `${r.repoId}:${r.path}`).join('|')}::${q}`
   const shouldProbeOnLanding =
     !forcedFetch &&

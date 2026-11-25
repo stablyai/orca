@@ -22,7 +22,7 @@ import { linuxNativeToolchainImage } from '../linux/build-wayland-clipboard.mjs'
 
 const PROVIDER_EXEC_EXECUTABLE = 'orca-provider-exec'
 // Equals the desktop's minimumSystemVersion; the pinned server Node needs a newer macOS anyway.
-const MACOS_DEPLOYMENT_TARGET = '13.4'
+export const MACOS_DEPLOYMENT_TARGET = '13.4'
 const SOURCE = 'native/provider-exec/provider-exec.c'
 const WARNINGS = ['-std=c11', '-O2', '-Wall', '-Wextra', '-Werror']
 const LINUX_HARDENING = [
@@ -59,7 +59,7 @@ function toolchainFor({ platform, slotLibc }, hostCompiler) {
   return slotLibc || hostCompiler ? 'host' : 'docker'
 }
 
-function providerExecFingerprint(root, target, toolchain) {
+export function providerExecFingerprint(root, target, toolchain) {
   const hash = createHash('sha256').update(
     `${target}\0${toolchain}\0${process.env.CC ?? ''}\0${HOST_GLIBC_RUNTIME ?? ''}`
   )

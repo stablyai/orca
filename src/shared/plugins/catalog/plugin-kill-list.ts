@@ -41,6 +41,9 @@ export const pluginKillListSchema = z.object({
 
 export type PluginKillListEntry = z.infer<typeof pluginKillListEntrySchema>
 export type PluginKillList = z.infer<typeof pluginKillListSchema>
+export type PluginBlockNotice = Pick<PluginKillListEntry, 'reason' | 'advisoryUrl'> & {
+  team?: true
+}
 
 /** Reject freshly fetched far-future lists that would permanently suppress later revocations. Do not rejudge accepted
  * caches against a slow device clock and accidentally drop active revocations. */

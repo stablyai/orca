@@ -60,7 +60,6 @@ export async function readInitialWorkerTranscriptReusing(
       }
       adopt(filePath, resource, stamp)
       const admitted = admit(key, filePath, stamp, resource, read)
-      admissionObserver?.(admitted.kind)
       return await admitted.result
     }
   } finally {
@@ -195,29 +194,4 @@ function variantId(part: NativeChatLineDecoder): number {
     variantIds.set(part, id)
   }
   return id
-}
-
-let admissionObserver: ((kind: Admission['kind']) => void) | undefined
-
-/** Test seam: told each admission's decision as it is made. */
-export function observeTranscriptAdmissions(
-  observer: ((kind: Admission['kind']) => void) | undefined
-): void {
-  admissionObserver = observer
-}
-
-/** Test seam: the settled cache's footprint, how many entries one file holds, and how many
- *  resource records are alive. */
-export function settledTranscriptPages(path?: string): {
-  entries: number
-  bytes: number
-  resources: number
-} {
-  return {
-    entries: path
-      ? [...settled.values()].filter((entry) => entry.path === path).length
-      : settled.size,
-    bytes: settledBytes,
-    resources: resources.size
-  }
 }

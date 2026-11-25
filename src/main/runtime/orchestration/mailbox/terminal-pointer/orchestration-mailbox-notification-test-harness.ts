@@ -13,7 +13,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layou
 import {
   bindPaneFirst,
   registerBoundPty
-} from '../../../orca-runtime-tests/bind-first-pane.test-fixture'
+} from '../../../terminal/layout/bind-first-pane.test-fixture'
 import { publishHeadlessRuntimeGraph } from '../../../session-graph/headless-runtime-graph'
 
 export const TAB_ID = '11111111-1111-4111-8111-111111111111'
@@ -38,7 +38,7 @@ export function createDatabase(prefix: string): OrchestrationDb {
 }
 
 export function sqliteFor(db: OrchestrationDb): Database.Database {
-  return (db as unknown as { db: Database.Database }).db
+  return db.db
 }
 
 /** `rebind` then run-uses it, so the pane keeps only the new Run. */
@@ -85,6 +85,7 @@ class MailboxRuntime extends OrcaRuntimeService {
 export type MailboxNotificationHarness = {
   runtime: MailboxRuntime
   write: ReturnType<typeof vi.fn>
+  requestRepaint: ReturnType<typeof vi.fn>
 }
 
 /** Keep main-owned pane bindings in the fixture's session layout. */
@@ -119,6 +120,7 @@ export async function createRuntime(
     getAgentStatusSnapshot?: () => AgentStatusIpcPayload[]
     checkHookAgentPresence?: (paneKey: string) => Promise<'live' | 'unverifiable' | 'exited' | null>
     launchAgent?: TuiAgent | null
+    foregroundProcess?: string
   } = {}
 ): Promise<MailboxNotificationHarness> {
   const runtime = new MailboxRuntime(
@@ -134,12 +136,14 @@ export async function createRuntime(
     }
   )
   const write = vi.fn(() => true)
+  const requestRepaint = vi.fn(async (_ptyId: string) => true)
   runtime.setOrchestrationDb(db)
   runtime.setPtyController({
     write,
     writeWithSettlement: settledWriteStub(write),
     kill: vi.fn(),
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => options.foregroundProcess ?? null,
+    requestRepaint
   })
   bindPaneFirst(runtime, { worktreeId: WORKTREE_ID, tabId: TAB_ID, leafId: LEAF_ID, ptyId: PTY_ID })
   runtime.registerPty(
@@ -164,7 +168,7 @@ export async function createRuntime(
   runtime.registerPreAllocatedHandleForPty(PTY_ID, TERMINAL_HANDLE)
   if (options.headless) {
     publishHeadlessRuntimeGraph(runtime)
-    return { runtime, write }
+    return { runtime, write, requestRepaint }
   }
   runtime.attachWindow(1)
   await runtime.syncWindowGraph(1, {
@@ -187,7 +191,7 @@ export async function createRuntime(
       }
     ]
   })
-  return { runtime, write }
+  return { runtime, write, requestRepaint }
 }
 
 export async function registerSecondPane(

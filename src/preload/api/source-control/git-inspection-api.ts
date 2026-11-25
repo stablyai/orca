@@ -1,3 +1,4 @@
+import type { GitBlameResult } from '../../../shared/git/blame/git-blame-types'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -158,4 +159,10 @@ export type GitInspectionApi = {
     sha: string
     connectionId?: string
   }) => Promise<string | null>
+  blame: (args: {
+    worktreePath: string
+    filePath: string
+    knownHeadOid?: string
+    connectionId?: string
+  }) => Promise<GitBlameResult>
 }

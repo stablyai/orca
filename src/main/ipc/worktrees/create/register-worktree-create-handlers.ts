@@ -16,10 +16,10 @@ import { workspaceSourceSchema } from '../../../../shared/telemetry/schemas/tele
 import type { WorkspaceSource } from '../../../../shared/workspace/creation/workspace-source'
 
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
+import { createLocalWorktree, notifyWorktreesChanged } from '../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
-import { classifyWorkspaceCreateError } from '../../workspace-create-error-classifier'
+import { classifyWorkspaceCreateError } from '../creation/workspace-create-error-classifier'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
 import { adoptProvisionedRootSshCheckout } from '../../../workspaces/catalog/provisioned-root-ssh-adoption'
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'

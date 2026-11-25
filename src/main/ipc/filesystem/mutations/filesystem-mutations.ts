@@ -1,6 +1,6 @@
 import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
-import { copyFile, mkdir, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
 import type { Store } from '../../../persistence/loading-store/store'
 import {
@@ -10,14 +10,14 @@ import {
 } from '../access/local-file-access-resolution'
 import type { LocalFileAccess } from '../../../../shared/file-access/local-file-access'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
-import { resolveLocalDroppedPathsForAgent } from '../../dropped-path-resolution'
+import { resolveLocalDroppedPathsForAgent } from './dropped-path-resolution'
 import type { SshMutationExpectation } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { assertSshMutationExpectation } from '../../../ssh/connection/authority/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../../../filesystem/destination-serialized-local-rename'
 import {
   assertNotExists,
-  rethrowWithUserMessage
-} from '../../../filesystem/local-file-io/filesystem-create-path-guards'
+  createLocalFile
+} from '../../../filesystem/local-file-io/filesystem-create-path'
 import type {
   ImportItemResult,
   ResolveDroppedPathsResult
@@ -31,9 +31,9 @@ import {
   stagedRuntimeUploadByteLength,
   stageOneSourceForRuntimeUpload
 } from '../imports/filesystem-runtime-upload-staging'
-import { streamExternalFileToRuntime } from '../../runtime-upload-file-stream'
-import { abortWhenRendererGone } from '../../renderer-lifetime-abort'
-import { sweepAbandonedRuntimeUploadTempPath } from '../../runtime-upload-temp-sweep'
+import { streamExternalFileToRuntime } from '../../runtime-transfers/runtime-upload-file-stream'
+import { abortWhenRendererGone } from '../../renderer-requests/renderer-lifetime-abort'
+import { sweepAbandonedRuntimeUploadTempPath } from '../../runtime-transfers/runtime-upload-temp-sweep'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { windowsFsPath } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
 
@@ -54,13 +54,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
         throw new SshHostNotServedError(args.connectionId)
       }
       const filePath = windowsFsPath(await resolveDesktopAuthorizedPath(args.filePath, store))
-      await mkdir(dirname(filePath), { recursive: true })
-      try {
-        // Exclusive creation closes the existence-check race.
-        await writeFile(filePath, '', { encoding: 'utf-8', flag: 'wx' })
-      } catch (error) {
-        rethrowWithUserMessage(error, filePath)
-      }
+      await createLocalFile(filePath)
     }
   )
 

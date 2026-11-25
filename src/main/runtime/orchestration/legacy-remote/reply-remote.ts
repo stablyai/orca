@@ -42,7 +42,7 @@ export async function replyToRemoteRunHome(args: {
     processIncarnation: runtime.getTerminalProcessIncarnation(from) ?? undefined,
     signal: args.signal
   })
-  db.markAsRead([original.id])
+  db.markAsRead([original.id], { kind: 'reply' })
   // Preserve message: every shipped CLI reads its reply id there.
   return { message: { id: sent.relay.messageId, subject }, ...sent }
 }

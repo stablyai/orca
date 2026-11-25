@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { windowsSystem32Binary } from '@orca/process-host/windows-system-binary'
 import { access, readdir, readFile, realpath } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { homedir } from 'node:os'
@@ -19,7 +20,9 @@ const OAUTH2_SUBPATH = path.join('dist', 'src', 'code_assist', 'oauth2.js')
 
 async function resolveGeminiBinary(): Promise<string | null> {
   const [lookup, args] =
-    process.platform === 'win32' ? ['where.exe', ['gemini']] : ['which', ['gemini']]
+    process.platform === 'win32'
+      ? [windowsSystem32Binary('where.exe'), ['gemini']]
+      : ['which', ['gemini']]
   try {
     // Shell execution defeats Windows console hiding; use execFile (#14543, #10488).
     const { stdout } = await execFileAsync(lookup, args, {

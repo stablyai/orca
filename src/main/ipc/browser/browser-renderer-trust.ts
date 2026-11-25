@@ -1,4 +1,4 @@
-import { isTrustedMainRendererSender } from '../main-renderer-sender-trust'
+import { isTrustedMainRendererSender } from '../renderer-requests/main-renderer-sender-trust'
 
 let trustedBrowserRendererWebContentsId: number | null = null
 

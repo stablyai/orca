@@ -129,10 +129,7 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
         setScreenState(
           keepReady({
             kind: 'error',
-            message: translate(
-              'session.useDiffReviewController.waitingForDesktop',
-              'Waiting for desktop...'
-            )
+            message: translate('common.waitingForHost', 'Waiting for host…')
           })
         )
         return

@@ -1,6 +1,6 @@
 import '@/lib/workspace/creation/new-workspace-project-options'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
-import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { AgentMenuRowsTarget } from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import type { ComposerModel } from '../composer-model'
 
@@ -9,8 +9,24 @@ export type ComposerAgentRows = {
   detectionTarget: AgentDetectionTarget | undefined
 }
 
+type ComposerAgentRowsInput = Pick<
+  ComposerModel,
+  | 'isProjectGroupTarget'
+  | 'selectedProjectGroup'
+  | 'folderTargetRuntimeEnvironmentId'
+  | 'folderTargetAgentDetectionTarget'
+  | 'resolvedRepoId'
+  | 'ephemeralVmsEnabled'
+  | 'selectedEphemeralVmRecipeId'
+  | 'selectedRepoRuntimeEnvironmentId'
+  | 'selectedRepoConnectionId'
+  | 'selectedWorkspaceTarget'
+  | 'selectedRepoIsGit'
+  | 'selectedRepoExecutionHostId'
+>
+
 /** Resolve the same launch workspace as submit; unknown pre-create hosts such as ephemeral VMs keep the unfiltered agent list. */
-export function resolveComposerAgentRows(state: ComposerModel): ComposerAgentRows | null {
+export function resolveComposerAgentRows(state: ComposerAgentRowsInput): ComposerAgentRows | null {
   if (state.isProjectGroupTarget) {
     const group = state.selectedProjectGroup
     return group

@@ -1,5 +1,6 @@
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { writeAiVaultSessionHandoffSnapshot } from '../../../../ai-vault/session-handoff-snapshot'
+import { prepareAiVaultSessionHandoffPrompts } from '../../../../ai-vault/session-handoff-prompt'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -24,9 +25,9 @@ import {
   searchWithStructuredOwners
 } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import {
-  ensureStructuredAgentSessionHostUnlessRefused,
+  ensurePersistedStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume
-} from '../../../agent-session/structured-agent-session-host-refusal'
+} from '../../../agent-session/installation/structured-agent-session-host-refusal'
 import {
   clientOpensStructuredChatFromHistory,
   supportsStructuredAgentSessions
@@ -35,6 +36,7 @@ import {
   AiVaultDeleteSessionParams,
   AiVaultListSessionsParams,
   AiVaultPrepareSessionHandoffParams,
+  AiVaultPrepareSessionHandoffPromptParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
 } from '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
@@ -51,7 +53,10 @@ export const AI_VAULT_METHODS = [
       // A client that reads no structured sessions keeps the transcript hit, as before.
       return supportsStructuredAgentSessions(context)
         ? searchWithStructuredOwners(response, {
-            ensureHost: () => context.runtime.ensureStructuredAgentSessionHost(),
+            ensureHost: () =>
+              ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
+                context.runtime.ensureStructuredAgentSessionHost()
+              ),
             transport,
             opensChat: (agent) => clientOpensStructuredChatFromHistory(context, agent)
           })
@@ -98,7 +103,7 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultListSessionsParams,
     handler: async (params, { runtime, clientKind, clientCapabilities, signal }) => {
-      await ensureStructuredAgentSessionHostUnlessRefused(() =>
+      await ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
         runtime.ensureStructuredAgentSessionHost()
       )
       let result
@@ -155,10 +160,13 @@ export const AI_VAULT_METHODS = [
         executionHostId: LOCAL_EXECUTION_HOST_ID
       }
       if (!isWslUncPath(args.filePath)) {
-        const ensureHost = () => runtime.ensureStructuredAgentSessionHost()
+        const ensureHost = () =>
+          ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
+            runtime.ensureStructuredAgentSessionHost()
+          )
         await (args.codexHome === null && !args.fork
           ? tryEnsureStructuredAgentSessionHostForResume(ensureHost)
-          : ensureStructuredAgentSessionHostUnlessRefused(ensureHost))
+          : ensureHost())
         assertLegacyAiVaultResumeAllowed(args)
       }
       return (
@@ -171,6 +179,12 @@ export const AI_VAULT_METHODS = [
     permission: 'workspace',
     params: AiVaultPrepareSessionHandoffParams,
     handler: (params) => writeAiVaultSessionHandoffSnapshot(params)
+  }),
+  defineMethod({
+    name: 'aiVault.prepareSessionHandoffPrompt',
+    permission: 'workspace',
+    params: AiVaultPrepareSessionHandoffPromptParams,
+    handler: (params) => prepareAiVaultSessionHandoffPrompts(params)
   }),
   defineMethod({
     name: 'aiVault.deleteSession',

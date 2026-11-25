@@ -10,6 +10,7 @@ import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../../shared/orchestration/mailbox/orchestration-check-output'
+import { readTextOrFileFlag } from '../../arguments/command-body-input'
 import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { requirePeerMailCarrier } from '../identity/agent-server-route'
@@ -29,7 +30,7 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       next?: string
     }>(client, flags, 'orchestration.reply', {
       id: getRequiredStringFlag(flags, 'id'),
-      body: getRequiredStringFlag(flags, 'body'),
+      body: await readTextOrFileFlag(flags, cwd, 'body', true),
       run: getOptionalStringFlag(flags, 'run'),
       on: getOptionalStringFlag(flags, 'on'),
       from

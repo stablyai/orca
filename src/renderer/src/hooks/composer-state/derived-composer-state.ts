@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import {
   normalizeSparseDirectoryLines,
   sparseDirectoriesMatch
-} from '@/lib/directory-input/sparse-paths'
+} from '../../../../shared/worktree/creation/sparse-directory-paths'
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink
@@ -23,7 +23,7 @@ import {
 import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
+import { useRetiredWorktreeNames } from '@/hooks/composer-state/workspace-identity/useRetiredWorktreeNames'
 import { getSuggestedCreatureName } from '@/components/sidebar/workspace-creation/naming/worktree-name-suggestions'
 const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 

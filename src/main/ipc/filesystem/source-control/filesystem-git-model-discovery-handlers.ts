@@ -9,7 +9,7 @@ import {
   resolveModelDiscoveryLocalPath,
   getLocalAgentRuntimeTarget
 } from './filesystem-source-control-ai-targets'
-import { getLocalGitOptionsForRegisteredWorktree } from '../../local-worktree-runtime-options'
+import { getLocalGitOptionsForRegisteredWorktree } from '../../worktrees/local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from '../filesystem-handler-context'
 
 export function registerFilesystemGitModelDiscoveryHandlers(

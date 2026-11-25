@@ -137,5 +137,11 @@ export const CROSS_LOCALE_KEY_OVERRIDES = {
   },
   'auto.components.sidebar.workspace.status.caabd5ca85': {
     zh: '锌灰'
+  },
+  // "Open source file" is the verb "open" + "source file"; MT reads it as open-source software.
+  'auto.components.editor.HtmlDocPreview.openSourceControl': {
+    fr: 'Ouvrir le fichier source',
+    ja: 'ソースファイルを開く',
+    ko: '소스 파일 열기'
   }
 }

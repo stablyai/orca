@@ -17,7 +17,7 @@ import {
   getHostedTerminalQuickCommandKey,
   shouldShowTerminalQuickCommandHostOwnership,
   type TerminalQuickCommandMenuHost
-} from '@/hooks/use-terminal-quick-command-hosts'
+} from '@/lib/terminal/quick-commands/use-terminal-quick-command-hosts'
 
 type TerminalQuickCommandsSubmenuProps = {
   hosts: TerminalQuickCommandMenuHost[]

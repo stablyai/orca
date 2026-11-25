@@ -11,6 +11,7 @@ import type { TabBarProps } from '../tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import TabBarItemRow from './TabBarItemRow'
+import { TAB_STRIP_WINDOW_SLOT_PX, type TabStripSegment } from '../strip/tab-strip-window'
 
 export type TabBarItemSurfaceProps = Pick<
   TabBarProps,
@@ -38,14 +39,20 @@ export type TabBarItemSurfaceRuntime = Pick<
 
 export function renderTabBarItems({
   items,
+  groupItems = items,
   props,
   runtime,
   actions,
   dropIndicatorByVisibleId,
   includeTopTabBorder,
-  activeClientHostedBrowserRowId
+  activeClientHostedBrowserRowId,
+  segments
 }: {
   items: TabBarItem[]
+  /** Mounted runs of `items`; gaps render as fixed-width spacers. */
+  segments: readonly TabStripSegment[]
+  /** The whole group in strip order; close-others/left/right act on hidden tabs too. */
+  groupItems?: readonly TabBarItem[]
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -91,13 +98,19 @@ export function renderTabBarItems({
     if (item.type === 'simulator') {
       return activeTabType === 'simulator' && item.id === activeSimulatorTabId
     }
-    if (item.type === 'agent-session') {
+    if (item.type === 'agent-session' || item.type === 'room') {
       return activeTabType === 'agent-session' && item.id === activeTabId
     }
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
-  return items.map((item, index) => {
+  const groupIndexById = new Map(groupItems.map((item, index) => [item.id, index]))
+  const unpinnedCount = groupItems.filter((item) => !item.isPinned).length
+
+  function renderRow(item: TabBarItem): React.ReactNode {
+    const groupIndex = groupIndexById.get(item.id) ?? 0
+    // "Close others" enables at tabCount > 1: count what it closes, hidden tabs included, pinned never.
+    const closableOthers = unpinnedCount - (item.isPinned ? 0 : 1)
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -130,9 +143,9 @@ export function renderTabBarItems({
         worktreeId={worktreeId}
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
-        tabCount={items.length}
-        hasTabsToLeft={index > 0}
-        hasTabsToRight={index < items.length - 1}
+        tabCount={closableOthers + 1}
+        hasTabsToLeft={groupIndex > 0}
+        hasTabsToRight={groupIndex < groupItems.length - 1}
         isActive={isActiveItem(item)}
         isExpanded={item.type === 'terminal' && expandedPaneByTabId[item.id] === true}
         dropIndicator={dropIndicatorByVisibleId.get(item.id) ?? null}
@@ -147,5 +160,27 @@ export function renderTabBarItems({
         }
       />
     )
-  })
+  }
+
+  const rows: React.ReactNode[] = []
+  for (const segment of segments) {
+    if (segment.kind === 'gap') {
+      rows.push(
+        <div
+          key={`tab-strip-gap-${segment.start}`}
+          aria-hidden
+          data-tab-strip-gap=""
+          data-tab-strip-gap-start={segment.start}
+          data-tab-strip-gap-end={segment.end}
+          className="flex-none"
+          style={{ width: (segment.end - segment.start) * TAB_STRIP_WINDOW_SLOT_PX }}
+        />
+      )
+      continue
+    }
+    for (let index = segment.start; index < segment.end; index++) {
+      rows.push(renderRow(items[index]))
+    }
+  }
+  return rows
 }

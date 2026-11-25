@@ -9,7 +9,7 @@ import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-d
 import { defaultServerNameForAccessLink } from '../../../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from '../../../runtime-access/RuntimeHostAccessFailureAlert'
-import { warnWslHostServerStop } from '../../../sidebar/wsl-host-removal'
+import { warnWslHostServerStop } from '../../../sidebar/host-lifecycle/wsl-host-removal'
 
 type RuntimeEnvironmentMutationActionParams = {
   settings: GlobalSettings

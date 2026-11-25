@@ -1,3 +1,5 @@
+import { portSystemBrowserOpener } from './server-port-forward-open'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
@@ -82,7 +84,7 @@ export async function resolveWorkspacePortBrowserUrl(args: {
 // Why: servers without a browser engine (managed SSH, desktop-hosted pages) open links here; ports must too.
 function opensRuntimePortOnThisDesktop(worktreeId: string, environmentId: string): boolean {
   const state = useAppStore.getState()
-  const capabilities = state.runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities
+  const capabilities = readRuntimeStatuses().get(environmentId)?.status?.capabilities
   return (
     !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
     canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, environmentId)
@@ -106,9 +108,17 @@ export async function openWorkspacePortInBrowser(args: {
     runtimeTarget: args.runtimeTarget,
     localhostLabelRoute: args.localhostLabelRoute
   })
-  if (args.openInOrcaBrowser === false && args.runtimeTarget.kind === 'local') {
+  const openInSystemBrowser =
+    args.openInOrcaBrowser === false
+      ? portSystemBrowserOpener(
+          url,
+          args.runtimeTarget,
+          args.port.kind === 'workspace' ? args.port.owner.worktreeId : null
+        )
+      : null
+  if (openInSystemBrowser) {
     try {
-      await window.api.shell.openUrl(url)
+      await openInSystemBrowser()
       return { ok: true }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
@@ -277,7 +287,8 @@ function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: strin
 
 export async function scanWorkspacePortsForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  options?: { background?: boolean }
 ): Promise<WorkspacePortScanResult> {
   const key = workspacePortScanRequestKey(target, repoId)
   const existing = inFlightWorkspacePortScans.get(key)
@@ -286,7 +297,7 @@ export async function scanWorkspacePortsForTarget(
   }
 
   // Coalesce same-tick surface refreshes to avoid duplicate lsof/netstat/RPC work.
-  const promise = runWorkspacePortScanForTarget(target, repoId).finally(() => {
+  const promise = runWorkspacePortScanForTarget(target, repoId, options).finally(() => {
     if (inFlightWorkspacePortScans.get(key) === promise) {
       inFlightWorkspacePortScans.delete(key)
     }

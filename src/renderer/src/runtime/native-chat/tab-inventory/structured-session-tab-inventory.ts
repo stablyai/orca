@@ -2,7 +2,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remot
 import { refreshLocalStructuredSessionTabs } from '../../local-structured-session-tabs-sync/inventory-refresh'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { isSessionTabsListAllResult } from '../../web-session-tabs-sync/tracking'
+import { isSessionTabsListAllResult } from '../../web-session-tabs-sync/tracking/tracking'
 
 /**
  * The owning host's current tab inventory. This machine's runtime is read through the local sync,

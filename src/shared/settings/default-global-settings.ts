@@ -1,10 +1,14 @@
 import type { GlobalSettings } from './global-settings-types'
+import { DEFAULT_EXPERIMENTAL_SETTINGS } from './default-experimental-settings'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
 import type { VoiceSettings } from '../speech/speech-types'
 import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from '../terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from '../terminal/quick-commands/terminal-quick-commands'
 import { TASK_PROVIDERS } from '../work-items/task-providers'
-import { getDefaultSourceControlAiSettings } from '../source-control/ai/settings/source-control-ai-settings'
+import {
+  getDefaultCommitMessageAiSettings,
+  getDefaultSourceControlAiSettings
+} from '../source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from '../app-lifecycle/identity/app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from '../editor/launch/open-in-applications'
 import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../native-chat/settings/native-chat-idle-stop'
@@ -64,8 +68,10 @@ export function buildDefaultSettings(args: {
     editorAutoSave: false,
     editorFormatOnSave: false,
     editorInsertFinalNewline: false,
+    editorEndOfLine: 'auto',
     editorAutoSaveDelayMs: args.editorAutoSaveDelayMs,
     editorMinimapEnabled: false,
+    editorInlineBlame: false,
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
@@ -92,6 +98,7 @@ export function buildDefaultSettings(args: {
     terminalLigatures: 'auto',
     // Lazy image addon stays off the critical path and creates canvas layers only on first image; decoder setup still has overhead.
     terminalInlineImages: true,
+    terminalDroppedImagesPreview: true,
     terminalCursorStyle: 'block',
     terminalCursorStyleDefaultedToBlock: true,
     terminalCursorBlink: true,
@@ -154,7 +161,8 @@ export function buildDefaultSettings(args: {
     agentDefaultSurface: 'terminal',
     nativeChatResumeWorkOnRestart: true,
     nativeChatQueueFollowUps: true,
-    nativeChatAutoContinueAfterUsageLimit: false,
+    nativeChatAutoContinueAfterUsageLimit: true,
+    nativeChatAutoContinueAfterUsageLimitDefaultedOn: true,
     nativeChatIdleStopMinutes: DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES,
     nativeChatInlineVisuals: true,
     nativeChatLinkPreviews: true,
@@ -175,6 +183,7 @@ export function buildDefaultSettings(args: {
     sourceControlCompareAgainstUpstream: false,
     prAutoRefresh: 'default',
     showTitlebarAppName: true,
+    linuxTilingWindowMode: false,
     showTasksButton: true,
     showAutomationsButton: true,
     artifactsEnabled: true,
@@ -194,6 +203,8 @@ export function buildDefaultSettings(args: {
     terminalShortcutPolicy: 'orca-first',
     floatingTerminalEnabled: true,
     browserClientHostedRemoteEnabled: true,
+    antigravityManagedAgyEnabled: true,
+    antigravityServerAutoUpdateEnabled: true,
     floatingTerminalDefaultedForAllUsers: true,
     floatingTerminalCwd: '~',
     floatingTerminalTrustedCwds: [],
@@ -238,6 +249,7 @@ export function buildDefaultSettings(args: {
     skipCloseTerminalWithRunningProcessConfirm: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
+    skipDeleteChatConfirm: false,
     skipCodexRateLimitResetConfirm: false,
     defaultTaskViewPreset: 'all',
     defaultTaskSource: 'github',
@@ -277,6 +289,7 @@ export function buildDefaultSettings(args: {
     terminalJISYenToBackslash: false,
     experimentalMobile: false,
     mobileEmulatorEnabled: true,
+    botsEnabled: true,
     mobileEmulatorDefaultDeviceUdid: null,
     androidSdkPath: null,
     // Why: indefinite hold — the "Restore" banner is the explicit return action, no wall-clock guess. See docs/mobile-fit-hold.md.
@@ -286,35 +299,14 @@ export function buildDefaultSettings(args: {
     mobilePairingCustomAddress: null,
     mobilePairingCustomAddresses: [],
     machineName: '',
-    // Why: off keeps the cosmetic overlay unmounted for users who never opt in.
-    experimentalPet: false,
-    experimentalActivity: false,
-    experimentalActivityDefaultedOffForAllUsers: true,
-    experimentalTerminalAttention: false,
-    experimentalAgentHibernation: false,
-    agentHibernationIdleMs: 30 * 60 * 1000,
-    experimentalNewWorktreeCardStyle: false,
-    experimentalEphemeralVms: false,
-    experimentalConnectors: false,
-    experimentalWslHosts: false,
-    experimentalOrchestrationPanel: false,
+    ...DEFAULT_EXPERIMENTAL_SETTINGS,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.
     githubProjects: { pinned: [], recent: [], lastViewByProject: {}, activeProject: null },
     // Why: keep agent/model maps empty so first use follows the default agent's model, not a frozen stale choice.
-    commitMessageAi: {
-      enabled: true,
-      agentId: null,
-      selectedModelByAgent: {},
-      discoveredModelsByAgent: {},
-      selectedModelByAgentByHost: {},
-      discoveredModelsByAgentByHost: {},
-      selectedThinkingByModel: {},
-      customPrompt: '',
-      customAgentCommand: ''
-    },
+    commitMessageAi: getDefaultCommitMessageAiSettings(),
     sourceControlAi: getDefaultSourceControlAiSettings(),
     voice: args.voice,
     voiceDictationModeDefaultedToAuto: true

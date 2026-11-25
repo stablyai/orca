@@ -2,8 +2,9 @@ import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   canUseRepoWideTrust,
-  approvedOrcaHookContentHashes,
   isOrcaHookContentApproved,
+  isOrcaHookRepoIdOnSeveralHosts,
+  isOrcaHookRepoTrusted,
   type OrcaHookTrustKind
 } from '../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
@@ -18,11 +19,7 @@ export function usesVersionedHookTrust(
   repoId: string,
   context: HookTrustContext
 ): boolean {
-  return context === 'vm' || isRepoIdOnSeveralHosts(state, repoId)
-}
-
-function isRepoIdOnSeveralHosts(state: AppState, repoId: string): boolean {
-  return state.repos.filter((repo) => repo.id === repoId).length > 1
+  return context === 'vm' || isOrcaHookRepoIdOnSeveralHosts(state.repos, repoId)
 }
 
 export function isDesktopHookRepoTrusted(
@@ -30,15 +27,9 @@ export function isDesktopHookRepoTrusted(
   repoId: string,
   context: HookTrustContext
 ): boolean {
-  if (canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)) {
-    return true
-  }
-  return (
-    !usesVersionedHookTrust(state, repoId, context) &&
-    (['setup', 'archive', 'issueCommand', 'vmRecipe'] as const).some(
-      (kind) => approvedOrcaHookContentHashes(state.trustedOrcaHooks, repoId, kind).length > 0
-    )
-  )
+  return context === 'vm'
+    ? canUseRepoWideTrust(state.trustedOrcaHooks, state.repos, repoId)
+    : isOrcaHookRepoTrusted(state.trustedOrcaHooks, state.repos, repoId)
 }
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
@@ -113,7 +104,7 @@ export async function confirmScriptContent(
       contentHash,
       previouslyApproved,
       versionOnly,
-      repoWideTrust: !isRepoIdOnSeveralHosts(state, repoId),
+      repoWideTrust: !isOrcaHookRepoIdOnSeveralHosts(state.repos, repoId),
       automation: context === 'automation',
       ...(skippedSetupReview ? { skippedSetupReview } : {}),
       onResolve: settle,

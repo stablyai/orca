@@ -2,7 +2,7 @@ import {
   formatByteCeiling,
   REMOTE_IMPORT_MAX_FILE_BYTES,
   REMOTE_IMPORT_MAX_TOTAL_BYTES
-} from '../../runtime-import-limits'
+} from '../../runtime-transfers/runtime-import-limits'
 import { constants } from 'node:fs'
 import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'

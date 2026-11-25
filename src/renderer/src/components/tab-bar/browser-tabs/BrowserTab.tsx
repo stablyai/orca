@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
+import { CopyX, Files, X, Pin, PinOff, Volume2, VolumeX } from 'lucide-react'
 import {
   ContextMenu,
   ContextMenuContent,
@@ -10,11 +10,9 @@ import {
 } from '@/components/ui/context-menu'
 import { TabHoverCard } from '../strip/TabHoverCard'
 import '../../../../../shared/orca-profiles/constants'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { getLiveBrowserUrl } from '../../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../../tab-group/drag/tab-drag-data'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -32,21 +30,19 @@ import { TabWorkspaceLayoutMenuSection } from '../pane-actions/TabWorkspaceLayou
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { cn } from '@/lib/class-names'
-import { BrowserFavicon } from '@/components/browser-favicon'
+import { BrowserFavicon } from '@/components/browser-pane/describe-page/browser-favicon'
 import { AgentCursorGlyph } from '../../browser-pane/agent-cursor/agent-cursor-glyph'
 import {
   useBrowserAgentControllerHost,
   useBrowserAgentDrivesAnyPage
 } from '../../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from '../pane-actions/CopyTabIdMenuItem'
+import { BrowserTabOpenExternallyItem } from './browser-tab-open-externally-item'
 import { CloseSplitPaneMenuItem } from '../pane-actions/CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store/index'
 
 import { formatBrowserTabUrlLabel, getBrowserTabLabel } from './browser-tab-label'
-
-function isBlankBrowserTab(tab: BrowserWorkspace): boolean {
-  return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
-}
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 
 export default function BrowserTab({
   tab,
@@ -90,15 +86,6 @@ export default function BrowserTab({
   })
   const [menuOpen, setMenuOpen] = useState(false)
 
-  // Only HTTP(S) URLs can open in the system browser; disable unsupported or malformed destinations.
-  const openInBrowserUrl = redactKagiSessionToken(getLiveBrowserUrl(tab.id) ?? tab.url)
-  let isHttpUrl = false
-  try {
-    const parsed = new URL(openInBrowserUrl)
-    isHttpUrl = parsed.protocol === 'http:' || parsed.protocol === 'https:'
-  } catch {
-    // invalid URL — leave disabled
-  }
   const tabLabel = getBrowserTabLabel(tab, t)
   const audible = useAppStore((s) =>
     (s.browserPagesByWorkspace[tab.id] ?? []).some((page) => s.browserAudiblePageIds[page.id])
@@ -187,12 +174,18 @@ export default function BrowserTab({
       ) : (
         <BrowserFavicon
           faviconUrl={tab.faviconUrl}
-          loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
+          loading={tab.loading && !tab.loadError && !isBlankBrowserUrl(tab.url)}
           className="size-3 mr-1"
           fallbackClassName="text-blue-500"
         />
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
+      {isPinned && (
+        <Pin
+          className="mr-1 size-3 shrink-0 text-muted-foreground"
+          aria-hidden
+          data-tab-compact-hide=""
+        />
+      )}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
       {showAudioControl && (
         // Why: unlike close, stays visible on inactive tabs; finding the playing tab is the point.
@@ -248,7 +241,7 @@ export default function BrowserTab({
               programName={
                 agentDriving
                   ? agentDrivingLabel
-                  : isBlankBrowserTab(tab)
+                  : isBlankBrowserUrl(tab.url)
                     ? t('tabHoverCard.browser', 'Browser')
                     : formatBrowserTabUrlLabel(redactKagiSessionToken(tab.url), t)
               }
@@ -272,7 +265,8 @@ export default function BrowserTab({
         />
         {onDuplicate ? (
           <>
-            <ContextMenuItem inset onSelect={onDuplicate}>
+            <ContextMenuItem onSelect={onDuplicate}>
+              <Files className="size-3.5" />
               {t('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
             </ContextMenuItem>
             <ContextMenuSeparator />
@@ -285,7 +279,8 @@ export default function BrowserTab({
             : t('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
         </ContextMenuItem>
         {showAudioControl ? (
-          <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
+          <ContextMenuItem onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
+            {audioMuted ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
             {toggleAudioMutedLabel}
           </ContextMenuItem>
         ) : null}
@@ -295,17 +290,15 @@ export default function BrowserTab({
           <X className="size-3.5" />
           {t('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
         </ContextMenuItem>
-        <ContextMenuItem inset onSelect={onCloseOthers} disabled={tabCount <= 1}>
+        <ContextMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+          <CopyX className="size-3.5" />
           {t('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
         </ContextMenuItem>
         <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
-        <ContextMenuItem
-          inset
-          onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}
-          disabled={!isHttpUrl}
-        >
-          {t('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
-        </ContextMenuItem>
+        <BrowserTabOpenExternallyItem
+          tab={tab}
+          onOpen={(url) => void window.api.shell.openUrl(url)}
+        />
       </ContextMenuContent>
     </ContextMenu>
   )

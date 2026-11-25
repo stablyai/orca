@@ -140,7 +140,8 @@ export function taskMountAdapters(
         taskUiReady: true,
         githubProjectFieldVisibilityScope: null,
         taskResumeRef: { current: {} },
-        trustedOrcaHooks: {}
+        trustedOrcaHooks: {},
+        repos: []
       })
       let actions: ReturnType<typeof usePreferences>
       const hook = hookMount(() => {
@@ -162,7 +163,7 @@ export function taskMountAdapters(
             return actions.persistTaskResumeState({ githubItemsPreset: 'issues' })
           }
           if (name === 'trust') {
-            return actions.persistSetupHookTrust('repo-1', 'hash-1', false)
+            return actions.persistSetupHookTrust({ repoId: 'repo-1', contentHash: 'hash-1' }, true)
           }
           throw new Error(`Unknown preferences action: ${name}`)
         },

@@ -1,4 +1,4 @@
-import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
+import { useLinearIssueResult } from '@/lib/work-items/linear/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import {

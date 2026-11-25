@@ -120,9 +120,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
   const sendPromptToTerminal = useCallback(
     async (terminal: string, comments: readonly DiffComment[], fromPicker = true) => {
       if (!client || connState !== 'connected') {
-        throw new Error(
-          translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
-        )
+        throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
       }
       // Heal by terminal handle so native-chat image leftovers cannot join review notes.
       if (!(await healMobileNativeChatStaleInput({ client, terminal, deviceToken: null }))) {
@@ -160,9 +158,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
       // Report instead of throwing because the sheet drops the promise.
       if (!client || connState !== 'connected') {
         closeSheet('send')
-        setActionError(
-          translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
-        )
+        setActionError(translate('common.waitingForHost', 'Waiting for host…'))
         return
       }
       if (agentLaunchInFlightRef.current) {
@@ -222,9 +218,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
 
   const openSendSheet = useCallback(async () => {
     if (!client || connState !== 'connected') {
-      setActionError(
-        translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
-      )
+      setActionError(translate('common.waitingForHost', 'Waiting for host…'))
       return
     }
     openSheet({ kind: 'send', load: { kind: 'loading' } })
@@ -258,9 +252,7 @@ export function useMobileDiffReviewSendActions(input: SendActionsInput) {
 
   const loadTerminals = useCallback(async () => {
     if (!client || connState !== 'connected') {
-      throw new Error(
-        translate('session.useDiffReviewSendActions.waitingForDesktop', 'Waiting for desktop...')
-      )
+      throw new Error(translate('common.waitingForHost', 'Waiting for host…'))
     }
     const response = await reviewTerminalListRead.request(client, {
       worktree: `id:${worktreeId}`

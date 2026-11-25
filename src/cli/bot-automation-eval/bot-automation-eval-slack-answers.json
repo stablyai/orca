@@ -1,0 +1,500 @@
+{
+  "persons": {
+    "U0OWNER": {
+      "id": "U0OWNER",
+      "name": "Alice",
+      "realName": "Alice Hart",
+      "handle": "alice",
+      "title": "Founder",
+      "email": "alice@example.com",
+      "timezone": "America/New_York"
+    },
+    "U0BOB": {
+      "id": "U0BOB",
+      "name": "Bob Lee",
+      "handle": "bob",
+      "title": "Engineer, exports",
+      "email": "bob@example.com",
+      "timezone": "America/Los_Angeles"
+    },
+    "U0BLAKE": {
+      "id": "U0BLAKE",
+      "name": "Blake Ortiz",
+      "handle": "blake",
+      "title": "Design",
+      "email": "blake@example.com",
+      "timezone": "Europe/Madrid"
+    },
+    "U0NORA": {
+      "id": "U0NORA",
+      "name": "Nora",
+      "realName": "Nora Park",
+      "handle": "nora",
+      "title": "Infrastructure",
+      "timezone": "America/New_York"
+    }
+  },
+  "people": {
+    "Bob": [
+      {
+        "id": "U0BOB",
+        "name": "Bob Lee",
+        "handle": "bob",
+        "title": "Engineer, exports",
+        "email": "bob@example.com",
+        "timezone": "America/Los_Angeles",
+        "exact": true
+      }
+    ],
+    "bob lee": [
+      {
+        "id": "U0BOB",
+        "name": "Bob Lee",
+        "handle": "bob",
+        "title": "Engineer, exports",
+        "email": "bob@example.com",
+        "timezone": "America/Los_Angeles",
+        "exact": true
+      }
+    ],
+    "bla": [
+      {
+        "id": "U0BLAKE",
+        "name": "Blake Ortiz",
+        "handle": "blake",
+        "title": "Design",
+        "email": "blake@example.com",
+        "timezone": "Europe/Madrid"
+      }
+    ],
+    "Nora": [
+      {
+        "id": "U0NORA",
+        "name": "Nora",
+        "realName": "Nora Park",
+        "handle": "nora",
+        "title": "Infrastructure",
+        "timezone": "America/New_York",
+        "exact": true
+      }
+    ],
+    "blake ortiz": [
+      {
+        "id": "U0BLAKE",
+        "name": "Blake Ortiz",
+        "handle": "blake",
+        "title": "Design",
+        "email": "blake@example.com",
+        "timezone": "Europe/Madrid",
+        "exact": true
+      }
+    ],
+    "zed": []
+  },
+  "searches": [
+    {
+      "asker": "U0OWNER",
+      "query": "export bug",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            },
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (this channel) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Public channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "Bob export",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            }
+          ],
+          "note": "Public channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0BLAKE",
+      "query": "export bug",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0DESIGN::1793376000.000300",
+              "label": "#design (public) · Bob Lee: honestly the export bug is the progress bar lying, not the worker",
+              "text": "honestly the export bug is the progress bar lying, not the worker"
+            }
+          ],
+          "note": "Public channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "nothing matches this",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [],
+          "note": "Public channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export from:<@U0BOB>",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            }
+          ],
+          "note": "Public channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export in:<#C0PLATENG|platform-eng>",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            },
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372900.000200",
+              "label": "#platform-eng (public) · Nora: nice, the export retry should also cap at 3 attempts",
+              "text": "nice, the export retry should also cap at 3 attempts"
+            }
+          ],
+          "note": "Public channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export from:@bob",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            }
+          ],
+          "note": "Searched for: export from:<@U0BOB>\nPublic channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export from:@Bob in:#platform-eng",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            }
+          ],
+          "note": "Searched for: export from:<@U0BOB> in:<#C0PLATENG>\nPublic channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export in:#design",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [],
+          "note": "Searched for: export in:<#C0DESIGN>\nPublic channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export in:#leads",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [],
+          "note": "Public channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export -from:@nora",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            },
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (this channel) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Searched for: export -from:<@U0NORA>\nPublic channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "from:me export",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (this channel) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Public channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export from:@bla",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [],
+          "note": "Public channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "\"export bug\" from:@zed",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [],
+          "note": "Public channels and this conversation only."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export from:U0BOB",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            }
+          ],
+          "note": "Searched for: export from:<@U0BOB>\nPublic channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0OWNER",
+      "query": "export -\"the worker\"",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372900.000200",
+              "label": "#platform-eng (public) · Nora: nice, the export retry should also cap at 3 attempts",
+              "text": "nice, the export retry should also cap at 3 attempts"
+            },
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (this channel) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Public channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "asker": "U0NORA",
+      "query": "Bob export",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            }
+          ],
+          "note": "Public channels and this conversation only. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    }
+  ],
+  "noAsker": {
+    "ok": false,
+    "refusal": "no_asker",
+    "message": "Slack search couldn't run as the person who asked (Slack didn't send their search permission with this message). Tell them so they can retry; results in a shared thread should come from what they can see."
+  },
+  "conversations": [
+    {
+      "channel": "C0LEADS",
+      "thread": "1793373100.000300",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            },
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372900.000200",
+              "label": "#platform-eng (public) · Nora: nice, the export retry should also cap at 3 attempts",
+              "text": "nice, the export retry should also cap at 3 attempts"
+            },
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (public) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Public channels only. This conversation is private and isn't searched; read it with `orca slack read slack:T0EVAL:C0LEADS:1793373100.000300`. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "channel": "D0BOB",
+      "thread": "D0BOB",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            },
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372900.000200",
+              "label": "#platform-eng (public) · Nora: nice, the export retry should also cap at 3 attempts",
+              "text": "nice, the export retry should also cap at 3 attempts"
+            },
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (public) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Public channels only. This conversation is private and isn't searched; read it with `orca slack read slack:T0EVAL:D0BOB`. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    },
+    {
+      "channel": "C0MYSTERY",
+      "thread": "1793400000.000100",
+      "answer": {
+        "ok": true,
+        "result": {
+          "matches": [
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372400.000100",
+              "label": "#platform-eng (public) · Bob Lee: Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in r",
+              "text": "Found the export bug: the worker drops chunk 48 when the upload socket times out and never retries it. Retry fix is in review."
+            },
+            {
+              "ref": "slack:T0EVAL:C0PLATENG::1793372900.000200",
+              "label": "#platform-eng (public) · Nora: nice, the export retry should also cap at 3 attempts",
+              "text": "nice, the export retry should also cap at 3 attempts"
+            },
+            {
+              "ref": "slack:T0EVAL:C0EXPORTS::1793437200.000500",
+              "label": "#exports (public) · Alice: where is the exports stall bug at?",
+              "text": "where is the exports stall bug at?"
+            }
+          ],
+          "note": "Public channels only. Read this conversation with `orca slack read slack:T0EVAL:C0MYSTERY:1793400000.000100`. Some matches are left out: Slack couldn't say whether the person is in their channels."
+        }
+      }
+    }
+  ],
+  "workspaces": [
+    {
+      "source": "slack",
+      "ref": "slack:T0EVAL:workspace",
+      "label": "Eval (T0EVAL)"
+    }
+  ],
+  "named": {
+    "Eval": [
+      {
+        "ref": "slack:T0EVAL:workspace",
+        "label": "Eval (T0EVAL)",
+        "exact": true
+      }
+    ],
+    "eval": [
+      {
+        "ref": "slack:T0EVAL:workspace",
+        "label": "Eval (T0EVAL)",
+        "exact": true
+      }
+    ],
+    "T0EVAL": [
+      {
+        "ref": "slack:T0EVAL:workspace",
+        "label": "Eval (T0EVAL)",
+        "exact": true
+      }
+    ],
+    "Eval (T0EVAL)": [
+      {
+        "ref": "slack:T0EVAL:workspace",
+        "label": "Eval (T0EVAL)",
+        "exact": true
+      }
+    ]
+  }
+}

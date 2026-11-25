@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useActivityUnreadCount } from './useActivityUnreadCount'
+import { useActivityUnreadCount } from './events/useActivityUnreadCount'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function ActivityTitlebarControls(): React.JSX.Element {

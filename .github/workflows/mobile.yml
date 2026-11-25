@@ -21,17 +21,13 @@ on:
       - 'src/main/runtime/rpc/server/runtime-rpc.ts'
       - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
-      - 'src/main/runtime/agent-session/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/environment/agent-session-account-env.ts'
+      - 'src/main/runtime/agent-session/launch/agent-session-launch-directory.ts'
+      - 'src/main/runtime/session-tabs/chat/agent-session-tab-identity.ts'
+      - 'src/main/runtime/session-tabs/chat/agent-session-tab-layout-queue.ts'
+      - 'src/main/runtime/session-tabs/chat/agent-session-tab-layout.ts'
       - 'src/main/runtime/agent-session/ownership/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-account-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-runtime-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
       # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
       - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
       - 'src/main/github/issues/issue-field-options.ts'
@@ -66,7 +62,6 @@ on:
       - 'src/main/ai-vault/discovery/session-path-absence.ts'
       - 'src/main/ai-vault/discovery/session-scanner-agent-sources.ts'
       - 'src/main/ai-vault/discovery/session-scanner-candidates.ts'
-      - 'src/main/ai-vault/discovery/session-scanner-discovery-pipeline.test.ts'
       - 'src/main/ai-vault/discovery/session-scanner-discovery.ts'
       - 'src/main/ai-vault/discovery/session-scanner-roots.ts'
       - 'src/main/ai-vault/discovery/session-scanner-source-discovery.ts'
@@ -76,7 +71,6 @@ on:
       - 'src/main/ai-vault/parsing/session-scanner-accumulator.ts'
       - 'src/main/ai-vault/parsing/session-scanner-agent-parser.ts'
       - 'src/main/ai-vault/parsing/session-scanner-candidate-parse.ts'
-      - 'src/main/ai-vault/parsing/session-scanner-core-parser-wsl-stall.test.ts'
       - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.test.ts'
       - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.ts'
       - 'src/main/ai-vault/parsing/session-scanner-messages.ts'
@@ -91,7 +85,6 @@ on:
       - 'src/main/ai-vault/scanners/opencode/session-scanner-opencode-parser.ts'
       - 'src/main/ai-vault/scope/session-scanner-scope-discovery.ts'
       - 'src/main/ai-vault/scope/session-scanner-scope-inventory.ts'
-      - 'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts'
       - 'src/main/ai-vault/scope/session-scanner-scope-walk.ts'
       - 'src/main/ai-vault/session-scanner.ts'
       - 'src/shared/errors/error-message.ts'
@@ -126,8 +119,6 @@ on:
       - 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'
       - 'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
       - 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'
-      - 'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs'
-      - 'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs'
       # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
       - '!src/shared/**/*.test.[jt]s'
       - '!src/shared/**/*.test.[jt]sx'
@@ -152,17 +143,13 @@ on:
       - 'src/main/runtime/rpc/server/runtime-rpc.ts'
       - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
-      - 'src/main/runtime/agent-session/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/environment/agent-session-account-env.ts'
+      - 'src/main/runtime/agent-session/launch/agent-session-launch-directory.ts'
+      - 'src/main/runtime/session-tabs/chat/agent-session-tab-identity.ts'
+      - 'src/main/runtime/session-tabs/chat/agent-session-tab-layout-queue.ts'
+      - 'src/main/runtime/session-tabs/chat/agent-session-tab-layout.ts'
       - 'src/main/runtime/agent-session/ownership/agent-session-*.ts'
       - 'src/main/runtime/agent-session/records/agent-session-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-account-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-runtime-*.ts'
-      - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
       # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
       - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
       - 'src/main/github/issues/issue-field-options.ts'
@@ -197,7 +184,6 @@ on:
       - 'src/main/ai-vault/discovery/session-path-absence.ts'
       - 'src/main/ai-vault/discovery/session-scanner-agent-sources.ts'
       - 'src/main/ai-vault/discovery/session-scanner-candidates.ts'
-      - 'src/main/ai-vault/discovery/session-scanner-discovery-pipeline.test.ts'
       - 'src/main/ai-vault/discovery/session-scanner-discovery.ts'
       - 'src/main/ai-vault/discovery/session-scanner-roots.ts'
       - 'src/main/ai-vault/discovery/session-scanner-source-discovery.ts'
@@ -207,7 +193,6 @@ on:
       - 'src/main/ai-vault/parsing/session-scanner-accumulator.ts'
       - 'src/main/ai-vault/parsing/session-scanner-agent-parser.ts'
       - 'src/main/ai-vault/parsing/session-scanner-candidate-parse.ts'
-      - 'src/main/ai-vault/parsing/session-scanner-core-parser-wsl-stall.test.ts'
       - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.test.ts'
       - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.ts'
       - 'src/main/ai-vault/parsing/session-scanner-messages.ts'
@@ -222,7 +207,6 @@ on:
       - 'src/main/ai-vault/scanners/opencode/session-scanner-opencode-parser.ts'
       - 'src/main/ai-vault/scope/session-scanner-scope-discovery.ts'
       - 'src/main/ai-vault/scope/session-scanner-scope-inventory.ts'
-      - 'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts'
       - 'src/main/ai-vault/scope/session-scanner-scope-walk.ts'
       - 'src/main/ai-vault/session-scanner.ts'
       - 'src/shared/errors/error-message.ts'
@@ -435,51 +419,6 @@ jobs:
 
       - name: Check formatting
         run: pnpm format:check
-
-  # Reports, never gates: flags in the job summary when a pull request changes the Expo fingerprint,
-  # i.e. dev clients need a native rebuild. Only mobile's install, without scripts: the fingerprint
-  # hashes project sources and dependency paths, never installed package contents.
-  native-fingerprint:
-    name: Mobile native fingerprint
-    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    continue-on-error: true
-
-    defaults:
-      run:
-        working-directory: mobile
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 2
-          persist-credentials: false
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          package-manager-cache: false
-
-      - name: Setup pnpm
-        uses: ./.github/actions/setup-pnpm
-
-      # The base commit may predate the fingerprint tools, so run the head's copy against both.
-      - name: Compare native fingerprint with the base
-        shell: bash
-        run: |
-          set -euo pipefail
-          tools="$RUNNER_TEMP/native-fingerprint"
-          mkdir -p "$tools"
-          cp scripts/native-client.mjs scripts/native-build-cache.cjs "$tools/"
-          pnpm install --frozen-lockfile --ignore-scripts
-          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/head.json"
-          git checkout --quiet --detach HEAD^1
-          pnpm install --frozen-lockfile --ignore-scripts
-          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/base.json"
-          node "$tools/native-client.mjs" compare "$tools/base.json" "$tools/head.json" \
-            --project . --summary "$GITHUB_STEP_SUMMARY"
 
   main-tests:
     name: Mobile tests on main

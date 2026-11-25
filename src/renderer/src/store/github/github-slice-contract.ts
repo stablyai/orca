@@ -44,6 +44,16 @@ import type {
 } from './projects/project-row-content'
 import type { PRRefreshState, PRRefreshStateClearToken } from './refresh/pr-refresh-state'
 
+/** One repo in a work-item fan-out. */
+export type GitHubWorkItemRepoArg = {
+  repoId: string
+  path: string
+  executionHostId?: string | null
+  sourceContext?: TaskSourceContext | null
+  /** Its host is known unreachable: answer as that request's failure without dialling. */
+  hostUnreachable?: boolean
+}
+
 export type GitHubSlice = {
   githubSourceCollections: GitHubSourceCollections
   githubTaskCache: GitHubTaskRecordCache
@@ -59,6 +69,9 @@ export type GitHubSlice = {
   visibleReviewWorktreeIds: readonly string[]
   visibleReviewCardWorktreeIds: readonly string[]
   setVisibleReviewCardWorktreeIds: (ids: readonly string[]) => void
+  /** Workspaces whose PRs an open item page shows; refreshed as visible sidebar rows are. */
+  visibleItemPageReviewWorktreeIds: readonly string[]
+  setVisibleItemPageReviewWorktreeIds: (ids: readonly string[]) => void
   // Why: keyed by repoId + limit + query so same-path repos on different SSH targets don't share results.
   workItemsCache: Record<string, CacheEntry<readonly GitHubWorkItem[]>>
   fetchPRForBranch: (
@@ -72,6 +85,8 @@ export type GitHubSlice = {
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
       selected?: boolean
+      /** A refresh timer's read or retry: no use of an idle WSL host (#46567). */
+      background?: boolean
       onReadOutcome?: (outcome: PRSnapshotReply) => void
       signal?: AbortSignal
     }
@@ -79,7 +94,8 @@ export type GitHubSlice = {
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo }
+    /** `background`: a card's poll, which must not hold an idle WSL host up or wake it. */
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo; background?: boolean }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,
@@ -112,6 +128,10 @@ export type GitHubSlice = {
     prNumber: number,
     options?: RepoScopedFetchOptions & { prRepo?: GitHubOwnerRepo | null; userRefresh?: boolean }
   ) => Promise<PRComment[]>
+  /** Null when the provider is unavailable and there is no cached result. */
+  readPRComments: (
+    ...args: Parameters<GitHubSlice['fetchPRComments']>
+  ) => Promise<PRComment[] | null>
   addPRConversationComment: (
     repoPath: string,
     prNumber: number,
@@ -197,12 +217,7 @@ export type GitHubSlice = {
   ) => Promise<readonly GitHubWorkItem[] | undefined>
   /** Fan out across repos with stale-cache fallback; failedCount counts only failures without data. githubUnavailable means all eligible GitHub sources failed reachability, even if stale results remain. */
   fetchWorkItemsAcrossRepos: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -218,12 +233,7 @@ export type GitHubSlice = {
   >
   /** Fetch one numbered provider page. Pagination pages remain renderer-local. */
   fetchWorkItemsNextPage: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     perRepoLimit: number,
     displayLimit: number,
     query: string,
@@ -239,12 +249,7 @@ export type GitHubSlice = {
   >
   /** Count items and derive pages from the largest per-repo result set. */
   countWorkItemsAcrossRepos: (
-    repos: {
-      repoId: string
-      path: string
-      executionHostId?: string | null
-      sourceContext?: TaskSourceContext | null
-    }[],
+    repos: GitHubWorkItemRepoArg[],
     query: string,
     perRepoLimit: number,
     options?: Pick<FetchOptions, 'wakeWslDistro'>

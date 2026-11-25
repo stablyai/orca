@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isPaletteCurrentWorktree } from '../palette-repo-resolution'
-import { compareWorktreeDisplayName } from '../../display/worktree-display-name-order'
+import { compareWorktreeDisplayName } from '../../../../../../shared/worktree/display-name-order'
 import { getWorktreeVisitTimestamp } from '../../activation/worktree-visit-recency'
 
 export type OrderEmptyQueryInputs = {

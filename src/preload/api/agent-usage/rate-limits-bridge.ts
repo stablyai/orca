@@ -9,6 +9,7 @@ import type { PreloadApi } from '../../api-types'
 export const rateLimitsApi = {
   get: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:get'),
   refresh: (): Promise<RateLimitState> => ipcRenderer.invoke('rateLimits:refresh'),
+  refreshOnOwnerReturn: (): Promise<void> => ipcRenderer.invoke('rateLimits:refreshOnOwnerReturn'),
   refreshCodexForTarget: (target: RateLimitRuntimeTarget): Promise<RateLimitState> =>
     ipcRenderer.invoke('rateLimits:refreshCodexForTarget', target),
   consumeCodexResetCredit: (): Promise<CodexRateLimitResetResult> =>
