@@ -4,6 +4,7 @@
 // current read then answers empty. Seeded data only; avatar transport is controlled.
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
+import { ConfirmationDialogProvider } from '@/components/dismiss/confirmation/confirmation-dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   environment,
@@ -11,7 +12,6 @@ import {
 } from '@/components/sidebar/worktree-list/listing/host-status-test-fixtures'
 import type { RuntimeEnvironmentStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { Bot } from '../../../../../shared/bot-types'
-import { makeTestBot } from '../../../../../main/bots/bot.test-fixture'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
 import { setBotHostListing } from '@/lib/bot-catalog-snapshot'
 import { syncBotHostListing, type BotHostListingInput } from '@/lib/bot-host-listing'
@@ -63,18 +63,40 @@ function hostIs(entry: RuntimeEnvironmentStatus): void {
 const flush = () => act(async () => new Promise((resolve) => setTimeout(resolve, 0)))
 
 // Seeded bot and group, no real data.
-const bot = makeTestBot({ id: 'seeded-bot', name: 'Seeded bot', hostId: HOST, avatar: 'upload:v1' })
-const group: BotGroup = {
+const storedBot: Bot = {
+  id: 'seeded-bot',
+  name: 'Seeded bot',
+  // A host stores its own bots as `local`; the listing stamps the server that read them.
+  hostId: 'local',
+  folder: 'seeded-bot',
+  folderWorkspaceId: 'seeded-home',
+  agent: 'claude',
+  avatar: 'upload:v1',
+  paused: false,
+  notifications: { needsPermission: true, taskComplete: true, couldNotFinish: true },
+  members: [],
+  slack: null,
+  linear: null,
+  github: null,
+  chatSessionId: null,
+  createdAt: 1,
+  updatedAt: 1
+}
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the listing stamps a paired server's id the same way (bot-catalog-snapshot.ts).
+const bot = { ...storedBot, hostId: HOST } as Bot
+const storedGroup: BotGroup = {
   id: 'seeded-group',
   name: 'Seeded group',
-  hostId: HOST,
+  hostId: 'local',
   revision: 1,
   createdAt: 1,
   folder: 'seeded-group',
   folderWorkspaceId: 'seeded-group-home',
   replyMode: { kind: 'mentions' },
-  members: [{ botId: bot.id, sessionId: 'room' }]
+  members: [{ botId: storedBot.id, sessionId: 'room' }]
 }
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a paired server's group is stamped with its id like its bots.
+const group = { ...storedGroup, hostId: HOST } as BotGroup
 
 /** The Items panel's provider wiring (BotGroupItemsPanel): one face-picture store around its rows. */
 function PanelRow({ member }: { member: Bot }): React.JSX.Element {
@@ -90,20 +112,22 @@ function PanelRow({ member }: { member: Bot }): React.JSX.Element {
 
 function Screen(): React.JSX.Element {
   return (
-    <TooltipProvider>
-      <div data-testid="header">
-        <BotGroupPanelHeader
-          group={group}
-          members={[bot]}
-          needsYou={0}
-          working={0}
-          next={null}
-          now={1}
-          filter={null}
-        />
-      </div>
-      <PanelRow member={bot} />
-    </TooltipProvider>
+    <ConfirmationDialogProvider>
+      <TooltipProvider>
+        <div data-testid="header">
+          <BotGroupPanelHeader
+            group={group}
+            members={[bot]}
+            needsYou={0}
+            working={0}
+            next={null}
+            now={1}
+            filter={null}
+          />
+        </div>
+        <PanelRow member={bot} />
+      </TooltipProvider>
+    </ConfirmationDialogProvider>
   )
 }
 
