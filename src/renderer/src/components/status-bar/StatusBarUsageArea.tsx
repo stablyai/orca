@@ -85,6 +85,8 @@ export function StatusBarUsageArea({
   const shownProviders = rosterProviders.filter((p) => !usageLayout.collapsed.includes(p.provider))
   const hiddenProviders = rosterProviders.filter((p) => usageLayout.collapsed.includes(p.provider))
   const showUnitLabel = shownProviders.some((p) => usageChipShowsPercentage(p, usageMode, t))
+  // Why the setting, not usageMode: the measured gap and label must not depend on the layout choice.
+  const compactBar = statusBarUsageMode === 'compact'
 
   // Why: usage gives way first, but keeps enough width to stay clickable; its popover holds
   // every provider. Its form is chosen from widths measured off-layout (see useUsageRowWidths).
@@ -113,11 +115,16 @@ export function StatusBarUsageArea({
                 <button
                   type="button"
                   data-usage-trigger=""
-                  className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
+                  className={cn(
+                    'inline-flex items-center rounded px-1 py-0.5 hover:bg-accent/70',
+                    compactBar ? 'gap-3.5' : 'gap-3'
+                  )}
                   aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
                   title={remoteOwner?.label}
                 >
-                  {showUnitLabel ? <UsageUnitLabel display={usagePercentageDisplay} /> : null}
+                  {showUnitLabel ? (
+                    <UsageUnitLabel display={usagePercentageDisplay} compact={compactBar} />
+                  ) : null}
                   {shownProviders.map((p) => (
                     <ClippedRowProviderSegment
                       key={p.provider}
@@ -252,7 +259,7 @@ export function StatusBarUsageArea({
           className="pointer-events-none invisible absolute left-0 top-0 flex w-max items-center"
         >
           <span data-measure-unit="" className="inline-flex">
-            <UsageUnitLabel display={usagePercentageDisplay} />
+            <UsageUnitLabel display={usagePercentageDisplay} compact={compactBar} />
           </span>
           {rosterProviders.flatMap((p) =>
             USAGE_ROW_LEVELS.map((level, index) => (

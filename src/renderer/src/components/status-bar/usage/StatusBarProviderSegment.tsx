@@ -11,7 +11,8 @@ import type {
 } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   type UsagePercentageDisplay,
-  clampUsedPercent
+  clampUsedPercent,
+  getDisplayedUsagePercentage
 } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
 import { formatCurrencyAmount } from '../../../../../shared/agent-usage/display/currency-format'
@@ -55,19 +56,44 @@ function WindowLabel({
   label,
   display,
   showLabel = true,
-  labelFirst = false
+  labelFirst = false,
+  compact = false
 }: {
   w: RateLimitWindow
   label: string
   display: UsagePercentageDisplay
   showLabel?: boolean
   labelFirst?: boolean
+  /** Compact bar: a bright number with a smaller, dimmer unit. */
+  compact?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const text = formatBareUsagePercentage(w.usedPercent, display, t)
+  if (compact) {
+    const value = String(getDisplayedUsagePercentage(w.usedPercent, display))
+    const at = text.indexOf(value)
+    const unit = (part: string) =>
+      part.trim() ? <span className="text-[0.82em] opacity-60">{part}</span> : part
+    return (
+      <span className="tabular-nums">
+        {showLabel && labelFirst ? <span className="text-foreground/50">{`${label} `}</span> : ''}
+        {at === -1 ? (
+          <span className="font-semibold text-foreground">{text}</span>
+        ) : (
+          <span className="font-semibold text-foreground">
+            {unit(text.slice(0, at))}
+            {value}
+            {unit(text.slice(at + value.length))}
+          </span>
+        )}
+        {showLabel && !labelFirst ? <span className="text-foreground/50">{` ${label}`}</span> : ''}
+      </span>
+    )
+  }
   return (
     <span className="tabular-nums">
       {showLabel && labelFirst ? `${label} ` : ''}
-      {formatBareUsagePercentage(w.usedPercent, display, t)}
+      {text}
       {showLabel && !labelFirst ? ` ${label}` : ''}
     </span>
   )
@@ -292,6 +318,16 @@ export function ProviderSegment({
           : []
   )
 
+  const compactBar = mode === 'compact'
+  // Why: the compact bar dims icons so the numbers carry the row.
+  const icon = compactBar ? (
+    <span className="inline-flex opacity-50">
+      <ProviderIcon provider={provider} />
+    </span>
+  ) : (
+    <ProviderIcon provider={provider} />
+  )
+
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
   if (!p || p.status === 'idle' || (p.status === 'fetching' && !tightest)) {
     return (
@@ -304,9 +340,7 @@ export function ProviderSegment({
 
   if (p.status === 'unavailable') {
     return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
-        <ProviderIcon provider={provider} /> --
-      </span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">{icon} --</span>
     )
   }
 
@@ -340,9 +374,24 @@ export function ProviderSegment({
   const showGroupedPools =
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
+  // Why: the compact bar drops pool names ("Cursor Models") from the row; the tooltip keeps them.
+  const providerName = getProviderDisplayName(provider)
+  const pool = sections.find((section) => section.labelFirst)?.label
+  const subject =
+    !pool || pool.startsWith(providerName) ? (pool ?? providerName) : `${providerName} ${pool}`
+  const compactTitle =
+    compactBar && tightest
+      ? `${subject} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
+      : undefined
+
   return (
-    <span className="inline-flex items-center gap-1.5">
-      <ProviderIcon provider={provider} />
+    <span
+      className={
+        compactBar ? 'inline-flex items-center gap-[5px]' : 'inline-flex items-center gap-1.5'
+      }
+      title={compactTitle}
+    >
+      {icon}
       {!template && mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
@@ -365,8 +414,9 @@ export function ProviderSegment({
                 mode === 'compact' ? section.label : formatStatusBarSectionLabel(p, section, now, t)
               }
               display={display}
-              showLabel={showLabels && section.label !== ''}
+              showLabel={showLabels && section.label !== '' && !(compactBar && section.labelFirst)}
               labelFirst={section.labelFirst}
+              compact={compactBar}
             />
           </React.Fragment>
         ))
