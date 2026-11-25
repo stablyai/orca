@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rmdir, unlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
@@ -50,6 +50,38 @@ it.runIf(process.platform === 'win32')(
     } finally {
       await unlink(bin)
       await rmdir(dir)
+    }
+  }
+)
+
+it.runIf(process.platform === 'win32')(
+  'keeps the stock Claude name when a quoted user PATH entry precedes an unquoted one',
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-claude-path-'))
+    const quoted = join(dir, 'quoted bin')
+    const unquoted = join(dir, 'unquoted')
+    const pathEnv = `"${quoted}";${unquoted}`
+    try {
+      for (const folder of [quoted, unquoted]) {
+        await mkdir(folder)
+        await writeFile(join(folder, 'claude.exe'), '')
+      }
+      expect(
+        await readHostManagedAgentCommands({}, ['claude'], {
+          pathEnv,
+          shell: 'powershell',
+          forDelivery: true
+        })
+      ).toEqual({})
+      expect(
+        await readHostManagedAgentCommands({}, ['claude'], {
+          pathEnv,
+          shell: 'cmd',
+          forDelivery: true
+        })
+      ).toEqual({})
+    } finally {
+      await rm(dir, { recursive: true, force: true })
     }
   }
 )
