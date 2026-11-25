@@ -13,7 +13,8 @@ it('names the SQLite statement main entered during a gap of a second or more', (
   recordSyncCallsOnThisThread(true)
   const db = new SyncDatabase(':memory:')
   const windows: EventLoopStallWindow[] = []
-  const startedAt = performance.now()
+  // Whole ms keep tick arithmetic exact; recorded calls still start at or after it.
+  const startedAt = Math.floor(performance.now())
   const summary = createEventLoopStallSummary(
     startedAt,
     { tickMs: 500, windowMs: 2_000, reportableMaxGapMs: 100, longestSyncCallSince },
