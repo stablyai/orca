@@ -1,0 +1,285 @@
+import type { WorkerMailboxCheckInput } from './check-worker-mailbox-input'
+import type { MessageRow, MessageType } from '../../../../orchestration/db/orchestration-records'
+import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
+import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
+import {
+  acknowledgedOnlyReceipt,
+  deliveryReceipt,
+  exposeMessages,
+  withReplyFollowUps
+} from './mailbox-message-receipt'
+import { createDirectMailSnapshotRouter } from './mailbox-page-routing'
+import { routeSettledDispatchMail } from './route-settled-dispatch-mail'
+import { isPotentiallyLiveRemoteAttachment } from '../../../../orchestration/db/federation/remote-attachment-liveness'
+import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
+import { interruptedAcknowledgedCheck } from '../routing'
+import type { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
+import { currentDispatchAssigneeRun } from './recipient-routing'
+import { asRecoveredAssignee } from '../../../../orchestration/workers/reports/reminted-worker-reporter'
+
+export async function checkWorkerMailbox(args: WorkerMailboxCheckInput) {
+  const {
+    params,
+    runtime,
+    db,
+    handle,
+    paneKey,
+    typeFilter,
+    signal,
+    activeDispatch,
+    remoteAttachment
+  } = args
+  // A restart-reissued caller is pinned to its recovered process at every fence, local or federated.
+  const holdsDispatch = (current: Parameters<typeof callerHoldsDispatchPane>[0]) =>
+    callerHoldsDispatchPane(current, paneKey) && (args.recoveredLocalProcessCurrent?.() ?? true)
+  const workerMailbox = activeDispatch
+    ? {
+        dispatchId: activeDispatch.id,
+        runId: activeDispatch.run_id,
+        generation: activeDispatch.consumer_generation
+      }
+    : remoteAttachment
+      ? {
+          dispatchId: remoteAttachment.dispatch_id,
+          runId: remoteAttachment.home_run_id,
+          generation: remoteAttachment.consumer_generation
+        }
+      : undefined
+  if (!workerMailbox) {
+    return undefined
+  }
+  const deliveryRunId = workerMailbox.runId
+  db.requireRun(deliveryRunId)
+  const mailboxIdentity = { runId: deliveryRunId, dispatchId: workerMailbox.dispatchId }
+  const address = `dispatch:${workerMailbox.dispatchId}`
+  // Federated hosts keep consumer generations on remote_dispatch_attachments, without a dispatch_contexts row.
+  const readCurrentGeneration = (): number | undefined =>
+    activeDispatch
+      ? db.getDispatchContextById(workerMailbox.dispatchId)?.consumer_generation
+      : db.getRemoteDispatchAttachment(workerMailbox.dispatchId)?.consumer_generation
+  const routeDirectSnapshot = createDirectMailSnapshotRouter(db, signal)
+  const revalidateWorkerMailbox = async (): Promise<void> => {
+    if (activeDispatch) {
+      const current = db.getActiveDispatchForIdentity(handle, paneKey)
+      if (current?.id === activeDispatch.id) {
+        // Re-attachment during awaits can retain the id while changing the pane, or the process.
+        if (holdsDispatch(current)) {
+          return
+        }
+        throw dispatchFenced()
+      }
+    } else if (remoteAttachment && paneKey) {
+      const current = db.findActiveRemoteAttachmentForPane(paneKey)
+      if (
+        current?.dispatch_id === remoteAttachment.dispatch_id &&
+        db.isRemoteAttachmentProcessCurrent({
+          dispatchId: current.dispatch_id,
+          paneKey,
+          processIncarnation: args.processIncarnation()
+        })
+      ) {
+        return
+      }
+    }
+    const latestDispatch = db.getDispatchContextById(workerMailbox.dispatchId)
+    const owningRunId = latestDispatch?.run_id ?? activeDispatch?.run_id ?? workerMailbox.runId
+    // A federated Dispatch has no local row. While its attachment may still be live, only this caller
+    // lost it: its mail stays for its worker, never moved into this host's placeholder for the home Run.
+    const federatedStillLive =
+      !activeDispatch &&
+      isPotentiallyLiveRemoteAttachment(db.getRemoteDispatchAttachment(workerMailbox.dispatchId))
+    if (
+      owningRunId &&
+      !federatedStillLive &&
+      (!latestDispatch ||
+        (latestDispatch.status !== 'pending' && latestDispatch.status !== 'dispatched'))
+    ) {
+      await routeSettledDispatchMail(runtime, db, {
+        dispatchId: workerMailbox.dispatchId,
+        runId: owningRunId,
+        signal
+      })
+    }
+    throw new OrchestrationError(
+      'dispatch_inactive',
+      `Dispatch ${workerMailbox.dispatchId} is no longer assigned to this worker.`
+    )
+  }
+
+  if (activeDispatch) {
+    await routeDirectSnapshot(activeDispatch.run_id, handle, (throughSequence) =>
+      db.routeUnreadDirectMessagesToDispatchMailbox(
+        activeDispatch.id,
+        activeDispatch.run_id,
+        handle,
+        throughSequence
+      )
+    )
+    const assigneeHandle = activeDispatch.assignee_handle
+    if (assigneeHandle && assigneeHandle !== handle) {
+      await routeDirectSnapshot(activeDispatch.run_id, assigneeHandle, (throughSequence) =>
+        db.routeUnreadDirectMessagesToDispatchMailbox(
+          activeDispatch.id,
+          activeDispatch.run_id,
+          assigneeHandle,
+          throughSequence
+        )
+      )
+    }
+  }
+  await revalidateWorkerMailbox()
+  args.revalidateConsumer?.()
+  let acknowledged
+  try {
+    acknowledged = params.ack
+      ? db.acknowledgeMailboxDelivery({
+          runId: deliveryRunId,
+          mailboxHandle: address,
+          consumerGeneration: workerMailbox.generation,
+          consumerSource: activeDispatch ? 'dispatch' : 'attachment',
+          deliveryId: params.ack,
+          taker: args.reconciliation.taker
+        })
+      : undefined
+  } catch (error) {
+    throw asDispatchFence(error)
+  }
+  if (acknowledged) {
+    args.recordMutationReceipt?.(
+      interruptedAcknowledgedCheck(deliveryRunId, acknowledged.delivery.id, 'outcome_unknown')
+    )
+    if (args.acknowledgeOnly) {
+      return acknowledgedOnlyReceipt(mailboxIdentity, acknowledged.delivery.id)
+    }
+  }
+  const formatted = (messages: MessageRow[]) =>
+    params.format || params.inject
+      ? {
+          formatted: messages
+            .map((message) => formatMessageBanner(message, { peerMail: db }))
+            .join('\n\n')
+        }
+      : {}
+  const showAll = params.all === true || (params.unread === false && params.peek !== true)
+  const readPeek = () => db.getUnreadMessages(address, typeFilter)
+  const result = (batch: MailboxDeliveryBatch | undefined) => {
+    const receipt = deliveryReceipt({
+      db,
+      mailbox: mailboxIdentity,
+      batch,
+      acknowledged: acknowledged?.delivery.id ?? args.runAcknowledged,
+      format: params.format === true || params.inject === true
+    })
+    return batch?.finalResponse ? receipt : withReplyFollowUps(runtime, db, args.reader, receipt)
+  }
+  const takeDelivery = async (wakeTypes?: MessageType[], wake?: MessageWake) => {
+    if (args.deferDelivery?.()) {
+      return undefined
+    }
+    const revalidate = () => {
+      args.revalidateCaller?.()
+      args.revalidateConsumer?.()
+      if (readCurrentGeneration() !== workerMailbox.generation) {
+        throw dispatchFenced()
+      }
+      if (activeDispatch) {
+        const current = db.getActiveDispatchForIdentity(handle, paneKey)
+        if (current?.id !== activeDispatch.id || !holdsDispatch(current)) {
+          throw dispatchFenced()
+        }
+      } else if (
+        !paneKey ||
+        db.findActiveRemoteAttachmentForPane(paneKey)?.dispatch_id !== workerMailbox.dispatchId ||
+        !db.isRemoteAttachmentProcessCurrent({
+          dispatchId: workerMailbox.dispatchId,
+          paneKey,
+          processIncarnation: args.processIncarnation()
+        })
+      ) {
+        throw dispatchFenced()
+      }
+      if (args.deferDelivery?.()) {
+        throw dispatchFenced()
+      }
+    }
+    try {
+      return await args.reconciliation.takeRole({
+        mailbox: {
+          runId: deliveryRunId,
+          mailboxHandle: address,
+          consumerGeneration: workerMailbox.generation,
+          consumerSource: activeDispatch ? 'dispatch' : 'attachment',
+          wakeTypes
+        },
+        revalidate,
+        respond: result,
+        record: args.recordMutationReceipt,
+        wake
+      })
+    } catch (error) {
+      throw asDispatchFence(error)
+    }
+  }
+  if (showAll) {
+    const messages = db.getAllMessagesForHandle(address, 100, typeFilter)
+    return {
+      ...mailboxIdentity,
+      messages: exposeMessages(messages),
+      count: messages.length,
+      acknowledged: acknowledged?.delivery.id ?? null,
+      ...formatted(messages)
+    }
+  }
+  if (params.peek) {
+    const messages = readPeek()
+    if (messages.length > 0 || !params.wait) {
+      return {
+        ...mailboxIdentity,
+        messages: exposeMessages(messages),
+        count: messages.length,
+        acknowledged: acknowledged?.delivery.id ?? null,
+        ...formatted(messages)
+      }
+    }
+  } else {
+    const current = await takeDelivery(params.wait ? typeFilter : args.wakeTypes)
+    if (current || !params.wait) {
+      return result(current)
+    }
+  }
+  // Binding can happen during recovery, before run-create/run-use can cancel this wait.
+  const waitResult =
+    activeDispatch &&
+    currentDispatchAssigneeRun(runtime, db, asRecoveredAssignee(activeDispatch, args.recovered))
+      ? 'cancelled'
+      : await runtime.waitForMessage(address, {
+          typeFilter: typeFilter as string[] | undefined,
+          timeoutMs: params.timeoutMs ?? undefined,
+          signal
+        })
+  await revalidateWorkerMailbox()
+  if (readCurrentGeneration() !== workerMailbox.generation) {
+    throw dispatchFenced()
+  }
+  if (waitResult === 'timed_out' || waitResult === 'cancelled') {
+    return {
+      ...result(undefined),
+      timedOut: waitResult === 'timed_out',
+      cancelled: waitResult === 'cancelled',
+      connectionLost: waitResult === 'cancelled' && signal?.aborted === true
+    }
+  }
+  if (params.peek) {
+    const arrived = readPeek()
+    return {
+      ...mailboxIdentity,
+      messages: exposeMessages(arrived),
+      count: arrived.length,
+      acknowledged: acknowledged?.delivery.id ?? null,
+      ...formatted(arrived)
+    }
+  }
+  const batch = await takeDelivery(typeFilter, waitResult)
+  return result(batch)
+}

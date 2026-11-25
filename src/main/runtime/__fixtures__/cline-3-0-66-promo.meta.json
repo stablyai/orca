@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:11:43.778Z",
+  "platform": "darwin",
+  "command": ["cline", "--config", "<scratch>/cline-or", "--data-dir", "<scratch>/cline-or/data"],
+  "cols": 120,
+  "rows": 40,
+  "note": "cline 3.0.66, macOS, OpenRouter free router, isolated --config/--data-dir, ClinePass promo popup left open",
+  "exitCode": 0
+}

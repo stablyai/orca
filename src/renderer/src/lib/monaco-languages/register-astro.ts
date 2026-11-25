@@ -1,4 +1,8 @@
 import type * as Monaco from 'monaco-editor'
+import {
+  restOfLineWithinEmbedBudget,
+  tagCloseWithinEmbedBudget
+} from './monarch-embed-entry-budget'
 
 type MonacoModule = typeof Monaco
 
@@ -13,34 +17,17 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     { open: '<', close: '>', token: 'delimiter.angle' }
   ],
   tokenizer: {
-    // Entry state: fires once at file start with no embed on the stack.
-    // Modeled after the Svelte tokenizer — structural rules MUST NOT emit
-    // `nextEmbedded: '@pop'` from here. Only the frontmatter fence is
-    // recognised at file start; everything else (markup, `{expr}`,
-    // `<script>`/`<style>`) is handled after we've routed through
-    // `markupReenter` so the invariant "markup has html embed active" is
-    // satisfied by a single code path. Without this, an interpolation in
-    // the very first markup line popped the html embed before any push had
-    // occurred via this entry — Monaco rejects that with "cannot pop
-    // embedded language if not inside one".
+    // Initial state has no embed to pop; route non-frontmatter through markupReenter to establish HTML ownership once.
     root: [
-      // Astro frontmatter: `---` at file start opens a TypeScript fence
-      // closed by another `---` line. The opening line itself enters the
-      // typescript embed.
+      // Only file-start --- opens TypeScript frontmatter.
       [/---\s*$/, { token: 'keyword', switchTo: '@frontmatter', nextEmbedded: 'typescript' }],
       [/(?=.)/, { token: '@rematch', switchTo: '@markupReenter' }]
     ],
-    // Inside the frontmatter fence the typescript embed is active; only a
-    // closing `---` on its own line pops it. Astro requires the closing
-    // fence at column 0.
+    // Pop only a standalone column-zero fence. Monaco’s ^ anchors the embed region, safe here because entry is at end-of-line; never reuse this for mid-line entry (#1127).
     frontmatter: [
       [/^---\s*$/, { token: 'keyword', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
-    // html-embedded markup state. Mirrors Svelte's invariant: whenever we
-    // are in `markup`, the html embed is active. Every state that pops back
-    // to markup routes through `markupReenter` to push html again. Astro
-    // expressions are plain JS (no `{#if}`-style block syntax), so a single
-    // `{` rule handles all interpolations.
+    // Markup always owns an HTML embed; return via markupReenter after each plain-JS expression.
     markup: [
       [
         /<script(?=\s|>)/,
@@ -50,28 +37,58 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/<!--/, { token: 'comment', switchTo: '@comment', nextEmbedded: '@pop' }],
       [/\{/, { token: 'delimiter.curly', switchTo: '@astroExpressionEnter', nextEmbedded: '@pop' }]
     ],
-    markupReenter: [[/(?=.)/, { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }]],
+    // Zero-width transitions require @rematch or Monarch silently drops nextEmbedded and leaves markup without HTML.
+    markupReenter: [
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }
+      ],
+      [/(?=.)/, { token: '@rematch', switchTo: '@markupPlain' }]
+    ],
+    // Keep over-budget structure without embeds to stop recursion; retry HTML on the next line when its remainder fits.
+    markupPlain: [
+      [/<script(?=\s|>)/, { token: 'tag', switchTo: '@scriptOpen.javascript' }],
+      [/<style(?=\s|>)/, { token: 'tag', switchTo: '@styleOpen.css' }],
+      [/<!--/, { token: 'comment', switchTo: '@comment' }],
+      [/\{/, { token: 'delimiter.curly', switchTo: '@astroExpressionEnter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }
+      ],
+      [/<\/?[A-Za-z][^>]*>/, 'tag'],
+      [/[^<{]+/, ''],
+      [/./, '']
+    ],
     comment: [
       [/-->/, { token: 'comment', switchTo: '@markupReenter' }],
       [/[^-]+/, 'comment'],
       [/./, 'comment']
     ],
-    // Once the typescript embed is active inside an expression, Monaco only
-    // consults parent rules whose action ends the embed. A brace counter
-    // therefore cannot run from inside the embed, so expressions with
-    // nested braces (e.g. `{items.map((x) => ({y: x}))}`) close at the
-    // first inner `}`. The common single-brace case `{title}` works.
+    // Active embeds expose only parent exit rules, so brace counting cannot run; nested JS braces close at the first }, a known regex-grammar limit.
     astroExpressionEnter: [
       // Empty `{}`: entry popped html, but typescript was never entered.
       [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter' }],
-      [/(?=.)/, { token: '', switchTo: '@astroExpression', nextEmbedded: 'typescript' }]
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@astroExpression', nextEmbedded: 'typescript' }
+      ],
+      [/(?=.)/, { token: '@rematch', switchTo: '@astroExpressionPlain' }]
     ],
     astroExpression: [
       [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
+    // Same expression, no typescript embed: reached only past the budget.
+    astroExpressionPlain: [
+      [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter' }],
+      [/[^}]+/, '']
+    ],
     scriptOpen: [
       [/\/>/, { token: 'tag', switchTo: '@markupReenter' }],
-      [/>/, { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@scriptBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@scriptLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -101,9 +118,23 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     scriptBody: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
+    // Re-enter $S2 as soon as the remaining line fits so long opening lines cannot leave entire blocks unhighlighted.
+    scriptBodyPlain: [
+      [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/[^<]+/, ''],
+      [/./, '']
+    ],
     styleOpen: [
       [/\/>/, { token: 'tag', switchTo: '@markupReenter' }],
-      [/>/, { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@styleBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@styleLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -132,6 +163,15 @@ export const astroMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     ],
     styleBody: [
       [/<\/style\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
+    ],
+    styleBodyPlain: [
+      [/<\/style\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/[^<]+/, ''],
+      [/./, '']
     ],
     tagAttributes: [
       [/[^\s/>=]+/, 'attribute.name'],

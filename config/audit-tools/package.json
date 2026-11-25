@@ -1,0 +1,13 @@
+{
+  "name": "@orca/audit-tools",
+  "private": true,
+  "description": "Locked command-line audits, installed separately from the application",
+  "dependencies": {
+    "knip": "5.88.1",
+    "react-doctor": "0.9.14"
+  },
+  "engines": {
+    "node": "24"
+  },
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3"
+}

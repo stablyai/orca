@@ -1,0 +1,1577 @@
+{
+  "purpose": "Actual pinned Claude scanner, source-cache and durable report persistence costs.",
+  "node": "v24.20.0",
+  "platform": "darwin",
+  "arch": "arm64",
+  "cpuModel": "Apple M4 Max",
+  "usageKeys": 16384,
+  "maximaPattern": "repeated",
+  "rounds": 6,
+  "historyBytes": 7481652,
+  "suffixBytes": 452,
+  "fixtureSha256": "205be0c5b238447bd975a7a9cda26381ffc906d5192796681de0b81bc51226d7",
+  "methodology": {
+    "timing": "Six arm permutations balance position/order; one unrecorded warmup. Fixtures are scanner-cache cold and OS-page-cache warm. Durable writes use production fsync/rename writers.",
+    "refresh": "Actual production functions composed in the worker request order: source read/verify/decode, scanner, source pack/seal/durable write, main report serialize/seal/durable write.",
+    "published": "Published B keeps source records in memory; sourceReadBytes=0 reflects that architecture. Its report contains those records.",
+    "exclusions": "Worker startup, message serialization/structured clone, IPC queueing, telemetry, worktree discovery and UI rendering are excluded. Report and source read bytes are logical filesystem payload bytes, not physical device I/O.",
+    "attribution": "Merged-main source/report ownership is inherited; compare current to fixed main to isolate this PR, and published to current for the combined user-visible change.",
+    "correctness": "Exact cold/append cross-arm sessions and daily equality and owned-key count; every append is checked against a fresh scan.",
+    "writtenBytes": "Source writes are logical replacement payload bytes: production durable writers replace the inode when writing. Consecutive bigint file identities prove whether the fixture sidecar was replaced; unavailable inode IDs produce null rather than a zero-write claim. Report payload bytes are captured in the actual writer callback. Accounting stat calls occur outside measured production intervals."
+  },
+  "toolingSha256": "858f4418ee5a099fb566285538b511827b4367b006a4805b16093ef42732efa5",
+  "supportToolingSha256": "9376c62d6ac1d7ae0697dd4584b47821c8dbe09bdeab51c6bae6f9953693f8ce",
+  "arms": {
+    "published": {
+      "commit": "8467877ed92aba2ef59737aebf461e9cab52c273",
+      "scanner": {
+        "bundleSha256": "99e5b592f4386bf0f9c68a29877e7788f2d8c4b9bdb15fadf81d1326423e6dd3",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "ef42add20f63152cf2ebe106e0794119b9c388c763736c8450b559ae7c2418f5"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "6598c02e38ea1776ef5ef926ca424dbc5880f27e7ff03b651cf8f60b791996f6"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "e96cc4aa9b899cad90aee462f053f483f5bb010dea99de1ee11a9f8fd8a2d0f2"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "56e2fe017f806670595dae766b6291e09b05b321b83e4b83e1ae5166bab2041c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "4534b3ff429df50140595ee536507c33f0a8b45434f09d7446f4592a37dbe2fb",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b03bc2db9f1f93e9d26ba31b8a469f85f27237498a520ea5cc128df397d1ff94"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "f4efccd6f1be0603a90174f66ac961d07ea5bf1c1fbebe015b0537deee1c58f2"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "b2ed0a589b60fdccb02c72fa234368853d32be080a84ee3bcc93f5834478a153"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "7df97e1a448696348cf89506085ea4959a7e876dae1a03b8ef02e32346feb295"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "baffe60b5c403b0d65afc7608c1903f726dee12d61a597c1d9525c82b4ed7bc4"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "49759bda2ba0efb81ac785eb13d4c51685dac505f5aa245144d441353793b5b0"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "1ecfcf5f829617792a2b16615001aee4c888cc80c3e8156191378c4a57d637b6"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "8467877ed92aba2ef59737aebf461e9cab52c273",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2"
+        }
+      }
+    },
+    "main": {
+      "commit": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+      "scanner": {
+        "bundleSha256": "d3c773d602731953d0d57d6227ce277d1a1dd21a4ddc39ba10995040072a5291",
+        "sourceFingerprints": {
+          "src/main/claude-usage/scanner.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "933e772e7d33994efa00ac37547ff8fa554dc628905011f7aff511a26f89331a"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6b1f31b8d25b496ac91b104c46bc67d17efc92c5092b6997efe5ddf69430ffc2"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec75f6f6f17d3f43ffa9ad7de543a80b2baf445560e80af77a44b38a63c275e2"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "55d1990fb662bfd005bfbfac8a2732702aa28b8511161b6259a72cd0e9f5a265",
+        "sourceFingerprints": {
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "d1a7041ef4e1366f7dc1c9225e663b49ebe5ef3ca60717d572bc4b9a85579232"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "657f5317536c7504416431c378bcc7a956ed5de7b7649a35f8d90674688f5da9"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "b44a5796c1154de84efa25cc09f3dae2b61eb4b5",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91"
+        }
+      }
+    },
+    "current": {
+      "commit": null,
+      "scanner": {
+        "bundleSha256": "0457542f4daf15c4a8bde1cb73cec13577fe06f39c00ffe2b89ed5b3faa64905",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/scanner.ts": {
+            "source": "worktree",
+            "sha256": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e"
+          },
+          "src/main/claude-usage/transcript-file-discovery.ts": {
+            "source": "worktree",
+            "sha256": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-record-parser.ts": {
+            "source": "worktree",
+            "sha256": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/transcript-token-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86"
+          },
+          "src/main/claude-usage/transcript-usage-projection.ts": {
+            "source": "worktree",
+            "sha256": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/claude-usage/worktree-attribution.ts": {
+            "source": "worktree",
+            "sha256": "7450e5ca7d8dcb66d1f5003a3e445c29f05c1416c6cd63aeb3f5f74804bc6213"
+          },
+          "src/main/usage/jsonl-file-checkpoint.ts": {
+            "source": "worktree",
+            "sha256": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4"
+          },
+          "src/main/usage/jsonl-file-snapshot.ts": {
+            "source": "worktree",
+            "sha256": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe"
+          },
+          "src/main/usage/jsonl-line-offsets.ts": {
+            "source": "worktree",
+            "sha256": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db"
+          },
+          "src/shared/definitive-filesystem-absence.ts": {
+            "source": "worktree",
+            "sha256": "32344097f40a7106fa41936b23bd485e12a1c6c4aca33b8feae0f3fc73f6010a"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          }
+        }
+      },
+      "persistence": {
+        "bundleSha256": "a5d58e164cdd9abca97628de1ea6333660f1fc0b4bf4b9244621e5b7cad81610",
+        "sourceFingerprints": {
+          "src/main/claude-usage/persisted-projection-validation.ts": {
+            "source": "worktree",
+            "sha256": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160"
+          },
+          "src/main/claude-usage/persisted-source-cache.ts": {
+            "source": "worktree",
+            "sha256": "505c5274cb3d92c49b93f6eeb63164b239b6caf7baa550ef20174e60db6a4fa2"
+          },
+          "src/main/claude-usage/persisted-token-columns.ts": {
+            "source": "worktree",
+            "sha256": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855"
+          },
+          "src/main/claude-usage/persisted-usage-report.ts": {
+            "source": "worktree",
+            "sha256": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04"
+          },
+          "src/main/claude-usage/transcript-projection-integrity.ts": {
+            "source": "worktree",
+            "sha256": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef"
+          },
+          "src/main/claude-usage/transcript-resume-projection.ts": {
+            "source": "worktree",
+            "sha256": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db"
+          },
+          "src/main/claude-usage/usage-aggregation.ts": {
+            "source": "worktree",
+            "sha256": "be4dad6f41eaf720252137b16b9a96a2cfdd2e73b05eee097993653ce6c5e509"
+          },
+          "src/main/codex-accounts/fs-utils.ts": {
+            "source": "worktree",
+            "sha256": "48093fbbd8879721ff25ff15002ab60b07517896be04fdf201bc9fdc4dadd2e7"
+          },
+          "src/main/durable-file-write.ts": {
+            "source": "worktree",
+            "sha256": "009b4775505ab6a10a1e53329fdbd5444c47f4f137c52d7de6384ae31725aaec"
+          },
+          "src/main/usage-cache-snapshot-writer.ts": {
+            "source": "worktree",
+            "sha256": "e0877d6acf2b1c32e78b0f9ab008460b990a48453e5155f8e65aa08458dfa5ed"
+          },
+          "src/main/usage/usage-cache-json-integrity.ts": {
+            "source": "worktree",
+            "sha256": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7"
+          },
+          "src/main/usage/usage-inline-cache-preservation.ts": {
+            "source": "worktree",
+            "sha256": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf"
+          },
+          "src/main/usage/usage-provider-store-lifecycle.ts": {
+            "source": "worktree",
+            "sha256": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901"
+          },
+          "src/main/usage/usage-source-cache-file.ts": {
+            "source": "worktree",
+            "sha256": "ee53cd3c823ce5bd49892bf96486f48d285c0b4e536a295adfe5e94f147712f5"
+          },
+          "src/main/usage/usage-worktree-refs.ts": {
+            "source": "worktree",
+            "sha256": "79a618c1385949a50afbf62439038217954f45ef0016edbfd76cf7c33fc58640"
+          },
+          "src/main/win32-utils.ts": {
+            "source": "worktree",
+            "sha256": "0c41cd182a1a182cc4c2bb663ec9b32e50acb99bd39d4835bfad26882ca87e53"
+          },
+          "src/shared/event-loop-yield.ts": {
+            "source": "worktree",
+            "sha256": "d291b71f09eb88f24a849d0ae310f946deb7f93b0b6b490b6ea5a605ab7a53cf"
+          },
+          "src/shared/node-file-content-equality.ts": {
+            "source": "worktree",
+            "sha256": "1e8b91fa8afdcd9f05bfe7cddfcd148e3400429bfae2fcf8d563524b2d0b01e2"
+          },
+          "src/shared/windows-batch-spawn.ts": {
+            "source": "worktree",
+            "sha256": "ec71689e7efc8229f980ed853120d281fc47c1431831548b5bf7baa8cb13933d"
+          },
+          "src/shared/windows-retry-file-operations.ts": {
+            "source": "worktree",
+            "sha256": "6e0394041802f045cd54f3029b078a72c2b4af5e20664624c07ac280113eb197"
+          }
+        },
+        "inactiveLifecycleStubFingerprints": {
+          "agent-token-usage-reporter": "7a66e3ed973ef671d6dfb37e6083d653d819a812bbf3b03af563d06bf81c2f19",
+          "analytics-session-id-store": "6b5b2a865385bd3c1a227f3aaea9a4a69bc3d0d6213654d78003342866a6c549",
+          "usage-worktree-metadata": "f08f35eb7b9d20bb4ad7b9b95dab615a6dbe7a5d1267e437e9c09de4784d4de2",
+          "telemetry/client": "6425ee31de92063075c068d45dfce88ac7c007f8ed2d677987888be247eabe91"
+        }
+      }
+    }
+  },
+  "summary": {
+    "published": {
+      "cold": {
+        "scanMs": 59.005,
+        "completeRefreshMs": 72.455,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0,
+        "reportSerializeSealMs": 0.849,
+        "reportDurableWriteMs": 12.122,
+        "totalPersistMs": 12.97,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.001,
+        "scanMs": 1.206,
+        "completeRefreshMs": 13.106,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0,
+        "reportSerializeSealMs": 0.901,
+        "reportDurableWriteMs": 10.777,
+        "totalPersistMs": 11.717,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.001,
+        "scanMs": 15.849,
+        "completeRefreshMs": 28,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0,
+        "reportSerializeSealMs": 0.792,
+        "reportDurableWriteMs": 11.285,
+        "totalPersistMs": 12.051,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768021,
+        "totalWrittenBytes": 768021,
+        "totalPersistedBytes": 768021
+      }
+    },
+    "main": {
+      "cold": {
+        "scanMs": 36.831,
+        "completeRefreshMs": 61.117,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 13.23,
+        "reportSerializeSealMs": 0.018,
+        "reportDurableWriteMs": 11.341,
+        "totalPersistMs": 24.641,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.525,
+        "scanMs": 1.521,
+        "completeRefreshMs": 21.844,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 470898,
+        "sourceWritePackSealDurableMs": 9.674,
+        "reportSerializeSealMs": 0.009,
+        "reportDurableWriteMs": 10.286,
+        "totalPersistMs": 19.722,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.656,
+        "scanMs": 35.36,
+        "completeRefreshMs": 61.131,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 7953002,
+        "sourceWritePackSealDurableMs": 13.606,
+        "reportSerializeSealMs": 0.01,
+        "reportDurableWriteMs": 10.292,
+        "totalPersistMs": 23.35,
+        "sourceBytes": 470897.5,
+        "sourceBytesWritten": 470897.5,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328.5,
+        "totalPersistedBytes": 472328.5
+      }
+    },
+    "current": {
+      "cold": {
+        "scanMs": 58.935,
+        "completeRefreshMs": 83.16,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 12.904,
+        "reportSerializeSealMs": 0.024,
+        "reportDurableWriteMs": 10.497,
+        "totalPersistMs": 23.754,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.931,
+        "scanMs": 1.583,
+        "completeRefreshMs": 12.29,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.002,
+        "reportSerializeSealMs": 0.013,
+        "reportDurableWriteMs": 9.775,
+        "totalPersistMs": 9.788,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.293,
+        "scanMs": 5.03,
+        "completeRefreshMs": 28.876,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 12.478,
+        "reportSerializeSealMs": 0.015,
+        "reportDurableWriteMs": 9.967,
+        "totalPersistMs": 22.689,
+        "sourceBytes": 537374,
+        "sourceBytesWritten": 537374,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538889,
+        "totalPersistedBytes": 538889
+      }
+    }
+  },
+  "samples": [
+    {
+      "arm": "published",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "cold": {
+        "scanMs": 72.32012499999996,
+        "completeRefreshMs": 88.60354099999995,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0.0004999999998744897,
+        "reportSerializeSealMs": 0.8522090000001299,
+        "reportDurableWriteMs": 15.430706999999984,
+        "totalPersistMs": 16.28341599999999,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768017,
+        "totalWrittenBytes": 768017,
+        "totalPersistedBytes": 768017
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.008542000000034022,
+        "scanMs": 1.5074580000000424,
+        "completeRefreshMs": 12.932874999999967,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0.00024999999982355803,
+        "reportSerializeSealMs": 0.9435840000001008,
+        "reportDurableWriteMs": 10.473040999999967,
+        "totalPersistMs": 11.41687499999989,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768017,
+        "totalWrittenBytes": 768017,
+        "totalPersistedBytes": 768017,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.003958000000011452,
+        "scanMs": 16.08458399999995,
+        "completeRefreshMs": 30.821500000000015,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0.0002500000000509317,
+        "reportSerializeSealMs": 0.8125,
+        "reportDurableWriteMs": 13.920208000000002,
+        "totalPersistMs": 14.732958000000053,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768021,
+        "totalWrittenBytes": 768021,
+        "totalPersistedBytes": 768021,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "cold": {
+        "scanMs": 37.24541700000009,
+        "completeRefreshMs": 63.43387600000028,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 14.776042000000189,
+        "reportSerializeSealMs": 0.01541599999995924,
+        "reportDurableWriteMs": 11.397001000000046,
+        "totalPersistMs": 26.188459000000194,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.5957080000000587,
+        "scanMs": 1.6277079999999842,
+        "completeRefreshMs": 21.80604100000005,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 470898,
+        "sourceWritePackSealDurableMs": 9.30925000000002,
+        "reportSerializeSealMs": 0.009291000000075655,
+        "reportDurableWriteMs": 10.264083999999912,
+        "totalPersistMs": 19.582625000000007,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.744457999999895,
+        "scanMs": 37.2537920000002,
+        "completeRefreshMs": 61.589792000000216,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 7953002,
+        "sourceWritePackSealDurableMs": 11.672167000000172,
+        "reportSerializeSealMs": 0.018708000000060565,
+        "reportDurableWriteMs": 10.900666999999885,
+        "totalPersistMs": 22.591542000000118,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 1,
+      "order": ["published", "main", "current"],
+      "cold": {
+        "scanMs": 61.7856670000001,
+        "completeRefreshMs": 85.2966250000004,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 12.791167000000314,
+        "reportSerializeSealMs": 0.023457999999664025,
+        "reportDurableWriteMs": 10.696333000000322,
+        "totalPersistMs": 23.5109580000003,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 1.549083000000337,
+        "scanMs": 1.8092499999997926,
+        "completeRefreshMs": 13.22604100000035,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.0016249999998763087,
+        "reportSerializeSealMs": 0.010416999999961263,
+        "reportDurableWriteMs": 9.855666000000383,
+        "totalPersistMs": 9.86770800000022,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.7092090000001008,
+        "scanMs": 9.060375000000022,
+        "completeRefreshMs": 33.64887499999986,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 12.582832999999937,
+        "reportSerializeSealMs": 0.021542000000408734,
+        "reportDurableWriteMs": 10.274915999999394,
+        "totalPersistMs": 22.87929099999974,
+        "sourceBytes": 537372,
+        "sourceBytesWritten": 537372,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538887,
+        "totalPersistedBytes": 538887,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "cold": {
+        "scanMs": 54.195458000000144,
+        "completeRefreshMs": 77.52729099999988,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 13.017374999999902,
+        "reportSerializeSealMs": 0.016374999999698048,
+        "reportDurableWriteMs": 10.298083000000133,
+        "totalPersistMs": 23.331832999999733,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 1.617917000000034,
+        "scanMs": 1.6077919999997903,
+        "completeRefreshMs": 13.546833999999762,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.0022089999997660925,
+        "reportSerializeSealMs": 0.015833999999813386,
+        "reportDurableWriteMs": 10.303082000000359,
+        "totalPersistMs": 10.321124999999938,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 16.472208000000137,
+        "scanMs": 19.033874999999625,
+        "completeRefreshMs": 58.59949999999981,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 14.952707999999802,
+        "reportSerializeSealMs": 0.03812500000003638,
+        "reportDurableWriteMs": 8.102584000000206,
+        "totalPersistMs": 23.093417000000045,
+        "sourceBytes": 537374,
+        "sourceBytesWritten": 537374,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538889,
+        "totalPersistedBytes": 538889,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "cold": {
+        "scanMs": 40.4970000000003,
+        "completeRefreshMs": 66.78116600000021,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 15.96245799999997,
+        "reportSerializeSealMs": 0.024332999999842286,
+        "reportDurableWriteMs": 10.297375000000102,
+        "totalPersistMs": 26.284165999999914,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.49608400000033726,
+        "scanMs": 1.5237499999998363,
+        "completeRefreshMs": 21.881584000000203,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470897,
+        "totalReadBytes": 470897,
+        "sourceWritePackSealDurableMs": 9.545208999999886,
+        "reportSerializeSealMs": 0.007708999999977095,
+        "reportDurableWriteMs": 10.308832000000166,
+        "totalPersistMs": 19.86175000000003,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.653874999999971,
+        "scanMs": 35.2807499999999,
+        "completeRefreshMs": 60.67233299999998,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470897,
+        "totalReadBytes": 7953001,
+        "sourceWritePackSealDurableMs": 13.663457999999991,
+        "reportSerializeSealMs": 0.010916000000179338,
+        "reportDurableWriteMs": 10.06333399999994,
+        "totalPersistMs": 23.73770800000011,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "published",
+      "round": 2,
+      "order": ["current", "main", "published"],
+      "cold": {
+        "scanMs": 63.24879199999987,
+        "completeRefreshMs": 76.06083399999989,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0.0002500000000509317,
+        "reportSerializeSealMs": 0.8947079999998095,
+        "reportDurableWriteMs": 11.917084000000159,
+        "totalPersistMs": 12.81204200000002,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.00858299999981682,
+        "scanMs": 1.2533750000002328,
+        "completeRefreshMs": 13.279457999999977,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0.0003329999999550637,
+        "reportSerializeSealMs": 0.9366669999999431,
+        "reportDurableWriteMs": 11.080500000000029,
+        "totalPersistMs": 12.017499999999927,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.002207999999882304,
+        "scanMs": 15.613000000000284,
+        "completeRefreshMs": 27.619666999999936,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0.0002919999997175182,
+        "reportSerializeSealMs": 0.7577080000000933,
+        "reportDurableWriteMs": 11.246458999999959,
+        "totalPersistMs": 12.00445899999977,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "cold": {
+        "scanMs": 35.02795900000001,
+        "completeRefreshMs": 57.35258399999975,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 12.30724999999984,
+        "reportSerializeSealMs": 0.007583000000067841,
+        "reportDurableWriteMs": 10.009791999999834,
+        "totalPersistMs": 22.32462499999974,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.5079999999998108,
+        "scanMs": 1.4295419999998558,
+        "completeRefreshMs": 21.00537499999973,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 470898,
+        "sourceWritePackSealDurableMs": 9.802999999999884,
+        "reportSerializeSealMs": 0.014125000000149157,
+        "reportDurableWriteMs": 9.250708000000031,
+        "totalPersistMs": 19.067833000000064,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.5029170000002523,
+        "scanMs": 33.695166999999856,
+        "completeRefreshMs": 58.15970900000002,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 7953002,
+        "sourceWritePackSealDurableMs": 13.549332999999933,
+        "reportSerializeSealMs": 0.006915999999819178,
+        "reportDurableWriteMs": 9.40537600000016,
+        "totalPersistMs": 22.961624999999913,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "published",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "cold": {
+        "scanMs": 57.22037500000033,
+        "completeRefreshMs": 71.17470800000046,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0.0002500000000509317,
+        "reportSerializeSealMs": 0.8077499999999418,
+        "reportDurableWriteMs": 13.14633300000014,
+        "totalPersistMs": 13.954333000000133,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.0006669999997939158,
+        "scanMs": 1.0206250000001091,
+        "completeRefreshMs": 13.545125999999982,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0.00020899999981338624,
+        "reportSerializeSealMs": 0.7711249999997563,
+        "reportDurableWriteMs": 11.75250000000051,
+        "totalPersistMs": 12.523834000000079,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.0006249999996725819,
+        "scanMs": 13.566000000000258,
+        "completeRefreshMs": 25.10699999999997,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0.00029200000017226557,
+        "reportSerializeSealMs": 0.7715829999997368,
+        "reportDurableWriteMs": 10.768500000000131,
+        "totalPersistMs": 11.54037500000004,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768021,
+        "totalWrittenBytes": 768021,
+        "totalPersistedBytes": 768021,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 3,
+      "order": ["main", "published", "current"],
+      "cold": {
+        "scanMs": 62.05841700000019,
+        "completeRefreshMs": 87.41433400000051,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 15.077416999999969,
+        "reportSerializeSealMs": 0.042374999999992724,
+        "reportDurableWriteMs": 10.236125000000357,
+        "totalPersistMs": 25.355917000000318,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.9149590000001808,
+        "scanMs": 1.6323750000001382,
+        "completeRefreshMs": 11.650542000000314,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.00483299999996234,
+        "reportSerializeSealMs": 0.020208999999795196,
+        "reportDurableWriteMs": 9.078166000000238,
+        "totalPersistMs": 9.103207999999995,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.9239590000001954,
+        "scanMs": 4.9658330000002024,
+        "completeRefreshMs": 27.446167000000514,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 11.839166000000205,
+        "reportSerializeSealMs": 0.011582999999973254,
+        "reportDurableWriteMs": 9.705625999999938,
+        "totalPersistMs": 21.556375000000116,
+        "sourceBytes": 537374,
+        "sourceBytesWritten": 537374,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538889,
+        "totalPersistedBytes": 538889,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "cold": {
+        "scanMs": 58.640957999999955,
+        "completeRefreshMs": 83.09370800000033,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 14.940209000000323,
+        "reportSerializeSealMs": 0.03187500000012733,
+        "reportDurableWriteMs": 9.480665999999928,
+        "totalPersistMs": 24.45275000000038,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.9132920000001832,
+        "scanMs": 1.469583000000057,
+        "completeRefreshMs": 12.365250000000287,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.001708000000235188,
+        "reportSerializeSealMs": 0.01195899999993344,
+        "reportDurableWriteMs": 9.968707999999879,
+        "totalPersistMs": 9.982375000000047,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.9201669999997648,
+        "scanMs": 4.748417000000245,
+        "completeRefreshMs": 25.577624999999898,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 9.664291000000048,
+        "reportSerializeSealMs": 0.01679100000001199,
+        "reportDurableWriteMs": 10.227958999999828,
+        "totalPersistMs": 19.90904099999989,
+        "sourceBytes": 537374,
+        "sourceBytesWritten": 537374,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538889,
+        "totalPersistedBytes": 538889,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "published",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "cold": {
+        "scanMs": 60.774875000000065,
+        "completeRefreshMs": 73.73545800000011,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0.0004170000001977314,
+        "reportSerializeSealMs": 0.8422500000001492,
+        "reportDurableWriteMs": 12.117915999999695,
+        "totalPersistMs": 12.960583000000042,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.0006250000001273293,
+        "scanMs": 1.1355830000002243,
+        "completeRefreshMs": 13.525375000000167,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0.00016700000014679972,
+        "reportSerializeSealMs": 0.9022079999999733,
+        "reportDurableWriteMs": 11.486791999999696,
+        "totalPersistMs": 12.389166999999816,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.0004999999996471161,
+        "scanMs": 17.51279199999999,
+        "completeRefreshMs": 29.312541999999667,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0.0002500000000509317,
+        "reportSerializeSealMs": 0.8206669999999576,
+        "reportDurableWriteMs": 10.97833300000002,
+        "totalPersistMs": 11.799250000000029,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768021,
+        "totalWrittenBytes": 768021,
+        "totalPersistedBytes": 768021,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 4,
+      "order": ["current", "published", "main"],
+      "cold": {
+        "scanMs": 37.41724999999997,
+        "completeRefreshMs": 61.68145800000002,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 12.771832999999788,
+        "reportSerializeSealMs": 0.01966599999968821,
+        "reportDurableWriteMs": 11.472709000000577,
+        "totalPersistMs": 24.264208000000053,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.538792000000285,
+        "scanMs": 1.53899999999976,
+        "completeRefreshMs": 22.795251000000007,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470897,
+        "totalReadBytes": 470897,
+        "sourceWritePackSealDurableMs": 10.328375000000051,
+        "reportSerializeSealMs": 0.007000000000061846,
+        "reportDurableWriteMs": 10.38208399999985,
+        "totalPersistMs": 20.717458999999963,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.583625000000211,
+        "scanMs": 35.44016699999975,
+        "completeRefreshMs": 56.81362599999966,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470897,
+        "totalReadBytes": 7953001,
+        "sourceWritePackSealDurableMs": 10.383041999999932,
+        "reportSerializeSealMs": 0.010041000000001077,
+        "reportDurableWriteMs": 10.396750999999767,
+        "totalPersistMs": 20.7898339999997,
+        "sourceBytes": 470897,
+        "sourceBytesWritten": 470897,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472328,
+        "totalPersistedBytes": 472328,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "published",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "cold": {
+        "scanMs": 55.81837499999983,
+        "completeRefreshMs": 68.24800000000005,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0.00016700000014679972,
+        "reportSerializeSealMs": 0.8452080000001843,
+        "reportDurableWriteMs": 11.584249999999884,
+        "totalPersistMs": 12.429625000000215,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.000792000000274129,
+        "scanMs": 1.4856249999998,
+        "completeRefreshMs": 11.576751000000058,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0.0002500000000509317,
+        "reportSerializeSealMs": 0.7789170000000922,
+        "reportDurableWriteMs": 9.311166999999841,
+        "totalPersistMs": 10.090333999999984,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.0005419999997684499,
+        "scanMs": 12.756333000000268,
+        "completeRefreshMs": 24.85375000000022,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0.00016700000014679972,
+        "reportSerializeSealMs": 0.7722920000005615,
+        "reportDurableWriteMs": 11.324415999999474,
+        "totalPersistMs": 12.096875000000182,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768021,
+        "totalWrittenBytes": 768021,
+        "totalPersistedBytes": 768021,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "cold": {
+        "scanMs": 59.228250000000116,
+        "completeRefreshMs": 83.22579099999984,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 12.780416000000514,
+        "reportSerializeSealMs": 0.019999999999527063,
+        "reportDurableWriteMs": 11.197124999999687,
+        "totalPersistMs": 23.99754099999973,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.8271250000007058,
+        "scanMs": 1.5093749999996362,
+        "completeRefreshMs": 11.749458000000232,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.002292000000124972,
+        "reportSerializeSealMs": 0.007708000000093307,
+        "reportDurableWriteMs": 9.402957999999671,
+        "totalPersistMs": 9.41295799999989,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.9248330000000351,
+        "scanMs": 4.694832999999562,
+        "completeRefreshMs": 28.330665999999837,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 13.068916999999601,
+        "reportSerializeSealMs": 0.012708000000202446,
+        "reportDurableWriteMs": 9.629375000000437,
+        "totalPersistMs": 22.71100000000024,
+        "sourceBytes": 537374,
+        "sourceBytesWritten": 537374,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538889,
+        "totalPersistedBytes": 538889,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 5,
+      "order": ["published", "current", "main"],
+      "cold": {
+        "scanMs": 34.483249999999316,
+        "completeRefreshMs": 59.501915999999255,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 13.687582999999904,
+        "reportSerializeSealMs": 0.0075839999999516294,
+        "reportDurableWriteMs": 11.323499000000083,
+        "totalPersistMs": 25.01866599999994,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.5115000000005239,
+        "scanMs": 1.5184170000002268,
+        "completeRefreshMs": 20.873125000000073,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 470898,
+        "sourceWritePackSealDurableMs": 9.534458000000086,
+        "reportSerializeSealMs": 0.0070420000001831795,
+        "reportDurableWriteMs": 9.301707999999053,
+        "totalPersistMs": 18.843207999999322,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 3.390875000000051,
+        "scanMs": 34.759665999999925,
+        "completeRefreshMs": 62.39991599999939,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 7953002,
+        "sourceWritePackSealDurableMs": 14.052040999999917,
+        "reportSerializeSealMs": 0.009707999999591266,
+        "reportDurableWriteMs": 10.18762599999991,
+        "totalPersistMs": 24.249374999999418,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "main",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "cold": {
+        "scanMs": 36.416291999999885,
+        "completeRefreshMs": 60.55254199999945,
+        "transcriptBytesRead": 7481652,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7481652,
+        "sourceWritePackSealDurableMs": 12.754167000000052,
+        "reportSerializeSealMs": 0.022625000000516593,
+        "reportDurableWriteMs": 11.359457999998995,
+        "totalPersistMs": 24.136249999999563,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.6486249999998108,
+        "scanMs": 1.511000000000422,
+        "completeRefreshMs": 22.87183300000015,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 470898,
+        "sourceWritePackSealDurableMs": 10.283666000000267,
+        "reportSerializeSealMs": 0.011167000000568805,
+        "reportDurableWriteMs": 10.417374999999083,
+        "totalPersistMs": 20.71220799999992,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.657709000000068,
+        "scanMs": 80.70166599999993,
+        "completeRefreshMs": 118.4057499999999,
+        "transcriptBytesRead": 7482104,
+        "sourceBytesRead": 470898,
+        "totalReadBytes": 7953002,
+        "sourceWritePackSealDurableMs": 20.968540999999277,
+        "reportSerializeSealMs": 0.014041999999790278,
+        "reportDurableWriteMs": 15.06379200000083,
+        "totalPersistMs": 36.0463749999999,
+        "sourceBytes": 470898,
+        "sourceBytesWritten": 470898,
+        "reportBytes": 1431,
+        "totalWrittenBytes": 472329,
+        "totalPersistedBytes": 472329,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "current",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "cold": {
+        "scanMs": 57.95808399999987,
+        "completeRefreshMs": 79.84400100000039,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 11.109833999999864,
+        "reportSerializeSealMs": 0.023709000000053493,
+        "reportDurableWriteMs": 10.7523740000006,
+        "totalPersistMs": 21.885917000000518,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 471838,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 473353,
+        "totalPersistedBytes": 473353
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.9472079999995913,
+        "scanMs": 1.5589170000002923,
+        "completeRefreshMs": 12.214582999999948,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 471838,
+        "sourceWritePackSealDurableMs": 0.0016660000001138542,
+        "reportSerializeSealMs": 0.01337500000045111,
+        "reportDurableWriteMs": 9.6934169999995,
+        "totalPersistMs": 9.708458000000064,
+        "sourceBytes": 471838,
+        "sourceBytesWritten": 0,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 1515,
+        "totalPersistedBytes": 473353,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 1.6604589999997188,
+        "scanMs": 5.093958000000384,
+        "completeRefreshMs": 29.421000000000276,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 471838,
+        "totalReadBytes": 496866,
+        "sourceWritePackSealDurableMs": 12.37341699999979,
+        "reportSerializeSealMs": 0.01391700000021956,
+        "reportDurableWriteMs": 10.279249000000164,
+        "totalPersistMs": 22.666583000000173,
+        "sourceBytes": 537372,
+        "sourceBytesWritten": 537372,
+        "reportBytes": 1515,
+        "totalWrittenBytes": 538887,
+        "totalPersistedBytes": 538887,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    },
+    {
+      "arm": "published",
+      "round": 6,
+      "order": ["main", "current", "published"],
+      "cold": {
+        "scanMs": 57.235915999999634,
+        "completeRefreshMs": 70.21600000000035,
+        "transcriptBytesRead": 7498036,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 7498036,
+        "sourceWritePackSealDurableMs": 0.0002920000006270129,
+        "reportSerializeSealMs": 0.8542499999994106,
+        "reportDurableWriteMs": 12.125542000000678,
+        "totalPersistMs": 12.980084000000716,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019
+      },
+      "warm": {
+        "sourceReadVerifyDecodeMs": 0.0005000000001018634,
+        "scanMs": 1.1582089999992604,
+        "completeRefreshMs": 12.323750999998992,
+        "transcriptBytesRead": 0,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 0,
+        "sourceWritePackSealDurableMs": 0.00033399999938410474,
+        "reportSerializeSealMs": 0.899333000000297,
+        "reportDurableWriteMs": 10.265374999999949,
+        "totalPersistMs": 11.16504199999963,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768019,
+        "totalWrittenBytes": 768019,
+        "totalPersistedBytes": 768019,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      },
+      "append": {
+        "sourceReadVerifyDecodeMs": 0.0009169999993901001,
+        "scanMs": 16.120915999999852,
+        "completeRefreshMs": 28.380582999999206,
+        "transcriptBytesRead": 25028,
+        "sourceBytesRead": 0,
+        "totalReadBytes": 25028,
+        "sourceWritePackSealDurableMs": 0.0002500000000509317,
+        "reportSerializeSealMs": 0.8347499999999854,
+        "reportDurableWriteMs": 11.423749999999927,
+        "totalPersistMs": 12.258749999999964,
+        "sourceBytes": 0,
+        "sourceBytesWritten": 0,
+        "reportBytes": 768021,
+        "totalWrittenBytes": 768021,
+        "totalPersistedBytes": 768021,
+        "transcriptPath": "/var/folders/td/0d_w3jrs3654mtmk1gd6kpq00000gn/T/orca-claude-persistence-cost-oPzJf5/.claude/projects/benchmark/active-session.jsonl"
+      }
+    }
+  ]
+}

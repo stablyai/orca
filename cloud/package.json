@@ -1,0 +1,26 @@
+{
+  "name": "orca-cloud",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "pnpm -r build",
+    "build:process-host": "tsc -p ../src/packages/process-host/tsconfig.json --typeRoots ./node_modules/@types",
+    "dev": "pnpm --filter @orca-cloud/relay dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm build:libs && pnpm -r --config.enable-pre-post-scripts=false --filter \"!@orca-cloud/relay\" test && pnpm --filter @orca-cloud/relay test",
+    "build:libs": "pnpm -r --filter \"./packages/*\" build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@orca/process-host": "link:../src/packages/process-host",
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=24 <27",
+    "pnpm": ">=12"
+  },
+  "packageManager": "pnpm@12.18.0+sha512.9d7882d5dc82147ecfc4e062aa34834e0ad0296710a1837a1115ae012127d36b7109e321ac1598a1dd0a65597681b1e99917e12ed0d749eae91187943363beb3"
+}

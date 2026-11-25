@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-11-08T19:48:25.862Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy 1.4.11, macOS, Google account, AGY_CLI_HIDE_ACCOUNT_INFO=1; one background task running, a second turn mid-way through a foreground command",
+  "exitCode": 0
+}

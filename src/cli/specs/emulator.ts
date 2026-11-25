@@ -1,10 +1,10 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['emulator', 'list'],
-    summary: 'List available/running emulators (Orca-managed + raw serve-sim)',
+    summary: "List the worktree's attached emulator sessions (iOS and Android)",
     usage: 'orca emulator list [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree']
   },
@@ -30,7 +30,7 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'type'],
-    summary: 'Type text (US ASCII only)',
+    summary: 'Type any text (Android without a stream: US ASCII)',
     usage: 'orca emulator type <text> [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'text', 'device', 'emulator', 'worktree'],
     positionalArgs: ['text']
@@ -65,12 +65,14 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'kill'],
+    destructive: true,
     summary: 'Stop helper for device',
     usage: 'orca emulator kill [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
   },
   {
     path: ['emulator', 'shutdown'],
+    destructive: true,
     summary: 'Stop helper and shut down the simulator device',
     usage:
       'orca emulator shutdown [--device <id>] [--emulator <id>] [--worktree <selector>] [--json]',
@@ -108,7 +110,7 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['emulator', 'ax'],
-    summary: 'Dump the Android accessibility (uiautomator) tree',
+    summary: 'Dump the accessibility tree (Android uiautomator; iOS serve-sim AX, frames 0..1)',
     usage: 'orca emulator ax [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
   },

@@ -1,0 +1,357 @@
+import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
+import type { BrowserAgentPointerPoint } from '../automation/browser-agent-activity-contract'
+import type { RuntimeFileReadChunkResult } from '../../file-content/runtime-file-read'
+import type {
+  BrowserCertificateFailure,
+  BrowserCookieImportResult,
+  BrowserLoadError,
+  BrowserSessionProfile,
+  BrowserSessionProfileSource
+} from '../workspaces/browser-workspace-types'
+import type {
+  BrowserPagePromptRequest,
+  BrowserStreamedPagePromptKind
+} from '../prompts/browser-page-prompt'
+import type {
+  BrowserContextMenuTarget,
+  BrowserDownloadFinishedEvent,
+  BrowserDownloadRequestedEvent
+} from '../guest-lifecycle/browser-guest-events'
+import type {
+  BROWSER_UNAVAILABLE_ERROR_CODE,
+  RuntimeTerminalDriverState
+} from '../../remote-runtime/session-graph/runtime-session-contracts'
+
+export type BrowserSnapshotRef = { ref: string; role: string; name: string }
+
+// agent-browser's `snapshot --delta` answer; `full` carries the tree, the others change the last one.
+export type BrowserSnapshotDelta =
+  | { kind: 'full'; revision: number; tree: string }
+  | { kind: 'unchanged'; revision: number; baseRevision: number }
+  | {
+      kind: 'delta'
+      revision: number
+      baseRevision: number
+      treeChange?: { startLine: number; deleteCount: number; lines: string[] }
+    }
+
+/** A passkey (WebAuthn) request the page is waiting on; Orca's browser has no UI to complete it. */
+export type BrowserPasskeyRequest = { origin: string }
+
+export type BrowserSnapshotResult = {
+  browserPageId: string
+  snapshot: string | BrowserSnapshotDelta
+  refs: BrowserSnapshotRef[]
+  url: string
+  title: string
+  passkeyRequest?: BrowserPasskeyRequest
+}
+
+/** What an agent's page action caused; absent for people's input and from runtimes that predate it. */
+export type BrowserActionEffects = {
+  /** Set only when the action changed them. */
+  url?: string
+  title?: string
+  /** A navigation was still loading at the settle cap, so no page changes are listed. */
+  loading?: boolean
+  loadError?: string
+  /** No browserPageId: the tab was requested but had not opened by the settle cap. */
+  newTabs?: { browserPageId?: string; url: string }[]
+  popups?: { action: 'blocked' | 'opened-external' | 'window'; origin: string }[]
+  downloads?: { filename: string; origin: string }[]
+  consoleErrors?: string[]
+  /** Still pending when the page settled. */
+  passkeyRequest?: BrowserPasskeyRequest
+  /** The page asked for the system print dialog, which Orca refused so it would not take the user's screen. */
+  blockedPrint?: { origin: string }
+  /** Snapshot lines changed since the last reading; `full` is the whole new tree. Absent when unread. */
+  page?: 'unchanged' | { lines: string[]; removedLines: number; full: boolean; truncated: boolean }
+  /** False when the page was still changing at the settle cap. */
+  settled: boolean
+}
+
+export type BrowserClickResult = { clicked: string }
+export type BrowserGotoResult = { url: string; title: string }
+export type BrowserFillResult = { filled: string }
+export type BrowserTypeResult = { typed: boolean }
+export type BrowserSelectResult = { selected: string }
+export type BrowserScrollResult = { scrolled: 'up' | 'down' }
+export type BrowserBackResult = { url: string; title: string }
+export type BrowserReloadResult = { url: string; title: string }
+export type BrowserStopResult = { url: string; title: string }
+export type BrowserFindInPageResult = { activeMatchOrdinal: number; matches: number }
+/** One slice of an image's bytes from the page's cache; `size` is the whole image's byte length. */
+export type BrowserReadImageResult = { mimeType: string; size: number; data: string }
+export type BrowserScreenshotAnnotation = {
+  ref: string
+  number: number
+  role: string
+  name?: string
+  box: { x: number; y: number; width: number; height: number }
+}
+
+export type BrowserScreenshotResult = {
+  data: string
+  format: 'png' | 'jpeg'
+  // Set only for --if-changed; false means nothing was captured and data is empty.
+  changed?: boolean
+  annotations?: BrowserScreenshotAnnotation[]
+}
+
+export type BrowserScreencastReadyResult = {
+  type: 'ready'
+  subscriptionId: string
+  browserPageId: string
+  format: 'jpeg' | 'png'
+  tab: BrowserTabInfo
+  // Echo of `frameAck: 1`: the host holds frames until the viewer acks them.
+  frameAck?: true
+  /** Present only when asked with `pointerEvents: 1`; older hosts omit it. */
+  pointer?: BrowserScreencastPointer
+  /** Echo of `contextMenus: 1`: right presses reach the page and its menus arrive as `contextMenu`. */
+  contextMenus?: true
+}
+
+/** What a local guest shows under the mouse: its cursor (an Electron cursor type) and hovered link. */
+export type BrowserScreencastPointer = { cursor: string; targetUrl: string }
+export type BrowserScreencastPointerResult = { type: 'pointer' } & BrowserScreencastPointer
+
+/** A menu an injected right press opened; sent only to viewers that asked with `contextMenus: 1`. */
+export type BrowserScreencastContextMenuResult = { type: 'contextMenu' } & BrowserContextMenuTarget
+
+export type BrowserScreencastEndResult = { type: 'end'; subscriptionId: string }
+export type BrowserScreencastDialogResult = {
+  type: 'dialog'
+  dialogType: string
+  message: string
+  /** Older hosts omit these two; viewers then start a prompt empty and name no origin. */
+  defaultPromptText?: string
+  origin?: string | null
+}
+export type BrowserScreencastDialogClosedResult = { type: 'dialogClosed' }
+/** Sent only to viewers that asked with `pagePrompts: 1`; answered with browser.pagePromptAnswer. */
+export type BrowserScreencastPagePromptResult = {
+  type: 'pagePrompt'
+  request: BrowserPagePromptRequest<BrowserStreamedPagePromptKind>
+}
+/** Answered (here or by another viewer), timed out, or the page navigated away. */
+export type BrowserScreencastPagePromptClosedResult = {
+  type: 'pagePromptClosed'
+  requestId: string
+}
+/** The viewer's own input opened the page's file picker; answered with browser.fileChooserAnswer. */
+export type BrowserFileChooserRequest = { requestId: string; multiple: boolean }
+/** `failed`: the page's input was gone by the time the files arrived. */
+export type BrowserFileChooserAnswerResult = 'answered' | 'rejected' | 'failed'
+export type BrowserScreencastFileChooserResult = {
+  type: 'fileChooser'
+  request: BrowserFileChooserRequest
+}
+/** Sent only to viewers that asked with `agentCursor: 1`: where an agent's command moves or presses, in the page's CSS px. */
+export type BrowserScreencastAgentCursorResult = {
+  type: 'agentCursor'
+} & BrowserAgentPointerPoint
+/** Sent only to viewers that asked with `driverEvents: 1`, after `ready` and on each change; a phone driving it locks other viewers' input. */
+export type BrowserScreencastDriverResult = {
+  type: 'driver'
+  browserPageId: string
+  driver: RuntimeTerminalDriverState
+}
+/** Sent only to viewers that asked with `downloads: 1`: a page's download starting and ending, as a local window hears them. */
+export type BrowserScreencastDownloadResult =
+  | { type: 'downloadRequested'; download: BrowserDownloadRequestedEvent }
+  | {
+      type: 'downloadFinished'
+      download: BrowserDownloadFinishedEvent
+      // Only for a viewer that asked with `downloadCopyStreams: 1`: browser.downloadCopyStream sends the saved file once.
+      copyId?: string
+    }
+/** Sent only to a viewer that asked with `prints: 1`, when its own input made the page call print(); it reads the PDF printed then with browser.readPrintPdf. */
+export type BrowserScreencastPrintResult = { type: 'print'; printId: string; title: string }
+export type BrowserScreencastErrorResult = { type: 'error'; message: string }
+
+export type BrowserScreencastResult =
+  | BrowserScreencastReadyResult
+  | BrowserScreencastEndResult
+  | BrowserScreencastDialogResult
+  | BrowserScreencastDialogClosedResult
+  | BrowserScreencastPointerResult
+  | BrowserScreencastContextMenuResult
+  | BrowserScreencastPagePromptResult
+  | BrowserScreencastPagePromptClosedResult
+  | BrowserScreencastFileChooserResult
+  | BrowserScreencastAgentCursorResult
+  | BrowserScreencastDriverResult
+  | BrowserScreencastDownloadResult
+  | BrowserScreencastPrintResult
+  | BrowserScreencastErrorResult
+
+export type BrowserEvalResult = { result: string; origin: string }
+
+export type BrowserTabInfo = {
+  generation?: number
+  browserPageId: string
+  index: number
+  url: string
+  title: string
+  active: boolean
+  loadError?: BrowserLoadError | null
+  certificateFailure?: BrowserCertificateFailure | null
+  worktreeId?: string | null
+  profileId?: string | null
+  profileLabel?: string | null
+  /** Set on a popup window (OAuth, payment): the tab whose page opened it. */
+  openerBrowserPageId?: string
+  /** False for a restored tab whose page has not loaded; a command aimed at it loads it. */
+  loaded?: boolean
+}
+
+export type BrowserTabListResult = { tabs: BrowserTabInfo[] }
+export type BrowserTabSwitchResult = { switched: number; browserPageId: string }
+
+export type BrowserTabSetProfileResult = {
+  browserPageId: string
+  profileId: string | null
+  profileLabel: string | null
+}
+
+export type BrowserTabShowResult = { tab: BrowserTabInfo }
+/** The notes the user left on a tab's page and has not sent yet. */
+export type BrowserTabAnnotationsResult = {
+  tab: BrowserTabInfo
+  annotations: BrowserPageAnnotation[]
+}
+export type BrowserTabCurrentResult = { tab: BrowserTabInfo }
+
+export type BrowserTabProfileShowResult = {
+  browserPageId: string
+  worktreeId: string | null
+  profileId: string | null
+  profileLabel: string | null
+}
+
+export type BrowserTabProfileCloneResult = {
+  browserPageId: string
+  sourceBrowserPageId: string
+  profileId: string | null
+  profileLabel: string | null
+}
+
+export type BrowserProfileListResult = {
+  profiles: BrowserSessionProfile[]
+  executorRuntimeId?: string
+}
+export type BrowserProfileCreateResult = { profile: BrowserSessionProfile | null }
+export type BrowserProfileDeleteResult = { deleted: boolean; profileId: string }
+export type BrowserDetectedProfileInfo = { name: string; directory: string }
+
+export type BrowserDetectedInfo = {
+  family: BrowserSessionProfileSource['browserFamily']
+  label: string
+  profiles: BrowserDetectedProfileInfo[]
+  selectedProfile: string
+}
+
+export type BrowserDetectProfilesResult = { browsers: BrowserDetectedInfo[] }
+export type BrowserProfileImportFromBrowserResult = BrowserCookieImportResult & {
+  executorRuntimeId?: string
+}
+export type BrowserProfileClearDefaultCookiesResult = { cleared: boolean }
+export type BrowserHoverResult = { hovered: string }
+export type BrowserDragResult = { dragged: { from: string; to: string } }
+// Older hosts and server-hosted pages report only the count.
+export type BrowserUploadResult = { uploaded: number; frameUrl?: string }
+export type BrowserWaitResult = { waited: boolean }
+export type BrowserCheckResult = { checked: boolean }
+export type BrowserFocusResult = { focused: string }
+export type BrowserClearResult = { cleared: string }
+export type BrowserSelectAllResult = { selected: string }
+export type BrowserKeypressResult = { pressed: string }
+export type BrowserPdfResult = { data: string }
+/** One slice of a print handed to the viewer; the last slice releases it on the host. */
+export type BrowserReadPrintPdfResult = RuntimeFileReadChunkResult
+
+export type BrowserCookie = {
+  name: string
+  value: string
+  domain: string
+  path: string
+  expires: number
+  httpOnly: boolean
+  secure: boolean
+  sameSite: string
+}
+
+export type BrowserCookieGetResult = { cookies: BrowserCookie[] }
+export type BrowserCookieSetResult = { success: boolean }
+export type BrowserCookieDeleteResult = { deleted: boolean }
+
+export type BrowserViewportResult = {
+  width: number
+  height: number
+  deviceScaleFactor: number
+  mobile: boolean
+}
+
+export type BrowserGeolocationResult = {
+  latitude: number
+  longitude: number
+  accuracy: number
+}
+
+export type BrowserInterceptedRequest = {
+  id: string
+  url: string
+  method: string
+  headers: Record<string, string>
+  resourceType: string
+}
+
+export type BrowserInterceptEnableResult = { enabled: boolean; patterns: string[] }
+export type BrowserInterceptDisableResult = { disabled: boolean }
+
+export type BrowserConsoleEntry = {
+  level: string
+  text: string
+  timestamp?: number
+  url?: string
+  line?: number
+}
+
+export type BrowserConsoleResult = { entries: BrowserConsoleEntry[]; truncated: boolean }
+
+export type BrowserNetworkEntry = {
+  url: string
+  method: string
+  // Absent while a request is pending or after it failed.
+  status?: number
+  mimeType?: string
+  size?: number
+  timestamp?: number
+}
+
+export type BrowserNetworkLogResult = { entries: BrowserNetworkEntry[]; truncated: boolean }
+export type BrowserCaptureStartResult = { capturing: boolean }
+export type BrowserCaptureStopResult = { stopped: boolean }
+export type BrowserTabCreateResult = { browserPageId: string }
+
+export type BrowserErrorCode =
+  | typeof BROWSER_UNAVAILABLE_ERROR_CODE
+  | 'browser_command_unavailable'
+  | 'browser_profile_unavailable'
+  | 'browser_screencast_unavailable'
+  | 'browser_certificate_trust_unavailable'
+  | 'browser_no_tab'
+  | 'browser_tab_not_found'
+  | 'browser_tab_closed'
+  | 'browser_tab_changed'
+  | 'browser_owner_unavailable'
+  | 'browser_stale_ref'
+  | 'browser_ref_not_found'
+  | 'browser_navigation_failed'
+  | 'browser_element_not_interactable'
+  | 'browser_eval_error'
+  | 'browser_cdp_error'
+  | 'browser_debugger_detached'
+  | 'browser_timeout'
+  | 'browser_error'

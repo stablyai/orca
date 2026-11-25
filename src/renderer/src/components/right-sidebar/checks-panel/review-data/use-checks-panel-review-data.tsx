@@ -1,0 +1,247 @@
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { useCallback, useEffect, useState } from 'react'
+import { checksPanelAsyncResultKey } from '../refresh/checks-panel-async-result-key'
+import { loadGitLabJobLogDetails } from '@/runtime/repository-gitlab/gitlab-job-trace-client'
+import { checksPanelLoadErrorMessage } from './checks-panel-forge-owner'
+import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
+
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
+
+type ChecksPanelReviewDataInput = Pick<
+  ChecksPanelContextState,
+  'activeGitLabReview' | 'pr' | 'prCacheKey' | 'prNumber'
+> &
+  Pick<
+    ChecksPanelControllerState,
+    | 'branch'
+    | 'fetchPRCheckDetails'
+    | 'fetchPRComments'
+    | 'gitLabProjectRefRef'
+    | 'isPanelVisible'
+    | 'repo'
+    | 'activeWorktree'
+    | 'setComments'
+    | 'setCommentsError'
+    | 'setCommentsLoading'
+  > &
+  Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>
+
+export function useChecksPanelReviewData(model: ChecksPanelReviewDataInput) {
+  const {
+    activeGitLabReview,
+    branch,
+    fetchPRCheckDetails,
+    fetchPRComments,
+    gitLabProjectRefRef,
+    isCurrentAsyncResult,
+    isPanelVisible,
+    pr,
+    prCacheKey,
+    prNumber,
+    repo,
+    activeWorktree,
+    setComments,
+    setCommentsError,
+    setCommentsLoading
+  } = model
+  const fetchComments = useCallback(
+    async ({
+      force = false,
+      prNumberOverride,
+      prRepoOverride,
+      userRefresh = false
+    }: {
+      force?: boolean
+      prNumberOverride?: number | null
+      prRepoOverride?: PRInfo['prRepo'] | null
+      /** A follow-up to a write: it must not be answered by a read begun before the write. */
+      userRefresh?: boolean
+    } = {}) => {
+      const targetPRNumber = prNumberOverride ?? prNumber
+      const targetPRRepo = prRepoOverride ?? pr?.prRepo
+      if (!repo || !targetPRNumber) {
+        return
+      }
+      setCommentsLoading(true)
+      try {
+        const requestKey = checksPanelAsyncResultKey(
+          prCacheKey,
+          branch,
+          targetPRNumber,
+          targetPRRepo,
+          pr?.headSha
+        )
+        const result = await fetchPRComments(repo.path, targetPRNumber, {
+          force,
+          repoId: repo.id,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+          prRepo: targetPRRepo,
+          ...(userRefresh ? { userRefresh: true } : {})
+        })
+        if (!isCurrentAsyncResult(requestKey)) {
+          return
+        }
+        setComments(result)
+      } catch (err) {
+        if (
+          !isCurrentAsyncResult(
+            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, targetPRRepo, pr?.headSha)
+          )
+        ) {
+          return
+        }
+        console.warn('Failed to fetch PR comments:', err)
+        setComments(null)
+        setCommentsError(checksPanelLoadErrorMessage(err, getRepoExecutionHostId(repo)))
+      } finally {
+        if (
+          isCurrentAsyncResult(
+            checksPanelAsyncResultKey(prCacheKey, branch, targetPRNumber, targetPRRepo, pr?.headSha)
+          )
+        ) {
+          setCommentsLoading(false)
+        }
+      }
+    },
+    [
+      repo,
+      prNumber,
+      pr?.headSha,
+      pr?.prRepo,
+      prCacheKey,
+      fetchPRComments,
+      branch,
+      isCurrentAsyncResult,
+      setCommentsLoading,
+      setComments,
+      setCommentsError
+    ]
+  )
+
+  const handleLoadCheckDetails = useCallback(
+    (check: PRCheckDetail) => {
+      if (!repo) {
+        return Promise.resolve(null)
+      }
+      if (check.gitlabJobId) {
+        return loadGitLabJobLogDetails({
+          repoPath: repo.path,
+          repoId: repo.id,
+          repoOwnerExecutionHostId: forgeOwnerHostIdForWorkspace(repo, activeWorktree),
+          check,
+          projectRef: gitLabProjectRefRef.current
+        })
+      }
+      return fetchPRCheckDetails(
+        repo.path,
+        {
+          checkRunId: check.checkRunId,
+          workflowRunId: check.workflowRunId,
+          checkName: check.name,
+          url: check.url,
+          prRepo: pr?.prRepo ?? null
+        },
+        { repoId: repo.id, repoOwnerExecutionHostId: getRepoExecutionHostId(repo) }
+      )
+    },
+    [fetchPRCheckDetails, pr?.prRepo, repo, activeWorktree, gitLabProjectRefRef]
+  )
+
+  // GitHub comments reset only when the read below would read something else; each such change
+  // reruns that read, so a reset never outlives it. GitLab comments belong to the checks timer.
+  const commentsReadIdentity = activeGitLabReview
+    ? 'gitlab'
+    : JSON.stringify([
+        repo ? getRepoExecutionHostId(repo) : null,
+        checksPanelAsyncResultKey(prCacheKey, branch, prNumber, pr?.prRepo, pr?.headSha)
+      ])
+  const [readCommentsIdentity, setReadCommentsIdentity] = useState(commentsReadIdentity)
+  if (readCommentsIdentity !== commentsReadIdentity) {
+    setReadCommentsIdentity(commentsReadIdentity)
+    if (!activeGitLabReview) {
+      setComments(undefined)
+      setCommentsLoading(false)
+    }
+  }
+
+  // Read the ref at call time because async MR fetches can fill it after render.
+  const getGitLabProjectRef = useCallback(() => gitLabProjectRefRef.current, [gitLabProjectRefRef])
+
+  useEffect(() => {
+    if (activeGitLabReview) {
+      return
+    }
+    if (!repo || !prNumber) {
+      setComments(undefined)
+      return
+    }
+    if (!isPanelVisible) {
+      setCommentsLoading(false)
+      return
+    }
+    let cancelled = false
+    const requestKey = checksPanelAsyncResultKey(
+      prCacheKey,
+      branch,
+      prNumber,
+      pr?.prRepo,
+      pr?.headSha
+    )
+    setCommentsLoading(true)
+    void fetchPRComments(repo.path, prNumber, {
+      repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      prRepo: pr?.prRepo
+    }).then(
+      (result) => {
+        if (!cancelled && isCurrentAsyncResult(requestKey)) {
+          setComments(result)
+          setCommentsLoading(false)
+        }
+      },
+      () => {
+        if (!cancelled && isCurrentAsyncResult(requestKey)) {
+          setComments(null)
+          setCommentsLoading(false)
+        }
+      }
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeGitLabReview,
+    repo,
+    prNumber,
+    pr?.headSha,
+    pr?.prRepo,
+    prCacheKey,
+    branch,
+    isPanelVisible,
+    fetchPRComments,
+    isCurrentAsyncResult,
+    setComments,
+    setCommentsLoading
+  ])
+
+  useEffect(() => {
+    if (activeGitLabReview || !repo || !prNumber || !isPanelVisible) {
+      return undefined
+    }
+    return window.api.gh.onWorkItemMutated((payload) => {
+      const sameRepo =
+        payload.repoId != null ? payload.repoId === repo.id : payload.repoPath === repo.path
+      if (!sameRepo || payload.type !== 'pr' || payload.number !== prNumber) {
+        return
+      }
+      void fetchComments({ force: true, userRefresh: true })
+    })
+  }, [activeGitLabReview, fetchComments, isPanelVisible, prNumber, repo])
+  return { fetchComments, handleLoadCheckDetails, getGitLabProjectRef }
+}
+
+export type ChecksPanelReviewDataState = ReturnType<typeof useChecksPanelReviewData>

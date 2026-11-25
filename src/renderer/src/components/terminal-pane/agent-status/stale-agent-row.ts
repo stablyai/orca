@@ -1,0 +1,33 @@
+import { toast } from 'sonner'
+import { useAppStore } from '@/store/index'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { translate } from '@/i18n/i18n'
+
+export function dismissStaleAgentRowByKey(paneKey: string): void {
+  const store = useAppStore.getState()
+  const liveExisted = store.agentStatusByPaneKey.has(paneKey)
+  store.dropAgentStatus(paneKey, { paneRemoved: true })
+  if (liveExisted) {
+    showAgentPaneUnavailable(
+      translate(
+        'auto.components.terminal.pane.stale.agent.row.090d607412',
+        'stale-agent-row-{{value0}}',
+        { value0: paneKey }
+      )
+    )
+  }
+}
+
+export function showAgentPaneUnavailable(id?: string): void {
+  toast.info(
+    translate(
+      'auto.components.terminal.pane.stale.agent.row.ad991ece5c',
+      "Agent's pane is no longer available."
+    ),
+    id === undefined ? undefined : { id }
+  )
+}
+
+export function surfaceStaleAgentRow(tabId: string, leafId: string): void {
+  dismissStaleAgentRowByKey(makePaneKey(tabId, leafId))
+}

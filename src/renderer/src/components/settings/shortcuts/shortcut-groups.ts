@@ -1,0 +1,43 @@
+import {
+  KEYBINDING_DEFINITIONS,
+  agentTabActionId
+} from '../../../../../shared/keybindings/definitions'
+import type {
+  KeybindingActionId,
+  KeybindingDefinition
+} from '../../../../../shared/keybindings/types'
+import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { localizeKeybindingDefinition } from './keybinding-title-copy'
+
+export type ShortcutGroup = {
+  title: string
+  items: KeybindingDefinition[]
+}
+
+export const EMPTY_DISABLED_TUI_AGENTS: readonly TuiAgent[] = []
+
+export function disabledAgentTabActionIds(
+  disabledTuiAgents: readonly TuiAgent[]
+): KeybindingActionId[] {
+  return normalizeDisabledTuiAgents(disabledTuiAgents).map((agent) => agentTabActionId(agent))
+}
+
+export function groupDefinitions(
+  disabledTuiAgents: readonly TuiAgent[],
+  additionalDefinitions: readonly KeybindingDefinition[] = []
+): ShortcutGroup[] {
+  // Hide launch bindings for disabled agents because those chords cannot launch them.
+  const hiddenAgentActionIds = new Set<KeybindingActionId>(
+    disabledAgentTabActionIds(disabledTuiAgents)
+  )
+  const groups = new Map<string, KeybindingDefinition[]>()
+  for (const definition of [...KEYBINDING_DEFINITIONS, ...additionalDefinitions]) {
+    if (hiddenAgentActionIds.has(definition.id)) {
+      continue
+    }
+    const localized = localizeKeybindingDefinition(definition)
+    groups.set(localized.group, [...(groups.get(localized.group) ?? []), localized])
+  }
+  return Array.from(groups.entries()).map(([title, items]) => ({ title, items }))
+}

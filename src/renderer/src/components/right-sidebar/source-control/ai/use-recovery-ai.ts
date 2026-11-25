@@ -1,0 +1,154 @@
+import { useSourceControlScope } from '../panel/worktree-scope'
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import { useCallback, useMemo, useState } from 'react'
+import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import {
+  buildFixCommitFailurePrompt,
+  summarizeCommitFailure
+} from '../../../../../../shared/source-control/recovery/source-control-commit-failure'
+
+import {
+  getDefaultSourceControlRecoveryLaunchCopy,
+  launchSourceControlRecoveryAgentWithDefault
+} from './recovery-launch'
+import type { SourceControlAiStoreSnapshot } from './controller-types'
+
+type SourceControlRecoveryAiParams = {
+  activeWorktreeId: string | null | undefined
+  activeGroupId: string | null | undefined
+  activeSourceControlLaunchPlatform: NodeJS.Platform | undefined
+  sourceRepoConnectionId?: string | null
+  worktreePath: string | null
+  commitMessage: string
+  commitError: string | null
+  pushRecoveryPrompt: string | null
+  stagedEntries: Pick<GitStatusEntry, 'path' | 'status' | 'area'>[]
+  getLaunchActionRecipe: (
+    actionId: SourceControlLaunchActionId
+  ) => SelectedSourceControlActionRecipe
+  getStoreState: () => SourceControlAiStoreSnapshot
+}
+
+export function useSourceControlRecoveryAi({
+  activeWorktreeId,
+  activeGroupId,
+  activeSourceControlLaunchPlatform,
+  sourceRepoConnectionId,
+  worktreePath,
+  commitMessage,
+  commitError,
+  pushRecoveryPrompt,
+  stagedEntries,
+  getLaunchActionRecipe,
+  getStoreState
+}: SourceControlRecoveryAiParams) {
+  const scope = useSourceControlScope()
+  const [isLaunchingCommitFailureAgent, setIsLaunchingCommitFailureAgent] = useState(false)
+  const [isLaunchingPushFailureAgent, setIsLaunchingPushFailureAgent] = useState(false)
+
+  const commitFailureRecoveryPrompt = useMemo(
+    () =>
+      commitError
+        ? buildFixCommitFailurePrompt({
+            summary: summarizeCommitFailure(commitError),
+            error: commitError,
+            entries: stagedEntries,
+            worktreePath,
+            commitMessage
+          })
+        : null,
+    [commitError, commitMessage, stagedEntries, worktreePath]
+  )
+  const handleFixCommitFailureWithAI = useCallback(
+    async (promptOverride?: string): Promise<boolean> => {
+      if (isLaunchingCommitFailureAgent || !activeWorktreeId || !commitError) {
+        return false
+      }
+
+      setIsLaunchingCommitFailureAgent(true)
+      try {
+        return await launchSourceControlRecoveryAgentWithDefault({
+          activeWorktreeId,
+          placementWorkspaceId: scope?.placementWorkspaceId,
+          initialCwd: scope ? (worktreePath ?? undefined) : undefined,
+          executionHostId: scope?.executionHostId,
+          activeGroupId,
+          activeSourceControlLaunchPlatform,
+          sourceRepoConnectionId,
+          actionId: 'fixCommitFailure',
+          basePrompt: commitFailureRecoveryPrompt,
+          promptOverride,
+          getLaunchActionRecipe,
+          getStoreState,
+          copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+        })
+      } finally {
+        setIsLaunchingCommitFailureAgent(false)
+      }
+    },
+    [
+      scope,
+      worktreePath,
+      activeGroupId,
+      activeWorktreeId,
+      activeSourceControlLaunchPlatform,
+      commitError,
+      commitFailureRecoveryPrompt,
+      getLaunchActionRecipe,
+      getStoreState,
+      isLaunchingCommitFailureAgent,
+      sourceRepoConnectionId
+    ]
+  )
+
+  const handleFixPushFailureWithAI = useCallback(
+    async (promptOverride?: string): Promise<boolean> => {
+      if (isLaunchingPushFailureAgent || !activeWorktreeId || !pushRecoveryPrompt) {
+        return false
+      }
+
+      setIsLaunchingPushFailureAgent(true)
+      try {
+        return await launchSourceControlRecoveryAgentWithDefault({
+          activeWorktreeId,
+          placementWorkspaceId: scope?.placementWorkspaceId,
+          initialCwd: scope ? (worktreePath ?? undefined) : undefined,
+          executionHostId: scope?.executionHostId,
+          activeGroupId,
+          activeSourceControlLaunchPlatform,
+          sourceRepoConnectionId,
+          actionId: 'fixPushFailure',
+          basePrompt: pushRecoveryPrompt,
+          promptOverride,
+          getLaunchActionRecipe,
+          getStoreState,
+          copy: getDefaultSourceControlRecoveryLaunchCopy('push')
+        })
+      } finally {
+        setIsLaunchingPushFailureAgent(false)
+      }
+    },
+    [
+      scope,
+      worktreePath,
+      activeGroupId,
+      activeWorktreeId,
+      activeSourceControlLaunchPlatform,
+      getLaunchActionRecipe,
+      getStoreState,
+      isLaunchingPushFailureAgent,
+      pushRecoveryPrompt,
+      sourceRepoConnectionId
+    ]
+  )
+
+  return {
+    isLaunchingCommitFailureAgent,
+    isLaunchingPushFailureAgent,
+    commitFailureRecoveryPrompt,
+    pushFailureRecoveryPrompt: pushRecoveryPrompt,
+    handleFixCommitFailureWithAI,
+    handleFixPushFailureWithAI
+  }
+}

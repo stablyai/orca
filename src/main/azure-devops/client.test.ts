@@ -1,179 +1,237 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getAzureDevOpsAuthStatus,
-  getAzureDevOpsPullRequestForBranch,
-  normalizeAzureDevOpsApiBaseUrl
-} from './client'
-import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
+import type { RawAzureDevOpsPullRequest } from './pull-request-mappers'
 
-const gitExecFileAsyncMock = vi.hoisted(() => vi.fn())
-
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock
+const { requestJson, readHead, headIsEquivalent } = vi.hoisted(() => ({
+  requestJson: vi.fn(),
+  readHead: vi.fn(),
+  headIsEquivalent: vi.fn()
 }))
 
-const OLD_ENV = process.env
-const OLD_FETCH = globalThis.fetch
+vi.mock('./azure-devops-api-request', () => ({
+  azureDevOpsTokenConfigured: () => true,
+  getAzureDevOpsAuthConfig: () => ({}),
+  normalizeAzureDevOpsApiBaseUrl: (value: string) => value,
+  requestAzureDevOpsJson: requestJson,
+  requestAzureDevOpsJsonAtBase: vi.fn()
+}))
+vi.mock('./repository-ref', () => ({
+  getAzureDevOpsRepoRef: async () => ({
+    host: 'dev.azure.com',
+    project: 'proj',
+    repository: 'repo',
+    apiBaseUrl: 'https://dev.azure.com/org/proj',
+    webBaseUrl: 'https://dev.azure.com/org/proj/_git/repo'
+  })
+}))
+vi.mock('../source-control/repo-default-branch', () => ({
+  shouldHideNonOpenReviewOnDefaultBranch: async () => false
+}))
+vi.mock('../source-control/review-current-head', () => ({ readCurrentReviewHead: readHead }))
+vi.mock('../source-control/merged-review-head-equivalence', () => ({
+  mergedReviewHeadIsEquivalent: headIsEquivalent
+}))
 
-describe('Azure DevOps client', () => {
+import { getAzureDevOpsPullRequestForBranch } from './client'
+
+function pr(id: number, status: string, head: string): RawAzureDevOpsPullRequest {
+  return {
+    pullRequestId: id,
+    title: `PR ${id}`,
+    status,
+    creationDate: new Date(Date.UTC(2026, 0, id)).toISOString(),
+    lastMergeSourceCommit: { commitId: head }
+  }
+}
+
+function serve(
+  pages: Record<string, RawAzureDevOpsPullRequest[]>,
+  commits: string[] = []
+): string[] {
+  const listStatuses: string[] = []
+  requestJson.mockImplementation(async (_repo, path: string, options) => {
+    if (path.endsWith('/pullRequests')) {
+      const status = options.searchParams['searchCriteria.status']
+      listStatuses.push(status)
+      return { value: pages[status] ?? [] }
+    }
+    if (path.endsWith('/commits')) {
+      return { value: commits.map((commitId) => ({ commitId })) }
+    }
+    return path.endsWith('/statuses') ? [] : { id: 'repo-id' }
+  })
+  return listStatuses
+}
+
+describe('getAzureDevOpsPullRequestForBranch', () => {
   beforeEach(() => {
-    process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
-    gitExecFileAsyncMock.mockReset()
-    _resetAzureDevOpsRepoRefCache()
+    requestJson.mockReset()
+    readHead.mockReset()
+    headIsEquivalent.mockReset()
+    headIsEquivalent.mockResolvedValue(false)
   })
-
   afterEach(() => {
-    process.env = OLD_ENV
-    globalThis.fetch = OLD_FETCH
-    _resetAzureDevOpsRepoRefCache()
+    vi.useRealTimers()
   })
 
-  it('normalizes configured API base URLs', () => {
-    expect(normalizeAzureDevOpsApiBaseUrl('https://dev.azure.com/acme/Project/_apis/')).toBe(
-      'https://dev.azure.com/acme/Project'
+  it('treats a completed PR as the branch review only while its head is the checkout HEAD', async () => {
+    serve({ all: [pr(1, 'completed', 'old-head')] })
+    await expect(
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', null, null, {
+        currentHeadOid: 'new-head'
+      })
+    ).resolves.toBeNull()
+
+    readHead.mockResolvedValue('old-head')
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 1,
+      state: 'merged'
+    })
+  })
+
+  it('keeps a completed PR when HEAD is an earlier commit of it or the PR is linked', async () => {
+    serve({ all: [pr(3, 'completed', 'final-head')] }, ['earlier-head', 'final-head'])
+    const lookup = (currentHeadOid: string, linked: number | null = null) =>
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', linked, null, { currentHeadOid })
+    await expect(lookup('earlier-head')).resolves.toMatchObject({ number: 3, state: 'merged' })
+    await expect(lookup('unrelated-head')).resolves.toBeNull()
+    await expect(lookup('unrelated-head', 3)).resolves.toMatchObject({ number: 3 })
+  })
+
+  it('keeps a completed PR when HEAD is an equivalent local rebase of it', async () => {
+    serve({ all: [{ ...pr(6, 'completed', 'final-head'), targetRefName: 'refs/heads/main' }] }, [
+      'final-head'
+    ])
+    const lookup = (userRefresh = false) =>
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', null, null, {
+        currentHeadOid: 'rebased-head',
+        userRefresh
+      })
+    await expect(lookup()).resolves.toBeNull()
+    headIsEquivalent.mockResolvedValue(true)
+    await expect(lookup(true)).resolves.toMatchObject({ number: 6, state: 'merged' })
+    expect(headIsEquivalent).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        repoPath: '/repo',
+        reviewHeadOid: 'final-head',
+        baseBranchName: 'main',
+        headOid: 'rebased-head'
+      })
     )
   })
 
-  it('marks token-only auth as configured but unverified because repository remotes supply the API base URL', async () => {
-    delete process.env.ORCA_AZURE_DEVOPS_API_BASE_URL
-    await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
-      configured: true,
-      authenticated: false,
-      account: null,
-      baseUrl: null,
-      tokenConfigured: true
+  it('reuses the rebase proof until the PR head, HEAD or target changes, the TTL ends or the user refreshes', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const completed = (head: string, target: string) => ({
+      ...pr(7, 'completed', head),
+      targetRefName: `refs/heads/${target}`
     })
-  })
-
-  it('resolves a PR for a branch through repository, PR, and status REST calls', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
-    })
-    const requests: { pathname: string; search: string; authorization: string | null }[] = []
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      requests.push({
-        pathname: url.pathname,
-        search: url.search,
-        authorization: null
+    const pages = { all: [completed('memo-head', 'main')] }
+    serve(pages, ['memo-head'])
+    headIsEquivalent.mockResolvedValue(true)
+    const lookup = (currentHeadOid: string, userRefresh = false) =>
+      getAzureDevOpsPullRequestForBranch('/repo', 'feature/x', null, null, {
+        currentHeadOid,
+        userRefresh
       })
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
-
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({
-          id: 'repo-guid',
-          webUrl: 'https://dev.azure.com/acme/Project/_git/repo'
-        })
-      }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        expect(url.searchParams.get('searchCriteria.sourceRefName')).toBe(
-          'refs/heads/feature/azure'
-        )
-        expect(url.searchParams.get('searchCriteria.status')).toBe('all')
-        return response({
-          value: [
-            {
-              pullRequestId: 17,
-              title: 'Old Azure PR',
-              status: 'completed',
-              creationDate: '2026-05-10T00:00:00Z',
-              lastMergeSourceCommit: { commitId: 'oldsha' }
-            },
-            {
-              pullRequestId: 18,
-              title: 'Azure branch',
-              status: 'active',
-              creationDate: '2026-05-11T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'abc123' }
-            }
-          ]
-        })
-      }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/18/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
-      }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
-    ).resolves.toEqual({
-      number: 18,
-      title: 'Azure branch',
-      state: 'open',
-      url: 'https://dev.azure.com/acme/Project/_git/repo/pullrequest/18',
-      status: 'success',
-      updatedAt: '2026-05-11T00:00:00Z',
-      mergeable: 'MERGEABLE',
-      headSha: 'abc123'
-    })
-    expect(requests.map((request) => request.pathname)).toEqual([
-      '/acme/Project/_apis/git/repositories/repo',
-      '/acme/Project/_apis/git/repositories/repo-guid/pullRequests',
-      '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/18/statuses'
-    ])
+    await expect(lookup('rebased-a')).resolves.toMatchObject({ number: 7, state: 'merged' })
+    await expect(lookup('rebased-a')).resolves.toMatchObject({ number: 7, state: 'merged' })
+    expect(headIsEquivalent).toHaveBeenCalledTimes(1)
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(2)
+    pages.all = [completed('memo-head-2', 'main')]
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(3)
+    pages.all = [completed('memo-head-2', 'release')]
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(4)
+    await lookup('rebased-b', true)
+    expect(headIsEquivalent).toHaveBeenCalledTimes(5)
+    vi.setSystemTime(Date.now() + 6 * 60 * 60_000 - 60_000)
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(5)
+    vi.setSystemTime(Date.now() + 60_000)
+    await lookup('rebased-b')
+    expect(headIsEquivalent).toHaveBeenCalledTimes(6)
   })
 
-  it('uses the most recent branch PR instead of preferring stale active PRs', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({
-      stdout: 'https://dev.azure.com/acme/Project/_git/repo\n'
+  it('keeps a completed PR when the checkout HEAD cannot be read', async () => {
+    const requests = serve({ all: [pr(8, 'completed', 'final-head')] })
+    readHead.mockResolvedValue(null)
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 8,
+      state: 'merged'
     })
-    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
-      const url = new URL(String(input))
-      const response = (body: unknown): Response =>
-        new Response(JSON.stringify(body), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' }
-        })
+    expect(requests).toEqual(['all'])
+    expect(requestJson).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringMatching(/\/commits$/),
+      expect.anything(),
+      expect.anything()
+    )
+    expect(headIsEquivalent).not.toHaveBeenCalled()
+  })
 
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo') {
-        return response({ id: 'repo-guid' })
+  it('pages PR commits, treats the page cap as proof only, and keeps the PR when commits are unreadable', async () => {
+    let completed = pr(4, 'completed', 'final-head')
+    const commitsPages: (string | undefined)[] = []
+    requestJson.mockImplementation(async (_repo, path: string, options) => {
+      if (path.endsWith('/pullRequests')) {
+        return { value: [completed] }
       }
-      if (url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests') {
-        return response({
-          value: [
-            {
-              pullRequestId: 20,
-              title: 'Stale active PR',
-              status: 'active',
-              creationDate: '2026-05-10T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'oldsha' }
-            },
-            {
-              pullRequestId: 21,
-              title: 'Latest completed PR',
-              status: 'completed',
-              creationDate: '2026-05-15T00:00:00Z',
-              closedDate: '2026-05-16T00:00:00Z',
-              mergeStatus: 'succeeded',
-              lastMergeSourceCommit: { commitId: 'newsha' }
-            }
-          ]
-        })
+      if (!path.endsWith('/commits')) {
+        return path.endsWith('/statuses') ? [] : { id: 'repo-id' }
       }
-      if (
-        url.pathname === '/acme/Project/_apis/git/repositories/repo-guid/pullRequests/21/statuses'
-      ) {
-        return response({ value: [{ state: 'succeeded' }] })
+      const token = options.searchParams.continuationToken
+      commitsPages.push(token)
+      if (path.includes('/5/')) {
+        throw new Error('commits unavailable')
       }
-      return new Response(JSON.stringify({ message: 'not found' }), { status: 404 })
-    }) as never
-
-    await expect(
-      getAzureDevOpsPullRequestForBranch('/repo', 'refs/heads/feature/azure')
-    ).resolves.toMatchObject({
-      number: 21,
-      title: 'Latest completed PR',
-      state: 'merged',
-      headSha: 'newsha'
+      const page = Number(token ?? 0)
+      options.onResponse(
+        new Response(null, { headers: { 'x-ms-continuationtoken': `${page + 1}` } })
+      )
+      return { value: [{ commitId: `commit-${page}` }] }
     })
+    const lookup = (currentHeadOid: string, throwOnFailure = false, userRefresh = false) =>
+      getAzureDevOpsPullRequestForBranch(
+        '/repo',
+        'feature/x',
+        null,
+        null,
+        { currentHeadOid, userRefresh },
+        throwOnFailure
+      )
+    await expect(lookup('commit-9')).resolves.toMatchObject({ number: 4, state: 'merged' })
+    expect(commitsPages).toEqual([undefined, '1', '2', '3', '4', '5', '6', '7', '8', '9'])
+    await expect(lookup('commit-10')).resolves.toBeNull()
+    expect(commitsPages).toHaveLength(10)
+
+    completed = pr(5, 'completed', 'final-head')
+    const merged = { number: 5, state: 'merged' }
+    await expect(lookup('earlier-head')).resolves.toMatchObject(merged)
+    commitsPages.length = 0
+    await expect(lookup('earlier-head', true)).resolves.toMatchObject(merged)
+    expect(commitsPages).toEqual([])
+    await expect(lookup('earlier-head', true, true)).resolves.toMatchObject(merged)
+    expect(commitsPages).toEqual([undefined])
+    expect(headIsEquivalent).not.toHaveBeenCalledWith(
+      expect.objectContaining({ reviewHeadOid: 'final-head', headOid: 'earlier-head' })
+    )
+  })
+
+  it('prefers the active PR and asks for it separately only when the recent page is full', async () => {
+    const recent = serve({ all: [pr(2, 'completed', 'head'), pr(1, 'active', 'head')] })
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 1
+    })
+    expect(recent).toEqual(['all'])
+
+    const completed = Array.from({ length: 10 }, (_, index) => pr(index + 2, 'completed', 'head'))
+    const full = serve({ all: completed, active: [pr(1, 'active', 'head')] })
+    await expect(getAzureDevOpsPullRequestForBranch('/repo', 'feature/x')).resolves.toMatchObject({
+      number: 1,
+      state: 'open'
+    })
+    expect(full).toEqual(['all', 'active'])
   })
 })

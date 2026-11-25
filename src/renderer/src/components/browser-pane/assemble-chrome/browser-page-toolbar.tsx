@@ -1,0 +1,284 @@
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
+import { useLocalBrowserPageSiteDisplaySource } from './toolbar/browser-page-site-display-source'
+import { applyBrowserViewportPreset } from './viewport/browser-viewport-preset-apply'
+import type { Dispatch, RefObject, SetStateAction } from 'react'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import { useAppStore } from '@/store/index'
+import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
+import BrowserAddressBar from './address-bar/BrowserAddressBar'
+import { BrowserChromeToolbar } from './toolbar/browser-chrome-toolbar'
+import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
+import { BrowserReloadControl } from './toolbar/browser-reload-control'
+import { BrowserToolbarMenu } from './toolbar/BrowserToolbarMenu'
+import {
+  BrowserExtensionToolbar,
+  BrowserExtensionsMenuSub
+} from './extensions/browser-extension-toolbar'
+import {
+  BrowserOpenSourceFileButton,
+  BrowserPageStateChips
+} from './address-bar/browser-address-chips'
+import { useBrowserExtensionToolbar } from './extensions/use-browser-extension-toolbar'
+import { useBrowserExtensionsTour } from './extensions/use-browser-extensions-tour'
+import { SshEgressIndicator } from './feedback/browser-egress-indicator'
+import {
+  getShareableBrowserArtifactFile,
+  readBrowserHtmlArtifactRequest
+} from '../describe-page/browser-artifact-upload'
+import {
+  canOpenBrowserFileInWorkspaceEditor,
+  openBrowserFileSource
+} from '../navigate/browser-file-editor-open'
+import type {
+  BrowserPageConversionOrigin,
+  BrowserViewportPresetId
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import {
+  advanceAcrossBrowserPageConversion,
+  returnAcrossBrowserPageConversion
+} from '@/lib/browser/history/browser-page-conversion-history'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import type {
+  BrowserChromeElementTools,
+  BrowserChromeNoteActions
+} from './toolbar/browser-annotate-tool-button'
+
+/** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
+export function BrowserPageToolbar({
+  browserPageId,
+  workspaceId,
+  worktreeId,
+  sessionProfileId,
+  viewportPresetId,
+  isActive,
+  canGoBack,
+  canGoForward,
+  convertedFrom,
+  convertedTo,
+  loading,
+  loadFailed,
+  webviewRef,
+  reloadMenuOpen,
+  setReloadMenuOpen,
+  reloadButtonLabel,
+  reloadButtonLabelKind,
+  reloadShortcut,
+  hardReloadShortcut,
+  runReloadTrigger,
+  addressBarValue,
+  setAddressBarValue,
+  submitAddressBar,
+  navigateToUrl,
+  addressBarInputRef,
+  dismissAddressBarSuggestionsRef,
+  elementTools,
+  grabIdle,
+  isBlankTab,
+  markupIsActive,
+  markupStart,
+  markupCancel,
+  notes,
+  onOpenFind,
+  shareableArtifactFile,
+  currentBrowserUrl,
+  onOpenExternal
+}: {
+  browserPageId: string
+  workspaceId: string
+  worktreeId: string
+  sessionProfileId: string | null
+  viewportPresetId: BrowserViewportPresetId | null
+  isActive: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  /** Set on a page the address bar converted; Back returns across it once guest history runs out. */
+  convertedFrom?: BrowserPageConversionOrigin | null
+  /** Set on a page Back returned to; Forward re-crosses it once guest history runs out. */
+  convertedTo?: BrowserPageConversionOrigin | null
+  loading: boolean
+  loadFailed: boolean
+  webviewRef: RefObject<Electron.WebviewTag | null>
+  reloadMenuOpen: boolean
+  setReloadMenuOpen: Dispatch<SetStateAction<boolean>>
+  reloadButtonLabel: string
+  reloadButtonLabelKind: 'stop' | 'retry' | 'reload'
+  reloadShortcut: string
+  hardReloadShortcut: string
+  runReloadTrigger: (trigger: BrowserReloadTrigger) => void
+  addressBarValue: string
+  setAddressBarValue: Dispatch<SetStateAction<string>>
+  submitAddressBar: () => void
+  navigateToUrl: (url: string) => void
+  addressBarInputRef: RefObject<HTMLInputElement | null>
+  dismissAddressBarSuggestionsRef: RefObject<(() => void) | null>
+  elementTools: BrowserChromeElementTools
+  grabIdle: boolean
+  isBlankTab: boolean
+  markupIsActive: boolean
+  markupStart: () => Promise<void>
+  markupCancel: () => void
+  notes: BrowserChromeNoteActions
+  onOpenFind: () => void
+  shareableArtifactFile: { filePath: string } | null
+  currentBrowserUrl: string
+  onOpenExternal: (() => void) | null
+}): React.JSX.Element {
+  const siteDisplaySource = useLocalBrowserPageSiteDisplaySource(browserPageId)
+  const applyViewportPreset = (nextId: BrowserViewportPresetId | null): void =>
+    applyBrowserViewportPreset(browserPageId, nextId)
+  const localHtmlFilePath = getShareableBrowserArtifactFile(currentBrowserUrl)?.filePath ?? null
+  // Why the URL check first: every other page skips the workspace-owner lookup on each store write.
+  const canOpenSourceFile = useAppStore(
+    (state) => localHtmlFilePath !== null && canOpenBrowserFileInWorkspaceEditor(state, worktreeId)
+  )
+  const openSourceFile =
+    canOpenSourceFile && localHtmlFilePath !== null
+      ? () => openBrowserFileSource(worktreeId, localHtmlFilePath)
+      : null
+  const extensionToolbar = useBrowserExtensionToolbar(
+    browserPageId,
+    isActive,
+    `${currentBrowserUrl}\n${loading}`
+  )
+  const extensionDiscoveryTarget = useAppStore(
+    (state) =>
+      isActive && state.activeTabType === 'browser' && state.activeBrowserTabId === workspaceId
+  )
+  useBrowserExtensionsTour(extensionDiscoveryTarget, extensionToolbar !== null)
+
+  return (
+    <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
+      showTourAnchors
+      controls={{
+        canGoBack: canGoBack || Boolean(convertedFrom),
+        canGoForward: canGoForward || Boolean(convertedTo),
+        // Guest replacement loses history; Back/Forward cross the conversion once guest history runs out.
+        goBack: () => {
+          if (canGoBack) {
+            issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goBack())
+            return
+          }
+          if (convertedFrom) {
+            returnAcrossBrowserPageConversion(browserPageId, convertedFrom)
+          }
+        },
+        goForward: () => {
+          if (canGoForward) {
+            issueBrowserGuestNavigation(webviewRef.current, (webview) => webview.goForward())
+            return
+          }
+          if (convertedTo) {
+            advanceAcrossBrowserPageConversion(browserPageId, convertedTo)
+          }
+        },
+        reload: () => runReloadTrigger('button'),
+        navigate: navigateToUrl
+      }}
+      addressSlot={
+        <BrowserAddressBar
+          pageId={browserPageId}
+          value={addressBarValue}
+          onChange={setAddressBarValue}
+          onSubmit={submitAddressBar}
+          onNavigate={navigateToUrl}
+          onOpenWorkspaceDoc={(docLocation) =>
+            convertBrowserPageToWorkspaceDoc(browserPageId, docLocation)
+          }
+          inputRef={addressBarInputRef}
+          dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
+          leadingIcon={<SshEgressIndicator worktreeId={worktreeId} />}
+          trailing={
+            <>
+              <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
+              <BrowserPageStateChips
+                browserPageId={browserPageId}
+                siteDisplaySource={siteDisplaySource}
+                url={currentBrowserUrl}
+                viewportPresetId={viewportPresetId}
+                onApplyViewportPreset={applyViewportPreset}
+                isActive={isActive}
+              />
+              {openSourceFile ? <BrowserOpenSourceFileButton onOpen={openSourceFile} /> : null}
+              {shareableArtifactFile ? (
+                <ArtifactPublishButton
+                  sourceKey={shareableArtifactFile.filePath}
+                  size="icon-xs"
+                  variant="muted-field-icon"
+                  createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
+                />
+              ) : null}
+            </>
+          }
+          loading={loading}
+          loadFailed={loadFailed}
+        />
+      }
+      reloadControl={
+        <BrowserReloadControl
+          menuOpen={reloadMenuOpen}
+          onMenuOpenChange={setReloadMenuOpen}
+          label={reloadButtonLabel}
+          showStop={reloadButtonLabelKind === 'stop'}
+          showShortcutHint={reloadButtonLabelKind === 'reload'}
+          reloadShortcut={reloadShortcut}
+          hardReloadShortcut={hardReloadShortcut}
+          onPrimary={() => runReloadTrigger('button')}
+          onReload={() => runReloadTrigger('reload')}
+          onHardReload={() => runReloadTrigger('hard-reload')}
+        />
+      }
+      extensionActions={
+        extensionToolbar &&
+        ((compact, menuTriggerRef) => (
+          <BrowserExtensionToolbar
+            browserPageId={browserPageId}
+            state={extensionToolbar}
+            compact={compact}
+            fallbackAnchorRef={menuTriggerRef}
+          />
+        ))
+      }
+      elementTools={elementTools}
+      markup={{
+        active: markupIsActive,
+        disabled: isBlankTab || !grabIdle,
+        onToggle: () => (markupIsActive ? markupCancel() : void markupStart()),
+        canShowDiscoveryHint: isActive
+      }}
+      notes={notes}
+      overflowMenu={(overflow) => (
+        <BrowserToolbarMenu
+          extensionDiscoveryTarget={extensionDiscoveryTarget}
+          currentProfileId={sessionProfileId}
+          workspaceId={workspaceId}
+          worktreeId={worktreeId}
+          browserPageId={browserPageId}
+          viewportPresetId={viewportPresetId}
+          onApplyViewportPreset={applyViewportPreset}
+          siteDisplaySource={siteDisplaySource}
+          isActive={isActive}
+          isBlankTab={isBlankTab}
+          pageActions={{
+            onFind: onOpenFind,
+            onHardReload: () => runReloadTrigger('hard-reload'),
+            onOpenDevTools: () => void window.api.browser.openDevTools({ browserPageId }),
+            onOpenExternal
+          }}
+          extensionsSub={
+            extensionToolbar ? (
+              <BrowserExtensionsMenuSub
+                browserPageId={browserPageId}
+                state={extensionToolbar}
+                anchorRef={overflow.triggerRef}
+                deferUntilClose={overflow.deferUntilClose}
+              />
+            ) : null
+          }
+          overflow={overflow}
+        />
+      )}
+    />
+  )
+}

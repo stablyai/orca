@@ -1,0 +1,197 @@
+import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
+import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
+import { commitTmuxSelectedStatus } from '../../../shared/agent-hook-listener/presence/tmux-selected-status'
+import {
+  serializeAgentStatusSubject,
+  type AgentStatusPtySubject,
+  type AgentStatusSubject
+} from '../../../shared/agent-status/contracts/agent-status-subject'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { structuredStatusLegacyEvent } from './server-structured-status-row'
+import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
+import { tmuxCliWriterEvent } from './cli-writer-observation'
+import { agentSightingOf } from '../identity/pane-agent-identities'
+
+export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeBinder {
+  /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
+  protected readHookRootEvidence: HookRootEvidenceReader | undefined
+
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
+    this.readHookRootEvidence = reader
+  }
+
+  private tmuxOwner: TmuxAgentHookOwner | undefined
+  private tmuxRootResolver: (paneKey: string) => Promise<TmuxManagedPty | null> = async () => null
+
+  setTmuxManagedPtyResolver(resolver: (paneKey: string) => Promise<TmuxManagedPty | null>): void {
+    this.tmuxRootResolver = resolver
+  }
+
+  private get owner(): TmuxAgentHookOwner {
+    this.tmuxOwner ??= new TmuxAgentHookOwner({
+      store: () => this.canonicalStatusStore,
+      getRoot: (paneKey) => this.tmuxRootResolver(paneKey),
+      isRetired: (paneKey) => this.getAgentStatusDisposition(paneKey) === 'suppress',
+      publish: (event, observedAt, subject, stateStartedAt) =>
+        this.publishTmuxSelectedStatus(event, observedAt, subject, stateStartedAt),
+      unavailable: (paneKey, subject) => {
+        if (this.getAgentStatusDisposition(paneKey) === 'suppress') {
+          return
+        }
+        if (subject && !this.canonicalSubjectsByPane.has(paneKey)) {
+          this.canonicalSubjectsByPane.set(
+            paneKey,
+            new Map([[serializeAgentStatusSubject(subject), subject]])
+          )
+          this.canonicalStatusStore.applyMutation({ parent: { subject } })
+        }
+        this.clearTmuxSelectedStatus(paneKey, true)
+        this.clearPaneState(paneKey, { preserveTmuxInnerSubjects: true, statusUnavailable: true })
+      }
+    })
+    return this.tmuxOwner
+  }
+
+  /** Commits the attachment's selected terminal status and publishes it like a hook row. */
+  protected publishTmuxSelectedStatus(
+    event: AgentHookEventPayload,
+    observedAt: number,
+    subject: AgentStatusPtySubject,
+    stateStartedAt: number | undefined
+  ): void {
+    if (this.getAgentStatusDisposition(event.paneKey, event) === 'suppress') {
+      return
+    }
+    this.clearPaneState(event.paneKey, { preserveTmuxInnerSubjects: true })
+    const previous = this.canonicalStatusStore.getParent(subject)?.status
+    const status = commitTmuxSelectedStatus(
+      this.canonicalStatusStore,
+      subject,
+      event,
+      observedAt,
+      stateStartedAt
+    )
+    if (!status) {
+      return
+    }
+    const key = serializeAgentStatusSubject(subject)
+    const subjects =
+      this.canonicalSubjectsByPane.get(event.paneKey) ?? new Map<string, AgentStatusSubject>()
+    subjects.set(key, subject)
+    this.canonicalSubjectsByPane.set(event.paneKey, subjects)
+    if (!this.canonicalListingOrder.has(key)) {
+      this.canonicalListingOrder.set(key, this.nextStatusListingOrder())
+    }
+    const committed = structuredStatusLegacyEvent(status)
+    // A tmux-selected terminal agent is named at commit, like a legacy row at admission.
+    const agentIdentity = this.agentIdentities.assignCanonical(
+      key,
+      event.paneKey,
+      agentSightingOf(committed)
+    )
+    const after = {
+      ...committed,
+      ...(agentIdentity ? { agentIdentity } : {}),
+      source: event.source,
+      hookEventName: event.hookEventName,
+      hasExplicitPrompt: event.hasExplicitPrompt,
+      launchToken: event.launchToken,
+      promptInteractionKey: event.promptInteractionKey
+    }
+    this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
+    this.recordCurrentAuthorityObservation(after)
+    this.notifyStatusChangeListeners()
+    this.emitEnrichedStatus(tmuxCliWriterEvent(after))
+  }
+
+  protected ingestTmuxHook(source: AgentHookSource, body: unknown): Promise<boolean> {
+    return this.owner.ingest(source, body, this.env)
+  }
+
+  protected clearTmuxInnerSubjects(paneKey: string): void {
+    this.tmuxOwner?.clearPane(paneKey)
+    this.clearTmuxSelectedStatus(paneKey)
+  }
+
+  protected clearTmuxTabSubjects(tabId: string): void {
+    this.tmuxOwner?.clearTab(tabId)
+    for (const paneKey of this.canonicalSubjectsByPane.keys()) {
+      if (paneKey.startsWith(`${tabId}:`)) {
+        this.clearTmuxSelectedStatus(paneKey)
+      }
+    }
+  }
+
+  protected getTmuxSelectedStatus(paneKey: string) {
+    for (const [key, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
+      if (subject.kind !== 'pty') {
+        continue
+      }
+      const status = this.canonicalStatusStore.getParent(subject)?.status
+      if (status) {
+        const agentIdentity = this.agentIdentities.canonicalIdentity(key)
+        const row = structuredStatusLegacyEvent(status)
+        return agentIdentity ? { ...row, agentIdentity } : row
+      }
+    }
+    return undefined
+  }
+
+  protected deleteTmuxSelectedStatus(paneKey: string) {
+    const previous = this.getTmuxSelectedStatus(paneKey)
+    if (!previous) {
+      return undefined
+    }
+    for (const [key, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
+      if (subject.kind === 'pty') {
+        this.canonicalStatusStore.applyMutation({ parent: { subject } })
+        this.agentIdentities.dropCanonical(key)
+      }
+    }
+    return previous
+  }
+
+  private clearTmuxSelectedStatus(paneKey: string, unavailable = false): void {
+    const subjects = this.canonicalSubjectsByPane.get(paneKey)
+    let changed = false
+    for (const [key, subject] of subjects ?? []) {
+      if (subject.kind !== 'pty') {
+        continue
+      }
+      const previous = this.canonicalStatusStore.getParent(subject)?.status
+      if (
+        !this.canonicalStatusStore.applyMutation(
+          unavailable ? { parent: { subject } } : { removeParent: subject }
+        )
+      ) {
+        continue
+      }
+      this.agentIdentities.dropCanonical(key)
+      if (!unavailable) {
+        subjects?.delete(key)
+        this.canonicalListingOrder.delete(key)
+      }
+      if (previous) {
+        this.commitStatusRowMutation(structuredStatusLegacyEvent(previous), undefined)
+      }
+      changed = true
+    }
+    if (subjects?.size === 0) {
+      this.canonicalSubjectsByPane.delete(paneKey)
+    }
+    if (changed) {
+      this.notifyStatusChangeListeners()
+      this.emitPaneStatusCleared({
+        paneKey,
+        ...(unavailable ? { statusUnavailable: true as const } : {})
+      })
+    }
+  }
+
+  protected stopTmuxStatus(): void {
+    this.tmuxOwner?.stop()
+    this.tmuxOwner = undefined
+  }
+}

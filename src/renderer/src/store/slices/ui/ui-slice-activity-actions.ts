@@ -1,0 +1,179 @@
+import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
+import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
+import { linkRecordWrite } from '@/store/record-transitions/keyed-record-transitions'
+import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
+import {
+  collectAcknowledgedAgentNotificationId,
+  latestAgentTurnTimestamp,
+  resolvePaneKeyWorktreeIdFromTabs,
+  usableTimestamp
+} from './ui-slice-agent-notification-acknowledgement'
+
+type ActivityActions = Pick<
+  UISlice,
+  | 'acknowledgedAgentsByPaneKey'
+  | 'acknowledgeAgents'
+  | 'unacknowledgeAgents'
+  | 'activityClearedAtByPaneKey'
+  | 'applyActivityClearedAt'
+  | 'manuallyUnreadTurnsByPaneKey'
+  | 'clearManuallyUnreadTurns'
+>
+
+const ACKNOWLEDGEMENT_REFRESH_MS = 24 * 60 * 60 * 1000
+
+export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): ActivityActions {
+  return {
+    acknowledgedAgentsByPaneKey: {},
+    acknowledgeAgents: (paneKeys, reads, intent) => {
+      emitAgentSubjectReads(paneKeys, reads, intent)
+      const notificationIdsToDismiss = new Set<string>()
+      set((s) => {
+        if (paneKeys.length === 0) {
+          return s
+        }
+        const now = Date.now()
+        const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
+        let next: Record<string, number> | null = null
+        let nextUnreadCompletions: Record<string, StoredAgentAttentionUnread> | null = null
+        for (const key of paneKeys) {
+          if (s.unreadAgentCompletionPanes[key]) {
+            nextUnreadCompletions ??= { ...s.unreadAgentCompletionPanes }
+            delete nextUnreadCompletions[key]
+          }
+          const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+          let known = 0
+          const liveEntry = s.agentStatusByPaneKey.get(key)
+          if (liveEntry) {
+            collectAcknowledgedAgentNotificationId({
+              state: s,
+              ids: notificationIdsToDismiss,
+              worktreeId: resolvePaneKeyWorktreeIdFromTabs(s, key) ?? liveEntry.worktreeId,
+              paneKey: key,
+              stateStartedAt: liveEntry.stateStartedAt,
+              previousAckAt: prev
+            })
+            known = latestAgentTurnTimestamp(liveEntry)
+          }
+          for (const unsupported of migrationUnsupported) {
+            if (unsupported.paneKey === key) {
+              known = Math.max(known, usableTimestamp(unsupported.updatedAt))
+            }
+          }
+          // A stamp already covering every known turn changes no reader; re-stamping costs a persisted UI write per click.
+          // Refresh it once a day anyway so hydration's newest-entries cap can't drop a stamp the user keeps renewing.
+          if (
+            s.acknowledgedAgentsByPaneKey[key] !== undefined &&
+            prev >= known &&
+            now - prev < ACKNOWLEDGEMENT_REFRESH_MS
+          ) {
+            continue
+          }
+          const stamp = Math.max(now, known)
+          if (prev < stamp) {
+            next ??= { ...s.acknowledgedAgentsByPaneKey }
+            next[key] = stamp
+          }
+        }
+        let nextManual: Record<string, number> | null = null
+        for (const key of paneKeys) {
+          if (s.manuallyUnreadTurnsByPaneKey[key] !== undefined) {
+            nextManual ??= { ...s.manuallyUnreadTurnsByPaneKey }
+            delete nextManual[key]
+          }
+        }
+        if (!next && !nextUnreadCompletions && !nextManual) {
+          return s
+        }
+        return {
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
+          ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {}),
+          ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
+        }
+      })
+      // Dismiss main’s announced subjects; rebuilt IDs cover restart-empty notification records.
+      if (paneKeys.length > 0 && typeof window !== 'undefined') {
+        void window.api?.notifications?.dismiss?.([...notificationIdsToDismiss], paneKeys)
+      }
+    },
+    unacknowledgeAgents: (paneKeys) =>
+      set((s) => {
+        if (paneKeys.length === 0) {
+          return s
+        }
+        let next: Record<string, number> | null = null
+        let nextManual: Record<string, number> | null = null
+        for (const key of paneKeys) {
+          if (s.acknowledgedAgentsByPaneKey[key] !== undefined) {
+            next ??= { ...s.acknowledgedAgentsByPaneKey }
+            delete next[key]
+          }
+          const liveEntry = s.agentStatusByPaneKey.get(key)
+          const turnTimestamp = liveEntry ? agentAttentionTurnAt(liveEntry) : undefined
+          if (
+            turnTimestamp !== undefined &&
+            s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp
+          ) {
+            nextManual ??= { ...s.manuallyUnreadTurnsByPaneKey }
+            nextManual[key] = turnTimestamp
+          }
+        }
+        if (!next && !nextManual) {
+          return s
+        }
+        return {
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
+          ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
+        }
+      }),
+    manuallyUnreadTurnsByPaneKey: {},
+    clearManuallyUnreadTurns: (paneKeys) =>
+      set((s) => {
+        let next: Record<string, number> | null = null
+        for (const key of paneKeys) {
+          if (s.manuallyUnreadTurnsByPaneKey[key] !== undefined) {
+            next ??= { ...s.manuallyUnreadTurnsByPaneKey }
+            delete next[key]
+          }
+        }
+        return next ? { manuallyUnreadTurnsByPaneKey: next } : s
+      }),
+    activityClearedAtByPaneKey: {},
+    applyActivityClearedAt: (patch) =>
+      set((s) => {
+        let next: Record<string, number> | null = null
+        for (const [key, value] of Object.entries(patch)) {
+          const previous = s.activityClearedAtByPaneKey[key]
+          if (value === null ? previous === undefined : previous === value) {
+            continue
+          }
+          next ??= { ...s.activityClearedAtByPaneKey }
+          if (value === null) {
+            delete next[key]
+          } else {
+            next[key] = value
+          }
+        }
+        return next ? { activityClearedAtByPaneKey: next } : s
+      })
+  }
+}

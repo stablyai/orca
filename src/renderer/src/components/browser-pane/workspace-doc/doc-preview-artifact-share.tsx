@@ -1,0 +1,122 @@
+import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { DocPreviewGrantOwner } from '../../../../../preload/api/document-preview/doc-preview-api'
+import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
+import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
+import { isShareableHtmlPath } from '@/components/editor/panel/editor-artifact-upload'
+import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
+import {
+  fileArtifactSourceKey,
+  type FileArtifactOwner
+} from '@/lib/files/artifacts/file-artifact-source-key'
+import { basename } from '@/lib/path'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import {
+  isWindowsAbsolutePathLike,
+  normalizeRuntimePathForComparison,
+  relativePathInsideRoot
+} from '../../../../../shared/file-access/cross-platform-path'
+import type { RuntimeFilePreviewResult } from '../../../../../shared/file-content/runtime-file-read'
+import {
+  acquireTerminalArtifactGrant,
+  pinTerminalArtifactGrantTarget,
+  type TerminalArtifactGrantTarget
+} from '@/runtime/files/grants/runtime-terminal-artifact-grant'
+
+/** The host a grant reads from, spelled as the editor's route for that host. */
+export function docPreviewGrantFileOwner(owner: DocPreviewGrantOwner): FileArtifactOwner {
+  return {
+    executionHostId: toRuntimeExecutionHostId(owner.environmentId),
+    runtimeEnvironmentId: owner.environmentId
+  }
+}
+
+async function readDocPreviewGrantFile(
+  owner: DocPreviewGrantOwner,
+  filePath: string
+): Promise<RuntimeFilePreviewResult> {
+  if (owner.fileAccess === 'terminal-artifact') {
+    const target = { kind: 'environment' as const, environmentId: owner.environmentId }
+    const context: TerminalArtifactGrantTarget = pinTerminalArtifactGrantTarget({
+      target,
+      worktreeId: owner.worktreeSelector,
+      absolutePath: filePath
+    })
+    const grant = await acquireTerminalArtifactGrant(context)
+    const samePath =
+      grant &&
+      (isWindowsAbsolutePathLike(filePath)
+        ? normalizeRuntimePathForComparison(grant.absolutePath) ===
+          normalizeRuntimePathForComparison(filePath)
+        : grant.absolutePath === filePath)
+    if (!grant || !samePath) {
+      throw new Error('outside_grant_root')
+    }
+    return callRuntimeRpc<RuntimeFilePreviewResult>(
+      target,
+      'files.readTerminalArtifactPreview',
+      {
+        worktree: owner.worktreeSelector,
+        grantId: grant.grantId,
+        absolutePath: grant.absolutePath
+      },
+      {
+        timeoutMs: 15_000,
+        expectedEnvironmentPairingRevision: context.expectedEnvironmentPairingRevision
+      }
+    )
+  }
+  // The grant's own selector and root, which may be a chat's scratch folder rather than a workspace.
+  const relativePath = relativePathInsideRoot(owner.worktreeRoot, filePath)
+  if (!relativePath) {
+    throw new Error('outside_grant_root')
+  }
+  return callRuntimeRpc<RuntimeFilePreviewResult>(
+    { kind: 'environment', environmentId: owner.environmentId },
+    'files.readPreview',
+    { worktree: owner.worktreeSelector, relativePath },
+    { timeoutMs: 15_000 }
+  )
+}
+
+/** Reads the document from the host its grant was minted for, never the one selected now. */
+async function readDocPreviewArtifactRequest(
+  location: DocPreviewGrantLocation,
+  filePath: string,
+  sourceKey: string
+): Promise<ArtifactWriteRequest> {
+  let result: RuntimeFilePreviewResult
+  try {
+    result = await readDocPreviewGrantFile(location.owner, filePath)
+  } catch {
+    throw new ArtifactPublishPreparationError('unreadable')
+  }
+  if (result.isBinary) {
+    throw new ArtifactPublishPreparationError('binary')
+  }
+  return {
+    sourceKey,
+    content: result.content,
+    contentType: 'text/html',
+    fileName: basename(filePath)
+  }
+}
+
+/** The toolbar's Share button for an HTML preview with a live grant; undefined for anything else. */
+export function buildDocPreviewShareControl(
+  filePath: string,
+  location: DocPreviewGrantLocation | null
+): React.ReactNode {
+  if (!location || !isShareableHtmlPath(filePath)) {
+    return undefined
+  }
+  const sourceKey = fileArtifactSourceKey(docPreviewGrantFileOwner(location.owner), filePath)
+  return (
+    <ArtifactPublishButton
+      sourceKey={sourceKey}
+      size="icon-xs"
+      variant="muted-field-icon"
+      createRequest={() => readDocPreviewArtifactRequest(location, filePath, sourceKey)}
+    />
+  )
+}

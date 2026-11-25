@@ -1,0 +1,1 @@
+export const SSH_PANE_RECOVERY_GRACE_MS = 30_000

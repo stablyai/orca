@@ -1,0 +1,51 @@
+import { normalizeSettingsFormOptionQuery } from '../../form-controls/settings-form-option-filter'
+
+export const FONT_SUGGESTION_RENDER_LIMIT = 320
+
+export type RenderedFontSuggestion = {
+  font: string
+  sourceIndex: number
+}
+
+export function filterFontSuggestions(
+  suggestions: readonly string[],
+  query: string,
+  defaultOptionLabel = ''
+): string[] {
+  const normalizedQuery = normalizeSettingsFormOptionQuery(query)
+  if (normalizedQuery === null) {
+    return []
+  }
+  if (!normalizedQuery) {
+    return [...suggestions]
+  }
+
+  const startsWith: string[] = []
+  const includes: string[] = []
+  for (const font of suggestions) {
+    const normalizedFont = (font || defaultOptionLabel).toLowerCase()
+    if (normalizedFont.startsWith(normalizedQuery)) {
+      startsWith.push(font)
+    } else if (normalizedFont.includes(normalizedQuery)) {
+      includes.push(font)
+    }
+  }
+  return [...startsWith, ...includes]
+}
+
+export function getRenderedFontSuggestions(
+  suggestions: readonly string[],
+  highlightedIndex: number,
+  limit = FONT_SUGGESTION_RENDER_LIMIT
+): RenderedFontSuggestion[] {
+  const cappedLength = Math.min(suggestions.length, limit)
+  if (cappedLength <= 0) {
+    return []
+  }
+
+  const sourceIndexes = Array.from({ length: cappedLength }, (_value, index) => index)
+  if (highlightedIndex >= cappedLength && highlightedIndex < suggestions.length) {
+    sourceIndexes[cappedLength - 1] = highlightedIndex
+  }
+  return sourceIndexes.map((sourceIndex) => ({ font: suggestions[sourceIndex] ?? '', sourceIndex }))
+}

@@ -1,0 +1,111 @@
+{
+  "cursor": {
+    "capture": "QA1257, 2026-10-22, official cursor-agent 2026.10.19-6bbf2c4; process argv excerpt after the runtime wrapper, signed out",
+    "launchPreferences": {
+      "agentId": "cursor",
+      "model": "claude-opus-4-8",
+      "options": {
+        "thinking": "true"
+      }
+    },
+    "agentArgs": "",
+    "argv": ["--model", "claude-opus-4-8-thinking"]
+  },
+  "antigravity": {
+    "capture": "QA1416, 2026-10-22, actual saved action and child process; signed out; rendered Settings readback",
+    "launchPreferences": {
+      "agentId": "antigravity",
+      "permissionMode": "ask"
+    },
+    "agentArgs": "",
+    "command": "agy",
+    "routeHint": "Applies to chats only"
+  },
+  "opencode": {
+    "capture": "Recorded ACP config_option_update from src/main/acp/fixtures/opencode-v2-reopen.jsonl line 2",
+    "update": {
+      "direction": "in",
+      "process": "A",
+      "message": {
+        "jsonrpc": "2.0",
+        "method": "session/update",
+        "params": {
+          "sessionId": "session-1",
+          "update": {
+            "sessionUpdate": "config_option_update",
+            "configOptions": [
+              {
+                "id": "model",
+                "name": "Model",
+                "category": "model",
+                "type": "select",
+                "currentValue": "opencode/big-pickle",
+                "options": [
+                  {
+                    "value": "opencode/beam-free",
+                    "name": "opencode/Beam Free"
+                  },
+                  {
+                    "value": "opencode/big-pickle",
+                    "name": "opencode/Big Pickle"
+                  },
+                  {
+                    "value": "opencode/deepseek-v4.1-flash-free",
+                    "name": "opencode/DeepSeek V4.1 Flash Free"
+                  },
+                  {
+                    "value": "opencode/glm-5.3-flash-free",
+                    "name": "opencode/GLM-5.3-Flash Free"
+                  },
+                  {
+                    "value": "opencode/longcat-2.5-preview-free",
+                    "name": "opencode/LongCat 2.5 Preview Free"
+                  },
+                  {
+                    "value": "opencode/mimo-v2.6-flash-free",
+                    "name": "opencode/MiMo-V2.6-Flash Free"
+                  },
+                  {
+                    "value": "opencode/nemotron-3-ultra-free",
+                    "name": "opencode/Nemotron 3 Ultra Free"
+                  },
+                  {
+                    "value": "opencode/nemotron-3.5-lightning-free",
+                    "name": "opencode/Nemotron 3.5 Lightning Free"
+                  },
+                  {
+                    "value": "opencode/nemotron-3.5-super-vl-free",
+                    "name": "opencode/Nemotron 3.5 Super VL Free"
+                  },
+                  {
+                    "value": "opencode/space-bunny-free",
+                    "name": "opencode/Space Bunny Free"
+                  }
+                ]
+              },
+              {
+                "id": "mode",
+                "name": "Session Mode",
+                "category": "mode",
+                "type": "select",
+                "currentValue": "build",
+                "options": [
+                  {
+                    "value": "build",
+                    "name": "Build",
+                    "description": "The default agent. Executes tools based on configured permissions."
+                  },
+                  {
+                    "value": "plan",
+                    "name": "Plan",
+                    "description": "Read-only agent for exploring the codebase and planning work before implementation."
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

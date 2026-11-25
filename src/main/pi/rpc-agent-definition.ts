@@ -1,0 +1,24 @@
+import type { DirectoryAccountAgentDefinition } from '../native-chat/agent-session-wire/providers/structured-agent-definition'
+
+export const PI_RPC_AGENT: DirectoryAccountAgentDefinition = {
+  agent: 'pi',
+  handleTransport: 'jsonl-rpc',
+  accountHomeVariable: 'PI_CODING_AGENT_DIR',
+  // Every launch passes --append-system-prompt, and Pi builds its system prompt from it at each start.
+  instructionsEachStart: true,
+  capabilities: {
+    rewind: false,
+    compact: true,
+    compactInstructions: true,
+    threadGoal: false,
+    contextUsage: true,
+    imagePrompts: true,
+    steering: 'inject',
+    approvalEnforcement: 'provider'
+  },
+  restingOptions: {
+    acceptsKey: (key) => key === 'model' || key === 'effort',
+    fallbackModels: () => null,
+    effortDefaultsToModel: false
+  }
+}

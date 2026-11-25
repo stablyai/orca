@@ -1,9 +1,11 @@
 declare module 'mermaid' {
-  type MermaidTheme = 'default' | 'dark'
+  type MermaidTheme = 'default' | 'dark' | 'base'
 
   type MermaidInitializeOptions = {
     startOnLoad?: boolean
     theme?: MermaidTheme
+    darkMode?: boolean
+    themeVariables?: Record<string, string | boolean>
     htmlLabels?: boolean
     securityLevel?: 'strict' | 'loose' | 'antiscript' | 'sandbox'
     suppressErrorRendering?: boolean
@@ -16,6 +18,7 @@ declare module 'mermaid' {
 
   type MermaidApi = {
     initialize: (options: MermaidInitializeOptions) => void
+    mermaidAPI: { getConfig: () => MermaidInitializeOptions }
     render: (id: string, text: string) => Promise<MermaidRenderResult>
   }
 

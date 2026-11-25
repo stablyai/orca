@@ -1,0 +1,32 @@
+{
+  "id": "prime-agent",
+  "engineVersion": 1,
+  "profile": { "screenSource": "trusted" },
+  "anchors": [],
+  "rules": [
+    {
+      "id": "composer_ready",
+      "why": "Prime Agent 0.9.5+ at an idle composer: a bare `>` over the `← manage` footer, optionally under the view-mode hint (`Details mode` in 0.9.8, `Collapsed mode` in 0.9.5). Both stay painted for a whole turn, so only the status row above them (`⠦ Writing · 6s`) says a turn is running; quiet because the composer also paints just before the first-launch question.",
+      "priority": 500,
+      "when": {
+        "region": "screen",
+        "rows": [
+          { "none": [{ "regex": "[⠀-⣿]" }] },
+          {
+            "optional": { "regex": "^\\S+ mode \\(ctrl\\+o to expand\\)$", "ignoreCase": true }
+          },
+          { "regex": "^>$" },
+          { "regex": "^← manage" }
+        ]
+      },
+      "answer": { "state": "idle", "strength": "strong", "requiresQuiet": true }
+    },
+    {
+      "id": "composer_not_shown",
+      "why": "A readable screen that is not the idle composer may be a picker, dialog or busy turn, which a name-only title or a quiet process cannot see.",
+      "priority": 100,
+      "when": { "region": "screen" },
+      "answer": { "state": "hold" }
+    }
+  ]
+}

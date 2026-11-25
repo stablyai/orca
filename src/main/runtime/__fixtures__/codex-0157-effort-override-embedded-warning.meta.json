@@ -1,0 +1,16 @@
+{
+  "capturedAt": "2026-09-27T19:35:31.761Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-m",
+    "gpt-6-sol",
+    "-c",
+    "model_reasoning_effort=high"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.1 with -m and -c model_reasoning_effort (the worker-start argv). Embedded mode shows a startup warning and redraws the header by cell diff, so a line-folded tail reads `dirctory:` (STA-8628). Worktree-path leaf redacted by the recorder scan.",
+  "exitCode": 0
+}

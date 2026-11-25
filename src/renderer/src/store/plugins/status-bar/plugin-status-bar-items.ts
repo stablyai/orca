@@ -1,0 +1,85 @@
+import { useEffect, useMemo } from 'react'
+import { create } from 'zustand'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginStatusBarOverrides } from '../../../../../shared/plugins/contributions/plugin-status-bar-state'
+import type { PluginDeclarativeTone } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
+import {
+  fromPlugin,
+  installedPluginDisplayNames,
+  isLivePlugin,
+  usePluginPanelsStore,
+  ensurePluginPanelsLoaded,
+  type ActivePluginCommand
+} from '../catalog/plugin-contribution-catalog'
+import type { Translate } from '../../../i18n/use-translate'
+
+/** A status bar item of an enabled plugin, with its worker's changes applied. */
+export type ActivePluginStatusBarItem = {
+  key: string
+  pluginName: string
+  text?: string
+  icon?: string
+  tone: PluginDeclarativeTone
+  tooltip: string
+  command: ActivePluginCommand | null
+}
+
+/** Mirrors main's snapshot of `statusBar.update` changes. */
+export const usePluginStatusBarStore = create<{ overrides: PluginStatusBarOverrides }>(() => ({
+  overrides: {}
+}))
+
+let watching = false
+
+function watchPluginStatusBar(): void {
+  const plugins = window.api?.plugins
+  if (watching || !plugins?.statusBarState || !plugins.onStatusBarChanged) {
+    return
+  }
+  watching = true
+  plugins.onStatusBarChanged((overrides) => usePluginStatusBarStore.setState({ overrides }))
+  void plugins
+    .statusBarState()
+    .then((overrides) => usePluginStatusBarStore.setState({ overrides }))
+    // Why ignored: an older host has no runtime changes; items keep their manifest values.
+    .catch(() => undefined)
+}
+
+export function collectPluginStatusBarItems(
+  plugins: readonly PluginHostListEntry[],
+  overrides: PluginStatusBarOverrides,
+  t?: Translate
+): ActivePluginStatusBarItem[] {
+  return plugins.filter(isLivePlugin).flatMap((plugin) =>
+    (plugin.statusBarItems ?? []).flatMap((declared) => {
+      const item = { ...declared, ...overrides[plugin.pluginKey]?.[declared.id] }
+      if (item.visible === false || (!item.text && !item.icon)) {
+        return []
+      }
+      const command = plugin.commands.find((candidate) => candidate.id === declared.command)
+      const names = installedPluginDisplayNames(plugins, t)
+      const pluginName = names.get(plugin.pluginKey) ?? plugin.name
+      return [
+        {
+          key: `${plugin.pluginKey}/${declared.id}`,
+          pluginName,
+          ...(item.text ? { text: item.text } : {}),
+          ...(item.icon ? { icon: item.icon } : {}),
+          tone: item.tone ?? 'neutral',
+          tooltip: item.tooltip || pluginName,
+          command: command ? fromPlugin(plugin, command, names) : null
+        }
+      ]
+    })
+  )
+}
+
+export function usePluginStatusBarItems(): ActivePluginStatusBarItem[] {
+  const plugins = usePluginPanelsStore((state) => state.plugins)
+  const overrides = usePluginStatusBarStore((state) => state.overrides)
+  useEffect(() => {
+    ensurePluginPanelsLoaded()
+    watchPluginStatusBar()
+  }, [])
+  return useMemo(() => collectPluginStatusBarItems(plugins, overrides), [plugins, overrides])
+}

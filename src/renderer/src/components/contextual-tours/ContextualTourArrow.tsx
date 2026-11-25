@@ -1,4 +1,5 @@
 import type { CSSProperties, JSX, RefObject } from 'react'
+import { cn } from '@/lib/class-names'
 import {
   CONTEXTUAL_TOUR_ARROW_SIZE,
   CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH,
@@ -8,9 +9,7 @@ import {
 const ARROW_WIDTH = CONTEXTUAL_TOUR_ARROW_SIZE.width
 const ARROW_HEIGHT = CONTEXTUAL_TOUR_ARROW_SIZE.height
 
-// Why: CSS rotation pivots on the svg center, so horizontal placements must
-// also shift by (width - height) / 2 to keep the rotated arrow flush with the
-// panel edge instead of half-swallowed by it.
+// Rotation pivots on SVG center; shift horizontal arrows by half the width/height difference to keep them flush.
 const PLACEMENT_TRANSFORM = {
   top: 'rotate(0deg)',
   bottom: 'rotate(180deg)',
@@ -21,11 +20,14 @@ const PLACEMENT_TRANSFORM = {
 export function ContextualTourArrow({
   arrowRef,
   placement,
-  style
+  style,
+  className
 }: {
   arrowRef: RefObject<SVGSVGElement | null>
   placement: ContextualTourPanelPlacement
   style: CSSProperties
+  /** Fill and stroke for surfaces other than the tour panel. */
+  className?: string
 }): JSX.Element {
   return (
     <svg
@@ -34,13 +36,13 @@ export function ContextualTourArrow({
       width={ARROW_WIDTH}
       height={ARROW_HEIGHT}
       viewBox={`0 0 ${ARROW_WIDTH} ${ARROW_HEIGHT}`}
-      className="absolute block overflow-visible fill-(--contextual-tour-panel-surface) stroke-(--contextual-tour-panel-border)"
+      className={cn(
+        'absolute block overflow-visible fill-(--contextual-tour-panel-surface) stroke-(--contextual-tour-panel-border)',
+        className
+      )}
       style={{ ...style, transform: PLACEMENT_TRANSFORM[placement] }}
     >
-      {/* Why: an open path fills as a triangle but strokes only the two slanted
-          edges; a closed polygon (Radix Arrow) also strokes the base, drawing a
-          seam across the panel border. Stroke width must match the 1px panel
-          border so the outline reads as continuous. */}
+      {/* An open path strokes no base seam; match the panel border width for a continuous outline. */}
       <path
         d={`M0,0 L${ARROW_WIDTH / 2},${ARROW_HEIGHT} L${ARROW_WIDTH},0`}
         strokeWidth={CONTEXTUAL_TOUR_PANEL_BORDER_WIDTH}

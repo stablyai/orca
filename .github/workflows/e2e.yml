@@ -1,5 +1,11 @@
 name: E2E
 
+run-name: E2E ${{ inputs.ref || github.ref }}
+
+# Why: checkout + artifact upload only; callers can only further restrict.
+permissions:
+  contents: read
+
 on:
   workflow_call:
     inputs:
@@ -7,22 +13,54 @@ on:
         description: Ref to check out (defaults to the calling workflow's ref)
         required: false
         type: string
+      test_files:
+        description: JSON array of changed specs; empty runs the full suite
+        required: false
+        type: string
+      # Why: artifact names are unique per workflow run, and pr.yml calls this workflow twice.
+      artifact_suffix:
+        description: Appended to the build and trace artifact names so two calls in one run do not collide
+        required: false
+        type: string
+        default: ''
+      # Why: the app, orcad and its test template (--dark-test-template) build with it; releases refuse it.
+      # Why: only required gates pay for Blacksmith; advisory lanes run on free hosted runners.
+      fast_runners:
+        description: Run on Blacksmith instead of free GitHub-hosted runners
+        required: false
+        type: boolean
+        default: false
+      layout_owner:
+        description: Set to main to build with ORCA_LAYOUT_OWNER=main and record save-divergence reports
+        required: false
+        type: string
+        default: ''
   workflow_dispatch:
     inputs:
       ref:
         description: Ref to check out (defaults to the workflow ref)
         required: false
         type: string
+      test_files:
+        description: JSON array of specs to run; empty runs the full suite
+        required: false
+        type: string
+      background_launch:
+        description: Keep targeted Electron launches hidden for automation
+        required: false
+        type: boolean
+        default: false
   schedule:
-    # Why: GitHub cron uses UTC; these slots map to 10am and 3pm
-    # America/Phoenix for the default-branch E2E run.
-    - cron: '0 17,22 * * *'
+    # One complete daily reference run; targeted PR coverage remains unchanged.
+    - cron: '0 17 * * *'
 
 jobs:
   build:
     name: build e2e app
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-8vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    timeout-minutes: 15
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
 
     steps:
       - name: Checkout
@@ -30,77 +68,126 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: the E2E build compiles native modules via node-gyp. Mirrors the
-      # install step in pr.yml's verify job so E2E doesn't hit missing-toolchain
-      # errors.
       - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+        env:
+          ORCA_E2E_APT_PACKAGES: build-essential python3
+        run: &install_e2e_tools |
+          if [ "$ORCA_E2E_APT_PACKAGES" = 'build-essential python3' ] &&
+            command -v make >/dev/null && command -v g++ >/dev/null && command -v python3 >/dev/null; then
+            exit 0
+          fi
+          read -r -a packages <<< "$ORCA_E2E_APT_PACKAGES"
+          if [ -f .github/scripts/install-ubuntu-apt-packages.sh ]; then
+            bash .github/scripts/install-ubuntu-apt-packages.sh "${packages[@]}"
+            exit 0
+          fi
+          if [ -f .github/scripts/prepare-ubuntu-apt.sh ]; then
+            bash .github/scripts/prepare-ubuntu-apt.sh
+          else
+            # Dispatched refs can predate the shared preparation script.
+            for source in /etc/apt/apt-mirrors.txt /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+              if [ -f "$source" ]; then
+                sudo sed -i 's|https*://azure\.archive\.ubuntu\.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$source"
+              fi
+            done
+            sudo tee /etc/apt/apt.conf.d/99-orca-ci >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
+          fi
+          timeout 120 sudo apt-get update
+          timeout 300 sudo apt-get install -y "${packages[@]}" || timeout 300 sudo apt-get install -y --fix-missing "${packages[@]}"
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      # Why: the build's plain-Node daemon smoke load resolves node-pty.
+      - uses: ./.github/actions/install-node-dependencies
+        id: deps
         with:
-          node-version-file: package.json
+          native-runtime: node
+          persist-native-cache: 'false'
+          cache-electron-package: 'true'
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      # Save Node's ABI before the Electron preparation replaces the same build paths.
+      - name: Save compiled Node native modules
+        if: steps.deps.outputs.native-cache-key != '' && steps.deps.outputs.native-cache-hit != 'true'
+        uses: actions/cache/save@v5
         with:
-          run_install: false
+          path: ${{ steps.deps.outputs.native-cache-path }}
+          key: ${{ steps.deps.outputs.native-cache-key }}
 
-      # Why: this job runs the same pnpm install path as pr.yml's verify
-      # job, so it needs the same pinned node-gyp override to avoid pnpm's
-      # broken bundled gyp_main.py on Linux.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
+      # Why: building here avoids parallel builds inside Playwright globalSetup;
+      # paired-browser specs also need the standalone web bundle.
+      - name: Build E2E outputs
+        env:
+          VITE_EXPOSE_STORE: 'true'
+          ORCA_CI_MAIN_SOURCEMAPS: '0'
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
         run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
+          if [ -n "$LAYOUT_OWNER" ]; then
+            export ORCA_LAYOUT_OWNER="$LAYOUT_OWNER"
+          fi
+          pnpm run build:electron-vite:parallel --mode e2e
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # The CLI emits into out/main too; start only after Electron finishes clearing that tree.
+      - name: Build shared E2E CLI
+        id: e2e-cli
+        background: true
+        run: |
+          if node -e 'process.exit(require("./package.json").scripts["prepare:cli-output"] ? 0 : 1)'; then
+            pnpm run build:cli
+          else
+            echo "Older ref: let each consumer build and install its CLI."
+          fi
 
-      # Why: building once avoids five parallel electron-vite builds inside
-      # Playwright globalSetup, which otherwise contends for CPU/RAM on OSS
-      # runners before the sharded tests even start.
-      - name: Build Electron app for E2E
-        run: npx electron-vite build --mode e2e
+      - name: Project shared E2E web client
+        run: pnpm run build:web-from-renderer
 
+      - wait: e2e-cli
+
+      # The switch-on specs skip, rather than fail, when the build left no marker.
+      - name: Check layout-owner build marker
+        if: inputs.layout_owner == 'main'
+        run: test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+
+      - name: Check shared native runtime action
+        id: native-runtime-action
+        run: |
+          if [ -f .github/actions/prepare-native-runtime/action.yml ]; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      # Foreground: a background JavaScript action reads the event payload while later steps rewrite it.
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
+          include-hidden-files: true
           retention-days: 1
           if-no-files-found: error
 
+      - name: Prepare shared Electron native runtime
+        id: electron-native-runtime
+        if: steps.native-runtime-action.outputs.available == 'true' && steps.deps.outputs.node-version != ''
+        uses: ./.github/actions/prepare-native-runtime
+        with:
+          native-runtime: electron
+          node-version: ${{ steps.deps.outputs.node-version }}
+
+      - name: Prepare Electron natives for older refs
+        if: steps.native-runtime-action.outputs.available != 'true' || steps.deps.outputs.node-version == ''
+        uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
   e2e:
-    name: e2e ${{ matrix.shard_name }}
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shard: '1/10'
-            shard_name: 1-of-10
-          - shard: '2/10'
-            shard_name: 2-of-10
-          - shard: '3/10'
-            shard_name: 3-of-10
-          - shard: '4/10'
-            shard_name: 4-of-10
-          - shard: '5/10'
-            shard_name: 5-of-10
-          - shard: '6/10'
-            shard_name: 6-of-10
-          - shard: '7/10'
-            shard_name: 7-of-10
-          - shard: '8/10'
-            shard_name: 8-of-10
-          - shard: '9/10'
-            shard_name: 9-of-10
-          - shard: '10/10'
-            shard_name: 10-of-10
+    name: e2e
+    needs: [build]
+    if: inputs.test_files == ''
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    timeout-minutes: 30
 
     steps:
       - name: Checkout
@@ -108,68 +195,130 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: pnpm install rebuilds native modules, and those postinstall
-      # scripts still need the Linux toolchain even though this shard reuses
-      # the prebuilt Electron output.
-      - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+      # Native cache misses need the compiler, Electron needs Xvfb, and paired
+      # Quick Open needs ripgrep. Install them in one apt transaction.
+      - name: Install native build and headless UI tools
+        # The Azure archive took 16 minutes for one font package; bound setup
+        # separately so a slow mirror cannot consume the test budget.
+        env: &e2e_tool_packages
+          ORCA_E2E_APT_PACKAGES: build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh openbox x11-utils xdotool
+        run: *install_e2e_tools
 
-      # Why: Electron on Linux needs an X display even when the app
-      # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
-      # virtual framebuffer so Chromium can initialize without a real display.
-      - name: Install xvfb
-        run: sudo apt-get install -y xvfb
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          node-version-file: package.json
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      # Why: this job runs the same pnpm install path as pr.yml's verify
-      # job, so it needs the same pinned node-gyp override to avoid pnpm's
-      # broken bundled gyp_main.py on Linux. Gate on runner.os matches
-      # release.yml so the invariant "this workaround is Linux-only" is
-      # consistent across all three workflows, even though this job
-      # currently pins runs-on: ubuntu-latest.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          native-runtime: electron
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8
         with:
-          name: e2e-build-out
+          name: e2e-build-out${{ inputs.artifact_suffix }}
           path: out/
 
-      # Why: the Electron suite is wall-clock constrained on OSS runners, but
-      # multiple Electron apps on one Xvfb VM contend on git/Chromium resources.
-      # Sharding keeps each VM at one Playwright worker while splitting the
-      # headless suite across separate runners.
-      # SKIP_BUILD makes Playwright globalSetup reuse the single build job's
-      # artifact instead of starting five concurrent electron-vite builds.
-      # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
-      # launches but never creates a BrowserWindow.
-      - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e --shard=${{ matrix.shard }}
+      # One worker avoids Electron/git/Xvfb contention. Reuse one SKIP_BUILD artifact and forward app logs for pre-window failures.
+      - name: Run E2E tests
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_FILE: e2e-results/results.json
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 pnpm run test:e2e --workers=1 --reporter=list,json
 
-      # Why: Playwright retains traces/screenshots only on failure. Uploading
-      # them as an artifact makes post-mortem debugging on CI possible without
-      # re-running locally.
+      - name: Summarize E2E failures
+        if: always()
+        continue-on-error: true
+        run: node config/scripts/ci/e2e-failures/ci-e2e-failure-summary.mjs e2e-results/results.json
+
+      # Upload failure traces/screenshots so CI failures are diagnosable without reproduction.
       - name: Upload Playwright traces
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-traces-${{ matrix.shard_name }}
+          name: playwright-traces
+          path: test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  changed-e2e:
+    name: changed e2e specs
+    env:
+      ORCA_BACKGROUND_LAUNCH: ${{ inputs.background_launch && '1' || '' }}
+    needs: [build]
+    if: inputs.test_files != ''
+    runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install native build and headless UI tools
+        # Install rg for bounded Quick Open searches exercised by the paired fixture.
+        env: *e2e_tool_packages
+        run: *install_e2e_tools
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
+      - name: Download E2E build output
+        uses: actions/download-artifact@v8
+        with:
+          name: e2e-build-out${{ inputs.artifact_suffix }}
+          path: out/
+
+      - name: Run changed E2E specs
+        env:
+          TEST_FILES_JSON: ${{ inputs.test_files }}
+          LAYOUT_OWNER: ${{ inputs.layout_owner }}
+        run: |
+          mapfile -t TEST_FILES < <(jq -r '.[]' <<<"$TEST_FILES_JSON")
+          if [ "${#TEST_FILES[@]}" -eq 0 ]; then
+            echo "No changed specs."
+            exit 0
+          fi
+          E2E_ENV=(SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1)
+          E2E_PROJECT_ARGS=()
+          if [ -n "$LAYOUT_OWNER" ]; then
+            test -f out/main/ORCA_LAYOUT_OWNER_MAIN
+            mkdir -p layout-divergence
+            E2E_ENV+=(ORCA_LAYOUT_SAVE_DIVERGENCE_LOG="$PWD/layout-divergence/window-specs.jsonl")
+            E2E_ENV+=(PLAYWRIGHT_JSON_OUTPUT_FILE="$PWD/layout-divergence/window-specs-results.json")
+            E2E_PROJECT_ARGS+=('--reporter=list,json')
+          fi
+          if grep -l '@headful' "${TEST_FILES[@]}" >/dev/null; then
+            E2E_PROJECT_ARGS+=(--project=electron-headful)
+          fi
+          xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env "${E2E_ENV[@]}" \
+            pnpm run test:e2e "${TEST_FILES[@]}" --workers=1 "${E2E_PROJECT_ARGS[@]}"
+
+      - name: Summarize layout save divergence
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        run: |
+          # Either file names a run: a log with no report is unattributed, a report with no log is zero.
+          shopt -s nullglob
+          runs=(layout-divergence/*.jsonl layout-divergence/*-results.json)
+          for run in $(printf '%s\n' "${runs[@]%.jsonl}" | sed 's/-results\.json$//' | sort -u); do
+            node config/scripts/diagnostics/layout-save/layout-save-divergence-summary.mjs "$run.jsonl" "$run-summary.json" "$run-results.json"
+            if [ -f "$run-results.json" ]; then
+              node config/scripts/ci/e2e-failures/ci-e2e-failure-summary.mjs "$run-results.json"
+            fi
+          done
+
+      - name: Upload layout save divergence report
+        if: always() && inputs.layout_owner == 'main'
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: layout-divergence-changed${{ inputs.artifact_suffix }}-attempt-${{ github.run_attempt }}
+          path: layout-divergence/
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Playwright traces
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-changed${{ inputs.artifact_suffix }}
           path: test-results/
           retention-days: 7
           if-no-files-found: ignore

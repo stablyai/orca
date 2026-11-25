@@ -1,0 +1,44 @@
+import { vi } from 'vitest'
+import { OrcaRuntimeService } from '../../orca-runtime'
+import { RpcDispatcher } from '../../rpc/dispatcher'
+import { BROWSER_PROFILE_METHODS } from '../../rpc/methods/browser/browser-profile-rpc-methods'
+import { RuntimeBrowserProfiles } from './browser-profiles'
+
+export function browserProfileRpcFixture(executorRuntimeId: string, outerRuntimeId = 'D') {
+  const unavailable = () => {
+    throw new Error('unused page target')
+  }
+  const profiles = new RuntimeBrowserProfiles(
+    {
+      getRuntimeId: () => executorRuntimeId,
+      getAuthoritativeWindowId: unavailable,
+      getAvailableAuthoritativeWindowId: unavailable,
+      getOffscreenBrowserBackend: unavailable,
+      getRuntimeBrowserPageRegistry: unavailable,
+      getBrowserHostLeaseRegistry: unavailable,
+      getBrowserHostRequestRegistry: unavailable,
+      getAgentBrowserBridge: unavailable,
+      resolveBrowserWorkspace: unavailable,
+      resolveBrowserNetworkExecutionHost: unavailable
+    },
+    { requireAgentBrowserBridge: unavailable, resolveBrowserCommandTarget: async () => ({}) },
+    {
+      describeBrowserTab: unavailable,
+      describeClientHostedBrowserTab: unavailable,
+      resolveClientHostedBrowserPage: async () => undefined
+    },
+    { browserTabCreate: unavailable },
+    { replace: unavailable },
+    { browserTabClose: unavailable }
+  )
+  const runtime = new OrcaRuntimeService(null)
+  vi.spyOn(runtime, 'getRuntimeId').mockReturnValue(outerRuntimeId)
+  vi.spyOn(runtime, 'browserProfileList').mockImplementation(() => profiles.browserProfileList())
+  vi.spyOn(runtime, 'browserProfileImportFromBrowser').mockImplementation(
+    profiles.browserProfileImportFromBrowser.bind(profiles)
+  )
+  vi.spyOn(runtime, 'browserProfileClearGoogleCookies').mockImplementation(
+    profiles.browserProfileClearGoogleCookies.bind(profiles)
+  )
+  return { profiles, dispatcher: new RpcDispatcher({ runtime, methods: BROWSER_PROFILE_METHODS }) }
+}

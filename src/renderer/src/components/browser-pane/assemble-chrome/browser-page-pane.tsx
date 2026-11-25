@@ -1,0 +1,408 @@
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { cn } from '@/lib/class-names'
+import '@/lib/workspace/ownership/connection-context'
+import { useAppStore } from '@/store/index'
+import '../../../../../shared/orca-profiles/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
+import { normalizeExternalBrowserUrl } from '../../../../../shared/browser/navigation/browser-url'
+import { getLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
+import { getBrowserViewportPreset } from '../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
+import {
+  ensureBrowserPageViewport,
+  scrollBrowserPageViewport,
+  setBrowserPageViewportPresetSize
+} from '../host-guest/viewport/browser-page-viewport'
+import { isBrowserPagePanePaintable } from '../host-guest/retention/browser-page-paintability'
+import { getShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
+import {
+  getOpenableExternalUrl,
+  getSshRoutedOpenableExternalUrl,
+  toDisplayUrl
+} from '../describe-page/browser-page-url-display'
+import { useSshRoutedPagePortForwards } from './profile-routing/use-ssh-workspace-browser-route'
+import type { BrowserPagePaneProps } from '../describe-page/browser-page-types'
+import { BrowserPageChromeHeader } from './browser-page-chrome-header'
+import { BrowserPageContextMenu } from './context-menu/browser-page-context-menu'
+import { BrowserPageViewportOverlays } from './browser-page-viewport-overlays'
+import { useBrowserPageChromeFocus } from './focus/use-browser-page-chrome-focus'
+import { useWebviewGuestFocus } from './focus/browser-page-guest-focus'
+import { useBrowserPageFindShortcuts } from './find/use-browser-page-find-shortcuts'
+import { useBrowserGuestAnnotateTools } from '../annotate/use-browser-guest-annotate-tools'
+import { useBrowserPageWebviewShortcuts } from '../host-guest/input/use-browser-page-webview-shortcuts'
+import { useBrowserPageMarkupCapture } from '../annotate/capture/use-browser-page-markup-capture'
+import { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
+import { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
+import { useBrowserPageResourceNotices } from '../navigate/use-browser-page-resource-notices'
+import { useBrowserPageSlotViewport } from '../host-guest/viewport/use-browser-page-slot-viewport'
+import { useBrowserPageWebviewLifecycle } from '../host-guest/use-browser-page-webview-lifecycle'
+import { useBrowserPageWebviewPartition } from '../host-guest/lifecycle/use-browser-page-webview-partition'
+import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
+import { useBrowserPageZoomFeedback } from '../host-guest/viewport/use-browser-page-zoom-feedback'
+import { useBrowserPageViewportScrollReporting } from '../host-guest/viewport/use-browser-page-viewport-scroll-reporting'
+import { BrowserPageDevToolsDock } from '../devtools-dock/BrowserDevToolsDock'
+import { openSshRoutedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
+import { openSystemHttpLink } from '@/lib/browser/navigation/http-link-routing'
+import { useBrowserPageViewportSizeFeedback } from '../host-guest/viewport/use-browser-page-viewport-size-feedback'
+
+export function BrowserPagePane({
+  browserTab,
+  workspaceId,
+  worktreeId,
+  sessionProfileId,
+  sessionPartition,
+  isActive,
+  chromeShortcutScope,
+  isAutomationVisible,
+  isMobileDriven,
+  isRemotelyViewed,
+  isMountAdmitted = false,
+  inputLocked,
+  onUpdatePageState,
+  onSetUrl
+}: BrowserPagePaneProps): React.JSX.Element {
+  const isPaintable = isBrowserPagePanePaintable({
+    isActive,
+    isAutomationVisible,
+    isMobileDriven,
+    hasRemoteViewer: isRemotelyViewed
+  })
+  const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
+  const pageViewportContainer = pageViewport?.container ?? null
+  const pageViewportScroller = pageViewport?.scroller ?? null
+  const containerRef = useRef<HTMLDivElement | null>(pageViewportContainer)
+  useLayoutEffect(() => {
+    containerRef.current = pageViewportContainer
+  }, [pageViewportContainer])
+  useLayoutEffect(() => {
+    const preset = getBrowserViewportPreset(browserTab.viewportPresetId ?? null)
+    setBrowserPageViewportPresetSize(
+      browserTab.id,
+      preset ? { width: preset.width, height: preset.height } : null
+    )
+  }, [browserTab.id, browserTab.viewportPresetId])
+  useBrowserPageViewportScrollReporting(
+    browserTab.id,
+    pageViewportScroller,
+    browserTab.viewportPresetId ?? null
+  )
+  useEffect(() => {
+    const subscribe = window.api.ui.onScrollBrowserPage
+    // Main sends these only while a preset or an agent's viewport outsizes the pane.
+    if (!subscribe || !pageViewportScroller) {
+      return
+    }
+    return subscribe((event) => {
+      if (event.browserPageId !== browserTab.id) {
+        return
+      }
+      scrollBrowserPageViewport(browserTab.id, event.deltaX, event.deltaY)
+    })
+  }, [browserTab.id, pageViewportScroller])
+  const chromeHeaderRef = useRef<HTMLDivElement | null>(null)
+  const webviewRef = useRef<Electron.WebviewTag | null>(null)
+  const addressBarInputRef = useRef<HTMLInputElement | null>(null)
+  const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
+  const addressBarValueRef = useRef(browserTab.url)
+  const browserTabUrlRef = useRef(browserTab.url)
+  // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
+  const lastKnownWebviewUrlRef = useRef<string | null>(null)
+  const recoveryNavigationValidationRef = useRef<{
+    committed: boolean
+    started: boolean
+    targetUrl: string
+  } | null>(null)
+  const activeLoadFailureRef = useRef(browserTab.loadError)
+  const retryGuestRecoveryRef = useRef<() => void>(() => {})
+  const onUpdatePageStateRef = useRef(onUpdatePageState)
+  const onSetUrlRef = useRef(onSetUrl)
+  const isActiveRef = useRef(isActive)
+  useLayoutEffect(() => {
+    isActiveRef.current = isActive
+  }, [isActive])
+  const [findOpen, setFindOpen] = useState(false)
+
+  const certificateFailure = useAppStore(
+    (s) => s.browserCertificateFailuresByPageId[browserTab.id] ?? null
+  )
+  const webviewPartition = useBrowserPageWebviewPartition({
+    sessionProfileId,
+    sessionPartition
+  })
+  const slotViewport = useBrowserPageSlotViewport(workspaceId)
+
+  const zoom = useBrowserPageZoomFeedback()
+  // Why: presets and remote viewers override the guest's metrics, so the box no longer is its viewport.
+  useBrowserPageViewportSizeFeedback(
+    pageViewport?.content ?? null,
+    isActive && !browserTab.viewportPresetId && !isMobileDriven && !isRemotelyViewed,
+    webviewRef,
+    zoom
+  )
+  const { resourceNotice, setResourceNotice } = useBrowserPageResourceNotices(browserTab.id)
+  const guestFocus = useWebviewGuestFocus(webviewRef)
+  const {
+    focusAddressBarNow,
+    focusGuestNow: focusWebviewNow,
+    keepAddressBarFocusRef
+  } = useBrowserPageChromeFocus({
+    browserTabId: browserTab.id,
+    workspaceId,
+    isActive,
+    chromeShortcutScope,
+    addressBarInputRef,
+    guestFocus,
+    inputLocked
+  })
+  const markup = useBrowserPageMarkupCapture(webviewRef)
+  // Why: a blank tab reads as 'about:blank' or the resolved data: URL, so match both to keep the "New Browser Tab" overlay visible.
+  const isBlankTab = browserTab.url === 'about:blank' || browserTab.url === ORCA_BROWSER_BLANK_URL
+  const {
+    grab,
+    annotationSend,
+    grabAnnotations,
+    browserOverlayViewport,
+    setBrowserOverlayViewport,
+    viewportBridge,
+    elementTools,
+    notes
+  } = useBrowserGuestAnnotateTools({
+    browserPageId: browserTab.id,
+    worktreeId,
+    isActive,
+    toolsDisabled: isBlankTab,
+    markupIsActive: markup.isActive,
+    containerRef,
+    guestSurfaceRef: webviewRef,
+    trackingContainer: pageViewport?.container ?? null,
+    trackingScroller: pageViewport?.scroller ?? null,
+    currentDocumentUrl: browserTab.url,
+    shortcuts: { workspaceId, chromeShortcutScope }
+  })
+  const nav = useBrowserPageNavigationDownloads({
+    browserTabId: browserTab.id,
+    worktreeId,
+    webviewRef,
+    activeLoadFailureRef,
+    lastKnownWebviewUrlRef,
+    recoveryNavigationValidationRef,
+    onSetUrlRef,
+    onUpdatePageStateRef,
+    keepAddressBarFocusRef,
+    focusWebviewNow,
+    setResourceNotice,
+    addressBarValueRef,
+    addressBarInputRef,
+    browserTabUrl: browserTab.url
+  })
+  useBrowserPageWebviewLifecycle({
+    browserTabId: browserTab.id,
+    browserTabUrl: browserTab.url,
+    browserTabLoading: browserTab.loading,
+    browserTabLoadError: browserTab.loadError,
+    workspaceId,
+    worktreeId,
+    sessionProfileId,
+    webviewPartition,
+    isActive,
+    isPaintable,
+    isMountAdmitted,
+    slotViewport,
+    viewportPresetId: browserTab.viewportPresetId ?? null,
+    addressBarInputRef,
+    addressBarValueRef,
+    browserTabUrlRef,
+    keepAddressBarFocusRef,
+    handleInternalFileDragOverRef: nav.handleInternalFileDragOverRef,
+    handleInternalFileDropRef: nav.handleInternalFileDropRef,
+    dismissAddressBarSuggestionsRef,
+    onUpdatePageState,
+    onSetUrl,
+    setAddressBarValue: nav.setAddressBarValue,
+    annotationViewportBridge: viewportBridge,
+    setBrowserOverlayViewport,
+    setFindOpen,
+    focusAddressBarNow,
+    focusWebviewNow,
+    inputLocked,
+    faviconUrl: browserTab.faviconUrl,
+    webviewRef,
+    lastKnownWebviewUrlRef,
+    recoveryNavigationValidationRef,
+    activeLoadFailureRef,
+    retryGuestRecoveryRef,
+    onUpdatePageStateRef,
+    onSetUrlRef
+  })
+  useBrowserPageWebviewUrlSync({
+    browserTabId: browserTab.id,
+    browserTabUrl: browserTab.url,
+    workspaceId,
+    isActive,
+    isPaintable,
+    slotViewport,
+    webviewRef,
+    chromeHeaderRef,
+    lastKnownWebviewUrlRef,
+    keepAddressBarFocusRef,
+    addressBarInputRef,
+    focusWebviewNow
+  })
+  const reload = useBrowserPageReloadActions({
+    browserTab,
+    webviewRef,
+    retryGuestRecoveryRef,
+    onUpdatePageStateRef
+  })
+  useBrowserPageFindShortcuts({
+    browserTabId: browserTab.id,
+    workspaceId,
+    isActive,
+    chromeShortcutScope,
+    setFindOpen
+  })
+  useBrowserPageWebviewShortcuts({
+    browserTabId: browserTab.id,
+    workspaceId,
+    isActive,
+    chromeShortcutScope,
+    isActiveRef,
+    webviewRef,
+    showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
+    reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest
+  })
+
+  // Why: synchronous webview URL access blocks render; navigation handlers update this cache before their store writes can re-render the pane.
+  const liveBrowserUrl = getLiveBrowserUrl(browserTab.id) ?? browserTab.url
+  // An SSH-routed page's localhost is the SSH host's; the system browser reaches it only through a forward.
+  const sshRouted = Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))
+  const sshPortForwards = useSshRoutedPagePortForwards(worktreeId, sshRouted)
+  const sshRoutedExternalUrl = sshRouted
+    ? (url: string) => getSshRoutedOpenableExternalUrl(url, sshPortForwards)
+    : undefined
+  const openExternalUrl = (url: string): void =>
+    sshRouted ? openSshRoutedUrlInSystemBrowser(url, sshPortForwards) : void openSystemHttpLink(url)
+  const externalUrl = (sshRoutedExternalUrl ?? getOpenableExternalUrl)(liveBrowserUrl)
+  const currentBrowserUrl = toDisplayUrl(liveBrowserUrl)
+  // A file: page in this webview is always this machine's file, even in an SSH workspace.
+  const shareableArtifactFile = getShareableBrowserArtifactFile(currentBrowserUrl)
+  const failedNavigationUrl = browserTab.loadError?.validatedUrl ?? currentBrowserUrl
+  const failureExternalUrl = (sshRoutedExternalUrl ?? normalizeExternalBrowserUrl)(
+    failedNavigationUrl
+  )
+  const showFailureOverlay = Boolean(browserTab.loadError) && !isBlankTab
+
+  useEffect(() => {
+    const webview = webviewRef.current
+    if (!webview) {
+      return
+    }
+    // Why: Electron webviews keep receiving native input under a React overlay unless their own hit testing is disabled.
+    webview.style.pointerEvents = inputLocked ? 'none' : 'auto'
+  }, [inputLocked])
+
+  useEffect(() => {
+    const webview = webviewRef.current
+    if (!webview) {
+      return
+    }
+    // Why: some Electron builds keep painting a hidden guest layer, so drop it from layout (display:none) instead of just hiding it.
+    webview.style.display = showFailureOverlay ? 'none' : 'flex'
+  }, [showFailureOverlay])
+
+  return (
+    <div
+      data-browser-page-pane-id={browserTab.id}
+      className={cn(
+        'absolute inset-0 flex min-h-0 flex-1 flex-col',
+        isActive
+          ? 'pointer-events-none z-10'
+          : isPaintable
+            ? 'pointer-events-none z-0 opacity-0'
+            : 'pointer-events-none hidden'
+      )}
+      // Why: hidden panes stay paintable (automation/mobile) but must not stay keyboard-focusable.
+      inert={!isActive}
+      aria-hidden={!isActive}
+    >
+      {/* IPC-driven context menu in a Portal so position:fixed escapes ancestor transform/backdrop-filter containing blocks. */}
+      <BrowserPageContextMenu
+        browserPageId={browserTab.id}
+        worktreeId={worktreeId}
+        canGoBack={browserTab.canGoBack}
+        canGoForward={browserTab.canGoForward}
+        webviewRef={webviewRef}
+        onReload={() => reload.reloadWebviewOrRecoverGuest(false)}
+        externalUrl={sshRoutedExternalUrl}
+        openExternal={sshRouted ? openExternalUrl : undefined}
+      />
+      <BrowserPageChromeHeader
+        chromeHeaderRef={chromeHeaderRef}
+        browserTab={browserTab}
+        workspaceId={workspaceId}
+        worktreeId={worktreeId}
+        sessionProfileId={sessionProfileId}
+        isActive={isActive}
+        webviewRef={webviewRef}
+        addressBarInputRef={addressBarInputRef}
+        dismissAddressBarSuggestionsRef={dismissAddressBarSuggestionsRef}
+        reload={reload}
+        nav={nav}
+        grab={grab}
+        grabAnnotations={grabAnnotations}
+        annotationSend={annotationSend}
+        elementTools={elementTools}
+        notes={notes}
+        onOpenFind={() => setFindOpen(true)}
+        markupIsActive={markup.isActive}
+        markupStart={markup.start}
+        markupCancel={markup.cancel}
+        shareableArtifactFile={shareableArtifactFile}
+        currentBrowserUrl={currentBrowserUrl}
+        onOpenExternal={externalUrl ? () => openExternalUrl(externalUrl) : null}
+        isBlankTab={isBlankTab}
+        resourceNotice={resourceNotice}
+        setResourceNotice={setResourceNotice}
+      />
+      {pageViewport?.container
+        ? createPortal(
+            <BrowserPageViewportOverlays
+              isActive={isActive}
+              markup={markup}
+              feedbackBadgeRef={zoom.feedbackBadgeRef}
+              findOpen={findOpen}
+              setFindOpen={setFindOpen}
+              webviewRef={webviewRef}
+              showFailureOverlay={showFailureOverlay}
+              browserTab={browserTab}
+              failureExternalUrl={failureExternalUrl}
+              onUpdatePageStateRef={onUpdatePageStateRef}
+              retryGuestRecoveryRef={retryGuestRecoveryRef}
+              navigateToUrl={nav.navigateToUrl}
+              certificateFailure={certificateFailure}
+              sshRouted={sshRouted}
+              autoRetry={{
+                active: isPaintable,
+                whileWindowHidden: isMobileDriven || isRemotelyViewed
+              }}
+              isBlankTab={isBlankTab}
+              containerRef={containerRef}
+              markupPortalContainer={pageViewport?.content ?? null}
+              // Why: a preset page box keeps its size, so a footer below it can take pane height without relayout.
+              markupControlsContainer={
+                browserTab.viewportPresetId ? (pageViewport?.shell ?? null) : null
+              }
+              browserOverlayViewport={browserOverlayViewport}
+              worktreeId={worktreeId}
+              importProfileId={sessionProfileId}
+              grab={grab}
+              annotationSend={annotationSend}
+              grabAnnotations={grabAnnotations}
+            />,
+            pageViewport.container
+          )
+        : null}
+      <BrowserPageDevToolsDock browserPageId={browserTab.id} viewport={pageViewport} />
+    </div>
+  )
+}

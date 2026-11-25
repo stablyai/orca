@@ -1,5 +1,5 @@
-import { gitExecFileAsync } from '../git/runner'
-import { getSshGitProvider } from '../providers/ssh-git-dispatch'
+import { createRemoteRefProbeCache } from '../git/remotes/remote-ref-probe-cache'
+import { isAzureDevOpsOrganizationName } from '../../shared/git/remotes/azure-devops-organization-name'
 
 export type AzureDevOpsRepoRef = {
   host: string
@@ -14,28 +14,16 @@ type LocalGitExecOptions = {
   wslDistro?: string
 }
 
-const REPO_REF_CACHE_MAX_ENTRIES = 512
-const repoRefCache = new Map<string, AzureDevOpsRepoRef | null>()
+const repoRefProbeCache = createRemoteRefProbeCache(parseAzureDevOpsRepoRef)
 
 /** @internal - exposed for tests only */
 export function _resetAzureDevOpsRepoRefCache(): void {
-  repoRefCache.clear()
+  repoRefProbeCache.clear()
 }
 
 /** @internal - exposed for tests only */
 export function _getAzureDevOpsRepoRefCacheSize(): number {
-  return repoRefCache.size
-}
-
-function rememberRepoRefCacheEntry(cacheKey: string, value: AzureDevOpsRepoRef | null): void {
-  repoRefCache.set(cacheKey, value)
-  while (repoRefCache.size > REPO_REF_CACHE_MAX_ENTRIES) {
-    const oldestKey = repoRefCache.keys().next().value
-    if (oldestKey === undefined) {
-      return
-    }
-    repoRefCache.delete(oldestKey)
-  }
+  return repoRefProbeCache.size()
 }
 
 function decodeSegment(value: string): string {
@@ -149,7 +137,8 @@ function parseVisualStudioUrl(url: URL): AzureDevOpsRepoRef | null {
 }
 
 function parseCloudSshPath(host: string, rawPath: string): AzureDevOpsRepoRef | null {
-  if (host.toLowerCase() !== 'ssh.dev.azure.com') {
+  const sshHost = host.toLowerCase()
+  if (!isCloudSshHost(sshHost)) {
     return null
   }
   const parts = splitPath(rawPath)
@@ -160,7 +149,27 @@ function parseCloudSshPath(host: string, rawPath: string): AzureDevOpsRepoRef | 
   if (!organization || !project || !repository) {
     return null
   }
-  return makeCloudRef('dev.azure.com', organization, project, repository)
+  if (sshHost === 'ssh.dev.azure.com') {
+    return makeCloudRef('dev.azure.com', organization, project, repository)
+  }
+  // Older orgs' SSH host; match what their https://<org>.visualstudio.com remotes resolve to.
+  if (!isAzureDevOpsOrganizationName(organization)) {
+    return null
+  }
+  const webHost = `${organization.toLowerCase()}.visualstudio.com`
+  const origin = `https://${webHost}`
+  return {
+    host: webHost,
+    organization,
+    project,
+    repository,
+    apiBaseUrl: joinUrl(origin, [project]),
+    webBaseUrl: joinUrl(origin, [project, '_git', repository])
+  }
+}
+
+function isCloudSshHost(host: string): boolean {
+  return host === 'ssh.dev.azure.com' || host === 'vs-ssh.visualstudio.com'
 }
 
 function parseScpLike(remoteUrl: string): AzureDevOpsRepoRef | null {
@@ -180,7 +189,7 @@ export function parseAzureDevOpsRepoRef(remoteUrl: string): AzureDevOpsRepoRef |
   try {
     const url = new URL(trimmed)
     const host = url.hostname.toLowerCase()
-    if (host === 'ssh.dev.azure.com') {
+    if (isCloudSshHost(host)) {
       return parseCloudSshPath(host, url.pathname)
     }
     if (!['http:', 'https:', 'ssh:', 'git+ssh:'].includes(url.protocol.toLowerCase())) {
@@ -197,8 +206,7 @@ export function parseAzureDevOpsRepoRef(remoteUrl: string): AzureDevOpsRepoRef |
     if (!parsed || !['http:', 'https:'].includes(url.protocol.toLowerCase())) {
       return null
     }
-    // Why: Azure DevOps Server remotes are self-hosted and only reliably
-    // identifiable by the `_git` path convention.
+    // Self-hosted Azure remotes are identified by the _git path, not the hostname.
     return makeServerRef(host, url.origin, parsed.prefix, parsed.project, parsed.repository)
   } catch {
     return null
@@ -211,34 +219,7 @@ export async function getAzureDevOpsRepoRefForRemote(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<AzureDevOpsRepoRef | null> {
-  const runtimeKey = connectionId ?? `local:${localGitOptions.wslDistro ?? 'host'}`
-  const cacheKey = `${runtimeKey}\0${repoPath}\0${remoteName}`
-  if (repoRefCache.has(cacheKey)) {
-    return repoRefCache.get(cacheKey)!
-  }
-  try {
-    const sshGitProvider = connectionId ? getSshGitProvider(connectionId) : null
-    if (connectionId && !sshGitProvider) {
-      return null
-    }
-    const { stdout } = sshGitProvider
-      ? await sshGitProvider.exec(['remote', 'get-url', remoteName], repoPath)
-      : await gitExecFileAsync(['remote', 'get-url', remoteName], {
-          cwd: repoPath,
-          ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {})
-        })
-    const result = parseAzureDevOpsRepoRef(stdout)
-    rememberRepoRefCacheEntry(cacheKey, result)
-    return result
-  } catch {
-    if (connectionId) {
-      // Why: SSH provider failures are often transient reconnect/tunnel states;
-      // caching them as "not Azure DevOps" would poison the repo for the session.
-      return null
-    }
-    rememberRepoRefCacheEntry(cacheKey, null)
-    return null
-  }
+  return repoRefProbeCache.get(repoPath, remoteName, connectionId, localGitOptions)
 }
 
 export async function getAzureDevOpsRepoRef(

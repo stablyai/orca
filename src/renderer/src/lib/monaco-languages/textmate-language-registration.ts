@@ -4,7 +4,7 @@ import type {
   TextMateGrammarLoader
 } from './textmate-token-provider'
 
-type MonacoModule = typeof Monaco
+type MonacoModule = Pick<typeof Monaco, 'languages'>
 type TextMateTokensProvider = Monaco.languages.TokensProvider
 type TextMateTokenProviderModule = {
   createTextMateTokensProvider: typeof createTextMateTokensProviderType
@@ -13,8 +13,8 @@ type TextMateTokenProviderModule = {
 export type TextMateLanguageRegistration = {
   language: Monaco.languages.ILanguageExtensionPoint
   configuration?: Monaco.languages.LanguageConfiguration
-  scopeName: string
   loadGrammar: TextMateGrammarLoader
+  mapTokenScopes?: (scopes: readonly string[]) => string
   loadProviderModule?: () => Promise<TextMateTokenProviderModule>
 }
 
@@ -41,14 +41,13 @@ export function registerTextMateLanguage(
   let tokensProviderPromise: Promise<TextMateTokensProvider> | undefined
   monaco.languages.registerTokensProviderFactory(registration.language.id, {
     create: () => {
-      // Why: plain Monaco tokenization requests basic language features; onLanguage
-      // only fires for rich features, so it never loads for a read-only Nim editor.
+      // Basic tokenization never fires rich-feature onLanguage; load read-only Nim through basic language features.
       tokensProviderPromise ??= (
         registration.loadProviderModule ?? loadDefaultProviderModule
       )().then(({ createTextMateTokensProvider }) =>
         createTextMateTokensProvider({
-          scopeName: registration.scopeName,
-          loadGrammar: registration.loadGrammar
+          loadGrammar: registration.loadGrammar,
+          ...(registration.mapTokenScopes ? { mapTokenScopes: registration.mapTokenScopes } : {})
         })
       )
       return tokensProviderPromise

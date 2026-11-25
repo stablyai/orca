@@ -7,9 +7,8 @@ import {
   type DeviceScreenSize
 } from './android-input-mapping'
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
-
-// Android control via `adb shell input`, so it works without the scrcpy server.
-// The backend resolves the serial + screen size and delegates here.
+import { EmulatorError } from '../emulator-errors'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 
 export function androidShellArgs(serial: string, command: readonly string[]): string[] {
   return ['-s', serial, 'shell', ...command]
@@ -45,8 +44,7 @@ export async function androidSwipe(
   if (!first || !last || points.length < 2) {
     return
   }
-  // adb input only supports a straight swipe, so approximate the path by its
-  // endpoints; the scrcpy control phase replaces this with true multi-touch.
+  // adb input supports only straight swipes, so approximate the path with its endpoints.
   const start = normalizedToDevicePixels(first.x, first.y, size)
   const end = normalizedToDevicePixels(last.x, last.y, size)
   ensureAdbOk(
@@ -72,9 +70,18 @@ export async function androidTypeText(
   serial: string,
   text: string
 ): Promise<void> {
-  // adb input text uses %s for spaces and cannot carry newlines.
+  // adb input text uses %s for spaces, cannot carry newlines, and crashes on non-ASCII.
+  if (!/^[\x20-\x7e]*$/.test(text)) {
+    throw new EmulatorError(
+      'emulator_unsupported',
+      'Without a live stream, Android typing is limited to US ASCII on one line. Run `orca emulator attach` first to type any text.'
+    )
+  }
   ensureAdbOk(
-    await runner(sdk.adb, androidShellArgs(serial, ['input', 'text', text.replace(/ /g, '%s')])),
+    await runner(
+      sdk.adb,
+      androidShellArgs(serial, ['input', 'text', quotePosixShell(text.replace(/ /g, '%s'))])
+    ),
     'adb type'
   )
 }
@@ -128,8 +135,7 @@ export async function androidExec(
   serial: string,
   command: string
 ): Promise<string> {
-  // Pass the whole command as a single arg so the device shell parses quotes,
-  // pipes, and compound commands instead of naively splitting on spaces.
+  // Preserve shell quoting and compound commands by passing the command as one argument.
   const result = ensureAdbOk(await runner(sdk.adb, androidShellArgs(serial, [command])), 'adb exec')
   return result.stdout
 }

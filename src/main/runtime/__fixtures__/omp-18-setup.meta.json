@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-10-01T05:49:50.289Z",
+  "platform": "darwin",
+  "command": [
+    "/bin/zsh",
+    "-f",
+    "-c",
+    "cd <isolated-capture-cwd> && exec <bun> <isolated-omp-18.4.5>/dist/cli.js --no-session --no-extensions --no-skills --no-rules --no-lsp --no-prewalk"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "OMP 18.4.5 isolated HOME, no credentials; startup.checkUpdate=false, marketplace.autoUpdate=off; command paths redacted; HOME/XDG/config isolated, no provider credentials; startup.checkUpdate=false, marketplace.autoUpdate=off; identifying cwd labels scrubbed with same-length replacements",
+  "exitCode": 129,
+  "sends": []
+}

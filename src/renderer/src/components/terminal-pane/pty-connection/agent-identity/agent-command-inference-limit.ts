@@ -1,0 +1,1 @@
+export const MANUAL_AGENT_COMMAND_MAX_CHARS = 4096

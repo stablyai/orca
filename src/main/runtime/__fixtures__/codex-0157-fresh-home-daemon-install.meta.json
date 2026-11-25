@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T21:45:00.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.0, plain launch (no -m/-c) on a fresh CODEX_HOME. The provisional screen reads `model: loading` while Codex installs and starts its shared daemon (`Installing daemon from CLI version 0.157.0`); 0.157 discards typed input during that start. The live header fills in at the end. Cut 6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

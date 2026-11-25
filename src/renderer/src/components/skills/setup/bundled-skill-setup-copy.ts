@@ -1,0 +1,146 @@
+import type {
+  BundledSkillInstallResult,
+  BundledSkillPlan
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import {
+  bundledSkillLocation,
+  type BundledSkillLocation
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
+import { bundledSkillInstallAgents } from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { agentNames } from '../freshness/skill-plan-op-copy'
+import type { SkillBackupLocation } from '../freshness/skill-backup-location'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+
+export type BundledSkillSetupChanges = {
+  agents: string[]
+  alreadyInstalled: boolean
+  updates: boolean
+  replaced: boolean
+  notUpdated: BundledSkillLocation[]
+}
+
+/** Results count only operations that actually finished on the planned machine. */
+export function bundledSkillSetupChanges(
+  plan: BundledSkillPlan,
+  result?: BundledSkillInstallResult
+): BundledSkillSetupChanges {
+  const entries = plan.skills.map((entry) => ({
+    ...entry,
+    ops: entry.ops.filter((op) => {
+      if (!result) {
+        return true
+      }
+      const outcome = result.skills.find((skill) => skill.name === entry.name)
+      return (
+        outcome?.status === 'ran' &&
+        outcome.ops.some(
+          (done) => done.path === op.path && done.kind === op.kind && done.status === 'done'
+        )
+      )
+    })
+  }))
+  return {
+    agents: bundledSkillInstallAgents(entries),
+    alreadyInstalled: plan.skills.some((entry) =>
+      entry.ops.some((op) => op.agents.length > 0 && op.observed.kind !== 'absent')
+    ),
+    replaced: entries.some((entry) => entry.ops.some((op) => op.kind === 'replace')),
+    notUpdated: entries.flatMap((entry) =>
+      entry.ops
+        .filter((op) => op.kind === 'leave')
+        .map((op) => bundledSkillLocation(op, plan.homeDirectory))
+    ),
+    updates: entries.some((entry) =>
+      entry.ops.some((op) => ['update', 'replace', 'restore'].includes(op.kind))
+    )
+  }
+}
+
+export function bundledSkillSetupActionLabel(
+  changes: BundledSkillSetupChanges,
+  t: Translate = translate
+): string {
+  if (changes.updates) {
+    return t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+  }
+  if (!changes.alreadyInstalled) {
+    return t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+  }
+  if (changes.agents.length > 1) {
+    return t(
+      'auto.components.settings.bundledSkillSetupCopy.installForMore',
+      'Install for {{value0}} more agents',
+      { value0: changes.agents.length }
+    )
+  }
+  const name = agentNames(changes.agents)
+  return name
+    ? t(
+        'auto.components.settings.bundledSkillSetupCopy.installForAgent',
+        'Install for {{value0}}',
+        { value0: name }
+      )
+    : t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+}
+
+export function bundledSkillSetupResultHeadline(
+  changes: BundledSkillSetupChanges,
+  t: Translate = translate
+): string {
+  const installed =
+    changes.agents.length > 1
+      ? changes.alreadyInstalled
+        ? t(
+            'auto.components.settings.bundledSkillSetupCopy.installedForMore',
+            'Installed for {{value0}} more agents',
+            { value0: changes.agents.length }
+          )
+        : t(
+            'auto.components.settings.bundledSkillSetupCopy.installedForAgents',
+            'Installed for {{value0}} agents',
+            { value0: changes.agents.length }
+          )
+      : changes.agents.length === 1
+        ? t(
+            'auto.components.settings.bundledSkillSetupCopy.installedForAgent',
+            'Installed for {{value0}}',
+            { value0: agentNames(changes.agents) }
+          )
+        : null
+  const updated = changes.replaced
+    ? t(
+        'auto.components.settings.bundledSkillSetupCopy.replacedWithBackup',
+        'Replaced · Your copy was saved as a backup'
+      )
+    : t('auto.components.skills.skillPlanOpCopy.updated', 'Updated')
+  return changes.updates
+    ? installed
+      ? `${updated} · ${installed}`
+      : updated
+    : (installed ?? t('auto.components.skills.skillPlanOpCopy.installed', 'Installed'))
+}
+
+/** Settings can't see what Replace will move, so it says "copy" rather than "folder". */
+export function bundledSkillReplaceMovesCopyHint(
+  backup: SkillBackupLocation | undefined,
+  t: Translate = translate
+): string {
+  if (!backup) {
+    return t(
+      'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopyToBackup',
+      'Replacing moves the current copy, including any extra files, to a backup.'
+    )
+  }
+  return backup.host.kind === 'remote'
+    ? t(
+        'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopyToFolderOnHost',
+        'Replacing moves the current copy, including any extra files, to {{folder}} on {{host}}.',
+        { folder: backup.folder, host: backup.host.name }
+      )
+    : t(
+        'auto.components.settings.bundledSkillSetupCopy.replaceMovesCopyToFolder',
+        'Replacing moves the current copy, including any extra files, to {{folder}}.',
+        { folder: backup.folder }
+      )
+}

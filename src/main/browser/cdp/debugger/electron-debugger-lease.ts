@@ -1,0 +1,60 @@
+import type { WebContents } from 'electron'
+import { invalidateBrowserGuestDiscardProtection } from '../../guest-lifecycle/manager/registration/browser-guest-discard-protection'
+import { forgetGuestFrameSessions } from '../input/guest-frame-input-sessions'
+
+type DebuggerLeaseState = {
+  attachedByLease: boolean
+  owners: Set<symbol>
+}
+
+export type ElectronDebuggerLease = {
+  release: () => void
+}
+
+const debuggerLeases = new WeakMap<WebContents, DebuggerLeaseState>()
+
+export function acquireElectronDebugger(webContents: WebContents): ElectronDebuggerLease {
+  if (webContents.isDestroyed()) {
+    throw new Error('Browser tab is no longer available')
+  }
+
+  const dbg = webContents.debugger
+  let state = debuggerLeases.get(webContents)
+  if (!state) {
+    state = { attachedByLease: false, owners: new Set() }
+    debuggerLeases.set(webContents, state)
+  }
+
+  if (!dbg.isAttached()) {
+    dbg.attach('1.3')
+    state.attachedByLease = true
+    invalidateBrowserGuestDiscardProtection(webContents)
+  }
+
+  const owner = Symbol('electron-debugger-lease')
+  state.owners.add(owner)
+  let released = false
+
+  return {
+    release: () => {
+      if (released) {
+        return
+      }
+      released = true
+      state.owners.delete(owner)
+      if (state.owners.size > 0) {
+        return
+      }
+      debuggerLeases.delete(webContents)
+      if (!state.attachedByLease || webContents.isDestroyed() || !dbg.isAttached()) {
+        return
+      }
+      try {
+        dbg.detach()
+        forgetGuestFrameSessions(webContents)
+      } catch {
+        // The tab may be destroyed or debugger ownership may have changed.
+      }
+    }
+  }
+}

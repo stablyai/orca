@@ -1,0 +1,53 @@
+/** Windows normalizes these names even when the host doing validation does not. */
+const WINDOWS_DEVICE_NAME_RE =
+  /^(?:con|prn|aux|nul|clock\$|conin\$|conout\$|com[1-9\u00B9\u00B2\u00B3]|lpt[1-9\u00B9\u00B2\u00B3])(?:\..*)?$/i
+
+const WINDOWS_FORBIDDEN_CHAR_RE = /[<>:"|?*]/
+
+// Why a regex beside the predicates: published JSON Schemas carry it as `pattern`, so editors
+// flag the character rules; only Windows device names are left to the predicate.
+const PATH_SEGMENT = String.raw`[^<>:"|?*\x00-\x1f\\/]*[^<>:"|?*\x00-\x1f\\/. ]`
+export const PLUGIN_RELATIVE_PATH_RE = new RegExp(`^${PATH_SEGMENT}(?:[\\\\/]${PATH_SEGMENT})*$`)
+/** A normalized POSIX directory inside a repository: `/` separators only, no dot segments. */
+export const PLUGIN_REPOSITORY_PATH_RE = new RegExp(`^${PATH_SEGMENT}(?:/${PATH_SEGMENT})*$`)
+
+export function pluginPathSegmentError(segment: string): string | null {
+  if (segment.length === 0 || segment === '.' || segment === '..') {
+    return 'empty and dot path segments are not allowed'
+  }
+  if (segment.endsWith('.') || segment.endsWith(' ')) {
+    return 'path segments may not end with a dot or space'
+  }
+  if (
+    WINDOWS_FORBIDDEN_CHAR_RE.test(segment) ||
+    [...segment].some((character) => character.charCodeAt(0) <= 31)
+  ) {
+    return 'path segment contains a Windows-forbidden character or alternate-data-stream colon'
+  }
+  if (WINDOWS_DEVICE_NAME_RE.test(segment)) {
+    return 'path segment is a Windows reserved device name'
+  }
+  return null
+}
+
+export function pluginRelativePathError(value: string): string | null {
+  if (value.length === 0 || value.startsWith('/') || value.startsWith('\\')) {
+    return 'must be a non-empty relative path'
+  }
+  const segments = value.split(/[\\/]/)
+  for (const segment of segments) {
+    const error = pluginPathSegmentError(segment)
+    if (error) {
+      return error
+    }
+  }
+  return null
+}
+
+export function isSafePluginRelativePath(value: string): boolean {
+  return pluginRelativePathError(value) === null
+}
+
+export function isPluginRepositoryPath(value: string): boolean {
+  return PLUGIN_REPOSITORY_PATH_RE.test(value) && pluginRelativePathError(value) === null
+}

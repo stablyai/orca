@@ -1,16 +1,18 @@
 import type React from 'react'
+import { sourceControlVariableDescription } from './source-control-variable-description'
 import { Braces } from 'lucide-react'
 import {
   SOURCE_CONTROL_ACTION_VARIABLE_INFO,
   SOURCE_CONTROL_ACTION_VARIABLES,
-  type SourceControlActionId
-} from '../../../../shared/source-control-ai-actions'
+  type SourceControlActionVariable
+} from '../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import type { AiActionId } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import { Button } from '../ui/button'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '../ui/hover-card'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SourceControlActionVariableChipsProps = {
-  actionId: SourceControlActionId
+  actionId: AiActionId
   disabled?: boolean
   variablePreviews?: Partial<Record<string, string>>
   onInsert: (variable: string) => void
@@ -22,9 +24,33 @@ function hasVariablePreview(
 ): boolean {
   return Boolean(
     variablePreviews &&
-    Object.prototype.hasOwnProperty.call(variablePreviews, variable) &&
+    Object.hasOwn(variablePreviews, variable) &&
     variablePreviews[variable] !== undefined &&
     variablePreviews[variable] !== null
+  )
+}
+
+function SourceControlVariableSample({
+  label,
+  value
+}: {
+  label: string
+  value: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="space-y-1">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </div>
+      <pre className="rounded-sm bg-background/60 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+        {value ||
+          t(
+            'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
+            '(empty)'
+          )}
+      </pre>
+    </div>
   )
 }
 
@@ -32,33 +58,20 @@ function SourceControlVariableDetails({
   variable,
   preview
 }: {
-  variable: string
+  variable: SourceControlActionVariable
   preview?: string
 }): React.JSX.Element {
-  if (preview !== undefined) {
-    if (variable === 'basePrompt') {
-      return (
-        <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {preview ||
-            translate(
-              'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
-              '(empty)'
-            )}
-        </pre>
-      )
-    }
-
+  const t = useTranslate()
+  // Why: for `basePrompt` the preview *is* the content — the static card only restates it.
+  if (preview !== undefined && variable === 'basePrompt') {
     return (
-      <div className="space-y-1.5">
-        <div className="font-mono text-[11px] text-muted-foreground">{`{${variable}}`}</div>
-        <pre className="rounded-sm bg-background/60 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {preview ||
-            translate(
-              'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
-              '(empty)'
-            )}
-        </pre>
-      </div>
+      <pre className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
+        {preview ||
+          t(
+            'auto.components.source.control.SourceControlActionVariableChips.4bf6d88039',
+            '(empty)'
+          )}
+      </pre>
     )
   }
 
@@ -67,19 +80,25 @@ function SourceControlVariableDetails({
     <div className="max-w-80 space-y-2 text-left leading-relaxed">
       <div className="space-y-0.5">
         <div className="font-mono text-[11px]">{`{${variable}}`}</div>
-        <div className="text-muted-foreground">{info.description}</div>
+        <div className="text-muted-foreground">{sourceControlVariableDescription(variable, t)}</div>
       </div>
-      <div className="space-y-1">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-          {translate(
-            'auto.components.source.control.SourceControlActionVariableChips.6b921a0ac2',
-            'Example'
+      <SourceControlVariableSample
+        label={t(
+          'auto.components.source.control.SourceControlActionVariableChips.6b921a0ac2',
+          'Example'
+        )}
+        value={info.example}
+      />
+      {/* Previews supplement the warning that missing linkedIssue turns Fixes #{linkedIssue} into Fixes #. */}
+      {preview !== undefined ? (
+        <SourceControlVariableSample
+          label={t(
+            'auto.components.source.control.SourceControlActionVariableChips.7377483644',
+            'This workspace'
           )}
-        </div>
-        <pre className="rounded-sm bg-background/60 p-2 whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed">
-          {info.example}
-        </pre>
-      </div>
+          value={preview}
+        />
+      ) : null}
     </div>
   )
 }
@@ -90,11 +109,12 @@ export function SourceControlActionVariableChips({
   variablePreviews,
   onInsert
 }: SourceControlActionVariableChipsProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
         <Braces className="size-3" />
-        {translate(
+        {t(
           'auto.components.source.control.SourceControlActionVariableChips.1b77798d5f',
           'Variables'
         )}

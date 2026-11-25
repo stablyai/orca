@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-30T19:11:25.475Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy 1.2.14, macOS, Google account, AGY_CLI_HIDE_ACCOUNT_INFO=1, one turn, recording stopped while the answer was streaming. Truncated 111495 -> 11142 bytes, after the first frame with the answer streaming under the spinner.",
+  "exitCode": 0
+}

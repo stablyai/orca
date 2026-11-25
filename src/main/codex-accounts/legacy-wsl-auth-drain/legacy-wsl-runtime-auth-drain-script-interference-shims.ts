@@ -1,0 +1,79 @@
+import { chmodSync, existsSync, symlinkSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { DRAIN_APPLY_INTERRUPTION_JS } from './legacy-wsl-runtime-auth-drain-interruption-source'
+import type { DrainApplyInterference } from './legacy-wsl-runtime-auth-drain-script-run-types'
+
+export function installDrainInterferenceShims(
+  binDir: string,
+  options: Pick<
+    DrainApplyInterference,
+    | 'killAfterDestinationInstall'
+    | 'killAfterSourceRemoval'
+    | 'rewriteAfterHashCall'
+    | 'replaceTargetOnHashOf'
+  >
+): void {
+  const shimPath = join(binDir, 'sha256sum')
+  const nativeHash = '/usr/bin/sha256sum'
+  // Count hashes only for interference that targets a hash boundary.
+  if (
+    process.platform === 'linux' &&
+    !options.rewriteAfterHashCall &&
+    !options.replaceTargetOnHashOf &&
+    existsSync(nativeHash)
+  ) {
+    symlinkSync(nativeHash, shimPath)
+  } else {
+    writeFileSync(
+      shimPath,
+      `#!/usr/bin/env node
+  const { createHash } = require('node:crypto')
+  const fs = require('node:fs')
+  const file = process.argv[process.argv.length - 1]
+  process.stdout.write(
+  createHash('sha256').update(fs.readFileSync(file)).digest('hex') + '  ' + file + '\\n'
+  )
+  const calls = Number(fs.readFileSync(process.env.HASH_COUNTER, 'utf8')) + 1
+  fs.writeFileSync(process.env.HASH_COUNTER, String(calls))
+  if (process.env.REWRITE_AFTER && calls === Number(process.env.REWRITE_AFTER)) {
+  fs.writeFileSync(process.env.REWRITE_TARGET, process.env.REWRITE_BYTES)
+  }
+  // Renames preserve the pinned inode's hash, so detecting replacement requires an identity check.
+  if (process.env.REPLACE_ON_HASH_OF && file.includes(process.env.REPLACE_ON_HASH_OF)) {
+  const staged = process.env.REPLACE_PATH + '.intruder'
+  fs.writeFileSync(staged, process.env.REPLACE_BYTES)
+  fs.renameSync(staged, process.env.REPLACE_PATH)
+  }
+  `
+    )
+    chmodSync(shimPath, 0o755)
+  }
+  if (options.killAfterDestinationInstall || options.killAfterSourceRemoval) {
+    const mvShimPath = join(binDir, 'mv')
+    writeFileSync(
+      mvShimPath,
+      `#!/usr/bin/env node
+  const { spawnSync } = require('node:child_process')
+  const fs = require('node:fs')
+  ${DRAIN_APPLY_INTERRUPTION_JS}
+  const args = process.argv.slice(2)
+  const result = spawnSync('/bin/mv', args, { stdio: 'inherit' })
+  const from = args.at(-2) ?? ''
+  const to = args.at(-1) ?? ''
+  const sourceInstalled =
+  process.env.KILL_SOURCE === '1' &&
+  from.endsWith('/legacy/auth.json') &&
+  to.endsWith('.orca-drain-live-source')
+  const destinationInstalled =
+  process.env.KILL_DESTINATION === '1' &&
+  from.includes('/account/auth.json.orca-drain-snapshot-') &&
+  to.endsWith('/account/auth.json')
+  if (result.status === 0 && (sourceInstalled || destinationInstalled)) {
+  interruptDrainApply(1)
+  }
+  process.exit(result.status ?? 1)
+  `
+    )
+    chmodSync(mvShimPath, 0o755)
+  }
+}

@@ -1,0 +1,203 @@
+import { OrcaRuntimeWithCreatePtyHeadlessTerminalState } from './headless-terminal-state'
+import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
+import type {
+  PtyProviderBufferSnapshot,
+  PtyProviderBufferSnapshotOptions
+} from '../../../providers/pty/provider-contract'
+import type { ProviderTerminalBufferWait } from '../records/runtime-terminal-state-records'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from './provider-snapshot-budget'
+
+export abstract class OrcaRuntimeWithSerializeTerminalBufferFromAvailableState extends OrcaRuntimeWithCreatePtyHeadlessTerminalState {
+  protected abstract captureProviderTerminalBuffer(
+    ptyId: string,
+    opts: PtyProviderBufferSnapshotOptions,
+    generation: number
+  ): Promise<PtyProviderBufferSnapshot | null>
+
+  protected async serializeTerminalBufferFromAvailableState(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{
+    data: string
+    frameRestoreAnsi?: string
+    cols: number
+    rows: number
+    cwd?: string | null
+    lastTitle?: string
+    seq?: number
+    source?: 'headless' | 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
+    alternateScreen?: boolean
+    pendingEscapeTailAnsi?: string
+    kittyKeyboardFlags?: number
+    terminalOwner?: 'shell'
+  } | null> {
+    const restoredSnapshot = await this.serializePreferredRestoredTerminalBuffer(ptyId, opts)
+    if (restoredSnapshot) {
+      return restoredSnapshot
+    }
+    const headlessSnapshot = await this.serializeHeadlessTerminalBuffer(ptyId, opts)
+    if (headlessSnapshot) {
+      return headlessSnapshot
+    }
+
+    const rendererSnapshot = await this.serializeRendererTerminalBuffer(ptyId, opts)
+    if (!rendererSnapshot) {
+      return this.serializeProviderTerminalBuffer(ptyId, opts)
+    }
+    if (rendererSnapshot.data.length > 0) {
+      return rendererSnapshot
+    }
+    // Why: parked desktop panes register serializers before their xterm has
+    // hydrated. Treat that empty shell as provisional so retained provider
+    // history can restore mobile without forcing the desktop pane to mount.
+    const providerSnapshot = await this.serializeProviderTerminalBuffer(ptyId, opts)
+    return providerSnapshot &&
+      (providerSnapshot.data.length > 0 || Boolean(providerSnapshot.scrollbackAnsi))
+      ? providerSnapshot
+      : rendererSnapshot
+  }
+
+  protected async serializePreferredRestoredTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ) {
+    if (!this.providerSnapshotPreferredPtys.has(ptyId)) {
+      return null
+    }
+    // Pre-attach bytes are only a suffix; older providers can fall back to the renderer.
+    return (
+      (await this.serializeProviderTerminalBuffer(ptyId, opts)) ??
+      (await this.serializeRendererTerminalBuffer(ptyId, opts))
+    )
+  }
+
+  async serializeRendererTerminalBuffer(
+    ptyId: string,
+    opts: { scrollbackRows?: number } = {}
+  ): Promise<{
+    data: string
+    frameRestoreAnsi?: string
+    cols: number
+    rows: number
+    seq?: number
+    cwd?: string | null
+    lastTitle?: string
+    source?: 'renderer'
+    oscLinks?: TerminalOscLinkRange[]
+    pendingEscapeTailAnsi?: string
+    kittyKeyboardFlags?: number
+  } | null> {
+    if (this.ptyController?.hasRendererSerializer?.(ptyId) === false) {
+      return null
+    }
+    let rendererSnapshot: {
+      data: string
+      cols: number
+      rows: number
+      seq?: number
+      cwd?: string | null
+      lastTitle?: string
+      oscLinks?: TerminalOscLinkRange[]
+      pendingEscapeTailAnsi?: string
+      kittyKeyboardFlags?: number
+    } | null = null
+    try {
+      rendererSnapshot = await (this.ptyController?.serializeBuffer?.(ptyId, {
+        scrollbackRows: opts.scrollbackRows
+      }) ?? Promise.resolve(null))
+    } catch {
+      // Why: terminal snapshots should not depend on a mounted renderer pane.
+      // If renderer serialization races reload/unmount, callers can still use
+      // their existing null fallback paths.
+    }
+    return rendererSnapshot
+      ? this.preferTrackedLastTitle(ptyId, {
+          ...rendererSnapshot,
+          cwd: rendererSnapshot.cwd ?? this.terminalCwdByPtyId.get(ptyId),
+          source: 'renderer' as const,
+          ...(rendererSnapshot.pendingEscapeTailAnsi
+            ? { pendingEscapeTailAnsi: rendererSnapshot.pendingEscapeTailAnsi }
+            : {})
+        })
+      : null
+  }
+
+  protected async serializeProviderTerminalBuffer(
+    ptyId: string,
+    opts: PtyProviderBufferSnapshotOptions = {},
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+  ): Promise<PtyProviderBufferSnapshot | null> {
+    return (await this.awaitProviderTerminalBuffer(ptyId, opts, wait)).snapshot
+  }
+
+  /** `late` is the capture still running when the bounded wait gave up, so a caller can act once it lands. */
+  protected async awaitProviderTerminalBuffer(
+    ptyId: string,
+    opts: PtyProviderBufferSnapshotOptions = {},
+    wait: { timeoutMs?: number; retireOnTimeout?: boolean } = {}
+  ): Promise<ProviderTerminalBufferWait> {
+    const generation = this.getPtyLifecycleGeneration(ptyId)
+    const scrollbackRows = opts.visibleProjection
+      ? 0
+      : Math.max(0, Math.floor(opts.scrollbackRows ?? 0))
+    const acquisitions = this.providerBufferAcquisitionsByPtyId.get(ptyId) ?? {}
+    // Replay readers need ANSI even while a visible projection is pending.
+    const kind =
+      opts.visibleProjection && this.ptyController?.supportsVisibleProjectionSnapshot?.(ptyId)
+        ? 'visible'
+        : 'ansi'
+    let acquisition = acquisitions[kind]
+    const ansi = acquisitions.ansi
+    if (
+      kind === 'visible' &&
+      (acquisition?.generation !== generation || acquisition.timedOut) &&
+      ansi?.generation === generation &&
+      !ansi.timedOut
+    ) {
+      acquisition = ansi
+    }
+    if (
+      acquisition?.generation !== generation ||
+      (!acquisition.timedOut && acquisition.scrollbackRows < scrollbackRows)
+    ) {
+      const captureOptions =
+        opts.visibleProjection && kind === 'ansi' ? { scrollbackRows: 0 } : opts
+      const promise = this.captureProviderTerminalBuffer(ptyId, captureOptions, generation)
+      acquisition = { generation, scrollbackRows, promise, timedOut: false }
+      acquisitions[kind] = acquisition
+      this.providerBufferAcquisitionsByPtyId.set(ptyId, acquisitions)
+      void promise.finally(() => {
+        if (acquisitions[kind] === acquisition) {
+          delete acquisitions[kind]
+          if (
+            !acquisitions.ansi &&
+            !acquisitions.visible &&
+            this.providerBufferAcquisitionsByPtyId.get(ptyId) === acquisitions
+          ) {
+            this.providerBufferAcquisitionsByPtyId.delete(ptyId)
+          }
+        }
+      })
+    }
+    if (acquisition.timedOut) {
+      return { snapshot: null, late: acquisition.promise }
+    }
+    // Every reader shares this bound: a provider that never answers must not hold its caller.
+    const result = await withTimeout<
+      { settled: true; value: PtyProviderBufferSnapshot | null } | { settled: false }
+    >(
+      acquisition.promise.then((value) => ({ settled: true as const, value })),
+      wait.timeoutMs ?? AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS,
+      { settled: false as const }
+    )
+    if (!result.settled) {
+      if (wait.retireOnTimeout) {
+        acquisition.timedOut = true
+      }
+      return { snapshot: null, late: acquisition.promise }
+    }
+    return { snapshot: result.value, late: null }
+  }
+}

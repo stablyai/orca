@@ -1,0 +1,144 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
+import {
+  pickParsedAgentStatusPayload,
+  type ParsedAgentStatusPayload
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../../shared/workspace-layout/stable-pane-id'
+import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
+import { structuredAgentSessionIdFromTabId } from '../../../../shared/agent-session/view/structured-agent-session-tab-id'
+import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
+import { createChatOrcaSessionIdResolver } from '../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+
+export type ConnectedPtyEvidence = {
+  tabIds: ReadonlySet<string>
+  paneKeys: ReadonlySet<string>
+  /** Join status rows to connected PTYs by issued handle; this also rescues rows whose pane binding was cleared. */
+  ptyIdByTerminalHandle: ReadonlyMap<string, string>
+  /** A pane's handle when exactly one connected PTY holds it; a restored hook row has none of its own. */
+  terminalHandleByPaneKey: ReadonlyMap<string, string>
+}
+
+/** Join only the host-owned summary of this exact chat, never a remote pane with a similar id. */
+function publishedStructuredChildren(
+  entry: AgentStatusIpcPayload,
+  read: ((sessionId: string) => AgentSessionStatusSummary | undefined) | undefined
+) {
+  const tabId = entry.tabId
+  const sessionId = tabId ? structuredAgentSessionIdFromTabId(tabId) : null
+  if (!read || !entry.structuredHost || entry.connectionId !== null || !tabId || !sessionId) {
+    return undefined
+  }
+  if (entry.paneKey !== structuredAgentSessionPaneKey(tabId, sessionId)) {
+    return undefined
+  }
+  const summary = read(sessionId)
+  return summary?.workspaceId === entry.worktreeId ? (summary?.children ?? []) : undefined
+}
+
+/** Admit hook-server rows using their execution-host evidence. */
+export function collectRuntimeWorktreePtyAgentSources(args: {
+  hookSnapshots: readonly AgentStatusIpcPayload[]
+  readStructuredSummary?: (sessionId: string) => AgentSessionStatusSummary | undefined
+  mirroredWorktreeIdByTabId: ReadonlyMap<string, string>
+  connectedPtyEvidence: ConnectedPtyEvidence
+  /** A chat's /clear root: the Orca session ID its row names. Defaults to this host's records. */
+  chatOrcaSessionId?: (sessionId: string) => string
+}): RuntimeWorktreeAgentSource[] {
+  const rowSources = new Map<
+    string,
+    RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
+  >()
+  let chatOrcaSessionId = args.chatOrcaSessionId
+  for (const source of args.hookSnapshots) {
+    const identity = source.structuredHost
+      ? null
+      : paneAgentIdentity({ paneKey: source.paneKey, row: source })
+    const entry = source.structuredHost ? source : identity?.status
+    if (
+      !entry ||
+      identity?.ended ||
+      entry.restoredUnconfirmed === true ||
+      source.providerSessionOnly === true
+    ) {
+      continue
+    }
+    const hookPayload = pickParsedAgentStatusPayload(entry)
+    const children = publishedStructuredChildren(entry, args.readStructuredSummary)
+    const terminalHandle =
+      entry.terminalHandle ??
+      (entry.structuredHost
+        ? undefined
+        : args.connectedPtyEvidence.terminalHandleByPaneKey.get(entry.paneKey))
+    const chatSessionId =
+      entry.structuredHost && entry.connectionId === null && entry.tabId
+        ? structuredAgentSessionIdFromTabId(entry.tabId)
+        : null
+    const orcaSessionId =
+      entry.orcaSessionId ??
+      (chatSessionId
+        ? (chatOrcaSessionId ??= createChatOrcaSessionIdResolver())(chatSessionId)
+        : undefined)
+    rowSources.set(entry.paneKey, {
+      paneKey: entry.paneKey,
+      ptyId: terminalHandle
+        ? args.connectedPtyEvidence.ptyIdByTerminalHandle.get(terminalHandle)
+        : undefined,
+      terminalHandle,
+      tabId: entry.tabId,
+      worktreeId: entry.worktreeId,
+      connectionId: entry.connectionId,
+      payload: hookPayload,
+      state: entry.state,
+      ...(entry.workingMode ? { workingMode: entry.workingMode } : {}),
+      agentType: entry.agentType ?? null,
+      ...(entry.providerSession?.id ? { providerSessionId: entry.providerSession.id } : {}),
+      ...(orcaSessionId ? { orcaSessionId } : {}),
+      prompt: entry.prompt,
+      lastAssistantMessage: entry.lastAssistantMessage ?? null,
+      toolName: entry.toolName ?? null,
+      toolInput: entry.toolInput ?? null,
+      interrupted: false,
+      ...agentVerdictFields(entry),
+      stateStartedAt: entry.stateStartedAt,
+      // A replay advances delivery order, not the age of the evidence shown by worktree.ps.
+      updatedAt: entry.evidenceObservedAt ?? entry.receivedAt,
+      ...(children !== undefined ? { children } : {}),
+      ...(entry.subagents !== undefined ? { subagents: entry.subagents } : {}),
+      ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
+      ...(entry.programStatus ? { programStatus: entry.programStatus } : {})
+    })
+  }
+  const sources: RuntimeWorktreeAgentSource[] = []
+  for (const source of rowSources.values()) {
+    const tabId =
+      source.tabId ??
+      parsePaneKey(source.paneKey)?.tabId ??
+      parseLegacyNumericPaneKey(source.paneKey)?.tabId
+    const mirroredWorktreeId = tabId ? args.mirroredWorktreeIdByTabId.get(tabId) : undefined
+    const hasLivePty =
+      // Resolved only from a connected PTY's handle, so its presence is the liveness evidence.
+      source.ptyId !== undefined ||
+      args.connectedPtyEvidence.paneKeys.has(source.paneKey) ||
+      (tabId !== undefined && args.connectedPtyEvidence.tabIds.has(tabId))
+    // Structured rows have no PTY; their host removes them on close, so roster membership proves liveness.
+    if (
+      source.structuredHost === undefined &&
+      tabId !== undefined &&
+      mirroredWorktreeId === undefined &&
+      isLocalHookConnectionId(source.connectionId) &&
+      !hasLivePty
+    ) {
+      continue
+    }
+    const worktreeId = mirroredWorktreeId ?? source.worktreeId
+    sources.push({ ...source, tabId, worktreeId, ...(hasLivePty ? { hasLivePty: true } : {}) })
+  }
+  return sources
+}

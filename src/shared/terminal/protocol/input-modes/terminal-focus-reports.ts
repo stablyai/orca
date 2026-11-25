@@ -1,0 +1,5 @@
+export const TERMINAL_FOCUS_IN_SEQUENCE = '\x1b[I'
+
+export const TERMINAL_FOCUS_OUT_SEQUENCE = '\x1b[O'
+
+export const FOCUS_REPORTING_DISABLE_SEQUENCE = '\x1b[?1004l'

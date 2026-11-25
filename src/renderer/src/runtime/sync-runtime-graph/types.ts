@@ -1,0 +1,152 @@
+import type { AppState } from '@/store/types'
+import type { RuntimeMobileTerminalTheme } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
+
+export type RuntimeMobileSessionSyncKey = {
+  // Reference changes signal layout/title updates without stringifying thousands of tabs.
+  terminalLayoutsByTabId: AppState['terminalLayoutsByTabId']
+  runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
+  nativeChatLaunchDraftByTabId: AppState['nativeChatLaunchDraftByTabId']
+  folderWorkspaces: AppState['folderWorkspaces']
+  groupsByWorktree: AppState['groupsByWorktree']
+  activeGroupIdByWorktree: AppState['activeGroupIdByWorktree']
+  layoutByWorktree: AppState['layoutByWorktree']
+  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
+  tabBarOrderByWorktree: AppState['tabBarOrderByWorktree']
+  activeFileId: AppState['activeFileId']
+  activeFileIdByWorktree: AppState['activeFileIdByWorktree']
+  activeTabType: AppState['activeTabType']
+  activeTabTypeByWorktree: AppState['activeTabTypeByWorktree']
+  activeTabId: AppState['activeTabId']
+  activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
+  // Sound changes nothing else a row reads, so a host's speaker icon needs its own publish trigger.
+  browserAudiblePageIds: AppState['browserAudiblePageIds']
+  browserAudioMutedTabIds: AppState['browserAudioMutedTabIds']
+  generatedTabTitlesEnabled: boolean
+  systemPrefersDark: boolean | null
+  terminalThemeProjection: string
+  tabsProjection: number
+  openFilesProjection: string
+  browserProjection: string
+  editorDraftsProjection: ReadonlyMap<string, string>
+}
+
+export type OpenFileByWorktreeAndId = Map<string, Map<string, AppState['openFiles'][number]>>
+export type OpenFileIndexes = {
+  byWorktreeAndId: OpenFileByWorktreeAndId
+  idsByWorktree: Map<string, string[]>
+}
+export type FallbackEditorTabTarget = {
+  tabId: string
+  groupId: string | null
+}
+export type TabsProjectionCacheEntry = {
+  worktreeId: string
+  tabs: NonNullable<AppState['tabsByWorktree'][string]>
+  projection: string
+}
+export type TabsProjectionCache = {
+  source: AppState['tabsByWorktree']
+  /** In source order; addressed writes keep surviving keys in place and append added ones. */
+  entries: Map<string, TabsProjectionCacheEntry>
+  revision: number
+}
+export type OpenFilesProjectionCacheEntry = {
+  file: AppState['openFiles'][number]
+  projection: string
+}
+export type OpenFilesProjectionCache = {
+  source: AppState['openFiles']
+  entries: Map<string, OpenFilesProjectionCacheEntry>
+  projection: string
+}
+export type BrowserWorkspacesProjectionCacheEntry = {
+  workspaces: NonNullable<AppState['browserTabsByWorktree'][string]>
+  keyJson: string
+  projection: string
+}
+export type BrowserWorkspacesProjectionCache = {
+  source: AppState['browserTabsByWorktree']
+  entries: Map<string, BrowserWorkspacesProjectionCacheEntry>
+  projection: string
+}
+export type BrowserPagesProjectionCacheEntry = {
+  pages: NonNullable<AppState['browserPagesByWorkspace'][string]>
+  keyJson: string
+  projection: string
+}
+export type BrowserPagesProjectionCache = {
+  source: AppState['browserPagesByWorkspace']
+  entries: Map<string, BrowserPagesProjectionCacheEntry>
+  projection: string
+}
+/** One dirty file's content and last published draft stamp. */
+export type EditorDraftHashCacheEntry = {
+  content: string
+  hash: string
+}
+export type EditorDraftHashCache = {
+  source: AppState['editorDrafts']
+  openFiles: AppState['openFiles']
+  entries: Map<string, EditorDraftHashCacheEntry>
+  hashByFileId: Map<string, string>
+}
+/** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
+export type MobileSessionPublicationInputs = {
+  browserTabsByWorktree: AppState['browserTabsByWorktree']
+  openFileIndexes: OpenFileIndexes
+  editorDraftVersionByFileId: ReadonlyMap<string, string>
+  generatedTitlesEnabled: boolean
+  terminalTheme: RuntimeMobileTerminalTheme | undefined
+}
+/** Capture mounted PaneManager/DOM inputs once per publication; builders cannot consult untracked live state, so mounted snapshots memoize too. */
+export type MountedTerminalSurfaceCapture = {
+  paneLeafIds: readonly string[]
+  hasLiveActivePane: boolean
+  liveActiveLeafId: string | null
+  liveLayoutRoot: TerminalPaneLayoutNode | null
+  numericPaneIdByLeafId: ReadonlyMap<string, number | null>
+  ptyIdByNumericPaneId: ReadonlyMap<number, string | null>
+  tabWideAgentHintLeafId: string | null
+}
+/** Complete per-worktree inputs constrain builders at compile time rather than relying on review. */
+export type MobileSessionWorktreeInputs = {
+  hostTabIds: ReadonlyMap<string, string>
+  worktreeId: string
+  worktreeInstanceId: string | undefined
+  terminalTabs: AppState['tabsByWorktree'][string]
+  browserWorkspaces: AppState['browserTabsByWorktree'][string]
+  browserRuntimeEnvironmentId: string | null
+  unifiedTabs: AppState['unifiedTabsByWorktree'][string]
+  groups: AppState['groupsByWorktree'][string]
+  tabBarOrder: AppState['tabBarOrderByWorktree'][string] | undefined
+  activeGroupId: string | null
+  tabGroupLayout: TabGroupLayoutNode | undefined
+  openFilesById: ReadonlyMap<string, AppState['openFiles'][number]> | undefined
+  openFileIds: readonly string[]
+  terminalLayoutByTabId: ReadonlyMap<string, AppState['terminalLayoutsByTabId'][string]>
+  paneTitlesByTabId: ReadonlyMap<string, AppState['runtimePaneTitlesByTabId'][string]>
+  launchDraftByPaneKey: ReadonlyMap<
+    string,
+    NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
+  >
+  editorDraftVersionByFileId: ReadonlyMap<string, string>
+  pagesByBrowserWorkspaceId: ReadonlyMap<
+    string,
+    NonNullable<AppState['browserPagesByWorkspace']>[string]
+  >
+  certificateFailureByBrowserPageId: ReadonlyMap<
+    string,
+    NonNullable<AppState['browserCertificateFailuresByPageId']>[string]
+  >
+  audibleBrowserPageIds: ReadonlyMap<string, true>
+  audioMutedBrowserWorkspaceIds: ReadonlyMap<string, true>
+  activeEditorFileId: string | null
+  activeEditorTabType: AppState['activeTabType'] | null
+  activeTerminalTabId: string | null
+  activeBrowserWorkspaceId: string | null
+  generatedTitlesEnabled: boolean
+  terminalTheme: RuntimeMobileTerminalTheme | undefined
+  mountedSurfaceCaptureByTabId: ReadonlyMap<string, MountedTerminalSurfaceCapture>
+}

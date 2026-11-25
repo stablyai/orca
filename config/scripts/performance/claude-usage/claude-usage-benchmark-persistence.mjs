@@ -1,0 +1,297 @@
+import assert from 'node:assert/strict'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
+import { dirname, extname, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { build, version } from 'esbuild'
+import { runProcessSync } from '@orca/process-host'
+
+const ROOT = fileURLToPath(new URL('../../../..', import.meta.url))
+const MIB = 1024 * 1024
+
+export function claudeBenchmarkSha256(value) {
+  return createHash('sha256').update(value).digest('hex')
+}
+
+export function resolveClaudeBenchmarkCommit(ref) {
+  const result = runProcessSync({
+    program: 'git',
+    args: ['rev-parse', '--verify', `${ref}^{commit}`],
+    cwd: ROOT,
+    timeoutMs: 10_000,
+    maxOutputBytes: MIB,
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+  })
+  assert.equal(result.code, 0, result.stderr)
+  return result.stdout.trim()
+}
+
+const SNAPSHOT_MODULE_PATHS = [
+  'src/main/usage/cache/usage-cache-snapshot-writer.ts',
+  'src/main/usage/usage-cache-snapshot-writer.ts',
+  'src/main/usage-cache-snapshot-writer.ts'
+]
+const PERSISTENCE_MODULE_PATHS = {
+  snapshot: SNAPSHOT_MODULE_PATHS,
+  lifecycle: [
+    'src/main/usage/provider-lifecycle/usage-provider-store-lifecycle.ts',
+    'src/main/usage/usage-provider-store-lifecycle.ts'
+  ],
+  sourceCache: [
+    'src/main/usage/cache/usage-source-cache-file.ts',
+    'src/main/usage/usage-source-cache-file.ts'
+  ]
+}
+
+function listClaudeBenchmarkModulePaths(commit, modulePaths) {
+  const listed = runProcessSync({
+    program: 'git',
+    args: ['ls-tree', '--name-only', commit, '--', ...modulePaths],
+    cwd: ROOT,
+    timeoutMs: 10_000,
+    maxOutputBytes: MIB,
+    env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+  })
+  assert.equal(listed.code, 0, listed.stderr)
+  assert.equal(listed.outputTruncated, false)
+  return new Set(listed.stdout.trim().split('\n'))
+}
+
+function persistenceEntry(mode, modulePaths) {
+  const exports = [
+    `export { UsageCacheSnapshotWriter } from './${modulePaths.snapshot.slice(0, -3)}';`,
+    `export { UsageProviderStoreLifecycle } from './${modulePaths.lifecycle.slice(0, -3)}';`
+  ]
+  if (mode === 'published') {
+    exports.push(`export { validatePersistedClaudeUsageProjections }
+      from './src/main/claude-usage/persisted-projection-validation';`)
+  } else if (mode === 'main') {
+    exports.push(`export { readUsageSourceCache as readSourceCache,
+      writeUsageSourceCache as writeSourceCache, splitUsageCacheFile as splitCacheFile }
+      from './${modulePaths.sourceCache.slice(0, -3)}';`)
+  } else {
+    exports.push(`export { readClaudeUsageSourceCache as readSourceCache,
+      writeClaudeUsageSourceCache as writeSourceCache, persistClaudeUsageSourceCache as persistSourceCache,
+      splitClaudeUsageCacheFile as splitCacheFile }
+      from './src/main/claude-usage/persisted-source-cache';
+      export { parseClaudeUsageReport as parseReport, serializeClaudeUsageReport as serializeReport }
+      from './src/main/claude-usage/persisted-usage-report';
+      export { encodeClaudeUsagePersistedState }
+      from './src/main/claude-usage/persisted-token-columns';`)
+  }
+  return exports.join('\n')
+}
+
+const INACTIVE_LIFECYCLE_IMPORTS = new Map([
+  [
+    'agent-token-usage-reporter',
+    'export class AgentTokenUsageReporter { constructor() { throw new Error("Inactive telemetry reached"); } }'
+  ],
+  [
+    'analytics-session-id-store',
+    'export class AnalyticsSessionIdStore { constructor() { throw new Error("Inactive analytics reached"); } }'
+  ],
+  ['telemetry/client', 'export const isTelemetryEnabled = () => false;'],
+  [
+    'usage-worktree-metadata',
+    'export const loadKnownUsageWorktreesByRepo = () => { throw new Error("Startup accessed worktrees"); };'
+  ]
+])
+
+export async function loadClaudeUsageBenchmarkPersistence(mode, commit = null, frozen = new Map()) {
+  const sourceFingerprints = {}
+  const stubFingerprints = {}
+  const modulePaths = Object.fromEntries(
+    Object.entries(PERSISTENCE_MODULE_PATHS).map(([name, paths]) => [name, paths[0]])
+  )
+  const nativeModulePaths = new Map()
+  if (typeof commit === 'string') {
+    const paths = listClaudeBenchmarkModulePaths(
+      commit,
+      Object.values(PERSISTENCE_MODULE_PATHS).flat()
+    )
+    for (const [name, candidates] of Object.entries(PERSISTENCE_MODULE_PATHS)) {
+      if (name === 'sourceCache' && mode !== 'main') {
+        continue
+      }
+      modulePaths[name] = candidates.find((path) => paths.has(path))
+      assert(modulePaths[name], `Pinned usage ${name} is absent`)
+    }
+  }
+  const result = await build({
+    stdin: { contents: persistenceEntry(mode, modulePaths), loader: 'ts', resolveDir: ROOT },
+    platform: 'node',
+    format: 'esm',
+    bundle: true,
+    write: false,
+    plugins: [
+      {
+        name: 'pinned-usage-persistence',
+        setup(bundler) {
+          bundler.onResolve({ filter: /usage-cache-snapshot-writer(?:\.ts)?$/ }, (args) => {
+            const resolved = relative(ROOT, resolve(args.resolveDir, args.path))
+              .split(sep)
+              .join('/')
+            const modulePath = resolved.endsWith('.ts') ? resolved : `${resolved}.ts`
+            return SNAPSHOT_MODULE_PATHS.includes(modulePath)
+              ? { path: resolve(ROOT, modulePaths.snapshot) }
+              : undefined
+          })
+          bundler.onResolve(
+            {
+              filter:
+                /agent-token-usage-reporter$|analytics-session-id-store$|telemetry\/client$|usage-worktree-metadata$/
+            },
+            (args) => {
+              const match = [...INACTIVE_LIFECYCLE_IMPORTS.keys()].find((path) =>
+                args.path.endsWith(path)
+              )
+              return match ? { path: match, namespace: 'inactive-lifecycle' } : undefined
+            }
+          )
+          bundler.onResolve({ filter: /^\./ }, (args) => {
+            if (typeof commit !== 'string') {
+              return undefined
+            }
+            const target = relative(ROOT, resolve(args.resolveDir, args.path)).split(sep).join('/')
+            if (!target.startsWith('src/')) {
+              return undefined
+            }
+            if (!nativeModulePaths.has(target)) {
+              const extensions = ['.tsx', '.ts', '.jsx', '.js', '.css', '.json']
+              const candidates = extname(target)
+                ? [target]
+                : [
+                    ...extensions.map((extension) => target + extension),
+                    ...extensions.map((extension) => `${target}/index${extension}`)
+                  ]
+              const paths = listClaudeBenchmarkModulePaths(commit, candidates)
+              const modulePath = candidates.find((path) => paths.has(path))
+              assert(modulePath, `Pinned usage source is absent: ${String(commit)}:${target}`)
+              nativeModulePaths.set(target, modulePath)
+            }
+            return { path: resolve(ROOT, nativeModulePaths.get(target)) }
+          })
+          bundler.onLoad({ filter: /.*/, namespace: 'inactive-lifecycle' }, (args) => {
+            const contents = INACTIVE_LIFECYCLE_IMPORTS.get(args.path)
+            stubFingerprints[args.path] = claudeBenchmarkSha256(contents)
+            return { contents, loader: 'js' }
+          })
+          bundler.onLoad({ filter: /[/\\]src[/\\].*\.[cm]?[jt]sx?$/ }, async ({ path }) => {
+            const modulePath = relative(ROOT, path).split(sep).join('/')
+            if (!modulePath.startsWith('src/')) {
+              return undefined
+            }
+            if (!frozen.has(path)) {
+              if (typeof commit === 'string') {
+                const pinned = runProcessSync({
+                  program: 'git',
+                  args: ['show', `${String(commit)}:${modulePath}`],
+                  cwd: ROOT,
+                  timeoutMs: 10_000,
+                  maxOutputBytes: MIB,
+                  env: { ...process.env, ORCA_BACKGROUND_LAUNCH: '1' }
+                })
+                assert.equal(pinned.code, 0, pinned.stderr)
+                assert.equal(pinned.outputTruncated, false, modulePath)
+                frozen.set(path, pinned.stdout)
+              } else {
+                frozen.set(path, readFile(path, 'utf8'))
+              }
+            }
+            const contents = await frozen.get(path)
+            sourceFingerprints[modulePath] = {
+              source: commit ?? 'worktree',
+              sha256: claudeBenchmarkSha256(contents)
+            }
+            const extension = extname(path).slice(1)
+            const loader =
+              extension === 'tsx' || extension === 'jsx'
+                ? extension
+                : extension.endsWith('ts')
+                  ? 'ts'
+                  : 'js'
+            return { contents, loader, resolveDir: dirname(path) }
+          })
+        }
+      }
+    ]
+  })
+  const code = result.outputFiles[0].text
+  return {
+    module: await import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`),
+    moduleUrl: `data:text/javascript;base64,${Buffer.from(code).toString('base64')}`,
+    bundleSha256: claudeBenchmarkSha256(code),
+    esbuildVersion: version,
+    sourceFingerprints: Object.fromEntries(Object.entries(sourceFingerprints).sort()),
+    stubFingerprints
+  }
+}
+
+export function claudeBenchmarkState(result, schemaVersion = 6) {
+  return {
+    schemaVersion,
+    worktreeFingerprint: '[]',
+    processedFiles: result.processedFiles,
+    sessions: result.sessions,
+    dailyAggregates: result.dailyAggregates,
+    scanState: { enabled: false, lastScanStartedAt: 1, lastScanCompletedAt: 2, lastScanError: null }
+  }
+}
+
+export function serializeClaudeBenchmarkReport(arm, state) {
+  if (arm.mode === 'current') {
+    return arm.persistence.module.serializeReport(state)
+  }
+  if (arm.mode === 'published') {
+    return JSON.stringify(state)
+  }
+  const { processedFiles: _sources, ...report } = state
+  return JSON.stringify(report)
+}
+
+export function createClaudeBenchmarkStore(arm, cacheFile, splitCacheFile, parseReport) {
+  const implementation = arm.persistence.module
+  class BenchmarkStore extends implementation.UsageProviderStoreLifecycle {
+    constructor() {
+      super(
+        {
+          getRepos: () => [],
+          getAllWorktreeMeta: () => ({}),
+          getRememberedWorktreeDisplayNames: () => new Map(),
+          whenLoaded: async () => {}
+        },
+        {
+          logTag: '[claude-persistence-benchmark]',
+          resolveCacheFile: () => cacheFile,
+          createDefaultState: () =>
+            claudeBenchmarkState(
+              { processedFiles: [], sessions: [], dailyAggregates: [] },
+              arm.mode === 'current' ? 7 : 6
+            ),
+          normalizeState:
+            arm.mode === 'published'
+              ? implementation.validatePersistedClaudeUsageProjections
+              : (state) => state,
+          sourceKey: 'processedFiles',
+          dataPresenceKey: 'hasAnyClaudeData',
+          scan: async () => {
+            throw new Error('Startup initiated a scan')
+          },
+          splitCacheFile,
+          ...(arm.mode === 'current'
+            ? {
+                providerId: 'claude',
+                parseReport: parseReport ?? implementation.parseReport,
+                serializeReport: implementation.serializeReport
+              }
+            : {})
+        }
+      )
+    }
+    reportState() {
+      return this.state
+    }
+  }
+  return new BenchmarkStore()
+}

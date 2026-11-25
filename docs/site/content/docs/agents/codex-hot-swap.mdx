@@ -1,0 +1,42 @@
+---
+title: Hot-swap Codex accounts
+---
+
+Running multiple Codex accounts to maximize tokens is common. Orca lets you add each account once and switch the active one in a click, with no config editing.
+
+## Add accounts
+
+1. Open [Settings → AI Provider Accounts → Codex](/docs/settings#ai-provider-accounts).
+1. Click **Add Account** and finish the Codex sign-in in your browser.
+1. Repeat for each account. Every account Orca adds keeps its own sign-in context, so adding one never signs another out.
+
+Accounts are optional: without any, Orca uses your normal Codex login (**System default**).
+
+## Swap accounts
+
+Click the Codex chip in the status bar to open the account switcher, or pick an account in Settings. Any new Codex session launched after that uses it, and open Codex chats move to it before their next message (a reply already running finishes first). Terminal sessions already running keep their original account until restarted.
+
+## Running accounts side by side
+
+Because each added account has its own isolated home, two Codex terminal sessions can run under different accounts at the same time: start one, switch accounts, start the next. Each terminal session keeps the account it launched with; chats always follow the selected account. Usage still counts against each account's own plan; Orca does not pool quota across accounts.
+
+## System default
+
+The **System default** row is your current host Codex login under `~/.codex`. Accounts added in Orca do not rewrite that login; they run in isolated homes. Select System default when you want launches to match a terminal `codex` outside Orca.
+
+## When config edits seem ignored
+
+For managed Codex accounts, Orca mirrors settings from your real `~/.codex/config.toml` into the active runtime home. If that source file is missing, empty (e.g. cloud-sync still downloading), or unreadable, Accounts shows a warning: Codex keeps the **last successfully synced** settings until the source is healthy again. Fix the file at the path named in the banner, then relaunch or reselect the account.
+
+## Rules & gotchas
+
+- Swapping does not re-authenticate; Orca launches new sessions in the selected account's home.
+- Existing Codex terminal processes keep their current account until restart. Chats switch on their next message.
+- Usage readouts in the status bar follow the currently-active account.
+- The restart chip preserves the active account at the time of restart.
+- Accounts belong to the machine that runs the agent. On a [Remote Orca Server](/docs/remote-servers), add them on that server.
+
+## Other providers
+
+- **Claude Code** accounts are added the same way under **Settings → AI Provider Accounts → Claude**, and switching applies to the next Claude you start.
+- **Antigravity** works differently: it switches one shared `agy` login rather than running isolated accounts. See [Antigravity accounts](/docs/agents/antigravity-accounts).

@@ -2,6 +2,11 @@ name: Other
 description: Report another Orca issue type
 title: '[Other]: '
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Please write your issue in English.
+
   - type: textarea
     id: details
     attributes:

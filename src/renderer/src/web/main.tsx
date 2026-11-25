@@ -1,25 +1,35 @@
 import '../assets/main.css'
 
 import { Suspense, useMemo, useState } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import ReactDOM from 'react-dom/client'
 import { useTranslation } from 'react-i18next'
-import WebConnect from './WebConnect'
+import WebConnect from './pairing/WebConnect'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import {
   clearPairingInputFromAddressBar,
   decideWebPairingStartup,
   readPairingInputFromLocation
-} from './web-pairing'
+} from './pairing/web-pairing'
 import {
   createStoredWebRuntimeEnvironment,
   readStoredWebRuntimeEnvironment,
   saveStoredWebRuntimeEnvironment
-} from './web-runtime-environment'
+} from './pairing/web-runtime-environment'
 import { installWebPreloadApi } from './web-preload-api'
+import { initWebDeviceKeySupport } from './runtime/security/web-device-key-support'
+import { WebPairingSecurityNotice } from './pairing/WebPairingSecurityNotice'
 import { I18nProvider } from '../i18n/I18nProvider'
-import { translate } from '../i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { installOsFileDropCancellationGuard } from '../lib/files/drop/os-file-drop-cancellation-guard'
+import { installBodyOverlayAttributes } from '../lib/overlay-interaction/body-overlay-attributes'
+import { installAppKeyboardRouter } from '../lib/keyboard/app-keyboard-router'
 
+const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
+import.meta.hot?.dispose(disposeOsFileDropGuard)
+const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
+import.meta.hot?.dispose(disposeBodyOverlayAttributes)
+installAppKeyboardRouter()
 const App = lazy(() => import('../App'))
 
 function WebRoot(): React.JSX.Element {
@@ -29,10 +39,11 @@ function WebRoot(): React.JSX.Element {
   const startupDecision = useMemo(() => {
     const decision = decideWebPairingStartup({
       initialPairingInput,
-      hasStoredEnvironment: readStoredWebRuntimeEnvironment() !== null
+      storedEnvironment: readStoredWebRuntimeEnvironment()
     })
     if (
       decision.kind === 'auto-save-runtime-offer' ||
+      decision.kind === 'confirm-replace-saved-server' ||
       (decision.kind === 'show-connect' && decision.initialPairingInput !== null)
     ) {
       clearPairingInputFromAddressBar()
@@ -42,7 +53,11 @@ function WebRoot(): React.JSX.Element {
   const [hasEnvironment, setHasEnvironment] = useState(() => {
     if (startupDecision.kind === 'auto-save-runtime-offer') {
       saveStoredWebRuntimeEnvironment(
-        createStoredWebRuntimeEnvironment({ name: 'Orca Server', offer: startupDecision.offer })
+        createStoredWebRuntimeEnvironment({
+          name: 'Orca Server',
+          offer: startupDecision.offer,
+          previousEnvironment: readStoredWebRuntimeEnvironment()
+        })
       )
       return true
     }
@@ -53,8 +68,12 @@ function WebRoot(): React.JSX.Element {
     return (
       <WebConnect
         initialPairingInput={
-          startupDecision.kind === 'show-connect' ? startupDecision.initialPairingInput : null
+          startupDecision.kind === 'show-connect' ||
+          startupDecision.kind === 'confirm-replace-saved-server'
+            ? startupDecision.initialPairingInput
+            : null
         }
+        confirmReplacingSavedServer={startupDecision.kind === 'confirm-replace-saved-server'}
         onConnected={() => setHasEnvironment(true)}
       />
     )
@@ -62,20 +81,24 @@ function WebRoot(): React.JSX.Element {
 
   installWebPreloadApi()
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-background" />}>
-      <App />
-    </Suspense>
+    <>
+      <Suspense fallback={<div className="min-h-dvh bg-background" />}>
+        <App />
+      </Suspense>
+      <WebPairingSecurityNotice />
+    </>
   )
 }
 
 function WebRootBoundary(): React.JSX.Element {
+  const t = useTranslate()
   useTranslation()
   return (
     <RecoverableRenderErrorBoundary
       boundaryId="web.root"
       surface="web-root"
-      title={translate('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
-      description={translate(
+      title={t('app.recoverableError.webTitle', 'Orca web hit a renderer error.')}
+      description={t(
         'app.recoverableError.webDescription',
         'Retry the web client or reconnect to the paired runtime.'
       )}
@@ -85,8 +108,18 @@ function WebRootBoundary(): React.JSX.Element {
   )
 }
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
-  <I18nProvider>
-    <WebRootBoundary />
-  </I18nProvider>
-)
+// Why await: where a new pairing may be stored depends on what this browser can keep secret.
+void initWebDeviceKeySupport()
+  .catch((error: unknown) => console.warn('[web] Device key probe failed', error))
+  .finally(() => {
+    ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+      <I18nProvider>
+        <WebRootBoundary />
+      </I18nProvider>
+    )
+  })
+
+// Prime WebGL here because web hosts terminals too; dynamic import keeps the App/pane-manager graph out of startup.
+void import('../lib/pane-manager/terminal-rendering/pane-webgl-renderer')
+  .then(() => import('../lib/pane-manager/terminal-rendering/terminal-webgl-addon-loader'))
+  .then(({ primeTerminalWebglAddon }) => primeTerminalWebglAddon())

@@ -1,0 +1,63 @@
+import { Zap } from 'lucide-react'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginEventName } from '../../../../../shared/plugins/contributions/plugin-event-contribution'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { DetailRow } from './PluginDetailSections'
+import { useInstalledPluginManifest } from '../state/use-plugin-contribution-source'
+
+/** Events a worker plugin subscribed to; the host entry doesn't carry them, so read its manifest. */
+export function usePluginWorkerEvents(plugin: PluginHostListEntry | null): PluginEventName[] {
+  const manifest = useInstalledPluginManifest(plugin?.hasWorker ? plugin : null)
+  // Why dedupe: one row per event name, even if a manifest lists the same event twice.
+  return [...new Set(manifest?.contributes.events.map((event) => event.on) ?? [])]
+}
+
+function eventTitle(event: PluginEventName, t: Translate = translate): string {
+  switch (event) {
+    case 'workspace.created':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.worktreeCreated',
+        'When a workspace is created'
+      )
+    case 'workspace.removed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.worktreeRemoved',
+        'When a workspace is removed'
+      )
+    case 'agent.status.changed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.agentStatusChanged',
+        'When an agent’s status changes'
+      )
+    case 'workspace.changed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.workspaceChanged',
+        'When you switch workspace or its terminals change'
+      )
+    case 'editor.typography.changed':
+      return t(
+        'auto.components.settings.PluginContributionActionEvents.editorTypographyChanged',
+        'When the editor font or zoom changes'
+      )
+  }
+}
+
+/** One event subscription, in plain words; nothing to click, Orca delivers it on its own. */
+export function PluginContributionEventRow({
+  event
+}: {
+  event: PluginEventName
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <DetailRow
+      icon={<Zap />}
+      title={eventTitle(event, t)}
+      detail={`${t(
+        'auto.components.settings.PluginContributionActionEvents.detail',
+        'Background code runs'
+      )} · ${event}`}
+    />
+  )
+}

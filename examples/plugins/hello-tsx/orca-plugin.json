@@ -1,0 +1,22 @@
+{
+  "manifestVersion": 2,
+  "execution": "sandboxed-ui",
+  "id": "hello-tsx",
+  "name": "Hello TSX",
+  "version": "1.0.0",
+  "description": "Sample build-less TSX panel: Orca transpiles src/panel.tsx when it loads, so there is no build step and no dist folder.",
+  "engines": { "orca": ">=1.4.246" },
+  "pluginApi": 1,
+  "contributes": {
+    "panels": [
+      {
+        "id": "todos",
+        "title": "Hello TSX",
+        "icon": "blocks",
+        "entry": "src/panel.tsx",
+        "ui": "components"
+      }
+    ]
+  },
+  "capabilities": []
+}

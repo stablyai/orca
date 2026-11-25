@@ -1,0 +1,17 @@
+{
+  "capturedAt": "2026-09-29T04:07:03.525Z",
+  "platform": "darwin",
+  "command": [
+    "codex",
+    "--no-daemon",
+    "-c",
+    "check_for_update_on_startup=false",
+    "--dangerously-bypass-approvals-and-sandbox",
+    "-c",
+    "tui.fullscreen_transcript=true"
+  ],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.1, default tui animations, fullscreen transcript (the 0.157 default). One turn running `sleep 25`, sent once the composer had been quiet 3s; cut 6s past the last busy frame, before exit. <name>.timing.json holds each PTY chunk as [ms since spawn, UTF-16 length] and the prompt-submit time.",
+  "exitCode": 0
+}

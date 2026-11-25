@@ -1,0 +1,200 @@
+import { Suspense, type JSX, type Ref } from 'react'
+import { useAppStore } from '@/store/index'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { EditorContent } from '../EditorContent'
+import { EditorPanelHeader } from './header/EditorPanelHeader'
+import { UntitledFileRenameDialog } from './untitled-rename/UntitledFileRenameDialog'
+import type { getEditorPanelRenderModel } from './editor-panel-render-model'
+import type { DiffContent, FileContent } from '../loading/editor-panel-content-types'
+import type { EditorToggleValue } from '../view-mode/EditorViewToggle'
+import { shouldShowEditorPanelHeader } from './header/editor-header'
+import { getUntitledFileRoot } from './untitled-rename/untitled-file-rename-path'
+import { useTranslate } from '@/i18n/use-translate'
+import type { ArtifactWriteRequest } from '../../../../../shared/artifacts/artifacts'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+
+type EditorPanelRenderModel = ReturnType<typeof getEditorPanelRenderModel>
+
+type EditorPanelShellProps = {
+  panelRef: Ref<HTMLDivElement>
+  activeFile: OpenFile
+  activeViewStateId: string | null | undefined
+  model: EditorPanelRenderModel
+  copiedPathVisible: boolean
+  showMarkdownTableOfContents: boolean
+  canShowMarkdownFrontmatterToggle: boolean
+  markdownFrontmatterVisible: boolean
+  sideBySide: boolean
+  openFiles: OpenFile[]
+  fileContents: Record<string, FileContent>
+  diffContents: Record<string, DiffContent>
+  editorDrafts: Record<string, string>
+  pendingEditorReveal: ReturnType<typeof useAppStore.getState>['pendingEditorReveal']
+  renameDialogFile: OpenFile | null
+  renameError: string | null
+  disableRenameBrowse: boolean
+  onCopyPath: () => void
+  onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
+  onOpenPreview: () => void
+  onOpenMarkdownPreview: () => void
+  onToggleSideBySide: () => void
+  onEditorToggleChange: (next: EditorToggleValue) => void
+  onToggleMarkdownTableOfContents: () => void
+  onToggleMarkdownFrontmatter: () => void
+  onExportMarkdownToPdf: () => void
+  createArtifactRequest?: () => Promise<ArtifactWriteRequest>
+  onContentChange: (content: string) => void
+  onContentChangeForFile: (file: OpenFile, content: string) => void
+  onDirtyStateHint: (dirty: boolean) => void
+  onSave: (content: string) => Promise<boolean>
+  onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
+  onReloadContent: (file: OpenFile) => void
+  onCloseMarkdownTableOfContents: () => void
+  onCloseRenameDialog: () => void
+  onRenameConfirm: (newRelPath: string) => Promise<void>
+  markdownAnnotationsEnabled: boolean
+}
+
+export function EditorPanelShell({
+  panelRef,
+  activeFile,
+  activeViewStateId,
+  model,
+  copiedPathVisible,
+  showMarkdownTableOfContents,
+  canShowMarkdownFrontmatterToggle,
+  markdownFrontmatterVisible,
+  sideBySide,
+  openFiles,
+  fileContents,
+  diffContents,
+  editorDrafts,
+  pendingEditorReveal,
+  renameDialogFile,
+  renameError,
+  disableRenameBrowse,
+  onCopyPath,
+  onOpenDiffTargetFile,
+  onOpenPreview,
+  onOpenMarkdownPreview,
+  onToggleSideBySide,
+  onEditorToggleChange,
+  onToggleMarkdownTableOfContents,
+  onToggleMarkdownFrontmatter,
+  onExportMarkdownToPdf,
+  createArtifactRequest,
+  onContentChange,
+  onContentChangeForFile,
+  onDirtyStateHint,
+  onSave,
+  onSaveForFile,
+  onReloadContent,
+  onCloseMarkdownTableOfContents,
+  onCloseRenameDialog,
+  onRenameConfirm,
+  markdownAnnotationsEnabled
+}: EditorPanelShellProps): JSX.Element {
+  return (
+    <div ref={panelRef} className="flex flex-col flex-1 min-w-0 min-h-0">
+      {shouldShowEditorPanelHeader(activeFile, model.isCombinedDiff) && (
+        <EditorPanelHeader
+          activeFile={activeFile}
+          copiedPathVisible={copiedPathVisible}
+          isSingleDiff={model.isSingleDiff}
+          isDiffSurface={model.isDiffSurface}
+          isMarkdown={model.isMarkdown}
+          isCsv={model.isCsv}
+          isNotebook={model.isNotebook}
+          isSvg={model.isSvg}
+          customEditorTitles={model.customEditorTitles}
+          hasEditorToggle={model.hasEditorToggle}
+          availableEditorToggleModes={model.availableEditorToggleModes}
+          effectiveToggleValue={model.effectiveToggleValue}
+          canOpenPreview={model.canOpenPreview}
+          canShowMarkdownPreview={model.canShowMarkdownPreview}
+          canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
+          isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
+          shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
+          canExportMarkdownToPdf={model.canExportMarkdownToPdf}
+          showMarkdownTableOfContents={showMarkdownTableOfContents}
+          canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+          markdownFrontmatterVisible={markdownFrontmatterVisible}
+          sideBySide={sideBySide}
+          openFileState={model.openFileState}
+          onCopyPath={onCopyPath}
+          onOpenDiffTargetFile={onOpenDiffTargetFile}
+          onOpenPreview={onOpenPreview}
+          onOpenMarkdownPreview={onOpenMarkdownPreview}
+          onToggleSideBySide={onToggleSideBySide}
+          onEditorToggleChange={onEditorToggleChange}
+          onToggleMarkdownTableOfContents={onToggleMarkdownTableOfContents}
+          onToggleMarkdownFrontmatter={onToggleMarkdownFrontmatter}
+          onExportMarkdownToPdf={onExportMarkdownToPdf}
+          createArtifactRequest={createArtifactRequest}
+        />
+      )}
+      <Suspense fallback={<EditorLoadingFallback />}>
+        <EditorContent
+          activeFile={activeFile}
+          viewStateScopeId={activeViewStateId ?? activeFile.id}
+          fileContents={fileContents}
+          diffContents={diffContents}
+          editBuffers={editorDrafts}
+          openFiles={openFiles}
+          worktreeEntries={model.worktreeEntries}
+          resolvedLanguage={model.resolvedLanguage}
+          isMarkdown={model.isMarkdown}
+          isMermaid={model.isMermaid}
+          isSvg={model.isSvg}
+          isCsv={model.isCsv}
+          isNotebook={model.isNotebook}
+          customEditor={model.activeCustomEditor}
+          mdViewMode={model.mdViewMode}
+          inlineMarkdownRenderState={model.inlineMarkdownRenderState}
+          isChangesMode={model.isDiffSurface && !model.isSingleDiff}
+          sideBySide={sideBySide}
+          pendingEditorReveal={pendingEditorReveal}
+          handleContentChange={onContentChange}
+          handleContentChangeForFile={onContentChangeForFile}
+          handleDirtyStateHint={onDirtyStateHint}
+          handleSave={onSave}
+          handleSaveForFile={onSaveForFile}
+          reloadContent={onReloadContent}
+          showMarkdownTableOfContents={showMarkdownTableOfContents}
+          showMarkdownFrontmatter={markdownFrontmatterVisible}
+          onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
+          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+        />
+      </Suspense>
+      <UntitledFileRenameDialog
+        open={renameDialogFile !== null}
+        currentName={renameDialogFile?.relativePath ?? ''}
+        worktreePath={
+          renameDialogFile
+            ? getUntitledFileRoot(
+                renameDialogFile,
+                findFirstIndexedWorktree(
+                  selectWorktreesByRepo(useAppStore.getState()),
+                  renameDialogFile.worktreeId
+                )?.path
+              )
+            : ''
+        }
+        disableBrowse={disableRenameBrowse}
+        externalError={renameError}
+        onClose={onCloseRenameDialog}
+        onConfirm={onRenameConfirm}
+      />
+    </div>
+  )
+}
+
+function EditorLoadingFallback(): JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+      {t('auto.components.editor.EditorPanelShell.e2c4dec350', 'Loading editor...')}
+    </div>
+  )
+}

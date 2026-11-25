@@ -1,0 +1,73 @@
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import {
+  compareFeatureInteractionUsageBuckets,
+  getFeatureInteractionUsageBucket
+} from '../../../shared/feature-education/interactions/feature-interaction-usage-buckets'
+import { getFeatureInteractionCategory } from '../../../shared/feature-education/interactions/feature-interaction-categories'
+import {
+  normalizeFeatureInteractions,
+  normalizeFeatureInteractionTelemetryBuckets
+} from '../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
+import { track } from '../../telemetry/client'
+import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
+
+export type FeatureInteractionOperations = {
+  state: PersistedState
+  scheduleSave: (domains: readonly string[]) => void
+  notifyUIChanged: () => void
+  getUI: () => PersistedState['ui']
+}
+
+export function recordFeatureInteraction(
+  operations: FeatureInteractionOperations,
+  id: FeatureInteractionId
+): PersistedState['ui'] {
+  const featureInteractions = normalizeFeatureInteractions(operations.state.ui?.featureInteractions)
+  const telemetryBuckets = normalizeFeatureInteractionTelemetryBuckets(
+    operations.state.featureInteractionTelemetryBuckets
+  )
+  const existing = featureInteractions[id]
+  const previousCount = existing?.interactionCount ?? 0
+  const nextCount = previousCount + 1
+  const previousBucket = getFeatureInteractionUsageBucket(previousCount)
+  const nextBucket = getFeatureInteractionUsageBucket(nextCount)
+  const lastEmittedBucket = telemetryBuckets[id] ?? null
+  const shouldEmit =
+    nextBucket !== null &&
+    (lastEmittedBucket === null ||
+      compareFeatureInteractionUsageBuckets(nextBucket, lastEmittedBucket) > 0)
+
+  operations.state.ui = {
+    ...operations.state.ui,
+    featureInteractions: {
+      ...featureInteractions,
+      [id]: {
+        firstInteractedAt: existing?.firstInteractedAt ?? Date.now(),
+        interactionCount: nextCount
+      }
+    }
+  }
+  operations.state.featureInteractionTelemetryBuckets = shouldEmit
+    ? { ...telemetryBuckets, [id]: nextBucket }
+    : telemetryBuckets
+  operations.scheduleSave(['ui', 'featureInteractionTelemetryBuckets'])
+  // Count-only telemetry must not rehydrate the renderer; notify only on first sight.
+  if (!existing) {
+    operations.notifyUIChanged()
+  }
+
+  if (shouldEmit) {
+    track('feature_interaction_usage_bucket_reached', {
+      feature_id: id,
+      feature_category: getFeatureInteractionCategory(id),
+      count_bucket: nextBucket,
+      bucket_source:
+        lastEmittedBucket === null && previousBucket !== null && previousBucket === nextBucket
+          ? 'observed_existing'
+          : 'crossed_now',
+      ...getCohortAtEmit()
+    })
+  }
+  return operations.getUI()
+}

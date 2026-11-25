@@ -2,8 +2,7 @@
   "files": [],
   "references": [
     { "path": "./config/tsconfig.node.json" },
-    { "path": "./config/tsconfig.web.json" },
-    { "path": "./config/tsconfig.relay.json" }
+    { "path": "./config/tsconfig.web.json" }
   ],
   "compilerOptions": {
     "baseUrl": ".",

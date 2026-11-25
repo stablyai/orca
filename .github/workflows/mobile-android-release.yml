@@ -1,12 +1,11 @@
 name: Mobile Android Release
 
-# Why a separate workflow from iOS: iOS releases go through App Store review,
-# which can take days. Decoupling the triggers lets an Android release ship
-# immediately without waiting on iOS, and vice versa.
+# Release Android independently so App Store review cannot block its shipping cadence.
+# dev.orca.app ships on Google Play and as an APK on GitHub; both are the same Play-signed build.
 on:
   push:
     tags:
-      - 'mobile-android-v*'
+      - 'android-v*'
   workflow_dispatch:
     inputs:
       release_version:
@@ -14,7 +13,7 @@ on:
         required: false
         type: string
       publish_github_release:
-        description: 'Create or update the mobile-android-v<version> GitHub Release'
+        description: 'Release to Play internal testing and publish the android-v<version> GitHub pre-release; off only validates the bundle with Play'
         required: false
         default: true
         type: boolean
@@ -22,13 +21,14 @@ on:
 jobs:
   android-build:
     runs-on: ubuntu-latest
-
-    # Why: the "Create GitHub Release" step below uses the default GITHUB_TOKEN
-    # to call `gh release create`, which requires contents:write. Without this,
-    # the job builds the APK fine but fails at release time with
-    # "HTTP 403: Resource not accessible by integration".
     permissions:
-      contents: write
+      contents: read
+
+    outputs:
+      publish_release: ${{ steps.release.outputs.publish_release }}
+      version: ${{ steps.release.outputs.version }}
+      version_code: ${{ steps.release.outputs.android_version_code }}
+      tag: ${{ steps.release.outputs.tag }}
 
     defaults:
       run:
@@ -38,15 +38,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Play only accepts bundles signed with the upload key, and re-signs them with Google's app signing key.
+      - name: Check upload key configuration
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in ORCA_ANDROID_KEYSTORE_BASE64 ORCA_ANDROID_KEYSTORE_PASSWORD ORCA_ANDROID_KEY_ALIAS ORCA_ANDROID_KEY_PASSWORD; do
+            if [ -z "${!name:-}" ]; then
+              missing+=("$name")
+            fi
+          done
+          if [ "${#missing[@]}" -ne 0 ]; then
+            echo "::error::The Play upload key is not fully configured. Missing secrets: ${missing[*]}. See the Android Release Signing section of mobile/README.md."
+            exit 1
+          fi
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
           node-version: 24
+          check-latest: true
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v2
         with:
-          run_install: false
+          install: false
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -67,20 +88,174 @@ jobs:
       - name: Expo prebuild
         run: npx expo prebuild --platform android --no-install
 
-      - name: Build Android release APK
-        run: cd android && ./gradlew assembleRelease
+      - name: Decode upload keystore
+        env:
+          ORCA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ORCA_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          printf '%s' "$ORCA_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orca-release.keystore"
+
+      - name: Build Play app bundle
+        env:
+          ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: 'true'
+          ORCA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/orca-release.keystore
+          ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
+          ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
+          ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
+        run: cd android && ./gradlew bundleRelease
+
+      - name: Remove upload keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/orca-release.keystore"
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-mobile-aab
+          path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+  # Its own job so a Play outage can be rerun without rebuilding. Play rejects a versionCode it has
+  # seen, so a missed versionCode bump fails here, before anything is published.
+  play-internal-upload:
+    needs: android-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    env:
+      BUNDLE_FROZEN: 'true'
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      FASTLANE_HIDE_CHANGELOG: '1'
+      FASTLANE_OPT_OUT_USAGE: '1'
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: orca-mobile-aab
+          path: mobile/build/play
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Write Play service account key
+        env:
+          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$RUNNER_TEMP/play-service-account.json"
+          printf '%s' "$ORCA_PLAY_SERVICE_ACCOUNT_JSON" > "$key"
+          echo "ORCA_PLAY_JSON_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      # Production promotion stays a manual step in Play Console.
+      - name: Upload to the internal testing track
+        env:
+          VALIDATE_ONLY: ${{ needs.android-build.outputs.publish_release != 'true' }}
+        run: bundle exec fastlane android upload_internal aab:"$PWD/build/play/app-release.aab" validate_only:"$VALIDATE_ONLY"
+
+      - name: Remove Play service account key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/play-service-account.json"
+
+  # The GitHub APK is Google's universal APK for the uploaded bundle, so it carries the same
+  # app signing key as Play installs and either channel can update the other.
+  github-release:
+    needs: [android-build, play-internal-upload]
+    if: needs.android-build.outputs.publish_release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Grant contents:write for gh release create; build success alone does not authorize publication.
+    permissions:
+      contents: write
+
+    env:
+      BUNDLE_FROZEN: 'true'
+      FASTLANE_SKIP_UPDATE_CHECK: '1'
+      FASTLANE_HIDE_CHANGELOG: '1'
+      FASTLANE_OPT_OUT_USAGE: '1'
+      APK: build/play/app-release.apk
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Ruby and fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: mobile
+
+      - name: Write Play service account key
+        env:
+          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
+        run: |
+          set -euo pipefail
+          umask 077
+          key="$RUNNER_TEMP/play-service-account.json"
+          printf '%s' "$ORCA_PLAY_SERVICE_ACCOUNT_JSON" > "$key"
+          echo "ORCA_PLAY_JSON_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      # Fails unless the V3.0 signer is Google's Play app signing key.
+      - name: Download and verify the Play-signed universal APK
+        id: signer
+        run: bundle exec fastlane android download_signed_apk version_code:"${{ needs.android-build.outputs.version_code }}" destination:"$PWD/$APK"
+
+      - name: Remove Play service account key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/play-service-account.json"
+
+      # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
+      - name: Checksum the APK
+        id: apk
+        run: |
+          set -euo pipefail
+          bytes="$(wc -c < "$APK" | tr -d ' ')"
+          sha256="$(sha256sum "$APK" | cut -d ' ' -f 1)"
+          # Publish sha256sum -c sidecars, excluded by *.apk globs. Use binary “ *” mode:
+          # Git Bash text-mode newline translation can reject a valid APK.
+          printf '%s *%s\n' "$sha256" "$(basename "$APK")" > "$APK.sha256"
+
+          {
+            echo "checksum=$APK.sha256"
+            echo "bytes=$bytes"
+            echo "sha256=$sha256"
+          } >> "$GITHUB_OUTPUT"
+          echo "APK is $bytes bytes, sha256 $sha256"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
         with:
           name: orca-mobile-apk
-          path: mobile/android/app/build/outputs/apk/release/*.apk
+          path: |
+            mobile/build/play/app-release.apk
+            mobile/build/play/app-release.apk.sha256
 
       - name: Ensure GitHub release tag
-        if: steps.release.outputs.publish_release == 'true' && !startsWith(github.ref, 'refs/tags/mobile-android-v')
+        if: ${{ !startsWith(github.ref, 'refs/tags/android-v') }}
         run: |
           set -euo pipefail
-          tag="${{ steps.release.outputs.tag }}"
+          tag="${{ needs.android-build.outputs.tag }}"
 
           if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag $tag already exists"
@@ -91,24 +266,94 @@ jobs:
           git push origin "refs/tags/$tag"
 
       - name: Create GitHub Release
-        if: steps.release.outputs.publish_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="${{ steps.release.outputs.tag }}"
+          tag="${{ needs.android-build.outputs.tag }}"
+          notes_file="$RUNNER_TEMP/android-release-notes.md"
+
+          # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
+          # Both platforms' commands are named because a reader on macOS has no sha256sum.
+          signer_line='- Signing certificate SHA-256: `${{ steps.signer.outputs.cert_sha256 }}`\n'
+          verification_section() {
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n%b\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+              '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}' "$signer_line"
+          }
+
+          # Verification is last; replace from heading to EOF, accepting API-roundtripped CRLFs.
+          drop_verification_section() {
+            sed '/^### Verify your download\r*$/,$d'
+          }
+
+          # Truncate by characters like desktop releases and reserve the appended section inside GitHub’s cap,
+          # or --clobber could replace assets before notes fail. wc -c over-reserves multibyte section text safely.
+          write_notes_with_verification() {
+            NOTES_FILE="$notes_file" \
+            NOTES_RESERVE="$(verification_section | wc -c | tr -d ' ')" \
+            NOTES_MODULE="$GITHUB_WORKSPACE/config/scripts/release/publication/create-draft-release.mjs" \
+            node --input-type=module -e '
+              const { readFileSync, writeFileSync } = await import("node:fs")
+              const { pathToFileURL } = await import("node:url")
+              const { MAX_RELEASE_BODY_LENGTH, truncateReleaseBody } = await import(
+                pathToFileURL(process.env.NOTES_MODULE).href
+              )
+              const file = process.env.NOTES_FILE
+              const max = MAX_RELEASE_BODY_LENGTH - Number(process.env.NOTES_RESERVE)
+              writeFileSync(file, truncateReleaseBody(readFileSync(file, "utf8"), max))
+            '
+            verification_section >> "$notes_file"
+          }
 
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release upload "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --clobber \
-              android/app/build/outputs/apk/release/*.apk
+              "$APK" \
+              "${{ steps.apk.outputs.checksum }}"
+            # --clobber replaced the APK; rewrite its digest so users cannot compare against obsolete bytes.
+            gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json body --jq .body \
+              | drop_verification_section > "$notes_file"
+            write_notes_with_verification
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --notes-file "$notes_file"
           else
+            # Side-branch release tags make automatic previous-tag detection span multiple releases and exceed
+            # the 125000-character API cap; pin the comparison base and truncate.
+            previous_tag="$(
+              gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName --jq '.[].tagName' \
+                | grep '^android-v' | grep -Fxv "$tag" | sort -V | tail -1 || true
+            )"
+
+            if [ -n "$previous_tag" ]; then
+              # gh writes HTTP error JSON to stdout too; require exit success, not merely a nonempty file.
+              if ! gh api "repos/$GITHUB_REPOSITORY/releases/generate-notes" -X POST \
+                -f tag_name="$tag" \
+                -f target_commitish="$GITHUB_SHA" \
+                -f previous_tag_name="$previous_tag" \
+                --jq .body > "$notes_file"; then
+                : > "$notes_file"
+              fi
+            fi
+            if [ ! -s "$notes_file" ]; then
+              printf 'Orca Mobile Android %s\n' "$tag" > "$notes_file"
+            fi
+            write_notes_with_verification
+
             gh release create "$tag" \
               --repo "$GITHUB_REPOSITORY" \
               --title "Orca Mobile Android $tag" \
               --prerelease \
               --latest=false \
-              --generate-notes \
-              android/app/build/outputs/apk/release/*.apk
+              --notes-file "$notes_file" \
+              "$APK" \
+              "${{ steps.apk.outputs.checksum }}"
           fi
+
+  # Advisory: a failed mirror only leaves the R2 copy of this APK missing.
+  release-mirror-r2:
+    needs: [android-build, github-release]
+    uses: ./.github/workflows/release-mirror-r2.yml
+    with:
+      tag: ${{ needs.android-build.outputs.tag }}
+      assets: app-release.apk
+    secrets: inherit

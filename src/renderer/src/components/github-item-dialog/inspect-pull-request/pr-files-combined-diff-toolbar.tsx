@@ -1,0 +1,82 @@
+import React from 'react'
+import { PanelLeftOpen } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTranslate } from '@/i18n/use-translate'
+import { isPRFileViewed } from '@/components/github/pr-file-content-size'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+
+export function PRFilesCombinedDiffToolbar({
+  files,
+  fileTreeCollapsed,
+  allSectionsCollapsed,
+  sideBySide,
+  onShowFileTree,
+  onToggleAllCollapsed,
+  onToggleSideBySide
+}: {
+  files: GitHubPRFile[]
+  fileTreeCollapsed: boolean
+  allSectionsCollapsed: boolean
+  sideBySide: boolean
+  onShowFileTree: () => void
+  onToggleAllCollapsed: () => void
+  onToggleSideBySide: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-background/50 px-3 py-1.5">
+      <div className="flex min-w-0 items-center gap-2">
+        {fileTreeCollapsed && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
+                onClick={onShowFileTree}
+              >
+                <PanelLeftOpen className="size-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>
+              {t('auto.components.GitHubItemDialog.1257d1435d', 'Show file tree')}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        <span className="truncate text-xs text-muted-foreground">
+          {t(
+            'auto.components.GitHubItemDialog.filesViewed',
+            '{{viewed}} / {{count}} files viewed',
+            {
+              viewed: files.filter(isPRFileViewed).length,
+              count: files.length,
+              defaultValue_one: '{{viewed}} / {{count}} file viewed'
+            }
+          )}
+        </span>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          className="min-w-20 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+          onClick={onToggleAllCollapsed}
+        >
+          {allSectionsCollapsed
+            ? t('auto.components.GitHubItemDialog.3c19ec3069', 'Expand All')
+            : t('auto.components.GitHubItemDialog.d00a0a7f8f', 'Collapse All')}
+        </button>
+        <button
+          type="button"
+          className="min-w-24 rounded border border-border px-2 py-0.5 text-center text-xs text-muted-foreground transition-colors hover:text-foreground"
+          onClick={onToggleSideBySide}
+        >
+          {sideBySide
+            ? t('auto.components.GitHubItemDialog.6e43a16435', 'Inline')
+            : t('auto.components.GitHubItemDialog.31770bef03', 'Side by Side')}
+        </button>
+      </div>
+    </div>
+  )
+}

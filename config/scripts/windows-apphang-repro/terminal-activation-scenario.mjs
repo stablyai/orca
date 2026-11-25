@@ -279,9 +279,7 @@ async function killActivePty(page) {
 }
 
 async function resetRendererProbe(page) {
-  // Why: probe drift is cumulative since installation; without a per-cycle
-  // reset, one startup/setup stall gets re-reported as a hang in every
-  // later cycle's rendererMaxDriftMs check.
+  // Reset probe drift each cycle; cumulative startup stall would otherwise count as fresh hang every time.
   await runWithTimeout(
     'renderer probe reset',
     () =>
@@ -463,9 +461,7 @@ export async function runGpuMode(gpuMode, args, fixture) {
       result.reproductionReason = error.message
       result.samples.push(error.evidence)
     } else {
-      // Why: setup/CDP/selector failures are inconclusive, not hang evidence.
-      // Conflating them with `reproduced` lets --expect=repro pass on a broken
-      // harness; callers treat harnessError as a hard failure instead.
+      // CDP/setup/selector failures are inconclusive and must fail expectations, never satisfy reproduced.
       result.harnessError = error instanceof Error ? error.stack || error.message : String(error)
     }
   } finally {

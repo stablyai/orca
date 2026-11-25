@@ -1,0 +1,117 @@
+import {
+  CONNECTOR_REFUSALS,
+  refused,
+  type ConnectorRefusal,
+  type Delivery
+} from './external-conversation-types'
+
+type Lane = {
+  controller: AbortController
+  signal: AbortSignal
+  tail: Promise<unknown>
+  // Aborted followers settle before the running item, so the tail cannot prove it ended.
+  running: Promise<Delivery> | null
+}
+
+export function refusalOf(signal: AbortSignal): ConnectorRefusal {
+  return CONNECTOR_REFUSALS.find((reason) => reason === signal.reason) ?? 'connectors_disabled'
+}
+
+/** Work run in a conversation's queue, told by `signal` when a Stop ends its wait. */
+export type QueuedWork = (signal: AbortSignal) => Promise<unknown>
+
+/** Serialize each conversation; cancellation aborts its head and settles queued work without undoing prior writes. */
+export class ConversationChain {
+  private readonly lanes = new Map<string, Lane>()
+
+  constructor(private readonly signal: AbortSignal) {}
+
+  enqueue(id: string, run: (signal: AbortSignal) => Promise<Delivery>): Promise<Delivery> {
+    const lane = this.lanes.get(id) ?? this.openLane(id)
+    if (lane.signal.aborted) {
+      return Promise.resolve(refused(refusalOf(lane.signal)))
+    }
+    const previous = lane.tail
+    const turn = new Promise<void>((resolve) => {
+      const onAbort = (): void => resolve()
+      lane.signal.addEventListener('abort', onAbort, { once: true })
+      void previous.then(() => {
+        lane.signal.removeEventListener('abort', onAbort)
+        resolve()
+      })
+    })
+    const result = turn.then(() => {
+      if (lane.signal.aborted) {
+        return refused(refusalOf(lane.signal))
+      }
+      const running = run(lane.signal)
+      lane.running = running
+      return running.finally(() => {
+        lane.running = null
+        if (lane.signal.aborted && this.lanes.get(id) === lane) {
+          this.lanes.delete(id)
+        }
+      })
+    })
+    const tail = result.catch(() => undefined)
+    lane.tail = tail
+    void tail.then(() => {
+      if (this.lanes.get(id) === lane && lane.tail === tail && !lane.running) {
+        this.lanes.delete(id)
+      }
+    })
+    return result
+  }
+
+  /** Waits in the lane after its queued items for `work`, which it starts; a cancel ends the wait
+   *  at once (the work goes on alone, told by `signal`) and it comes back refused. */
+  after(id: string, work?: QueuedWork): Promise<Delivery> {
+    return this.enqueue(id, async (signal) => {
+      const done = (work?.(signal) ?? Promise.resolve()).catch(() => undefined)
+      let onAbort = (): void => {}
+      const stopped = new Promise<void>((resolve) => {
+        onAbort = resolve
+        signal.addEventListener('abort', onAbort, { once: true })
+        if (signal.aborted) {
+          resolve()
+        }
+      })
+      try {
+        await Promise.race([done, stopped])
+      } finally {
+        // Its lane may outlive it: a listener left on its signal would be kept as long as the lane.
+        signal.removeEventListener('abort', onAbort)
+      }
+      return signal.aborted ? refused(refusalOf(signal)) : { outcome: 'accepted' }
+    })
+  }
+
+  /** Resolves true if no running work could publish; laneSignal protects a replacement lane. */
+  cancel(id: string, reason: ConnectorRefusal, laneSignal?: AbortSignal): Promise<boolean> | null {
+    const lane = this.lanes.get(id)
+    if (!lane || (laneSignal && lane.signal !== laneSignal)) {
+      return null
+    }
+    lane.controller.abort(reason)
+    if (!lane.running) {
+      this.lanes.delete(id)
+      return Promise.resolve(true)
+    }
+    return lane.running.then(
+      (delivery) => delivery.outcome === 'refused',
+      () => false
+    )
+  }
+
+  private openLane(id: string): Lane {
+    const controller = new AbortController()
+    const lane: Lane = {
+      controller,
+      signal: AbortSignal.any([this.signal, controller.signal]),
+      tail: Promise.resolve(),
+      running: null
+    }
+    this.lanes.set(id, lane)
+    return lane
+  }
+}

@@ -1,162 +1,247 @@
-import type { SpeechModelManifest } from '../../shared/speech-types'
+import type { SpeechModelManifest } from '../../shared/speech/speech-types'
+import {
+  DICTATION_LANGUAGES,
+  NEMOTRON_DICTATION_LANGUAGES,
+  PARAKEET_V3_LANGUAGES,
+  SENSE_VOICE_DICTATION_LANGUAGES,
+  WHISPER_LANGUAGES
+} from '../../shared/speech/models/dictation-language'
+import { getSpeechModelDownloadMetadata } from './model-download-catalog'
+import { getGgufSpeechModelDownload } from './speech-model-gguf-downloads'
+import { getSpeechModelErrorRates } from './speech-model-error-rates'
+
+const legacy = (id: Parameters<typeof getSpeechModelDownloadMetadata>[0]) => ({
+  legacyDownloadFiles: getSpeechModelDownloadMetadata(id).downloadFiles
+})
 
 export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
   {
     id: 'parakeet-tdt-0.6b-v3-int8',
     label: 'Parakeet TDT v3',
-    description:
-      'Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.',
     type: 'transducer',
     provider: 'local',
     language: 'multilingual',
-    sizeBytes: 180_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2',
-    archiveSha256: '5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf',
-    archiveFormat: 'tar.bz2',
-    files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'],
+    ...getGgufSpeechModelDownload('parakeet-tdt-0.6b-v3-int8'),
+    ...legacy('parakeet-tdt-0.6b-v3-int8'),
+    languages: PARAKEET_V3_LANGUAGES,
+    ...getSpeechModelErrorRates('parakeet-tdt-0.6b-v3-int8'),
+    licence: 'CC-BY-4.0',
     sampleRate: 16000,
     streaming: false,
-    modelingUnit: 'bpe',
     recommended: true
   },
   {
-    id: 'parakeet-tdt-0.6b-v2-int8',
-    label: 'Parakeet TDT v2',
-    description:
-      'English only. Faster than v3 with similar accuracy. Punctuation and capitalization.',
+    // Ahead of v2, which measures the same, so it wins the tie as the most accurate English pick.
+    id: 'parakeet-unified-en-0.6b',
+    label: 'Parakeet Unified EN',
     type: 'transducer',
     provider: 'local',
     language: 'en',
-    sizeBytes: 170_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2',
-    archiveSha256: '157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad',
-    archiveFormat: 'tar.bz2',
-    files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'joiner.int8.onnx', 'tokens.txt'],
-    sampleRate: 16000,
-    streaming: false,
-    modelingUnit: 'bpe'
-  },
-  {
-    id: 'zipformer-bilingual-zh-en',
-    label: 'Zipformer Bilingual',
-    description: 'Chinese + English with code-switching. Low-latency real-time streaming.',
-    type: 'transducer',
-    provider: 'local',
-    language: 'zh-en',
-    sizeBytes: 130_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-bilingual-zh-en-2023-02-20.tar.bz2',
-    archiveSha256: '27ffbd9ee24ad186d99acc2f6354d7992b27bcab490812510665fa8f9389c5f8',
-    archiveFormat: 'tar.bz2',
-    files: [
-      'encoder-epoch-99-avg-1.onnx',
-      'decoder-epoch-99-avg-1.onnx',
-      'joiner-epoch-99-avg-1.onnx',
-      'tokens.txt'
-    ],
-    sampleRate: 16000,
-    streaming: true,
-    modelingUnit: 'cjkchar+bpe'
-  },
-  {
-    id: 'paraformer-bilingual-zh-en',
-    label: 'Paraformer Bilingual',
-    description:
-      'Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.',
-    type: 'paraformer',
-    provider: 'local',
-    language: 'zh-en',
-    sizeBytes: 115_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-paraformer-bilingual-zh-en.tar.bz2',
-    archiveSha256: '5462a1fce42693deae572af1e8c4687124b12aa85fe61ff4d3168bb5280e205f',
-    archiveFormat: 'tar.bz2',
-    files: ['encoder.int8.onnx', 'decoder.int8.onnx', 'tokens.txt'],
+    ...getGgufSpeechModelDownload('parakeet-unified-en-0.6b'),
+    languages: ['en'],
+    ...getSpeechModelErrorRates('parakeet-unified-en-0.6b'),
+    licence: 'NVIDIA Open Model License',
     sampleRate: 16000,
     streaming: true
   },
   {
-    id: 'zipformer-streaming-en-20m',
-    label: 'Zipformer Streaming EN',
-    description: 'English only. Lightweight 20M-param model, good balance of speed and size.',
+    id: 'parakeet-tdt-0.6b-v2-int8',
+    label: 'Parakeet TDT v2',
     type: 'transducer',
     provider: 'local',
     language: 'en',
-    sizeBytes: 128_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-en-20M-2023-02-17.tar.bz2',
-    archiveSha256: '9c559283e8498d3fe95913c79ca1cb454bb26281ac2b102b41306c7d752765d9',
-    archiveFormat: 'tar.bz2',
-    files: [
-      'encoder-epoch-99-avg-1.onnx',
-      'decoder-epoch-99-avg-1.onnx',
-      'joiner-epoch-99-avg-1.onnx',
-      'tokens.txt'
-    ],
+    ...getGgufSpeechModelDownload('parakeet-tdt-0.6b-v2-int8'),
+    ...legacy('parakeet-tdt-0.6b-v2-int8'),
+    languages: ['en'],
+    ...getSpeechModelErrorRates('parakeet-tdt-0.6b-v2-int8'),
+    licence: 'CC-BY-4.0',
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'zipformer-bilingual-zh-en',
+    label: 'Zipformer Bilingual',
+    type: 'transducer',
+    provider: 'local',
+    language: 'zh-en',
+    ...getSpeechModelDownloadMetadata('zipformer-bilingual-zh-en'),
+    languages: ['zh', 'en'],
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'bpe'
+    // transcribe-cpp has no zipformer; SenseVoice covers Chinese and English.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
+  },
+  {
+    id: 'paraformer-bilingual-zh-en',
+    label: 'Paraformer Bilingual',
+    type: 'paraformer',
+    provider: 'local',
+    language: 'zh-en',
+    ...getSpeechModelDownloadMetadata('paraformer-bilingual-zh-en'),
+    languages: ['zh', 'en'],
+    sampleRate: 16000,
+    streaming: true,
+    // transcribe-cpp has no paraformer; SenseVoice covers Chinese and English.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
+  },
+  {
+    id: 'zipformer-streaming-en-20m',
+    label: 'Zipformer Streaming EN',
+    type: 'transducer',
+    provider: 'local',
+    language: 'en',
+    ...getSpeechModelDownloadMetadata('zipformer-streaming-en-20m'),
+    languages: ['en'],
+    sampleRate: 16000,
+    streaming: true,
+    // The model itself loses the first words of every utterance.
+    replacedBy: 'parakeet-tdt-0.6b-v2-int8'
   },
   {
     id: 'zipformer-streaming-zh-14m',
     label: 'Zipformer Streaming ZH',
-    description: 'Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.',
     type: 'transducer',
     provider: 'local',
     language: 'zh',
-    sizeBytes: 74_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-zipformer-zh-14M-2023-02-23.tar.bz2',
-    archiveSha256: '2cbd71b640d9c37d3784f29367333a4577b0398b62e9deeed418170b081cba8b',
-    archiveFormat: 'tar.bz2',
-    files: [
-      'encoder-epoch-99-avg-1.onnx',
-      'decoder-epoch-99-avg-1.onnx',
-      'joiner-epoch-99-avg-1.onnx',
-      'tokens.txt'
-    ],
+    ...getSpeechModelDownloadMetadata('zipformer-streaming-zh-14m'),
+    languages: ['zh'],
     sampleRate: 16000,
     streaming: true,
-    modelingUnit: 'cjkchar'
+    // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
+  },
+  {
+    id: 'zipformer-streaming-korean',
+    label: 'Zipformer Streaming KO',
+    type: 'transducer',
+    provider: 'local',
+    language: 'ko',
+    ...getSpeechModelDownloadMetadata('zipformer-streaming-korean'),
+    languages: ['ko'],
+    sampleRate: 16000,
+    streaming: true,
+    // transcribe-cpp has no zipformer; SenseVoice beat Nemotron 3.5 on Korean and Chinese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
+  },
+  {
+    id: 'parakeet-tdt-ctc-0.6b-ja-int8',
+    label: 'Parakeet TDT-CTC JA',
+    type: 'nemo-ctc',
+    provider: 'local',
+    language: 'ja',
+    ...getSpeechModelDownloadMetadata('parakeet-tdt-ctc-0.6b-ja-int8'),
+    languages: ['ja'],
+    sampleRate: 16000,
+    streaming: false,
+    // No GGUF conversion exists; SenseVoice covers Japanese.
+    replacedBy: 'sense-voice-zh-en-ja-ko-yue'
   },
   {
     id: 'whisper-tiny',
     label: 'Whisper Tiny',
-    description: '90+ languages. Lower accuracy than Parakeet but broadest language coverage.',
     type: 'whisper',
     provider: 'local',
     language: 'multilingual',
-    sizeBytes: 116_000_000,
-    downloadUrl:
-      'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-tiny.tar.bz2',
-    archiveSha256: 'c46116994e539aa165266d96b325252728429c12535eb9d8b6a2b10f129e66b1',
-    archiveFormat: 'tar.bz2',
-    files: ['tiny-encoder.onnx', 'tiny-decoder.onnx', 'tiny-tokens.txt'],
+    ...getGgufSpeechModelDownload('whisper-tiny'),
+    ...legacy('whisper-tiny'),
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: WHISPER_LANGUAGES,
+    ...getSpeechModelErrorRates('whisper-tiny'),
+    licence: 'Apache-2.0',
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'whisper-large-v3-turbo',
+    label: 'Whisper Large v3 Turbo',
+    type: 'whisper',
+    provider: 'local',
+    language: 'multilingual',
+    ...getGgufSpeechModelDownload('whisper-large-v3-turbo'),
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: [...WHISPER_LANGUAGES, 'yue'],
+    ...getSpeechModelErrorRates('whisper-large-v3-turbo'),
+    licence: 'MIT',
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'sense-voice-zh-en-ja-ko-yue',
+    label: 'SenseVoice',
+    type: 'senseVoice',
+    provider: 'local',
+    language: 'multilingual',
+    ...getGgufSpeechModelDownload('sense-voice-zh-en-ja-ko-yue'),
+    ...legacy('sense-voice-zh-en-ja-ko-yue'),
+    dictationLanguages: SENSE_VOICE_DICTATION_LANGUAGES,
+    languages: SENSE_VOICE_DICTATION_LANGUAGES,
+    ...getSpeechModelErrorRates('sense-voice-zh-en-ja-ko-yue'),
+    licence: 'FunASR Model License',
+    // Turbo scores better here but is 3.5x the download and takes seconds per phrase on a CPU.
+    suggestedFor: ['zh', 'ja', 'ko', 'yue'],
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'nemotron-3.5-asr-streaming-0.6b',
+    label: 'Nemotron 3.5',
+    type: 'transducer',
+    provider: 'local',
+    language: 'multilingual',
+    ...getGgufSpeechModelDownload('nemotron-3.5-asr-streaming-0.6b'),
+    dictationLanguages: NEMOTRON_DICTATION_LANGUAGES,
+    languages: NEMOTRON_DICTATION_LANGUAGES,
+    ...getSpeechModelErrorRates('nemotron-3.5-asr-streaming-0.6b'),
+    licence: 'OpenMDW-1.1',
+    sampleRate: 16000,
+    streaming: true
+  },
+  {
+    id: 'openai-gpt-transcribe',
+    label: 'GPT Transcribe',
+    type: 'openai',
+    provider: 'openai',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
+    id: 'openai-compatible',
+    label: 'OpenAI-compatible',
+    type: 'openai',
+    provider: 'openai-compatible',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: DICTATION_LANGUAGES,
     sampleRate: 16000,
     streaming: false
   },
   {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
-    description:
-      'Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.',
     type: 'openai',
     provider: 'openai',
     language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: DICTATION_LANGUAGES,
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    // OpenAI shuts the gpt-4o transcribe models down on 2027-02-26.
+    replacedBy: 'openai-gpt-transcribe'
   },
   {
     id: 'openai-gpt-4o-transcribe',
     label: 'GPT-4o Transcribe',
-    description: 'Cloud transcription with higher accuracy. Requires an OpenAI API key.',
     type: 'openai',
     provider: 'openai',
     language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: DICTATION_LANGUAGES,
     sampleRate: 16000,
-    streaming: false
+    streaming: false,
+    replacedBy: 'openai-gpt-transcribe'
   }
 ]
 
@@ -166,4 +251,8 @@ export function getCatalogModel(id: string): SpeechModelManifest | undefined {
 
 export function isLocalSpeechModel(manifest: SpeechModelManifest): boolean {
   return manifest.provider === 'local'
+}
+
+export function replaceRetiredSpeechModelId(id: string): string {
+  return getCatalogModel(id)?.replacedBy ?? id
 }

@@ -1,0 +1,76 @@
+import { useState } from 'react'
+import { X } from 'lucide-react'
+import { useAppStore } from '@/store'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { useTranslate } from '@/i18n/use-translate'
+import { NativeChatAccountUsageCard } from './NativeChatAccountUsageCard'
+import {
+  readNativeChatAccountUsageModalRequest,
+  type NativeChatAccountUsageModalRequest
+} from './native-chat-account-usage-modal'
+import { useNativeChatAccountUsage } from './use-native-chat-account-usage'
+
+/** `/usage`'s modal: each opening mounts a fresh read of the chat's account. */
+export default function NativeChatAccountUsageDialog(): React.JSX.Element | null {
+  const modalData = useAppStore((s) => s.modalData)
+  // The opening's chat is fixed; a fresh object per render would restart its read.
+  const [request] = useState(() => readNativeChatAccountUsageModalRequest(modalData))
+  return request ? <UsageDialog request={request} /> : null
+}
+
+function UsageDialog({
+  request
+}: {
+  request: NativeChatAccountUsageModalRequest
+}): React.JSX.Element {
+  const t = useTranslate()
+  const closeModal = useAppStore((s) => s.closeModal)
+  const usage = useNativeChatAccountUsage(request.sessionId, request.target)
+  // Why: the slot has no trigger element for the dialog to hand focus back to.
+  const [returnFocusTo] = useState(() =>
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  )
+  const title = t('components.native-chat.usage.title', 'Codex usage')
+  // Sized to the card, capped at /resume's height. The top is pinned where /resume's top sits,
+  // so title and Close stay put while the card grows from its loading layout to the loaded one.
+  return (
+    <Dialog open onOpenChange={(open) => !open && closeModal()}>
+      <DialogContent
+        showCloseButton={false}
+        aria-describedby={undefined}
+        surface="panel"
+        className="top-[max(2rem,calc(50%-320px))] flex max-h-[min(640px,calc(100vh-4rem))] translate-y-0 flex-col overflow-hidden sm:max-w-[560px]"
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          if (returnFocusTo?.isConnected) {
+            returnFocusTo.focus({ preventScroll: true })
+          }
+        }}
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-sidebar-border px-3 py-2">
+          <DialogTitle size="compact">{title}</DialogTitle>
+          <DialogClose asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="size-6"
+              aria-label={t('auto.components.ui.dialog.f26c4baeda', 'Close')}
+            >
+              <X className="size-3" />
+            </Button>
+          </DialogClose>
+        </div>
+        <div className="scrollbar-sleek min-h-0 overflow-y-auto">
+          <NativeChatAccountUsageCard
+            result={usage.result}
+            notice={usage.notice}
+            target={request.target}
+            onRetry={usage.refresh}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}

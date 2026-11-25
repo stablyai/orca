@@ -1,0 +1,260 @@
+{
+  "recordedAt": "2026-10-10T01:03:28.131138+00:00",
+  "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+  "sourceCommit": "bcfbb8cb6d543aca516fca346c32c47ec880019f",
+  "command": "ORCA_BACKGROUND_LAUNCH=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/native-chat-tool-pairing.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --retries=0 --output=/tmp/orca-perf-2-pr-proof/round2-desktop-test-results",
+  "buildCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm run build:electron-vite --mode e2e",
+  "build": {
+    "sourceSnapshotAt": "2026-10-10T01:01:51.984377+00:00",
+    "headCommit": "bcfbb8cb6d543aca516fca346c32c47ec880019f",
+    "sourceSha256": {
+      "config/scripts/ensure-native-runtime.mjs": "ba33bac7159cc8cd9375f20617d662a7ab5ef85120f94ea3b4f0877569f97365",
+      "config/scripts/run-electron-vite-build.mjs": "457e6a2cc6ce3cbe3dd460909a95862ba6f4ef4ef081f451317ca73843bb3840",
+      "config/tsconfig.e2e.json": "a380344aa7318a7dedf7e9d17575b6d8a98e8b4487e04698888ba13a49c06a24",
+      "electron.vite.config.ts": "bfb7b82d1d479c3fe5036f61cf739df5b9dd2d8436e8b63291214cc6c6ea644d",
+      "mobile/src/session/MobileNativeChatToolRun.tsx": "a6690578f1fbd89ff2874bc80a069deed5807dd445a21fdaa7f285eee31f59cd",
+      "package.json": "e2bfb1f33cde3d4e9d255ea74a8c6f79a4e0eb55e8dee964aa23a79f1a76ca7f",
+      "pnpm-lock.yaml": "6b0da6b6375a40be7ba9ab98798618b3185ca73e5f01e654967469494ec73829",
+      "src/main/claude-usage/persisted-projection-validation.ts": "f3d4da4410ff51519660d234380b1a4fb7f31d2cc17ae9c703fccf874b329160",
+      "src/main/claude-usage/persisted-source-cache.ts": "c51b94ed2edc6dd19a53a940e1a5ab3ed0b5de5b033c97d679f6419e92b5a535",
+      "src/main/claude-usage/persisted-token-columns.ts": "87c7892cd887bbfaf0ebcf2d85f460773a2070594de896eef94955c40b823855",
+      "src/main/claude-usage/persisted-usage-report.ts": "13737060c3fde1287f194ad833e149f596842534e35eb91e8826b289f9686a04",
+      "src/main/claude-usage/persisted-usage-test-fixture.ts": "ab45375b06b8d3916fb90e3c31fc7ce6de5e3b2eb7410fa574b9095d0c29d6fa",
+      "src/main/claude-usage/scanner.ts": "8174e231f388f5fbc73cdcc2f1216d0cdb5d7213eaa97edd59c304bf76dd219e",
+      "src/main/claude-usage/store.ts": "5beb17f973fbd12b70408e7c8526fda9486ca3fdba2acc89dccb3b0f6d3e8b39",
+      "src/main/claude-usage/transcript-file-discovery.ts": "54c84d0b99b45c0fa13e589a1bcec2b479cb01e8b17bcbddbb65a4bc85a03401",
+      "src/main/claude-usage/transcript-projection-integrity.ts": "a9447fd3916484b03e60993f56bf6052c122a3774a3d91b2541aaeb51bd06aef",
+      "src/main/claude-usage/transcript-record-parser.ts": "bfd4608941761444fdbc53a3d86f9e401d8d088a77f5d906cc36910786ac937b",
+      "src/main/claude-usage/transcript-resume-projection.ts": "d9d5fd504489a32371bcbffe0f77b5d00a8f4dd7a8aa2dea7eaeb8b63d1866db",
+      "src/main/claude-usage/transcript-token-checkpoint.ts": "6e3ebb95532118730eb7c91d486e6885d429c6cc0c47f4b1078fc71afd910b86",
+      "src/main/claude-usage/transcript-usage-projection.ts": "5711193900bcab341c110529c91c973f38dd625d045cbaaab91ac6b0903e118c",
+      "src/main/claude-usage/types.ts": "900f26e7aa69707b9141cd8ef0d27c72ec7c6aab187140d0ec08cd770afe27bf",
+      "src/main/codex-usage/codex-rollout-file-parse.ts": "f39a10c1dce47a71d46c0948d05df30aa6dcc044c81b777b6a013be6f23e9c7a",
+      "src/main/codex-usage/codex-rollout-resume-state.ts": "aa028d2155b7744c0d961c5649537faa20c39bfe404dea8d9c4c1464d11a0e39",
+      "src/main/codex-usage/codex-session-file-discovery.ts": "6c36d6c7da6f5f7ff526b2b67290d072f710f0018b13d604854410ae07bdfe24",
+      "src/main/codex-usage/scanner.ts": "8221f7420ddaae20a94a6c14421bc688d659f82daf85eb47bbe26760418c41a5",
+      "src/main/codex-usage/types.ts": "84bfd3976613b6a775d215fa54f00917cabb981be780d4837c92d43f7cb0a036",
+      "src/main/native-chat/agent-session-journal/journal-legacy-import-tool-pairing.test.ts": "db13d19c0e1036d2b5e7298482ef3811d2dc29d130d896a849f791beb72b4266",
+      "src/main/native-chat/agent-session-journal/journal-legacy-import.ts": "73ec3704b9558b0468446a5a597a56d80decb5398239a2697f3244a9141714ec",
+      "src/main/native-chat/transcript-line-decoders-codex.ts": "cbd4133da04988a9b86015349411a679a5b1b513738a7c10bf165869c49e05e4",
+      "src/main/native-chat/transcript-record-blocks.ts": "110990b4d8ebd6f28ea8702de92568fff5af398bffa5dafdb81d93b65f7da594",
+      "src/main/usage/jsonl-file-checkpoint.ts": "b7f307564989dabaf1dfda095a26c7bd9f0683e0efcabe79a010c7b58fa1a2d4",
+      "src/main/usage/jsonl-file-snapshot.ts": "b1b8869db92c08c762160acba7570aabff25879649cb6ffa3826912ee35deffe",
+      "src/main/usage/jsonl-line-offsets.ts": "f3574adfad4549c6330e2ac52760c91be5a8cbb9bf8e1beb440e3226087074db",
+      "src/main/usage/usage-cache-json-integrity.ts": "7fbe3f92f3e59d7f6e55a4edf50899f142a313d8662587c85fdc9489976231d7",
+      "src/main/usage/usage-event-aggregation.ts": "31adda2e8e0a32756416fb49b2c3e02c707703bfe76434aabc95c61a7efd180b",
+      "src/main/usage/usage-inline-cache-preservation.ts": "4167fe146fb6c87e2cbed190618fcb9e79166ec60fcc495106428b9fd0eecacf",
+      "src/main/usage/usage-provider-store-lifecycle.ts": "7dfa6cfdd487149c39c07a491ce4d327ebc366fa4809c695f7eca056e7584901",
+      "src/main/usage/usage-scan-worker-client.ts": "fe18350d29970d9100af6518c3d7982308f8e5e232bd956c6d2e07849e8a0386",
+      "src/main/usage/usage-scan-worker-entry.ts": "480ccdb83674f85fbd8f33c27d4af3b8faad9d7e5075da4b99c8ff400542425a",
+      "src/main/usage/usage-source-cache-file.ts": "ee53cd3c823ce5bd49892bf96486f48d285c0b4e536a295adfe5e94f147712f5",
+      "src/main/window/foreground-activation-policy.ts": "239ed120ac1e6ede9918dc960685faf487d48d875c0f65dc5521776f79230740",
+      "src/renderer/src/components/native-chat/NativeChatToolRun.test.tsx": "8801f413a061d42d1986bc6abd28caa30184dbe56c6be9c59175a688105b579b",
+      "src/renderer/src/components/native-chat/NativeChatToolRun.tsx": "3b1d3378f18ddc3a2bcb9a1253797cae430933a6195b68fa4f456a0e5dd64fb1",
+      "src/renderer/src/components/native-chat/NativeChatToolRunMemberList.tsx": "e98c7d150acd4a4f63da0f5f70e02c033a347335be06a0e3c61ff5a5d87891f2",
+      "src/renderer/src/components/native-chat/native-chat-task-list-history.ts": "9b1068f2e10c60ad78e0042de429384880aaf24726cf6b26dfa7a54ca0845cc1",
+      "src/renderer/src/components/native-chat/native-chat-task-list-state.ts": "99897f87fb2df731e1a991eb82a1d863fe8c36115192fbcfa6508cf745ad9e26",
+      "src/renderer/src/env.d.ts": "cea39433a66e2f28fbacf8152f5587a8355eaa0e2868b9f496349238d652f42c",
+      "src/shared/native-chat-folded-tool-results.ts": "e563aad787ef7b96fe91077006347121ffb5e4accca44e56a8282a9d278e2881",
+      "src/shared/native-chat-tool-fold.ts": "97b6a7e7bad809827178fd72a3343be9e6d9956c4eb30631de081f35d8126253",
+      "src/shared/native-chat-tool-pairing.ts": "3ccb8d4ef673f4f6bc00d7f63fbc112cfd688585f8054ee3f53f2e745f712fdb",
+      "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+      "src/shared/native-chat-transcript-projection.ts": "9813324df27e4e8192347c38f7602f8f850a9611b2ee8f7527c40888795ebbe2",
+      "src/shared/native-chat-turn-membership.ts": "6bb5d619ae4d6335345b855e07aca84fc79721d1ec32d6c5a2201453b78430af",
+      "src/shared/native-chat-turn-row-attribution.ts": "a441a6dccfa304c95e18f6886fbc7a6c6bdc98c6fec65a637d0b7ad320028386",
+      "src/shared/native-chat-types.ts": "449b3ed60a5e75de48584d9d4e33ad431342834d6c7a8951571304a21f7f5ded",
+      "src/shared/structured-agent-session-projection.ts": "484deef1674afa52a3c16e304c0a1640e635d96eeabaddfe31d24e52cc295238",
+      "src/shared/structured-agent-session-tool-call-block.ts": "2bfcf1bba56b94154ca7f5b3fc44a517754e61352512c5e486457e5ea4744e7e",
+      "tests/e2e/helpers/electron-process-shutdown.ts": "94e6be0f7348309561186d529410621caace80966b5d6fc3e3e68182c0253c60",
+      "tests/e2e/helpers/native-chat-transcript-fixture.ts": "e769ca91c2c2d117f817cd36544e1be99583139306444a411f699aa83053b60b",
+      "tests/e2e/helpers/orca-app.ts": "f514cb2215434c57519e63c01a9ca49c129203f46ea470232fcb2bf9bb0cc573",
+      "tests/e2e/helpers/store.ts": "82807c85d54f68bf4347ac37dee04a6112eae84521f3f597f883728df4627dea",
+      "tests/e2e/native-chat-tool-pairing.spec.ts": "4a76af0989ae2e47df0e2f01792ff995d8b5b18546c3505e41ca42b9f7973608"
+    },
+    "sourceSnapshotSelection": "Prior desktop surface, fixture and launch policy plus recorded A/B/C production paths",
+    "buildCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm run build:electron-vite --mode e2e",
+    "compilerOnly": true,
+    "buildOutputSha256": {
+      "out/main/index.js": "4244ad9f7c023bbf4c9e305b3e7cd3784ffd5ade622485ecc03fa594c45bed67",
+      "out/preload/index.js": "cd7ce30025711f399219fd3434ac7d7ea7eddc37c2dc9c4b833be1ef213b5395",
+      "out/renderer/index.html": "ab10055bb8138465b737161af99c5a02d3050ac42585ddcbeaf26498aa58ca85",
+      "out/renderer/assets/index-BZXVgZo3.js": "9e77badc5442eda7e35b8697f957daca98de54b9503a02860ab38acff703d969"
+    },
+    "rendererChatChunkSha256": {
+      "out/renderer/assets/native-chat-layout-actions-p5EtP_LF.js": "13c94c32f25c5045ccd0e2bc527d42e3c5d7c376f92213840ad54dfdd323d765",
+      "out/renderer/assets/native-chat-resume-run-view-BYp7PJSh.js": "6f8f69dede17abf9980a570d20cf6ce75c4123d76e91778f02ca9b51648033fa",
+      "out/renderer/assets/native-chat-runtime-contract-DzrwGKiV.js": "abceb8886edfde4b2d4386cea8e11257ed520625049acbbb7cf26f4c9ac79942",
+      "out/renderer/assets/native-chat-tool-identity-0GsWAP69.js": "717a8839df0551723beea9371a2e2faffdc5ca622955715a2992e825ed0ac0e0",
+      "out/renderer/assets/native-chat-turn-status-D1KZFoU0.js": "33b27cba4f58a7c9971b470fe6ee23ed72fa7f6fa26435a37b75624739b625f4",
+      "out/renderer/assets/native-chat-upgrade-tip-audience-CuyR88Mj.js": "7e956bbaec8304e930012cd908f2e83c8d9e4894c9f301b4354cb2caed580b5d",
+      "out/renderer/assets/store-BuxSCsDN.js": "ead8c38c16619275a7c51df36338ff9bee2d167f9e12642ef4a22f3ee619764f",
+      "out/renderer/assets/store-uwnXpoN1.js": "4fac6fd409f37ad74c7dfdaeef4fc714f6256b96eca81c03237983bcdf1c1e0a"
+    },
+    "rendererJavascriptManifest": {
+      "files": 1235,
+      "sha256": "6202398589f33d0e2289c8d111822f68fa0c77d7efffda76981b1d3bd27952e8"
+    },
+    "sourceStableThroughoutBuild": true,
+    "buildCompletedAt": "2026-10-10T01:02:51.504006+00:00",
+    "ensureElectronCommand": "ORCA_BACKGROUND_LAUNCH=1 pnpm run ensure:electron-runtime",
+    "ensureElectronSeconds": 1.888,
+    "nativeRuntimeEnsuredAfterCompilerOnlyBuild": true,
+    "sourceAndBuildStableThroughoutCapture": true,
+    "captureCompletedAt": "2026-10-10T01:03:28.129689+00:00",
+    "chatProductionSourceSha256": {
+      "mobile/src/session/MobileNativeChatToolRun.tsx": "a6690578f1fbd89ff2874bc80a069deed5807dd445a21fdaa7f285eee31f59cd",
+      "src/main/native-chat/agent-session-journal/journal-legacy-import.ts": "73ec3704b9558b0468446a5a597a56d80decb5398239a2697f3244a9141714ec",
+      "src/main/native-chat/transcript-line-decoders-codex.ts": "cbd4133da04988a9b86015349411a679a5b1b513738a7c10bf165869c49e05e4",
+      "src/main/native-chat/transcript-record-blocks.ts": "110990b4d8ebd6f28ea8702de92568fff5af398bffa5dafdb81d93b65f7da594",
+      "src/renderer/src/components/native-chat/NativeChatToolRun.tsx": "3b1d3378f18ddc3a2bcb9a1253797cae430933a6195b68fa4f456a0e5dd64fb1",
+      "src/renderer/src/components/native-chat/NativeChatToolRunMemberList.tsx": "e98c7d150acd4a4f63da0f5f70e02c033a347335be06a0e3c61ff5a5d87891f2",
+      "src/renderer/src/components/native-chat/native-chat-task-list-history.ts": "9b1068f2e10c60ad78e0042de429384880aaf24726cf6b26dfa7a54ca0845cc1",
+      "src/renderer/src/components/native-chat/native-chat-task-list-state.ts": "99897f87fb2df731e1a991eb82a1d863fe8c36115192fbcfa6508cf745ad9e26",
+      "src/shared/native-chat-folded-tool-results.ts": "e563aad787ef7b96fe91077006347121ffb5e4accca44e56a8282a9d278e2881",
+      "src/shared/native-chat-tool-fold.ts": "97b6a7e7bad809827178fd72a3343be9e6d9956c4eb30631de081f35d8126253",
+      "src/shared/native-chat-tool-pairing.ts": "3ccb8d4ef673f4f6bc00d7f63fbc112cfd688585f8054ee3f53f2e745f712fdb",
+      "src/shared/native-chat-tool-pairs.ts": "73e0da592a69f0962cba46d7fedfeb1feab01cc39d1d938d7460fabd17a09a33",
+      "src/shared/native-chat-transcript-projection.ts": "9813324df27e4e8192347c38f7602f8f850a9611b2ee8f7527c40888795ebbe2",
+      "src/shared/native-chat-turn-membership.ts": "6bb5d619ae4d6335345b855e07aca84fc79721d1ec32d6c5a2201453b78430af",
+      "src/shared/native-chat-turn-row-attribution.ts": "a441a6dccfa304c95e18f6886fbc7a6c6bdc98c6fec65a637d0b7ad320028386",
+      "src/shared/native-chat-types.ts": "449b3ed60a5e75de48584d9d4e33ad431342834d6c7a8951571304a21f7f5ded",
+      "src/shared/structured-agent-session-projection.ts": "484deef1674afa52a3c16e304c0a1640e635d96eeabaddfe31d24e52cc295238",
+      "src/shared/structured-agent-session-tool-call-block.ts": "2bfcf1bba56b94154ca7f5b3fc44a517754e61352512c5e486457e5ea4744e7e"
+    },
+    "chatSourcesStillMatchAtDocumentationRefresh": true,
+    "documentationRefreshedAt": "2026-10-10T01:04:47.586946+00:00",
+    "combinedBuildScope": "Final C chat sources on the then-frozen combined worktree; later B-only optimizations reopened after this capture and are not included in this build."
+  },
+  "test": {
+    "file": "tests/e2e/native-chat-tool-pairing.spec.ts",
+    "sourceSha256": "4a76af0989ae2e47df0e2f01792ff995d8b5b18546c3505e41ca42b9f7973608",
+    "passed": 1,
+    "failed": 0,
+    "testSeconds": 6.3,
+    "totalSeconds": 7.5
+  },
+  "differential": {
+    "source": "src/shared/native-chat-tool-pairs.ts",
+    "sourceSha256": "6be4c6ac899c275362658ac69478cd3b71dec97b0cd59520f71eb5e1dfc093b4",
+    "pairComparisons": 81920,
+    "unpairedOccurrenceComparisons": 8192,
+    "oracle": "independent original pending array scan",
+    "status": "passed",
+    "scope": "Historical earlier matcher revision measured before orphan/import hardening and optional-sink allocation changes; not a differential check of the current source hash"
+  },
+  "lint": {
+    "basic": "passed --deny-warnings",
+    "nativePlugin": "passed --deny-warnings",
+    "typeAware": "passed --deny-warnings",
+    "files": ["tests/e2e/native-chat-tool-pairing.spec.ts"]
+  },
+  "typecheck": {
+    "status": "passed",
+    "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/typescript/bin/tsc --noEmit -p config/tsconfig.native-chat-tool-pairing.verify.json",
+    "temporaryConfiguration": {
+      "extends": "./tsconfig.e2e.json",
+      "include": [
+        "../tests/e2e/native-chat-tool-pairing.spec.ts",
+        "../src/renderer/src/env.d.ts",
+        "../src/types/**/*"
+      ],
+      "compilerOptions": {
+        "incremental": false,
+        "composite": false
+      }
+    },
+    "temporaryConfigurationRemoved": true,
+    "scope": "This E2E spec and its imports with renderer ambient declarations"
+  },
+  "unitCoverage": {
+    "journalImport": {
+      "file": "src/main/native-chat/agent-session-journal/journal-legacy-import-tool-pairing.test.ts",
+      "coverage": [
+        "Separately imported calls and reverse batched results behind a silent call",
+        "Singleton and multi-call records retain matching IDs",
+        "Duplicate provider IDs retain FIFO order",
+        "Calls and results without IDs remain positional",
+        "Old persisted call rows missing IDs keep named outputs visible separately",
+        "Codex function, custom-tool and local-shell call IDs survive singleton import"
+      ],
+      "scope": "Actual importer and projector regression coverage; provider adoption launch not exercised in this Electron run"
+    },
+    "resultSummary": {
+      "reportedByRendererOwner": true,
+      "passedTests": 99,
+      "files": 8,
+      "scope": "Historical focused Result-only summary and adjacent renderer correctness suites from preceding integration"
+    },
+    "historicalAffectedDomainRun": {
+      "files": 851,
+      "passedTests": 8398,
+      "todoTests": 5,
+      "scope": "Historical affected-domain Node unit coverage from the preceding integration; not the current revision or whole repository unit suite",
+      "command": "ORCA_BACKGROUND_LAUNCH=1 node node_modules/vitest/vitest.mjs run --config config/vitest.config.ts --maxWorkers=4 src/main/claude-usage src/main/codex-usage src/main/usage src/shared/native-chat src/main/native-chat src/renderer/src/components/native-chat src/main/runtime/orchestration/structured-worker-journal-archive.test.ts src/main/runtime/rpc/methods/native-chat-ssh-transcript.test.ts",
+      "log": "/tmp/orca-perf-2-hardening-domain-tests-node.log",
+      "sourceCommit": "38598a51c5069a116a17eda3a35365761181be6e"
+    },
+    "historicalPerformanceContracts": {
+      "files": 17,
+      "passedTests": 155,
+      "command": "pnpm test:perf:contracts",
+      "scope": "Historical155-test performance contract run from the preceding integration"
+    },
+    "round2ReportedByCoordinator": {
+      "fullTypecheck": "passed",
+      "performanceContractTests": 163,
+      "qualityGates": "passed",
+      "independentCounsels": "passed",
+      "scope": "Coordinator-reported combined contract/typecheck/quality validation before later B-only source optimizations; no whole-unit-suite claim"
+    }
+  },
+  "launch": {
+    "appPath": "/Users/nwparker/orca/workspaces/orca/perf-2",
+    "windows": [
+      {
+        "visible": false,
+        "focused": false
+      }
+    ],
+    "processId": 29225
+  },
+  "completion": {
+    "allNativeWindowsHiddenAndUnfocused": true,
+    "ownedElectronProcessAbsent": true,
+    "processCheckCommand": "ps -p 29225 -o pid=,command=",
+    "processCheckExitCode": 1,
+    "processCheckStdout": "",
+    "fixtureShutdown": "closeElectronAppForE2E, cleanupE2EDaemons and temporary transcript/profile cleanup completed"
+  },
+  "scenario": {
+    "loader": "Synthetic Claude JSONL through production main-process native chat reader and real UI clicks",
+    "silentCalls": 32,
+    "namedOutputsCompletedInReverseOrder": 3,
+    "unmatchedNamedOutputRetainedStandalone": true,
+    "unmatchedNamedOutputAbsentFromCallRun": true,
+    "standaloneOrphanOwnsNoNamedCallOutputs": true,
+    "failedTodoWritePreservesAcceptedPendingTask": true,
+    "standaloneSummaryUsesResultLabel": true,
+    "standaloneSummaryHasNoFabricatedToolCallCount": true
+  },
+  "screenshot": "https://github.com/user-attachments/assets/79f41dc6-8ec8-4f12-8e89-e4d7ec4b5daa",
+  "screenshotSha256": "67783ff3a4a7f4294fd3619d600ab61a32a5b9c6f3b40b1afb632e0b183c442f",
+  "renderedInspection": "All three reverse completions belong to their named commands; unrelated output appears under separate Result summary and row without a fabricated tool-call count; accepted task remains pending 0/1 after matched failure",
+  "beforeProof": {
+    "screenshot": "https://github.com/user-attachments/assets/b9f84d6e-a786-42d5-b895-8a4319f972cd",
+    "record": "before-validation.json",
+    "baselineCommit": "51e7181850b022bae2d41091fe1229accef4bd50",
+    "overlayFiles": [
+      "src/shared/native-chat-tool-fold.ts",
+      "src/main/native-chat/transcript-record-blocks.ts",
+      "src/main/native-chat/transcript-line-decoders-codex.ts"
+    ],
+    "scope": "Only these three modules were restored from the baseline in the then-current app; other code and hidden launch policy remained current. It demonstrates the original ownership defect, not a full historical app build or adopted-journal UI flow."
+  },
+  "scope": "Hidden desktop Electron ownership, standalone output retention and task correctness. No provider CLI run, provider adoption launch, mobile rendering, SSH transport or full-render timing measurement.",
+  "sourceSnapshotScope": "Exact combined app build at the recorded source snapshot with final C sources. B-only optimizations reopened after capture and are not included. C production hashes remained unchanged at documentation refresh.",
+  "mobileProof": {
+    "record": "mobile-rendered-validation.json",
+    "scope": "Actual production mobile Message/fold with React Native Web, browser build options and shell CSP; component disclosure and ownership, no native phone or transport"
+  }
+}

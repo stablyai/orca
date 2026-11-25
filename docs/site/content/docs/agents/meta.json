@@ -1,0 +1,20 @@
+{
+  "title": "Working with Agents",
+  "defaultOpen": true,
+  "pages": [
+    "supported",
+    "claude-code",
+    "glm-agent",
+    "codex",
+    "cursor-cli",
+    "codex-hot-swap",
+    "antigravity",
+    "antigravity-accounts",
+    "hermes",
+    "native-chat",
+    "session-history",
+    "hibernation",
+    "usage-tracking",
+    "hooks-memory"
+  ]
+}

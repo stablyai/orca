@@ -1,0 +1,73 @@
+import { parseGitRepositoryIdentity, splitQualifiedPluginKey } from './plugin-marketplace'
+import { gitUrlPluginPublisher } from '../installation/plugin-publisher-derivation'
+
+const LINKABLE_GIT_HOSTS = new Set(['github.com', 'gitlab.com'])
+const PATH_SEGMENT_RE = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/
+
+/** The web page of the git repository Orca installs a plugin from, built by Orca itself; null
+ *  unless it is on github.com or gitlab.com. Why: plugin- and catalog-supplied URLs are never
+ *  opened, so a listing cannot turn its page into a link to anywhere. */
+export function pluginRepositoryPageUrl(gitUrl: string): string | null {
+  const identity = parseGitRepositoryIdentity(gitUrl)
+  if (!identity || !LINKABLE_GIT_HOSTS.has(identity.host)) {
+    return null
+  }
+  const segments = identity.path.split('/')
+  if (!segments.every((segment) => PATH_SEGMENT_RE.test(segment))) {
+    return null
+  }
+  return `https://${identity.host}/${segments.join('/')}`
+}
+
+const COMMIT_RE = /^[0-9a-f]{40}$/
+
+/** The plugin's folder at an exact source commit, where the host renders its
+ *  README; built like `pluginRepositoryPageUrl`, so a listing cannot point it elsewhere. */
+export function pluginReadmePageUrl(source: {
+  gitUrl: string
+  commit: string
+  path?: string
+}): string | null {
+  const repository = pluginRepositoryPageUrl(source.gitUrl)
+  if (!repository || !COMMIT_RE.test(source.commit)) {
+    return null
+  }
+  const pathSegments = source.path ? source.path.split('/') : []
+  if (!pathSegments.every((segment) => PATH_SEGMENT_RE.test(segment))) {
+    return null
+  }
+  const tree = repository.startsWith('https://gitlab.com/') ? '-/tree' : 'tree'
+  return `${[repository, tree, source.commit, ...pathSegments].join('/')}#readme`
+}
+
+/** The catalog's repository claim when its namespace matches; otherwise the fetch source.
+ *  Neither the claim nor a matching namespace establishes who authored the plugin. */
+export function pluginListingRepositoryUrl(listing: {
+  pluginKey: string
+  source: { url: string }
+  release?: { repository?: string; sourceUnavailable?: true }
+}): string {
+  const authored = listing.release?.repository
+  if (
+    authored &&
+    !listing.release?.sourceUnavailable &&
+    pluginRepositoryPageUrl(authored) &&
+    gitUrlPluginPublisher(authored) === splitQualifiedPluginKey(listing.pluginKey)?.publisher
+  ) {
+    return authored
+  }
+  return listing.source.url
+}
+
+/** Orca's own reading of a Git URL: `host/owner/repo` plus the owner, never the manifest's claim. */
+export function pluginRepositoryOrigin(
+  url: string,
+  path?: string
+): { owner: string; repository: string } | null {
+  const identity = parseGitRepositoryIdentity(url)
+  if (!identity) {
+    return null
+  }
+  const repository = `${identity.host}/${identity.path}`
+  return { owner: identity.owner, repository: path ? `${repository} (${path})` : repository }
+}

@@ -1,0 +1,336 @@
+import type {
+  BridgeRpcClient,
+  BridgeRpcClientOptions
+} from './client-state/bridge-rpc-client-contract'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { emitPageAppInactive } from './page-lifecycle/bridge-app-inactive'
+import { createPageSwapSafety } from './page-lifecycle/page-swap-safety'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import {
+  BRIDGE_MAX_SUBSCRIPTIONS,
+  bridgePendingRequestCap,
+  isBridgeFrameWithinCap,
+  utf8ByteLength
+} from './protocol/bridge-caps'
+import {
+  BridgeConnectionCache,
+  type BridgeSnapshotOutcome
+} from './client-state/bridge-client-connection-cache'
+import type { BridgeRpcClientDiagnostic } from './client-state/bridge-client-diagnostics'
+import {
+  createBridgeClientShellSession,
+  shellSessionListeners
+} from './client-state/bridge-client-shell-session'
+import {
+  createBridgeInitHandshake,
+  createPageReadyFrame
+} from './client-state/bridge-client-init-handshake'
+import {
+  BridgeClientCapExceededError,
+  BridgeClientClosedError,
+  BridgeClientNotNativeVerbError,
+  BridgeClientNotReadyError,
+  BridgeRequestOversizedError,
+  BridgeSendFailedError,
+  BridgeShellReplacedError,
+  throwIfBridgeSignalAborted
+} from './client-state/bridge-client-errors'
+import { createBridgeInboundFrameReader } from './client-state/bridge-client-inbound-frames'
+import { createBridgeClientNotifications } from './client-state/bridge-client-notifications'
+import { createBridgeClientTerminalKeys } from './client-state/bridge-client-terminal-keys'
+import { createPageBackConsumers } from './page-lifecycle/page-back-consumers'
+import { BridgeClientRequests } from './client-state/bridge-client-requests'
+import {
+  readBridgeRequestFrameOptions,
+  readBridgeRpcEnvelope
+} from './client-state/bridge-client-rpc-envelope'
+import { BridgeClientSubscriptions } from './client-state/bridge-client-subscriptions'
+import { isBridgeNativeMethod } from './native-capabilities/bridge-native-verbs'
+import { routeParamClearFrame } from './page-lifecycle/bridge-route-update'
+import { BRIDGE_PROTOCOL_VERSION, BRIDGE_RPC_ENVELOPE_GRANT } from './protocol/bridge-frame-fields'
+import type { BridgeClientMessage } from './protocol/bridge-envelope'
+
+const BRIDGE_ID_CHARS = 22
+
+// Expose synchronous RpcClient getters from init-primed state so first renders match native clients. Page close settles its own work, never the native client shared by other screens.
+// Ungated calls before init throw for mount-order bugs; after close, teardown calls are inert and getters retain a disconnected snapshot. Stream failures notify listeners.
+export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRpcClient {
+  const requests = new BridgeClientRequests()
+  const cache = new BridgeConnectionCache()
+  let closed = false
+  let idCounter = 0
+
+  const report = (diagnostic: BridgeRpcClientDiagnostic) => options.onDiagnostic?.(diagnostic)
+
+  // Never throw: serialization/transport failure must return control to request-id cleanup. Keep JSON.stringify inside try for cycles, BigInt and throwing toJSON.
+  // Refuse oversize using the shell’s exact predicate before posting, or the receiver drops it and leaves the caller waiting forever.
+  function sendFrame(frame: BridgeClientMessage): 'sent' | 'oversized' | 'port-failed' {
+    try {
+      const json = JSON.stringify(frame)
+      if (!isBridgeFrameWithinCap(json)) {
+        // Count UTF-8 bytes like Swift utf8.count and Kotlin UTF_8 size; JS code units undercount non-ASCII requests.
+        report({ kind: 'send-oversized', bytes: utf8ByteLength(json) })
+        return 'oversized'
+      }
+      options.send(json)
+      return 'sent'
+    } catch (error) {
+      report({ kind: 'send-failed', error })
+      return 'port-failed'
+    }
+  }
+
+  const hasGrant = (name: string) => shellSession.current()?.grants.native.includes(name) === true
+
+  const posted = (frame: BridgeClientMessage): boolean => sendFrame(frame) === 'sent'
+
+  // Use a deterministic counter for recorded replay; one page/client makes it unique across active exchanges.
+  function nextId(): string {
+    idCounter += 1
+    return idCounter.toString(36).padStart(BRIDGE_ID_CHARS, '0')
+  }
+
+  const subscriptions = new BridgeClientSubscriptions({
+    send: posted,
+    onDroppedBinaryFrame: () => report({ kind: 'binary-frame-dropped' })
+  })
+
+  const handshake = createBridgeInitHandshake(() => {
+    sendFrame(createPageReadyFrame())
+  })
+
+  // Before-init calls expose mount-order bugs; after-close calls stay inert because teardown callers generally have no catch.
+  function requireSession(): void {
+    if (shellSession.current() === null && !closed) {
+      throw new BridgeClientNotReadyError()
+    }
+  }
+
+  const snapshot = () => cache.require()
+
+  // Repeated init for the same session updates route/insets/cache while preserving exchanges and the original storage snapshot. A different session id invalidates prior work.
+  const shellSession = createBridgeClientShellSession({
+    onReplaced: () => {
+      const replaced = new BridgeShellReplacedError()
+      requests.closeAll(replaced)
+      subscriptions.failAll(replaced.message)
+    },
+    prime: (connection) => cache.prime(connection)
+  })
+
+  function acceptState(outcome: BridgeSnapshotOutcome): void {
+    if (outcome === 'stale') {
+      report({ kind: 'state-out-of-order' })
+      handshake.restart()
+    }
+  }
+
+  const back = createPageBackConsumers({
+    publishClaim: (claimed) => notifications.notifyBackClaim(claimed),
+    onUnclaimed: () => {
+      report({ kind: 'back-unclaimed' })
+      notifications.notifyNavigateBack()
+    }
+  })
+
+  // Requests still unanswered when the app left: the user may be waiting on an upload or a save.
+  let sentBeforeLeaving: readonly string[] | null = null
+  const pageDocument: Document | undefined = globalThis.document
+  const swapSafety = pageDocument === undefined ? null : createPageSwapSafety(pageDocument)
+  const readInboundFrame = createBridgeInboundFrameReader({
+    requests,
+    subscriptions,
+    report,
+    // Reassert only after the new init has been applied to the session.
+    acceptInit: (message) => {
+      handshake.stop()
+      shellSession.accept(message)
+      back.reassert()
+      terminalKeys.reassert()
+    },
+    acceptState: (connection) => acceptState(cache.apply(connection)),
+    acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
+    acceptBack: back.press,
+    // Only a page booted before its screen, with no init yet, is parked; the shell answers its ready on adoption.
+    acceptParked: handshake.stop,
+    acceptAppInactive: () => {
+      sentBeforeLeaving = requests.ids()
+      swapSafety?.disarm()
+      emitPageAppInactive()
+    },
+    // A leave the page never heard leaves its requests unknown, so it never says safe.
+    acceptAppResumed: (round, reloading) => {
+      const sent = sentBeforeLeaving
+      const safe =
+        sent !== null &&
+        swapSafety !== null &&
+        swapSafety.answer(
+          sent.some((id) => requests.has(id)),
+          reloading ? () => notifications.notifySwapSafe(false, round) : null
+        )
+      notifications.notifySwapSafe(safe, round)
+    },
+    acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
+  })
+
+  function receive(json: string): void {
+    if (closed) {
+      return
+    }
+    try {
+      readInboundFrame(json)
+    } catch (error) {
+      // Catch listener failures after frame receipt; letting them escape would reject iOS native post for a delivered frame. Report without retrying (ruling 34 addendum).
+      report({ kind: 'inbound-listener-threw', error })
+    }
+  }
+
+  function sendRequest(...args: [string, unknown?, SendRequestOptions?]): Promise<RpcResponse> {
+    // Missing session is a synchronous mount-order bug; in-flight cap refusal instead rejects like the shell’s response.
+    requireSession()
+    if (closed) {
+      // Return a rejected promise: deferred operations hand it back directly, so synchronous throws would bypass callers’ promise catches.
+      return Promise.reject(new BridgeClientClosedError())
+    }
+    const [method, params, requestOptions] = args
+    const cap = bridgePendingRequestCap(isBridgeNativeMethod(method))
+    if (requests.size >= cap) {
+      return Promise.reject(new BridgeClientCapExceededError(`over ${cap} requests in flight`))
+    }
+    throwIfBridgeSignalAborted(requestOptions?.signal)
+    requestOptions?.beforeSend?.()
+    const id = nextId()
+    const response = new Promise<RpcResponse>((resolve, reject) => {
+      const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
+      requests.open(id, { resolve, reject })
+      const outcome = sendFrame({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'request',
+        id,
+        method,
+        // Preserve absent params for replayed arity. JSON cannot carry explicit undefined, so that spelling necessarily arrives as the absent form.
+        ...(args.length > 1 ? { params } : {}),
+        ...frameOptions
+      })
+      if (outcome !== 'sent') {
+        requests.abandon(id)
+        // Both failures prove nothing was sent; distinguish oversize so the caller can retry a smaller action.
+        reject(
+          outcome === 'oversized' ? new BridgeRequestOversizedError() : new BridgeSendFailedError()
+        )
+      }
+    })
+    return requests.wait(id, response, requestOptions, () => {
+      sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'cancel', id, target: 'request' })
+    })
+  }
+
+  function subscribe(
+    method: string,
+    params: unknown,
+    onData: (result: unknown) => void,
+    subscribeOptions?: Parameters<RpcClient['subscribe']>[3]
+  ): () => void {
+    requireSession()
+    if (closed) {
+      return () => undefined
+    }
+    // Subscribe returns only cleanup, so local refusal throws; asynchronous shell refusal instead reports through the stream diagnostic.
+    if (subscriptions.size >= BRIDGE_MAX_SUBSCRIPTIONS) {
+      throw new BridgeClientCapExceededError(`over ${BRIDGE_MAX_SUBSCRIPTIONS} subscriptions`)
+    }
+    const { onBinaryFrame, envelope: fields } = subscribeOptions ?? {}
+    const envelope = readBridgeRpcEnvelope(fields, hasGrant)
+    const id = nextId()
+    // Failed posting already freed the slot and notified its listener; still return an idempotent cleanup.
+    if (!subscriptions.open(id, method, params, onData, onBinaryFrame, envelope)) {
+      return () => undefined
+    }
+    let disposed = false
+    return () => {
+      if (disposed) {
+        return
+      }
+      disposed = true
+      subscriptions.cancel(id)
+    }
+  }
+
+  function close(): void {
+    if (closed) {
+      return
+    }
+    closed = true
+    handshake.stop()
+    back.clear()
+    subscriptions.closeAll()
+    sendFrame({ v: BRIDGE_PROTOCOL_VERSION, type: 'close' })
+    requests.closeAll()
+    cache.close()
+    shellSession.close()
+    unsubscribeFromMessages()
+  }
+
+  const notifications = createBridgeClientNotifications({
+    send: posted,
+    requireSession,
+    isClosed: () => closed,
+    hasGrant
+  })
+  const terminalKeys = createBridgeClientTerminalKeys(notifications.notifyTerminalKeyRailClaim)
+
+  const unsubscribeFromMessages = options.onMessage(receive)
+  handshake.start()
+
+  return {
+    sendRequest,
+    subscribe,
+    updateTerminalSubscriptionViewport: notifications.updateTerminalSubscriptionViewport,
+    getState: (): ConnectionState => snapshot().state,
+    getReconnectAttempt: () => snapshot().reconnectAttempt,
+    getLastConnectedAt: () => snapshot().lastConnectedAt,
+    getLastInboundAt: () => snapshot().lastInboundAt,
+    // Clients without migration generation use a constant zero; native screen readers still require a number.
+    getGeneration: () => snapshot().generation ?? 0,
+    ...cache.pathSource(),
+    getShellHostStatus: () => shellSession.current()?.hostStatus ?? null,
+    carriesRpcEnvelope: () => hasGrant(BRIDGE_RPC_ENVELOPE_GRANT),
+    // Allow listener registration before init so providers can observe the first state change; it reads no unprimed value.
+    onStateChange: (listener) => cache.onStateChange(listener),
+    notifyForeground: notifications.notifyForeground,
+    probeLivenessNow: notifications.notifyLivenessProbe,
+    notifyNavigate: notifications.notifyNavigate,
+    notifyNavigateBack: notifications.notifyNavigateBack,
+    notifyExternalLink: notifications.notifyExternalLink,
+    callNativeVerb: (verb, params) => {
+      // Validate the typed verb at runtime too; widened callers must not turn this into an untracked raw desktop RPC port.
+      if (!isBridgeNativeMethod(verb)) {
+        return Promise.reject(new BridgeClientNotNativeVerbError(verb))
+      }
+      return sendRequest(verb, params).then((reply) => {
+        // Native refusals reject as error frames and never forward to desktop, so the return has no RpcFailure arm.
+        if (!reply.ok) {
+          throw new Error(reply.error.message)
+        }
+        return reply
+      })
+    },
+    notifyStorageWrite: notifications.notifyStorageWrite,
+    notifyHaptics: notifications.notifyHaptics,
+    notifyPageFault: notifications.notifyPageFault,
+    notifyPagePainted: notifications.notifyPagePainted,
+    notifyPageLocation: (href) => {
+      swapSafety?.navigated()
+      notifications.notifyPageLocation(href)
+    },
+    claimBack: back.claim,
+    close,
+    ...shellSessionListeners(shellSession),
+    claimTerminalKeyRail: terminalKeys.claim,
+    getShellSession: shellSession.current,
+    nativeRequestRoom: () => bridgePendingRequestCap(true) - requests.size,
+    clearRouteParam: (param, value) => posted(routeParamClearFrame(param, value))
+  }
+}

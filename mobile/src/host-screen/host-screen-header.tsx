@@ -1,0 +1,241 @@
+import { useRef, useState } from 'react'
+import { Pressable, Text, type HostInstance } from 'react-native'
+import {
+  CalendarClock,
+  ChevronLeft,
+  Link,
+  List,
+  MoreHorizontal,
+  PanelLeftClose,
+  Server,
+  SquareTerminal,
+  UserCircle
+} from 'lucide-react-native'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
+import { hostDiagnosticsAction, hostEditAction } from '../host-list-action-sheet-actions'
+import { NavBar, NavBarSubtitleText } from '../components/nav-bar/NavBar'
+import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
+import { PullDownMenu } from '../components/nav-bar/PullDownMenu'
+import { StatusDot } from '../components/feedback/StatusDot'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useRefreshHint } from '../query/refresh-hint'
+import { colors, pressedStyle } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
+import {
+  isConnectionOutage,
+  verdictDisplayLabel,
+  type ConnectionVerdict
+} from '../transport/connection/connection-health'
+import type { HostScreenController } from './use-host-screen-controller'
+import { HostSharedLinksSheet } from './host-shared-links-sheet'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host/execution-host'
+import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../src/shared/mcp-servers/mcp-servers'
+import { useRouteCapability } from '../worktree/execution-hosts/use-route-capability'
+
+function isErrorVerdict(v: ConnectionVerdict): boolean {
+  return isConnectionOutage(v) || v.kind === 'auth-failed'
+}
+
+// The host's status line: under the page title at the top, and under the bar title once scrolled.
+export function HostConnectionStatus({ controller }: { controller: HostScreenController }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const { connectionVerdict, connState, forceReconnectHost, hostId, hostDisplay, lastConnectedAt } =
+    controller
+  // Why: a drop healed in a few seconds must not flash the host dot amber.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
+  const calmed = presentedConnState !== connState && !isErrorVerdict(connectionVerdict)
+  const statusText = isErrorVerdict(connectionVerdict)
+    ? verdictDisplayLabel(connectionVerdict)
+    : presentedConnState === 'connected'
+      ? (hostDisplay.machineLine ??
+        hostDisplay.descriptorLine ??
+        t('connection.connectionHealth.connected', 'Connected'))
+      : connectionVerdict.label
+  return (
+    <>
+      {calmed ? (
+        <StatusDot state={presentedConnState} />
+      ) : (
+        <StatusDot state={connState} verdict={connectionVerdict} />
+      )}
+      <NavBarSubtitleText>{statusText}</NavBarSubtitleText>
+      {/* auth-failed has its own banner; the page cannot re-dial the connection the shell owns. */}
+      {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
+        <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
+          onPress={() => void forceReconnectHost(hostId)}
+          accessibilityRole="button"
+          accessibilityLabel={t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
+          hitSlop={8}
+        >
+          <Text style={styles.reconnectText}>
+            {t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
+          </Text>
+        </Pressable>
+      ) : null}
+    </>
+  )
+}
+
+export function HostScreenHeader({
+  controller,
+  collapsingTitle
+}: {
+  controller: HostScreenController
+  /** Set when the list shows the host name as its PageTitle; the bar then shows it only once scrolled. */
+  collapsingTitle?: CollapsingTitle
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const {
+    actions,
+    connState,
+    embedded,
+    floatingWorkspaceEnabled,
+    hostId,
+    hostDisplay,
+    onHideSidebar,
+    router
+  } = controller
+  const moreRef = useRef<HostInstance>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [sharedLinksOpen, setSharedLinksOpen] = useState(false)
+  // The computer's own bot links, once it lists bots; a server's live under that server's account.
+  const listsBots = controller.bots.some(
+    (entry) => entry.kind === 'listed' && entry.hostId === LOCAL_EXECUTION_HOST_ID
+  )
+  const showRefreshLine = useRefreshHint(controller.catalog.revalidating)
+  const disconnected = connState !== 'connected'
+  // Only while the host's MCP servers switch is on; a host that hasn't answered yet lists nothing.
+  const mcpServers = useRouteCapability(MCP_SERVERS_RUNTIME_CAPABILITY)
+  const hostPath = `/h/${encodeURIComponent(hostId)}`
+
+  const navigationGroup: ActionSheetAction[] = [
+    {
+      id: 'tasks',
+      label: t('hostScreen.hostScreenHeader.tasks', 'Tasks'),
+      icon: List,
+      disabled: disconnected,
+      closeBeforePress: true,
+      onPress: () => actions.navigateFromHostList(`${hostPath}/tasks`)
+    },
+    {
+      id: 'automations',
+      label: t('hostScreen.hostScreenHeader.automations', 'Automations'),
+      icon: CalendarClock,
+      disabled: disconnected,
+      closeBeforePress: true,
+      onPress: () => actions.navigateFromHostList(`${hostPath}/automations`)
+    },
+    {
+      id: 'accounts',
+      label: t('hostScreen.hostScreenHeader.accounts', 'Accounts'),
+      icon: UserCircle,
+      disabled: disconnected,
+      closeBeforePress: true,
+      onPress: () => actions.navigateFromHostList(`${hostPath}/accounts`)
+    },
+    ...(mcpServers
+      ? [
+          {
+            id: 'mcp-servers',
+            label: t('hostScreen.hostScreenHeader.mcpServers', 'MCP servers'),
+            icon: Server,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: () => actions.navigateFromHostList(`${hostPath}/mcp`)
+          }
+        ]
+      : []),
+    ...(listsBots
+      ? [
+          {
+            id: 'shared-links',
+            label: t('hostScreen.hostScreenHeader.sharedLinks', 'Shared links'),
+            icon: Link,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: () => setSharedLinksOpen(true)
+          }
+        ]
+      : []),
+    ...(floatingWorkspaceEnabled
+      ? [
+          {
+            id: 'floating-workspace',
+            label: t('hostScreen.hostScreenHeader.floatingWorkspace', 'Floating Workspace'),
+            icon: SquareTerminal,
+            disabled: disconnected,
+            closeBeforePress: true,
+            onPress: actions.openFloatingWorkspace
+          }
+        ]
+      : [])
+  ]
+  // Unlike the screens above, these work on the saved host, so they stay offered while disconnected.
+  const hostGroup: ActionSheetAction[] = [
+    hostEditAction(() => actions.navigateFromHostList(`${hostPath}/edit`)),
+    hostDiagnosticsAction(() => router.push({ pathname: '/connection-log', params: { hostId } }))
+  ]
+  return (
+    <>
+      <NavBar
+        leading={
+          <>
+            <NavBarButton
+              icon={ChevronLeft}
+              accessibilityLabel={t('hostScreen.hostScreenHeader.backToHosts', 'Back to hosts')}
+              onPress={actions.leaveHost}
+            />
+            {embedded && onHideSidebar ? (
+              <NavBarButton
+                icon={PanelLeftClose}
+                accessibilityLabel={t('hostScreen.hostScreenHeader.hideSidebar', 'Hide sidebar')}
+                onPress={onHideSidebar}
+              />
+            ) : null}
+          </>
+        }
+        title={hostDisplay.title}
+        subtitle={<HostConnectionStatus controller={controller} />}
+        refreshing={showRefreshLine}
+        titleOpacity={collapsingTitle?.barTitleOpacity}
+        dividerOpacity={collapsingTitle?.barDividerOpacity}
+        trailing={
+          <NavBarButton
+            ref={moreRef}
+            icon={MoreHorizontal}
+            accessibilityLabel={t('hostScreen.hostScreenHeader.moreActions', 'More actions')}
+            onPress={() => setMenuOpen(true)}
+            active={menuOpen}
+          />
+        }
+      />
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={moreRef}
+        groups={[navigationGroup, hostGroup]}
+        onClose={() => setMenuOpen(false)}
+      />
+      {listsBots ? (
+        <HostSharedLinksSheet
+          controller={controller}
+          visible={sharedLinksOpen}
+          onClose={() => setSharedLinksOpen(false)}
+        />
+      ) : null}
+    </>
+  )
+}
+
+const styles = themedStyleSheet(() => ({
+  reconnectText: {
+    color: colors.textPrimary,
+    fontSize: 12,
+    fontWeight: '600'
+  }
+}))

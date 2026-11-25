@@ -1,0 +1,114 @@
+import type {
+  DispatchStatus,
+  WorkerDispatchRow,
+  LegacyWorkerTerminalRecoveryRow
+} from '../orchestration-records'
+import { OrchestrationError } from '../../orchestration-error'
+import { DISPATCH_CIRCUIT_BREAK_FAILURES } from '../dispatch-context/dispatch-circuit-breaker'
+import type { OrchestrationDb } from '../orchestration-db'
+import {
+  reconcileTaskAfterDispatchInterruption,
+  settleTaskAfterLostWorker
+} from '../dispatch-context/task-dispatch-reconciliation'
+import { transitionLifecycleWithDb } from '../lifecycle-transition'
+
+export function listLegacyWorkerTerminalRecoveryRows(
+  this: OrchestrationDb,
+  dispatchIds?: readonly string[]
+): LegacyWorkerTerminalRecoveryRow[] {
+  if (dispatchIds?.length === 0) {
+    return []
+  }
+  // Why: drive from the live workers' partial index; ORDER BY dc.rowid alone made the planner scan every Dispatch.
+  const rows = this.db
+    .prepare(
+      `SELECT dc.id AS dispatch_id, dc.task_id, dc.status AS dispatch_status,
+              dc.contract_version, dc.assignee_handle, dc.assignee_pane_key,
+              dc.process_incarnation, wd.state AS worker_state, wd.worktree_id,
+              wd.agent_terminal_handle
+       FROM worker_dispatches wd INDEXED BY idx_worker_dispatches_recoverable
+       CROSS JOIN dispatch_contexts dc ON dc.id = wd.dispatch_id
+       WHERE wd.state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+       ${dispatchIds ? 'AND wd.dispatch_id IN (SELECT value FROM json_each(?))' : ''}
+       ORDER BY dc.rowid`
+    )
+    .all(...(dispatchIds ? [JSON.stringify(dispatchIds)] : []))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Static SQL aliases match the recovery row contract; the planner validates terminal identity before use.
+  return rows as LegacyWorkerTerminalRecoveryRow[]
+}
+
+export function reconcileMissingWorkerTerminal(
+  this: OrchestrationDb,
+  dispatchId: string,
+  reason: string
+): WorkerDispatchRow {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    const dispatch = this.getDispatchContextById(dispatchId)
+    const worker = this.getWorkerDispatch(dispatchId)
+    if (!dispatch || !worker) {
+      throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+    }
+    if (['succeeded', 'failed', 'stopped', 'abandoned'].includes(worker.state)) {
+      this.db.exec('COMMIT')
+      return worker
+    }
+
+    const activeDispatch = dispatch.status === 'pending' || dispatch.status === 'dispatched'
+    const stopWasPending = worker.state === 'stopping' || worker.state === 'stop_unknown'
+    if (activeDispatch) {
+      const failureCount = dispatch.failure_count + 1
+      const dispatchStatus: DispatchStatus =
+        failureCount >= DISPATCH_CIRCUIT_BREAK_FAILURES ? 'circuit_broken' : 'failed'
+      transitionLifecycleWithDb(this.db, {
+        entity: 'dispatch',
+        id: dispatchId,
+        from: dispatch.status,
+        to: dispatchStatus,
+        projection: {
+          failure_count: failureCount,
+          last_failure: reason,
+          completed_at: new Date().toISOString(),
+          capability_revoked_at: dispatch.capability_revoked_at ?? new Date().toISOString()
+        }
+      })
+      if (!stopWasPending) {
+        reconcileTaskAfterDispatchInterruption(this, dispatch.task_id, dispatchId)
+        settleTaskAfterLostWorker(
+          this,
+          dispatch.task_id,
+          dispatchStatus === 'circuit_broken' ? 'failed' : 'ready'
+        )
+      }
+      this.closeQuestionsForDispatch(dispatchId)
+    }
+    transitionLifecycleWithDb(this.db, {
+      entity: 'worker',
+      id: dispatchId,
+      from: worker.state,
+      to: stopWasPending ? 'stopped' : 'abandoned',
+      projection: {
+        stage: 'terminal_missing',
+        last_error: reason,
+        updated_at: new Date().toISOString()
+      }
+    })
+    this.db.exec('COMMIT')
+    return this.getWorkerDispatch(dispatchId) as WorkerDispatchRow
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+export type WorkerTerminalRecoveryMethods = {
+  listLegacyWorkerTerminalRecoveryRows: typeof listLegacyWorkerTerminalRecoveryRows
+  reconcileMissingWorkerTerminal: typeof reconcileMissingWorkerTerminal
+}
+
+export function attachWorkerTerminalRecovery(ctor: { prototype: object }): void {
+  Object.assign(ctor.prototype, {
+    listLegacyWorkerTerminalRecoveryRows,
+    reconcileMissingWorkerTerminal
+  })
+}

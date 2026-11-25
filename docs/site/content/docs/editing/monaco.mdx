@@ -1,0 +1,43 @@
+---
+title: Monaco editor & autosave
+---
+
+Orca's code editor is Monaco — the same editor VS Code uses — with a few Orca-specific tweaks.
+
+## Autosave
+
+Files save on blur and after short idle periods. There is no "dirty" dot because there are no unsaved changes in normal flow.
+
+## Final newline
+
+Enable **Insert Final Newline** under [Settings → General → Editor](/docs/settings) to add a missing line break when saving a non-empty file from the code editor. It is off by default, keeps the file's LF or CRLF line endings, and leaves the cursor in place. Rich Markdown, notebook, and CSV editors are unchanged.
+
+## Line endings
+
+New files, and files that have no line breaks yet, use the line ending of the system that runs the file's workspace: LF on Linux and macOS hosts, WSL hosts, and Windows projects that run in WSL; CRLF on Windows otherwise. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. The ending is set only while the file has at most one line. Once it has line breaks, Orca never changes them, so lines you typed keep their ending. A file that opened with line breaks, or got them from text written outside the editor, keeps its ending even if you empty it. When outside text with line breaks lands in a file that has at most one line, the file takes that text's ending. If you type several lines before a remote SSH host or Orca server reports its system, those lines keep the editor's starting ending. WSL hosts are treated as Linux from the start, so they are not affected. Shell scripts always start with LF.
+
+## Multi-cursor, go-to, find
+
+- `Cmd-D` — select next occurrence.
+- `Cmd-F` / `Cmd-Shift-F` — file find / worktree find. File find seeds the search box from the current selection when text is selected.
+- `Cmd-Click` — go to definition (where supported by language extensions).
+
+## Changes view mode
+
+Toggle **Changes view mode** in any editor tab to flip the file into an in-tab HEAD-vs-working-tree diff without leaving your cursor position. Toggle again to return to the regular file view.
+
+## Word wrap
+
+File editors wrap long lines by default. Toggle **Word Wrap** from the editor tab's **⋯** menu, press `Alt+Z` (same as VS Code; remappable under [Settings → Shortcuts](/docs/settings)), or set the default under [Settings → General → Editor Word Wrap](/docs/settings). This setting is separate from **Diff Word Wrap**, which only affects diff editors.
+
+## Minimap
+
+A minimap is available in the file editor under [Settings → Appearance](/docs/settings). It's off by default; turn it on if you prefer the VS Code-style overview rail.
+
+## Custom editor font
+
+By default the editor and diff views use the same font as the terminal. Leave **Editor Font Family** empty under [Settings → Appearance](/docs/settings) to keep that link; set a font to override editors only (UI font stays separate).
+
+## Language support
+
+Syntax highlighting ships for the languages Monaco supports out of the box. Orca is intentionally editor-first, not IDE-first — run type-checkers and linters in a terminal pane.

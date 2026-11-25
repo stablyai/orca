@@ -1,4 +1,7 @@
-import type { CheckStatus, PRMergeableState } from '../../shared/types'
+import type {
+  CheckStatus,
+  PRMergeableState
+} from '../../shared/github/pull-requests/pull-request-types'
 
 export type RawGiteaPullRequest = {
   number?: number
@@ -93,8 +96,7 @@ export function mapGiteaPullRequestState(
   if (raw.merged) {
     return 'merged'
   }
-  // Closed Gitea PRs can still carry the draft flag; terminal state should
-  // win so review summaries do not show closed PRs as active drafts.
+  // Closed PRs can retain their draft flag; terminal state takes precedence.
   if (raw.state?.trim().toLowerCase() === 'closed') {
     return 'closed'
   }

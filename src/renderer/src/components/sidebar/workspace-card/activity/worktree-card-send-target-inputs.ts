@@ -1,0 +1,74 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
+import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
+import { selectSendApprovalGuardEnvironmentIds } from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
+import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
+
+export type SendTargetInputsState = Pick<
+  AppState,
+  | 'agentSendPopoverTargetMode'
+  | 'agentStatusByPaneKey'
+  | 'tabsByWorktree'
+  | 'unifiedTabsByWorktree'
+  | 'terminalLayoutsByTabId'
+  | 'ptyIdsByTabId'
+  | 'runtimePaneTitlesByTabId'
+>
+
+export type SendTargetControlInputsState = Pick<
+  AppState,
+  'agentSendPopoverTargetMode' | 'agentStatusEpoch'
+>
+
+export type SendTargetControlInputs = {
+  targetMode: AppState['agentSendPopoverTargetMode']
+  agentStatusEpoch: number
+}
+
+// Share an inactive-card sentinel so pane-title/status churn cannot wake every idle agent body.
+export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
+  tabsByWorktree: {},
+  unifiedTabsByWorktree: {},
+  terminalLayoutsByTabId: {},
+  ptyIdsByTabId: {},
+  runtimePaneTitlesByTabId: {},
+  sendApprovalGuardEnvironmentIds: new Set<string>()
+})
+
+// Inactive cards ignore picker-mode and freshness-epoch changes.
+export const EMPTY_SEND_TARGET_CONTROL_INPUTS: SendTargetControlInputs = Object.freeze({
+  targetMode: null,
+  agentStatusEpoch: 0
+})
+
+/** Select live send-target maps only for the targeted card; all others reuse the empty sentinel. */
+export function selectSendTargetInputs(
+  s: SendTargetInputsState,
+  statuses: RuntimeStatuses,
+  worktreeId: string
+): RunningAgentTargetState {
+  if (s.agentSendPopoverTargetMode?.worktreeId !== worktreeId) {
+    return EMPTY_SEND_TARGET_INPUTS
+  }
+  return {
+    agentStatusByPaneKey: s.agentStatusByPaneKey,
+    tabsByWorktree: s.tabsByWorktree,
+    unifiedTabsByWorktree: s.unifiedTabsByWorktree,
+    terminalLayoutsByTabId: s.terminalLayoutsByTabId,
+    ptyIdsByTabId: s.ptyIdsByTabId,
+    runtimePaneTitlesByTabId: s.runtimePaneTitlesByTabId,
+    sendApprovalGuardEnvironmentIds: selectSendApprovalGuardEnvironmentIds(statuses)
+  }
+}
+
+export function selectSendTargetControlInputs(
+  s: SendTargetControlInputsState,
+  worktreeId: string
+): SendTargetControlInputs {
+  const targetMode = s.agentSendPopoverTargetMode
+  if (targetMode?.worktreeId !== worktreeId) {
+    return EMPTY_SEND_TARGET_CONTROL_INPUTS
+  }
+  return { targetMode, agentStatusEpoch: s.agentStatusEpoch }
+}

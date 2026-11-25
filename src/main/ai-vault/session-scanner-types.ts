@@ -1,67 +1,159 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
+import type { Dirent } from 'node:fs'
 import type {
+  AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
-} from '../../shared/ai-vault-types'
-import type { ExecutionHostId } from '../../shared/execution-host'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
+import type {
+  TranscriptMessageSink,
+  TranscriptSessionIdentity
+} from './transcripts/session-transcript-consumers'
+import type { SessionSidecarObservation } from './parse-cache/session-sidecar-stat'
+import type { OpenCodeWslRuntime } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-runtime'
+import type { SessionDiscoveryStatCache } from './discovery/session-discovery-stat-cache'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
+  /** Account `projects` folders the System default does not link; resolved by the host process. */
+  claudeProfileProjectsDirs?: readonly string[]
+  codebuddyProjectsDir?: string
+  qoderProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
+  // Override the default Codex home to test unprefixed resume commands without reading user data.
+  defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
-  geminiSessionsDir?: string
+  wslOpenCodeReaders?: readonly OpenCodeWslRuntime[]
+  antigravityBrainDir?: string
+  antigravityAppHome?: string
+  /** Orca's managed Antigravity chat transcripts; resolved by the host process. */
+  antigravityChatBrainDir?: string
+  includeAntigravityIdeSessions?: boolean
   copilotSessionsDir?: string
   cursorProjectsDir?: string
+  /** Native Chat's Cursor sessions and the config folders they run in; resolved by the host process. */
+  cursorAcpSessions?: {
+    folders: readonly { configDir: string; sessionIds: readonly string[] }[]
+    /** Looked for under each WSL home's default `.cursor`. */
+    wslSessionIds: readonly string[]
+  }
   opencodeStorageDir?: string
-  // Why: OpenCode 1.17.x stores sessions in SQLite; tests inject a temp DB
-  // here so they don't depend on the real ~/.local/share/opencode.
   opencodeDbPaths?: readonly string[]
+  /** Managed account OpenCode data directories; resolved by the host process. */
+  opencodeAccountDataDirs?: readonly string[]
+  zcodeDbPath?: string
   grokSessionsDir?: string
   devinTranscriptsDir?: string
-  hermesSessionsDir?: string
+  /** Hermes home whose state.db and profiles/<name>/state.db are scanned. */
+  hermesHome?: string
   rovoSessionsDir?: string
   openclawStateDir?: string
   openclawLegacyStateDir?: string
   piSessionsDir?: string
+  ompSessionsDir?: string
+  primeAgentSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
+  clineSessionsDir?: string
   kimiSessionsDir?: string
+  museSessionsDir?: string
+  jcodeSessionsDir?: string
+  kiroSessionsDir?: string
   limit?: number
+  unlimited?: boolean
   limitPerAgent?: number
-  // Active workspace/project paths whose sessions must be included regardless of
-  // the recency cap (see discoverInScopeClaudeFiles).
+  // Include sessions for these workspace paths beyond the recency cap (AI_VAULT_SCOPE_CWD_SOURCES).
   scopePaths?: readonly string[]
+  // Return only scopePaths sessions, skipping the global recency pass (Workspace and Project).
+  scopeOnly?: boolean
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  /** Search indexing reuses stats of quiet files between complete sweeps. */
+  statCache?: SessionDiscoveryStatCache
+  signal?: AbortSignal
 }
 
 export type FileWithMtime = {
+  /** Antigravity alias observation, separate from the actual file stat/cache key. */
+  aliasMtimeMs?: number
   path: string
   mtimeMs: number
   modifiedAt: string
+  // Discovery’s transcript byte length avoids restats; synthetic database rows omit it.
+  sizeBytes?: number
+  sidecar?: SessionSidecarObservation
+  // Codex dual-root scans use filesystem identity to deduplicate hardlink aliases.
+  dev?: number
+  ino?: number
+  nlink?: number
 }
 
 export type SessionFileCandidate = {
   agent: AiVaultAgent
   file: FileWithMtime
   codexHome: string | null
+  antigravityHistoryPath?: string
+}
+
+// Pass-local wrapper; only its original physical candidates may reach parsers or IPC.
+export type SessionFileChoice = SessionFileCandidate & {
+  alternatives?: readonly SessionFileCandidate[]
+  /** Proven duplicates parsers never read; search retires their rows. */
+  outrankedCopies?: readonly SessionFileCandidate[]
+}
+
+export function physicalSessionCandidates(
+  choice: SessionFileChoice
+): readonly SessionFileCandidate[] {
+  return choice.alternatives ?? [choice]
 }
 
 export type SessionFileDiscovery = {
   agent: AiVaultAgent
   rootDir: string
   files: FileWithMtime[]
+  // Discovered beyond `files`, kept only for a scoped scan's in-scope walk.
+  scopeFiles?: FileWithMtime[]
+  // Conversation folder -> one top-level artifact file, seen while walking Antigravity brains.
+  antigravityArtifactPaths?: ReadonlyMap<string, string>
+  // Declared roots not walked because they resolve to rootDir; rows under them are stale.
+  aliasRootDirs?: readonly string[]
 }
 
 export type SessionParseResult = {
+  sourceFailed?: boolean
   session: AiVaultSession | null
   issue: AiVaultScanIssue | null
 }
 
+export type ResumableParseFinalizeOptions = {
+  signal?: AbortSignal
+  executionHostId?: ExecutionHostId
+  executionHostPlatform?: NodeJS.Platform | null
+}
+
+// clone() must isolate mutable fold state so failed or display-only reads cannot corrupt the cache.
+export type ResumableSessionParseState = {
+  consumeLine(line: string): void
+  // Reject irrelevant records by bounded byte prefix before decoding large JSONL lines.
+  consumeLineBytes?(line: Buffer): void
+  shouldStop?(): boolean
+  // Expose identity to consumers that commit before the transcript read ends.
+  identity?(): TranscriptSessionIdentity | null
+  clone(): ResumableSessionParseState
+  touchFile(file: FileWithMtime): void
+  finalize(
+    platform: NodeJS.Platform,
+    options?: ResumableParseFinalizeOptions
+  ): Promise<AiVaultSession | null> | AiVaultSession | null
+}
+
 export type SessionAccumulator = {
   agent: AiVaultAgent
+  // Clones share the sink so one transcript read produces one message stream.
+  messages: TranscriptMessageSink
   sessionId: string
   title: string | null
   fallbackTitle: string | null
@@ -75,6 +167,15 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // The earliest retained preview is no longer the opening turn.
+  previewMessagesTruncated: boolean
+  antigravityOpeningPrompt?: AiVaultSession['antigravityOpeningPrompt'] | null
+  firstUserPrompt: string | null
+  lastUserPrompt: string | null
+  // Recoverable signal for a zero-turn transcript (see AiVaultSession).
+  queuedMessageCount: number
+  subagentTranscriptCount: number
+  earliestTimestampMs: number
   latestTimestampMs: number
 }
 
@@ -84,4 +185,14 @@ export type CodexUsageSnapshot = {
   outputTokens: number
   reasoningOutputTokens: number
   totalTokens: number
+}
+
+export type SessionFileWalkOptions = {
+  extensions: Set<string>
+  filePredicate?: (path: string) => boolean
+  // Return false to prune a subtree; depth 0 denotes a child of rootDir.
+  directoryPredicate?: (name: string, depth: number) => boolean
+  strictErrors?: boolean
+  readDirectory?: (dirPath: string) => Promise<Dirent[]>
+  signal?: AbortSignal
 }

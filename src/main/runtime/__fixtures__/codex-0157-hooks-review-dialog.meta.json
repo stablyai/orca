@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-29T03:30:27.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.157.0, plain launch on a fresh CODEX_HOME with a hooks.json of 8 command hooks that were never trusted. Over the provisional screen Codex paints `Hooks need review`, `1. Review hooks` / `2. Trust all and continue` / `3. Continue without trusting (hooks won't run)` and the key row `enter confirm · esc skip`, where older builds wrote `Press enter to confirm`. No key was sent (only automatic terminal-query replies). Cut 6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

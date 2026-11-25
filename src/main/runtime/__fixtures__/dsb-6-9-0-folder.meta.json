@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-10-02T09:55:40.033Z",
+  "platform": "darwin",
+  "command": ["/tmp/orca-deepseek-build-20261002/bin/dsb"],
+  "cols": 110,
+  "rows": 32,
+  "note": "Third-party innocarpe DeepSeek Build 6.9.0 release; isolated HOME; folder workspace; synthetic credential; welcome screen, no prompt or model request",
+  "exitCode": 0,
+  "sourceRevision": "74df67a56988e9a32845c4565cc62b021ea68c7d",
+  "releaseSha256": "a57f225a537fc5c027ac4592e3f37f7bdc28cc2d6e27a366934511ea565cb874",
+  "sourceTag": "v6.9.0"
+}

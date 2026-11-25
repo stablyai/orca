@@ -5,10 +5,6 @@ export async function initialize() {
   return await ExpoTwoWayAudioModule.initialize()
 }
 
-export function playPCMData(audioData: Uint8Array) {
-  return ExpoTwoWayAudioModule.playPCMData(audioData)
-}
-
 export function bypassVoiceProcessing(bypass: boolean) {
   return ExpoTwoWayAudioModule.bypassVoiceProcessing(bypass)
 }
@@ -43,20 +39,4 @@ export function getMicrophoneModeIOS() {
 
 export function setMicrophoneModeIOS() {
   return ExpoTwoWayAudioModule.setMicrophoneModeIOS()
-}
-
-export function isPlaying(): boolean {
-  return ExpoTwoWayAudioModule.isPlaying()
-}
-
-export function stopPlayback() {
-  return ExpoTwoWayAudioModule.stopPlayback()
-}
-
-export function pausePlayback() {
-  return ExpoTwoWayAudioModule.pausePlayback()
-}
-
-export function resumePlayback() {
-  return ExpoTwoWayAudioModule.resumePlayback()
 }

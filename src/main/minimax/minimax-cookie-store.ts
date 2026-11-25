@@ -1,11 +1,17 @@
-import { safeStorage } from 'electron'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import {
+  inCredentialFileOrder,
+  credentialFileExists,
+  hardenCredentialFile,
+  writeCredentialEnvelope as writeSecureFile
+} from '../credentials/credential-file-io'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
+import { readFile, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { hardenExistingSecureFile, writeSecureFile } from '../../shared/secure-file'
+import type { SecretAtRestProtection } from '../../shared/secure-storage/secret-at-rest-protection'
 
 const MINIMAX_COOKIE_FILE = 'minimax-session-cookie.enc'
-const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
+export const COOKIE_ENVELOPE_PREFIX = 'orca-minimax-cookie:v1:'
 let cachedMiniMaxCookie: string | null = null
 let warnedMiniMaxCookieStatusHardenFailure = false
 
@@ -18,7 +24,7 @@ function getOrcaDir(): string {
   return join(homedir(), '.orca')
 }
 
-function getMiniMaxCookiePath(): string {
+export function getMiniMaxCookiePath(): string {
   return join(getOrcaDir(), MINIMAX_COOKIE_FILE)
 }
 
@@ -33,7 +39,7 @@ function decodeCookieEnvelope(raw: Buffer): MiniMaxCookieEnvelope | null {
   }
   const rest = text.slice(COOKIE_ENVELOPE_PREFIX.length)
   const separator = rest.indexOf(':')
-  if (separator < 0) {
+  if (separator === -1) {
     throw new Error('MiniMax session cookie could not be decrypted')
   }
   const kind = rest.slice(0, separator)
@@ -46,9 +52,7 @@ function decodeCookieEnvelope(raw: Buffer): MiniMaxCookieEnvelope | null {
   }
 }
 
-// Why: migrates cookies saved before the envelope format existed. Older files
-// hold raw bytes (safeStorage-encrypted or plaintext), so we sniff the content
-// to tell the two apart rather than removing this as seemingly dead code.
+// Legacy files contain raw encrypted or plaintext bytes; sniff them before envelope migration.
 function looksLikeCookieHeader(value: string): boolean {
   const trimmed = value.trim()
   if (!trimmed) {
@@ -71,16 +75,16 @@ function readEnvelope(envelope: MiniMaxCookieEnvelope): string {
   if (envelope.kind === 'plaintext') {
     return envelope.payload.toString('utf8')
   }
-  if (!safeStorage.isEncryptionAvailable()) {
+  if (!getSecretStore().isEncryptionAvailable()) {
     throw new Error('MiniMax session cookie could not be decrypted')
   }
-  return safeStorage.decryptString(envelope.payload)
+  return getSecretStore().decryptString(envelope.payload)
 }
 
 function readLegacyCookie(raw: Buffer): string {
-  if (safeStorage.isEncryptionAvailable()) {
+  if (getSecretStore().isEncryptionAvailable()) {
     try {
-      return safeStorage.decryptString(raw)
+      return getSecretStore().decryptString(raw)
     } catch {
       const plaintext = raw.toString('utf8')
       if (looksLikeCookieHeader(plaintext)) {
@@ -96,70 +100,99 @@ function readLegacyCookie(raw: Buffer): string {
   throw new Error('MiniMax session cookie could not be decrypted')
 }
 
-export function hasMiniMaxSessionCookie(): boolean {
-  const keyPath = getMiniMaxCookiePath()
-  if (!existsSync(keyPath)) {
-    return false
-  }
-  try {
-    hardenExistingSecureFile(keyPath)
-  } catch (error) {
-    if (!warnedMiniMaxCookieStatusHardenFailure) {
-      warnedMiniMaxCookieStatusHardenFailure = true
-      console.warn('[minimax] Failed to harden MiniMax cookie file while checking status', error)
+/** Inspect protection without decryption/keychain prompts; legacy files use the reader's sniff. */
+export async function getMiniMaxSessionCookieProtection(): Promise<SecretAtRestProtection | null> {
+  return inCredentialFileOrder(`${getMiniMaxCookiePath()}.mutation`, async () => {
+    const cookiePath = getMiniMaxCookiePath()
+    if (!(await credentialFileExists(cookiePath))) {
+      return null
     }
-  }
-  return true
+    try {
+      const raw = await readFile(cookiePath)
+      const envelope = decodeCookieEnvelope(raw)
+      if (envelope) {
+        return envelope.kind === 'plaintext' ? 'plaintext' : 'sealed'
+      }
+      return looksLikeCookieHeader(raw.toString('utf8')) ? 'plaintext' : 'sealed'
+    } catch {
+      return null
+    }
+  })
 }
 
-export function saveMiniMaxSessionCookie(cookie: string): void {
-  const trimmed = cookie.trim()
-  if (!trimmed) {
-    throw new Error('MiniMax session cookie is required')
-  }
-  if (safeStorage.isEncryptionAvailable()) {
-    writeSecureFile(
+export async function hasMiniMaxSessionCookie(): Promise<boolean> {
+  return inCredentialFileOrder(`${getMiniMaxCookiePath()}.mutation`, async () => {
+    const keyPath = getMiniMaxCookiePath()
+    if (!(await credentialFileExists(keyPath))) {
+      return false
+    }
+    try {
+      await hardenCredentialFile(keyPath)
+    } catch (error) {
+      if (!warnedMiniMaxCookieStatusHardenFailure) {
+        warnedMiniMaxCookieStatusHardenFailure = true
+        console.warn('[minimax] Failed to harden MiniMax cookie file while checking status', error)
+      }
+    }
+    return true
+  })
+}
+
+export async function saveMiniMaxSessionCookie(cookie: string): Promise<void> {
+  return inCredentialFileOrder(`${getMiniMaxCookiePath()}.mutation`, async () => {
+    const trimmed = cookie.trim()
+    if (!trimmed) {
+      throw new Error('MiniMax session cookie is required')
+    }
+    if (getSecretStore().isEncryptionAvailable()) {
+      await writeSecureFile(
+        getMiniMaxCookiePath(),
+        encodeCookieEnvelope('encrypted', getSecretStore().encryptString(trimmed))
+      )
+      cachedMiniMaxCookie = trimmed
+      return
+    }
+    console.warn(
+      '[minimax] safeStorage encryption unavailable — storing MiniMax cookie in plaintext'
+    )
+    await writeSecureFile(
       getMiniMaxCookiePath(),
-      encodeCookieEnvelope('encrypted', safeStorage.encryptString(trimmed))
+      encodeCookieEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
     )
     cachedMiniMaxCookie = trimmed
-    return
-  }
-  console.warn('[minimax] safeStorage encryption unavailable — storing MiniMax cookie in plaintext')
-  writeSecureFile(
-    getMiniMaxCookiePath(),
-    encodeCookieEnvelope('plaintext', Buffer.from(trimmed, 'utf8'))
-  )
-  cachedMiniMaxCookie = trimmed
+  })
 }
 
-export function readMiniMaxSessionCookie(): string | null {
-  if (cachedMiniMaxCookie !== null) {
-    return cachedMiniMaxCookie
-  }
-  const keyPath = getMiniMaxCookiePath()
-  if (!existsSync(keyPath)) {
-    return null
-  }
-  // Why: keep hardening out of the decode/decrypt try below so a chmod/ACL
-  // failure isn't misreported as a decrypt failure (matches hasMiniMaxSessionCookie).
-  try {
-    hardenExistingSecureFile(keyPath)
-  } catch (error) {
-    console.warn('[minimax] Failed to harden MiniMax cookie file while reading', error)
-  }
-  try {
-    const raw = readFileSync(keyPath)
-    const envelope = decodeCookieEnvelope(raw)
-    cachedMiniMaxCookie = envelope ? readEnvelope(envelope) : readLegacyCookie(raw)
-    return cachedMiniMaxCookie
-  } catch (error) {
-    console.error('[minimax] failed to decode/decrypt session cookie', error)
-    throw new Error('MiniMax session cookie could not be decrypted')
-  }
+export async function readMiniMaxSessionCookie(): Promise<string | null> {
+  return inCredentialFileOrder(`${getMiniMaxCookiePath()}.mutation`, async () => {
+    if (cachedMiniMaxCookie !== null) {
+      return cachedMiniMaxCookie
+    }
+    const keyPath = getMiniMaxCookiePath()
+    if (!(await credentialFileExists(keyPath))) {
+      return null
+    }
+    // Keep permission failures outside decryption handling so they retain their actual diagnosis.
+    try {
+      await hardenCredentialFile(keyPath)
+    } catch (error) {
+      console.warn('[minimax] Failed to harden MiniMax cookie file while reading', error)
+    }
+    try {
+      const raw = await readFile(keyPath)
+      const envelope = decodeCookieEnvelope(raw)
+      cachedMiniMaxCookie = envelope ? readEnvelope(envelope) : readLegacyCookie(raw)
+      return cachedMiniMaxCookie
+    } catch (error) {
+      console.error('[minimax] failed to decode/decrypt session cookie', error)
+      throw new Error('MiniMax session cookie could not be decrypted')
+    }
+  })
 }
 
-export function clearMiniMaxSessionCookie(): void {
-  cachedMiniMaxCookie = null
-  rmSync(getMiniMaxCookiePath(), { force: true })
+export async function clearMiniMaxSessionCookie(): Promise<void> {
+  return inCredentialFileOrder(`${getMiniMaxCookiePath()}.mutation`, async () => {
+    cachedMiniMaxCookie = null
+    await rm(getMiniMaxCookiePath(), { force: true })
+  })
 }

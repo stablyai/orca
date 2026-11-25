@@ -1,43 +1,66 @@
 import { useCallback, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, BackHandler } from 'react-native'
+import { View, Text, Pressable, BackHandler, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
-import { resolvePairConfirmRouteState } from '../src/transport/pair-confirm-state'
 import {
-  startPairingConnectionAttempt,
-  type PairingConnectionAttempt
-} from '../src/transport/pairing-connection-attempt'
-import { connect } from '../src/transport/rpc-client'
-import { saveHost, getNextHostName } from '../src/transport/host-store'
-import type { ConnectionLogEntry, RpcResponse } from '../src/transport/types'
-import { colors, spacing, radii, typography } from '../src/theme/mobile-theme'
-import { ConnectionLog } from '../src/components/ConnectionLog'
+  resolvePairConfirmRouteState,
+  type PairConfirmRouteState
+} from '../src/pairing/pair-confirm-state'
+import {
+  startPreProfilePairing,
+  type PreProfilePairingAttempt
+} from '../src/pairing/pre-profile-pairing-coordinator'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
+import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'
+import { themedStyleSheet } from '../src/theme/themed-styles'
+import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../src/i18n/use-mobile-translation'
+import { ConnectionLog } from '../src/components/host-connection/ConnectionLog'
+import {
+  loadMobileOnboardingSteps,
+  mobileOnboardingDestination
+} from '../src/onboarding/mobile-onboarding-plan'
+import {
+  PAIRING_SUCCESS_HOLD_MS,
+  PairingProgress,
+  waitForBeat
+} from '../src/pairing/pairing-visuals'
+import { triggerSuccess } from '../src/platform/haptics/haptics'
+import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'
 
-// Why: cap how long the user stares at "Connecting…" during pairing.
-// rpc-client retries forever by design (good for live sessions), but for
-// the *initial* pair we want a hard ceiling so a half-broken Tailscale
-// route surfaces an actionable error with the log visible, instead of
-// spinning silently. ~25s allows for one full connect-timeout + a retry.
+// Bound initial pairing at ~25s (one connect timeout plus retry) so broken routes show an actionable error/log; live RPC retries indefinitely.
 const PAIRING_OVERALL_TIMEOUT_MS = 25_000
 
 export default function PairConfirmScreen() {
+  useMobileTranslation()
+  const params = useLocalSearchParams<{ code?: string | string[] }>()
+  return (
+    <PairConfirmContent
+      key={typeof params.code === 'string' ? params.code : undefined}
+      routeState={resolvePairConfirmRouteState(params.code)}
+    />
+  )
+}
+
+function PairConfirmContent({ routeState }: { routeState: PairConfirmRouteState }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouter()
+  const refreshHostClient = useRefreshHostClient()
   const insets = useSafeAreaInsets()
-  const params = useLocalSearchParams<{ code?: string }>()
   const [status, setStatus] = useState<Status>('awaiting-confirm')
+  const [paired, setPaired] = useState(false)
   const [errorMessage, setErrorMessage] = useState('')
   const [logs, setLogs] = useState<ConnectionLogEntry[]>([])
-  // Why: collect logs in a ref so the rpc-client callback (which closures
-  // over the initial state setter) always sees the freshest list and we
-  // batch fewer setState calls when entries arrive in bursts.
+  // Ref keeps RPC callback logs current and batches bursty state updates.
   const logsRef = useRef<ConnectionLogEntry[]>([])
   const mountedRef = useRef(true)
-  const activePairingAttemptRef = useRef<PairingConnectionAttempt | null>(null)
+  const activePairingAttemptRef = useRef<PreProfilePairingAttempt | null>(null)
 
-  const routeState = resolvePairConfirmRouteState(params.code)
   const offer = routeState.offer
   const resolvedStatus =
     status === 'awaiting-confirm' && routeState.kind === 'error' ? 'error' : status
@@ -47,6 +70,9 @@ export default function PairConfirmScreen() {
       : errorMessage
 
   const cancel = useCallback(() => {
+    mountedRef.current = false
+    activePairingAttemptRef.current?.dispose()
+    activePairingAttemptRef.current = null
     router.replace('/')
   }, [router])
 
@@ -60,13 +86,12 @@ export default function PairConfirmScreen() {
     }, [cancel])
   )
 
-  const setPairConfirmRootRef = useCallback((node: View | null): void => {
+  const setPairConfirmRootRef = useCallback((node: HostInstance | null): void => {
     if (node !== null) {
       mountedRef.current = true
       return
     }
-    // Why: pairing attempts can outlive the visible route; dispose them when
-    // the confirm screen detaches without a passive cleanup-only Effect.
+    // Dispose pairing on route detach: attempts can outlive the visible screen, before passive cleanup.
     mountedRef.current = false
     activePairingAttemptRef.current?.dispose()
     activePairingAttemptRef.current = null
@@ -79,20 +104,12 @@ export default function PairConfirmScreen() {
     setStatus('connecting')
     logsRef.current = []
     setLogs([])
-    let client: ReturnType<typeof connect> | null = null
     activePairingAttemptRef.current?.dispose()
 
-    // Why: split the try/catch around the network call vs the local save
-    // so a Keychain or AsyncStorage failure doesn't masquerade as a
-    // "Cannot connect" error.
-    let response: RpcResponse
-    const attempt = startPairingConnectionAttempt({
+    const attempt = startPreProfilePairing({
+      offer,
       timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
-      closeClient: () => client?.close()
-    })
-    activePairingAttemptRef.current = attempt
-    try {
-      client = connect(offer.endpoint, offer.deviceToken, offer.publicKeyB64, {
+      connectOptions: {
         onLog: (entry) => {
           if (!mountedRef.current || activePairingAttemptRef.current !== attempt) {
             return
@@ -100,8 +117,11 @@ export default function PairConfirmScreen() {
           logsRef.current = [...logsRef.current, entry]
           setLogs(logsRef.current)
         }
-      })
-      response = await client.sendRequest('status.get')
+      }
+    })
+    activePairingAttemptRef.current = attempt
+    try {
+      const { hostId } = await attempt.result
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
       attempt.dispose()
       if (activePairingAttemptRef.current === attempt) {
@@ -110,6 +130,18 @@ export default function PairConfirmScreen() {
       if (!mountedRef.current || !attemptIsCurrent) {
         return
       }
+      // Re-pair reuses host id; close cached client so it reloads the persisted endpoint/relay (STA-1840).
+      refreshHostClient(hostId)
+      setPaired(true)
+      triggerSuccess()
+      const [onboardingSteps] = await Promise.all([
+        loadMobileOnboardingSteps(),
+        waitForBeat(PAIRING_SUCCESS_HOLD_MS)
+      ])
+      if (!mountedRef.current) {
+        return
+      }
+      router.replace(mobileOnboardingDestination(onboardingSteps, hostId))
     } catch (err) {
       const timedOut = attempt.timedOut
       const attemptIsCurrent = activePairingAttemptRef.current === attempt
@@ -123,49 +155,13 @@ export default function PairConfirmScreen() {
       console.warn('[pair-confirm] connect failed', err)
       setStatus('error')
       setErrorMessage(
-        timedOut
-          ? `Couldn't connect within ${PAIRING_OVERALL_TIMEOUT_MS / 1000}s — see log below for where it stalled`
-          : 'Cannot connect — check that your computer is on the same network'
-      )
-      return
-    }
-
-    if (!response.ok) {
-      if (!mountedRef.current) {
-        return
-      }
-      setStatus('error')
-      setErrorMessage(
-        response.error.code === 'unauthorized'
-          ? 'Authentication failed — token may be expired'
-          : `Server error: ${response.error.message}`
-      )
-      return
-    }
-
-    try {
-      const hostId = `host-${Date.now()}`
-      const hostName = await getNextHostName()
-      await saveHost({
-        id: hostId,
-        name: hostName,
-        endpoint: offer.endpoint,
-        deviceToken: offer.deviceToken,
-        publicKeyB64: offer.publicKeyB64,
-        lastConnected: Date.now()
-      })
-      if (!mountedRef.current) {
-        return
-      }
-      router.replace(`/h/${hostId}`)
-    } catch (err) {
-      if (!mountedRef.current) {
-        return
-      }
-      console.warn('[pair-confirm] save failed', err)
-      setStatus('error')
-      setErrorMessage(
-        `Pairing succeeded but couldn't save the host: ${err instanceof Error ? err.message : String(err)}`
+        getPairingFailureMessage({
+          screen: 'confirm',
+          error: err,
+          timedOut,
+          timeoutMs: PAIRING_OVERALL_TIMEOUT_MS,
+          t
+        })
       )
     }
   }
@@ -174,23 +170,42 @@ export default function PairConfirmScreen() {
 
   return (
     <View ref={setPairConfirmRootRef} style={[styles.container, containerPadding]}>
-      <Pressable style={styles.backButton} onPress={cancel}>
+      <Pressable
+        style={({ pressed }) => [styles.backButton, pressed && pressedStyle]}
+        onPress={cancel}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={t('common.back', 'Back')}
+      >
         <ChevronLeft size={22} color={colors.textSecondary} />
       </Pressable>
 
       <View style={styles.content}>
         {offer && resolvedStatus === 'awaiting-confirm' && (
           <>
-            <Text style={styles.title}>Pair with this desktop?</Text>
+            <Text style={styles.title}>
+              {t('app.pairConfirm.title', 'Pair with this desktop?')}
+            </Text>
             <Text style={styles.subtitle}>
-              You opened a pairing link from your desktop. Confirm to add it to your hosts.
+              {t(
+                'app.pairConfirm.description',
+                'You opened a pairing link from your desktop. Confirm to add it to your hosts.'
+              )}
             </Text>
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={() => void confirm()}>
-                <Text style={styles.primaryButtonText}>Pair</Text>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                onPress={() => void confirm()}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {t('app.pairConfirm.pairButton', 'Pair')}
+                </Text>
               </Pressable>
-              <Pressable style={styles.secondaryButton} onPress={cancel}>
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+              <Pressable
+                style={({ pressed }) => [styles.secondaryButton, pressed && pressedStyle]}
+                onPress={cancel}
+              >
+                <Text style={styles.secondaryButtonText}>{t('common.cancel', 'Cancel')}</Text>
               </Pressable>
             </View>
           </>
@@ -198,10 +213,16 @@ export default function PairConfirmScreen() {
 
         {resolvedStatus === 'connecting' && (
           <>
-            <ActivityIndicator size="large" color={colors.textSecondary} />
-            <Text style={styles.connectingText}>Connecting…</Text>
+            <PairingProgress
+              succeeded={paired}
+              connectingLabel={t('app.pairConfirm.connecting', 'Connecting…')}
+              labelStyle={styles.connectingText}
+            />
             <View style={styles.logSlot}>
-              <ConnectionLog entries={logs} title="Pairing log" />
+              <ConnectionLog
+                entries={logs}
+                title={t('app.pairConfirm.pairingLog', 'Pairing log')}
+              />
             </View>
           </>
         )}
@@ -211,12 +232,20 @@ export default function PairConfirmScreen() {
             <Text style={styles.errorText}>{resolvedErrorMessage}</Text>
             {logs.length > 0 && (
               <View style={styles.logSlot}>
-                <ConnectionLog entries={logs} title="Pairing log" />
+                <ConnectionLog
+                  entries={logs}
+                  title={t('app.pairConfirm.pairingLog', 'Pairing log')}
+                />
               </View>
             )}
             <View style={styles.actionStack}>
-              <Pressable style={styles.primaryButton} onPress={cancel}>
-                <Text style={styles.primaryButtonText}>Back to home</Text>
+              <Pressable
+                style={({ pressed }) => [styles.primaryButton, pressed && pressedStyle]}
+                onPress={cancel}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {t('app.pairConfirm.backToHome', 'Back to home')}
+                </Text>
               </Pressable>
             </View>
           </>
@@ -226,7 +255,7 @@ export default function PairConfirmScreen() {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -235,7 +264,7 @@ const styles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm
@@ -244,9 +273,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    // Why: nudges the centered group slightly above the geometric
-    // middle so the eye reads it as visually centered above the home
-    // indicator / nav bar.
+    // Offset above geometric center to balance home-indicator/nav-bar space.
     paddingBottom: spacing.xl * 2
   },
   title: {
@@ -275,7 +302,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     marginBottom: spacing.sm
   },
@@ -288,7 +315,7 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   secondaryButtonText: {
@@ -314,4 +341,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
     lineHeight: 20
   }
-})
+}))

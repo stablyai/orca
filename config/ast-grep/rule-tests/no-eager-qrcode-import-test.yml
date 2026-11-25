@@ -1,0 +1,5 @@
+id: no-eager-qrcode-import
+valid:
+  - "import { type QRCodeToStringOptions } from 'qrcode'"
+invalid:
+  - "import { toString, type QRCodeToStringOptions } from 'qrcode'"

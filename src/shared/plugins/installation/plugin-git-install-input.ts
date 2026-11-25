@@ -1,0 +1,191 @@
+import { isAllowedPluginGitUrl } from './plugin-install-lockfile'
+import { getPublicForgeProviderForHost } from '../../git/remotes/public-forge-host'
+
+/** `ref` is empty when the input names no version: main resolves the newest version tag. */
+export type PluginGitInstallInput = { url: string; ref: string }
+
+export type PluginGitInstallInputError =
+  | 'missing-git-url'
+  | 'git-url-credentials'
+  | 'invalid-git-url'
+  | 'invalid-git-ref'
+
+export type PluginGitInstallInputParseResult =
+  | ({ ok: true } & PluginGitInstallInput)
+  | { ok: false; reason: PluginGitInstallInputError }
+
+const MAX_REF_LENGTH = 255
+const SHORTHAND_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9._-]+$/
+const SCP_PATTERN = /^[^\s@/:]+@[A-Za-z0-9.-]+:[^\s]+$/
+const GITLAB_PAGE_KINDS = new Set(['tree', 'tags', 'releases', 'commit'])
+
+/** `git check-ref-format` rules plus no leading `-`, so a ref can never read as an option. */
+export function isSafePluginGitRef(ref: string): boolean {
+  return (
+    ref.length > 0 &&
+    ref.length <= MAX_REF_LENGTH &&
+    !ref.startsWith('-') &&
+    !ref.startsWith('/') &&
+    !ref.endsWith('/') &&
+    !ref.endsWith('.') &&
+    !ref.endsWith('.lock') &&
+    !ref.includes('..') &&
+    !ref.includes('//') &&
+    !ref.includes('@{') &&
+    ref !== '@' &&
+    !/[~^:?*[\\]/.test(ref) &&
+    ![...ref].some((char) => char.charCodeAt(0) <= 0x20 || char.charCodeAt(0) === 0x7f) &&
+    ref.split('/').every((part) => !part.startsWith('.'))
+  )
+}
+
+/**
+ * What users paste: `owner/repo`, a repository URL with or without `.git`, an SSH URL, or a
+ * GitHub/GitLab release, tag, branch, commit or file page. `#ref` still pins a version explicitly.
+ */
+export function parsePluginGitInstallInput(input: string): PluginGitInstallInputParseResult {
+  let value = input.trim()
+  if (!value) {
+    return { ok: false, reason: 'missing-git-url' }
+  }
+  let fragment = ''
+  const hashIndex = value.indexOf('#')
+  if (hashIndex !== -1) {
+    fragment = value.slice(hashIndex + 1).trim()
+    value = value.slice(0, hashIndex).trim()
+  }
+  if (!value) {
+    return { ok: false, reason: 'missing-git-url' }
+  }
+  if (SHORTHAND_PATTERN.test(value)) {
+    value = `https://github.com/${value}`
+  } else if (
+    !value.includes('://') &&
+    !SCP_PATTERN.test(value) &&
+    /^[^/\s]+\.[^/\s]+\//.test(value)
+  ) {
+    value = `https://${value}`
+  }
+  const parsed = SCP_PATTERN.test(value) ? { url: value, ref: '' } : parseUrlInput(value)
+  if ('reason' in parsed) {
+    return { ok: false, reason: parsed.reason }
+  }
+  // Why the page ref wins: a copied page link can carry an unrelated anchor such as #readme.
+  const ref = parsed.ref || fragment
+  if (!isAllowedPluginGitUrl(parsed.url)) {
+    return { ok: false, reason: 'invalid-git-url' }
+  }
+  if (ref && !isSafePluginGitRef(ref)) {
+    return { ok: false, reason: 'invalid-git-ref' }
+  }
+  return { ok: true, url: parsed.url, ref }
+}
+
+function parseUrlInput(
+  value: string
+): PluginGitInstallInput | { reason: Exclude<PluginGitInstallInputError, 'missing-git-url'> } {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return { reason: 'invalid-git-url' }
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'ssh:') {
+    return { reason: 'invalid-git-url' }
+  }
+  // Why refuse rather than strip: a token pasted here would otherwise land in the lockfile.
+  if (url.password || (url.protocol === 'https:' && url.username)) {
+    return { reason: 'git-url-credentials' }
+  }
+  if (url.protocol === 'ssh:') {
+    return { url: value, ref: '' }
+  }
+  const segments = url.pathname.split('/').filter(Boolean)
+  const page = pageRef(segments, url.hostname)
+  if (page === null) {
+    return { reason: 'invalid-git-url' }
+  }
+  const repository = segments.slice(0, page.repositoryLength).join('/')
+  return { url: `https://${url.host}/${repository}`, ref: page.ref }
+}
+
+/** Repository path length and ref of a hosted page URL; null when no repository path remains. */
+function pageRef(
+  segments: string[],
+  hostname: string
+): { repositoryLength: number; ref: string } | null {
+  // GitLab: /group/sub/repo/-/tree/<ref>, /-/tags/<tag>, /-/releases/<tag>, /-/commit/<sha>.
+  const gitLabMarker = segments.indexOf('-')
+  if (gitLabMarker !== -1 && gitLabMarker < 2) {
+    return null
+  }
+  const page = ownerRepoPageRef(segments, hostname)
+  // Why only public owner/repo forges: elsewhere `/group/sub/tree/p/-/blob/main` is a GitLab
+  // project under a subgroup named `tree`, so the `-` must stay GitLab's separator.
+  if (page && (gitLabMarker === -1 || hasOnlyOwnerRepoPaths(hostname))) {
+    return page
+  }
+  if (gitLabMarker !== -1) {
+    const [kind, ...rest] = segments.slice(gitLabMarker + 1)
+    return {
+      repositoryLength: gitLabMarker,
+      ref: GITLAB_PAGE_KINDS.has(kind) ? decodeRef(rest) : ''
+    }
+  }
+  return segments.length >= 2 ? { repositoryLength: segments.length, ref: '' } : null
+}
+
+function hasOnlyOwnerRepoPaths(hostname: string): boolean {
+  const provider = getPublicForgeProviderForHost(hostname)
+  return provider === 'github' || provider === 'gitea'
+}
+
+/**
+ * GitHub: /owner/repo/tree/<ref>, /blob/<ref>/<path>;
+ * Gitea/Forgejo/Codeberg: /owner/repo/src/{branch,tag,commit}/<ref>.
+ */
+function ownerRepoPageRef(
+  segments: string[],
+  hostname: string
+): { repositoryLength: number; ref: string } | null {
+  const [kind, ...rest] = segments.slice(2)
+  if (kind === 'tree' || kind === 'commit') {
+    return { repositoryLength: 2, ref: decodeRef(rest) }
+  }
+  if (
+    kind === 'src' &&
+    hostname !== 'bitbucket.org' &&
+    rest.length >= 2 &&
+    (rest[0] === 'branch' || rest[0] === 'tag' || rest[0] === 'commit')
+  ) {
+    // Why exclude Bitbucket: its /src/<ref>/<path> layout belongs on the fallback path.
+    // Why one segment for commit: a sha has no slash, so the rest is a file path.
+    return {
+      repositoryLength: 2,
+      ref: decodeRef(rest.slice(1, rest[0] === 'commit' ? 2 : undefined))
+    }
+  }
+  if (kind === 'releases') {
+    return { repositoryLength: 2, ref: rest[0] === 'tag' ? decodeRef(rest.slice(1)) : '' }
+  }
+  // Why no ref for blob: /blob/<ref>/<path> can't be split when the ref has a `/`. Why GitHub
+  // and Codeberg only: elsewhere `blob` can be a GitLab subgroup name.
+  if (
+    kind === 'tags' ||
+    kind === 'branches' ||
+    kind === 'commits' ||
+    (kind === 'blob' && hasOnlyOwnerRepoPaths(hostname))
+  ) {
+    return { repositoryLength: 2, ref: '' }
+  }
+  return null
+}
+
+function decodeRef(parts: string[]): string {
+  try {
+    return parts.map(decodeURIComponent).join('/')
+  } catch {
+    // Why a control character: an undecodable ref must fail isSafePluginGitRef.
+    return '\u0000'
+  }
+}

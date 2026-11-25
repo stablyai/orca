@@ -1,0 +1,200 @@
+diff --git a/lib/gitWorkflow.js b/lib/gitWorkflow.js
+index 3a32d6a9cd65c7ecb6b3cbccfce5a15c96530435..f91b1931224ce59df5cf9880248d4fad93e74f03 100644
+--- a/lib/gitWorkflow.js
++++ b/lib/gitWorkflow.js
+@@ -50,6 +50,9 @@ export const STASH = 'lint-staged automatic backup'
+ 
+ const PATCH_UNSTAGED = 'lint-staged_unstaged.patch'
+ 
++const BACKUP_REF_PREFIX = 'refs/worktree/lint-staged-backups'
++const ZERO_OID = '0000000000000000000000000000000000000000'
++
+ const GIT_DIFF_ARGS = [
+   '--binary', // support binary files
+   '--unified=0', // do not add lines around diff for consistent behaviour
+@@ -100,6 +103,8 @@ export class GitWorkflow {
+     /** @type {import('./getStagedFiles.js').StagedFile[][]} */
+     this.matchedFileChunks = matchedFileChunks
+     this.topLevelDir = topLevelDir
++    this.backupOid = null
++    this.backupRef = null
+ 
+     /**
+      * These three files hold state about an ongoing git merge
+@@ -122,6 +127,17 @@ export class GitWorkflow {
+    * Get name of backup stash
+    */
+   async getBackupStash(ctx) {
++    if (this.backupRef) {
++      const backupOid = await this.execGit(['rev-parse', '--verify', this.backupRef])
++
++      if (backupOid !== this.backupOid) {
++        ctx.errors.add(GetBackupStashError)
++        throw new Error('lint-staged automatic backup is missing!')
++      }
++
++      return this.backupRef
++    }
++
+     /** Print stash list with short hash and subject */
+     const stashes = await this.execGit(['stash', 'list', '--format="%h %s"', '-z'])
+       .then(parseGitZOutput)
+@@ -142,11 +158,44 @@ export class GitWorkflow {
+    */
+   async getDeletedFiles() {
+     debugLog('Getting deleted files...')
+-    const lsFiles = await this.execGit(['ls-files', '--deleted'])
+-    const deletedFiles = lsFiles
+-      .split('\n')
+-      .filter(Boolean)
+-      .map((file) => path.resolve(this.topLevelDir, file))
++    // Orca patch: `ls-files --deleted` lstat()s every tracked file one at a time, which takes tens
++    // of seconds when the stat cache is cold. `diff-files` reads the index with parallel lstat
++    // (preload) instead. Like `ls-files --deleted`, it must not trust an fsmonitor (a stale one
++    // would hide a deletion), so the monitor is turned off for this read-only query. It does
++    // trust the assume-unchanged bit, so those entries (lowercase `ls-files -v` tag; `s` is also
++    // skip-worktree, which `--deleted` skips) are added as candidates. A candidate counts only
++    // if lstat() fails, which is the `--deleted` rule.
++    const [diffOutput, taggedOutput] = await Promise.all([
++      this.execGit([
++        '-c',
++        'core.fsmonitor=false',
++        'diff-files',
++        '--name-only',
++        '--diff-filter=D',
++        '--no-renames',
++        '--no-relative',
++        '--ignore-submodules=none',
++        '-z',
++      ]),
++      this.execGit(['ls-files', '-v', '-z']),
++    ])
++    const assumeUnchanged = parseGitZOutput(taggedOutput).flatMap((line) =>
++      /^[a-rt-z] /.test(line) ? [line.slice(2)] : []
++    )
++    const candidates = new Set(
++      [...parseGitZOutput(diffOutput), ...assumeUnchanged].map((file) =>
++        path.resolve(this.topLevelDir, file)
++      )
++    )
++    const isGone = await Promise.all(
++      [...candidates].map((file) =>
++        fs.lstat(file).then(
++          () => false,
++          () => true
++        )
++      )
++    )
++    const deletedFiles = [...candidates].filter((_, i) => isGone[i])
+     debugLog('Found deleted files:', deletedFiles)
+     return deletedFiles
+   }
+@@ -194,7 +243,7 @@ export class GitWorkflow {
+    */
+   async getUnstagedFiles({ onlyPartial = false } = {}) {
+     debugLog('Getting partially staged files...')
+-    const status = await this.execGit(['status', '-z'])
++    const status = await this.execGit(['status', '-z', '--untracked-files=no'])
+     /**
+      * See https://git-scm.com/docs/git-status#_short_format
+      * Entries returned in machine format are separated by a NUL character.
+@@ -270,11 +319,14 @@ export class GitWorkflow {
+         } else {
+           /** Save stash of all changes, keeping all files as-is */
+           const stashHash = await this.execGit(['stash', 'create'])
++          this.backupOid = stashHash
++          this.backupRef = `${BACKUP_REF_PREFIX}/${crypto.randomUUID()}`
+           ctx.backupHash = await this.execGit(['rev-parse', '--short', stashHash])
+-          await this.execGit(['stash', 'store', '--quiet', '--message', STASH, ctx.backupHash])
++          await this.execGit(['update-ref', this.backupRef, this.backupOid, ZERO_OID])
++          ctx.backupRef = this.backupRef
+         }
+ 
+-        task.title = `Backed up original state in git stash (${ctx.backupHash})`
++        task.title = `Backed up original state (${ctx.backupHash})`
+         debugLog(task.title)
+       }
+     } catch (error) {
+@@ -425,7 +477,11 @@ export class GitWorkflow {
+   async cleanup(ctx) {
+     try {
+       debugLog('Dropping backup stash...')
+-      await this.execGit(['stash', 'drop', '--quiet', await this.getBackupStash(ctx)])
++      if (this.backupRef) {
++        await this.execGit(['update-ref', '-d', this.backupRef, this.backupOid])
++      } else {
++        await this.execGit(['stash', 'drop', '--quiet', await this.getBackupStash(ctx)])
++      }
+       debugLog('Done dropping backup stash!')
+     } catch (error) {
+       handleError(error, ctx)
+diff --git a/lib/index.js b/lib/index.js
+index 75eeacee48759ef90249df5524639d61bce10918..24b4852eba9b14e05e10c3df8a2b2dae75af19f3 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -157,7 +157,7 @@ const lintStaged = async (
+         logger.warn(PREVENTED_EMPTY_COMMIT)
+       } else if (ctx.errors.has(FailOnChangesError)) {
+         logger.warn(PREVENTED_TASK_MODIFICATIONS + '\n')
+-        logger.warn(restoreStashExample(ctx.backupHash))
++        logger.warn(restoreStashExample(ctx.backupHash, ctx.backupRef))
+       } else if (ctx.errors.has(RestoreUnstagedChangesError)) {
+         logger.warn(UNSTAGED_CHANGES_BACKUP_STASH_LOCATION)
+         logger.warn(ctx.unstagedPatch)
+@@ -168,7 +168,7 @@ const lintStaged = async (
+         logger.error(GIT_ERROR)
+         if (ctx.shouldBackup) {
+           // No sense to show this if the backup stash itself is missing.
+-          logger.error(restoreStashExample(ctx.backupHash) + '\n')
++          logger.error(restoreStashExample(ctx.backupHash, ctx.backupRef) + '\n')
+         }
+       }
+ 
+diff --git a/lib/messages.js b/lib/messages.js
+index 993f8d81cac48132b5ae2ebdc8ca452c7217caad..2dc2291bc82451eacc5babfc8ce408051e1101e3 100644
+--- a/lib/messages.js
++++ b/lib/messages.js
+@@ -66,9 +66,12 @@ export const PREVENTED_EMPTY_COMMIT = `
+   Use the --allow-empty option to continue, or check your task configuration`)}
+ `
+ 
+-export const restoreStashExample = (
+-  hash = 'h0a0s0h0'
+-) => `Any lost modifications can be restored from a git stash:
++export const restoreStashExample = (hash = 'h0a0s0h0', backupRef) =>
++  backupRef
++    ? `Any lost modifications can be restored from the worktree backup:
++
++  > git stash apply --index ${backupRef}`
++    : `Any lost modifications can be restored from a git stash:
+ 
+   > git stash list --format="%h %s"
+   ${hash} On main: lint-staged automatic backup
+diff --git a/lib/searchConfigs.js b/lib/searchConfigs.js
+index 77ffe8f2423bb24ed80e2e23b57847a69c137195..822ff82c189cf712029e5e5870e5b3d9266f74a2 100644
+--- a/lib/searchConfigs.js
++++ b/lib/searchConfigs.js
+@@ -36,8 +36,9 @@ const listConfigFilesFromGit = async ({ cwd, topLevelDir }) =>
+     [
+       ...EXEC_GIT,
+       '--cached', // show all tracked files
+-      '--others', // show untracked files
+-      '--exclude-standard', // apply standard git exclusions (.gitignore, etc.)
++      // Orca patch: no `--others`. Listing untracked files walks the whole worktree, which takes
++      // seconds on a cold stat cache. Untracked configs in `cwd` and above are still found by
++      // `listConfigFilesFromFs`; a nested config must be tracked or staged to apply.
+       '--',
+       ...CONFIG_PATHSPEC,
+     ],
+diff --git a/lib/state.js b/lib/state.js
+index da30e6f639d31307ebf503691aa991bb93948f8a..4a38799fa7773a8e8629c7c3a6b72287e6b22f4b 100644
+--- a/lib/state.js
++++ b/lib/state.js
+@@ -15,6 +15,7 @@ export const getInitialState = ({
+   revert = true,
+ } = {}) => ({
+   backupHash: null,
++  backupRef: null,
+   errors: new Set([]),
+   shouldFailOnChanges: failOnChanges,
+   hasFilesToHide: null,

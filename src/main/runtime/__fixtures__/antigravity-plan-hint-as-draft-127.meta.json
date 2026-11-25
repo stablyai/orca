@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-19T07:34:50.080Z",
+  "platform": "darwin",
+  "command": ["agy", "--mode", "plan"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Plan mode; exact placeholder wording typed as an unsent draft at 12 seconds",
+  "exitCode": 0
+}

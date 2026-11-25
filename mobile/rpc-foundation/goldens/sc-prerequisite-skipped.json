@@ -1,0 +1,40 @@
+{
+  "goldenFormatVersion": 6,
+  "operation": "source-control.remote-prerequisite",
+  "family": "git.remote-prerequisite",
+  "namedDeltas": [],
+  "values": {
+    "69f421c50546": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "ok": true,
+        "ran": false
+      }
+    },
+    "cede2a5d35c8": {
+      "outcome": {
+        "ok": true,
+        "ran": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-prerequisite-skipped",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "apply": "69f421c50546"
+          },
+          "state": "cede2a5d35c8",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

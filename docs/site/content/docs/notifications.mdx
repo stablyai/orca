@@ -1,0 +1,52 @@
+---
+title: Notifications & Inbox
+---
+
+Orca runs agents, not just terminals, so it knows when an agent actually finishes versus when it's just paused. Notifications lean on that signal so you can queue three agents, walk away, and come back when the first one is done.
+
+## Agent-finished pings
+
+When an agent transitions from working to idle, Orca fires a notification — system notification, sound, and a chip on the worktree.
+
+## Persistent bell
+
+The header bell shows unread notifications across all worktrees. Clicking a notification jumps to the matching worktree and pane.
+
+On macOS, the same unread count is mirrored as a badge on the Dock icon, so you can spot pending agent pings without bringing Orca to the foreground.
+
+## Mark unread
+
+Right-click a notification to mark unread — useful when you've triaged something but want to come back to it later.
+
+## Tuning
+
+Turn off specific categories (system, sound, chip-only) under [Settings → Notifications](/docs/settings).
+
+## Custom sounds
+
+Pick a custom desktop notification sound per category under [Settings → Notifications](/docs/settings) — point at any audio file on disk, or pick from Orca's built-in set. Useful when you want agent-finished pings to stand out from system mail and Slack.
+
+Supported formats: MP3, WAV, OGG, M4A, AAC, FLAC. One file applies to all delivered desktop notifications.
+
+When you use a custom sound, set its playback volume from the same settings pane.
+
+## Disable mobile push from a host
+
+Set `ORCA_MOBILE_PUSH_MODE` in the environment of each desktop or remote runtime
+that sends mobile push, then restart that host:
+
+- `full` (default): existing notification titles, bodies and navigation identifiers.
+- `disabled`: no alert or test sends and no new push registration from that host.
+  Existing registration deletion and queued cleanup still run. This does not
+  itself erase historical gateway/provider records or disable live in-app events.
+
+An unrecognized nonempty value disables push delivery. This is a host configuration,
+not a centrally enforced organization policy. Users who control the host environment
+can change it. It applies to that host's push gateway traffic, not local desktop
+notifications or direct/Relay application content. Every sending host needs the
+setting; older Orca versions do not implement it. OS notification permissions and
+lock-screen preview settings are separate controls.
+
+There is no generic-content mode: enabled push may include project/agent text and
+identifiers. Disabling phone lock-screen previews does not stop that content from
+reaching the push gateway and APNs/FCM.

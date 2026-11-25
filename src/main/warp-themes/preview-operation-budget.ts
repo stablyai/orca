@@ -1,4 +1,4 @@
-import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
+import type { WarpThemeImportSkippedFile } from '../../shared/terminal-themes/terminal-custom-themes'
 import type { WarpThemeScanBudget } from './theme-file-scanner'
 
 const DEFAULT_PREVIEW_BUDGET_MS = 5_000

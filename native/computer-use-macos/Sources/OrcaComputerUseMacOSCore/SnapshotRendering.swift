@@ -71,6 +71,11 @@ public enum SnapshotRenderHeuristics {
 
     public static func supportsAttribute(_ attribute: String, advertisedAttributes: Set<String>?) -> Bool {
         guard let advertisedAttributes else { return true }
+        // Why: SwiftUI controls (Calculator's keys, System Settings' sidebar) list only AXAttributedDescription,
+        // yet answer AXDescription.
+        if attribute == "AXDescription", advertisedAttributes.contains("AXAttributedDescription") {
+            return true
+        }
         return advertisedAttributes.contains(attribute)
     }
 
@@ -109,8 +114,8 @@ public enum SnapshotRenderHeuristics {
                 return action != "AXCancel" && action != "AXPick"
             }
             if role == "AXScrollArea",
-               (rawActions.contains("AXScrollUpByPage") || rawActions.contains("AXScrollDownByPage")),
-               action == "AXScrollLeftByPage" || action == "AXScrollRightByPage" {
+               action == "AXScrollLeftByPage" || action == "AXScrollRightByPage",
+               (rawActions.contains("AXScrollUpByPage") || rawActions.contains("AXScrollDownByPage")) {
                 return false
             }
             return true
@@ -219,8 +224,14 @@ public enum SnapshotRenderHeuristics {
         if action == "AXZoomWindow" {
             return "zoom the window"
         }
+        // Why: a custom action reads "Name:Copy\nTarget:0x0\nSelector:(null)"; only the name means anything.
+        if action.hasPrefix("Name:"),
+           let name = clean(action.dropFirst("Name:".count).prefix { !$0.isNewline }.trimmingCharacters(in: .whitespaces)) {
+            return name
+        }
         let stripped = action.hasPrefix("AX") ? String(action.dropFirst(2)) : action
-        return splitCamelCase(stripped.replacingOccurrences(of: "ByPage", with: "")).lowercased()
+        // Why: an action name can span several lines; one element renders as one line.
+        return sanitize(splitCamelCase(stripped.replacingOccurrences(of: "ByPage", with: "")).lowercased())
     }
 
     public static func sanitize(_ value: String) -> String {
@@ -238,11 +249,10 @@ public enum SnapshotRenderHeuristics {
         if roleText == "heading", Int(value) != nil {
             return nil
         }
-        let clean = sanitize(value)
         if roleText == "text" || roleText == "text entry area" || roleText == "scroll bar" || roleText == "value indicator" {
-            return " \(clean)"
+            return " \(value)"
         }
-        return ", Value: \(clean)"
+        return ", Value: \(value)"
     }
 
     private static func markdownEscaped(_ value: String) -> String {

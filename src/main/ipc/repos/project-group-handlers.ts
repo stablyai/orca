@@ -1,0 +1,147 @@
+import { ProjectGroupHooksCheck } from '../../../shared/rpc-contract/projects/repo-params'
+import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { type BrowserWindow, ipcMain } from 'electron'
+import type { Store } from '../../persistence/loading-store/store'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import type {
+  NestedRepoScanResult,
+  ProjectGroup
+} from '../../../shared/project/groups/project-group-types'
+import { notifyReposChanged } from './repos-changed-notification'
+import {
+  ProjectGroupCancelNestedScanArgs,
+  ProjectGroupCreateArgs,
+  ProjectGroupMoveProjectArgs,
+  ProjectGroupScanNestedArgs,
+  ProjectGroupSelectorArgs,
+  ProjectGroupUpdateArgs,
+  ProjectGroupUpdateManyArgs,
+  parseProjectGroupIpcArgs
+} from './repo-ipc-arg-schemas'
+import {
+  assertWslMoveProjectWritable,
+  assertWslMoveRepoWritable
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { activeNestedRepoScans, runNestedRepoScanForIpc } from './nested-repo-scan-ipc'
+import { runtimeVisibleProjectGroups } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
+
+export function registerProjectGroupHandlers(
+  mainWindow: BrowserWindow,
+  store: Store,
+  runtime: Pick<OrcaRuntimeService, 'checkProjectGroupHooks'>
+): void {
+  ipcMain.handle('projectGroups:checkHooks', (_event, rawArgs: unknown) => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupHooksCheck,
+      rawArgs,
+      'invalid_project_group_hooks_check_args'
+    )
+    return runtime.checkProjectGroupHooks(args.groupId, { background: args.background })
+  })
+  ipcMain.handle('projectGroups:list', () => runtimeVisibleProjectGroups(store))
+
+  ipcMain.handle('projectGroups:create', (_event, rawArgs: unknown): ProjectGroup => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupCreateArgs,
+      rawArgs,
+      'invalid_project_group_create_args'
+    )
+    const group = store.createProjectGroup({
+      name: args.name,
+      parentPath: args.parentPath ?? null,
+      connectionId: args.connectionId ?? null,
+      parentGroupId: args.parentGroupId ?? null,
+      createdFrom: args.createdFrom ?? 'manual'
+    })
+    notifyReposChanged(mainWindow)
+    return group
+  })
+
+  ipcMain.handle('projectGroups:update', (_event, rawArgs: unknown): ProjectGroup | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupUpdateArgs,
+      rawArgs,
+      'invalid_project_group_update_args'
+    )
+    const updated = store.updateProjectGroup(args.groupId, args.updates)
+    if (updated) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
+  ipcMain.handle('projectGroups:updateMany', (_event, rawArgs: unknown): ProjectGroup[] | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupUpdateManyArgs,
+      rawArgs,
+      'invalid_project_group_update_many_args'
+    )
+    const updated = store.updateProjectGroups(args.mutations)
+    if (updated?.length) {
+      notifyReposChanged(mainWindow)
+    }
+    return updated
+  })
+
+  ipcMain.handle('projectGroups:delete', (_event, rawArgs: unknown): boolean => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupSelectorArgs,
+      rawArgs,
+      'invalid_project_group_delete_args'
+    )
+    const deleted = store.deleteProjectGroup(args.groupId)
+    if (deleted) {
+      notifyReposChanged(mainWindow)
+    }
+    return deleted
+  })
+
+  ipcMain.handle('projectGroups:moveProject', (_event, rawArgs: unknown): Repo | null => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupMoveProjectArgs,
+      rawArgs,
+      'invalid_project_group_move_repo_args'
+    )
+    const target: RepoHostTarget | undefined = args.hostId
+      ? { id: args.projectId, executionHostId: args.hostId }
+      : store.getRepo(args.projectId)
+    if (!target) {
+      assertWslMoveProjectWritable(store, { repoId: args.projectId })
+      return null
+    }
+    // Fence the selected host only; a WSL move must not block its SSH sibling.
+    assertWslMoveRepoWritable(store, target)
+    const moved = store.moveProjectToGroup(target, args.groupId, args.order)
+    if (moved) {
+      notifyReposChanged(mainWindow)
+    }
+    return moved
+  })
+
+  ipcMain.handle(
+    'projectGroups:scanNested',
+    async (event, rawArgs: unknown): Promise<NestedRepoScanResult> => {
+      const args = parseProjectGroupIpcArgs(
+        ProjectGroupScanNestedArgs,
+        rawArgs,
+        'invalid_project_group_scan_nested_args'
+      )
+      return runNestedRepoScanForIpc(event, args)
+    }
+  )
+
+  ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown): boolean => {
+    const args = parseProjectGroupIpcArgs(
+      ProjectGroupCancelNestedScanArgs,
+      rawArgs,
+      'invalid_project_group_cancel_nested_scan_args'
+    )
+    const controller = activeNestedRepoScans.get(args.scanId)
+    if (!controller) {
+      return false
+    }
+    controller.abort()
+    return true
+  })
+}

@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.local/
+.env
+.env.local
+.env.local.generated
+*.log
+
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Contains development signing keys and personal data.
+data/

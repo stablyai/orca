@@ -1,0 +1,192 @@
+import { resolveTerminalLayoutActiveLeafId } from './ownership/terminal-layout-active-leaf'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../../../shared/workspace-layout/terminal-tab-types'
+import {
+  isTerminalLeafId,
+  type TerminalLeafId
+} from '../../../../../shared/workspace-layout/stable-pane-id'
+import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pane-id'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
+import { resolveRootlessTerminalLayoutLeafId } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+
+const EMPTY_TERMINAL_LAYOUT: TerminalLayoutSnapshot = {
+  root: null,
+  activeLeafId: null,
+  expandedLeafId: null
+}
+
+type LeafIdRewrite = {
+  nextLeafIdByInputLeafId: Map<string, TerminalLeafId>
+  duplicatedInputLeafIds: Set<string>
+}
+
+function cloneLayoutWithLeafRewrite(
+  node: TerminalPaneLayoutNode,
+  rewrite: LeafIdRewrite
+): TerminalPaneLayoutNode {
+  if (node.type === 'leaf') {
+    const replacement = rewrite.nextLeafIdByInputLeafId.get(node.leafId) ?? mintStablePaneId()
+    return { type: 'leaf', leafId: replacement }
+  }
+  return {
+    ...node,
+    first: cloneLayoutWithLeafRewrite(node.first, rewrite),
+    second: cloneLayoutWithLeafRewrite(node.second, rewrite)
+  }
+}
+
+function remapLeafRecord(
+  source: Record<string, string> | undefined,
+  rewrite: LeafIdRewrite
+): Record<string, string> | undefined {
+  if (!source) {
+    return undefined
+  }
+  const next: Record<string, string> = {}
+  for (const [leafId, value] of Object.entries(source)) {
+    if (rewrite.duplicatedInputLeafIds.has(leafId)) {
+      continue
+    }
+    const nextLeafId = rewrite.nextLeafIdByInputLeafId.get(leafId)
+    if (nextLeafId) {
+      next[nextLeafId] = value
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined
+}
+
+function collectLeafCounts(
+  node: TerminalPaneLayoutNode,
+  counts = new Map<string, number>()
+): Map<string, number> {
+  if (node.type === 'leaf') {
+    counts.set(node.leafId, (counts.get(node.leafId) ?? 0) + 1)
+    return counts
+  }
+  collectLeafCounts(node.first, counts)
+  collectLeafCounts(node.second, counts)
+  return counts
+}
+
+function firstLeafId(node: TerminalPaneLayoutNode | null): string | null {
+  if (!node) {
+    return null
+  }
+  return node.type === 'leaf' ? node.leafId : firstLeafId(node.first)
+}
+
+function getRemappedLeafId(
+  leafId: string | null | undefined,
+  rewrite: LeafIdRewrite
+): string | null {
+  if (!leafId || rewrite.duplicatedInputLeafIds.has(leafId)) {
+    return null
+  }
+  return rewrite.nextLeafIdByInputLeafId.get(leafId) ?? null
+}
+
+function normalizeTerminalLayoutLeafIds(snapshot: TerminalLayoutSnapshot | null | undefined): {
+  snapshot: TerminalLayoutSnapshot
+  changed: boolean
+} {
+  if (!snapshot?.root) {
+    const nextSnapshot = snapshot ?? EMPTY_TERMINAL_LAYOUT
+    const activeLeafId = resolveRootlessTerminalLayoutLeafId(nextSnapshot)
+    return {
+      snapshot:
+        activeLeafId === nextSnapshot.activeLeafId
+          ? nextSnapshot
+          : { ...nextSnapshot, activeLeafId },
+      changed: activeLeafId !== nextSnapshot.activeLeafId
+    }
+  }
+  const counts = collectLeafCounts(snapshot.root)
+  const duplicatedInputLeafIds = new Set(
+    Array.from(counts.entries())
+      .filter(([, count]) => count > 1)
+      .map(([leafId]) => leafId)
+  )
+  const nextLeafIdByInputLeafId = new Map<string, TerminalLeafId>()
+  let changed = false
+  for (const [leafId, count] of counts) {
+    if (count === 1 && isTerminalLeafId(leafId)) {
+      nextLeafIdByInputLeafId.set(leafId, leafId)
+      continue
+    }
+    changed = true
+    if (count === 1) {
+      nextLeafIdByInputLeafId.set(leafId, mintStablePaneId())
+    }
+  }
+  const inputLeafIds = new Set(counts.keys())
+  const activeLeafId = resolveTerminalLayoutActiveLeafId({
+    root: snapshot.root,
+    activeLeafId: snapshot.activeLeafId,
+    ptyIdsByLeafId: snapshot.ptyIdsByLeafId
+  })
+  const expandedLeafId =
+    snapshot.expandedLeafId && inputLeafIds.has(snapshot.expandedLeafId)
+      ? snapshot.expandedLeafId
+      : null
+  const selectionChanged =
+    activeLeafId !== snapshot.activeLeafId || expandedLeafId !== snapshot.expandedLeafId
+  if (!changed && !selectionChanged) {
+    return { snapshot, changed: false }
+  }
+  const rewrite: LeafIdRewrite = { nextLeafIdByInputLeafId, duplicatedInputLeafIds }
+  const root = changed ? cloneLayoutWithLeafRewrite(snapshot.root, rewrite) : snapshot.root
+  // Closed/restored splits can leave stale selection IDs; fall back instead of stranding focus.
+  const remappedActiveLeafId = getRemappedLeafId(activeLeafId, rewrite) ?? firstLeafId(root)
+  const remappedExpandedLeafId = getRemappedLeafId(expandedLeafId, rewrite)
+  const remappedChatLeafId = getRemappedLeafId(snapshot.chatLeafId, rewrite)
+  const ptyIdsByLeafId = remapLeafRecord(snapshot.ptyIdsByLeafId, rewrite)
+  const buffersByLeafId = remapLeafRecord(snapshot.buffersByLeafId, rewrite)
+  const scrollbackRefsByLeafId = remapLeafRecord(snapshot.scrollbackRefsByLeafId, rewrite)
+  const titlesByLeafId = remapLeafRecord(snapshot.titlesByLeafId, rewrite)
+  const {
+    ptyIdsByLeafId: _oldPtyIdsByLeafId,
+    buffersByLeafId: _oldBuffersByLeafId,
+    scrollbackRefsByLeafId: _oldScrollbackRefsByLeafId,
+    titlesByLeafId: _oldTitlesByLeafId,
+    chatLeafId: _oldChatLeafId,
+    ...snapshotWithoutLeafRecords
+  } = snapshot
+  return {
+    snapshot: {
+      ...snapshotWithoutLeafRecords,
+      root,
+      activeLeafId: resolveTerminalLayoutActiveLeafId({
+        root,
+        activeLeafId: remappedActiveLeafId,
+        ptyIdsByLeafId
+      }),
+      expandedLeafId: remappedExpandedLeafId,
+      ...(remappedChatLeafId ? { chatLeafId: remappedChatLeafId } : {}),
+      ...(ptyIdsByLeafId ? { ptyIdsByLeafId } : {}),
+      ...(buffersByLeafId ? { buffersByLeafId } : {}),
+      ...(scrollbackRefsByLeafId ? { scrollbackRefsByLeafId } : {}),
+      ...(titlesByLeafId ? { titlesByLeafId } : {})
+    },
+    changed: true
+  }
+}
+
+export function normalizeTerminalLayoutSnapshot(
+  snapshot: TerminalLayoutSnapshot | null | undefined
+): { snapshot: TerminalLayoutSnapshot; changed: boolean } {
+  const ptyOwnership = normalizeTerminalLayoutPtyOwnership(snapshot ?? EMPTY_TERMINAL_LAYOUT)
+  const leafIds = normalizeTerminalLayoutLeafIds(ptyOwnership.snapshot)
+  const activeLeafId = leafIds.snapshot.root
+    ? leafIds.snapshot.activeLeafId
+    : resolveRootlessTerminalLayoutLeafId(leafIds.snapshot)
+  return {
+    snapshot:
+      activeLeafId === leafIds.snapshot.activeLeafId
+        ? leafIds.snapshot
+        : { ...leafIds.snapshot, activeLeafId },
+    changed:
+      ptyOwnership.changed || leafIds.changed || activeLeafId !== leafIds.snapshot.activeLeafId
+  }
+}

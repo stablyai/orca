@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-28T21:44:30.000Z",
+  "platform": "darwin",
+  "command": ["codex", "--dangerously-bypass-approvals-and-sandbox"],
+  "cols": 120,
+  "rows": 40,
+  "note": "codex-cli 0.158.0, plain launch on a fresh CODEX_HOME whose config.toml sets an older model with an available upgrade. After the provisional screen, Codex paints its model announcement (`Meet GPT-6 Sol`, `1. Try new model` / `2. Use existing model`, `enter/esc confirm`), which owns Enter. Cut 6 s after spawn. Home-directory user name redacted by hand, same length.",
+  "exitCode": null
+}

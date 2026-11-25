@@ -1,0 +1,8 @@
+{
+  "questions": [
+    {
+      "title": "What would you most like to do this weekend?",
+      "options": ["Relax at home", "Get outside", "See friends or family", "Work on a project"]
+    }
+  ]
+}

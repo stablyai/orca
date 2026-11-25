@@ -1,0 +1,135 @@
+import { useCallback, useState } from 'react'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { HostedReviewProvider } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
+import { useAppStore } from '@/store/index'
+import { latestLookupGeneration } from '@/store/slices/hosted-review/refresh/lookup-generation-sequence'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review/hosted-review-card-refresh'
+import type { ChecksPanelManualRefreshInput } from './manual-refresh-dependencies'
+
+/** Reviews and links name the provider first; an unlinked branch falls back to the remote's provider, not GitHub. */
+export function checksPanelManualRefreshProvider(
+  model: ChecksPanelManualRefreshInput
+): HostedReviewProvider {
+  return (
+    model.activeReview?.provider ??
+    model.hostedReview?.provider ??
+    (model.isGitLabReviewContext
+      ? 'gitlab'
+      : model.linkedBitbucketPR != null
+        ? 'bitbucket'
+        : model.linkedAzureDevOpsPR != null
+          ? 'azure-devops'
+          : model.linkedGiteaPR != null
+            ? 'gitea'
+            : model.hostedReviewCreateProvider)
+  )
+}
+
+/** A failed click's message, kept until a click succeeds, the context changes or a provider read issued after the failure answers. */
+export function useChecksPanelManualRefreshFailure(
+  panelContextKey: string,
+  hostedReviewCacheKey: string
+) {
+  const [failure, setFailure] = useState<{
+    contextKey: string
+    message: string | null
+    failedAfterGeneration: number
+  }>({ contextKey: panelContextKey, message: null, failedAfterGeneration: 0 })
+  if (failure.contextKey !== panelContextKey) {
+    setFailure({ contextKey: panelContextKey, message: null, failedAfterGeneration: 0 })
+  }
+  // Last-good fallbacks and cache hits don't move this, so only a real provider read can clear the failure.
+  const providerReadGeneration = useAppStore((s) =>
+    hostedReviewCacheKey
+      ? (s.hostedReviewCache[hostedReviewCacheKey]?.providerReadGeneration ?? 0)
+      : 0
+  )
+  const setManualFailure = useCallback(
+    (message: string | null) =>
+      setFailure({
+        contextKey: panelContextKey,
+        message,
+        failedAfterGeneration: latestLookupGeneration()
+      }),
+    [panelContextKey]
+  )
+  return {
+    manualRefreshError:
+      failure.contextKey === panelContextKey &&
+      providerReadGeneration <= failure.failedAfterGeneration
+        ? failure.message
+        : null,
+    setManualFailure
+  }
+}
+
+/** The click's own review read: it never joins a read that began before the click. */
+export function refreshHostedReviewForClick(
+  model: ChecksPanelManualRefreshInput,
+  repo: NonNullable<ChecksPanelManualRefreshInput['repo']>,
+  branch: string,
+  fallbackGitHubPR: number | null
+) {
+  return refreshHostedReviewCard(model.fetchHostedReviewForBranch, {
+    repoPath: repo.path,
+    repoId: repo.id,
+    repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+    branch,
+    admissionTier: 'interactive',
+    userRefresh: true,
+    linkedGitHubPR: model.linkedPR,
+    fallbackGitHubPR,
+    linkedGitLabMR: model.linkedGitLabMR,
+    linkedBitbucketPR: model.linkedBitbucketPR,
+    linkedAzureDevOpsPR: model.linkedAzureDevOpsPR,
+    linkedGiteaPR: model.linkedGiteaPR
+  })
+}
+
+export async function refreshChecksPanelHostedReview(
+  model: ChecksPanelManualRefreshInput,
+  provider: HostedReviewProvider,
+  isCurrentRequest: () => boolean
+): Promise<'review' | 'no-review' | 'superseded'> {
+  const { repo, branch, activeGitLabReview, fetchGitLabDetails } = model
+  if (!repo || !branch) {
+    return 'superseded'
+  }
+  const refreshedReview = await refreshHostedReviewForClick(
+    model,
+    repo,
+    branch,
+    model.fallbackGitHubPRNumber
+  )
+  if (!isCurrentRequest()) {
+    return 'superseded'
+  }
+  if (provider !== 'gitlab') {
+    return 'review'
+  }
+  // The published card is the panel's selection. A newer lookup (a title save, say) can publish a
+  // replacement while this click waits; a late click must not claim details for the review it
+  // replaced. Its own card and the captured review are only the fallback when nothing is published.
+  const published = model.hostedReviewCacheKey
+    ? useAppStore.getState().hostedReviewCache[model.hostedReviewCacheKey]
+    : undefined
+  const refreshedGitLabReview = published
+    ? published.data?.provider === 'gitlab'
+      ? published.data
+      : null
+    : refreshedReview?.provider === 'gitlab'
+      ? refreshedReview
+      : activeGitLabReview
+  if (refreshedGitLabReview) {
+    await fetchGitLabDetails({
+      mrNumberOverride: refreshedGitLabReview.number,
+      headShaOverride: refreshedGitLabReview.headSha,
+      commitAsCurrent: true,
+      isRequestCurrent: isCurrentRequest
+    })
+    return 'review'
+  }
+  // A lookup that finds no review keeps the current results: if the review is really gone, the
+  // panel's review identity changes and the section owners reset and re-read.
+  return 'no-review'
+}

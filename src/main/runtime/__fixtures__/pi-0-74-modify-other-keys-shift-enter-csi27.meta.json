@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-16T07:25:24.029Z",
+  "platform": "linux",
+  "command": ["pi"],
+  "cols": 100,
+  "rows": 30,
+  "note": "pi 0.74.0, Linux, isolated HOME, no CSI ?u reply so pi arms modifyOtherKeys only; typed abc, CSI 27;2;13~ (modifyOtherKeys Shift+Enter), def: newline",
+  "exitCode": 129
+}
