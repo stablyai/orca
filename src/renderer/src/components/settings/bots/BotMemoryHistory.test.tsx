@@ -9,7 +9,7 @@ afterEach(cleanup)
 
 const row = (id: string, by: BotMemoryHistoryView['by']): BotMemoryHistoryView => ({
   id,
-  at: Date.now(),
+  at: Date.UTC(2026, 10, 6, 9),
   by,
   change: { added: [], removed: [{ line: '- 2026-11-01 owner fact', after: '# Memory' }] },
   undoable: true,
