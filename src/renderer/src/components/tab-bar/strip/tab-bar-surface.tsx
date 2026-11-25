@@ -28,7 +28,7 @@ import type { TabStripSegment } from './tab-strip-window'
 import { TabBarStaticCreateMenu } from '../create-menu/tab-bar-static-create-menu'
 import { NewTabMenuContent } from '../menu-fit/NewTabMenuContent'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
-import { botHomeOffers } from '../../../../../shared/bots/bot-agent-choices'
+import { botHomeOffers, type BotNewChatAgent } from '../../../../../shared/bots/bot-agent-choices'
 import { BotNewChatMenuItems } from '../../bots/BotNewChatMenuItems'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
@@ -64,8 +64,9 @@ export function renderTabBarSurface(
     surfaceRef: (node: HTMLDivElement | null) => void
     /** Set in a bot's home, where the menu leads with a new chat with the bot. */
     bot: Bot | null
-    /** The bot is an agent shared with this account, whose home here holds only its chats. */
-    sharedBot: boolean
+    /** Set for an agent shared with this account, whose home here holds only its chats: the agents
+     *  its owner offers, null until read. */
+    sharedBot: { ownerAgents: readonly BotNewChatAgent[] | null } | null
     /** Set in a group's home, where the menu leads with a new thread. */
     botGroup: BotGroup | null
   },

@@ -293,11 +293,12 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
+      // A teammate picks the agent as the owner does.
+      const onAgent = botOnAgent(bot, params.agent)
       const share = botShareScopeOf(context)
       if (share) {
-        return { sessionId: await startBotShareSession(runtime, bot, share, params.newChatId) }
+        return { sessionId: await startBotShareSession(runtime, onAgent, share, params.newChatId) }
       }
-      const onAgent = botOnAgent(bot, params.agent)
       // Like a blank page: an empty chat already open is the new chat, not one more.
       const empty = await openEmptyBotChat(
         runtimeBotChatTreeHost(runtime),

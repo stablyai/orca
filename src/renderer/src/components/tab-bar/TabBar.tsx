@@ -12,6 +12,7 @@ import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import { useSharedBotOwnerAgents } from '../bots/sharing/use-shared-bot-owner-agents'
 import {
   sharedBotHostOf,
   useSharedBotHosts
@@ -69,6 +70,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     createMenuOptions: pluginCreateMenu.menuOptions,
     handleSelectCreateMenuOption: pluginCreateMenu.onSelectMenuOption
   }
+  const ownerAgents = useSharedBotOwnerAgents(bot, sharedBot, baseCreateMenu.newTabMenuOpen)
   const itemProjection = useTabBarItemProjection({
     props,
     resolvedGroupId: runtime.resolvedGroupId,
@@ -150,7 +152,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       itemActions,
       surfaceRef,
       bot,
-      sharedBot,
+      sharedBot: sharedBot ? { ownerAgents } : null,
       botGroup
     },
     t

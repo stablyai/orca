@@ -84,7 +84,7 @@ function menuCase(width: number) {
           <DropdownMenu defaultOpen modal={false}>
             <DropdownMenuTrigger>New</DropdownMenuTrigger>
             <DropdownMenuContent align="start" style={{ width }}>
-              <BotNewChatMenuItems bot={bot} offers={botHomeOffers(bot, model, false)} />
+              <BotNewChatMenuItems bot={bot} offers={botHomeOffers(bot, model, null)} />
               <DropdownMenuSeparator />
               <OpenAgentSettingsMenuItem variant="create" />
             </DropdownMenuContent>

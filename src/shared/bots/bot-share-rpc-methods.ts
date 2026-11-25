@@ -43,6 +43,7 @@ export const BOT_SHARE_SCOPED_METHODS = [
   'bots.list',
   'bots.roster',
   'bots.chats.own',
+  'bots.agentChoices',
   'agentSession.subscribeStatus',
   'status.get'
 ] as const
