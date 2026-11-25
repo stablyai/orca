@@ -1,7 +1,9 @@
 // WSL-host orcad must ignore Windows CLI shims; identify mounts by type because the automount root is configurable.
 import { existsSync, readFileSync } from 'node:fs'
-import { isAbsolute } from 'node:path'
+import { access, readFile } from 'node:fs/promises'
+import { dirname, isAbsolute } from 'node:path'
 import { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { resolveCliCommandAsync } from '../../../shared/shell/command-resolution/node-cli-command-async-resolution'
 
 const WINDOWS_DRIVE_MOUNT_TYPES = new Set(['drvfs', '9p', 'virtiofs'])
 
@@ -85,6 +87,38 @@ export function readGuestWindowsDriveMounts(): readonly string[] {
   return mounts
 }
 
+/** The same mount discovery with every fs read off the event loop. */
+export async function readGuestWindowsDriveMountsAsync(): Promise<readonly string[]> {
+  if (cachedGuestMounts) {
+    return cachedGuestMounts
+  }
+  let mounts: string[] = []
+  if (await isWslHostOrcadProcessAsync()) {
+    try {
+      mounts = parseWindowsDriveMountPoints(await readFile('/proc/mounts', 'utf8'))
+    } catch {
+      // Unreadable: keep PATH as is rather than guess which entries are Windows drives.
+    }
+  }
+  cachedGuestMounts = mounts
+  return mounts
+}
+
+async function isWslHostOrcadProcessAsync(): Promise<boolean> {
+  if (process.platform !== 'linux' || process.env[ORCAD_WSL_HOST_ENV] !== '1') {
+    return false
+  }
+  if (process.env.WSL_DISTRO_NAME?.trim() || process.env.WSL_INTEROP?.trim()) {
+    return true
+  }
+  try {
+    await access('/proc/sys/fs/binfmt_misc/WSLInterop')
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Keep CLI launches consistent with detection by removing Windows drive PATH entries only in WSL-host orcad. */
 export function guestNativePathEnv(
   pathEnv: string | null | undefined,
@@ -130,6 +164,32 @@ export function resolveGuestNativeProgram(
     return native
   }
   return hasWindowsDriveCopy(command, options, resolve, mounts) ? null : native
+}
+
+/** Async counterpart of {@link resolveGuestNativeProgram}; null means only a Windows copy exists. */
+export async function resolveGuestNativeProgramAsync(
+  command: string,
+  options: NonNullable<Parameters<typeof resolveCliCommand>[1]>,
+  mounts?: readonly string[]
+): Promise<string | null> {
+  const resolvedMounts = mounts ?? (await readGuestWindowsDriveMountsAsync())
+  if (resolvedMounts.length === 0) {
+    return resolveCliCommandAsync(command, options)
+  }
+  const pathValue = options.pathEnv ?? process.env.PATH ?? null
+  const filteredPath =
+    pathValue === null ? undefined : withoutWindowsDriveMountDirs(pathValue, resolvedMounts)
+  const native = await resolveCliCommandAsync(command, {
+    ...options,
+    ...(filteredPath === undefined ? {} : { pathEnv: filteredPath })
+  })
+  if (isAbsolute(native)) {
+    return native
+  }
+  const windows = await resolveCliCommandAsync(command, options)
+  return isAbsolute(windows) && isUnderWindowsDriveMount(dirname(windows), resolvedMounts)
+    ? null
+    : native
 }
 
 function hasWindowsDriveCopy(

@@ -1,4 +1,6 @@
 import { agentPaneConversationForEntry } from '@/store/slices/agent-status/conversation/agent-pane-conversation'
+import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import {
   resolveOriginalPaneTarget,
@@ -13,9 +15,10 @@ export function findAllOriginalAiVaultSessionPaneTabIds(
 ): string[] {
   const tabIds = new Set<string>()
   const add = (target: AiVaultOriginalPaneTarget | null): void => {
-    if (target) {
-      tabIds.add(target.tabId)
+    if (!target || !tabMatchesSessionHost(state, target, session)) {
+      return
     }
+    tabIds.add(target.tabId)
   }
 
   for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
@@ -62,4 +65,15 @@ export function findAllOriginalAiVaultSessionPaneTabIds(
     }
   }
   return [...tabIds]
+}
+
+function tabMatchesSessionHost(
+  state: OriginalPaneState,
+  target: AiVaultOriginalPaneTarget,
+  session: AiVaultSession
+): boolean {
+  const owner = resolveStructuredAgentSessionOwner(state, target.worktreeId)
+  return owner
+    ? owner === session.executionHostId
+    : session.executionHostId === LOCAL_EXECUTION_HOST_ID
 }
