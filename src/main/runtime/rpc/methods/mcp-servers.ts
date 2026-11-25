@@ -44,7 +44,8 @@ import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
 import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { defineMethod, type RpcContext } from '../core'
-import { botToolServerOf, toolsHomeFor } from './bots-tools'
+import { toolsHomeFor } from './bots-tools'
+import { mcpServersOfPaste } from '../../../mcp-servers/mcp-server-paste'
 import {
   agentMcpImportHost,
   copyAgentMcpServer,
@@ -101,10 +102,16 @@ export const MCP_SERVER_METHODS = [
         async () => {
           const given =
             'config' in params
-              ? resolveBotToolInput(params.config)
-              : botToolServerOf(params.source, params.name)
-          const nameGiven = 'config' in params || params.name !== undefined
-          return changed(await addMcpServer(given, { nameGiven, signal: context.signal }))
+              ? [resolveBotToolInput(params.config)]
+              : mcpServersOfPaste(params.source, params.name)
+          // A name the user gave is refused when taken; a paste's own names move to a free one.
+          const nameGiven = 'config' in params || (params.name !== undefined && given.length === 1)
+          // Each in turn: a later one refused leaves the earlier ones added, as separate adds would.
+          const servers: McpServer[] = []
+          for (const server of given) {
+            servers.push(await addMcpServer(server, { nameGiven, signal: context.signal }))
+          }
+          return { ...changed(servers[0]), servers }
         },
         true
       )
