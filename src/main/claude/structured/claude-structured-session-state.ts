@@ -164,6 +164,8 @@ export type ClaudeSession = {
   launchIntent?: { permissionMode?: string; model?: string }
   /** The chat was saved in Plan when this process was acquired. */
   savedPlan?: boolean
+  /** A kept agent's mode for its next message: picked since it launched, or never written yet. */
+  keptModeOwed?: string
   firstRootInit?: { permissionMode: string | null }
   /** Claude's own effective settings turn bypass off for this process (startup `get_settings`). */
   bypassDisabled?: boolean

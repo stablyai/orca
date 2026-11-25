@@ -81,21 +81,32 @@ async function applyBuildMode(
   }
 }
 
-/** At reattach: the agent runs the mode it had when the last app let go, which a pick made since
- *  may have changed, so the chat's own mode is written before anything is sent. */
-export function applyKeptClaudeLaunchMode(
+/** At reattach the agent runs what it had when the last app let go, which a pick made since may
+ *  have changed. Like the open app, the chat's mode and choices go with its next message: by then
+ *  the replay has shown whether the agent is in Plan. The launch-seeded choices are forgotten, so
+ *  that message writes them. */
+export function noteKeptClaudeReattach(session: ClaudeSession): void {
+  for (const key of ['model', 'effort', 'fastMode']) {
+    session.appliedInputOptions.delete(key)
+  }
+  const launched = session.launchIntent?.permissionMode
+  if (!isBuildMode(launched)) {
+    return
+  }
+  session.appliedInputOptions.set('buildPermissionMode', launched)
+  session.keptModeOwed = launched
+}
+
+/** Before a kept agent's first message: its owed mode, unless it is in Plan (leaving Plan writes it). */
+export async function applyKeptClaudeModeOwed(
   session: ClaudeSession,
   timeoutMs: number | undefined
 ): Promise<void> {
-  const launched = session.launchIntent?.permissionMode
-  const wanted = isBuildMode(launched) ? launched : undefined
-  if (wanted && session.savedPlan === true) {
-    // Saved in Plan, so the agent may still be in it: leaving Plan writes this mode.
-    session.appliedInputOptions.set('buildPermissionMode', wanted)
+  const owed = session.keptModeOwed
+  session.keptModeOwed = undefined
+  if (isBuildMode(owed) && !claudeInPlan(session) && session.savedPlan !== true) {
+    await applyBuildMode(session, owed, timeoutMs)
   }
-  return wanted && session.savedPlan !== true
-    ? applyBuildMode(session, wanted, timeoutMs)
-    : Promise.resolve()
 }
 
 export function requiresAcquisition(

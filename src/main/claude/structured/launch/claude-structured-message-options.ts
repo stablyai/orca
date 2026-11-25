@@ -26,6 +26,7 @@ import {
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { claudeTakesFlagSettings, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import { applyKeptClaudeModeOwed } from '../../relay/claude-kept-permission'
 import {
   isAbortSignalReason,
   throwIfSignalAborted,
@@ -78,6 +79,12 @@ export async function applyClaudeMessageOptions(
     )
   }
   throwIfSignalAborted(signal)
+  if (session.keptModeOwed) {
+    await waitForPromiseWithSignal(
+      applyKeptClaudeModeOwed(session, timeoutMs).catch(() => {}),
+      signal
+    )
+  }
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
       claimClaudePermissionModeRequest(session)
