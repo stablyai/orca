@@ -94,6 +94,49 @@ describe('checkAgentCliUpdatesOnOpen', () => {
   })
 })
 
+describe('checkConnectedAgentCliUpdateHosts', () => {
+  beforeEach(() => {
+    callRuntimeRpc.mockReset()
+    vi.useFakeTimers({ toFake: ['Date'] })
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('lists a connected host without a chat there, and asks again only after it reconnects', async () => {
+    callRuntimeRpc.mockResolvedValue({ updates: [stale] })
+    const store = createTestStore()
+    const wsl = agentCliUpdateHostTarget('wsl')
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        ['wsl', hostStatus()],
+        ['offline', { status: null, checkedAt: 1 }]
+      ])
+    })
+    store.getState().checkConnectedAgentCliUpdateHosts()
+    await vi.waitFor(() => expect(store.getState().agentCliUpdates.get('wsl')).toEqual(listed))
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      wsl,
+      'agentCliUpdate.check',
+      { agents: AGENT_CLI_UPDATE_AGENTS },
+      expect.anything()
+    )
+
+    // Status writes while it stays connected ask nothing more, even past the interval.
+    vi.setSystemTime(Date.now() + 60 * 60_000)
+    store.setState({ runtimeStatusByEnvironmentId: new Map([['wsl', hostStatus()]]) })
+    store.getState().checkConnectedAgentCliUpdateHosts()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+
+    store.setState({
+      runtimeStatusByEnvironmentId: new Map([['wsl', { status: null, checkedAt: 2 }]])
+    })
+    store.getState().checkConnectedAgentCliUpdateHosts()
+    store.setState({ runtimeStatusByEnvironmentId: new Map([['wsl', hostStatus()]]) })
+    store.getState().checkConnectedAgentCliUpdateHosts()
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+  })
+})
+
 describe('forgetAgentCliUpdateHosts', () => {
   beforeEach(() => {
     callRuntimeRpc.mockReset()

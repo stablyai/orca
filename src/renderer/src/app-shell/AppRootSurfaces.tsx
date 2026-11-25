@@ -33,7 +33,7 @@ import {
 } from '../components/worktree-jump/worktree-jump-palette-preload'
 import { AiVaultSessionHistoryDialog } from '../components/right-sidebar/ai-vault/session-list/agent-session-history-dialog-preload'
 import { usePrefetchAvatarCapability } from '../components/bots/avatar-generation-capability-store'
-import { useLocalAgentCliUpdateCheck } from '../components/agent-cli-update/use-local-agent-cli-update-check'
+import { useAgentCliUpdateHostChecks } from '../components/agent-cli-update/use-agent-cli-update-host-checks'
 import {
   selectAppRootSurfacePetEnabled,
   selectAppRootSurfaceTelemetryOptedIn,
@@ -123,7 +123,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
   usePrefetchAvatarCapability()
-  useLocalAgentCliUpdateCheck()
+  useAgentCliUpdateHostChecks()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
   // Subscribe only to consumed settings so unrelated preferences cannot rerender every overlay.

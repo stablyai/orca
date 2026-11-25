@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import { runtimeStatusSubscriptionsFor } from '../runtime-status/views/runtime-status-subscriptions'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   AGENT_CLI_UPDATE_AGENTS,
   AGENT_CLI_UPDATE_RUNTIME_CAPABILITY,
@@ -89,6 +90,8 @@ export type AgentCliUpdatesSlice = {
   recheckAgentCliUpdates: (target: RuntimeClientTarget) => void
   /** Checks as `checkAgentCliUpdates` does, but past a much shorter interval, when the user opens the list. */
   checkAgentCliUpdatesOnOpen: (target: RuntimeClientTarget) => Promise<void>
+  /** Checks each paired host once per connection, once it answers these calls, so it lists without a chat there. */
+  checkConnectedAgentCliUpdateHosts: () => void
   /** Drops the answers of paired hosts that were removed or re-paired; a disconnected host keeps its own. */
   forgetAgentCliUpdateHosts: (environmentIds: readonly string[]) => void
   /** Resolves true once the host reports the CLI current. */
@@ -110,6 +113,8 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
       next.set(key, write(state.agentCliUpdates.get(key) ?? EMPTY_HOST))
       return { agentCliUpdates: next }
     })
+  // Paired hosts checked since they last connected; dropping out lets the next connect check again.
+  const checkedWhileConnected = new Set<string>()
   const updateSlotsByHost = new Map<string, PrioritySemaphore>()
   const updateSlots = (key: string): PrioritySemaphore => {
     let slots = updateSlotsByHost.get(key)
@@ -220,6 +225,29 @@ export const createAgentCliUpdatesSlice: StateCreator<AppState, [], [], AgentCli
     checkAgentCliUpdates: (target) => checkPastInterval(target, CHECK_INTERVAL_MS),
 
     checkAgentCliUpdatesOnOpen: (target) => checkPastInterval(target, OPEN_CHECK_INTERVAL_MS),
+
+    checkConnectedAgentCliUpdateHosts: () => {
+      const statuses = runtimeStatusSubscriptionsFor(store).readStatuses()
+      const removed = get().removedRuntimeEnvironmentIds
+      for (const environmentId of checkedWhileConnected) {
+        if (runtimeHostConnectionStateForEntry(statuses.get(environmentId)) !== 'connected') {
+          checkedWhileConnected.delete(environmentId)
+        }
+      }
+      for (const [environmentId, entry] of statuses) {
+        const target = { kind: 'environment', environmentId } as const
+        if (
+          checkedWhileConnected.has(environmentId) ||
+          removed.has(environmentId) ||
+          runtimeHostConnectionStateForEntry(entry) !== 'connected' ||
+          !hostAnswers(target)
+        ) {
+          continue
+        }
+        checkedWhileConnected.add(environmentId)
+        void get().checkAgentCliUpdates(target)
+      }
+    },
 
     forgetAgentCliUpdateHosts: (environmentIds) => {
       environmentIds.forEach((id) => {
