@@ -37,6 +37,9 @@ import { classifyConnection } from '../transport/connection/connection-health'
 import { useHostBots } from '../bots/use-host-bots'
 import type { BotsChangeScope } from '../worktree/execution-hosts/host-worktree-refresh'
 import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
+
+const NO_CONFIRMED_ROWS: readonly Worktree[] = []
 
 export type HostScreenProps = {
   embedded?: boolean
@@ -156,8 +159,9 @@ export function useHostScreenController({
   const retireDeleteIntent = useHostListDeleteIntent({
     embedded,
     hostId,
-    connected: connState === 'connected',
-    rows: displayWorktrees,
+    // Only rows this screen read from the host: cached rows may name a checkout already gone.
+    connected: connState === 'connected' && catalog.confirmedRows !== null,
+    rows: catalog.confirmedRows ?? NO_CONFIRMED_ROWS,
     bots,
     newBotOpen: newBotHostId !== null,
     state

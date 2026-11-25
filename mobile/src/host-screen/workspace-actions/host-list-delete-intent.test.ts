@@ -5,6 +5,7 @@ import {
   type HostBotListing
 } from '../../bots/host-bot-listing'
 import { readHostBotListing } from '../../bots/use-host-bots'
+import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../src/shared/bots/bot-sidebar-view'
 import { BOTS_MOBILE_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 import { createFakeRpcClient } from '../../mobile-web-shell/test-support/bridge-host-test-fakes'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
@@ -156,6 +157,28 @@ describe('host list delete intent', () => {
     expect(
       advanceHostListDeleteClaim(claim, view({ rows: [{ ...folderRow, botHome: true }] })).step.kind
     ).toBe('notFound')
+  })
+
+  it("never carries one installation's groups or threads into another's listing", async () => {
+    const group = { folderWorkspaceId: 'g1' }
+    const listed = (installationId: string, extra: object): HostBotListing => ({
+      kind: 'listed',
+      hostId: 'runtime:s',
+      hostLabel: 'Server',
+      installationId,
+      bots: [],
+      hideBotCreated: false,
+      view: DEFAULT_BOT_SIDEBAR_VIEW,
+      workspaceLineage: {},
+      worktreeLineage: {},
+      ...extra
+    })
+    const before = listed('A', { groups: [group], links: {} })
+    const sameInstall = mergeHostBotListing([before], 'runtime:s', listed('A', {}), false)
+    expect(sameInstall[0]).toMatchObject({ groups: [group], links: {} })
+    const otherInstall = mergeHostBotListing([before], 'runtime:s', listed('B', {}), false)
+    expect(otherInstall[0]).not.toHaveProperty('groups')
+    expect(otherInstall[0]).not.toHaveProperty('links')
   })
 
   it('drops a held claim once the list search changes', () => {

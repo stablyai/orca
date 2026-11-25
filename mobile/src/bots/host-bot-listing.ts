@@ -155,7 +155,14 @@ export function mergeHostBotListing(
       ? previous.map((entry) => (entry === last ? { ...last, stale: true } : entry))
       : previous
   }
-  const kept = listing.kind === 'listed' && last && last.kind === 'listed' ? last : null
+  // Another installation under the same id is another store: none of its facts carry over.
+  const kept =
+    listing.kind === 'listed' &&
+    last &&
+    last.kind === 'listed' &&
+    last.installationId === listing.installationId
+      ? last
+      : null
   const groups = kept && listing.kind === 'listed' && !listing.groups ? kept.groups : undefined
   const threadFacts =
     kept && !threads
