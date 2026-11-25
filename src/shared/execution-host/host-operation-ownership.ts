@@ -82,7 +82,8 @@ export const HOST_OPERATION_OWNERSHIP = {
   // A hook belongs to its bot's execution host.
   webhooks: 'host',
   workspacePorts: 'host',
-  worktree: 'host'
+  worktree: 'host',
+  youtrack: 'scope-picked'
 } as const satisfies Record<string, HostOperationOwnership>
 
 /** Method overrides for scope-picked forge reads and streams without a subscription name. */

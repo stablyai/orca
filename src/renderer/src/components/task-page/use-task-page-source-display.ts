@@ -1,5 +1,6 @@
 import type { TaskPageLinearCreationStateModel } from './linear/creation/use-task-page-linear-creation-state'
 import { useMemo } from 'react'
+import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
 import type { GitHubTaskKind } from '../../../../shared/work-items/task-github-search'
 import { buildGitHubRepoUrl } from '../../../../shared/github/repositories/links'
 import { getTaskSourceContextSummary } from './source-selection/task-source-context-summary'
@@ -39,6 +40,7 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
   const linearWorkspaceName =
     selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null
   const jiraSiteName = selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+  const youtrackSiteUrl = useYouTrackStore((state) => state.status.baseUrl)
   // Why the catalog dep: it changes with the language, and the summary's own copy is translated too.
   const taskSourceContextSummary = useMemo(() => {
     const providerLabel =
@@ -49,6 +51,13 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
         hostId: accountBackedTaskSourceHostId,
         host: hostRegistryById.get(accountBackedTaskSourceHostId),
         hostLabelById
+      })
+    }
+    if (taskSource === 'youtrack') {
+      return getTaskSourceContextSummary({
+        provider: taskSource,
+        providerLabel,
+        siteUrl: youtrackSiteUrl
       })
     }
     if (taskSource === 'linear' || taskSource === 'jira') {
@@ -90,7 +99,8 @@ export function useTaskPageSourceDisplay<Model extends TaskPageSourceDisplayInpu
     sourceOptions,
     taskSource,
     taskSourceHostAvailability,
-    taskSourceRepoContexts
+    taskSourceRepoContexts,
+    youtrackSiteUrl
   ])
   const selectedGitHubRepoExternalLink = useMemo(() => {
     if (selectedRepos.length !== 1) {

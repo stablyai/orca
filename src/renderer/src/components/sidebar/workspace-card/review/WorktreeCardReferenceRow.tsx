@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { GitHubIcon } from '@/components/icons/GitHubIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { YouTrackIcon } from '@/components/icons/YouTrackIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { FilePathCursorTooltip } from '@/components/file-actions/file-path-cursor-tooltip'
 import { HoverScrollText } from '@/components/hover-scroll-text'
@@ -24,7 +25,8 @@ const PROVIDER_MARKS: Partial<
 > = {
   GitHub: GitHubIcon,
   Linear: LinearIcon,
-  Jira: JiraIcon
+  Jira: JiraIcon,
+  YouTrack: YouTrackIcon
 }
 
 function StateGlyph({

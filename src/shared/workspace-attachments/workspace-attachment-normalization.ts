@@ -8,7 +8,10 @@ import {
   normalizeStoredTaskSourceContext
 } from '../work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
-import { getProvenWorkspaceReferenceIdentity } from './workspace-reference-identity'
+import {
+  getProvenWorkspaceReferenceIdentity,
+  getWorkspaceReferenceIdentifier
+} from './workspace-reference-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
 
 function nonEmpty(value: unknown): string | undefined {
@@ -26,6 +29,7 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     provider !== 'gitlab' &&
     provider !== 'linear' &&
     provider !== 'jira' &&
+    provider !== 'youtrack' &&
     provider !== 'bitbucket' &&
     provider !== 'azure-devops' &&
     provider !== 'gitea'
@@ -36,7 +40,8 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
   if (type !== 'issue' && type !== 'pr' && type !== 'mr') {
     return null
   }
-  if ((provider === 'linear' || provider === 'jira') && type !== 'issue') {
+  const keyedIssue = provider === 'linear' || provider === 'jira' || provider === 'youtrack'
+  if (keyedIssue && type !== 'issue') {
     return null
   }
   if (type === 'mr' && provider !== 'gitlab') {
@@ -46,8 +51,11 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     return null
   }
   const identifier =
-    nonEmpty(raw.identifier) ?? nonEmpty(raw.linearIdentifier) ?? nonEmpty(raw.jiraIdentifier)
-  if (raw.number === 0 && (!identifier || (provider !== 'linear' && provider !== 'jira'))) {
+    nonEmpty(raw.identifier) ??
+    nonEmpty(raw.linearIdentifier) ??
+    nonEmpty(raw.jiraIdentifier) ??
+    nonEmpty(raw.youtrackIdentifier)
+  if (raw.number === 0 && (!identifier || !keyedIssue)) {
     return null
   }
   if (raw.url !== undefined) {
@@ -73,6 +81,9 @@ export function normalizeWorkspaceAttachment(value: unknown): WorkspaceAttachmen
     ...(nonEmpty(raw.repoId) ? { repoId: nonEmpty(raw.repoId) } : {}),
     ...(nonEmpty(raw.linearIdentifier) ? { linearIdentifier: nonEmpty(raw.linearIdentifier) } : {}),
     ...(nonEmpty(raw.jiraIdentifier) ? { jiraIdentifier: nonEmpty(raw.jiraIdentifier) } : {}),
+    ...(nonEmpty(raw.youtrackIdentifier)
+      ? { youtrackIdentifier: nonEmpty(raw.youtrackIdentifier) }
+      : {}),
     ...(nonEmpty(raw.linearWorkspaceId)
       ? { linearWorkspaceId: nonEmpty(raw.linearWorkspaceId) }
       : {}),
@@ -101,8 +112,8 @@ function attachmentIdentity(item: WorkspaceAttachment): string {
   return JSON.stringify([
     item.provider,
     item.type,
-    item.provider === 'linear' || item.provider === 'jira'
-      ? (item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.number)
+    item.provider === 'linear' || item.provider === 'jira' || item.provider === 'youtrack'
+      ? (getWorkspaceReferenceIdentifier(item) ?? item.number)
       : item.number
   ])
 }
@@ -294,6 +305,8 @@ export function toWorkspaceLinkedItem(
     ...item,
     linearIdentifier:
       item.linearIdentifier ?? (item.provider === 'linear' ? item.identifier : undefined),
-    jiraIdentifier: item.jiraIdentifier ?? (item.provider === 'jira' ? item.identifier : undefined)
+    jiraIdentifier: item.jiraIdentifier ?? (item.provider === 'jira' ? item.identifier : undefined),
+    youtrackIdentifier:
+      item.youtrackIdentifier ?? (item.provider === 'youtrack' ? item.identifier : undefined)
   })
 }

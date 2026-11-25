@@ -27,7 +27,7 @@ export function renderWorktreeCardIndicators(
           allReferenceItems.filter((candidate) => candidate.type !== 'issue').length > 1)
       : item.provider === 'linear'
         ? card.showLinearIssue
-        : item.provider === 'jira'
+        : item.provider === 'jira' || item.provider === 'youtrack'
           ? card.showJiraIssue
           : showIssue
   )

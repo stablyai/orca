@@ -61,6 +61,7 @@ type RepoBackedTaskSourceSummaryArgs = {
 export function getTaskSourceContextSummary(
   args:
     | ({ provider: Extract<TaskProvider, 'github' | 'gitlab'> } & RepoBackedTaskSourceSummaryArgs)
+    | { provider: 'youtrack'; providerLabel: string; siteUrl?: string | null }
     | {
         provider: Extract<TaskProvider, 'linear' | 'jira'>
         providerLabel: string
@@ -96,6 +97,12 @@ export function getTaskSourceContextSummary(
           hostLabelById: args.hostLabelById,
           hostAvailability: args.hostAvailability
         },
+        t
+      )
+    case 'youtrack':
+      return getAccountBackedTaskSourceSummary(
+        args.providerLabel,
+        { accountLabel: args.siteUrl, accountHostId: null },
         t
       )
   }

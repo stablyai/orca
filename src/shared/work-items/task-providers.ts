@@ -1,6 +1,17 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'youtrack'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'youtrack'
+]
+
+/** YouTrack is opt-in: it appears once connected or enabled in Settings → Tasks. */
+export const DEFAULT_VISIBLE_TASK_PROVIDERS: readonly TaskProvider[] = TASK_PROVIDERS.filter(
+  (provider) => provider !== 'youtrack'
+)
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -32,7 +43,7 @@ export function normalizeTaskProviderSettings(value: {
 
 export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   if (!Array.isArray(value)) {
-    return [...TASK_PROVIDERS]
+    return [...DEFAULT_VISIBLE_TASK_PROVIDERS]
   }
 
   const normalized: TaskProvider[] = []
@@ -46,7 +57,7 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
   }
 
   // Keep a selectable source after hydration or manual settings edits.
-  return normalized.length > 0 ? normalized : [...TASK_PROVIDERS]
+  return normalized.length > 0 ? normalized : [...DEFAULT_VISIBLE_TASK_PROVIDERS]
 }
 
 export type TaskProviderAvailability = {
@@ -97,7 +108,7 @@ function isTaskProviderAvailable(
     return availability.gitlabInstalled
   }
   // Disconnected Jira must remain visible as its own first-time setup entry point.
-  if (provider === 'jira') {
+  if (provider === 'jira' || provider === 'youtrack') {
     return true
   }
   return availability.linearConnected

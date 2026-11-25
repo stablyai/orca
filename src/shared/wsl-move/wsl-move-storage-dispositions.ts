@@ -84,6 +84,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/unexpected-signout/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
+      'src/renderer/src/components/youtrack/YouTrackCreateIssueDialog.tsx',
       'src/renderer/src/diagnostics/telemetry/feature-education-telemetry.ts',
       'src/renderer/src/components/orchestration/setup/orchestration-setup-state.ts',
       'src/renderer/src/lib/notifications/terminal-shortcut-capture-notification.tsx',
@@ -97,10 +98,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/web/runtime/security/web-runtime-credential-source.ts',
       'src/renderer/src/web/pairing/web-runtime-environment.ts',
       'src/shared/settings/default-global-settings.ts'
-    ].map((path) => [
-      path,
-      notApplicableDisposition(62, 'Global preference or web-client storage.')
-    ])
+    ].map((path) => [path, notApplicableDisposition(62, 'Global preference or web storage.')])
   )
 }
 

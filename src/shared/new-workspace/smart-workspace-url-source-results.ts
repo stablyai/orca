@@ -11,13 +11,14 @@ import {
 
 export type SmartWorkspaceGitLabUrlIntent = NonNullable<ReturnType<typeof parseGitLabIssueOrMRLink>>
 
-type SmartWorkspaceUrlSourceMode =
+export type SmartWorkspaceUrlSourceMode =
   | 'smart'
   | 'github'
   | 'gitlab'
   | 'branches'
   | 'linear'
   | 'jira'
+  | 'youtrack'
   | 'text'
 
 export type SmartWorkspaceUrlSourceRow =

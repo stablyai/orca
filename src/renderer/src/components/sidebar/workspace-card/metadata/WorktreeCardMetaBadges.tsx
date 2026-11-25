@@ -2,9 +2,10 @@ import React from 'react'
 import { CalendarClock, CircleDot, Link2, SquareTerminal, StickyNote } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { LinearIcon } from '@/components/icons/LinearIcon'
-import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
 import { getReviewLabel, ReviewIcon } from '../review/worktree-review-presentation'
+import { JiraIcon } from '@/components/icons/JiraIcon'
+import { YouTrackIcon } from '@/components/icons/YouTrackIcon'
 import type {
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps
@@ -81,10 +82,15 @@ export const WorktreeCardMetaBadges = React.forwardRef<
 
   const reviewItems = referenceItems?.filter((item) => item.type !== 'issue') ?? []
   const linearItems = referenceItems?.filter((item) => item.provider === 'linear') ?? []
-  const jiraItems = referenceItems?.filter((item) => item.provider === 'jira') ?? []
+  const keyedIssueItems =
+    referenceItems?.filter((item) => item.provider === 'jira' || item.provider === 'youtrack') ?? []
   const issueItems =
     referenceItems?.filter(
-      (item) => item.type === 'issue' && item.provider !== 'linear' && item.provider !== 'jira'
+      (item) =>
+        item.type === 'issue' &&
+        item.provider !== 'linear' &&
+        item.provider !== 'jira' &&
+        item.provider !== 'youtrack'
     ) ?? []
 
   return (
@@ -155,18 +161,28 @@ export const WorktreeCardMetaBadges = React.forwardRef<
           </MetaIconBadge>
         )
       )}
-      {jiraItems.length ? (
-        <WorktreeReferenceStack items={jiraItems} details={referenceDetails} />
+      {keyedIssueItems.length ? (
+        <WorktreeReferenceStack items={keyedIssueItems} details={referenceDetails} />
       ) : (
         jiraIssue && (
           <MetaIconBadge
-            label={t(
-              'auto.components.sidebar.WorktreeCardMeta.linkedJira',
-              'Linked Jira {{value0}}',
-              { value0: jiraIssue.identifier }
-            )}
+            label={
+              jiraIssue.provider === 'youtrack'
+                ? t('youtrack.sidebar.linkedIssue', 'Linked YouTrack {{value0}}', {
+                    value0: jiraIssue.identifier
+                  })
+                : t(
+                    'auto.components.sidebar.WorktreeCardMeta.linkedJira',
+                    'Linked Jira {{value0}}',
+                    { value0: jiraIssue.identifier }
+                  )
+            }
           >
-            <JiraIcon className="text-muted-foreground" />
+            {jiraIssue.provider === 'youtrack' ? (
+              <YouTrackIcon className="text-muted-foreground" />
+            ) : (
+              <JiraIcon className="text-muted-foreground" />
+            )}
           </MetaIconBadge>
         )
       )}

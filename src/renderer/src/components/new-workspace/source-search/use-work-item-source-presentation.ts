@@ -8,7 +8,10 @@ import {
   parseBoundedSmartWorkspaceLinearIssueUrlIntent,
   prioritizeSmartWorkspaceLinearIssueResults
 } from '../../../../../shared/new-workspace/smart-workspace-linear-intent'
-import { resolveSmartWorkspaceCommandValue } from '../../../../../shared/new-workspace/smart-workspace-command-value'
+import {
+  resolveSmartWorkspaceCommandValue,
+  type SmartWorkspaceSourceIntent
+} from '../../../../../shared/new-workspace/smart-workspace-command-value'
 import {
   buildSmartWorkspaceSourceRows,
   getVisibleBranchResults,
@@ -17,6 +20,7 @@ import {
 } from '../../../../../shared/new-workspace/smart-workspace-source-results'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../../shared/new-workspace/smart-workspace-source-query'
 import { RESULT_LIMIT, type RowEntry } from '../name-field/smart-workspace-name-field-model'
+import { isExactYouTrackMatch } from '../../../../../shared/new-workspace/smart-workspace-youtrack-rows'
 import type { useWorkItemSourceFoundation } from './use-work-item-source-foundation'
 
 type Foundation = ReturnType<typeof useWorkItemSourceFoundation>
@@ -35,6 +39,8 @@ export function useWorkItemSourcePresentation(
 ) {
   const {
     jiraSource,
+    youtrackIssues,
+    youtrackLoading,
     branches,
     mode,
     branchResultsSource,
@@ -133,7 +139,8 @@ export function useWorkItemSourcePresentation(
       gitlabUrlIntent,
       mode,
       resultLimit: RESULT_LIMIT,
-      value
+      value,
+      youtrackIssues
     })
     return foundation.typedTextEnabled
       ? results
@@ -158,7 +165,8 @@ export function useWorkItemSourcePresentation(
     linearUrlLookupFailed,
     mode,
     selectedRepo?.id,
-    value
+    value,
+    youtrackIssues
   ])
   const { typedTextActionRow, searchResultRows } = useMemo(() => {
     const typedTextRow = rows.find(isTypedTextSourceRow) ?? null
@@ -176,7 +184,7 @@ export function useWorkItemSourcePresentation(
   const isQueryStale =
     !linearUrlIntentOwnsInput && trimmedValue.length > 0 && trimmedDebouncedQuery !== trimmedValue
   // Why: unambiguous refs highlight their source row instead of the typed-text fallback.
-  const sourceIntent = useMemo<'github' | 'gitlab' | 'linear' | 'jira' | null>(() => {
+  const sourceIntent = useMemo<SmartWorkspaceSourceIntent>(() => {
     if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
       return null
     }
@@ -186,6 +194,10 @@ export function useWorkItemSourcePresentation(
     }
     if (jiraSource.intent) {
       return 'jira'
+    }
+    // Why: only an exact ID/URL pins the highlight; ID-prefix suggestions stay keyboard-navigable.
+    if (rows.some((row) => row.kind === 'youtrack' && isExactYouTrackMatch(row.issue, trimmed))) {
+      return 'youtrack'
     }
     if (/^#\d+$/.test(trimmed) || parseGitHubIssueOrPRLink(trimmed) !== null) {
       return 'github'
@@ -238,7 +250,12 @@ export function useWorkItemSourcePresentation(
     linearLoading && (!linearUrlIntentOwnsInput || showLinearUrlLoadingFeedback)
   const loading = jiraSource.intent
     ? jiraSource.loading
-    : githubLoading || gitlabLoading || branchesLoading || visibleLinearLoading || jiraLoading
+    : githubLoading ||
+      gitlabLoading ||
+      branchesLoading ||
+      visibleLinearLoading ||
+      jiraLoading ||
+      youtrackLoading
   // Why: only spin on first load, not refreshes with retained rows.
   const showSearchSpinner = loading && searchResultRows.length === 0
   const ActiveInputIcon =

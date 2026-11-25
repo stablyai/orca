@@ -11,6 +11,8 @@ import { useSmartWorkspaceNameFieldActions } from './use-smart-workspace-name-fi
 import { getSmartWorkspaceNameFieldCopy } from './smart-workspace-name-field-copy'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { useTranslate } from '@/i18n/use-translate'
+import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
+import { useYouTrackVisible } from '@/components/youtrack/use-youtrack-visible'
 
 export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFieldProps) {
   const t = useTranslate()
@@ -82,9 +84,12 @@ export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFi
     allowCrossRepoProjectAdd: props.allowCrossRepoProjectAdd ?? true
   }
   const actions = useSmartWorkspaceNameFieldActions(foundation, { ...search, activeEmojiShortcode })
+  const youtrackConnected = useYouTrackStore((state) => state.status.connected)
+  const youtrackVisible = useYouTrackVisible()
   const copy = getSmartWorkspaceNameFieldCopy(
     {
       ...search,
+      youtrackConnected: youtrackConnected && youtrackVisible,
       disabledPlaceholder: props.disabledPlaceholder
     },
     t

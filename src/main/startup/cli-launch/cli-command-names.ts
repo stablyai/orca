@@ -93,5 +93,6 @@ export const CLI_COMMAND_NAMES = [
   'vm',
   'wait',
   'webhooks',
-  'worktree'
+  'worktree',
+  'youtrack'
 ] as const

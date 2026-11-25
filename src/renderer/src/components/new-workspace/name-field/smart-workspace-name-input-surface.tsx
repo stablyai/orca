@@ -279,7 +279,7 @@ export function renderSmartWorkspaceNameInput(
                 return
               }
             }
-            if (mode === 'jira' || jiraSource.intent) {
+            if (mode === 'jira' || mode === 'youtrack' || jiraSource.intent) {
               event.preventDefault()
               return
             }

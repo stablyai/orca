@@ -1,5 +1,6 @@
 import type { TaskPageJiraSummaryGenerationModel } from './jira/creation/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
+import { useYouTrackStore } from '@/components/youtrack/youtrack-store'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 
@@ -16,7 +17,6 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
   const {
     closeTaskPage,
     closeTaskDetailPage,
-    taskSource,
     activeModal,
     linearStatusContextKey,
     preflightStatusChecked,
@@ -38,8 +38,10 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     selectedLinearIssue,
     selectedJiraIssue,
     newLinearIssueOpen,
-    newJiraIssueOpen
+    newJiraIssueOpen,
+    taskSource
   } = model
+  const youtrackIssueOpen = useYouTrackStore((s) => s.selectedIssueId !== null)
   const githubTasksBusy = githubListPending || tasksRefreshing || tasksFiltering
   // GitHub and Linear details replace the list in-page; the Jira detail is a Sheet that owns Esc.
   const detailPageOpen =
@@ -49,6 +51,7 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     // Why: when a modal is open, let it own Esc dismissal.
     if (
       selectedJiraIssue ||
+      (taskSource === 'youtrack' && youtrackIssueOpen) ||
       newIssueOpen ||
       newLinearIssueOpen ||
       newJiraIssueOpen ||
@@ -100,7 +103,9 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newIssueOpen,
     newLinearIssueOpen,
     newJiraIssueOpen,
-    selectedJiraIssue
+    selectedJiraIssue,
+    taskSource,
+    youtrackIssueOpen
   ])
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {

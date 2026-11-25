@@ -42,6 +42,7 @@ import type { MobileApi } from './api/mobile/mobile-api'
 import type { NativeChatApi } from './api/native-chat/native-chat-api'
 import type { OnboardingApi, StarNagApi } from './api/onboarding/onboarding-api'
 import type { OrcaProfileApi } from './api/profiles/orca-profile-api'
+import type { YouTrackApi } from './api/youtrack-api'
 import type {
   ComputerUsePermissionsApi,
   DeveloperPermissionsApi,
@@ -121,6 +122,8 @@ export type PreloadApi = {
   bitbucket: BitbucketApi
   linear: LinearApi
   jira: JiraApi
+  /** Desktop-only; absent in the web client. */
+  youtrack?: YouTrackApi
   starNag: StarNagApi
   telemetryTrack: TelemetryApi['telemetryTrack']
   telemetrySetOptIn: TelemetryApi['telemetrySetOptIn']

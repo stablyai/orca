@@ -45,7 +45,8 @@ export function useSmartWorkspaceFieldAvailability({
   linearStatusChecked,
   linearStatusPending,
   checkLinearConnection,
-  jiraSourceConnected
+  jiraSourceConnected,
+  youtrackSourceConnected
 }: {
   props: NormalizedWorkItemSourceSearchProps
   state: FieldState
@@ -63,6 +64,7 @@ export function useSmartWorkspaceFieldAvailability({
   linearStatusPending: boolean
   checkLinearConnection: () => Promise<void>
   jiraSourceConnected: boolean
+  youtrackSourceConnected: boolean
 }) {
   const t = useTranslate()
   const { disabled, textOnly, repoBackedSourcesDisabled, branchesEnabled, value } = props
@@ -111,6 +113,9 @@ export function useSmartWorkspaceFieldAvailability({
     }
     if (item.id === 'jira') {
       return jiraSourceConnected
+    }
+    if (item.id === 'youtrack') {
+      return youtrackSourceConnected
     }
     if (item.id === 'branches') {
       return branchesEnabled && !repoBackedSourcesDisabled

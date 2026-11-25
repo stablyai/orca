@@ -1,3 +1,4 @@
+import { YOUTRACK_HANDLER_GROUP } from '../youtrack-handler-group'
 import type { CommandHandler } from './dispatch'
 import { AUTH_HANDLER_GROUP } from '../accounts/auth-handler-group'
 import { BOT_HANDLER_GROUPS } from '../bots/bot-handler-groups'
@@ -19,6 +20,7 @@ export type HandlerGroup = {
 
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   JIRA_HANDLER_GROUP,
+  YOUTRACK_HANDLER_GROUP,
   LINEAR_HANDLER_GROUP,
   REFERENCE_HANDLER_GROUP,
   {

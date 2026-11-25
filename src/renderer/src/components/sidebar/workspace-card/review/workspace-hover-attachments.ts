@@ -40,8 +40,12 @@ export function getWorkspaceHoverAttachments(
     if (item.provider === 'linear') {
       return (item.identifier ?? item.linearIdentifier) === details.linearIssue?.identifier
     }
-    if (item.provider === 'jira') {
-      return (item.identifier ?? item.jiraIdentifier) === details.jiraIssue?.identifier
+    if (item.provider === 'jira' || item.provider === 'youtrack') {
+      return (
+        item.provider === (details.jiraIssue?.provider ?? 'jira') &&
+        (item.identifier ?? item.jiraIdentifier ?? item.youtrackIdentifier) ===
+          details.jiraIssue?.identifier
+      )
     }
     return (
       item.type !== 'issue' &&
@@ -55,7 +59,7 @@ export function getWorkspaceHoverAttachments(
         ? details.issue
         : item.provider === 'linear'
           ? details.linearIssue
-          : item.provider === 'jira'
+          : item.provider === 'jira' || item.provider === 'youtrack'
             ? details.jiraIssue
             : details.review
     const sameReference =

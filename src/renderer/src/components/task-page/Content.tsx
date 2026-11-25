@@ -8,6 +8,7 @@ import { TaskPageGitHubList } from './github/listing/List'
 import { TaskPageGitLabTodoList } from './gitlab/TodoList'
 import { TaskPageGitLabItemList } from './gitlab/ItemList'
 import { TaskPageJiraContent } from './jira/Content'
+import { YouTrackTaskContent } from '@/components/youtrack/YouTrackTaskContent'
 export function TaskPageContent({
   model
 }: {
@@ -27,7 +28,8 @@ export function TaskPageContent({
     setDialogWorkItem,
     handleDialogReviewRequestsChange,
     closeTaskDetailPage,
-    handleUseWorkItem
+    handleUseWorkItem,
+    hideTaskSource
   } = model
   return taskSource === 'github' && dialogWorkItem ? (
     dialogWorkItem.type === 'pr' ? (
@@ -75,6 +77,8 @@ export function TaskPageContent({
     <TaskPageGitLabTodoList model={model} />
   ) : taskSource === 'gitlab' ? (
     <TaskPageGitLabItemList model={model} />
+  ) : taskSource === 'youtrack' ? (
+    <YouTrackTaskContent onHide={() => hideTaskSource('youtrack', 'YouTrack')} />
   ) : (
     <TaskPageJiraContent model={model} />
   )

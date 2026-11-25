@@ -10,7 +10,8 @@ export function getSmartWorkspaceNameFieldCopy(
     crossRepoSwitchTarget,
     disabled,
     disabledPlaceholder,
-    mode
+    mode,
+    youtrackConnected = false
   }: {
     repoBackedSourcesDisabled: boolean
     linearAvailable: boolean
@@ -19,10 +20,11 @@ export function getSmartWorkspaceNameFieldCopy(
     disabled: boolean
     disabledPlaceholder?: string
     mode: SmartNameMode
+    youtrackConnected?: boolean
   },
   t: Translate = translate
 ) {
-  const smartPlaceholder = repoBackedSourcesDisabled
+  const basePlaceholder = repoBackedSourcesDisabled
     ? linearAvailable
       ? t(
           'auto.components.new.workspace.SmartWorkspaceNameField.placeholderNameOrLinearUrl',
@@ -51,6 +53,9 @@ export function getSmartWorkspaceNameFieldCopy(
             'auto.components.new.workspace.SmartWorkspaceNameField.placeholderSmartGitLab',
             'Type a name, #1234, GitHub, GitLab, or Jira URL'
           )
+  const smartPlaceholder = youtrackConnected
+    ? t('youtrack.smartField.placeholder', 'Type a name, #1234, issue URL, or YouTrack ID')
+    : basePlaceholder
   const crossRepoSwitchIsTaskSource = crossRepoSwitchTarget === 'task-source'
   const crossRepoSwitchTitle = crossRepoSwitchIsTaskSource
     ? t(
@@ -101,15 +106,17 @@ export function getSmartWorkspaceNameFieldCopy(
                   'auto.components.new.workspace.SmartWorkspaceNameField.searchLinear',
                   'Search Linear issues'
                 )
-              : mode === 'jira'
-                ? t(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
-                    'Search Jira issues or paste an issue URL'
-                  )
-                : t(
-                    'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
-                    'Workspace name'
-                  )
+              : mode === 'youtrack'
+                ? t('youtrack.smartField.search', 'Search YouTrack issues or paste an ID')
+                : mode === 'jira'
+                  ? t(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.searchJira',
+                      'Search Jira issues or paste an issue URL'
+                    )
+                  : t(
+                      'auto.components.new.workspace.SmartWorkspaceNameField.workspaceName',
+                      'Workspace name'
+                    )
 
   return {
     crossRepoSwitchTitle,

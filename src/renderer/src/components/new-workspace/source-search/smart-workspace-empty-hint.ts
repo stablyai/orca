@@ -28,6 +28,8 @@ export function translateSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
         'auto.components.new.workspace.smart.workspace.empty.hint.b4e65d98a6',
         'Start typing to search Linear issues.'
       )
+    case 'youtrack':
+      return translate('youtrack.smartField.search', 'Search YouTrack issues or paste an ID')
     case 'jira':
       return translate(
         'auto.components.new.workspace.smart.workspace.empty.hint.5ba5d3e516',

@@ -32,13 +32,22 @@ export async function getFlagOrStdinPayload(
     : getRequiredStringFlag(flags, name)
 }
 
-export async function readStdin(label: string): Promise<string> {
+export async function readStdin(
+  label: string,
+  limit?: { maximumBytes: number; onExceeded: () => Error }
+): Promise<string> {
   if (process.stdin.isTTY) {
     throw new RuntimeClientError('invalid_argument', `stdin ${label} requested but stdin is a TTY`)
   }
   const chunks: Buffer[] = []
+  let bytes = 0
   for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))
+    bytes += buffer.length
+    if (limit && bytes > limit.maximumBytes) {
+      throw limit.onExceeded()
+    }
+    chunks.push(buffer)
   }
   return Buffer.concat(chunks).toString('utf8')
 }

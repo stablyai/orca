@@ -1,4 +1,7 @@
-import { getWorkspaceReferenceIdentity } from './workspace-reference-identity'
+import {
+  getWorkspaceReferenceIdentifier,
+  getWorkspaceReferenceIdentity
+} from './workspace-reference-identity'
 import {
   WORKSPACE_ATTACHMENT_NUMBER_SLOTS,
   WORKSPACE_ATTACHMENT_LEGACY_FIELDS,
@@ -42,16 +45,22 @@ const ENGLISH_ATTACHMENT_LABELS: WorkspaceAttachmentLabelFormats = {
   issue: (number) => `Issue #${number}`
 }
 
-/** Use provider-native Linear/Jira keys; other references use PR #12-style labels. */
+/** Use provider-native issue keys for keyed trackers. */
 export function workspaceAttachmentReferenceLabel(
   item: Pick<
     WorkspaceAttachment,
-    'provider' | 'type' | 'number' | 'identifier' | 'linearIdentifier' | 'jiraIdentifier'
+    | 'provider'
+    | 'type'
+    | 'number'
+    | 'identifier'
+    | 'linearIdentifier'
+    | 'jiraIdentifier'
+    | 'youtrackIdentifier'
   >,
   formats: WorkspaceAttachmentLabelFormats = ENGLISH_ATTACHMENT_LABELS
 ): string {
-  if (item.provider === 'linear' || item.provider === 'jira') {
-    return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? `#${item.number}`
+  if (item.provider === 'linear' || item.provider === 'jira' || item.provider === 'youtrack') {
+    return getWorkspaceReferenceIdentifier(item) ?? `#${item.number}`
   }
   return formats[item.type](item.number)
 }

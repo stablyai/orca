@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { readStdin } from './flag-or-stdin-payload'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
@@ -26,12 +26,9 @@ export async function readCommandBody(
   cwd: string,
   options: BodyOptions
 ): Promise<string | undefined> {
-  const body = await readTextOrFileFlag(flags, cwd, 'body', options.required)
+  const body = await readTextOrFileFlag(flags, cwd, 'body', options.required, options)
   if (body !== undefined && body.length > options.maximumCharacters) {
-    throw new RuntimeClientError(
-      options.tooLargeCode,
-      `${options.label} must be at most ${options.maximumCharacters} characters`
-    )
+    throw bodyTooLarge(options)
   }
   return body
 }
@@ -41,7 +38,8 @@ export async function readTextOrFileFlag(
   flags: Map<string, string | boolean>,
   cwd: string,
   flag: string,
-  required: boolean
+  required: boolean,
+  bodyOptions?: BodyOptions
 ): Promise<string | undefined> {
   const fileFlag = `${flag}-file`
   const hasText = flags.has(flag)
@@ -60,18 +58,37 @@ export async function readTextOrFileFlag(
   }
   return hasText
     ? getRequiredStringFlagAllowingEmpty(flags, flag)
-    : readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd)
+    : readBodyFile(getRequiredStringFlag(flags, fileFlag), cwd, bodyOptions)
 }
 
-async function readBodyFile(path: string, cwd: string): Promise<string> {
+function bodyTooLarge(options: BodyOptions): RuntimeClientError {
+  return new RuntimeClientError(
+    options.tooLargeCode,
+    `${options.label} must be at most ${options.maximumCharacters} characters`
+  )
+}
+
+async function readBodyFile(path: string, cwd: string, options?: BodyOptions): Promise<string> {
+  const maximumBytes = options ? options.maximumCharacters * 4 : undefined
   if (path !== '-') {
     const resolved = isAbsolute(path) ? path : join(cwd, path)
     try {
+      if (options && maximumBytes !== undefined && (await stat(resolved)).size > maximumBytes) {
+        throw bodyTooLarge(options)
+      }
       return await readFile(resolved, 'utf8')
     } catch (error) {
+      if (error instanceof RuntimeClientError) {
+        throw error
+      }
       const reason = error instanceof Error && 'code' in error ? String(error.code) : String(error)
       throw new RuntimeClientError('invalid_argument', `Could not read ${resolved}: ${reason}`)
     }
   }
-  return readStdin('body')
+  return readStdin(
+    'body',
+    options && maximumBytes !== undefined
+      ? { maximumBytes, onExceeded: () => bodyTooLarge(options) }
+      : undefined
+  )
 }

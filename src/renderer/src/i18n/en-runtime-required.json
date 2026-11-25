@@ -4039,5 +4039,11 @@
       "ariaActiveCount_one": "Filter: {{count}} active.",
       "ariaActiveCount_other": "Filter: {{count}} active."
     }
+  },
+  "youtrack": {
+    "sidebar": {
+      "issue": "YouTrack {{value0}}",
+      "viewIssue": "View in YouTrack"
+    }
   }
 }

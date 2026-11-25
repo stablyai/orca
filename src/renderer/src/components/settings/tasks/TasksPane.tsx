@@ -9,12 +9,14 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../../shared/work-items/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { YouTrackIcon } from '@/components/icons/YouTrackIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { CodeHostSetupSteps } from './TaskSourceCodeHostSetup'
 import { JiraSetupSteps } from './TaskSourceJiraSetup'
+import { YouTrackSetupSteps } from '../TaskSourceYouTrackSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -23,7 +25,8 @@ import {
 } from './task-source-setup-state'
 import {
   JIRA_INTEGRATION_SECTION_ID,
-  LINEAR_INTEGRATION_SECTION_ID
+  LINEAR_INTEGRATION_SECTION_ID,
+  YOUTRACK_INTEGRATION_SECTION_ID
 } from '../../integrations/task-trackers/task-provider-integration-section-ids'
 import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from '../../../runtime/hosts/observations/use-integration-provider-status-refresh'
@@ -92,6 +95,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  youtrack: {
+    get label() {
+      return translate('youtrack.source.label', 'YouTrack')
+    },
+    get description() {
+      return translate(
+        'youtrack.settings.providerDescription',
+        'Connect self-hosted YouTrack and show your issues in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <YouTrackIcon className={className} />
   }
 }
 
@@ -219,6 +234,15 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                   onToggleVisible={() => toggleProvider('jira')}
                   onConnected={() => void checkJiraConnection()}
                   onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                />
+              ) : provider === 'youtrack' ? (
+                <YouTrackSetupSteps
+                  connected={readiness.connected}
+                  checking={readiness.checking}
+                  visible={visible}
+                  canHide={canHide}
+                  onToggleVisible={() => toggleProvider('youtrack')}
+                  onOpenIntegrations={() => openIntegrations(YOUTRACK_INTEGRATION_SECTION_ID)}
                 />
               ) : (
                 <CodeHostSetupSteps

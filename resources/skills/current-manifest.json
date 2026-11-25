@@ -162,6 +162,22 @@
       ]
     },
     {
+      "name": "orca-youtrack",
+      "sourcePath": "skills/orca-youtrack",
+      "packageDigest": "45c8e04a19826761e1bc1feb46155ee6fa4843862df9b5d9ab637670956b1a07",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2575,
+          "executable": false,
+          "classification": "text",
+          "exactSha256": "61196180ca58cd91395fc5be26e9b702445201f5db9bccc9dbe2f9915f56ed98",
+          "textNormalizedSha256": "61196180ca58cd91395fc5be26e9b702445201f5db9bccc9dbe2f9915f56ed98",
+          "identitySha256": "61196180ca58cd91395fc5be26e9b702445201f5db9bccc9dbe2f9915f56ed98"
+        }
+      ]
+    },
+    {
       "name": "orchestration",
       "sourcePath": "skills/orchestration",
       "packageDigest": "8994f4e97a6544cc9d5cf7ce71f496efafb0a6a3ebe7d18c1472c4122fca4817",

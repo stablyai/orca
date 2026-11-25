@@ -25,6 +25,7 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
+import type { YouTrackIssue } from '../../../../../shared/youtrack-types'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 
@@ -96,6 +97,7 @@ export type NewWorkspaceComposerCardProps = {
   smartNameMode?: SmartNameMode
   onSmartLinearIssueSelect: (issue: LinearIssue) => void
   onSmartJiraIssueSelect?: (issue: JiraIssue, sourceContext: TaskSourceContext) => void
+  onSmartYouTrackIssueSelect?: (issue: YouTrackIssue) => void
   onOpenJiraSettings?: () => void
   smartNameSelection: SmartWorkspaceNameSelection | null
   onClearSmartNameSelection: () => void

@@ -22,6 +22,7 @@ import { registerJiraIssueSummaryGenerationHandlers } from '../jira/issue-summar
 import { registerBitbucketHandlers } from '../source-control/bitbucket'
 import { registerFeedbackHandlers } from '../feedback/feedback'
 import { registerCrashReportingHandlers } from '../crash-reporting/crash-reporting'
+import { registerYouTrackHandlers } from '../youtrack'
 import { registerExportHandlers } from '../export'
 import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
@@ -165,6 +166,7 @@ export async function registerCoreHandlers(
     registerHostedReviewHandlers(store, stats)
     registerLinearHandlers()
     registerJiraHandlers()
+    registerYouTrackHandlers(() => store.getSettings())
     registerJiraIssueSummaryGenerationHandlers(store, commitMessageAgentEnv)
     registerBitbucketHandlers()
     registerFeedbackHandlers()

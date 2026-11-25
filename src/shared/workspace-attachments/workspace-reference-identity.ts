@@ -1,6 +1,7 @@
 import { parseJiraIssueUrl, JIRA_ISSUE_KEY_PATTERN } from '../jira/jira-issue-url'
 import { parseLinearIssueInput, parseLinearIssueUrlIntent } from '../linear/links'
 import { getTaskSourceCacheScope } from '../work-items/task-source-context'
+import { normalizeYouTrackIssueUrl } from '../youtrack-issue-reference'
 import type { WorkspaceAttachment } from '../worktree/types'
 import { getPublicForgeProviderForHost } from '../git/remotes/public-forge-host'
 
@@ -20,6 +21,9 @@ const PUBLIC_REFERENCE_HOSTS = new Set([
 ])
 
 function referenceHostProvider(host: string): WorkspaceAttachment['provider'] | undefined {
+  if (host.endsWith('.youtrack.cloud')) {
+    return 'youtrack'
+  }
   if (host === 'linear.app') {
     return 'linear'
   }
@@ -117,6 +121,16 @@ function parseReferenceRoute(
       url: url.href
     }
   }
+  const youtrack = providerHint === 'youtrack' ? normalizeYouTrackIssueUrl(url) : null
+  if (youtrack) {
+    return {
+      provider: 'youtrack',
+      type: 'issue',
+      number: 0,
+      ...youtrack,
+      youtrackIdentifier: youtrack.identifier
+    }
+  }
   const gitlab = /^(\/.+)\/-\/(merge_requests|issues)\/(\d+)(?:\/.*)?$/.exec(url.pathname)
   if (gitlab && url.hostname !== 'github.com' && url.hostname !== 'linear.app') {
     return numberedReference(
@@ -171,8 +185,13 @@ function parseReferenceRoute(
   )
 }
 
-export function getWorkspaceReferenceIdentifier(item: WorkspaceAttachment): string | undefined {
-  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier
+export function getWorkspaceReferenceIdentifier(
+  item: Pick<
+    WorkspaceAttachment,
+    'identifier' | 'linearIdentifier' | 'jiraIdentifier' | 'youtrackIdentifier'
+  >
+): string | undefined {
+  return item.identifier ?? item.linearIdentifier ?? item.jiraIdentifier ?? item.youtrackIdentifier
 }
 
 function externalUrl(item: WorkspaceAttachment): string | undefined {

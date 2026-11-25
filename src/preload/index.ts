@@ -98,6 +98,7 @@ import { e2eApi } from './api/diagnostics/e2e-bridge'
 import { mobileApi } from './api/mobile/mobile-bridge'
 import { agentStatusApi } from './api/agent-status/agent-status-bridge'
 import { speechApi } from './api/speech/speech-bridge'
+import { youtrackApi } from './api/youtrack-bridge'
 
 installBrowserFindListener()
 
@@ -143,6 +144,7 @@ const api = {
   bitbucket: bitbucketApi,
   linear: linearApi,
   jira: jiraApi,
+  youtrack: youtrackApi,
   starNag: starNagApi,
   telemetryTrack: telemetryTrackApi,
   telemetrySetOptIn: telemetrySetOptInApi,
