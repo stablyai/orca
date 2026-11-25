@@ -114,6 +114,45 @@ describe('provider relay pending requests', () => {
     await relay.dispose()
   })
 
+  it("asks a paused relay's client again until it acks, so one short answer never stalls the agent", async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    try {
+      const { managed, stdout } = fakeManaged()
+      const relay = new ProviderRelay({
+        relayId: 'r-nudge',
+        chatKey: 'chat',
+        managed,
+        spoolPath: join(dir, 'r-nudge.ndjson'),
+        onSettled: () => {},
+        onDetached: () => {}
+      })
+      const socket = new PassThrough()
+      let asks = 0
+      socket.on('data', (chunk: Buffer) => {
+        asks += chunk.toString().split('"relayAckWanted"').length - 1
+      })
+      await relay.attach('app-1', { socket }, 0)
+      const line = `${'x'.repeat(64 * 1024)}\n`
+      for (let i = 0; i < 20; i++) {
+        stdout.write(line)
+      }
+      await vi.waitFor(() => expect(stdout.isPaused()).toBe(true))
+      expect(asks).toBe(1)
+      // The answer falls short: half the cap is still held, so the spool alone would not ask again.
+      relay.ack(2)
+      vi.advanceTimersByTime(2_000)
+      expect(asks).toBe(2)
+      relay.ack(relay.info().nextSeq - 1)
+      await vi.waitFor(() => expect(stdout.isPaused()).toBe(false))
+      const resumed = asks
+      vi.advanceTimersByTime(6_000)
+      expect(asks).toBe(resumed)
+      await relay.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('never replays a request the client already answered, while an unanswered one is still asked', async () => {
     const { managed, stdout } = fakeManaged()
     const relay = new ProviderRelay({

@@ -9,6 +9,8 @@ import { isHighSurrogate } from './provider-relay-input'
 
 /** Keeps each event frame well under the stream's line cap even after JSON escaping. */
 const EVENT_PIECE_CHARS = 1024 * 1024
+/** How often a paused relay asks its client again for an ack. */
+export const RELAY_ACK_NUDGE_MS = 2_000
 
 /** A piece never ends between the halves of a surrogate pair, so each piece encodes as UTF-8. */
 function pieceEnd(line: string, offset: number): number {
@@ -49,11 +51,14 @@ export class ProviderRelayAttachment {
     return !this.released
   }
 
+  private nudge: ReturnType<typeof setInterval> | null = null
+
   release(): void {
     if (this.released) {
       return
     }
     this.released = true
+    this.whilePaused(false, () => null)
     this.stream.socket.off('close', this.onClose)
     for (const settle of this.waits) {
       settle()
@@ -102,6 +107,25 @@ export class ProviderRelayAttachment {
       }
     }
     return true
+  }
+
+  /**
+   * While the relay is paused at its cap the ask goes again on a timer, so an answer that fell
+   * short or went missing never stalls the agent. `askedSeq` is null when there is nothing to ask.
+   */
+  whilePaused(paused: boolean, askedSeq: () => number | null): void {
+    if (paused && !this.nudge && !this.released) {
+      this.nudge = setInterval(() => {
+        const seq = askedSeq()
+        if (seq !== null) {
+          this.askForAck(seq)
+        }
+      }, RELAY_ACK_NUDGE_MS)
+      this.nudge.unref?.()
+    } else if (!paused && this.nudge) {
+      clearInterval(this.nudge)
+      this.nudge = null
+    }
   }
 
   askForAck(seq: number): void {
