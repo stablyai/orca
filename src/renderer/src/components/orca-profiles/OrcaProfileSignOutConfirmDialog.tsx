@@ -14,17 +14,30 @@ export function OrcaProfileSignOutConfirmDialog({
   open,
   onOpenChange,
   onConfirm,
-  signingOut
+  signingOut,
+  returnFocusRef
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onConfirm: () => void
   signingOut: boolean
+  /** Where focus goes when the dialog closes, for a dialog opened from a menu row rather than its own trigger. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]">
+      <DialogContent
+        className="sm:max-w-[420px]"
+        onCloseAutoFocus={
+          returnFocusRef
+            ? (event) => {
+                event.preventDefault()
+                returnFocusRef.current?.focus({ preventScroll: true })
+              }
+            : undefined
+        }
+      >
         <DialogHeader>
           <DialogTitle>
             {t('auto.components.orca.profiles.signout.confirm.title', 'Sign out of Orca?')}

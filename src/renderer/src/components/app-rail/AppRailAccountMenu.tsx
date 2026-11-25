@@ -1,4 +1,4 @@
-import React, { useId, useMemo, useState } from 'react'
+import React, { useId, useMemo, useRef, useState } from 'react'
 import { Loader2, LogIn, LogOut, Settings } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -126,6 +126,8 @@ export function AppRailAccountMenu({
   const signingIn = useAppStore((s) => Boolean(s.orcaProfileSignInProgress))
   const settingsShortcut = useOptionalShortcutLabel('app.settings')
   const setupDescriptionId = useId()
+  // The sign-out dialog opens from a menu row, so it has no trigger of its own to hand focus back to.
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -157,6 +159,7 @@ export function AppRailAccountMenu({
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <AppRailButton
+                ref={triggerRef}
                 itemId="account"
                 label={label}
                 // The ring is visual only; screen readers hear the same progress as its description.
@@ -257,6 +260,7 @@ export function AppRailAccountMenu({
         onOpenChange={setSignOutOpen}
         onConfirm={() => void confirmSignOut()}
         signingOut={signingOut}
+        returnFocusRef={triggerRef}
       />
     </>
   )

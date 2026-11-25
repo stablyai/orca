@@ -189,6 +189,56 @@ describe('AppRailAccountMenu groups and setup description', () => {
   })
 })
 
+describe('AppRailAccountMenu sign-out dialog focus', () => {
+  async function settle(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  }
+
+  async function openSignOut(): Promise<HTMLElement> {
+    const button = screen.getByRole('button', { name: 'Account' })
+    openWithKey(button, 'Enter')
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }))
+    })
+    await settle()
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    return button
+  }
+
+  it('Escape on the dialog hands focus back to the account button', async () => {
+    useAppStore.setState({ orcaProfileAuthStatus: SIGNED_IN })
+    render(<Harness />)
+    const button = await openSignOut()
+    act(() => {
+      fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' })
+    })
+    await settle()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(button)
+  })
+
+  it('a completed sign-out leaves focus on the same button, now the Settings gear', async () => {
+    useAppStore.setState({
+      orcaProfileAuthStatus: SIGNED_IN,
+      signOutCurrentOrcaProfile: async () => {
+        useAppStore.setState({ orcaProfileAuthStatus: SIGNED_OUT })
+        return { status: 'signed-out', auth: SIGNED_OUT } as never
+      }
+    })
+    render(<Harness />)
+    const button = await openSignOut()
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    })
+    await settle()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(button)
+    expect(button).toHaveAccessibleName('Settings')
+  })
+})
+
 describe('appRailAccount', () => {
   it('prefers the display name, then the email, then the fallback', () => {
     const cloud = SIGNED_IN.cloud!
