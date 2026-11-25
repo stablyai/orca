@@ -4,8 +4,10 @@ import * as z from 'zod'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { NODE_PLATFORM_NAMES } from '../../transport/connection/mobile-runtime-host-platform'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
 
-const SignInStatusSchema = z.looseObject({
+export const SignInStatusSchema = z.looseObject({
   // A state or problem a newer host adds reads as not signed in, never as an unreadable list.
   state: z.enum(['signed-in', 'signed-out', 'lost']).catch('signed-out'),
   problem: z.enum(['unsupported', 'unreachable']).optional().catch(undefined)
@@ -33,7 +35,8 @@ export const botToolsListRead = bindDeferredRpcOperation(
       'bot-tools',
       z.looseObject({
         own: z.array(OwnToolSchema).optional(),
-        inherited: z.array(InheritedToolSchema).optional()
+        inherited: z.array(InheritedToolSchema).optional(),
+        hostMcpServers: z.boolean().optional().catch(undefined)
       })
     )
   })
@@ -60,6 +63,17 @@ export const botToolProblemsRead = bindDeferredRpcOperation(
   })
 )
 
+/** Whether the bot's sessions also take its host's MCP servers; only a person sets it. */
+export const botToolSetHostMcpServers = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'bots.tools.setHostMcpServers',
+    method: 'bots.tools.setHostMcpServers',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('bot-host-mcp-servers', z.looseObject({ hostMcpServers: z.boolean() }))
+  })
+)
+
 export const botToolProblemsCancel = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'bots.tools.cancelProblems',
@@ -82,33 +96,32 @@ export const botToolAdd = bindDeferredRpcOperation(
 
 const MaskedSecretsSchema = z.array(z.looseObject({ key: z.string(), configured: z.boolean() }))
 
-/** The saved tool, with its secrets as names only, and the version a save must match. */
+/** A saved tool or server, with its secrets as names only, and the version a save must match. */
+export const ToolDetailsSchema = z.looseObject({
+  version: z.string(),
+  server: z.union([
+    z.looseObject({
+      name: z.string(),
+      url: z.string(),
+      transport: z.literal('http'),
+      headers: MaskedSecretsSchema
+    }),
+    z.looseObject({
+      name: z.string(),
+      command: z.string(),
+      args: z.array(z.string()),
+      env: MaskedSecretsSchema
+    })
+  ])
+})
+
 export const botToolDetailsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'bots.tools.details',
     method: 'bots.tools.details',
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
-    read: rpcResultVariant(
-      'bot-tool-details',
-      z.looseObject({
-        version: z.string(),
-        server: z.union([
-          z.looseObject({
-            name: z.string(),
-            url: z.string(),
-            transport: z.literal('http'),
-            headers: MaskedSecretsSchema
-          }),
-          z.looseObject({
-            name: z.string(),
-            command: z.string(),
-            args: z.array(z.string()),
-            env: MaskedSecretsSchema
-          })
-        ])
-      })
-    )
+    read: rpcResultVariant('bot-tool-details', ToolDetailsSchema)
   })
 )
 
@@ -164,7 +177,7 @@ const FAILURES = [
 ] as const
 
 // BotToolSignInAttemptView: an Orca-owned sign-in the host runs for this phone.
-const AttemptSchema = z.union([
+export const AttemptSchema = z.union([
   z.looseObject({
     flowId: z.string(),
     revision: z.number(),
@@ -219,6 +232,33 @@ export const botToolSignInCancel = bindDeferredRpcOperation(
     read: rpcResultVariant('bot-tool-sign-in-cancelled', z.unknown())
   })
 )
+
+/** The host's side of an Orca-owned sign-in, bound to one bot tool or MCP server. */
+export type PhoneOwnedSignInOps = {
+  start: (client: RpcClient) => Promise<PhoneSignInAttempt>
+  wait: (client: RpcClient, flowId: string, afterRevision: number) => Promise<PhoneSignInAttempt>
+  finish: (client: RpcClient, flowId: string, query: string) => Promise<PhoneSignInAttempt>
+  cancel: (client: RpcClient, flowId: string) => Promise<unknown>
+  /** A host without it answers Update Orca instead of starting. */
+  capability?: string
+}
+
+export const botOwnedSignInOps = (botId: string, name: string): PhoneOwnedSignInOps => ({
+  start: (client) =>
+    botToolSignInStart
+      .request(client, { botId, name, mode: 'paste' })
+      .then((response) => botToolSignInStart.interpret(response)),
+  wait: (client, flowId, afterRevision) =>
+    botToolSignInWait
+      .request(client, { flowId, afterRevision }, { timeoutMs: 60_000 })
+      .then((response) => botToolSignInWait.interpret(response)),
+  finish: (client, flowId, query) =>
+    botToolSignInFinish
+      .request(client, { flowId, query })
+      .then((response) => botToolSignInFinish.interpret(response)),
+  cancel: (client, flowId) => botToolSignInCancel.request(client, { flowId }),
+  capability: BOTS_TOOLS_OWNED_SIGN_IN_RUNTIME_CAPABILITY
+})
 
 /** A tool whose agent's CLI signs in: the page it names, or null when it opened one on its computer. */
 export const botToolConnect = bindDeferredRpcOperation(

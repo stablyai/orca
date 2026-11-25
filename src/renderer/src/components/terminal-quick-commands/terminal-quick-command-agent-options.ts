@@ -5,7 +5,6 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 const QUICK_COMMAND_AGENT_PRESENTATION_ORDER = [
   'claude',
   'codex',
-  'gemini',
   'copilot',
   'opencode',
   'pi',

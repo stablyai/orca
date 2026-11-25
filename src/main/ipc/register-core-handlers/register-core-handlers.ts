@@ -160,7 +160,7 @@ export async function registerCoreHandlers(
     registerZcodePlanCredentialsHandlers(rateLimits)
     registerGrokAccountHandlers()
     registerCursorAccountHandlers()
-    registerRateLimitHandlers(rateLimits, codexAccounts)
+    registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())
     registerGitHubHandlers(store, stats, runtime)
     registerGitLabHandlers(store)
     registerHostedReviewHandlers(store, stats)

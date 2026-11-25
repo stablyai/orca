@@ -1,3 +1,5 @@
+import { onMcpHostListSignInChanged } from '../../../mcp-servers/mcp-host-list-sign-in'
+import { noteMcpHostListChanged } from '../../../mcp-servers/mcp-host-list-changes'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -82,5 +84,17 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
   // The PR coordinator is fed by desktop IPC, so its refreshes reach paired clients only through here.
   notifyPullRequestChangedForRemoteClients(change: PullRequestChange): void {
     this.emitClientEvent({ type: 'pullRequestChanged', ...change })
+  }
+
+  // A sign-in finishing, failing to start or getting lost changes a row outside mcpServers.* calls.
+  protected readonly stopMcpServerSignInWatch = onMcpHostListSignInChanged(() =>
+    this.notifyMcpServersChanged()
+  )
+
+  /** This host's MCP server list changed; its windows and every other client re-read it. */
+  notifyMcpServersChanged(): void {
+    noteMcpHostListChanged()
+    this.notifier?.mcpServersChanged?.()
+    this.emitClientEvent({ type: 'mcpServersChanged' })
   }
 }

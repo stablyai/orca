@@ -161,7 +161,30 @@ export function botToolCredentialsTransaction<T>(folder: string, work: () => Pro
 
 /** One header or source credential, opened and checked against its folder and id; null for none or a sign-in. */
 export function readBotToolCredential(folder: string, id: string): BotToolCredential | null {
-  const entry = entryOf(readSealed(folder), id)
+  return botToolCredentialsReader(folder).credential(id)
+}
+
+/** The sign-in a credential id holds, or null when it holds none or something else. */
+export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
+  return botToolCredentialsReader(folder).oauth(id)
+}
+
+type BotToolCredentialsReader = {
+  credential: (id: string) => BotToolCredential | null
+  oauth: (id: string) => BotToolOAuthEntry | null
+}
+
+/**
+ * `readBotToolCredential` and `readBotToolOAuth` for many ids from one read of the store, which opens
+ * every entry; taken on the first id asked for, so a caller with none reads nothing.
+ */
+export function botToolCredentialsReader(folder: string): BotToolCredentialsReader {
+  let sealed: Stored | undefined
+  const entry = (id: string) => entryOf((sealed ??= readSealed(folder)), id)
+  return { credential: (id) => credentialOf(entry(id)), oauth: (id) => oauthOf(entry(id)) }
+}
+
+function credentialOf(entry: Entry | null): BotToolCredential | null {
   if (!entry || entry.kind === 'oauth') {
     return null
   }
@@ -170,11 +193,6 @@ export function readBotToolCredential(folder: string, id: string): BotToolCreden
     ...(entry.kind === 'source' ? { source: entry.source } : {}),
     headers: { ...entry.headers }
   }
-}
-
-/** The sign-in a credential id holds, or null when it holds none or something else. */
-export function readBotToolOAuth(folder: string, id: string): BotToolOAuthEntry | null {
-  return oauthOf(entryOf(readSealed(folder), id))
 }
 
 function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
@@ -195,8 +213,16 @@ function oauthOf(entry: Entry | null): BotToolOAuthEntry | null {
  * address and sign-in for an app Orca signs in to, so a refreshed token restarts no chat.
  */
 export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<string>): string {
+  return JSON.stringify([...botToolCredentialFingerprints(folder, ids)])
+}
+
+/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+export function botToolCredentialFingerprints(
+  folder: string,
+  ids: ReadonlySet<string>
+): Map<string, unknown> {
   const sealed = readSealed(folder)
-  return JSON.stringify(
+  return new Map(
     [...ids].sort().map((id) => {
       const slot = sealed[id]
       const entry = slot?.entry
@@ -310,7 +336,7 @@ export function commitBotToolOAuth(
   if (current && (next === null || next.grant !== current.grant || next.url !== current.url)) {
     announceBotToolCredentialsEnded(folder, [id])
   }
-  announceIfShownChanged(current, next)
+  announceIfShownChanged(folder, current, next)
   return next === null ? null : { ...next, revision }
 }
 

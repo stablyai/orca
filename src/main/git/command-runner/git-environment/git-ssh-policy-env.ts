@@ -13,8 +13,8 @@ import { promptGuardGitEnv } from './git-process-env'
 import { acquireGitAdmission } from '../admission/git-subprocess-admission'
 
 const CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 2500
-// Cold WSL starts and login rc files need the environment probe's startup budget.
-const WSL_CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 10_000
+// Windows process creation (cold WSL, AV hooks) can eat the deadline; a timeout must not drop core.sshCommand.
+const WINDOWS_CORE_SSH_COMMAND_PROBE_TIMEOUT_MS = 10_000
 
 export async function buildNetworkSshPolicyEnv(
   options: GitExecOptions,
@@ -52,7 +52,9 @@ export async function buildNetworkSshPolicyEnv(
       maxBuffer: DEFAULT_GIT_MAX_BUFFER,
       timeout: Math.min(
         options.timeout && options.timeout > 0 ? options.timeout : Infinity,
-        resolved.wsl ? WSL_CORE_SSH_COMMAND_PROBE_TIMEOUT_MS : CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
+        process.platform === 'win32'
+          ? WINDOWS_CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
+          : CORE_SSH_COMMAND_PROBE_TIMEOUT_MS
       ),
       env: promptEnv,
       signal: options.signal,
