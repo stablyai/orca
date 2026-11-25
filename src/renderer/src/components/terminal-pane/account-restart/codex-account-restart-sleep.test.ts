@@ -32,7 +32,8 @@ const { store, captured } = vi.hoisted(() => {
       store.sleepingAgentSessionsByPaneKey = rest
     }
   }
-  return { store, captured: { modes: [] as string[] } }
+  const modes: string[] = []
+  return { store, captured: { modes } }
 })
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store } }))
 

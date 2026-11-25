@@ -163,8 +163,8 @@ function setup() {
     shutdownProviderAndDetectExit: vi.fn(),
     rememberSyntheticKillExit: vi.fn(),
     sendPtyExitToRenderer,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
     getSettings: () =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
       ({ codexManagedAccounts: [{ id: 'old', managedHomePath: '/old' }] }) as never,
     isRendererLive: () => h.rendererLive,
     transcriptHasNoOpenWriter: async () => h.writerGone
@@ -374,8 +374,8 @@ describe('account restart exits arriving out of order', () => {
       shutdownProviderAndDetectExit: vi.fn(),
       rememberSyntheticKillExit: vi.fn(),
       sendPtyExitToRenderer: nextWindowSend,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
       getSettings: () =>
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
         ({ codexManagedAccounts: [{ id: 'old', managedHomePath: '/old' }] }) as never
     })
     t.release({ outcome: 'ended', writersExited: true })

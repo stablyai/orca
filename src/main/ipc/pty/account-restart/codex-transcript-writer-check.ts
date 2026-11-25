@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '@orca/process-host'
 import { readdir, readlink, realpath } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -34,7 +34,8 @@ export async function transcriptHasNoOpenWriter(
     if (deps.platform === 'darwin') {
       // lsof matches by inode, so a linked sessions folder still names the same file. Exit 1 with no
       // output and no error is "no process has it open"; anything else is not proof.
-      const result = await deps.exec('lsof', ['-t', '--', transcriptPath])
+      // Absolute: a GUI app's stripped PATH may not reach /usr/sbin.
+      const result = await deps.exec('/usr/sbin/lsof', ['-t', '--', transcriptPath])
       return result.code === 1 && result.stdout.trim() === '' && result.stderr.trim() === ''
     }
     const target = await deps.realpath(transcriptPath)
@@ -47,13 +48,14 @@ export async function transcriptHasNoOpenWriter(
 
 const defaultDeps: TranscriptWriterCheckDeps = {
   platform: process.platform,
-  exec: (file, args) =>
-    new Promise((resolve) => {
-      execFile(file, [...args], { timeout: LSOF_TIMEOUT_MS }, (error, stdout, stderr) => {
-        const code = error ? (typeof error.code === 'number' ? error.code : null) : 0
-        resolve({ code, stdout: String(stdout), stderr: String(stderr) })
-      })
-    }),
+  exec: async (program, args) => {
+    const result = await runProcess({ program, args, timeoutMs: LSOF_TIMEOUT_MS })
+    return {
+      code: result.timedOut ? null : result.code,
+      stdout: result.stdout,
+      stderr: result.stderr
+    }
+  },
   openPaths: readProcOpenPaths,
   realpath: (path) => realpath(path)
 }
