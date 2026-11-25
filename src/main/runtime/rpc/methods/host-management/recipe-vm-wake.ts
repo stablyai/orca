@@ -12,6 +12,7 @@ export const RECIPE_VM_WAKE_METHODS = [
   defineMethod({
     name: RECIPE_VM_WAKE_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: RecipeVmWakeParams,
     handler: async ({ environment }) => {
       const waker = getRecipeVmWaker()

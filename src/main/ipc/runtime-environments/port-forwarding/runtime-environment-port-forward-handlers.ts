@@ -1,4 +1,5 @@
-import { BrowserWindow, ipcMain } from 'electron'
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
+import { BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
@@ -81,22 +82,30 @@ export function registerRuntimeEnvironmentPortForwardHandlers(options: {
       set: (environmentId, record) => options.store.setPairedPortForwards(environmentId, record)
     }
   })
-  ipcMain.handle('runtimeEnvironments:listPortForwards', () => listPairedPortForwards())
-  ipcMain.handle('runtimeEnvironments:addPortForward', (_event, input: unknown) =>
+  handleRuntimeEnvironmentChannel('runtimeEnvironments:listPortForwards', () =>
+    listPairedPortForwards()
+  )
+  handleRuntimeEnvironmentChannel('runtimeEnvironments:addPortForward', (_event, input: unknown) =>
     addPairedPortForward(ForwardSpec.parse(input))
   )
-  ipcMain.handle('runtimeEnvironments:updatePortForward', (_event, input: unknown) =>
-    updatePairedPortForward(ForwardSpec.extend({ id: z.string().min(1).max(64) }).parse(input))
+  handleRuntimeEnvironmentChannel(
+    'runtimeEnvironments:updatePortForward',
+    (_event, input: unknown) =>
+      updatePairedPortForward(ForwardSpec.extend({ id: z.string().min(1).max(64) }).parse(input))
   )
-  ipcMain.handle('runtimeEnvironments:removePortForward', (_event, input: unknown) =>
-    removePairedPortForward(z.object({ id: z.string().min(1).max(64) }).parse(input).id)
+  handleRuntimeEnvironmentChannel(
+    'runtimeEnvironments:removePortForward',
+    (_event, input: unknown) =>
+      removePairedPortForward(z.object({ id: z.string().min(1).max(64) }).parse(input).id)
   )
-  ipcMain.handle('runtimeEnvironments:ensurePortForward', (_event, input: unknown) =>
-    ensurePairedPortForward(
-      z.object({ environmentId: EnvironmentId, remotePort: Port, label: Label }).parse(input)
-    )
+  handleRuntimeEnvironmentChannel(
+    'runtimeEnvironments:ensurePortForward',
+    (_event, input: unknown) =>
+      ensurePairedPortForward(
+        z.object({ environmentId: EnvironmentId, remotePort: Port, label: Label }).parse(input)
+      )
   )
-  ipcMain.handle('runtimeEnvironments:takeRestoredPortForwardMoves', () =>
+  handleRuntimeEnvironmentChannel('runtimeEnvironments:takeRestoredPortForwardMoves', () =>
     takeRestoredPairedPortForwardMoves()
   )
 }

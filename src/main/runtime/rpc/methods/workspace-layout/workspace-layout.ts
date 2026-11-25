@@ -27,6 +27,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
   defineStreamingMethod({
     name: 'layout.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: LayoutSubscribeParams,
     handler: async (params, { runtime, connectionId, signal, clientCapabilities }, emitFrame) => {
       // Keep emitted frames checked against the client contract.
@@ -74,6 +75,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
   defineMethod({
     name: 'layout.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: LayoutUnsubscribeParams,
     handler: async (params, { runtime, connectionId }) => {
       runtime.cleanupSubscription(layoutCleanupKey(connectionId, params.subscriptionId))
@@ -83,6 +85,7 @@ export const WORKSPACE_LAYOUT_METHODS = [
   defineMethod({
     name: 'layout.getRemoteSnapshots',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => {
       // Removed servers' saved snapshots must not seed views again.
@@ -103,6 +106,7 @@ export const LAYOUT_APPLY_METHODS = [
   defineMethod({
     name: 'layout.apply',
     permission: 'workspace',
+    share: 'not-shared',
     params: LayoutApplyParams,
     handler: async (params, { runtime, clientCapabilities }) => {
       return runtime.applyLayoutCommand(
@@ -115,6 +119,7 @@ export const LAYOUT_APPLY_METHODS = [
   defineMethod({
     name: 'layout.reopenHeldPanes',
     permission: 'workspace',
+    share: 'not-shared',
     params: LayoutReopenHeldPanesParams,
     handler: async (params, { runtime }) => runtime.reopenHeldTerminalPanes(params.panes)
   }),
@@ -122,6 +127,7 @@ export const LAYOUT_APPLY_METHODS = [
   defineMethod({
     name: 'layout.startWslHeldPanes',
     permission: 'workspace',
+    share: 'not-shared',
     params: LayoutReopenHeldPanesParams,
     handler: async (params, { runtime }) => runtime.startWslHeldTerminalPanes(params.panes)
   })
@@ -132,6 +138,7 @@ export const LAYOUT_VIEW_REPORT_METHODS = [
   defineMethod({
     name: 'layout.reportView',
     permission: 'workspace',
+    share: 'not-shared',
     params: LayoutReportViewParams,
     handler: async (params, { runtime, connectionId, signal }) => {
       // Reports outlive calls and require connection-close cleanup, as sidebarInputs.reportView does.

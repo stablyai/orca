@@ -210,6 +210,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
   defineMethod({
     name: MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (): Promise<MobileWebBundleManifestResult> => ({
       manifest: (await requireBundle()).manifest,
@@ -221,6 +222,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
   defineMethod({
     name: MOBILE_WEB_BUNDLE_CHUNK_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: MobileWebBundleChunkParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleChunkResult> =>
       readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, rawWindowReply)
@@ -228,6 +230,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
   defineMethod({
     name: MOBILE_WEB_BUNDLE_RANGE_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: MobileWebBundleRangeParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleRangeResult> =>
       readVerifiedWindow(ctx, params, MOBILE_WEB_BUNDLE_CHUNK_BYTES, async (window) => {
@@ -242,6 +245,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
   defineMethod({
     name: MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: MobileWebBundleRangeParamsSchema,
     handler: (params, ctx): Promise<MobileWebBundleBrotliRangeResult> =>
       // The raw asset's hash still gates every window of its copy.
@@ -250,6 +254,7 @@ export const MOBILE_WEB_BUNDLE_METHODS = [
   defineMethod({
     name: MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: MobileWebBundleLocaleCatalogParamsSchema,
     handler: readLocaleCatalog
   })

@@ -20,6 +20,7 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
     name: 'orchestration.workerStop',
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkerDispatchParams,
     handler: (params, { runtime, orchestrationMutation }) =>
       stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)

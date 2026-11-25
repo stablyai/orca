@@ -26,10 +26,11 @@ export function applyRuntimeHostStatusSnapshot(
   publishEvidence: (entry: RuntimeEnvironmentStatus) => void
 ): void {
   const environment = state.runtimeEnvironments.find((entry) => entry.id === snapshot.environmentId)
-  if (
-    !environment ||
-    (environment.pairingRevision ?? environment.createdAt) !== snapshot.pairingRevision
-  ) {
+  // A shared host is in no paired catalog; main alone says it is one.
+  const listed = environment
+    ? (environment.pairingRevision ?? environment.createdAt) === snapshot.pairingRevision
+    : snapshot.sharedHost === true
+  if (!listed) {
     return
   }
   const previous = state.runtimeStatusByEnvironmentId.get(snapshot.environmentId)

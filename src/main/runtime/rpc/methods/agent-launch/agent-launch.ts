@@ -262,6 +262,7 @@ export const AGENT_LAUNCH_METHODS = [
     name: 'agent.launchReplay',
     requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentLaunchReplay,
     handler: async (params, context): Promise<AgentLaunchResult> => {
       if (!supportsAgentLaunch(context)) {
@@ -294,6 +295,7 @@ export const AGENT_LAUNCH_METHODS = [
     name: 'agent.launch',
     requires: agentLaunchFeatureRequirement,
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentLaunch,
     handler: (params, context) => launchAgentOnHost(params, context)
   })

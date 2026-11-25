@@ -1,5 +1,5 @@
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 /** IPC for a host an older build changed after conversion: move its newer projects, or keep the server's. */
-import { ipcMain } from 'electron'
 import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveResult
@@ -23,7 +23,7 @@ import { publishResolvedChangedHostStatus } from './runtime-environment-managed-
 import { runTargetLifecycle } from '../../ssh/ssh-target-lifecycle-queue'
 
 export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): void {
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:previewOrcadDeltaMove',
     (_event, args: { sshTargetId: string }): OrcadDeltaMovePreview => {
       const { store, target } = requireChangedHost(args)
@@ -32,7 +32,7 @@ export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): v
       return { sshTargetId, environmentId, added, notReflected, blockers }
     }
   )
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:moveOrcadDelta',
     async (_event, args: { sshTargetId: string }): Promise<OrcadDeltaMoveResult> => {
       const userDataPath = getUserDataPath()
@@ -74,7 +74,7 @@ export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): v
       return result
     }
   )
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:keepOrcadServerVersion',
     async (_event, args: { sshTargetId: string }): Promise<void> => {
       const { store, claims, target, environmentId } = requireChangedHost(args)

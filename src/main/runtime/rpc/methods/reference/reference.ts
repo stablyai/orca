@@ -8,12 +8,14 @@ export const REFERENCE_METHODS = [
   defineMethod({
     name: 'reference.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: ReferenceList,
     handler: (params, { runtime }) => runtime.listWorkspaceReferences(params.worktree, params.cwd)
   }),
   defineMethod({
     name: 'reference.find',
     permission: 'workspace',
+    share: 'not-shared',
     params: ReferenceFind,
     handler: (params, { runtime }) => runtime.findWorkspaceReferences(params)
   })

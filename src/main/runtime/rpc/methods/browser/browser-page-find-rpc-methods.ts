@@ -7,12 +7,14 @@ export const BROWSER_PAGE_FIND_METHODS = [
   defineMethod({
     name: 'browser.findInPage',
     permission: 'workspace',
+    share: 'not-shared',
     params: FindInPage,
     handler: async (params, { runtime }) => runtime.browserFindInPage(params)
   }),
   defineMethod({
     name: 'browser.stopFindInPage',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserTarget,
     handler: async (params, { runtime }) => runtime.browserStopFindInPage(params)
   })

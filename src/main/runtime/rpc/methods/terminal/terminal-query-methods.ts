@@ -25,6 +25,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalListParams,
     handler: async (params, { runtime }) => {
       // Switch point: main places the swept workspace's live terminals itself, so this listing
@@ -55,6 +56,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.resolveActive',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalResolveActive,
     handler: async (params, { runtime }) => ({
       handle: await runtime.resolveActiveTerminal(
@@ -66,6 +68,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.resolvePane',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalResolvePane,
     handler: async (params, { runtime }) => ({
       terminal: runtime.resolveTerminalPane(params.paneKey, params.worktreeId)
@@ -75,6 +78,7 @@ export const TERMINAL_QUERY_METHODS = [
     // The id lives with the pane's hook server, so a failed earlier commit is retried here.
     name: 'terminal.agentId',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalAgentId,
     handler: async (params, { runtime }): Promise<{ orcaSessionId: OrcaSessionAddress | null }> => {
       // Re-read on each look: the pane may wake or sleep while the worker answers.
@@ -90,6 +94,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.recoverPane',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalRecoverPane,
     handler: async (params, { runtime }) => ({
       terminal: await runtime.recoverTerminalPane(
@@ -102,6 +107,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.show',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       terminal: await runtime.showTerminal(params.terminal)
@@ -111,6 +117,7 @@ export const TERMINAL_QUERY_METHODS = [
     // Read identity only: structured workers have no writable terminal, so never return terminal.show's shape.
     name: 'terminal.resolveIdentity',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       identity: runtime.resolveTerminalIdentity(params.terminal)
@@ -119,6 +126,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalRead,
     handler: async (params, { runtime }) => ({
       terminal: await runtime.readTerminal(params.terminal, {
@@ -131,6 +139,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.inspectProcess',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalInspectProcess,
     handler: async (params, { runtime }) => {
       const options = {
@@ -150,6 +159,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.isRunningAgent',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       isRunningAgent: await runtime.isTerminalRunningAgent(params.terminal)
@@ -158,6 +168,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.agentStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       agentStatus: await runtime.getTerminalAgentStatus(params.terminal)
@@ -166,6 +177,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.rename',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalRename,
     handler: async (params, { runtime }) => ({
       rename: await runtime.renameTerminal(params.terminal, params.title || null)
@@ -174,6 +186,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.setPaneTitle',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSetPaneTitle,
     handler: async (params, { runtime }) => ({
       paneTitle: await runtime.setPaneTitle(params.terminal, params.title)
@@ -182,6 +195,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.clearBuffer',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       clear: await runtime.clearTerminalBuffer(params.terminal)
@@ -190,6 +204,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.resetInputModes',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalHandle,
     handler: async (params, { runtime }) => ({
       reset: await runtime.resetTerminalInputModes(params.terminal)
@@ -198,6 +213,7 @@ export const TERMINAL_QUERY_METHODS = [
   defineMethod({
     name: 'terminal.readKittyFile',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalReadKittyFile,
     handler: async (params, { runtime, signal, clientKind, requestId }) => {
       const result = await runtime.readKittyFile(params.terminal, params, signal)

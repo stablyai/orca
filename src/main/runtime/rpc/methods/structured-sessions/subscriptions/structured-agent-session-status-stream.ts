@@ -1,3 +1,4 @@
+import { SHARE_SCOPED } from '../../../../../../shared/bots/bot-share-rpc-methods'
 // `agentSession.subscribeStatus` — every structured session's projected status on one stream.
 //
 // Session lists read turn state from here instead of replaying transcripts: one stream per client
@@ -48,6 +49,7 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
   defineStreamingMethod({
     name: 'agentSession.subscribeStatus',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: null,
     handler: async (_params, ctx, emit) => {
       const restoration = prepareStructuredTabsIfSupported(ctx)

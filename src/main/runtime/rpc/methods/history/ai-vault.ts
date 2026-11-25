@@ -46,6 +46,7 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.searchSessions',
     requires: ['sessionSearch'],
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultSearchRequestSchema,
     handler: (params, context) => {
       const transport = sessionSearchTransportForClient(context.clientKind)
@@ -67,6 +68,7 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.searchStatus',
     requires: ['sessionSearch'],
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultSearchStatusRequestSchema,
     handler: (params, { clientKind }) =>
       sessionSearchServiceStatus(params, sessionSearchTransportForClient(clientKind))
@@ -75,6 +77,7 @@ export const AI_VAULT_METHODS = [
     name: 'aiVault.setSearchEnabled',
     requires: ['sessionSearch'],
     permission: 'settings-write',
+    share: 'not-shared',
     params: AiVaultSetSearchEnabledParamsSchema,
     handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
       // Only authenticated paired clients may flip host consent; local callers write settings directly.
@@ -94,6 +97,7 @@ export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultSessionTitlesParams,
     handler: (params, { runtime, signal }) =>
       runtime.resolveAiVaultSessionTitles(params.requests, signal)
@@ -101,6 +105,7 @@ export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.listSessions',
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultListSessionsParams,
     handler: async (params, { runtime, clientKind, clientCapabilities, signal }) => {
       await ensurePersistedStructuredAgentSessionHostUnlessRefused(() =>
@@ -142,6 +147,7 @@ export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.prepareSessionResume',
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultPrepareSessionResumeParams,
     handler: async (params, { runtime }) => {
       if ('sourceChat' in params) {
@@ -177,18 +183,21 @@ export const AI_VAULT_METHODS = [
   defineMethod({
     name: 'aiVault.prepareSessionHandoff',
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultPrepareSessionHandoffParams,
     handler: (params) => writeAiVaultSessionHandoffSnapshot(params)
   }),
   defineMethod({
     name: 'aiVault.prepareSessionHandoffPrompt',
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultPrepareSessionHandoffPromptParams,
     handler: (params) => prepareAiVaultSessionHandoffPrompts(params)
   }),
   defineMethod({
     name: 'aiVault.deleteSession',
     permission: 'workspace',
+    share: 'not-shared',
     params: AiVaultDeleteSessionParams,
     handler: (params, { runtime }) => runtime.deleteAiVaultSession(params)
   })

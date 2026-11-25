@@ -41,6 +41,7 @@ export function createNetworkPortForwardMethods(
     defineStreamingMethod({
       name: 'network.portForward',
       permission: 'host-admin',
+      share: 'not-shared',
       params: NetworkPortForwardAttachParams,
       handler: async (
         _params,

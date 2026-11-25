@@ -1,3 +1,4 @@
+import { SHARE_BY_BOT, SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
 import {
   BotActivityRead,
   BotAvatarRead,
@@ -34,7 +35,7 @@ import { namedOrCallerBot } from './bots-caller-bot'
 import { releaseDeletedBotLinks } from './bots-home-release'
 import { dropUnreadBotRequests } from './orchestration/messaging/bot-request-outcome'
 import { releaseHeldBotMail } from '../../../bots/bot-paused-mail'
-import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { defineMethod, InvalidArgumentError, type RpcContext, notShared } from '../core'
 import { botSkillProjectViews, relinkBotSkills } from '../../../bots/bot-skill-projects'
 import { botOwnSkillsView, linkBotOwnSkills } from '../../../bots/bot-own-skills'
 import { botHomeFolder } from '../../../bots/bot-home'
@@ -70,11 +71,9 @@ async function updateBot(params: BotUpdateParams, context: RpcContext) {
   }
   const { removeMember, removeMembers = [], addMembers = [] } = params.updates
   // Who can ask decides who may make this host run commands, so the device that changed it is kept on record.
+  const removed = [...(removeMember ? [removeMember] : []), ...removeMembers]
   const changes = [
-    ...[...(removeMember ? [removeMember] : []), ...removeMembers].map((key) => ({
-      change: 'removed',
-      key
-    })),
+    ...removed.map((key) => ({ change: 'removed', key })),
     ...addMembers.map((member) => ({ change: 'added', key: member }))
   ]
   for (const { change, key } of changes) {
@@ -107,6 +106,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.list',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: null,
     // webhooks: whether this host's Orca Cloud takes them, so a bot can be offered webhook.call;
     // threadReplies: whether it binds an event's run to its thread, for --results-to thread.
@@ -148,6 +148,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.roster',
     permission: 'workspace',
+    share: SHARE_SCOPED,
     params: BotRoster,
     handler: async (params, context) => {
       const { runtime } = context
@@ -195,13 +196,13 @@ export const BOT_METHODS = [
   ...BOT_MEMORY_METHODS,
   defineMethod({
     name: 'bots.update',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotUpdate,
     handler: updateBot
   }),
   defineMethod({
     name: 'bots.skillProjects.scan',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotSkillProjectsScan,
     handler: async (params, { runtime }) => {
       const bot = params.botId
@@ -216,7 +217,7 @@ export const BOT_METHODS = [
   }),
   defineMethod({
     name: 'bots.avatar.upload',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotAvatarUpload,
     handler: async (params, { runtime }) => ({
       bot: await runtime.bots.setAvatarImage(
@@ -230,6 +231,7 @@ export const BOT_METHODS = [
   defineMethod({
     name: 'bots.avatar.read',
     permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotAvatarRead,
     handler: async (params, { runtime }) =>
       params.catalogRevision === undefined
@@ -238,13 +240,13 @@ export const BOT_METHODS = [
   }),
   defineMethod({
     name: 'bots.avatar.slackIcon.wanted',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotSlackIconWanted,
     handler: (params, { runtime }) => runtime.bots.slackIcons.wanted(params.botId, params.look)
   }),
   defineMethod({
     name: 'bots.avatar.slackIcon.upload',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotSlackIconUpload,
     handler: async (params, { runtime }) => ({
       stored: await runtime.bots.slackIcons.store(
@@ -256,7 +258,7 @@ export const BOT_METHODS = [
   }),
   defineMethod({
     name: 'bots.activity',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotActivityRead,
     handler: async (params, { runtime }) => ({
       activity: await readSharedBotActivity(runtime, params.botId)
@@ -264,7 +266,7 @@ export const BOT_METHODS = [
   }),
   defineMethod({
     name: 'bots.delete',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotDelete,
     handler: async (params, { runtime }) => {
       const bot = runtime.bots.list().find((entry) => entry.id === params.botId)
@@ -288,7 +290,7 @@ export const BOT_METHODS = [
   ...BOT_KICKOFF_METHODS,
   defineMethod({
     name: 'bots.chat.reset',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: BotChatReset,
     handler: newHomeChat
   }),
@@ -296,6 +298,7 @@ export const BOT_METHODS = [
     // A new conversation beside the Chat, started the way the bot's thread sessions are.
     name: 'bots.session.start',
     permission: 'workspace',
+    share: SHARE_BY_BOT,
     params: BotSessionStart,
     handler: async (params, context) => {
       const { runtime } = context

@@ -15,6 +15,7 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.checkHooks',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupHooksCheck,
     handler: (params, { runtime }) =>
       runtime.checkProjectGroupHooks(params.groupId, { background: params.background })
@@ -22,12 +23,14 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => ({ groups: runtime.listVisibleProjectGroups() })
   }),
   defineMethod({
     name: 'projectGroup.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupCreate,
     handler: async (params, { runtime }) => ({
       group: await runtime.createProjectGroup(params)
@@ -36,6 +39,7 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupUpdate,
     handler: async (params, { runtime }) => ({
       group: await runtime.updateProjectGroup(params.groupId, params.updates)
@@ -44,12 +48,14 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupSelector,
     handler: async (params, { runtime }) => runtime.deleteProjectGroup(params.groupId)
   }),
   defineMethod({
     name: 'projectGroup.updateMany',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupUpdateMany,
     handler: async (params, { runtime }) => ({
       groups: await runtime.updateProjectGroups(params.mutations)
@@ -58,6 +64,7 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.moveProject',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupMoveProject,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
@@ -74,12 +81,14 @@ export const PROJECT_GROUP_METHODS = [
   defineMethod({
     name: 'projectGroup.scanNested',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupScanNested,
     handler: async (params, { runtime }) => runtime.scanNestedRepos(params.path)
   }),
   defineMethod({
     name: 'projectGroup.importNested',
     permission: 'workspace',
+    share: 'not-shared',
     params: ProjectGroupImportNested,
     handler: async (params, { runtime }) => runtime.importNestedRepos(params)
   })

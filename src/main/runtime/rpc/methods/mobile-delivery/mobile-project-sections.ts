@@ -9,6 +9,7 @@ export const MOBILE_PROJECT_SECTIONS_METHODS = [
   defineMethod({
     name: MOBILE_PROJECT_SECTIONS_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // Switch point: for a page that predates the feed's projectCatalog domain, main's own catalog.
     handler: (_params, { runtime }) =>

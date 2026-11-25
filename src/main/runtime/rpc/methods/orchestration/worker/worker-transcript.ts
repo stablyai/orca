@@ -31,6 +31,7 @@ export const ORCHESTRATION_WORKER_TRANSCRIPT_METHODS = [
     name: ORCHESTRATION_WORKER_TRANSCRIPT_METHOD,
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkerTranscriptParams,
     // Read only: opening a worker whose terminal is gone shows what it did, never restarts it.
     handler: (params, { runtime }): OrchestrationWorkerTranscriptResult => ({

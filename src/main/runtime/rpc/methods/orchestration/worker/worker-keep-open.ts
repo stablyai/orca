@@ -23,6 +23,7 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: OrchestrationWorkerSubjectParams,
     handler: (params, { runtime }) => {
       const paneKey = resolveWorkerPaneKey(runtime, params)
@@ -40,6 +41,7 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: OrchestrationWorkerKeepOpenParams,
     handler: (params, { runtime }) => {
       const paneKey = resolveWorkerPaneKey(runtime, params)
@@ -64,6 +66,7 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: OrchestrationWorkerSubjectParams,
     // Older clients still report typing; only Keep open keeps a worker now, so this records nothing.
     handler: () => ({ changed: 0 })
@@ -75,6 +78,7 @@ export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
       targets: { paneKey: 'worker', sessionId: 'worker', terminal: 'worker' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: OrchestrationWorkerSubjectParams,
     // Older clients still report viewing; answered like typing, without `pending`, so they stop retrying.
     handler: () => ({ changed: 0 })

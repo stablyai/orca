@@ -8,6 +8,7 @@ export const TERMINAL_CODEX_QUESTION_SKIP_METHODS = [
   defineMethod({
     name: 'terminal.inferCodexQuestionSkip',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalInferCodexQuestionSkip,
     handler: async (params, { runtime }): Promise<{ applied: boolean }> => {
       const paneKey = runtime.getLiveTerminalPaneKey(params.terminal)

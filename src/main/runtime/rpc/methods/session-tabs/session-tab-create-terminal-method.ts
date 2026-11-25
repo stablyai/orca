@@ -11,6 +11,7 @@ export const SESSION_TAB_CREATE_TERMINAL_METHOD = defineMethod({
   name: 'session.tabs.createTerminal',
   requires: terminalCreateFeatureRequirement,
   permission: 'workspace',
+  share: 'not-shared',
   params: CreateTerminalTab,
   handler: async (params, context) => {
     const { runtime, signal, clientKind, pairedDeviceId, clientCapabilities } = context

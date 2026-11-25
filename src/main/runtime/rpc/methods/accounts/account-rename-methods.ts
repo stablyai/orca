@@ -6,6 +6,7 @@ export const ACCOUNT_RENAME_METHODS = [
   defineMethod({
     name: 'accounts.renameClaude',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: RenameAccountParams,
     handler: async (params, { runtime }) =>
       runtime.renameManagedAccount('claude', params.accountId, params.displayName)
@@ -13,6 +14,7 @@ export const ACCOUNT_RENAME_METHODS = [
   defineMethod({
     name: 'accounts.renameCodex',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: RenameAccountParams,
     handler: async (params, { runtime }) =>
       runtime.renameManagedAccount('codex', params.accountId, params.displayName)

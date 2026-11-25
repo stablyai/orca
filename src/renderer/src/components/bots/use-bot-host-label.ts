@@ -16,15 +16,13 @@ import {
  */
 export function useBotHostLabel(hostId: ExecutionHostId): string | null {
   const t = useTranslate()
-  const shared = useSharedBotHostOf(hostId)
-  const label = useAppStore((state) =>
+  // Read so a share listed later relabels its bot.
+  useSharedBotHostOf(hostId)
+  return useAppStore((state) =>
     hostId === LOCAL_EXECUTION_HOST_ID || isPairedWebClientWindow()
       ? null
-      : selectExecutionHostDisplayLabel(state, hostId)
+      : selectExecutionHostDisplayLabel(state, hostId, { t })
   )
-  return shared
-    ? t('bots.share.ownersComputer', '{{name}}’s computer', { name: shared.ownerName })
-    : label
 }
 
 const NO_LABELS: ReadonlyMap<ExecutionHostId, string> = new Map()

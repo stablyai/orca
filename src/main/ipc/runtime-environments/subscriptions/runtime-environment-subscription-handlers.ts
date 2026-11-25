@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import { registerRuntimeEnvironmentSubscriptionControls } from './runtime-environment-binary-payload'
 import type {
   RuntimeEnvironmentSubscribeArgs,
@@ -10,7 +10,7 @@ import { electronDocumentEndpoint } from '../../../backend-desktop/electron-docu
 export function registerRuntimeEnvironmentSubscriptionHandlers(
   args: RuntimeEnvironmentSubscriptionHandlerDependencies
 ): void {
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:subscribe',
     (event, subscribe: RuntimeEnvironmentSubscribeArgs) =>
       subscribeRuntimeEnvironmentForDocument(args, electronDocumentEndpoint(event), subscribe)

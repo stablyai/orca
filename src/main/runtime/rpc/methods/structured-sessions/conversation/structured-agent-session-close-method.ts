@@ -20,6 +20,7 @@ export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
   // Close only provider/in-memory state, preserving record/journal for future attachment.
   name: 'agentSession.close',
   permission: 'workspace',
+  share: 'not-shared',
   params: OptionsParams,
   handler: async (params, ctx) => {
     requireStructuredCapability(ctx)

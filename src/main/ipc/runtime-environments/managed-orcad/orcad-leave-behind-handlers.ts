@@ -1,10 +1,10 @@
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 /** IPC for "Move anyway": the user confirms that saved state a move can't carry stays on this desktop. */
-import { ipcMain } from 'electron'
 import { getSshTargetRegistryStore } from '../../../ssh/targets/ssh-target-registry'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 
 export function registerOrcadLeaveBehindHandlers(): void {
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:allowOrcadMoveLeavingBehind',
     (_event, args: { sshTargetId: string }): void => {
       const sshTargetId = requiredString(args?.sshTargetId, 'SSH target')

@@ -41,6 +41,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerDockRead',
     permission: 'workspace',
+    share: 'not-shared',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockRead,
     handler: (request, { runtime }) => {
@@ -59,6 +60,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerDockAcknowledge',
     permission: 'workspace',
+    share: 'not-shared',
     access: { kind: 'localOnly', targets: { party: 'party' }, rule: requireOwner },
     params: WorkerDockAcknowledge,
     handler: (request, { runtime }) => {
@@ -69,6 +71,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerDockResult',
     permission: 'workspace',
+    share: 'not-shared',
     access: { kind: 'localOnly', targets: { party: 'party', dispatch: 'dispatch' } },
     params: WorkerDockResultRead,
     handler: ({ party, dispatch }, { runtime }) =>
@@ -77,6 +80,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.workerDockStop',
     permission: 'workspace',
+    share: 'not-shared',
     access: {
       kind: 'localOnly',
       targets: { party: 'party', dispatch: 'dispatch' },
@@ -108,6 +112,7 @@ export const ORCHESTRATION_WORKER_DOCK_METHODS = [
   defineOrchestrationStreamingMethod({
     name: 'orchestration.workerDockSubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     params: WorkerDockSubscribe,
     handler: (

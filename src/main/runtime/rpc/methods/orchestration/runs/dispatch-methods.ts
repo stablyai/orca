@@ -29,6 +29,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.dispatch',
     permission: 'workspace',
+    share: 'not-shared',
     params: DispatchParams,
     access: {
       kind: 'writes',
@@ -211,6 +212,7 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.dispatchShow',
     permission: 'workspace',
+    share: 'not-shared',
     params: DispatchShowParams,
     access: { kind: 'reads', targets: { task: 'task' } },
     handler: (params, { runtime }) => {

@@ -29,6 +29,7 @@ export const BOT_CONNECT_METHODS = [
   defineMethod({
     name: 'bots.connect.start',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: ConnectorConnectStart,
     handler: async ({ source, switchAccount, addAccess }, context) =>
       withHostCloudClient(context, (client) =>
@@ -42,12 +43,14 @@ export const BOT_CONNECT_METHODS = [
   defineMethod({
     name: 'bots.connect.wait',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: ConnectorConnectWait,
     handler: async ({ tripId }, context) => waitConnectorTrip(tripId, context.signal)
   }),
   defineMethod({
     name: 'bots.connect.cancel',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: ConnectorConnectCancel,
     handler: async ({ source }) => {
       cancelConnectorConnect(source)
@@ -57,6 +60,7 @@ export const BOT_CONNECT_METHODS = [
   defineMethod({
     name: 'bots.connect.redeem',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: ConnectorConnectRedeemParams,
     handler: async ({ source, result }, context) => {
       if (!CONNECTOR_CONNECT_CODE_PATTERN.test(result)) {

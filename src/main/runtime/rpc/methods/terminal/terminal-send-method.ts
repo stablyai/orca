@@ -44,6 +44,7 @@ export const TERMINAL_SEND_METHODS = [
   defineMethod({
     name: 'terminal.send',
     permission: 'workspace',
+    share: 'not-shared',
     params: TerminalSend,
     handler: withTerminalInputSequence(
       async (

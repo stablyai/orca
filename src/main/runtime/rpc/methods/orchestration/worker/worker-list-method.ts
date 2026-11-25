@@ -36,6 +36,7 @@ export const ORCHESTRATION_WORKER_LIST_METHOD = defineOrchestrationMethod({
   name: 'orchestration.workerList',
   access: { kind: 'reads', server: 'on', targets: { run: 'run' }, collection: true },
   permission: 'workspace',
+  share: 'not-shared',
   params: WorkerListParams,
   handler: async (params, { runtime }) => {
     const page = await listLocalWorkerPage(runtime, params)

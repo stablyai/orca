@@ -11,6 +11,7 @@ export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.forBranch',
     permission: 'workspace',
+    share: 'not-shared',
     params: HostedReviewForBranch,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -36,6 +37,7 @@ export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.getCreationEligibility',
     permission: 'workspace',
+    share: 'not-shared',
     params: HostedReviewCreationEligibility,
     handler: async (params, { runtime }) => {
       const fallbackGitHubPR =
@@ -63,6 +65,7 @@ export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) => {
       // Refuse an unknown host-issued provider token here; schema rejection would be unreadable to the client.
@@ -85,6 +88,7 @@ export const HOSTED_REVIEW_METHODS = [
   defineMethod({
     name: 'hostedReview.createStacked',
     permission: 'workspace',
+    share: 'not-shared',
     params: HostedReviewCreate,
     handler: async (params, { runtime }) => {
       if (!supportsHostedReviewCreation(params.provider)) {

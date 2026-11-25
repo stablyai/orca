@@ -39,6 +39,7 @@ export const BOT_SHARE_METHODS = [
   defineMethod({
     name: 'bots.share.prepare',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSharePrepare,
     handler: async (
       { botId, setupNote, last, localOnly, skillsSession, reuseSkills, ...selection },
@@ -55,6 +56,7 @@ export const BOT_SHARE_METHODS = [
   defineMethod({
     name: 'bots.share.publish',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSharePublish,
     handler: async ({ botId, candidateId, setupNote = '', link }, context) => {
       const bot = authorizedBot(context, botId)
@@ -67,6 +69,7 @@ export const BOT_SHARE_METHODS = [
   defineMethod({
     name: 'bots.share.view',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSharePartView,
     handler: async ({ botId, candidateId, part }, context) => ({
       files: await context.runtime
@@ -77,6 +80,7 @@ export const BOT_SHARE_METHODS = [
   defineMethod({
     name: 'bots.share.stop',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotShareStop,
     handler: async ({ shareId, botId }, context) => {
       assertTrustedCaller(context)
@@ -86,6 +90,7 @@ export const BOT_SHARE_METHODS = [
   defineMethod({
     name: 'bots.share.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotShareStatusParams,
     // Every live bot link the owner has; botShareStatusOf reads one bot's from it.
     handler: async ({ botId }, context) => {

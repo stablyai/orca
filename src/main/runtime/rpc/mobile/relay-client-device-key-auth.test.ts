@@ -45,12 +45,15 @@ function relayToHost(
     terminateClientConnections: () => 0
   }
   const requests: Record<string, unknown>[] = []
+  // What the host's socket says the client reads, as each request finds it.
+  const capabilities: (readonly string[])[] = []
   const wiring = new MobileSocketWiring({
     deviceRegistry: registry,
     e2eeKeypair: { ...desktop, publicKeyB64: desktopPublicKeyB64 },
     onText: (socket, plaintext, reply) => {
       const request = JSON.parse(plaintext) as Record<string, unknown>
       requests.push(request)
+      capabilities.push(socket.clientCapabilities)
       reply(JSON.stringify({ id: request.id, ok: true, result: socket.device.deviceId }))
     },
     onBinary: () => {},
@@ -91,7 +94,7 @@ function relayToHost(
       }
     }
   }
-  return { platform, requests }
+  return { platform, requests, capabilities }
 }
 
 describe('relay client authentication against the host', () => {
@@ -115,7 +118,8 @@ describe('relay client authentication against the host', () => {
         deviceId: keyed.deviceId,
         relayCredential: { kind: 'invite', inviteToken: 'invite' }
       },
-      sign: async (message) => nacl.sign.detached(message, key.secretKey)
+      sign: async (message) => nacl.sign.detached(message, key.secretKey),
+      clientCapabilities: []
     })
     await expect(sharedClient.sendRequest('status.get')).resolves.toMatchObject({
       ok: true,
@@ -139,6 +143,32 @@ describe('relay client authentication against the host', () => {
     })
     expect(token.requests[0]).toMatchObject({ deviceToken: phone.token })
     phoneClient.close()
+  })
+  it('declares the shared-host client’s capabilities to the host, which gates every chat call on them', async () => {
+    const registry = new DeviceRegistry(mkdtempSync(join(tmpdir(), 'orca-relay-client-')))
+    const phone = registry.addDevice('Phone', 'mobile')
+    const key = nacl.sign.keyPair()
+    const keyed = registry.forkDeviceKey(
+      phone.deviceId,
+      Buffer.from(key.publicKey).toString('base64'),
+      'Laptop'
+    )
+    const shared = relayToHost(registry, phone.deviceId)
+    const client = connectSharedHost({
+      platform: shared.platform,
+      connection: {
+        kind: 'shared-host',
+        relay: { cellUrl: 'https://cell.example', relayHostId: RELAY_HOST_ID },
+        hostPublicKeyB64: desktopPublicKeyB64,
+        deviceId: keyed.deviceId,
+        relayCredential: { kind: 'invite', inviteToken: 'invite' }
+      },
+      sign: async (message) => nacl.sign.detached(message, key.secretKey),
+      clientCapabilities: ['structured.v1', 'agent_session.turn_item']
+    })
+    await client.sendRequest('agentSession.history')
+    expect(shared.capabilities[0]).toEqual(['structured.v1', 'agent_session.turn_item'])
+    client.close()
   })
   it('never sends a request that timed out before the host authenticated', async () => {
     const registry = new DeviceRegistry(mkdtempSync(join(tmpdir(), 'orca-relay-client-')))

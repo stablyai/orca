@@ -39,7 +39,14 @@ export function installAgentSessionAttachments(deps: {
     })
   }
   const attachments = new AgentSessionAttachmentStore(root, {
-    hasSession: (sessionId) => deps.store.getRecord(sessionId) !== null
+    hasSession: (sessionId) => deps.store.getRecord(sessionId) !== null,
+    claimingSessions: async (uploadId) => {
+      const read = await deps.journalDatabase.readers.database({
+        kind: 'attachment-sessions',
+        uploadId
+      })
+      return read.kind === 'attachment-sessions' ? read.sessionIds : []
+    }
   })
   setAgentSessionAttachmentStore(attachments, async (sessionId, body) => {
     if (deps.journalDatabase.readOnly || deps.journalDatabase.isClosed) {

@@ -1,3 +1,4 @@
+import { SHARE_BY_SESSION } from '../../../../../../shared/bots/bot-share-rpc-methods'
 // Negotiate item-detail.v1 for full journal items beyond preview heads; fit replies to transport limits and mark remaining truncation.
 
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -12,6 +13,7 @@ export const STRUCTURED_AGENT_SESSION_ITEM_METHODS = [
   defineMethod({
     name: 'agentSession.item',
     permission: 'workspace',
+    share: SHARE_BY_SESSION,
     params: ItemParams,
     handler: async (params, ctx): Promise<{ item: AgentJournalRenderItem | null }> => {
       const item = await (

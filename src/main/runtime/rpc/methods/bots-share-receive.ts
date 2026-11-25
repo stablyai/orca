@@ -8,6 +8,7 @@ export const BOT_SHARE_RECEIVE_METHODS = [
   defineMethod({
     name: 'bots.share.review',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotShareReviewParams,
     handler: async ({ shareId, versionId }, context) => {
       assertTrustedCaller(context)

@@ -18,6 +18,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.inbox',
     permission: 'workspace',
+    share: 'not-shared',
     params: InboxParams,
     access: { kind: 'reads', targets: { terminal: 'party', run: 'run' }, collection: true },
     handler: (params, { runtime }) => {
@@ -48,6 +49,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.taskCreate',
     permission: 'workspace',
+    share: 'not-shared',
     params: TaskCreateParams,
     access: {
       kind: 'writes',
@@ -91,6 +93,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.taskList',
     permission: 'workspace',
+    share: 'not-shared',
     params: TaskListParams,
     access: {
       kind: 'reads',
@@ -126,6 +129,7 @@ export const ORCHESTRATION_MESSAGE_METHODS = [
   defineOrchestrationMethod({
     name: 'orchestration.taskUpdate',
     permission: 'workspace',
+    share: 'not-shared',
     params: TaskUpdateParams,
     access: {
       kind: 'writes',

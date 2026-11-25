@@ -30,36 +30,42 @@ export const WEBHOOK_METHODS = [
   defineMethod({
     name: 'webhooks.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhooksList,
     handler: async ({ botId }, { runtime }) => ({ hooks: await webhooks(runtime).list(botId) })
   }),
   defineMethod({
     name: 'webhooks.card',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookCard,
     handler: async ({ hookId }, { runtime }) => webhooks(runtime).card(hookId)
   }),
   defineMethod({
     name: 'webhooks.calls',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookCalls,
     handler: async ({ hookId }, { runtime }) => ({ calls: await webhooks(runtime).calls(hookId) })
   }),
   defineMethod({
     name: 'webhooks.call',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookCallShow,
     handler: async ({ hookId, callId }, { runtime }) => webhooks(runtime).callText(hookId, callId)
   }),
   defineMethod({
     name: 'webhooks.check',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookCheck,
     handler: async ({ hookId, filters }, { runtime }) => webhooks(runtime).check(hookId, filters)
   }),
   defineMethod({
     name: 'webhooks.sample',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookSample,
     handler: async ({ hookId, operationId }, { runtime }) =>
       webhooks(runtime).sample(hookId, operationId)
@@ -67,6 +73,7 @@ export const WEBHOOK_METHODS = [
   defineMethod({
     name: 'webhooks.pause',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookPause,
     // One hook per automation, so pausing either is the same. pending: the cloud hasn't confirmed yet.
     handler: async ({ hookId, paused }, { runtime }) => {
@@ -78,6 +85,7 @@ export const WEBHOOK_METHODS = [
   defineMethod({
     name: 'webhooks.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookDelete,
     handler: async ({ hookId }, { runtime }) => {
       // The cloud deletes the hook once nothing here lists its rule.
@@ -91,18 +99,21 @@ export const WEBHOOK_METHODS = [
   defineMethod({
     name: 'webhooks.reveal',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookReveal,
     handler: async ({ hookId }, { runtime }) => webhooks(runtime).reveal(hookId)
   }),
   defineMethod({
     name: 'webhooks.rotate',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookRotate,
     handler: async ({ hookId, ...body }, { runtime }) => webhooks(runtime).rotate(hookId, body)
   }),
   defineMethod({
     name: 'webhooks.secret',
     permission: 'workspace',
+    share: 'not-shared',
     params: WebhookSecret,
     handler: async (params, { runtime }) => webhooks(runtime).setSecret(params)
   })

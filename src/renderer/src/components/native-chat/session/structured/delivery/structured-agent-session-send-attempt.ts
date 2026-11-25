@@ -109,6 +109,7 @@ function sharedBotHostAnswer(error: unknown): StructuredAgentSessionSendAttempt 
     case SHARED_BOT_HOST_ERRORS.held:
       return { kind: 'held' }
     case SHARED_BOT_HOST_ERRORS.tooLarge:
+    case SHARED_BOT_HOST_ERRORS.unshared:
       return { kind: 'not-sent', parts: [{ text: error.message }] }
     case SHARED_BOT_HOST_ERRORS.offline:
       return { kind: 'not-sent', parts: [{ text: error.message }, 'notDoneSend'] }
@@ -135,7 +136,8 @@ export async function attemptStructuredAgentSessionSend(args: {
   let fence: number | null
   let body = entry.body
   try {
-    if (target.kind === 'environment') {
+    // A shared host is checked by its share (and holds the message while away), not by a probe.
+    if (target.kind === 'environment' && !shared) {
       await ensureRuntimeEnvironmentCompatible(target.environmentId)
     }
     fence = shared ? null : await knownFence(target, entry.sessionId)

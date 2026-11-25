@@ -53,6 +53,7 @@ export const ORCHESTRATION_CREW_METHODS = [
     name: 'orchestration.crewSubscribe',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: CrewSubscribeParams,
     handler: ({ party, view, deltas }, context, emit) =>
       streamUntilClosed(
@@ -73,6 +74,7 @@ export const ORCHESTRATION_CREW_METHODS = [
     name: 'orchestration.workerApprovalsSubscribe',
     access: { kind: 'localOnly', targets: { party: 'party' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkerApprovalsSubscribeParams,
     handler: ({ party }, context, emit) =>
       streamUntilClosed(
@@ -86,6 +88,7 @@ export const ORCHESTRATION_CREW_METHODS = [
     name: 'orchestration.workerApprovalsUnsubscribe',
     access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkerApprovalsUnsubscribeParams,
     handler: ({ subscriptionId }, { runtime, connectionId }) => {
       runtime.releaseSubscriptionByRequest(connectionId, subscriptionId)

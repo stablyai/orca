@@ -6,6 +6,7 @@ export const BROWSER_PAGE_INITIALIZATION_ACTION_METHODS = [
   defineMethod({
     name: 'browser.clientPage.initializationAction',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserPageInitializationActionParams,
     handler: async (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       await runtime.actOnClientPageInitialization(params)

@@ -6,6 +6,7 @@ export const DESKTOP_WINDOW_METHODS = [
   defineMethod({
     name: 'desktop.openWindowInBackground',
     permission: 'desktop-control',
+    share: 'not-shared',
     params: null,
     handler: async () => ({ requested: requestBackgroundWindowOpen() })
   })

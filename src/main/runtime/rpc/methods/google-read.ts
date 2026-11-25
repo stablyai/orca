@@ -23,6 +23,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.gmail.search',
     permission: 'workspace',
+    share: 'not-shared',
     params: GmailSearchParams,
     handler: async (params, context) =>
       searchGmail(await googleApiForCaller(params, context), params)
@@ -30,6 +31,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.gmail.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: GmailReadParams,
     handler: async (params, context) =>
       readGmail(await googleApiForCaller(params, context, [params.ref]), params)
@@ -37,6 +39,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.gmail.attachment',
     permission: 'workspace',
+    share: 'not-shared',
     params: GmailAttachmentParams,
     handler: async (params, context) =>
       downloadGmailAttachment(await googleApiForCaller(params, context), params.ref)
@@ -44,6 +47,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.calendar.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarListParams,
     handler: async (params, context) =>
       listCalendarEvents(await googleApiForCaller(params, context), { ...params, now: Date.now() })
@@ -51,6 +55,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.calendar.calendars',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarCalendarsParams,
     handler: async (params, context) =>
       listCalendars(await googleApiForCaller(params, context), Date.now())
@@ -58,6 +63,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.calendar.get',
     permission: 'workspace',
+    share: 'not-shared',
     params: CalendarGetParams,
     handler: async (params, context) =>
       getCalendarEvent(await googleApiForCaller(params, context), { ...params, now: Date.now() })
@@ -65,6 +71,7 @@ export const GOOGLE_READ_METHODS = [
   defineMethod({
     name: 'google.contacts.find',
     permission: 'workspace',
+    share: 'not-shared',
     params: ContactsFindParams,
     handler: async (params, context) =>
       findContacts(await googleApiForCaller(params, context), params.query)

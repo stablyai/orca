@@ -7,6 +7,7 @@ export const STRUCTURED_AGENT_SESSION_AUTO_REVIEW_METHODS = [
   defineMethod({
     name: 'agentSession.approveAutoReviewDenial',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutoReviewApprovalParams,
     // Only a person may approve, so only this computer's own Orca window: the CLI, plugins and any
     // paired client (whose agent marker is self-declared) could be an agent authorizing itself.

@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
 import { BotChats } from '../../../../shared/rpc-contract/bots-params'
-import { AttachmentUploadStartParams } from '../../../../shared/rpc-contract/structured-agent-session/agent-session-attachment-params'
+import {
+  AttachmentReadParams,
+  AttachmentUploadStartParams
+} from '../../../../shared/rpc-contract/structured-agent-session/agent-session-attachment-params'
 import { emptyChatReusableBy } from '../../../bots/team-share/bot-share-chats'
 import {
   HistoryParams,
@@ -18,11 +21,21 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
-import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-methods'
+import {
+  BOT_SHARE_SCOPED_METHODS,
+  SHARE_BY_ATTACHMENT,
+  SHARE_BY_BOT,
+  SHARE_BY_ENVELOPE_SESSION,
+  SHARE_BY_SESSION
+} from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareMethodNames } from '../methods/rpc-method-share'
 import { defineMethod } from '../core'
+import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import { BOT_METHODS } from '../methods/bots'
+import { STATUS_METHODS } from '../methods/host-management/status'
 import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { makeTestBot } from '../../../bots/bot.test-fixture'
@@ -151,35 +164,54 @@ beforeEach(() => {
       defineMethod({
         name: 'agentSession.history',
         permission: 'workspace',
+        share: SHARE_BY_SESSION,
         params: HistoryParams,
         handler: ran
       }),
       defineMethod({
         name: 'agentSession.respondToApproval',
         permission: 'workspace',
+        share: SHARE_BY_ENVELOPE_SESSION,
         params: RespondParams,
         handler: ran
       }),
-      defineMethod({ name: 'bots.chats', permission: 'workspace', params: BotChats, handler: ran }),
+      defineMethod({
+        name: 'bots.chats',
+        permission: 'workspace',
+        share: SHARE_BY_BOT,
+        params: BotChats,
+        handler: ran
+      }),
       defineMethod({
         name: 'agentSessionAttachment.uploadStart',
         permission: 'workspace',
+        share: SHARE_BY_SESSION,
         params: AttachmentUploadStartParams,
+        handler: ran
+      }),
+      defineMethod({
+        name: 'agentSessionAttachment.read',
+        permission: 'workspace',
+        share: SHARE_BY_ATTACHMENT,
+        params: AttachmentReadParams,
         handler: ran
       }),
       defineMethod({
         name: 'bots.chats.seen',
         permission: 'workspace',
+        share: 'not-shared',
         params: null,
         handler: ran
       }),
       ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
-      ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
+      ...STRUCTURED_AGENT_SESSION_STATUS_METHODS,
+      ...STATUS_METHODS
     ]
   })
 })
 
 afterEach(() => {
+  setAgentSessionAttachmentStore(null)
   setStructuredAgentSessionHost(null)
   db.close()
   rmSync(directory, { recursive: true, force: true })
@@ -271,6 +303,32 @@ describe('the share guard', () => {
     expect(errorCode(await upload(ids.alicesOtherBotChat))).toBe('not_found')
   })
 
+  // A stored file's upload id is claimed by the chats whose messages carry it (the journal's claims).
+  it('previews a stored attachment only when one of the teammate’s own chats claims it, right after a restart too', async () => {
+    const root = join(directory, 'attachments')
+    const theirs = join(root, '11111111-1111-4111-8111-111111111111', 'a.png')
+    const owners = join(root, '22222222-2222-4222-8222-222222222222', 'b.png')
+    const claims = new Map([
+      ['11111111-1111-4111-8111-111111111111', [ids.alicesChat]],
+      ['22222222-2222-4222-8222-222222222222', [ids.ownersChat]]
+    ])
+    // As on a cold start: the store comes with the chat host, which the first call opens.
+    vi.mocked(runtime.ensureStructuredAgentSessionHost).mockImplementation(async () => {
+      setAgentSessionAttachmentStore(
+        new AgentSessionAttachmentStore(root, {
+          hasSession: () => true,
+          claimingSessions: async (uploadId) => claims.get(uploadId) ?? []
+        }),
+        async () => {}
+      )
+      throw new Error('installed')
+    })
+    const read = (path: string) => call('agentSessionAttachment.read', { path })
+    expect(errorCode(await read(theirs))).toBeNull()
+    expect(errorCode(await read(owners))).toBe('not_found')
+    expect(errorCode(await read(join(directory, 'elsewhere.png')))).toBe('not_found')
+  })
+
   it('lets New chat reopen only an empty chat of the asker’s own', () => {
     const forOwner = emptyChatReusableBy(runtime, null)
     const forAlice = emptyChatReusableBy(runtime, SCOPE)
@@ -313,8 +371,75 @@ describe('the share guard', () => {
     })
   })
 
-  it('lists only methods this host serves', () => {
-    const served = new Set<string>(ALL_RPC_METHODS.map((method) => method.name))
-    expect([...BOT_SHARE_RPC_METHODS.keys()].filter((name) => !served.has(name))).toEqual([])
+  it('answers a teammate’s status with its protocol and capabilities, nothing of this computer', async () => {
+    const response = await call('status.get', undefined)
+    const status: object | null = response.ok ? Object(response.result) : null
+    expect(status).toMatchObject({
+      runtimeId: runtime.getRuntimeId(),
+      capabilities: runtime.getStatus().capabilities,
+      authoritativeWindowId: null,
+      liveTabCount: 0,
+      liveLeafCount: 0
+    })
+    const shared = new Set([
+      'runtimeId',
+      'rendererGraphEpoch',
+      'graphStatus',
+      'authoritativeWindowId',
+      'liveTabCount',
+      'liveLeafCount',
+      'runtimeProtocolVersion',
+      'minCompatibleRuntimeClientVersion',
+      'capabilities',
+      'appVersion',
+      'protocolVersion',
+      'minCompatibleMobileVersion'
+    ])
+    expect(Object.keys(status ?? {}).filter((key) => !shared.has(key))).toEqual([])
+  })
+
+  // The whole share surface, read off each method's own decision: a change here is a security review.
+  it('shares exactly these methods, each scoped one with its view', () => {
+    expect(botShareMethodNames().sort()).toEqual(
+      [
+        'agentSession.cancel',
+        'agentSession.currentRequests',
+        'agentSession.history',
+        'agentSession.item',
+        'agentSession.queuedMessageDelete',
+        'agentSession.queuedMessageEditHold',
+        'agentSession.queuedMessageMove',
+        'agentSession.queuedMessageSend',
+        'agentSession.queuedMessageUpdate',
+        'agentSession.queuedMessagesResume',
+        'agentSession.readVisual',
+        'agentSession.respondToApproval',
+        'agentSession.respondToQuestion',
+        'agentSession.send',
+        'agentSession.subscribe',
+        'agentSession.subscribeStatus',
+        'agentSession.unsubscribe',
+        'agentSessionAttachment.read',
+        'agentSessionAttachment.readTextChunk',
+        'agentSessionAttachment.uploadAbort',
+        'agentSessionAttachment.uploadAppend',
+        'agentSessionAttachment.uploadCommit',
+        'agentSessionAttachment.uploadStart',
+        'bots.avatar.read',
+        'bots.chatTree',
+        'bots.chats',
+        'bots.chats.own',
+        'bots.list',
+        'bots.roster',
+        'bots.session.start',
+        'pairing.getEndpoints',
+        'pairing.provisionRelay',
+        'status.get'
+      ].sort()
+    )
+    const scoped = ALL_RPC_METHODS.filter(
+      (method) => method.share !== 'not-shared' && method.share.kind === 'scoped'
+    ).map((method) => method.name)
+    expect(scoped.sort()).toEqual([...BOT_SHARE_SCOPED_METHODS].sort())
   })
 })

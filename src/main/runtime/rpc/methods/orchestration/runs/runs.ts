@@ -52,6 +52,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runCreate',
     access: { kind: 'localOnly', caller: 'from', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: RunCreateParams,
     handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
       const caller = resolveOrchestrationCaller(runtime, {
@@ -67,6 +68,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runUse',
     access: { kind: 'localOnly', caller: 'from', targets: { id: 'run' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: RunUseParams,
     handler: (
       params,
@@ -134,6 +136,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runCurrent',
     access: { kind: 'reads', caller: 'from', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: RunCurrentParams,
     handler: (params, { orchestrationCompatibilityEvidence, orchestrationCaller, runtime }) => {
       const caller = resolveOrchestrationCaller(runtime, {
@@ -155,6 +158,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runList',
     access: { kind: 'reads', targets: {}, collection: true },
     permission: 'workspace',
+    share: 'not-shared',
     params: RunListParams,
     handler: (params, { runtime }) => {
       const listed = runtime.getOrchestrationDb().listRuns(params)
@@ -165,6 +169,7 @@ export const ORCHESTRATION_RUN_METHODS = [
     name: 'orchestration.runShow',
     access: { kind: 'reads', targets: { id: 'run' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: RunShowParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

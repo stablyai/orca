@@ -6,6 +6,7 @@ export const LINK_PREVIEW_METHODS = [
   defineMethod({
     name: 'linkPreview.get',
     permission: 'workspace',
+    share: 'not-shared',
     params: LinkPreviewGetParams,
     handler: async (params) => getLinkPreview({ url: params.url })
   })

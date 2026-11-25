@@ -1,11 +1,13 @@
 // A teammate's messages held in Orca Cloud for a shared agent's host: where a send goes, the held
 // states the cloud reports, and Send again for one the host refused.
+import { UNKNOWN_SHARE_REFUSAL } from '../../../shared/connector-share-contract'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
   isSharedBotNewChatId,
   newSharedBotChatId,
   SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHeldState,
   type SharedBotHeldView
 } from '../../../shared/bots/shared-bot-hosts'
@@ -155,6 +157,15 @@ export class SharedBotHeldSends {
         `Too large to hold; send it when ${entry.ownerName}’s computer is online`
       )
     }
+    if (result?.kind === 'failed' && result.error === UNKNOWN_SHARE_REFUSAL) {
+      // Revoked: the cloud's list drops it now, not at the next idle read.
+      this.deps.changed()
+      return sharedBotFailure(
+        'agentSession.send',
+        SHARED_BOT_HOST_ERRORS.unshared,
+        `${entry.ownerName} no longer shares this agent with you`
+      )
+    }
     // Not held (refused, unsupported, no cloud): still never sent live ahead of the queue.
     return sharedBotOffline(entry)
   }
@@ -173,7 +184,10 @@ export class SharedBotHeldSends {
     if (method === 'bots.session.start') {
       // A start naming a placeholder is its swap to the real chat: only the host answers it, so a
       // link that dropped meanwhile leaves that placeholder in place rather than minting another.
-      return link !== 'live' && entry.hostKey && !NewChatParams.safeParse(params).success
+      return SHARED_HOSTS_HOLD_WHILE_AWAY &&
+        link !== 'live' &&
+        entry.hostKey &&
+        !NewChatParams.safeParse(params).success
         ? {
             id: method,
             ok: true,

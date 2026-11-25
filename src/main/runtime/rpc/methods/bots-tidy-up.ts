@@ -57,12 +57,14 @@ export const BOT_TIDY_UP_METHODS = [
   defineMethod({
     name: 'bots.tidyUp.get',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotTidyUpAct,
     handler: (params, context) => ({ tidyUp: botTidyUpView(context, params.botId) })
   }),
   defineMethod({
     name: 'bots.tidyUp.now',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotTidyUpAct,
     handler: (params, context) => {
       botById(context, params.botId)
@@ -76,6 +78,7 @@ export const BOT_TIDY_UP_METHODS = [
   defineMethod({
     name: 'bots.tidyUp.undo',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotTidyUpUndo,
     handler: async (params, context) => {
       const bot = botById(context, params.botId)

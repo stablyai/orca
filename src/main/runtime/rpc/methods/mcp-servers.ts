@@ -43,7 +43,7 @@ import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { mcpServerConnection } from '../../../mcp-servers/mcp-server-connection'
 import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
 import { sharedMcpProcesses } from '../../../mcp-servers/shared-process/shared-mcp-processes'
-import { defineMethod, type RpcContext } from '../core'
+import { defineMethod, type RpcContext, notShared } from '../core'
 import { toolsHomeFor } from './bots-tools'
 import { mcpServersOfPaste } from '../../../mcp-servers/mcp-server-paste'
 import {
@@ -100,14 +100,14 @@ function problemsClient(context: RpcContext): string {
 export const MCP_SERVER_METHODS = [
   defineMethod({
     name: 'mcpServers.list',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServersList,
     handler: (_params, context) =>
       onHost(context, async () => withMcpAgentProblems(await readMcpHostList()))
   }),
   defineMethod({
     name: 'mcpServers.add',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerAdd,
     handler: (params, context) =>
       onHost(
@@ -131,13 +131,13 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.details',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerTarget,
     handler: (params, context) => onHost(context, () => mcpServerDetails(params.id))
   }),
   defineMethod({
     name: 'mcpServers.update',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerUpdate,
     handler: (params, context) =>
       onHost(
@@ -153,7 +153,7 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.remove',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerTarget,
     handler: (params, context) =>
       onHost(
@@ -167,7 +167,7 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.problems',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerProblems,
     handler: (params, context) =>
       onHost(context, async () => {
@@ -205,7 +205,7 @@ export const MCP_SERVER_METHODS = [
   defineMethod({
     // The asking window let go; the check's CLI and servers close once no other client waits on it.
     name: 'mcpServers.cancelProblems',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServersList,
     handler: (_params, context) =>
       onHost(context, async () => {
@@ -215,7 +215,7 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.setAgentEnabled',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerSetAgentEnabled,
     handler: (params, context) =>
       onHost(
@@ -227,7 +227,7 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.setWorkspaces',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerSetWorkspaces,
     handler: (params, context) =>
       onHost(
@@ -241,7 +241,7 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.setSharedProcess',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerSetSharedProcess,
     handler: (params, context) =>
       onHost(
@@ -252,7 +252,7 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.discover',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerDiscover,
     handler: (_params, context) =>
       onHost(context, async () => ({
@@ -261,21 +261,21 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.move',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerImport,
     handler: (params, context) =>
       onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.copy',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerImport,
     handler: (params, context) =>
       onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerAgentFilesAllow,
     handler: (params, context) =>
       onHost(
@@ -288,7 +288,7 @@ export const MCP_SERVER_METHODS = [
     // `orca mcp connect` in Grok's, Cursor's and Droid's own MCP files. The answer carries the
     // relay token or a command's secret env, so this host's own CLI is the only caller it serves.
     name: 'mcpServers.connect',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerConnect,
     handler: (params, context) =>
       onHost(context, () =>
@@ -302,13 +302,13 @@ export const MCP_SERVER_METHODS = [
   }),
   defineMethod({
     name: 'mcpServers.sessions.stale',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerSessions,
     handler: (_params, context) => onHost(context, () => context.runtime.countMcpStaleTerminals())
   }),
   defineMethod({
     name: 'mcpServers.sessions.restart',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: McpServerSessions,
     handler: (_params, context) => onHost(context, () => context.runtime.restartMcpStaleTerminals())
   })

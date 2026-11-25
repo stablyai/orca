@@ -53,6 +53,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'chat-exists'; sessionId: string }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
+  | { kind: 'attachment-sessions'; uploadId: string }
   | { kind: 'attachment-sweeps'; after: string | null }
   | { kind: 'legacy-compares'; after: string | null }
   | { kind: 'forgotten-chats'; after: string | null }
@@ -80,6 +81,7 @@ export type JournalSqlDatabaseReadResult =
       claims: { rowid: number; uploadId: string; sessionId: string }[]
     }
   | { kind: 'attachment-sweeps'; uploadIds: string[] }
+  | { kind: 'attachment-sessions'; sessionIds: string[] }
   | { kind: 'forgotten-chats'; sessionIds: string[] }
   | { kind: 'deleted-chats'; chats: DeletedChat[] }
   | { kind: 'connector-replies'; rows: JournalConnectorReplyRow[] }
@@ -216,6 +218,14 @@ function read(
             uploadId: String(row.upload_id),
             sessionId: String(row.session_id)
           }))
+      }
+    case 'attachment-sessions':
+      return {
+        kind: 'attachment-sessions',
+        sessionIds: db
+          .prepare('SELECT session_id FROM agent_session_attachment_claims WHERE upload_id=?')
+          .all(operation.uploadId)
+          .map((row) => String(row.session_id))
       }
     case 'attachment-sweeps': {
       const rows =

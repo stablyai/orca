@@ -34,6 +34,7 @@ import { parseItemLink, resolveItem, writeResult, writerOf } from './bots-items-
 const ADD = defineMethod({
   name: 'bots.items.add',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsAdd,
   handler: addItem
 })
@@ -41,6 +42,7 @@ const ADD = defineMethod({
 const SET = defineMethod({
   name: 'bots.items.set',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsSet,
   handler: async (params, context) => {
     const writer = writerOf(params, context)
@@ -106,6 +108,7 @@ const SET = defineMethod({
 const COMMENT = defineMethod({
   name: 'bots.items.comment',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsComment,
   handler: async (params, context) => {
     const writer = writerOf(params, context)
@@ -126,6 +129,7 @@ const COMMENT = defineMethod({
 const DONE = defineMethod({
   name: 'bots.items.done',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsDone,
   handler: async (params, context) => {
     const writer = writerOf(params, context)
@@ -140,6 +144,7 @@ const DONE = defineMethod({
 const CANCEL = defineMethod({
   name: 'bots.items.cancel',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsCancel,
   handler: async (params, context) => {
     const writer = writerOf(params, context)
@@ -154,6 +159,7 @@ const CANCEL = defineMethod({
 const LINK = defineMethod({
   name: 'bots.items.link',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsLink,
   handler: async (params, context) => {
     const writer = writerOf(params, context)

@@ -10,6 +10,7 @@ export const BROWSER_EXTENSION_METHODS = [
   defineMethod({
     name: 'browser.extensionList',
     permission: 'workspace',
+    share: 'not-shared',
     params: ExtensionList,
     handler: async (params, { runtime }) => ({
       ...(await getRuntimeBrowserExtensions().list(params)),
@@ -19,6 +20,7 @@ export const BROWSER_EXTENSION_METHODS = [
   defineMethod({
     name: 'browser.extensionReload',
     permission: 'workspace',
+    share: 'not-shared',
     params: ExtensionReload,
     handler: async (params, { runtime }) => ({
       ...(await getRuntimeBrowserExtensions().reload(params)),

@@ -84,6 +84,7 @@ export const STRUCTURED_AGENT_SESSION_ACCOUNT_USAGE_METHODS = [
   defineMethod({
     name: 'agentSession.accountUsage',
     permission: 'workspace',
+    share: 'not-shared',
     params: OptionsParams,
     handler: async ({ sessionId }, ctx): Promise<AgentSessionAccountUsage> => {
       const host = await requireInstalledStructuredHost(ctx, sessionId)

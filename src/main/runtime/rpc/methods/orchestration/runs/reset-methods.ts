@@ -8,6 +8,7 @@ export const ORCHESTRATION_RESET_METHODS = [
     name: 'orchestration.reset',
     access: { kind: 'localOnly', targets: {} },
     permission: 'workspace',
+    share: 'not-shared',
     params: ResetParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()

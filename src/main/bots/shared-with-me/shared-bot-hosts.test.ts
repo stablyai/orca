@@ -14,6 +14,7 @@ import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host
 import {
   isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHostView
 } from '../../../shared/bots/shared-bot-hosts'
 import {
@@ -36,6 +37,9 @@ import type {
   ConnectorShareAcceptRequest,
   ConnectorShareHoldRequest
 } from '../../../shared/connector-share-contract'
+
+// Held sends are off while SHARED_HOSTS_HOLD_WHILE_AWAY is: their tests run again when it is on.
+const heldIt = it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)
 
 const HOST = nacl.box.keyPair()
 const HOST_KEY = Buffer.from(HOST.publicKey).toString('base64')
@@ -197,19 +201,22 @@ describe('where a message to a shared agent goes', () => {
   const chat = { sessionId: 'chat-1' }
   const noStates = new Map()
 
-  it('hands off to the held queue when the host is away or the device is not paired yet', () => {
-    expect(sendsHeld(entry({ hostKey: HOST_KEY }), 'offline', chat, noStates)).toBe(true)
-    expect(sendsHeld(entry({ hostKey: HOST_KEY }), 'unpaired', { newChatId: 'n1' }, noStates)).toBe(
-      true
-    )
-    expect(sendsHeld(entry({ hostKey: HOST_KEY }), 'live', chat, noStates)).toBe(false)
-  })
+  heldIt(
+    'hands off to the held queue when the host is away or the device is not paired yet',
+    () => {
+      expect(sendsHeld(entry({ hostKey: HOST_KEY }), 'offline', chat, noStates)).toBe(true)
+      expect(
+        sendsHeld(entry({ hostKey: HOST_KEY }), 'unpaired', { newChatId: 'n1' }, noStates)
+      ).toBe(true)
+      expect(sendsHeld(entry({ hostKey: HOST_KEY }), 'live', chat, noStates)).toBe(false)
+    }
+  )
 
   it('holds nothing for a host that published no key', () => {
     expect(sendsHeld(entry(), 'offline', chat, noStates)).toBe(false)
   })
 
-  it('keeps a chat’s follow-ups on the held queue until its first held message lands', () => {
+  heldIt('keeps a chat’s follow-ups on the held queue until its first held message lands', () => {
     const held = entry({
       hostKey: HOST_KEY,
       held: [{ clientMessageId: 'm1', chat, text: 'hi', sentAt: 0 }]
@@ -230,7 +237,7 @@ const sendParams = (sessionId: string, clientOperationId: string) =>
   })
 
 describe('the key a held message is sealed to', () => {
-  it('stays the paired host’s own when the cloud later names or offers another', async () => {
+  heldIt('stays the paired host’s own when the cloud later names or offers another', async () => {
     const primitives = NODE_PAIRED_E2EE_PRIMITIVES
     const host = primitives.generateKeyPair()
     const cloudKeys = primitives.generateKeyPair()
@@ -285,127 +292,136 @@ describe('the key a held message is sealed to', () => {
 })
 
 describe('the held queue’s order', () => {
-  it('keeps a message held while an older read of the cloud was out, and reads once more after it', async () => {
-    let now = 1_000
-    let release: (shares: MineShare[]) => void = () => {}
-    let reads = 0
-    const away = share({ hostOnline: false, hostKey: HOST_KEY })
-    const { service, mineReads } = hosts(
-      () => {
-        reads += 1
-        if (reads === 2) {
-          return new Promise<MineShare[]>((resolve) => {
-            release = resolve
-          })
-        }
-        return reads === 1
-          ? [away]
-          : [{ ...away, held: [{ clientMessageId: 'm1', state: 'waiting' }] }]
-      },
-      () => now
-    )
-    await service.refresh()
-    const reading = service.refresh()
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    now = 2_000
-    const sent = await service.call(
-      service.views()[0]!.environmentId,
-      'agentSession.send',
-      sendParams('chat-0001', 'm1')
-    )
-    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
-    // The older read lands without m1; m1 stays, and one more read follows it.
-    release([away])
-    await reading
-    service.stop()
-    expect(mineReads()).toBe(3)
-    expect(service['store'].get('share-1')?.held.map((held) => held.clientMessageId)).toEqual([
-      'm1'
-    ])
-  })
+  heldIt(
+    'keeps a message held while an older read of the cloud was out, and reads once more after it',
+    async () => {
+      let now = 1_000
+      let release: (shares: MineShare[]) => void = () => {}
+      let reads = 0
+      const away = share({ hostOnline: false, hostKey: HOST_KEY })
+      const { service, mineReads } = hosts(
+        () => {
+          reads += 1
+          if (reads === 2) {
+            return new Promise<MineShare[]>((resolve) => {
+              release = resolve
+            })
+          }
+          return reads === 1
+            ? [away]
+            : [{ ...away, held: [{ clientMessageId: 'm1', state: 'waiting' }] }]
+        },
+        () => now
+      )
+      await service.refresh()
+      const reading = service.refresh()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      now = 2_000
+      const sent = await service.call(
+        service.views()[0]!.environmentId,
+        'agentSession.send',
+        sendParams('chat-0001', 'm1')
+      )
+      expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+      // The older read lands without m1; m1 stays, and one more read follows it.
+      release([away])
+      await reading
+      service.stop()
+      expect(mineReads()).toBe(3)
+      expect(service['store'].get('share-1')?.held.map((held) => held.clientMessageId)).toEqual([
+        'm1'
+      ])
+    }
+  )
 
-  it('never sends live a message that belongs behind one still waiting, even when it can’t be held', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-held-'))
-    dirs.push(dir)
-    const store = new SharedBotHostStore(dir)
-    await store.load()
-    const held = new SharedBotHeldSends({
-      store,
-      cloud: () => ({
-        mine: async () => UNREADABLE_ANSWER,
-        accept: async () => UNREADABLE_ANSWER,
-        hold: async () => UNREADABLE_ANSWER
-      }),
-      now: () => 0,
-      changed: () => {}
-    })
-    const waiting = entry({
-      hostKey: HOST_KEY,
-      deviceKey: {
-        publicKeyB64: Buffer.from(nacl.sign.keyPair().publicKey).toString('base64'),
-        secretKeyB64: Buffer.from(nacl.sign.keyPair().secretKey).toString('base64')
-      },
-      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, text: 'hi', sentAt: 0 }]
-    })
-    const answer = await held.send(waiting, 'live', sendParams('chat-0001', 'm2'))
-    expect(answer?.ok).toBe(false)
-    expect(await held.send(waiting, 'live', sendParams('chat-0002', 'm3'))).toBeNull()
-  })
+  heldIt(
+    'never sends live a message that belongs behind one still waiting, even when it can’t be held',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'shared-bot-held-'))
+      dirs.push(dir)
+      const store = new SharedBotHostStore(dir)
+      await store.load()
+      const held = new SharedBotHeldSends({
+        store,
+        cloud: () => ({
+          mine: async () => UNREADABLE_ANSWER,
+          accept: async () => UNREADABLE_ANSWER,
+          hold: async () => UNREADABLE_ANSWER
+        }),
+        now: () => 0,
+        changed: () => {}
+      })
+      const waiting = entry({
+        hostKey: HOST_KEY,
+        deviceKey: {
+          publicKeyB64: Buffer.from(nacl.sign.keyPair().publicKey).toString('base64'),
+          secretKeyB64: Buffer.from(nacl.sign.keyPair().secretKey).toString('base64')
+        },
+        held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, text: 'hi', sentAt: 0 }]
+      })
+      const answer = await held.send(waiting, 'live', sendParams('chat-0001', 'm2'))
+      expect(answer?.ok).toBe(false)
+      expect(await held.send(waiting, 'live', sendParams('chat-0002', 'm3'))).toBeNull()
+    }
+  )
 })
 
 describe('a held message and a cloud read that cross', () => {
-  it('keeps a message held while a read was out until a read lists it, then drops it once one doesn’t', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-cross-'))
-    dirs.push(dir)
-    const store = new SharedBotHostStore(dir)
-    await store.load()
-    const device = nacl.sign.keyPair()
-    store.put(
-      entry({
-        hostKey: HOST_KEY,
-        deviceKey: {
-          publicKeyB64: Buffer.from(device.publicKey).toString('base64'),
-          secretKeyB64: Buffer.from(device.secretKey).toString('base64')
-        }
+  heldIt(
+    'keeps a message held while a read was out until a read lists it, then drops it once one doesn’t',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'shared-bot-cross-'))
+      dirs.push(dir)
+      const store = new SharedBotHostStore(dir)
+      await store.load()
+      const device = nacl.sign.keyPair()
+      store.put(
+        entry({
+          hostKey: HOST_KEY,
+          deviceKey: {
+            publicKeyB64: Buffer.from(device.publicKey).toString('base64'),
+            secretKeyB64: Buffer.from(device.secretKey).toString('base64')
+          }
+        })
+      )
+      let accept: () => void = () => {}
+      const held = new SharedBotHeldSends({
+        store,
+        cloud: () => ({
+          mine: async () => UNREADABLE_ANSWER,
+          accept: async () => UNREADABLE_ANSWER,
+          hold: () =>
+            new Promise((resolve) => {
+              accept = () => resolve({ ok: true, value: { status: 'held' } })
+            })
+        }),
+        now: () => 5,
+        changed: () => {}
       })
-    )
-    let accept: () => void = () => {}
-    const held = new SharedBotHeldSends({
-      store,
-      cloud: () => ({
-        mine: async () => UNREADABLE_ANSWER,
-        accept: async () => UNREADABLE_ANSWER,
-        hold: () =>
-          new Promise((resolve) => {
-            accept = () => resolve({ ok: true, value: { status: 'held' } })
-          })
-      }),
-      now: () => 5,
-      changed: () => {}
-    })
-    // A cloud read: begun at one point, its answer applied later.
-    const begin = () => {
-      const read = held.beginRead()
-      return (listed: MineShare['held']): void => {
-        held.applyMine([share({ hostKey: HOST_KEY, held: listed })])
-        const current = store.get('share-1')!
-        store.put({ ...current, held: held.settle(current.held, read) })
+      // A cloud read: begun at one point, its answer applied later.
+      const begin = () => {
+        const read = held.beginRead()
+        return (listed: MineShare['held']): void => {
+          held.applyMine([share({ hostKey: HOST_KEY, held: listed })])
+          const current = store.get('share-1')!
+          store.put({ ...current, held: held.settle(current.held, read) })
+        }
       }
+      const sending = held.send(store.get('share-1')!, 'offline', sendParams('chat-0001', 'm1'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      // Out while m1 was being held: its answer can't list it yet.
+      const crossing = begin()
+      accept()
+      await sending
+      crossing([])
+      const ids = () => store.get('share-1')!.held.map((message) => message.clientMessageId)
+      expect(ids()).toEqual(['m1'])
+      begin()([{ clientMessageId: 'm1', state: 'waiting' }])
+      expect(ids()).toEqual(['m1'])
+      begin()([])
+      expect(ids()).toEqual([])
     }
-    const sending = held.send(store.get('share-1')!, 'offline', sendParams('chat-0001', 'm1'))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    // Out while m1 was being held: its answer can't list it yet.
-    const crossing = begin()
-    accept()
-    await sending
-    crossing([])
-    const ids = () => store.get('share-1')!.held.map((message) => message.clientMessageId)
-    expect(ids()).toEqual(['m1'])
-    begin()([{ clientMessageId: 'm1', state: 'waiting' }])
-    expect(ids()).toEqual(['m1'])
-    begin()([])
-    expect(ids()).toEqual([])
-  })
+  )
 
   it('settles a message kept from an earlier run that the cloud no longer lists, so its chat goes live', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'shared-bot-aged-'))
@@ -548,39 +564,66 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     share({ hostOnline: false, hostKey: HOST_KEY, held })
   ]
 
-  it('starts a new chat as a placeholder whose first message is held for the host to start it', async () => {
+  heldIt(
+    'starts a new chat as a placeholder whose first message is held for the host to start it',
+    async () => {
+      const { service, holds } = hosts(
+        () => away(),
+        () => 1_000
+      )
+      await service.refresh()
+      const environmentId = service.views()[0]!.environmentId
+      const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+      const sessionId = StartedChat.parse(started.ok ? started.result : null).sessionId
+      expect(isSharedBotNewChatId(sessionId)).toBe(true)
+      // The host doesn't know the placeholder: nothing of it is read there.
+      const read = await service.call(environmentId, 'agentSession.history', { sessionId })
+      expect(read.ok ? null : read.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+      const sent = await service.call(
+        environmentId,
+        'agentSession.send',
+        send(sessionId, 'm1', 'Hi')
+      )
+      service.stop()
+      expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+      const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
+        hostSecretKey: HOST.secretKey,
+        hostKey: HOST_KEY,
+        sealed: holds[0]![1].sealed,
+        expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
+      })
+      expect(opened?.chat).toEqual({ newChatId: sessionId })
+      expect(service.views()[0]!.held).toEqual([
+        {
+          clientMessageId: 'm1',
+          sessionId,
+          text: 'Hi',
+          attachments: [],
+          sentAt: 1_000,
+          state: 'waiting'
+        }
+      ])
+    }
+  )
+
+  it('with held sends off, is away like a paired server: nothing held, listed or started', async () => {
     const { service, holds } = hosts(
-      () => away(),
+      () => away([{ clientMessageId: 'old', state: 'waiting' }]),
       () => 1_000
     )
     await service.refresh()
-    const environmentId = service.views()[0]!.environmentId
-    const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
-    const sessionId = StartedChat.parse(started.ok ? started.result : null).sessionId
-    expect(isSharedBotNewChatId(sessionId)).toBe(true)
-    // The host doesn't know the placeholder: nothing of it is read there.
-    const read = await service.call(environmentId, 'agentSession.history', { sessionId })
-    expect(read.ok ? null : read.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
-    const sent = await service.call(environmentId, 'agentSession.send', send(sessionId, 'm1', 'Hi'))
+    const view = service.views()[0]!
+    expect(view).toMatchObject({ holds: false, held: [] })
+    const started = await service.call(view.environmentId, 'bots.session.start', { botId: 'bot-1' })
+    const sent = await service.call(
+      view.environmentId,
+      'agentSession.send',
+      send('chat-1', 'm1', 'Hi')
+    )
     service.stop()
-    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
-    const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
-      hostSecretKey: HOST.secretKey,
-      hostKey: HOST_KEY,
-      sealed: holds[0]![1].sealed,
-      expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
-    })
-    expect(opened?.chat).toEqual({ newChatId: sessionId })
-    expect(service.views()[0]!.held).toEqual([
-      {
-        clientMessageId: 'm1',
-        sessionId,
-        text: 'Hi',
-        attachments: [],
-        sentAt: 1_000,
-        state: 'waiting'
-      }
-    ])
+    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    expect(holds).toEqual([])
   })
 
   it('starts no placeholder for a host that holds nothing', async () => {
@@ -596,24 +639,27 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
     expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
   })
 
-  it('keeps a placeholder whose swap meets a dropped link, never minting another for it', async () => {
-    const { service } = hosts(
-      () => away(),
-      () => 0
-    )
-    await service.refresh()
-    const environmentId = service.views()[0]!.environmentId
-    const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
-    const placeholder = StartedChat.parse(started.ok ? started.result : null).sessionId
-    const swap = await service.call(environmentId, 'bots.session.start', {
-      botId: 'bot-1',
-      newChatId: placeholder
-    })
-    service.stop()
-    expect(swap.ok ? null : swap.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
-  })
+  heldIt(
+    'keeps a placeholder whose swap meets a dropped link, never minting another for it',
+    async () => {
+      const { service } = hosts(
+        () => away(),
+        () => 0
+      )
+      await service.refresh()
+      const environmentId = service.views()[0]!.environmentId
+      const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+      const placeholder = StartedChat.parse(started.ok ? started.result : null).sessionId
+      const swap = await service.call(environmentId, 'bots.session.start', {
+        botId: 'bot-1',
+        newChatId: placeholder
+      })
+      service.stop()
+      expect(swap.ok ? null : swap.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    }
+  )
 
-  it('sends a refused message again under a new id, in its place', async () => {
+  heldIt('sends a refused message again under a new id, in its place', async () => {
     let held: MineShare['held'] = []
     const { service, holds } = hosts(
       () => away(held),
@@ -644,32 +690,37 @@ describe('a teammate’s messages while the shared agent’s computer is away', 
 })
 
 describe('a new chat the host started from its placeholder id', () => {
-  it('draws its held messages in the started chat, and keeps that chat’s follow-ups behind them', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-started-'))
-    dirs.push(dir)
-    const store = new SharedBotHostStore(dir)
-    await store.load()
-    const placeholder = entry({
-      hostKey: HOST_KEY,
-      held: [{ clientMessageId: 'm1', chat: { newChatId: 'shared-new-1' }, text: 'hi', sentAt: 0 }]
-    })
-    store.put(placeholder)
-    let changed = 0
-    const held = new SharedBotHeldSends({
-      store,
-      cloud: () => null,
-      now: () => 0,
-      changed: () => {
-        changed += 1
-      }
-    })
-    held.started(placeholder, 'shared-new-1', 'chat-real-01')
-    const started = store.get('share-1')!
-    expect(changed).toBe(1)
-    expect(held.views(started).map((view) => view.sessionId)).toEqual(['chat-real-01'])
-    expect(sendsHeld(started, 'live', { sessionId: 'chat-real-01' }, new Map())).toBe(true)
-    expect(sendsHeld(started, 'live', { sessionId: 'chat-other-1' }, new Map())).toBe(false)
-  })
+  heldIt(
+    'draws its held messages in the started chat, and keeps that chat’s follow-ups behind them',
+    async () => {
+      const dir = mkdtempSync(join(tmpdir(), 'shared-bot-started-'))
+      dirs.push(dir)
+      const store = new SharedBotHostStore(dir)
+      await store.load()
+      const placeholder = entry({
+        hostKey: HOST_KEY,
+        held: [
+          { clientMessageId: 'm1', chat: { newChatId: 'shared-new-1' }, text: 'hi', sentAt: 0 }
+        ]
+      })
+      store.put(placeholder)
+      let changed = 0
+      const held = new SharedBotHeldSends({
+        store,
+        cloud: () => null,
+        now: () => 0,
+        changed: () => {
+          changed += 1
+        }
+      })
+      held.started(placeholder, 'shared-new-1', 'chat-real-01')
+      const started = store.get('share-1')!
+      expect(changed).toBe(1)
+      expect(held.views(started).map((view) => view.sessionId)).toEqual(['chat-real-01'])
+      expect(sendsHeld(started, 'live', { sessionId: 'chat-real-01' }, new Map())).toBe(true)
+      expect(sendsHeld(started, 'live', { sessionId: 'chat-other-1' }, new Map())).toBe(false)
+    }
+  )
 })
 
 describe('attachments kept while the host was away, sent once it is back', () => {

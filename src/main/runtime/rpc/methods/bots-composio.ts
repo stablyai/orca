@@ -29,7 +29,7 @@ import { ComposioSetup } from '../../../composio/composio-setup'
 import { ComposioEvents } from '../../../composio/composio-events'
 import { createComposioIngress } from './bots-composio-ingress'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { InvalidArgumentError, notShared, defineMethod, type RpcContext } from '../core'
 import { ownerOnly } from './bots-caller-gates'
 import { botToolsHome } from './bots-tools'
 
@@ -152,13 +152,13 @@ export function setupBot(
 export const BOT_COMPOSIO_METHODS = [
   defineMethod({
     name: 'bots.composio.status',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioBot,
     handler: ({ botId }, context) => composio(context, botId).status(botId)
   }),
   defineMethod({
     name: 'bots.composio.setKey',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioSetKey,
     handler: async ({ key, botId, app }, context) => {
       // The key goes from the owner's dialog to this host; a bot never handles it.
@@ -174,7 +174,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.key',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async (_params, context) => ({
       ...(await composio(context).key()),
@@ -183,7 +183,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.removeKey',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioRemoveKey,
     handler: async (params, context) => {
       ownerOnly(context, 'Your owner removes the Composio key in Orca.')
@@ -201,7 +201,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.checkLimit',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async (_params, context) => {
       await composio(context).checkLimit()
@@ -210,33 +210,33 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.apps',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioApps,
     handler: ({ botId, search, cursor }, context) =>
       composio(context, botId).apps({ search, cursor })
   }),
   defineMethod({
     name: 'bots.composio.app',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioApp,
     handler: ({ botId, app }, context) => composio(context, botId).app(app)
   }),
   defineMethod({
     name: 'bots.composio.connections',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioBot,
     handler: ({ botId }, context) => composio(context, botId).connections(botId)
   }),
   defineMethod({
     name: 'bots.composio.connect',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioConnect,
     handler: ({ botId, app, card }, context) =>
       composio(context, botId).connect(botId, app, card ?? null)
   }),
   defineMethod({
     name: 'bots.composio.cancelConnect',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioApp,
     handler: ({ botId, app }, context) => {
       composio(context, botId).cancelConnect(botId, app)
@@ -245,7 +245,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.disconnect',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioDisconnect,
     handler: async ({ botId, accountId }, context) => {
       await composio(context, botId).disconnect(botId, accountId)
@@ -254,7 +254,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.add',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioBot,
     handler: async ({ botId }, context) => {
       await composio(context, botId).ensureTool(botId)
@@ -263,7 +263,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.remove',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioBot,
     handler: async ({ botId }, context) => {
       await composio(context, botId).removeFromBot(botId)
@@ -272,7 +272,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.startSetup',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioStartSetup,
     handler: async ({ botId, from, app }, context) => {
       ownerOnly(context, 'Your owner starts Composio setup from Orca.')
@@ -283,7 +283,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.setup',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioSetupCard,
     handler: async (params, context) => {
       const bot = setupBot(params, context)
@@ -297,7 +297,7 @@ export const BOT_COMPOSIO_METHODS = [
   }),
   defineMethod({
     name: 'bots.composio.declineKey',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: ComposioKeyDeclined,
     handler: async ({ botId }, context) => {
       ownerOnly(context, 'Only your owner answers setup cards, in Orca.')

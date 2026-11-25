@@ -45,6 +45,8 @@ type InFlightUpload = {
 
 export type AgentSessionAttachmentStoreOptions = {
   hasSession: (sessionId: string) => boolean
+  /** The chats whose messages claim an upload; absent where no journal holds claims. */
+  claimingSessions?: (uploadId: string) => Promise<readonly string[]>
 }
 
 export class AgentSessionAttachmentStore {
@@ -233,6 +235,12 @@ export class AgentSessionAttachmentStore {
   /** Refuse out-of-store paths and previews exceeding the remote reply budget. */
   readTextChunk(request: AttachmentTextRequest, maxContentBytes?: number) {
     return readAttachmentTextChunk(this.rootDir, request, maxContentBytes)
+  }
+
+  /** The chats whose messages claim the stored file at `filePath`; none for a path outside the store. */
+  async claimingSessions(filePath: string): Promise<readonly string[]> {
+    const stored = parseAgentSessionAttachmentStorePath(this.rootDir, filePath)
+    return stored ? ((await this.options.claimingSessions?.(stored.uploadId)) ?? []) : []
   }
 
   async readPreview(filePath: string, maxContentBytes?: number): Promise<RuntimeFilePreviewResult> {

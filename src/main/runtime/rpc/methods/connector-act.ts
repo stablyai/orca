@@ -291,6 +291,7 @@ export async function actAsBot(
 export const CONNECTOR_ACT_METHOD = defineMethod({
   name: 'connector.act',
   permission: 'workspace',
+  share: 'not-shared',
   params: ConnectorAct,
   handler: (params, context) => actAsBot(params, context)
 })

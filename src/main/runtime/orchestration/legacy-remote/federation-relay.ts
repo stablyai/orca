@@ -21,6 +21,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     name: 'orchestration.federationPull',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationPullParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -45,6 +46,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     name: 'orchestration.federationAck',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationAckParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
@@ -112,6 +114,7 @@ export const ORCHESTRATION_FEDERATION_RELAY_METHODS = [
     name: 'orchestration.federationImport',
     access: { kind: 'localOnly', targets: { dispatchId: 'dispatch' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: FederationImportParams,
     handler: (params, { runtime, authenticatedCallerFingerprint }) => {
       const db = runtime.getOrchestrationDb()

@@ -144,3 +144,76 @@ describe('whether this account’s Orca Cloud takes shares', () => {
     expect(published.at(-1)?.sharing).toBe(false)
   })
 })
+
+describe('an account switch while a shares read is out', () => {
+  it('drops the last account’s answer: no share or home is added, removed or accepted from it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-sharing-'))
+    dirs.push(dir)
+    const share = (shareId: string) => ({
+      shareId,
+      botId: `bot-${shareId}`,
+      botName: 'Ivy',
+      ownerName: 'Jinwoo Hong',
+      hostOnline: false,
+      state: 'ready' as const,
+      held: []
+    })
+    let account = 'ada'
+    let answerLate: () => void = () => {}
+    const late = new Promise<void>((resolve) => {
+      answerLate = resolve
+    })
+    const lists = [
+      async () => [share('share-1')],
+      async () => {
+        await late
+        return [share('share-2')]
+      },
+      async () => null
+    ]
+    const accepted: string[] = []
+    const { homes, folders } = memorySharedBotHomes(dir)
+    const hosts = new SharedBotHosts({
+      userDataPath: dir,
+      account: () => account,
+      cloud: () => ({
+        mine: async () => {
+          const shares = await lists.shift()!()
+          return shares
+            ? { ok: true as const, value: { v: 1 as const, shares } }
+            : { ok: false as const, status: null, error: null, retryAfterMs: null }
+        },
+        accept: async (shareId) => {
+          accepted.push(shareId)
+          return { ok: true, value: { status: 'queued' } }
+        },
+        hold: async () => ({ ok: true, value: { status: 'held' } })
+      }),
+      platform: NODE_RELAY_CLIENT_PLATFORM,
+      publish: () => {},
+      homes,
+      now: () => 0
+    })
+    try {
+      await hosts.refresh()
+      const kept = hosts.views()
+      expect(kept.map((view) => view.shareId)).toEqual(['share-1'])
+      const keptFolders = folders.map((folder) => folder.id)
+      const keptAccepts = accepted.length
+
+      const outstanding = hosts.refresh()
+      await vi.waitFor(() => expect(lists).toHaveLength(1))
+      account = 'grace'
+      void hosts.refresh()
+      answerLate()
+      await outstanding
+
+      expect(hosts.views()).toEqual(kept)
+      expect(folders.map((folder) => folder.id)).toEqual(keptFolders)
+      expect(accepted).toHaveLength(keptAccepts)
+    } finally {
+      hosts.stop()
+      await hosts.flushed()
+    }
+  })
+})

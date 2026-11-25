@@ -37,6 +37,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => ({
       groups: runtime.bots.enabled() ? runtimeBotGroups(runtime).store.listing() : []
@@ -45,6 +46,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupCreate,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
@@ -55,6 +57,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupUpdate,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
@@ -65,6 +68,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.reorder',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupReorder,
     handler: (params, context) => {
       assertBotGroupOwner(context)
@@ -78,6 +82,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupRead,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
@@ -91,6 +96,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.send',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupSend,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
@@ -104,6 +110,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.stop',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupStop,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
@@ -119,6 +126,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.newThread',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupNewThread,
     handler: async (params, context) => {
       assertBotGroupOwner(context)
@@ -128,6 +136,7 @@ export const BOT_GROUP_METHODS = [
   defineMethod({
     name: 'bots.groups.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotGroupDelete,
     handler: async (params, context) => {
       assertBotGroupOwner(context)

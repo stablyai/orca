@@ -41,18 +41,21 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.installedAgents',
     permission: 'workspace',
+    share: 'not-shared',
     params: PreflightAgentDetection,
     handler: (params, { runtime }) => listInstalledWorkspaceAgents(runtime, params)
   }),
   defineMethod({
     name: 'preflight.check',
     permission: 'workspace',
+    share: 'not-shared',
     params: PreflightCheck,
     handler: (params) => runPreflightCheck(params.force)
   }),
   defineMethod({
     name: 'preflight.detectAgents',
     permission: 'workspace',
+    share: 'not-shared',
     params: PreflightProjectAgentDetection,
     // Only the host knows the workspace's actual project runtime, including WSL.
     handler: async (params, { runtime }) => {
@@ -69,6 +72,7 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.detectRemoteAgents',
     permission: 'workspace',
+    share: 'not-shared',
     params: PreflightDetectRemoteAgents,
     handler: async (params) =>
       detectAgentsOnHost({ kind: 'ssh', connectionId: params.connectionId })
@@ -76,12 +80,14 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.detectRemoteWindowsTerminalCapabilities',
     permission: 'workspace',
+    share: 'not-shared',
     params: PreflightDetectRemoteWindowsTerminalCapabilities,
     handler: async (params) => detectRemoteWindowsTerminalCapabilities(params)
   }),
   defineMethod({
     name: 'preflight.refreshAgents',
     permission: 'workspace',
+    share: 'not-shared',
     params: PreflightAgentRefresh,
     handler: async (params, { runtime }) => {
       const host = await resolveQualifiedAgentDetectionHost(runtime, params)

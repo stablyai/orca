@@ -10,6 +10,7 @@ export const BROWSER_TEXT_METHODS = [
   defineMethod({
     name: 'browser.fill',
     permission: 'workspace',
+    share: 'not-shared',
     params: Fill,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.value)
@@ -19,6 +20,7 @@ export const BROWSER_TEXT_METHODS = [
   defineMethod({
     name: 'browser.type',
     permission: 'workspace',
+    share: 'not-shared',
     params: Type,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.input)
@@ -28,6 +30,7 @@ export const BROWSER_TEXT_METHODS = [
   defineMethod({
     name: 'browser.keyboardInsertText',
     permission: 'workspace',
+    share: 'not-shared',
     params: KeyboardInsert,
     handler: async (params, { runtime }) => {
       await assertRpcClipboardTextWriteWithinLimit(params.text)

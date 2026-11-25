@@ -6,6 +6,7 @@ export const SIDEBAR_REPO_ICON_METHODS = [
   defineMethod({
     name: 'sidebarInputs.repoIcons',
     permission: 'workspace',
+    share: 'not-shared',
     params: RepoIconDataUrlsParams,
     handler: async ({ ids }, { runtime }) => runtime.repoIconDataUrls.read(ids)
   })

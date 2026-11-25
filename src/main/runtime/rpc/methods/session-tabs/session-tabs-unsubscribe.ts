@@ -7,6 +7,7 @@ import { worktreeIdentityKey } from '../../../../../shared/worktree/id'
 export const SESSION_TABS_UNSUBSCRIBE_METHOD = defineMethod({
   name: 'session.tabs.unsubscribe',
   permission: 'workspace',
+  share: 'not-shared',
   params: SessionTabsUnsubscribe,
   handler: async (
     params,
@@ -35,6 +36,7 @@ export const SESSION_TABS_UNSUBSCRIBE_METHOD = defineMethod({
 export const SESSION_TABS_UNSUBSCRIBE_ALL_METHOD = defineMethod({
   name: 'session.tabs.unsubscribeAll',
   permission: 'workspace',
+  share: 'not-shared',
   params: SessionTabsUnsubscribeAllParams,
   handler: async (params, { runtime, connectionId }) => {
     const cleanupPrefix = `session.tabs:${connectionId ?? 'local'}:*`

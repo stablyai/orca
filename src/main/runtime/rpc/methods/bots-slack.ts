@@ -62,6 +62,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.saveGrant',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackGrant,
     handler: async ({ refreshToken }, context) =>
       withHostCloudClient(context, (client) => client.saveSlackGrant(refreshToken))
@@ -69,6 +70,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.forgetGrant',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackTeam,
     handler: async ({ teamId }, context) =>
       withHostCloudClient(context, (client) => client.forgetSlackGrant(teamId))
@@ -76,6 +78,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.state',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackBot,
     handler: async ({ botId, teamId }, context) =>
       withHostCloudClient(context, (client) => client.slackState(botId, teamId))
@@ -83,6 +86,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.setUpApp',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackSetUp,
     handler: async ({ botId, teamId }, context) => {
       const { runtime } = context
@@ -110,6 +114,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.handOff',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackSetUp,
     handler: async ({ botId, teamId }, context) => {
       const cloud = context.runtime.getConnectorCloud()
@@ -122,6 +127,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.adoptApp',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackSetUp,
     handler: async ({ botId, teamId }, context) => {
       const state = await withHostCloudClient(context, (client) => client.slackState(botId, teamId))
@@ -141,6 +147,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.remove',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackBot,
     handler: async ({ botId, teamId }, context) => {
       const removed = await withHostCloudClient(context, (client) =>
@@ -157,6 +164,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.setPostAs',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackPostAs,
     handler: async ({ botId, ...request }, context) =>
       withHostCloudClient(context, (client) => client.setSlackPostAs(botId, { v: 1, ...request }))
@@ -164,6 +172,7 @@ export const BOT_SLACK_METHODS = [
   defineMethod({
     name: 'bots.slack.members',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: BotSlackMembers,
     handler: async ({ botId, query, teamId }, context) =>
       withHostCloudClient(context, (client) => client.slackMembers(botId, query, teamId))

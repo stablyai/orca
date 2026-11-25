@@ -24,6 +24,7 @@ import {
 const LIST = defineMethod({
   name: 'bots.items.list',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsList,
   handler: async (params, context) => {
     const { runtime } = context
@@ -65,6 +66,7 @@ const LIST = defineMethod({
 const SHOW = defineMethod({
   name: 'bots.items.show',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsShow,
   handler: async (params, context) => {
     const { runtime } = context

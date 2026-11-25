@@ -6,6 +6,7 @@ import { defineMethod } from '../../core'
 export const WORKTREE_SET_METHOD = defineMethod({
   name: 'worktree.set',
   permission: 'workspace',
+  share: 'not-shared',
   params: WorktreeSet,
   handler: async (params, { runtime }) => {
     const acknowledgement =

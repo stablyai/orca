@@ -24,6 +24,7 @@ export const CONNECTOR_SLACK_MIRROR_METHODS = [
   defineMethod({
     name: 'connector.slackMirror.set',
     permission: 'workspace',
+    share: 'not-shared',
     params: ConnectorSlackMirrorSet,
     handler: (params, context) => {
       ownerOnly(context, REFUSAL)
@@ -33,6 +34,7 @@ export const CONNECTOR_SLACK_MIRROR_METHODS = [
   defineMethod({
     name: 'connector.slackMirror.post',
     permission: 'workspace',
+    share: 'not-shared',
     params: ConnectorSlackMirrorPost,
     handler: async (params, context) => {
       ownerOnly(context, REFUSAL)
@@ -50,6 +52,7 @@ export const CONNECTOR_SLACK_MIRROR_METHODS = [
   defineMethod({
     name: 'connector.slackMirror.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: ConnectorSlackMirrorStatus,
     handler: async (params, context) => {
       ownerOnly(context, REFUSAL)

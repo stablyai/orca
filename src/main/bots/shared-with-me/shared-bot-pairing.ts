@@ -3,6 +3,7 @@
 import type { ConnectorSharesMine } from '../../../shared/connector-share-contract'
 import { openBotTeamShareOffer } from '../../../shared/bots/bot-team-share-seal'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
+import { SHARED_HOSTS_HOLD_WHILE_AWAY } from '../../../shared/bots/shared-bot-hosts'
 import type { SharedHostRelayCredential } from '../../../shared/remote-runtime/relay/client/shared-host-relay-connection'
 import {
   sharedBotHostKey,
@@ -118,7 +119,7 @@ export function sendsHeld(
   chat: HeldChat,
   heldStates: ReadonlyMap<string, MineShare['held'][number]['state']>
 ): boolean {
-  if (!sharedBotHostKey(entry)) {
+  if (!SHARED_HOSTS_HOLD_WHILE_AWAY || !sharedBotHostKey(entry)) {
     return false
   }
   if (link !== 'live' || 'newChatId' in chat) {

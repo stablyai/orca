@@ -1,3 +1,4 @@
+import { SHARE_BY_ENVELOPE_SESSION } from '../../../../shared/bots/bot-share-rpc-methods'
 import { defineMethod } from '../core'
 import { assertBotGroupSessionAccess } from '../../../bots/bot-group-session-access'
 import { CancelParams } from '../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
@@ -10,6 +11,7 @@ import {
 export const STRUCTURED_AGENT_SESSION_CANCEL_METHOD = defineMethod({
   name: 'agentSession.cancel',
   permission: 'workspace',
+  share: SHARE_BY_ENVELOPE_SESSION,
   params: CancelParams,
   handler: async (params, ctx) => {
     assertBotGroupSessionAccess(ctx.runtime, params.envelope.sessionId)

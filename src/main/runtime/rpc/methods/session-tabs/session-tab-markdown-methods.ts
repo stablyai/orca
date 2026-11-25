@@ -8,6 +8,7 @@ export const SESSION_TAB_MARKDOWN_METHODS = [
   defineMethod({
     name: 'markdown.readTab',
     permission: 'workspace',
+    share: 'not-shared',
     params: ActivateTab,
     handler: async (params, { runtime }) =>
       runtime.readMobileMarkdownTab(params.worktree, params.tabId)
@@ -15,6 +16,7 @@ export const SESSION_TAB_MARKDOWN_METHODS = [
   defineMethod({
     name: 'markdown.saveTab',
     permission: 'workspace',
+    share: 'not-shared',
     params: SaveMarkdownTab,
     handler: async (params, { runtime }) =>
       runtime.saveMobileMarkdownTab(

@@ -32,6 +32,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   defineStreamingMethod({
     name: 'browser.clientHost.attach',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientHostAttachParams,
     handler: async (
       params,
@@ -195,6 +196,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   defineMethod({
     name: 'browser.clientHost.commandResult',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientHostCommandResultParams,
     handler: (params, context) => {
       const accepted = getBrowserHostLeaseRegistry(context.runtime).settleClientPageCommand(
@@ -207,6 +209,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   defineMethod({
     name: BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientHostCommandResultChunkParams,
     handler: (params, context) => {
       getBrowserHostLeaseRegistry(context.runtime)
@@ -218,6 +221,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   defineMethod({
     name: 'browser.clientHost.requestResult',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientHostRequestResultParams,
     handler: (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
       if (clientKind !== 'runtime' || !pairedDeviceId) {
@@ -234,6 +238,7 @@ export const BROWSER_CLIENT_HOST_METHODS = [
   defineMethod({
     name: 'browser.clientHost.pageMetadata',
     permission: 'workspace',
+    share: 'not-shared',
     params: BrowserClientPageMetadataParams,
     handler: (
       params,

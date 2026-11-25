@@ -5,13 +5,15 @@ import type {
 } from '../../../../../shared/bots/shared-bot-hosts'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { subscribeRuntimeRpc } from '../../rpc/subscriptions/runtime-rpc-subscribe'
-import { ensureRuntimeEnvironmentCompatible } from '../../rpc/compatibility/runtime-compatibility-probe'
-import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '../../rpc/testing/runtime-compatibility-test-fixture'
 import {
   installSharedBotHostCatalog,
   readSharedBotHosts,
   readTeamSharingOffered
 } from './shared-bot-host-catalog'
+import { selectExecutionHostDisplayLabel } from '../display/execution-host-display-label'
+import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { useAppStore } from '@/store'
 
 const HOST: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -27,15 +29,13 @@ const HOST: SharedBotHostView = {
 const target = { kind: 'environment', environmentId: HOST.environmentId } as const
 
 let uninstall: () => void
-const call = vi.fn()
-const subscribe = vi.fn()
 const environmentCall = vi.fn()
+const environmentSubscribe = vi.fn()
 let changed: (state: SharedBotHostsState) => void = () => {}
 
 beforeEach(async () => {
-  call.mockReset().mockResolvedValue({ id: 'x', ok: true, result: {}, _meta: { runtimeId: 'r' } })
-  subscribe.mockReset().mockResolvedValue({ unsubscribe: () => {} })
   environmentCall.mockReset()
+  environmentSubscribe.mockReset().mockResolvedValue({ unsubscribe: () => {} })
   vi.stubGlobal('window', {
     api: {
       sharedBotHosts: {
@@ -43,11 +43,9 @@ beforeEach(async () => {
         onChanged: (listener: typeof changed) => {
           changed = listener
           return () => {}
-        },
-        call,
-        subscribe
+        }
       },
-      runtimeEnvironments: { call: environmentCall }
+      runtimeEnvironments: { call: environmentCall, subscribe: environmentSubscribe }
     }
   })
   uninstall = installSharedBotHostCatalog()
@@ -59,56 +57,40 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('what a teammate’s Orca asks a shared agent’s host', () => {
-  it('never sends a read the share refuses, and answers it as the host would', async () => {
-    for (const method of ['bots.activity', 'bots.upNext.unseen', 'pairedServerAsks.list']) {
-      await expect(callRuntimeRpc(target, method, { botId: 'bot-1' })).rejects.toMatchObject({
-        code: 'method_not_found'
-      })
-    }
-    const onError = vi.fn()
-    await subscribeRuntimeRpc(
-      target,
-      'bots.items.subscribe',
-      {},
-      {
-        onEvent: () => {},
-        onError,
-        onClose: () => {}
-      }
-    )
-    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: 'method_not_found' }))
-    expect(call).not.toHaveBeenCalled()
-    expect(subscribe).not.toHaveBeenCalled()
-  })
+it('names a shared agent’s host as its owner’s computer, never by its environment id', async () => {
+  await vi.waitFor(() => expect(readSharedBotHosts()).toHaveLength(1))
+  const state = useAppStore.getState()
+  expect(selectExecutionHostDisplayLabel(state, toRuntimeExecutionHostId(HOST.environmentId))).toBe(
+    'Jinwoo Hong’s computer'
+  )
+})
 
-  it('sends what the share allows over its own link', async () => {
+// Its calls and streams go through runtimeEnvironments; main routes them (runtime-environment-shared-hosts.test.ts).
+describe('a shared agent’s host in the window', () => {
+  it('sends calls and streams through runtimeEnvironments, with no channel of its own', async () => {
+    environmentCall.mockImplementation(
+      async (request: { method: string }) =>
+        createCompatibleRuntimeStatusResponseIfNeeded(request) ?? {
+          id: 'x',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'r' }
+        }
+    )
     await callRuntimeRpc(target, 'bots.list', {})
     await subscribeRuntimeRpc(
       target,
       'agentSession.subscribe',
       { sessionId: 's' },
-      {
-        onEvent: () => {},
-        onError: () => {},
-        onClose: () => {}
-      }
+      { onEvent: () => {}, onError: () => {}, onClose: () => {} }
     )
-    expect(call).toHaveBeenCalledWith(expect.objectContaining({ method: 'bots.list' }))
-    expect(subscribe).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'agentSession.subscribe' }),
-      expect.any(Function)
+    expect(environmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: HOST.environmentId, method: 'bots.list' })
     )
-  })
-
-  it('probes no status: the host answers none to a share', async () => {
-    await expect(ensureRuntimeEnvironmentCompatible(HOST.environmentId)).resolves.toBeNull()
-    // A capability read refuses as the host would; the paired-server registry is never asked.
-    await expect(
-      runtimeEnvironmentSupportsCapability(HOST.environmentId, 'agent-session.rewind')
-    ).rejects.toMatchObject({ code: 'method_not_found' })
-    expect(environmentCall).not.toHaveBeenCalled()
-    expect(call).not.toHaveBeenCalled()
+    expect(environmentSubscribe).toHaveBeenCalledWith(
+      expect.objectContaining({ selector: HOST.environmentId, method: 'agentSession.subscribe' }),
+      expect.any(Object)
+    )
   })
 })
 

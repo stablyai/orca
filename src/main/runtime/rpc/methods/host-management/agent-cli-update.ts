@@ -16,6 +16,7 @@ export const AGENT_CLI_UPDATE_METHODS = [
   defineMethod({
     name: 'agentCliUpdate.check',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentCliUpdateCheckParams,
     handler: async ({ agents }, { runtime }) => ({
       updates: await checkAgentCliUpdates(runtime.requireStore().getSettings(), agents)
@@ -24,6 +25,7 @@ export const AGENT_CLI_UPDATE_METHODS = [
   defineMethod({
     name: 'agentCliUpdate.run',
     permission: 'host-admin',
+    share: 'not-shared',
     params: AgentCliUpdateRunParams,
     handler: ({ agent }, { runtime }) =>
       runAgentCliUpdate(agent, runtime.requireStore().getSettings())
@@ -32,6 +34,7 @@ export const AGENT_CLI_UPDATE_METHODS = [
   defineStreamingMethod({
     name: 'agentCliUpdate.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, ctx, emit) => {
       let dispose = (): void => {}

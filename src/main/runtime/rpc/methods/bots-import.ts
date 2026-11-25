@@ -53,6 +53,7 @@ export const BOT_IMPORT_METHODS = [
   defineMethod({
     name: 'bots.import.sources',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotImportSources,
     handler: async (_params, { runtime }) => {
       runtime.bots.assertEnabled()
@@ -67,6 +68,7 @@ export const BOT_IMPORT_METHODS = [
   defineMethod({
     name: 'bots.import.plan',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotImportPlanCard,
     handler: async ({ callerSessionId, plan }, { runtime, pairedDeviceId }) => {
       const bot = callingBot(runtime, callerSessionId, pairedDeviceId)
@@ -84,6 +86,7 @@ export const BOT_IMPORT_METHODS = [
   defineMethod({
     name: 'bots.import.done',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotImportDoneCard,
     handler: async ({ callerSessionId, done }, { runtime, pairedDeviceId }) => {
       const bot = callingBot(runtime, callerSessionId, pairedDeviceId)

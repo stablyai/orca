@@ -8,6 +8,7 @@ export const SESSION_TERMINAL_SCROLLBACK_METHODS = [
   defineMethod({
     name: 'session.readTerminalScrollback',
     permission: 'workspace',
+    share: 'not-shared',
     params: SessionReadTerminalScrollbackParams,
     handler: async (params, { runtime }) =>
       runtime.readTerminalScrollbackForClient({ worktree: params.worktree, ref: params.ref })

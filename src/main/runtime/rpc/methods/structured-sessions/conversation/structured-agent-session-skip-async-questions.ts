@@ -6,6 +6,7 @@ export const STRUCTURED_AGENT_SESSION_SKIP_ASYNC_QUESTIONS_METHODS = [
   defineMethod({
     name: 'agentSession.skipAsyncQuestions',
     permission: 'workspace',
+    share: 'not-shared',
     params: SkipAsyncQuestionsParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)

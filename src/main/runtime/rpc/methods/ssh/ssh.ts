@@ -95,6 +95,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.getState',
     permission: 'workspace',
+    share: 'not-shared',
     params: SshTarget,
     handler: (params) => ({
       state: getPublicSshState(getRegisteredSshState(params.targetId) ?? null)
@@ -103,6 +104,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.connect',
     permission: 'host-admin',
+    share: 'not-shared',
     params: SshConnect,
     handler: async (params) => {
       try {
@@ -119,6 +121,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.listTargets',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // Legacy direct calls must preserve the HUB-private secret boundary too.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
@@ -126,6 +129,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.listTargetSummaries',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // Expose only display identity; SSH addresses, jump chains and credentials stay HUB-private.
     handler: () => ({ targets: listRegisteredSshTargetSummaries() })
@@ -133,6 +137,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.listRemovedTargetLabels',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: () => ({ labels: listRegisteredRemovedSshTargetLabels() })
   }),
@@ -140,12 +145,14 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.listEditableTargets',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: () => ({ targets: listRegisteredSshTargets().map(toSshEditableTarget) })
   }),
   defineMethod({
     name: 'ssh.addTarget',
     permission: 'workspace',
+    share: 'not-shared',
     params: SshTargetAdd,
     handler: (params) => {
       const result = getRegisteredSshTargetMutations().add({
@@ -161,6 +168,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.updateTarget',
     permission: 'workspace',
+    share: 'not-shared',
     params: SshTargetUpdate,
     handler: (params) => {
       // Replace semantics clear omitted optional fields, matching SSH settings.
@@ -177,6 +185,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.removeTarget',
     permission: 'workspace',
+    share: 'not-shared',
     params: SshTarget,
     handler: async (params) => {
       await getRegisteredSshTargetMutations().remove(params.targetId)
@@ -186,6 +195,7 @@ export const SSH_METHODS = [
   defineMethod({
     name: 'ssh.browseDir',
     permission: 'workspace',
+    share: 'not-shared',
     params: SshBrowseDir,
     handler: (params) => {
       const manager = getSshConnectionManager()

@@ -11,6 +11,7 @@ export const STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS = [
   defineMethod({
     name: 'agentSession.conversationOutline',
     permission: 'workspace',
+    share: 'not-shared',
     params: OptionsParams,
     handler: async (params, ctx) =>
       (await requireInstalledStructuredHost(ctx, params.sessionId)).conversationOutline(

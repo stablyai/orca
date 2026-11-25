@@ -90,6 +90,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.suggest',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSuggest,
     handler: (params, context) => {
       const { runtime } = context
@@ -112,6 +113,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.suggestions.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSuggestionAct,
     handler: (params, context) => {
       botById(context, params.botId)
@@ -129,6 +131,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.suggestions.dismiss',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotSuggestionAct,
     handler: (params, context) => {
       botById(context, params.botId)
@@ -145,6 +148,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.lookAround.lookNow',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotLookNow,
     handler: (params, context) => {
       context.runtime.bots.assertEnabled()
@@ -158,6 +162,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.upNext.unseen',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // Each bot's new Up next count, for its sidebar dot and Activity tab.
     handler: (_params, { runtime }) => ({
@@ -167,6 +172,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.upNext.seen',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotUpNextSeen,
     handler: (params, context) => {
       botById(context, params.botId)
@@ -180,6 +186,7 @@ export const BOT_LOOK_AROUND_METHODS = [
   defineMethod({
     name: 'bots.lookAround.set',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotLookAroundSet,
     handler: setLookAround
   })

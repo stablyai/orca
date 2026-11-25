@@ -22,7 +22,7 @@ import {
 import { stageOneSourceForRuntimeUpload } from '../filesystem/imports/filesystem-runtime-upload-staging'
 import { streamExternalFileSlices } from '../runtime-transfers/runtime-upload-file-stream'
 import { formatByteCeiling } from '../runtime-transfers/runtime-import-limits'
-import { sharedBotHostCall } from '../../bots/shared-with-me/shared-bot-host-routing'
+import { runtimeEnvironmentIdOf } from '../runtime-environments/requests/runtime-environment-shared-hosts'
 
 const ATTACHMENT_CALL_TIMEOUT_MS = 30_000
 
@@ -45,22 +45,10 @@ async function callAttachmentMethod<TResult>(
   method: string,
   params: unknown
 ): Promise<TResult> {
-  const sharedHost = await sharedBotHostCall(context.environmentId)
-  if (!sharedHost && isRuntimeEnvironmentManuallyDisconnected(context.environmentId)) {
+  if (isRuntimeEnvironmentManuallyDisconnected(context.environmentId)) {
     throw new Error(RUNTIME_MANUALLY_DISCONNECTED_MESSAGE)
   }
-  const response = sharedHost
-    ? await sharedHost(method, params)
-    : await callPairedServer(context, method, params)
-  if (response.ok !== true) {
-    throw new Error(response.error.message || response.error.code)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the result type of the agentSessionAttachment.* method it calls, whose server handler returns exactly that shape.
-  return response.result as TResult
-}
-
-function callPairedServer(context: UploadContext, method: string, params: unknown) {
-  return callRuntimeEnvironment(
+  const response = await callRuntimeEnvironment(
     context.userDataPath,
     context.environmentId,
     method,
@@ -73,6 +61,11 @@ function callPairedServer(context: UploadContext, method: string, params: unknow
       signal: context.signal
     }
   )
+  if (response.ok !== true) {
+    throw new Error(response.error.message || response.error.code)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the result type of the agentSessionAttachment.* method it calls, whose server handler returns exactly that shape.
+  return response.result as TResult
 }
 
 /** One `agentSessionAttachment.*` call on the store's host; `abort` is the cleanup call, sent even
@@ -180,9 +173,7 @@ export async function resolveAttachmentEnvironmentId(
   userDataPath: string,
   selector: string
 ): Promise<string> {
-  return (await sharedBotHostCall(selector))
-    ? selector
-    : (await resolveEnvironment(userDataPath, selector)).id
+  return runtimeEnvironmentIdOf(selector, (named) => resolveEnvironment(userDataPath, named))
 }
 
 /** Upload files in input order; folders are unsupported. */

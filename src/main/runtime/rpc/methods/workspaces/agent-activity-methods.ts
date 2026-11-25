@@ -12,6 +12,7 @@ export const AGENT_ACTIVITY_METHODS = [
   defineMethod({
     name: 'agentActivity.setRead',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentActivitySetReadParams,
     handler: async (params, { runtime }) => {
       await runtime.applyAgentPaneActivity({
@@ -24,6 +25,7 @@ export const AGENT_ACTIVITY_METHODS = [
   defineMethod({
     name: 'agentActivity.clear',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentActivityClearParams,
     handler: async (params, { runtime }) => {
       await runtime.applyAgentPaneActivity({ kind: 'clear', paneKeys: params.paneKeys })
@@ -34,6 +36,7 @@ export const AGENT_ACTIVITY_METHODS = [
   defineMethod({
     name: AGENT_ACTIVITY_ORCHESTRATION_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }): Promise<AgentActivityOrchestrationResult> => ({
       contexts: Object.fromEntries(

@@ -22,6 +22,7 @@ export const BOT_COMPOSIO_EVENTS_METHODS = [
   defineMethod({
     name: 'bots.composio.events',
     permission: 'workspace',
+    share: 'not-shared',
     params: ComposioEventsCard,
     handler: async (params, context) => {
       const bot = setupBot(params, context)
@@ -50,6 +51,7 @@ export const BOT_COMPOSIO_EVENTS_METHODS = [
   defineMethod({
     name: 'bots.composio.eventsStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: ComposioEventsStatus,
     handler: ({ botId, hookId, trigger }, context) => {
       composio(context, botId)
@@ -59,6 +61,7 @@ export const BOT_COMPOSIO_EVENTS_METHODS = [
   defineMethod({
     name: 'bots.composio.setUpEvents',
     permission: 'workspace',
+    share: 'not-shared',
     params: ComposioEventsSetUp,
     handler: async ({ botId, hookId, trigger, config, replace, byHand }, context) => {
       ownerOnly(context, 'Only your owner answers setup cards, in Orca.')
@@ -82,6 +85,7 @@ export const BOT_COMPOSIO_EVENTS_METHODS = [
   defineMethod({
     name: 'bots.composio.eventsByHand',
     permission: 'workspace',
+    share: 'not-shared',
     params: ComposioEventsByHand,
     handler: async ({ botId, hookId }, context) => {
       ownerOnly(context, 'Only your owner answers setup cards, in Orca.')

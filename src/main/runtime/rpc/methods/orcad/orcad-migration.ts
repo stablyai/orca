@@ -15,6 +15,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.stageCatalog',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -26,6 +27,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.commitCatalog',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationCommitCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -38,6 +40,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.stageSnapshotChunk',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationSnapshotChunkRequestSchema,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -49,6 +52,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.stageBlobChunk',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationBlobChunkRequestSchema,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -58,6 +62,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.abortCatalog',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -70,6 +75,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.abortCatalogByReference',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationCatalogReferenceParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)
@@ -81,6 +87,7 @@ export const ORCAD_MIGRATION_METHODS = [
   defineMethod({
     name: 'orcad.migration.catalogState',
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadMigrationCatalogParams,
     handler: async (params, context) => {
       requireMigrationRuntimeClient(context)

@@ -1,3 +1,4 @@
+import { SHARE_BY_ENVELOPE_SESSION } from '../../../../../../shared/bots/bot-share-rpc-methods'
 import { defineMethod } from '../../../core'
 import { clientReadsOptionsWithoutModel } from '../structured-agent-session-policy'
 import {
@@ -17,6 +18,7 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
   defineMethod({
     name: 'agentSession.respondToApproval',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: RespondParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).respondToPrompt(callerFor(ctx), {
@@ -27,6 +29,7 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
   defineMethod({
     name: 'agentSession.respondToQuestion',
     permission: 'workspace',
+    share: SHARE_BY_ENVELOPE_SESSION,
     params: RespondToQuestionParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).respondToPrompt(callerFor(ctx), {
@@ -37,6 +40,7 @@ export const STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS = [
   defineMethod({
     name: 'agentSession.setOption',
     permission: 'workspace',
+    share: 'not-shared',
     params: SetOptionParams,
     handler: async (params, ctx) =>
       requireSessionHost(ctx, params.envelope.sessionId).setOption(

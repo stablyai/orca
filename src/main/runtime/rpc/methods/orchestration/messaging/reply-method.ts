@@ -30,6 +30,7 @@ import { runLifecycleWriteTransaction } from '../../../../orchestration/db/lifec
 export const ORCHESTRATION_REPLY_METHOD = defineOrchestrationMethod({
   name: 'orchestration.reply',
   permission: 'workspace',
+  share: 'not-shared',
   params: ReplyParams,
   access: {
     kind: 'writes',

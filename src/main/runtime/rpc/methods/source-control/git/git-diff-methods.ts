@@ -22,6 +22,7 @@ export const GIT_DIFF_METHODS = [
   defineMethod({
     name: 'git.diff',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitDiff(
@@ -36,6 +37,7 @@ export const GIT_DIFF_METHODS = [
   defineMethod({
     name: 'git.branchDiff',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitBranchDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitBranchDiff(
@@ -49,6 +51,7 @@ export const GIT_DIFF_METHODS = [
   defineMethod({
     name: 'git.commitDiff',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitCommitDiff,
     handler: async (params, { runtime, clientKind, requestId }) =>
       runtime.getRuntimeGitCommitDiff(
@@ -65,6 +68,7 @@ export const GIT_DIFF_METHODS = [
   defineMethod({
     name: 'git.blame',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitBlame,
     handler: async (params, { runtime, clientKind, requestId }) => {
       const result = await runtime.getRuntimeGitBlame(

@@ -12,12 +12,14 @@ export const WORKSPACE_PORT_METHODS = [
   defineMethod({
     name: 'workspacePorts.scan',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspacePortScanParams,
     handler: async (params, { runtime }) => runtime.scanWorkspacePorts(params.repoId)
   }),
   defineMethod({
     name: 'workspacePorts.kill',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspacePortKillParams,
     handler: async (params, { runtime }) =>
       runtime.killWorkspacePort({
@@ -29,18 +31,21 @@ export const WORKSPACE_PORT_METHODS = [
   defineMethod({
     name: 'workspacePorts.probePage',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspacePortProbePageParams,
     handler: async (params) => probeWorkspacePortPage(params)
   }),
   defineMethod({
     name: 'workspacePorts.scanHost',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspacePortScanHostParams,
     handler: async (params, { runtime }) => runtime.scanWorkspacePortsOnHost(params.worktree)
   }),
   defineMethod({
     name: 'workspacePorts.killHost',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkspacePortKillHostParams,
     handler: async (params, { runtime }) =>
       runtime.killWorkspacePortOnHost({

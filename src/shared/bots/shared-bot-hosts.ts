@@ -3,6 +3,10 @@
 
 export type SharedBotHostLink = 'live' | 'connecting' | 'offline' | 'unpaired'
 
+/** Off for now: a shared host that is away reads as a paired server that is away (no send, nothing
+ *  held). Every held path reads this; the held code stays for when it comes back. */
+export const SHARED_HOSTS_HOLD_WHILE_AWAY: boolean = false
+
 /** A held message as Orca Cloud last reported it: waiting for the host, in its journal, or refused. */
 export type SharedBotHeldState = 'waiting' | 'delivered' | 'not_sent'
 
@@ -58,5 +62,7 @@ export const SHARED_BOT_HOST_ERRORS = {
   // The message is held in Orca Cloud until the host is back.
   held: 'shared_host_send_held',
   // Past the cloud's limit for one held message.
-  tooLarge: 'shared_host_send_too_large'
+  tooLarge: 'shared_host_send_too_large',
+  // The owner stopped sharing it: nothing is sent or held.
+  unshared: 'shared_host_unshared'
 } as const

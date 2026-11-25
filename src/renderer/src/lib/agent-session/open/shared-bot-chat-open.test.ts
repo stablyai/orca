@@ -18,6 +18,7 @@ import { openBotHome, openBotHomeTab, startBotSession } from '../../bot-catalog'
 import { installSharedBotNewChatSwap } from '@/runtime/hosts/shared-bot-hosts/shared-bot-new-chat-swap'
 import { buildWorkspaceSessionPayload } from '../../workspace/persistence/workspace-session'
 import { activateAiVaultStructuredSession } from './activate-ai-vault-structured-session'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const SHARED: SharedBotHostView = {
   environmentId: 'shared-env',
@@ -83,10 +84,17 @@ function resetStore(): void {
 
 let stopCatalog: () => void = () => {}
 let changed: (state: SharedBotHostsState) => void = () => {}
-// The owner's host as the share reaches it: the window's own share gate refuses what isn't allowed
-// before it is sent; a new chat started while the host is away is a placeholder there.
+// The owner's host as the share reaches it, through runtimeEnvironments: main's share gate refuses
+// what isn't allowed before it is sent; a new chat started while the host is away is a placeholder there.
 const call = vi.fn(
-  async ({ method, params }: { method: string; params: { newChatId?: string } }) => ({
+  async ({
+    method,
+    params
+  }: {
+    environmentId: string
+    method: string
+    params: { newChatId?: string }
+  }) => ({
     id: method,
     ok: true,
     result:
@@ -96,6 +104,30 @@ const call = vi.fn(
     _meta: { runtimeId: SHARED.environmentId }
   })
 )
+// The shared methods this flow asks (main's registry decides the full list).
+const SHARED_METHODS = new Set([
+  'bots.list',
+  'bots.chats',
+  'bots.chats.own',
+  'bots.chatTree',
+  'bots.session.start',
+  'agentSession.history',
+  'agentSession.subscribe',
+  'agentSession.subscribeStatus'
+])
+const environmentCall = async (request: {
+  selector: string
+  method: string
+  params: { newChatId?: string }
+}) =>
+  createCompatibleRuntimeStatusResponseIfNeeded(request) ??
+  (SHARED_METHODS.has(request.method)
+    ? call({ environmentId: request.selector, method: request.method, params: request.params })
+    : {
+        id: request.method,
+        ok: false,
+        error: { code: 'method_not_found', message: request.method }
+      })
 
 beforeEach(async () => {
   call.mockClear()
@@ -106,9 +138,9 @@ beforeEach(async () => {
       onChanged: (listener: (state: SharedBotHostsState) => void) => {
         changed = listener
         return () => {}
-      },
-      call
-    }
+      }
+    },
+    runtimeEnvironments: { ...window.api?.runtimeEnvironments, call: environmentCall }
   })
   stopCatalog = installSharedBotHostCatalog()
   await Promise.resolve()

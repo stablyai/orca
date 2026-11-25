@@ -49,6 +49,7 @@ export const ORCHESTRATION_SESSION_WORKERS_METHODS = [
     name: ORCHESTRATION_SESSION_WORKERS_METHOD,
     access: { kind: 'reads', targets: { session: 'session' } },
     permission: 'workspace',
+    share: 'not-shared',
     params: SessionWorkersParams,
     handler: async (params, { runtime }): Promise<OrchestrationSessionWorkersResult> => ({
       workers: await readSessionWorkers(runtime, params.session, { lostTerminalsEnded: true }),

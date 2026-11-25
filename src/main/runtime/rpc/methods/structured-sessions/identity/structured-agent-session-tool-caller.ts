@@ -7,6 +7,7 @@ export const STRUCTURED_AGENT_SESSION_TOOL_CALLER_METHODS = [
     // A tool in a process several chats share trades its session's token for that chat's identity.
     name: 'agentSession.toolCaller',
     permission: 'workspace',
+    share: 'not-shared',
     params: ToolCallerParams,
     handler: async (params, ctx): Promise<{ env: Readonly<Record<string, string>> | null }> => {
       // Only this host's own CLI runs in the tool process that holds the token.

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import type { OrcadManagedRuntimeStatus } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { createManagedOrcadEnvironment } from '../../../managed-server/lifecycle/orcad-runtime-deployment'
 import { getManagedOrcadRuntimeStatus } from '../../../managed-server/lifecycle/orcad-runtime-status'
@@ -6,7 +6,7 @@ import { getManagedOrcadRuntimeStatus } from '../../../managed-server/lifecycle/
 export function registerOrcadRuntimeLifecycleHandlers(options: {
   getUserDataPath: () => string
 }): void {
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:deployOrcad',
     async (_event, args: { name: string; sshTargetId: string; force?: boolean }) =>
       createManagedOrcadEnvironment(options.getUserDataPath(), {
@@ -15,7 +15,7 @@ export function registerOrcadRuntimeLifecycleHandlers(options: {
         force: args?.force === true
       })
   )
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:getOrcadStatus',
     (_event, args: { selector: string }): Promise<OrcadManagedRuntimeStatus> =>
       getManagedOrcadRuntimeStatus(

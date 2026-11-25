@@ -73,6 +73,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationList,
     // The projection retains `automations`, so old clients ignore the added owner metadata.
     handler: (params, context) => {
@@ -92,6 +93,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.show',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationId,
     // Return optional owner metadata for CLI mutations; older hosts omit it and older clients ignore it.
     handler: (params, context) => {
@@ -107,6 +109,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationCreate,
     handler: async ({ callerSessionId, runsInDefault, waitInCallerChat, ...params }, context) => {
       refuseFromLookAround(callerSessionId, context)
@@ -133,6 +136,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationUpdate,
     handler: async (params, context) => {
       refuseFromLookAround(params.callerSessionId, context)
@@ -149,6 +153,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationId,
     handler: (params, context) =>
       deleteAutomationRecordingCancelledWait(
@@ -160,6 +165,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.runNow',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationId,
     handler: async (params, context) => ({
       run: await context.runtime.runAutomationNow(
@@ -171,6 +177,7 @@ export const AUTOMATION_METHODS = [
   defineMethod({
     name: 'automation.runs',
     permission: 'workspace',
+    share: 'not-shared',
     params: AutomationRuns,
     handler: (params, { runtime, requestId }) => {
       if (params.runId !== undefined) {

@@ -1,3 +1,4 @@
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
 // `bots.chats`: a bot's chats that mail can reach, newest first, so a bot can pick one by title and
 // last ask and send it `--chat <id>`.
 import type { Bot } from '../../../../shared/bot-types'
@@ -35,6 +36,7 @@ import {
 const BOT_CHATS_METHOD = defineMethod({
   name: 'bots.chats',
   permission: 'workspace',
+  share: SHARE_BY_BOT,
   params: BotChats,
   handler: async (params, context) => {
     const { runtime } = context
@@ -58,6 +60,7 @@ const BOT_CHATS_METHOD = defineMethod({
 const BOT_CHATS_UNSEEN_METHOD = defineMethod({
   name: 'bots.chats.unseen',
   permission: 'workspace',
+  share: 'not-shared',
   params: null,
   handler: (): { unseen: Record<string, number> } => ({ unseen: {} })
 })
@@ -66,6 +69,7 @@ const BOT_CHATS_UNSEEN_METHOD = defineMethod({
 const BOT_CHATS_SEEN_METHOD = defineMethod({
   name: 'bots.chats.seen',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotChatsSeen,
   handler: (params, { runtime }) => {
     params.sessionIds.forEach((sessionId) => runtime.markBotThreadSeen(sessionId))

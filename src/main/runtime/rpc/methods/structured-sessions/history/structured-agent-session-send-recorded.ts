@@ -25,6 +25,7 @@ export const STRUCTURED_AGENT_SESSION_SEND_RECORDED_METHODS = [
   defineMethod({
     name: 'agentSession.sendRecorded',
     permission: 'workspace',
+    share: 'not-shared',
     params: SendRecordedParams,
     handler: async (params, ctx): Promise<{ recorded: boolean }> => {
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)

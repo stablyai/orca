@@ -14,6 +14,7 @@ export const BOT_TOOLS_HOST_MCP_METHODS = [
   defineMethod({
     name: 'bots.tools.setHostMcpServers',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotToolsSetHostMcpServers,
     handler: async (params, context) => {
       assertMcpServersFeatureEnabled()

@@ -20,6 +20,7 @@ export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
     name: 'worktree.ps',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreePsParams,
     handler: async (params, context) => {
       const pendingAtScan = snapshotPendingWorktreeRemovals()
@@ -59,6 +60,7 @@ export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
     name: 'worktree.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeListParams,
     handler: async (params, context) => {
       const pendingAtScan = snapshotPendingWorktreeRemovals()
@@ -76,12 +78,14 @@ export const WORKTREE_CATALOG_METHODS = [
   defineMethod({
     name: 'worktree.listRetiredNames',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeDetectedListParams,
     handler: async (params, { runtime }) => runtime.listRetiredWorktreeNames(params.repo)
   }),
   defineMethod({
     name: 'worktree.detectedList',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeDetectedListParams,
     handler: async (params, context) => {
       const pendingAtScan = snapshotPendingWorktreeRemovals()

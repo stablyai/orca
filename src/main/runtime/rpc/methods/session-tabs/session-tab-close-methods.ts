@@ -14,6 +14,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.close',
     permission: 'workspace',
+    share: 'not-shared',
     params: CloseTab,
     handler: async (params, context) => {
       if (context.clientKind) {
@@ -95,6 +96,7 @@ export const SESSION_TAB_CLOSE_METHODS = [
   defineMethod({
     name: 'session.tabs.closeLifecycle',
     permission: 'workspace',
+    share: 'not-shared',
     params: CloseLifecycleTab,
     handler: async (params, context) => {
       if (context.clientKind) {

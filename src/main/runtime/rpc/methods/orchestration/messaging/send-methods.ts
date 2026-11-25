@@ -53,6 +53,7 @@ export const ORCHESTRATION_SEND_METHODS = [
       targets: { to: 'party', threadId: 'message', run: 'run', payload: 'dispatch' }
     },
     permission: 'workspace',
+    share: 'not-shared',
     params: SendParams,
     replay: (params, { runtime, replayedMutationReceipt }) =>
       replayAcceptedSend(runtime, params, replayedMutationReceipt),
@@ -153,9 +154,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         return botRoute.receipt
       }
       to = botRoute.to
-      if (botRoute.body !== undefined) {
-        params = { ...params, body: botRoute.body }
-      }
+      params = botRoute.body === undefined ? params : { ...params, body: botRoute.body }
 
       const sendWarnings: SendRecipientWarning[] = []
       let messageRunId = routing.run?.id

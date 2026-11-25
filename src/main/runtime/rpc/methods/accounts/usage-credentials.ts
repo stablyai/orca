@@ -24,6 +24,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.minimaxCredentialsStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_, { runtime }) => {
       runtime.requireUsageRateLimits()
@@ -33,6 +34,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.minimaxSaveApiKey',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: UsageCredentialApiKeyParams,
     handler: async ({ apiKey }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
@@ -43,6 +45,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.minimaxClearApiKey',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
@@ -52,6 +55,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.minimaxSaveSessionCookie',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: UsageCredentialSessionCookieParams,
     handler: async ({ cookie }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
@@ -62,6 +66,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.minimaxClearSessionCookie',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
@@ -71,6 +76,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.zcodePlanCredentialsStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_, { runtime }) => {
       runtime.requireUsageRateLimits()
@@ -80,6 +86,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.zcodePlanSaveApiKey',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: UsageCredentialApiKeyParams,
     handler: async ({ apiKey }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
@@ -90,6 +97,7 @@ export const USAGE_CREDENTIAL_METHODS = [
   defineMethod({
     name: 'accounts.zcodePlanClearApiKey',
     permission: 'accounts-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()

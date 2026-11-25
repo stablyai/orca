@@ -22,12 +22,14 @@ export const MANAGED_SERVER_METHODS = [
   defineMethod({
     name: 'managedServer.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().status(selector)
   }),
   defineMethod({
     name: 'managedServer.update',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedServerUpdate,
     handler: ({ selector, force, endInProcessTerminals }) =>
       actions().update(selector, force === true, undefined, endInProcessTerminals === true)
@@ -35,12 +37,14 @@ export const MANAGED_SERVER_METHODS = [
   defineMethod({
     name: 'managedServer.rollback',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().rollback(selector)
   }),
   defineMethod({
     name: 'managedServer.recover',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedServerRecover,
     handler: ({ selector, acceptChangedState }) =>
       actions().recover(selector, acceptChangedState === true)
@@ -48,12 +52,14 @@ export const MANAGED_SERVER_METHODS = [
   defineMethod({
     name: 'managedServer.stop',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().stop(selector)
   }),
   defineMethod({
     name: 'managedServer.cancelStop',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().cancelStop(selector)
   }),
@@ -61,6 +67,7 @@ export const MANAGED_SERVER_METHODS = [
   defineMethod({
     name: 'managedServer.forget',
     permission: 'host-admin',
+    share: 'not-shared',
     params: ManagedServerSelector,
     handler: ({ selector }) => actions().forget(selector)
   })

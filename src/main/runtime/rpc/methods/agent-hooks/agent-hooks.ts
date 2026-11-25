@@ -7,6 +7,7 @@ export const AGENT_HOOK_METHODS = [
   defineMethod({
     name: 'agentHooks.prepareCodexForWslPane',
     permission: 'workspace',
+    share: 'not-shared',
     params: PrepareCodexForWslPaneParams,
     handler: async (params, { runtime, clientKind }) => {
       if (clientKind !== undefined) {

@@ -53,6 +53,7 @@ export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: NotificationsSubscribeParams,
     handler: async (params, { runtime, connectionId }, emit) => {
       const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
@@ -84,6 +85,7 @@ export const NOTIFICATION_METHODS = [
   defineMethod({
     name: 'notifications.unsubscribe',
     permission: 'workspace',
+    share: 'not-shared',
     params: NotificationUnsubscribeParams,
     handler: async (params, { runtime }) => {
       runtime.cleanupSubscription(params.subscriptionId)
@@ -93,6 +95,7 @@ export const NOTIFICATION_METHODS = [
   defineMethod({
     name: 'notifications.getMissedSince',
     permission: 'workspace',
+    share: 'not-shared',
     params: NotificationGetMissedSinceParams,
     // Runtime sequence/epoch is authoritative for notifications missed while the socket was reaped.
     handler: async (params, { runtime }) => {
@@ -111,18 +114,21 @@ export const NOTIFICATION_METHODS = [
   defineMethod({
     name: 'notifications.reportDesktopPresence',
     permission: 'workspace',
+    share: 'not-shared',
     params: NotificationReportDesktopPresenceParams,
     handler: async (params, context) => reportDesktopPresence(params, context)
   }),
   defineMethod({
     name: 'notifications.pushCoverage',
     permission: 'workspace',
+    share: 'not-shared',
     params: NotificationPushCoverageParams,
     handler: async (params, context) => pushCoverage(params, context)
   }),
   defineMethod({
     name: 'notifications.registerPush',
     permission: 'pairing-admin',
+    share: 'not-shared',
     params: NotificationRegisterPushParams,
     // Register only the transport-proven revocable mobile device; CLI/in-process callers have no device identity.
     handler: async (params, { runtime, clientKind, pairedDeviceId }) => {
@@ -136,6 +142,7 @@ export const NOTIFICATION_METHODS = [
   defineMethod({
     name: 'notifications.testPush',
     permission: 'pairing-admin',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {
       if (clientKind !== 'mobile' || !pairedDeviceId) {
@@ -147,6 +154,7 @@ export const NOTIFICATION_METHODS = [
   defineMethod({
     name: 'notifications.unregisterPush',
     permission: 'pairing-admin',
+    share: 'not-shared',
     params: null,
     // Durable gateway deletion lets unregister succeed even while the gateway is offline.
     handler: async (_params, { runtime, clientKind, pairedDeviceId }) => {

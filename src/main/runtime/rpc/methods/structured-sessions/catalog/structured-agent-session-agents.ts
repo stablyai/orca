@@ -27,6 +27,7 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
   defineMethod({
     name: AGENT_SESSION_AGENTS_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentsParams,
     // Read build-time registrations without installing the host, matching createSupport.
     handler: async (_params, ctx): Promise<AgentSessionAgentsResult> => {
@@ -45,6 +46,7 @@ export const STRUCTURED_AGENT_SESSION_AGENTS_METHODS = [
   defineStreamingMethod({
     name: AGENT_SESSION_AVAILABILITY_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: AvailabilityParams,
     handler: async (_params, ctx, emit) => {
       requireStructuredCapability(ctx)

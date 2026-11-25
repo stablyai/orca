@@ -73,6 +73,7 @@ async function allOpenItems(
 const LIST = defineMethod({
   name: 'bots.items.owner.list',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsOwnerList,
   handler: async (params, context) => {
     ownerActor(context)
@@ -135,6 +136,7 @@ const LIST = defineMethod({
 const SHOW = defineMethod({
   name: 'bots.items.owner.show',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsOwnerShow,
   handler: async (params, context) => {
     ownerActor(context)
@@ -172,6 +174,7 @@ const SHOW = defineMethod({
 const COMMENT = defineMethod({
   name: 'bots.items.owner.comment',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsOwnerComment,
   handler: async (params, context) => {
     const actor = ownerActor(context)
@@ -220,6 +223,7 @@ const COMMENT = defineMethod({
 const STATUS = defineMethod({
   name: 'bots.items.owner.status',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsOwnerStatus,
   handler: async (params, context) => {
     const actor = ownerActor(context)
@@ -252,6 +256,7 @@ const STATUS = defineMethod({
 const SNOOZE = defineMethod({
   name: 'bots.items.owner.snooze',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsOwnerSnooze,
   handler: async (params, context) => {
     const actor = ownerActor(context)
@@ -281,6 +286,7 @@ const SNOOZE = defineMethod({
 const OPENED = defineMethod({
   name: 'bots.items.owner.opened',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotItemsOwnerOpened,
   handler: async (params, context) => {
     ownerActor(context)

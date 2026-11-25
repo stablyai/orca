@@ -12,6 +12,7 @@ export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: (_params, { runtime }) => ({
       folderWorkspaces: runtime.listVisibleFolderWorkspaces()
@@ -20,6 +21,7 @@ export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: FolderWorkspaceCreate,
     handler: async (params, context) => {
       const viewerSupported = terminalImageViewerSupported(context)
@@ -34,6 +36,7 @@ export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.update',
     permission: 'workspace',
+    share: 'not-shared',
     params: FolderWorkspaceUpdate,
     handler: async (params, { runtime }) => ({
       folderWorkspace: await runtime.updateFolderWorkspace(
@@ -46,6 +49,7 @@ export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.delete',
     permission: 'workspace',
+    share: 'not-shared',
     params: FolderWorkspaceDelete,
     handler: async (params, { runtime }) =>
       runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
@@ -57,6 +61,7 @@ export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.getPathStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: FolderWorkspacePathStatus,
     handler: async (params, { runtime }) => ({
       status: await runtime.getFolderWorkspacePathStatus(params)

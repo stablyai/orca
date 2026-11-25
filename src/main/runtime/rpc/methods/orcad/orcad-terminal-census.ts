@@ -19,6 +19,7 @@ export const ORCAD_TERMINAL_CENSUS_METHODS = [
   defineMethod({
     name: ORCAD_TERMINAL_CENSUS_METHOD,
     permission: 'host-admin',
+    share: 'not-shared',
     params: OrcadTerminalCensusParamsSchema,
     handler: async (params, { runtime }) => {
       if (params.closeAdmissionForMs === undefined) {

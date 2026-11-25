@@ -22,6 +22,7 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
   defineMethod({
     name: 'agentSession.acknowledgeAttention',
     permission: 'workspace',
+    share: 'not-shared',
     params: AcknowledgeAttentionParams,
     handler: async (params, ctx) => {
       requireStructuredCapability(ctx)
@@ -45,6 +46,7 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
   defineStreamingMethod({
     name: 'agentSession.subscribeTurnCompletions',
     permission: 'workspace',
+    share: 'not-shared',
     params: SubscribeTurnCompletionsParams,
     handler: async (params, ctx, emit) => {
       const host = requireHost(ctx)

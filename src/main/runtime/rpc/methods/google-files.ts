@@ -49,6 +49,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.drive.search',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveSearchParams,
     handler: async (params, context) =>
       searchDrive(await googleApiForCaller(params, context), params)
@@ -56,6 +57,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.drive.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveListParams,
     handler: async (params, context) =>
       searchDrive(await googleApiForCaller(params, context), { ...params, in: params.folder })
@@ -63,12 +65,14 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.drive.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveReadParams,
     handler: async (params, context) => readDrive(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.drive.download',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveDownloadParams,
     handler: async (params, context) =>
       downloadDrive(await googleApiForCaller(params, context), params.ref)
@@ -76,6 +80,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.drive.upload',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveUploadParams,
     handler: async (params, context) =>
       uploadDrive(await googleApiForCaller(params, context), {
@@ -86,6 +91,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.drive.mkdir',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveMkdirParams,
     handler: async (params, context) =>
       makeFolder(await googleApiForCaller(params, context), {
@@ -96,12 +102,14 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.drive.move',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveMoveParams,
     handler: async (params, context) => moveDrive(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.drive.share',
     permission: 'workspace',
+    share: 'not-shared',
     params: DriveShareParams,
     handler: async (params, context) =>
       shareDrive(await googleApiForCaller(params, context), {
@@ -112,12 +120,14 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.docs.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: DocsReadParams,
     handler: async (params, context) => readDoc(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.docs.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: DocsCreateParams,
     handler: async (params, context) =>
       createDoc(await googleApiForCaller(params, context), {
@@ -128,12 +138,14 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.docs.append',
     permission: 'workspace',
+    share: 'not-shared',
     params: DocsAppendParams,
     handler: async (params, context) => appendDoc(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.docs.replace',
     permission: 'workspace',
+    share: 'not-shared',
     params: DocsReplaceParams,
     handler: async (params, context) =>
       replaceInDoc(await googleApiForCaller(params, context), params)
@@ -141,6 +153,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.docs.comment',
     permission: 'workspace',
+    share: 'not-shared',
     params: DocsCommentParams,
     handler: async (params, context) =>
       commentOnDoc(await googleApiForCaller(params, context), {
@@ -151,6 +164,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.sheets.create',
     permission: 'workspace',
+    share: 'not-shared',
     params: SheetsCreateParams,
     handler: async (params, context) =>
       createSheet(await googleApiForCaller(params, context), params.title)
@@ -158,12 +172,14 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.sheets.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: SheetsReadParams,
     handler: async (params, context) => readSheet(await googleApiForCaller(params, context), params)
   }),
   defineMethod({
     name: 'google.sheets.write',
     permission: 'workspace',
+    share: 'not-shared',
     params: SheetsWriteParams,
     handler: async (params, context) =>
       writeSheet(await googleApiForCaller(params, context), params)
@@ -171,6 +187,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.sheets.append',
     permission: 'workspace',
+    share: 'not-shared',
     params: SheetsAppendParams,
     handler: async (params, context) =>
       appendSheet(await googleApiForCaller(params, context), params)
@@ -178,6 +195,7 @@ export const GOOGLE_FILES_METHODS = [
   defineMethod({
     name: 'google.sheets.upsert',
     permission: 'workspace',
+    share: 'not-shared',
     params: SheetsUpsertParams,
     handler: async (params, context) =>
       upsertSheet(await googleApiForCaller(params, context), params)

@@ -27,6 +27,7 @@ import type { OrcadPeerDesktopsResult } from '../../../shared/remote-runtime/orc
 import type { RpcBinarySender } from './transports/rpc-binary-sender'
 import type { RpcCallerScope } from './callers/rpc-caller-scope'
 import type { RpcMethodPermission } from './callers/rpc-method-permission'
+import type { RpcMethodShare } from '../../../shared/bots/bot-share-rpc-methods'
 import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
 import {
   runsOrchestrationAccessCheck,
@@ -223,10 +224,17 @@ export type RpcTypedMethod<TName extends string, TSchema extends ZodType | null,
   readonly name: TName
   // Every new method must explicitly choose caller permissions.
   readonly permission: RpcMethodPermission
+  // And whether a shared agent's teammate may call it, and under which check.
+  readonly share: RpcMethodShare
   readonly params: TSchema
   // Startup phases this method needs; the dispatcher waits for them, bounded (orcad only).
   readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly handler: (params: RpcParsedParams<TSchema>, ctx: RpcContext) => TResult
+}
+
+/** Both decisions at once for a method a share may not call: its caller permission, and no share. */
+export function notShared<P extends RpcMethodPermission>(permission: P) {
+  return { permission, share: 'not-shared' } as const
 }
 
 export function defineMethod<TName extends string, TSchema extends ZodType | null, TResult>(
@@ -239,6 +247,7 @@ export function defineMethod<TName extends string, TSchema extends ZodType | nul
 export type RpcTypedStreamingMethod<TName extends string, TSchema extends ZodType | null> = {
   readonly name: TName
   readonly permission: RpcMethodPermission
+  readonly share: RpcMethodShare
   readonly params: TSchema
   readonly requires?: OrcadFeatureRequirement<RpcParsedParams<TSchema>>
   readonly stream: true
@@ -258,6 +267,7 @@ export function defineStreamingMethod<TName extends string, TSchema extends ZodT
 type RpcMethodWithParams<P> = {
   readonly name: string
   readonly permission: RpcMethodPermission
+  readonly share: RpcMethodShare
   readonly params: ZodType | null
   readonly requires?: OrcadFeatureRequirement<P>
   // Set only by defineOrchestrationMethod, whose checked handler the registry requires.
@@ -268,6 +278,7 @@ type RpcMethodWithParams<P> = {
 type RpcStreamingMethodWithParams<P> = {
   readonly name: string
   readonly permission: RpcMethodPermission
+  readonly share: RpcMethodShare
   readonly params: ZodType | null
   readonly requires?: OrcadFeatureRequirement<P>
   readonly orchestrationAccess?: OrchestrationMethodAccessDeclaration

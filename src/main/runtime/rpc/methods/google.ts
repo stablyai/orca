@@ -135,6 +135,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.status',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleStatusParams,
     handler: async (
       { check, botToken },
@@ -162,6 +163,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.client.import',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleClientImportParams,
     handler: async ({ botToken, file }, ctx) => {
       refuseFromBot(botToken, ctx)
@@ -171,6 +173,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.client.export',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleClientExportParams,
     handler: async ({ botToken }, ctx) => {
       refuseFromBot(botToken, ctx)
@@ -180,6 +183,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.signIn.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSignInStartParams,
     handler: async ({ botToken, callerLoopbackPort, account, services, currentApp }, ctx) => {
       refuseFromBot(botToken, ctx)
@@ -197,6 +201,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.signIn.wait',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSignInWaitParams,
     handler: async ({ flowId, afterRevision }, ctx) =>
       google().waitSignIn(flowOwner(ctx), flowId, afterRevision, ctx.signal)
@@ -204,6 +209,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.finishSignIn',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleFinishSignInParams,
     handler: async ({ flowId, address }, ctx) =>
       google().finishSignIn(flowOwner(ctx), flowId, address)
@@ -211,12 +217,14 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.signIn.cancel',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleSignInFlowParams,
     handler: async ({ flowId }, ctx) => google().cancelSignIn(flowOwner(ctx), flowId)
   }),
   defineMethod({
     name: 'google.disconnect',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleDisconnectParams,
     handler: async ({ botToken, account, revoke }, ctx) => {
       refuseFromBot(botToken, ctx)
@@ -227,6 +235,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.default.set',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleDefaultSetParams,
     // A bot with Google on may switch the default when its owner asks; it only picks among connected accounts.
     handler: async ({ botToken, account }, ctx) => {
@@ -242,6 +251,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.bot.set',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleBotAccessSetParams,
     handler: async (
       { botToken, botId, on, accounts, allAccounts, basedOn, confirmedAskers },
@@ -282,6 +292,7 @@ export const GOOGLE_METHODS = [
   defineMethod({
     name: 'google.bot.connected',
     permission: 'workspace',
+    share: 'not-shared',
     params: GoogleBotConnectedParams,
     handler: async ({ botToken, botId, account, sessionId }, ctx) => {
       refuseFromBot(botToken, ctx)

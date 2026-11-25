@@ -1,3 +1,4 @@
+import { SHARE_SELF } from '../../../../../shared/bots/bot-share-rpc-methods'
 import { defineMethod } from '../../core'
 import {
   DECLARE_ORCA_ACCOUNT_METHOD,
@@ -35,6 +36,7 @@ export const PAIRING_METHODS = [
     name: PAIRING_CREATE_OFFER_METHOD,
     // Only this host's owner CLI gets the context; paired clients and phones never hold pairing-admin.
     permission: 'pairing-admin',
+    share: 'not-shared',
     params: PairingCreateOfferParamsSchema,
     handler: async (params, ctx) => {
       if (!ctx.pairingOffers) {
@@ -51,6 +53,7 @@ export const PAIRING_METHODS = [
   defineMethod({
     name: 'pairing.getEndpoints',
     permission: 'pairing-admin',
+    share: SHARE_SELF,
     params: PairingGetEndpointsParamsSchema,
     handler: async (params, ctx) => {
       if (!ctx.pairing) {
@@ -62,6 +65,7 @@ export const PAIRING_METHODS = [
   defineMethod({
     name: 'pairing.provisionRelay',
     permission: 'pairing-admin',
+    share: SHARE_SELF,
     params: PairingProvisionRelayParamsSchema,
     handler: async (params, ctx) => {
       if (!ctx.pairing) {
@@ -73,6 +77,7 @@ export const PAIRING_METHODS = [
   defineMethod({
     name: REGISTER_DEVICE_KEY_METHOD,
     permission: 'device-self',
+    share: 'not-shared',
     params: RegisterDeviceKeyParamsSchema,
     handler: (params, ctx) => {
       if (!ctx.deviceSelf) {
@@ -84,6 +89,7 @@ export const PAIRING_METHODS = [
   defineMethod({
     name: DECLARE_ORCA_ACCOUNT_METHOD,
     permission: 'device-self',
+    share: 'not-shared',
     params: DeclareOrcaAccountParamsSchema,
     handler: (params, ctx) => {
       ctx.deviceSelf?.declareOrcaAccount(params.account, params.clientInstanceId)
@@ -93,6 +99,7 @@ export const PAIRING_METHODS = [
   defineMethod({
     name: EXCHANGE_PAIRING_TICKET_METHOD,
     permission: 'device-self',
+    share: 'not-shared',
     params: ExchangePairingTicketParamsSchema,
     handler: (params, ctx) => {
       if (!ctx.deviceSelf) {
@@ -105,6 +112,7 @@ export const PAIRING_METHODS = [
     name: ORCAD_PEER_DESKTOPS_METHOD,
     // Paired desktops lack pairing-admin; they learn only other desktops' names, never credentials.
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcadPeerDesktopsParamsSchema,
     handler: (params, ctx) => {
       if (!ctx.peerDesktops) {
@@ -116,6 +124,7 @@ export const PAIRING_METHODS = [
   defineMethod({
     name: ORCAD_DECLARE_CLIENT_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: OrcadDeclareClientParamsSchema,
     handler: (params, ctx) => {
       if (!ctx.peerDesktops) {
@@ -129,6 +138,7 @@ export const PAIRING_METHODS = [
     name: DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
     // Paired desktops lack pairing-admin but must manage their children within rpc-caller-scope.
     permission: 'workspace',
+    share: 'not-shared',
     params: DelegatedMobileDeviceSyncParamsSchema,
     handler: (params, ctx) => {
       if (!ctx.delegatedMobileDevices) {

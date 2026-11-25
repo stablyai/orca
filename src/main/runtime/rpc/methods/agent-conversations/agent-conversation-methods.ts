@@ -25,6 +25,7 @@ export const AGENT_CONVERSATION_METHODS = [
   defineMethod({
     name: 'agent.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentListParams,
     handler: async (params, { runtime }): Promise<AgentListResult> =>
       projectAgentConversationList(
@@ -35,6 +36,7 @@ export const AGENT_CONVERSATION_METHODS = [
   defineMethod({
     name: 'agent.show',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentShowParams,
     handler: async (params, { runtime }): Promise<AgentShowResult> => {
       const resolved = await resolveAgentConversation(runtime, params.id)
@@ -48,6 +50,7 @@ export const AGENT_CONVERSATION_METHODS = [
   defineMethod({
     name: 'agent.read',
     permission: 'workspace',
+    share: 'not-shared',
     params: AgentReadParams,
     handler: async (params, ctx): Promise<AgentReadResult> =>
       readAgentConversation(ctx, await resolveAgentConversation(ctx.runtime, params.id), params)

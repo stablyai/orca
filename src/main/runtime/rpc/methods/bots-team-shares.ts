@@ -42,6 +42,7 @@ export const BOT_TEAM_SHARES_METHODS = [
   defineMethod({
     name: 'bots.teamShares.add',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotTeamSharesAdd,
     // added: the invites made now, each emailed before the answer; emails already on the list are kept.
     handler: async ({ botId, emails }, context) => {
@@ -68,6 +69,7 @@ export const BOT_TEAM_SHARES_METHODS = [
   defineMethod({
     name: 'bots.teamShares.resend',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotTeamSharesResend,
     handler: async ({ botId, shareId }, context) => {
       ownerOnly(context, OWNER_ONLY)
@@ -83,6 +85,7 @@ export const BOT_TEAM_SHARES_METHODS = [
   defineMethod({
     name: 'bots.teamShares.remove',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotTeamSharesRemove,
     handler: async ({ botId, shareId }, context) => {
       ownerOnly(context, OWNER_ONLY)

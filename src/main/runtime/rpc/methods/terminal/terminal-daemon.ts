@@ -10,18 +10,21 @@ export const TERMINAL_DAEMON_METHODS = [
   defineMethod({
     name: 'terminalDaemon.limit',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }) => runtime.terminalLimit()
   }),
   defineMethod({
     name: 'terminalDaemon.setLimit',
     permission: 'host-admin',
+    share: 'not-shared',
     params: TerminalLimitUpdateParams,
     handler: async (params, { runtime }) => runtime.terminalLimit(params)
   }),
   defineMethod({
     name: 'terminalDaemon.severedStatus',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // Why `daemon` is additive: older CLIs read only `severed`.
     handler: async () => ({
@@ -35,6 +38,7 @@ export const TERMINAL_DAEMON_METHODS = [
   defineMethod({
     name: 'terminalDaemon.restartSevered',
     permission: 'host-admin',
+    share: 'not-shared',
     params: TerminalDaemonRestartSeveredParams,
     handler: async (params) => restartSeveredDaemon(params)
   })

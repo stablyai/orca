@@ -13,6 +13,7 @@ import { defineMethod, InvalidArgumentError } from '../core'
 export const BOT_CREATE_OFFER_METHOD = defineMethod({
   name: 'bots.createOffer',
   permission: 'workspace',
+  share: 'not-shared',
   params: BotCreateOfferRequest,
   handler: async ({ callerSessionId, ...proposal }, { runtime, pairedDeviceId }) => {
     runtime.bots.assertEnabled()

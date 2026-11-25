@@ -32,6 +32,7 @@ export type RelayE2eeLinkOptions = {
   expectedCredentialKind: 'invite' | 'resume'
   // What authenticates this device to the host inside E2EE: a phone's token or a device key.
   authCredential: PairedE2EEClientCredential
+  clientCapabilities?: readonly string[]
   desktopPublicKeyB64: string
   onAuthenticated: () => void
   onText: (plaintext: string) => void
@@ -108,6 +109,7 @@ export class RelayE2eeLink {
       handshake,
       socket: this.socket,
       credential: options.authCredential,
+      clientCapabilities: options.clientCapabilities,
       decodeBinary: platform.decodeBinary,
       inflateFrame: platform.inflateFrame,
       onAuthenticated: () => {

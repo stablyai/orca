@@ -1,4 +1,4 @@
-import { defineMethod } from '../../core'
+import { notShared, defineMethod } from '../../core'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
@@ -41,7 +41,7 @@ import { RepoAddRemote } from '../../../../../shared/rpc-contract/ssh/ssh-params
 export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoList,
     handler: (params, context) => {
       context.runtime.enrichMissingRepoGitRemoteIdentities?.()
@@ -60,7 +60,7 @@ export const REPO_METHODS = [
   ...FOLDER_WORKSPACE_METHODS,
   defineMethod({
     name: 'repo.sparsePresets',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSelector,
     handler: async (params, { runtime }) => ({
       presets: await runtime.listSparsePresets(params.repo)
@@ -68,7 +68,7 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.saveSparsePreset',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSparsePresetSave,
     handler: async (params, { runtime }) => ({
       preset: await runtime.saveSparsePreset(params.repo, {
@@ -80,7 +80,7 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.removeSparsePreset',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSparsePresetRemove,
     handler: async (params, { runtime }) => {
       await runtime.removeSparsePreset(params.repo, params.presetId)
@@ -89,7 +89,7 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.add',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoPath,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
@@ -101,7 +101,7 @@ export const REPO_METHODS = [
   // Use a new ssh.target-management.v1 method: old repo.add would strip the target and register the path locally.
   defineMethod({
     name: 'repo.addRemote',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoAddRemote,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(await context.runtime.addSshRepo(params), context)
@@ -109,7 +109,7 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.create',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoCreate,
     handler: async (params, context) =>
       projectRepoResultVisibilityForClient(
@@ -120,19 +120,19 @@ export const REPO_METHODS = [
   // Older hosts answer method_not_found; clients then fall back to <host home>/orca/projects.
   defineMethod({
     name: 'repo.defaultCreateParent',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: (_params, { runtime }) => ({ parentPath: runtime.getDefaultCreateProjectParent() })
   }),
   defineMethod({
     name: 'repo.gitAvailable',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: null,
     handler: async (_params, { runtime }) => ({ available: await runtime.isGitAvailable() })
   }),
   defineMethod({
     name: 'repo.clone',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoClone,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
@@ -148,13 +148,13 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.checkCloneTarget',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoClone,
     handler: async (params, { runtime }) => ({ target: await runtime.checkCloneTarget(params) })
   }),
   defineMethod({
     name: 'repo.show',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoShow,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
@@ -165,7 +165,7 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.update',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoUpdate,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
@@ -179,7 +179,7 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.setHidden',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSetHidden,
     handler: async (params, context) => {
       const repo = await context.runtime.setRepoHidden(
@@ -195,19 +195,19 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.rm',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.removeProject(params.repo)
   }),
   defineMethod({
     name: 'repo.reorder',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoReorder,
     handler: async (params, { runtime }) => runtime.reorderRepos(params.orderedIds)
   }),
   defineMethod({
     name: 'repo.setBaseRef',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSetBaseRef,
     handler: async (params, context) => ({
       repo: projectRepoVisibilityForClient(
@@ -218,13 +218,13 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.baseRefDefault',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.getRepoBaseRefDefault(params.repo)
   }),
   defineMethod({
     name: 'repo.searchRefs',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSearchRefs,
     handler: async (params, { runtime, clientCapabilities, signal }) =>
       projectRepoSearchRefsForClient(
@@ -241,14 +241,14 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.hooks',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoHooksRead,
     handler: async (params, { runtime }) =>
       runtime.getRepoHooks(params.repo, { createSource: params.createSource })
   }),
   defineMethod({
     name: 'repo.hooksCheck',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoHooksCheck,
     handler: async (params, { runtime }) =>
       runtime.checkRepoHooks(params.repo, {
@@ -258,20 +258,20 @@ export const REPO_METHODS = [
   }),
   defineMethod({
     name: 'repo.setupScriptImports',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.inspectRepoSetupScriptImports(params.repo)
   }),
   defineMethod({
     name: 'repo.issueCommandRead',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoIssueCommandRead,
     handler: async (params, { runtime }) =>
       runtime.readRepoIssueCommand(params.repo, { wakeWslDistro: params.wakeWslDistro })
   }),
   defineMethod({
     name: 'repo.issueCommandWrite',
-    permission: 'workspace',
+    ...notShared('workspace'),
     params: RepoIssueCommandWrite,
     handler: async (params, { runtime }) =>
       runtime.writeRepoIssueCommand(params.repo, params.content, {

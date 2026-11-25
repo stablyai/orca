@@ -11,6 +11,7 @@ export const STRUCTURED_AGENT_SESSION_REGENERATE_NAME_METHODS = [
   defineMethod({
     name: 'agentSession.regenerateName',
     permission: 'workspace',
+    share: 'not-shared',
     params: OptionsParams,
     handler: async (params, ctx) => {
       const host = await requireInstalledStructuredHost(ctx, params.sessionId)

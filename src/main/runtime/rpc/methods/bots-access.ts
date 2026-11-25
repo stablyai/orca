@@ -15,6 +15,7 @@ export const BOT_ACCESS_METHODS = [
   defineMethod({
     name: 'bots.access.list',
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     // From the host's store, so every window's and phone's re-read on botsChanged costs no cloud call.
     handler: async (_params, { runtime }) =>
@@ -23,6 +24,7 @@ export const BOT_ACCESS_METHODS = [
   defineMethod({
     name: 'bots.access.decide',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotAccessDecide,
     handler: async (params, context) => {
       ownerOnly(context, 'Only your owner answers access requests, in Orca.')
@@ -42,6 +44,7 @@ export const BOT_ACCESS_METHODS = [
   defineMethod({
     name: 'bots.access.redeem',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotAccessRedeem,
     handler: async (params, { runtime }) => redeemHostAccessRequest(accessHost(runtime), params)
   })

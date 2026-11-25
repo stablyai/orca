@@ -17,24 +17,28 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.repoSlug',
     permission: 'workspace',
+    share: 'not-shared',
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.getRepoSlug(params.repo)
   }),
   defineMethod({
     name: 'github.repoUpstream',
     permission: 'workspace',
+    share: 'not-shared',
     params: RepoSelector,
     handler: async (params, { runtime }) => runtime.getRepoUpstream(params.repo)
   }),
   defineMethod({
     name: 'github.rateLimit',
     permission: 'workspace',
+    share: 'not-shared',
     params: RateLimit,
     handler: async (params, { runtime }) => runtime.getGitHubRateLimit(params)
   }),
   defineMethod({
     name: 'github.listWorkItems',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkItemsList,
     handler: async (params, { runtime }) =>
       runtime.listRepoWorkItems(
@@ -48,18 +52,21 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.listIssues',
     permission: 'workspace',
+    share: 'not-shared',
     params: IssuesList,
     handler: async (params, { runtime }) => runtime.listRepoIssues(params.repo, params.limit)
   }),
   defineMethod({
     name: 'github.countWorkItems',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkItemsCount,
     handler: async (params, { runtime }) => runtime.countRepoWorkItems(params.repo, params.query)
   }),
   defineMethod({
     name: 'github.listLabels',
     permission: 'workspace',
+    share: 'not-shared',
     params: RepoWithGitHubAccountExpectation,
     handler: async (params, { runtime }) =>
       params.expectedGhAccount !== undefined
@@ -72,6 +79,7 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.listAssignableUsers',
     permission: 'workspace',
+    share: 'not-shared',
     params: RepoWithGitHubAccountExpectation,
     handler: async (params, { runtime }) =>
       params.expectedGhAccount !== undefined
@@ -84,6 +92,7 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.workItem',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkItem,
     handler: async (params, { runtime }) =>
       runtime.getRepoWorkItem(params.repo, params.number, params.type)
@@ -91,6 +100,7 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.workItemByOwnerRepo',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkItemByOwnerRepo,
     handler: async (params, { runtime }) =>
       runtime.getRepoWorkItemByOwnerRepo(
@@ -108,6 +118,7 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
   defineMethod({
     name: 'github.workItemDetails',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorkItemDetails,
     handler: async (params, { runtime }) => {
       if (params.expectedGhAccount !== undefined) {

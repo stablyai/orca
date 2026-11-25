@@ -22,6 +22,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.activate',
     permission: 'workspace',
+    share: 'not-shared',
     params: BotLinkActivateTab,
     handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
       const botLinkTarget = params.botLinkTarget
@@ -77,6 +78,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.move',
     permission: 'workspace',
+    share: 'not-shared',
     params: MoveTab,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
@@ -112,6 +114,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.updatePaneLayout',
     permission: 'workspace',
+    share: 'not-shared',
     params: UpdatePaneLayout,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       await assertVisibleMutationTab(
@@ -135,6 +138,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.movePaneToNewTab',
     permission: 'workspace',
+    share: 'not-shared',
     params: MovePaneToNewTab,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       await assertVisibleMutationTab(
@@ -166,6 +170,7 @@ export const SESSION_TAB_MUTATION_METHODS = [
   defineMethod({
     name: 'session.tabs.setTabProps',
     permission: 'workspace',
+    share: 'not-shared',
     params: SetTabProps,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       await assertVisibleMutationTab(

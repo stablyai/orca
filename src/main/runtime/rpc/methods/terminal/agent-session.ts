@@ -45,6 +45,7 @@ export const AGENT_SESSION_METHODS = [
     name: 'terminal.ensureAgentSession',
     requires: ensureAgentSessionFeatureRequirement,
     permission: 'workspace',
+    share: 'not-shared',
     params: EnsureAgentSessionParams,
     handler: (params, context) =>
       context.runtime.ensureAgentSession(
@@ -56,6 +57,7 @@ export const AGENT_SESSION_METHODS = [
     name: 'terminal.createAgentSession',
     requires: ['accounts'],
     permission: 'workspace',
+    share: 'not-shared',
     params: CreateAgentSessionParams,
     handler: (params, context) => {
       assertOperationTimestampWithinFutureSkew(params.clientOperationId)

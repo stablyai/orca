@@ -5,10 +5,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from '../../bots/shared-with-me/shared-bot-hosts'
 import { memorySharedBotHomes } from '../../bots/shared-with-me/shared-bot-home.test-fixture'
-import { setSharedBotHostRouting } from '../../bots/shared-with-me/shared-bot-host-routing'
+import { routeSharedHostsThrough } from '../runtime-environments/requests/runtime-environment-shared-hosts'
+import {
+  isBotShareMethod,
+  isBotShareStreamMethod
+} from '../../runtime/rpc/methods/rpc-method-share'
 import nacl from 'tweetnacl'
 import { openBotTeamShareHeldMessage } from '../../../shared/bots/bot-team-share-seal'
-import { SHARED_BOT_HOST_ERRORS } from '../../../shared/bots/shared-bot-hosts'
+import {
+  SHARED_BOT_HOST_ERRORS,
+  SHARED_HOSTS_HOLD_WHILE_AWAY
+} from '../../../shared/bots/shared-bot-hosts'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import type { ConnectorShareHoldRequest } from '../../../shared/connector-share-contract'
@@ -17,17 +24,15 @@ import {
   uploadBufferToAgentSessionAttachments
 } from './agent-session-attachment-upload'
 
-const paired = vi.hoisted(() => ({ call: vi.fn(), resolve: vi.fn() }))
-vi.mock('../runtime-environments/requests/runtime-environment-transport-routing', () => ({
-  callRuntimeEnvironment: paired.call
-}))
+// Every paired-server path starts by resolving its selector in the registry.
+const paired = vi.hoisted(() => ({ resolve: vi.fn() }))
 vi.mock('../../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
   resolveEnvironment: paired.resolve
 }))
 
 const dirs: string[] = []
 afterEach(() => {
-  setSharedBotHostRouting(null)
+  routeSharedHostsThrough(null)
   for (const dir of dirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -72,14 +77,17 @@ async function awayHost(hostKey?: string) {
     }),
     publish: () => {}
   })
-  setSharedBotHostRouting(hosts)
+  routeSharedHostsThrough({
+    hosts,
+    methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
+  })
   await hosts.refresh()
   hosts.stop()
   return { hosts, userDataPath, holds }
 }
 
 describe('attachment uploads to a shared agent’s host', () => {
-  it('go through its share link, never the paired-server registry', async () => {
+  it('go through runtimeEnvironments to its share link, never the paired-server registry', async () => {
     const { hosts, userDataPath } = await awayHost()
     const environmentId = hosts.views()[0]!.environmentId
     expect(await resolveAttachmentEnvironmentId(userDataPath, environmentId)).toBe(environmentId)
@@ -91,56 +99,59 @@ describe('attachment uploads to a shared agent’s host', () => {
         Buffer.from('png')
       )
     ).rejects.toThrow('Jinwoo Hong’s computer is offline')
-    expect(paired.call).not.toHaveBeenCalled()
     expect(paired.resolve).not.toHaveBeenCalled()
   })
 
-  it('are kept here for a chat whose message will be held, and sealed into that message', async () => {
-    const { hosts, userDataPath, holds } = await awayHost(HOST_KEY)
-    const environmentId = hosts.views()[0]!.environmentId
-    const upload = {
-      environmentId,
-      sessionId: 'chat-0001',
-      expectedEnvironmentRuntimeId: 'r',
-      userDataPath
-    }
-    const stored = await uploadBufferToAgentSessionAttachments(
-      upload,
-      'shot.png',
-      Buffer.from('png bytes')
-    )
-    const sent = await hosts.call(
-      environmentId,
-      'agentSession.send',
-      structuredAgentSessionMessageSendMutation({
+  // Held sends are off for now; nothing is held, so nothing is kept for one.
+  it.skipIf(!SHARED_HOSTS_HOLD_WHILE_AWAY)(
+    'are kept here for a chat whose message will be held, and sealed into that message',
+    async () => {
+      const { hosts, userDataPath, holds } = await awayHost(HOST_KEY)
+      const environmentId = hosts.views()[0]!.environmentId
+      const upload = {
+        environmentId,
         sessionId: 'chat-0001',
-        clientOperationId: 'm1',
-        expectedRuntimeFence: null,
-        body: {
-          kind: 'message',
-          role: 'user',
-          blocks: [
-            { type: 'text', text: 'See this' },
-            { type: 'image-ref', path: stored.path }
-          ]
-        }
+        expectedEnvironmentRuntimeId: 'r',
+        userDataPath
+      }
+      const stored = await uploadBufferToAgentSessionAttachments(
+        upload,
+        'shot.png',
+        Buffer.from('png bytes')
+      )
+      const sent = await hosts.call(
+        environmentId,
+        'agentSession.send',
+        structuredAgentSessionMessageSendMutation({
+          sessionId: 'chat-0001',
+          clientOperationId: 'm1',
+          expectedRuntimeFence: null,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [
+              { type: 'text', text: 'See this' },
+              { type: 'image-ref', path: stored.path }
+            ]
+          }
+        })
+      )
+      expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+      const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
+        hostSecretKey: HOST.secretKey,
+        hostKey: HOST_KEY,
+        sealed: holds[0]!.sealed,
+        expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
       })
-    )
-    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
-    const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
-      hostSecretKey: HOST.secretKey,
-      hostKey: HOST_KEY,
-      sealed: holds[0]!.sealed,
-      expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
-    })
-    expect(opened?.text).toBe('See this')
-    expect(opened?.attachments).toEqual([
-      { name: 'shot.png', contentBase64: Buffer.from('png bytes').toString('base64') }
-    ])
-    // Past one held message's budget it is refused before a byte is kept.
-    await expect(
-      uploadBufferToAgentSessionAttachments(upload, 'big.bin', Buffer.alloc(800 * 1024))
-    ).rejects.toThrow('Too large to hold')
-    expect(paired.call).not.toHaveBeenCalled()
-  })
+      expect(opened?.text).toBe('See this')
+      expect(opened?.attachments).toEqual([
+        { name: 'shot.png', contentBase64: Buffer.from('png bytes').toString('base64') }
+      ])
+      // Past one held message's budget it is refused before a byte is kept.
+      await expect(
+        uploadBufferToAgentSessionAttachments(upload, 'big.bin', Buffer.alloc(800 * 1024))
+      ).rejects.toThrow('Too large to hold')
+      expect(paired.resolve).not.toHaveBeenCalled()
+    }
+  )
 })
