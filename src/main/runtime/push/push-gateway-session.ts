@@ -1,10 +1,7 @@
-// Why: the challenge/proof handshake every push request rides on, split out of
-// push-gateway-client.ts so the session cache and its refusal cache stay readable
-// next to the request methods rather than buried under them.
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import type { E2EEKeypair } from '../e2ee-keypair'
-import { deriveRelayHostId } from '../mobile-cloud-relay/relay-http-client'
+import type { E2EEKeypair } from '../rpc/server/pairing/e2ee-keypair'
+import { deriveRelayHostId } from '../mobile-cloud-relay/director/relay-http-client'
 import { answerPushHostChallenge } from './push-host-proof'
 import {
   postPushGatewayJson,
@@ -12,14 +9,11 @@ import {
   type PushGatewayFailure
 } from './push-gateway-response'
 
-// Re-auth a little early so a send never spends its one retry on a token that
-// expired between the check and the request.
+// Renew early so expiry between check and send cannot consume the single retry.
 const SESSION_RENEWAL_MARGIN_MS = 60_000
-// Why: a gateway that refuses this host's proof refuses the identical next one,
-// so without this every dispatch pays two full handshake round trips to relearn it.
+// Cache proof refusal to avoid repeating identical failed handshakes on every dispatch.
 const HANDSHAKE_REFUSAL_TTL_MS = 30_000
-// Why: the handshake routes sit behind a per-IP bucket. Backing off keeps this
-// host from spending the whole bucket on challenges it will never get to use.
+// Back off the per-IP challenge bucket instead of exhausting it on unusable sessions.
 const HANDSHAKE_RATE_LIMIT_TTL_MS = 60_000
 
 const ChallengeResponseSchema = z
@@ -61,7 +55,10 @@ export class PushGatewaySession {
   readonly hostFingerprint: string
   private session: PushSession | null = null
   private pending: Promise<PushSessionOutcome> | null = null
-  private negative: { until: number; reason: PushGatewayFailure['reason'] } | null = null
+  private negative: { at: number; ttlMs: number; failure: PushGatewayFailure } | null = null
+  // One log line per distinct refusal, so a host stuck on it does not log every retry.
+  private loggedRefusal: string | null = null
+  private refusedClockSkewMs: number | null = null
 
   constructor(options: PushGatewaySessionOptions) {
     this.origin = options.origin
@@ -71,21 +68,22 @@ export class PushGatewaySession {
     this.hostFingerprint = deriveRelayHostId(options.keypair.publicKey)
   }
 
-  /**
-   * `staleToken` is the token that just received a 401. Only that exact session is
-   * dropped: a concurrent request may already have installed a good one, and
-   * clearing unconditionally would throw it away and re-handshake for nothing.
-   */
+  /** How far off this host's clock was when the last sign-in was refused for it; null otherwise. */
+  clockSkewMs(): number | null {
+    return this.refusedClockSkewMs
+  }
+
+  /** Invalidate only the token that received 401; concurrent requests may already have installed its replacement. */
   async ensure(staleToken: string | null): Promise<PushSessionOutcome> {
     if (staleToken !== null && this.session?.token === staleToken) {
       this.session = null
     }
     const cached = this.session
     if (cached && cached.expiresAt - SESSION_RENEWAL_MARGIN_MS > this.now()) {
-      return { ok: true, session: cached }
+      return this.signedIn(cached)
     }
-    if (this.negative && this.negative.until > this.now()) {
-      return { ok: false, reason: this.negative.reason }
+    if (this.negative && this.isCached(this.negative)) {
+      return this.negative.failure
     }
     // Concurrent sends must not each burn a challenge; share one handshake.
     this.pending ??= this.open().finally(() => {
@@ -101,18 +99,29 @@ export class PushGatewaySession {
       ChallengeResponseSchema
     )
     if (!challenge.ok) {
-      return this.remember(challenge)
+      return this.remember(challenge, 'the push service refused this host')
     }
+    const invalid: string[] = []
+    let clockSkewMs: number | undefined
     const proofB64 = answerPushHostChallenge(challenge.value, {
       gatewayOrigin: this.origin,
       hostFingerprint: this.hostFingerprint,
       hostPublicKey: this.keypair.publicKey,
       hostSecretKey: this.keypair.secretKey,
-      now: this.now
+      now: this.now,
+      onInvalid: (reason) => invalid.push(reason),
+      onClockSkew: (skewMs) => {
+        clockSkewMs = skewMs
+      }
     })
     if (!proofB64) {
       // A challenge this host cannot answer is a refusal, not a dropped packet.
-      return this.remember({ ok: false, reason: 'rejected' })
+      return clockSkewMs === undefined
+        ? this.remember(
+            { ok: false, reason: 'rejected' },
+            `its challenge did not verify (${invalid.join(', ') || 'unreadable'})`
+          )
+        : this.remember({ ok: false, reason: 'rejected', clockSkewMs }, clockSkewCause(clockSkewMs))
     }
     const parsed = await this.handshakePost(
       '/v1/host/session',
@@ -120,15 +129,24 @@ export class PushGatewaySession {
       SessionResponseSchema
     )
     if (!parsed.ok) {
-      return this.remember(parsed)
+      return this.remember(parsed, 'the push service refused this host')
     }
     if (parsed.value.hostFingerprint !== this.hostFingerprint) {
       // The gateway answered for some other host; that token is never usable here.
-      return this.remember({ ok: false, reason: 'rejected' })
+      return this.remember({ ok: false, reason: 'rejected' }, 'it answered for a different host')
     }
     this.session = { token: parsed.value.sessionToken, expiresAt: parsed.value.expiresAt }
     this.negative = null
-    return { ok: true, session: this.session }
+    return this.signedIn(this.session)
+  }
+
+  private signedIn(session: PushSession): PushSessionOutcome {
+    this.refusedClockSkewMs = null
+    if (this.loggedRefusal !== null) {
+      this.loggedRefusal = null
+      console.warn('[push] Signed in to the push service again')
+    }
+    return { ok: true, session }
   }
 
   private async handshakePost<TSchema extends z.ZodType>(
@@ -139,19 +157,40 @@ export class PushGatewaySession {
     const response = await postPushGatewayJson(this.fetchImpl, `${this.origin}${path}`, body)
     if (response.ok && response.response.status === 429) {
       await cancelUnreadResponseBody(response.response)
-      // Rate limiting refuses the moment, not this host: back off, stay retryable
-      // so register reports gateway_unreachable and send keeps its one retry.
-      this.negative = { until: this.now() + HANDSHAKE_RATE_LIMIT_TTL_MS, reason: 'unreachable' }
-      return { ok: false, reason: 'unreachable' }
+      // Rate limiting is temporary, not host rejection; retain register/send retry semantics.
+      const failure = { ok: false, reason: 'unreachable' } as const
+      this.negative = { at: this.now(), ttlMs: HANDSHAKE_RATE_LIMIT_TTL_MS, failure }
+      return failure
     }
     return await readPushGatewayJson(response, schema)
   }
 
+  // A clock set back (the usual fix for skew) ends the cache instead of stretching it by the skew.
+  private isCached(entry: { at: number; ttlMs: number }): boolean {
+    const age = this.now() - entry.at
+    return age >= 0 && age < entry.ttlMs
+  }
+
   /** Caches refusals only: a transport failure may clear on the very next try. */
-  private remember(failure: PushGatewayFailure): PushGatewayFailure {
-    if (failure.reason === 'rejected') {
-      this.negative = { until: this.now() + HANDSHAKE_REFUSAL_TTL_MS, reason: 'rejected' }
+  private remember(failure: PushGatewayFailure, cause: string): PushGatewayFailure {
+    if (failure.reason !== 'rejected') {
+      return failure
+    }
+    this.negative = { at: this.now(), ttlMs: HANDSHAKE_REFUSAL_TTL_MS, failure }
+    this.refusedClockSkewMs = failure.clockSkewMs ?? null
+    // Clock refusals key on the cause without the seconds, which drift between attempts.
+    const key = failure.clockSkewMs === undefined ? cause : 'clock'
+    if (key !== this.loggedRefusal) {
+      this.loggedRefusal = key
+      console.warn(
+        `[push] Push service sign-in refused: ${cause}. Phones get no pushes from this host.`
+      )
     }
     return failure
   }
+}
+
+function clockSkewCause(skewMs: number): string {
+  const seconds = Math.round(Math.abs(skewMs) / 1000)
+  return `this host's clock is ${seconds} s ${skewMs > 0 ? 'ahead of' : 'behind'} the push service; set the system clock (for example, turn on NTP)`
 }

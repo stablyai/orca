@@ -3,14 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
-import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/mutation-receipt-capacity'
+import { MUTATION_RECEIPT_MAX_ROWS } from '../runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity'
 import {
+  CONNECTOR_CANCEL_RECEIPT_RESERVE,
   CONNECTOR_PENDING_RECEIPT_LIMIT,
   DeliveryReceipts
 } from './external-conversation-delivery-receipts'
 import type { ConversationKey, Delivery } from './external-conversation-types'
 
-const KEY: ConversationKey = { source: 'dev', externalId: 'thread' }
+const KEY: ConversationKey = { source: 'slack', externalId: 'thread' }
 const ORDINARY = {
   callerFingerprint: 'ordinary-user',
   requestId: 'send',
@@ -45,24 +46,43 @@ describe('DeliveryReceipts ledger capacity', () => {
       outcome: 'refused',
       reason: 'delivery_backlog_full'
     })
-    expect(db.countPendingMutationReceipts(['connector:dev'])).toBe(CONNECTOR_PENDING_RECEIPT_LIMIT)
+    expect(db.countPendingMutationReceipts(['connector:slack'])).toBe(
+      CONNECTOR_PENDING_RECEIPT_LIMIT
+    )
     db.close()
 
-    // Process loss, then a restart that never starts connectors.
+    // Reopen without starting connectors to model a process restart before connector initialization.
     const reopened = new OrchestrationDb(path)
     expect(reopened.beginMutationReceipt(ORDINARY).disposition).toBe('started')
     reopened.close()
   })
 
-  it('answers a recorded delivery even when the backlog is full', async () => {
+  it('still admits a cancel when sends fill the backlog, within its own reserve', async () => {
     const { db } = fileDb()
     const receipts = new DeliveryReceipts(() => db)
     for (let i = 0; i < CONNECTOR_PENDING_RECEIPT_LIMIT; i++) {
       void receipts.run(KEY, String(i), 'connector.send', ['hello'], never)
     }
-    const joined = receipts.run(KEY, '0', 'connector.send', ['hello'], never)
-    const raced = await Promise.race([joined, Promise.resolve('waiting')])
-    expect(raced).toBe('waiting')
+    await expect(
+      receipts.run(KEY, 'cancel', 'connector.cancel', [], async () => ({ outcome: 'accepted' }))
+    ).resolves.toEqual({ outcome: 'accepted' })
+    for (let i = 0; i < CONNECTOR_CANCEL_RECEIPT_RESERVE; i++) {
+      void receipts.run(KEY, `held-cancel-${i}`, 'connector.cancel', [], never)
+    }
+    await expect(receipts.run(KEY, 'one-more', 'connector.cancel', [], never)).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'delivery_backlog_full'
+    })
+    for (const method of ['connector.send', 'connector.start'] as const) {
+      await expect(receipts.run(KEY, method, method, [], never)).resolves.toEqual({
+        outcome: 'refused',
+        reason: 'delivery_backlog_full'
+      })
+    }
+    expect(db.countPendingMutationReceipts(['connector:slack'])).toBe(
+      CONNECTOR_PENDING_RECEIPT_LIMIT + CONNECTOR_CANCEL_RECEIPT_RESERVE
+    )
+    expect(db.beginMutationReceipt(ORDINARY).disposition).toBe('started')
     db.close()
   })
 
@@ -72,6 +92,7 @@ describe('DeliveryReceipts ledger capacity', () => {
     for (let i = 0; i < CONNECTOR_PENDING_RECEIPT_LIMIT; i++) {
       void before.run(KEY, String(i), 'connector.send', ['hello'], never)
     }
+    db.beginMutationReceipt(ORDINARY)
     db.close()
 
     const reopened = new OrchestrationDb(path)
@@ -86,26 +107,61 @@ describe('DeliveryReceipts ledger capacity', () => {
       reason: 'replayed_after_restart'
     })
     expect(
-      reopened.getMutationReceipt('connector:dev', JSON.stringify(['thread', '0']))?.state
+      reopened.getMutationReceipt('connector:slack', JSON.stringify(['thread', '0']))?.state
     ).toBe('completed')
-    // The settled rows no longer hold the connector's budget.
     await expect(after.run(KEY, 'new', 'connector.send', ['hello'], execute)).resolves.toEqual({
       outcome: 'accepted'
     })
     expect(executed).toBe(1)
-    expect(reopened.countPendingMutationReceipts(['connector:dev'])).toBe(0)
-    reopened.close()
-  })
-
-  it('leaves other callers’ pending receipts alone', async () => {
-    const { db } = fileDb()
-    db.beginMutationReceipt(ORDINARY)
-    await new DeliveryReceipts(() => db).run(KEY, 'd1', 'connector.send', ['hello'], async () => ({
-      outcome: 'accepted'
-    }))
-    expect(db.getMutationReceipt(ORDINARY.callerFingerprint, ORDINARY.requestId)?.state).toBe(
+    expect(reopened.countPendingMutationReceipts(['connector:slack'])).toBe(0)
+    expect(reopened.getMutationReceipt(ORDINARY.callerFingerprint, ORDINARY.requestId)?.state).toBe(
       'pending'
     )
+    reopened.close()
+  })
+})
+
+describe('DeliveryReceipts.recorded', () => {
+  it('replays a result, reads an interrupted delivery as unknown, and runs nothing', async () => {
+    const { path, db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    await receipts.run(KEY, 'done', 'connector.send', ['hi'], async () => ({ outcome: 'accepted' }))
+    void receipts.run(KEY, 'interrupted', 'connector.send', ['hi'], never)
+    await receipts.run(KEY, 'refused', 'connector.send', ['hi'], async () => ({
+      outcome: 'refused',
+      reason: 'agent_not_reachable'
+    }))
+    db.close()
+
+    const reopened = new OrchestrationDb(path)
+    const restarted = new DeliveryReceipts(() => reopened)
+    await expect(restarted.recorded(KEY, 'done')).resolves.toEqual({ outcome: 'accepted' })
+    await expect(restarted.recorded(KEY, 'interrupted')).resolves.toEqual({
+      outcome: 'unknown',
+      reason: 'replayed_after_restart'
+    })
+    await expect(restarted.recorded(KEY, 'refused')).resolves.toBeNull()
+    await expect(restarted.recorded(KEY, 'never-received')).resolves.toBeNull()
+    reopened.close()
+  })
+})
+
+describe('DeliveryReceipts.heldByMute', () => {
+  it('replays only the same send the mute held, and refuses another payload under its id', async () => {
+    const { db } = fileDb()
+    const receipts = new DeliveryReceipts(() => db)
+    await receipts.run(KEY, 'held', 'connector.mute', ['mute'], async () => ({
+      outcome: 'accepted'
+    }))
+    await receipts.run(KEY, 'sent', 'connector.send', ['hi'], async () => ({ outcome: 'accepted' }))
+    await expect(receipts.heldByMute(KEY, 'held', ['mute'])).resolves.toEqual({
+      outcome: 'accepted'
+    })
+    await expect(receipts.heldByMute(KEY, 'held', ['hello'])).resolves.toEqual({
+      outcome: 'refused',
+      reason: 'delivery_id_reused'
+    })
+    expect(receipts.heldByMute(KEY, 'sent', ['hi'])).toBeNull()
     db.close()
   })
 })

@@ -1,19 +1,19 @@
-import { randomUUID } from 'node:crypto'
-import type { Store } from '../../persistence'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
+import type { Store } from '../../persistence/loading-store/store'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+import { getRepoName } from '../../git/repositories/repository-name'
 import {
-  inspectGitRepoForRegistrationAsync,
-  getGitRepoRootAsync,
-  getRepoName
-} from '../../git/repo'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { findProjectAtSameRealPath } from '../../project-realpath-identity'
-import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
+import { findProjectAtSameRealPath } from '../../workspaces/catalog/project-realpath-identity'
+import { matchLinkedWorktreeMainCheckout } from '../../workspaces/catalog/linked-worktree-main-checkout'
+import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { describeWslUncAccessDenied } from '../../wsl/filesystem/wsl-unc-access-denied'
+import { createLocalProjectRecord } from '../../workspaces/catalog/local-project-record'
 
 export async function addLocalRepoFromPath(
   store: Store,
@@ -27,7 +27,11 @@ export async function addLocalRepoFromPath(
   }
   const gitInfo = repoKind === 'git' ? await inspectGitRepoForRegistrationAsync(path) : null
   if (gitInfo && !gitInfo.isRepo) {
-    return { error: `Not a valid git repository: ${path}` }
+    return {
+      error:
+        (await describeWslUncAccessDenied(path, store.getSettings())) ??
+        `Not a valid git repository: ${path}`
+    }
   }
 
   const resolvedPath = gitInfo?.rootPath ?? path
@@ -59,33 +63,15 @@ export async function addLocalRepoFromPath(
     return { repo: existingAtRealPath, alreadyExisted: true }
   }
 
-  // Why: a linked worktree reports itself as its own toplevel, so the path checks above can't see that
-  // it belongs to an already-tracked repo. Adding it anyway yields a second "ready" host setup on the
-  // same project and host — a duplicate run-target row that resolves to a transient worktree path.
-  let mainRepoKey: string | null = null
-  if (repoKind === 'git') {
-    const mainRepoRoot = gitInfo?.mainRepoPath
-      ? await getGitRepoRootAsync(gitInfo.mainRepoPath)
-      : null
-    if (mainRepoRoot) {
-      mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
-      // Why !isFolderRepo: only a git-kind main checkout projects onto the same project as its
-      // worktree, so matching a folder record would suppress the add without deduping anything.
-      const trackedMainRepo = store
-        .getRepos()
-        .find(
-          (repo) =>
-            !repo.connectionId &&
-            !isFolderRepo(repo) &&
-            normalizeRuntimePathForComparison(repo.path) === mainRepoKey
-        )
-      if (trackedMainRepo) {
-        return { repo: trackedMainRepo, alreadyExisted: true }
-      }
-    }
+  const isMainCheckout = matchLinkedWorktreeMainCheckout(gitInfo)
+  const trackedMainRepo = store
+    .getRepos()
+    .find((repo) => !repo.connectionId && isMainCheckout(repo))
+  if (trackedMainRepo) {
+    return { repo: trackedMainRepo, alreadyExisted: true }
   }
 
-  const detected = await detectRepoIconAndUpstream({
+  const detected = await detectRepoLocalMetadata({
     repoPath: resolvedPath,
     kind: repoKind,
     executionHostId: LOCAL_EXECUTION_HOST_ID
@@ -96,31 +82,17 @@ export async function addLocalRepoFromPath(
       return false
     }
     const repoPathKey = normalizeRuntimePathForComparison(repo.path)
-    return (
-      repoPathKey === pathKey ||
-      repoPathKey === resolvedPathKey ||
-      (mainRepoKey !== null && !isFolderRepo(repo) && repoPathKey === mainRepoKey)
-    )
+    return repoPathKey === pathKey || repoPathKey === resolvedPathKey || isMainCheckout(repo)
   })
   if (raceWinner) {
     return { repo: raceWinner, alreadyExisted: true }
   }
-  const repo: Repo = {
-    id: randomUUID(),
+  const repo = createLocalProjectRecord({
     path: resolvedPath,
     displayName: displayName?.trim() || getRepoName(resolvedPath),
-    badgeColor: DEFAULT_REPO_BADGE_COLOR,
-    ...detected,
-    addedAt: Date.now(),
     kind: repoKind,
-    ...(repoKind === 'git'
-      ? {
-          externalWorktreeVisibilityLegacy: false,
-          // Why: new Add Project imports are explicit ready host setups; 'legacy-repo' is reserved for older records/projection.
-          projectHostSetupMethod: 'imported-existing-folder' as const
-        }
-      : {})
-  }
+    detected
+  })
 
   store.addRepo(repo)
   await prepareLocalWorktreeRootForRepo(store, repo)

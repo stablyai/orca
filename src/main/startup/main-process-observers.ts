@@ -1,39 +1,58 @@
 import { app, powerMonitor } from 'electron'
-import { join } from 'node:path'
-import { AgentAwakeService } from '../agent-awake-service'
-import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
-import { registerSystemResumeBroadcast } from '../system-resume-broadcast'
+import type { Store } from '../persistence/loading-store/store'
+import type { UsageWorktreeHistory } from '../usage/worktree-attribution/usage-worktree-history'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
+import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
+import { provideHostUsageAnalytics } from '../usage/host-usage-analytics'
+import { BACKEND_PUBLIC_USAGE_METHOD } from '../../shared/backend/backend-service-contract'
+import { AgentAwakeService } from '../power/agent-awake-service'
+import { bindAgentAwakeToHookStatus } from '../power/agent-awake-hook-status-binding'
+import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
+import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
+import { recordWakeSignal } from '../power/wake-signal-clock'
+import { installBackgroundRunAwakeHold } from '../power/background-run-awake-hold'
+import { holdPowerSaveBlocker } from '../power/power-save-blocker-hold'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
   startDesktopPresenceReporter
 } from '../notifications/desktop-presence-reporter'
-import { agentHookServer } from '../agent-hooks/server'
-import { installHookStatusSessionTabsRepublish } from '../agent-hooks/hook-status-session-tabs-republish'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { startWslHostAgentAwake } from '../ipc/wsl/wsl-host-agent-awake-wiring'
 import { initTelemetry, track } from '../telemetry/client'
-import { setCodexTrustGrantTelemetry } from '../codex/codex-trust-grant-telemetry'
-import { initObservability } from '../observability'
-import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
+import { setCodexTrustGrantTelemetry } from '../codex/trust/grants/codex-trust-grant-telemetry'
+import { initObservability } from '../observability/index'
+import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { reportPreviousHangDetection } from '../hang-watchdog/previous-hang-detection'
-import { getCanonicalUserDataPath } from '../persistence'
-import { recoverPendingSkillTransactions } from '../skills/skill-transaction-startup-recovery'
-import { initCohortClassifier } from '../telemetry/cohort-classifier'
-import { initOnboardingCohortClassifier } from '../telemetry/onboarding-cohort-classifier'
-import { StatsCollector } from '../stats/collector'
-import { feedAgentSessionStats } from '../stats/agent-session-stats-feed'
-import { ClaudeUsageStore } from '../claude-usage/store'
-import { CodexUsageStore } from '../codex-usage/store'
-import { OpenCodeUsageStore } from '../opencode-usage/store'
-import { MuseUsageStore } from '../muse-usage/store'
-import { installRepoMaintenanceIdleGate } from '../repo-maintenance-idle-gate'
+import type { NativeHangTelemetry } from '../hang-watchdog/previous-native-hang-telemetry'
+import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { mainProcessState as state } from './main-process-state'
+import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
-export function initializeMainProcessObservers(): void {
-  const store = state.store
-  if (!store) {
-    throw new Error('Store must be initialized before observers')
+const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
+
+function feedWakeSignalClock(): () => void {
+  const onResume = (): void => recordWakeSignal('resume')
+  const onUnlock = (): void => recordWakeSignal('unlock-screen')
+  const onUserActive = (): void => recordWakeSignal('user-did-become-active')
+  powerMonitor.on('resume', onResume)
+  powerMonitor.on('unlock-screen', onUnlock)
+  powerMonitor.on('user-did-become-active', onUserActive)
+  return () => {
+    powerMonitor.off('resume', onResume)
+    powerMonitor.off('unlock-screen', onUnlock)
+    powerMonitor.off('user-did-become-active', onUserActive)
   }
+}
+
+/** Main's power, presence, awake, telemetry and hang observers; core observers start in composition. */
+export function initializeMainProcessObservers(store: Store): void {
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  if (process.platform === 'darwin') {
+    state.unsubscribeWakeSignalClock = feedWakeSignalClock()
+  }
+  // Bots' Tidy-up and Look around hold off idle sleep while they run; display sleep is fine.
+  installBackgroundRunAwakeHold(() => holdPowerSaveBlocker('prevent-app-suspension'))
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -57,29 +76,20 @@ export function initializeMainProcessObservers(): void {
       store.getSettings().keepComputerAwakeWhileAgentsRun
     )
   )
-  // Why: start from empty — disk-hydrated status rows are UI continuity only; only this runtime's hook events keep the computer awake.
+  // Hydrated rows preserve UI only; only this runtime's live hook events may keep the machine awake.
   state.agentAwakeService.setStatuses([])
-  state.uninstallRepoMaintenanceIdleGate = installRepoMaintenanceIdleGate({
-    isQuitting: () => state.isQuitting,
-    getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
-  })
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    state.agentAwakeService?.setStatuses(statuses)
-  })
-  const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
-    state.agentAwakeService?.observeStatusFreshness(status)
-  })
-  const uninstallHookStatusRepublish = installHookStatusSessionTabsRepublish(
-    agentHookServer,
-    () => state.runtime
-  )
+  const unsubscribeHookStatus = bindAgentAwakeToHookStatus(agentHookServer, state.agentAwakeService)
+  // WSL-host agents never reach the hook server; their host's own stream reports them.
+  const stopWslHostAgentAwake = startWslHostAgentAwake(state.agentAwakeService)
   state.unsubscribeAgentAwakeStatusChanges = () => {
-    unsubscribeStatusChanges()
-    unsubscribeStatusFreshness()
-    uninstallHookStatusRepublish()
+    unsubscribeHookStatus()
+    stopWslHostAgentAwake()
   }
-  // Why: telemetry must init before any IPC handler/renderer can call track(); it's a no-op in dev and while TELEMETRY_ENABLED is false, so it's safe early.
-  initTelemetry(store)
+  // Initialize before IPC/renderers can track; the telemetry client gates dev/disabled cases itself.
+  // Load the SDK after first paint (#35752); headless serve and GPU failures never show a window.
+  initTelemetry(store, (start) =>
+    runAfterFirstWindowShown(start, TELEMETRY_CLIENT_START_FALLBACK_MS)
+  )
   const profileStateStartup = state.profileStateStartup
   if (profileStateStartup) {
     track('profile_state_authority_selected', {
@@ -90,9 +100,7 @@ export function initializeMainProcessObservers(): void {
       migrated: profileStateStartup.migrated
     })
   }
-  // Why: the trust-grant module is bundled into plain-node CLI entries where
-  // the telemetry client cannot load, so the tracker is injected here instead
-  // of imported there.
+  // Inject tracking because plain-Node CLI imports cannot load the telemetry client.
   setCodexTrustGrantTelemetry(({ outcome, hostKind, lane, reason, errorClass, verifyClass }) => {
     track('codex_trust_grant', {
       outcome,
@@ -103,12 +111,7 @@ export function initializeMainProcessObservers(): void {
       ...(verifyClass !== undefined ? { verify_class: verifyClass } : {})
     })
   })
-  // Why: the error-tracking lane (telemetry-error-tracking.md) is its own
-  // composition root — independent of product telemetry — and must
-  // initialize before any IPC handler / runtime span is created so the
-  // tracer's active sink is populated at the moment the first span fires.
-  // Honors DO_NOT_TRACK / ORCA_TELEMETRY_DISABLED / ORCA_DIAGNOSTICS_DISABLED
-  // / CI internally; those gates do not need to be re-checked here.
+  // Initialize the independent error-tracking sink before any IPC/runtime span; it enforces diagnostics/privacy gates internally.
   initObservability()
   recordDurableCrashBreadcrumb('main_process_lifecycle_started', {
     packaged: app.isPackaged,
@@ -116,39 +119,37 @@ export function initializeMainProcessObservers(): void {
   })
   state.hangDetection = reportPreviousHangDetection(getCanonicalUserDataPath())
   if (state.hangDetection) {
-    track('main_thread_hang_detected', {
-      unresponsive_ms: Math.round(state.hangDetection.unresponsiveMs),
-      self_recovered: state.hangDetection.selfRecovered
-    })
+    const marker = state.hangDetection
+    const report = (details: NativeHangTelemetry): void => {
+      track('main_thread_hang_detected', {
+        unresponsive_ms: Math.round(marker.unresponsiveMs),
+        self_recovered: marker.selfRecovered,
+        ...details
+      })
+    }
+    if (process.platform === 'darwin') {
+      void import('../hang-watchdog/previous-native-hang-telemetry')
+        .then(({ readPreviousNativeHangTelemetry }) =>
+          readPreviousNativeHangTelemetry(getCanonicalUserDataPath(), marker)
+        )
+        .then(report, () => report({}))
+    } else {
+      report({})
+    }
   }
-  state.skillTransactionRecovery = recoverPendingSkillTransactions(
-    join(app.getPath('userData'), 'skill-installs')
-  )
-  void state.skillTransactionRecovery
-    .then((report) => {
-      const result = report as {
-        scanned: number
-        recovered: number
-        failures: { code: string }[]
-        truncated: boolean
-      }
-      if (result.scanned || result.failures.length || result.truncated) {
-        console.info('[skills] startup transaction recovery:', {
-          scanned: result.scanned,
-          recovered: result.recovered,
-          failures: result.failures.map((failure) => failure.code),
-          truncated: result.truncated
-        })
-      }
-    })
-    .catch((error) => console.warn('[skills] startup transaction recovery failed:', error))
-  // Why: cohort-classifier reads repo count synchronously at every emit, so hydrate it here — before any IPC handler or window can trigger track().
-  initCohortClassifier(store)
-  initOnboardingCohortClassifier(store)
-  state.stats = new StatsCollector()
-  feedAgentSessionStats(state.stats, agentHookServer)
-  state.claudeUsage = new ClaudeUsageStore(store)
-  state.codexUsage = new CodexUsageStore(store)
-  state.openCodeUsage = new OpenCodeUsageStore(store)
-  state.museUsage = new MuseUsageStore(store)
+}
+
+/** The usage utility process stays a main-owned child; core supplies its worktree history. */
+export function startUsageBackend(usageWorktrees: UsageWorktreeHistory): {
+  claudeUsage: AutomationUsageClient
+  codexUsage: AutomationUsageClient
+} {
+  const backend = new BackendSupervisor(usageWorktrees)
+  state.backend = backend
+  // Paired clients get a renderer's usage privileges, never the automation-only methods.
+  provideHostUsageAnalytics((call) => backend.callControl(BACKEND_PUBLIC_USAGE_METHOD, call))
+  return {
+    claudeUsage: backend.automationClient('claudeUsage'),
+    codexUsage: backend.automationClient('codexUsage')
+  }
 }

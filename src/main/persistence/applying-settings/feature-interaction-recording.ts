@@ -1,18 +1,20 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   compareFeatureInteractionUsageBuckets,
-  getFeatureInteractionCategory,
-  getFeatureInteractionUsageBucket,
+  getFeatureInteractionUsageBucket
+} from '../../../shared/feature-education/interactions/feature-interaction-usage-buckets'
+import { getFeatureInteractionCategory } from '../../../shared/feature-education/interactions/feature-interaction-categories'
+import {
   normalizeFeatureInteractions,
-  normalizeFeatureInteractionTelemetryBuckets,
-  type FeatureInteractionId
-} from '../../../shared/feature-interactions'
+  normalizeFeatureInteractionTelemetryBuckets
+} from '../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { track } from '../../telemetry/client'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 
 export type FeatureInteractionOperations = {
   state: PersistedState
-  scheduleSave: (domains?: readonly string[]) => void
+  scheduleSave: (domains: readonly string[]) => void
   notifyUIChanged: () => void
   getUI: () => PersistedState['ui']
 }
@@ -50,7 +52,7 @@ export function recordFeatureInteraction(
     ? { ...telemetryBuckets, [id]: nextBucket }
     : telemetryBuckets
   operations.scheduleSave(['ui', 'featureInteractionTelemetryBuckets'])
-  // Why: live UI only consumes the seen transition; count-only telemetry must not re-hydrate the renderer.
+  // Count-only telemetry must not rehydrate the renderer; notify only on first sight.
   if (!existing) {
     operations.notifyUIChanged()
   }

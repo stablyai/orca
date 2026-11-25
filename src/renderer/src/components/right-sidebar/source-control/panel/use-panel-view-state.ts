@@ -1,37 +1,63 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { resolveSourceControlGroupOrder } from '../listing/section-order'
+import { useAppStore } from '@/store'
+import { useSourceControlSectionActive } from './worktree-scope'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { BoundedMap } from '../../../../../../shared/collections/bounded-map'
+import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control/listing/source-control-section-order'
 import { getNextSourceControlViewMode } from './header-toolbar'
 import { normalizeSourceControlViewMode } from '../commit/commit-drafts'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
-
-const DEFAULT_COLLAPSED_SECTIONS = ['history'] as const
+import {
+  ALL_CHANGES_SCOPE,
+  getChangeScopeSessionRevision,
+  subscribeChangeScopeSession,
+  readRememberedChangeScope,
+  rememberChangeScope,
+  type SourceControlChangeScope,
+  type SourceControlCommitScopeFiles
+} from './change-scope'
 
 function createDefaultCollapsedSections(): Set<string> {
-  return new Set(DEFAULT_COLLAPSED_SECTIONS)
+  return new Set()
 }
 
-/**
- * Local presentation state for the Source Control panel: filter, collapsed sections/directories,
- * list-vs-tree mode and the base-ref dialog, plus the per-worktree reset that keeps a worktree
- * switch from inheriting the previous worktree's view.
- */
+// Preserve per-worktree disclosure across sidebar-tab unmounts for this renderer session.
+const collapsedSectionsByWorktree = new BoundedMap<string, Set<string>>({ maxEntries: 512 })
+
+function readCollapsedSections(worktreeId: string | null): Set<string> {
+  return (
+    (worktreeId ? collapsedSectionsByWorktree.get(worktreeId) : undefined) ??
+    createDefaultCollapsedSections()
+  )
+}
+
 export function useSourceControlPanelViewState({
   activeWorktreeId,
+  owner,
   settings,
   updateSettings
 }: {
+  owner: string
   activeWorktreeId: string | null
   settings: SourceControlWorktreeContext['settings']
   updateSettings: SourceControlStoreActions['updateSettings']
 }) {
+  const sectionActive = useSourceControlSectionActive()
+  const subscribeScopeSession = useCallback(
+    (listener: () => void) => (sectionActive ? subscribeChangeScopeSession(listener) : () => {}),
+    [sectionActive]
+  )
+  const scopeSessionRevision = useSyncExternalStore(
+    subscribeScopeSession,
+    getChangeScopeSessionRevision
+  )
   const sourceControlRef = useRef<HTMLDivElement | null>(null)
-  // Why: virtualize against the panel's shared scroller; use state (not a ref) so lists re-render and start observing once the element attaches.
+  // Use state so virtual lists start observing the shared scroller when its element attaches.
   const [fileListScrollElement, setFileListScrollElement] = useState<HTMLDivElement | null>(null)
   const isMac = useMemo(() => navigator.userAgent.includes('Mac'), [])
   const [filterExpanded, setFilterExpanded] = useState(false)
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    createDefaultCollapsedSections
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() =>
+    readCollapsedSections(activeWorktreeId)
   )
   const persistedSourceControlViewMode = normalizeSourceControlViewMode(
     settings?.sourceControlViewMode
@@ -41,41 +67,66 @@ export function useSourceControlPanelViewState({
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
   const [filterQuery, setFilterQuery] = useState('')
-  const isGitHistoryExpanded = !collapsedSections.has('history')
+  const [changeScope, setChangeScopeState] = useState<SourceControlChangeScope>(() =>
+    readRememberedChangeScope(activeWorktreeId, owner)
+  )
+  const [commitScopeFiles, setCommitScopeFiles] = useState<SourceControlCommitScopeFiles | null>(
+    null
+  )
+  const [changeScopeMenuOpen, setChangeScopeMenuOpen] = useState(false)
+  const setChangeScope = useCallback(
+    (scope: SourceControlChangeScope) => {
+      rememberChangeScope(activeWorktreeId, scope, owner)
+      setChangeScopeState(scope)
+    },
+    [activeWorktreeId, owner]
+  )
 
   const handleToggleSourceControlViewMode = useCallback(() => {
-    if (!settings) {
+    const current = useAppStore.getState().settings
+    if (!current) {
       return
     }
     updateSettings({
-      sourceControlViewMode: getNextSourceControlViewMode(sourceControlViewMode)
+      sourceControlViewMode: getNextSourceControlViewMode(
+        normalizeSourceControlViewMode(current.sourceControlViewMode)
+      )
     })
-  }, [settings, sourceControlViewMode, updateSettings])
+  }, [updateSettings])
 
-  // Why: reset during render instead of key-remounting on switch (which caused a Windows IPC storm).
-  const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)
-  if (viewStateWorktreeId !== activeWorktreeId) {
-    setViewStateWorktreeId(activeWorktreeId)
+  // Reset during render; key-based remounts on switches caused Windows IPC storms.
+  const viewIdentity = JSON.stringify([activeWorktreeId, owner, scopeSessionRevision])
+  const [viewStateWorktreeId, setViewStateWorktreeId] = useState(viewIdentity)
+  if (viewStateWorktreeId !== viewIdentity) {
+    setViewStateWorktreeId(viewIdentity)
     setFilterExpanded(false)
-    setCollapsedSections(createDefaultCollapsedSections())
+    setCollapsedSections(readCollapsedSections(activeWorktreeId))
     setCollapsedTreeDirs(new Set())
     setBaseRefDialogOpen(false)
-    // Why: don't reset defaultBaseRef here — it's repo-scoped (resolved on activeRepo change); resetting would clobber non-main defaults.
+    // Preserve repo-scoped defaultBaseRef and per-worktree in-flight commits so switches cannot clobber defaults or enable duplicate commits.
     setFilterQuery('')
+    rememberChangeScope(activeWorktreeId, ALL_CHANGES_SCOPE, owner)
+    setChangeScopeState(ALL_CHANGES_SCOPE)
+    setCommitScopeFiles(null)
+    setChangeScopeMenuOpen(false)
     // Why: don't reset commit-in-flight state — it's per-worktree; resetting would re-enable Commit for an incoming worktree mid-commit.
   }
 
-  const toggleSection = useCallback((section: string) => {
-    setCollapsedSections((prev) => {
-      const next = new Set(prev)
+  const toggleSection = useCallback(
+    (section: string) => {
+      const next = new Set(collapsedSections)
       if (next.has(section)) {
         next.delete(section)
       } else {
         next.add(section)
       }
-      return next
-    })
-  }, [])
+      setCollapsedSections(next)
+      if (activeWorktreeId) {
+        collapsedSectionsByWorktree.set(activeWorktreeId, next)
+      }
+    },
+    [activeWorktreeId, collapsedSections]
+  )
 
   const toggleTreeDir = useCallback((key: string) => {
     setCollapsedTreeDirs((prev) => {
@@ -91,15 +142,20 @@ export function useSourceControlPanelViewState({
 
   return {
     baseRefDialogOpen,
+    changeScope,
+    changeScopeMenuOpen,
     collapsedSections,
+    commitScopeFiles,
     collapsedTreeDirs,
     fileListScrollElement,
     filterExpanded,
     filterQuery,
     handleToggleSourceControlViewMode,
-    isGitHistoryExpanded,
     isMac,
     setBaseRefDialogOpen,
+    setChangeScope,
+    setChangeScopeMenuOpen,
+    setCommitScopeFiles,
     setFileListScrollElement,
     setFilterExpanded,
     setFilterQuery,

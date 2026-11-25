@@ -39,11 +39,7 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/>/, { token: 'tag', switchTo: '@templateBodyPlain' }],
       { include: '@tagAttributes' }
     ],
-    // INVARIANT: the html embed is active whenever this state is. Leaving an
-    // interpolation routes back through `templateBodyReenter`, never straight
-    // here, or the next `{{` would pop an embed that is no longer on the stack.
-    // Transitions are flat (`switchTo`) so the monarch stack stays at the depth
-    // `<template>` pushed and `</template>` still pops back to `root`.
+    // Template body always owns HTML; re-enter via templateBodyReenter and keep switchTo transitions flat so </template> returns to root.
     templateBody: [
       [
         /\{\{/,
@@ -51,9 +47,7 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       ],
       [/<\/template\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]
     ],
-    // Re-entry shim. `@rematch` is required: on a zero-width match Monarch's
-    // progress check rejects any other token and drops the pending embed with
-    // it, leaving `templateBody` without the html embed its pop rules assume.
+    // Zero-width reentry requires @rematch or Monarch drops the pending HTML embed needed by template-body pop rules.
     templateBodyReenter: [
       [
         restOfLineWithinEmbedBudget,
@@ -61,8 +55,7 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       ],
       [/(?=.)/, { token: '@rematch', switchTo: '@templateBodyPlain' }]
     ],
-    // Same body with no embeds, so the rest of an over-budget line cannot
-    // deepen the recursion. Its rules must not touch the embed stack.
+    // Over-budget bodies keep structure without touching embeds, bounding recursion for the rest of the line.
     templateBodyPlain: [
       [/\{\{/, { token: 'delimiter.curly', switchTo: '@templateExpressionEnter' }],
       [/<\/template\s*>/, { token: 'tag', next: '@pop' }],
@@ -125,8 +118,7 @@ export const vueMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       [/\s+/, 'white']
     ],
     scriptBody: [[/<\/script\s*>/, { token: 'tag', next: '@pop', nextEmbedded: '@pop' }]],
-    // Over-budget mirror of the body: re-enters `$S2` as soon as the rest of
-    // the line fits, so a long opening line does not grey out the whole block.
+    // Re-enter $S2 when the remaining line fits so long openers cannot leave whole blocks unhighlighted.
     scriptBodyPlain: [
       [/<\/script\s*>/, { token: 'tag', next: '@pop' }],
       [

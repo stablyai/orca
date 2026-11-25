@@ -28,7 +28,7 @@ const TOOL_INPUT_KEYS_BY_TOOL: Record<string, readonly string[]> = {
   exec_command: ['cmd', 'command'],
   shell_command: ['cmd', 'command'],
   run_terminal_cmd: ['command'],
-  // Why: Grok maps Bash/Edit/Write to snake_case tool names; without these keys the status row shows blank toolInput for most Grok turns.
+  // Grok maps Bash/Edit/Write to these snake_case tools; retain their input previews.
   run_terminal_command: ['command'],
   search_replace: ['file_path', 'path', 'filePath'],
   write_to_file: ['TargetFile', 'path', 'file_path'],

@@ -1,4 +1,4 @@
-import type { MobileRelayServerWorktreeRow } from '../../../shared/mobile-relay-hosts-contract'
+import type { MobileRelayServerWorktreeRow } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   SERVER_FETCH_TIMEOUT_MS,
   SERVER_WORKTREE_LIMIT,
@@ -18,17 +18,19 @@ type CachedServerWorktrees = {
   worktrees: MobileRelayServerWorktreeRow[]
 }
 
-/** Each server's rows as the desktop last fetched them for a phone request; nothing runs between. */
+/** Fetch only on phone requests; preserve last-known rows between them. */
 export class OnDemandServerWorktreeRows implements ServerWorktreeRows {
   private readonly cached = new Map<string, CachedServerWorktrees>()
-  // Keyed by server identity, so a poll after a re-pair never joins the old server's fetch.
+  // Identity-scoped fetches prevent re-pairing from joining old-server work.
   private readonly refreshing = new Map<string, Promise<void>>()
 
   constructor(private readonly hosts: MobileDesktopRelayHosts) {}
 
-  // Why lazily, not on retirement: a disconnected server keeps its rows; only a removed one loses them.
-  sync(): void {
-    const configured = new Set(this.hosts.list().environments.map((environment) => environment.id))
+  // Disconnects retain rows; prune only removed servers when syncing.
+  async sync(): Promise<void> {
+    const configured = new Set(
+      (await this.hosts.list()).environments.map((environment) => environment.id)
+    )
     for (const environmentId of this.cached.keys()) {
       if (!configured.has(environmentId)) {
         this.cached.delete(environmentId)
@@ -36,12 +38,12 @@ export class OnDemandServerWorktreeRows implements ServerWorktreeRows {
     }
   }
 
-  refresh(environmentId: string): Promise<void> {
-    const host = describeRelayHosts(this.hosts).find(
+  async refresh(environmentId: string): Promise<void> {
+    const host = (await describeRelayHosts(this.hosts)).find(
       (entry) => entry.environmentId === environmentId
     )
     if (!host) {
-      return Promise.resolve()
+      return
     }
     const key = `${host.environmentId}\0${relayHostFence(host.identity)}`
     const inFlight = this.refreshing.get(key)
@@ -64,24 +66,26 @@ export class OnDemandServerWorktreeRows implements ServerWorktreeRows {
         host,
         'worktree.ps',
         { limit: SERVER_WORKTREE_LIMIT, supportsWorktreeVisibilitySourceDefaults: true },
-        // Why the transport bound too: it ends the hung call, so the next poll fetches afresh instead of joining it.
+        // Bound the transport too, so the next poll cannot join an indefinitely hung call.
         { timeoutMs: SERVER_FETCH_TIMEOUT_MS, expected: host.identity }
       )
       const reply = response.ok ? WorktreePsReplySchema.safeParse(response.result) : null
-      // Why: a removed server's late answer must not outlive it.
+      // Removed servers must not repopulate rows with late replies.
       if (
         !reply?.success ||
-        !this.hosts.list().environments.some((entry) => entry.id === host.environmentId)
+        !(await this.hosts.list()).environments.some(
+          (entry) =>
+            entry.id === host.environmentId &&
+            relayHostFence(entry) === relayHostFence(host.identity)
+        )
       ) {
         return
       }
       this.cached.set(host.environmentId, {
-        // Why the identity taken before the fetch: the call's own check cannot see a re-pair after dispatch.
+        // Capture identity before dispatch; transport checks cannot see later re-pairing.
         fence: relayHostFence(host.identity),
         worktrees: stampServerWorktreeRows(host.environmentId, reply.data.worktrees)
       })
-    } catch {
-      // An unreachable server keeps its last rows.
-    }
+    } catch {}
   }
 }

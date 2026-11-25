@@ -1,60 +1,55 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import {
-  clearSidebarFilters,
   selectSidebarFilterState,
   sidebarHasActiveFilters,
   sidebarWorkspaceRowFilters
-} from '../../sidebar-filter-actions'
+} from '../controls/sidebar-filter-actions'
+import { clearSidebarFiltersKeepingActiveRow } from '../controls/sleeping-workspaces-visibility'
 import { useShallow } from 'zustand/react/shallow'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   activeWorkspaceRowFilterKeys,
-  isSleepingSweepExempt,
   type WorkspaceRowFilters
 } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../../../shared/workspace-view/workspace-host-visibility'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getWorktreeExecutionHostId,
   getSettingsFocusedExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace,
   isDefaultBranchWorkspace,
   isDetachedHeadWorkspace
-} from '../../../../../../shared/worktree/workspace-kinds'
-import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/host-filtering'
+} from '../../../../../../shared/worktree/visibility/workspace-kinds'
+import { getFolderWorkspaceExecutionHostIdForRows } from '../../../../../../shared/sidebar-list/hosts/host-filtering'
 import {
   getPairedDeviceIdsByEnvironment,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../../../../shared/workspace-creator-visibility'
-import { getAgentStatusEpochNow } from '@/lib/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
-import {
-  getVisibleWorktreeBrowserActivityTabs,
-  getVisibleWorktreeTerminalActivityTabs,
-  getWorktreeIdsWithStructuredChat
-} from '../../visible-worktree-activity-inputs'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
+import { createSleepingSweepHiddenCheck } from './sleeping-sweep-visibility'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export type SidebarWorktreeFilters = ReturnType<typeof useSidebarWorktreeFilters>
 
 type RevealContext = {
   state: AppState
+  statuses: RuntimeStatuses
   worktree: Worktree
   repo: Repo | undefined
   targetHostId: ExecutionHostId
 }
 
-/**
- * For each active filter, how to make one workspace visible again. Keyed on the shared filter
- * keys, so a new filter fails to compile until it says how a hidden workspace is revealed.
- */
+/** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
   filterRepoIds: ({ state, worktree }) => {
     if (!worktree.id.startsWith('folder:') && !state.filterRepoIds.includes(worktree.repoId)) {
@@ -90,37 +85,14 @@ const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContex
       state.setHideDetachedHeadWorkspaces(false)
     }
   },
-  hideWorkspacesFromOtherDevices: ({ state, worktree }) => {
-    const pairedDeviceIds = getPairedDeviceIdsByEnvironment(
-      state.runtimeEnvironments,
-      state.runtimeStatusByEnvironmentId
-    )
+  hideWorkspacesFromOtherDevices: ({ state, statuses, worktree }) => {
+    const pairedDeviceIds = getPairedDeviceIdsByEnvironment(state.runtimeEnvironments, statuses)
     if (isWorkspaceOwnedBySomeoneElse(worktree, pairedDeviceIds)) {
       state.setHideWorkspacesFromOtherDevices(false)
     }
   },
   hideSleepingWorkspaces: ({ state, worktree }) => {
-    const tabsByWorktree = getVisibleWorktreeTerminalActivityTabs(state.tabsByWorktree)
-    const browserTabsByWorktree = getVisibleWorktreeBrowserActivityTabs(state.browserTabsByWorktree)
-    const liveAgentWorktrees = getWorktreeIdsWithLiveAgent(
-      state.agentStatusByPaneKey,
-      tabsByWorktree,
-      getAgentStatusEpochNow(state.agentStatusEpoch)
-    )
-    if (
-      !isSleepingSweepExempt(worktree.isMainWorktree, state.alwaysShowDefaultBranchWorkspace) &&
-      isInactiveWorkspace(
-        worktree.id,
-        tabsByWorktree,
-        state.ptyIdsByTabId,
-        browserTabsByWorktree,
-        liveAgentWorktrees,
-        getWorktreeIdsWithStructuredChat(
-          state.unifiedTabsByWorktree,
-          state.structuredChatSleptAtByPaneKey
-        )
-      )
-    ) {
+    if (createSleepingSweepHiddenCheck(state)(worktree)) {
       state.setShowSleepingWorkspaces(true)
     }
   },
@@ -148,7 +120,6 @@ function getRevealTargetHostId(state: AppState, worktree: Worktree, repo: Repo |
   return getWorktreeExecutionHostId(worktree, repo, defaultHostId)
 }
 
-// Every sidebar filter, plus the single escape hatch that resets all of them.
 export function useSidebarWorktreeFilters() {
   const filterState = useAppStore(useShallow(selectSidebarFilterState))
 
@@ -157,6 +128,7 @@ export function useSidebarWorktreeFilters() {
     const repo = state.repos.find((candidate) => candidate.id === worktree.repoId)
     const context = {
       state,
+      statuses: readRuntimeStatuses(),
       worktree,
       repo,
       targetHostId: getRevealTargetHostId(state, worktree, repo)
@@ -166,15 +138,10 @@ export function useSidebarWorktreeFilters() {
     }
   }, [])
 
-  const clearFilters = useCallback(
-    () => clearSidebarFilters(filterState, useAppStore.getState()),
-    [filterState]
-  )
-
   return {
     filterState,
     hasFilters: sidebarHasActiveFilters(filterState),
-    clearFilters,
+    clearFilters: clearSidebarFiltersKeepingActiveRow,
     revealWorkspaceFilters
   }
 }

@@ -1,40 +1,41 @@
-import { getRepoRegistrationHostIds } from '../../../shared/repo-host-identity'
-import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
-import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './orca-runtime-detected-checkouts-live-content'
-import type { OrcaRuntimeWithAgentTransitions } from '../orca-runtime-agent-transitions'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-switch'
-import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/constants'
+import { getRepoRegistrationHostIds } from '../../../shared/repository/repo-host-identity'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import { OrcaRuntimeWithDetectedCheckoutsAndLiveContent } from './workspace-facts/orca-runtime-detected-checkouts-live-content'
+import type { OrcaRuntimeWithAgentTransitions } from '../construction/orca-runtime-agent-transitions'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-list/feed/sidebar-inputs-switch'
+import { DEFAULT_HIDE_SLEEPING_WORKSPACES } from '../../../shared/workspace-view/sleeping-workspace-visibility'
 import {
   getConnectionExecutionHostId,
   isLocalExecutionHost,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/sidebar-temporal-snapshot'
-import type { WorkspaceRowsProducer } from './workspace-rows-producer'
-import { SidebarRetentionOwner, type SidebarRetentionCandidates } from './sidebar-retention-owner'
-import type { AgentStatusStoreView } from './workspace-activity-facts-producer'
-import { SortStampsProducer } from './sort-stamps-producer'
-import { writeUnreadFlag } from './sort-stamp-records'
-import { WorkspaceViewers } from './workspace-viewers'
-import { clientRaisesUnreadFlagItself } from '../../../shared/workspace-unread-raise-capability'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
-import { TerminalUseProducer } from './terminal-use-producer'
-import { createKeyedTrailingEdgeCoalescer } from '../keyed-trailing-edge-coalescer'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+} from '../../../shared/execution-host/execution-host'
+import type { SidebarTemporalSnapshot } from '../../../shared/sidebar-list/feed/sidebar-temporal-snapshot'
+import type { WorkspaceRowsProducer } from './workspace-rows/workspace-rows-producer'
+import {
+  SidebarRetentionOwner,
+  type SidebarRetentionCandidates
+} from './temporal/sidebar-retention-owner'
+import type { AgentStatusStoreView } from './workspace-facts/workspace-activity-facts-producer'
+import { SortStampsProducer } from './temporal/sort-stamps-producer'
+import { writeUnreadFlag } from '../workspaces/metadata/workspace-activity-records'
+import { WorkspaceViewers } from './temporal/workspace-viewers'
+import { clientRaisesUnreadFlagItself } from '../../../shared/worktree/metadata/workspace-unread-raise-capability'
+import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
+import { TerminalUseProducer } from './temporal/terminal-use-producer'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId, worktreeIdentityKey } from '../../../shared/worktree/id'
 import {
   getWorktreeIdFromHostIdentity,
   parseWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
 import { anySleepKeyNames } from '../terminal/stop/worktree-terminal-sleep-key'
-import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/restored-status-dead-terminal-sweep'
-import { WORKTREE_METADATA_DOMAINS } from '../../persistence/loading-store/worktree-identity-metadata'
+import { resolveAgentWorkspaceExecutionHostId } from '../../agent-hooks/observations/restored-status-dead-terminal-sweep'
 import {
   isWslMoveProjectBlocked,
   wslMoveProjectRefForWorkspace
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 /**
  * Feeds main's sleeping retention, and owns the host's sort stamps: clients sort by those, so main
@@ -57,12 +58,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     retentionCandidates: () => this.readSidebarRetentionCandidates()
   })
   readonly workspaceViewers = new WorkspaceViewers(Date.now)
-  // A streaming agent can flip its title many times a second; each notice makes every client
-  // re-list the repo, so a burst is announced once. The store is already written.
-  private readonly sortStampNotices = createKeyedTrailingEdgeCoalescer(
-    (worktreeId) => this.notifySortStampsChanged(worktreeId),
-    { flushMs: 50, maxWaitMs: 250 }
-  )
   readonly sortStamps = new SortStampsProducer({
     store: () => this.store,
     isWriteFenced: (worktreeId) =>
@@ -102,8 +97,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
     this.terminalRunFacts.onInput((ptyId, now) => this.terminalUse.noteTerminalUse(ptyId, now))
     // Before any store attaches, so its rows reach the stamps as seeds; titles flow without one.
     this.sortStamps.attachAgentTransitions(this.agentTransitions)
-    // Why here: consuming side effects makes the host scan its bytes, which only this layer's
-    // stamps (and the switch) pay for; hookless titles then reach every detector reader.
+    // Only this layer's enabled stamps pay for byte scanning; hookless titles then reach all detector readers.
     this.onClientEvent(
       (event) => {
         if (event.type === 'terminalSideEffects') {
@@ -112,12 +106,8 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       },
       { consumesTerminalSideEffects: true }
     )
-    // Every unread write (window, phone, CLI, activation) lands in a record; a Done may re-tier.
-    this.store?.onStateWritten?.((domains) => {
-      if (domains === undefined || WORKTREE_METADATA_DOMAINS.some((d) => domains.includes(d))) {
-        this.sortStamps.noteRecordsWritten()
-      }
-    })
+    // A Done may re-tier.
+    this.onWorkspaceRecordsWritten(() => this.sortStamps.noteRecordsWritten())
   }
 
   getSidebarTemporalSnapshot(): SidebarTemporalSnapshot {
@@ -187,8 +177,7 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
       worktreeId,
       sshHostId: hostId && parseExecutionHostId(hostId)?.kind === 'ssh' ? hostId : null
     }
-    // The phone names only an id. With same-id copies on two hosts it cannot say which one it
-    // shows, and a guessed host would clear the other copy's flag (a `runtime:` copy read as local).
+    // Phone ids cannot disambiguate same-id workspaces on two hosts; guessing would clear another host's unread flag.
     if (!this.isTwinRepoWorkspace(worktreeId) && writeUnreadFlag(this.store, workspace, false)) {
       this.sortStampNotices.cancel(worktreeId)
       this.notifySortStampsChanged(worktreeId)
@@ -214,16 +203,6 @@ export abstract class OrcaRuntimeWithSidebarTemporal extends OrcaRuntimeWithDete
           getProjectGroups: () => store.getProjectGroups?.() ?? []
         })
       : null
-  }
-
-  // Metadata only: clients re-list the record, and the cached git scans stay.
-  private notifySortStampsChanged(worktreeId: string): void {
-    if (parseWorkspaceKey(worktreeId)?.type === 'folder') {
-      this.notifyFolderWorkspaceChanged()
-      return
-    }
-    this.invalidateResolvedWorktreeCache()
-    this.notifyWorktreesChanged(getRepoIdFromWorktreeId(worktreeId), { invalidateGitScans: false })
   }
 
   override attachAgentStatusStore(store: AgentStatusStoreView): () => void {

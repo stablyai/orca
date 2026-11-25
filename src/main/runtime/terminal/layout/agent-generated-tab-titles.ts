@@ -1,11 +1,10 @@
-// Layout-owner builds: main gives agent tabs their generated titles from the hook status it owns,
-// so a headless server titles them and a window's first frame already shows them.
+// Main-owned titles use hook status so headless tabs and the first window frame already show them.
 
-import { generatedTabTitleForStatus } from '../../../../shared/agent-generated-tab-title-rules'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-ipc-payload'
-import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
-import { isOrcaDispatchPrompt } from '../../../../shared/agent-row-primary-text'
-import type { GeneratedTitleTab } from '../../../../shared/agent-generated-tab-title-rules'
+import { generatedTabTitleForStatus } from '../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { isOrcaDispatchPrompt } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
+import type { GeneratedTitleTab } from '../../../../shared/agent-status/presentation/agent-generated-tab-title-rules'
 import type {
   GeneratedTabTitle,
   LayoutApplyReply,
@@ -23,7 +22,7 @@ export type AgentGeneratedTabTitlesDeps = {
   enabled: () => boolean
   targetOf: (row: AgentStatusIpcPayload) => GeneratedTitleTarget | null
   /** Main's dispatch labels by pane key, which a worker's own status may lack. */
-  orchestrationByPaneKey: () => Record<string, AgentStatusOrchestrationContext> | undefined
+  orchestrationForPaneKey: (paneKey: string) => AgentStatusOrchestrationContext | undefined
   apply: (command: RenameTabsCommand) => Promise<LayoutApplyReply>
 }
 
@@ -61,18 +60,17 @@ export class AgentGeneratedTabTitles {
     if (!this.deps.enabled()) {
       return
     }
-    // Why by tab: a batch's later status reads the title an earlier one gave, as the window's batch does.
+    // Later statuses in the batch must read earlier generated titles, matching window batching.
     const renames = new Map<string, GeneratedTabTitle>()
-    // Read once per batch, and only for a dispatch: it scans every dispatch record.
-    const orchestration = rows.some((row) => isOrcaDispatchPrompt(row.prompt))
-      ? this.deps.orchestrationByPaneKey()
-      : undefined
     for (const row of rows) {
       const target = this.deps.targetOf(row)
       if (!target) {
         continue
       }
-      const labels = orchestration?.[row.paneKey] ?? row.orchestration
+      const labels =
+        (isOrcaDispatchPrompt(row.prompt)
+          ? this.deps.orchestrationForPaneKey(row.paneKey)
+          : undefined) ?? row.orchestration
       const key = `${target.workspace}\0${target.tabId}`
       const earlier = renames.get(key)
       const next = generatedTabTitleForStatus(

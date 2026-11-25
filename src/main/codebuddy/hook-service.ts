@@ -1,4 +1,4 @@
-import type { ClaudeManagedHookPlan } from '../claude/claude-managed-hook-events'
+import type { ClaudeManagedHookPlan } from '../claude/hooks/claude-managed-hook-events'
 import { ClaudeHookService } from '../claude/hook-service'
 
 export const CODEBUDDY_HOOK_EVENTS = [

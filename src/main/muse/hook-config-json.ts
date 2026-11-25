@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
-import { isPlainObject } from '../agent-hooks/installer-utils'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 
 // Muse strips nonstandard environment variables from managed hooks unless allowlisted.
 export const MUSE_MANAGED_HOOK_ENV_VARS = [
@@ -15,9 +15,15 @@ export const MUSE_MANAGED_HOOK_ENV_VARS = [
   'ORCA_TAB_ID',
   'ORCA_WORKTREE_ID',
   'ORCA_AGENT_LAUNCH_TOKEN',
-  // Why: Windows cmd AutoRun scripts commonly live under %USERPROFILE%; without it every hook exits 1.
+  // Windows cmd AutoRun may need USERPROFILE or every hook exits 1.
   'USERPROFILE'
 ] as const
+
+export function hasOrcaEnvVars(config: Record<string, unknown>): boolean {
+  const names: readonly unknown[] = MUSE_MANAGED_HOOK_ENV_VARS
+  const listed = config.managed_hooks_env_vars
+  return Array.isArray(listed) && listed.some((name) => names.includes(name))
+}
 
 export type MuseSettingsSource = {
   text: string | null
@@ -58,8 +64,7 @@ export function serializeMuseSettings(
   managedHooksPath: string | undefined
 ): string {
   if (originalText === null) {
-    // Why: a fresh settings.json needs `"schema_version": 1` or every muse
-    // command fails with `malformed settings file`.
+    // Muse rejects new settings without schema_version: 1.
     const config: Record<string, unknown> = { schema_version: 1 }
     if (managedHooksPath !== undefined) {
       config.managed_hooks_path = managedHooksPath
@@ -79,26 +84,35 @@ export function serializeMuseSettings(
   if (current?.managed_hooks_path !== managedHooksPath) {
     text = applyEdits(
       text,
-      // Why: `undefined` removes the key, which is how remove() drops the pointer.
       modify(text, ['managed_hooks_path'], managedHooksPath, {
         formattingOptions: { insertSpaces: true, tabSize: 2 }
       })
     )
   }
-  if (managedHooksPath !== undefined) {
-    const existing = current?.managed_hooks_env_vars
-    const names = Array.isArray(existing)
-      ? existing.filter((value): value is string => typeof value === 'string')
-      : []
-    const nextNames = [...new Set([...names, ...MUSE_MANAGED_HOOK_ENV_VARS])]
-    if (JSON.stringify(existing) !== JSON.stringify(nextNames)) {
-      text = applyEdits(
-        text,
-        modify(text, ['managed_hooks_env_vars'], nextNames, {
-          formattingOptions: { insertSpaces: true, tabSize: 2 }
-        })
-      )
-    }
+  const existing = current?.managed_hooks_env_vars
+  const listed = Array.isArray(existing) ? existing : []
+  const orcaNames: readonly string[] = MUSE_MANAGED_HOOK_ENV_VARS
+  // Removal keeps only names the user added; an emptied list goes with Orca's pointer.
+  const nextNames =
+    managedHooksPath !== undefined
+      ? [
+          ...new Set([
+            ...listed.filter((value): value is string => typeof value === 'string'),
+            ...MUSE_MANAGED_HOOK_ENV_VARS
+          ])
+        ]
+      : listed.filter((value) => typeof value !== 'string' || !orcaNames.includes(value))
+  const nextValue = managedHooksPath === undefined && nextNames.length === 0 ? undefined : nextNames
+  if (
+    (managedHooksPath !== undefined || Array.isArray(existing)) &&
+    JSON.stringify(existing) !== JSON.stringify(nextValue)
+  ) {
+    text = applyEdits(
+      text,
+      modify(text, ['managed_hooks_env_vars'], nextValue, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 }
+      })
+    )
   }
   return text
 }

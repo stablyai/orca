@@ -1,18 +1,12 @@
-// Why: the middle band and the project band scored queries with byte-identical copies of
-// this logic, so ranking fixes only ever landed in one of the two.
+import { normalizePaletteText } from '../../../../shared/palette-match/normalized-text'
+import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 
-import { normalizePaletteText } from '@/lib/palette-match/normalized-text'
-import { PALETTE_QUERY_MAX_TOKENS } from '@/lib/palette-match/palette-query'
-
-// Why: normalizePaletteText already folds every Unicode space to U+0020, so only ASCII
-// control whitespace can still reach the collapsing pass below.
+// Unicode spaces are already folded; only ASCII control whitespace remains to collapse.
 function isCmdJPaletteWhitespace(code: number): boolean {
   return code === 32 || (code >= 9 && code <= 13)
 }
 
-// Why: one Cmd+J query must fold identically in every section, so case/Unicode folding comes
-// from the shared matcher and only run collapsing (which entity tokens skip) stays local.
-// The collapse avoids a regex over untrusted pasted text.
+// Reuse shared Unicode/case folding across sections; collapse runs locally without regex over untrusted input.
 export function normalizeCmdJPaletteQuery(value: string): string {
   const folded = normalizePaletteText(value).normalized
   let normalized = ''
@@ -31,9 +25,7 @@ export function normalizeCmdJPaletteQuery(value: string): string {
   return normalized
 }
 
-// Why: the token ceiling is a query rule, not a section rule, so it counts whitespace-split
-// unique tokens exactly like the shared preparer instead of this file's punctuation-stripping
-// tokenizer, which would reject `08-13 1.4.182` far earlier than the entity sections do.
+// Count unique whitespace tokens like entity sections before bounding the punctuation-split scoring tokens separately.
 export function isCmdJPaletteQueryOverTokenLimit(normalizedQuery: string): boolean {
   const seen = new Set<string>()
   for (const token of normalizedQuery.split(' ')) {
@@ -45,16 +37,11 @@ export function isCmdJPaletteQueryOverTokenLimit(normalizedQuery: string): boole
       return true
     }
   }
-  // Why also bound the scoring split: whitespace-split counting lets 2KB of punctuation
-  // through as a single token, and the scorer's tokenizer then expands it into hundreds —
-  // paid once per candidate, per keystroke, on the render thread.
+  // Punctuation can expand one pasted token into hundreds; bound that per-candidate scoring cost too.
   return uniqueCmdJPaletteQueryTokens(normalizedQuery).length > PALETTE_QUERY_MAX_TOKENS
 }
 
-/**
- * Why dedupe: a repeated query token would otherwise contribute its score twice, so
- * `terminal terminal ssh` outranks an otherwise-tied candidate on the strength of the repeat.
- */
+/** Deduplicate query tokens so repeated words cannot inflate a candidate’s score. */
 export function uniqueCmdJPaletteQueryTokens(query: string): string[] {
   return [...new Set(tokenizeCmdJPaletteQuery(query))]
 }
@@ -63,17 +50,14 @@ export function uniqueNormalizedCmdJPaletteKeywords(values: readonly string[]): 
   return [...new Set(values.map(normalizeCmdJPaletteQuery).filter(Boolean))]
 }
 
-// Why: splitting on non-ASCII would drop CJK and accented words entirely, so a localized
-// query would silently skip the coverage rule below instead of failing it.
+// Keep Unicode words so localized queries cannot silently bypass coverage requirements.
 export function tokenizeCmdJPaletteQuery(value: string): string[] {
   return normalizeCmdJPaletteQuery(value)
     .split(/[^\p{L}\p{N}]+/u)
     .filter(Boolean)
 }
 
-// Why gate the reverse-containment tier on script: a space-delimited language already
-// tokenizes its own compounds, so a contained Latin keyword is a coincidence (`database`
-// vs `base`), while Han/Kana/Hangul text arrives as one run that must be matched inside.
+// Reverse containment serves unsegmented Han/Kana/Hangul; Latin substring coincidences such as database/base must not score.
 const UNSEGMENTED_SCRIPT_TOKEN_RE =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u
 
@@ -81,8 +65,7 @@ function isUnsegmentedScriptToken(token: string): boolean {
   return UNSEGMENTED_SCRIPT_TOKEN_RE.test(token)
 }
 
-// Why: navigation filler carries no intent ("open ssh settings" means "ssh settings"), so an
-// unmatched filler word must not count against a candidate's coverage.
+// Ignore unmatched navigation filler such as “open” when measuring intent coverage.
 const CMD_J_QUERY_FILLER_TOKENS = new Set([
   'a',
   'an',
@@ -110,8 +93,7 @@ const CMD_J_QUERY_FILLER_TOKENS = new Set([
   'with'
 ])
 
-// Why the caller passes tokens: this runs once per candidate, and re-folding plus
-// re-splitting the same query for each one dominated the ranking pass.
+// Tokenize once per query; repeating folding/splitting for every candidate dominates ranking cost.
 export function cmdJPaletteTokenScore(
   queryTokens: readonly string[],
   values: readonly string[]
@@ -138,10 +120,7 @@ export function cmdJPaletteTokenScore(
         queryToken.includes(candidateToken) &&
         isUnsegmentedScriptToken(candidateToken)
       ) {
-        // Why the reverse direction: CJK is written without spaces, so the natural query for
-        // the terminal settings pane is the single token `终端设置` — one token that CONTAINS
-        // the keyword rather than being contained by it. Weakest tier, gated on the script
-        // that needs it: in Latin text the query `database` does not mean the keyword `base`.
+        // Unsegmented scripts need weak reverse containment: 终端设置 contains the 终端 keyword.
         best = Math.max(best, 1)
       }
     }
@@ -155,8 +134,7 @@ export function cmdJPaletteTokenScore(
     }
   }
 
-  // Why: "linear triage" matched the Linear pane as strongly as "linear" did, so a candidate
-  // now has to cover most of what was typed, not just one word of it.
+  // Require majority coverage so a single matching word cannot dominate a multiword query.
   if (meaningful > 0 && covered * 2 <= meaningful) {
     return 0
   }

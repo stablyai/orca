@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from 'react'
 
 export type SidebarRevealHighlight = ReturnType<typeof useSidebarRevealHighlight>
 
-// Owns the frames a reveal schedules and the short glow it leaves on the revealed row.
 export function useSidebarRevealHighlight() {
   const [highlightedRevealRowKey, setHighlightedRevealRowKey] = useState<string | null>(null)
   const pendingRevealFrameIdsRef = useRef<Set<number>>(new Set())

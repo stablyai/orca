@@ -1,32 +1,29 @@
 import type { SshConnection } from '../connection/ssh-connection'
-import { Ssh2PortForwardProvider } from './ssh2-port-forward-provider'
-import { SystemSshPortForwardProvider } from './system-ssh-port-forward-provider'
-import type { PortForwardEntry } from '../../../shared/ssh-types'
+import type { PortForwardEntry } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PortForwardCloseReason,
+  PortForwardConnection,
   SshPortForwardProvider,
   StartedPortForward
 } from './ssh-port-forward-provider'
 
-// Why bounded: a start on an unresponsive host can take long, and its `closed` flag already ends
-// it when it resolves; only a close needs waiting out, since a rebind needs its port.
+// Bound waiting for slow starts; their closed flag cleans up late results. Wait for closes because rebind needs the port.
 const TEARDOWN_START_WAIT_MS = 3_000
 
-/** A start the connection's teardown overtook; it holds nothing, so an edit must not roll back. */
+/** Overtaken starts hold nothing; do not roll back an edit after connection teardown. */
 export class PortForwardTornDownError extends Error {
   constructor() {
-    super('The SSH session closed while this port forward was starting.')
+    super('The connection closed while this port forward was starting.')
     this.name = 'PortForwardTornDownError'
   }
 }
 
-/**
- * A forward between states: starting (closed as soon as it resolves once `closed` is set) or
- * closing. Either may still hold its port, so a teardown waits for `settled`.
- */
+/** Track pending starts/closes until settled because either may still hold its port. */
 type ForwardInTransit = {
   kind: 'starting' | 'closing'
   connectionId: string
+  /** 0 while the OS picks a port for a start. */
+  localPort: number
   closed: boolean
   settled: Promise<unknown>
 }
@@ -35,19 +32,17 @@ type SshPortForwardManagerCallbacks = {
   onForwardClosed?: (entry: PortForwardEntry, reason: PortForwardCloseReason) => void
 }
 
-export class SshPortForwardManager {
-  private forwards = new Map<string, StartedPortForward>()
+/** Owns forwards' listeners for any connection kind; each provider bridges one kind. */
+export class SshPortForwardManager<TConnection extends PortForwardConnection = SshConnection> {
+  private forwards = new Map<string, StartedPortForward<TConnection>>()
   private inTransit = new Set<ForwardInTransit>()
   private nextId = 1
-  private providers: SshPortForwardProvider[]
+  private providers: SshPortForwardProvider<TConnection>[]
   private callbacks: SshPortForwardManagerCallbacks
 
   constructor(
-    callbacks: SshPortForwardManagerCallbacks = {},
-    providers: SshPortForwardProvider[] = [
-      new Ssh2PortForwardProvider(),
-      new SystemSshPortForwardProvider()
-    ]
+    callbacks: SshPortForwardManagerCallbacks,
+    providers: SshPortForwardProvider<TConnection>[]
   ) {
     this.callbacks = callbacks
     this.providers = providers
@@ -59,7 +54,7 @@ export class SshPortForwardManager {
 
   async addForward(
     connectionId: string,
-    conn: SshConnection,
+    conn: TConnection,
     localPort: number,
     remoteHost: string,
     remotePort: number,
@@ -79,14 +74,13 @@ export class SshPortForwardManager {
   private async addForwardWithId(
     id: string,
     connectionId: string,
-    conn: SshConnection,
+    conn: TConnection,
     localPort: number,
     remoteHost: string,
     remotePort: number,
     label?: string
   ): Promise<PortForwardEntry> {
-    // Why: a teardown disposes its connection at once, so an add or edit that reaches here later
-    // (its connection picked before the teardown) must not open a forward that outlives it.
+    // Reject connections selected before teardown so late adds/edits cannot outlive disposal.
     if (conn.isDisposed()) {
       throw new PortForwardTornDownError()
     }
@@ -95,14 +89,15 @@ export class SshPortForwardManager {
       throw new Error('SSH connection is not established')
     }
 
-    let forward: StartedPortForward | null = null
+    let forward: StartedPortForward<TConnection> | null = null
     const starting: ForwardInTransit = {
       kind: 'starting',
       connectionId,
+      localPort,
       closed: false,
       settled: Promise.resolve()
     }
-    const settled = (async (): Promise<StartedPortForward> => {
+    const settled = (async (): Promise<StartedPortForward<TConnection>> => {
       const started = await provider.start(conn, {
         id,
         connectionId,
@@ -120,7 +115,7 @@ export class SshPortForwardManager {
           this.callbacks.onForwardClosed?.(entry, reason)
         }
       })
-      // Why checked with the registration: a teardown between the two would miss this forward.
+      // Check during registration so teardown cannot miss this forward.
       if (starting.closed || conn.isDisposed()) {
         await started.close()
         throw new PortForwardTornDownError()
@@ -140,7 +135,7 @@ export class SshPortForwardManager {
 
   async updateForward(
     id: string,
-    conn: SshConnection,
+    conn: TConnection,
     localPort: number,
     remoteHost: string,
     remotePort: number,
@@ -152,9 +147,7 @@ export class SshPortForwardManager {
     }
     const oldEntry = { ...existing.entry }
 
-    // Why: use the async variant so the OS fully releases the port before
-    // we try to rebind. Without this, same-port edits (e.g. label change)
-    // fail with EADDRINUSE because server.close() is async.
+    // Await OS port release before same-port edits or rebind can fail EADDRINUSE.
     await this.removeForwardAsync(id)
 
     try {
@@ -171,8 +164,7 @@ export class SshPortForwardManager {
       if (err instanceof PortForwardTornDownError) {
         throw err
       }
-      // Why: use addForwardWithId to preserve the original ID so the
-      // renderer's references remain valid after a failed edit.
+      // Rollback with the original id so renderer references stay valid.
       try {
         await this.addForwardWithId(
           oldEntry.id,
@@ -183,9 +175,7 @@ export class SshPortForwardManager {
           oldEntry.remotePort,
           oldEntry.label
         )
-      } catch {
-        // best-effort rollback
-      }
+      } catch {}
       throw err
     }
   }
@@ -204,8 +194,7 @@ export class SshPortForwardManager {
     return this.removeForwardAsync(id)
   }
 
-  // Why: server.close()/process exit are async — callers that need to rebind
-  // the same port (update/reconnect) must wait until the owner fully releases it.
+  // Rebind callers must await async listener close or process exit.
   private removeForwardAsync(id: string): Promise<PortForwardEntry | null> {
     const forward = this.forwards.get(id)
     if (!forward) {
@@ -215,6 +204,7 @@ export class SshPortForwardManager {
     const closing: ForwardInTransit = {
       kind: 'closing',
       connectionId: forward.entry.connectionId,
+      localPort: forward.entry.localPort,
       closed: true,
       settled: forward.close()
     }
@@ -232,12 +222,19 @@ export class SshPortForwardManager {
     return entries
   }
 
+  /** Local ports held by forwards, including ones still starting or closing. */
+  heldLocalPorts(): number[] {
+    return [
+      ...[...this.forwards.values()].map(({ entry }) => entry.localPort),
+      ...[...this.inTransit].map((forward) => forward.localPort).filter((port) => port > 0)
+    ]
+  }
+
   async removeAllForwards(connectionId: string): Promise<void> {
     await this.closeAndSettle(connectionId)
   }
 
-  /** Closes this connection's forwards that tunnel through a transport `conn` replaced. */
-  async closeStaleForwards(connectionId: string, conn: SshConnection): Promise<void> {
+  async closeStaleForwards(connectionId: string, conn: TConnection): Promise<void> {
     const stale = [...this.forwards.entries()]
       .filter(([, forward]) => forward.entry.connectionId === connectionId)
       .filter(([, forward]) => forward.isLive?.(conn) === false)
@@ -245,15 +242,11 @@ export class SshPortForwardManager {
     await Promise.all(stale.map((id) => this.removeForwardAsync(id)))
   }
 
-  /** Stops every forward and waits until each released its port; quit uses it. */
   async closeAll(): Promise<void> {
     await this.closeAndSettle()
   }
 
-  /**
-   * Closes `connectionId`'s forwards (every one when omitted) and resolves only once none of them
-   * can still hold its port: starts and closes already under way included.
-   */
+  /** Wait for all owned starts/closes, including those underway before teardown, to release their ports. */
   private async closeAndSettle(connectionId?: string): Promise<void> {
     const owned = (owner: string): boolean => connectionId === undefined || owner === connectionId
     const toRemove = [...this.forwards.entries()]

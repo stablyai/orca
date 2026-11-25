@@ -5,7 +5,7 @@ import {
   listPriorities
 } from '../../jira/jira-issue-create-metadata'
 import { listProjects } from '../../jira/jira-project-queries'
-import type { JiraSiteSelection } from '../../../shared/jira-types'
+import type { JiraSiteSelection } from '../../../shared/jira/jira-types'
 
 export function registerJiraProjectMetadataHandlers(
   normalizeSiteId: (value: unknown) => string | undefined

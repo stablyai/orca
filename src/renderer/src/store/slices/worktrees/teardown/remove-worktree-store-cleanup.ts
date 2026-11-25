@@ -1,11 +1,13 @@
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/workspace-card/slots/worktree-card-slot-pane-index'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
-import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
-import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
+import { removeWorktreeVisitEntries } from '@/lib/workspace/activation/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '@/lib/workspace/ownership/ambiguous-owner-warning'
 import { omitRecordKeys } from './record-key-omission'
+import { removeWorkspaceUnreadState } from '../../workspace-attention/workspace-unread-removal'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
@@ -21,10 +23,10 @@ export function applyRemoveWorktreeSuccessState(
   executionHostId?: ExecutionHostId,
   confirmedDiscards?: ConfirmedUnsavedDiscards
 ): void {
-  // Why outside `set`: it is module-scope, not store state. Dropping it also
-  // re-arms the once-per-workspace warning if this id is ever added back.
+  // Clear module caches outside store state; reused IDs must re-arm ambiguity warnings.
   forgetAmbiguousOwnerWarnings([worktreeId])
   forgetCombinedDiffViewsForWorktrees([worktreeId])
+  forgetDisplayedPanesForWorktrees([{ id: worktreeId }])
   set((s) => {
     const worktreeIds = [worktreeId]
     const omitByWorktree = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, worktreeIds)
@@ -46,13 +48,13 @@ export function applyRemoveWorktreeSuccessState(
     }
     const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, removedFileIds, confirmedDiscards)
     const omitByFileId = <T>(m: Record<string, T> | undefined) => omitRecordKeys(m, removedFileIds)
-    // If the active file belonged to the removed worktree, clear it
     const activeFileCleared = s.activeFileId
       ? s.openFiles.some((f) => f.id === s.activeFileId && f.worktreeId === worktreeId)
       : false
     const removedActiveWorktree = s.activeWorktreeId === worktreeId
     return {
       editorBufferKeepRequest,
+      ...removeWorkspaceUnreadState(s, [{ id: worktreeId }]),
       ...removeWorktreeLayout(s, {
         worktreeIds: new Set(worktreeIds),
         tabIds,
@@ -78,14 +80,10 @@ export function applyRemoveWorktreeSuccessState(
       ),
       baseStatusByWorktreeId: omitByWorktree(s.baseStatusByWorktreeId),
       remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
-      // Why: file search state is worktree-scoped; clear it so another worktree can't inherit stale matches.
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
-      // Why: these worktree-keyed maps are re-keyed on rename but were missed by removal, leaking one entry each.
       remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
-      recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
       recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
-      recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
       defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
         s.defaultTerminalTabsAppliedByWorktreeId
       ),
@@ -102,16 +100,20 @@ export function applyRemoveWorktreeSuccessState(
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
       editorViewMode: omitByFileId(s.editorViewMode),
       markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
-      // Why: editorCursorLine is keyed by fileId; clear it with the other per-file state so it doesn't leak.
       editorCursorLine: omitByFileId(s.editorCursorLine),
       explorerDisplayRootByWorktree: omitByWorktree(s.explorerDisplayRootByWorktree),
       showDotfilesByWorktree: omitByWorktree(s.showDotfilesByWorktree),
+      gitGraphFiltersByWorktree: omitByWorktree(s.gitGraphFiltersByWorktree ?? {}),
+      notificationsMutedByWorktree: omitByWorktree(s.notificationsMutedByWorktree),
       expandedDirs: omitByWorktree(s.expandedDirs),
-      // Why: clear the huge-status marker so it doesn't linger after the worktree is gone.
       gitStatusHugeByWorktree: omitByWorktree(s.gitStatusHugeByWorktree),
+      gitStatusReadErrorByWorktree: omitByWorktree(s.gitStatusReadErrorByWorktree),
       // Why: git status/compare caches stop refreshing once the worktree is deleted; remove them so no stale badges/diffs linger.
       gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
       gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),
+      gitRebaseIndexObservationByWorktree: omitByWorktree(
+        s.gitRebaseIndexObservationByWorktree ?? {}
+      ),
       gitBranchLineTotalByWorktree: omitByWorktree(s.gitBranchLineTotalByWorktree),
       gitIgnoredPathsByWorktree: omitByWorktree(s.gitIgnoredPathsByWorktree),
       gitConflictOperationByWorktree: omitByWorktree(s.gitConflictOperationByWorktree),
@@ -130,8 +132,7 @@ export function applyRemoveWorktreeSuccessState(
         new Set(worktreeIds),
         executionHostId
       ),
-      // Why: terminal shutdown clears these earlier, but teardown awaits after that and a
-      // provider-session event routed by worktree id can write a record in between (#24784).
+      // Provider-session events can reinsert worktree-scoped sleep records after terminal shutdown while teardown awaits (#24784).
       ...omitSleepingAgentSessionsForWorktrees(s, new Set(worktreeIds)),
       sortEpoch: s.sortEpoch + 1
     }

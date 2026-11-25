@@ -1,46 +1,104 @@
-import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session-question-answer'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
+import type { AgentSessionProviderRetry } from '../../../shared/agent-session/failures/agent-session-failure'
+import type { AgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
+import type {
+  AgentJournalThreadGoal,
+  AgentJournalToolCallItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
-} from '../../../shared/native-chat-types'
+} from '../../../shared/native-chat/native-chat-types'
 import type { ProviderTimelineRequestBody } from '../../native-chat/agent-session-timeline/provider-timeline-event'
-import type { AcpAgentError } from '../acp-errors'
-import type { AgentSessionOptionChoice } from '../../../shared/agent-session-wire'
-import type { ModelInfo, ToolCallUpdate } from '../generated/acp-protocol.generated'
+import type { AcpAgentError } from '../transport/acp-errors'
+import type { StructuredAgentListedSelection } from '../../native-chat/agent-session-wire/providers/structured-agent-definition'
+import type { AgentSessionOptionChoice } from '../../../shared/agent-session/agent-session-wire'
+import type {
+  AvailableCommand,
+  ClientCapabilities,
+  CompactionUpdate,
+  InitializeResponse,
+  ModelInfo,
+  SessionNotification,
+  SessionUpdate,
+  ToolCallUpdate
+} from '../generated/acp-protocol.generated'
+
+export const pendingAcpResolution = {
+  state: 'pending',
+  selectedOptionId: null,
+  resolvedBy: null,
+  resolvedAt: null
+} as const
+
+export type AcpAdvertisedEfforts = {
+  efforts: AgentSessionOptionChoice[]
+  defaultEffort?: string
+  declaredDefaultEffort?: string | null
+}
 
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
   reply(response: AgentSessionPromptResponse | null): unknown
+  /** A URL request the agent may later report finished with `elicitation/complete`. */
+  elicitationId?: string
 }
 
-/** A request the client answers at once, asking no one: the reply, and a plan it carried for the
- *  chat's existing plan row. */
 export type AcpRequestSettlement = { reply: unknown; plan?: string }
 
 export type AcpBackgroundTaskUpdate = Pick<NativeChatBackgroundTaskBlock, 'taskId' | 'state'> &
   Partial<Omit<NativeChatBackgroundTaskBlock, 'type' | 'taskId' | 'state'>> & {
-    /** Used only until a provider description is known. */
     fallbackLabel?: string
-    /** Used only until a frame names the task's kind. */
     fallbackKind?: NativeChatBackgroundTaskBlock['kind']
   }
 
-/** What the provider said about one subagent; absent fields are unchanged. */
+/** Omitted fields leave existing subagent state unchanged. */
 export type AcpSubagentUpdate = {
-  /** The provider's subagent id: the roster key, and where its own rows are filed. */
   id: string
   state?: NativeChatSubagentState
   label?: string
-  /** Latest total tokens the provider reported for this subagent. */
   tokens?: number
-  /** The provider turn that spawned it. */
+  /** Spawning provider turn. */
   turn?: string
-  /** The subagent's final reply, once it completed. */
   result?: string
-  /** For a report that cannot tell a subagent from a background task: applies only to a known one. */
+  /** Why a failed subagent failed. */
+  error?: string
+  /** A completed subagent's final message, unlike `result` never posted as a reply row. */
+  reply?: string
+  /** Ambiguous task reports apply only to known subagents. */
   knownOnly?: true
+  /** The provider started this subagent again; reopens it after an ending. */
+  restart?: true
+  /** The subagent that spawned this one; absent for the main agent's. */
+  ownerId?: string
+}
+
+/** A subagent's own report, relayed on its root session; it never opens or ends the root's turns. */
+export type AcpChildSessionReport = {
+  rootSessionId: string
+  agentId: string
+  /** Set for a child of another child. */
+  parentAgentId?: string
+  label?: string
+  state?: NativeChatSubagentState
+  /** The child began an execution. */
+  started?: true
+  /** Why a failed child failed. */
+  error?: string
+  update?: SessionNotification
+}
+
+/** The agent's own goal as it reported it; null means cleared. */
+export type AcpThreadGoalReport = {
+  goal:
+    | ({ id: string } & Pick<
+        AgentJournalThreadGoal,
+        'objective' | 'status' | 'tokenBudget' | 'tokensUsed' | 'timeUsedSeconds'
+      >)
+    | null
 }
 
 export type AcpDialectNotification =
@@ -52,49 +110,84 @@ export type AcpDialectNotification =
       at?: number
       started?: boolean
       end?: Omit<AcpTurnEnding, 'at' | 'notSignedIn'>
-      /** The provider's own words for why `turn` failed, sent apart from its end. */
       failureDetail?: string
+      /** Replaces the update that reported it. */
+      failure?: Pick<
+        AcpTurnEnding,
+        'stopReason' | 'failureDetail' | 'failureFrame' | 'usageLimit' | 'notSignedIn'
+      >
       usage?: AgentSessionContextUsage
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
+      child?: AcpChildSessionReport
+      threadGoal?: AcpThreadGoalReport
     }
 
-/** A prompt hook refused the message: the turn ended, but the user did not stop it. */
+/** Hook denial completes the turn rather than recording a user Stop. */
 export type AcpHookBlock = { reason?: string }
 
-/** How a turn ended, as the agent reported it. */
 export type AcpTurnEnding = {
   stopReason: string
   at: number
   durationMs?: number
   failureDetail?: string
+  /** The agent's own failure line, verbatim, kept under Details when `failureDetail` is a shorter
+   *  sentence drawn from it. */
+  failureFrame?: string
   notSignedIn?: boolean
+  /** The agent had no model for the prompt; why (selection or sign-in) is unknown. */
+  modelNotSelected?: boolean
+  usageLimit?: AgentSessionUsageLimit
+  /** Structured error data shows the model provider failed; runtime only. */
+  providerFailure?: boolean
   hookBlock?: AcpHookBlock
+  /** Orca asked the agent to stop this prompt, whatever reason it then gave. */
+  cancelRequested?: boolean
 }
 
-/** How a `/compact` the agent ended normally went, read from its reply; absent compacted. */
+/** Undefined means a normally ended /compact succeeded. */
 export type AcpCompactionReply = { outcome: 'skipped' | 'failed'; detail: string }
+
+/** What the agent's own model command reported: the model it now runs, or why it refused. */
+export type AcpModelCommandReply =
+  | { applied: string }
+  | { refused: 'notSignedIn' | 'modelUnavailable'; detail: string }
+
+/** A listed chat model and the choices a CLI model id encodes for it. */
+export type AcpListedChatModel = {
+  model: string
+  effort?: string
+  fastMode: 'true' | 'false'
+  thinking: 'true' | 'false'
+}
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  /** Effort replaces part of the native composite model selection. */
+  effortChangesModel?: true
   subagentStop?: {
-    /** Missing required target: proves the route exists without addressing any child. */
+    /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }
     recognizesProbeError(error: AcpAgentError): boolean
     request(sessionId: string, id: string): { method: string; params: unknown }
     response(value: unknown, id: string): { cancelled: boolean; state?: NativeChatSubagentState }
   }
+  /** Subagents are child sessions that `session/close` interrupts; a user's Stop also ends them. */
+  childSessionStop?: { supported(initialized: InitializeResponse): boolean }
   backgroundTaskStop?: {
-    /** Missing required target: proves the route exists without addressing any task. */
+    /** Probe without a target to establish support without killing a task. */
     probe: { method: string; params: unknown }
-    /** The agent refusing the route by name: the only answer that hides Stop. */
+    /** Only explicit route rejection hides Stop. */
     lacksRoute(error: AcpAgentError): boolean
     request(sessionId: string, taskId: string): { method: string; params: unknown }
-    /** `gone`: the agent no longer runs a task by that id; its own ending may still follow. */
+    /** A missing task may still report its own ending later. */
     response(value: unknown, taskId: string): 'killed' | 'gone' | 'refused'
   }
   injectedPromptIdentity?: true
-  /** A tool update in the shared shape (`rawOutput.stdout`, `rawOutput.exitCode`), read first. */
+  /** Calls still running at a prompt's end were backgrounded, and the agent later resumes work
+   *  unprompted to report them; that work arrives with no open turn. */
+  reactiveWakeups?: true
+  /** Normalize before reading tools: rawOutput.stdout and rawOutput.exitCode. */
   normalizeToolUpdate?(update: ToolCallUpdate): ToolCallUpdate
   toolName?(update: ToolCallUpdate): string | undefined
   toolBackgroundTasks?(
@@ -105,28 +198,89 @@ export type AcpDialect = {
   /** A child-session notice supplies only its outcome; the translator owns membership and replay. */
   subagentSessionEnd?(method: string, params: unknown): 'completed' | 'stopped' | undefined
   notification?(method: string, params: unknown, at: number): AcpDialectNotification | undefined
+  /** Completion of an independent text task, apart from interactive turn projection. */
+  textTaskCompletion?(
+    method: string,
+    params: unknown
+  ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
-  /** A model's own effort menu and default, as the agent advertises them per model. */
-  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
-  /** A request shown to the person; a permission request it claims is never auto-answered. */
+  modelEfforts?(model: ModelInfo): AcpAdvertisedEfforts
+  /** Efforts of a listed model family that `models` advertises only as per-effort variants. */
+  familyEfforts?(family: string, models: readonly ModelInfo[]): AcpAdvertisedEfforts | undefined
+  /** A saved model id the chat lists as another row and effort, e.g. a family's level id. */
+  listedSelection?: StructuredAgentListedSelection
+  /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
+  clampsUnlistedEffort?: true
+  /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */
+  clientCapabilities?: Pick<ClientCapabilities, 'elicitation' | '_meta'>
+  /** Requests that name no session; they belong to the chat's own. */
+  sessionlessRequests?: readonly string[]
+  /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
-  /** Requests answered at once instead of shown to the person. */
+  /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
+  elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
-  /** The provider's words in a `session/prompt` error answer, when its message is generic. */
+  /** A retry of a failed model call this update announces; null when the agent says retrying is over. */
+  providerRetry?(update: SessionUpdate): AgentSessionProviderRetry | null | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
+  promptFailure?(
+    error: AcpAgentError,
+    at: number
+  ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit' | 'providerFailure'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
-  /** A hook's refusal, read from the `_meta` of the prompt's answer or of the turn's end. */
+  /** The agent dropped this session; only a new child can reopen it. */
+  sessionLost?(error: AcpAgentError, sessionId: string): boolean
+  /** A mapped failure notice says the agent dropped this session, though its prompt ends normally. */
+  sessionLostNotice?(notice: string): boolean
+  /** The agent refused to reopen this session from `cwd` because it keeps it in another folder. */
+  sessionInOtherFolder?(error: AcpAgentError, sessionId: string, cwd: string): boolean
+  /** Reopening moves a session into the folder it is reopened from, so reopen it where it is listed. */
+  reopenMovesSession?: true
   hookBlock?(meta: unknown): AcpHookBlock | undefined
-  /** The row for a failed turn the provider gave no words for. */
   failedTurnText?(stopReason: string): string
-  /** An agent that ends a `/compact` it did not do as a normal turn says so in its reply. */
   compactionReply?(text: string): AcpCompactionReply | undefined
-  /** The agent's own `/` commands a chat does not offer: hidden from its list, and a message
-   *  that is only one of them is refused before it reaches the agent. */
+  /** The agent's own compaction report, read as the standard `compaction_update`. */
+  compactionUpdate?(update: SessionUpdate): CompactionUpdate | undefined
+  /** The agent's own command for /compact. */
+  compactCommand?: string
+  /** Orca's catalog ids (the agent CLI's) its chat server names differently, as the server's ids. */
+  chatModelIds?: ReadonlyMap<string, string>
+  /** Resolves a CLI model id the chat server does not list to a listed model plus its effort,
+   *  thinking and Fast; null if none. */
+  unlistedChatModel?(value: string, listed: readonly string[]): AcpListedChatModel | null
+  /** CLI efforts some of the chat server's models spell differently, as those models' ids. */
+  chatEffortIds?: ReadonlyMap<string, string>
+  /** The agent's own model command resolves selections its model option cannot name. */
+  modelCommand?: {
+    /** Only the model option's own "unknown model" refusal sends the value to the command. */
+    refusedByOption(error: AcpAgentError): boolean
+    /** The prompt failed because no model resolved, not because the agent is signed out. */
+    noModel(error: AcpAgentError): boolean
+    /** The first release whose command resolves what its option refuses; older ones take ids only. */
+    resolvesSelectorsFrom: string
+    text(value: string): string
+    reply(text: string): AcpModelCommandReply
+  }
+  /** The agent reads a mentioned file only from a resource link, not from `@path` text. */
+  linksFileMentions?: true
+  /** The agent advertises image prompts but drops image blocks, so images go as file references. */
+  dropsPromptImages?: true
+  /** Hide these commands and reject command-only prompts before dispatch. */
   withheldCommands?: readonly string[]
+  /** Which sign-in a not-signed-in chat needs; absent is the agent's usual one. */
+  signInAccount?: AgentSessionAccountKind
+  /** A session row's own description when the row is one of the agent's skills; null for a command. */
+  skillDescription?(command: AvailableCommand): string | null
+  /** Which session rows are the agent's own built-ins, as this process's initialize response proves. */
+  builtinCommands?(initialized: InitializeResponse): (command: AvailableCommand) => boolean
+  /** This agent's fast parameter, mapped to Orca's fast mode toggle. */
+  fastConfigId?: string
+  /** This agent's on/off thinking parameter, written only for a CLI model id that names it. */
+  thinkingConfigId?: string
+  /** This agent's mode values, mapped to Orca's Build/Plan interaction mode. */
+  interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
 }
 
-/** Which of the dialect's stop routes this agent process proved it answers. */
 export type AcpChildStops = { subagents: boolean; backgroundTasks: boolean }
 
 export const GENERIC_ACP_DIALECT: AcpDialect = {}

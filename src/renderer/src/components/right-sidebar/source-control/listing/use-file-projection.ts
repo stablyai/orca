@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
-import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
-import { compareFileNames } from '../../../../../../shared/file-name-sort'
-import { compareGitStatusEntries } from '../../source-control-status-sort'
+import type { GitBranchChangeEntry } from '../../../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
+import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   filterSourceControlPathEntries,
   getSourceControlFileFilterState,
@@ -17,15 +16,15 @@ import {
   flattenSourceControlTree,
   namespaceSourceControlTreeDirectoryKeys,
   type SourceControlTreeNode
-} from '../../source-control-tree'
+} from '../../../../../../shared/source-control/listing/source-control-tree'
 import {
   buildSourceControlDisplaySections,
-  SOURCE_CONTROL_AREAS,
+  groupSourceControlEntries,
   type SourceControlDisplaySection,
   type SourceControlDisplaySectionId,
   type SourceControlEntryGroups,
   type SourceControlDisplaySectionArea
-} from './section-order'
+} from '../../../../../../shared/source-control/listing/source-control-section-order'
 import {
   collectListSelectionEntries,
   injectExpandedSubmoduleEntries,
@@ -36,7 +35,10 @@ import {
 } from './submodule-expansion'
 import type { FlatEntry } from './use-selection'
 import type { GitStatusSourceControlTreeNode } from './directory-action-paths'
-import { SUBMODULE_EMPTY_LABEL, SUBMODULE_LOADING_LABEL } from './row-layout'
+import { getSubmoduleEmptyLabel, getSubmoduleLoadingLabel } from './row-layout'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useTranslate } from '@/i18n/use-translate'
+import type { SourceControlChangeScope } from '../panel/change-scope'
 
 export type SourceControlFileProjection = {
   grouped: SourceControlEntryGroups
@@ -59,12 +61,7 @@ export type SourceControlFileProjection = {
   visibleSelectionEntries: FlatEntry[]
 }
 
-// Why: only one view mode is ever rendered, so building the other mode's projection is pure dead
-// work (precedent: the combined-diff file tree short-circuits the same way while collapsed).
-// The gates below and both branching consumers (section-file-list.tsx, branch-section.tsx) read the
-// same sourceControlViewMode prop within one synchronous render, so a mode switch can never show
-// these. Keep that single source: deriving the mode from a separate store read would let a consumer
-// switch a render before the memos do, and only then could one of these reach the screen.
+// Build only the rendered mode; gates and consumers must use the same synchronous mode prop so empty projections cannot appear.
 const EMPTY_TREE_ROOTS_BY_SECTION: Readonly<
   Partial<Record<SourceControlDisplaySectionId, GitStatusSourceControlTreeNode[]>>
 > = Object.freeze({})
@@ -76,10 +73,14 @@ const EMPTY_LIST_ROWS_BY_SECTION: Readonly<
 > = Object.freeze({})
 const EMPTY_BRANCH_TREE_NODES: readonly SourceControlTreeNode<GitBranchChangeEntry, 'branch'>[] =
   Object.freeze([])
+const EMPTY_BRANCH_ENTRIES: GitBranchChangeEntry[] = []
+const EMPTY_DISPLAY_SECTIONS: SourceControlDisplaySection[] = []
 
 export function useSourceControlFileProjection({
   entries,
   branchEntries,
+  changeScopeKind = 'all',
+  commitScopeEntries = null,
   filterQuery,
   sourceControlGroupOrder,
   activeWorktreeId,
@@ -93,6 +94,9 @@ export function useSourceControlFileProjection({
 }: {
   entries: GitStatusEntry[]
   branchEntries: GitBranchChangeEntry[]
+  /** Uncommitted hides committed rows; commit shows only that commit's files in the branch slot. */
+  changeScopeKind?: SourceControlChangeScope['kind']
+  commitScopeEntries?: GitBranchChangeEntry[] | null
   filterQuery: string
   sourceControlGroupOrder: readonly SourceControlDisplaySectionArea[]
   activeWorktreeId: string | null
@@ -104,27 +108,18 @@ export function useSourceControlFileProjection({
   sourceControlViewMode: SourceControlViewMode
   collapsedSections: Set<string>
 }): SourceControlFileProjection {
-  const grouped = useMemo(() => {
-    const groups: SourceControlEntryGroups = {
-      staged: [],
-      unstaged: [],
-      untracked: []
-    }
-    for (const entry of entries) {
-      groups[entry.area].push(entry)
-    }
-    for (const area of SOURCE_CONTROL_AREAS) {
-      groups[area].sort(compareGitStatusEntries)
-    }
-    return groups
-  }, [entries])
+  const t = useTranslate()
+  const grouped = useMemo(() => groupSourceControlEntries(entries), [entries])
 
   const fileFilterState = useMemo(() => getSourceControlFileFilterState(filterQuery), [filterQuery])
   const normalizedFilter = fileFilterState.normalizedFilter
-  const isGitHistoryVisible =
-    !normalizedFilter &&
-    !fileFilterState.tooLarge &&
-    Boolean(activeWorktreeId && worktreePath && !isFolder)
+  const isGitHistoryVisible = Boolean(activeWorktreeId && worktreePath && !isFolder)
+  const scopedBranchEntries =
+    changeScopeKind === 'all'
+      ? branchEntries
+      : changeScopeKind === 'commit'
+        ? (commitScopeEntries ?? EMPTY_BRANCH_ENTRIES)
+        : EMPTY_BRANCH_ENTRIES
 
   const unfilteredDisplaySections = useMemo(
     () => buildSourceControlDisplaySections(grouped, sourceControlGroupOrder),
@@ -132,27 +127,25 @@ export function useSourceControlFileProjection({
   )
   const displaySections = useMemo(
     () =>
-      unfilteredDisplaySections
-        .map((section) => ({
-          ...section,
-          items: filterSourceControlPathEntries(section.items, fileFilterState)
-        }))
-        .filter((section) => section.items.length > 0),
-    [fileFilterState, unfilteredDisplaySections]
+      changeScopeKind === 'commit'
+        ? EMPTY_DISPLAY_SECTIONS
+        : unfilteredDisplaySections
+            .map((section) => ({
+              ...section,
+              items: filterSourceControlPathEntries(section.items, fileFilterState)
+            }))
+            .filter((section) => section.items.length > 0),
+    [changeScopeKind, fileFilterState, unfilteredDisplaySections]
   )
   const unfilteredDisplaySectionsById = useMemo(
     () => new Map(unfilteredDisplaySections.map((section) => [section.id, section])),
     [unfilteredDisplaySections]
   )
 
-  // Why: sorting before filtering keeps the collator off the keystroke path, and is order-identical
-  // to the old filter-then-sort for any self-consistent comparator (a total order is not required):
-  // a stable sort fixes each element's position by (comparator result, original index), and
-  // Array#filter drops elements without disturbing either, so re-sorting the survivors would
-  // reproduce the same relative order. filter(sort(x)) === sort(filter(x)).
+  // Stable sorting commutes with filtering, including ties; sort once to keep collator work off keystrokes.
   const sortedBranchEntries = useMemo(
-    () => [...branchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
-    [branchEntries]
+    () => [...scopedBranchEntries].sort((a, b) => compareFileNames(a.path, b.path)),
+    [scopedBranchEntries]
   )
   const filteredBranchEntries = useMemo(
     () => filterSourceControlPathEntries(sortedBranchEntries, fileFilterState),
@@ -179,6 +172,7 @@ export function useSourceControlFileProjection({
     return roots
   }, [displaySections, sourceControlViewMode])
 
+  const languageRevision = useUiLanguageRevision()
   const visibleTreeRowsBySection = useMemo(() => {
     if (sourceControlViewMode !== 'tree') {
       return EMPTY_TREE_ROWS_BY_SECTION
@@ -189,18 +183,21 @@ export function useSourceControlFileProjection({
         flattenSourceControlTree(treeRootsBySection[section.id] ?? [], collapsedTreeDirs),
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        SUBMODULE_LOADING_LABEL,
-        SUBMODULE_EMPTY_LABEL
+        getSubmoduleLoadingLabel(t),
+        getSubmoduleEmptyLabel(t)
       )
     }
     return rows
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- placeholder labels read the UI language.
   }, [
     collapsedTreeDirs,
     displaySections,
     treeRootsBySection,
     expandedSubmoduleKeys,
     sourceControlViewMode,
-    submoduleStatusByKey
+    submoduleStatusByKey,
+    languageRevision,
+    t
   ])
 
   // List view needs the same lazy submodule expansion as tree view, spliced into the flat entry list.
@@ -214,12 +211,20 @@ export function useSourceControlFileProjection({
         section.items,
         expandedSubmoduleKeys,
         submoduleStatusByKey,
-        SUBMODULE_LOADING_LABEL,
-        SUBMODULE_EMPTY_LABEL
+        getSubmoduleLoadingLabel(t),
+        getSubmoduleEmptyLabel(t)
       )
     }
     return rows
-  }, [displaySections, expandedSubmoduleKeys, sourceControlViewMode, submoduleStatusByKey])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- placeholder labels read the UI language.
+  }, [
+    displaySections,
+    expandedSubmoduleKeys,
+    sourceControlViewMode,
+    submoduleStatusByKey,
+    languageRevision,
+    t
+  ])
 
   const branchTreeRoots = useMemo(
     () =>
@@ -238,7 +243,7 @@ export function useSourceControlFileProjection({
 
   const visibleSelectionEntries = useMemo(() => {
     const arr: FlatEntry[] = []
-    // Why: list view splices in lazy submodule rows, so selection/range bookkeeping must read the injected rows, not the pre-injection entries.
+    // Selection/ranges must read injected submodule rows so rendered children remain selectable.
     if (sourceControlViewMode === 'list') {
       for (const section of displaySections) {
         if (collapsedSections.has(section.id)) {

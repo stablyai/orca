@@ -2,13 +2,14 @@ import type { WebSocket } from 'ws'
 import {
   DESKTOP_PROTOCOL_VERSION,
   MIN_COMPATIBLE_MOBILE_VERSION
-} from '../../src/shared/protocol-version'
+} from '../../src/shared/remote-runtime/protocol/protocol-version'
 import {
   applyTerminalQuickCommandMutation,
   type TerminalQuickCommandMutation
-} from '../../src/shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../src/shared/terminal-quick-command-types'
+} from '../../src/shared/terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { handleMockFilePreviewRequest } from './mock-server-file-preview-data'
+import { handleMockForkedChatsRequest } from './mock-server-forked-chats-scenario'
 import { handleMockGitRequest } from './mock-server-git-state'
 import { handleMockAccountRequest } from './mock-server-account-rpc'
 import { handleMockNativeChatRequest } from './mock-server-native-chat-scenario'
@@ -23,8 +24,7 @@ const MOCK_RPC_DELAY_MS = readScenarioNumber('MOCK_RPC_DELAY_MS', 0)
 const FAKE_REPOS = createMockRepos(MOCK_REPO_COUNT)
 let fakeWorktrees = createMockWorktrees(FAKE_REPOS, MOCK_WORKTREE_COUNT)
 
-// Mutable quick-command list so the mobile Quick Commands sheet can add/edit/
-// delete against the mock the same way it does a paired desktop.
+// Mutable commands let mock-backed mobile sheet add/edit/delete like a paired desktop.
 let fakeQuickCommands: TerminalQuickCommand[] = [
   {
     id: 'qc-codex-review',
@@ -125,6 +125,7 @@ export function handleRequest(
 
   // Each returns false for methods it does not own; first owner wins.
   if (
+    handleMockForkedChatsRequest(request, respond, success) ||
     handleMockGitRequest(request, respond, success) ||
     handleMockFilePreviewRequest(request, respond, success, error) ||
     handleMockAccountRequest(request, respond, success, error) ||
@@ -223,7 +224,7 @@ export function handleRequest(
 
     case 'preflight.detectAgents':
     case 'preflight.detectRemoteAgents':
-      respond(success(request.id, ['claude', 'codex', 'gemini']))
+      respond(success(request.id, ['claude', 'codex', 'antigravity']))
       break
 
     case 'ssh.getState':

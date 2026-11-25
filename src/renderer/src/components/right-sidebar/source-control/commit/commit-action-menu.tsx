@@ -3,9 +3,9 @@ import { ChevronDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import type { PrimaryAction } from '../../source-control-primary-action'
-import { PrimaryActionTooltip } from '../../source-control-primary-action-tooltip'
+import { cn } from '@/lib/class-names'
+import type { PrimaryAction } from '../review/source-control-primary-action-types'
+import { PrimaryActionTooltip } from '../review/source-control-primary-action-tooltip'
 
 export function CommitActionMenu({
   showComposer,
@@ -30,11 +30,11 @@ export function CommitActionMenu({
   onPrimaryAction: () => void
 }): React.JSX.Element {
   return (
-    // Why: action + chevron form one split button so the edit → commit → push loop stays in a single vertical band.
-    <div className={cn('flex items-stretch gap-1', showComposer && 'mt-1')}>
-      <div className="flex flex-1 items-stretch">
+    // Keep action and chevron together so edit/commit/push stays in one vertical band.
+    <div className={cn('flex min-w-0 items-stretch gap-1', showComposer && 'mt-1')}>
+      <div className="flex min-w-0 flex-1 items-stretch">
         <PrimaryActionTooltip action={primaryAction} side="top">
-          <span className="flex flex-1">
+          <span className="flex min-w-0 flex-1" tabIndex={primaryAction.disabled ? 0 : undefined}>
             <Button
               type="button"
               variant="outline"
@@ -48,34 +48,32 @@ export function CommitActionMenu({
               ) : PrimaryIcon ? (
                 <PrimaryIcon className="size-3.5" aria-hidden="true" />
               ) : null}
-              {primaryAction.label}
+              <span className="truncate">{primaryAction.label}</span>
             </Button>
           </span>
         </PrimaryActionTooltip>
         <DropdownMenu>
           <Tooltip>
             <TooltipTrigger asChild>
-              <span className="inline-flex shrink-0">
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="xs"
-                    className={cn(
-                      'rounded-l-none border-l border-border px-1.5 shrink-0',
-                      // Why: mirror the primary's disabled dimming for a unified look, but the chevron stays clickable (its push/fetch/pull stay valid when Commit is disabled).
-                      primaryAction.disabled && 'opacity-50'
-                    )}
-                    aria-label={moreCommitAndRemoteActionsLabel}
-                  >
-                    {showChevronSpinner ? (
-                      <Loader2 className="size-3.5 animate-spin" />
-                    ) : (
-                      <ChevronDown className="size-3.5" />
-                    )}
-                  </Button>
-                </DropdownMenuTrigger>
-              </span>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  className={cn(
+                    'rounded-l-none border-l border-border px-1.5 shrink-0',
+                    // Dim with the primary but keep the chevron clickable because remote actions may remain valid.
+                    primaryAction.disabled && 'opacity-50'
+                  )}
+                  aria-label={moreCommitAndRemoteActionsLabel}
+                >
+                  {showChevronSpinner ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <ChevronDown className="size-3.5" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>
               {moreCommitAndRemoteActionsLabel}

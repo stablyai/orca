@@ -1,39 +1,31 @@
 import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-agent-prompt-render'
-import type {
-  RuntimeProviderSnapshotReadOptions,
-  TerminalWaiter
-} from '../../runtime-terminal-contracts'
-import {
-  TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS,
-  VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
-import { withTimeout } from '../../runtime-async-boundaries'
+import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
+import type { TerminalWaiter } from './terminal-waiter'
+import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
   isKnownReadyPromptSettled
-} from '../../terminal-wait-detection'
+} from './terminal-wait-detection'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
-import { restoreProjectedComposerDraft } from '../../orca-runtime-terminal-projection'
+import { restoreProjectedComposerDraft } from '../../../daemon/emulation/terminal-screen-projection'
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
-  buildPtyTerminalWaitResult,
-  buildTerminalWaitBlockedResult,
-  buildTerminalWaitResult
-} from '../../terminal-wait-results'
-import { createSetupCompletionScanner } from '../../orchestration/setup-completion-signal'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+  buildPtyTerminalWaitResult
+} from './terminal-wait-results'
+import { outputClockOf } from './tui-idle-evidence-source'
+import { hasTerminalAgentPainted, isShellInFront } from '../input/terminal-command-paint-record'
+import { createSetupCompletionScanner } from '../../orchestration/workers/launch/setup-completion-signal'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 
 export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRuntimeWithCreateAgentPromptRenderGate {
-  /** One bounded look at the provider's screen for an adopted PTY whose retained
-   *  readiness metadata was lost. Deliberately single-shot: it answers "is the
-   *  screen already showing a settled prompt", and the poll above owns every
-   *  later transition. A provider screen that is still working when this fires
-   *  resolves through the poll, not here. */
+  /** One bounded readiness read for adopted PTYs with lost metadata; later working-to-idle transitions belong to the poll. */
   protected startTuiIdleVisibleReadProbe(
     waiter: TerminalWaiter,
     waiterTimeoutMs: number,
@@ -67,32 +59,37 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       null
     )
       .then((projection) => {
+        const pty = this.ptysById.get(waiter.ptyId)
         if (
           !projection ||
           projection.source !== 'screen' ||
-          !this.terminalWaiters.get(waiter.handle)?.has(waiter)
+          !pty ||
+          !this.terminalWaiters.has(waiter)
         ) {
           return
         }
         const snapshotText = projection.tail.join('\n')
         const blockedReason = detectTerminalWaitBlockedReason(snapshotText)
-        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse.
-        const ready = screenRule
-          ? isKnownReadyPromptBody(
-              snapshotText,
-              agent,
-              () => restoreProjectedComposerDraft(projection.tail, projection.draft),
-              // Why read now: output since the probe started makes the pane clocked.
-              (
-                this.getLivePtyForHandle(waiter.handle)?.pty ??
-                this.getLiveLeafForHandle(waiter.handle).leaf
-              ).lastOutputAt !== null
-            )
-          : isKnownReadyPromptSettled(snapshotText)
+        // Why the shared tier-1 rule: a probe must not settle what the live screen would refuse,
+        // nor on a frame no current program painted (a reattach awaiting paint, or the shell back in front).
+        const ready =
+          !isShellInFront(pty) &&
+          hasTerminalAgentPainted(pty, agent) &&
+          (screenRule
+            ? isKnownReadyPromptBody(
+                snapshotText,
+                agent,
+                () => restoreProjectedComposerDraft(projection.tail, projection.draft),
+                // Why read now: output since the probe started makes the pane clocked.
+                outputClockOf(this.tuiIdleEvidenceSource, pty) !== null
+              )
+            : isKnownReadyPromptSettled(snapshotText))
         if (!blockedReason && !ready) {
           return
         }
-        const result = this.buildTuiIdleProbeResult(waiter.handle, blockedReason)
+        const result = blockedReason
+          ? buildPtyTerminalWaitBlockedResult(waiter.handle, 'tui-idle', pty, blockedReason)
+          : buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty)
         if (waiter.cancelIdlePoll) {
           waiter.cancelIdlePoll()
         }
@@ -105,23 +102,33 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     handle: string,
     blockedReason: RuntimeTerminalWaitBlockedReason | null
   ): RuntimeTerminalWait {
-    const pty = this.getLivePtyForHandle(handle)
-    if (pty) {
-      return blockedReason
-        ? buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty.pty, blockedReason)
-        : buildPtyTerminalWaitResult(handle, 'tui-idle', pty.pty)
-    }
-    const { leaf } = this.getLiveLeafForHandle(handle)
+    const { pty } = this.getTerminalPtyForHandle(handle)
     return blockedReason
-      ? buildTerminalWaitBlockedResult(handle, 'tui-idle', leaf, blockedReason)
-      : buildTerminalWaitResult(handle, 'tui-idle', leaf)
+      ? buildPtyTerminalWaitBlockedResult(handle, 'tui-idle', pty, blockedReason)
+      : buildPtyTerminalWaitResult(handle, 'tui-idle', pty)
+  }
+
+  /** Whether the setup Orca typed into this terminal is still running: its completion token is known
+   *  (none after a restart) and has not printed. Read-only, so a later completion wait still sees it. */
+  isSetupTerminalRunning(handle: string): boolean {
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
+    const completionToken = ptyId ? this.setupCompletionTokenByPtyId.get(ptyId) : undefined
+    if (!ptyId || !completionToken) {
+      return false
+    }
+    let completed = false
+    createSetupCompletionScanner(completionToken, () => {
+      completed = true
+    }).scan(this.recentPtyOutputById.get(ptyId)?.read() ?? '')
+    return !completed
   }
 
   async waitForSetupTerminalCompletion(
     handle: string,
     signal?: AbortSignal
   ): Promise<{ exitCode: number | null }> {
-    const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
+    // Why: once the window adopts the setup pane, the handle names its leaf, not a pty: record.
+    const ptyId = this.getTerminalPtyIdForHandle(handle)
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
     }
@@ -171,9 +178,11 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         scanner.scan(replay)
       }
       if (!settled) {
+        // Why outlivesRenderer: a window closing or reloading (an app quit) must not read as Setup ending.
         void this.waitForTerminal(handle, {
           condition: 'exit',
-          signal: exitAbort.signal
+          signal: exitAbort.signal,
+          outlivesRenderer: true
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {

@@ -3,13 +3,11 @@ import type { SourceControlPanelFoundation } from '../panel/use-panel-foundation
 import { useSourceControlCreatePrIntentCommitMessage } from '../review/use-create-pr-intent-commit-message'
 import { useSourceControlConflictAbort } from '../sync/use-conflict-abort'
 import { useSourceControlRemoteActionRunner } from '../sync/use-remote-action-runner'
+import { useSourceControlRebaseContinue } from '../sync/use-rebase-continue'
+import { resolveRebaseContinueState } from '../panel/base-rebase-state'
 import { useSourceControlCommitAction } from './use-commit-action'
 import { useSourceControlCommitMessageGeneration } from './use-commit-message-generation'
 
-/**
- * Everything that writes to the local branch: the commit itself, the message it gets, the remote
- * ops that follow it, and the escape hatch out of a conflicted merge or rebase.
- */
 export function useSourceControlCommitFlows(foundation: SourceControlPanelFoundation) {
   const {
     activeRepo,
@@ -19,43 +17,28 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     allocateCommitMessageGenerationRequestId,
     beginGitBranchCompareRequest,
     branchName,
-    commitInFlightRef,
     commitMessage,
-    commitMessageGenerationRecords,
     compareBaseRef,
     conflictOperation,
     effectiveBaseRef,
     fastForwardBranch,
     fetchBranch,
-    generateErrors,
-    generateInFlightByWorktree,
-    generateInFlightRef,
     getCreatePrIntentOperationTarget,
     grouped,
-    isAbortingOperation,
     openCommitGenerationDialog,
+    operationStore,
     pullBranch,
     pushBranch,
     rebaseFromBase,
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
-    remoteActionErrorSequenceByWorktreeRef,
     remoteStatus,
     remoteStatusForActions,
-    resolvedCommitMessageAi,
-    setAbortOperationInFlightByWorktree,
-    setCommitErrorForWorktree,
-    setCommitInFlightByWorktree,
     setCommitMessageGenerationRecord,
-    setGenerateErrors,
-    setGenerateInFlightByWorktree,
-    setRemoteActionErrors,
-    settings,
-    sourceControlAiActionsVisible,
     syncBranch,
     unresolvedConflicts,
-    updateCommitDrafts,
+    updateCommitDraft,
     updateCommitMessageGenerationRecord,
     worktreePath
   } = foundation
@@ -65,17 +48,15 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     activeWorktree,
     activeWorktreeId,
     beginGitBranchCompareRequest,
-    commitInFlightRef,
     commitMessage,
     compareBaseRef,
+    operationStore,
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
-    setCommitErrorForWorktree,
-    setCommitInFlightByWorktree,
     stagedCount: grouped.staged.length,
     unresolvedConflictCount: unresolvedConflicts.length,
-    updateCommitDrafts,
+    updateCommitDraft,
     worktreePath
   })
   const commitMessageGeneration = useSourceControlCommitMessageGeneration({
@@ -83,25 +64,16 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     activeRepoTarget,
     activeWorktreeId,
     allocateCommitMessageGenerationRequestId,
-    commitMessageGenerationRecords,
-    generateErrors,
-    generateInFlightByWorktree,
-    generateInFlightRef,
     openCommitGenerationDialog,
-    resolvedCommitMessageAi,
+    operationStore,
     setCommitMessageGenerationRecord,
-    setGenerateErrors,
-    setGenerateInFlightByWorktree,
-    settings,
-    sourceControlAiActionsVisible,
-    updateCommitDrafts,
+    updateCommitDraft,
     updateCommitMessageGenerationRecord,
     worktreePath
   })
-  const { handleCommit: commitStagedChanges } = commitAction
+  const { handleCommit: commitStagedChanges, handleCompleteMerge } = commitAction
   const { handleCancelGenerate } = commitMessageGeneration
-  // Why: committing the box's own message makes a running generation moot; cancel it so its late
-  // reply cannot refill the box the commit empties. Create PR commits carry their own target.
+  // Cancel box generation when committing its draft so a late reply cannot refill it; Create PR has its own target.
   const handleCommit = useCallback<typeof commitStagedChanges>(
     (messageOverride, options) => {
       if (!options?.target) {
@@ -113,12 +85,8 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
   )
   const createPrIntentCommitMessage = useSourceControlCreatePrIntentCommitMessage({
     activeRepo,
-    generateInFlightRef,
     getCreatePrIntentOperationTarget,
-    resolvedCommitMessageAi,
-    setGenerateErrors,
-    setGenerateInFlightByWorktree,
-    settings
+    operationStore
   })
   const remoteActionRunner = useSourceControlRemoteActionRunner({
     activeRepoTarget,
@@ -130,16 +98,15 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     fetchBranch,
     grouped,
     handleCommit,
+    operationStore,
     pullBranch,
     pushBranch,
     rebaseFromBase,
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
-    remoteActionErrorSequenceByWorktreeRef,
     remoteStatus,
     remoteStatusForActions,
-    setRemoteActionErrors,
     syncBranch,
     worktreePath
   })
@@ -147,21 +114,41 @@ export function useSourceControlCommitFlows(foundation: SourceControlPanelFounda
     activeRepoTarget,
     activeWorktreeId,
     conflictOperation,
-    isAbortingOperation,
+    operationStore,
     refreshActiveGitStatusAfterMutation,
     refreshBranchCompareRef,
     refreshGitHistoryRef,
-    setAbortOperationInFlightByWorktree,
-    setRemoteActionErrors,
+    worktreePath
+  })
+  const rebaseContinue = useSourceControlRebaseContinue({
+    activeRepoTarget,
+    activeWorktreeId,
+    conflictOperation,
+    operationStore,
+    rebaseStopUnread:
+      resolveRebaseContinueState(
+        foundation.rebaseStop,
+        foundation.activeGitStatusHead,
+        foundation.rebaseStopInspectFailure
+      ) === 'unknown',
+    refreshActiveGitStatusAfterMutation,
+    refreshBranchCompareRef,
+    refreshGitHistoryRef,
+    statusHead: foundation.activeGitStatusHead,
+    rebaseStop: foundation.rebaseStop,
+    inspectFailure: foundation.rebaseStopInspectFailure,
+    indexObservation: foundation.rebaseIndexObservation,
     worktreePath
   })
 
   return {
     handleCommit,
+    handleCompleteMerge,
     ...commitMessageGeneration,
     ...createPrIntentCommitMessage,
     ...remoteActionRunner,
-    ...conflictAbort
+    ...conflictAbort,
+    ...rebaseContinue
   }
 }
 

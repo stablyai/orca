@@ -1,9 +1,4 @@
-// The tab group each workspace shows, as the window and each paired desktop last reported it: a
-// view fact, kept in memory only. Main opens a CLI or phone file in the group of whichever of them
-// reported that workspace last; with none, in the saved view's. A refresh (a desktop re-sending its
-// view after a reconnect) ranks below every live report, so it never displaces another's, nor
-// lowers the connection's own. A closed connection's reports go with it. A removed workspace's entry stays: a stale group is refused and the open falls back to
-// main's rule.
+// Open CLI/phone files in the latest reported group, falling back to saved view. Live reports outrank reconnect refreshes; disconnect drops reports, while stale removed-group ids fall back after refusal.
 
 /** `refresh` entries rank below every `live` one; within a tier, the later wins. */
 type Reported = { groupId: string | null; tier: 'live' | 'refresh'; order: number }

@@ -1,5 +1,6 @@
-import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira-quick-filter-params'
-import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira-favourite-filter-params'
+import { taskProviderFailure } from '../../../shared/work-items/task-provider-failure'
+import { JiraIssueListFiltersParam } from '../../../shared/rpc-contract/jira/jira-quick-filter-params'
+import { JiraFavouriteFilterParams } from '../../../shared/rpc-contract/jira/jira-favourite-filter-params'
 import { ipcMain } from 'electron'
 import type { JiraMediaFormat } from '../../../shared/jira/jira-attachment-image'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../../jira/client'
@@ -26,13 +27,12 @@ import type {
   JiraIssueListFilters,
   JiraIssueUpdate,
   JiraSiteSelection
-} from '../../../shared/jira-types'
+} from '../../../shared/jira/jira-types'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
 const issueSummaryRequests = new JiraCancellableRequests()
 const searchRequests = new JiraCancellableRequests()
 
-/** Registers every `jira:*` IPC handler on the main process. */
 export function registerJiraHandlers(): void {
   ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {
     if (
@@ -40,7 +40,10 @@ export function registerJiraHandlers(): void {
       typeof args?.email !== 'string' ||
       typeof args?.apiToken !== 'string'
     ) {
-      return { ok: false, error: 'Site URL, email, and API token are required.' }
+      return taskProviderFailure(
+        'jira.credentialsRequired',
+        'Site URL, email, and API token are required.'
+      )
     }
     const result = await connect({
       siteUrl: args.siteUrl,
@@ -55,7 +58,7 @@ export function registerJiraHandlers(): void {
   })
 
   ipcMain.handle('jira:disconnect', async (_event, args?: { siteId?: string }) => {
-    disconnect(normalizeJiraSiteId(args?.siteId))
+    await disconnect(normalizeJiraSiteId(args?.siteId))
     _resetPreflightCache()
   })
 
@@ -67,9 +70,9 @@ export function registerJiraHandlers(): void {
     return selectSite(siteId)
   })
 
-  ipcMain.handle('jira:status', async () => getStatus())
+  ipcMain.handle('jira:status', () => getStatus())
 
-  ipcMain.handle('jira:readStatus', async () => getStatus())
+  ipcMain.handle('jira:readStatus', () => getStatus())
 
   ipcMain.handle('jira:testConnection', async (_event, args?: { siteId?: string }) => {
     return testConnection(normalizeJiraSiteId(args?.siteId))
@@ -161,13 +164,13 @@ export function registerJiraHandlers(): void {
 
   ipcMain.handle('jira:createIssue', async (_event, args: JiraCreateIssueArgs) => {
     if (typeof args?.projectId !== 'string' || !args.projectId.trim()) {
-      return { ok: false, error: 'Project is required.' }
+      return taskProviderFailure('jira.projectRequired', 'Project is required.')
     }
     if (typeof args?.issueTypeId !== 'string' || !args.issueTypeId.trim()) {
-      return { ok: false, error: 'Issue type is required.' }
+      return taskProviderFailure('jira.issueTypeRequired', 'Issue type is required.')
     }
     if (typeof args?.title !== 'string' || !args.title.trim()) {
-      return { ok: false, error: 'Title is required.' }
+      return taskProviderFailure('jira.titleRequired', 'Title is required.')
     }
     return createIssue({
       siteId: normalizeJiraSiteId(args.siteId),
@@ -187,11 +190,11 @@ export function registerJiraHandlers(): void {
     'jira:updateIssue',
     async (_event, args: { key: string; updates: JiraIssueUpdate; siteId?: string }) => {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
-        return { ok: false, error: 'Issue key is required.' }
+        return taskProviderFailure('jira.issueKeyRequired', 'Issue key is required.')
       }
       const updates = normalizeJiraIssueUpdate(args.updates)
       if (!updates) {
-        return { ok: false, error: 'Updates object is required.' }
+        return taskProviderFailure('jira.updatesRequired', 'Updates object is required.')
       }
       return updateIssue(args.key.trim(), updates, normalizeJiraSiteId(args.siteId))
     }
@@ -201,10 +204,10 @@ export function registerJiraHandlers(): void {
     'jira:addIssueComment',
     async (_event, args: { key: string; body: string; siteId?: string }) => {
       if (typeof args?.key !== 'string' || !args.key.trim()) {
-        return { ok: false, error: 'Issue key is required.' }
+        return taskProviderFailure('jira.issueKeyRequired', 'Issue key is required.')
       }
       if (typeof args?.body !== 'string' || !args.body.trim()) {
-        return { ok: false, error: 'Comment body is required.' }
+        return taskProviderFailure('jira.commentBodyRequired', 'Comment body is required.')
       }
       return addIssueComment(args.key.trim(), args.body.trim(), normalizeJiraSiteId(args.siteId))
     }

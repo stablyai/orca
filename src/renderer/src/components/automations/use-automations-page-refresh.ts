@@ -1,18 +1,41 @@
-import { useCallback, useEffect, useRef } from 'react'
-import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
-import { useAppStore } from '@/store'
-import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
+import { useAppStore } from '@/store/index'
+import type { PendingAutomationRunNavigation } from '@/store/slices/ui/ui-slice-contract-core'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { AUTOMATIONS_CHANGED_EVENT } from '@/components/automations/events/automations-changed-window-event'
 import {
   getAutomationHostTargetKey,
-  getAutomationTargetFromHostId,
+  getAutomationListedTargetFromHostId,
   listAutomationsForTarget
-} from './automation-host-client'
-import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { useSelectedAutomationRunHistory } from './use-selected-automation-run-history'
-import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
-import type { AutomationsPageListState } from './use-automations-page-list-state'
+} from './hosts/automation-host-client'
+import { automationAuthorityCatalogKey } from './hosts/automation-host-catalog-types'
+import { useSelectedAutomationRunHistory } from './runs/use-selected-automation-run-history'
+import type { AutomationsPageDestinationState } from './authoring/use-automations-page-destination-state'
+import type { AutomationsPageListState } from './listing/use-automations-page-list-state'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
+
+// Backoff before each retry of a pending link's host listing; after the last one the link is dropped.
+const PENDING_LISTING_RETRY_DELAYS_MS = [500, 1000, 2000]
+
+type PendingListingFailures = {
+  navigation: PendingAutomationRunNavigation | null
+  count: number
+}
+
+function dropUnreachablePendingNavigation(navigation: PendingAutomationRunNavigation): void {
+  const state = useAppStore.getState()
+  state.setPendingAutomationRunNavigation(null)
+  toast.error(
+    translate('automations.hostUnreachable', "Couldn't reach {{host}}. Try again once it's back.", {
+      host: selectExecutionHostDisplayLabel(state, navigation.hostId ?? LOCAL_EXECUTION_HOST_ID)
+    })
+  )
+}
 
 /** Refreshes host-scoped rows and wires lifecycle/selection history effects. */
 export function useAutomationsPageRefresh({
@@ -26,31 +49,42 @@ export function useAutomationsPageRefresh({
   list: AutomationsPageListState
   destination: AutomationsPageDestinationState
 }) {
-  const { fetchAllWorktrees, startupWorktreeRefreshCompleted, pendingAutomationRunNavigation } =
-    store
+  const {
+    fetchAllWorktrees,
+    startupWorktreeRefreshCompleted,
+    pendingAutomationRunNavigation,
+    runtimeEnvironments
+  } = store
   const {
     setIsLoading,
     setAutomations,
     setAutomationHostTargetKey,
     setFailedAuthorityKeys,
+    setPageView,
     isLoading,
     automationHostTargetKey,
     setRelativeNow,
-    runHistoryReloadToken,
-    workspaceNameCacheRef
+    runHistoryReloadToken
   } = local
   const { scopedExternal, selectedRow } = list
   const { automationHostTargetFor } = destination
   const reloadExternalManagers = scopedExternal.reload
+  // Only listings the pending link itself started count, so a failed focus refresh never drops it.
+  const [pendingListingFailures, setPendingListingFailures] = useState<PendingListingFailures>({
+    navigation: null,
+    count: 0
+  })
 
   const refresh = useCallback(
-    async (options?: { awaitExternalManagers?: boolean }): Promise<void> => {
+    async (options?: {
+      awaitExternalManagers?: boolean
+      forPendingNavigation?: boolean
+    }): Promise<void> => {
       setIsLoading(true)
       const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
-      // Until a navigation names a host, the desktop is the only authority the
-      // legacy unscoped arm can address without guessing.
+      // Until navigation names a host, only the desktop’s legacy unscoped arm can be addressed without guessing.
       const target = pendingNavigation
-        ? getAutomationTargetFromHostId(pendingNavigation.hostId)
+        ? getAutomationListedTargetFromHostId(pendingNavigation.hostId, useAppStore.getState())
         : { kind: 'local' as const }
       const authorityKey = automationAuthorityCatalogKey(
         target.kind === 'environment'
@@ -60,7 +94,8 @@ export function useAutomationsPageRefresh({
       const managersSettled = reloadExternalManagers().catch(() => undefined)
       try {
         const nextAutomations = await listAutomationsForTarget(target)
-        setAutomations(nextAutomations)
+        // A bot's waits are listed in its sidebar, never with automations.
+        setAutomations(nextAutomations.filter((automation) => !automation.once))
         setAutomationHostTargetKey(getAutomationHostTargetKey(target))
         setFailedAuthorityKeys((current) => {
           if (!current.has(authorityKey)) {
@@ -72,6 +107,16 @@ export function useAutomationsPageRefresh({
         })
       } catch {
         setFailedAuthorityKeys((current) => new Set(current).add(authorityKey))
+        if (
+          options?.forPendingNavigation &&
+          pendingNavigation &&
+          useAppStore.getState().pendingAutomationRunNavigation === pendingNavigation
+        ) {
+          setPendingListingFailures((current) => ({
+            navigation: pendingNavigation,
+            count: current.navigation === pendingNavigation ? current.count + 1 : 1
+          }))
+        }
       } finally {
         setIsLoading(false)
       }
@@ -117,26 +162,53 @@ export function useAutomationsPageRefresh({
       return
     }
     const pendingTargetKey = getAutomationHostTargetKey(
-      getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
+      getAutomationListedTargetFromHostId(pendingAutomationRunNavigation.hostId, {
+        runtimeEnvironments
+      })
     )
-    if (automationHostTargetKey !== pendingTargetKey) {
-      void refresh()
+    if (automationHostTargetKey === pendingTargetKey) {
+      return
     }
-  }, [automationHostTargetKey, isLoading, pendingAutomationRunNavigation, refresh])
-  useEffect(() => {
-    for (const [workspaceId, worktree] of store.worktreeMap) {
-      const displayName = worktree.displayName.trim()
-      if (displayName) {
-        workspaceNameCacheRef.current.set(workspaceId, displayName)
+    const failureCount =
+      pendingListingFailures.navigation === pendingAutomationRunNavigation
+        ? pendingListingFailures.count
+        : 0
+    if (failureCount > PENDING_LISTING_RETRY_DELAYS_MS.length) {
+      if (
+        useAppStore.getState().pendingAutomationRunNavigation === pendingAutomationRunNavigation
+      ) {
+        dropUnreachablePendingNavigation(pendingAutomationRunNavigation)
+        setPageView('automations')
       }
+      return
     }
-  }, [store.worktreeMap, workspaceNameCacheRef])
+    if (failureCount === 0) {
+      void refresh({ forPendingNavigation: true })
+      return
+    }
+    const timer = window.setTimeout(
+      () => void refresh({ forPendingNavigation: true }),
+      PENDING_LISTING_RETRY_DELAYS_MS[failureCount - 1]
+    )
+    return () => window.clearTimeout(timer)
+  }, [
+    automationHostTargetKey,
+    isLoading,
+    pendingAutomationRunNavigation,
+    pendingListingFailures,
+    refresh,
+    runtimeEnvironments,
+    setPageView
+  ])
   useSelectedAutomationRunHistory({
     selected: selectedRow,
+    selection: { automationId: store.selectedId, rowKey: local.selectedRowKey },
+    retained: local.selectedAutomationRuns,
     context: destination.automationDispatchContext,
     legacyTarget: automationHostTargetFor,
     navigation: pendingAutomationRunNavigation,
     reloadToken: runHistoryReloadToken,
+    acquisitionToken: local.runHistoryAcquisitionToken,
     onSettled: local.setSelectedAutomationRuns
   })
   useEffect(() => {

@@ -23,8 +23,10 @@ import {
   Wrench,
   type LucideIcon
 } from 'lucide-react'
-import type { RepoIcon } from '../../../../shared/repo-icon'
-import { cn } from '@/lib/utils'
+import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
+import { cn } from '@/lib/class-names'
+import { softMarkColors } from '../../../../shared/repository/appearance/repo-badge-color'
+import { monogramFontScale } from '../../../../shared/repository/appearance/repo-monogram'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
@@ -143,8 +145,7 @@ export function RepoIconGlyph({
   color?: string
 }): React.JSX.Element {
   const imageSrc = repoIcon?.type === 'image' ? repoIcon.src : null
-  // Why: private-mode GHES avatars need a session cookie, so the load fails and would
-  // render blank — track the failed src so a different icon still renders.
+  // Private GHES avatars may require cookies; track failed URLs without hiding later replacement icons.
   const [failedImageSrc, setFailedImageSrc] = React.useState<string | null>(null)
 
   if (imageSrc !== null && failedImageSrc !== imageSrc) {
@@ -153,10 +154,38 @@ export function RepoIconGlyph({
         <img
           src={imageSrc}
           alt=""
-          className={cn('size-full object-contain', iconClassName)}
+          // Keep in step with MobileRepoIcon's radii.mark.
+          className={cn('size-full rounded-[4px] object-contain', iconClassName)}
           draggable={false}
           onError={() => setFailedImageSrc(imageSrc)}
         />
+      </span>
+    )
+  }
+
+  if (repoIcon?.type === 'letters') {
+    const light = softMarkColors(color, 'light')
+    const dark = softMarkColors(color, 'dark')
+    const markColors: React.CSSProperties & Record<`--mark-${string}`, string> = {
+      '--mark-bg-light': light.background,
+      '--mark-bg-dark': dark.background,
+      '--mark-fg-light': light.foreground,
+      '--mark-fg-dark': dark.foreground
+    }
+    return (
+      <span
+        className={cn(
+          'inline-flex items-center justify-center overflow-hidden rounded-[22%] bg-(--mark-bg-light) font-semibold leading-none text-(--mark-fg-light) [container-type:size] dark:bg-(--mark-bg-dark) dark:text-(--mark-fg-dark)',
+          className,
+          iconClassName
+        )}
+        style={markColors}
+        aria-hidden="true"
+      >
+        {/* Why: container units scale the letters with the mark, from 16px sidebar chips to 40px tiles. */}
+        <span style={{ fontSize: `${(monogramFontScale(repoIcon.text) * 100).toFixed(1)}cqh` }}>
+          {repoIcon.text}
+        </span>
       </span>
     )
   }

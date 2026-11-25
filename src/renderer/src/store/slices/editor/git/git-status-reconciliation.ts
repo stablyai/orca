@@ -3,13 +3,13 @@ import type {
   GitConflictKind,
   GitStatusEntry,
   GitUpstreamStatus
-} from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/status/git-status-types'
 import type { BranchCompareLike, CommitCompareLike, OpenFile } from '../types/open-file'
 import type {
   BranchCompareSnapshot,
   CommitCompareSnapshot,
   OpenConflictMetadata
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 
 export function getCompareVersion(
   compare: Pick<BranchCompareLike, 'baseOid' | 'headOid' | 'mergeBase'>
@@ -120,7 +120,8 @@ export function areUpstreamStatusesEqual(
     prev.ahead === next.ahead &&
     prev.behind === next.behind &&
     prev.hasConfiguredPushTarget === next.hasConfiguredPushTarget &&
-    prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent
+    prev.behindCommitsArePatchEquivalent === next.behindCommitsArePatchEquivalent &&
+    prev.upstreamOid === next.upstreamOid
   )
 }
 
@@ -131,15 +132,40 @@ export function reconcileOpenFilesForStatus(
   statusIsComplete: boolean
 ): OpenFile[] {
   let entriesByPath: Map<string, GitStatusEntry> | undefined
+  let stagedEntriesByPath: Map<string, GitStatusEntry> | undefined
   let changed = false
 
-  const nextOpenFiles = openFiles.flatMap((file) => {
+  const nextOpenFiles = openFiles.flatMap((originalFile) => {
+    let file = originalFile
     if (file.worktreeId !== worktreeId) {
       return [file]
     }
 
-    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
+    if (
+      file.mode === 'conflict-review' ||
+      file.mode === 'check-details' ||
+      file.mode === 'git-graph'
+    ) {
       return [file]
+    }
+
+    if (file.mode === 'diff' && file.diffSource === 'staged') {
+      if (!stagedEntriesByPath) {
+        stagedEntriesByPath = new Map()
+        for (const entry of nextEntries) {
+          if (entry.area === 'staged') {
+            stagedEntriesByPath.set(entry.path, entry)
+          }
+        }
+      }
+      const entry = stagedEntriesByPath.get(file.relativePath)
+      if (entry) {
+        const oldPath = entry.status === 'renamed' ? entry.oldPath : undefined
+        if (file.branchOldPath !== oldPath) {
+          changed = true
+          file = { ...file, branchOldPath: oldPath }
+        }
+      }
     }
 
     if (!file.conflict) {

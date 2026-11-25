@@ -1,11 +1,11 @@
-import { sortByUpdatedAtDescending } from '../../shared/updated-at-order'
+import { sortByUpdatedAtDescending } from '../../shared/collections/updated-at-order'
 import type {
   JiraIssue,
   JiraIssueFilter,
   JiraIssueListFilters,
   JiraSiteSelection
-} from '../../shared/jira-types'
-import { buildJiraPresetJql } from '../../shared/jira/jira-preset-jql'
+} from '../../shared/jira/jira-types'
+import { buildJiraPresetJql, searchJiraPreset } from '../../shared/jira/jira-preset-jql'
 import { acquire, release } from './request-queue'
 import { apiBasePath, jiraRequest, type JiraClientForSite } from './authenticated-request'
 import { clearToken, getClients, isAuthError } from './client'
@@ -43,8 +43,13 @@ async function readIssuesForClient(
   if ('jql' in query) {
     return searchIssuesForClient(entry, query.jql, limit, agileFields, signal)
   }
+  if (entry.site.authType === 'server') {
+    return searchJiraPreset(query.filter, query.filters, (jql) =>
+      searchIssuesForClient(entry, jql, limit, agileFields, signal)
+    )
+  }
   const jql = buildJiraPresetJql(query.filter, query.filters)
-  if (query.filter !== 'all' || entry.site.authType === 'server') {
+  if (query.filter !== 'all') {
     return searchIssuesForClient(entry, jql, limit, agileFields, signal)
   }
   const projects = await readProjectsForClient(entry, signal, true)
@@ -150,7 +155,7 @@ async function runIssueSearch(
   signal?: AbortSignal,
   strict = false
 ): Promise<JiraIssue[]> {
-  const entries = getClients(siteId)
+  const entries = await getClients(siteId)
   requireStrictJiraSite(entries, siteId, strict)
   if (entries.length === 0 || ('jql' in query && !query.jql)) {
     return []
@@ -163,7 +168,7 @@ async function runIssueSearch(
       entries.map(async (entry, index) => {
         // Discovery owns a slot, so finish it before acquiring the search slot.
         const agileFields = await getAgileFieldIds(entry, requestSignal)
-        // Why: queueing on an abandoned search would keep occupying the shared Jira pool.
+        // Pass cancellation through queue admission so abandoned searches do not occupy the shared pool.
         await acquire(requestSignal)
         try {
           return await readIssuesForClient(entry, query, safeLimit, agileFields, requestSignal)
@@ -174,7 +179,7 @@ async function runIssueSearch(
           }
           const authFailure = isAuthError(error)
           if (authFailure) {
-            clearToken(entry.site.id)
+            await clearToken(entry)
           }
           if (surfaceSiteFailure) {
             throw toIssueSearchFailureError(error)
@@ -188,8 +193,7 @@ async function runIssueSearch(
       })
     )
   )
-  // 'all' fan-out: only surface an error when every connected site failed, so a
-  // partial success (or a genuinely empty result) is not reported as an error.
+  // Preserve partial success, including empty results; report failure only when every connected site fails.
   const recordedFailures = failures.filter(
     (failure): failure is JiraIssueSearchFailure => failure !== undefined
   )

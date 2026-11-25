@@ -7,8 +7,7 @@ export type PetPointerInteraction = {
   dragging: boolean
   dragAnimation: PetDragAnimation
   hovering: boolean
-  // Why: bumped on grab so the sprite restarts from frame 0, aligned with the
-  // Codex mascot.
+  // Grab generation restarts sprite playback at frame 0.
   dragGeneration: number
   handlers: {
     onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
@@ -21,8 +20,7 @@ export type PetPointerInteraction = {
   }
 }
 
-// Drag/hover state for the pet overlay. `position` is the overlay's current
-// top-left corner and `moveTo` receives the unclamped position the drag wants.
+// moveTo receives the desired unclamped overlay position.
 export function usePetPointerInteraction(
   position: Point,
   moveTo: (next: Point) => void
@@ -32,20 +30,15 @@ export function usePetPointerInteraction(
   const [hovering, setHovering] = useState(false)
   const [dragGeneration, setDragGeneration] = useState(0)
   const dragOffsetRef = useRef<Point>({ x: 0, y: 0 })
-  // Why: horizontal baseline for the drag-direction hysteresis, advanced only on
-  // an accepted direction. Kept separate from dragOffsetRef (position math).
+  // Advance horizontal hysteresis only on accepted direction changes; keep it separate from position anchors.
   const dragBaselineXRef = useRef(0)
-  // Why: read+written inside handlers, so keep in refs immune to render batching
-  // (state would let two coalesced moves resurrect a stale direction).
+  // Read/write refs in handlers so batched moves cannot resurrect a stale direction.
   const dragDirectionRef = useRef<PetDragAnimation>(null)
   const activePointerRef = useRef<number | null>(null)
 
-  // Why: setPointerCapture routes subsequent pointer events to this element
-  // even when the cursor leaves the OS window, so dragging can't get stuck in
-  // the "true" state if the user releases outside the app.
+  // Capture pointer events beyond the window so outside releases cannot leave dragging stuck.
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    // Why: primary button only, and one pointer owns the drag — a second touch
-    // must not hijack the anchors mid-drag.
+    // Accept one primary-button pointer so additional touches cannot replace active anchors.
     if (event.button !== 0 || activePointerRef.current !== null) {
       return
     }
@@ -107,8 +100,7 @@ export function usePetPointerInteraction(
       onPointerMove,
       onPointerUp: endDrag,
       onPointerCancel: endDrag,
-      // Why: capture can be revoked without a pointerup (e.g. the element loses
-      // it); treat that as the end of the drag so it can't wedge on.
+      // Capture may be revoked without pointerup; end the drag then too.
       onLostPointerCapture: endDrag,
       onPointerEnter: () => setHovering(true),
       onPointerLeave: () => setHovering(false)

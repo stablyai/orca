@@ -1,12 +1,14 @@
-import { terminalImageViewerSupported } from '../../../terminal-image-viewer-env'
+import { bindTerminalToCallingWorker } from '../../../orchestration/workers/lifecycle/worker-created-terminal-owner'
+import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
+import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { defineMethod } from '../../core'
 import {
   navigationTargetsHost,
   resolveRuntimeNavigationTarget
-} from '../../../../../shared/runtime-navigation'
-import { withTerminalCloseAttribution } from '../../terminal-close-attribution'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import { withTerminalCloseAttribution } from '../../terminal/terminal-close-attribution'
 import {
   AgentTeamsPrepareLaunch,
   AgentTeamsTmuxCompat,
@@ -14,10 +16,10 @@ import {
   TerminalFocus,
   TerminalHandle,
   TerminalReveal,
-  TerminalSplit,
   TerminalWait
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import { TerminalSplit } from '../../../../../shared/rpc-contract/terminal/terminal-split-params'
+import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({
@@ -34,14 +36,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
   }),
   defineMethod({
     name: 'terminal.create',
+    requires: terminalCreateFeatureRequirement,
     permission: 'workspace',
     params: TerminalCreateParams,
     handler: async (params, context) => {
       const { runtime, pairedDeviceId, clientId, clientKind } = context
-      // A focused terminal create predates paired-client navigation. Keep the
-      // authority boundary here so a remote caller cannot activate the host
-      // renderer. This legacy RPC remains a background create for paired viewers;
-      // caller-local selection belongs to the session-tab RPC flow.
+      // Paired viewers create in the background; only caller-local session-tab navigation may select it, never the host renderer.
       const pairedViewer = clientKind !== undefined
       const focus = pairedViewer ? false : params.focus === true
       const activate = pairedViewer ? false : params.activate === true
@@ -49,8 +49,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         pairedViewer && params.presentation === 'focused' ? 'background' : params.presentation
       // Switch point: the window's own new tab, which main starts; refused as a pane-named split is.
       if (params.windowTab) {
-        // Only this host's own window draws its tabs, by the identity its IPC proved: that channel
-        // also labels itself a client, and a paired viewer's window starts its own host's.
+        // Only transport-proven local IPC owns these host tabs; paired viewers create tabs on their own hosts.
         if (
           context.caller?.kind !== 'desktop' ||
           !params.worktree?.startsWith('id:') ||
@@ -76,6 +75,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
                 : {}),
               ...(params.launchToken ? { launchToken: params.launchToken } : {}),
               ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+              ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
               terminalImageViewerSupported: terminalImageViewerSupported(context)
             }
           )
@@ -88,6 +88,8 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         params.reconcileExisting === true,
         (canonicalWorktreeSelector, preAllocatedHandle) =>
           runtime.createTerminal(canonicalWorktreeSelector, {
+            // A CLI command (typed or an agent's) or a window's create is the user's act.
+            wslUserAct: true,
             command: params.command,
             terminalImageViewerSupported: terminalImageViewerSupported(context),
             ...(params.shell ? { shellOverride: params.shell } : {}),
@@ -98,13 +100,18 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             ...(params.resumeProviderSession
               ? { resumeProviderSession: params.resumeProviderSession }
               : {}),
+            ...(params.resumeOrigin ? { resumeOrigin: params.resumeOrigin } : {}),
             ...(params.launchToken ? { launchToken: params.launchToken } : {}),
             ...(params.launchAgent ? { launchAgent: params.launchAgent } : {}),
+            ...(params.trustWorktreeId ? { trustWorktreeId: params.trustWorktreeId } : {}),
             ...(params.terminalKittyKeyboardProtocol === true
               ? { terminalKittyKeyboardProtocol: true }
               : {}),
             ...(params.terminalColorQueryReplies
-              ? { terminalColorQueryReplies: params.terminalColorQueryReplies }
+              ? {
+                  terminalColorQueryReplies: params.terminalColorQueryReplies,
+                  terminalViewAttributes: params.terminalViewAttributes
+                }
               : {}),
             title: params.title,
             focus,
@@ -113,8 +120,11 @@ export const TERMINAL_LIFECYCLE_METHODS = [
             tabId: params.tabId,
             leafId: params.leafId,
             ...(params.spawnIntent ? { spawnIntent: params.spawnIntent } : {}),
+            // A paired window starts its mounted panes here, activation spawns included, and can't tell them apart.
+            ...(clientKind === 'runtime' ? { reopensPane: true as const } : {}),
             ...(preAllocatedHandle ? { preAllocatedHandle } : {})
-          })
+          }),
+        { wslUserAct: true }
       )
       // Switch point. A CLI start is work in the workspace; a window or phone tab is a person opening one.
       if (
@@ -127,6 +137,9 @@ export const TERMINAL_LIFECYCLE_METHODS = [
           terminal.executionHostId
         )
       }
+      if (!terminal.isReattach) {
+        bindCreatedTerminal(runtime, context, terminal.handle, params.keepOpen === true)
+      }
       const publicTerminal = { ...terminal }
       delete publicTerminal.savedStartupCwd
       return { terminal: publicTerminal }
@@ -136,28 +149,41 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     name: 'terminal.split',
     permission: 'workspace',
     params: TerminalSplit,
-    handler: async (params, { runtime }) => ({
-      split:
-        params.pane && !params.terminal
-          ? await runtime.splitTerminalPane(params.pane, {
-              direction: params.direction ?? 'horizontal',
-              newLeafId: params.newLeafId,
-              cwd: params.cwd,
-              initialSize: params.initialSize,
-              command: params.command,
-              env: params.env,
-              // The window's split shows why its start failed, as its own spawn did.
-              keepPaneOnStartFailure: true
-            })
-          : // The schema requires a handle when no pane is named.
-            await runtime.splitTerminal(params.terminal ?? '', {
-              direction: params.direction,
-              command: params.command,
-              env: params.env,
-              telemetrySource: params.telemetrySource,
-              retrySplit: params.retrySplit
-            })
-    })
+    handler: async (params, context) => {
+      const { runtime, caller } = context
+      const viewerSupported = terminalImageViewerSupported(context)
+      const viewer =
+        viewerSupported === undefined ? {} : { terminalImageViewerSupported: viewerSupported }
+      if (params.pane && !params.terminal) {
+        return {
+          split: await runtime.splitTerminalPane(params.pane, {
+            direction: params.direction ?? 'horizontal',
+            newLeafId: params.newLeafId,
+            cwd: params.cwd,
+            initialSize: params.initialSize,
+            command: params.command,
+            env: params.env,
+            ...viewer,
+            // The window's split shows why its start failed, as its own spawn did.
+            keepPaneOnStartFailure: true,
+            wslUserAct: true
+          })
+        }
+      }
+      // The schema requires a handle when no pane is named.
+      const split = await runtime.splitTerminal(params.terminal ?? '', {
+        direction: params.direction,
+        command: params.command,
+        env: params.env,
+        ...viewer,
+        telemetrySource: params.telemetrySource,
+        retrySplit: params.retrySplit,
+        ...(caller?.kind === 'local-cli' ? { activate: false } : {}),
+        wslUserAct: true
+      })
+      bindCreatedTerminal(runtime, context, split.handle, params.keepOpen === true)
+      return { split }
+    }
   }),
   ...TERMINAL_WORKSPACE_STOP_METHODS,
   defineMethod({
@@ -165,7 +191,7 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     permission: 'workspace',
     params: TerminalResizeForClient,
     handler: async (params, { runtime }) => {
-      // Why: a stale handle must fail with terminal_handle_stale, not resize the wrong PTY (#7718).
+      // Reject stale handles before resize can reach the wrong PTY (#7718).
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       if (!leaf?.ptyId) {
         throw new Error('no_connected_pty')
@@ -198,14 +224,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   }),
   defineMethod({
-    // Why a method of its own: terminal.focus resolves a handle on the host that runs the PTY, and a
-    // paired server has no window, so only the desktop showing its pane can reveal it (#24688).
+    // Keep reveal separate from host-side focus: only the desktop showing a remote pane can reveal it (#24688).
     name: 'terminal.reveal',
     permission: 'workspace',
     params: TerminalReveal,
     handler: async (params, { runtime, clientKind }) => {
-      // Why local callers only: it moves this host's window, which terminal.focus lets a paired
-      // client do only by asking for host navigation, and a CLI or companion app here needs no more.
+      // Local callers may move this window; paired callers need explicit host-navigation intent through focus.
       if (clientKind !== undefined) {
         throw Object.assign(
           new Error('terminal.reveal is available only to callers on this machine.'),
@@ -271,3 +295,12 @@ export const TERMINAL_LIFECYCLE_METHODS = [
     })
   })
 ]
+
+// Binding is best effort: a terminal that could not be bound still opens, as it always has.
+function bindCreatedTerminal(...args: Parameters<typeof bindTerminalToCallingWorker>): void {
+  try {
+    bindTerminalToCallingWorker(...args)
+  } catch (error) {
+    console.warn('[terminal] could not bind a worker-created terminal', args[2], error)
+  }
+}

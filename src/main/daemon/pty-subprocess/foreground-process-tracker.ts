@@ -1,52 +1,46 @@
 import type * as pty from 'node-pty'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import { getAgentForegroundContextPaths } from '../../providers/agent-foreground-context-paths'
+import * as foreground from '../../providers/foreground/pty-confirmation'
+import { getAgentForegroundContextPaths } from '../../providers/foreground/context-paths'
 import { confirmPtyShellForeground } from './pty-shell-foreground-confirmation'
 import {
   judgeCachedAgentJobEvidence,
   WINDOWS_DETACHED_DESCENDANT_IDENTITY_MAX_AGE_MS
-} from '../../providers/windows-cached-agent-revalidation'
+} from '../../providers/foreground/windows/cached-agent-revalidation'
 import {
   isWindowsPtyJobReadable,
   readWindowsPtyJobProcessIds
-} from '../../providers/windows-pty-job-membership'
+} from '../../providers/foreground/windows/pty-job-membership'
 
-import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
   type RecognizedAgentProcess
-} from '../../../shared/agent-process-recognition'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { shouldInspectOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import {
-  shouldInspectOuterWrapperForegroundName,
-  shouldInspectOuterWrapperForegroundProcess
-} from '../../../shared/foreground-wrapper-agent'
-import { isShellProcess } from '../../../shared/shell-process-detection'
-import { resolveFallbackForegroundProcess } from './foreground-fallback-process'
-import { parsePtySessionId } from '../../../shared/pty-session-id-format'
+  resolveFallbackForegroundProcess,
+  shouldInspectForegroundFallback
+} from './foreground-fallback-process'
+import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import {
   ptyProcessNameIsSpawnFile,
   createPtyForegroundResolver,
   shouldCachePtyForeground
 } from './spawn-file-foreground-process'
+import {
+  toCachedAgentForeground,
+  type AgentForegroundAnchor,
+  type CachedAgentForeground,
+  type PtyForegroundProcessTracker
+} from './pty-foreground-tracker-types'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
 const WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS = 15_000
 const SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS = 10_000
 const STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS = 5_000
-
-type CachedAgentForeground = { processName: string; pid: number | null; refreshedAt: number }
-
-export type PtyForegroundProcessTracker = {
-  recordOutput(data: string): void
-  markDead(): void
-  /** `rawFallback`: node-pty's own name only, with no identity cache and no background
-   *  process-table refresh -- the cheap-tier tick must not fork a full `ps` as a side effect. */
-  getForegroundProcess(options?: { rawFallback?: boolean; cachedOnly?: boolean }): string | null
-  confirmForegroundProcess(): Promise<string | null>
-  confirmShellForeground(): Promise<boolean>
-}
 
 export function createPtyForegroundProcessTracker(args: {
   process: pty.IPty
@@ -73,10 +67,14 @@ export function createPtyForegroundProcessTracker(args: {
           expiresAt: Date.now() + STARTUP_AGENT_FOREGROUND_BOOTSTRAP_MS
         }
       : null
-  let foregroundRefreshInFlight = false
+  let foregroundRefresh: Promise<unknown> | null = null
   let lastForegroundRefreshStartedAt = 0
-  const cacheAgentForeground = (processName: string, pid: number | null): void => {
-    cachedAgentForeground = { processName, pid, refreshedAt: Date.now() }
+  const cacheAgentForeground = (
+    processName: string,
+    found: AgentForegroundAnchor | null,
+    identifiedAt = Date.now()
+  ): void => {
+    cachedAgentForeground = toCachedAgentForeground(processName, found, identifiedAt)
     startupAgentForeground = null
   }
   const getFallbackProcess = (): string | null =>
@@ -89,12 +87,6 @@ export function createPtyForegroundProcessTracker(args: {
     }
     return startupAgentForeground
   }
-  const shouldInspectFallback = (fallbackProcess: string | null): boolean =>
-    fallbackProcess !== null &&
-    (isShellProcess(fallbackProcess) ||
-      isAgentForegroundWrapperProcess(fallbackProcess) ||
-      shouldInspectOuterWrapperForegroundName(fallbackProcess) ||
-      process.platform !== 'win32')
 
   const scheduleRefresh = (fallbackProcess: string | null): void => {
     if (args.isDead() || !proc.pid) {
@@ -106,7 +98,7 @@ export function createPtyForegroundProcessTracker(args: {
       !fallbackProcess ||
       (fallbackRecognition !== null &&
         !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
-      !shouldInspectFallback(fallbackProcess)
+      !shouldInspectForegroundFallback(fallbackProcess)
     ) {
       return
     }
@@ -118,10 +110,9 @@ export function createPtyForegroundProcessTracker(args: {
       : process.platform === 'win32' && now - lastOutputAt > SHELL_FOREGROUND_OUTPUT_HOT_WINDOW_MS
         ? WINDOWS_IDLE_SHELL_FOREGROUND_REFRESH_RETRY_MS
         : SHELL_FOREGROUND_REFRESH_RETRY_MS
-    if (foregroundRefreshInFlight || now - lastForegroundRefreshStartedAt < retryMs) {
+    if (foregroundRefresh || now - lastForegroundRefreshStartedAt < retryMs) {
       return
     }
-    foregroundRefreshInFlight = true
     lastForegroundRefreshStartedAt = now
     const identityOlderThan = (ms: number): boolean =>
       cachedAgentForeground !== null && Date.now() - cachedAgentForeground.refreshedAt > ms
@@ -145,19 +136,19 @@ export function createPtyForegroundProcessTracker(args: {
       }
     }
     const anchor = cachedAgentForeground
-    void resolveForeground(proc.pid, fallbackProcess, {
+    foregroundRefresh = resolveForeground(proc.pid, fallbackProcess, {
       contextPaths,
       ...(anchor?.pid != null
         ? { anchorProcessId: anchor.pid, anchorProcessName: anchor.processName }
         : {})
     })
-      .then<string | void>(({ processName, processId, available, anchorPidForeign }) => {
+      .then<string | void>(({ processName, available, anchorPidForeign, ...found }) => {
         if (args.isDead() || !available) {
           return
         }
         if (!shouldCachePtyForeground(processName, staticName)) {
           if (process.platform === 'win32' && fallbackIsShell && cachedAgentForeground !== null) {
-            // Job, not console: needs no console attachment, so no fork (#10857).
+            // Job membership avoids attaching to the console or forking a helper.
             const verdict = judgeCachedAgentJobEvidence({
               jobProcessIds: readWindowsPtyJobProcessIds(proc),
               jobSupported: isWindowsPtyJobReadable(),
@@ -165,50 +156,47 @@ export function createPtyForegroundProcessTracker(args: {
               anchorProcessId: cachedAgentForeground.pid,
               identityAgeMs: Date.now() - cachedAgentForeground.refreshedAt
             })
-            // Unverifiable is never exit proof (ssh-execution-boundary.md): hold.
+            // Unavailable evidence cannot prove exit.
             if (verdict === 'unavailable') {
               return
             }
             if (verdict === 'unsupported') {
-              // No job to consult on this build, and the scan that got here was
-              // available and found no agent. Trust it, as every other platform
-              // does, rather than holding a dead name forever (#16059).
+              // Without job support, use the available scan that found no agent.
               retireStaleForegroundIdentity()
               return
             }
             if (verdict === 'confirmed' || verdict === 'recheck') {
               if (anchorPidForeign === true) {
-                // The scan proved the pid recycled to a non-agent: retire now.
                 retireStaleForegroundIdentity()
                 return
               }
-              // The anchor pid is still in the job: the scan lost the row, not
-              // the agent. Restamp so a live agent never ages out (#9258).
+              // Keep an anchored identity while its PID remains in the job and no foreign identity was found.
               cachedAgentForeground = { ...cachedAgentForeground, refreshedAt: Date.now() }
               return
             }
             if (verdict === 'exited' || verdict === 'anchor-exited') {
-              // Safe mid-restart: an available scan already found no agent.
+              // Retire only after an available scan found no agent.
               retireStaleForegroundIdentity()
               return
             }
-            // Unanchored superset evidence cannot tell a working agent from a
-            // leftover; the age bound settles it.
+            // Unanchored job members may be detached leftovers; bound the cached identity’s age.
             retireStaleForegroundIdentity({ onlyWhenAged: true })
             return
           }
           retireStaleForegroundIdentity()
           return
         }
-        cachedAgentForeground = { processName, pid: processId ?? null, refreshedAt: Date.now() }
-        startupAgentForeground = null
+        // A confirmation that landed during this lookup is newer; its pid is the one to watch.
+        if (cachedAgentForeground === anchor) {
+          cacheAgentForeground(processName, found, now)
+        }
         return processName
       })
       .catch(() => {
         // Best-effort only: foreground enrichment must never affect PTY health.
       })
       .finally(() => {
-        foregroundRefreshInFlight = false
+        foregroundRefresh = null
       })
   }
 
@@ -222,6 +210,11 @@ export function createPtyForegroundProcessTracker(args: {
       cachedAgentForeground = null
       startupAgentForeground = null
     },
+    cachedAgent: () =>
+      cachedAgentForeground?.pid != null
+        ? { ...cachedAgentForeground, pid: cachedAgentForeground.pid }
+        : null,
+    pendingForegroundRefresh: () => foregroundRefresh,
     getForegroundProcess: (options) => {
       if (args.isDead()) {
         return null
@@ -272,45 +265,45 @@ export function createPtyForegroundProcessTracker(args: {
         return null
       }
     },
-    confirmForegroundProcess: async () => {
+    confirmForegroundProcess: async (context) => {
       if (args.isDead() || !proc.pid) {
         return null
       }
+      const decision = process.platform === 'win32' && context?.decision === true
+      const anchor = cachedAgentForeground
       try {
         const fallbackProcess = getFallbackProcess()
-        const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
-        if (
-          !fallbackProcess ||
-          (fallbackRecognition !== null &&
-            process.platform !== 'win32' &&
-            !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
-          (process.platform !== 'win32' && !shouldInspectFallback(fallbackProcess))
-        ) {
+        if (!foreground.shouldConfirmPtyForeground(fallbackProcess, decision)) {
           return fallbackProcess
         }
-        const resolution = await resolveForeground(proc.pid, fallbackProcess, {
+        const lookupStartedAt = Date.now()
+        const { resolution, processName: name } = await foreground.confirmFreshPtyForeground({
+          process: proc,
+          fallbackProcess,
           contextPaths,
-          fresh: true,
-          ...(process.platform === 'win32'
-            ? {
-                forceProcessScan: true,
-                readWindowsConsoleAttachedProcessIds: () =>
-                  readWindowsConsoleAttachedProcessIds(proc.pid)
-              }
-            : {})
+          decision,
+          anchor,
+          anchorAt: anchor?.refreshedAt
         })
-        if (args.isDead() || !resolution.available) {
+        if (args.isDead()) {
           return null
         }
-        const processName =
-          recognizeAgentProcess(resolution.processName)?.processName ?? resolution.processName
-        if (shouldCachePtyForeground(processName, staticName)) {
-          cacheAgentForeground(processName, resolution.processId ?? null)
-          return processName
+        if (!resolution.available && !decision) {
+          return null
         }
-        cachedAgentForeground = null
-        startupAgentForeground = null
-        return resolution.processName
+        const recognized = recognizeAgentProcess(resolution.processName)
+        const processName = decision ? name : (recognized?.processName ?? resolution.processName)
+        const cacheName = decision ? (recognized?.processName ?? null) : processName
+        if (
+          resolution.available &&
+          shouldCachePtyForeground(cacheName, decision ? false : staticName)
+        ) {
+          cacheAgentForeground(cacheName, resolution, lookupStartedAt)
+        } else if (!decision || processName !== anchor?.processName) {
+          cachedAgentForeground = null
+          startupAgentForeground = null
+        }
+        return processName
       } catch {
         return null
       }

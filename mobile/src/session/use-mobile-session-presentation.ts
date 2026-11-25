@@ -1,13 +1,37 @@
-import { classifyConnection, verdictDisplayLabel } from '../transport/connection-health'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
-import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
-import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
-import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
-import { hostOs } from '../platform/host-os'
+import { useMemo } from 'react'
+import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
+import { useRelayRecoveryStatus } from '../transport/connection/client-context-connection-metrics'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
+import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
+import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
+import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
+import {
+  isSessionErrorVerdict,
+  sessionConnectionVerdict,
+  sessionRetryAvailable,
+  sessionStatusDot,
+  sessionStatusLine
+} from './session-connection-verdict'
+
+// The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
+const TOAST_RISE_PX = 8
+
+function sessionPlaceLabel(name: string, branch: string | null, repo: string | null) {
+  if (branch && branch !== name) {
+    return branch
+  }
+  return repo && repo !== name ? repo : branch
+}
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
+  const t = useMobileTranslation()
   const {
     created,
+    hostId,
+    hostName,
     worktreeId,
     router,
     insets,
@@ -20,21 +44,19 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     creating,
     creatingBrowser,
     creatingMarkdown,
-    keyboardHeight,
-    terminalKeyboardMetrics,
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
-    terminalFrameRef,
     handleCreateTerminal,
     visibleTabs,
     forceReconnectHost
   } = scope
-  const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
+  // A strip drawn from cache has no active tab until the host's snapshot lands, so the body shows a state, not an empty frame.
+  const nothingActive = scope.activeSessionTab === null && !activeHandle
+  const showLoadingState = connState === 'connected' && !terminalsLoaded && nothingActive
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
-  // Why: a newly created workspace can hydrate with zero tabs before its first terminal exists.
   useInitialSessionTerminalAutoCreate({
     client,
     newlyCreatedWorkspace: created === '1',
@@ -49,56 +71,74 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     createTerminal: () => void handleCreateTerminal()
   })
 
-  // Why: reconnect trickles to 90s at its give-up cap; surface tap-to-retry so recovery needn't wait it out (issue #5049).
-  const connectionVerdict = classifyConnection({
+  // Offer explicit retry after reconnect backoff reaches 90s so recovery need not wait for the next attempt.
+  const relayRecovery = useRelayRecoveryStatus(hostId)
+  const connectionVerdict = sessionConnectionVerdict({
     state: connState,
     reconnectAttempts,
     lastConnectedAt,
-    endpoint: hostEndpoint
+    endpoint: hostEndpoint,
+    hostName,
+    ...relayRecovery
   })
-  const connectionEscalated =
-    connectionVerdict.kind === 'warning' || connectionVerdict.kind === 'unreachable'
-  // Not on the page: the shell owns the connection and the tap could only do nothing.
-  const showConnectionRetry = connectionEscalated && forceReconnectHost !== null
+  // Errors, refused pairings included, keep the title block visible beside side-rail tabs.
+  const connectionEscalated = isSessionErrorVerdict(connectionVerdict)
+  const showConnectionRetry = sessionRetryAvailable(connectionVerdict, forceReconnectHost !== null)
 
+  // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
+  const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
+  // A session with nothing to draw says it is offline instead of showing an empty frame.
+  const showOfflineState = presentedConnState !== 'connected' && nothingActive
+  const statusLine = sessionStatusLine({
+    verdict: connectionVerdict,
+    presentedConnState,
+    pendingPath: relayRecovery.pendingPath,
+    retryShown: showConnectionRetry
+  })
+  const statusDot = sessionStatusDot({ verdict: connectionVerdict, connState, presentedConnState })
   const terminalSummary =
-    connState === 'connected'
-      ? showLoadingState
-        ? 'Loading tabs'
-        : visibleTabs.length === 1
-          ? '1 tab'
-          : `${visibleTabs.length} tabs`
-      : showConnectionRetry
-        ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
-        : connectionEscalated
-          ? verdictDisplayLabel(connectionVerdict)
-          : MOBILE_SESSION_STATUS_LABELS[connState]
+    statusLine === null
+      ? showLoadingState && visibleTabs.length === 0
+        ? t('session.presentation.loadingTabs', 'Loading tabs')
+        : // The tab count lives in the tab bar, so the header names the branch, or the project when the branch repeats the title.
+          (sessionPlaceLabel(scope.worktreeName, scope.worktreeBranch, scope.worktreeRepo) ??
+          MOBILE_SESSION_STATUS_LABELS.connected)
+      : statusLine.withRetrySuffix
+        ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
+            status: statusLine.label
+          })
+        : statusLine.label
 
-  // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
-  const keyboardLift =
-    keyboardHeight > 0
-      ? hostOs() === 'ios'
-        ? Math.max(0, keyboardHeight - insets.bottom)
-        : keyboardHeight
-      : 0
-  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
-    keyboardLift,
-    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight: terminalFrameRef.current?.height ?? 0
-  })
-  const toastAnimatedStyle = {
-    opacity: toastOpacityRef.current,
-    transform: [{ translateY: -keyboardLift }]
-  }
+  const [sideRail, padAvailable] = [useShellSideRail(), useDirectionPadAvailable()]
+  const dockShown =
+    !scope.showNativeChat &&
+    !scope.activeMarkdownTab &&
+    !scope.activeFileTab &&
+    !scope.activeBrowserTab
+  const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
+  const reducedMotion = useReducedMotionEnabled()
+  const toastRise = useMemo<MobileAnimatedInterpolation | 0>(
+    () =>
+      reducedMotion === false
+        ? toastOpacityRef.current.interpolate({
+            inputRange: [0, 1],
+            outputRange: [TOAST_RISE_PX, 0]
+          })
+        : 0,
+    [reducedMotion, toastOpacityRef]
+  )
   return {
+    presentedConnState,
     showLoadingState,
     showEmptyState,
+    showOfflineState,
     connectionVerdict,
     showConnectionRetry,
+    connectionEscalated,
+    statusDot,
     terminalSummary,
-    keyboardLift,
-    activeTerminalKeyboardLift,
-    toastAnimatedStyle
+    dockBottomInset,
+    toastRise
   }
 }
 

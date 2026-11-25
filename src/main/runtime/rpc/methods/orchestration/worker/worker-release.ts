@@ -1,22 +1,34 @@
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { defineMethod } from '../../../core'
-import { releaseFederatedWorker } from '../federation/federated-worker-release'
+import { defineOrchestrationMethod } from '../access/orchestration-method-access'
+import {
+  releaseFederatedWorker,
+  retainFederatedWorker
+} from '../../../../orchestration/legacy-remote-home/federated-worker-release'
 import { ORCHESTRATION_WORKER_LIST_METHOD } from './worker-list-method'
-import { resolvePinnedFederatedServer } from './worker-observation'
-import { archiveSummary } from './worker-terminal-resource-presentation'
+import { resolvePinnedFederatedServer } from '../../../../orchestration/legacy-remote-home/pinned-federated-server'
+import {
+  archiveSummary,
+  exposeWorkerRetainReceipt
+} from './release/worker-terminal-resource-presentation'
 import {
   completeWorkerTerminalRelease,
   type WorkerReleaseReceipt
-} from './worker-release-completion'
+} from './release/worker-release-completion'
 import {
   WorkerDispatchParams,
   WorkerRetainParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
-import { OrchestrationWorkerTerminalUserInputParams } from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
+import { ORCHESTRATION_WORKER_KEEP_OPEN_METHODS } from './worker-keep-open'
+import { closeWorkerBoundTerminals } from './release/worker-bound-terminal-close'
+import {
+  readRetainedWorkerReleaseState,
+  settleProvenExitedWorkerTerminal
+} from './release/worker-release-proven-exit'
 
 export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRelease',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
     handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
@@ -29,9 +41,10 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
             'Remote worker-release requires a durable retry request.'
           )
         }
+        db.endFederatedHomeAutoRelease(params.dispatch)
         return releaseFederatedWorker({
           runtime,
-          server: resolvePinnedFederatedServer(runtime, federated),
+          server: await resolvePinnedFederatedServer(runtime, federated),
           federated,
           dispatchId: params.dispatch,
           requestId: orchestrationMutation.requestId
@@ -48,35 +61,52 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       }
       if (requested.disposition === 'retained') {
         const resource = requested.resource
-        const processIncarnation = resource?.process_incarnation
-        if (
-          processIncarnation &&
-          (await runtime.inspectTerminalProcessIncarnationLiveness(
-            processIncarnation,
-            resource.host_scope
-          )) === 'exited'
-        ) {
-          const reconciled = db.settleDeadWorkerTerminalRelease({
-            requestingDispatchId: params.dispatch,
-            resourceId: resource.id,
-            processIncarnation
-          })
-          if (reconciled.disposition === 'released') {
-            runtime.notifyMessageArrived(`dispatch:${params.dispatch}`, 'status')
-            return {
-              dispatchId: params.dispatch,
-              state: 'released',
-              processAction: 'none',
-              archive: archiveSummary(reconciled.resource)
-            }
+        if (!resource || resource.owner_dispatch_id !== params.dispatch) {
+          // Nothing of its own to prove: a former owner's lookup keeps its lineage summary as it always has.
+          return {
+            dispatchId: params.dispatch,
+            state: 'retained',
+            reason: requested.reason,
+            processAction: 'none',
+            archive: archiveSummary(resource)
+          }
+        }
+        const exited = await settleProvenExitedWorkerTerminal({
+          runtime,
+          db,
+          dispatchId: params.dispatch,
+          resource
+        })
+        if (exited) {
+          await closeWorkerBoundTerminals(runtime, db, exited.origin_dispatch_id)
+          return {
+            dispatchId: params.dispatch,
+            state: 'released',
+            processAction: 'none',
+            archive: archiveSummary(exited)
+          }
+        }
+        // The proof awaited; a keep-open, transfer or release since then decides what this receipt says.
+        const current = readRetainedWorkerReleaseState(
+          db,
+          params.dispatch,
+          resource,
+          requested.reason
+        )
+        if (current.disposition === 'already_released') {
+          return {
+            dispatchId: params.dispatch,
+            state: 'already_released',
+            processAction: 'none',
+            archive: archiveSummary(current.resource)
           }
         }
         return {
           dispatchId: params.dispatch,
           state: 'retained',
-          reason: requested.reason,
+          reason: current.reason,
           processAction: 'none',
-          archive: archiveSummary(resource)
+          archive: archiveSummary(current.resource)
         }
       }
       return completeWorkerTerminalRelease({
@@ -87,74 +117,41 @@ export const ORCHESTRATION_WORKER_RELEASE_METHODS = [
       })
     }
   }),
-  defineMethod({
+  defineOrchestrationMethod({
     name: 'orchestration.workerRetain',
+    access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerRetainParams,
-    handler: (params, { runtime }) => {
+    handler: async (params, { runtime, orchestrationMutation }): Promise<WorkerReleaseReceipt> => {
       const db = runtime.getOrchestrationDb()
-      const retained = db.retainWorkerTerminalResource(params.dispatch)
-      if (retained.disposition === 'already_released') {
-        return {
+      const federated = db.getFederatedDispatch(params.dispatch)
+      if (federated) {
+        if (!orchestrationMutation) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            'Remote worker-keep-open requires a durable retry request.'
+          )
+        }
+        db.endFederatedHomeAutoRelease(params.dispatch)
+        const forwarded = await retainFederatedWorker({
+          runtime,
+          server: await resolvePinnedFederatedServer(runtime, federated),
+          federated,
           dispatchId: params.dispatch,
-          state: 'already_released' as const,
-          processAction: 'none' as const,
-          archive: archiveSummary(retained.resource)
+          requestId: orchestrationMutation.requestId
+        })
+        if (forwarded) {
+          return forwarded
         }
       }
-      if (retained.disposition === 'no_owned_resource') {
-        return {
-          dispatchId: params.dispatch,
-          state: 'retained' as const,
-          reason: 'no_owned_resource' as const,
-          processAction: 'none' as const,
-          archive: null
-        }
-      }
-      if (retained.disposition === 'release_committed') {
-        const unknown = retained.resource.release_state === 'unknown'
-        return {
-          dispatchId: params.dispatch,
-          state: unknown ? ('release_unknown' as const) : ('release_pending' as const),
-          processAction: 'none' as const,
-          archive: archiveSummary(retained.resource),
-          ...(retained.resource.release_error
-            ? { lastError: retained.resource.release_error }
-            : {}),
-          recovery:
-            'Terminal release was already committed and could not be changed to retained; inspect worker-show before taking further action.'
-        }
-      }
-      return {
-        dispatchId: params.dispatch,
-        state: 'retained' as const,
-        reason: 'user_requested' as const,
-        processAction: 'none' as const,
-        archive: archiveSummary(retained.resource)
-      }
+      return exposeWorkerRetainReceipt(
+        params.dispatch,
+        db.getRemoteDispatchAttachment(params.dispatch)
+          ? db.retainRemoteAttachmentTerminalResource(params.dispatch)
+          : db.retainWorkerTerminalResource(params.dispatch)
+      )
     }
   }),
   ORCHESTRATION_WORKER_LIST_METHOD,
-  defineMethod({
-    name: 'orchestration.workerTerminalUserInput',
-    permission: 'workspace',
-    // `sessionId` addresses a worker that IS a structured agent session. Its pane key is a random
-    // identity credential that never leaves main, so the caller names the session and the owning
-    // runtime resolves it — a renderer echoing the pane key back would make it learnable.
-    params: OrchestrationWorkerTerminalUserInputParams,
-    // Real user keystrokes durably relinquish orchestration ownership on the owning runtime, so
-    // restarts, SSH drops, remote viewing, and renderer remounts cannot erase the takeover.
-    handler: (params, { runtime }) => {
-      // A structured worker reports by session id; it has no pane of its own to name.
-      const paneKey =
-        params.paneKey ??
-        (params.sessionId
-          ? runtime.getStructuredWorkerPaneKeyForSession(params.sessionId)
-          : runtime.getTerminalPaneKey(params.terminal!))
-      const changed = paneKey
-        ? runtime.getOrchestrationDb().markWorkerTerminalUserOwned(paneKey)
-        : 0
-      return { changed }
-    }
-  })
+  ...ORCHESTRATION_WORKER_KEEP_OPEN_METHODS
 ]

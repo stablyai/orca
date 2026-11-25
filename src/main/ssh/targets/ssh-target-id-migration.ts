@@ -1,24 +1,12 @@
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/ssh-pty-id'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { parseAppSshPtyId, toAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 
-/**
- * Carrier sweep for SSH target re-adoption (see ssh-target-readoption.ts).
- *
- * reassignSshTargetId re-points repos/worktree metas, but the removed target's
- * id is also embedded in other persisted state: app-scoped SSH pty ids
- * ("ssh:<targetId>@@pty-N") inside the workspace session, the startup
- * reconnect list, sleeping-agent resume records, and the sidebar host-scope
- * arrays. Any survivor resurfaces later as `SSH target "<old>" not found` at
- * connect/reattach time (STA-1468), so every carrier must migrate together.
- *
- * All helpers mutate in place (matching how the Store edits this.state) and
- * return whether anything changed so callers can gate scheduleSave.
- */
+/** Re-adoption must migrate every persisted id carrier together or reconnect/reattach resurrects dead target ids (STA-1468). Non-session carriers mutate in place and report changes for save scheduling. */
 
 function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string): string | null {
   const parsed = parseAppSshPtyId(ptyId)
@@ -28,76 +16,122 @@ function rewriteSshPtyId(ptyId: string, oldTargetId: string, newTargetId: string
   return toAppSshPtyId(newTargetId, parsed.relayPtyId)
 }
 
+/** The window keeps a rewritten relay only if it owned the old id; ownership of other keys is unchanged. */
+function migratedRelayOwnership(
+  session: WorkspaceSessionState,
+  rewritten: Record<string, string>
+): Pick<WorkspaceSessionState, 'desktopRelayOwnerByTabId'> {
+  const before = session.desktopRelayOwnerByTabId
+  if (!before) {
+    return {}
+  }
+  const owners = { ...before }
+  for (const [tabId, relayId] of Object.entries(rewritten)) {
+    const old = session.remoteSessionIdsByTabId?.[tabId]
+    if (old === relayId) {
+      continue
+    }
+    if (owners[tabId] === old) {
+      owners[tabId] = relayId
+    } else {
+      delete owners[tabId]
+    }
+  }
+  return { desktopRelayOwnerByTabId: Object.keys(owners).length > 0 ? owners : undefined }
+}
+
 function rewriteSshPtyIdRecordValues(
   record: Record<string, string> | undefined,
   oldTargetId: string,
   newTargetId: string
-): boolean {
-  if (!record) {
-    return false
-  }
-  let changed = false
-  for (const [key, ptyId] of Object.entries(record)) {
-    const next = rewriteSshPtyId(ptyId, oldTargetId, newTargetId)
-    if (next) {
-      record[key] = next
-      changed = true
+): Record<string, string> | null {
+  let next: Record<string, string> | null = null
+  for (const [key, ptyId] of Object.entries(record ?? {})) {
+    const rewritten = rewriteSshPtyId(ptyId, oldTargetId, newTargetId)
+    if (rewritten) {
+      next ??= { ...record }
+      next[key] = rewritten
     }
   }
-  return changed
+  return next
 }
 
-/** Re-point every old-target-id carrier inside one workspace session partition. */
+/** A new session with the target id rewritten, or null when nothing references the old id. */
 export function migrateWorkspaceSessionSshTargetId(
   session: WorkspaceSessionState,
   oldTargetId: string,
   newTargetId: string
-): boolean {
-  let changed = false
-  for (const tabs of Object.values(session.tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      if (!tab.ptyId) {
-        continue
-      }
-      const next = rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId)
-      if (next) {
-        tab.ptyId = next
-        changed = true
+): WorkspaceSessionState | null {
+  let next: WorkspaceSessionState | null = null
+  let rows: WorkspaceSessionState['tabsByWorktree'] | null = null
+  for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
+    let nextTabs: typeof tabs | null = null
+    for (const [index, tab] of tabs.entries()) {
+      const rewritten = tab.ptyId ? rewriteSshPtyId(tab.ptyId, oldTargetId, newTargetId) : null
+      if (rewritten) {
+        nextTabs ??= [...tabs]
+        nextTabs[index] = { ...tab, ptyId: rewritten }
       }
     }
-  }
-  for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
-    if (rewriteSshPtyIdRecordValues(layout.ptyIdsByLeafId, oldTargetId, newTargetId)) {
-      changed = true
+    if (nextTabs) {
+      rows ??= { ...session.tabsByWorktree }
+      rows[worktreeId] = nextTabs
     }
   }
-  if (rewriteSshPtyIdRecordValues(session.remoteSessionIdsByTabId, oldTargetId, newTargetId)) {
-    changed = true
+  if (rows) {
+    next = { ...(next ?? session), tabsByWorktree: rows }
+  }
+  let layouts: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+  for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+    const ptyIdsByLeafId = rewriteSshPtyIdRecordValues(
+      layout.ptyIdsByLeafId,
+      oldTargetId,
+      newTargetId
+    )
+    if (ptyIdsByLeafId) {
+      layouts ??= { ...session.terminalLayoutsByTabId }
+      layouts[tabId] = { ...layout, ptyIdsByLeafId }
+    }
+  }
+  if (layouts) {
+    next = { ...(next ?? session), terminalLayoutsByTabId: layouts }
+  }
+  const remoteSessionIdsByTabId = rewriteSshPtyIdRecordValues(
+    session.remoteSessionIdsByTabId,
+    oldTargetId,
+    newTargetId
+  )
+  if (remoteSessionIdsByTabId) {
+    next = {
+      ...(next ?? session),
+      remoteSessionIdsByTabId,
+      ...migratedRelayOwnership(session, remoteSessionIdsByTabId)
+    }
   }
   if (session.activeConnectionIdsAtShutdown?.includes(oldTargetId)) {
-    session.activeConnectionIdsAtShutdown = [
-      ...new Set(
-        session.activeConnectionIdsAtShutdown.map((id) => (id === oldTargetId ? newTargetId : id))
-      )
-    ]
-    changed = true
-  }
-  for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    if (record.connectionId === oldTargetId) {
-      record.connectionId = newTargetId
-      changed = true
+    next = {
+      ...(next ?? session),
+      activeConnectionIdsAtShutdown: [
+        ...new Set(
+          session.activeConnectionIdsAtShutdown.map((id) => (id === oldTargetId ? newTargetId : id))
+        )
+      ]
     }
   }
-  return changed
+  let sleeping: WorkspaceSessionState['sleepingAgentSessionsByPaneKey'] | null = null
+  for (const [paneKey, record] of Object.entries(session.sleepingAgentSessionsByPaneKey ?? {})) {
+    if (record.connectionId === oldTargetId) {
+      sleeping ??= { ...session.sleepingAgentSessionsByPaneKey }
+      sleeping[paneKey] = { ...record, connectionId: newTargetId }
+    }
+  }
+  if (sleeping) {
+    next = { ...(next ?? session), sleepingAgentSessionsByPaneKey: sleeping }
+  }
+  return next
 }
 
-/**
- * Re-point folder-workspace scopes pinned to the old SSH target.
- *
- * A folder workspace carries its own connection/host stamp, and its group can
- * carry the scope connection — neither is a repo row, so the repo sweep misses
- * both and the workspace (plus any automation pinned to it) stays on the dead id.
- */
+/** Folder workspace and group host stamps are outside the repo sweep; leaving either stale strands workspaces and pinned automations. */
 export function migrateFolderWorkspaceHostSshTargetId(
   scope: { folderWorkspaces?: FolderWorkspace[]; projectGroups?: ProjectGroup[] },
   oldTargetId: string,
@@ -119,7 +153,6 @@ export function migrateFolderWorkspaceHostSshTargetId(
   return changed
 }
 
-/** Re-point the sidebar host-scope arrays pinned to the old SSH host id. */
 export function migrateUiHostScopeSshTargetId(
   ui: PersistedUIState,
   oldTargetId: string,

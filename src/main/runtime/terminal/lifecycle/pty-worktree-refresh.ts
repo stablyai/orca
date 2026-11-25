@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithRecordPtyWorktree } from '../identity/pty-worktree-record'
-import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
+import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 
 export abstract class OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController extends OrcaRuntimeWithRecordPtyWorktree {
   protected abstract refreshFloatingWorkspacePtyLiveness(): Set<string> | null

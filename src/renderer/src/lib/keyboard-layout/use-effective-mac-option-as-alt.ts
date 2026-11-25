@@ -1,13 +1,4 @@
-/**
- * React hook: resolve the user-facing `terminalMacOptionAsAlt` setting
- * (which may be `'auto'`) into the four-valued `EffectiveMacOptionAsAlt`
- * that xterm.js and terminal-shortcut-policy consume.
- *
- * The probe's `current` is held outside React state, so we subscribe inside
- * a useSyncExternalStore to keep every consumer in sync when the OS layout
- * switches mid-session (e.g. user flips Input Source, Orca regains focus,
- * focus-in listener re-probes).
- */
+/** Resolve auto to an explicit terminal mode; subscribe to the external probe so all consumers follow live OS layout switches. */
 import { useSyncExternalStore } from 'react'
 import {
   effectiveMacOptionAsAlt,

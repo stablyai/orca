@@ -15,7 +15,8 @@ export function buildWorktreePurgeSurfacePatch(
   s: AppState,
   omitters: WorktreePurgeOmitters,
   doomedTabIds: ReadonlySet<string>,
-  sleeping: WorktreePurgeSleepingMaps
+  sleeping: WorktreePurgeSleepingMaps,
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const {
     omitByTabId,
@@ -25,7 +26,16 @@ export function buildWorktreePurgeSurfacePatch(
     omitByPageId,
     omitByFileId
   } = omitters
-  const nextAgentStatusByPaneKey = omitByPaneKeyTabPrefix(s.agentStatusByPaneKey)
+  const removedStatusKeys = new Set<string>()
+  for (const key of s.agentStatusByPaneKey.keys()) {
+    if (doomedTabIds.has(key.slice(0, key.indexOf(':')))) {
+      removedStatusKeys.add(key)
+      changedPaneKeys?.add(key)
+    }
+  }
+  const nextAgentStatusByPaneKey = s.agentStatusByPaneKey.replace(
+    Array.from(removedStatusKeys, (key) => [key, null] as const)
+  )
   return {
     localOnlyScrollbackByTabId: omitByTabId(s.localOnlyScrollbackByTabId),
     runtimePaneTitlesByTabId: omitByTabId(s.runtimePaneTitlesByTabId),
@@ -35,9 +45,9 @@ export function buildWorktreePurgeSurfacePatch(
     // Why: bulk/hydration purge runs no terminal teardown, so it must drop the per-tab pane-expand flags itself.
     expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
     canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),
-    // Why: these per-tab/per-pty terminal+agent maps evict on the single removeWorktree teardown path; the bulk reconcile / remove-project / hydration-stale paths run no teardown, so without these each strands an entry per tab/pane of externally-removed worktrees.
+    // Bulk/reconcile/project/hydration purges skip single-removal teardown and must evict terminal caches here.
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
-    // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
+    // Reconnect maps prove orphan-sweep liveness; clear them or recreated IDs inherit phantom sessions.
     pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
     unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
     deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
@@ -48,9 +58,9 @@ export function buildWorktreePurgeSurfacePatch(
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
     pendingPaneAccountRestarts: omitByPtyId(s.pendingPaneAccountRestarts),
-    // Why: these agent-status/unread/input maps clear only on the single removeWorktree teardown path; the bulk reconcile / remove-project / hydration-stale paths run no teardown, so without this they orphan an entry per agent pane (plus a phantom unread badge).
-    // retainedAgentsByPaneKey and runtimeAgentOrchestrationByPaneKey are omitted here — both self-heal (pruneRetainedAgents on worktreesByRepo change; runtime map replaced wholesale each sync).
+    // Bulk purges skip pane teardown, so evict its agent identity and activity state here.
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
+    agentConversationsByPaneKey: omitByPaneKeyTabPrefix(s.agentConversationsByPaneKey),
     ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey
       ? { agentStatusEpoch: s.agentStatusEpoch + 1 }
       : {}),
@@ -62,12 +72,10 @@ export function buildWorktreePurgeSurfacePatch(
     sleepingAgentSessionsByPaneKey: sleeping.sleepingAgentSessionsByPaneKey,
     ...removeTabsAttention(s, doomedTabIds),
     lastTerminalInputAtByPaneKey: omitByPaneKeyTabPrefix(s.lastTerminalInputAtByPaneKey),
-    // Browser state
     browserPagesByWorkspace: omitByBrowserWorkspaceId(s.browserPagesByWorkspace),
-    // Why: keyed by page/workspace id, only cleaned by closeBrowserTab on the single-removal path; the bulk reconcile missed them, orphaning an entry per page of externally-removed worktrees.
     browserAnnotationsByPageId: omitByPageId(s.browserAnnotationsByPageId),
     browserAnnotationMarkerIdsByPageId: omitByPageId(s.browserAnnotationMarkerIdsByPageId),
-    remoteBrowserPageHandlesByPageId: omitByPageId(s.remoteBrowserPageHandlesByPageId),
+    remoteBrowserPageHandlesByPageId: omitters.omitBrowserPageHandles(),
     pendingAddressBarFocusByPageId: omitByPageId(s.pendingAddressBarFocusByPageId),
     // createBrowserTab writes both the workspace id and the page id into this map.
     pendingAddressBarFocusByTabId: omitByPageId(
@@ -76,12 +84,10 @@ export function buildWorktreePurgeSurfacePatch(
     recentlyClosedBrowserPagesByWorkspace: omitByBrowserWorkspaceId(
       s.recentlyClosedBrowserPagesByWorkspace
     ),
-    // Per-file editor state for removed files
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
     markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),
     markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
-    // Why: keyed by fileId; the bulk reconcile path previously kept these, leaking a cursor-line / view-mode entry per removed file.
     editorCursorLine: omitByFileId(s.editorCursorLine),
     editorViewMode: omitByFileId(s.editorViewMode)
   }

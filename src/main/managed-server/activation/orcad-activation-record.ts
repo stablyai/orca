@@ -1,48 +1,32 @@
-/**
- * Which installed orcad is the live one, and which one a rollback goes back to.
- *
- * A versioned install directory decides where bytes land; it does not decide which version
- * runs. Without this record, "roll back" means "deploy the old version again" — which needs
- * the client that has those bytes, on a host that may be the only thing still working. The
- * record is the host-side half: it names an active version, a rollback target, and the
- * pre-activation state snapshot that makes going back to that target sound.
- *
- * It lives beside the version dirs (`~/.orca-remote/orcad-active.json`), not inside one,
- * because it has to outlive whichever version GC removes.
- */
+// Keep activation identity, rollback target and state snapshot outside version directories so GC cannot erase recovery metadata.
 import { remoteInstallDirName, ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
 
 export const ORCAD_ACTIVATION_FILENAME = 'orcad-active.json'
 export const ORCAD_ACTIVATION_SCHEMA_VERSION = 1
 
-/** Where a pre-activation copy of the shared data root lives, relative to `.orca-remote/`. */
 export const ORCAD_STATE_SNAPSHOT_DIR = 'orcad-state-snapshots'
 
 export type OrcadStateSnapshot = {
-  /** Directory name under `ORCAD_STATE_SNAPSHOT_DIR`. */
   dirName: string
-  /** The version whose activation this snapshot was taken FOR — i.e. taken before it ran. */
+  /** Activation this snapshot precedes. */
   takenBeforeVersion: string
-  /** The version that produced the state, i.e. the rollback target it is readable by. */
+  /** Build that produced this state and can read it during rollback. */
   readableByVersion: string | null
   takenAt: string
 }
 
 export type OrcadActivationRecord = {
   schemaVersion: typeof ORCAD_ACTIVATION_SCHEMA_VERSION
-  /** Full content-hashed version, e.g. `0.1.0+9f2a1c`. Null before the first activation. */
+  /** Content-hashed install version; null before activation or after decommission. */
   active: string | null
-  /** The version `active` replaced. The rollback target, and pinned against GC. */
+  /** Rollback target, pinned against GC. */
   previous: string | null
   activatedAt: string | null
   snapshot: OrcadStateSnapshot | null
-  /**
-   * The Orca app versions that activated `active` and `previous`, so a client can tell a host
-   * deployed by a newer Orca. Optional: builds without them write records that omit both.
-   */
+  /** Optional app provenance; older builds omit it, so mixed-version readers must tolerate absence. */
   activeAppVersion?: string
   previousAppVersion?: string
-  /** The build an explicit rollback left; updating on connect never reactivates it. */
+  /** Explicit rollback suppresses reconnect auto-reactivation of this build. */
   rolledBackFrom?: string
 }
 
@@ -56,13 +40,7 @@ export function emptyOrcadActivationRecord(): OrcadActivationRecord {
   }
 }
 
-/**
- * Parse the record read off the host.
- *
- * Why a null return and not a throw on a newer schema: a client older than the host must not
- * treat "I cannot read this" as "nothing is activated" — that would deploy over a live
- * install. Callers distinguish the two through `OrcadActivationReadResult`.
- */
+/** Distinguish absent from unreadable so older clients cannot deploy over records they cannot interpret. */
 export type OrcadActivationReadResult =
   | { state: 'absent' }
   | { state: 'ok'; record: OrcadActivationRecord }
@@ -131,10 +109,7 @@ function parseSnapshot(value: unknown): OrcadStateSnapshot | null {
   }
 }
 
-/**
- * The fields that commit an activation. Why not the advisory ones: an older client drops them
- * when it journals a record, and its journal must still match the record on the host.
- */
+/** Omit advisory fields dropped by older peers so their journals still match the committed core record. */
 export function coreOrcadActivationRecord(record: OrcadActivationRecord): OrcadActivationRecord {
   const {
     activeAppVersion: _app,
@@ -149,7 +124,6 @@ export function serializeOrcadActivationRecord(record: OrcadActivationRecord): s
   return `${JSON.stringify(record, null, 2)}\n`
 }
 
-/** The record that results from activating `version`, keeping the outgoing one as the target. */
 export function withActivatedVersion(
   record: OrcadActivationRecord,
   version: string,
@@ -158,7 +132,7 @@ export function withActivatedVersion(
   appVersion?: string
 ): OrcadActivationRecord {
   const same = record.active === version
-  // A stopped record keeps activeAppVersion with nothing active; it names no `previous` here.
+  // A decommissioned record can retain app provenance without naming an active predecessor.
   const previousAppVersion = same
     ? record.previousAppVersion
     : record.active
@@ -167,9 +141,7 @@ export function withActivatedVersion(
   return {
     schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
     active: version,
-    // Why keep the OLD previous when re-activating the same version: a repeated deploy of
-    // an already-active build is not a version change, so it must not erase the rollback
-    // target by naming the active version as its own predecessor.
+    // Re-activating identical bytes must preserve the existing rollback target.
     previous: same ? record.previous : record.active,
     activatedAt: now.toISOString(),
     snapshot: same ? record.snapshot : snapshot,
@@ -178,7 +150,6 @@ export function withActivatedVersion(
   }
 }
 
-/** The record that results from rolling `active` back to `previous`. */
 export function withRolledBackVersion(
   record: OrcadActivationRecord,
   now: Date
@@ -186,54 +157,40 @@ export function withRolledBackVersion(
   return {
     schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
     active: record.previous,
-    // Why null and not the version we just left: it is the build we are rolling back FROM,
-    // so offering it as the next rollback target would walk straight back into the failure.
+    // Rolling back must not offer the failed build as the next rollback target.
     previous: null,
     activatedAt: now.toISOString(),
-    // The snapshot was taken before `active` ran; once restored it has been consumed.
+    // Restoring consumes the snapshot taken before the outgoing build ran.
     snapshot: null,
     ...(record.previousAppVersion ? { activeAppVersion: record.previousAppVersion } : {}),
     ...(record.active ? { rolledBackFrom: record.active } : {})
   }
 }
 
-/** The record after decommissioning `active`: nothing serves; the stopped build stays pinned. */
 export function withDeactivatedVersion(record: OrcadActivationRecord): OrcadActivationRecord {
   return {
     schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
     active: null,
-    // Kept so GC leaves the slot whose daemon may still own terminals, and a redeploy can find it.
+    // Pin the stopped build for redeploy and any daemon still using its entry.
     previous: record.active,
     activatedAt: null,
-    // No version is active, so there is nothing a pre-activation snapshot could roll back to.
     snapshot: null
   }
 }
 
-/**
- * The deactivated record as committed to the host. Never journaled: released peers require a stop
- * journal's `recordAfter` to equal their core-only `withDeactivatedVersion`, byte for byte.
- */
+/** Commit-only provenance; never journal it because released peers compare core-only stop records byte for byte. */
 export function withDeactivatedVersionCommitted(
   record: OrcadActivationRecord
 ): OrcadActivationRecord {
   return {
     ...withDeactivatedVersion(record),
-    // Why kept with nothing active: the stopped build may have migrated the host's state, and
-    // released planners already skip a host whose activeAppVersion is newer than theirs.
+    // Newer state may survive decommission; preserve provenance so older planners still refuse it.
     ...(record.activeAppVersion ? { activeAppVersion: record.activeAppVersion } : {}),
     ...(record.rolledBackFrom ? { rolledBackFrom: record.rolledBackFrom } : {})
   }
 }
 
-/**
- * Version dirs GC must not remove, as directory names.
- *
- * `previous` is here because a rollback target that GC deleted is not a rollback target.
- * `daemonEntryVersion` is here because an update preserves a live daemon forked from the
- * OUTGOING bundle (see orcad-update-plan.ts) — deleting the tree under a running process is
- * how a later respawn finds no entry point.
- */
+/** Pin rollback bytes and any outgoing bundle still serving a live daemon. */
 export function orcadGcPinnedDirNames(
   record: OrcadActivationRecord,
   daemonEntryVersion?: string | null
@@ -241,7 +198,6 @@ export function orcadGcPinnedDirNames(
   return orcadInstallDirNames([record.active, record.previous, daemonEntryVersion])
 }
 
-/** Distinct install dir names for the non-empty versions, in first-seen order. */
 export function orcadInstallDirNames(versions: readonly (string | null | undefined)[]): string[] {
   const named = versions.filter((v): v is string => typeof v === 'string' && v.length > 0)
   return [...new Set(named)].map((version) => remoteInstallDirName(ORCAD_INSTALL_MODEL, version))

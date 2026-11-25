@@ -3,8 +3,8 @@ import { LoaderCircle, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import type { GitHubPRReviewerRow } from '@/components/github-pr-reviewer-display'
-import { translate } from '@/i18n/i18n'
+import type { GitHubPRReviewerRow } from '../../../../../shared/github/pull-requests/pr-reviewer-display'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function PRReviewersRequestedList({
   loading,
@@ -23,11 +23,12 @@ export function PRReviewersRequestedList({
   canRequestReview: boolean
   onRemoveReviewers: (reviewersToRemove: string[]) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   if (loading && !hasReviewerMetadata) {
     return (
       <div className="flex items-center gap-2 py-1 text-[12px] text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        {translate('auto.components.GitHubItemDialog.6a45771d47', 'Loading reviewers')}
+        {t('auto.components.GitHubItemDialog.6a45771d47', 'Loading reviewers')}
       </div>
     )
   }
@@ -59,7 +60,7 @@ export function PRReviewersRequestedList({
                       size="icon-xs"
                       className="size-6 shrink-0 text-muted-foreground hover:text-foreground"
                       disabled={submitting || !canRequestReview}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.GitHubItemDialog.8b15a5e91c',
                         'Remove reviewer {{value0}}',
                         { value0: reviewer.login }
@@ -72,7 +73,7 @@ export function PRReviewersRequestedList({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
-                    {translate('auto.components.GitHubItemDialog.5c1c973855', 'Remove reviewer')}
+                    {t('auto.components.GitHubItemDialog.5c1c973855', 'Remove reviewer')}
                   </TooltipContent>
                 </Tooltip>
               ) : null}
@@ -84,7 +85,7 @@ export function PRReviewersRequestedList({
   }
   return (
     <div className="py-1 text-[12px] text-muted-foreground">
-      {translate('auto.components.GitHubItemDialog.36f9ac4a47', 'No reviewers requested.')}
+      {t('auto.components.GitHubItemDialog.36f9ac4a47', 'No reviewers requested.')}
     </div>
   )
 }

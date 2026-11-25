@@ -1,0 +1,135 @@
+import { Fragment, useCallback, type ReactNode } from 'react'
+import { DetailCardFocusBoundary } from '../components/detail-cards/detail-card-host'
+import {
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type HostInstance,
+  type StyleProp,
+  type TextStyle
+} from 'react-native'
+import type { SessionTitleCard } from './tabs/use-session-title-card'
+import { StatusDot } from '../components/feedback/StatusDot'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { ConnectionVerdict } from '../transport/connection/connection-health'
+import { styles } from './mobile-session-styles'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { pressedStyle } from '../theme/mobile-theme'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
+
+/** The session's title and status line. A tap opens a card with the full name, where it lives
+ *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */
+export function MobileSessionTitleBlock({
+  title,
+  leading,
+  connState,
+  verdict,
+  details,
+  meta,
+  centered = false,
+  showConnectionRetry,
+  onRetry
+}: {
+  title: string
+  /** Before the title, as a bot's avatar is. */
+  leading?: ReactNode
+  connState: ConnectionState
+  /** Colours the dot by the verdict's severity; omitted while a short drop is calmed. */
+  verdict?: ConnectionVerdict
+  details: SessionTitleCard
+  meta: string
+  /** Sits in NavBar's centre slot rather than beside the tabs. */
+  centered?: boolean
+  showConnectionRetry: boolean
+  onRetry: () => void
+}): React.JSX.Element {
+  const t = useMobileTranslation()
+  const titleText = (extra?: StyleProp<TextStyle>) => (
+    <Text
+      ref={details.titleRef}
+      onLayout={details.onAnchorLayout}
+      onPress={Platform.OS === 'web' ? details.toggle : undefined}
+      style={[styles.sessionTitle, centered && centeredStyles.title, extra]}
+      numberOfLines={1}
+    >
+      {title}
+    </Text>
+  )
+  // Why: opening the card must keep a focused field's keyboard. 'always' because the whole block
+  // is one button; 'handled' would let its own text through.
+  const titleKeepsKeyboard = useKeyboardPersistingTaps('always')
+  const { openerRef } = details
+  const attachOpener = useCallback(
+    (view: HostInstance | null) => {
+      openerRef.current = view
+      titleKeepsKeyboard(view)
+    },
+    [openerRef, titleKeepsKeyboard]
+  )
+  return (
+    <>
+      <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.active} />
+      <Fragment key="title">
+        <Pressable
+          style={({ pressed }) => [
+            centered
+              ? centeredStyles.block
+              : [
+                  styles.sessionTitleBlock,
+                  details.besideTabs && styles.sessionTitleBlockBesideTabs
+                ],
+            pressed && pressedStyle
+          ]}
+          ref={attachOpener}
+          onLayout={details.onAnchorLayout}
+          onPress={details.toggle}
+          aria-expanded={details.requestedOpen}
+          accessibilityRole="button"
+          accessibilityHint={t(
+            'session.header.workspaceDetailsHint',
+            'Shows the full workspace name and where it is'
+          )}
+        >
+          {leading ? (
+            <View style={styles.sessionBotTitleRow}>
+              {leading}
+              {titleText(styles.sessionBotTitle)}
+            </View>
+          ) : (
+            titleText()
+          )}
+          <Pressable
+            style={({ pressed }) => [styles.sessionMetaRow, pressed && pressedStyle]}
+            disabled={!showConnectionRetry}
+            onPress={onRetry}
+            accessibilityRole={showConnectionRetry ? 'button' : undefined}
+            accessibilityLabel={
+              showConnectionRetry
+                ? t('session.header.reconnectToDesktop', 'Reconnect to desktop')
+                : undefined
+            }
+          >
+            <StatusDot state={connState} verdict={verdict} />
+            <Text style={styles.sessionMetaText} numberOfLines={1}>
+              {meta}
+            </Text>
+          </Pressable>
+        </Pressable>
+      </Fragment>
+      <DetailCardFocusBoundary refs={details.boundaryRefs} index={1} active={details.active} />
+    </>
+  )
+}
+
+const centeredStyles = StyleSheet.create({
+  block: {
+    maxWidth: '100%',
+    alignItems: 'center'
+  },
+  // NavBar's title size, so the session bar reads like every other screen's.
+  title: {
+    fontSize: 16
+  }
+})

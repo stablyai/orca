@@ -1,0 +1,84 @@
+diff --git a/web/pdf_viewer.mjs b/web/pdf_viewer.mjs
+--- a/web/pdf_viewer.mjs
++++ b/web/pdf_viewer.mjs
+@@ -5192,11 +5192,11 @@
+     if (visibleArea.minX < minDetailX || visibleArea.minY < minDetailY || visibleArea.maxX > maxDetailX || visibleArea.maxY > maxDetailY) {
+       return true;
+     }
++    const { scale } = this.pageView.viewport;
+     const {
+-      width: maxWidth,
+-      height: maxHeight,
+-      scale
+-    } = this.pageView.viewport;
++      clientWidth: maxWidth,
++      clientHeight: maxHeight
++    } = this.pageView._ensureCanvasWrapper();
+     if (this.#detailArea.scale !== scale) {
+       return true;
+     }
+@@ -5237,12 +5237,15 @@
+     if (overflowScale < 0) {
+       overflowScale = 0;
+     }
++    const canvasWrapper = this.pageView._ensureCanvasWrapper();
++    const { pixelRatio } = OutputScale;
+     const overflowWidth = visibleWidth * overflowScale;
+     const overflowHeight = visibleHeight * overflowScale;
+-    const minX = Math.max(0, visibleArea.minX - overflowWidth);
+-    const maxX = Math.min(viewport.width, visibleArea.maxX + overflowWidth);
+-    const minY = Math.max(0, visibleArea.minY - overflowHeight);
+-    const maxY = Math.min(viewport.height, visibleArea.maxY + overflowHeight);
++    // Visible bounds and tile coverage share the rounded page's device pixels.
++    const minX = Math.floor(Math.max(0, visibleArea.minX - overflowWidth) * pixelRatio) / pixelRatio;
++    const maxX = Math.ceil(Math.min(canvasWrapper.clientWidth, visibleArea.maxX + overflowWidth) * pixelRatio) / pixelRatio;
++    const minY = Math.floor(Math.max(0, visibleArea.minY - overflowHeight) * pixelRatio) / pixelRatio;
++    const maxY = Math.ceil(Math.min(canvasWrapper.clientHeight, visibleArea.maxY + overflowHeight) * pixelRatio) / pixelRatio;
+     const width = maxX - minX;
+     const height = maxY - minY;
+     this.#detailArea = {
+@@ -5263,11 +5266,9 @@
+       return baseContext;
+     }
+     const {
+-      viewport: {
+-        width: vWidth,
+-        height: vHeight
+-      }
+-    } = this.pageView;
++      clientWidth: vWidth,
++      clientHeight: vHeight
++    } = this.pageView._ensureCanvasWrapper();
+     const {
+       width: aWidth,
+       height: aHeight,
+@@ -5330,16 +5331,22 @@
+     const {
+       pixelRatio
+     } = OutputScale;
+-    const transform = [pixelRatio, 0, 0, pixelRatio, -area.minX * pixelRatio, -area.minY * pixelRatio];
+-    canvas.width = area.width * pixelRatio;
+-    canvas.height = area.height * pixelRatio;
++    const pageWidth = canvasWrapper.clientWidth;
++    const pageHeight = canvasWrapper.clientHeight;
++    const scaleX = pageWidth * pixelRatio / width;
++    const scaleY = pageHeight * pixelRatio / height;
++    const left = Math.round(area.minX * pixelRatio);
++    const top = Math.round(area.minY * pixelRatio);
++    const transform = [scaleX, 0, 0, scaleY, -left, -top];
++    canvas.width = Math.round(area.width * pixelRatio);
++    canvas.height = Math.round(area.height * pixelRatio);
+     const {
+       style
+     } = canvas;
+-    style.width = `${area.width * 100 / width}%`;
+-    style.height = `${area.height * 100 / height}%`;
+-    style.top = `${area.minY * 100 / height}%`;
+-    style.left = `${area.minX * 100 / width}%`;
++    style.width = `${canvas.width * 100 / (pageWidth * pixelRatio)}%`;
++    style.height = `${canvas.height * 100 / (pageHeight * pixelRatio)}%`;
++    style.top = `${top * 100 / (pageHeight * pixelRatio)}%`;
++    style.left = `${left * 100 / (pageWidth * pixelRatio)}%`;
+     const renderingPromise = this._drawCanvas(this._getRenderingContext(canvas, transform), () => {
+       this.canvas?.remove();
+       this.canvas = prevCanvas;

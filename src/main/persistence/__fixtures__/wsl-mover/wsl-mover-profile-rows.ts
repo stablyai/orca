@@ -1,8 +1,7 @@
-/** Row factories and the path forms shared by the WSL mover profiles. */
-import type { Project } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Project } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 export type WslMoverProfileSide = 'source' | 'destination'
@@ -11,7 +10,7 @@ export const WSL_MOVER_DISTRO = 'Ubuntu'
 
 export type WslMoverPaths = {
   side: WslMoverProfileSide
-  /** A path of the scoped distro in this side's form; `wsl$` exercises the older UNC spelling. */
+  /** wsl$ exercises the legacy UNC spelling. */
   at: (linuxPath: string, spelling?: 'wsl.localhost' | 'wsl$') => string
   fileUrl: (linuxPath: string) => string
 }

@@ -1,15 +1,14 @@
-import {
-  collectLeafIdsInOrder,
-  serializePaneTree
-} from '@/components/terminal-pane/layout-serialization'
+import '../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 import type { AppState } from '@/store/types'
 import type { MobileSessionWorktreeInputs, MountedTerminalSurfaceCapture } from './types'
 import { EMPTY_NARROWED_BY_KEY, jsonContentEquals } from './graph-state'
 import {
   findRegisteredTerminalTab,
   type RegisteredTerminalTab
-} from '../mounted-terminal-tab-registry'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+} from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export function narrowRecordByKeys<T>(
   source: Record<string, T> | undefined,
@@ -59,7 +58,7 @@ function captureMountedTerminalSurface(
   const effectiveLeafIds =
     paneLeafIds.length > 0
       ? paneLeafIds
-      : collectLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
+      : collectLayoutLeafIdsInOrder(savedLayout?.root).filter(isTerminalLeafId)
   const numericPaneIdByLeafId = new Map<string, number | null>()
   const ptyIdByNumericPaneId = new Map<number, string | null>()
   for (const leafId of effectiveLeafIds) {
@@ -133,15 +132,33 @@ export function mountedSurfaceCapturesEqual(
   return true
 }
 
+/** The complete input set of buildBrowserPageInventory; terminal-only changes keep the built array. */
+export function canReuseBrowserPageInventory(
+  previous: MobileSessionWorktreeInputs,
+  next: MobileSessionWorktreeInputs
+): boolean {
+  return (
+    previous.browserWorkspaces === next.browserWorkspaces &&
+    previous.browserRuntimeEnvironmentId === next.browserRuntimeEnvironmentId &&
+    narrowedEntriesEqual(previous.pagesByBrowserWorkspaceId, next.pagesByBrowserWorkspaceId) &&
+    narrowedEntriesEqual(
+      previous.certificateFailureByBrowserPageId,
+      next.certificateFailureByBrowserPageId
+    )
+  )
+}
+
 export function canReuseMobileSessionSnapshot(
   previous: MobileSessionWorktreeInputs,
   next: MobileSessionWorktreeInputs
 ): boolean {
   return (
+    narrowedEntriesEqual(previous.hostTabIds, next.hostTabIds) &&
     previous.worktreeId === next.worktreeId &&
     previous.worktreeInstanceId === next.worktreeInstanceId &&
     previous.terminalTabs === next.terminalTabs &&
     previous.browserWorkspaces === next.browserWorkspaces &&
+    previous.browserRuntimeEnvironmentId === next.browserRuntimeEnvironmentId &&
     previous.unifiedTabs === next.unifiedTabs &&
     previous.groups === next.groups &&
     previous.tabBarOrder === next.tabBarOrder &&
@@ -158,12 +175,16 @@ export function canReuseMobileSessionSnapshot(
     narrowedEntriesEqual(previous.terminalLayoutByTabId, next.terminalLayoutByTabId) &&
     narrowedEntriesEqual(previous.paneTitlesByTabId, next.paneTitlesByTabId) &&
     narrowedEntriesEqual(previous.launchDraftByPaneKey, next.launchDraftByPaneKey) &&
-    narrowedEntriesEqual(previous.agentStatusByPaneKey, next.agentStatusByPaneKey) &&
     narrowedEntriesEqual(previous.editorDraftVersionByFileId, next.editorDraftVersionByFileId) &&
     narrowedEntriesEqual(previous.pagesByBrowserWorkspaceId, next.pagesByBrowserWorkspaceId) &&
     narrowedEntriesEqual(
       previous.certificateFailureByBrowserPageId,
       next.certificateFailureByBrowserPageId
+    ) &&
+    narrowedEntriesEqual(previous.audibleBrowserPageIds, next.audibleBrowserPageIds) &&
+    narrowedEntriesEqual(
+      previous.audioMutedBrowserWorkspaceIds,
+      next.audioMutedBrowserWorkspaceIds
     ) &&
     mountedSurfaceCapturesEqual(
       previous.mountedSurfaceCaptureByTabId,

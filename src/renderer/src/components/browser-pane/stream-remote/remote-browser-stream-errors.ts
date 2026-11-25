@@ -1,5 +1,5 @@
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/runtime-session-contracts'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   remoteBrowserStreamLostNotice,
   remoteBrowserStreamRestartFailedNotice,
@@ -49,8 +49,12 @@ export function isRemoteBrowserPageMissingError(error: unknown): boolean {
   return isRemoteBrowserPageMissingCode(readErrorCode(error))
 }
 
-// Why: restart retries must stop for failures the host cannot recover from on its own; anything
-// else is unproven and must keep retrying rather than strand the pane with a dead subscription.
+// The input landed and opened a page dialog, which the stream shows; its agent instructions are not for a person.
+export function isRemoteBrowserInputOpenedDialogError(error: unknown): boolean {
+  return readErrorCode(error) === 'browser_dialog_opened'
+}
+
+// Stop automatic retry only for proven permanent failures; unclassified failures retain bounded recovery.
 export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
   const code = readErrorCode(error)
   if (code === null) {
@@ -62,7 +66,6 @@ export function isPermanentRemoteBrowserStreamFailure(error: unknown): boolean {
 }
 
 export type RemoteBrowserStreamFailure = {
-  /** What the pane shows. */
   message: string
   /** False once the failure is proven unrecoverable on this connection. */
   shouldRetry: boolean

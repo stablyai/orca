@@ -4,7 +4,13 @@ import type {
   NormalizeKeybindingOptions
 } from './types'
 import { DEFINITIONS_BY_ID, DIGIT_INDEX_KEY_PATTERN, isDigitIndexActionId } from './definitions'
-import { canonicalizeParsedKeybinding, isSafeBareKey, parseKeybinding } from './parser'
+import {
+  canonicalizeParsedKeybinding,
+  endsWithPlusKey,
+  isSafeBareKey,
+  parseKeybinding
+} from './parser'
+import { keybindingValidationFailure } from './keybinding-diagnostic-copy'
 
 export function normalizeKeybindingWithOptions(
   binding: string,
@@ -12,10 +18,10 @@ export function normalizeKeybindingWithOptions(
 ): KeybindingValidationResult {
   const parsed = parseKeybinding(binding)
   if (!parsed) {
-    return { ok: false, error: 'Use a shortcut like Ctrl+Shift+P or Cmd+K.' }
+    return keybindingValidationFailure('invalidFormat')
   }
   if (parsed.mod && (parsed.meta || parsed.control)) {
-    return { ok: false, error: 'Use either Mod or a platform-specific modifier, not both.' }
+    return keybindingValidationFailure('mixedModifiers')
   }
   if (parsed.doubleTapModifier) {
     return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
@@ -38,7 +44,7 @@ export function normalizeKeybindingWithOptions(
     !isBareAllowed &&
     !isShiftOnlyAllowed
   ) {
-    return { ok: false, error: 'Include at least one modifier key.' }
+    return keybindingValidationFailure('modifierRequired')
   }
   return { ok: true, value: canonicalizeParsedKeybinding(parsed) }
 }
@@ -51,6 +57,25 @@ export function isDoubleTapBinding(binding: string): boolean {
   return Boolean(parseKeybinding(binding)?.doubleTapModifier)
 }
 
+// `,` is both the list separator and the Comma key: `Mod+,` splits into `Mod+` and a blank piece, so rejoin them.
+function splitKeybindingList(input: string): string[] {
+  const pieces: string[] = []
+  for (const piece of input.split(',')) {
+    const previous = pieces.at(-1)
+    if (
+      previous !== undefined &&
+      piece.trim() === '' &&
+      previous.trimEnd().endsWith('+') &&
+      !endsWithPlusKey(previous)
+    ) {
+      pieces[pieces.length - 1] = `${previous},`
+      continue
+    }
+    pieces.push(piece)
+  }
+  return pieces
+}
+
 export function normalizeKeybindingListWithOptions(
   input: string,
   options: NormalizeKeybindingOptions = {}
@@ -60,7 +85,7 @@ export function normalizeKeybindingListWithOptions(
     return []
   }
   const normalized: string[] = []
-  for (const piece of trimmed.split(',')) {
+  for (const piece of splitKeybindingList(trimmed)) {
     const result = normalizeKeybindingWithOptions(piece, options)
     if (!result.ok) {
       return result
@@ -109,10 +134,7 @@ export function normalizeOptionsForAction(
 export function canonicalizeDigitIndexBinding(binding: string): KeybindingValidationResult {
   const parsed = parseKeybinding(binding)
   if (!parsed || parsed.doubleTapModifier || !DIGIT_INDEX_KEY_PATTERN.test(parsed.key)) {
-    return {
-      ok: false,
-      error: 'Pick a number key 1–9 with a modifier, like Cmd+1 or Ctrl+1.'
-    }
+    return keybindingValidationFailure('digitKeyRequired')
   }
   return { ok: true, value: canonicalizeParsedKeybinding({ ...parsed, key: '1' }) }
 }

@@ -22,12 +22,7 @@ function matchRank(host: { label: string; searchText?: string }, needle: string)
   return null
 }
 
-/**
- * The one choke point for drawing a list of hosts. Matches are ranked exact name, then prefix, then
- * substring, so typing a host's full name always reaches it. Pinned hosts (current value, checked or
- * muted ones) get their own `limit` so a long pinned set never crowds out other results, and both
- * pools are cut by rank. Rows keep their input order (ties included), so clicking a row never moves it.
- */
+/** Rank exact/prefix/substring matches with stable ties; cap pinned and other hosts separately so neither crowds out the other. */
 export function boundHostList<T extends { id: string; label: string; searchText?: string }>(
   hosts: readonly T[],
   options: { query?: string; pinnedIds?: ReadonlySet<string>; limit?: number } = {}
@@ -41,7 +36,6 @@ export function boundHostList<T extends { id: string; label: string; searchText?
       ranked.push({ host, rank, index })
     }
   })
-  // Stable sort: equal ranks stay in input order.
   ranked.sort((a, b) => a.rank - b.rank)
   const pinned = ranked.filter((entry) => pinnedIds?.has(entry.host.id) === true)
   const others = ranked.filter((entry) => pinnedIds?.has(entry.host.id) !== true)

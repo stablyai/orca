@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli/cli-argument-boundary'
 
 export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -15,6 +15,7 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca project setups [--project <id>] [--host <host>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'project', 'host'],
     notes: [
+      "Lists only the Orca that answers: a project set up only on a paired server is not listed until you ask that server. --environment <environment-id> returns everything that server lists, with its own machine's rows as hostId local; --host runtime:<environment-id> returns only those rows and leaves out the server's SSH targets. --environment local pins the read to this machine whatever ORCA_ENVIRONMENT or a pairing code selects.",
       'A setup means a project is available on a host at a concrete filesystem path.',
       '--host runtime:<environment-id> runs the command on that paired Orca server instead of filtering this runtime; unknown environment ids are rejected rather than answered with an empty list.',
       'Run `orca environment list` to see the environment ids that runtime:<environment-id> accepts. It matches ids only, never environment names.',
@@ -36,7 +37,8 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'For remote runtimes, --path must be an absolute path on the remote server.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
-      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.'
+      'SSH targets are set up through the desktop UI because the desktop client owns SSH connections.',
+      "--project takes a project id or an existing project's name. A remote-backed Git folder's project id usually comes from its remote: github:owner/repo, github:<host>/owner/repo for GitHub Enterprise, or git:<host>/<path> for other remotes."
     ],
     examples: [
       'orca project setup-existing-folder --project github:stablyai/orca --host local --path ~/orca',
@@ -47,10 +49,19 @@ export const PROJECT_COMMAND_SPECS: CommandSpec[] = [
     path: ['project', 'setup-clone'],
     summary: 'Make a project available on a host by cloning a repository',
     usage:
-      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--display-name <name>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'project', 'host', 'url', 'destination', 'display-name'],
+      'orca project setup-clone --project <id> --host <host> --url <clone-url> --destination <path> [--folder-name <name>] [--display-name <name>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'project',
+      'host',
+      'url',
+      'destination',
+      'folder-name',
+      'display-name'
+    ],
     notes: [
       'For remote runtimes, --destination must be an absolute parent directory on the remote server.',
+      '--folder-name sets the folder created inside --destination; it defaults to the repository name from the URL.',
       '--host takes local, ssh:<target-id>, runtime:<environment-id>, or the bare host name `orca host list` prints for any of them.',
       'SSH targets are cloned through the desktop UI because the desktop client owns SSH connections.'
     ],

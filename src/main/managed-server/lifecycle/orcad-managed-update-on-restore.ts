@@ -1,17 +1,15 @@
-/**
- * The launch-time tunnel restore reaches a managed server without an SSH connect, so it runs the
- * same update check a connect would, once per server per session and off the caller's path.
- */
-import type { SshManagedServerUpdateNote, SshTarget } from '../../../shared/ssh-types'
+// Restored tunnels bypass SSH connect; perform its update check once per server/session in the background.
+import type {
+  SshManagedServerUpdateNote,
+  SshTarget
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   checkManagedServerUpdate,
   type ManagedServerUpdateDeps
-} from '../../ssh/managed-server-update-check'
+} from '../../ssh/host-server/managed-server-update-check'
 
 export type ManagedOrcadRestoreUpdateDeps = ManagedServerUpdateDeps & {
-  /** The SSH target that serves this managed server, or null when it is gone or unlinked. */
   target: (environmentId: string) => SshTarget | null
-  /** Records the outcome so the host's status line can show it. */
   publish: (
     target: SshTarget,
     environmentId: string,
@@ -22,7 +20,6 @@ export type ManagedOrcadRestoreUpdateDeps = ManagedServerUpdateDeps & {
 
 const checked = new Set<string>()
 
-/** Resolves when the check settles; null when this session already checked the server. */
 export function updateManagedOrcadOnRestore(
   environmentId: string,
   createDeps: () => ManagedOrcadRestoreUpdateDeps
@@ -55,11 +52,7 @@ export function updateManagedOrcadOnRestore(
 
 const redeploying = new Map<string, Promise<boolean>>()
 
-/**
- * Redeploys a server another desktop stopped while this session uses it, so the call that found it
- * stopped can still reach it. Not limited to once per session: a stop can come at any time.
- * Resolves true when a server was activated; concurrent callers share one attempt.
- */
+/** Coalesce redeploys after peer stops; unlike restore checks, these must remain retryable all session. */
 export function redeployStoppedManagedOrcad(
   environmentId: string,
   createDeps: () => ManagedOrcadRestoreUpdateDeps
@@ -93,9 +86,4 @@ async function runRedeploy(
     console.warn('[ssh] Could not redeploy a stopped managed Orca server:', error)
     return false
   }
-}
-
-export function resetManagedOrcadRestoreUpdatesForTests(): void {
-  checked.clear()
-  redeploying.clear()
 }

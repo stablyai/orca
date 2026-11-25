@@ -1,17 +1,13 @@
 import type { JiraAdfMediaAttrs } from '../adf-markdown'
 import { MAX_IMAGES, parseImageAttachmentMetas } from './meta'
 
-/**
- * Pull attachment content IDs from Jira rendered HTML in document order.
- * Why: thumbnail paths use the same numeric attachment id as content URLs.
- */
+/** Thumbnail and content paths share numeric attachment IDs; retain document order. */
 export function extractAttachmentContentIdsFromHtml(html: string | undefined | null): string[] {
   if (!html) {
     return []
   }
   const ids: string[] = []
   const seen = new Set<string>()
-  // content, secure/attachment, thumbnail, and rest thumbnail forms
   const pattern =
     /\/(?:rest\/api\/\d+\/attachment\/(?:content|thumbnail)|secure\/(?:attachment|thumbnail))\/(\d+)(?:\/|\b|"|'|\?)/gi
   let match: RegExpExecArray | null
@@ -37,7 +33,7 @@ export function selectPreferredAttachmentIds(args: {
   const needing = args.mediaAttrs.filter((attrs) => !(attrs.url && /^https?:\/\//i.test(attrs.url)))
   const needCount = needing.length
   if (needCount === 0) {
-    // Why: no attachment-needing ADF media — skip downloads (do not sweep HTML-only).
+    // HTML-only images must not trigger downloads.
     return { preferredIds: [], fallbackRan: false, needCount: 0 }
   }
 
@@ -47,7 +43,7 @@ export function selectPreferredAttachmentIds(args: {
 
   if (needCount > preferredIds.length) {
     const metas = parseImageAttachmentMetas(args.attachmentField, args.maxBytes)
-    // Why: multiple Jira screenshots often share image.png — assign next unused meta per node.
+    // Screenshots often share image.png; assign each the next unused attachment.
     for (const node of needing) {
       if (preferredIds.length >= (args.maxImages ?? MAX_IMAGES)) {
         break

@@ -1,57 +1,49 @@
-import { ANTIGRAVITY_BROWSER_MARKER } from './antigravity-browser-helper'
-import type { AntigravitySignInPending } from './antigravity-sign-in-callback'
+// `agy acp --login` prints Google's sign-in link on its own line, then reads the code (or the
+// address of the page Google lands on) from stdin. Only Google's own link back to agy's callback
+// page is shown or opened, and only one line is ever written back.
 
-/** The line the server prints before its sign-in link. */
-export const ANTIGRAVITY_SIGN_IN_PROMPT = 'Open the following link to authenticate the ACP server: '
+const MAX_CHARS = 16_384
+const AGY_LOGIN_REDIRECT = 'https://antigravity.google/oauth-callback'
+const AUTH_PATHS = new Set(['/o/oauth2/auth', '/o/oauth2/v2/auth'])
 
-const MAX_URL_CHARS = 16_384
-const MAX_LINE_CHARS = ANTIGRAVITY_SIGN_IN_PROMPT.length + MAX_URL_CHARS + 2
-
-/** The link only when it is Google's sign-in page sending the browser back to a loopback port on
- *  this host: it is opened for the person, so anything else is withheld. */
-export function antigravitySignInUrl(
-  link: string
-): ({ url: string } & AntigravitySignInPending) | null {
-  if (link.length > MAX_URL_CHARS || /\s/.test(link) || !URL.canParse(link)) {
+/** The sign-in link on one line of agy's output, or null for any other line. */
+export function agyLoginLink(line: string): string | null {
+  const link = line.trim()
+  if (link.length > MAX_CHARS || /\s/.test(link) || !URL.canParse(link)) {
     return null
   }
   const url = new URL(link)
   const one = (name: string): string =>
     url.searchParams.getAll(name).length === 1 ? (url.searchParams.get(name) ?? '') : ''
-  const redirect = /^http:\/\/127\.0\.0\.1:([1-9]\d{0,4})\/$/.exec(one('redirect_uri'))
-  const port = Number(redirect?.[1])
   const valid =
     url.origin === 'https://accounts.google.com' &&
-    url.pathname === '/o/oauth2/v2/auth' &&
+    AUTH_PATHS.has(url.pathname) &&
     !url.username &&
     !url.password &&
     !url.hash &&
     one('response_type') === 'code' &&
-    /^\S{1,512}$/.test(one('state')) &&
-    port >= 1024 &&
-    port <= 65_535
-  return valid ? { url: link, redirectUri: one('redirect_uri'), state: one('state') } : null
+    one('redirect_uri') === AGY_LOGIN_REDIRECT &&
+    /^\S{1,512}$/.test(one('state'))
+  return valid ? link : null
 }
 
-/** A sign-in line's valid link; null for a malformed or overlong one, which is never an answer;
- *  undefined for any other line. Only error output carries the helper's line. */
-export function readAntigravitySignInLine(
-  line: string,
-  source: 'stdout' | 'stderr'
-): string | null | undefined {
-  const text = line.endsWith('\r') ? line.slice(0, -1) : line
-  let link: string
-  if (text.startsWith(ANTIGRAVITY_SIGN_IN_PROMPT)) {
-    link = text.slice(ANTIGRAVITY_SIGN_IN_PROMPT.length)
-  } else if (source === 'stderr' && text.startsWith(ANTIGRAVITY_BROWSER_MARKER)) {
-    try {
-      const parsed: unknown = JSON.parse(text.slice(ANTIGRAVITY_BROWSER_MARKER.length))
-      link = typeof parsed === 'string' ? parsed : ''
-    } catch {
-      link = ''
-    }
-  } else {
-    return undefined
+/** What may be written to agy as the one line it reads: a code, or the callback page's address. */
+export function agyLoginAnswer(pasted: string): string | null {
+  const answer = pasted.trim()
+  // One line only: agy reads up to the first newline.
+  if (
+    !answer ||
+    answer.length > MAX_CHARS ||
+    [...answer].some((char) => char < ' ' || char === '\x7f')
+  ) {
+    return null
   }
-  return text.length <= MAX_LINE_CHARS && antigravitySignInUrl(link) ? link : null
+  if (!URL.canParse(answer)) {
+    // A bare code has no spaces.
+    return /\s/.test(answer) ? null : answer
+  }
+  const url = new URL(answer)
+  return `${url.origin}${url.pathname}` === AGY_LOGIN_REDIRECT && url.searchParams.get('code')
+    ? answer
+    : null
 }

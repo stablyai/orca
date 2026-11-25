@@ -1,22 +1,18 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { getSecretStore } from '../../shared/secret-store'
+import { readFile } from 'node:fs/promises'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 
-/** Why a credential file this host holds cannot be used; absent when it can be. */
 export type SavedCredentialUnreadable =
-  /** Sealed by the other Orca app on this machine: the desktop (safeStorage) and orcad (its own
-   *  host key) share ~/.orca but cannot open each other's files. */
-  | 'sealed-elsewhere'
-  /** Corrupt, not readable by this user, or this host cannot decrypt anything right now. */
-  | 'unreadable'
+  /** Desktop safeStorage and orcad host keys cannot decrypt each other's files in ~/.orca. */
+  'sealed-elsewhere' | 'unreadable'
 
 export type SavedCredentialFile = {
   path: string
   envelopePrefix: string
-  /** The store also accepts pre-envelope files, which carry nothing to judge them by. */
+  /** Accept legacy files that have no envelope metadata to inspect. */
   legacyRaw?: boolean
 }
 
-/** Why: orcad reports encryption available before (or without) loading its key, then throws. */
+// Orcad can report encryption available before its host key is loaded; probe actual use.
 function secretStoreWorks(): boolean {
   try {
     const store = getSecretStore()
@@ -29,20 +25,17 @@ function secretStoreWorks(): boolean {
   }
 }
 
-/**
- * Reads the file itself, never the store's in-memory copy, so a file the other app rewrote is
- * judged as it is now. Logs nothing: Settings polls this.
- */
-export function savedCredentialUnreadable(
+/** Read disk to see other-app rewrites; stay silent because Settings polls this. */
+export async function savedCredentialUnreadable(
   file: SavedCredentialFile
-): SavedCredentialUnreadable | undefined {
-  if (!existsSync(file.path)) {
-    return undefined
-  }
+): Promise<SavedCredentialUnreadable | undefined> {
   let text: string
   try {
-    text = readFileSync(file.path, 'utf8')
-  } catch {
+    text = await readFile(file.path, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return undefined
+    }
     return 'unreadable'
   }
   if (!text.startsWith(file.envelopePrefix)) {
@@ -59,7 +52,7 @@ export function savedCredentialUnreadable(
   }
   const payload = rest.slice(separator + 1).trim()
   const cipher = Buffer.from(payload, 'base64')
-  // Why: Buffer decodes malformed base64 leniently, and that garbage would read as sealed elsewhere.
+  // Reject malformed base64 before it can be mistaken for a foreign sealed credential.
   if (cipher.length === 0 || cipher.toString('base64') !== payload) {
     return 'unreadable'
   }
@@ -71,12 +64,12 @@ export function savedCredentialUnreadable(
     secretStore.decryptString(cipher)
     return undefined
   } catch {
-    // Why only here: a well-formed sealed file that a working store cannot open came from another.
+    // Classify decryption failure as foreign only after checking format and store health.
     return 'sealed-elsewhere'
   }
 }
 
-/** A paired client must not overwrite what the other Orca app on this machine reads. */
+/** Prevent paired clients from overwriting credentials sealed by another local Orca app. */
 export function refuseCredentialSealedElsewhere(credentialName: string): never {
   throw new Error(
     `The ${credentialName} on this computer was saved by another Orca app here, which this one cannot read. Change it in that app, or forget it here first.`

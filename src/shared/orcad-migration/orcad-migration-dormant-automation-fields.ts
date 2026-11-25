@@ -8,8 +8,6 @@ import {
   requiredStringOrEmpty
 } from './orcad-migration-dormant-value-validation'
 
-// Field checks for dormant automations and their final runs; each throws its specific error.
-
 export function parsePrecheck(value: unknown): void {
   if (value === null) {
     return

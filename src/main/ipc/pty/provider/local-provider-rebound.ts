@@ -1,5 +1,4 @@
-// Layout-owner build: who learns that this machine's terminal provider was installed or replaced
-// (a terminal service restart), so main can show the live terminals the new provider reports.
+// Main-owned layout discovers surviving terminals whenever the local provider is installed or replaced.
 
 type ReboundListener = () => void
 

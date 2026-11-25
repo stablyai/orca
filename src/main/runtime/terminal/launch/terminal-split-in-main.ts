@@ -1,21 +1,26 @@
-// Layout-owner build: a split of a pane in main's layout is written and started by main, under the
-// caller's proposed pane id; every view, the window's included, attaches to the terminal it starts.
+// Main writes and starts its owned splits under the proposed pane id; every view attaches to that terminal.
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
-import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { recordPtySurface, spawnSurfaceClaimSequence } from '../../pty-recorded-surface-topology'
-import { runtimeSplitPlacement } from '../../runtime-terminal-spawn-placement'
-import { spawnInAdmittedPane } from '../../runtime-pane-admission'
-import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/pty-first-size'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import {
+  recordPtySurface,
+  spawnSurfaceClaimSequence
+} from '../surface/pty-recorded-surface-topology'
+import { runtimeSplitPlacement } from '../layout/runtime-terminal-spawn-placement'
+import { spawnInAdmittedPane } from './runtime-pane-admission'
+import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/delivery/pty-first-size'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { randomUUID } from 'node:crypto'
-import { paneStartFailure } from '../../pane-start-statuses'
-import { collectLeafIds } from '../../../../shared/terminal-pane-layout-tree'
+import { paneStartFailure } from '../surface/pane-start-statuses'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { recordFreshLaunch } from './launch-evidence'
+import type { TerminalCreateOptions } from './terminal-create-options'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
 
 export type SplitPaneSource = { worktreeId: string; tabId: string; leafId: string }
 
-export type SplitPaneInMainOptions = {
+export type SplitPaneInMainOptions = Pick<TerminalCreateOptions, 'terminalImageViewerSupported'> & {
   direction: 'horizontal' | 'vertical'
   /** The caller's id for the new pane; main refuses one another pane holds. */
   newLeafId?: string
@@ -28,6 +33,10 @@ export type SplitPaneInMainOptions = {
   activate?: boolean
   /** The window's own split keeps a pane whose start failed, showing why, as its spawn did. */
   keepPaneOnStartFailure?: boolean
+  /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
+  /** The new terminal's handle, drawn by a caller that must know it before the process starts. */
+  preAllocatedHandle?: string
 }
 
 export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSplitPtyBackedTerminal {
@@ -79,7 +88,10 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       // The window then splits it as before (a paired server's tab, or the window-owned build).
       throw new Error('host_not_owned')
     }
-    return this.splitPaneInMain(source, opts)
+    return this.splitPaneInMain(
+      source,
+      applyRemoteViewerLaunchEnv(opts, opts.terminalImageViewerSupported)
+    )
   }
 
   protected async splitPaneInMain(
@@ -97,9 +109,11 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       return this.keepSplitThatCannotStart(source, opts, new Error('runtime_unavailable'))
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${source.worktreeId}`
+      `id:${source.worktreeId}`,
+      undefined,
+      { wslUserAct: opts.wslUserAct === true }
     ).catch((error: unknown) => this.keepSplitThatCannotStart(source, opts, error))
-    const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
+    const preAllocatedHandle = opts.preAllocatedHandle ?? this.createPreAllocatedTerminalHandle()
     const result = await spawnInAdmittedPane(this.store, controller, {
       ...resolvePtyFirstSize({ pane: opts.initialSize }),
       cwd: opts.cwd ?? workspace.path,
@@ -110,8 +124,10 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
         ...opts.env
       }),
       envToDelete: opts.envToDelete,
+      ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       preAllocatedHandle,
       tabId: source.tabId,
       leafId,
@@ -130,13 +146,16 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
     if (!createdPty) {
       throw new Error('terminal_exited')
     }
+    if (!result.isReattach) {
+      recordFreshLaunch(createdPty)
+    }
     recordPtySurface(
+      this.terminalIdentity,
       createdPty,
       source.tabId,
       makePaneKey(source.tabId, leafId),
       spawnSurfaceClaimSequence(this.graphSequence)
     )
-    // Phones and session.tabs list the pane without a window's report, as the other splits do.
     this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
       tabId: source.tabId,
       leafId,

@@ -1,41 +1,70 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { Globe, Loader2 } from 'lucide-react'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
+import {
+  ComposingKeyboardProxy,
+  recordComposingKeyboardProxyAnchor
+} from '@/lib/text-input/ime/composing-keyboard-proxy'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserPage as BrowserPageState
-} from '../../../../../shared/browser-workspace-types'
-import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
-import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
-import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
+import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { BrowserScreencastPointer } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
+import {
+  getRemoteBrowserFrameCursor,
+  getRemoteBrowserFrameStyle
+} from './remote-browser-frame-style'
+import { RemoteBrowserLinkStatusBubble } from './remote-browser-link-status-bubble'
+import BrowserFind from '../assemble-chrome/find/BrowserFind'
+import type { RemoteBrowserPageFind } from './use-remote-browser-page-find'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
-import type { MarkupModeController } from '../annotate/useMarkupMode'
+import type { MarkupModeController } from '../annotate/capture/useMarkupMode'
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
-import { ReopenBrowserPageOnServerButton } from '../ReopenBrowserPageOnServerButton'
+import { ReopenBrowserPageOnServerButton } from '../navigate/reopen-on-server/ReopenBrowserPageOnServerButton'
 import { resolveActiveBrowserLoadFailure } from '../navigate/browser-load-failure-for-url'
 import { BrowserNewTabPage } from '../new-tab/BrowserNewTabPage'
 import {
   canReconnectRemoteBrowserStream,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
+import type { RemoteBrowserKeyboardProxyHandlers } from './remote-browser-page-input-params'
+import { useWorkspaceDocPageFileDrop } from '../navigate/browser-page-workspace-file-drop'
+import {
+  BrowserPageFeedbackBadge,
+  type BrowserPageFeedbackBadgeHandle
+} from '../assemble-chrome/feedback/browser-page-feedback-badge'
+import { useBrowserAgentCursor } from '../agent-cursor/use-browser-agent-cursor'
+import { RemoteBrowserPageDriverOverlay } from './remote-browser-page-driver-overlay'
+import type { RemoteBrowserPageDriver } from './use-remote-browser-stream-viewer-state'
 
 export function RemoteBrowserPageViewport({
   remoteViewportRef,
+  attachFileDrop,
   imageRef,
+  keyboardProxyRef,
+  feedbackBadgeRef,
+  find,
   frameUrl,
   frameMetadata,
+  pagePointer,
+  pageDriver,
   busy,
   markup,
   browserTab,
   remoteError,
   streamStatus,
-  remoteCertificateTrustSupported,
   certificateFailure,
   remotePageHandle,
   activeRuntimeEnvironmentId,
@@ -46,21 +75,33 @@ export function RemoteBrowserPageViewport({
   onGoto,
   onNavigateToUrl,
   onReconnect,
+  onBeforeProceedCertificate,
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
-  handleRemoteScreenshotKeyDown
+  keyboardProxyHandlers,
+  handleRemotePointerMove,
+  annotateOverlays
 }: {
   remoteViewportRef: React.RefObject<HTMLDivElement | null>
+  /** Sets remoteViewportRef too; takes files dragged in from this computer. */
+  attachFileDrop: (root: HTMLElement | null) => void
   imageRef: React.RefObject<HTMLImageElement | null>
+  /** Holds the page's keyboard focus, so host input methods compose. */
+  keyboardProxyRef: React.RefObject<HTMLTextAreaElement | null>
+  feedbackBadgeRef: React.RefObject<BrowserPageFeedbackBadgeHandle | null>
+  find: RemoteBrowserPageFind
   frameUrl: string | null
   frameMetadata: BrowserScreencastFrameMetadata | null
+  /** The host page's cursor and hovered link; null from hosts that don't report them. */
+  pagePointer: BrowserScreencastPointer | null
+  /** Who drives the page on its host; null from hosts that don't report it. */
+  pageDriver: RemoteBrowserPageDriver | null
   busy: boolean
   markup: MarkupModeController
   browserTab: BrowserPageState
   remoteError: string | null
   streamStatus: RemoteBrowserStreamStatus
-  remoteCertificateTrustSupported: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageHandle: RemoteBrowserPageHandle | null
   activeRuntimeEnvironmentId: string
@@ -72,12 +113,44 @@ export function RemoteBrowserPageViewport({
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
+  onBeforeProceedCertificate: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
-  handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
+  keyboardProxyHandlers: RemoteBrowserKeyboardProxyHandlers
+  /** Takes pointer leaves too, which move the page's pointer off it. */
+  handleRemotePointerMove: (event: React.PointerEvent<HTMLImageElement>) => void
+  annotateOverlays: React.ReactNode
 }): React.JSX.Element {
-  const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
+  const t = useTranslate()
+  // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
+  const remoteCertificateTrustSupported = useRuntimeEnvironmentCapability(
+    certificateFailure?.challengeId ? remotePageHandle?.environmentId : null,
+    BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
+  )
+  const getAgentCursorHost = useCallback(() => remoteViewportRef.current, [remoteViewportRef])
+  useBrowserAgentCursor(browserTab.id, imageRef, getAgentCursorHost)
+  const fileDrop = useWorkspaceDocPageFileDrop(browserTab.id, worktreeId, remoteViewportRef)
+
+  // Transfer viewport focus to the first frame's keyboard proxy, which owns remote key input.
+  const hasStreamFrame = frameUrl !== null
+  useEffect(() => {
+    if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
+      return
+    }
+    keyboardProxyRef.current?.focus({ preventScroll: true })
+  }, [hasStreamFrame, keyboardProxyRef, remoteViewportRef])
+
+  const hasViewportPreset = Boolean(browserTab.viewportPresetId)
+  const remoteFrameStyle = useMemo(
+    () => getRemoteBrowserFrameStyle(frameMetadata, hasViewportPreset),
+    [frameMetadata, hasViewportPreset]
+  )
+  const pageCursor = pagePointer?.cursor
+  const remoteImageStyle = useMemo(
+    () => ({ ...remoteFrameStyle, cursor: getRemoteBrowserFrameCursor(pageCursor) }),
+    [pageCursor, remoteFrameStyle]
+  )
   // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
   const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
   if (
@@ -91,14 +164,31 @@ export function RemoteBrowserPageViewport({
   const remoteFailureUrl = loadError?.validatedUrl ?? browserTab.url
   const remoteFailureExternalUrl = resolveRemoteFailureExternalUrl(remoteFailureUrl)
   const showRemoteFailureOverlay = Boolean(loadError) && !isBlankBrowserUrl(remoteFailureUrl)
+  const phoneDriven = pageDriver?.driver.kind === 'mobile'
 
   return (
     <div
-      ref={remoteViewportRef}
+      ref={attachFileDrop}
       tabIndex={-1}
       // Why a size container: the frame letterboxes itself in cq units of this pane.
-      className="@container-size relative min-h-0 flex-1 overflow-hidden bg-background"
+      className={cn(
+        '@container-size relative min-h-0 flex-1 overflow-hidden bg-background',
+        // The phone has the page; only the overlay's Take back stays clickable.
+        phoneDriven && 'pointer-events-none'
+      )}
+      onPointerDownCapture={recordComposingKeyboardProxyAnchor}
+      {...fileDrop}
     >
+      {pageDriver ? (
+        <RemoteBrowserPageDriverOverlay pageDriver={pageDriver} runtimeTarget={runtimeTarget} />
+      ) : null}
+      <BrowserPageFeedbackBadge ref={feedbackBadgeRef} />
+      <BrowserFind
+        browserPageId={browserTab.id}
+        isOpen={find.findOpen}
+        onClose={find.closeFind}
+        webviewRef={find.findTargetRef}
+      />
       {markup.isActive && markup.baseImage ? (
         // Why the frame's own box: markup draws over the letterboxed page, not the whole pane.
         <div className="absolute top-0 left-0" style={remoteFrameStyle}>
@@ -111,20 +201,43 @@ export function RemoteBrowserPageViewport({
         </div>
       ) : null}
       {frameUrl ? (
-        <img
-          data-testid="remote-browser-frame"
-          ref={imageRef}
-          src={frameUrl}
-          alt=""
-          tabIndex={0}
-          style={remoteFrameStyle}
-          className="absolute top-0 left-0 max-w-none cursor-default bg-white outline-none"
-          onPointerDown={handleRemotePointerDown}
-          onPointerUp={handleRemotePointerUp}
-          onContextMenu={handleRemoteContextMenu}
-          onKeyDown={handleRemoteScreenshotKeyDown}
-          draggable={false}
-        />
+        <>
+          <img
+            data-testid="remote-browser-frame"
+            ref={imageRef}
+            src={frameUrl}
+            alt=""
+            tabIndex={0}
+            // Keys and paste reach the page through the proxy, so the phone's lock takes its focus too.
+            inert={phoneDriven}
+            style={remoteImageStyle}
+            className="absolute top-0 left-0 max-w-none bg-white outline-none"
+            onPointerDown={handleRemotePointerDown}
+            onPointerMove={handleRemotePointerMove}
+            onPointerLeave={handleRemotePointerMove}
+            onPointerUp={handleRemotePointerUp}
+            onContextMenu={handleRemoteContextMenu}
+            // Keyboard focus belongs to the proxy, so a Tab or a focus call on the frame lands there.
+            onFocus={() => keyboardProxyRef.current?.focus({ preventScroll: true })}
+            draggable={false}
+          />
+          <ComposingKeyboardProxy
+            ref={keyboardProxyRef}
+            data-browser-keyboard-proxy=""
+            inert={phoneDriven}
+            aria-label={t('auto.components.browser.pane.BrowserPane.572046436a', 'Remote browser')}
+            onKeyDown={(event) => {
+              // An Escape that cancels a composition belongs to the input method.
+              if (!isImeOwnedKeyboardEvent(event)) {
+                find.closeFindOnPageEscape(event)
+              }
+              keyboardProxyHandlers.onKeyDown(event)
+            }}
+            onPaste={keyboardProxyHandlers.onPaste}
+            onCompositionEnd={keyboardProxyHandlers.onText}
+            onInput={keyboardProxyHandlers.onText}
+          />
+        </>
       ) : (
         <div className="absolute inset-0 flex items-center justify-center px-6 text-center">
           <div className="flex max-w-sm flex-col items-center gap-2">
@@ -135,17 +248,11 @@ export function RemoteBrowserPageViewport({
             )}
             <div className="text-sm font-medium text-foreground">
               {busy
-                ? translate(
-                    'auto.components.browser.pane.BrowserPane.b313a7275b',
-                    'Opening remote browser'
-                  )
-                : translate(
-                    'auto.components.browser.pane.BrowserPane.572046436a',
-                    'Remote browser'
-                  )}
+                ? t('auto.components.browser.pane.BrowserPane.b313a7275b', 'Opening remote browser')
+                : t('auto.components.browser.pane.BrowserPane.572046436a', 'Remote browser')}
             </div>
             <div className="text-xs leading-5 text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserPane.bbe8f15e83',
                 'This pane is rendered from the active runtime server.'
               )}
@@ -156,6 +263,12 @@ export function RemoteBrowserPageViewport({
       {isBlankBrowserUrl(browserTab.url) ? (
         <BrowserNewTabPage worktreeId={worktreeId} onOpenUrl={onNavigateToUrl} />
       ) : null}
+      {annotateOverlays}
+      <RemoteBrowserLinkStatusBubble
+        browserPageId={browserTab.id}
+        targetUrl={pagePointer?.targetUrl ?? ''}
+        viewportRef={remoteViewportRef}
+      />
       {showRemoteFailureOverlay && loadError ? (
         <BrowserLoadFailureOverlay
           loadError={loadError}
@@ -182,6 +295,7 @@ export function RemoteBrowserPageViewport({
             ) {
               return { ok: false, reason: 'missing' }
             }
+            onBeforeProceedCertificate()
             return callRuntimeRpc<BrowserCertificateProceedResult>(
               target,
               'browser.certificate.proceed',
@@ -195,28 +309,23 @@ export function RemoteBrowserPageViewport({
           }}
         />
       ) : null}
-      {/* Why the reconnect control also opens this toast: the control renders inside it, so
-          gating the toast on the message alone made an empty message ('' from a host that failed
-          with no text) swallow the user's only way back — the original stranding bug, reachable
-          through three sites that forward host-supplied text into `stopped`. */}
+      {/* Render the toast for Reconnect even when a host failure supplies no message; the control lives inside it. */}
       {remoteError || canReconnectRemoteBrowserStream(streamStatus) ? (
         <div
           data-testid="remote-browser-stream-error"
           role="status"
           aria-live="polite"
-          // Why z-30: the load-failure overlay is a z-20 full-pane sheet, so without this the
-          // Reconnect control renders beneath it and silently swallows every click — the user's
-          // only way back, present but unusable, whenever the page also failed to load.
+          // Keep Reconnect above the z-20 load-failure sheet so it remains clickable.
           className="absolute bottom-4 left-1/2 z-30 flex max-w-md -translate-x-1/2 items-center gap-2 rounded-md border border-border bg-popover px-3 py-2 text-xs text-popover-foreground shadow-md"
         >
           <span>{remoteError}</span>
-          {/* Why: the runtime refuses server screencast for a client-placed page, so reconnecting
-              can never render it here. A new server-placed page is the only way through. */}
+          {/* Client-placed pages refuse server screencasts; only a new server-placed page can render here. */}
           {remotePageHandle?.placement?.kind === 'client' ? (
             <ReopenBrowserPageOnServerButton
+              browserPageId={browserTab.id}
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={browserTab.url}
+              reopenUrl={browserTab.url}
               className="h-6 shrink-0 px-2 text-xs"
             />
           ) : null}
@@ -227,7 +336,7 @@ export function RemoteBrowserPageViewport({
               className="h-6 shrink-0 px-2 text-xs"
               onClick={onReconnect}
             >
-              {translate('auto.components.browser.pane.BrowserPane.b71dc3d930', 'Reconnect')}
+              {t('auto.components.browser.pane.BrowserPane.b71dc3d930', 'Reconnect')}
             </Button>
           ) : null}
         </div>

@@ -1,13 +1,11 @@
-import {
-  buildWindowsAgentHookPostCommand,
-  getSharedManagedScriptPath
-} from '../agent-hooks/installer-utils'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
+  buildWindowsHookEnvironmentGuardLines
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 export function getManagedScriptFileName(): string {
   return process.platform === 'win32' ? 'copilot-hook.cmd' : 'copilot-hook.sh'
@@ -33,7 +31,6 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
         '  --data-urlencode "hookEventName=%ORCA_COPILOT_HOOK_EVENT%" ^'
       ]),
       'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
       ''
     ].join('\r\n')
   }
@@ -43,8 +40,7 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     "printf '{}\\n'",
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('copilot'),
-    // Why: Copilot consumes stdout for some hooks, so stdout is emitted before
-    // endpoint refresh, stdin parsing, or the network POST can fail.
+    // Answer Copilot before endpoint refresh, stdin parsing or posting can fail.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
@@ -52,10 +48,8 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
-    // `payload=$VALUE` arg, so tens-of-KB tool output stays off the curl
-    // command line (EDR command-line false positives). Wire body is identical.
-    'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\',
+    // Keep large tool payloads off curl's command line to avoid EDR false positives.
+    `printf '%s' "$payload" | ${posixCurlCommand()} -sS -X POST "http://127.0.0.1:\${ORCA_AGENT_HOOK_PORT}/hook/copilot" \\`,
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
     '  -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',

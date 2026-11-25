@@ -1,5 +1,6 @@
 export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:list',
+  'runtimeEnvironments:desktopCreatedChatIds',
   'runtimeEnvironments:addFromPairingCode',
   'runtimeEnvironments:verifyAndAddFromPairingCode',
   'runtimeEnvironments:repairFromPairingCode',
@@ -7,8 +8,13 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:remove',
   'runtimeEnvironments:disconnect',
   'runtimeEnvironments:connect',
-  'runtimeEnvironments:retryControlConnection',
   'runtimeEnvironments:prepareBrowserClientHostPlacement',
+  'runtimeEnvironments:listPortForwards',
+  'runtimeEnvironments:addPortForward',
+  'runtimeEnvironments:updatePortForward',
+  'runtimeEnvironments:removePortForward',
+  'runtimeEnvironments:ensurePortForward',
+  'runtimeEnvironments:takeRestoredPortForwardMoves',
   'runtimeEnvironments:getStatus',
   'runtimeEnvironments:getStatusSnapshots',
   'runtimeEnvironments:call',
@@ -22,6 +28,7 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:rollbackOrcad',
   'runtimeEnvironments:recoverOrcad',
   'runtimeEnvironments:restartOrcad',
+  'runtimeEnvironments:reclaimOrcadStaleLock',
   'runtimeEnvironments:stopOrcad',
   'runtimeEnvironments:cancelOrcadStop',
   'runtimeEnvironments:forgetOrcad',
@@ -30,8 +37,5 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:previewOrcadDeltaMove',
   'runtimeEnvironments:moveOrcadDelta',
   'runtimeEnvironments:keepOrcadServerVersion',
-  'runtimeEnvironments:allowOrcadMoveLeavingBehind',
-  'runtimeEnvironments:createOrcadSshHost',
-  'runtimeEnvironments:resumeOrcadSshHost',
-  'runtimeEnvironments:listPendingOrcadSshProvisioning'
+  'runtimeEnvironments:allowOrcadMoveLeavingBehind'
 ] as const
