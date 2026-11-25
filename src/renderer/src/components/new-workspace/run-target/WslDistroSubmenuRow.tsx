@@ -14,7 +14,7 @@ import { getWslHostServerFilesMissingLabel } from '@/components/sidebar/host-adm
 import { useWslHostServerFilesMissing } from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
 import { RunTargetRow } from './RunTargetComboboxRow'
 import { wslDistroMenuRows } from './wsl-distro-menu-rows'
-import { focusFirstSubmenuOption, stepSubmenuOptionFocus } from './submenu-option-focus'
+import { focusFirstSubmenuOptionWhenMounted, stepSubmenuOptionFocus } from './submenu-option-focus'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 
 const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
@@ -69,16 +69,8 @@ export function WslDistroSubmenuRow({
     if (!open || !focusOnOpen || loading || enabledCount === 0) {
       return
     }
-    // The portaled list can mount a frame after the open state; retry briefly until it is there.
-    let frame = 0
-    let tries = 0
-    const attempt = (): void => {
-      if (!focusFirstSubmenuOption(listRef.current) && tries++ < 10) {
-        frame = requestAnimationFrame(attempt)
-      }
-    }
-    attempt()
-    return () => cancelAnimationFrame(frame)
+    // The portaled list can mount a frame after the open state.
+    return focusFirstSubmenuOptionWhenMounted(() => listRef.current)
   }, [open, focusOnOpen, loading, enabledCount])
   const back = (): void => {
     onOpenChange(false)

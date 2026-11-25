@@ -18,3 +18,16 @@ export function focusFirstSubmenuOption(list: HTMLElement | null): boolean {
   first?.focus()
   return Boolean(first)
 }
+
+/** Focuses the first enabled option once a portaled list has mounted, trying for a few frames. */
+export function focusFirstSubmenuOptionWhenMounted(list: () => HTMLElement | null): () => void {
+  let frame = 0
+  let tries = 0
+  const attempt = (): void => {
+    if (!focusFirstSubmenuOption(list()) && tries++ < 10) {
+      frame = requestAnimationFrame(attempt)
+    }
+  }
+  attempt()
+  return () => cancelAnimationFrame(frame)
+}
