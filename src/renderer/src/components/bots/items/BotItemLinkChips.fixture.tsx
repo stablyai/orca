@@ -1,5 +1,6 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { fixtureCos } from '../../../component-fixtures/fixture-bot-panel'
+import type { BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import {
   now,
@@ -231,4 +232,42 @@ export const staleChecksOmitted = defineFixture({
   render: () =>
     header([pr(STALE_CHECKS, 'open', 'success', 'Share dialog: copy-link button', now - 3 * hour)]),
   interact: (frame) => hover(frame, `#${STALE_CHECKS}`)
+})
+
+const MANY: BotItemLinkView[] = Array.from({ length: 1000 }, (_, i): BotItemLinkView => {
+  switch (i % 4) {
+    case 0:
+      return {
+        kind: 'dispatch',
+        ref: `ctx_${i}`,
+        latest: null,
+        title: `Worker ${i}`,
+        state: 'completed',
+        host: null,
+        startedAt: now - hour,
+        settledAt: now - hour / 2,
+        report: { subject: 'Done.', body: null },
+        pr: null
+      }
+    case 1:
+      return { kind: 'url', ref: `https://example.com/runs/${i}` }
+    case 2:
+      return { kind: 'file', ref: `notes/run-${i}.md` }
+    default:
+      return pr(40000 + i, 'merged', 'success', `Change ${i}`)
+  }
+})
+
+/** A busy item's 1,000 links: the menu draws the first page, scrolled to its Show more. */
+export const thousandLinks = defineFixture({
+  width: 720,
+  store,
+  render: () => header(MANY),
+  interact: async (frame) => {
+    frame.querySelector<HTMLButtonElement>('button[aria-label="1000 links"]')?.click()
+    await wait(100)
+    const list = document.querySelector('[data-radix-popper-content-wrapper] .overflow-y-auto')
+    list?.scrollTo({ top: list.scrollHeight })
+    await wait(100)
+  }
 })

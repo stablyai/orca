@@ -41,13 +41,13 @@ export type DashboardSnapshotState = Pick<
   | 'tabsByWorktree'
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
-  | 'runtimeAgentOrchestrationByPaneKey'
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
   | 'runtimePaneTitlesByTabId'
   | 'acknowledgedAgentsByPaneKey'
   | 'settings'
 > &
+  Pick<AppState, 'runtimeAgentOrchestrationByPaneKey' | 'remoteAgentOrchestrationByHost'> &
   DashboardCardContextState &
   Partial<
     DashboardCardTerminalInputState &

@@ -1641,7 +1641,22 @@
     "ko": "라이트"
   },
   "auto.components.settings.AutoRenameBranchFromWorkSetting.d9b65054ef": {
-    "ko": ") 작업을 요약하는 짧은 이름으로 변경됩니다. Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+    "ko": " 대신 작업을 요약하는 짧은 이름으로). Orca가 직접 이름 붙인 브랜치만 이름을 바꾸며, 푸시된 후에는 이름을 바꾸지 않습니다."
+  },
+  "auto.components.settings.BaseRefPicker.a5c16712c1": {
+    "ko": "여러 개의 원격이 감지되었습니다. 결과를 좁히려면 원격 이름(예:"
+  },
+  "auto.components.settings.BaseRefPicker.80f7c82303": {
+    "ko": ")이나 전체 참조(예:"
+  },
+  "auto.components.settings.BaseRefPicker.ade9a5bb03": {
+    "ko": ")를 입력하세요."
+  },
+  "auto.components.settings.ManageSessionKillDialog.8401328fed": {
+    "ko": "세션"
+  },
+  "auto.components.settings.ManageSessionKillDialog.ad9832aa26": {
+    "ko": "을(를) 강제 종료합니다. 해당 창에서 저장되지 않은 작업은 모두 손실됩니다. 이 작업은 되돌릴 수 없습니다."
   },
   "auto.components.settings.BaseRefPicker.915ad97875": {
     "ko": "upstream"
@@ -2214,13 +2229,13 @@
     "ko": "Warp 테마를 Orca 터미널 테마로 가져옵니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_in_source": {
-    "ko": "{{value0}}에서"
+    "ko": " ({{value0}})"
   },
   "auto.components.settings.WarpThemeImportModal.found_theme_one": {
     "ko": "테마 1개를 찾았습니다."
   },
   "auto.components.settings.WarpThemeImportModal.found_theme_other": {
-    "ko": "테마 {{value0}}개를 찾았습니다."
+    "ko": "테마 {{value0}}개를 찾았습니다"
   },
   "auto.components.settings.WarpThemeImportModal.import_theme_one": {
     "ko": "테마 1개 가져오기"
@@ -2257,6 +2272,9 @@
   },
   "auto.components.settings.WarpThemeImportModal.yaml_title": {
     "ko": "테마 YAML 가져오기"
+  },
+  "auto.components.settings.WarpThemeImportModal.found_theme": {
+    "ko": "테마 {{value0}}개를 찾았습니다"
   },
   "auto.components.settings.WorkspaceDirectorySetting.1a2b3c4d5e": {
     "ko": "클라이언트 기본값"
@@ -3683,6 +3701,9 @@
   "auto.components.stats.ClaudeUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
   },
+  "auto.components.stats.ClaudeUsagePane.2d41fd45c6": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
+  },
   "auto.components.stats.CodexUsageDailyChart.1e6f62d7e3": {
     "ko": "추론"
   },
@@ -3704,6 +3725,9 @@
   "auto.components.stats.CodexUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
   },
+  "auto.components.stats.CodexUsagePane.8a6655f7a2": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
+  },
   "auto.components.stats.OpenCodeUsagePane.349f7c3f5c": {
     "ko": "합계"
   },
@@ -3721,6 +3745,9 @@
   },
   "auto.components.stats.OpenCodeUsagePane.rangeLast90Days": {
     "ko": "최근 90일"
+  },
+  "auto.components.stats.OpenCodeUsagePane.6cc7782458": {
+    "ko": " • 마지막 스캔 오류: {{value0}}"
   },
   "auto.components.stats.UsageOverviewPane.6c00c46815": {
     "ko": "공급자를 활성화해 로컬 에이전트 로그를 스캔하고 통합 토큰 원장을 만드세요."
@@ -4651,6 +4678,9 @@
   },
   "auto.components.settings.ZcodePlanAccountsSection.detailsUnavailable": {
     "ko": "요금제 자격 증명 세부 정보는 Orca를 실행 중인 컴퓨터에서만 볼 수 있습니다."
+  },
+  "auto.components.settings.ZcodePlanAccountsSection.resetIn": {
+    "ko": " — {{value0}} 후 초기화"
   },
   "accounts.antigravity.changed": {
     "ko": "agy 자체 계정이 변경되었습니다. agy를 시작하기 전에 저장된 계정을 다시 선택하세요."
@@ -5585,8 +5615,14 @@
   "auto.components.skills.install.rowNew": {
     "ko": "새 스킬"
   },
+  "auto.components.skills.SkillDelete.placementJoin": {
+    "ko": "와 "
+  },
   "auto.components.right.sidebar.FileExplorerRow.a06551beee": {
     "ko": "Enter"
+  },
+  "auto.components.right.sidebar.github.pr.stack.confirmation.84f6f5b9eb": {
+    "ko": "포함됨: {{numbers}}. "
   },
   "browser.history.enterKey": {
     "ko": "Enter"

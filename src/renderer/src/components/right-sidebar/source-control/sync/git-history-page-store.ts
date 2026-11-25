@@ -28,11 +28,39 @@ export type GitHistoryFence = {
   baseOid: string | null | undefined
 }
 
+// Listeners per slot, so one section's read never wakes the hooks of unrelated retained sections.
+const gitHistoryListeners = new Map<string, Set<() => void>>()
+
+function notifyGitHistorySlot(slotKey: string): void {
+  for (const listener of gitHistoryListeners.get(slotKey) ?? []) {
+    listener()
+  }
+}
+
+const MAX_GIT_HISTORY_SLOTS = 256
 // Share each worktree and execution owner’s history across panel remounts.
-export const gitHistorySlots = new BoundedMap<string, GitHistoryEntry>({ maxEntries: 256 })
+export const gitHistorySlots = new BoundedMap<string, GitHistoryEntry>({
+  maxEntries: MAX_GIT_HISTORY_SLOTS,
+  // Reached only with more read slots than the cap (see publishGitHistory); never keep a dropped page.
+  onEvict: (_entry, slotKey) => notifyGitHistorySlot(slotKey)
+})
 export const latestGitHistoryRequest = new Map<string, { worktreeId: string; id: number }>()
 export const mountedHistoryConsumers = new Map<string, number>()
-const gitHistoryListeners = new Set<() => void>()
+/** Slots no consumer has held since the last sweep; a workspace switch checks only these. */
+export const releasedHistorySlots = new Set<string>()
+// The worktree catalog the last sweep checked, shared so a remount with the same catalog does not sweep again.
+let sweptWorktreeCatalog: ReadonlyMap<string, unknown> | null = null
+
+/** Slots that may have lost their worktree: every request after a catalog change, else only released slots. */
+export function takeRetirementCandidates(catalog: ReadonlyMap<string, unknown>): string[] {
+  const candidates =
+    sweptWorktreeCatalog === catalog
+      ? [...releasedHistorySlots]
+      : [...latestGitHistoryRequest.keys()]
+  sweptWorktreeCatalog = catalog
+  releasedHistorySlots.clear()
+  return candidates
+}
 let gitHistoryRequestSeq = 0
 
 export function nextGitHistoryRequestId(): number {
@@ -41,15 +69,37 @@ export function nextGitHistoryRequestId(): number {
 }
 
 export function publishGitHistory(slotKey: string, entry: GitHistoryEntry): void {
-  gitHistorySlots.set(slotKey, entry)
-  for (const listener of gitHistoryListeners) {
-    listener()
+  if (!gitHistorySlots.has(slotKey) && gitHistorySlots.size >= MAX_GIT_HISTORY_SLOTS) {
+    // About to evict: drop the oldest page no section reads, so a read page stays. This walks the
+    // resident pages (at most the cap), never every subscribed slot. When every page has a reader,
+    // the least recent one goes and onEvict tells its readers.
+    const unread = gitHistorySlots.keys().find((key) => !gitHistoryListeners.has(key))
+    if (unread !== undefined) {
+      gitHistorySlots.delete(unread)
+    }
   }
+  gitHistorySlots.set(slotKey, entry)
+  notifyGitHistorySlot(slotKey)
 }
 
-export function subscribeGitHistory(listener: () => void): () => void {
-  gitHistoryListeners.add(listener)
-  return () => gitHistoryListeners.delete(listener)
+/** Drops a slot's page and pending request, then tells that slot's readers. */
+export function retireGitHistorySlot(slotKey: string): void {
+  gitHistorySlots.delete(slotKey)
+  latestGitHistoryRequest.delete(slotKey)
+  releasedHistorySlots.delete(slotKey)
+  notifyGitHistorySlot(slotKey)
+}
+
+export function subscribeGitHistory(slotKey: string, listener: () => void): () => void {
+  const listeners = gitHistoryListeners.get(slotKey) ?? new Set<() => void>()
+  gitHistoryListeners.set(slotKey, listeners)
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (!listeners.size && gitHistoryListeners.get(slotKey) === listeners) {
+      gitHistoryListeners.delete(slotKey)
+    }
+  }
 }
 
 function pageKeyMatches(key: GitHistoryPageKey, fence: GitHistoryFence): boolean {

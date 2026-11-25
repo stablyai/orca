@@ -10,6 +10,37 @@ import { resolveSidebarDrawerLeftEdge } from '../../chrome/sidebar-drawer-left-e
 import { useAppStore } from '@/store/index'
 import { selectAppRailWidth } from '@/components/app-rail/app-rail-layout'
 
+const MIN_DOCKED_BOARD_WIDTH = 320
+const BOARD_RIGHT_EDGE = '--workspace-board-right-edge'
+
+function trackWorkspaceBoardBounds(element: HTMLElement | null): (() => void) | undefined {
+  if (!element) {
+    return
+  }
+
+  const stopTrackingSidebar = trackSidebarLiveWidth(element)
+  const workspace = element.ownerDocument.querySelector('[data-workspace-shell-content]')
+  if (!workspace) {
+    return stopTrackingSidebar
+  }
+
+  let lastRightEdge: string | null = null
+  // Why: ResizeObserver's initial delivery runs before first paint, so no synchronous sync is needed.
+  const observer = new ResizeObserver(() => {
+    const next = `${workspace.getBoundingClientRect().right}px`
+    if (next === lastRightEdge) {
+      return
+    }
+    lastRightEdge = next
+    element.style.setProperty(BOARD_RIGHT_EDGE, next)
+  })
+  observer.observe(workspace)
+  return () => {
+    observer.disconnect()
+    stopTrackingSidebar?.()
+  }
+}
+
 type WorkspaceKanbanSheetProps = {
   boardRef: React.RefObject<HTMLDivElement | null>
   children: React.ReactNode
@@ -77,7 +108,7 @@ export default function WorkspaceKanbanSheet({
       <SheetContent
         side="left"
         showCloseButton={false}
-        ref={trackSidebarLiveWidth}
+        ref={trackWorkspaceBoardBounds}
         className="workspace-kanban-sheet-content bg-worktree-sidebar p-0 sm:max-w-none"
         overlayStyle={{
           top: WORKSPACE_TOP_CHROME_HEIGHT,
@@ -85,16 +116,14 @@ export default function WorkspaceKanbanSheet({
           left: drawerLeftCss,
           pointerEvents: 'none'
         }}
-        style={
-          {
-            ...leftSidebarStyle,
-            left: drawerLeftCss,
-            top: WORKSPACE_TOP_CHROME_HEIGHT,
-            bottom: drawerBottom,
-            height: 'auto',
-            width: `min(calc(100vw - ${drawerLeftCss}), 1294px)`
-          } as React.CSSProperties
-        }
+        style={{
+          ...leftSidebarStyle,
+          left: drawerLeftCss,
+          top: WORKSPACE_TOP_CHROME_HEIGHT,
+          bottom: drawerBottom,
+          height: 'auto',
+          width: `min(max(var(${BOARD_RIGHT_EDGE}, 100vw) - ${drawerLeftCss}, ${MIN_DOCKED_BOARD_WIDTH}px), 100vw - ${drawerLeftCss}, 1294px)`
+        }}
         data-contextual-tour-target="workspace-board-surface"
         data-workspace-board-sheet=""
         data-workspace-board-drag-preview={dragPreview ? 'true' : undefined}
