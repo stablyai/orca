@@ -41,7 +41,7 @@ export function parseAgentMcpConfigText(
   text: string,
   format: AgentMcpConfigLocation['format']
 ): Record<string, unknown> | null {
-  const body = text.replace(/^﻿/, '')
+  const body = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
   if (format === 'toml') {
     try {
       return record(parseToml(body))

@@ -5,6 +5,10 @@ import { homedir } from 'node:os'
 import { basename } from 'node:path'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { botToolDetail, type BotToolServer } from '../../../shared/bot-tools'
+import type {
+  DiscoveredMcpServer,
+  McpServerWorkspaces
+} from '../../../shared/mcp-servers/mcp-servers'
 import { agentMcpServerMergeKey } from '../../../shared/mcp/agent-mcp-config-entry'
 import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
@@ -19,20 +23,10 @@ import {
 } from './agent-mcp-config-read'
 import { removeAgentMcpServerEntries } from './agent-mcp-config-removal'
 
-export type AgentMcpServerRow = {
-  key: string
-  name: string
-  detail: string
-  transport: 'http' | 'command'
-  agents: string[]
-  files: string[]
-  /** The repos or folders a project-limited server (Claude's local scope) is for; empty otherwise. */
-  projectNames: string[]
-  movable: boolean
-}
+export type AgentMcpServerRow = DiscoveredMcpServer
 
 /** Only these workspaces; null keeps a server on everywhere. */
-export type AgentMcpServerWorkspaces = { later: false; on: string[]; off: [] } | null
+export type AgentMcpServerWorkspaces = McpServerWorkspaces | null
 
 /** The host's workspace key and name for a project folder, or null when Orca doesn't know it. */
 export type WorkspaceForPath = (projectPath: string) => { key: string; name: string } | null
