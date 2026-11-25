@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { DiscoveredSlashCommand } from '../../../shared/skills/discovery/custom-slash-commands'
 import {
   buildCustomSlashCommandRoots,
   clearCustomSlashCommandScanCache,
@@ -143,9 +144,12 @@ describe('withCommandScanDeadline', () => {
 
   it('returns the scan result and clears its timer', async () => {
     vi.useFakeTimers()
-    const command = { name: 'opsx:apply' } as Awaited<
-      ReturnType<typeof discoverCustomSlashCommands>
-    >[number]
+    const command: DiscoveredSlashCommand = {
+      name: 'opsx:apply',
+      description: null,
+      scope: 'project',
+      commandFilePath: '/repo/.claude/commands/opsx/apply.md'
+    }
     await expect(withCommandScanDeadline(Promise.resolve([command]))).resolves.toEqual([command])
     expect(vi.getTimerCount()).toBe(0)
   })
