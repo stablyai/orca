@@ -93,6 +93,8 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.slack.members',
   'bots.slack.remove',
   'bots.slack.saveGrant',
+  // Gated on bots.slack-post-as.v1; older hosts refuse it here.
+  'bots.slack.setPostAs',
   'bots.slack.setUpApp',
   'bots.slack.state',
   'bots.suggestions.dismiss',
@@ -120,11 +122,14 @@ export const MOBILE_BOT_RPC_METHODS = [
   'bots.upNext.unseen',
   'bots.update',
   'google.bot.set',
-  // The bot's Google panel; sign-in stays off the phone, which has no loopback for its return.
   'google.client.export',
   'google.client.import',
   'google.default.set',
   'google.disconnect',
+  // Its page opens in Orca's browser on the host, whose own loopback takes the return; no paste-back.
+  'google.signIn.cancel',
+  'google.signIn.start',
+  'google.signIn.wait',
   'google.status',
   'webhooks.calls',
   'webhooks.card',

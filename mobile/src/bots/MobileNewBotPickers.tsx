@@ -1,32 +1,30 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, View } from 'react-native'
 import { Shuffle } from 'lucide-react-native'
-import { parseBotAvatar } from '../../../src/shared/bot-avatar'
 import type { BotAgent } from '../../../src/shared/bot-types'
 import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { HostKindIcon } from '../components/icons/HostKindIcon'
-import { ListGroup, ListRow } from '../components/list/ListGroup'
+import { COMPOSER_LINE_HEIGHT } from '../components/composer-input/composer-input-styles'
+import { LIST_ROW_PADDING, ListRow } from '../components/list/ListGroup'
 import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
 import { readBotAgentChoices, readSignedInEmail } from './new-bot-host-reads'
 
 /** New bot's picture, with Another picture's shuffle on its corner. */
-export function NewBotPicture(props: { avatar: string; onShuffle: () => void }) {
+export function NewBotPicture(props: { avatar: MobileBotAvatarSource; onShuffle: () => void }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const picture = parseBotAvatar(props.avatar)
   return (
     <View>
-      {picture?.kind === 'mascot' ? (
-        <MobileBotAvatar avatar={{ kind: 'mascot', id: picture.id }} size={72} />
-      ) : null}
+      <MobileBotAvatar avatar={props.avatar} size={72} />
       <Pressable
         style={({ pressed }) => [styles.shuffle, pressed && styles.pressed]}
         onPress={props.onShuffle}
@@ -85,63 +83,28 @@ export function useOtherOrcaAccount(
   return answer && answer.server === server ? answer.email : null
 }
 
-/** Runs on: the chosen computer, and what is true of it under the row. */
-export function NewBotRunsOn(props: {
+/** Runs on: the chosen computer; locked for a suggestion that takes workspaces over where they are. */
+export function NewBotRunsOnRow(props: {
   computer: NewBotComputer | undefined
-  /** A suggestion that takes over workspaces runs where they are. */
   locked: boolean
-  reachable: boolean
-  otherAccount: string | null
   onPick: () => void
 }) {
-  useMobileColorScheme()
   const t = useMobileTranslation()
-  const { computer } = props
-  const label = computer?.label ?? ''
-  const hasNote = !props.reachable || Boolean(props.otherAccount)
+  const label = props.computer?.label ?? ''
   return (
-    <>
-      <ListGroup style={hasNote ? undefined : styles.groupAlone}>
-        <ListRow
-          key="runs-on"
-          title={t('bots.new.runsOn', 'Runs on')}
-          accessory={
-            <View style={styles.value}>
-              <HostKindIcon hostId={computer?.hostId} size={14} />
-              <Text style={styles.valueText} numberOfLines={1}>
-                {label}
-              </Text>
-            </View>
-          }
-          navigates={!props.locked}
-          {...(props.locked ? {} : { onPress: props.onPick })}
-          accessibilityLabel={`${t('bots.new.runsOn', 'Runs on')}, ${label}`}
-        />
-      </ListGroup>
-      {props.reachable ? null : (
-        <Text style={styles.note}>
-          {t('bots.new.cantReach', 'Can’t reach {{host}}. Pick another computer.', {
-            host: label
-          })}
-        </Text>
-      )}
-      {props.reachable && props.otherAccount ? (
-        <Text style={styles.note}>
-          {t(
-            'bots.new.otherAccount',
-            '{{host}} uses its own Orca account ({{email}}). Its bots post and connect as that account.',
-            { host: label, email: props.otherAccount }
-          )}
-        </Text>
-      ) : null}
-    </>
+    <ListRow
+      title={t('bots.new.runsOn', 'Runs on')}
+      value={label}
+      valueIcon={<HostKindIcon hostId={props.computer?.hostId} size={14} />}
+      navigates={!props.locked}
+      {...(props.locked ? {} : { onPress: props.onPick })}
+    />
   )
 }
 
 /** Agent: the chosen agent, which opens the computer's choices; null when the computer has none. */
 export function NewBotAgentRow(props: {
   agent: BotAgent | null
-  hostLabel: string
   /** The computer hasn't said which agents it has yet: the row waits, as the desktop's picker does. */
   loading: boolean
   onPick: () => void
@@ -149,37 +112,41 @@ export function NewBotAgentRow(props: {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { agent } = props
-  const label = agent ? botAgentLabel(agent) : t('bots.new.noAgent', 'None')
   return (
-    <>
-      <ListGroup style={styles.agent}>
-        <ListRow
-          key="agent"
-          title={t('bots.new.agent', 'Agent')}
-          accessory={
-            <View style={styles.value}>
-              {props.loading ? <ActivityIndicator size="small" color={colors.textMuted} /> : null}
-              {agent ? <MobileAgentIcon agentId={agent} size={14} /> : null}
-              <Text style={styles.valueText} numberOfLines={1}>
-                {label}
-              </Text>
-            </View>
-          }
-          navigates={agent !== null}
-          busy={props.loading}
-          {...(agent ? { onPress: props.onPick } : {})}
-          accessibilityLabel={`${t('bots.new.agent', 'Agent')}, ${label}`}
-        />
-      </ListGroup>
-      {agent ? null : (
-        <Text style={styles.note}>
-          {t('bots.new.noChatAgents', 'No chat agents available on {{host}}.', {
-            host: props.hostLabel
-          })}
-        </Text>
-      )}
-    </>
+    <ListRow
+      title={t('bots.new.agent', 'Agent')}
+      value={agent ? botAgentLabel(agent) : t('bots.new.noAgent', 'None')}
+      {...(agent ? { valueIcon: <MobileAgentIcon agentId={agent} size={14} /> } : {})}
+      accessory={
+        props.loading ? <ActivityIndicator size="small" color={colors.textMuted} /> : undefined
+      }
+      navigates={agent !== null}
+      busy={props.loading}
+      {...(agent ? { onPress: props.onPick } : {})}
+    />
   )
+}
+
+/** The one thing true of the chosen computer that stops or changes the bot, under its rows. */
+export function newBotComputerNote(
+  t: ReturnType<typeof useMobileTranslation>,
+  facts: { host: string; reachable: boolean; otherAccount: string | null; noAgents: boolean }
+): string | null {
+  if (!facts.reachable) {
+    return t('bots.new.cantReach', 'Can’t reach {{host}}. Pick another computer.', {
+      host: facts.host
+    })
+  }
+  if (facts.noAgents) {
+    return t('bots.new.noChatAgents', 'No chat agents available on {{host}}.', { host: facts.host })
+  }
+  return facts.otherAccount
+    ? t(
+        'bots.new.otherAccount',
+        '{{host}} uses its own Orca account ({{email}}). Its bots post and connect as that account.',
+        { host: facts.host, email: facts.otherAccount }
+      )
+    : null
 }
 
 export function NewBotComputerSheet(props: {
@@ -236,24 +203,33 @@ export function NewBotAgentSheet(props: {
 }
 
 const styles = themedStyleSheet(() => ({
-  value: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, maxWidth: 180 },
-  valueText: { fontSize: typography.bodySize, color: colors.textMuted, flexShrink: 1 },
-  groupAlone: { marginBottom: spacing.md },
-  note: {
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: spacing.xs,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.xs
-  },
-  agent: { marginTop: spacing.md },
   shuffle: {
     position: 'absolute',
     right: -spacing.sm,
     bottom: -spacing.sm,
     padding: spacing.xs,
     borderRadius: radii.pill,
-    backgroundColor: colors.bgRaised
+    // bgRaised is the light sheet's own colour; the group fill lifts off the sheet in both themes.
+    backgroundColor: colors.sheetGroup
   },
   pressed: { opacity: 0.7 }
+}))
+
+const ROW_HEIGHT = 48
+// The phone's own text fields drawn as rows of a group: no edge, fill or ring, the text on the row inset.
+const unframed = {
+  borderWidth: 0,
+  borderRadius: 0,
+  backgroundColor: 'transparent',
+  outlineWidth: 0
+} as const
+
+export const groupFieldStyles = themedStyleSheet(() => ({
+  line: { ...unframed, minHeight: ROW_HEIGHT, paddingHorizontal: LIST_ROW_PADDING },
+  // The message text pads itself 6 across and 2 down; its first line sits where a one-line row's does.
+  lines: {
+    ...unframed,
+    paddingHorizontal: LIST_ROW_PADDING - 6,
+    paddingVertical: (ROW_HEIGHT - COMPOSER_LINE_HEIGHT) / 2 - spacing.xxs
+  }
 }))

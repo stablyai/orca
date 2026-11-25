@@ -49,8 +49,9 @@
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 - `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
+- `mcpServers` (McpServerContribution[], since 1.4.276): MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.
 
-Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `sidebarCards`.
+Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `taskSources`, `connections`, `sidebarCards`.
 
 ## PanelContribution
 
@@ -58,7 +59,7 @@ A sidebar panel. Requires the `sandboxed-ui` execution profile or higher.
 
 - `id` (string, required, since 1.4.160): Panel id, unique among this plugin's panels. The reserved names `constructor` and `prototype` are refused.
 - `title` (string, required, since 1.4.160): Title shown on the panel tab and its tooltip.
-- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link, since 1.4.160): Icon shown in the right-sidebar activity bar. Defaults to `plug`.
+- `icon` (one of activity, bar-chart-3, bell, blocks, book, bot, bug, calendar, cloud, code, database, file-text, flag, folder, gauge, globe, hammer, layers, lightbulb, package, plug, puzzle, rocket, star, terminal, wrench, zap, add, remove, delete, edit, refresh, search, settings, check, close, info, warning, error, open-external, copy, download, upload, play, pause, stop, more, expand, collapse, next, filter, branch, file, agent, link | object, since 1.4.160): Icon shown in the right-sidebar activity bar. Defaults to `puzzle`. Either a built-in name, or (manifest format 2, needs `engines.orca` `>=1.4.274`) an object with inline SVG path data that Orca draws in the theme color: `path` (required; up to 4096 characters of SVG path data starting with `M`, separated only by spaces, tabs, line breaks and commas), `viewBox` (`"0 0 W H"`, W and H from 1 to 1024; default `"0 0 24 24"`) and `mode` (`stroke`, the default, draws a 2-unit outline with round caps and joins like Lucide, which assumes a viewBox of about 24, so validation warns when W or H is above 48; `fill` fills the shape). Unknown keys are refused. SVG files are not supported. In format 2, an object icon that isn't a valid path icon, or a string ending in `.svg`, shows `puzzle` with a warning; any other value (a misspelled name, `null`, an array, a number or a boolean) is a manifest error. Format 1 shows `puzzle` with a warning for any icon that isn't a built-in name. Orca draws a single `<path>`: for an icon made of several `<path>` elements or other shapes (`<circle>`, `<rect>`, `<line>`), convert each shape to path commands and join every `d` into one `path`. Example: `{ "path": "M4 4h16v16H4z", "mode": "stroke" }`.
 - `entry` (string, required, since 1.4.160): What the panel runs: an HTML page for `ui: "html"`, a `.js`/`.mjs` module for `ui: "components"`. Either may instead be a `.ts`/`.tsx`/`.mts`/`.jsx` file, which Orca transpiles when it loads (needs `engines.orca` `>=1.4.246`; an `html` panel then gets a generated page around it). It is trusted code: install panels you trust.
 - `ui` ("html" | "components", since 1.4.246): How the panel draws its UI. `html` (default) shows `entry` as a web page in an isolated frame; `components` runs `entry` as a hidden module and Orca draws the component tree it returns with its own controls.
 
@@ -193,6 +194,16 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 - `tone` ("neutral" | "accent" | "success" | "warning" | "danger", since 1.4.248): Colour of the item. Defaults to `neutral`.
 - `tooltip` (string, since 1.4.248): Shown on hover. Defaults to the plugin name.
 - `command` (string, since 1.4.248): Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.
+
+## McpServerContribution
+
+An MCP server Orca offers to the agents it launches, beside the user’s own.
+
+- `name` (string, required, since 1.4.276): Server name agents see, unique in this plugin: letters, digits, `-` and `_`, at most 64.
+- `url` (string, since 1.4.276): Streamable HTTP address of a remote server. Give either `url` or `command`.
+- `command` (string, since 1.4.276): Executable that starts a local (stdio) server.
+- `args` (string[], since 1.4.276): Arguments for `command`.
+- `env` (object, since 1.4.276): Environment variables for `command`; nothing secret.
 
 ## Capability
 

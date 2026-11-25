@@ -1,3 +1,5 @@
+import { resolvePluginPanelPathIcon } from '../../../shared/plugins/contributions/plugin-panel-path-icon'
+import type { PluginPanelContribution } from '../../../shared/plugins/contributions/plugin-panel-contribution'
 import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { needsReconsent } from '../../../shared/plugins/approval/plugin-consent-state'
 import { pluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
@@ -12,6 +14,7 @@ import { pluginInstalledHostImages } from '../media/plugin-manifest-images'
 import { markCommandReplacementOwners } from '../commands/plugin-command-replacement-owners'
 import type { PluginService } from '../plugin-service'
 import { listPluginVmRecipeCommands } from '../../../shared/plugins/artifacts/plugin-vm-recipe-artifact'
+import { pluginMcpServerListing } from '../../../shared/plugins/contributions/plugin-mcp-server-contribution'
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
@@ -22,6 +25,7 @@ import { pluginCatalogTypes } from '../../../shared/plugins/catalog/plugin-catal
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import type {
   PluginHostListEntry,
+  PluginHostPanel,
   PluginHostStatus
 } from '../../../shared/plugins/plugin-list-entry'
 import {
@@ -83,6 +87,17 @@ const devChangeCountOf = (plugin: DiscoveredPlugin) =>
   plugin.devChangeCount === undefined ? {} : { devChangeCount: plugin.devChangeCount }
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
+
+/** A name stays in `icon`; a path icon goes to `iconPath` so older clients never see an object. */
+export function projectPluginPanelIcon(
+  icon: PluginPanelContribution['icon']
+): Pick<PluginHostPanel, 'icon' | 'iconPath'> {
+  if (typeof icon === 'string') {
+    return { icon }
+  }
+  const iconPath = icon ? resolvePluginPanelPathIcon(icon) : null
+  return iconPath ? { iconPath } : {}
+}
 
 export async function buildPluginList(
   service: PluginService,
@@ -205,7 +220,7 @@ export async function buildPluginList(
         panels: plugin.manifest.contributes.panels.map((panel) => ({
           id: panel.id,
           title: panel.title,
-          ...(panel.icon ? { icon: panel.icon } : {}),
+          ...projectPluginPanelIcon(panel.icon),
           tabKey: pluginPanelTabKey(plugin.pluginKey, panel.id)
         })),
         customEditors: plugin.manifest.contributes.customEditors.map((editor, index) => ({
@@ -249,6 +264,7 @@ export async function buildPluginList(
         statusBarItems: plugin.manifest.contributes.statusBarItems,
         hooks: plugin.manifest.contributes.hooks.map((hook) => hook.event),
         hasWorker: Boolean(plugin.manifest.main),
+        mcpServers: plugin.manifest.contributes.mcpServers.map(pluginMcpServerListing),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,

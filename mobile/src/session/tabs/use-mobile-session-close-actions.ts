@@ -1,4 +1,5 @@
 import {
+  pendingSelectionHandle,
   pendingSelectionTabId,
   withoutPendingHandle,
   withoutPendingTabId
@@ -186,10 +187,13 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
-        if (tab.type === 'terminal' && typeof tab.terminal === 'string') {
-          const terminalHandle = tab.terminal
+        const terminalHandle = tab.type === 'terminal' ? tab.terminal : null
+        if (terminalHandle !== null) {
           unsubscribeTerminal(terminalHandle)
           terminalRefs.current.delete(terminalHandle)
+          if (pendingSelectionHandle(pendingSelectionRef.current) === terminalHandle) {
+            pendingSelectionRef.current = withoutPendingHandle(pendingSelectionRef.current)
+          }
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
@@ -205,7 +209,14 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
           pendingSelectionRef.current = withoutPendingTabId(pendingSelectionRef.current)
         }
         // Read active identity live: bulk close can reactivate its anchor while an older close closure still names another tab.
-        if (activeSessionTabIdRef.current === tab.id) {
+        // An empty snapshot published before this reply can leave the ID null or set to the closed terminal's handle.
+        const activeTabId = activeSessionTabIdRef.current
+        if (
+          activeTabId === tab.id ||
+          ((activeTabId === null || activeTabId === terminalHandle) &&
+            terminalHandle !== null &&
+            activeHandleRef.current === terminalHandle)
+        ) {
           activeSessionTabTypeRef.current = null
           activeSessionTabIdRef.current = null
           setActiveSessionTabId(null)

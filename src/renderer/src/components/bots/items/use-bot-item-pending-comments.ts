@@ -15,23 +15,22 @@ import {
   createBotItemPendingCommentsHook,
   type BotItemPendingComments
 } from '../../../../../shared/bots/bot-item-pending-comments'
+import { botItemRefusedReplyText } from '../../../../../shared/bots/bot-item-refused-reply'
 import { useTranslate } from '@/i18n/use-translate'
 import { botErrorMessage } from '../bot-presentation'
 import { botHostTakes } from '../bot-host-capability'
 import { commentOnBotItem } from './use-bot-items'
 import { returnBotItemCommentDraft } from './bot-item-comment-draft'
-import {
-  botItemClearDeliveredAnswers,
-  botItemHeldAnswersScope,
-  botItemRefusedAnswerWords
-} from './bot-item-held-answers'
+import { readNativeChatDraftCache } from '../../native-chat/drafts/native-chat-draft-views'
+import { botItemClearDeliveredAnswers, botItemHeldAnswersScope } from './bot-item-held-answers'
 
 const usePendingComments = createBotItemPendingCommentsHook({ useEffect, useSyncExternalStore })
 
 export function useBotItemPendingComments(
   bot: BotRef,
   uid: string,
-  events: readonly BotItemEvent[]
+  events: readonly BotItemEvent[],
+  refresh: () => void
 ): BotItemPendingComments {
   const t = useTranslate()
   return usePendingComments(`${botRefKey(bot)}\0${uid}`, events, {
@@ -56,14 +55,12 @@ export function useBotItemPendingComments(
     // An ask of several keeps its picks held for its card's recovery row; only the words they don't
     // keep go back to the box.
     returnText: (text, { intent }) => {
-      returnBotItemCommentDraft(
-        bot,
-        uid,
-        intent && intent.shape.decisions.length > 1
-          ? botItemRefusedAnswerWords(botItemHeldAnswersScope(bot, uid, intent.askId), intent, text)
-          : text
-      )
+      const held = intent
+        ? readNativeChatDraftCache(botItemHeldAnswersScope(bot, uid, intent.askId))
+        : ''
+      returnBotItemCommentDraft(bot, uid, botItemRefusedReplyText(intent, text, held))
     },
+    refresh,
     // Its answers leave the ask's held picks: the host has them.
     delivered: ({ intent }) => {
       if (intent && intent.shape.decisions.length > 1) {

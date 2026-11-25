@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from 'react'
-import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
@@ -110,25 +109,6 @@ export function useWorkerDockOwnerActions(
     }
     attempt()
   }, [])
-  const clear = useCallback(
-    async (settlements: Parameters<typeof acknowledge>[0]) => {
-      await acknowledge(settlements)
-      toast.message(
-        t('components.native-chat.workerDock.cleared', 'Cleared {{count}} workers', {
-          count: settlements.length,
-          defaultValue_one: 'Cleared 1 worker'
-        }),
-        {
-          action: {
-            label: t('components.native-chat.workerDock.restore', 'Show in dock again'),
-            onClick: () =>
-              void acknowledge(settlements, false).catch((error) => toast.error(message(error)))
-          }
-        }
-      )
-    },
-    [acknowledge, t]
-  )
   const action = useCallback(
     (row: WorkerDockRowView, kind: 'stop' | 'clear') => {
       // Clear only acknowledges; a row with no settlement has nothing to clear and must not Stop.
@@ -139,7 +119,7 @@ export function useWorkerDockOwnerActions(
       const settlement = kind === 'clear' ? row.settlement : null
       track(new Set([row.id]), () => {
         if (settlement) {
-          return clear([{ dispatchId: row.dispatchId, settlement }])
+          return acknowledge([{ dispatchId: row.dispatchId, settlement }])
         }
         const block = stopBlock?.(row, party)
         return block
@@ -157,7 +137,7 @@ export function useWorkerDockOwnerActions(
             })
       })
     },
-    [clear, party, stopBlock, t, target, track]
+    [acknowledge, party, stopBlock, t, target, track]
   )
   const clearAll = useCallback(() => {
     const captured = (identities ?? []).flatMap((row) =>
@@ -170,9 +150,9 @@ export function useWorkerDockOwnerActions(
         .map((row) => row.id)
     )
     if (captured.length) {
-      track(capturedIds, () => clear(captured))
+      track(capturedIds, () => acknowledge(captured))
     }
-  }, [clear, identities, track])
+  }, [acknowledge, identities, track])
   const restore = useCallback(() => {
     const shown = dialog?.result
     if (!dialog || !shown || shown.dispatchId !== dialog.row.dispatchId) {
