@@ -179,7 +179,8 @@ export const storedAutomationRun = z.object({
         .optional()
     })
     .optional(),
-  instructionsLength: z.number()
+  instructionsLength: z.number(),
+  home: text
 })
 
 export const storedAutomationRunNotStarted = {

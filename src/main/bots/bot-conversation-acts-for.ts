@@ -5,6 +5,10 @@ import type { AutomationRun } from '../../shared/automations/history/automation-
 import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotConversationActsFor } from '../runtime/orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
+import type { Bot } from '../../shared/bot-types'
+import type { AutomationBotTarget } from '../../shared/automation-bot-target'
+import { automationHomeOf, botHomeOfActsFor, type BotHomeOf } from '../../shared/bots/bot-home-of'
+import { createChatOrcaSessionIdResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 
 export type BotConversationActsForSources = {
   getOrchestrationDb: () => OrchestrationDb
@@ -43,4 +47,26 @@ function legacyRunAutomationExists(sources: BotConversationActsForSources, root:
   } catch {
     return false
   }
+}
+
+/** Whose Home a chat's mail falls back to: the teammate it acts for alone, else the owner. Takes any
+ *  session of the chat; the record is keyed by its /clear root. */
+export function botHomeOfChat(
+  sources: BotConversationActsForSources,
+  bot: Pick<Bot, 'shares'>,
+  sessionId: string
+): BotHomeOf {
+  const recorded = readBotConversationActsFor(sources, createChatOrcaSessionIdResolver()(sessionId))
+  return recorded ? botHomeOfActsFor(bot, recorded.actsFor) : 'owner'
+}
+
+/** Whose Home an automation's "chat" runs and results use. */
+export function automationHome(
+  sources: BotConversationActsForSources,
+  bot: Pick<Bot, 'shares'>,
+  target: Pick<AutomationBotTarget, 'home' | 'chat'> | undefined
+): BotHomeOf {
+  return target
+    ? automationHomeOf(target, (sessionId) => botHomeOfChat(sources, bot, sessionId))
+    : 'owner'
 }

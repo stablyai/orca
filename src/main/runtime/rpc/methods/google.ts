@@ -258,7 +258,7 @@ export const GOOGLE_METHODS = [
       const chats = runtimeBotChats(ctx.runtime)
       const { outcome } = sessionId
         ? await chats.sendToSession(botId, sessionId, line, undefined, 'card-answer')
-        : await chats.sendToChat(botId, line, 'card-answer')
+        : await chats.sendToChat(botId, 'owner', line, 'card-answer')
       return { sent: outcome.kind !== 'refused' }
     }
   })

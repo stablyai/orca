@@ -2,6 +2,8 @@
 // teammate reads the shared bot without the list of whom else it is shared with.
 import type { Bot } from '../../../shared/bot-types'
 import { botShareUsable, type BotShare } from '../../../shared/bots/bot-team-shares'
+import { botHome } from '../../../shared/bots/bot-home-of'
+import type { Automation } from '../../../shared/automations/automation-definition'
 import type {
   BotShareProvisionedPhone,
   BotShareProvisionPhoneParams
@@ -50,11 +52,12 @@ export function botSharedWithAccount(
 }
 
 /** The bots a teammate's share connection lists: the shared bot alone, with only what its row, avatar
- *  and chats show. Its people, connectors, settings and the owner's chats stay on this host; the
- *  fields a Bot requires read empty, as for a shared agent whose host hasn't answered yet. */
+ *  and chats show, and their own Home Chat in the Home slot. Its people, connectors, settings and the
+ *  owner's chats stay on this host; the fields a Bot requires read empty, as for a shared agent whose
+ *  host hasn't answered yet. */
 export function botShareListedBots(
   bots: readonly Bot[],
-  scope: Pick<BotShareCallerScope, 'botId'>
+  scope: Pick<BotShareCallerScope, 'botId' | 'accountId'>
 ): Bot[] {
   return bots
     .filter((bot) => bot.id === scope.botId)
@@ -79,11 +82,25 @@ export function botShareListedBots(
       slack: null,
       linear: null,
       github: null,
-      chatSessionId: null
+      chatSessionId: botHome(bot, { accountId: scope.accountId })
     }))
 }
 
-/** Takes the share off the list, then ends that account's devices on the bot at once. */
+/** The running automations made for that teammate on the agent, which their removal pauses. */
+export function automationsOfTeammate(
+  automations: readonly Pick<Automation, 'id' | 'enabled' | 'bot'>[],
+  botId: string,
+  accountId: string
+): string[] {
+  return automations.flatMap((automation) =>
+    automation.enabled && automation.bot?.botId === botId && automation.bot.home === accountId
+      ? [automation.id]
+      : []
+  )
+}
+
+/** Takes the share off the list, pauses the automations made for that teammate (kept, for the owner
+ *  to resume or delete), then ends their devices on the agent at once. Their chats stay. */
 export async function removeBotShare(
   deps: {
     update: (
@@ -91,6 +108,10 @@ export async function removeBotShare(
       edit: (saved: Pick<Bot, 'shares'>) => Pick<BotHostUpdates, 'shares'>
     ) => Promise<Bot>
     devices: Pick<BotShareDevices, 'revokeBotShareDevices'> | null
+    automations: {
+      list: () => readonly Pick<Automation, 'id' | 'enabled' | 'bot'>[]
+      pause: (ids: readonly string[]) => Promise<void>
+    }
   },
   botId: string,
   shareId: string
@@ -100,6 +121,12 @@ export async function removeBotShare(
     removed = saved.shares?.find((share) => share.shareId === shareId)
     return { shares: (saved.shares ?? []).filter((share) => share !== removed) }
   })
+  if (removed?.kind === 'account') {
+    const theirs = automationsOfTeammate(deps.automations.list(), botId, removed.accountId)
+    if (theirs.length > 0) {
+      await deps.automations.pause(theirs)
+    }
+  }
   // An invite never reached a device; an account keeps no other share on the bot (one per account).
   if (removed?.kind === 'account' && deps.devices) {
     const ended = await deps.devices.revokeBotShareDevices(botId, removed.accountId)

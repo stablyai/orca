@@ -56,12 +56,11 @@ describe('botNewChatAgents', () => {
   })
 })
 
-it('offers a shared agent its owner’s agents, its own first, and no Home Chat, terminal or browser', () => {
+it('offers a shared agent its owner’s agents, its own first, and no terminal or browser', () => {
   // This computer's own agents don't matter: the chat runs on the owner's.
   const here = settled([{ kind: 'chat', agent: 'claude' }])
   const ownerAgents = [{ agent: 'claude' as const }, { agent: 'codex' as const }]
   expect(botHomeOffers({ agent: 'codex' }, here, { ownerAgents })).toEqual({
-    homeChat: false,
     agents: [{ agent: 'codex' }, { agent: 'claude' }],
     workspaceTabs: false
   })

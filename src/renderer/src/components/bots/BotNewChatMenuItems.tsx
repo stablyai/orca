@@ -48,20 +48,16 @@ export function BotNewChatMenuItems({
   const entries = offers.agents
   return (
     <>
-      {offers.homeChat ? (
-        <>
-          <DropdownMenuItem variant="create" onSelect={() => void newHomeChat()}>
-            <BotAgentAvatar bot={bot} agent={bot.agent} />
-            <span className="min-w-0 flex-1 truncate">
-              {t('bots.newHomeChat.action', 'New Home Chat')}
-            </span>
-            <span className="font-normal text-muted-foreground">
-              {t('bots.newHomeChat.hint', 'starts fresh')}
-            </span>
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-        </>
-      ) : null}
+      <DropdownMenuItem variant="create" onSelect={() => void newHomeChat()}>
+        <BotAgentAvatar bot={bot} agent={bot.agent} />
+        <span className="min-w-0 flex-1 truncate">
+          {t('bots.newHomeChat.action', 'New Home Chat')}
+        </span>
+        <span className="font-normal text-muted-foreground">
+          {t('bots.newHomeChat.hint', 'starts fresh')}
+        </span>
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
       <DropdownMenuLabel>
         {t('bots.sideChatsWith', 'Side chats with {{name}}', { name: bot.name })}
       </DropdownMenuLabel>

@@ -5,16 +5,18 @@ import type { BotRowLineChat } from '../../shared/bots/bot-row-line'
 import { buildBotChatBase, readBotChatInputs } from './bot-chat-tree-base'
 import type { BotChatTreeHost } from './bot-chat-tree-host'
 import { isBotOwnChat } from './bot-own-chat'
+import { sameBotHome, type BotHomeOf } from '../../shared/bots/bot-home-of'
 import { isOrcaSessionId } from '../../shared/agent-session/identity/orca-session-address'
 import { readSessionParties } from '../runtime/orchestration/addressing/session-party-reader'
 import { createCanonicalOrcaSessionResolver } from '../runtime/orchestration/addressing/session-lineage/canonical-orca-session-id'
 
-/** Bot id to its open side chats, Home and threads left out (the line names those its own way);
- *  `listed` narrows them to the chats the asker may see. */
+/** Agent id to its open side chats, the asker's Home and threads left out (the line names those its
+ *  own way); `listed` narrows them to the chats the asker may see, and `home` is whose Home is theirs. */
 export async function readBotOwnChatPanes(
   host: BotChatTreeHost,
   botIds?: readonly string[],
-  listed: (chatId: string) => boolean = () => true
+  listed: (chatId: string) => boolean = () => true,
+  home: BotHomeOf = 'owner'
 ): Promise<Record<string, BotRowLineChat[]>> {
   const store = await host.sessionRecords()
   if (!store) {
@@ -40,6 +42,7 @@ export async function readBotOwnChatPanes(
     const sides = [...build.chats.values()].flatMap((chat) => {
       const record = store.getRecord(build.sessionOfChat.get(chat.chatId) ?? chat.chatId)
       return chat.origin === 'side' &&
+        !(chat.whoseHome && sameBotHome(chat.whoseHome, home)) &&
         !chat.closed &&
         !threads.has(chat.chatId) &&
         listed(chat.chatId) &&

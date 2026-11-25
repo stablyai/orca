@@ -1,5 +1,6 @@
 // Shared by the bot mail tests: two bots on one host, their sessions and journals, and a send as one
 // of their chats. Each test file mocks the modules below with these factories.
+import type { BotHomeOf } from '../../../../../../shared/bots/bot-home-of'
 import type { BotConversationActsFor } from '../../../../orchestration/db/bot-requests/bot-conversation-acts-for-store'
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -24,8 +25,9 @@ export const sessionsOf: Record<string, string[]> = {
   docs: [DOCS_CHAT, DOCS_THREAD, DOCS_REQUEST]
 }
 export const journals: Record<string, AgentJournalRenderItem[]> = {}
-export const withChat: Mock<(botId: string, work: (sessionId: string) => unknown) => unknown> =
-  vi.fn()
+export const withChat: Mock<
+  (botId: string, of: BotHomeOf, work: (sessionId: string) => unknown) => unknown
+> = vi.fn()
 export const startBotSession: Mock<() => Promise<string>> = vi.fn(async () => DOCS_REQUEST)
 export const closeBotSession: Mock<(sessionId: string) => Promise<unknown>> = vi.fn(async () => ({
   stopped: true
@@ -170,9 +172,7 @@ export function setupBotMail(h: ReturnType<typeof createOrchestrationRpcHarness>
   failureHeldChats.clear()
   cards.length = 0
   withChat.mockReset()
-  withChat.mockImplementation((_botId: string, work: (sessionId: string) => unknown) =>
-    work(DOCS_CHAT)
-  )
+  withChat.mockImplementation((_botId, _of, work) => work(DOCS_CHAT))
   for (const key of Object.keys(journals)) {
     delete journals[key]
   }

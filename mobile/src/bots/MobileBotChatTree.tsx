@@ -50,6 +50,8 @@ export type BotChatTreeNote = (
 
 export type BotChatTreeActions = {
   openChat: (chat: BotChatTreeChat) => void
+  /** False for a chat that can't open now: its row shows disabled, as a worker's that can't. */
+  opens?: (chat: BotChatTreeChat) => boolean
   openWorker: (worker: BotChatTreeWorker) => void
   /** Asks, then deletes the chat; absent where the host can't. */
   deleteChat?: (chat: BotChatTreeChat) => void
@@ -141,6 +143,7 @@ function ChatGroup({
       onOpen={each.worktreeId ? () => actions.openWorker(each) : undefined}
     />
   )
+  const opens = actions.opens?.(chat) ?? true
   const openRow = () => openChat(chat, actions)
   return (
     <>
@@ -181,7 +184,8 @@ function ChatGroup({
                 ) : null}
               </>
             }
-            onPress={unopenable ? undefined : openRow}
+            onPress={unopenable || !opens ? undefined : openRow}
+            disabled={!opens}
             onLongPress={onLongPress}
             accessibilityLabel={
               chat.unread ? `${label}, ${t('bots.chats.unread', 'Unread')}` : label

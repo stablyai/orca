@@ -27833,7 +27833,8 @@
       "untitled": "새 채팅",
       "searchRetry": "다시 시도하세요",
       "loading": "채팅 로드 중…",
-      "readFailed": "이 봇의 채팅을 읽지 못했습니다."
+      "readFailed": "이 봇의 채팅을 읽지 못했습니다.",
+      "personHome": "{{name}}의 Home"
     },
     "needs": {
       "chat": "{{name}} 채팅",

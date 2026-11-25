@@ -4,6 +4,9 @@ import { releaseReplacedHomes } from '../../../bots/bot-home-chat-name'
 import { retryBotKickoff } from '../../../bots/bot-kickoff-retry'
 import { requireStructuredHost, runtimeBotChats } from '../../../bots/bot-chat-session'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { SHARE_BY_BOT } from '../../../../shared/bots/bot-share-rpc-methods'
+import { botShareScopeOf } from '../../../bots/team-share/bot-share-chats'
+import { callerHomeOf } from './bots-caller-home'
 
 /** A kickoff retry reads each send's fingerprint first, and the chat from its start only once that
  *  shows Orca's kickoff (and, on Try again, the owner's sends to check none reached the agent).
@@ -29,14 +32,16 @@ export const BOT_KICKOFF_METHODS = [
   defineMethod({
     name: 'bots.chat.open',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_BOT,
     params: BotChat,
-    handler: async (params, { runtime }) => {
+    handler: async (params, context) => {
+      const { runtime } = context
       runtime.bots.assertEnabled()
+      const of = callerHomeOf(botShareScopeOf(context))
       const chats = runtimeBotChats(runtime)
       const current = () => runtime.bots.list().find((entry) => entry.id === params.botId)
-      // Under the Chat's lock, a Home replaced before replaced Homes were renamed is renamed too.
-      const sessionId = await chats.withChat(params.botId, async (id) => {
+      // Under the Home's lock, a Home replaced before replaced Homes were renamed is renamed too.
+      const sessionId = await chats.withChat(params.botId, of, async (id) => {
         const opened = current()
         if (opened) {
           await releaseReplacedHomes(await requireStructuredHost(runtime), opened)
@@ -45,10 +50,10 @@ export const BOT_KICKOFF_METHODS = [
       })
       // The bot's page opens this, at launch too: a kickoff that ended silent gets its one retry.
       const bot = current()
-      if (bot) {
+      if (bot && of === 'owner') {
         void retryBotKickoff(bot, {
           ...kickoffReads(runtime),
-          send: (botId) => chats.sendToChat(botId, botFirstKickoff(bot), 'bot-created')
+          send: (botId) => chats.sendToChat(botId, 'owner', botFirstKickoff(bot), 'bot-created')
         }).catch((error: unknown) => console.warn('[bots] first-run kickoff retry failed:', error))
       }
       return { sessionId }
@@ -71,7 +76,7 @@ export const BOT_KICKOFF_METHODS = [
         bot,
         {
           ...kickoffReads(runtime),
-          send: (botId) => chats.sendToChat(botId, botFirstKickoff(bot), 'bot-created')
+          send: (botId) => chats.sendToChat(botId, 'owner', botFirstKickoff(bot), 'bot-created')
         },
         true
       )

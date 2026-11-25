@@ -31,7 +31,9 @@ export const BotShareSchema = z.discriminatedUnion('kind', [
     /** When the teammate accepted it (a device of theirs asked to reach the bot); absent until then. */
     acceptedAt: z.number().optional(),
     /** When the teammate declined it: it stays listed for the owner, as declined, never offered again. */
-    declinedAt: z.number().optional()
+    declinedAt: z.number().optional(),
+    /** The teammate's Home Chat with the agent; absent until they first open it. Older hosts drop it. */
+    homeSessionId: z.string().min(1).optional()
   }),
   z.object({
     kind: z.literal('invite'),

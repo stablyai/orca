@@ -24526,7 +24526,8 @@
       "untitled": "Neuer Chat",
       "searchRetry": "Erneut versuchen",
       "loading": "Chats werden geladen…",
-      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden."
+      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden.",
+      "personHome": "Home von {{name}}"
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",

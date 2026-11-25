@@ -7,6 +7,7 @@ import { botOfAddress, parseBotAddress } from '../../../../../../shared/bot-rost
 import { isFinalAutomationRunStatus } from '../../../../../../shared/automations/history/automation-run'
 import { isConnectorSource } from '../../../../../../shared/automation-event-triggers'
 import { botOfSession } from '../../../../../bots/bot-session-tabs'
+import { botShareAskerOf } from '../../../../../../shared/bots/bot-home-of'
 import { requireStructuredHost } from '../../../../../bots/bot-chat-session'
 import { readBotConversationActsFor } from '../../../../../bots/bot-conversation-acts-for'
 import {
@@ -290,11 +291,18 @@ export async function readBotTurn(
   const workspaceId = conversation ? workspaceOf(conversation.externalId) : null
   const host = await requireStructuredHost(runtime)
   const root = isOrcaSessionId(sessionId) ? canonicalOrcaSessionId(sessionId) : sessionId
+  const bot = botOfSession(runtime.bots, sessionId)
+  const personName = (accountId: string) => (bot && botShareAskerOf(bot, accountId).name) ?? null
   let recorded = readBotConversationActsFor(runtime, root)
   if (!recorded) {
     // Conversations from before Orca recorded this, and ones a person opened: their first message
     // says, and is kept as the record.
-    const first = await readFirstMessageActsFor(db, host.journalReads(root), workspaceId)
+    const first = await readFirstMessageActsFor(
+      db,
+      host.journalReads(root),
+      workspaceId,
+      personName
+    )
     if (first) {
       db.recordBotConversationActsFor(root, { actsFor: first })
       recorded = { actsFor: first }
@@ -306,7 +314,8 @@ export async function readBotTurn(
     botRequestActsFor: (messageId: string) => botRequestActsFor(db, messageId),
     conversationActsFor: actsFor,
     automationPlace: () => automationPlace(runtime, sessionId),
-    conversationWorkspaceId: workspaceId
+    conversationWorkspaceId: workspaceId,
+    personName
   }
   const turn = opening
     ? readBotActingTurn([openingItem(opening)], lookups, [])

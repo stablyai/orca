@@ -108,7 +108,23 @@ export const BOT_TEAM_SHARES_METHODS = [
       const bot = await removeBotShare(
         {
           update: (id, edit) => context.runtime.bots.update(id, edit),
-          devices: context.runtime.botShareDevices
+          devices: context.runtime.botShareDevices,
+          automations: {
+            list: () => context.runtime.listAutomationsForScope().automations,
+            pause: async (ids) => {
+              const results = await context.runtime.updateAutomations(
+                ids.map((id) => ({ id, updates: { enabled: false } }))
+              )
+              for (const result of results) {
+                if ('error' in result) {
+                  console.warn('[bots] could not pause a removed teammate’s automation', {
+                    botId,
+                    automationId: result.id
+                  })
+                }
+              }
+            }
+          }
         },
         botId,
         shareId

@@ -451,6 +451,8 @@ describe('the share guard', () => {
         'agentSessionAttachment.uploadStart',
         'bots.agentChoices',
         'bots.avatar.read',
+        'bots.chat.open',
+        'bots.chat.reset',
         'bots.chatTree',
         'bots.chats',
         'bots.chats.own',

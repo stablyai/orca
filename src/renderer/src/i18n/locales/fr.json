@@ -25129,7 +25129,8 @@
       "untitled": "Nouveau chat",
       "searchRetry": "Réessayer",
       "loading": "Chargement des chats…",
-      "readFailed": "Impossible de lire les chats de ce bot."
+      "readFailed": "Impossible de lire les chats de ce bot.",
+      "personHome": "Home de {{name}}"
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",
