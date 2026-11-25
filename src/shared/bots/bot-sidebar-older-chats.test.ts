@@ -58,7 +58,9 @@ const WORKSPACES: Line[] = [
   { id: 'quiet-2', host: 'local' },
   { id: 'asking-paged-out', host: 'local' },
   { id: 'twin', host: 'local' },
-  { id: 'twin', host: 'remote' }
+  { id: 'twin', host: 'remote' },
+  { id: 'idle-twin', host: 'local' },
+  { id: 'idle-twin', host: 'remote' }
 ]
 const WORKSPACE_CHATS: Record<string, string> = {
   'old-done-line': 'failed-1',
@@ -68,7 +70,9 @@ const WORKSPACE_CHATS: Record<string, string> = {
   'quiet-1': 'holds-paged-out-line',
   'quiet-2': 'holds-paged-out-line',
   'asking-paged-out': 'holds-paged-out-line',
-  twin: 'holds-remote-twin-descendant'
+  twin: 'holds-remote-twin-descendant',
+  // Two physical workspaces share this id: which chat each belongs to can't be told, so it holds.
+  'idle-twin': 'holds-ambiguous-twins'
 }
 const identityOf = (line: Line): string => `${line.host}/${line.id}`
 const CHILDREN: Record<string, Line[]> = {
@@ -100,7 +104,9 @@ function split(
       ['focused-today', NOW - HOUR],
       ['focused-long-ago', DAYS_AGO_4],
       ['cleared-into-session', NOW - HOUR],
-      ['focus-time-nan', Number.NaN]
+      ['focus-time-nan', Number.NaN],
+      ['alias-valid-today', NOW - HOUR],
+      ['alias-invalid', Number.POSITIVE_INFINITY]
     ]),
     heldSessionIds: new Set(['front-session', 'revealed']),
     heldLineIds: new Set([
@@ -150,6 +156,9 @@ const CHATS = [
   chat('holds-asking-descendant'),
   chat('holds-paged-out-line'),
   chat('holds-remote-twin-descendant'),
+  chat('holds-ambiguous-twins'),
+  // A valid recent focus on its own id survives an invalid sample on its /clear successor.
+  chat('alias-valid-today', { liveSessionId: 'alias-invalid' }),
   chat('turn-failed-today', { turnDone: { paneKey: 'p', at: NOW - 60_000 } }),
   chat('worker-failed-today', { finished: [worker('w-failed', 'failed', NOW - 60_000)] }),
   // Its newest worker exited without reporting: nothing dates the failure, so it never folds.

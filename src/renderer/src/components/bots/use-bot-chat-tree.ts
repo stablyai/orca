@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { BOT_WORK_KINDS } from '../../../../shared/bots/bot-change-scope'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { botRefKey, callBotRpc } from '@/lib/bot-hosts'
+import { botRefKey, callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botOwnChatTree,
@@ -53,38 +53,107 @@ type LoadedPages = { botKey: string; byChat: Record<string, BotChatTreeWorker[]>
 const NO_WORKSPACES: Record<string, string> = {}
 const NO_PAGES: LoadedPages['byChat'] = {}
 
-/** From each change notice for the bot until a read that started after it lands. A read that fails or
- *  never comes keeps it set until a later notice's read lands. Unchanged answers notify no listener, so
- *  this waits on the read itself, not on the shown value. */
+type ChangeNotices = {
+  unread: boolean
+  /** Bumped by each notice, so only the newest notice's read clears `unread`. */
+  latest: number
+  /** A notice came while the window was hidden; its read is asked for once it shows. */
+  missed: boolean
+  listeners: Set<() => void>
+  stop: () => void
+}
+
+/** Per bot, shared by every surface reading its chats (sidebar, Chats panel), for as long as any does:
+ *  set by each change notice, cleared only when a read that started after the newest notice lands. */
+const changeNoticesByBot = new Map<string, ChangeNotices>()
+
+function watchChangeNotices(bot: BotRef, key: string): ChangeNotices {
+  const notices: ChangeNotices = {
+    unread: false,
+    latest: 0,
+    missed: false,
+    listeners: new Set(),
+    stop: () => {}
+  }
+  const tell = (): void => notices.listeners.forEach((listener) => listener())
+  // Unchanged answers notify no reader, so this waits on the read itself, not on the shown value. A read
+  // that fails or never comes leaves `unread` set until a later notice's read lands.
+  const settle = (): void => {
+    const notice = notices.latest
+    void chatTreeRead.requestSettled(bot).then((settled) => {
+      if (settled.ok && notice === notices.latest && changeNoticesByBot.get(key) === notices) {
+        notices.unread = false
+        tell()
+      }
+    })
+  }
+  const onChanged = (): void => {
+    notices.latest += 1
+    if (!notices.unread) {
+      notices.unread = true
+      tell()
+    }
+    // A hidden window reads once it shows again, as the chat read itself does.
+    if (document.visibilityState === 'visible') {
+      settle()
+    } else {
+      notices.missed = true
+    }
+  }
+  const onVisible = (): void => {
+    if (notices.missed && document.visibilityState === 'visible') {
+      notices.missed = false
+      settle()
+    }
+  }
+  const stopListening = onBotsChanged(onChanged, bot.hostId, {
+    botId: bot.id,
+    kinds: chatTreeRead.kinds
+  })
+  document.addEventListener('visibilitychange', onVisible)
+  notices.stop = () => {
+    stopListening()
+    document.removeEventListener('visibilitychange', onVisible)
+  }
+  return notices
+}
+
+/** Whether the host said the bot's work changed and no read started since has landed. */
 function useChangeUnread(bot: Bot | null): boolean {
-  const [unread, setUnread] = useState(false)
   const hostId = bot?.hostId ?? null
   const botId = bot?.id ?? null
-  useEffect(() => {
-    if (!hostId || !botId) {
-      return
-    }
-    const notices = { latest: 0 }
-    const stop = onBotsChanged(
-      () => {
-        notices.latest += 1
-        const notice = notices.latest
-        setUnread(true)
-        void chatTreeRead.requestSettled({ hostId, id: botId }).then((settled) => {
-          if (settled.ok && notice === notices.latest) {
-            setUnread(false)
-          }
-        })
-      },
-      hostId,
-      { botId, kinds: chatTreeRead.kinds }
-    )
-    return () => {
-      notices.latest += 1
-      stop()
-    }
-  }, [hostId, botId])
-  return unread
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      if (!hostId || !botId) {
+        return () => {}
+      }
+      const ref = { hostId, id: botId }
+      const key = botRefKey(ref)
+      let notices = changeNoticesByBot.get(key)
+      if (!notices) {
+        notices = watchChangeNotices(ref, key)
+        changeNoticesByBot.set(key, notices)
+      }
+      const watched = notices
+      watched.listeners.add(listener)
+      return () => {
+        watched.listeners.delete(listener)
+        if (watched.listeners.size === 0 && changeNoticesByBot.get(key) === watched) {
+          watched.stop()
+          changeNoticesByBot.delete(key)
+        }
+      }
+    },
+    [hostId, botId]
+  )
+  const getUnread = useCallback(
+    () =>
+      hostId && botId
+        ? (changeNoticesByBot.get(botRefKey({ hostId, id: botId }))?.unread ?? false)
+        : false,
+    [hostId, botId]
+  )
+  return useSyncExternalStore(subscribe, getUnread, getUnread)
 }
 
 /** The bot's chats with their workers, from its host (a paired server's too); empty until read.

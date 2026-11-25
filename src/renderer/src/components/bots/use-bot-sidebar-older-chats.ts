@@ -16,6 +16,8 @@ import { folderWorkspaceKey } from '../../../../shared/workspace/identity/worksp
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import { selectWorktreeActivityStatus } from '@/components/sidebar/workspace-card/activity/use-worktree-activity-status'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import type { AppState } from '@/store/types'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -32,6 +34,14 @@ export function pruneBotSidebarOlderChats(liveKeys: ReadonlySet<string>): void {
     }
   }
 }
+
+/** Card statuses that say nothing is going on in a workspace. */
+const IDLE_STATUSES: ReadonlySet<WorktreeStatus> = new Set([
+  'inactive',
+  'done',
+  'failed',
+  'interrupted'
+])
 
 /** A chat tab in the bot's home counts for the bot only when it is the bot host's, or names no host. */
 export function tabOfBotHost(tab: Tab, hostId: string): boolean {
@@ -64,6 +74,7 @@ export function useBotSidebarOlderChats(input: {
   bot: Pick<Bot, 'hostId' | 'folderWorkspaceId'>
   entryKey: string
   views: readonly BotSidebarChatView<Worktree>[]
+  /** Every root workspace of the bot, sleeping ones too: attention under a hidden root still holds. */
   workspaces: readonly Worktree[]
   workspaceChats: Readonly<Record<string, string>>
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
@@ -90,13 +101,20 @@ export function useBotSidebarOlderChats(input: {
     (line: Worktree) => lineageChildrenByParentIdentity.get(getWorktreeHostIdentity(line)) ?? [],
     [lineageChildrenByParentIdentity]
   )
-  // Fold times from the read, tabs, open line and reveal; agent attention is added below, scanned only
-  // in the trees of chats that could fold.
+  // Fold times from the read, tabs, open line and reveal; workspace attention is checked below, only for
+  // chats already due.
   const baseTimes = useMemo(() => {
     const focusedAt = new Map<string, number>()
     for (const tab of homeTabs ?? []) {
-      if (tabOfBotHost(tab, bot.hostId) && tab.lastFocusedAt !== undefined) {
-        focusedAt.set(tab.entityId, Math.max(tab.lastFocusedAt, focusedAt.get(tab.entityId) ?? 0))
+      // Each stamp is checked before it competes, so a malformed duplicate can't hide a valid one.
+      const at = tab.lastFocusedAt
+      if (
+        tabOfBotHost(tab, bot.hostId) &&
+        typeof at === 'number' &&
+        Number.isFinite(at) &&
+        at > 0
+      ) {
+        focusedAt.set(tab.entityId, Math.max(at, focusedAt.get(tab.entityId) ?? 0))
       }
     }
     const heldLineIds = new Set(input.liveLineIds)
@@ -132,59 +150,10 @@ export function useBotSidebarOlderChats(input: {
     input.workspaceChats,
     childrenOf
   ])
-  // Each line, and every line under it, of a chat that could fold, by the chat. An id two hosts share
-  // maps to every chat holding either, so ambiguous attention holds them all.
-  const candidateLines = useMemo(() => {
-    const chatsByLine = new Map<string, Set<string>>()
-    const walked = new Set<string>()
-    const walk = (line: Worktree, chatId: string): void => {
-      const identity = `${chatId}\u0000${getWorktreeHostIdentity(line)}`
-      if (walked.has(identity)) {
-        return
-      }
-      walked.add(identity)
-      const chats = chatsByLine.get(line.id) ?? new Set<string>()
-      chats.add(chatId)
-      chatsByLine.set(line.id, chats)
-      childrenOf(line).forEach((child) => walk(child, chatId))
-    }
-    for (const line of workspaces) {
-      const chatId = input.workspaceChats[line.id]
-      if (chatId !== undefined && Number.isFinite(baseTimes.get(chatId) ?? Infinity)) {
-        walk(line, chatId)
-      }
-    }
-    return chatsByLine
-  }, [workspaces, input.workspaceChats, baseTimes, childrenOf])
-  const candidateIds = useMemo(() => [...candidateLines.keys()], [candidateLines])
-  // Any agent in one of those workspaces still working, blocked or waiting: read per pane, before any
-  // rollup to one status picks a failed pane over a working one. Joined, so unrelated writes compare equal.
-  const selectAttention = useCallback(
-    (state: AppState) =>
-      candidateIds
-        .filter((id) =>
-          selectLiveAgentStatusEntriesForWorktree(state, id).some((entry) => entry.state !== 'done')
-        )
-        .join('\n'),
-    [candidateIds]
-  )
-  const attentionIds = useAppStore(selectAttention)
-  const foldTimes = useMemo(() => {
-    if (!attentionIds) {
-      return baseTimes
-    }
-    const times = new Map(baseTimes)
-    for (const id of attentionIds.split('\n')) {
-      for (const chatId of candidateLines.get(id) ?? []) {
-        times.set(chatId, Number.POSITIVE_INFINITY)
-      }
-    }
-    return times
-  }, [baseTimes, attentionIds, candidateLines])
   // The clock only counts how many fold times have passed, so a tick re-renders nothing until one does.
   const dueTimes = useMemo(
-    () => [...foldTimes.values()].filter(Number.isFinite).sort((a, b) => a - b),
-    [foldTimes]
+    () => [...baseTimes.values()].filter(Number.isFinite).sort((a, b) => a - b),
+    [baseTimes]
   )
   const countDue = useCallback(
     (clock: number) => {
@@ -206,14 +175,78 @@ export function useBotSidebarOlderChats(input: {
     [dueTimes]
   )
   const dueCount = useNowSnapshot(OLDER_CHATS_CLOCK_MS, countDue)
+  const now = dueCount === 0 ? Number.NEGATIVE_INFINITY : dueTimes[dueCount - 1]!
+  // The workspaces whose attention can change a fold: every line under a chat already due, and every
+  // line no chat claims (whose attention nobody can place). Fewer than two due: nothing can fold, so none.
+  const watched = useMemo(() => {
+    const chatsByLine = new Map<string, Set<string | null>>()
+    if (dueCount < 2) {
+      return chatsByLine
+    }
+    const walked = new Set<string>()
+    const walk = (line: Worktree, chatId: string | null): void => {
+      const identity = `${chatId}\u0000${getWorktreeHostIdentity(line)}`
+      if (walked.has(identity)) {
+        return
+      }
+      walked.add(identity)
+      const chats = chatsByLine.get(line.id) ?? new Set<string | null>()
+      chats.add(chatId)
+      chatsByLine.set(line.id, chats)
+      childrenOf(line).forEach((child) => walk(child, chatId))
+    }
+    for (const line of workspaces) {
+      const chatId = input.workspaceChats[line.id]
+      if (chatId === undefined) {
+        walk(line, null)
+      } else if ((baseTimes.get(chatId) ?? Number.POSITIVE_INFINITY) <= now) {
+        walk(line, chatId)
+      }
+    }
+    return chatsByLine
+  }, [dueCount, now, workspaces, input.workspaceChats, baseTimes, childrenOf])
+  const watchedIds = useMemo(() => [...watched.keys()], [watched])
+  // Any sign a workspace is not idle: its card's status (titles and permission prompts included) or any
+  // agent pane not done, read per pane so a failed pane can't mask a working one. Joined, so a write that
+  // changes none of them compares equal; nothing is read while nothing is due.
+  const selectAttention = useCallback(
+    (state: AppState) =>
+      watchedIds.length === 0
+        ? ''
+        : watchedIds
+            .filter(
+              (id) =>
+                !IDLE_STATUSES.has(selectWorktreeActivityStatus(state, id)) ||
+                selectLiveAgentStatusEntriesForWorktree(state, id).some(
+                  (entry) => entry.state !== 'done'
+                )
+            )
+            .join('\n'),
+    [watchedIds]
+  )
+  const attentionIds = useAppStore(selectAttention)
+  const foldTimes = useMemo(() => {
+    const held = attentionIds
+      ? attentionIds.split('\n').flatMap((id) => [...(watched.get(id) ?? [])])
+      : []
+    // Attention no chat claims could be any chat's: then nothing folds.
+    const heldChats = new Set(held)
+    const unplaced = heldChats.has(null)
+    const times = new Map(baseTimes)
+    for (const [chatId] of baseTimes) {
+      if (unplaced || heldChats.has(chatId)) {
+        times.set(chatId, Number.POSITIVE_INFINITY)
+      }
+    }
+    return times
+  }, [baseTimes, attentionIds, watched])
   const split = useMemo(() => {
     const shown = olderByBot.get(entryKey)
     // No fresh read, or the owner over or in the list (or not yet sampled on mount): only what was folded
     // before stays folded, and with nothing drawn before, nothing folds.
     const keepFoldedOnly = !fresh || input.held ? (shown ?? new Set<string>()) : null
-    const now = dueCount === 0 ? Number.NEGATIVE_INFINITY : dueTimes[dueCount - 1]!
     return splitOlderBotSidebarChats(views, foldTimes, now, keepFoldedOnly)
-  }, [entryKey, fresh, input.held, dueCount, dueTimes, views, foldTimes])
+  }, [entryKey, fresh, input.held, now, views, foldTimes])
   const olderKey = split.older.map((view) => view.chat.chatId).join('\n')
   useEffect(() => {
     olderByBot.set(entryKey, new Set(olderKey ? olderKey.split('\n') : []))

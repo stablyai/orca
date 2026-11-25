@@ -1,51 +1,40 @@
 // A bot chat row's fold and paging controls, the same in the sidebar and the Activity panel.
-import { Fragment } from 'react'
+import { Fragment, useMemo } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import type { Bot } from '../../../../shared/bot-types'
-import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { flashChatPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
 
-/** The front tab shows this chat. Its own id matches as before; the session a /clear moved it to marks
- *  it current only when the tab is stamped with the bot's host, never on an unknown owner. */
-function frontTabIsBotChat(
-  tab: Pick<Tab, 'entityId' | 'executionHostId'> | null,
-  hostId: string,
-  chatId: string,
-  liveSessionId: string | undefined
-): boolean {
-  if (!tab) {
-    return false
-  }
-  return (
-    tab.entityId === chatId ||
-    (liveSessionId !== undefined &&
-      tab.entityId === liveSessionId &&
-      tab.executionHostId === hostId)
-  )
-}
-
-/** Whether a chat's tab is the one in front (from the list's one read of the bot home's front chat tab),
- *  its fold toggle, and a flash of its pane for a press on the row of the chat already in front. */
+/** Whether a chat's tab is the one in front, its fold toggle, and a flash of its pane for a press
+ *  on the row of the chat already in front, for a row whose list reads its fold. */
 export function useBotChatPress(
-  bot: Pick<Bot, 'hostId' | 'id'>,
-  chat: { chatId: string; liveSessionId?: string },
-  front: Pick<Tab, 'id' | 'entityId' | 'executionHostId'> | null
+  bot: Pick<Bot, 'hostId' | 'id' | 'folderWorkspaceId'>,
+  chatId: string
 ): {
   active: boolean
   toggle: (open: boolean) => void
   highlight: () => void
 } {
+  const homeKey = useMemo(() => folderWorkspaceKey(bot.folderWorkspaceId), [bot.folderWorkspaceId])
   const setBotChatFold = useAppStore((s) => s.setBotChatFold)
-  const active = frontTabIsBotChat(front, bot.hostId, chat.chatId, chat.liveSessionId)
+  const active = useAppStore((s) => {
+    if ((s.activeWorkspaceKey ?? s.activeWorktreeId) !== homeKey) {
+      return false
+    }
+    const tab = selectFrontTab(s)
+    return tab?.contentType === 'agent-session' && tab.entityId === chatId
+  })
   return {
     active,
-    toggle: (open) => setBotChatFold(bot.hostId, bot.id, chat.chatId, open ? 'folded' : 'open'),
+    toggle: (open) => setBotChatFold(bot.hostId, bot.id, chatId, open ? 'folded' : 'open'),
     highlight: () => {
-      if (front && active) {
-        flashChatPaneRim(front.id)
+      const tab = selectFrontTab(useAppStore.getState())
+      if (tab?.contentType === 'agent-session' && tab.entityId === chatId) {
+        flashChatPaneRim(tab.id)
       }
     }
   }

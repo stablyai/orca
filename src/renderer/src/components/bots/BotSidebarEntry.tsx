@@ -169,6 +169,7 @@ export function BotSidebarEntry({
           <BotSidebarList
             bot={bot}
             workspaces={workspaces}
+            allWorkspaces={ordered}
             lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
             activeLine={activeLine}
             onFoldBot={() => toggleCollapsedGroup(groupKey)}
@@ -185,6 +186,7 @@ export function BotSidebarEntry({
 function BotSidebarList({
   bot,
   workspaces,
+  allWorkspaces,
   lineageChildrenByParentIdentity,
   activeLine,
   onFoldBot,
@@ -192,6 +194,8 @@ function BotSidebarList({
 }: {
   bot: Bot
   workspaces: Worktree[]
+  /** Every worker line, sleeping ones too, for what the fold of old chats must see. */
+  allWorkspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
   onFoldBot: () => void
@@ -224,6 +228,7 @@ function BotSidebarList({
         bot={bot}
         tree={chatTree}
         workspaces={workspaces}
+        allWorkspaces={allWorkspaces}
         lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
         activeLine={activeLine}
         steps={chatSteps}

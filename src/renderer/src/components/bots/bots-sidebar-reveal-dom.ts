@@ -36,10 +36,8 @@ export function findBotsRevealElement(
     )
   }
   if (depth === 2 && target.chatId) {
-    const chatId = escapeAttribute(target.chatId)
-    // After /clear the tab in front carries the successor session; its row keeps the chat's own id.
     return entry.querySelector<HTMLElement>(
-      `[data-bot-sidebar-chat="${chatId}"], [data-bot-sidebar-chat-session="${chatId}"]`
+      `[data-bot-sidebar-chat="${escapeAttribute(target.chatId)}"]`
     )
   }
   return depth === 1 ? entry.querySelector<HTMLElement>('[data-worktree-card-surface]') : null

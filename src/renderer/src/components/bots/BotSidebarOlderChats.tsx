@@ -17,7 +17,7 @@ export function BotSidebarOlderToggle({
   onToggle: () => void
   /** It is going away while it holds focus, so the list can hand focus on. Stable. */
   onRemovedWithFocus: () => void
-  /** Focus is in a listed older row or its portaled menu, which DOM ancestry alone can't see. */
+  /** Focus is in one of this list's older rows or a menu one of them opened. */
   olderFocused: () => boolean
 }): React.JSX.Element {
   const t = useTranslate()
@@ -32,10 +32,7 @@ export function BotSidebarOlderToggle({
     }
   }, [onRemovedWithFocus])
   const toggle = (): void => {
-    if (
-      open &&
-      (olderFocused() || document.activeElement?.closest('[data-bot-sidebar-older-chat]'))
-    ) {
+    if (open && olderFocused()) {
       // Focus would otherwise drop to the page as the focused row goes away.
       toggleRef.current?.focus()
     }

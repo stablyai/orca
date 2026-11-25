@@ -71,6 +71,32 @@ export function botSidebarChatFoldTimes<T extends { id: string }>(
       heldChats.add(chatId)
     }
   }
+  // An id two physical workspaces share (twins on two hosts) maps to one chat however many claim it, so
+  // whichever chat it names can't be told apart from the other's: every chat over such an id holds.
+  const identitiesById = new Map<string, Set<string>>()
+  const chatsById = new Map<string, Set<string>>()
+  const seen = new Set<string>()
+  const collect = (line: T, chatId: string): void => {
+    const identity = holds.identityOf(line)
+    if (seen.has(`${chatId}\u0000${identity}`)) {
+      return
+    }
+    seen.add(`${chatId}\u0000${identity}`)
+    identitiesById.set(line.id, (identitiesById.get(line.id) ?? new Set()).add(identity))
+    chatsById.set(line.id, (chatsById.get(line.id) ?? new Set()).add(chatId))
+    holds.childrenOf(line).forEach((child) => collect(child, chatId))
+  }
+  for (const line of holds.workspaces) {
+    const chatId = holds.workspaceChats[line.id]
+    if (chatId !== undefined) {
+      collect(line, chatId)
+    }
+  }
+  for (const [id, identities] of identitiesById) {
+    if (identities.size > 1) {
+      chatsById.get(id)?.forEach((chatId) => heldChats.add(chatId))
+    }
+  }
   const times = new Map<string, number>()
   for (const chat of chats) {
     const ids = chat.liveSessionId ? [chat.chatId, chat.liveSessionId] : [chat.chatId]
