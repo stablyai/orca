@@ -19,7 +19,10 @@ import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storag
 import { provideInstalledManagedAgents } from '../../../../preflight/managed-agent-detection'
 import { notifyAgentsRefreshedOnHost } from '../../../../preflight/agents-refreshed-on-host'
 import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
-import { normalizePathEntry } from '../../../../../shared/shell/command-resolution/node-cli-command-resolution'
+import {
+  normalizePathEntry,
+  stripWindowsPathQuotes
+} from '../../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   resolveCliCommandAsync,
   resolveExecutableCommandAsync
@@ -192,24 +195,44 @@ function lookUpOwnProgram(program: string, pathEnv: string): Promise<string> {
   return lookup
 }
 
-function onTerminalPath(file: string, pathEnv: string): boolean {
-  const folder = dirname(file)
-  return pathEnv
-    .split(delimiter)
-    .map((entry) => normalizePathEntry(process.platform, entry))
-    .some(
-      (entry) => entry && isPathInsideOrEqual(entry, folder) && isPathInsideOrEqual(folder, entry)
-    )
+export function isQuotedWindowsPathEntry(entry: string): boolean {
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const trimmed = entry.trim()
+  return stripWindowsPathQuotes(trimmed) !== trimmed
 }
 
-function withoutManagedDirectories(agent: TuiAgent, pathEnv: string): string {
+function onTerminalPath(file: string, pathEnv: string, shell?: AgentStartupShell): boolean {
+  const folder = dirname(file)
+  const acceptsQuotes = shell === 'cmd' || shell === 'posix'
+  return pathEnv.split(delimiter).some((rawEntry) => {
+    if (!acceptsQuotes && isQuotedWindowsPathEntry(rawEntry)) {
+      return false
+    }
+    const entry = normalizePathEntry(process.platform, rawEntry)
+    return entry && isPathInsideOrEqual(entry, folder) && isPathInsideOrEqual(folder, entry)
+  })
+}
+
+function withoutManagedDirectories(
+  agent: TuiAgent,
+  pathEnv: string,
+  pathFromSpawn?: boolean
+): string {
   if (!isManagedAgentCli(agent)) {
     return pathEnv
   }
   const root = managedAgentCli(agent).runtime.root(getProfileUserDataPath())
   return pathEnv
     .split(delimiter)
-    .filter((entry) => !isPathInsideOrEqual(root, entry))
+    .filter((entry) => {
+      const directory =
+        pathFromSpawn && isQuotedWindowsPathEntry(entry)
+          ? normalizePathEntry('win32', entry)
+          : entry
+      return !isPathInsideOrEqual(root, directory)
+    })
     .join(delimiter)
 }
 
@@ -238,13 +261,16 @@ export async function readHostManagedAgentCommands(
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
-        const own = await lookUpOwnProgram(program, withoutManagedDirectories(agent, pathEnv))
+        const own = await lookUpOwnProgram(
+          program,
+          withoutManagedDirectories(agent, pathEnv, options.forDelivery)
+        )
         if (own === program) {
           const managed = await managedCopyFor(agent, program, settings)
           if (managed) {
             commands[agent] = managed
           }
-        } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv)) {
+        } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
           commands[agent] = own
         }
       } catch (error) {

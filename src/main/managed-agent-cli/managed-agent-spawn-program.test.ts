@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { withOmpDraftCleanup } from '../../shared/agent-launch/startup/omp-draft-launch'
 import { withFreshOmpLaunch } from '../../shared/agent-launch/startup/omp-fresh-launch'
+import type { readHostManagedAgentCommands } from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { rememberManagedAgentRelease } from './managed-agent-cli-registry'
 import { alignManagedAgentLaunchAtSpawn } from './managed-agent-spawn-program'
 
@@ -11,23 +12,21 @@ vi.mock('../orca-profiles/profile-storage-paths', () => ({
   getProfileUserDataPath: () => '/data/orca'
 }))
 const host = vi.hoisted(() => ({
-  resolve:
-    vi.fn<
-      (
-        settings: unknown,
-        agents: unknown,
-        options?: { pathEnv?: string }
-      ) => Promise<Record<string, string>>
-    >(),
+  resolve: vi.fn<typeof readHostManagedAgentCommands>(),
   capture: vi.fn(async () => ({ PATH: '/profile/bin:/usr/bin' })),
   cached: vi.fn(async (): Promise<{ status: 'captured' | 'fallback'; env: NodeJS.ProcessEnv }> => ({
     status: 'fallback',
     env: {}
   }))
 }))
-vi.mock('../runtime/rpc/methods/host-management/managed-copy-detection', () => ({
-  readHostManagedAgentCommands: host.resolve
-}))
+vi.mock(
+  import('../runtime/rpc/methods/host-management/managed-copy-detection'),
+  async (importOriginal) => {
+    const actual = await importOriginal()
+    host.resolve.mockImplementation(actual.readHostManagedAgentCommands)
+    return { ...actual, readHostManagedAgentCommands: host.resolve }
+  }
+)
 
 vi.mock('../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: host.capture,
@@ -44,6 +43,25 @@ const spawn = (launchCommand: string, codexRuntime: 'host' | 'wsl' = 'host') =>
     { launchCommand, codexRuntime, getSettings: () => settings },
     'posix'
   )
+
+it.runIf(process.platform === 'win32')(
+  'uses the absolute Claude path in PowerShell when its directory is quoted on PATH',
+  async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca claude path '))
+    const bin = join(dir, 'claude.exe')
+    try {
+      writeFileSync(bin, '')
+      expect(
+        await alignManagedAgentLaunchAtSpawn(
+          { launchCommand: 'claude --verbose', queuedPath: `"${dir}"`, getSettings: () => ({}) },
+          'powershell'
+        )
+      ).toBe(`& '${bin}' --verbose`)
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  }
+)
 
 it.skipIf(process.platform === 'win32')(
   "starts the installed release of Orca's copy, or the plain name where it can't run",

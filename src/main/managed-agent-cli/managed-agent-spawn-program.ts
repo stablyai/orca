@@ -28,7 +28,10 @@ import {
 } from '../startup/shell-environment/login-shell-environment'
 import { resolveProfileLoadingShell } from '../startup/shell-environment/hydrate-shell-path'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
-import { readHostManagedAgentCommands } from '../runtime/rpc/methods/host-management/managed-copy-detection'
+import {
+  isQuotedWindowsPathEntry,
+  readHostManagedAgentCommands
+} from '../runtime/rpc/methods/host-management/managed-copy-detection'
 import { MANAGED_AGENT_CLI_IDS, managedAgentCli } from './managed-agent-cli-registry'
 
 type SpawnSettings = Parameters<typeof readHostManagedAgentCommands>[0]
@@ -148,13 +151,14 @@ async function effectiveSearchPath(
   shell: AgentStartupShell,
   launch: NonNullable<ReturnType<typeof readLaunchPosition>>
 ): Promise<string> {
+  const isWindows = process.platform === 'win32'
   const pathKey = (name: string): boolean =>
-    process.platform === 'win32' ? name.toLowerCase() === 'path' : name === 'PATH'
+    isWindows ? name.toLowerCase() === 'path' : name === 'PATH'
   const scopedPath = [...launch.env].findLast(([name]) => pathKey(name))
   const launchEnvPath = launchPath(spawn.env ?? {})
   const profileShell = spawn.sourceShell ?? shell
   const shellOverride =
-    !scopedPath && spawn.queuedPath === undefined && process.platform === 'win32'
+    !scopedPath && spawn.queuedPath === undefined && isWindows
       ? profileShell === 'cmd'
         ? null
         : profileShell === 'posix'
@@ -176,27 +180,26 @@ async function effectiveSearchPath(
       ? await withStartupFilePath(spawn.queuedPath, shellOverride)
       : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
   const nativePath =
-    process.platform === 'win32' && shell === 'posix'
-      ? msysDrivePathToWindows
-      : (value: string) => value
+    isWindows && shell === 'posix' ? msysDrivePathToWindows : (value: string) => value
   // Profile capture and a PTY's env seed use native delimiters; Bash's inline PATH uses colons.
-  const pathDelimiter =
-    process.platform === 'win32' && shell === 'posix' && scopedPath ? ':' : delimiter
-  const directories =
-    path !== undefined && (path !== '' || process.platform !== 'win32')
-      ? path
-          .split(pathDelimiter)
-          .map((entry) => nativePath(normalizePathEntry(process.platform, entry)))
-      : []
-  const searchesCwd = process.platform === 'win32' && shell === 'cmd'
+  const pathDelimiter = isWindows && shell === 'posix' && scopedPath ? ':' : delimiter
+  const entries = path !== undefined && (path !== '' || !isWindows) ? path.split(pathDelimiter) : []
+  const directories = entries.map((entry) =>
+    nativePath(normalizePathEntry(process.platform, entry))
+  )
+  const preserveQuotes = (paths: string[]) =>
+    isWindows
+      ? paths.map((dir, index) => (isQuotedWindowsPathEntry(entries[index]) ? `"${dir}"` : dir))
+      : paths
+  const searchesCwd = isWindows && shell === 'cmd'
   if (!searchesCwd && directories.every(isAbsolute)) {
-    return directories.join(delimiter)
+    return preserveQuotes(directories).join(delimiter)
   }
   const launchCwd = nativePath(launch.cwd ?? '.')
   const cwd = isAbsolute(launchCwd)
     ? launchCwd
     : resolve(nativePath((await spawn.readCwd?.()) || spawn.cwd || process.cwd()), launchCwd)
-  const absoluteDirectories = directories.map((entry) => resolve(cwd, entry))
+  const absoluteDirectories = preserveQuotes(directories.map((entry) => resolve(cwd, entry)))
   return (searchesCwd ? [cwd, ...absoluteDirectories] : absoluteDirectories).join(delimiter)
 }
 
