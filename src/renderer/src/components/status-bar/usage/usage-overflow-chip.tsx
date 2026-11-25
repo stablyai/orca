@@ -1,10 +1,8 @@
 import React from 'react'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
-import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { useTranslate } from '@/i18n/use-translate'
-import { getTightestUsageSection } from './usage-headline-sections'
-import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatUsageChipTitle } from './usage-chip-title'
 
 /** Stands in for the chips a narrow bar leaves out; its tooltip names them and the popover lists them. */
 export function UsageOverflowChip({
@@ -19,15 +17,7 @@ export function UsageOverflowChip({
   hostLabel?: string
 }): React.JSX.Element {
   const t = useTranslate()
-  const names = hidden
-    .map((p) => {
-      const tightest = getTightestUsageSection(p, t, 'all')
-      const name = getProviderDisplayName(p.provider)
-      return tightest
-        ? `${name} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`
-        : name
-    })
-    .join(', ')
+  const names = hidden.map((p) => formatUsageChipTitle(p, display, t)).join(', ')
   return (
     <span
       title={[

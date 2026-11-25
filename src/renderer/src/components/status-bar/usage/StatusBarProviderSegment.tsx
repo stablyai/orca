@@ -27,8 +27,8 @@ import {
   isClaudeUsageWaitingForClaude
 } from '../../../../../shared/agent-usage/status-copy/usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './usage-headline-sections'
-import { getProviderDisplayName } from '../../../../../shared/agent-usage/display/usage-provider-windows'
-import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
+import { formatBareUsagePercentage } from './usage-percentage-label'
+import { formatUsageChipTitle } from './usage-chip-title'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from '../composition/status-bar-usage-sections'
@@ -297,9 +297,9 @@ export function ProviderSegment({
   )
 
   const compactBar = barMode === 'compact'
-  // Why: the compact bar dims icons so the numbers carry the row.
+  // Why muted color, not opacity: monochrome icons go quiet while brand colors keep 3:1 contrast.
   const icon = compactBar ? (
-    <span className="inline-flex opacity-75">
+    <span className="inline-flex text-muted-foreground">
       <ProviderIcon provider={provider} />
     </span>
   ) : (
@@ -318,7 +318,9 @@ export function ProviderSegment({
 
   if (p.status === 'unavailable') {
     return (
-      <span className="inline-flex items-center gap-1 text-muted-foreground/50">{icon} --</span>
+      <span className="inline-flex items-center gap-1 text-muted-foreground/50">
+        <ProviderIcon provider={provider} /> --
+      </span>
     )
   }
 
@@ -352,19 +354,10 @@ export function ProviderSegment({
   const showGroupedPools =
     mode === 'verbose' && groupedBuckets.length > 0 && groupedBuckets.length === sections.length
 
-  // Why: the compact bar drops pool and window names from the row; the tooltip keeps them.
-  const providerName = getProviderDisplayName(provider)
-  const name = sections.find((section) => section.label)?.label
-  const subject =
-    !name || name.startsWith(providerName) ? (name ?? providerName) : `${providerName} ${name}`
+  // Why the form, not barMode: a narrow Detailed chip is a bare percent too, so it needs the name.
   const compactTitle =
-    compactBar && tightest
-      ? [
-          `${subject} ${formatUsagePercentageLabel(tightest.window.usedPercent, display, t)}`,
-          hostLabel
-        ]
-          .filter(Boolean)
-          .join('\n')
+    mode === 'compact' && tightest
+      ? [formatUsageChipTitle(p, display, t), hostLabel].filter(Boolean).join('\n')
       : undefined
 
   return (
