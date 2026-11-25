@@ -37,7 +37,7 @@ export const ORCHESTRATION_GROUP_POST_METHOD = defineOrchestrationMethod({
         { effectsApplied: false }
       )
     }
-    const from = peerGroupQuestionRecipient(runtime, original, route)
+    const { to: from } = peerGroupQuestionRecipient(runtime, original, route)
     if (
       sessionCallerOf(orchestrationCaller)?.address !== from ||
       (params.from && params.from !== from)

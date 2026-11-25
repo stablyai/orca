@@ -12,6 +12,7 @@ import type { BotGroup } from '../../shared/bots/bot-group'
 const KEPT_FIELDS = [
   ['bot_groups', 'remoteMembers'],
   ['bot_groups', 'remoteStops'],
+  ['bot_groups', 'legacyRemoteCutoff'],
   ['bot_group_messages', 'images'],
   ['bot_group_messages', 'remoteAsks'],
   ['bot_group_messages', 'remoteAuthor'],
@@ -135,6 +136,15 @@ export function createBotGroupTables(db: Database): boolean {
     CREATE TABLE IF NOT EXISTS bot_group_remote_asks (request_id TEXT PRIMARY KEY, message_id TEXT NOT NULL);
     CREATE INDEX IF NOT EXISTS bot_group_remote_asks_message ON bot_group_remote_asks(message_id);
     CREATE TABLE IF NOT EXISTS bot_group_remote_asks_scanned (id INTEGER PRIMARY KEY CHECK (id = 1), sequence INTEGER NOT NULL);
+    CREATE TRIGGER IF NOT EXISTS bot_groups_fence_legacy_room_write AFTER UPDATE OF record ON bot_groups
+      WHEN json_type(NEW.record, '$.remoteStopWriter') IS NULL
+        AND NEW.record ->> '$.revision' > OLD.record ->> '$.revision'
+      BEGIN
+        UPDATE bot_groups SET record = json_set(record, '$.legacyRemoteCutoff', max(
+          coalesce(OLD.record ->> '$.legacyRemoteCutoff', 0),
+          coalesce((SELECT max(sequence) FROM bot_group_messages WHERE group_id = NEW.id), 0)
+        )) WHERE id = NEW.id;
+      END;
     ${keepRouteFields(
       'bot_groups',
       'remoteMembers',

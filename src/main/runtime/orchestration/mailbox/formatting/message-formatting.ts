@@ -172,7 +172,9 @@ export function formatMessageBannerWithContent(
   }
 
   const body = msg.body ? appendField(msg.body) : undefined
-  const contextOnly = msg.payload === GROUP_ANSWER_CONTEXT_PAYLOAD
+  const contextOnly =
+    msg.payload === GROUP_ANSWER_CONTEXT_PAYLOAD &&
+    options.peerMail?.getPeerMailMessage(msg.id)?.sender_label === msg.from_handle
   const payload =
     msg.payload && !contextOnly ? appendField(msg.payload, '[Payload: ', ']') : undefined
 

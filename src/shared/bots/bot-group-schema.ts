@@ -93,6 +93,8 @@ export const BotGroupSchema = z.object({
   remoteStops: z
     .record(z.string(), z.record(z.string(), z.number().int().nonnegative()))
     .optional(),
+  /** Any write by a host without the remote Stop cutoff retires older remote roots. */
+  legacyRemoteCutoff: z.number().int().nonnegative().optional(),
   formerSessionIds: FormerSessionIds,
   threads: z.array(BotGroupThreadSchema).optional(),
   replyMode: BotGroupReplyMode,

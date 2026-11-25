@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { expect, it, vi } from 'vitest'
+import type { z } from 'zod'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY
@@ -89,6 +90,16 @@ it('keeps two remote Homes and the local member in the same group request withou
     })
   })
   const deliveredLocally = new Map<string, string>()
+  let admission:
+    | {
+        entered: PromiseWithResolvers<void>
+        release: PromiseWithResolvers<void>
+        attempt?: z.infer<typeof PeerMailDeliverParams>
+        result?: Promise<RuntimeRpcResponse<unknown>>
+        overlapping?: boolean
+        explicitRetry?: boolean
+      }
+    | undefined
   // Only the native agent is substituted; peer admission, mail, group storage, relay and wake routing are real.
   const native = {
     deps: {
@@ -98,8 +109,18 @@ it('keeps two remote Homes and the local member in the same group request withou
         requireWritableRecord: () => ({ lease: { runtimeFence: 1 } })
       }
     },
-    conversation: async () => ({
-      journal: { queuedMessages: { failureHolds: async () => false } }
+    conversation: async (id: string) => ({
+      journal: {
+        queuedMessages: {
+          failureHolds: async () => {
+            if (id === atlas.chatSessionId && admission) {
+              admission.entered.resolve()
+              await admission.release.promise
+            }
+            return false
+          }
+        }
+      }
     }),
     captureAgentStartDestination: async (id: string) => id,
     appendAgentStart: async () => {},
@@ -196,7 +217,7 @@ it('keeps two remote Homes and the local member in the same group request withou
         wireParams = legacy
       }
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the in-process transport carries the real dispatcher response.
-      const response = (await host.dispatcher.dispatch(
+      const received = host.dispatcher.dispatch(
         {
           id: method,
           method,
@@ -209,7 +230,30 @@ it('keeps two remote Homes and the local member in the same group request withou
           pairedDeviceId: `device-${selector}`,
           clientKind: 'runtime'
         }
-      )) as RuntimeRpcResponse<unknown>
+      ) as Promise<RuntimeRpcResponse<unknown>>
+      const gated =
+        admission && selector === 'atlas' && delivery?.group?.kind === 'question'
+          ? admission
+          : undefined
+      if (gated && delivery) {
+        if (!gated.result) {
+          gated.attempt = delivery
+          gated.result = received
+          await gated.entered.promise
+          throw new OrchestrationError(
+            'runtime_timeout',
+            'test: first attempt is still in admission'
+          )
+        }
+        expect(delivery).toEqual(gated.attempt)
+      }
+      const response = await received
+      if (gated && !response.ok && response.error.code === 'delivery_in_progress') {
+        gated.overlapping = true
+        if (gated.explicitRetry) {
+          return { ...response, error: { ...response.error, code: 'test_temporary_admission' } }
+        }
+      }
       if (answerId && loseAnswerReceipt && response.ok) {
         loseAnswerReceipt = false
         lostReceiptId = answerId
@@ -380,13 +424,26 @@ it('keeps two remote Homes and the local member in the same group request withou
     )
     const continuation = atlasHost.db.getMessageById(lostReceiptId!)!
     expect(continuation).toMatchObject({ thread_id: first, payload: '{"groupContinuation":true}' })
-    const banner = formatMessageBannerWithContent(continuation).text
+    const banner = formatMessageBannerWithContent(continuation, { peerMail: atlasHost.db }).text
     expect(banner).toContain('Signature verified.')
     expect(banner).toContain('context only')
     expect(banner).not.toContain('orchestration reply')
     await expect(answer(continuation.id, 'Not a request.', aContext)).rejects.toMatchObject({
       code: 'invalid_argument'
     })
+    const ordinaryPayload = atlasHost.db.insertMessage({
+      from: continuation.from_handle,
+      to: continuation.to_handle,
+      subject: 'Ordinary mail with a user payload',
+      body: 'Ask me if anything is unclear.',
+      type: 'status',
+      payload: continuation.payload ?? undefined
+    })
+    const ordinaryBanner = formatMessageBannerWithContent(ordinaryPayload, {
+      peerMail: atlasHost.db
+    }).text
+    expect(ordinaryBanner).toContain(`orchestration reply --id ${ordinaryPayload.id}`)
+    expect(ordinaryBanner).toContain('[Payload: {"groupContinuation":true}]')
     const receivedId = lostReceiptId
     lostReceiptId = undefined
     restartRoom()
@@ -483,7 +540,124 @@ it('keeps two remote Homes and the local member in the same group request withou
       })
     )
     expect(groups.store.roomMessages(group.id, undefined)).toEqual([])
+
+    legacyDocs = false
+    const beforeDowngrade = await post('@Atlas Root before authority downgrade.')
+    await vi.waitFor(() => expect(aMail()[0]?.body).toContain(beforeDowngrade.text))
+    const beforeDowngradeId = aMail()[0]!.id
+    await answer(beforeDowngradeId, '@Docs Reply before the next maintenance window.', aContext)
+    await vi.waitFor(() => expect(bMail()[0]?.body).toContain('next maintenance window'))
+    const gatedQuestion = bMail()[0]!.id
+    const gatedConversation = docsHost.db.getPeerMailMessage(gatedQuestion)!.conversation_id
+    legacyRoom = true
+    restartRoom()
+    const lateAnswer = 'Gated reply, never imported by a legacy merger.'
+    await answer(gatedQuestion, lateAnswer, bContext)
+    const ordinaryDuringRollback = await post('@Docs Ordinary legacy reply can drain.')
+    await vi.waitFor(() => expect(bMail()[0]?.body).toContain(ordinaryDuringRollback.text))
+    await answer(bMail()[0]!.id, 'Ordinary reply drained.', bContext)
+    await vi.waitFor(() =>
+      expect(groups.store.message(ordinaryDuringRollback.id)?.remoteAsks?.[0]?.reply).toMatchObject(
+        {
+          text: 'Ordinary reply drained.'
+        }
+      )
+    )
+    await vi.waitFor(() =>
+      expect(docsHost.db.listPendingFederationRelay(gatedConversation, 'to_home')).toMatchObject([
+        { kind: 'group_reply', payload: expect.stringContaining(lateAnswer) }
+      ])
+    )
+    expect(
+      rows()
+        .flatMap((row) => row.remoteAsks ?? [])
+        .find((ask) => ask.requestId === gatedQuestion)?.reply
+    ).toBeUndefined()
+    legacyRoom = false
+    restartRoom()
+    await vi.waitFor(() =>
+      expect(aMail().filter((row) => row.body.includes(lateAnswer))).toMatchObject([
+        { thread_id: beforeDowngradeId }
+      ])
+    )
+
+    legacyRoom = true
+    restartRoom()
+    const stoppedPost = ORCHESTRATION_GROUP_POST_METHOD.handler(
+      { id: beforeDowngradeId, body: '@Docs This follow-up must not cross legacy Stop.' },
+      aContext
+    )
+    const put = groups.store.put.bind(groups.store)
+    const legacyStopWrite = vi.spyOn(groups.store, 'put').mockImplementationOnce((record) => {
+      // The old Stop writes the room revision and local cutoff but has no remote-stop fields.
+      const { remoteStops: _stops, legacyRemoteCutoff: _cutoff, ...old } = record
+      host.db.db
+        .prepare('UPDATE bot_groups SET record = ? WHERE id = ?')
+        .run(JSON.stringify(old), old.id)
+    })
+    await groups.stop(group.id, undefined, threadId)
+    legacyStopWrite.mockImplementation(put)
+    expect(groups.store.get(group.id).legacyRemoteCutoff).toBeGreaterThanOrEqual(
+      beforeDowngrade.sequence
+    )
+    const beforeStopConversation =
+      atlasHost.db.getPeerMailMessage(beforeDowngradeId)!.conversation_id
+    const docsRequestIds = bMail().map((row) => row.id)
+    legacyRoom = false
+    restartRoom()
+    await vi.waitFor(() =>
+      expect(atlasHost.db.listPendingFederationRelay(beforeStopConversation, 'to_home')).toEqual([])
+    )
+    expect(groups.store.message(`group-post:${stoppedPost.messageId}`)).toBeNull()
+    expect(bMail().map((row) => row.id)).toEqual(docsRequestIds)
+    const newRoot = await post('@Docs New root after authority rollforward.')
+    await vi.waitFor(() =>
+      expect(bMail().filter((row) => row.body.includes(newRoot.text))).toMatchObject([
+        { id: newRoot.remoteAsks![0].requestId }
+      ])
+    )
+
+    for (const firstAttemptSucceeds of [true, false]) {
+      const gate = {
+        entered: Promise.withResolvers<void>(),
+        release: Promise.withResolvers<void>(),
+        explicitRetry: !firstAttemptSucceeds
+      } satisfies NonNullable<typeof admission>
+      admission = gate
+      const question = await post(
+        `@Atlas Retried question: ${firstAttemptSucceeds ? 'commit' : 'recover'}.`
+      )
+      const id = question.remoteAsks![0].requestId
+      await vi.waitFor(() => expect(admission?.overlapping).toBe(true))
+      expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toContainEqual(
+        expect.objectContaining({ id, messageId: question.id })
+      )
+      expect(groups.store.message(question.id)?.remoteAsks?.[0]?.state).toBe('unknown')
+      expect(aMail().filter((row) => row.id === id)).toEqual([])
+      const firstResult = admission.result!
+      if (!firstAttemptSucceeds) {
+        const admit = atlasHost.db.admitBotRequest.bind(atlasHost.db)
+        const storage = vi.spyOn(atlasHost.db, 'admitBotRequest').mockImplementationOnce(() => {
+          storage.mockImplementation(admit)
+          throw new Error('test: first admission failed')
+        })
+      }
+      gate.release.resolve()
+      await expect(firstResult).resolves.toMatchObject({ ok: firstAttemptSucceeds })
+      await vi.waitFor(() =>
+        expect(groups.store.message(question.id)?.remoteAsks?.[0]?.state).toBe('sent')
+      )
+      admission = undefined
+      expect(aMail().filter((row) => row.body.includes(question.text))).toMatchObject([{ id }])
+      await answer(id, 'Received once.', aContext)
+      await vi.waitFor(() =>
+        expect(groups.store.message(question.id)?.remoteAsks?.[0]?.reply).toMatchObject({
+          text: 'Received once.'
+        })
+      )
+    }
   } finally {
+    admission?.release.resolve()
     setStructuredAgentSessionHost(null)
     for (const side of [host, ...hosts.values()]) {
       side.runtime.stopOrchestrationFederationRelay()

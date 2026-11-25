@@ -47,5 +47,5 @@ export function peerGroupQuestionRecipient(
       { effectsApplied: false }
     )
   }
-  return original.to_handle
+  return { to: original.to_handle, requiresGroupReply: scope.requiresGroupReply === true }
 }

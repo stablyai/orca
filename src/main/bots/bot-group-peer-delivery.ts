@@ -237,6 +237,7 @@ async function deliverRoomMail(
                   botId: ask.botId,
                   roomId: room.id,
                   rootRequestId: root.id,
+                  ...(asker ? { requiresGroupReply: true as const } : {}),
                   threadId: root.threadId
                 }
               }

@@ -133,7 +133,14 @@ export class BotGroupStore {
         'INSERT INTO bot_groups(id, record) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET record = excluded.record'
       )
       // Always the key, so a roster cleared here is not kept as an older build's dropped one.
-      .run(group.id, JSON.stringify({ ...group, remoteMembers: group.remoteMembers ?? [] }))
+      .run(
+        group.id,
+        JSON.stringify({
+          ...group,
+          remoteMembers: group.remoteMembers ?? [],
+          remoteStopWriter: true
+        })
+      )
   }
 
   /** The group and everything kept for it: messages, pending sends, operation and worker links. */

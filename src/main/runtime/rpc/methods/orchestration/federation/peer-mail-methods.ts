@@ -164,7 +164,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
           params.chat !== undefined ||
           params.item !== undefined ||
           params.threadId !== original.id ||
-          params.to !== peerGroupQuestionRecipient(runtime, original, route)
+          params.to !== peerGroupQuestionRecipient(runtime, original, route).to
         ) {
           throw new OrchestrationError(
             'request_mismatch',

@@ -48,7 +48,11 @@ export function activeGroupRemoteMember(
 ): boolean {
   const cutoff = room.remoteStops?.[root.threadId ?? '']
   return (
-    Math.max(cutoff?.[''] ?? 0, cutoff?.[botGroupRemoteKey(member)] ?? 0) < root.sequence &&
+    Math.max(
+      room.legacyRemoteCutoff ?? 0,
+      cutoff?.[''] ?? 0,
+      cutoff?.[botGroupRemoteKey(member)] ?? 0
+    ) < root.sequence &&
     (room.remoteMembers?.some(
       (current) =>
         current.environmentId === member.environmentId &&

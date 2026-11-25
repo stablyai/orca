@@ -4,7 +4,10 @@ import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
 import { NOT_CLIENT_ENVIRONMENT_SQL } from '../../federation/client-asks/client-ask-environment'
-import { GROUP_POST_RELAY_KIND } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  GROUP_POST_RELAY_KIND,
+  GROUP_REPLY_RELAY_KIND
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export type PeerMailConversationRow = {
   conversation_id: string
@@ -90,7 +93,7 @@ export function listPeerConversationIdsWithPendingReplies(
     `SELECT DISTINCT c.conversation_id FROM federation_relay_items i
      JOIN peer_mail_conversations c ON c.conversation_id = i.dispatch_id
      WHERE i.acked_at IS NULL AND c.peer_fingerprint = ?1
-       AND (?3 OR i.kind <> '${GROUP_POST_RELAY_KIND}')
+       AND (?3 OR i.kind NOT IN ('${GROUP_POST_RELAY_KIND}', '${GROUP_REPLY_RELAY_KIND}'))
        AND ((i.direction = 'to_home' AND c.role = 'peer' AND c.environment_id IS NULL)
          OR (?2 IS NOT NULL AND i.direction = 'to_worker' AND c.role = 'home' AND c.environment_id = ?2))
      ORDER BY c.conversation_id`

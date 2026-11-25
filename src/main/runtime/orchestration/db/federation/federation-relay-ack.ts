@@ -1,7 +1,10 @@
 import type { FederationRelayDirection, FederationRelayItemRow } from '../orchestration-records'
 import type { FederationRelayAcknowledgment } from '../../legacy-remote/federation-relay-report-acknowledgment'
 import type { OrchestrationDb } from '../orchestration-db'
-import { GROUP_POST_RELAY_KIND } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  GROUP_POST_RELAY_KIND,
+  GROUP_REPLY_RELAY_KIND
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 export function listPendingFederationRelay(
   this: OrchestrationDb,
@@ -15,7 +18,7 @@ export function listPendingFederationRelay(
     .prepare(
       `SELECT * FROM federation_relay_items
        WHERE dispatch_id = ? AND direction = ? AND acked_at IS NULL
-         AND (? OR kind <> '${GROUP_POST_RELAY_KIND}')
+         AND (? OR kind NOT IN ('${GROUP_POST_RELAY_KIND}', '${GROUP_REPLY_RELAY_KIND}'))
        ORDER BY sequence LIMIT ?`
     )
     .all(
@@ -38,7 +41,7 @@ export function acknowledgeFederationRelay(
       .prepare(
         `UPDATE federation_relay_items SET acked_at = COALESCE(acked_at, datetime('now'))
          WHERE dispatch_id = ? AND direction = ? AND sequence <= ?
-           AND (? OR kind <> '${GROUP_POST_RELAY_KIND}')`
+           AND (? OR kind NOT IN ('${GROUP_POST_RELAY_KIND}', '${GROUP_REPLY_RELAY_KIND}'))`
       )
       .run(params.dispatchId, params.direction, params.throughSequence, Number(includeGroupPosts))
     this.db.exec('COMMIT')

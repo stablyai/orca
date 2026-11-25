@@ -21,10 +21,17 @@ export function retryGroupDelivery(error: unknown): boolean {
   if (!(error instanceof OrchestrationError)) {
     return true
   }
-  if (isRemoteServerUnreachable(error) || error.code === 'server_mail_unsupported') {
+  if (
+    isRemoteServerUnreachable(error) ||
+    error.code === 'server_mail_unsupported' ||
+    error.code === 'delivery_in_progress'
+  ) {
     return true
   }
   const data: unknown = error.data
+  if (typeof data === 'object' && data && 'retryable' in data && data.retryable === true) {
+    return true
+  }
   return (
     !REFUSED_BEFORE_ADMISSION.has(error.code) &&
     !(

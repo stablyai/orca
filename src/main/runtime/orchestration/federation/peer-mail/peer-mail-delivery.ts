@@ -6,7 +6,10 @@ import {
   ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY,
   ORCHESTRATION_PEER_MAIL_TYPES_RUNTIME_CAPABILITY
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import { GROUP_POST_RELAY_KIND } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
+import {
+  GROUP_POST_RELAY_KIND,
+  GROUP_REPLY_RELAY_KIND
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import type {
   PeerGroupMail,
   PeerMailMessageType,
@@ -202,12 +205,17 @@ export function queuePeerMailReply(
   db: OrchestrationDb,
   conversationId: string,
   messageId: string,
-  reply: z.infer<typeof PeerMailRelayPayload>
+  reply: z.infer<typeof PeerMailRelayPayload>,
+  requiresGroupReply = false
 ): void {
   db.enqueueFederationRelay({
     dispatchId: conversationId,
     direction: 'to_home',
-    kind: reply.groupPost ? GROUP_POST_RELAY_KIND : 'peer_mail',
+    kind: reply.groupPost
+      ? GROUP_POST_RELAY_KIND
+      : requiresGroupReply
+        ? GROUP_REPLY_RELAY_KIND
+        : 'peer_mail',
     messageId,
     payload: JSON.stringify(reply)
   })

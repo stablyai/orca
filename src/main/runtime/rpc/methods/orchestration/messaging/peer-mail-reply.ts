@@ -73,10 +73,8 @@ export async function replyOverPeerMail(args: {
         NOTHING_SENT
       )
     }
-    if (
-      route.group_question &&
-      args.orchestrationCaller?.address !== peerGroupQuestionRecipient(runtime, original, route)
-    ) {
+    const group = route.group_question ? peerGroupQuestionRecipient(runtime, original, route) : null
+    if (group && args.orchestrationCaller?.address !== group.to) {
       throw new OrchestrationError(
         'request_mismatch',
         'Only the group question’s receiving Home Chat can answer it.',
@@ -87,15 +85,21 @@ export async function replyOverPeerMail(args: {
     // The answer's record and its queued reply commit together.
     try {
       runLifecycleWriteTransaction(db.db, 'peer_reply_with_answer', () => {
-        queuePeerMailReply(db, conversation.conversation_id, id, {
-          senderLabel,
-          fromAddress: replier,
-          subject,
-          body: params.body,
-          threadId,
-          sender,
-          ...botAnswerOf(db, original)
-        })
+        queuePeerMailReply(
+          db,
+          conversation.conversation_id,
+          id,
+          {
+            senderLabel,
+            fromAddress: replier,
+            subject,
+            body: params.body,
+            threadId,
+            sender,
+            ...botAnswerOf(db, original)
+          },
+          group?.requiresGroupReply
+        )
         db.markAsRead([original.id], { kind: 'reply' })
       })
     } catch (error) {
