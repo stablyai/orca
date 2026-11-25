@@ -206,6 +206,11 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     await (handingOff ? this.output.flush(waitMs) : this.output.settle())
   }
 
+  /** After a hand-back: output held for a chat that never opened goes (the daemon keeps it). */
+  dropHeldOutput(): void {
+    this.output.restartAt()
+  }
+
   /** The agent keeps running under the daemon; this app stops seeing it. */
   async detach(policy: ProviderRelayDetachPolicy, waitMs?: number): Promise<void> {
     if (this.state === 'exited' || this.handedOff) {

@@ -424,7 +424,11 @@ describe('codex rows across a reattach', () => {
       const threadId = String(readRecord(params).threadId)
       // Only the app-server's loaded threads name the child: no carried work does.
       if (method === 'thread/loaded/list') {
-        return { data: ['main', 'child', 'grand', 'done'] }
+        return { data: ['main', 'child', 'grand', 'done', 'review'] }
+      }
+      // Loaded, but not a spawned agent: never one of the chat's children.
+      if (method === 'thread/read' && threadId === 'review') {
+        return { thread: { id: threadId, source: { subAgent: 'review' } } }
       }
       if (method === 'thread/read' && threadId === 'grand') {
         throw new Error('timed out')
@@ -461,6 +465,7 @@ describe('codex rows across a reattach', () => {
       now: () => 0
     })
     restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
+    expect(turns.map(({ threadId }) => threadId)).not.toContain('review')
     // A running child keeps the name it was spawned under.
     expect(JSON.stringify(tracker.state)).toContain('child_agent')
     // A child that finished while closed is settled, not left working.

@@ -195,10 +195,10 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   let endedSince = false
   if (keptProviderRelayAttachable(info) && (await connected(channel.client))) {
     const child = relayedChild(channel, info.relayId, info.pid, launch, launch.passWhileHeld)
-    const attached = await child.start(info.ackedSeq).catch(() => null)
+    const attach = await child.start(info.ackedSeq).catch(() => null)
     // An agent that ended can't answer the chat's open, unless its integration opens ended ones.
-    endedSince = (attached?.exit ?? null) !== null && !providerRelayAgentOpensEnded(info.agent)
-    if (attached && !endedSince) {
+    endedSince = (attach?.exit ?? null) !== null && !providerRelayAgentOpensEnded(info.agent)
+    if (attach && !endedSince) {
       forgetKeptProviderRelay(launch.chatKey, relay)
       reattachedChildren.add(child)
       noteProviderRelayReattachedFromLastRun(launch.chatKey)
@@ -208,6 +208,10 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
         // A failed detach request still hands the agent off (as at quit); it is listed again
         // either way, so the next open reattaches it rather than starting a second agent.
         await child.detach(policyFor(launch.markers), KEEP_READER_WAIT_MS).catch(() => {})
+        child.dropHeldOutput()
+        if (attached.get(launch.chatKey) === child) {
+          attached.delete(launch.chatKey)
+        }
         rememberKeptProviderRelay(launch.chatKey, relay)
       }
       return { managed: relayedManagedProcess(child), child, reattached: true, keep }

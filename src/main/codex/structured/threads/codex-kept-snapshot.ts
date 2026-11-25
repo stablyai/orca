@@ -1,8 +1,14 @@
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { readCodexTurnStatus } from '../../app-server/codex-structured-thread-facts'
 import { readRecord } from '../../app-server/codex-item-field-readers'
-import { codexSubagentParentThreadId } from '../../app-server/shared-servers/codex-shared-server-frames'
-import { codexSubagentPathLabel } from '../../../../shared/agent-hook-listener/providers/codex/codex-agent-path'
+import {
+  loadedChildren,
+  loadedThreadIds,
+  MAX_SNAPSHOT_THREADS,
+  readSource,
+  SOFT_READ_TIMEOUT_MS,
+  type ChildSource
+} from './codex-kept-loaded-threads'
 import type { CodexJournalTranslator } from '../journal/codex-structured-journal-contracts'
 import { isCodexMessageItemType, readCodexThreadItem } from '../items/codex-thread-item-identity'
 import {
@@ -24,12 +30,7 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
-/** The chat's own thread and the children a reattach follows; past it the rest are logged. */
-const MAX_SNAPSHOT_THREADS = 65
-/** Recent turns read for their state: a replay rarely spans more of one thread's turns. */
-const SNAPSHOT_TURNS = 16
 const PRIMARY_RETRY_MS = 500
-const PRIMARY_RETRY_TIMEOUT_MS = 5_000
 const KEPT_UNREACHABLE_DETAIL =
   "Orca couldn't reconnect to this chat's agent, which is still running. Send again to reconnect."
 
@@ -38,48 +39,20 @@ type Connection = Pick<CodexAppServerConnection, 'request'>
 /** What a kept agent says of itself at reattach: each thread's turns and its children. */
 export type KeptCodexSnapshot = { turns: KeptCodexTurn[]; spawns: KeptCodexSpawn[] }
 
-type ChildSource = { parentThreadId: string | null; label: string | null }
 type ThreadRead = { turn: KeptCodexTurn | null; source: ChildSource | null }
 
-/** A child's parent and the name it was spawned under, as the live spawn labelled it. */
-function readChildSource(result: unknown): ChildSource {
-  const thread = readRecord(readRecord(result).thread)
-  const spawn = readRecord(readRecord(readRecord(thread.source).subAgent).thread_spawn)
-  const path = typeof spawn.agent_path === 'string' ? spawn.agent_path : null
-  const nickname = typeof thread.agentNickname === 'string' ? thread.agentNickname : null
-  return {
-    parentThreadId: codexSubagentParentThreadId(result),
-    label: codexSubagentPathLabel(path) ?? nickname
-  }
-}
-
-async function turnPage(
-  connection: Connection,
-  threadId: string,
-  limit: number,
-  itemsView: 'full' | 'notLoaded',
-  timeoutMs: number
-): Promise<Record<string, unknown>[]> {
-  const page = readRecord(
-    await connection.request(
-      'thread/turns/list',
-      { threadId, sortDirection: 'desc', limit, itemsView },
-      { timeoutMs }
-    )
-  )
-  return Array.isArray(page.data) ? page.data.map((turn) => readRecord(turn)) : []
-}
-
 /**
- * One thread's state: its latest turn whole (its messages' numbering and running commands), its
- * recent turns' states for the translator, and for a child its parent. Only the chat's own turns
- * are required; any other read that fails is logged and left out.
+ * One thread's latest turn whole (its messages' numbering, running commands and state). One turn
+ * read per thread: a read rebuilds the thread's history in the agent, so it is never repeated.
+ * Only the chat's own read is required; any other that fails is logged and left out.
  */
 async function readKeptThread(input: {
   connection: Connection
   translator: Pick<CodexJournalTranslator, 'seedKeptTurns'>
   threadId: string
   primary: boolean
+  /** Already read (an idle loaded child's); otherwise read beside its turn. */
+  source?: ChildSource | null
   timeoutMs: number
   onError: (threadId: string, error: unknown) => void
 }): Promise<ThreadRead> {
@@ -89,63 +62,39 @@ async function readKeptThread(input: {
       input.onError(threadId, error)
       return fallback
     })
-  // The chat's own turns number its replayed rows and keep finished ones finished, so they are
-  // asked twice before giving up; a child's are best effort.
-  const required = <T>(read: (ms: number) => Promise<T>, fallback: T): Promise<T> =>
+  const latest = (ms: number) =>
+    connection
+      .request(
+        'thread/turns/list',
+        { threadId, sortDirection: 'desc', limit: 1, itemsView: 'full' },
+        { timeoutMs: ms }
+      )
+      .then((page) => {
+        const data = readRecord(page).data
+        return readRecord(Array.isArray(data) ? data[0] : null)
+      })
+  const [turn, source] = await Promise.all([
     input.primary
-      ? read(timeoutMs).catch(async (error: unknown) => {
+      ? latest(timeoutMs).catch(async (error: unknown) => {
           input.onError(threadId, error)
           await new Promise((resolve) => setTimeout(resolve, PRIMARY_RETRY_MS))
           // Bounded, so a wedged agent holds a launch slot only a little past one request.
-          return read(Math.min(timeoutMs, PRIMARY_RETRY_TIMEOUT_MS))
+          return latest(Math.min(timeoutMs, SOFT_READ_TIMEOUT_MS))
         })
-      : soft(read(timeoutMs), fallback)
-  const [[turn], recent, source] = await Promise.all([
-    required((ms) => turnPage(connection, threadId, 1, 'full', ms), []),
-    required((ms) => turnPage(connection, threadId, SNAPSHOT_TURNS, 'notLoaded', ms), []),
-    input.primary
-      ? null
-      : soft(
-          connection
-            .request('thread/read', { threadId, includeTurns: false }, { timeoutMs })
-            .then(readChildSource),
-          null
-        )
+      : soft(latest(timeoutMs), {}),
+    input.primary || input.source !== undefined
+      ? (input.source ?? null)
+      : soft(readSource(connection, threadId, timeoutMs), null)
   ])
-  const states = [...(turn ? [turn] : []), ...recent].flatMap((record) =>
-    typeof record.id === 'string'
-      ? [{ id: record.id, running: readCodexTurnStatus(record) === 'inProgress' }]
-      : []
-  )
-  input.translator.seedKeptTurns(threadId, states)
-  if (!turn || typeof turn.id !== 'string') {
+  if (typeof turn.id !== 'string') {
     return { turn: null, source }
   }
+  const status = readCodexTurnStatus(turn)
+  input.translator.seedKeptTurns(threadId, [{ id: turn.id, running: status === 'inProgress' }])
   const items = (Array.isArray(turn.items) ? turn.items : []).flatMap(
     (value) => readCodexThreadItem(value) ?? []
   )
-  return {
-    turn: { threadId, turnId: turn.id, status: readCodexTurnStatus(turn), items },
-    source
-  }
-}
-
-/** Threads the app-server holds in memory, a page at a time. */
-async function loadedThreadIds(connection: Connection, timeoutMs: number): Promise<string[]> {
-  const ids: string[] = []
-  let cursor: string | null = null
-  do {
-    const page = readRecord(
-      await connection.request(
-        'thread/loaded/list',
-        { cursor, limit: MAX_SNAPSHOT_THREADS },
-        { timeoutMs }
-      )
-    )
-    ids.push(...(Array.isArray(page.data) ? page.data.filter((id) => typeof id === 'string') : []))
-    cursor = typeof page.nextCursor === 'string' ? page.nextCursor : null
-  } while (cursor !== null && ids.length < MAX_SNAPSHOT_THREADS)
-  return ids
+  return { turn: { threadId, turnId: turn.id, status, items }, source }
 }
 
 /** A child as the tracker learns of it from a spawn, so Stop reaches it and its end settles it. */
@@ -212,36 +161,37 @@ export async function readKeptCodexSnapshot(input: {
   /** Children whose parent couldn't be read: placed under the chat only if no read turn spawned them. */
   const unparented: string[] = []
   // Only a chat's own app-server's loaded threads are all its agents; a shared one holds others'.
-  const loaded = input.ownServer
-    ? await loadedThreadIds(input.connection, input.timeoutMs).catch((error: unknown) => {
+  // Asked beside the first reads; what it adds comes last, after every child something named.
+  const loading = input.ownServer
+    ? loadedThreadIds(input.connection, SOFT_READ_TIMEOUT_MS).catch((error: unknown) => {
         input.onError(input.threadId, error)
         return []
       })
-    : []
-  let wave = [input.threadId, ...(input.carriedThreadIds ?? []), ...loaded]
-  while (wave.length > 0) {
-    const threads = [...new Set(wave)].filter((id) => !seen.has(id))
+    : Promise.resolve([])
+  const readWave = async (wave: { threadId: string; source?: ChildSource }[]) => {
+    const fresh = wave.filter(({ threadId }) => !seen.has(threadId))
     const room = MAX_SNAPSHOT_THREADS - seen.size
-    if (threads.length > room) {
-      console.warn(`[codex] a reattach follows ${room} more threads; ${threads.length - room} left`)
+    if (fresh.length > room) {
+      console.warn(`[codex] a reattach follows ${room} more threads; ${fresh.length - room} left`)
     }
-    const reading = threads.slice(0, Math.max(0, room))
-    reading.forEach((id) => seen.add(id))
+    const reading = fresh.slice(0, Math.max(0, room))
+    reading.forEach(({ threadId }) => seen.add(threadId))
     const reads = await Promise.all(
-      reading.map((threadId) =>
+      reading.map(({ threadId, source }) =>
         readKeptThread({
           connection: input.connection,
           translator: input.translator,
           threadId,
           primary: threadId === input.threadId,
+          ...(source ? { source } : {}),
           timeoutMs: input.timeoutMs,
           onError: input.onError
         })
       )
     )
-    wave = []
+    const named: string[] = []
     reads.forEach(({ turn, source }, i) => {
-      const threadId = reading[i]!
+      const threadId = reading[i]!.threadId
       if (threadId !== input.threadId) {
         if (source?.parentThreadId) {
           spawns.push(spawnOf(source.parentThreadId, threadId, source.label))
@@ -257,10 +207,28 @@ export async function readKeptCodexSnapshot(input: {
       // A child spawned in this turn may still run though no carried work names it.
       for (const item of turn.items) {
         if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
-          wave.push(...readReceiverThreadIds(item))
+          named.push(...readReceiverThreadIds(item))
         }
       }
     })
+    return [...new Set(named)].map((threadId) => ({ threadId }))
+  }
+  // The chat's thread and the children named by carried work or a read turn come first.
+  let wave = [input.threadId, ...(input.carriedThreadIds ?? [])].map((threadId) => ({ threadId }))
+  while (wave.length > 0) {
+    wave = await readWave(wave)
+  }
+  const extra = (await loading).filter((threadId) => !seen.has(threadId))
+  if (extra.length > 0) {
+    wave = await loadedChildren({
+      connection: input.connection,
+      ids: extra,
+      room: MAX_SNAPSHOT_THREADS - seen.size,
+      onError: input.onError
+    })
+    while (wave.length > 0) {
+      wave = await readWave(wave)
+    }
   }
   // A spawn in a read turn names the real parent (restated with that turn); a guess must not win.
   const spawned = new Set(

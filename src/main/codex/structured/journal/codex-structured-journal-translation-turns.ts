@@ -123,6 +123,8 @@ export function publishCodexTurnLifecycle(input: {
   requestedAt?: number
   completedAt?: number
   durationMs?: number
+  /** A kept agent's replay: a start never reopens a turn the journal already holds ended. */
+  neverReopen?: true
 }): StructuredAgentSessionSinkAdmission {
   if (input.primaryThreadId !== input.threadId) {
     return ADMITTED
@@ -150,7 +152,14 @@ export function publishCodexTurnLifecycle(input: {
   if (input.sink.tryReviseResolvedItem) {
     admission = input.sink.tryReviseResolvedItem(
       codexTurnRowReservedBytes(identity, body),
-      { kind: 'turn-row', target: { identity }, write: { lifecycle: body } },
+      {
+        kind: 'turn-row',
+        target: { identity },
+        write: {
+          lifecycle: body,
+          ...(input.neverReopen && input.state === 'running' ? { onlyWhileRunning: true } : {})
+        }
+      },
       appendOptions
     )
   } else if (input.sink.tryAppendItem) {

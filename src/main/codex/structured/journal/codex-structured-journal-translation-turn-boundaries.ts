@@ -59,6 +59,8 @@ export class CodexJournalTurnBoundaries {
   private readonly recentTurns = new CodexJournalRecentTurns()
   /** Turns a kept agent had finished at reattach (`thread\0turn`): their replayed start is old news. */
   private readonly keptFinished = new Set<string>()
+  /** Seeded from a kept agent: a replayed start never reopens a turn the journal holds ended. */
+  private kept = false
 
   constructor(
     private readonly deps: {
@@ -79,11 +81,14 @@ export class CodexJournalTurnBoundaries {
 
   /** The agent's own view at reattach; the replay that follows only fills in content. */
   seedKept(threadId: string, turns: readonly CodexKeptTurnState[]): void {
-    // A running turn becomes active only at its replayed start: seeded earlier, it would claim the
-    // rows of an earlier turn whose start was acked before the replay.
+    this.kept = true
     for (const turn of turns) {
       if (!turn.running) {
         this.keptFinished.add(`${threadId}\u0000${turn.id}`)
+      } else if (!this.deps.activeTurns.has(threadId, turn.id)) {
+        // Its start was likely acked before the restart; a replayed earlier turn's start is
+        // remembered after it, so that turn's rows stay its own until its end.
+        this.deps.activeTurns.remember(threadId, turn.id)
       }
     }
   }
@@ -115,6 +120,7 @@ export class CodexJournalTurnBoundaries {
           turnId,
           state: 'running',
           startedAt,
+          ...(this.kept ? { neverReopen: true as const } : {}),
           ...(opener ? { userItemId: opener.userItemId, requestedAt: opener.requestedAt } : {})
         })
     if (admission.accepted) {
@@ -270,6 +276,7 @@ export class CodexJournalTurnBoundaries {
   }
 
   clear(): void {
+    this.kept = false
     this.keptFinished.clear()
     this.deps.activeTurns.clear()
     this.recentTurns.clear()
