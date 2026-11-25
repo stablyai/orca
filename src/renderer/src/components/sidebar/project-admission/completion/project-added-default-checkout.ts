@@ -1,5 +1,3 @@
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
 import { captureBrowserLinkReveal } from '@/lib/browser/navigation/browser-link-reveal'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -13,7 +11,6 @@ import {
 } from '../../../../../../shared/file-access/cross-platform-path'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
-import { projectAddToastId } from '@/store/repos/repo-state'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { worktreeMatchesHost } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import {
@@ -22,6 +19,7 @@ import {
 } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
+import { showSelectedCheckoutFailure } from './selected-checkout-failure-toast'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
@@ -207,48 +205,29 @@ export async function openProjectDefaultCheckout({
       reason
     })
     finalizeImportedRepoAfterSkip(useAppStore.getState(), repoId)
-    const description =
-      !repo || !ownerHostId
-        ? translate(
-            'projectAdmission.checkout.ownerUnavailable',
-            'The project host could not be identified. Add the project again from the intended host.'
-          )
-        : reason === 'show_detected_default_failed'
-          ? translate(
-              'projectAdmission.checkout.saveFailed',
-              'Could not save the selected checkout’s visibility. Retry to open it.'
-            )
-          : reason === 'no_default_checkout' || reason === 'refreshed_default_missing'
-            ? translate(
-                'projectAdmission.checkout.missing',
-                'The selected folder could not be matched to an available checkout on this host.'
-              )
-            : translate(
-                'projectAdmission.checkout.refreshFailed',
-                'Could not refresh checkouts on {{host}}. Retry when the host is available.',
-                { host: selectExecutionHostDisplayLabel(useAppStore.getState(), ownerHostId) }
-              )
-    toast.error(
-      translate('projectAdmission.checkout.openFailed', 'Could not open selected checkout'),
-      {
-        id: projectAddToastId(repoId),
-        description,
-        ...(repo && ownerHostId
-          ? {
-              action: {
-                label: translate('common.retry', 'Retry'),
-                onClick: () => {
-                  void openProjectDefaultCheckout({
-                    repoId,
-                    source,
-                    selectedPath,
-                    executionHostId: ownerHostId
-                  })
-                }
-              }
+    if (!repo || !ownerHostId) {
+      showSelectedCheckoutFailure(repoId, { kind: 'owner_unavailable' })
+      return
+    }
+    const retry = () => {
+      void openProjectDefaultCheckout({
+        repoId,
+        source,
+        selectedPath,
+        executionHostId: ownerHostId
+      })
+    }
+    showSelectedCheckoutFailure(
+      repoId,
+      reason === 'show_detected_default_failed'
+        ? { kind: 'save_failed', retry }
+        : reason === 'no_default_checkout' || reason === 'refreshed_default_missing'
+          ? { kind: 'missing', retry }
+          : {
+              kind: 'refresh_failed',
+              hostLabel: selectExecutionHostDisplayLabel(useAppStore.getState(), ownerHostId),
+              retry
             }
-          : {})
-      }
     )
   } finally {
     reveal.dispose()
