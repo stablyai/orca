@@ -2,8 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   markHostBotListingRefreshing,
   mergeHostBotListing,
-  type HostBotListing
+  type HostBotListing,
+  type ListedHostBots
 } from '../../bots/host-bot-listing'
+import type { BotGroup } from '../../../../src/shared/bots/bot-group-schema'
 import { readHostBotListing } from '../../bots/use-host-bots'
 import { DEFAULT_BOT_SIDEBAR_VIEW } from '../../../../src/shared/bots/bot-sidebar-view'
 import { BOTS_MOBILE_RUNTIME_CAPABILITY } from '../../../../src/shared/bot-runtime-capabilities'
@@ -160,8 +162,21 @@ describe('host list delete intent', () => {
   })
 
   it("never carries one installation's groups or threads into another's listing", async () => {
-    const group = { folderWorkspaceId: 'g1' }
-    const listed = (installationId: string, extra: object): HostBotListing => ({
+    const group: BotGroup = {
+      id: 'g1',
+      name: 'Room',
+      hostId: 'local',
+      revision: 1,
+      folder: 'room',
+      folderWorkspaceId: 'g1',
+      createdAt: 0,
+      members: [],
+      replyMode: { kind: 'all' }
+    }
+    const listed = (
+      installationId: string,
+      extra: Pick<ListedHostBots, 'groups' | 'links'>
+    ): HostBotListing => ({
       kind: 'listed',
       hostId: 'runtime:s',
       hostLabel: 'Server',
