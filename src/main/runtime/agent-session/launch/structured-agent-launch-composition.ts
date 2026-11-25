@@ -42,7 +42,9 @@ export type StructuredAgentLaunchSources = {
     record: AgentSessionRecord,
     launchDirectory: string,
     /** How to use the linked projects' skills, as `linkedSkillsSection` writes it; null for none. */
-    linkedSkills: string | null
+    linkedSkills: string | null,
+    /** See `StructuredAgentDefinition.instructionsEachStart`. */
+    eachStart: boolean
   ) => Promise<string | null>
   /** Rereads the base environment after a lookup that started at `askedAt` found no program in
    *  it; absent never retries. */
@@ -204,7 +206,12 @@ async function composedPart<L>(
       return (linkedSkills: string | null = null) =>
         (read ??= (async () =>
           sources.resolveInstructions
-            ? sources.resolveInstructions(record, await launchDirectory(), linkedSkills)
+            ? sources.resolveInstructions(
+                record,
+                await launchDirectory(),
+                linkedSkills,
+                definition.instructionsEachStart
+              )
             : linkedSkills)())
     })(),
     // A read-only session gets none: Look around keeps every tool off.

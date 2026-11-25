@@ -69,7 +69,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   resolveSessionInstructions?: (
     record: AgentSessionRecord,
     launchDirectory: string,
-    linkedSkills: string | null
+    linkedSkills: string | null,
+    eachStart: boolean
   ) => Promise<string | null>
   /** See `StructuredAgentLaunchSources.readOnlySession`. */
   readOnlySession?: (sessionId: string) => ReadOnlySessionMode | null

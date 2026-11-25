@@ -30,13 +30,34 @@ export type AcpInstructionsLaunch = {
   takesSessionMeta?: (initialized: InitializeResponse) => boolean
   /** An agent that doesn't take `sessionMeta` starts without it instead of refusing to start. */
   sessionMetaOptional?: true
-  /** Runs around `session/new` (never a reopen) in the session's folder; returns what undoes it. */
-  aroundNewSession?: (cwd: string) => Promise<() => Promise<void>>
+  /** Runs around every `session/new` and `session/load` in the session's folder; returns what undoes it. */
+  aroundSessionOpen?: (cwd: string) => Promise<() => Promise<void>>
   /** Removes what this launch wrote once its child has exited or the launch is abandoned. */
   release?: () => Promise<void>
 }
 
-export type AcpInstructionsDelivery = (input: {
+/** Opens a session with what `aroundSessionOpen` places there for the open. */
+export async function withAcpSessionOpen<T>(
+  launch: Pick<AcpInstructionsLaunch, 'aroundSessionOpen'>,
+  cwd: string,
+  open: () => Promise<T>
+): Promise<T> {
+  const undo = await launch.aroundSessionOpen?.(cwd)
+  try {
+    return await open()
+  } finally {
+    await undo?.()
+  }
+}
+
+export type AcpInstructionsDelivery = {
+  /** Every start of the agent gives it the current text, a reopened conversation included;
+   *  otherwise a reopened one keeps the text it began with. */
+  eachStart: boolean
+  launch: AcpInstructionsLaunchInput
+}
+
+type AcpInstructionsLaunchInput = (input: {
   text: string
   /** Writes the text to a file only this host's user can read, and returns its path. */
   file: () => Promise<string>
@@ -53,10 +74,21 @@ export type AcpInstructionsDelivery = (input: {
   version: string | null
 }) => Promise<AcpInstructionsLaunch | null>
 
-// Grok keeps them with the session, so a reopened conversation keeps the preamble it began with.
-export const deliverGrokInstructions: AcpInstructionsDelivery = async ({ text }) => ({
-  sessionMeta: { rules: text }
+const givenEachStart = (launch: AcpInstructionsLaunchInput): AcpInstructionsDelivery => ({
+  eachStart: true,
+  launch
 })
+
+const keptWithSession = (launch: AcpInstructionsLaunchInput): AcpInstructionsDelivery => ({
+  eachStart: false,
+  launch
+})
+
+// Grok keeps them with the session, so a reopened conversation keeps the preamble it began with,
+// in a new process too (checked live on 1.0.92).
+export const deliverGrokInstructions = keptWithSession(async ({ text }) => ({
+  sessionMeta: { rules: text }
+}))
 
 const AntigravitySystemPromptCapability = z.object({
   antigravity: z.object({ systemPrompt: z.object({ append: z.literal(true) }) })
@@ -68,7 +100,7 @@ export function antigravityTakesSystemPrompt(initialized: InitializeResponse): b
 }
 
 // Orca's managed server forgets it when it restarts, and a re-sent text replaces the old one.
-export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverAntigravityInstructions = givenEachStart(async ({ text, cwd }) => {
   // agy also reads the folder's GEMINI.md, where Gemini CLI chats (bots now on Antigravity) left
   // Orca's old copy of these instructions.
   await removeFolderContextFile(cwd, 'GEMINI.md', 'Gemini').catch(() => undefined)
@@ -77,11 +109,11 @@ export const deliverAntigravityInstructions: AcpInstructionsDelivery = async ({ 
     sessionMetaOnReopen: true,
     takesSessionMeta: antigravityTakesSystemPrompt
   }
-}
+})
 
 /** OpenCode 1.x and its forks: appended to the user's own inline instructions in `variable`, never
  *  replacing them. */
-function inlineConfigInstructions(variable: string): AcpInstructionsDelivery {
+function inlineConfigInstructions(variable: string): AcpInstructionsLaunchInput {
   return async ({ env, file }) => {
     const content = withOpenCodeInstructionsFile(env[variable], await file())
     return content === null ? null : { env: { [variable]: content } }
@@ -89,111 +121,113 @@ function inlineConfigInstructions(variable: string): AcpInstructionsDelivery {
 }
 
 const deliverOpenCode1Instructions = inlineConfigInstructions('OPENCODE_CONFIG_CONTENT')
-export const deliverKiloInstructions = inlineConfigInstructions('KILO_CONFIG_CONTENT')
-export const deliverMimoInstructions = inlineConfigInstructions('MIMOCODE_CONFIG_CONTENT')
+// Each launch passes them in its environment, and they build every request's system prompt.
+export const deliverKiloInstructions = givenEachStart(
+  inlineConfigInstructions('KILO_CONFIG_CONTENT')
+)
+export const deliverMimoInstructions = givenEachStart(
+  inlineConfigInstructions('MIMOCODE_CONFIG_CONTENT')
+)
 
 /** 1.x: as its forks. 2.x ignores inline instructions, so they follow the user's own global
  *  AGENTS.md in a config folder that links the rest of theirs. */
-export const deliverOpenCodeInstructions: AcpInstructionsDelivery = async (
-  input
-): Promise<AcpInstructionsLaunch | null> => {
-  const { text, emptyFolder, env, version } = input
-  if (openCodeTakesConfigDirInstructions(version)) {
-    const configDir = await emptyFolder()
-    const release = () => removeTreeKeepingLinkTargets(configDir)
-    await writeOpenCodeInstructionsConfigDir(
-      configDir,
-      openCodeSourceConfigDirectory(env),
-      text
-    ).catch(async (error: unknown) => {
-      await release()
-      throw error
-    })
-    return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
+export const deliverOpenCodeInstructions = givenEachStart(
+  async (input): Promise<AcpInstructionsLaunch | null> => {
+    const { text, emptyFolder, env, version } = input
+    if (openCodeTakesConfigDirInstructions(version)) {
+      const configDir = await emptyFolder()
+      const release = () => removeTreeKeepingLinkTargets(configDir)
+      await writeOpenCodeInstructionsConfigDir(
+        configDir,
+        openCodeSourceConfigDirectory(env),
+        text
+      ).catch(async (error: unknown) => {
+        await release()
+        throw error
+      })
+      return { env: { OPENCODE_CONFIG_DIR: configDir }, release }
+    }
+    return deliverOpenCode1Instructions(input)
   }
-  return deliverOpenCode1Instructions(input)
-}
+)
 
 // OMP and Auggie, both built on Pi, read the file; a path keeps the text out of the process list
 // and clear of argument-length limits.
-export const deliverAppendSystemPromptInstructions: AcpInstructionsDelivery = async ({ file }) => ({
+export const deliverAppendSystemPromptInstructions = givenEachStart(async ({ file }) => ({
   args: [`--append-system-prompt=${await file()}`]
-})
+}))
 
 // Kiro keeps steering sent on `session/new` with the session, so a reopen keeps the preamble it began with.
-export const deliverKiroInstructions: AcpInstructionsDelivery = async ({ text }) => ({
+export const deliverKiroInstructions = keptWithSession(async ({ text }) => ({
   sessionMeta: { kiro: { steering: [{ name: 'orca', inclusion: 'always', content: text }] } }
-})
+}))
 
 // Droid rebuilds its system prompt at every start from the file each launch passes.
-export const deliverDroidInstructions: AcpInstructionsDelivery = async ({ file }) => ({
+export const deliverDroidInstructions = givenEachStart(async ({ file }) => ({
   args: ['--append-system-prompt-file', await file()]
-})
+}))
 
-// Cursor reads its folder's rules once, when a session opens, and keeps them across reopens.
-export const deliverCursorInstructions: AcpInstructionsDelivery = async ({ text }) => ({
-  aroundNewSession: (cwd) => placeCursorOpeningRule(cwd, text)
-})
+// Cursor reads its folder's rules once per process, at its first open, and keeps none with the
+// session, so every open places them.
+export const deliverCursorInstructions = givenEachStart(async ({ text }) => ({
+  aroundSessionOpen: (cwd) => placeCursorOpeningRule(cwd, text)
+}))
 
 // Hermes builds its system prompt from the folder's `.hermes.md` at the first turn and again at
 // each compaction, so the file stays; every launch rewrites it with the current text. Only Hermes
 // reads it, ahead of AGENTS.md.
-export const deliverHermesInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverHermesInstructions = keptWithSession(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, '.hermes.md', 'Hermes', text)
   return {}
-}
+})
 
 // Kimi builds its system prompt from the folder's AGENTS.md files at `session/new` and keeps it
 // across reopens and compactions. Only Kimi reads `.kimi-code/AGENTS.md`; it stays, because a
 // running Kimi treats a removed one as stale and stops following it.
-export const deliverKimiInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverKimiInstructions = keptWithSession(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, join('.kimi-code', 'AGENTS.md'), 'Kimi', text)
   return {}
-}
+})
 
 // Goose takes no system prompt over ACP and rebuilds its own from the folder's `.goosehints` before
 // every model call, so a reopened chat reads what its latest launch wrote (checked live on 1.60.2).
-export const deliverGooseInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverGooseInstructions = givenEachStart(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, '.goosehints', 'Goose', text)
   return {}
-}
+})
 
 // Qwen rebuilds its system prompt from the folder's QWEN.md at every start, reopens included
 // (checked live on 0.28.0), so every launch rewrites it with the current text.
-export const deliverQwenCodeInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverQwenCodeInstructions = givenEachStart(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, 'QWEN.md', 'Qwen Code', text)
   return {}
-}
+})
 
 // Cline rebuilds its system prompt from the folder's rules at every start, reopens included
 // (checked live on 3.0.75); `.cline/rules` sits beside the user's own `.clinerules`.
-export const deliverClineInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverClineInstructions = givenEachStart(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, join('.cline', 'rules', 'orca.md'), 'Cline', text)
   return {}
-}
+})
 
 // Devin reads the folder's AGENTS.local.md as an always-on rule at `session/new` and keeps it with
 // the session, so a reopened chat keeps the text it began with (checked live on 3000.14.30821).
-export const deliverDevinInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverDevinInstructions = keptWithSession(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, 'AGENTS.local.md', 'Devin', text)
   return {}
-}
+})
 
 // CodeBuddy rebuilds its system prompt from the folder's CODEBUDDY.local.md at every start, reopens
 // included (checked live on 2.185.0). Its --append-system-prompt takes only inline text, which a
 // grown bot preamble would push past Windows' command-line limit.
-export const deliverCodeBuddyInstructions: AcpInstructionsDelivery = async ({ text, cwd }) => {
+export const deliverCodeBuddyInstructions = givenEachStart(async ({ text, cwd }) => {
   await writeFolderContextFile(cwd, 'CODEBUDDY.local.md', 'CodeBuddy', text)
   return {}
-}
+})
 
 // Copilot rebuilds them at every start from its instruction sources, so each launch passes the folder.
 // Only an instructions file applies at once: an AGENTS.md there counts as nested and loads on demand.
-export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
-  text,
-  folder,
-  env
-}) => {
+export const deliverCopilotInstructions = givenEachStart(async ({ text, folder, env }) => {
   const dir = await folder(
     join('.github', 'instructions', 'orca.instructions.md'),
     `---\napplyTo: "**"\n---\n${text}\n`
@@ -204,7 +238,7 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
   }
   const inherited = env.COPILOT_CUSTOM_INSTRUCTIONS_DIRS?.trim()
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
-}
+})
 
 const cleared = new Map<string, Promise<void>>()
 
@@ -310,7 +344,7 @@ export async function acpLaunchInstructions(
   if (!text) {
     return null
   }
-  const delivered = await spec.instructions?.({
+  const delivered = await spec.instructions?.launch({
     text,
     env: input.env,
     cwd: input.cwd,

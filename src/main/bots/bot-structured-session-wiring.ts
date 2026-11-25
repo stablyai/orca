@@ -154,12 +154,12 @@ export function botStructuredSessionWiring(deps: {
     clientName: deps.clientName
   })
   return {
-    resolveSessionInstructions: (record, launchDirectory, linkedSkills) => {
+    resolveSessionInstructions: (record, launchDirectory, linkedSkills, eachStart) => {
       const bot = botOfRecord(record)
       return botSessionInstructions(
         turnContext,
         bot ? [bot] : [],
-        record,
+        { ...record, instructionsEachStart: eachStart },
         launchDirectory,
         linkedSkills
       )
