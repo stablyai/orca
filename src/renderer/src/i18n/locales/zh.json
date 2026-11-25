@@ -28871,7 +28871,8 @@
       "resumeShort": "恢复",
       "deleting": "正在删除…",
       "deleteFailed": "无法删除 {{name}}",
-      "deleteDescription": "删除 <name/> 及其运行历史。"
+      "deleteDescription": "删除 <name/> 及其运行历史。",
+      "nextAt": "下次 {{time}}"
     },
     "host": {
       "errors": {
@@ -30188,6 +30189,17 @@
         "expired": "登录已过期。请重试。",
         "couldNotSignIn": "无法登录。请重试。"
       }
+    },
+    "pairedServers": {
+      "add": "添加配对服务器",
+      "allAdded": "所有配对服务器都已添加",
+      "heading": "配对服务器",
+      "info": "关于配对服务器",
+      "none": "没有配对服务器",
+      "remove": "移除",
+      "removeServer": "移除 {{server}}",
+      "search": "搜索配对服务器",
+      "tooltip": "这些服务器上的 bot 和智能体可以直接向 {{name}} 提问，不用每次都问你。"
     }
   },
   "speechModelUpdate": {
