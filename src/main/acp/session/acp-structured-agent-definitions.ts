@@ -44,6 +44,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     ...(managedRuntime && { managedRuntime: () => managedRuntime.pin() !== null }),
     ...(isManagedAgentCli(agent) && { managedRuntime: () => managedAgentCli(agent).available() }),
     ...(hostBackend && { runsHostProgram: (home) => hostBackend.pins(home) }),
+    ...(hostBackend?.ownLogin && { usesOwnLogin: hostBackend.ownLogin }),
     restingOptions: {
       acceptsKey: (key) =>
         isAcpStructuredOptionKey(key) ||

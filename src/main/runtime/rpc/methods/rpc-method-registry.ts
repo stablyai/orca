@@ -116,6 +116,8 @@ import { BOT_SHARE_RECEIVE_METHODS } from './bots-share-receive'
 import { BOT_CONNECTORS_METHOD } from './bots-connectors'
 import { BOT_TOOLS_METHODS } from './bots-tools'
 import { BOT_TOOLS_OWNED_SIGN_IN_METHODS } from './bots-tools-owned-sign-in'
+import { MCP_SERVER_METHODS } from './mcp-servers'
+import { MCP_SERVER_SIGN_IN_METHODS } from './mcp-servers-sign-in'
 import { BOT_COMPOSIO_METHODS } from './bots-composio'
 import { BOT_COMPOSIO_EVENTS_METHODS } from './bots-composio-events'
 import { WEBHOOK_METHODS } from './webhooks'
@@ -185,6 +187,8 @@ const BOT_RPC_METHODS = [
   BOT_CONNECTORS_METHOD,
   ...BOT_TOOLS_METHODS,
   ...BOT_TOOLS_OWNED_SIGN_IN_METHODS,
+  ...MCP_SERVER_METHODS,
+  ...MCP_SERVER_SIGN_IN_METHODS,
   ...BOT_COMPOSIO_METHODS,
   ...BOT_COMPOSIO_EVENTS_METHODS,
   ...WEBHOOK_METHODS

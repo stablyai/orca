@@ -638,8 +638,7 @@
         "title": "提供者",
         "searchAgents": "代理程式",
         "searchCli": "CLI",
-        "searchTerminal": "終端機",
-        "antigravityAccount": "帳戶"
+        "searchTerminal": "終端機"
       },
       "permissionsDescriptionOwnAgents": "新聊天會採用「設定 → 代理程式」中各代理程式的權限設定。",
       "launch": {
@@ -4727,8 +4726,6 @@
             "runtime_last_close_reason": "已關閉：{{value0}}",
             "runtime_reconnect_attempt": "第 {{value0}} 次嘗試",
             "runtime_workspace_window_closed": "工作區視窗已關閉",
-            "connectedHostCount_one": "{{count}} 個主機",
-            "connectedHostCount_other": "{{count}} 個主機",
             "searchSshHosts": "搜尋 SSH 主機…",
             "noMatchingSshHosts": "沒有符合的 SSH 主機。",
             "moreSshHostMatches_one": "還有 {{count}} 個符合的主機。繼續輸入以縮小範圍。",
@@ -22430,22 +22427,16 @@
       "description": "在 WSL 中的 Orca 更新之前，那裡的代理程式將使用該發行版預設的 Claude 和 Codex 帳戶。"
     },
     "antigravity": {
-      "chatSignIn": "登入",
-      "chatChangeAccount": "變更帳戶",
-      "chatRetry": "重試登入",
       "chatCancel": "取消",
       "chatCopyLink": "複製登入連結",
       "chatCopyFailed": "無法複製連結。",
       "chatStarting": "正在啟動登入…",
-      "chatWaiting": "請在瀏覽器中完成登入。",
       "chatOpenFailed": "複製連結並在瀏覽器中開啟。",
       "chatVerifying": "正在完成登入…",
-      "chatPasteHelp": "若登入後的最後一個頁面無法載入，請從瀏覽器複製其完整網址，並在此貼上。",
       "chatContinue": "繼續",
       "chatCancelled": "已取消登入。",
       "chatExpired": "登入逾時。請再試一次。",
       "chatFailed": "登入失敗。請再試一次。",
-      "chatOtherClient": "另一個應用程式正在登入。",
       "chatReadFailed": "無法檢查 {{host}} 上的登入狀態。",
       "retry": "重試",
       "changed": "原生帳戶已變更。請在啟動 agy 前重新選擇已儲存的帳戶。",
@@ -22476,8 +22467,6 @@
       "enterpriseOption": "你所屬組織的授權",
       "apiKeyGet": "取得 API 金鑰",
       "location": "位置",
-      "enterpriseFieldsShort": "請輸入專案和位置。",
-      "chatUseMethod": "重新登入以使用 {{method}}",
       "loadFailed": "無法載入 agy 帳戶",
       "loading": "正在載入帳戶…",
       "notSignedIn": "尚未登入",
@@ -22488,8 +22477,7 @@
       "noEmailNotSaved": "agy 未提供電子郵件地址 · 尚未儲存",
       "saveShort": "儲存",
       "readAt": "讀取於 {{time}}",
-      "active": "使用中",
-      "chatDescriptionKeyOnAgy": "新聊天會使用下方的登入資訊在 agy 上執行，與終端機中的 agy 分開。"
+      "active": "使用中"
     },
     "claude": {
       "added": "已新增帳戶。選擇它即可將其用於您下次啟動的 Claude。",

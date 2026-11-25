@@ -8,12 +8,6 @@ import {
 } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import { ManagedRuntimeInstallRow } from '../../managed-runtime/ManagedRuntimeInstallRow'
 import { useAntigravityChatSignIn } from '../../provider-accounts/use-antigravity-chat-sign-in'
-import { AntigravityProviderSignInArea } from '../../provider-accounts/AntigravityProviderSignInArea'
-import { antigravityProviderSignInShown } from '../../provider-accounts/antigravity-chat-runtime-sign-in-policy'
-import {
-  getHostRuntimeLabel,
-  getRuntimeSentenceLabel
-} from '../../../lib/provider-accounts/account-runtime-label'
 import type { AgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSegmentedControl } from '../../settings/form-controls/SettingsFormControls'
 import { structuredChatUnavailableOnPlatform } from '../../../../../shared/agent-session/capabilities/structured-chat-platform-support'
@@ -84,7 +78,7 @@ export function useAgentChatRuntimeInstall(agent: TuiAgent): {
   signInRunning: boolean
 } {
   const runtime = useManagedRuntimeInstall(CHAT_HOST, agent, true)
-  // Install and Remove wait for a running sign-in, which runs the installed server.
+  // Install and Remove wait for a running sign-in, which runs agy.
   const signIn = useAntigravityChatSignIn(
     agent === 'antigravity' && runtime.kind === 'active' ? CHAT_HOST : null
   )
@@ -108,31 +102,22 @@ export function AgentChatRuntimeArea({
     return null
   }
   return (
-    <div className="space-y-2">
-      <ManagedRuntimeInstallRow
-        observation={runtime}
-        agentLabel={label}
-        signInRunning={signInRunning}
-      >
-        {(line, actions) => (
-          <div className="flex items-center gap-3">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium leading-none">
-                {t('settings.agents.chatRuntime', 'Chat runtime')}
-              </p>
-              <div className="mt-1">{line}</div>
-            </div>
-            {actions}
+    <ManagedRuntimeInstallRow
+      observation={runtime}
+      agentLabel={label}
+      signInRunning={signInRunning}
+    >
+      {(line, actions) => (
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium leading-none">
+              {t('settings.agents.chatRuntime', 'Chat runtime')}
+            </p>
+            <div className="mt-1">{line}</div>
           </div>
-        )}
-      </ManagedRuntimeInstallRow>
-      {agent === 'antigravity' && antigravityProviderSignInShown(runtime) ? (
-        <AntigravityProviderSignInArea
-          owner={CHAT_HOST}
-          label={getRuntimeSentenceLabel({ runtime: 'host', label: getHostRuntimeLabel(t) })}
-          install={runtime}
-        />
-      ) : null}
-    </div>
+          {actions}
+        </div>
+      )}
+    </ManagedRuntimeInstallRow>
   )
 }

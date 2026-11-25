@@ -1,5 +1,5 @@
 import { useRef, useState, type RefObject } from 'react'
-import type { AntigravityAccountAction } from './AntigravityTerminalAccountRows'
+import type { AntigravityAccountAction } from './AntigravityAgyAccountRows'
 
 type PerformAccountAction = (
   action: AntigravityAccountAction,

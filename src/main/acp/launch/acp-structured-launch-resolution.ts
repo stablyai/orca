@@ -19,7 +19,6 @@ import {
 
 import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
-import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
@@ -34,6 +33,7 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
+import { homeBeforeFirstTurn } from './acp-launch-home-before-first-turn'
 import {
   nothingExchangedOn,
   type SavedProviderTurnReads
@@ -80,6 +80,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   launchModel?: string
   /** The launched program's version, when its check or managed release names it. */
   version?: string
+  /** The home this launch moved the chat to, which the chat keeps from now on. */
+  launchedAccountHome?: AgentSessionAccountHome
   resume: {
     sessionId: string
     key: string
@@ -156,14 +158,10 @@ async function readAcpLaunchInvocation(
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
   const commandSettings = deps.resolveCommandSettings?.()
-  // Orca's account-type setting selects only the managed server's sign-in.
+  // Orca's account-type setting reaches only agy run on a home Orca owns.
   const antigravityChatAuth = launchAntigravityChatAuth(spec, commandSettings?.antigravityChatAuth)
   const envToDelete =
     spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env, antigravityChatAuth) ?? []
-  if (spec.agent === 'antigravity' && spec.managedRuntime) {
-    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
-    assertStructuredAgentResolutionCurrent(deps.operation)
-  }
   if (antigravityChatAuth) {
     Object.assign(env, await antigravityChatAuthEnvironment(antigravityChatAuth, env))
     assertStructuredAgentResolutionCurrent(deps.operation)
@@ -185,8 +183,10 @@ export function acpStructuredLaunchPart(
 ): StructuredAgentLaunchPartResolver<AcpStructuredLaunch> {
   return async (basis, identity) => {
     const { record } = basis
+    const movedHome = await homeBeforeFirstTurn(agentSpec, record, basis, deps.dataDirectory)
+    const accountHome = movedHome ?? record.accountHome
     const { env, envToDelete, command, prefixArgs, spec, antigravityChatAuth, version } =
-      await resolveAcpLaunchInvocation(agentSpec, record.accountHome, {
+      await resolveAcpLaunchInvocation(agentSpec, accountHome, {
         resolveEnvironment: basis.baseEnvironment,
         resolveLaunchEnv: () => basis.launchEnv(),
         resolveCommandSettings: basis.commandSettings,
@@ -298,6 +298,7 @@ export function acpStructuredLaunchPart(
         ...(mcpServers.length > 0 ? { mcpServers } : {}),
         ...(model ? { launchModel: model } : {}),
         ...(launchedVersion ? { version: launchedVersion } : {}),
+        ...(movedHome ? { launchedAccountHome: movedHome } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,
