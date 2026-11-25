@@ -115,7 +115,7 @@ describe('provider relay pending requests', () => {
   })
 
   it("asks a paused relay's client again until it acks, so one short answer never stalls the agent", async () => {
-    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     try {
       const { managed, stdout } = fakeManaged()
       const relay = new ProviderRelay({
@@ -145,7 +145,7 @@ describe('provider relay pending requests', () => {
       relay.ack(relay.info().nextSeq - 1)
       await vi.waitFor(() => expect(stdout.isPaused()).toBe(false))
       const resumed = asks
-      vi.advanceTimersByTime(6_000)
+      vi.advanceTimersByTime(60_000)
       expect(asks).toBe(resumed)
       await relay.dispose()
     } finally {
