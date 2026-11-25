@@ -496,9 +496,9 @@
   color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
 }
 
-/* Terminal pane actions stay hidden (still focusable) until the pointer is on the pane's
-   top row or focus is inside it; data-top-row-hover covers the pass-through chromeless strip.
-   Touch-only devices cannot hover, so they keep the actions visible. */
+/* Terminal pane actions stay hidden (still focusable) until the pointer is on the pane's top
+   row or keyboard focus is inside it; data-top-row-hover covers the pass-through chromeless
+   strip. Touch-only devices cannot hover, so they keep the actions visible. */
 @media (hover: hover) and (pointer: fine) {
   .pane-title-overlay-layer .pane-title-actions {
     opacity: 0;
@@ -515,7 +515,7 @@
 }
 
 .pane-title-overlay-layer
-  .pane-title-bar:is(:hover, :focus-within, [data-top-row-hover])
+  .pane-title-bar:is(:hover, [data-top-row-hover], :has(:focus-visible))
   .pane-title-actions,
 .pane-title-overlay-layer .pane-title-actions:has([data-state$='open']),
 body:has([data-contextual-tour-overlay])
