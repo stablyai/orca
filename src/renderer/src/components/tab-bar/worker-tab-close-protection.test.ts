@@ -3,21 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
-const owner = vi.hoisted(() => ({ isMain: false }))
+const owner = vi.hoisted(() => ({
+  isMain: false,
+  publishFrame: (_workspace: string, _closed: readonly string[]): void => {}
+}))
 vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return owner.isMain
   }
 }))
-// Main's layout answer lands at once, so a close main would perform finishes inside the test.
+// Main's layout answer lands at once: its frame drops the closed tabs, then the window hears the result.
 vi.mock('@/runtime/workspace-layout/commands/layout-apply-send', () => ({
   sendLayoutApply: (
     _state: unknown,
-    _workspace: string,
-    command: { tabId?: string },
+    workspace: string,
+    command: { tabId?: string; tabIds?: string[] },
     hooks: { apply: (result: { closed: string[] }) => void }
   ) => {
-    hooks.apply({ closed: command.tabId ? [command.tabId] : [] })
+    const closed = command.tabIds ?? (command.tabId ? [command.tabId] : [])
+    owner.publishFrame(workspace, closed)
+    hooks.apply({ closed })
     return true
   }
 }))
@@ -34,6 +39,23 @@ import { selectWorkerTabPeekId } from './worker-tab-presentation'
 import { closeTerminalTab } from '../terminal/tab-lifecycle/terminal-tab-actions'
 import { stampedTaskTitleForRow } from '../../../../shared/orchestration/workers/worker-tab-stamp'
 import { workerTabCloseKind } from './worker-tab-view-actions'
+
+owner.publishFrame = (workspace, closed) =>
+  useAppStore.setState((state) => ({
+    unifiedTabsByWorktree: {
+      ...state.unifiedTabsByWorktree,
+      [workspace]: (state.unifiedTabsByWorktree[workspace] ?? []).filter(
+        (tab) => !closed.includes(tab.id)
+      )
+    },
+    groupsByWorktree: {
+      ...state.groupsByWorktree,
+      [workspace]: (state.groupsByWorktree[workspace] ?? []).map((group) => ({
+        ...group,
+        tabOrder: group.tabOrder.filter((id) => !closed.includes(id))
+      }))
+    }
+  }))
 
 // Invariant: a close gesture this window admits never removes or moves a tab that holds a worker,
 // while worker-free tabs still close as before.
@@ -184,6 +206,8 @@ describe.each([false, true])('layout owner is main: %s', (isMain) => {
       [{ id: 'pane', activeTabId: 'anchor', tabOrder: ['anchor', 'mixed', 'pure', 'a', 'b'] }],
       { mixed: mixedRoot, pure: leaf(WORKER_LEAF) }
     )
+    // Shown in the strip, so Close Others reaches it; a folded worker is already out of its reach.
+    useAppStore.setState({ workerTabStripChoiceByWorktree: { [WT]: { pure: 'kept' } } })
     useAppStore.getState().closeOtherTabs('anchor')
     expect(tabIds()).toEqual(['anchor', 'mixed', 'pure'])
     const choices = useAppStore.getState().workerTabStripChoiceByWorktree[WT]
@@ -293,7 +317,7 @@ it('Show peeks only a folded worker still ordered in that pane on the same host'
     }
   })
   const active = () => useAppStore.getState().groupsByWorktree[WT]?.[0]?.activeTabId
-  showFoldedWorkerOfPane(WT, 'pane', new Map([['kept', 'another-host']]))
+  showFoldedWorkerOfPane(WT, 'pane', new Map([['kept', 'runtime:another-host']]))
   expect(active()).toBeNull()
   showFoldedWorkerOfPane(
     WT,

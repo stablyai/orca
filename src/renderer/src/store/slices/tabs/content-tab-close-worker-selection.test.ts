@@ -66,7 +66,14 @@ it.each([null, 'worker'])(
       workerTabStripChoiceByWorktree: { wt: { worker: 'kept' } },
       workerTabPeekByGroupId: {},
       workerTabFailOpenShown: {},
-      terminalLayoutsByTabId: {}
+      // The worker tab holds only its own leaf, so it folds once hidden.
+      terminalLayoutsByTabId: {
+        worker: {
+          root: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000001' },
+          activeLeafId: null,
+          expandedLeafId: null
+        }
+      }
     })
     expect(
       closeContentTabThroughLayoutOwner(useAppStore.getState, closing, {

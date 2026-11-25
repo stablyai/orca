@@ -5,6 +5,13 @@ import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test
 import { selectWorkerTabFold, forgetWorkerTabFolding } from './worker-tab-folding'
 import { selectCoordinatorNeedsYouCount } from './worker-tab-presentation'
 
+// Each worker tab holds only the leaf Orca created for it, so it folds.
+const workerLayout = {
+  root: { type: 'leaf' as const, leafId: '00000000-0000-4000-8000-000000000001' },
+  activeLeafId: null,
+  expandedLeafId: null
+}
+
 vi.mock('@/components/sidebar/workspace-card/activity/worktree-agent-rows-projection', () => {
   const rows: never[] = []
   return { getSharedWorktreeAgentRowsSelector: () => () => rows }
@@ -48,7 +55,7 @@ it.each(['last worker removed', 'alternating workspaces'] as const)(
         workerTabPeekByGroupId: {},
         workerTabStripChoiceByWorktree: {},
         workerTabFailOpenShown: {},
-        terminalLayoutsByTabId: {}
+        terminalLayoutsByTabId: { 'worker-wt': workerLayout, 'worker-other': workerLayout }
       }
       selectWorkerTabFold(state, worktreeId, worktreeId === 'wt' ? 'pane-a' : 'pane-b')
       selectCoordinatorNeedsYouCount(state, 'ordinary')
@@ -113,7 +120,7 @@ it('releases closed pane snapshots and unsaved drafts while the workspace stays 
     workerTabPeekByGroupId: {},
     workerTabStripChoiceByWorktree: {},
     workerTabFailOpenShown: {},
-    terminalLayoutsByTabId: {}
+    terminalLayoutsByTabId: { worker: workerLayout }
   })
   const closed: WeakRef<AppState>[] = []
   const drafts: WeakRef<AppState['editorDrafts']>[] = []

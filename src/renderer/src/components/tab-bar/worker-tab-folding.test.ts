@@ -94,7 +94,22 @@ function seed(activeTabId: string, tabs: Tab[]): void {
           createdAt: t.createdAt
         }))
     },
-    terminalLayoutsByTabId: {},
+    // Each terminal holds only the leaf Orca created for it, so a stamped tab is a pure worker tab.
+    terminalLayoutsByTabId: Object.fromEntries(
+      tabs
+        .filter((t) => t.contentType === 'terminal')
+        .map((t) => [
+          t.entityId,
+          {
+            root: {
+              type: 'leaf' as const,
+              leafId: t.workerTab?.origin.workerLeafId ?? LEAF[t.id] ?? `leaf-${t.id}`
+            },
+            activeLeafId: null,
+            expandedLeafId: null
+          }
+        ])
+    ),
     workerTabsMode: 'open-when-clicked',
     workerTabPeekByGroupId: {},
     workerTabStripChoiceByWorktree: {},

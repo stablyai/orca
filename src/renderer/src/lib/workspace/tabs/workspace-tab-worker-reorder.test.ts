@@ -48,7 +48,15 @@ beforeEach(() => {
     },
     workerTabsMode: 'open-when-clicked',
     workerTabStripChoiceByWorktree: { wt: { folded: 'hidden' } },
-    workerTabPeekByGroupId: {}
+    workerTabPeekByGroupId: {},
+    // The worker tab holds only its own leaf, so its hidden choice folds it.
+    terminalLayoutsByTabId: {
+      folded: {
+        root: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000001' },
+        activeLeafId: null,
+        expandedLeafId: null
+      }
+    }
   })
 })
 it('moves across a folded neighbor to the next visible tab while preserving the worker', () => {
