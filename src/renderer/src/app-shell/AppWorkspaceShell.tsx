@@ -20,6 +20,7 @@ import { AppShellLeftColumn } from './chrome/AppShellLeftColumn'
 import { useRailPageFocusRecovery } from './chrome/use-rail-page-focus-recovery'
 import { RightSidebarToggle } from './chrome/RightSidebarToggle'
 import { TitlebarMainStrip } from './chrome/TitlebarMainStrip'
+import { TaskPageMount } from './TaskPageMount'
 import type { AppChromeLayout } from './chrome/use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from '../components/floating-terminal/workspace/use-floating-workspace-panel'
 
@@ -33,7 +34,6 @@ const WorktreeCreationPanel = lazy(
 const PendingNativeChatCreation = lazy(
   () => import('../components/worktree-creation/PendingNativeChatCreation')
 )
-const TaskPage = lazy(() => import('../components/task-page/TaskPage'))
 const AutomationsPage = lazy(() => import('../components/automations/AutomationsPage'))
 const ActivityPrototypePage = lazy(() => import('../components/activity/ActivityPrototypePage'))
 const Settings = lazy(() => import('../components/settings/Settings'))
@@ -144,7 +144,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'settings' ? <Settings /> : null}
       {activeView === 'skills' ? <SkillsPage /> : null}
       {activeView === 'artifacts' ? <ArtifactsPage /> : null}
-      {activeView === 'tasks' ? <TaskPage /> : null}
+      <TaskPageMount active={activeView === 'tasks'} />
       {activeView === 'automations' ? <AutomationsPage /> : null}
       {activeView === 'activity' ? <ActivityPrototypePage /> : null}
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
