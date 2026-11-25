@@ -45,6 +45,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { CursorAccountsSection } from './providers/CursorAccountsSection'
 import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
+import { CommandCodeAccountsSection } from './usage/CommandCodeAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
@@ -397,6 +398,10 @@ export function AccountsPane({
     ) : null,
     readsOwnerGrokCursor && matchesSettingsSearch(searchQuery, getAccountsCursorSearchEntries()) ? (
       <CursorAccountsSection key="cursor" />
+    ) : null,
+    !isRemoteAccountScope &&
+    (!searchQuery || /command ?code|account|usage|rate limit/i.test(searchQuery)) ? (
+      <CommandCodeAccountsSection key="command-code" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection

@@ -48,12 +48,15 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       miniMaxGeneration,
       zcodeConfigChanged,
       zcodeGeneration,
+      commandCodeConfigChanged,
+      commandCodeGeneration,
       antigravityGeneration,
       claudeFetchGated,
       results: [claudeResult, codexResult, opencodeGoResult, kimiResult, miniMaxResult],
       grokResultPromise,
       cursorResultPromise,
       zcodeResultPromise,
+      commandCodeResultPromise,
       antigravityResultPromise
     } = prepared
     if (signal.aborted) {
@@ -194,12 +197,14 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : this.state.minimax
     })
 
-    const [grokSettled, cursorSettled, zcodeSettled, antigravitySettled] = await Promise.all([
-      grokResultPromise,
-      cursorResultPromise,
-      zcodeResultPromise,
-      antigravityResultPromise
-    ])
+    const [grokSettled, cursorSettled, zcodeSettled, commandCodeSettled, antigravitySettled] =
+      await Promise.all([
+        grokResultPromise,
+        cursorResultPromise,
+        zcodeResultPromise,
+        commandCodeResultPromise,
+        antigravityResultPromise
+      ])
     if (signal.aborted) {
       return
     }
@@ -219,6 +224,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     const shouldApplyZcode = zcodeGeneration === this.zcodeFetchGeneration
     const antigravity = settleSiblingProviderResult('antigravity', antigravitySettled)
     const shouldApplyAntigravity = antigravityGeneration === this.antigravityFetchGeneration
+    const commandCode = settleSiblingProviderResult('command-code', commandCodeSettled)
+    const shouldApplyCommandCode = commandCodeGeneration === this.commandCodeFetchGeneration
+    if (shouldApplyCommandCode) {
+      this.trackActiveFailureStreak('command-code', commandCode)
+    }
     // Discard Cursor stale usage only for a known account change; unidentified transient failures retain their last reading.
     const cursorAccountChanged = hasKnownProvenanceChange(previousState.cursor, cursor)
     const previousZcodeAccount = previousState.zcode?.usageMetadata?.authProvenance
@@ -246,6 +256,11 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
           : zcode.status === 'error' && !sameZcodeAccount
             ? zcode
             : this.applyStalePolicy(zcode, previousState.zcode),
+      commandCode: !shouldApplyCommandCode
+        ? this.state.commandCode
+        : commandCodeConfigChanged
+          ? commandCode
+          : this.applyStalePolicy(commandCode, previousState.commandCode),
       // Another runtime's last reading must not stand in for this runtime's failure.
       antigravity: !shouldApplyAntigravity
         ? this.state.antigravity

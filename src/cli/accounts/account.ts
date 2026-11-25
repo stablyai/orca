@@ -47,6 +47,8 @@ import {
   formatDataAccounts
 } from './account-list-format'
 import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
+import { addCommandCodeAccount } from './command-code-account-add'
+import { assertAddAccountAgent } from './account-add-agent'
 import {
   listAgentAccounts,
   readAntigravityAccountsForList,
@@ -250,18 +252,16 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     if (agentFlag !== undefined && typeof agentFlag !== 'string') {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Missing a value for --agent. Use `--agent claude`, `--agent codex`, `--agent opencode`, or `--agent devin`.'
+        'Missing a value for --agent. Use `--agent claude`, `--agent codex`, `--agent opencode`, `--agent devin`, or `--agent commandcode`.'
       )
     }
     const agent = agentFlag ?? 'claude'
-    if (agent !== 'claude' && agent !== 'codex' && agent !== 'opencode' && agent !== 'devin') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `Unsupported --agent "${agent}". Use "claude", "codex", "opencode", or "devin".`
-      )
-    }
+    assertAddAccountAgent(agent)
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     rejectOpenCodeLoginFlagsForAgent(ctx, agent)
+    if (agent === 'commandcode') {
+      return addCommandCodeAccount(ctx)
+    }
     if (agent === 'opencode' || agent === 'devin') {
       await addDataAccount(ctx, agent, runAgentLoginInTerminal)
       return

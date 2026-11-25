@@ -9040,7 +9040,20 @@
           "4d274a02f0": "OpenCode Go session cookie",
           "4d41177f74": "MiniMax session cookie",
           "7e9977b560": "Add account",
-          "109431f707": "OpenCode Go workspace id"
+          "109431f707": "OpenCode Go workspace id",
+          "commandCode": {
+            "title": "Command Code",
+            "apiKey": {
+              "title": "Command Code API key",
+              "description": "Save a Command Code API key to see plan usage and credits for it below.",
+              "label": "API key",
+              "placeholder": "Paste your Command Code API key"
+            },
+            "checking": "Checking…",
+            "unavailable": "Status unavailable",
+            "monthly": "Monthly plan: {{percent}}% used",
+            "credits": "Credits remaining: {{credits}}"
+          }
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",

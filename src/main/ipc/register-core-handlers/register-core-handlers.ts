@@ -74,6 +74,7 @@ import { registerClaudeAccountHandlers } from '../accounts/claude-accounts'
 import { registerOpenCodeGoCredentialsHandlers } from '../accounts/opencode-go-credentials'
 import { registerMiniMaxCredentialsHandlers } from '../accounts/minimax-credentials'
 import { registerZcodePlanCredentialsHandlers } from '../accounts/zcode-plan-credentials'
+import { registerCommandCodeCredentialsHandlers } from '../accounts/command-code-credentials'
 import { registerGrokAccountHandlers } from '../accounts/grok-accounts'
 import { registerCursorAccountHandlers } from '../accounts/cursor-accounts'
 import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
@@ -157,6 +158,7 @@ export async function registerCoreHandlers(
     registerOpenCodeGoCredentialsHandlers(rateLimits)
     registerMiniMaxCredentialsHandlers(rateLimits)
     registerZcodePlanCredentialsHandlers(rateLimits)
+    registerCommandCodeCredentialsHandlers(rateLimits)
     registerGrokAccountHandlers()
     registerCursorAccountHandlers()
     registerRateLimitHandlers(rateLimits, codexAccounts, () => store.getSettings())

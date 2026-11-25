@@ -1,5 +1,10 @@
 import { RateLimitServiceFetchTargets } from './service-fetch-targets'
 import { withoutResetWindows } from './service-result-policy'
+import type { SettledProviderResult } from './service-sibling-provider-result'
+import {
+  fetchCommandCodeRateLimits,
+  unconfiguredCommandCodeUsage
+} from '../providers/command-code/command-code-usage-api'
 import {
   LIVE_CLAUDE_INGEST_DEDUPE_MS,
   MIN_REFETCH_MS,
@@ -53,6 +58,35 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       status: 'error',
       usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
     }
+  }
+
+  protected getCommandCodeCredentialError(message: string): ProviderRateLimits {
+    return {
+      provider: 'command-code',
+      session: null,
+      weekly: null,
+      monthly: null,
+      updatedAt: Date.now(),
+      error: message,
+      status: 'error',
+      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
+    }
+  }
+
+  protected startCommandCodeFetch(
+    keyResult: { apiKey: string | null; error: string | null },
+    signal: AbortSignal
+  ): Promise<SettledProviderResult> {
+    return (
+      keyResult.error
+        ? Promise.resolve(this.getCommandCodeCredentialError(keyResult.error))
+        : keyResult.apiKey
+          ? fetchCommandCodeRateLimits({ apiKey: keyResult.apiKey, signal })
+          : Promise.resolve(unconfiguredCommandCodeUsage())
+    ).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
   }
 
   protected getZcodePlanCredentialError(message: string): ProviderRateLimits {

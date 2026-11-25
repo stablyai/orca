@@ -7,6 +7,7 @@ import {
   createCursorAccountsApi,
   createGrokAccountsApi,
   createZcodePlanCredentialsApi,
+  createCommandCodeCredentialsApi,
   createOpenCodeGoCredentialsApi,
   createMiniMaxCredentialsApi
 } from './preload-api/agents/web-agent-accounts-api'
@@ -132,6 +133,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     notifications: createNotificationsApi(),
     rateLimits: createRateLimitsApi(),
     opencodeGoCredentials: createOpenCodeGoCredentialsApi(),
+    commandCodeCredentials: createCommandCodeCredentialsApi(),
     minimaxCredentials: createMiniMaxCredentialsApi(),
     zcodePlanCredentials: createZcodePlanCredentialsApi(),
     grokAccounts: createGrokAccountsApi(),

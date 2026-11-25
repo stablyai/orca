@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { hasMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { hasMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { hasZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
+import { hasCommandCodeApiKey } from '../../command-code/command-code-api-key-store'
 import { RateLimitServiceTargetUsageRead } from './service-target-usage-read'
 import type { AntigravityAccountUsageRecorder } from '../providers/antigravity/antigravity-account-usage'
 import {
@@ -79,6 +80,10 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
     resolver: () => MiniMaxRateLimitConfig | Promise<MiniMaxRateLimitConfig>
   ): void {
     this.miniMaxConfigResolver = resolver
+  }
+
+  setCommandCodeApiKeyResolver(resolver: () => string | null | Promise<string | null>): void {
+    this.commandCodeApiKeyResolver = resolver
   }
 
   setZcodePlanConfigResolver(
@@ -221,8 +226,17 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
   }
 
   async getState(): Promise<RateLimitState> {
-    const [minimaxCookieConfigured, minimaxApiKeyConfigured, zcodePlanApiKeyConfigured] =
-      await Promise.all([hasMiniMaxSessionCookie(), hasMiniMaxApiKey(), hasZcodePlanApiKey()])
+    const [
+      minimaxCookieConfigured,
+      minimaxApiKeyConfigured,
+      zcodePlanApiKeyConfigured,
+      commandCodeApiKeyConfigured
+    ] = await Promise.all([
+      hasMiniMaxSessionCookie(),
+      hasMiniMaxApiKey(),
+      hasZcodePlanApiKey(),
+      hasCommandCodeApiKey()
+    ])
     this.pruneInactiveClaudeState()
     this.pruneInactiveCodexState()
     return {
@@ -231,6 +245,7 @@ export class RateLimitService extends RateLimitServiceTargetUsageRead {
       minimaxCookieConfigured,
       minimaxApiKeyConfigured,
       zcodePlanApiKeyConfigured,
+      commandCodeApiKeyConfigured,
       opencodeGoApiKeyConfigured: this.openCodeGoApiKeyConfigured,
       grokAuthConfigured: this.grokAuthConfigured,
       cursorAuthConfigured: this.cursorAuthConfigured,

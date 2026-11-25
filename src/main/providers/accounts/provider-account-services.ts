@@ -15,6 +15,7 @@ import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
 import { readOpenCodeGoApiKey } from '../../opencode/accounts/opencode-go-api-key-store'
+import { readCommandCodeApiKey } from '../../command-code/command-code-api-key-store'
 import {
   getAntigravityAccountService,
   setAntigravityNativeCredentialChangeListener
@@ -140,6 +141,7 @@ export function createProviderAccountServices(
       workspaceIdOverride: settings.opencodeWorkspaceId
     }
   }, readOpenCodeGoApiKey)
+  rateLimits.setCommandCodeApiKeyResolver(readCommandCodeApiKey)
   rateLimits.setMiniMaxConfigResolver(async () => {
     const settings = store.getSettings()
     const apiKey = (await readMiniMaxApiKey()) ?? ''

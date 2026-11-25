@@ -7,7 +7,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     path: ['account', 'add'],
     summary: 'Add a managed agent account by signing in on this Orca host',
     usage:
-      'orca account add [--agent claude|codex|opencode|devin] [--label <name>] [--integration <id>] [--method <id>] [--answer <key=value>]... [--json]',
+      'orca account add [--agent claude|codex|opencode|devin|commandcode] [--label <name>] [--integration <id>] [--method <id>] [--answer <key=value>]... [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'agent', 'label', 'integration', 'method', 'answer'],
     repeatableFlags: ['answer'],
     notes: [
@@ -17,6 +17,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
       'Use --integration <id> to skip the OpenCode integration picker; --label names the saved OpenCode or Devin profile.',
       'Use --method <id> and repeated --answer <key=value> to pass OpenCode its login method and form answers, so sign-in can finish without an interactive terminal.',
       'Antigravity accounts are saved from the current `agy` login in Orca Settings > AI Provider Accounts.',
+      'Command Code has no login flow here: pipe its API key on stdin, e.g. `printf %s "$COMMAND_CODE_API_KEY" | orca account add --agent commandcode`. The key is stored sealed on this host and replaces any saved key.',
       'OpenCode and Devin profiles apply to new explicit host agent launches. Direct SSH relay and Windows-hosted WSL selection are not supported; run the command on a headless Orca runtime on that host.',
       'Sign in with the account you want to add (e.g. use a private/incognito browser window for a second account).',
       '--agent defaults to claude. Requires the Orca runtime to be running on this machine.'
@@ -24,6 +25,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     examples: [
       'orca account add',
       'orca account add --agent codex',
+      'printf %s "$COMMAND_CODE_API_KEY" | orca account add --agent commandcode',
       'orca account add --agent opencode --integration github-copilot --method <id> --answer <key=value>'
     ]
   },

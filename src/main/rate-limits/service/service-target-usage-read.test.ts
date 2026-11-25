@@ -23,6 +23,9 @@ vi.mock('../../minimax/minimax-cookie-store', () => ({
 }))
 vi.mock('../../minimax/minimax-api-key-store', () => ({ hasMiniMaxApiKey: async () => false }))
 vi.mock('../../zcode/zcode-plan-api-key-store', () => ({ hasZcodePlanApiKey: async () => false }))
+vi.mock('../../command-code/command-code-api-key-store', () => ({
+  hasCommandCodeApiKey: async () => false
+}))
 
 function ok(provider: 'claude' | 'codex', usedPercent: number): ProviderRateLimits {
   return {

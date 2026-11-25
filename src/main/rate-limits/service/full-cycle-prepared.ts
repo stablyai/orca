@@ -23,6 +23,8 @@ export type FetchAllCyclePrepared = {
   miniMaxGeneration: number
   zcodeConfigChanged: boolean
   zcodeGeneration: number
+  commandCodeConfigChanged: boolean
+  commandCodeGeneration: number
   antigravityGeneration: number
   claudeFetchGated: boolean
   results: [
@@ -35,5 +37,6 @@ export type FetchAllCyclePrepared = {
   grokResultPromise: Promise<SettledProviderResult>
   cursorResultPromise: Promise<SettledProviderResult>
   zcodeResultPromise: Promise<SettledProviderResult>
+  commandCodeResultPromise: Promise<SettledProviderResult>
   antigravityResultPromise: Promise<SettledProviderResult>
 }

@@ -1,0 +1,110 @@
+import { ensureElectronProxyFromEnvironment } from '../../../network/proxy-settings'
+import { getMainHttpClient } from '../../../network/http-client'
+import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
+import { cancelUnreadResponseBody } from '../../../lib/unread-response-body'
+import { classifyThrownUsageRequestError } from '../usage-request-failure-kind'
+import { normalizeCommandCodeUsage } from './command-code-usage-normalize'
+import type {
+  ProviderRateLimits,
+  UsageRateLimitFailureKind
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+
+// UNVERIFIED: these routes come from the community-reported `cmd` CLI behavior, not public docs.
+// Keep every assumption here so a wrong path is a one-line fix.
+export const COMMAND_CODE_API_BASE_URL = 'https://api.commandcode.ai'
+export const COMMAND_CODE_CREDITS_PATH = '/alpha/billing/credits'
+export const COMMAND_CODE_SUBSCRIPTIONS_PATH = '/alpha/billing/subscriptions'
+const API_TIMEOUT_MS = 15_000
+
+type JsonRead =
+  | { kind: 'ok'; value: unknown }
+  | { kind: 'failed'; failureKind: UsageRateLimitFailureKind; status?: number }
+
+function failed(
+  error: string,
+  failureKind: UsageRateLimitFailureKind,
+  status: ProviderRateLimits['status'] = 'error'
+): ProviderRateLimits {
+  return {
+    provider: 'command-code',
+    session: null,
+    weekly: null,
+    monthly: null,
+    updatedAt: Date.now(),
+    error,
+    status,
+    usageMetadata: { source: 'web', failureKind }
+  }
+}
+
+export function unconfiguredCommandCodeUsage(): ProviderRateLimits {
+  return failed('Command Code API key is not configured', 'missing-credentials', 'unavailable')
+}
+
+async function getJson(path: string, apiKey: string, signal?: AbortSignal): Promise<JsonRead> {
+  let response: Response
+  try {
+    response = await getMainHttpClient().fetch(`${COMMAND_CODE_API_BASE_URL}${path}`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}`, Accept: 'application/json' },
+      signal: abortSignalWithTimeout(signal, API_TIMEOUT_MS)
+    })
+  } catch (error) {
+    // Exception text can echo the request, so only the error class is surfaced.
+    return { kind: 'failed', failureKind: classifyThrownUsageRequestError(error) }
+  }
+  if (!response.ok) {
+    await cancelUnreadResponseBody(response)
+    if (response.status === 401 || response.status === 403) {
+      return { kind: 'failed', failureKind: 'missing-credentials', status: response.status }
+    }
+    if (response.status === 429) {
+      return { kind: 'failed', failureKind: 'rate-limited', status: response.status }
+    }
+    return { kind: 'failed', failureKind: 'server', status: response.status }
+  }
+  try {
+    const value: unknown = JSON.parse(await response.text())
+    return { kind: 'ok', value }
+  } catch {
+    return { kind: 'failed', failureKind: 'parse' }
+  }
+}
+
+/** Reads both billing routes with the saved key; a rejected key fails without any fallback source. */
+export async function fetchCommandCodeRateLimits(input: {
+  apiKey: string
+  signal?: AbortSignal
+}): Promise<ProviderRateLimits> {
+  await ensureElectronProxyFromEnvironment({ probeUrl: COMMAND_CODE_API_BASE_URL }).catch(() => {})
+  const [credits, subscriptions] = await Promise.all([
+    getJson(COMMAND_CODE_CREDITS_PATH, input.apiKey, input.signal),
+    getJson(COMMAND_CODE_SUBSCRIPTIONS_PATH, input.apiKey, input.signal)
+  ])
+  if (credits.kind === 'failed' && credits.failureKind === 'missing-credentials') {
+    return failed('Command Code rejected the saved API key', 'missing-credentials')
+  }
+  if (credits.kind === 'failed' && subscriptions.kind === 'failed') {
+    return failed('Command Code usage request failed', credits.failureKind)
+  }
+  const normalized = normalizeCommandCodeUsage({
+    credits: credits.kind === 'ok' ? credits.value : null,
+    subscriptions: subscriptions.kind === 'ok' ? subscriptions.value : null,
+    now: Date.now()
+  })
+  if (!normalized.monthly && !normalized.extraUsage) {
+    return failed('Could not read Command Code usage from the response', 'parse')
+  }
+  return {
+    provider: 'command-code',
+    session: null,
+    weekly: null,
+    monthly: normalized.monthly,
+    extraUsage: normalized.extraUsage,
+    planType: normalized.planType,
+    updatedAt: Date.now(),
+    error: null,
+    status: 'ok',
+    usageMetadata: { source: 'web' }
+  }
+}

@@ -79,6 +79,16 @@ export function createOpenCodeGoCredentialsApi(): PreloadApi['opencodeGoCredenti
   }
 }
 
+export function createCommandCodeCredentialsApi(): PreloadApi['commandCodeCredentials'] {
+  const notConfigured = { apiKeyConfigured: false }
+  return {
+    getStatus: () => Promise.resolve(notConfigured),
+    saveApiKey: () =>
+      Promise.reject(new Error('Command Code key storage is only available in the desktop app.')),
+    clearApiKey: () => Promise.resolve(notConfigured)
+  }
+}
+
 export function createGrokAccountsApi(): NonNullable<Partial<PreloadApi>['grokAccounts']> {
   const unsigned = {
     signedIn: false,
