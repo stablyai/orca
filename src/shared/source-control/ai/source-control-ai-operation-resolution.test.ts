@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveSourceControlAiForOperation } from './source-control-ai-operation-resolution'
 import { getDefaultSourceControlAiSettings } from './settings/source-control-ai-settings'
 import type { CommitMessageAiModelCapability } from './generation/commit-message-ai-types'
@@ -10,6 +10,9 @@ const ACCOUNT_LISTING: CommitMessageAiModelCapability[] = [
   { id: 'gpt-6-luna', label: 'GPT-6 Luna', isDefault: true }
 ]
 
+// The 24h listing window reads the clock, so tests pin it.
+const NOW = Date.UTC(2026, 10, 25, 12)
+
 function resolveCodexModel(settings: Partial<SourceControlAiSettings>): string | undefined {
   const resolved = resolveSourceControlAiForOperation({
     settings: {
@@ -17,7 +20,7 @@ function resolveCodexModel(settings: Partial<SourceControlAiSettings>): string |
         ...getDefaultSourceControlAiSettings(),
         agentId: 'codex',
         discoveredModelsByAgentByHost: { local: { codex: ACCOUNT_LISTING } },
-        discoveredAtByAgentByHost: { local: { codex: Date.now() } },
+        discoveredAtByAgentByHost: { local: { codex: NOW } },
         ...settings
       }
     },
@@ -27,6 +30,14 @@ function resolveCodexModel(settings: Partial<SourceControlAiSettings>): string |
 }
 
 describe('resolveSourceControlAiForOperation with an account model listing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('never runs a Codex model the signed-in account does not list', () => {
     // A saved global pick from an older build that the account cannot run.
     expect(resolveCodexModel({ selectedModelByAgent: { codex: 'gpt-5.5' } })).toBe('gpt-6-luna')
@@ -48,7 +59,7 @@ describe('resolveSourceControlAiForOperation with an account model listing', () 
   })
 
   it('lets an old listing block nothing, so a model added since still runs', () => {
-    const dayAndAMinuteAgo = Date.now() - 24 * 60 * 60 * 1000 - 60_000
+    const dayAndAMinuteAgo = NOW - 24 * 60 * 60 * 1000 - 60_000
     expect(
       resolveCodexModel({
         selectedModelByAgent: { codex: 'gpt-6.2-new' },
