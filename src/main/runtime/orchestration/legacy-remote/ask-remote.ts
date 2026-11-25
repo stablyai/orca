@@ -22,6 +22,8 @@ export async function askRemoteRunHome(args: {
   workerState: WorkerDispatchState
   /** Re-read at admission; for a restart-reissued handle it comes from the recovered incarnation. */
   processIncarnation: () => string | null
+  /** A restart-recovered asker, re-proved before a wait takes its answer. */
+  callerCurrent?: () => boolean
 }): Promise<unknown> {
   const db = args.runtime.getOrchestrationDb()
   const timeoutMs = clampOrchestrationAskTimeoutMs(args.params.timeoutMs)
@@ -82,6 +84,7 @@ export async function askRemoteRunHome(args: {
     closedMessage: `Question ${questionId} closed because its remote Dispatch is inactive.`,
     timeoutMs,
     signal: args.signal,
-    recordMutationReceipt: args.recordMutationReceipt
+    recordMutationReceipt: args.recordMutationReceipt,
+    callerCurrent: args.callerCurrent
   })
 }

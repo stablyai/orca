@@ -16,6 +16,21 @@ export type RemintedWorkerReporter = {
   handle: string
   paneKey: string
   processIncarnation: string
+  /** The host the recorded process ran on; a re-read must find the same one. */
+  hostScope: string | null
+}
+
+/**
+ * A recovered worker's Dispatch still records its stale handle as assignee; its recovered terminal
+ * stands in for it wherever the assignee's live pane and process are probed, such as its bound Run.
+ */
+export function asRecoveredAssignee<D extends { id: string; assignee_handle: string | null }>(
+  dispatch: D,
+  recovered: Pick<RemintedWorkerReporter, 'dispatchId' | 'handle'> | null | undefined
+): D {
+  return recovered?.dispatchId === dispatch.id
+    ? { ...dispatch, assignee_handle: recovered.handle }
+    : dispatch
 }
 
 /** The Dispatch identity recorded for a handle, from whichever store owns it: a local Dispatch or a
@@ -27,6 +42,7 @@ type RecordedReporter = {
   paneKey: string | null
   processIncarnation: string | null
   hostScope: string | null
+  createdAt: string
 }
 
 function recordedReporter(
@@ -44,7 +60,8 @@ function recordedReporter(
         active: dispatch.status === 'pending' || dispatch.status === 'dispatched',
         paneKey: dispatch.assignee_pane_key,
         processIncarnation: dispatch.process_incarnation,
-        hostScope: dispatch.host_scope
+        hostScope: dispatch.host_scope,
+        createdAt: dispatch.created_at
       }
     : null
   const attachment = db.findLatestRemoteAttachmentForTerminal(handle)
@@ -60,17 +77,20 @@ function recordedReporter(
         paneKey: attachment.pane_key,
         processIncarnation: attachment.process_incarnation,
         // The attachment records no host; its terminal resource records the one it attached on.
-        hostScope: db.getWorkerTerminalResourceByOwner(attachment.dispatch_id)?.host_scope ?? null
+        hostScope: db.getWorkerTerminalResourceByOwner(attachment.dispatch_id)?.host_scope ?? null,
+        createdAt: attachment.created_at
       }
     : null
   if (local && remote) {
-    // One handle recorded in both stores: only a single working owner is unambiguous, unless the
-    // request names a server-owned record of this handle's own local Dispatch. That only selects the
-    // candidate; every identity and custody check below still decides.
+    // One handle recorded in both stores: only a single working owner is unambiguous. Two working
+    // owners never are. When both finished, a request naming a server-owned record of this handle's own
+    // local Dispatch selects it; every identity and custody check below still decides.
     if (local.active !== remote.active) {
       return local.active ? local : remote
     }
-    return candidateDispatchId && candidateDispatchId === local.dispatchId ? local : null
+    return !local.active && candidateDispatchId && candidateDispatchId === local.dispatchId
+      ? local
+      : null
   }
   return local ?? remote
 }
@@ -80,7 +100,8 @@ function ownsPaneNow(
   db: OrchestrationDb,
   recorded: RecordedReporter,
   handle: string,
-  paneKey: string
+  paneKey: string,
+  staleHandle: string
 ): boolean {
   const activeLocal = db.getActiveDispatchForIdentity(handle, paneKey)
   const activeRemote = db.findActiveRemoteAttachmentForPane(paneKey)
@@ -92,9 +113,28 @@ function ownsPaneNow(
   if (activeLocal || activeRemote) {
     return false
   }
+  const latestLocal = db.getLatestDispatchForTerminal(handle, paneKey)
+  const latestRemote = db.findLatestRemoteAttachmentForPane(paneKey)
+  // A finished owner keeps the pane only while no later Dispatch from the other store ran there. The
+  // stores share no sequence and their clocks step by seconds, so a tie with another terminal's record
+  // is refused; a record of this same stale handle was already weighed when this one was chosen.
+  const laterInOtherStore = (other: { terminal: string | null; createdAt: string } | undefined) =>
+    Boolean(other && other.terminal !== staleHandle && other.createdAt >= recorded.createdAt)
   return recorded.store === 'local'
-    ? db.getLatestDispatchForTerminal(handle, paneKey)?.id === recorded.dispatchId
-    : db.findLatestRemoteAttachmentForPane(paneKey)?.dispatch_id === recorded.dispatchId
+    ? latestLocal?.id === recorded.dispatchId &&
+        !laterInOtherStore(
+          latestRemote && {
+            terminal: latestRemote.terminal_handle,
+            createdAt: latestRemote.created_at
+          }
+        )
+    : latestRemote?.dispatch_id === recorded.dispatchId &&
+        !laterInOtherStore(
+          latestLocal && {
+            terminal: latestLocal.assignee_handle,
+            createdAt: latestLocal.created_at
+          }
+        )
 }
 
 /**
@@ -151,10 +191,16 @@ export function resolveRemintedWorkerReporter(
     recorded.store === 'local'
       ? db.isDispatchProcessCurrent(current)
       : db.isRemoteAttachmentProcessCurrent(current)
-  if (!exact || !ownsPaneNow(db, recorded, handle, paneKey)) {
+  if (!exact || !ownsPaneNow(db, recorded, handle, paneKey, from)) {
     return null
   }
-  return { dispatchId: recorded.dispatchId, handle, paneKey, processIncarnation }
+  return {
+    dispatchId: recorded.dispatchId,
+    handle,
+    paneKey,
+    processIncarnation,
+    hostScope: recorded.hostScope
+  }
 }
 
 /**
@@ -224,11 +270,13 @@ export function resolveWorkerReporterIdentity(
           candidateDispatchId: args.candidateDispatchId
         })
   const reminted = remint()
-  // The re-read must still speak for the same Dispatch, pane and process that routing already used, so a
-  // record rewritten to another incarnation after entry cannot carry the request over to it.
+  // The re-read must still speak for the same Dispatch, terminal, host, pane and process that routing
+  // already used, so a record rewritten after entry cannot carry the request over to another.
   const remintedAgain = (entry: RemintedWorkerReporter): string | null => {
     const again = remint()
     return again?.dispatchId === entry.dispatchId &&
+      again.handle === entry.handle &&
+      again.hostScope === entry.hostScope &&
       isEquivalentPaneKey(again.paneKey, entry.paneKey) &&
       again.processIncarnation === entry.processIncarnation
       ? again.processIncarnation

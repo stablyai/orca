@@ -141,6 +141,34 @@ describe('Run check draining a pre-bind Dispatch after its worker process change
     }
   )
 
+  it('drains the residual mail for its recovered process after a restart reissued its handle', async () => {
+    const { dispatchId, leadRunId } = setup()
+    liveHandle = REISSUED_HANDLE
+
+    const checked = await check(WORKER_HANDLE, staleEnv())
+
+    expect(checked).toMatchObject({ dispatchId })
+    expect(checkedBodies(checked)).toContain('Pre-bind instructions')
+    expect(residualUnread(dispatchId)).toBe(false)
+    expect(db.getCurrentRunForPane(WORKER_PANE)?.id).toBe(leadRunId)
+  })
+
+  it('fences a recovered lead whose process was replaced while it waited on its Run', async () => {
+    setup()
+    liveHandle = REISSUED_HANDLE
+    // The first check drains the residual mail, so the next one waits on the Run.
+    await check(WORKER_HANDLE, staleEnv())
+    vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
+      paneIncarnation = REPLACEMENT
+      return 'timed_out'
+    })
+
+    // A plain timeout here would tell the replaced caller it still holds the Run's mailbox.
+    await expect(check(WORKER_HANDLE, staleEnv(), { wait: true })).rejects.toMatchObject({
+      code: 'consumer_fenced'
+    })
+  })
+
   it('refuses a stale handle whose process recovery refused, before any mailbox is read', async () => {
     const { dispatchId } = setup()
     liveHandle = REISSUED_HANDLE

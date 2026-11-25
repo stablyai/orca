@@ -66,6 +66,10 @@ export const ORCHESTRATION_ASK_METHODS = [
         candidateDispatchId: params.resume ? db.getQuestion(params.resume)?.dispatch_id : undefined
       })
       const paneKey = reporter.paneKey ?? undefined
+      // A recovered asker's stale handle names no process, so each answer take re-proves the recovery.
+      const callerCurrent = reporter.recovered
+        ? () => reporter.processIncarnation() !== null
+        : undefined
       if (!orchestrationCaller) {
         assertLifecycleCallerIsNotAnotherParty(runtime, {
           from,
@@ -86,7 +90,8 @@ export const ORCHESTRATION_ASK_METHODS = [
           dispatchId: remoteAttachment.dispatch_id,
           taskId: remoteAttachment.task_id,
           workerState: remoteAttachment.state,
-          processIncarnation: reporter.processIncarnation
+          processIncarnation: reporter.processIncarnation,
+          callerCurrent
         })
       }
       const workingDispatch = db.getActiveDispatchForIdentity(from, paneKey)
@@ -196,7 +201,8 @@ export const ORCHESTRATION_ASK_METHODS = [
         closedMessage: `Question ${questionId} closed because its Dispatch is inactive.`,
         timeoutMs,
         signal,
-        recordMutationReceipt
+        recordMutationReceipt,
+        callerCurrent
       })
     }
   })

@@ -112,10 +112,12 @@ export const ORCHESTRATION_CHECK_METHODS = [
         : undefined
       const livePane = runtime.getTerminalPaneKey(handle)
       const process = runtime.getTerminalProcessIncarnation(handle)
+      // A recovered caller's stale handle names no terminal, so its recovered process is re-proved instead.
       const revalidateCaller = () => {
         if (
           runtime.getTerminalPaneKey(handle) !== livePane ||
-          runtime.getTerminalProcessIncarnation(handle) !== process
+          runtime.getTerminalProcessIncarnation(handle) !== process ||
+          (recovered && reporter.processIncarnation() === null)
         ) {
           throw new OrchestrationError(
             'consumer_fenced',
@@ -148,7 +150,10 @@ export const ORCHESTRATION_CHECK_METHODS = [
             recordMutationReceipt,
             reconciliation,
             reader,
-            revalidateCaller
+            revalidateCaller,
+            recovered,
+            processIncarnation: reporter.processIncarnation,
+            recoveredLocalProcessCurrent
           })
           const answer =
             consumingCheck && !(params.ack && !params.wait) && !handsOverBatch(result)
@@ -215,6 +220,7 @@ export const ORCHESTRATION_CHECK_METHODS = [
               remoteAttachment,
               processIncarnation: reporter.processIncarnation,
               recoveredLocalProcessCurrent,
+              recovered,
               recordMutationReceipt,
               reconciliation,
               reader,
