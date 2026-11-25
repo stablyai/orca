@@ -3105,11 +3105,6 @@
           "failedToLoadUsage": "Kullanım verileri yüklenemedi",
           "failedToParseCliOutput": "CLI çıktısı ayrıştırılamadı",
           "fetchAborted": "Kullanım sınırlarını getirme işlemi iptal edildi",
-          "geminiCredentialsNotFound": "Gemini CLI kimlik bilgileri bulunamadı",
-          "geminiOauthDisabled": "Gemini CLI için OAuth ayarlarda kapalı",
-          "geminiProjectIdLoadFailed": "Gemini proje kimliği yüklenemedi (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "API yanıtında Gemini proje kimliği bulunamadı",
-          "geminiProjectIdNotFound": "Gemini proje kimliği bulunamadı",
           "grokAuthInvalid": "Grok kimlik doğrulama dosyası geçersiz",
           "grokAuthUnreadable": "Grok kimlik doğrulama dosyası okunamadı",
           "grokBillingConfigMissing": "Grok faturalandırma yanıtında yapılandırma bilgisi yok",
@@ -3145,13 +3140,11 @@
           "opencodeNoWorkspaceIdShort": "Çalışma alanı kimliği bulunamadı",
           "ptyTimeout": "PTY zaman aşımına uğradı",
           "ptyUsageTimeout": "PTY zaman aşımına uğradı. /usage paneli açılmadı.",
-          "quotaFetchFailed": "Kota bilgisi alınamadı ({{status}})",
           "rpcFailed": "RPC işlemi başarısız oldu",
           "rpcProcessExited": "RPC işlemi beklenmedik biçimde sonlandı",
           "rpcTimeout": "RPC zaman aşımına uğradı",
           "sessionCookieNotConfigured": "Oturum çerezi yapılandırılmamış",
           "signInWithChatgpt": "ChatGPT ile oturum aç",
-          "tokenRefreshFailed": "Erişim belirteci yenilenemedi",
           "unknown": "Bilinmeyen hata",
           "usagePageFetchFailed": "Kullanım sayfası alınamadı ({{status}})",
           "waitingForClaudeSession": "Claude oturumu bekleniyor",
@@ -14973,7 +14966,6 @@
             "windows": "kullanım aralığının yüzdesi",
             "reset": "sıfırlamaya kalan süre, ör. 3 sa 15 dk",
             "resetAt": "sıfırlama saati, ör. 20:50",
-            "buckets": "Gemini model grupları",
             "optional": "içindeki yer tutuculardan biri boşsa bu bölüm gösterilmez"
           }
         }

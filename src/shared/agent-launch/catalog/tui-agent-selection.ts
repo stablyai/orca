@@ -64,8 +64,9 @@ export function pickTuiAgent(
   }
   const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
   const detectedSet = detected instanceof Set ? detected : new Set(detected)
+  // An older host can still name a removed agent (Gemini CLI) as its default.
   if (
-    preferred &&
+    isTuiAgent(preferred) &&
     (detectedSet.has(preferred) || chosenUsable?.(preferred)) &&
     !disabledSet.has(preferred)
   ) {
