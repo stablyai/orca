@@ -2,6 +2,8 @@ import { keepsTerminalPaneVisible } from '../../terminal/session/pane-layout/mob
 import { useCallback } from 'react'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../src/shared/shell/launch/startup-cwd-fallback'
 import { triggerSelection } from '../../platform/haptics/haptics'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { isCachedActiveDocumentRetap } from '../../files/session-documents/mobile-session-active-document-retap'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
@@ -16,6 +18,7 @@ import type { MobileSessionKeyboardStateModel } from '../../terminal/session/inp
 
 function rememberRecentSessionCard(args: {
   hostId: string | undefined
+  executionHost: ExecutionHostId | undefined
   worktreeId: string | undefined
   worktreeName: string | undefined
   tab: MobileSessionTab
@@ -27,6 +30,7 @@ function rememberRecentSessionCard(args: {
   recordRecentSessionCardVisit(
     buildRecentSessionCardFromTab({
       hostId: args.hostId,
+      executionHost: args.executionHost,
       worktreeId: args.worktreeId,
       worktreeName: args.worktreeName || '',
       tab: args.tab,
@@ -36,6 +40,7 @@ function rememberRecentSessionCard(args: {
 }
 
 export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateModel) {
+  const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
     worktreeId,
@@ -106,7 +111,14 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       }
       subscribeToTerminal(handle)
       if (matchingTab) {
-        rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab: matchingTab, terminals })
+        rememberRecentSessionCard({
+          hostId,
+          executionHost,
+          worktreeId,
+          worktreeName,
+          tab: matchingTab,
+          terminals
+        })
       }
       if (client) {
         if (matchingTab) {
@@ -124,6 +136,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     },
     [
       client,
+      executionHost,
       hostId,
       reportActivation,
       sessionTabs,
@@ -154,7 +167,14 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
           switchTab(tab.terminal)
           return
         }
-        rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab, terminals })
+        rememberRecentSessionCard({
+          hostId,
+          executionHost,
+          worktreeId,
+          worktreeName,
+          tab,
+          terminals
+        })
         terminalDiagnosticsRef.current.tabSwitch('terminal', tab.id, true)
         triggerSelection()
         pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
@@ -182,7 +202,14 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         return
       }
 
-      rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab, terminals })
+      rememberRecentSessionCard({
+        hostId,
+        executionHost,
+        worktreeId,
+        worktreeName,
+        tab,
+        terminals
+      })
       triggerSelection()
       terminalDiagnosticsRef.current.tabSwitch(tab.type, tab.id, false)
       pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
@@ -227,6 +254,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     [
       activeSessionTabId,
       client,
+      executionHost,
       fileDocs,
       hostId,
       markdownDocs,

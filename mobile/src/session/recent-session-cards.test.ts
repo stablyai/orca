@@ -288,4 +288,85 @@ describe('removal, reconciliation, and pending cross-worktree targets', () => {
     expect(dedicated!.length).toBeLessThanOrEqual(PAGE_STORAGE_MAX_VALUE_CHARS)
     expect(mirrored!.length).toBeLessThanOrEqual(PAGE_STORAGE_MAX_VALUE_CHARS)
   })
+
+  it('keeps local and remote executionHost cards together without cross-host reconciliation wipes', async () => {
+    const parsed = parseRecentSessionCards(
+      JSON.stringify([
+        card({ tabId: 'tab-local', lastVisitedAt: 10 }),
+        card({ tabId: 'tab-remote', executionHost: 'runtime:zreators-app', lastVisitedAt: 20 })
+      ])
+    )
+    expect(parsed.map((item) => [item.tabId, item.executionHost])).toEqual([
+      ['tab-local', undefined],
+      ['tab-remote', 'runtime:zreators-app']
+    ])
+
+    await persistMirrored(RECENT_SESSION_CARDS_STORAGE_KEY, JSON.stringify(parsed))
+    clearRecentSessionCardsForTests()
+    const hydrated = await hydrateRecentSessionCards()
+    expect(hydrated.map((item) => item.tabId)).toEqual(['tab-remote', 'tab-local'])
+
+    // Reconciling/removing on the remote runtime leaves the same-id local card intact.
+    const afterRemoteReconcile = reconcileRecentSessionCardsForWorktree({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      executionHost: 'runtime:zreators-app',
+      liveTabs: [],
+      allowEmpty: true
+    })
+    expect(afterRemoteReconcile.map((item) => item.tabId)).toEqual(['tab-local'])
+
+    // Same-id local reconcile leaves cards on another executionHost intact.
+    recordRecentSessionCardVisit(
+      card({
+        worktreeId: 'wt-1',
+        tabId: 'tab-remote-keep',
+        executionHost: 'runtime:zreators-app',
+        lastVisitedAt: 25
+      })
+    )
+    const afterLocalReconcile = reconcileRecentSessionCardsForWorktree({
+      hostId: 'host-1',
+      worktreeId: 'wt-1',
+      liveTabs: [{ id: 'tab-local' }],
+      allowEmpty: true
+    })
+    expect(afterLocalReconcile.map((item) => item.tabId)).toEqual(['tab-remote-keep', 'tab-local'])
+
+    recordRecentSessionCardVisit(
+      card({
+        worktreeId: 'wt-remote',
+        tabId: 'tab-r2',
+        executionHost: 'runtime:zreators-app',
+        lastVisitedAt: 30
+      })
+    )
+    const visibleBoth = getVisibleRecentSessionCards({
+      hostId: 'host-1',
+      currentWorktreeId: 'wt-remote',
+      currentExecutionHost: 'runtime:zreators-app',
+      currentTabId: 'tab-r2',
+      liveWorktrees: [
+        { worktreeId: 'wt-1', displayName: 'Local Main' },
+        { worktreeId: 'wt-remote', executionHost: 'runtime:zreators-app', displayName: 'App' }
+      ],
+      confirmedExecutionHosts: new Set(['', 'runtime:zreators-app'])
+    })
+    expect(visibleBoth.map((item) => [item.tabId, item.worktreeName, item.executionHost])).toEqual([
+      ['tab-local', 'Local Main', undefined]
+    ])
+
+    // When only remote catalog is confirmed, unconfirmed local cards stay visible while absent remote worktrees are hidden.
+    const visibleWithUnconfirmedLocal = getVisibleRecentSessionCards({
+      hostId: 'host-1',
+      currentWorktreeId: 'wt-other',
+      currentTabId: 'tab-x',
+      liveWorktrees: [{ worktreeId: 'wt-remote', executionHost: 'runtime:zreators-app' }],
+      confirmedExecutionHosts: new Set(['runtime:zreators-app'])
+    })
+    expect(visibleWithUnconfirmedLocal.map((item) => item.tabId)).toEqual(['tab-r2', 'tab-local'])
+
+    const afterLocalRemove = removeRecentSessionCard('host-1', 'wt-1', 'tab-local')
+    expect(afterLocalRemove.map((item) => item.tabId)).toEqual(['tab-r2', 'tab-remote-keep'])
+  })
 })

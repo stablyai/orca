@@ -12,6 +12,8 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { agentStateLabel, formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { getWorktreeLabel } from '../worktree/row-presentation/worktree-label'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { recentCardExecutionHostKey, recentCardRowKey } from './recent-session-card-snapshot'
 import {
   getRecentSessionCardsMaxDisplaySync,
   MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -37,8 +39,6 @@ export type RecentSessionCardsSheetProps = RecentSessionCardsSectionProps & {
 }
 
 export const MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS = 16
-
-const recentCardKey = (card: RecentSessionCardRecord) => `${card.worktreeId}:${card.tabId}`
 
 export function formatWorkspaceBadgeLabel(label: string): string {
   if (label.length <= MAX_RECENT_CARD_WORKSPACE_LABEL_CHARS) {
@@ -190,6 +190,8 @@ export const RecentSessionCardsSection = memo(function RecentSessionCardsSection
 }: RecentSessionCardsSectionProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const executionHost = useWorkspaceExecutionHost()
+  const currentExecKey = recentCardExecutionHostKey(executionHost)
   const effectiveMaxDisplay = maxDisplay ?? getRecentSessionCardsMaxDisplaySync()
   const handleUpdateMaxDisplay = onChangeMaxDisplay ?? setRecentSessionCardsMaxDisplay
   const canDecrease = effectiveMaxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
@@ -203,11 +205,12 @@ export const RecentSessionCardsSection = memo(function RecentSessionCardsSection
               Boolean(currentWorktreeId) &&
               Boolean(currentTabId) &&
               card.worktreeId === currentWorktreeId &&
+              recentCardExecutionHostKey(card.executionHost) === currentExecKey &&
               card.tabId === currentTabId
             )
         )
         .slice(0, effectiveMaxDisplay),
-    [cards, currentTabId, currentWorktreeId, effectiveMaxDisplay]
+    [cards, currentExecKey, currentTabId, currentWorktreeId, effectiveMaxDisplay]
   )
   const now = useNow(30_000, visibleCards.length > 0)
   return (
@@ -263,9 +266,11 @@ export const RecentSessionCardsSection = memo(function RecentSessionCardsSection
           </Text>
         ) : (
           visibleCards.map((card, index) => {
-            const key = recentCardKey(card)
+            const key = recentCardRowKey(card)
             const isCurrentWorkspace =
-              Boolean(currentWorktreeId) && card.worktreeId === currentWorktreeId
+              Boolean(currentWorktreeId) &&
+              card.worktreeId === currentWorktreeId &&
+              recentCardExecutionHostKey(card.executionHost) === currentExecKey
             return (
               <RecentSessionCardRow
                 key={key}

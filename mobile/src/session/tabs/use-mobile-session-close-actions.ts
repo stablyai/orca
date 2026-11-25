@@ -16,6 +16,7 @@ import type { MobileSessionContentCreateActionsModel } from '../use-mobile-sessi
 import { mobileNativeChatScopeKey } from '../native-chat/conversation/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from '../native-chat/composer/drafts/mobile-native-chat-draft-store'
 import { removeRecentSessionCard } from '../recent-session-cards'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import {
   defineHostMutation,
   useHostMutation,
@@ -73,6 +74,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     showToast
   } = scope
   const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
+  const executionHost = useWorkspaceExecutionHost()
   // A refused or lost close keeps the tab, so say so rather than leave the tap unanswered.
   function showCloseFailed(code?: string) {
     showToast(
@@ -120,7 +122,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         showCloseFailed(reply.ok ? undefined : reply.error.code)
       } else {
         if (hostId && worktreeId) {
-          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
+          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle, executionHost)
         }
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
@@ -174,7 +176,8 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
             hostId,
             worktreeId,
             tab.id,
-            tab.type === 'terminal' ? tab.terminal : undefined
+            tab.type === 'terminal' ? tab.terminal : undefined,
+            executionHost
           )
         }
         const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)

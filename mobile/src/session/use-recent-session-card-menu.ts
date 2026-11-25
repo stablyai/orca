@@ -6,17 +6,20 @@ import {
   workspaceRouteHref
 } from '../navigation/workspace-execution-host'
 import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
-import { worktreeCatalogRead } from '../worktree/catalog/worktree-catalog-operations'
-import { sessionTabsListRead } from './tabs/mobile-session-tab-read-operations'
 import {
   activateMobileSessionTab,
   setPendingCrossWorktreeTabTarget
 } from './tabs/mobile-session-tab-activation'
-import { isUnpublishedSnapshot, recentCardSnapshotTabs } from './recent-session-card-snapshot'
+import { recentCardExecutionHostKey, recentCardRowKey } from './recent-session-card-snapshot'
+import {
+  EMPTY_RECENT_CARDS_POLL_STATE,
+  pollRecentCardsAcrossHosts,
+  resolveRecentCardClient,
+  sameRecentCardsPollState,
+  type RecentCardsPollState
+} from './recent-session-card-routing'
 import {
   getVisibleRecentSessionCards,
-  readAllRecentSessionCardsSync,
-  reconcileRecentSessionCardsForWorktree,
   removeRecentSessionCard,
   subscribeRecentSessionCards,
   type RecentSessionCardRecord
@@ -26,44 +29,6 @@ import type { MobileSessionPresentationModel } from './use-mobile-session-presen
 const EMPTY_RECENT_SESSION_CARDS: readonly RecentSessionCardRecord[] = []
 const POLL_INTERVAL_MS = 2500
 
-type RecentCardWorktree = {
-  worktreeId: string
-  displayName?: string
-  isArchived?: boolean
-}
-
-const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
-
-function toRecentCardWorktrees(rows: readonly unknown[] | undefined): RecentCardWorktree[] {
-  return (rows ?? []).flatMap((row) =>
-    isRecord(row) && typeof row.worktreeId === 'string' && row.worktreeId.length > 0
-      ? [
-          {
-            worktreeId: row.worktreeId,
-            displayName: typeof row.displayName === 'string' ? row.displayName : undefined,
-            isArchived: typeof row.isArchived === 'boolean' ? row.isArchived : undefined
-          }
-        ]
-      : []
-  )
-}
-
-function sameRecentCardWorktrees(
-  prev: readonly RecentCardWorktree[],
-  next: readonly RecentCardWorktree[]
-): boolean {
-  return (
-    prev === next ||
-    (prev.length === next.length &&
-      prev.every(
-        (a, i) =>
-          a.worktreeId === next[i]?.worktreeId &&
-          a.displayName === next[i]?.displayName &&
-          a.isArchived === next[i]?.isArchived
-      ))
-  )
-}
-
 export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) {
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
@@ -72,6 +37,9 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     worktreeId,
     client,
     connState,
+    pairedHostClient,
+    pairedHostState,
+    hostCapabilities,
     router,
     sessionTabs,
     activeSessionTabId,
@@ -87,8 +55,8 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
   const jumpLockRef = useRef(false)
   const recentCardsPollInFlightRef = useRef(false)
   const [recentCardsRevision, setRecentCardsRevision] = useState(0)
-  const [recentCardsWorktrees, setRecentCardsWorktrees] = useState<readonly RecentCardWorktree[]>(
-    []
+  const [recentCardsPollState, setRecentCardsPollState] = useState<RecentCardsPollState>(
+    EMPTY_RECENT_CARDS_POLL_STATE
   )
 
   useEffect(() => {
@@ -98,62 +66,33 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     return subscribeRecentSessionCards(() => setRecentCardsRevision((rev) => rev + 1))
   }, [isRecentCardsOpen])
 
+  const anyHostConnected = connState === 'connected' || pairedHostState === 'connected'
   useEffect(() => {
-    if (!isRecentCardsOpen || !client || connState !== 'connected') {
+    if (!isRecentCardsOpen || !anyHostConnected) {
       return
     }
     let cancelled = false
-    const pollRecentCards = async () => {
-      try {
-        const reply = await worktreeCatalogRead.request(client, { limit: 10000 })
-        const catalog = !cancelled ? worktreeCatalogRead.interpret(reply) : null
-        if (catalog?.accepted && Array.isArray(catalog.value.worktrees)) {
-          const next = toRecentCardWorktrees(catalog.value.worktrees)
-          setRecentCardsWorktrees((prev) => (sameRecentCardWorktrees(prev, next) ? prev : next))
-        }
-      } catch {
-        // A refused catalog leaves the cached rows in place.
-      }
-      if (!hostId || cancelled) {
-        return
-      }
-      const ids = Array.from(
-        new Set(
-          readAllRecentSessionCardsSync()
-            .filter(
-              (item) =>
-                item.hostId === hostId &&
-                (item.worktreeId !== worktreeId || sessionTabs.length === 0)
-            )
-            .map((item) => item.worktreeId)
-        )
-      )
-      await Promise.allSettled(
-        ids.map(async (targetId) => {
-          const reply = await sessionTabsListRead.request(client, { worktree: `id:${targetId}` })
-          const snapshot = !cancelled && reply.ok ? sessionTabsListRead.interpret(reply) : null
-          const liveTabs =
-            snapshot !== null && !isUnpublishedSnapshot(snapshot)
-              ? recentCardSnapshotTabs(snapshot)
-              : null
-          if (liveTabs !== null) {
-            reconcileRecentSessionCardsForWorktree({
-              hostId,
-              worktreeId: targetId,
-              liveTabs,
-              allowEmpty: true
-            })
-          }
-        })
-      )
-    }
     const tick = async () => {
-      if (recentCardsPollInFlightRef.current || cancelled) {
+      if (recentCardsPollInFlightRef.current || cancelled || !hostId) {
         return
       }
       recentCardsPollInFlightRef.current = true
       try {
-        await pollRecentCards()
+        const next = await pollRecentCardsAcrossHosts({
+          hostId,
+          worktreeId,
+          sessionTabsCount: sessionTabs.length,
+          currentExecutionHost: executionHost,
+          currentClient: client,
+          currentConnState: connState,
+          pairedHostClient,
+          pairedHostState,
+          hostCapabilities,
+          isCancelled: () => cancelled
+        })
+        if (next && !cancelled) {
+          setRecentCardsPollState((prev) => (sameRecentCardsPollState(prev, next) ? prev : next))
+        }
       } finally {
         recentCardsPollInFlightRef.current = false
       }
@@ -169,10 +108,15 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     }
   }, [
     activeSessionTabId,
+    anyHostConnected,
     client,
     connState,
+    executionHost,
+    hostCapabilities,
     hostId,
     isRecentCardsOpen,
+    pairedHostClient,
+    pairedHostState,
     sessionTabs.length,
     worktreeId
   ])
@@ -185,16 +129,19 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     return getVisibleRecentSessionCards({
       hostId,
       currentWorktreeId: worktreeId,
+      currentExecutionHost: executionHost,
       currentTabId: activeSessionTabId,
-      liveWorktrees: recentCardsWorktrees,
+      liveWorktrees: recentCardsPollState.worktrees,
+      confirmedExecutionHosts: recentCardsPollState.confirmedExecutionHosts,
       currentWorktreeTabs: sessionTabs
     })
   }, [
     activeSessionTabId,
+    executionHost,
     hostId,
     isRecentCardsOpen,
+    recentCardsPollState,
     recentCardsRevision,
-    recentCardsWorktrees,
     sessionTabs,
     worktreeId
   ])
@@ -208,7 +155,10 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
     if (jumpingRecentCardKey !== null || jumpLockRef.current) {
       return
     }
-    if (card.worktreeId === worktreeId) {
+    const isSameWorktree =
+      card.worktreeId === worktreeId &&
+      recentCardExecutionHostKey(card.executionHost) === recentCardExecutionHostKey(executionHost)
+    if (isSameWorktree) {
       if (card.tabId === activeSessionTabId) {
         closeRecentCardSheets()
         return
@@ -225,19 +175,28 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
         switchSessionTab(targetTab)
         triggerSuccess()
       } else {
-        removeRecentSessionCard(hostId, card.worktreeId, card.tabId)
+        removeRecentSessionCard(hostId, card.worktreeId, card.tabId, undefined, card.executionHost)
         triggerError()
         showToast(t('session.recentSessionCards.cardClosed', 'Card was closed'))
       }
       return
     }
-    if (!client || connState !== 'connected') {
+    const targetClient = resolveRecentCardClient({
+      targetExecutionHost: card.executionHost,
+      currentExecutionHost: executionHost,
+      currentClient: client,
+      currentConnState: connState,
+      pairedHostClient,
+      pairedHostState,
+      hostCapabilities
+    })
+    if (!targetClient) {
       triggerError()
       showToast(t('session.recentSessionCards.waitingForHost', 'Waiting for host…'))
       return
     }
     jumpLockRef.current = true
-    setJumpingRecentCardKey(`${card.worktreeId}:${card.tabId}`)
+    setJumpingRecentCardKey(recentCardRowKey(card))
     try {
       setPendingCrossWorktreeTabTarget({
         worktreeId: card.worktreeId,
@@ -245,7 +204,7 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
         leafId: card.leafId,
         terminalHandle: card.terminalHandle
       })
-      const response = await activateMobileSessionTab(client, {
+      const response = await activateMobileSessionTab(targetClient, {
         worktree: `id:${card.worktreeId}`,
         tabId: card.tabId,
         ...(card.leafId ? { leafId: card.leafId } : {}),
@@ -256,7 +215,13 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
       if (!response.ok) {
         setPendingCrossWorktreeTabTarget(null)
         if (response.error.code === 'repo_not_found') {
-          removeRecentSessionCard(hostId, card.worktreeId, card.tabId)
+          removeRecentSessionCard(
+            hostId,
+            card.worktreeId,
+            card.tabId,
+            undefined,
+            card.executionHost
+          )
         }
         if (
           response.error.code === 'repo_not_found' ||
@@ -281,7 +246,7 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
       router.replace(
         workspaceRouteHref(
           `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(card.worktreeId)}${query}`,
-          executionHost
+          card.executionHost ?? null
         )
       )
     } catch {

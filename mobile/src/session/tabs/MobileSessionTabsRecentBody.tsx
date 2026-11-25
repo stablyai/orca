@@ -12,7 +12,9 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { agentStateLabel, formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { getWorktreeLabel } from '../../worktree/row-presentation/worktree-label'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { formatWorkspaceBadgeLabel } from '../RecentSessionCardsSheet'
+import { recentCardExecutionHostKey, recentCardRowKey } from '../recent-session-card-snapshot'
 import {
   getRecentSessionCardsMaxDisplaySync,
   MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -50,6 +52,8 @@ export function MobileSessionTabsRecentBody({
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const executionHost = useWorkspaceExecutionHost()
+  const currentExecKey = recentCardExecutionHostKey(executionHost)
   const {
     recentSessionCards,
     jumpingRecentCardKey,
@@ -72,11 +76,12 @@ export function MobileSessionTabsRecentBody({
               Boolean(worktreeId) &&
               Boolean(activeSessionTabId) &&
               card.worktreeId === worktreeId &&
+              recentCardExecutionHostKey(card.executionHost) === currentExecKey &&
               card.tabId === activeSessionTabId
             )
         )
         .slice(0, maxDisplay),
-    [activeSessionTabId, cards, maxDisplay, worktreeId]
+    [activeSessionTabId, cards, currentExecKey, maxDisplay, worktreeId]
   )
   const now = useNow(30_000, visibleCards.length > 0)
   const canDecrease = maxDisplay > MIN_RECENT_SESSION_CARDS_DISPLAY
@@ -139,10 +144,13 @@ export function MobileSessionTabsRecentBody({
           </View>
         ) : (
           visibleCards.map((card) => {
-            const key = `${card.worktreeId}:${card.tabId}`
+            const key = recentCardRowKey(card)
             const isJumping = jumpingRecentCardKey === key
             const anyJumping = jumpingRecentCardKey !== null
-            const isCurrentWorkspace = Boolean(worktreeId) && card.worktreeId === worktreeId
+            const isCurrentWorkspace =
+              Boolean(worktreeId) &&
+              card.worktreeId === worktreeId &&
+              recentCardExecutionHostKey(card.executionHost) === currentExecKey
             const workspaceLabel = getWorktreeLabel(card.worktreeName, card.worktreeId)
             const badgeLabel = formatWorkspaceBadgeLabel(workspaceLabel)
             const timeAgo = formatTimeAgo(card.lastVisitedAt, now)

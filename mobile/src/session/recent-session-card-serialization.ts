@@ -1,3 +1,7 @@
+import {
+  canonicalExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../src/shared/execution-host/execution-host'
 import type { MobileSessionTabType } from './tabs/mobile-session-tabs'
 import { parseAgentDotState, type RecentSessionCardSnapshot } from './recent-session-card-snapshot'
 
@@ -42,11 +46,20 @@ function parseCard(v: unknown): RecentSessionCardSnapshot | null {
   }
   const [leaf, hdl] = [str(v.leafId), str(v.terminalHandle)]
   const [sid, aid, st] = [str(v.sessionId), str(v.agentId), parseAgentDotState(v.agentState)]
+  const parsedExec =
+    typeof v.executionHost === 'string' ? canonicalExecutionHostId(v.executionHost) : null
+  const executionHost =
+    parsedExec && parsedExec !== LOCAL_EXECUTION_HOST_ID ? parsedExec : undefined
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: guarded by TAB_TYPES.has(v.tabType) above.
   const tabType = v.tabType as MobileSessionTabType
   const base = { hostId: h, worktreeId: w, worktreeName: str(v.worktreeName) ?? '', tabId: id }
   const rest = { title: t, tabType, lastVisitedAt: Number(v.lastVisitedAt) }
-  const opt = Object.assign({}, leaf && { leafId: leaf }, hdl && { terminalHandle: hdl })
+  const opt = Object.assign(
+    {},
+    executionHost && { executionHost },
+    leaf && { leafId: leaf },
+    hdl && { terminalHandle: hdl }
+  )
   return Object.assign(
     base,
     rest,

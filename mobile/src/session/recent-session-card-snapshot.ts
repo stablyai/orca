@@ -1,4 +1,8 @@
 import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusState
@@ -13,6 +17,7 @@ import {
 
 export type RecentSessionCardSnapshot = {
   hostId: string
+  executionHost?: ExecutionHostId
   worktreeId: string
   worktreeName: string
   tabId: string
@@ -26,6 +31,17 @@ export type RecentSessionCardSnapshot = {
   /** Transient host unread verdict projected from live `tab.unread`; never persisted to storage. */
   unread?: boolean
   lastVisitedAt: number
+}
+
+export function recentCardExecutionHostKey(executionHost?: string | null): string {
+  return executionHost && executionHost !== LOCAL_EXECUTION_HOST_ID ? executionHost : ''
+}
+
+export function recentCardRowKey(
+  card: Pick<RecentSessionCardSnapshot, 'executionHost' | 'worktreeId' | 'tabId'>
+): string {
+  const exec = recentCardExecutionHostKey(card.executionHost)
+  return exec ? `${exec}:${card.worktreeId}:${card.tabId}` : `${card.worktreeId}:${card.tabId}`
 }
 
 export type LiveRecentCardTab = {
@@ -187,13 +203,14 @@ export function recentCardSnapshotTabs(
 
 export function buildRecentSessionCardFromTab(p: {
   hostId: string
+  executionHost?: ExecutionHostId
   worktreeId: string
   worktreeName: string
   tab: MobileSessionTab
   hostAgentIdentity?: string | null
   now?: number
 }): RecentSessionCardSnapshot {
-  const { hostId, worktreeId, worktreeName, tab: t, hostAgentIdentity } = p
+  const { hostId, executionHost, worktreeId, worktreeName, tab: t, hostAgentIdentity } = p
   const now = p.now ?? Date.now()
   const agentId =
     t.type === 'agent-session'
@@ -206,6 +223,8 @@ export function buildRecentSessionCardFromTab(p: {
   const leafId = t.type === 'terminal' && t.leafId ? t.leafId : undefined
   const terminalHandle = t.type === 'terminal' && t.terminal ? t.terminal : undefined
   const sessionId = t.type === 'agent-session' && t.sessionId ? t.sessionId : undefined
+  const scopedExec =
+    executionHost && executionHost !== LOCAL_EXECUTION_HOST_ID ? executionHost : undefined
   return {
     hostId,
     worktreeId,
@@ -214,6 +233,7 @@ export function buildRecentSessionCardFromTab(p: {
     title: getMobileSessionTabTitle(t, hostAgentIdentity),
     tabType: t.type,
     lastVisitedAt: now,
+    ...(scopedExec ? { executionHost: scopedExec } : {}),
     ...(agentId ? { agentId } : {}),
     ...(agentState ? { agentState } : {}),
     ...(leafId ? { leafId } : {}),

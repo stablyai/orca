@@ -120,7 +120,12 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
       return
     }
     if (sessionTabs.length > 0) {
-      reconcileRecentSessionCardsForWorktree({ hostId, worktreeId, liveTabs: sessionTabs })
+      reconcileRecentSessionCardsForWorktree({
+        hostId,
+        worktreeId,
+        executionHost,
+        liveTabs: sessionTabs
+      })
     }
     if (!activeSessionTabId) {
       return
@@ -133,6 +138,7 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     // Status receipts rewrite sessionTabs without a new user visit.
     const recordedKey = [
       hostId,
+      executionHost ?? '',
       worktreeId,
       activeTab.id,
       activeTab.title,
@@ -146,13 +152,14 @@ export function useMobileSessionKeyboardState(scope: MobileSessionKeyboardScope)
     recordRecentSessionCardVisit(
       buildRecentSessionCardFromTab({
         hostId,
+        executionHost,
         worktreeId,
         worktreeName: worktreeName || '',
         tab: activeTab,
         hostAgentIdentity
       })
     )
-  }, [activeSessionTabId, hostId, sessionTabs, terminals, worktreeId, worktreeName])
+  }, [activeSessionTabId, executionHost, hostId, sessionTabs, terminals, worktreeId, worktreeName])
 
   const handleDeleteCustomKey = useCallback(async (key: CustomKey) => {
     try {

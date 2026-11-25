@@ -19,12 +19,21 @@ import {
   type MobileSessionTabBarMode,
   type MobileSessionTabsSheetScope
 } from './tabs/mobile-session-tab-bar-mode'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import {
   buildRecentSessionCardFromTab,
-  syncRecentCardWithLiveTab,
+  recentCardExecutionHostKey,
   type LiveRecentCardTab,
   type RecentSessionCardSnapshot
 } from './recent-session-card-snapshot'
+import {
+  capRecentCardList,
+  filterVisibleRecentSessionCards,
+  mergeRecentCardListsByRecency,
+  recentCardStorageKey,
+  reconcileRecentSessionCardList,
+  type LiveRecentCardWorktree
+} from './recent-session-card-visibility'
 import {
   MAX_RECENT_SESSION_CARDS_DISPLAY,
   MAX_RECENT_SESSION_CARDS_LIMIT,
@@ -54,8 +63,13 @@ const M_KEYS = [RECENT_SESSION_CARDS_STORAGE_KEY, LAST_VISITED_WORKTREE_STORAGE_
 
 type Cards = RecentSessionCardRecord[]
 type ReadonlyCards = readonly RecentSessionCardRecord[]
-type LiveWorktree = { worktreeId: string; displayName?: string; isArchived?: boolean }
-type PendingRemoval = { hostId: string; worktreeId: string; tabId?: string; handle?: string }
+type PendingRemoval = {
+  hostId: string
+  executionHost?: ExecutionHostId
+  worktreeId: string
+  tabId?: string
+  handle?: string
+}
 
 let memory: Cards | null = null
 let maxDisplayMemory: number | null = null
@@ -71,12 +85,10 @@ export const subscribeRecentSessionCards = (l: () => void): (() => void) => (
 const notify = () => listeners.forEach((l) => l())
 const str = (v: unknown): string | undefined =>
   typeof v === 'string' && v.length > 0 ? v : undefined
-const cardKey = (c: RecentSessionCardRecord): string => `${c.hostId}\0${c.worktreeId}\0${c.tabId}`
-const matchesTab = (c: RecentSessionCardRecord, t: LiveRecentCardTab): boolean =>
-  t.id === c.tabId || (Boolean(c.terminalHandle) && t.terminal === c.terminalHandle)
 const removalDrops = (i: RecentSessionCardRecord, r: PendingRemoval): boolean =>
   i.hostId === r.hostId &&
   i.worktreeId === r.worktreeId &&
+  recentCardExecutionHostKey(i.executionHost) === recentCardExecutionHostKey(r.executionHost) &&
   ((r.tabId === undefined && r.handle === undefined) ||
     i.tabId === r.tabId ||
     (r.handle !== undefined && i.terminalHandle === r.handle))
@@ -115,29 +127,12 @@ export function setRecentSessionCardsMaxDisplay(limit: number): number {
   return maxDisplayMemory
 }
 
-function capCards(cards: ReadonlyCards): Cards {
-  const perHost = new Map<string, number>()
-  return cards
-    .filter((i) => {
-      const n = (perHost.get(i.hostId) ?? 0) + 1
-      perHost.set(i.hostId, n)
-      return n <= MAX_RECENT_SESSION_CARDS_STORED
-    })
-    .slice(0, MAX_TOTAL)
-}
-
-function mergeByRecency(primary: ReadonlyCards, secondary: ReadonlyCards): Cards {
-  const byKey = new Map<string, RecentSessionCardRecord>()
-  for (const c of [...secondary, ...primary]) {
-    if ((byKey.get(cardKey(c))?.lastVisitedAt ?? -Infinity) <= c.lastVisitedAt) {
-      byKey.set(cardKey(c), c)
-    }
-  }
-  return [...byKey.values()].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
-}
-
 const applyVisit = (existing: ReadonlyCards, record: RecentSessionCardRecord): Cards =>
-  capCards([record, ...existing.filter((i) => cardKey(i) !== cardKey(record))])
+  capRecentCardList(
+    [record, ...existing.filter((i) => recentCardStorageKey(i) !== recentCardStorageKey(record))],
+    MAX_RECENT_SESSION_CARDS_STORED,
+    MAX_TOTAL
+  )
 
 export function readAllRecentSessionCardsSync(): Cards {
   if (!memory) {
@@ -159,8 +154,15 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
     parseRecentSessionCardsMaxDisplay(dRaw) ?? parseRecentSessionCardsMaxDisplay(lRaw)
   maxDisplayMemory ??= storedLimit
   const storedPrefs = hydrateSessionTabPreferencesFromRaw(dRaw, lRaw)
-  const merged = mergeByRecency(parseRecentSessionCards(dRaw), parseRecentSessionCards(lRaw))
-  const stored = capCards(withoutPendingRemovals(merged))
+  const merged = mergeRecentCardListsByRecency(
+    parseRecentSessionCards(dRaw),
+    parseRecentSessionCards(lRaw)
+  )
+  const stored = capRecentCardList(
+    withoutPendingRemovals(merged),
+    MAX_RECENT_SESSION_CARDS_STORED,
+    MAX_TOTAL
+  )
   pendingRemovals.length = 0
   if (memory !== null) {
     const combined = memory.reduceRight((acc, visit) => applyVisit(acc, visit), stored)
@@ -232,12 +234,19 @@ export function removeRecentSessionCard(
   hostId: string,
   worktreeId: string,
   tabId?: string | null,
-  handle?: string | null
+  handle?: string | null,
+  executionHost?: ExecutionHostId
 ): Cards {
+  const execKey = recentCardExecutionHostKey(executionHost)
   if (!hydrated) {
     const [tid, hdl] = [str(tabId), str(handle)]
     pendingRemovals.push(
-      Object.assign({ hostId, worktreeId }, tid && { tabId: tid }, hdl && { handle: hdl })
+      Object.assign(
+        { hostId, worktreeId },
+        executionHost && { executionHost },
+        tid && { tabId: tid },
+        hdl && { handle: hdl }
+      )
     )
   }
   const current = readAllRecentSessionCardsSync()
@@ -246,14 +255,24 @@ export function removeRecentSessionCard(
     (i) =>
       i.hostId !== hostId ||
       i.worktreeId !== worktreeId ||
+      recentCardExecutionHostKey(i.executionHost) !== execKey ||
       (scoped && (tabId == null || i.tabId !== tabId) && (!handle || i.terminalHandle !== handle))
   )
-  return next.length === current.length ? current : persistCards(next)
+  if (next.length === current.length) {
+    return current
+  }
+  if (!hydrated) {
+    memory = next
+    notify()
+    return next.slice()
+  }
+  return persistCards(next)
 }
 
 export function reconcileRecentSessionCardsForWorktree(p: {
   hostId: string
   worktreeId: string
+  executionHost?: ExecutionHostId
   liveTabs: readonly LiveRecentCardTab[]
   allowEmpty?: boolean
 }): Cards {
@@ -261,17 +280,16 @@ export function reconcileRecentSessionCardsForWorktree(p: {
   if (!p.hostId || !p.worktreeId || (!p.liveTabs.length && !p.allowEmpty)) {
     return current
   }
-  let changed = false
-  const next = current.flatMap((i) => {
-    if (i.hostId !== p.hostId || i.worktreeId !== p.worktreeId) {
-      return [i]
-    }
-    const match = p.liveTabs.find((t) => matchesTab(i, t))
-    const updated = match ? syncRecentCardWithLiveTab(i, match) : null
-    changed ||= updated !== i
-    return updated ? [updated] : []
-  })
-  return changed ? persistCards(next) : current
+  const { next, changed } = reconcileRecentSessionCardList(current, p)
+  if (!changed) {
+    return current
+  }
+  if (!hydrated) {
+    memory = next
+    notify()
+    return next.slice()
+  }
+  return persistCards(next)
 }
 
 export const clearRecentSessionCardsForTests = (): void => {
@@ -285,32 +303,15 @@ export const clearRecentSessionCardsForTests = (): void => {
 export function getVisibleRecentSessionCards(p: {
   hostId: string
   currentWorktreeId: string
+  currentExecutionHost?: ExecutionHostId
   currentTabId: string | null
   limit?: number
-  liveWorktrees?: readonly LiveWorktree[]
+  liveWorktrees?: readonly LiveRecentCardWorktree[]
+  confirmedExecutionHosts?: ReadonlySet<string>
   currentWorktreeTabs?: readonly LiveRecentCardTab[]
 }): Cards {
-  const live = p.liveWorktrees?.length
-    ? new Map(p.liveWorktrees.map((w) => [w.worktreeId, w]))
-    : null
-  const tabs = p.currentWorktreeTabs
-  return readAllRecentSessionCardsSync()
-    .filter((i) => {
-      const inCurrent = i.worktreeId === p.currentWorktreeId
-      const isCurrent = Boolean(p.currentTabId) && inCurrent && i.tabId === p.currentTabId
-      const closed = Boolean(tabs?.length) && inCurrent && !tabs?.some((t) => matchesTab(i, t))
-      const activeWt =
-        !live || Boolean(live.get(i.worktreeId) && !live.get(i.worktreeId)?.isArchived)
-      return i.hostId === p.hostId && !isCurrent && activeWt && !closed
-    })
-    .slice(0, p.limit ?? getRecentSessionCardsMaxDisplaySync())
-    .map((i) => {
-      const match =
-        i.worktreeId === p.currentWorktreeId ? tabs?.find((t) => matchesTab(i, t)) : undefined
-      const synced = syncRecentCardWithLiveTab(i, match)
-      return {
-        ...synced,
-        worktreeName: live?.get(i.worktreeId)?.displayName || synced.worktreeName
-      }
-    })
+  return filterVisibleRecentSessionCards(readAllRecentSessionCardsSync(), {
+    ...p,
+    limit: p.limit ?? getRecentSessionCardsMaxDisplaySync()
+  })
 }
