@@ -2198,6 +2198,7 @@
         "folderWorkspaceRemoved": "文件夹工作区已移除。",
         "chatStillStarting": "此聊天仍在启动，请稍后重试",
         "chatOpenFailed": "无法打开此聊天",
+        "chatOpenDismiss": "忽略",
         "chatOpenRetry": "重试",
         "chatOpenShowDetails": "显示详情",
         "chatOpenHideDetails": "隐藏详情"

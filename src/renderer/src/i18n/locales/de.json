@@ -2053,7 +2053,8 @@
         "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
         "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt.",
         "chatStillStarting": "Chat startet noch. Versuche es gleich erneut.",
-        "chatOpenFailed": "Chat konnte nicht geöffnet werden.",
+        "chatOpenFailed": "Chat konnte nicht geöffnet werden",
+        "chatOpenDismiss": "Verwerfen",
         "chatOpenRetry": "Erneut versuchen",
         "chatOpenShowDetails": "Details anzeigen",
         "chatOpenHideDetails": "Details ausblenden"

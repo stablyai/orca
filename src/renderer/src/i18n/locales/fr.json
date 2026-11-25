@@ -1770,7 +1770,8 @@
         "projectRemoved": "Le projet a été retiré d’Orca.",
         "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré.",
         "chatStillStarting": "Le chat démarre encore. Réessayez bientôt.",
-        "chatOpenFailed": "Impossible d'ouvrir ce chat.",
+        "chatOpenFailed": "Impossible d'ouvrir ce chat",
+        "chatOpenDismiss": "Ignorer",
         "chatOpenRetry": "Réessayer",
         "chatOpenShowDetails": "Afficher les détails",
         "chatOpenHideDetails": "Masquer les détails"

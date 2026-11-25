@@ -2882,7 +2882,8 @@
         "notLocatedNamed": "Orca, {{agent}} ajanının nerede çalıştığını bulamadığı için ajanı açamıyor.",
         "notLocated": "Orca, bu ajanın nerede çalıştığını bulamadığı için ajanı açamıyor.",
         "chatStillStarting": "Sohbet hâlâ başlatılıyor. Birazdan tekrar deneyin.",
-        "chatOpenFailed": "Bu sohbet açılamadı.",
+        "chatOpenFailed": "Bu sohbet açılamadı",
+        "chatOpenDismiss": "Kaldır",
         "chatOpenRetry": "Tekrar dene",
         "chatOpenShowDetails": "Ayrıntıları göster",
         "chatOpenHideDetails": "Ayrıntıları gizle"

@@ -2887,7 +2887,8 @@
         "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed.",
         "chatStillStarting": "This chat is still starting. Try again in a moment.",
-        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenFailed": "Couldn't open chat",
+        "chatOpenDismiss": "Dismiss",
         "chatOpenRetry": "Retry",
         "chatOpenShowDetails": "Show details",
         "chatOpenHideDetails": "Hide details"
