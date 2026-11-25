@@ -933,6 +933,11 @@
     },
     "artifacts": {
       "teamDisabled": "アーティファクトの共有はチームによってオフにされています。"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "組織の Claude 設定によりブロックされています"
+      }
     }
   },
   "menu": {

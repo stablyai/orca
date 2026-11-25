@@ -5304,5 +5304,8 @@
     "cardSlot": {
       "working": "En activité"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Bloqué par les paramètres Claude de votre organisation"
   }
 }

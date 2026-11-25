@@ -642,6 +642,11 @@
       "keywordDelay": "retraso",
       "keywordCooldown": "espera",
       "keywordSecurity": "seguridad"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "Bloqueado por la configuración de Claude de tu organización"
+      }
     }
   },
   "menu": {

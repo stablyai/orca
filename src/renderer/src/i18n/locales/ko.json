@@ -1096,6 +1096,11 @@
       "keywordDelay": "지연",
       "keywordCooldown": "대기",
       "keywordSecurity": "보안"
+    },
+    "mcpServers": {
+      "agents": {
+        "blocked": "조직의 Claude 설정에 의해 차단됨"
+      }
     }
   },
   "menu": {
