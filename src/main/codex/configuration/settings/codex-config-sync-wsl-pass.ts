@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { format } from 'node:util'
 import { syncCodexGlobalInstructionsIntoManagedHome } from '../homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from './codex-config-mirror'
 import { getCodexConfigSyncStatus } from './config-sync-stall'
+import { getCodexSettingsBaselinePath } from './config-settings-baseline'
+import { withHookPassEditGuard } from '../../hooks/installation/codex-hook-pass-edit-guard'
 import {
   CODEX_CONFIG_SYNC_WSL_PROTOCOL,
   type CodexConfigSyncWslHomeResult,
@@ -57,8 +59,13 @@ function syncHome(runtimeHome: string, systemHome: string): CodexConfigSyncWslHo
       systemHomePath: systemHome,
       managedHomePath: runtimeHome
     })
-    const complete = syncSystemConfigIntoManagedCodexHome({ ...homes, guestHome: true })
-    return { runtimeHome, complete, status: getCodexConfigSyncStatus(homes), error: null, warnings }
+    return {
+      runtimeHome,
+      complete: syncGuarded(homes),
+      status: getCodexConfigSyncStatus(homes),
+      error: null,
+      warnings
+    }
   } catch (error) {
     return {
       runtimeHome,
@@ -71,6 +78,27 @@ function syncHome(runtimeHome: string, systemHome: string): CodexConfigSyncWslHo
     console.warn = warn
   }
 }
+
+// A Codex save landing mid-pass must not be mirrored over; redo the pass instead, as hook passes do.
+function syncGuarded(homes: { runtimeHomePath: string; systemHomePath: string }): boolean {
+  const paths = [
+    join(homes.runtimeHomePath, 'config.toml'),
+    join(homes.systemHomePath, 'config.toml'),
+    getCodexSettingsBaselinePath(homes.runtimeHomePath)
+  ]
+  for (let attempt = 0; attempt < PASS_ATTEMPTS; attempt++) {
+    const guarded = withHookPassEditGuard(paths, () =>
+      syncSystemConfigIntoManagedCodexHome({ ...homes, guestHome: true })
+    )
+    if (guarded.conflict === null) {
+      return guarded.value
+    }
+  }
+  console.warn('[codex-config] Codex kept changing its config during the sync; retrying next pass')
+  return false
+}
+
+const PASS_ATTEMPTS = 3
 
 // The guest's $HOME and its Windows drive mounts; nothing else in the distro is Orca's to touch.
 function allowedRoots(): string[] {

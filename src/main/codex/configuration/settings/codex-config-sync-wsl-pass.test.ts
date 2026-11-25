@@ -87,14 +87,15 @@ describe.skipIf(process.platform === 'win32')('WSL Codex settings sync inside th
     expect(runtimeToml()).toContain('model_reasoning_effort = "high"')
   })
 
-  it('promotes values the one-way build kept once, strips their marks and drops the field', () => {
+  it('turns kept values into pending edits: a newer tab edit and a distro edit both still win', () => {
     writeFileSync(
       join(systemHome, 'config.toml'),
       'model = "gpt-a"\nmodel_reasoning_effort = "high"\n'
     )
     writeFileSync(
       join(runtimeHome, 'config.toml'),
-      `model = "gpt-b" ${MARKER}\nmodel_reasoning_effort = "low" ${MARKER}\n`
+      // The tab changed model again after the one-way build kept gpt-b.
+      `model = "gpt-c"\nmodel_reasoning_effort = "low" ${MARKER}\n`
     )
     writeBaseline({
       settings: {
@@ -112,9 +113,9 @@ describe.skipIf(process.platform === 'win32')('WSL Codex settings sync inside th
     })
 
     expect(sync().homes[0]).toMatchObject({ complete: true, error: null })
-    expect(systemToml()).toBe('model = "gpt-b"\nmodel_reasoning_effort = "high"\n')
+    expect(systemToml()).toBe('model = "gpt-c"\nmodel_reasoning_effort = "high"\n')
     expect(runtimeToml()).not.toContain(MARKER)
-    expect(runtimeToml()).toContain('model = "gpt-b"')
+    expect(runtimeToml()).toContain('model = "gpt-c"')
     expect(runtimeToml()).toContain('model_reasoning_effort = "high"')
     expect(baselineFile()).not.toHaveProperty('guestCarryForward')
   })

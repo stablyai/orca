@@ -33,7 +33,7 @@ import {
 } from './codex-native-source-check'
 import {
   isGuestCarryForwardEmpty,
-  promoteGuestCarryForward
+  migrateGuestCarryForward
 } from './codex-config-guest-carry-forward'
 
 export type CodexSettingsBaselineSnapshotOptions = {
@@ -190,16 +190,13 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const baseline = baselineObservation.kind === 'present' ? baselineObservation.baseline : null
   if (baseline?.guestCarryForward && !isGuestCarryForwardEmpty(baseline.guestCarryForward)) {
     // Redo the pass on the files this just rewrote; the next one finds nothing left to carry.
-    if (
-      promoteGuestCarryForward(
-        runtimeTomlPath,
-        runtimeTomlObservation.value,
-        systemTomlPath,
-        baseline.guestCarryForward
-      ) !== 'done'
-    ) {
-      return null
-    }
+    migrateGuestCarryForward(
+      runtimeHomePath,
+      runtimeTomlObservation.value,
+      baseline,
+      baseline.guestCarryForward
+    )
+    return null
   }
   const mirroredMcpServers = baseline?.mcpServers ?? new Set<string>()
   const mirroredMcpServerRoot = baseline?.mcpServerRoot ?? false

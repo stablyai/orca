@@ -4,7 +4,11 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { createIntegrationStateFileCache } from '../../credentials/integration-state-file-cache'
-import { parseWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import {
+  parseWslUncPath,
+  toLinuxPath,
+  toWindowsWslPath
+} from '../../../shared/file-access/wsl-paths'
 import {
   ensureCodexDaemonSocketGuard,
   syncSystemConfigIntoManagedCodexHome
@@ -191,12 +195,20 @@ export class CodexConfigMirror {
           account.managedHomePath,
           account.id
         )
-        const linuxRuntimeHome = parseWslUncPath(runtimeHomePath)?.linuxPath
-        return linuxRuntimeHome ? { runtimeHomePath, linuxRuntimeHome } : null
+        // Ownership answers a home stored on a drive (/mnt/c) in its drive spelling.
+        const linuxRuntimeHome =
+          parseWslUncPath(runtimeHomePath)?.linuxPath ??
+          (/^[A-Za-z]:[\\/]/.test(runtimeHomePath) ? toLinuxPath(runtimeHomePath) : null)
+        const linuxSystemHome = wslSystemCodexHome(
+          parseWslUncPath(account.managedHomePath)?.linuxPath ?? ''
+        )
+        return linuxRuntimeHome && linuxSystemHome
+          ? { runtimeHomePath, linuxRuntimeHome, linuxSystemHome }
+          : null
       })
     )
     const owned = homes.filter((home) => home !== null)
-    const linuxSystemHome = owned[0] ? wslSystemCodexHome(owned[0].linuxRuntimeHome) : null
+    const linuxSystemHome = owned[0]?.linuxSystemHome
     if (!linuxSystemHome) {
       return
     }
@@ -204,7 +216,7 @@ export class CodexConfigMirror {
       distro,
       linuxSystemHome,
       // Homes of another guest user would sync against the wrong ~/.codex.
-      homes: owned.filter((home) => wslSystemCodexHome(home.linuxRuntimeHome) === linuxSystemHome),
+      homes: owned.filter((home) => home.linuxSystemHome === linuxSystemHome),
       forLaunch: options.forLaunch
     })
   }
