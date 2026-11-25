@@ -1,16 +1,35 @@
-// The shares offered to each paired computer's account, at the top of the Bots tab: who shared what,
-// with Accept and Decline. The phone answers through that computer; accepted, the agent's own row
-// takes its place once the computer pairs it.
+// The shares offered to each paired computer's account, at the top of the Bots tab: each is the agent's
+// row, dimmed, with an invite mark, and opens a sheet that explains it with Accept and Decline. The phone
+// answers through that computer; accepted, the agent's own row takes its place once the computer pairs it.
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
-import { Users } from 'lucide-react-native'
+import {
+  Eye,
+  KeyRound,
+  Laptop,
+  Lock,
+  LogOut,
+  Mail,
+  MessageSquare,
+  Moon,
+  UserRound,
+  Users,
+  type LucideIcon
+} from 'lucide-react-native'
 import type { SharedBotPhoneRequest } from '../../../../src/shared/bots/bot-share-phone'
-import { botFallback } from '../../../../src/shared/bots/bot-avatar-fallback'
+import type { AgentCardService } from '../../../../src/shared/bots/agent-card-contract'
+import { agentCardAvatar, agentCardServices } from '../../../../src/shared/bots/shared-agent-card'
+import { ownerShortName } from '../../../../src/shared/bots/shared-bot-owner-name'
+import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
+import { ListGroup, ListRow } from '../../components/list/ListGroup'
+import { ConfirmContent } from '../../components/sheets/ConfirmModal'
+import { mobileBotAvatarSource } from '../../bots/host-bot-row-facts'
 import { MobileBotAvatar } from '../../bots/MobileBotAvatar'
+import { MobileConnectorSourceIcon } from '../../bots/MobileConnectorSourceIcon'
 import { phoneSharedAgents } from '../../bots/shared-agents/phone-shared-agents'
 import { watchPhoneSharedAgents } from '../../bots/shared-agents/phone-shared-agent-watch'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { colors, feedback, radii, spacing } from '../../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 
@@ -45,15 +64,107 @@ export function useSharedAgentRequests(hostIds: readonly string[]): readonly Hos
   }, [byHost, key])
 }
 
-/** The name a request calls its owner by: their first name. */
-function ownerShortName(ownerName: string): string {
-  return ownerName.trim().split(/\s+/)[0] ?? ownerName
+const FACT_ICONS: readonly LucideIcon[] = [Laptop, MessageSquare, Lock, Eye, KeyRound, Moon, LogOut]
+
+/** What accepting means, in the desktop invite dialog's plain lines. */
+function inviteFacts(t: ReturnType<typeof useMobileTranslation>, owner: string): string[] {
+  return [
+    t('bots.share.invite.runsOn', '{{owner}}’s agent. It runs on {{owner}}’s computer.', { owner }),
+    t('bots.share.invite.chatFrom', 'You chat with it from your Orca and your phone.'),
+    t('bots.share.invite.ownChats', 'You see only your own chats.'),
+    t('bots.share.invite.ownerSees', '{{owner}} can see your chats with it.', { owner }),
+    t(
+      'bots.share.invite.actsAs',
+      'It can act on {{owner}}’s computer, with {{owner}}’s accounts.',
+      {
+        owner
+      }
+    ),
+    `${t('bots.share.invite.pauses', 'It pauses while {{owner}}’s computer is off.', { owner })} ${t(
+      'bots.share.invite.messagesWait',
+      'Messages wait until it’s back.'
+    )}`,
+    t('bots.share.invite.leave', 'You can leave anytime.')
+  ]
+}
+
+function requestAvatar(request: SharedBotPhoneRequest) {
+  return mobileBotAvatarSource({ name: request.botName, ...agentCardAvatar(request.agentCard) })
+}
+
+function InviteSheetContent({
+  request,
+  onAnswer,
+  onClose
+}: {
+  request: SharedBotPhoneRequest
+  onAnswer: (accept: boolean) => void
+  onClose: () => void
+}) {
+  const t = useMobileTranslation()
+  const owner = ownerShortName(request.ownerName)
+  const services = agentCardServices(request.agentCard)
+  return (
+    <ConfirmContent
+      media={<MobileBotAvatar avatar={requestAvatar(request)} size={56} />}
+      title={request.botName}
+      message={t('bots.share.invite.sharedWithYou', '{{owner}} shared it with you', {
+        owner: request.ownerName
+      })}
+      details={
+        <>
+          {request.botPurpose ? (
+            <Text numberOfLines={4} style={styles.purpose}>
+              {request.botPurpose}
+            </Text>
+          ) : null}
+          <ListGroup>
+            {inviteFacts(t, owner).map((fact, index) => {
+              const Icon = FACT_ICONS[index] ?? Laptop
+              return (
+                <ListRow
+                  key={fact}
+                  title={fact}
+                  wrapTitle
+                  leading={<Icon size={17} strokeWidth={2} color={colors.textSecondary} />}
+                />
+              )
+            })}
+          </ListGroup>
+          {services.length > 0 ? (
+            <View style={styles.uses}>
+              <Text style={styles.usesLabel}>{t('bots.share.invite.uses', 'Uses')}</Text>
+              {services.map((service) => (
+                <View key={service} style={styles.chip}>
+                  <MobileConnectorSourceIcon source={service} size={12} />
+                  <Text style={styles.chipText}>{SERVICE_NAMES[service]}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+        </>
+      }
+      cancelLabel={t('bots.share.decline', 'Decline')}
+      onCancelPress={() => onAnswer(false)}
+      confirmLabel={t('bots.share.accept', 'Accept')}
+      onConfirm={() => onAnswer(true)}
+      onCancel={onClose}
+    />
+  )
+}
+
+const SERVICE_NAMES: Record<AgentCardService, string> = {
+  github: 'GitHub',
+  slack: 'Slack',
+  linear: 'Linear'
 }
 
 function RequestRow({ pairedHostId, request, divider }: HostRequest & { divider: boolean }) {
   const t = useMobileTranslation()
+  const [open, setOpen] = useState(false)
   const [answering, setAnswering] = useState(false)
   const answer = async (accept: boolean): Promise<void> => {
+    setOpen(false)
     setAnswering(true)
     const done = await phoneSharedAgents().answerRequest(pairedHostId, request.shareId, accept)
     if (!done) {
@@ -61,63 +172,63 @@ function RequestRow({ pairedHostId, request, divider }: HostRequest & { divider:
       Alert.alert(t('bots.share.requestFailed', 'Couldn’t answer the request. Try again.'))
     }
   }
-  const avatar = request.avatarUrl
-    ? ({ kind: 'image', uri: request.avatarUrl } as const)
-    : ({ kind: 'text', text: botFallback({ name: request.botName, avatar: null }) } as const)
+  const invited = t('bots.share.invite.invitedYou', '{{owner}} invited you', {
+    owner: request.ownerName
+  })
   return (
-    <View style={styles.row}>
-      {divider ? <View style={styles.divider} /> : null}
-      <MobileBotAvatar avatar={avatar} size={32} />
-      <View style={styles.main}>
-        <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={styles.title}>
-            {request.botName}
-          </Text>
-          <Users
-            size={12}
-            color={colors.textMuted}
-            accessibilityLabel={t('bots.share.sharedBy', 'Shared by {{name}}', {
-              name: request.ownerName
-            })}
-          />
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${request.botName}, ${invited}`}
+        disabled={answering}
+        onPress={() => setOpen(true)}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      >
+        {divider ? <View style={styles.divider} /> : null}
+        <View>
+          <View style={styles.dimmed}>
+            <MobileBotAvatar avatar={requestAvatar(request)} size={32} />
+          </View>
+          <View style={styles.badge}>
+            <Mail size={10} strokeWidth={2.5} color={colors.textPrimary} />
+          </View>
         </View>
-        <Text numberOfLines={1} style={styles.line}>
-          {t('bots.share.requestLine', '{{owner}} shared {{agent}} with you', {
-            owner: ownerShortName(request.ownerName),
-            agent: request.botName
-          })}
-        </Text>
-        {request.botPurpose ? (
-          <Text numberOfLines={1} style={styles.line}>
-            {request.botPurpose}
-          </Text>
-        ) : null}
-        <View style={styles.buttons}>
-          {answering ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void answer(true)}
-                style={({ pressed }) => [styles.button, styles.primary, pressed && styles.pressed]}
-              >
-                <Text style={[styles.buttonText, styles.primaryText]}>
-                  {t('bots.share.accept', 'Accept')}
-                </Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => void answer(false)}
-                style={({ pressed }) => [styles.button, pressed && styles.pressed]}
-              >
-                <Text style={styles.buttonText}>{t('bots.share.decline', 'Decline')}</Text>
-              </Pressable>
-            </>
-          )}
+        <View style={styles.main}>
+          <View style={[styles.titleRow, styles.dimmed]}>
+            <Text numberOfLines={1} style={styles.title}>
+              {request.botName}
+            </Text>
+            <Users
+              size={12}
+              color={colors.textMuted}
+              accessibilityLabel={t('bots.share.sharedBy', 'Shared by {{name}}', {
+                name: request.ownerName
+              })}
+            />
+          </View>
+          <View style={styles.lineRow}>
+            <View style={styles.person}>
+              <UserRound size={10} color={colors.textMuted} />
+            </View>
+            <Text numberOfLines={1} style={styles.line}>
+              {invited}
+            </Text>
+          </View>
         </View>
-      </View>
-    </View>
+        {answering ? (
+          <ActivityIndicator size="small" color={colors.textSecondary} />
+        ) : (
+          <Text style={styles.view}>{t('bots.share.invite.view', 'View invite')}</Text>
+        )}
+      </Pressable>
+      <BottomDrawer visible={open} onClose={() => setOpen(false)}>
+        <InviteSheetContent
+          request={request}
+          onAnswer={(accept) => void answer(accept)}
+          onClose={() => setOpen(false)}
+        />
+      </BottomDrawer>
+    </>
   )
 }
 
@@ -137,7 +248,7 @@ export function MobileSharedAgentRequestRows({ requests }: { requests: readonly 
 const styles = themedStyleSheet(() => ({
   row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
@@ -152,19 +263,57 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.borderSubtle
   },
   main: { flex: 1, minWidth: 0 },
+  dimmed: { opacity: 0.6 },
+  badge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgBase
+  },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   title: { flexShrink: 1, fontSize: 15, color: colors.textSecondary, fontWeight: '500' },
-  line: { marginTop: 3, fontSize: 13, color: colors.textMuted },
-  buttons: { flexDirection: 'row', gap: spacing.sm, marginTop: 10 },
-  button: {
-    minHeight: 32,
+  lineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
+  person: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
-  primary: { backgroundColor: colors.surfaceBright },
-  buttonText: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
-  primaryText: { color: colors.bgBase },
+  line: { flexShrink: 1, fontSize: 13, color: colors.textMuted },
+  view: { fontSize: 13, fontWeight: '600', color: colors.textPrimary },
+  purpose: {
+    fontSize: typography.bodySize,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.md
+  },
+  uses: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xs
+  },
+  usesLabel: { fontSize: typography.metaSize, color: colors.textSecondary },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 24,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.control,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
+  },
+  chipText: { fontSize: typography.metaSize, color: colors.textPrimary },
   pressed: { opacity: feedback.pressedOpacity }
 }))

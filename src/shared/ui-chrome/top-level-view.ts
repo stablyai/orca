@@ -10,17 +10,7 @@ const TOP_LEVEL_VIEW_LOOKUP: Record<TopLevelView, true> = {
   space: true,
   skills: true,
   artifacts: true,
-  mobile: true,
-  shareRequest: true
-}
-
-// Views shown for something of this run only, so never saved or sent to a host (an older one would
-// refuse the value): a share request's page. Launch opens the workspace instead.
-const UNSAVED_TOP_LEVEL_VIEWS: ReadonlySet<TopLevelView> = new Set(['shareRequest'])
-
-/** A view the saved active view may hold: known, and not one of this run only. */
-export function isSavedTopLevelView(value: unknown): value is TopLevelView {
-  return isTopLevelView(value) && !UNSAVED_TOP_LEVEL_VIEWS.has(value)
+  mobile: true
 }
 
 export function isTopLevelView(value: unknown): value is TopLevelView {

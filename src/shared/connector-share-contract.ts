@@ -2,6 +2,7 @@
 // Copies, not imports: the CLI compiles src/shared with rootDir src, so it can't reach cloud files.
 import * as z from 'zod'
 import { BotShareEmailSchema, BotShareIdSchema } from './bots/bot-team-shares'
+import { AgentCardSchema } from './bots/agent-card-contract'
 import { CONNECTOR_PATHS } from './connectors/connector-cloud-paths'
 
 const Id = z.string().min(1).max(128)
@@ -113,11 +114,12 @@ export const ConnectorSharesMineSchema = z.object({
       botId: Id,
       botName: Name,
       ownerName: Name,
-      avatarUrl: z.string().url().max(2048).optional(),
       hostOnline: z.boolean(),
       state: z.enum(['ready', 'needs-accept']),
       // The agent's purpose line from its owner's hello, when given.
       botPurpose: z.string().min(1).max(1000).optional(),
+      // Its mascot and services from its owner's hello; absent from an older host or cloud.
+      agentCard: AgentCardSchema,
       // Present only once the host takes held messages; absent, hold nothing.
       hostKey: PublicKey.optional(),
       offers: z

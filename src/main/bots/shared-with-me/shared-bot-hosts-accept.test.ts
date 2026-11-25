@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
+import { ConnectorSharesMineSchema } from '../../../shared/connector-share-contract'
+import { agentCardAvatar } from '../../../shared/bots/shared-agent-card'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { newSharedBotHostEntry, SharedBotHostStore } from './shared-bot-host-store'
 import type { MineShare } from './shared-bot-pairing'
@@ -30,12 +32,15 @@ const offered: MineShare = {
 }
 
 /** The account's shared hosts in `dir`, over a cloud that lists `offered` and records each call. */
-function hosts(dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-'))) {
+function hosts(
+  dir = mkdtempSync(join(tmpdir(), 'shared-bot-accept-')),
+  shares: MineShare[] = [offered]
+) {
   dirs.push(dir)
   const accepts: string[] = []
   const declines: string[] = []
   const cloud: SharedBotsCloud = {
-    mine: async () => ({ ok: true, value: { v: 1, shares: [offered] } }),
+    mine: async () => ({ ok: true, value: { v: 1, shares } }),
     accept: async (shareId) => {
       accepts.push(shareId)
       return { ok: true, value: { status: 'queued' } }
@@ -75,6 +80,28 @@ describe('a share offered to this account', () => {
         botPurpose: 'Triages flaky tests and drafts the fix'
       }
     ])
+  })
+
+  it("draws the card a newer cloud lists, and the agent's initial from an older one", async () => {
+    // As each cloud answers: a newer one with the owner's card, an older one with none.
+    const { shares } = ConnectorSharesMineSchema.parse({
+      v: 1,
+      shares: [
+        { ...offered, agentCard: { mascot: 'H1', color: '#f4c4cf', services: ['github'] } },
+        { ...offered, shareId: 'share-2' }
+      ]
+    })
+    const { service } = hosts(undefined, shares)
+    await service.refresh()
+    service.stop()
+    const [carded, plain] = service.state().requests ?? []
+    expect(agentCardAvatar(carded?.agentCard)).toEqual({
+      avatar: 'mascot:H1',
+      avatarColor: '#f4c4cf'
+    })
+    expect(carded?.agentCard?.services).toEqual(['github'])
+    expect(plain).not.toHaveProperty('agentCard')
+    expect(agentCardAvatar(plain?.agentCard)).toEqual({ avatar: null })
   })
 
   it('pairs on Accept: asks the host with a key it keeps, and lists the agent', async () => {

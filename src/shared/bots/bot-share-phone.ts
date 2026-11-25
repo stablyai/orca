@@ -5,6 +5,7 @@
 import * as z from 'zod'
 import { isDevicePublicKeyB64 } from '../remote-runtime/pairing/device-key-proof'
 import { BotShareIdSchema } from './bot-team-shares'
+import { AgentCardSchema } from './agent-card-contract'
 
 const Id = z.string().min(1).max(128)
 const Name = z.string().min(1).max(200)
@@ -57,7 +58,8 @@ export const SharedBotPhoneRequest = z.object({
   botName: Name,
   ownerName: Name,
   botPurpose: z.string().min(1).max(1000).optional(),
-  avatarUrl: z.string().url().max(2048).optional()
+  // Its mascot and services; absent from a computer from before cards.
+  agentCard: AgentCardSchema
 })
 export type SharedBotPhoneRequest = z.infer<typeof SharedBotPhoneRequest>
 

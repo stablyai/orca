@@ -5261,7 +5261,21 @@
       }
     },
     "share": {
-      "signInOtherSite": "コンピューターから別のサイトのサインインリンクが送られてきたため、開きませんでした。"
+      "signInOtherSite": "コンピューターから別のサイトのサインインリンクが送られてきたため、開きませんでした。",
+      "invite": {
+        "invitedYou": "{{owner}} さんから招待されました",
+        "view": "招待を表示",
+        "sharedWithYou": "{{owner}} さんがあなたと共有しました",
+        "runsOn": "{{owner}} さんの Agent です。{{owner}} さんのコンピュータで動作します。",
+        "chatFrom": "あなたの Orca とスマートフォンからチャットできます。",
+        "ownChats": "表示されるのは自分のチャットだけです。",
+        "ownerSees": "{{owner}} さんはあなたのこの Agent とのチャットを見られます。",
+        "actsAs": "{{owner}} さんのコンピュータ上で、{{owner}} さんのアカウントを使って操作できます。",
+        "pauses": "{{owner}} さんのコンピュータがオフの間は一時停止します。",
+        "messagesWait": "メッセージは再開まで待機します。",
+        "leave": "いつでも退出できます。",
+        "uses": "使用サービス"
+      }
     },
     "settingsPage": {
       "off": "オフ",

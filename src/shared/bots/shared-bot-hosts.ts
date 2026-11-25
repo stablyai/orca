@@ -1,6 +1,7 @@
 // The agents other people shared with this Orca account, as main publishes them to the window: each is
 // a host the app reaches over Orca Relay by its own environment id.
 import type { SharedHostLink } from '../remote-runtime/relay/client/shared-host-relay-link'
+import type { AgentCard } from './agent-card-contract'
 
 export type SharedBotHostLink = SharedHostLink
 
@@ -77,7 +78,8 @@ export type SharedBotRequestView = {
   ownerName: string
   /** The agent's one-line purpose, when its owner gave one. */
   botPurpose?: string
-  avatarUrl?: string
+  /** Its mascot and services from its owner's hello; absent from an older host or cloud. */
+  agentCard?: AgentCard
 }
 
 // A new chat started while the host is away: its id until the host starts it from the first held message.

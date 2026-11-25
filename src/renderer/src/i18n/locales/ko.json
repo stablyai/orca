@@ -27952,7 +27952,21 @@
       "receive": {
         "fromLinkMenu": "링크에서…"
       },
-      "duplicateSkill": "같은 이름, {{folder}}에 있음 · 공유되지 않음"
+      "duplicateSkill": "같은 이름, {{folder}}에 있음 · 공유되지 않음",
+      "invite": {
+        "invitedYou": "{{owner}}님이 초대했습니다",
+        "view": "초대 보기",
+        "sharedWithYou": "{{owner}}님이 공유했습니다",
+        "runsOn": "{{owner}}님의 에이전트입니다. {{owner}}님의 컴퓨터에서 실행됩니다.",
+        "chatFrom": "내 Orca와 휴대폰에서 채팅할 수 있습니다.",
+        "ownChats": "내 채팅만 볼 수 있습니다.",
+        "ownerSees": "{{owner}}님은 이 에이전트와 나눈 내 채팅을 볼 수 있습니다.",
+        "actsAs": "{{owner}}님의 컴퓨터에서 {{owner}}님의 계정으로 작업할 수 있습니다.",
+        "pauses": "{{owner}}님의 컴퓨터가 꺼져 있으면 일시 중지됩니다.",
+        "messagesWait": "메시지는 다시 켜질 때까지 대기합니다.",
+        "leave": "언제든지 나갈 수 있습니다.",
+        "uses": "사용"
+      }
     },
     "host": {
       "botWorkspaceUnavailable": "현재 여기서 이 에이전트의 워크스페이스를 사용할 수 없어 해당 워크스페이스에서 페이지를 열 수 없습니다.",

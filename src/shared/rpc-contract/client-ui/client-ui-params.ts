@@ -16,7 +16,8 @@ import {
   ACTIVITY_GROUP_BY_VALUES,
   THREAD_READ_FILTER_VALUES
 } from '../../agent-status/presentation/agents-view-thread-filters'
-import { isReleaseChannel, type ReleaseChannel } from '../../updater/release-channel'
+import { isReleaseChannel } from '../../updater/release-channel'
+import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'
@@ -115,8 +116,7 @@ export const TopLevelViewSchema = z
     // Bot templates was a view before it became a dialog; an older peer can still send it.
     'botTemplates',
     'artifacts',
-    'mobile',
-    'shareRequest'
+    'mobile'
   ])
   .transform((view) => (view === 'botTemplates' ? 'terminal' : view))
 
