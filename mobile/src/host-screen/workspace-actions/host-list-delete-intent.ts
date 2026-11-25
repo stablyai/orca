@@ -44,14 +44,18 @@ export function takeHostListDeleteIntent(
   if (intent.hostId !== hostId || now > intent.expiresAt) {
     return null
   }
-  return { hostId: intent.hostId, executionHost: intent.executionHost, worktreeId: intent.worktreeId }
+  return {
+    hostId: intent.hostId,
+    executionHost: intent.executionHost,
+    worktreeId: intent.worktreeId
+  }
 }
 
 /** The one row the session showed: same id on the same execution host, never a same-id twin elsewhere. */
-export function findHostListDeleteRow(
-  rows: readonly Worktree[],
+export function findHostListDeleteRow<Row extends Pick<Worktree, 'worktreeId' | 'hostId'>>(
+  rows: readonly Row[],
   target: HostListDeleteTarget
-): Worktree | null {
+): Row | null {
   const matches = rows.filter(
     (row) =>
       row.worktreeId === target.worktreeId &&
