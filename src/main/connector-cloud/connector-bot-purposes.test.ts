@@ -4,7 +4,6 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { BotPurposeSchema } from '../../../cloud/packages/connector-contract/src/share-messages'
 import { CONNECTOR_LIMITS } from '../../../cloud/packages/connector-contract/src/connector-limits'
 import { BotSchema, type Bot } from '../../shared/bot-types'
 import { starterSoul } from '../../shared/bot-soul'
@@ -74,11 +73,11 @@ describe('a shared bot’s purpose in the hello', () => {
     await purposes.refresh()
 
     const hello = connectorBots({ getBots: () => bots }, true, [], null, (id) => purposes.of(id))
-    // As the cloud's hello reads it.
-    const said = hello.map((entry) => ({
-      ...entry,
-      botPurpose: BotPurposeSchema.optional().parse(entry.botPurpose)
-    }))
+    // Within what the cloud's hello takes.
+    const said = hello.map(({ id, botPurpose }) => {
+      expect((botPurpose ?? '').length).toBeLessThanOrEqual(CONNECTOR_LIMITS.maxBotPurposeLength)
+      return { id, botPurpose }
+    })
     expect(said.map((entry) => [entry.id, entry.botPurpose])).toEqual([
       ['bot-ivy', 'Triages flaky tests and drafts the fix.'],
       ['bot-blank', undefined],
