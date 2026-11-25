@@ -26,6 +26,7 @@ const keptListSchema = z.object({
   pairing: z.string().optional(),
   bots: z.array(z.custom<Bot>(someObject)),
   threadReplies: z.boolean().catch(false),
+  slackChannelHello: z.boolean().catch(false),
   webhooks: z.boolean().optional().catch(undefined),
   connectorNeedsSignIn: z.boolean().catch(false),
   connectorStatus: z
@@ -49,6 +50,7 @@ export type KeptBotHostRead = Partial<Omit<KeptBotHostList, 'pairing' | 'homes'>
 const EMPTY: KeptBotHostList = {
   bots: [],
   threadReplies: false,
+  slackChannelHello: false,
   webhooks: undefined,
   connectorNeedsSignIn: false,
   connectorStatus: undefined,

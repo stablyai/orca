@@ -1,5 +1,6 @@
-// One installed Slack workspace's body, the same in the connector panel and the after-install dialog:
-// how to ask, Who can ask, and who messages typed in Orca show as.
+// One installed Slack workspace's page in the bot's connectors: how to ask, Who can ask, who
+// messages typed in Orca show as, and the bot's channel intro. The after-install dialog shows only
+// its Post as.
 import React from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
@@ -8,6 +9,7 @@ import { BotHowToAsk, HOW_TO_ASK_ESCAPED } from '../BotHowToAsk'
 import { BotWhoCanAskInsetList } from '../BotWhoCanAskInsetList'
 import { useBotConnectorPaged } from '../bot-connector-page'
 import { BotConnectorSection } from '../bot-connector-people'
+import { BotSlackChannelIntro } from './BotSlackChannelIntro'
 import { BotSlackPostAs } from './BotSlackPostAs'
 import { useSlackWhoCanAsk } from './use-slack-who-can-ask'
 
@@ -50,6 +52,7 @@ export function BotSlackSection({
           className={paged ? undefined : 'mt-3 px-3'}
         />
       </BotConnectorSection>
+      <BotSlackChannelIntro bot={bot} />
     </div>
   )
 }

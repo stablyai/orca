@@ -63,6 +63,8 @@ const NEEDS_RUNNING_AGENT: ReadonlySet<string> = new Set([
 const SESSION_CALLER_METHODS: ReadonlySet<string> = new Set([
   'automation.create',
   'automation.update',
+  // Turning off a bot's Slack intro from its chat needs the turn its owner asked for.
+  'bots.slackChannelHello.set',
   ...BOT_ITEM_WRITE_METHOD_NAMES,
   ...CONNECTOR_POST_METHOD_NAMES
 ])

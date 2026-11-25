@@ -165,6 +165,8 @@ export function connectorBots(
       // Bots off reads as every bot paused: the cloud keeps the bot, so a running turn's Stop still arrives.
       paused: bot.paused || !botsEnabled,
       ...(plain(bot.folder, maxBotHandleLength) ? { handle: bot.folder } : {}),
+      // Only off is sent: absent posts the intro, as an older Orca's hello does.
+      ...(bot.slackChannelHello === false ? { channelHello: false as const } : {}),
       sharedAppWorkspaces: withSlackFirst(slackWorkspaces(bot), [
         ...botLinearWorkspaces(bot)
           .filter((linear) => plain(linear.workspaceId, maxBotIdLength))

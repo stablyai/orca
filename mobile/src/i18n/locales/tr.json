@@ -6249,6 +6249,12 @@
         "whyNeeded": "Orca’nın bu çalışma alanı için çalışan bir Slack belirteci yok.",
         "continue": "Devam et",
         "stopped": "Slack, {{host}} sunucusunun kullandığı belirteci artık kabul etmiyor."
+      },
+      "channelIntro": {
+        "caption": "Kanallarda",
+        "title": "Bir kanala eklenince tanıtım mesajı paylaş",
+        "detail": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır.",
+        "detailEvery": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır. {{name}} adlı botun bulunduğu her Slack çalışma alanında geçerlidir."
       }
     },
     "cloudSignIn": {

@@ -182,6 +182,10 @@ export class ConnectorPollClient {
     return post.finally(() => this.posting--)
   }
 
+  private takeFeatures(next: ReadonlySet<string> | null): void {
+    this.features = pollControl.noteFeatures(this.features, next, this.options.onFeaturesChanged)
+  }
+
   stop(): void {
     this.stopped.abort()
     // Confirmations still owed are listed as unsettled after the next hello and settled from receipts.
@@ -294,7 +298,7 @@ export class ConnectorPollClient {
     const sent = await sayConnectorHello(machine, said, this.transport, this.stopped.signal)
     if (!sent.ok) {
       // A cloud rolled back to one without pages: ask again what it takes.
-      this.features = said.paged && sent.status === 404 ? null : this.features
+      this.takeFeatures(said.paged && sent.status === 404 ? null : this.features)
       return sent
     }
     const { answer, trimmed } = sent.value
@@ -307,10 +311,11 @@ export class ConnectorPollClient {
     }
     this.helloSaid = JSON.stringify(said)
     this.botsSaid = said.bots !== null
-    this.features = new Set(answer.features)
+    const features = new Set(answer.features)
+    this.takeFeatures(features)
     const current = this.helloRev !== null
     this.helloRev = null
-    this.options.events.useCloudFeatures(this.features, answer.helloRev)
+    this.options.events.useCloudFeatures(features, answer.helloRev)
     this.wake.offer(answer.wake ?? null)
     machine.helloAnswered?.(answer)
     // A fresh watch's first event is the snapshot, which opens this hello's numbered events.

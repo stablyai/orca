@@ -45,7 +45,7 @@ import { orcaSignInServer } from '../../../bots/orca-sign-in-server'
 import { refuseUnsavedFolderDrafts } from '../../repositories/folder-workspace-deletion'
 
 async function updateBot(params: BotUpdateParams, context: RpcContext) {
-  if (params.updates.slackMirror !== undefined) {
+  if (params.updates.slackMirror !== undefined || params.updates.slackChannelHello !== undefined) {
     ownerOnly(context, 'Only the owner can change what posts to Slack')
   }
   const { members, addMembers: added, permissionMode } = params.updates
@@ -110,6 +110,7 @@ export const BOT_METHODS = [
     // githubEvents2: whether it sends GitHub's newer events and label=, for trigger-options.
     // githubWorkflows: whether it sends github.workflow_finished, for trigger-options.
     // githubCiFinished: whether it sends github.ci_finished, for trigger-options and watch-pr.
+    // slackChannelHello: whether it reads a bot's Slack channel intro switch, for Settings and the CLI.
     // waits: each bot's waits still waiting, for its row; needsYou: its unstale Needs you items, for phones.
     // connectorNeedsSignIn: Orca Cloud refused this host's sign-in, so nothing reaches its bots.
     // connectorStatus: signed out, needs sign-in (the app is signed in but the connector refuses it),
@@ -130,7 +131,8 @@ export const BOT_METHODS = [
           threadReplies: false,
           githubEvents2: false,
           githubWorkflows: false,
-          githubCiFinished: false
+          githubCiFinished: false,
+          slackChannelHello: false
         }),
         signInServer
       }

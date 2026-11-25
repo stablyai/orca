@@ -2,6 +2,7 @@
 import { connectorAccountName } from './connector-token-mint'
 import type { z } from 'zod'
 import type { ConnectorCloudStatus } from '../../shared/bots/connector-cloud-status'
+import { connectorCloudFeatureFacts } from './connector-cloud-feature-facts'
 import {
   connectorStopNeedsSignIn,
   SIGNED_OUT,
@@ -149,27 +150,17 @@ export class ConnectorCloud {
   }
 
   /** What `bots.list` says of this connection. */
-  botListFacts(): {
+  botListFacts(): ReturnType<typeof connectorCloudFeatureFacts> & {
     threadReplies: boolean
-    githubEvents2: boolean
-    githubWorkflows: boolean
-    githubCiFinished: boolean
     connectorStatus: ConnectorCloudStatus
     connectorMessage?: string
     connectorNeedsSignIn?: true
   } {
     const connectorStatus = this.status()
-    const features = this.cloudFeatures()
     const needsSignIn = this.needsSignIn() || connectorStatus === 'needs-sign-in'
     return {
       threadReplies: this.takesThreadReplies(),
-      // Whether it sends GitHub's newer events and label=, so trigger-options offers only those it does.
-      githubEvents2: features?.has('triggers.github2' satisfies ConnectorCloudFeature) === true,
-      // Whether it sends github.workflow_finished, so trigger-options offers it only where it does.
-      githubWorkflows: features?.has('triggers.workflows' satisfies ConnectorCloudFeature) === true,
-      // Whether it sends github.ci_finished, so trigger-options and watch-pr use it only where it does.
-      githubCiFinished:
-        features?.has('triggers.ci_finished' satisfies ConnectorCloudFeature) === true,
+      ...connectorCloudFeatureFacts(this.cloudFeatures()),
       connectorStatus,
       ...((connectorStatus === 'refused' || connectorStatus === 'needs-sign-in') &&
       this.reach.refusal
@@ -291,6 +282,8 @@ export class ConnectorCloud {
         events,
         seam,
         machine: this.options.machine,
+        // bots.list says what the cloud takes (the Slack intro switch, GitHub's newer events).
+        onFeaturesChanged: () => this.options.onStatusChanged?.(),
         onHalt: (reason) => {
           if (this.client === client) {
             this.clientStop = reason
@@ -377,12 +370,13 @@ export class ConnectorCloud {
   }
 
   private stopClient(): void {
-    const neededSignIn = this.needsSignIn()
+    // Its sign-in need, and what its cloud took, go with it.
+    const told = this.needsSignIn() || this.cloudFeatures() !== null
     this.client?.stop()
     this.client = null
     this.clientStop = null
     this.settling = null
-    if (neededSignIn) {
+    if (told) {
       this.options.onStatusChanged?.()
     }
     this.reach.stopped()

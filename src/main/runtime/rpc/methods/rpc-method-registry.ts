@@ -100,6 +100,7 @@ import { BOT_LINEAR_METHODS } from './bots-linear'
 import { BOT_GITHUB_METHODS } from './bots-github'
 import { BOT_CONNECT_METHODS } from './bots-connect'
 import { BOT_LOOK_AROUND_METHODS } from './bots-look-around'
+import { BOT_SLACK_CHANNEL_HELLO_METHODS } from './bots-slack-channel-hello'
 import { BOT_TIDY_UP_METHODS } from './bots-tidy-up'
 import { BOT_WORK_METHODS } from './bots-work'
 import { BOT_ITEMS_METHODS } from './bots-items'
@@ -173,6 +174,7 @@ const BOT_RPC_METHODS = [
   ...BOT_GITHUB_METHODS,
   ...BOT_CONNECT_METHODS,
   ...BOT_LOOK_AROUND_METHODS,
+  ...BOT_SLACK_CHANNEL_HELLO_METHODS,
   ...BOT_TIDY_UP_METHODS,
   ...BOT_WORK_METHODS,
   ...BOT_ITEMS_METHODS,

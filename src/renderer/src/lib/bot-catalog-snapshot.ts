@@ -8,6 +8,7 @@ import {
 import { keepBotHostList, readKeptBotHostList } from './bot-host-kept-lists'
 import { reuseEqualJson } from '../../../shared/reuse-equal-json'
 import type { BotNeedsYouCounts } from '../../../shared/bots/bot-change-scope'
+import { takeNeedsYou } from './bot-catalog-needs-you'
 import type { ConnectorCloudStatus } from '../../../shared/bots/connector-cloud-status'
 
 /** What a host's bots.list says of its link to Orca Cloud. */
@@ -24,6 +25,8 @@ type BotHostEntry = {
   listed: 'pending' | 'kept' | 'read' | 'failed'
   // Whether the host's Orca Cloud binds an event's run to its thread, from the last full read.
   threadReplies: boolean
+  // Whether the host's Orca Cloud honours a bot's Slack channel intro switch, from the last full read.
+  slackChannelHello: boolean
   // Whether the host's Orca Cloud takes webhooks; undefined from an older host, which doesn't say.
   webhooks: boolean | undefined
   // Whether Orca Cloud refused the host's sign-in, so nothing reaches its bots until it signs in again.
@@ -50,6 +53,7 @@ function emptyEntry(state: BotHostState): BotHostEntry {
     bots: [],
     listed: 'pending',
     threadReplies: false,
+    slackChannelHello: false,
     webhooks: undefined,
     connectorNeedsSignIn: false,
     connectorStatus: undefined,
@@ -79,6 +83,7 @@ function startingEntry(hostId: ExecutionHostId, state: BotHostState): BotHostEnt
         bots: stamp(hostId, kept.bots),
         listed: 'kept',
         threadReplies: kept.threadReplies,
+        slackChannelHello: kept.slackChannelHello,
         webhooks: kept.webhooks,
         connectorNeedsSignIn: kept.connectorNeedsSignIn,
         connectorStatus: kept.connectorStatus,
@@ -120,6 +125,7 @@ export function publishBots(
   next: readonly Bot[],
   answer?: {
     threadReplies: boolean
+    slackChannelHello?: boolean
     webhooks: boolean | undefined
     waits?: BotListWaits
     needsYou?: Readonly<Record<string, number>>
@@ -140,6 +146,7 @@ export function publishBots(
   if (answer) {
     entry.listed = 'read'
     entry.threadReplies = answer.threadReplies
+    entry.slackChannelHello = answer.slackChannelHello === true
     entry.webhooks = answer.webhooks
     entry.waits = reuseEqualJson(entry.waits, answer.waits ?? {})
     if (!answer.needsYou) {
@@ -169,6 +176,7 @@ export function publishBots(
     keepBotHostList(hostId, {
       bots: entry.bots,
       threadReplies: entry.threadReplies,
+      slackChannelHello: entry.slackChannelHello,
       webhooks: entry.webhooks,
       connectorNeedsSignIn: entry.connectorNeedsSignIn,
       connectorStatus: entry.connectorStatus,
@@ -177,23 +185,6 @@ export function publishBots(
   }
   reflatten()
   listeners.forEach((listener) => listener())
-}
-
-/** Takes the host's counts unless the entry holds a later count; none (an older host) clears them. */
-function takeNeedsYou(entry: BotHostEntry, needsYou: BotNeedsYouCounts | undefined): void {
-  if (!needsYou) {
-    entry.needsYou = undefined
-    entry.needsYouAt = undefined
-    entry.needsYouStaleAt = undefined
-    return
-  }
-  if (entry.needsYouAt !== undefined && needsYou.at < entry.needsYouAt) {
-    return
-  }
-  entry.needsYou = reuseEqualJson(entry.needsYou, needsYou.counts)
-  entry.needsYouAt = needsYou.at === -Infinity ? undefined : needsYou.at
-  entry.needsYouStaleAt =
-    needsYou.staleInMs !== undefined ? Date.now() + needsYou.staleInMs : undefined
 }
 
 /** An items notice's counts: the host's bots' Needs you counts change without a list read. */
@@ -219,6 +210,7 @@ function entryFacts(entry: BotHostEntry): unknown[] {
     entry.bots,
     entry.listed,
     entry.threadReplies,
+    entry.slackChannelHello,
     entry.webhooks,
     entry.waits,
     entry.needsYou,
@@ -328,6 +320,11 @@ export function readHasBot(): boolean | null {
 
 export function readBotThreadReplies(hostId: ExecutionHostId): boolean {
   return entryOf(hostId)?.threadReplies ?? false
+}
+
+/** Whether the host's Orca Cloud honours the Slack channel intro switch; false until it says so. */
+export function readBotSlackChannelHello(hostId: ExecutionHostId): boolean {
+  return entryOf(hostId)?.slackChannelHello ?? false
 }
 
 export function readConnectorNeedsSignIn(hostId: ExecutionHostId): boolean {

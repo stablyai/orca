@@ -250,5 +250,15 @@ export const BOT_COMMAND_SPECS: CommandSpec[] = [
       'Run from a bot’s chat it changes that bot; the chat shows what changed.',
       '--focus "" clears it, so the bot looks for anything waiting on its owner.'
     ]
+  },
+  {
+    path: ['bot', 'slack', 'intro'],
+    summary: 'Show or turn off the intro a bot posts in a Slack channel someone adds it to',
+    usage: 'orca bot slack intro [--bot <name>] [--off] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'bot', 'on', 'off'],
+    notes: [
+      'Without --off it says whether the intro is on. Run from a bot’s chat it changes only that bot,',
+      'and only in a turn its owner asked for. Only the owner turns it back on, in Orca.'
+    ]
   }
 ]

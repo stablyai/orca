@@ -31,6 +31,7 @@ import {
   publishBots as publish,
   readBots,
   readBotThreadReplies,
+  readBotSlackChannelHello,
   readBotItemsNeedingOwner,
   readBotWaits,
   readBotWebhooks,
@@ -164,6 +165,12 @@ export function useListedBotItemsNeedingOwner(bot: BotRef | null): number | null
 /** Whether results can go to an event's thread: the host's Orca Cloud binds it; false for no host. */
 export function useBotThreadReplies(hostId: ExecutionHostId | null): boolean {
   const read = (): boolean => (hostId ? readBotThreadReplies(hostId) : false)
+  return useSyncExternalStore(subscribe, read, read)
+}
+
+/** Whether the host's Orca Cloud honours a bot's Slack channel intro switch; false for no host or an older one. */
+export function useBotSlackChannelHello(hostId: ExecutionHostId): boolean {
+  const read = (): boolean => readBotSlackChannelHello(hostId)
   return useSyncExternalStore(subscribe, read, read)
 }
 

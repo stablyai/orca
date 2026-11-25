@@ -55,6 +55,8 @@ export type HostBotsRead =
       connectorStatus?: ConnectorCloudStatus
       /** Its Orca Cloud answers an event in that event's thread, for an automation's results. */
       threadReplies?: boolean
+      /** Its Orca Cloud honours a bot's Slack intro switch, so the switch is shown. */
+      slackChannelHello?: boolean
     }
   | { kind: 'no-capability' }
   | { kind: 'unreadable' }

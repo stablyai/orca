@@ -29875,6 +29875,13 @@
         "otherDevice": "Başka bir cihazda onayla",
         "linkLabel": "Slack onay bağlantısı",
         "copied": "Kopyalandı"
+      },
+      "channelIntro": {
+        "caption": "Kanallarda",
+        "title": "Bir kanala eklenince tanıtım mesajı paylaş",
+        "detail": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır.",
+        "detailEvery": "Biri {{name}} adlı botu bir kanala eklediğinde, ona nasıl soru sorulacağını anlatır. {{name}} adlı botun bulunduğu her Slack çalışma alanında geçerlidir.",
+        "failed": "Tanıtım ayarı kaydedilemedi."
       }
     },
     "whoCanAsk": {

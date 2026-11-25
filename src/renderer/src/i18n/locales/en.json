@@ -27994,6 +27994,13 @@
         "otherDevice": "Approve on another device",
         "linkLabel": "Slack approval link",
         "copied": "Copied"
+      },
+      "channelIntro": {
+        "caption": "In channels",
+        "title": "Post an intro when added to a channel",
+        "detail": "When someone adds {{name}} to a channel, it says how to ask it.",
+        "detailEvery": "When someone adds {{name}} to a channel, it says how to ask it. In every Slack workspace {{name}} is in.",
+        "failed": "Couldn’t save the intro setting."
       }
     },
     "whoCanAsk": {

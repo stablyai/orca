@@ -31,6 +31,8 @@ export const phoneBotSchema = z.looseObject({
   slack: BotSchema.shape.slack,
   // Every Slack workspace, for its Connectors rows.
   slackApps: BotSchema.shape.slackApps,
+  // Absent is on: it posts an intro in a Slack channel a person adds it to.
+  slackChannelHello: BotSchema.shape.slackChannelHello,
   linear: BotSchema.shape.linear,
   linearWorkspaces: BotSchema.shape.linearWorkspaces,
   github: BotSchema.shape.github,
@@ -99,7 +101,9 @@ export const botsListRead = bindDeferredRpcOperation(
           // The host's Orca Cloud link; absent from an older host, and a newer value reads as absent.
           connectorStatus: z.enum(CONNECTOR_CLOUD_STATUSES).optional().catch(undefined),
           // Whether its Orca Cloud answers an event in its own thread; older hosts don't say.
-          threadReplies: z.boolean().optional().catch(undefined)
+          threadReplies: z.boolean().optional().catch(undefined),
+          // Whether its Orca Cloud honours a bot's Slack intro switch; older hosts don't say.
+          slackChannelHello: z.boolean().optional().catch(undefined)
         })
         // Off, the host's own sidebar lists its bot homes as ordinary folders, so the phone does too.
         .transform((listing) => ({
@@ -111,6 +115,7 @@ export const botsListRead = bindDeferredRpcOperation(
           needsYou: botNeedsYouSchema.catch({}).parse(listing.needsYou ?? {}),
           connectorStatus: listing.connectorStatus,
           threadReplies: listing.threadReplies === true,
+          slackChannelHello: listing.slackChannelHello === true,
           ...(listing.needsYouStaleInMs !== undefined
             ? { needsYouChangeInMs: listing.needsYouStaleInMs }
             : {})

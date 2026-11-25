@@ -170,7 +170,10 @@ export const BotUpdate = z.object({
        *  Applied inside the host's update queue, so a claim is a compare-and-set. */
       offerAnswer: BotOfferAnswerUpdateSchema.optional(),
       itemsStale: BotItemsStaleSchema.optional(),
-      slackMirror: z.boolean().optional()
+      slackMirror: z.boolean().optional(),
+      /** Sent only to a host whose bots.list says `slackChannelHello`: an older host's strict
+       *  params refuse the key. */
+      slackChannelHello: z.boolean().optional()
     })
     // Strict so a phone's unknown key fails the phone gate instead of being dropped.
     .strict()

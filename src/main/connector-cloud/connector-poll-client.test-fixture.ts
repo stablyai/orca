@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { ConnectorPollClient } from './connector-poll-client'
+import { ConnectorPollClient, type ConnectorPollClientOptions } from './connector-poll-client'
 import { ConnectorAccountTransport } from './connector-transport'
 import { ConnectorTurnEvents } from './connector-turn-events'
 import { FakeConnectorCloud } from './fake-connector-cloud.test-fixture'
@@ -56,7 +56,8 @@ export function pollClientHarness() {
     startClient(
       seam = fakeSeam(),
       events = new ConnectorTurnEvents(state.userDataPath, 'ada'),
-      configure?: (machine: ReturnType<typeof fakeMachine>) => void
+      configure?: (machine: ReturnType<typeof fakeMachine>) => void,
+      options: Pick<ConnectorPollClientOptions, 'onFeaturesChanged'> = {}
     ) {
       const machine = fakeMachine(() => seam)
       configure?.(machine)
@@ -70,7 +71,8 @@ export function pollClientHarness() {
         seam: seam.seam,
         machine,
         random: () => 0.5,
-        wakeSocketFactory: state.wake.factory
+        wakeSocketFactory: state.wake.factory,
+        ...options
       })
       client.start()
       return { client, machine, ...seam }
