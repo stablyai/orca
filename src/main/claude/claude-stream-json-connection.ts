@@ -59,8 +59,9 @@ export type ClaudeStreamJsonConnectionHandlers = {
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
-  /** The connection is to an agent kept from before this app, ahead of any of its output. */
-  onReattach?: () => void
+  /** The connection is to an agent kept from before this app, ahead of any of its output; may
+   *  return a raw stdout observer for the kept connection. */
+  onReattach?: () => ((chunk: string) => void) | void
   /** The SDK handles request IDs, aborts and deduplication; cannot combine with permissionPromptToolName. */
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */

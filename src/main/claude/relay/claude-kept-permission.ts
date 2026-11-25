@@ -39,8 +39,11 @@ const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice):
  *  the ladder (which reads an Ask launch's first init as a refusal). A refusal makes the next send
  *  start a flagged agent; acceptance proves Full access for this process. */
 async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefined): Promise<void> {
+  // Watching starts before the write, so Claude's report of the switch keeps its wire position.
+  const live = session.liveFullAccess?.() ?? null
   try {
     await session.connection.setPermissionMode('bypassPermissions', { timeoutMs })
+    live?.grant()
     session.bypassAccepted = true
     session.bypassDisabled = false
     session.bypassRefusal = undefined
@@ -88,15 +91,15 @@ function applyInOrder(
   mode: PermissionMode,
   timeoutMs: number | undefined
 ): Promise<void> {
-  const turn = (session.keptModeTurn ?? 0) + 1
-  session.keptModeTurn = turn
-  const run = (session.keptModeWrites ?? Promise.resolve())
+  const before = session.keptModeWrites
+  const turn = (before?.turn ?? 0) + 1
+  const done = (before?.done ?? Promise.resolve())
     .catch(() => {})
     .then(() =>
-      session.keptModeTurn === turn ? applyBuildMode(session, mode, timeoutMs) : undefined
+      session.keptModeWrites?.turn === turn ? applyBuildMode(session, mode, timeoutMs) : undefined
     )
-  session.keptModeWrites = run
-  return run
+  session.keptModeWrites = { turn, done }
+  return done
 }
 
 /** Full access picked in Plan wasn't asked of Claude (asking leaves Plan), so leaving Plan asks it

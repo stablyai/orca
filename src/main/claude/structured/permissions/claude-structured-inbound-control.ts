@@ -4,7 +4,10 @@ import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structure
 import type { ClaudeStreamJsonConnectionHandlers } from '../../claude-stream-json-connection'
 import type { ClaudeStructuredLaunch } from '../launch/claude-structured-launch-resolution'
 import { claudeLaunchSkipsPermissions } from '../launch/claude-structured-spawn-options'
-import { createClaudeFullAccessPolicy } from './claude-full-access-policy'
+import {
+  createClaudeFullAccessPolicy,
+  type ClaudeFullAccessPolicy
+} from './claude-full-access-policy'
 import {
   claudePermissionPresentation,
   claudePermissionSubject
@@ -116,23 +119,43 @@ export function claudeLaunchPermissions(
   orderedMode: (() => string | null | undefined) | null
   /** Wraps the connection's exit handler: this process's permission state ends first. */
   closeThen: (onExit: ClaudeExitHandler) => ClaudeExitHandler
+  /** A kept agent launched without Full access: starts watching for a live pick, else null. */
+  liveFullAccess: () => ClaudeFullAccessPolicy | null
 } {
   const policy = claudeLaunchSkipsPermissions(launch.options)
     ? createClaudeFullAccessPolicy(launch.providerSessionId)
     : null
+  let kept = false
+  let live: ClaudeFullAccessPolicy | null = null
   const callbacks = buildClaudePermissionCallbacks({
     ...deps,
-    fullAccessAt: (requestId) => policy?.allows(requestId) ?? false
+    fullAccessAt: (requestId) => (policy ?? live)?.allows(requestId) ?? false
   })
   return {
     handlers: {
       ...callbacks,
-      ...(policy ? { onStdout: policy.observe, onReattach: policy.reattached } : {})
+      ...(policy
+        ? { onStdout: policy.observe, onReattach: policy.reattached }
+        : {
+            // Only a kept agent can take Full access live; it reads stdout once a pick asks.
+            onReattach: () => {
+              kept = true
+              return (chunk) => live?.observe(chunk)
+            }
+          })
     },
     orderedMode: policy ? policy.mode : null,
     closeThen: (onExit) => (error, exit) => {
       policy?.close()
+      live?.close()
       onExit(error, exit)
+    },
+    liveFullAccess: () => {
+      if (policy || !kept) {
+        return null
+      }
+      live ??= createClaudeFullAccessPolicy(launch.providerSessionId, true)
+      return live
     }
   }
 }

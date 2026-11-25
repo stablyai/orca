@@ -143,7 +143,7 @@ export async function openKeptClaudeAgentConnection(
     return null
   }
   const { managed, child } = relayed
-  handlers.onReattach?.()
+  const reattachedStdout = handlers.onReattach?.()
   const records = child.stdout.relayRecords
   records.claim()
   const exited = Promise.withResolvers<Error>()
@@ -217,6 +217,7 @@ export async function openKeptClaudeAgentConnection(
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', (chunk: string) => {
     handlers.onStdout?.(chunk)
+    reattachedStdout?.(chunk)
     const parts = (partial + chunk).split('\n')
     partial = parts.pop() ?? ''
     for (const part of parts) {
