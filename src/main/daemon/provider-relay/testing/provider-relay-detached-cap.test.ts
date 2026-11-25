@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProviderRelayIdleStop } from '../provider-relay-idle-stop'
 import { readProviderRelayDetachPolicy } from '../provider-relay-detach-policy'
 import {
+  providerRelayStopFlags,
   ProviderRelayDetachedCap,
   RELAY_DETACHED_CAP_MS,
   type CappableRelay
@@ -11,12 +12,15 @@ import { CODEX_RELAY_WORK_MARKERS } from '../../../codex/app-server/codex-app-se
 const IDLE_MS = 30 * 60_000
 const HOUR = 60 * 60_000
 
-function relay(id: string, state: { tracking: boolean; unread: boolean }): CappableRelay {
+function relay(
+  id: string,
+  state: { tracking: boolean; unread: boolean; finished?: boolean }
+): CappableRelay {
   return {
     relayId: id,
     live: true,
     attachedClientId: null,
-    idleStopPolicy: state,
+    idleStopPolicy: { finished: false, ...state },
     stoppedBy: null,
     close: vi.fn(async () => {})
   }
@@ -87,6 +91,23 @@ describe('a detached agent with output no app took', () => {
     await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS * 2)
     expect(back.close).not.toHaveBeenCalled()
     expect(busyRead.close).not.toHaveBeenCalled()
+    cap.stop()
+  })
+
+  it('reports a cap stop whose work had all ended as finished, so its chat gets no restart offer', async () => {
+    let now = 0
+    const cap = new ProviderRelayDetachedCap(
+      () => {},
+      () => now
+    )
+    const done = relay('done', { tracking: true, unread: true, finished: true })
+    const working = relay('working', { tracking: true, unread: true })
+    cap.detached(done)
+    cap.detached(working)
+    now = RELAY_DETACHED_CAP_MS
+    await vi.advanceTimersByTimeAsync(RELAY_DETACHED_CAP_MS)
+    expect(providerRelayStopFlags(done.stoppedBy)).toEqual({ idleStopped: true, capStopped: true })
+    expect(providerRelayStopFlags(working.stoppedBy)).toEqual({ capStopped: true })
     cap.stop()
   })
 })

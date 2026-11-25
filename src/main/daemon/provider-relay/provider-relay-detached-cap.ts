@@ -1,3 +1,18 @@
+import type { ProviderRelayExit } from '../protocol/daemon-provider-relay-protocol'
+
+/** What stopped a relay's agent: the idle stop, or the detached cap with its work open or finished. */
+export type ProviderRelayStop = 'idle' | 'cap' | 'cap-finished' | null
+
+/** A cap stop whose work had all ended is finished, as an idle stop is; its kept output says cap. */
+export function providerRelayStopFlags(
+  stop: ProviderRelayStop
+): Pick<ProviderRelayExit, 'idleStopped' | 'capStopped'> {
+  return {
+    ...(stop === 'idle' || stop === 'cap-finished' ? { idleStopped: true as const } : {}),
+    ...(stop === 'cap' || stop === 'cap-finished' ? { capStopped: true as const } : {})
+  }
+}
+
 /** A detached agent held only by output no app took, or by work the idle stop can't see, ends after this. */
 export const RELAY_DETACHED_CAP_MS = 24 * 60 * 60 * 1000
 /** A relay past the cap but still busy and fully read is looked at again this often. */
@@ -7,8 +22,12 @@ export type CappableRelay = {
   readonly relayId: string
   readonly live: boolean
   readonly attachedClientId: string | null
-  readonly idleStopPolicy: { readonly tracking: boolean; readonly unread: boolean }
-  stoppedBy: 'idle' | 'cap' | null
+  readonly idleStopPolicy: {
+    readonly tracking: boolean
+    readonly unread: boolean
+    readonly finished: boolean
+  }
+  stoppedBy: ProviderRelayStop
   close: () => Promise<unknown>
 }
 
@@ -85,7 +104,7 @@ export class ProviderRelayDetachedCap {
       const policy = relay.idleStopPolicy
       if (now - at >= RELAY_DETACHED_CAP_MS && (!policy.tracking || policy.unread)) {
         this.detachedAt.delete(relay)
-        relay.stoppedBy = 'cap'
+        relay.stoppedBy = policy.finished ? 'cap-finished' : 'cap'
         this.log('relay-cap-stop', { relayId: relay.relayId, unread: policy.unread })
         void relay.close().catch(() => {})
       }
