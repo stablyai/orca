@@ -80,8 +80,8 @@ export function createAgentSessionDeltaCoalescer(
       dirty: boolean
       /** Appends since the text was last copied flat. */
       links: number
-      /** The text is a copy of its own, not a raw delta that may pin a larger string. */
-      owned: boolean
+      /** How many leading chunks are copies of their own, not raw deltas that may pin a larger string. */
+      ownedChunks: number
     }
   >()
   let totalRetainedBytes = 0
@@ -94,8 +94,9 @@ export function createAgentSessionDeltaCoalescer(
       return true
     }
     if (deps.shouldEmit?.(key, stream.textLength) === false) {
-      // Joined anyway, so a skipped window's deltas are kept as copies and pin no larger string.
-      joined(stream)
+      // A skipped window's deltas are kept as one copy, so they pin no larger string, without
+      // copying the text before them: nothing reads it until a window is sent.
+      ownTail(stream)
       stream.dirty = false
       return true
     }
@@ -126,18 +127,28 @@ export function createAgentSessionDeltaCoalescer(
   // string, and every APPENDS_PER_COPY appends the text is copied flat, which bounds the chain.
   const joined = (stream: Stream): string => {
     const [head = '', ...added] = stream.chunks
-    if (added.length === 0 && stream.owned) {
+    if (added.length === 0 && stream.ownedChunks > 0) {
       return head
     }
     stream.links = (stream.links + 1) % APPENDS_PER_COPY
     // The first read copies too: until then the text is the raw first delta.
     const text =
-      !stream.owned || stream.links === 0
+      stream.ownedChunks === 0 || stream.links === 0
         ? ownRetainedString(head + added.join(''))
         : head + ownRetainedString(added.join(''))
-    stream.owned = true
     stream.chunks = text ? [text] : []
+    stream.ownedChunks = stream.chunks.length
     return text
+  }
+
+  const ownTail = (stream: Stream): void => {
+    const owned = stream.ownedChunks
+    if (owned < stream.chunks.length) {
+      const tail = ownRetainedString(stream.chunks.slice(owned).join(''))
+      stream.chunks.length = owned
+      stream.chunks.push(tail)
+      stream.ownedChunks = stream.chunks.length
+    }
   }
 
   const flushAll = (): boolean => {
@@ -184,7 +195,7 @@ export function createAgentSessionDeltaCoalescer(
         stream = {
           chunks: [],
           links: 0,
-          owned: false,
+          ownedChunks: 0,
           retainedBytes: 0,
           textLength: 0,
           observedBytes: 0,
@@ -214,6 +225,7 @@ export function createAgentSessionDeltaCoalescer(
           ? (next.chunks[0]?.length ?? 0)
           : stream.textLength + delta.length
         stream.chunks = next.chunks
+        stream.ownedChunks = next.truncated ? 0 : stream.ownedChunks
         stream.retainedBytes = next.retainedBytes
         stream.truncated = next.truncated
         stream.dirty = true
