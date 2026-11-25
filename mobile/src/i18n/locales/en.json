@@ -6311,6 +6311,7 @@
       "updateOrcaOn": "Update Orca on {{host}}",
       "cantReach": "Can’t reach {{host}}. Its bots show when it’s back.",
       "noBotsYet": "No bots yet.",
+      "noGroups": "No groups yet. Groups only hides your bots.",
       "offline": "Offline",
       "updateToSee": "Update Orca on {{host}} to see its bots.",
       "offEnd": "Bots are off on {{host}}.",

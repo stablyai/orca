@@ -186,6 +186,15 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
         ...(total === 0 && newBotHostId
           ? [{ key: 'no-bots', text: translate('bots.list.noBotsYet', 'No bots yet.') }]
           : []),
+        // Groups always list, so an empty Groups only list means there are none, as on the desktop.
+        ...(total > 0 && shownTotal === 0 && view.showGroupsOnly
+          ? [
+              {
+                key: 'no-groups',
+                text: translate('bots.list.noGroups', 'No groups yet. Groups only hides your bots.')
+              }
+            ]
+          : []),
         ...endLines
       ]
   return {
@@ -197,7 +206,13 @@ export function buildHostBotSections(inputs: HostBotSectionInputs): HostBotSecti
         ...(newBotHostId ? { newBotHostId } : {}),
         // Groups are this computer's: New group counts its bots alone, whatever the search hides.
         botCount: local?.kind === 'listed' ? local.bots.length : 0,
-        botPreview: arranged.flatMap(({ preview }) => preview ?? []),
+        // The folded header keeps the bots Groups only hides, so one that needs you still shows there.
+        botPreview: (view.showGroupsOnly && !searching
+          ? drawn.filter(
+              ({ entry }) => entry.kind === 'bot' && !(view.hidePausedBots && entry.bot.paused)
+            )
+          : arranged
+        ).flatMap(({ preview }) => preview ?? []),
         data: inputs.collapsedGroups.has(BOTS_GROUP_KEY)
           ? []
           : arranged.flatMap(({ items }, index) =>
