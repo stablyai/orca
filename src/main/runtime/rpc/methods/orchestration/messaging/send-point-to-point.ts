@@ -40,7 +40,11 @@ export function sendPointToPointMessage(args: {
   messageRunId: string | undefined
   senderPaneKey: string | undefined
   legacyCoordinatorRunId: string | undefined
-  resolveProcessIncarnation: () => string | undefined
+  /** How `from` was admitted; a restart-reissued worker carries its proven current terminal. */
+  reporter: {
+    processIncarnation: () => string | null
+    recovered: { dispatchId: string; handle: string } | null
+  }
   revalidateLegacyCoordinator: (() => string) | undefined
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
   markWorkerDoneMutationEffectFree: (() => void) | undefined
@@ -56,12 +60,13 @@ export function sendPointToPointMessage(args: {
     messageRunId,
     senderPaneKey,
     legacyCoordinatorRunId,
-    resolveProcessIncarnation,
     revalidateLegacyCoordinator,
     recordMutationReceipt,
     markWorkerDoneMutationEffectFree,
-    withSendWarnings
+    withSendWarnings,
+    reporter
   } = args
+  const resolveProcessIncarnation = () => reporter.processIncarnation() ?? undefined
   revalidateLegacyCoordinator?.()
   const messageType = (params.type ?? 'status') as MessageType
   const processIncarnation = isDispatchMutationMessageType(messageType)
@@ -180,7 +185,14 @@ export function sendPointToPointMessage(args: {
       const checkWarnings =
         msg.type === 'worker_done' &&
         (reconciled.action === 'completed' || reconciled.action === 'failed')
-          ? checkWorkerDoneWorkspacePrs({ runtime, db, msg, settled: reconciled, from, to })
+          ? checkWorkerDoneWorkspacePrs({
+              runtime,
+              db,
+              msg,
+              settled: reconciled,
+              terminal: reportingTerminal(reporter, reconciled.dispatchId, from),
+              to
+            })
           : []
       const receipt = withReportWarnings(
         msg.type === 'worker_done'
@@ -286,4 +298,17 @@ function lifecycleRefusal(args: {
         code: 'sender_not_assignee',
         reason: `Terminal ${from} does not own Dispatch ${dispatch.id}.`
       }
+}
+
+/** Formats printed commands for the reporter's terminal: a reminted worker's exported handle names
+ *  none now, its revalidated one does. Classification and parent stay with the settled Dispatch. */
+function reportingTerminal(
+  reporter: Parameters<typeof sendPointToPointMessage>[0]['reporter'],
+  dispatchId: string,
+  from: string
+): string {
+  const { recovered } = reporter
+  return recovered?.dispatchId === dispatchId && reporter.processIncarnation()
+    ? recovered.handle
+    : from
 }

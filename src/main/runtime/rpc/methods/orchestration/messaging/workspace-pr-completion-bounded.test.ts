@@ -74,11 +74,9 @@ describe('accepted completion builds the lineage child index only when a negativ
       }
     }
     // The getter returns a throwaway {} until a marker exists, so seed the Store's own map.
-    const state = (
-      store as unknown as {
-        state: { workspaceLineageUncertaintyByChild?: Record<string, true> }
-      }
-    ).state
+    type SeededState = { state: { workspaceLineageUncertaintyByChild?: Record<string, true> } }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Store keeps its persisted state in `state`; no public setter writes foreign-host markers.
+    const { state } = store as unknown as SeededState
     const markers = (state.workspaceLineageUncertaintyByChild ??= {})
     for (let i = 0; i < MARKERS; i++) {
       markers[JSON.stringify(['ssh:other', `worktree:p::/elsewhere/${i}`])] = true
@@ -147,7 +145,7 @@ describe('accepted completion builds the lineage child index only when a negativ
   const spyBuild = () => vi.spyOn(childIndexModule, 'buildLineageChildIndex')
   // Keys the builder visited, read from what each build returned.
   const visited = (build: ReturnType<typeof spyBuild>) =>
-    build.mock.results.map((result) => (result.value as childIndexModule.LineageChildIndex).size)
+    build.mock.results.map((result) => (result.type === 'return' ? result.value.size : Number.NaN))
 
   it.each([
     ['no reference', 'Done, tests pass', 'Make the change'],
@@ -184,6 +182,58 @@ describe('accepted completion builds the lineage child index only when a negativ
     // The cached overflow is reused as incomplete; it never certifies absence.
     expect(await send('Opened org/q#17')).toEqual(unknown)
     expect(build).toHaveBeenCalledTimes(1)
+  })
+
+  /** Project groups and folder workspaces beside the two repos, `total` catalog rows in all. */
+  const seedCatalog = (total: number) => {
+    const folders = Math.floor((total - 2) / 2)
+    const groups = total - 2 - folders
+    const ids: string[] = []
+    for (let i = 0; i < groups; i++) {
+      ids.push(
+        store.createProjectGroup({
+          name: `group ${i}`,
+          parentPath: testState.dir,
+          createdFrom: 'manual'
+        }).id
+      )
+    }
+    for (let i = 0; i < folders; i++) {
+      store.createFolderWorkspace({ projectGroupId: ids[i % ids.length]! })
+    }
+    expect(
+      store.getRepos().length + store.getFolderWorkspaces().length + store.getProjectGroups().length
+    ).toBe(total)
+  }
+  // The catalog getters hydrate, copy and sort whole collections; count what an accepted send calls.
+  const spyCatalog = () => [
+    vi.spyOn(store, 'getRepos'),
+    vi.spyOn(store, 'getFolderWorkspaces'),
+    vi.spyOn(store, 'getProjectGroups')
+  ]
+
+  it('stays unknown over the 200-row catalog limit without reading any catalog collection', async () => {
+    seedCatalog(201)
+    const getters = spyCatalog()
+    const build = spyBuild()
+    expect(await send('Opened org/q#17')).toEqual({ version: 1, state: 'partial', outside: [] })
+    for (const getter of getters) {
+      expect(getter).not.toHaveBeenCalled()
+    }
+    expect(build).not.toHaveBeenCalled()
+  })
+
+  it('reads the catalog once and warns at exactly the 200-row limit (control)', async () => {
+    seedCatalog(200)
+    const getters = spyCatalog()
+    expect(await send('Opened org/q#17')).toEqual({
+      version: 1,
+      state: 'complete',
+      outside: [Q17]
+    })
+    for (const getter of getters) {
+      expect(getter).toHaveBeenCalledTimes(1)
+    }
   })
 
   it('bounds construction far over the limit after a cold start', async () => {

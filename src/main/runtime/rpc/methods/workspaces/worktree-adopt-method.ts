@@ -5,5 +5,5 @@ export const WORKTREE_ADOPT_METHOD = defineMethod({
   permission: 'workspace',
   params: WorktreeAdopt,
   handler: async (params, { runtime }) =>
-    runtime.adoptManagedExternalWorktree(params.path, params.parentWorktree)
+    runtime.adoptManagedExternalWorktree(params.path, params.parentWorktree, params.cliCommand)
 })

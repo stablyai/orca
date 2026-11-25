@@ -11,6 +11,10 @@ import {
 } from '../../../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { WORKTREE_ADOPT_METHOD } from '../../rpc/methods/workspaces/worktree-adopt-method'
+import { WorktreeAdopt } from '../../../../shared/rpc-contract/workspaces/worktree-adopt-params'
+import { mapRuntimeError } from '../../rpc/responses/rpc-response'
+import type { RpcContext } from '../../rpc/core'
 
 async function fixture() {
   testState.dir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-adopt-')))
@@ -75,6 +79,34 @@ it('refuses the main checkout', async () => {
   await expect(h.runtime.adoptManagedExternalWorktree(h.main, h.parent)).rejects.toMatchObject({
     code: 'main_checkout'
   })
+})
+
+it.each([
+  ['orca-ide', { cliCommand: 'orca-ide' }],
+  ['orca-dev', { cliCommand: 'orca-dev' }],
+  ['orca', {}]
+])('names the %s launcher the caller used in the main-checkout hint', async (cli, invocation) => {
+  const h = await fixture()
+  const failure = await WORKTREE_ADOPT_METHOD.handler(
+    WorktreeAdopt.parse({ path: h.main, parentWorktree: h.parent, ...invocation }),
+    { runtime: h.runtime } satisfies RpcContext
+  ).catch((error: unknown) => error)
+  expect(failure).toMatchObject({
+    code: 'main_checkout',
+    message: `${h.main} is the project's main checkout and can't be adopted. Orca did not change it. For new changes, use ${cli} worktree create; for an existing PR, ask your coordinator.`
+  })
+  // The wire error keeps its code and carries the same sentence for human and --json output.
+  expect(mapRuntimeError('1', { runtimeId: 'rt' }, failure)).toMatchObject({
+    ok: false,
+    error: { code: 'runtime_error', message: failure instanceof Error ? failure.message : '' }
+  })
+  expect(h.store.getWorktreeLineage(`repo::${h.main}`)).toBeUndefined()
+})
+
+it('rejects a launcher name the CLI could not have invoked', () => {
+  expect(() =>
+    WorktreeAdopt.parse({ path: '/w', parentWorktree: 'id:x', cliCommand: 'rm -rf' })
+  ).toThrow()
 })
 
 it.each(['legacy', 'workspace', 'cross-store'] as const)(

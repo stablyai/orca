@@ -128,3 +128,62 @@ it.each([
   expect(check(url, url)).toEqual({ version: 1, state: 'complete', outside: [] })
   expect(check('org/q#17', url)).toEqual({ version: 1, state: 'complete', outside: [] })
 })
+
+// A suffix after the PR number may normalize (dot segments, encoded dots) without touching the PR:
+// both the literal and the normalized PR prefix name the same Q#17, so both sides read it.
+const SAME_PR_SUFFIX = [
+  'https://github.com/org/q/pull/17/files/../commits',
+  'https://github.com/org/q/pull/17/files/%2e%2e/commits',
+  'https://github.com/org/q/pull/17/./files',
+  'https://github.com/org/q/pull/17/files/../commits.'
+]
+
+it.each(SAME_PR_SUFFIX)('reads the same pull request through a normalized suffix: %s', (url) => {
+  expect(check(url)).toEqual({ version: 1, state: 'complete', outside: [ref] })
+  expect(check(url, url)).toEqual({ version: 1, state: 'complete', outside: [] })
+  expect(check(url, 'https://github.com/org/q/pull/17')).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: []
+  })
+  expect(check('https://github.com/org/q/pull/17', url)).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: []
+  })
+  expect(check('org/q#17', url)).toEqual({ version: 1, state: 'complete', outside: [] })
+})
+
+// A suffix that normalizes the PR away or into another one is no reference on either side.
+const SUFFIX_CHANGES_PR = [
+  'https://github.com/org/q/pull/17/../18',
+  'https://github.com/org/q/pull/17/../../../r/pull/17',
+  'https://github.com/org/q/pull/17/../',
+  'https://github.com/org/q/pull/17/%2e%2e/18'
+]
+
+it.each(SUFFIX_CHANGES_PR)('does not read a pull request a suffix changes: %s', (url) => {
+  expect(check(url)).toEqual({ version: 1, state: 'complete', outside: [] })
+  expect(check('https://github.com/org/q/pull/17', url)).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: [ref]
+  })
+  expect(check('org/q#17', url)).toEqual({ version: 1, state: 'complete', outside: [ref] })
+})
+
+it('keeps host and forge identity through a normalized suffix', () => {
+  expect(check('https://git.example/org/e/pull/17/files/../commits')).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: [{ forgeHost: 'git.example', owner: 'org', repo: 'e', number: 17 }]
+  })
+  expect(check('https://unknown.example/org/q/pull/17/files/../commits')).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: []
+  })
+  expect(
+    check('https://github.com/org/q/pull/17', 'https://git.example/org/q/pull/17/files/../x')
+  ).toEqual({ version: 1, state: 'complete', outside: [ref] })
+})

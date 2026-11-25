@@ -28,16 +28,19 @@ Read-only and test scratch copies are fine anywhere, but don't push from them or
     id: string,
     parentArgument = quoteStartupArg(`id:${id}`, 'posix')
   ) =>
-    `At report time, Orca found no workspace for ${repo} under your workspace (cited: #${number}). If you opened it, take no action now; your coordinator may resume you to run: ${cli} worktree adopt --path "<your-worktree-path>" --parent-worktree ${parentArgument}`,
+    `At report time, Orca found no workspace for ${repo} under your workspace (cited: #${number}). Take no action now. If you opened it, your coordinator may resume you to run: ${cli} worktree adopt --path "<your-worktree-path>" --parent-worktree ${parentArgument}`,
+  /** The receipt as a fresh follow-up agent reads it: resumed, it may act; its preamble has the command. */
+  followUp: (repo: string, number: number) =>
+    `At report time, Orca found no workspace for ${repo} under your workspace (cited: #${number}). If you opened it, adopt it with the worktree adopt command under YOUR WORKSPACE above.`,
   coordinator: (repo: string, number: number, cli = 'orca') =>
-    `Orca: At report time, Orca found no workspace for ${repo} under this worker (cited: #${number}). If the worker opened it, resume the worker to run the ${cli} worktree adopt command (with --path and --parent-worktree) from its completion receipt.`,
+    `Orca: At report time, no workspace was found for ${repo} under this worker (cited: #${number}). If the worker opened it, resume the worker to run the ${cli} worktree adopt command (with --path and --parent-worktree) from its completion receipt.`,
   adopted: (path: string, parent: string) =>
     `Adopted ${path} under ${parent}. It is visible in Orca; its pull requests and checks follow the worktree's own branch.`,
   already: (path: string, parent: string) => `${path} is already visible in Orca under ${parent}.`,
   not_a_project_worktree: (path: string) =>
     `${path} is not a git worktree of a registered project on this host. Ask your coordinator.`,
   main_checkout: (path: string, cli = 'orca') =>
-    `${path} is the project's main checkout. Use ${cli} worktree create for your change.`,
+    `${path} is the project's main checkout and can't be adopted. Orca did not change it. For new changes, use ${cli} worktree create; for an existing PR, ask your coordinator.`,
   parent_required: () => 'Choose a parent with --parent-worktree "id:<parent-workspace-id>".',
   parent_unavailable: () =>
     'Orca could not find the worktree and the parent workspace together on this host. Check the --path and --parent-worktree values.',
@@ -50,10 +53,10 @@ Read-only and test scratch copies are fine anywhere, but don't push from them or
     `Orca could not finish adopting ${path}. Retry once; if it fails again, ask your coordinator.`
 }
 
-export function reportedWorkspacePrLines(
-  payload: string | null | undefined,
-  cli = 'orca'
-): string[] {
+/** The outside pull requests of a stored completion check (message payload or task result). */
+export function reportedWorkspacePrRefs(
+  payload: string | null | undefined
+): { repo: string; number: number }[] {
   try {
     const check = JSON.parse(payload ?? '{}').workspaceCheck
     if (check?.version !== 1 || !Array.isArray(check.outside)) {
@@ -79,14 +82,22 @@ export function reportedWorkspacePrLines(
         return []
       }
       return [
-        workspacePrCopy.coordinator(
-          displayPrRepo({ forgeHost: ref.forgeHost, owner: ref.owner, repo: ref.repo }),
-          ref.number,
-          cli
-        )
+        {
+          repo: displayPrRepo({ forgeHost: ref.forgeHost, owner: ref.owner, repo: ref.repo }),
+          number: ref.number
+        }
       ]
     })
   } catch {
     return []
   }
+}
+
+export function reportedWorkspacePrLines(
+  payload: string | null | undefined,
+  cli = 'orca'
+): string[] {
+  return reportedWorkspacePrRefs(payload).map((ref) =>
+    workspacePrCopy.coordinator(ref.repo, ref.number, cli)
+  )
 }

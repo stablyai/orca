@@ -105,7 +105,8 @@ export class CrossStoreLineagePersistence {
     if (child?.type === 'worktree') {
       delete state.worktreeLineageById[child.worktreeId]
     }
-    preserveFolderLineageUncertainty(state, lineage.childWorkspaceKey)
+    // A replaced folder link, here or to another store, is the child's only folder evidence.
+    preserveFolderLineageUncertainty(state, lineage.childWorkspaceKey, lineage.parent)
     delete state.workspaceLineageByChildKey[lineage.childWorkspaceKey]
     state.crossStoreLineageByChildKey ??= {}
     state.crossStoreLineageByChildKey[lineage.childWorkspaceKey] = lineage

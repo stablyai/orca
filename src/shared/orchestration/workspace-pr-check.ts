@@ -182,14 +182,10 @@ export function checkWorkspacePullRequests(
     }
     return result
   }
-  const coverage = possibleWorkspacePrRepositories(
-    input,
-    report.host,
-    repos,
-    identities,
-    projectOf,
-    interested
-  )
+  // Already unknown: walking lineage could only confirm that, so do no lineage work at all.
+  const coverage = incomplete
+    ? { candidateRepos: new Set<string>(), incomplete: true }
+    : possibleWorkspacePrRepositories(input, report.host, repos, identities, projectOf, interested)
   incomplete ||= coverage.incomplete
   for (const ref of refs) {
     const key = repoKey(ref)

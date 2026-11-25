@@ -278,7 +278,7 @@ export const ORCHESTRATION_SEND_METHODS = [
           messageRunId,
           senderPaneKey,
           legacyCoordinatorRunId,
-          resolveProcessIncarnation: processIncarnation,
+          reporter,
           revalidateLegacyCoordinator,
           recordMutationReceipt,
           markWorkerDoneMutationEffectFree,

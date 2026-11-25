@@ -118,7 +118,7 @@ describe("a deleted bot home's release keeps a surviving child unknown to report
     const { runtime } = harness.setup(true, store)
     return WORKTREE_RELEASE_BOT_HOME_METHOD.handler(
       { botHomeKey: HOME, ...(installationId ? { installationId } : {}) },
-      { runtime } as unknown as RpcContext
+      { runtime } satisfies RpcContext
     )
   }
 

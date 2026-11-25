@@ -51,6 +51,8 @@ const REPORT_TOKENS = new RegExp(
   'giu'
 )
 
+const PR_PATH = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/([0-9]+)(?:\/|$)/
+
 function urlRefAt(text: string, index: number, token: string): PullRequestRef | undefined {
   if (index > 0 && !/[\s([{<"'\x60>|*,;:]/.test(text[index - 1]!)) {
     return undefined
@@ -61,17 +63,14 @@ function urlRefAt(text: string, index: number, token: string): PullRequestRef | 
   try {
     const trimmed = token.replace(/[.,;:'!?*]+$/, '')
     const url = new URL(trimmed)
-    // Only a path already in its normalized form counts. Dot segments, encoded dots and backslashes
-    // could name a PR only after normalization, and report scanning and spec matching both admit
-    // URLs here, so a spelling one side cannot see is rejected on both.
-    if (/^https?:\/\/[^/?#\\]*([^?#]*)/i.exec(trimmed)?.[1] !== url.pathname) {
-      return undefined
-    }
-    const path = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/([0-9]+)(?:\/|$)/.exec(
-      url.pathname
-    )
+    // The PR must already be named by the literal path, and normalization must keep exactly that
+    // prefix: dot segments, encoded dots and backslashes that create or change the owner, repo or
+    // number are rejected on both sides (report scanning and spec matching both admit URLs here).
+    // A suffix after the number may normalize freely: /pull/17/files/../commits is still Q#17.
+    const literal = PR_PATH.exec(/^https?:\/\/[^/?#\\]*([^?#]*)/i.exec(trimmed)?.[1] ?? '')
+    const path = PR_PATH.exec(url.pathname)
     const number = Number(path?.[3])
-    if (path && Number.isSafeInteger(number) && number > 0) {
+    if (path && literal?.[0] === path[0] && Number.isSafeInteger(number) && number > 0) {
       return {
         forgeHost: url.hostname.toLowerCase(),
         owner: path[1]!.toLowerCase(),

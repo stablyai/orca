@@ -20,23 +20,13 @@ export function possibleWorkspacePrRepositories(
   interested: ReadonlySet<string>
 ) {
   let incomplete = false,
-    rawRows = 0,
-    hasCanonical = false,
-    hasCross = false
+    rawRows = 0
   const candidateRepos = new Set<string>(),
     markers = new Set<string>()
   const nodeKey = (key: string) => (key.startsWith('worktree:') ? key.slice(9) : key)
   const primaries = new Set(input.primaries.map(nodeKey))
   const state = input.uncertainty
   const markerRows = isLineageUncertaintyMap(state) ? state : {}
-  for (const _key in input.workspaceLineage) {
-    hasCanonical = true
-    break
-  }
-  for (const _key in input.crossStoreLineage) {
-    hasCross = true
-    break
-  }
   const admit = () => {
     if (++rawRows <= LINEAGE_SCAN_ROW_LIMIT) {
       return true
@@ -109,18 +99,21 @@ export function possibleWorkspacePrRepositories(
     return instance
   }
   const edgeOf = (key: string): Edge | boolean | undefined => {
-    const canonicalKey =
-      hasCanonical || hasCross ? (key.startsWith('folder:') ? key : worktreeWorkspaceKey(key)) : ''
-    if (hasCross && Object.hasOwn(input.crossStoreLineage, canonicalKey)) {
+    // Keyed reads only: probing a record for emptiness with for…in would make the engine collect
+    // every saved key before the row budget could stop it.
+    const canonicalKey = key.startsWith('folder:') ? key : worktreeWorkspaceKey(key)
+    if (Object.hasOwn(input.crossStoreLineage, canonicalKey)) {
       return true
     }
     const raw = key.startsWith('folder:') ? undefined : input.lineage[key]
-    const row = hasCanonical ? input.workspaceLineage[canonicalKey] : undefined
+    const row = Object.hasOwn(input.workspaceLineage, canonicalKey)
+      ? input.workspaceLineage[canonicalKey]
+      : undefined
     if ((raw && raw.worktreeId !== key) || (row && row.childWorkspaceKey !== canonicalKey)) {
       return true
     }
     if (!raw && !row) {
-      return (hasCanonical && Object.hasOwn(input.workspaceLineage, canonicalKey)) ||
+      return Object.hasOwn(input.workspaceLineage, canonicalKey) ||
         Object.hasOwn(input.lineage, key)
         ? true
         : undefined

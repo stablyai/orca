@@ -3,7 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import * as lineageUncertainty from '../../../../shared/worktree/lineage/lineage-uncertainty'
 import { checkWorkspacePullRequests } from '../../../../shared/orchestration/workspace-pr-check'
 import Database from '../../../sqlite/sync-database'
-import { createWorkerBackedStore, writerBarrier } from './folder-lineage-uncertainty-fixture'
+import {
+  createWorkerBackedStore,
+  lostAcknowledgementWorker,
+  writerBarrier
+} from './folder-lineage-uncertainty-fixture'
+import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import { makeRepo } from '../../persistence-test-harness'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -23,10 +28,27 @@ const keep = { keepFolderUncertainty: true }
 type Variant = {
   name: string
   seed: (store: Store, child: string) => void
-  release: (store: Store) => unknown[]
+  release: (store: Store, child: string) => unknown
   edge: (saved: Record<string, Record<string, unknown> | undefined>, key: string) => unknown
   capture: 'preserveFolderLineageUncertainty' | 'markLineageUncertainty'
 }
+
+const childStoreLink = (store: Store, child: string) =>
+  store.setCrossStoreWorkspaceLineage(
+    {
+      childWorkspaceKey: worktreeWorkspaceKey(child),
+      childInstanceId: 'child-instance',
+      parent: {
+        installationId: 'home-store',
+        workspaceKey: HOME,
+        instanceId: 'home'
+      },
+      origin: 'cli',
+      capture,
+      createdAt: 1
+    },
+    'local'
+  )
 
 const variants: Variant[] = [
   {
@@ -48,22 +70,7 @@ const variants: Variant[] = [
   },
   {
     name: 'child-store',
-    seed: (store, child) =>
-      store.setCrossStoreWorkspaceLineage(
-        {
-          childWorkspaceKey: worktreeWorkspaceKey(child),
-          childInstanceId: 'child-instance',
-          parent: {
-            installationId: 'home-store',
-            workspaceKey: HOME,
-            instanceId: 'home'
-          },
-          origin: 'cli',
-          capture,
-          createdAt: 1
-        },
-        'local'
-      ),
+    seed: childStoreLink,
     release: (store) =>
       store.removeCrossStoreWorkspaceLineage(
         ({ parent }) => parent.workspaceKey === HOME && parent.installationId === 'home-store',
@@ -71,11 +78,20 @@ const variants: Variant[] = [
       ),
     edge: (saved, key) => saved.crossStoreLineageByChildKey?.[key],
     capture: 'markLineageUncertainty'
+  },
+  {
+    // The ordinary `worktree.set --no-parent` removal (runtime-managed-worktree-metadata.ts).
+    name: 'child-store detach',
+    seed: childStoreLink,
+    release: (store, child) =>
+      store.removeWorktreeLineage(hostWorktreeTarget({ id: child, hostId: 'local' })),
+    edge: (saved, key) => saved.crossStoreLineageByChildKey?.[key],
+    capture: 'preserveFolderLineageUncertainty'
   }
 ]
 
-async function seed(variant: Variant) {
-  const h = await createWorkerBackedStore()
+async function seed(variant: Variant, worker?: (directory: string) => { workerPath: string }) {
+  const h = await createWorkerBackedStore({ worker })
   const identity = (id: string) => ({
     canonicalKey: `github.com/org/${id}`,
     remoteName: 'origin',
@@ -126,30 +142,60 @@ async function seed(variant: Variant) {
       },
       { subject: 'Opened org/q#17', body: '', spec: '', host: 'local' }
     ).state
-  return { ...h, key, liveCheck, marker: JSON.stringify(['local', key]) }
+  return { ...h, child, key, liveCheck, marker: JSON.stringify(['local', key]) }
 }
 
-describe.each(variants)('$name bot-home release through the actual async profile writer', (v) => {
-  it('commits the marker and the erasure in one snapshot, after an older queued write', async () => {
+type Saved = Record<string, Record<string, unknown> | undefined>
+const domainsOf = (domains: readonly { domain: string; payload: string | null }[]): Saved =>
+  Object.fromEntries(domains.map(({ domain, payload }) => [domain, JSON.parse(payload ?? 'null')]))
+
+describe.each(variants)('$name through the actual async profile writer', (v) => {
+  it('an older write that captured the same lineage domains commits the old edge; the release then commits marker and erasure together', async () => {
     const h = await seed(v)
-    const entered = writerBarrier(),
-      release = writerBarrier()
+    const gates = [0, 1].map(() => ({ entered: writerBarrier(), release: writerBarrier() }))
+    const batches: Saved[] = []
     const original = h.authority.writeSerializedDomains.bind(h.authority)
-    vi.spyOn(h.authority, 'writeSerializedDomains').mockImplementationOnce(async (domains) => {
-      entered.resolve()
-      await release.promise
-      await original(domains)
+    const spy = vi.spyOn(h.authority, 'writeSerializedDomains')
+    for (const gate of gates) {
+      spy.mockImplementationOnce(async (domains) => {
+        batches.push(domainsOf(domains))
+        gate.entered.resolve()
+        await gate.release.promise
+        await original(domains)
+      })
+    }
+    // An unrelated lineage write: its save serializes every lineage domain, the edge included.
+    h.store.setWorkspaceLineage({
+      childWorkspaceKey: 'worktree:p::/elsewhere/unrelated',
+      childInstanceId: 'unrelated',
+      parentWorkspaceKey: 'worktree:p::/elsewhere/parent',
+      parentInstanceId: 'parent',
+      origin: 'cli',
+      capture,
+      createdAt: 1
     })
-    h.store.addRepo(makeRepo({ id: 'r', path: `${h.directory}/r` }))
-    const oldWrite = h.store.flushPendingOrThrowAsync()
-    await entered.promise
-    expect(v.release(h.store)).toEqual([h.key])
+    // Flushing waits for every pending write, the release's too, so it settles only at the end.
+    const flushed = h.store.flushPendingOrThrowAsync()
+    await gates[0]!.entered.promise
+    // The held snapshot already holds this child's edge and no marker for it.
+    expect(v.edge(batches[0]!, h.key)).toBeDefined()
+    expect(batches[0]!.workspaceLineageUncertaintyByChild?.[h.marker]).toBeUndefined()
+    v.release(h.store, h.child)
     expect(h.liveCheck()).toBe('partial')
-    expect(v.edge(h.readState(), h.key)).toBeDefined()
-    release.resolve()
-    await oldWrite
-    await h.store.flushPendingOrThrowAsync()
-    const saved = h.readState()
+    gates[0]!.release.resolve()
+    // The release's write starts only once the older one committed.
+    await gates[1]!.entered.promise
+    expect(v.edge(batches[1]!, h.key)).toBeUndefined()
+    expect(batches[1]!.workspaceLineageUncertaintyByChild?.[h.marker]).toBe(true)
+    // Between the two commits the database holds the old edge: still evidence of the folder parent.
+    let saved = h.readState()
+    expect(v.edge(saved, h.key)).toBeDefined()
+    expect(saved.workspaceLineageUncertaintyByChild?.[h.marker]).toBeUndefined()
+    expect(h.store.getWorkspaceLineageUncertainty()[h.marker]).toBe(true)
+    expect(h.liveCheck()).toBe('partial')
+    gates[1]!.release.resolve()
+    await flushed
+    saved = h.readState()
     expect(v.edge(saved, h.key)).toBeUndefined()
     expect(saved.workspaceLineageUncertaintyByChild).toEqual({
       [h.marker]: true
@@ -165,7 +211,7 @@ describe.each(variants)('$name bot-home release through the actual async profile
       )
     }
     try {
-      v.release(h.store)
+      v.release(h.store, h.child)
       await expect(h.store.flushPendingOrThrowAsync()).rejects.toThrow()
       const saved = h.readState()
       expect(v.edge(saved, h.key)).toBeDefined()
@@ -179,18 +225,34 @@ describe.each(variants)('$name bot-home release through the actual async profile
     }
   })
 
-  it('keeps the committed marker when acknowledgement is lost after commit', async () => {
+  it('keeps the committed marker when the Store-facing call throws after commit', async () => {
     const h = await seed(v)
     const original = h.authority.writeSerializedDomains.bind(h.authority)
     vi.spyOn(h.authority, 'writeSerializedDomains').mockImplementationOnce(async (domains) => {
       await original(domains)
       throw new Error('lost acknowledgement')
     })
-    v.release(h.store)
+    v.release(h.store, h.child)
     await expect(h.store.flushPendingOrThrowAsync()).rejects.toThrow()
     const saved = h.readState()
     expect(v.edge(saved, h.key)).toBeUndefined()
     expect(saved.workspaceLineageUncertaintyByChild[h.marker]).toBe(true)
+    expect(h.liveCheck()).toBe('partial')
+  })
+
+  it('keeps marker custody when the writer worker dies after commit, before it replies', async () => {
+    let worker: ReturnType<typeof lostAcknowledgementWorker> | undefined
+    const h = await seed(v, (directory) => (worker = lostAcknowledgementWorker(directory)))
+    worker!.arm()
+    v.release(h.store, h.child)
+    const failure = await h.store.flushPendingOrThrowAsync().catch((error: unknown) => error)
+    // The Store cannot tell whether the write landed: that is the uncertain acknowledgement.
+    expect(profileStateWriterFailureOutcome(failure)).toBe('indeterminate')
+    expect(worker!.armed()).toBe(false)
+    const saved = h.readState()
+    expect(v.edge(saved, h.key)).toBeUndefined()
+    expect(saved.workspaceLineageUncertaintyByChild?.[h.marker]).toBe(true)
+    expect(h.store.getWorkspaceLineageUncertainty()[h.marker]).toBe(true)
     expect(h.liveCheck()).toBe('partial')
   })
 
@@ -199,7 +261,7 @@ describe.each(variants)('$name bot-home release through the actual async profile
     vi.spyOn(lineageUncertainty, v.capture).mockImplementationOnce(() => {
       throw new Error('capture interrupted')
     })
-    expect(() => v.release(h.store)).toThrow('capture interrupted')
+    expect(() => v.release(h.store, h.child)).toThrow('capture interrupted')
     expect(
       v.edge(
         {

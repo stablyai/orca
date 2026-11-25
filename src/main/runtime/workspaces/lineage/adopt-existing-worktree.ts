@@ -19,7 +19,9 @@ export function adoptExistingWorktree(
   child: ResolvedWorktree,
   parent: ResolvedWorkspaceParent,
   validateParent?: () => void,
-  beforeResolution?: AdoptionLineageSnapshot
+  beforeResolution?: AdoptionLineageSnapshot,
+  /** The caller's launcher, for the create command the main-checkout refusal suggests. */
+  cliCommand?: string
 ) {
   const fail = (
     code:
@@ -31,7 +33,11 @@ export function adoptExistingWorktree(
       | 'parent_conflict'
       | 'adopt_failed'
   ): never => {
-    const error = new Error(workspacePrCopy[code](child.path))
+    const error = new Error(
+      code === 'main_checkout'
+        ? workspacePrCopy.main_checkout(child.path, cliCommand)
+        : workspacePrCopy[code](child.path)
+    )
     Object.assign(error, { code })
     throw error
   }

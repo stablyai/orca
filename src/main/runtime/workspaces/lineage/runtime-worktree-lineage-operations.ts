@@ -55,7 +55,7 @@ export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithRe
     })
   }
 
-  async adoptManagedExternalWorktree(path: string, parentSelector: string) {
+  async adoptManagedExternalWorktree(path: string, parentSelector: string, cliCommand?: string) {
     if (!this.store) {
       throw new Error(workspacePrCopy.parent_unavailable())
     }
@@ -83,7 +83,8 @@ export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithRe
           this.worktreeLineage.validateParent(child, parent.worktree)
         }
       },
-      beforeResolution
+      beforeResolution,
+      cliCommand
     )
   }
 
@@ -123,6 +124,11 @@ export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithRe
       const primary = db.getWorkerDispatch(dispatchId)?.worktree_id
       if (!dispatch || !primary) {
         return skipped
+      }
+      // Admitted by count first: the getters hydrate, copy and sort whole collections.
+      const catalogSize = store.getWorkspaceCatalogSize?.()
+      if (catalogSize === undefined || catalogSize > 200) {
+        return { version: 1, state: 'partial', outside: [] }
       }
       const repos = store.getRepos()
       const folders = store.getFolderWorkspaces?.() ?? []

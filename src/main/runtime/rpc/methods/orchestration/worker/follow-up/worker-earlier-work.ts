@@ -2,6 +2,10 @@ import { z } from 'zod'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { isTuiAgent } from '../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { DispatchContextRow } from '../../../../../orchestration/db/orchestration-records'
+import {
+  reportedWorkspacePrRefs,
+  workspacePrCopy
+} from '../../../../../../../shared/orchestration/workspace-pr-copy'
 
 const EARLIER_WORK_CLIP = 2_000
 
@@ -49,7 +53,10 @@ export function parseStartOptions(raw: string): {
 }
 
 /** The earlier task and report, for a fresh agent that cannot reopen the conversation. */
-export function earlierWork(db: OrchestrationDb, latest: DispatchContextRow): string {
+export function earlierWork(
+  db: OrchestrationDb,
+  latest: Pick<DispatchContextRow, 'task_id'>
+): string {
   const task = db.getTask(latest.task_id)
   const clip = (text: string) =>
     text.length > EARLIER_WORK_CLIP ? `${text.slice(0, EARLIER_WORK_CLIP)}…` : text
@@ -61,6 +68,11 @@ export function earlierWork(db: OrchestrationDb, latest: DispatchContextRow): st
   if (report.success) {
     const text = [report.data.subject, report.data.body].filter(Boolean).join(' — ')
     lines.push(`Its report (${report.data.outcome ?? 'unknown'}): ${clip(text)}`)
+  }
+  // The coordinator was pointed at the completion receipt, which this agent never saw. Restate it;
+  // the command itself is in this agent's own preamble, rendered for the terminal it runs in.
+  for (const ref of reportedWorkspacePrRefs(task?.result)) {
+    lines.push(`Its completion receipt: ${workspacePrCopy.followUp(ref.repo, ref.number)}`)
   }
   return lines.join('\n')
 }

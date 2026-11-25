@@ -1,4 +1,5 @@
-import type { WorkspaceLineage } from '../lineage-types'
+import type { CrossStoreParentRef, WorkspaceLineage } from '../lineage-types'
+import { isCrossStoreWorkspaceLineage } from './cross-store-lineage-records'
 import type { PersistedState } from '../../orca-profiles/persisted-state-types'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../execution-host/execution-host'
@@ -10,7 +11,8 @@ export const LINEAGE_SCAN_ROW_LIMIT = 5000
 type State = Pick<
   PersistedState,
   'workspaceLineageByChildKey' | 'workspaceLineageUncertaintyByChild' | 'worktreeMeta' | 'repos'
->
+> &
+  Partial<Pick<PersistedState, 'crossStoreLineageByChildKey'>>
 
 export function isLineageUncertaintyMap(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value)
@@ -90,13 +92,44 @@ export class LineageUncertaintyKeyIndex {
   }
 }
 
-export function preserveFolderLineageUncertainty(state: State, childKey: string): void {
+/** Marks a child before its saved parent evidence is erased or replaced, when that evidence is a
+ *  folder edge: its same-store folder row, or its cross-store link (saved by the child's store
+ *  only) to a folder in another store, or one this build cannot read. `keepCrossStoreParent` is the
+ *  parent a cross-store rewrite saves again, which leaves that link's evidence in place. */
+export function preserveFolderLineageUncertainty(
+  state: State,
+  childKey: string,
+  keepCrossStoreParent?: CrossStoreParentRef
+): void {
   const rows: Record<string, WorkspaceLineage | undefined> = state.workspaceLineageByChildKey ?? {}
-  const row = rows[childKey]
-  if (!row?.parentWorkspaceKey?.startsWith('folder:')) {
-    return
+  if (
+    rows[childKey]?.parentWorkspaceKey?.startsWith('folder:') ||
+    crossStoreFolderEvidence(state.crossStoreLineageByChildKey, childKey, keepCrossStoreParent)
+  ) {
+    markLineageUncertainty(state, childKey)
   }
-  markLineageUncertainty(state, childKey)
+}
+
+function crossStoreFolderEvidence(
+  saved: Readonly<Record<string, unknown>> | undefined,
+  childKey: string,
+  keep: CrossStoreParentRef | undefined
+): boolean {
+  if (!saved || !Object.hasOwn(saved, childKey)) {
+    return false
+  }
+  const link = saved[childKey]
+  if (!isCrossStoreWorkspaceLineage(link) || link.childWorkspaceKey !== childKey) {
+    return true
+  }
+  return (
+    link.parent.workspaceKey.startsWith('folder:') &&
+    !(
+      keep &&
+      keep.installationId === link.parent.installationId &&
+      keep.workspaceKey === link.parent.workspaceKey
+    )
+  )
 }
 
 /** Marks a child whose folder-parent evidence is about to go, wherever that evidence was saved: the

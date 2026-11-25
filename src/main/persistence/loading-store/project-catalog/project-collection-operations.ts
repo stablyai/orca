@@ -108,6 +108,16 @@ export class ProjectCollectionOperations {
     return getProjectHostOperations(this).getRepoCount()
   }
 
+  /** Repos, folder workspaces and project groups, counted without hydrating, copying or sorting. */
+  getWorkspaceCatalogSize(): number {
+    const { state } = this[projectCollectionOperationsContext].runtime
+    return (
+      state.repos.length +
+      (state.folderWorkspaces?.length ?? 0) +
+      (state.projectGroups?.length ?? 0)
+    )
+  }
+
   getRepo(id: string): Repo | undefined {
     return getProjectHostOperations(this).getRepo(id)
   }

@@ -37,6 +37,7 @@ import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
 import { runWorktreePs } from './worktree-ps'
+import { adoptRecoveryCliCommand } from './worktree-adopt-cli-command'
 import { callNamingParentEnvironment } from './worktree-parent-environment'
 import { annotateShown } from './worktree-address-annotation'
 import { refuseCurrentForRemoval } from './worktree-removal-current-refusal'
@@ -70,9 +71,11 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     if (!getOptionalStringFlag(flags, 'parent-worktree')) {
       throw new RuntimeClientError('parent_required', workspacePrCopy.parent_required())
     }
+    const cliCommand = adoptRecoveryCliCommand()
     const result = await client.call<{ message: string }>('worktree.adopt', {
       path: getRequiredStringFlag(flags, 'path'),
-      parentWorktree: getRequiredStringFlag(flags, 'parent-worktree')
+      parentWorktree: getRequiredStringFlag(flags, 'parent-worktree'),
+      ...(cliCommand ? { cliCommand } : {})
     })
     printResult(result, json, (value) => value.message)
   },

@@ -14,10 +14,11 @@ export function checkWorkerDoneWorkspacePrs(args: {
   db: OrchestrationDb
   msg: MessageRow
   settled: { dispatchId: string; taskId: string }
-  from: string
+  /** The reporter's current terminal: its launcher and shell format the printed command. */
+  terminal: string
   to: string
 }): SendRecipientWarning[] {
-  const { runtime, db, msg, settled, from, to } = args
+  const { runtime, db, msg, settled, terminal, to } = args
   let check: WorkspaceCheck
   try {
     check = runtime.checkReportedWorkspacePrs(settled.dispatchId, msg.subject, msg.body ?? '')
@@ -32,9 +33,9 @@ export function checkWorkerDoneWorkspacePrs(args: {
     message: workspacePrCopy.worker(
       displayPrRepo(ref),
       ref.number,
-      runtime.getTerminalOrchestrationCliCommand(from),
+      runtime.getTerminalOrchestrationCliCommand(terminal),
       primary,
-      runtime.getOrchestrationWorkspaceSelectorArgument(from, primary)
+      runtime.getOrchestrationWorkspaceSelectorArgument(terminal, primary)
     )
   }))
 }

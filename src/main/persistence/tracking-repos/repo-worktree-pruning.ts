@@ -144,6 +144,7 @@ export function pruneWorktreeStateForRepo(
   for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
     const childScope = parseWorkspaceKey(childKey)
     if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
+      preserveFolderLineageUncertainty(state, childKey as WorkspaceKey)
       delete state.crossStoreLineageByChildKey?.[childKey]
     }
   }

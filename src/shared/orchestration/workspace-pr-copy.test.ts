@@ -38,7 +38,7 @@ Read-only and test scratch copies are fine anywhere, but don't push from them or
 
   it('tells a finished worker to take no action, with the full command its coordinator may run', () => {
     expect(workspacePrCopy.worker('git.example/org/q', 17, 'orca', 'p::/w/feature')).toBe(
-      'At report time, Orca found no workspace for git.example/org/q under your workspace (cited: #17). If you opened it, take no action now; your coordinator may resume you to run: orca worktree adopt --path "<your-worktree-path>" --parent-worktree \'id:p::/w/feature\''
+      'At report time, Orca found no workspace for git.example/org/q under your workspace (cited: #17). Take no action now. If you opened it, your coordinator may resume you to run: orca worktree adopt --path "<your-worktree-path>" --parent-worktree \'id:p::/w/feature\''
     )
   })
 
@@ -51,9 +51,16 @@ Read-only and test scratch copies are fine anywhere, but don't push from them or
         ])
       )
     ).toEqual([
-      'Orca: At report time, Orca found no workspace for org/q under this worker (cited: #17). If the worker opened it, resume the worker to run the orca worktree adopt command (with --path and --parent-worktree) from its completion receipt.',
-      'Orca: At report time, Orca found no workspace for git.example/org/e under this worker (cited: #3). If the worker opened it, resume the worker to run the orca worktree adopt command (with --path and --parent-worktree) from its completion receipt.'
+      'Orca: At report time, no workspace was found for org/q under this worker (cited: #17). If the worker opened it, resume the worker to run the orca worktree adopt command (with --path and --parent-worktree) from its completion receipt.',
+      'Orca: At report time, no workspace was found for git.example/org/e under this worker (cited: #3). If the worker opened it, resume the worker to run the orca worktree adopt command (with --path and --parent-worktree) from its completion receipt.'
     ])
+  })
+
+  it('refuses the main checkout without changing it, with the caller launcher', () => {
+    expect(workspacePrCopy.main_checkout('/w/p', 'orca-ide')).toBe(
+      "/w/p is the project's main checkout and can't be adopted. Orca did not change it. For new changes, use orca-ide worktree create; for an existing PR, ask your coordinator."
+    )
+    expect(workspacePrCopy.main_checkout('/w/p')).toContain('use orca worktree create;')
   })
 
   it('gives the retry and lookup guidance from review', () => {
