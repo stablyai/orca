@@ -4,7 +4,8 @@ import {
   mapGroupBy,
   objectGroupBy,
   promiseWithResolvers,
-  setPolyfills
+  setPolyfills,
+  urlCanParse
 } from './older-webview-polyfills'
 
 // Node ships every one of these natively, so each polyfill is checked against the real built-in.
@@ -57,6 +58,20 @@ describe('older WebView polyfills match the built-ins', () => {
     expect([...mapGroupBy(words, firstLetter)]).toEqual([...Map.groupBy(words, firstLetter)])
     expect(objectGroupBy(words, firstLetter)).toEqual(Object.groupBy(words, firstLetter))
     expect(Object.getPrototypeOf(objectGroupBy(words, firstLetter))).toBeNull()
+  })
+
+  it('parses like URL.canParse', () => {
+    const cases: [string, string?][] = [
+      ['https://example.com/a'],
+      ['not a url'],
+      ['/relative'],
+      ['/relative', 'https://example.com'],
+      ['http:example.com'],
+      ['', 'https://example.com/x']
+    ]
+    for (const [url, base] of cases) {
+      expect(urlCanParse(url, base)).toBe(URL.canParse(url, base))
+    }
   })
 
   it('settles like Promise.withResolvers', async () => {

@@ -1,6 +1,6 @@
 // The page targets es2022 syntax (Chromium 94), but the code and its libraries call newer built-ins:
 // gesture-handler's web detector uses Set.union/intersection/difference (Chromium 122), react-navigation
-// uses Array.toSpliced (110). Vendor WebViews that never update (Huawei/Honor ship Chromium 99) lack them.
+// uses Array.toSpliced (110), a URL check and mermaid's sanitizer call URL.canParse (120). Vendor WebViews that never update (Huawei/Honor ship Chromium 99) lack them.
 // Each one is installed only where missing, so current WebViews and iOS keep their native versions.
 
 type Grouped<K, T> = Map<K, T[]>
@@ -163,6 +163,16 @@ export function promiseWithResolvers<T>(): {
   return { promise, resolve, reject }
 }
 
+export function urlCanParse(url: string | URL, base?: string | URL): boolean {
+  try {
+    // oxlint-disable-next-line no-new -- constructing is the parse check.
+    new URL(url, base)
+    return true
+  } catch {
+    return false
+  }
+}
+
 function defineMissing(target: object, methods: Record<string, unknown>): void {
   for (const [name, value] of Object.entries(methods)) {
     if (name in target) {
@@ -179,4 +189,5 @@ export function installOlderWebViewPolyfills(): void {
   defineMissing(Map, { groupBy: mapGroupBy })
   defineMissing(Object, { groupBy: objectGroupBy })
   defineMissing(Promise, { withResolvers: promiseWithResolvers })
+  defineMissing(URL, { canParse: urlCanParse })
 }

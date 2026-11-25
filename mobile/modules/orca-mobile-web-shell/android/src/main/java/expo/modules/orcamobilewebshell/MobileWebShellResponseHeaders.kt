@@ -1,6 +1,10 @@
 package expo.modules.orcamobilewebshell
 
-/** CSP belongs only on the document response; it is inert on subresources. WebResourceResponse takes MIME/encoding separately. */
+/** Opened as a frame, any other response is an opaque-origin document with nothing allowed, so page script
+ * cannot borrow its fresh WebSocket. Document-start scripts cover such frames, the page-script fallback does not. */
+internal const val MOBILE_WEB_SHELL_NON_DOCUMENT_CSP = "sandbox; default-src 'none'"
+
+/** The document's CSP is inert on subresources. WebResourceResponse takes MIME/encoding separately. */
 internal fun mobileWebShellResponseHeaders(path: String, byteCount: Int): Map<String, String> {
   val headers = mutableMapOf(
     "Content-Length" to byteCount.toString(),
@@ -15,6 +19,8 @@ internal fun mobileWebShellResponseHeaders(path: String, byteCount: Int): Map<St
   } else if (path == MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_PATH) {
     headers["Content-Security-Policy"] = MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP
     headers["Referrer-Policy"] = "no-referrer"
+  } else {
+    headers["Content-Security-Policy"] = MOBILE_WEB_SHELL_NON_DOCUMENT_CSP
   }
   return headers
 }
