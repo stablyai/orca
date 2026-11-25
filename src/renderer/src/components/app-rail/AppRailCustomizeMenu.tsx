@@ -75,14 +75,9 @@ export function AppRailCustomizeRows({
   rows: readonly AppRailCustomizeRow[]
   focusRow?: string | null
 }): React.JSX.Element {
-  // Focus the row as it attaches, so it already holds focus when the menu's opening focus scope looks. Once only: the
-  // row's composed ref is rebuilt on its re-renders, and focus must not follow the arrow keys back to it.
-  const pendingFocusRef = useRef(focusRow)
-  const focusPendingRow = useCallback((node: HTMLDivElement | null) => {
-    if (node && pendingFocusRef.current !== null) {
-      pendingFocusRef.current = null
-      node.focus({ preventScroll: true })
-    }
+  // The attached row already holds focus when the menu's opening focus scope runs.
+  const focusCarriedRow = useCallback((node: HTMLDivElement | null) => {
+    node?.focus({ preventScroll: true })
   }, [])
   // Whether the toggle came from the pointer: Radix selects on the click that follows a pointerdown or a Space/Enter.
   const byPointerRef = useRef(false)
@@ -91,7 +86,7 @@ export function AppRailCustomizeRows({
       {rows.map((row) => (
         <DropdownMenuItem
           key={row.id}
-          ref={row.id === focusRow ? focusPendingRow : undefined}
+          ref={row.id === focusRow ? focusCarriedRow : undefined}
           role="menuitemcheckbox"
           aria-checked={row.shown}
           onPointerDown={() => {
