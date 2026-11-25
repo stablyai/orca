@@ -1,6 +1,7 @@
 import type { StackedReviewFailureReason } from './stacked-hosted-review-failure-copy'
 import type {
   CheckStatus,
+  GitHubPRMergeMethodSettings,
   PRConflictSummary,
   PRMergeableState,
   PRReviewDecision,
@@ -43,6 +44,8 @@ export type HostedReviewInfo = {
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
   mergeStateStatus?: string | null
+  /** GitLab project merge settings; GitHub carries these on PRInfo. */
+  mergeMethodSettings?: GitHubPRMergeMethodSettings
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
   githubRepository?: GitHubRepositoryIdentity

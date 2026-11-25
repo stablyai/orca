@@ -34,6 +34,7 @@ export type HostedReviewActionInfo = Pick<
       | 'autoMergeAllowed'
       | 'mergeQueueRequired'
       | 'mergeStateStatus'
+      | 'mergeMethodSettings'
     >
   >
 
