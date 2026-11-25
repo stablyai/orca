@@ -260,7 +260,7 @@ export function useNativeChatSubagentScope({
         <NativeChatSubagentSheetHeader
           chain={chain}
           entries={entries}
-          subagentRows={subagentRows}
+          subagentRows={subagentStructure}
           onOpen={open}
           controls={view.sheet}
         />
