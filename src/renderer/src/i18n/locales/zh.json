@@ -29038,7 +29038,8 @@
       },
       "deliveryUnconfirmed": "投递未确认",
       "starting": "正在启动…",
-      "notStarted": "尚未启动"
+      "notStarted": "尚未启动",
+      "pickLocalBot": "选择这台电脑上的 bot"
     },
     "settingsView": {
       "pathCopied": "路径已复制",
@@ -29289,7 +29290,8 @@
       "fallbackNamed": "Webhook“{{automation}}”已生效。请在电脑上的 Orca 中复制其 URL：设置 › Bots › {{bot}} › Webhook。要暂停或删除它，请在这里告诉 {{bot}}",
       "fallback": "此 Webhook 已生效。请在电脑上的 Orca 中，从 bot 设置的“Webhook”下复制其 URL。要暂停或删除它，请在这里告诉 bot",
       "copiedNoClear": "用完后请清空剪贴板；此浏览器无法保证会替你清空",
-      "pausedSignedOut": "{{hooks}} · 未登录期间已暂停"
+      "pausedSignedOut": "{{hooks}} · 未登录期间已暂停",
+      "copied": "已复制"
     },
     "handToBot": {
       "cantMove": "无法从这里将 {{name}} 移到 {{bot}} 下",
@@ -29522,7 +29524,8 @@
       "thisServer": "此服务器",
       "there": "那里",
       "executionComputer": "运行此智能体的电脑",
-      "yourComputer": "你的电脑"
+      "yourComputer": "你的电脑",
+      "actsAsYou": "它们会以你的身份在 {{computer}} 上操作。"
     },
     "import": {
       "nudgeOne": "在 {{app}} 中发现了一个 bot",
@@ -29596,7 +29599,9 @@
         "unavailable": "没有已安装的智能体能够生成图片",
         "failed": "{{agent}} 无法生成图片。请重试",
         "face": "生成头像",
-        "agent": "使用 {{agent}} 生成"
+        "agent": "使用 {{agent}} 生成",
+        "closeAnytime": "可随时关闭",
+        "failedFor": "无法为 {{name}} 生成图片。"
       }
     },
     "section": {
@@ -29885,7 +29890,9 @@
       "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "generic": "出了点问题，请重试",
       "avatarInvalid": "无法使用该图片。请选择 PNG 或 JPG 图片",
-      "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除"
+      "unsavedDrafts": "它的文件夹中有未保存的编辑器更改。请先保存或关闭这些更改，然后再删除",
+      "avatarHomeUnreadable": "无法读取已保存的图片。请重新选择。",
+      "folderNotOwned": "无法验证这个 bot 的文件夹。"
     },
     "slack": {
       "setup": {
@@ -30036,7 +30043,11 @@
         "mine": "这台电脑上的令牌已过期。请粘贴新令牌",
         "paste": "粘贴新令牌以重新连接",
         "expiredOnTitle": "{{host}} 上的 Slack 登录已过期",
-        "signInAgain": "重新登录"
+        "signInAgain": "重新登录",
+        "continue": "继续",
+        "neededTitle": "Slack 需要这个工作区的令牌",
+        "pasteNeeded": "粘贴令牌即可继续。",
+        "whyNeeded": "Orca 没有这个工作区可用的 Slack 令牌。"
       },
       "approve": {
         "noteUntil": "仅可使用一次，有效期至 {{time}}。请在那里以你自己的身份登录 Slack；Orca Cloud 会把批准结果传回 {{host}}。",
