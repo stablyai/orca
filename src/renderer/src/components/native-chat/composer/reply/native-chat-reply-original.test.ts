@@ -207,14 +207,20 @@ it('two different texts of the same length that share a 32-bit hash keep their o
   )
 })
 
-it('the oldest record goes once the cap is passed, and its reply falls back to words', () => {
+it('keeps 200 records, and the 201st drops the oldest, whose reply falls back to words', () => {
+  expect(NATIVE_CHAT_REPLY_SOURCES_MAX).toBe(200)
   const sent = (n: number) =>
     withNativeChatReplyContext(`Question ${n}`, { author: 'agent', excerpt: 'Done.' }, 'x')
-  for (let n = 0; n <= NATIVE_CHAT_REPLY_SOURCES_MAX; n += 1) {
+  for (let n = 0; n < 200; n += 1) {
     rememberNativeChatReplySource('chat-a', sent(n), `m-${n}`)
   }
+  // At 200, every record is still there.
+  expect(nativeChatReplyTargetFromSentText(sent(0), 'chat-a').target?.messageId).toBe('m-0')
+  expect(nativeChatReplyTargetFromSentText(sent(199), 'chat-a').target?.messageId).toBe('m-199')
+  rememberNativeChatReplySource('chat-a', sent(200), 'm-200')
   expect(nativeChatReplyTargetFromSentText(sent(0), 'chat-a').target?.messageId).toBe('')
   expect(nativeChatReplyTargetFromSentText(sent(1), 'chat-a').target?.messageId).toBe('m-1')
+  expect(nativeChatReplyTargetFromSentText(sent(200), 'chat-a').target?.messageId).toBe('m-200')
 })
 
 it('a record from before replies were kept per chat is never used, even for the exact text', () => {

@@ -183,8 +183,12 @@ it('a hand-back whose original is unknown or ambiguous counts as the reply alrea
     handBackNativeChatQueuedEdit(edit)
     expect(readNativeChatComposerDraft(scope).text).toBe('Why blue, really?')
     expect(readNativeChatReplyTarget(scope)?.messageId).toBe('m-b')
-    // Rewind: the same.
+    // Rewind: the same, so its words come back without a second copy of the quote.
     returnMessageToComposer(scope, `rewound-${known}`, [{ type: 'text', text: SENT }])
+    const rewound = readNativeChatComposerDraft(scope).text
+    expect(rewound.startsWith('Why blue, really?')).toBe(true)
+    expect(rewound.endsWith('Why blue?')).toBe(true)
+    expect(rewound).not.toContain('Replying to')
     expect(readNativeChatReplyTarget(scope)?.messageId).toBe('m-b')
   }
 })
