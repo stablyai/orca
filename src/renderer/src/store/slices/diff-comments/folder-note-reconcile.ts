@@ -158,7 +158,7 @@ export function observeFolderCatalogInput(args: {
   }
   const observed: ProtectedCopy[] = []
   let merged = args.merged
-  for (const copy of [...protectedCopies.values()]) {
+  for (const copy of protectedCopies.values()) {
     const folderWorkspaceId = folderWorkspaceIdOf(copy.owner)
     if (
       !folderWorkspaceId ||

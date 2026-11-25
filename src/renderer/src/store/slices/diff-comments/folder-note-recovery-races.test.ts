@@ -189,7 +189,7 @@ describe('folder note recovery: reads and catalog fetches', () => {
 
   // Why: a paired route's preparation can rebuild an SSH tunnel or restart a stopped server.
   it.each(['paired', 'paired-older'] as const)(
-    'never reads a %s host on its own; only the user\'s saves go out',
+    "never reads a %s host on its own; only the user's saves go out",
     async (kind) => {
       const { add, failOnce, startCatalogFetch } = setupFolderNotes(kind, [note('X', 'v0')])
       await failOnce()

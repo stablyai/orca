@@ -50,7 +50,9 @@ function versionsDiffer(a: DiffComment | undefined, b: DiffComment | undefined):
 }
 
 function touches(action: FolderNoteAction, id: string, scope: FolderNoteScope): boolean {
-  return action.delta.has(id) && (scope(id, action.delta.get(id)) || scope(id, action.before.get(id)))
+  return (
+    action.delta.has(id) && (scope(id, action.delta.get(id)) || scope(id, action.before.get(id)))
+  )
 }
 
 /** For each id `scope` selects among queued actions, the latest queued action that changed it. */
@@ -116,7 +118,9 @@ export function createFolderNoteAction(args: {
     pairingRevision: owner.runtimeEnvironmentId
       ? getRuntimeEnvironmentRevision(owner.runtimeEnvironmentId)
       : undefined,
-    borrowed: scope ? latestQueuedActionsTouching(copyKey, scope, new Set(delta.keys())) : new Map(),
+    borrowed: scope
+      ? latestQueuedActionsTouching(copyKey, scope, new Set(delta.keys()))
+      : new Map(),
     outcome,
     resolveOutcome
   }
@@ -146,7 +150,11 @@ export function settleFolderNoteAction(
 export const NOTHING_SATISFIED: ReadonlySet<string> = new Set()
 
 /** What the host confirmed for one id: its version, or absence; `relocated` once it was absent. */
-export type ConfirmedNote = { note: DiffComment | undefined; relocated: boolean; generation: number }
+export type ConfirmedNote = {
+  note: DiffComment | undefined
+  relocated: boolean
+  generation: number
+}
 
 type Change = { note: DiffComment | undefined; appended: number | null }
 

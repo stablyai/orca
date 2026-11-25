@@ -212,7 +212,9 @@ describe('folder note recovery: retained state', () => {
     expect(copy).toMatchObject({ pending: [], authoritative: undefined })
 
     folderWorkspacesApi.list.mockImplementationOnce(async () => [])
-    await startCatalogFetch().deliver().catch(() => {})
+    await startCatalogFetch()
+      .deliver()
+      .catch(() => {})
     await vi.waitFor(() => expect(protectedCopies.size).toBe(0))
   })
 })

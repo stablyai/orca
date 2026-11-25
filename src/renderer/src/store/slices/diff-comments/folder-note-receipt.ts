@@ -14,7 +14,10 @@ import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/work
 import type { FolderNoteAction, FolderOwner } from './folder-note-actions'
 
 // A version is the absent marker or a SHA-256 hex digest; anything else is not from a real host.
-const NoteVersionSchema = z.union([z.literal(ABSENT_NOTE_VERSION), z.string().regex(/^[0-9a-f]{64}$/)])
+const NoteVersionSchema = z.union([
+  z.literal(ABSENT_NOTE_VERSION),
+  z.string().regex(/^[0-9a-f]{64}$/)
+])
 
 const HostReceiptSchema = z.object({
   outcome: z.enum(['applied', 'read']),

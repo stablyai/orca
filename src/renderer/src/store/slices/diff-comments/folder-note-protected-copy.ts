@@ -87,7 +87,11 @@ export function recordConfirmed(
   verdict: FolderDiffCommentVerdict
 ): ReadonlySet<string> {
   const { satisfied, held } = projectFolderNoteVerdict(action, verdict)
-  const generation = peekHostCatalogGeneration(get, 'folder-workspaces', catalogTargetOf(copy.owner))
+  const generation = peekHostCatalogGeneration(
+    get,
+    'folder-workspaces',
+    catalogTargetOf(copy.owner)
+  )
   for (const [id, entry] of held) {
     const prior = copy.confirmed.get(id)
     copy.confirmed.delete(id)
@@ -96,7 +100,9 @@ export function recordConfirmed(
       copy.dirty = true
       continue
     }
-    const wasAbsent = prior ? prior.note === undefined || prior.relocated : action.before.get(id) === undefined
+    const wasAbsent = prior
+      ? prior.note === undefined || prior.relocated
+      : action.before.get(id) === undefined
     copy.confirmed.set(id, { note: entry.note, relocated: !!entry.note && wasAbsent, generation })
   }
   return satisfied

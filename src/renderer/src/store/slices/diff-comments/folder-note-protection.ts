@@ -20,7 +20,11 @@ import {
   type FolderNoteScope,
   type FolderOwner
 } from './folder-note-actions'
-import { checkFolderNoteReceipt, folderNoteRequest, isDefinitiveRefusalReply } from './folder-note-receipt'
+import {
+  checkFolderNoteReceipt,
+  folderNoteRequest,
+  isDefinitiveRefusalReply
+} from './folder-note-receipt'
 import {
   adoptHostList,
   isCurrentCopy,
@@ -149,7 +153,7 @@ export function enterFolderNoteProtection(args: {
     lastRunAcknowledged: false,
     authoritative: [...args.floor],
     provisional: true,
-    pending: [...queued.slice(0, MAX_PENDING_FOLDER_NOTE_ACTIONS)],
+    pending: queued.slice(0, MAX_PENDING_FOLDER_NOTE_ACTIONS),
     confirmed: new Map(),
     shown: row?.diffComments,
     observationGeneration: 0,

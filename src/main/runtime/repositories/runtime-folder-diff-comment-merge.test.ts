@@ -5,14 +5,12 @@ import type { FolderDiffCommentMergeRequest } from '../../../shared/file-review/
 import { mergeFolderDiffCommentsOnHost } from '../../../shared/file-review/folder-diff-comment-merge-operation'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { runtimeFolderDiffCommentMergeHost } from './runtime-folder-diff-comment-merge'
+import type * as WslMoveScopeGuard from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 const fenced = new Set<string>()
 
 vi.mock('../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard', async (load) => {
-  const actual =
-    await load<
-      typeof import('../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard')
-    >()
+  const actual = await load<typeof WslMoveScopeGuard>()
   return {
     ...actual,
     // Stands in for a WSL move journal fencing one folder: a non-passive write throws.
