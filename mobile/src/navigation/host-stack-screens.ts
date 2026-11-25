@@ -11,7 +11,7 @@ export const HOST_STACK_SCREENS = [
   {
     name: '[hostId]/edit',
     get title() {
-      return translate('navigation.hostStackScreens.editHost', 'Edit host')
+      return translate('navigation.hostStackScreens.editComputer', 'Edit computer')
     }
   },
   {

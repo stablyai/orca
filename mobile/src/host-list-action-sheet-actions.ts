@@ -86,7 +86,7 @@ export function hostDiagnosticsAction(onPress: () => void): ActionSheetAction {
 export function hostEditAction(onPress: () => void): ActionSheetAction {
   return {
     id: 'editHost',
-    label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
+    label: translate('hostScreen.hostListActionSheetActions.editComputer', 'Edit computer'),
     icon: Edit3,
     closeBeforePress: true,
     onPress
