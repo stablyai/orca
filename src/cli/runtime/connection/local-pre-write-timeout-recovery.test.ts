@@ -217,7 +217,11 @@ describe('a local mutation dial that times out before its frame is written', () 
 
     expect(mutationFrames()).toEqual([])
     expect(dials.count).toBe(2)
-    const requestId = (error.data as { orchestrationRequestId?: unknown }).orchestrationRequestId
+    const data: unknown = error.data
+    const requestId =
+      typeof data === 'object' && data !== null && 'orchestrationRequestId' in data
+        ? data.orchestrationRequestId
+        : undefined
     expect(requestId).toEqual(expect.any(String))
     expect(error.data).toMatchObject({
       requestSent: false,

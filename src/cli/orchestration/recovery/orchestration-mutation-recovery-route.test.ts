@@ -4,6 +4,7 @@ import { ORCHESTRATION_RUNTIME_CAPABILITIES } from '../../../shared/orchestratio
 import { getPlatformUserDataPath } from '../../runtime/profile/metadata'
 import type * as ClientModule from '../../runtime/client'
 import type * as HostFlagModule from '../../hosts/execution-host-flag'
+import type { RuntimeRpcSuccess } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 // Each Orca a command can reach keeps its own receipt ledger: the original lands in one of them,
 // and the recovery commands it prints must ask that same one after a one-shot assignment expires.
@@ -34,32 +35,30 @@ vi.mock('../../runtime/client', async (importOriginal) => {
       this.command = ['orca', ...(args[5] ?? [])]
     }
 
-    override async call(
+    override async call<TResult>(
       method: string,
       params?: unknown,
       options?: { orchestrationRequestId?: string; orchestrationReplayOnly?: true }
-    ): Promise<never> {
+    ): Promise<RuntimeRpcSuccess<TResult>> {
       const ledger = ledgers.get(this.ledgerKey) ?? new Set<string>()
       ledgers.set(this.ledgerKey, ledger)
-      const id = 'rpc'
-      const _meta = { runtimeId: this.ledgerKey }
+      const reply = (result: unknown): RuntimeRpcSuccess<TResult> => ({
+        id: 'rpc',
+        ok: true,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each handler under test reads only the fields this fixture returns for its method.
+        result: result as TResult,
+        _meta: { runtimeId: this.ledgerKey }
+      })
       if (method === 'status.get') {
-        return {
-          id,
-          ok: true,
-          result: { capabilities: ORCHESTRATION_RUNTIME_CAPABILITIES },
-          _meta
-        } as never
+        return reply({ capabilities: ORCHESTRATION_RUNTIME_CAPABILITIES })
       }
       if (method === 'orchestration.requestShow') {
-        const request = (params as { request: string }).request
+        const request =
+          typeof params === 'object' && params !== null && 'request' in params
+            ? String(params.request)
+            : ''
         const state = ledger.has(request) ? 'completed' : 'absent'
-        return {
-          id,
-          ok: true,
-          result: { requestId: request, state, interpretation: state },
-          _meta
-        } as never
+        return reply({ requestId: request, state, interpretation: state })
       }
       if (method !== 'orchestration.send') {
         throw new Error(`unexpected ${method}`)
