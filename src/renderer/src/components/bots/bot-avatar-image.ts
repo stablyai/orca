@@ -1,51 +1,92 @@
 // Where a bot's picture loads from: a bundled mascot, or its uploaded PNG read once per version.
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { readBotAvatarPng } from '@/lib/bot-catalog'
+import { readBotHostState, subscribeToBotChanges } from '@/lib/bot-catalog-snapshot'
+import { botHostGeneration, useBotHostGeneration } from '@/lib/bot-host-link-read'
 import { botRefKey, type BotOnHost, type BotRef } from '@/lib/bot-hosts'
 import { parseBotAvatar } from '../../../../shared/bot-avatar'
 import type { Bot } from '../../../../shared/bot-types'
 import { wornBotOutfit } from '../../../../shared/bots/bot-avatar-outfit'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { useBotMascotLayers, type BotOutfitArt, type BotPictureSize } from './bot-mascot-look'
 
-// Each bot's current upload only (by botRefKey), so a replaced picture is let go; a failed read is retried next time.
-// `read`: the finished read, for a caller that may not ask the host now.
-const uploads = new Map<
-  string,
-  { version: string; src: Promise<string | null>; read?: string | null }
->()
+/** A read that failed (its host away or unreachable) says nothing about the picture, so it never
+ *  replaces one already shown; one that answered null means the host has no picture for the bot. */
+type UploadRead = { src: string | null } | 'failed'
 
-function uploadSrc(bot: BotRef, version: string): Promise<string | null> {
-  const key = botRefKey(bot)
-  const cached = uploads.get(key)
-  if (cached?.version === version) {
-    return cached.src
-  }
-  const entry: { version: string; src: Promise<string | null>; read?: string | null } = {
-    version,
-    src: readBotAvatarPng(bot).then(
-      (png) => (entry.read = png ? `data:image/png;base64,${png}` : null),
-      () => {
-        uploads.delete(key)
-        return null
-      }
-    )
-  }
-  uploads.set(key, entry)
-  return entry.src
+type UploadEntry = {
+  version: string
+  generation: number
+  read: Promise<UploadRead>
+  // The finished answer, for a caller that may not ask the host now; undefined until it lands.
+  src?: string | null
+  loaded: boolean
 }
 
-/** The shared cache's finished read of that version, if any: a data URL or null; undefined when none. */
+// Each bot's current upload only (by botRefKey), so a replaced picture is let go. A version names the
+// upload's bytes, so a picture read once is kept; a failed read is dropped so the next try reads
+// again, and an empty answer is read again once its host comes back (it may have changed while away).
+const uploads = new Map<string, UploadEntry>()
+
+function uploadRead(bot: BotRef, version: string, generation: number): Promise<UploadRead> {
+  const key = botRefKey(bot)
+  const cached = uploads.get(key)
+  if (cached?.version === version && (cached.loaded || cached.generation === generation)) {
+    return cached.read
+  }
+  const entry: UploadEntry = {
+    version,
+    generation,
+    loaded: false,
+    read: Promise.resolve<UploadRead>('failed')
+  }
+  entry.read = readBotAvatarPng(bot).then(
+    (png): UploadRead => {
+      entry.src = png ? `data:image/png;base64,${png}` : null
+      entry.loaded = png !== null
+      return { src: entry.src }
+    },
+    (): UploadRead => {
+      if (uploads.get(key) === entry) {
+        uploads.delete(key)
+      }
+      return 'failed'
+    }
+  )
+  uploads.set(key, entry)
+  return entry.read
+}
+
+/** The picture already loaded for this version, if any: shown without a read, even while its host is away. */
+function loadedUploadRead(bot: BotRef, version: string): Promise<UploadRead> | null {
+  const cached = uploads.get(botRefKey(bot))
+  return cached?.version === version && cached.loaded ? cached.read : null
+}
+
+/** The shared cache's finished read of that version, if any: a data URL or null; undefined when none,
+ *  or when it answered null before its host last came back (so it is read again). */
 export function peekBotUploadSrc(bot: BotRef, version: string): string | null | undefined {
   const cached = uploads.get(botRefKey(bot))
-  return cached?.version === version ? cached.read : undefined
+  if (cached?.version !== version) {
+    return undefined
+  }
+  return cached.loaded || cached.generation === botHostGeneration(bot.hostId)
+    ? cached.src
+    : undefined
 }
 
 /** The bot's uploaded picture through the shared cache: a data URL, null for none, undefined when the
  *  read failed. */
 export function readBotUploadSrc(bot: BotRef, version: string): Promise<string | null | undefined> {
-  return uploadSrc(bot, version).then((src) =>
-    src === null && uploads.get(botRefKey(bot))?.version !== version ? undefined : src
+  return uploadRead(bot, version, botHostGeneration(bot.hostId)).then((read) =>
+    read === 'failed' ? undefined : read.src
   )
+}
+
+/** Only an away paired server is offline; this computer, or a host not listed, is tried. */
+function useBotHostAway(hostId: ExecutionHostId): boolean {
+  const read = (): boolean => readBotHostState(hostId) === 'offline'
+  return useSyncExternalStore(subscribeToBotChanges, read, read)
 }
 
 type AvatarBot = Pick<Bot, 'id' | 'avatar' | 'avatarColor' | 'avatarOutfit'> & BotOnHost
@@ -71,19 +112,30 @@ function useUploadSrc(bot: AvatarBot): string | null {
   const uploadKey = parsed?.kind === 'upload' ? parsed.version : null
   const [upload, setUpload] = useState<{ key: string; src: string | null } | null>(null)
   const { hostId, id } = bot
+  const away = useBotHostAway(hostId)
+  // A paired server's picture read while it was away (as at launch, from its kept list) failed;
+  // its coming back reads it again, so the row never stays on the initial.
+  const generation = useBotHostGeneration(hostId)
   useEffect(() => {
     if (!uploadKey) {
       return
     }
+    // An away server can't answer, but a picture already loaded from it still shows.
+    const pending = away
+      ? loadedUploadRead({ hostId, id }, uploadKey)
+      : uploadRead({ hostId, id }, uploadKey, generation)
+    if (!pending) {
+      return
+    }
     let live = true
-    void uploadSrc({ hostId, id }, uploadKey).then((src) => {
-      if (live) {
-        setUpload({ key: uploadKey, src })
+    void pending.then((read) => {
+      if (live && read !== 'failed') {
+        setUpload({ key: uploadKey, src: read.src })
       }
     })
     return () => {
       live = false
     }
-  }, [hostId, id, uploadKey])
+  }, [hostId, id, uploadKey, away, generation])
   return uploadKey && upload?.key === uploadKey ? upload.src : null
 }
