@@ -131,19 +131,10 @@ export class KeybindingService {
     }
     if (choice === 'accepted' && this.searchShortcutChoice !== 'accepted') {
       // Fresh read and live plugin owners: either may have claimed Mod+K since the UI rendered.
-      const offer = planSearchShortcutOptInForSnapshot(
-        this.withSearchShortcut(
-          readKeybindingFile(
-            this.configPath,
-            this.platform,
-            this.defaultOverrides,
-            this.fallbackOverrides
-          )
-        ),
-        this.getSearchShortcutPluginOwners()
-      )
+      const fresh = this.reload()
+      const offer = planSearchShortcutOptInForSnapshot(fresh, this.getSearchShortcutPluginOwners())
       if (offer.kind !== 'eligible') {
-        return { snapshot: this.reload(), outcome: 'refused' }
+        return { snapshot: fresh, outcome: 'refused' }
       }
     }
     let failed = false
