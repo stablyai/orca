@@ -50,6 +50,9 @@ export async function routeRemoteGroupMail(
   const drained = runKeyedSerializedOperation(groups.queues, groupId, async () => {
     const db = groups.runtime.getOrchestrationDb()
     for (const { mailId, requestId, isPost } of groups.store.routes.pendingMailRoutes(groupId)) {
+      if (!groups.runtime.bots.enabled()) {
+        break
+      }
       const post = groups.store.remoteAskMessage(requestId)
       const ask = post?.remoteAsks?.find((candidate) => candidate.requestId === requestId)
       const mail = db.getMessageById(mailId)
@@ -68,6 +71,9 @@ export async function routeRemoteGroupMail(
       const server = await groups.runtime
         .resolveOrchestrationWorkerServer(ask.environmentId)
         .catch(() => null)
+      if (!groups.runtime.bots.enabled()) {
+        break
+      }
       const room = groups.store.room(post.groupId, post.threadId)
       const member = room.remoteMembers?.find(
         (candidate) =>

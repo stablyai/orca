@@ -58,6 +58,7 @@ export function configureBotGroupChats(
     const groups = runtimes.get(runtime)
     if (updates.botsEnabled === true && groups?.store.db.isOpen) {
       try {
+        settleStoredRoomMail(groups)
         groups.resumePending()
       } catch (error) {
         console.warn('[bot-groups] could not resume pending deliveries', error)

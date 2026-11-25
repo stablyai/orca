@@ -8,7 +8,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_GROUP_CONVERSATION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { BotGroup } from '../../../../../../shared/bots/bot-group'
+import { botGroupRemoteKey, type BotGroup } from '../../../../../../shared/bots/bot-group'
 import { botGroupRoomMailAddress } from '../../../../../../shared/bots/bot-group-room-mail'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
@@ -306,7 +306,7 @@ it('keeps two remote Homes and the local member in the same group request withou
     vi.spyOn(host.runtime.bots, 'list').mockReturnValue([local])
     const notify = host.runtime.notifyMessageArrived.bind(host.runtime)
     vi.spyOn(host.runtime, 'notifyMessageArrived').mockImplementation((to, type) => {
-      if (!muteRoom || to !== botGroupRoomMailAddress(group.id)) {
+      if (!muteRoom || to !== roomAddress) {
         notify(to, type)
       }
     })
@@ -343,6 +343,7 @@ it('keeps two remote Homes and the local member in the same group request withou
       }
     })
   }
+  const roomAddress = botGroupRoomMailAddress(group.id)
   let groups = roomRuntime()
   const rows = () => groups.read(group.id, undefined, threadId).messages
   const inbox = (side: typeof host, sessionId: string) =>
@@ -458,8 +459,26 @@ it('keeps two remote Homes and the local member in the same group request withou
       rows().find((row) => row.remoteAsks?.some((ask) => ask.requestId === docsAsk))?.requester
         ?.name
     ).toBe('Atlas')
+    const suspendRoomAnswer = async (questionId: string, text: string) => {
+      muteRoom = true
+      roomPrefs.updateSettings({ botsEnabled: false }, { notifyListeners: true })
+      await answer(questionId, text, bContext)
+      const incoming = () =>
+        host.db.getUnreadMessages(roomAddress).find((row) => row.thread_id === questionId)
+      await vi.waitFor(() => expect(incoming()).toBeDefined())
+      const mailId = incoming()!.id
+      const asks = rows().flatMap((row) => row.remoteAsks ?? [])
+      expect(asks.find((ask) => ask.requestId === questionId)?.reply).toMatchObject({ text })
+      await groups.queues.get(group.id)
+      expect(groups.store.routes.pendingMailRoutes(group.id)).toEqual([
+        { mailId, requestId: questionId, isPost: false }
+      ])
+      muteRoom = false
+    }
+    await suspendRoomAnswer(docsAsk, '@Atlas Signature verified.')
+    expect(aMail().some((mail) => mail.body.includes('Signature verified.'))).toBe(false)
     loseAnswerReceipt = true
-    await answer(docsAsk, '@Atlas Signature verified.', bContext)
+    roomPrefs.updateSettings({ botsEnabled: true }, { notifyListeners: true })
     await vi.waitFor(() => expect(lostReceiptId).toBeDefined())
     expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toContainEqual(
       expect.objectContaining({ id: lostReceiptId, isAnswer: true })
@@ -525,7 +544,7 @@ it('keeps two remote Homes and the local member in the same group request withou
     await answer(bMail()[0]!.id, 'Archive verified.', bContext)
     // Lose the arrival nudge after import; the reader must still route the answer to the asker.
     await vi.waitFor(() =>
-      expect(host.db.getUnreadMessages(botGroupRoomMailAddress(group.id))).toContainEqual(
+      expect(host.db.getUnreadMessages(roomAddress)).toContainEqual(
         expect.objectContaining({ body: 'Archive verified.' })
       )
     )
@@ -548,6 +567,15 @@ it('keeps two remote Homes and the local member in the same group request withou
       rows().find((row) => row.remoteAsks?.some((ask) => ask.requestId === bMail()[0]?.id))
         ?.rootRequestId
     ).toBe(separately.id)
+    await suspendRoomAnswer(bMail()[0]!.id, 'The attestation stays in the room after Stop.')
+    await groups.stop(group.id, botGroupRemoteKey(group.remoteMembers![1]), threadId)
+    roomPrefs.updateSettings({ botsEnabled: true }, { notifyListeners: true })
+    await groups.queues.get(group.id)
+    expect(groups.store.routes.pendingMailRoutes(group.id)).toEqual([])
+    expect(groups.store.routes.pendingRemoteDeliveries(group.id)).toEqual([])
+    expect(
+      aMail().filter((mail) => mail.thread_id === separately.remoteAsks![0].requestId)
+    ).toEqual([])
 
     const oversized = GroupPostParams.parse({ id: first, body: '한'.repeat(22_000) })
     expect(() => ORCHESTRATION_GROUP_POST_METHOD.handler(oversized, aContext)).toThrow(
@@ -764,9 +792,10 @@ it('keeps two remote Homes and the local member in the same group request withou
       aContext
     )
     await vi.waitFor(() =>
-      expect(
-        host.db.getUnreadMessages(botGroupRoomMailAddress(group.id)).map(({ id }) => id)
-      ).toEqual([acceptedPost.messageId, rejectedPost.messageId])
+      expect(host.db.getUnreadMessages(roomAddress).map(({ id }) => id)).toEqual([
+        acceptedPost.messageId,
+        rejectedPost.messageId
+      ])
     )
     host.db.db.exec(`CREATE TRIGGER reject_one_route BEFORE DELETE ON bot_group_pending
       WHEN OLD.operation_id = 'remote-room-mail:${rejectedPost.messageId}'

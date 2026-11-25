@@ -271,8 +271,7 @@ function drainRoomRoutes(groups: BotGroupRuntime, groupId: string): void {
   }
 }
 
-/** At startup: settle room mail that arrived while this build wasn't running, as if it had just
- *  come. Each room's unread mail is one seek in the inbox index. */
+/** At startup or re-enable, recover unread mail and staged room routes. */
 export function settleStoredRoomMail(groups: BotGroupRuntime): void {
   try {
     const db = groups.runtime.getOrchestrationDb().db

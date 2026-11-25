@@ -125,7 +125,8 @@ No mention means the new post is for reference only. An answer to a bot's reques
 group and goes back to the requesting chat as context, not as another question to reply to.
 Stop blocks further routing under that request; it doesn't cancel an already-running remote Home
 turn, and its first answer may still appear in the room.
-Turning bots off on the group host pauses pending outbound delivery until bots are turned back on.
+Turning bots off on the group host pauses pending group routing and delivery until bots are turned
+back on. Answers can still appear in the room while their delivery to the requester is paused.
 
 Update the group host and each participating remote bot's computer. Older peers can still answer
 the owner's first question. After updating, start with a new group question so the host can pin

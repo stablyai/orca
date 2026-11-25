@@ -101,6 +101,10 @@ export async function routeSpeech(
           history: [],
           completed: new Map<string, string>()
         }
+  // Unlike Stop, disable is reversible. Preserve the inbound route if it changed during reservation.
+  if (speaker.kind === 'remote' && !groups.runtime.bots.enabled()) {
+    return []
+  }
   const place = { groupId, threadId, rootRequestId: root.id, rootSequence: root.sequence }
   const author = { kind: 'bot' as const, ...who }
   const stored: BotGroupMessage[] = []
