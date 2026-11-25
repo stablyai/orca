@@ -1,4 +1,5 @@
 import type SyncDatabase from '../../../sqlite/sync-database'
+import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { sessionSelect, type HermesSchema, type HermesSessionRow } from './hermes-state-db-schema'
 
@@ -145,10 +146,9 @@ function readLocalLineages(db: SyncDatabase, schema: HermesSchema, source: Sessi
   if (!schema.hasStateMeta) {
     return { owners, superseded }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects the value column.
   const receipts = db
-    .prepare('SELECT value FROM state_meta WHERE key GLOB ?')
-    .all(`${LOCAL_POLICY_PREFIX}*`) as { value: unknown }[]
+    .prepare<SqliteRow>('SELECT value FROM state_meta WHERE key GLOB ?')
+    .all(`${LOCAL_POLICY_PREFIX}*`)
   for (const receipt of receipts.map(({ value }) => parseReceipt(value))) {
     if (!receipt) {
       continue
@@ -176,8 +176,7 @@ export function listHermesConversations(
   let starts: HermesSessionRow[]
   let source: SessionRowSource
   if (recent === undefined || !schema.sessions.has('last_activity_at')) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
-    starts = db.prepare(`SELECT ${select} FROM sessions`).all() as HermesSessionRow[]
+    starts = db.prepare<HermesSessionRow>(`SELECT ${select} FROM sessions`).all()
     const rows = new Map(starts.map((row) => [row.id, row]))
     const children = Map.groupBy(
       starts.filter((row) => row.parent_session_id),
@@ -185,13 +184,12 @@ export function listHermesConversations(
     )
     source = { row: (id) => rows.get(id), children: (row) => children.get(row.id) ?? [] }
   } else {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
     const newest = db
-      .prepare(
+      .prepare<HermesSessionRow>(
         `SELECT ${select} FROM sessions
          ORDER BY COALESCE(last_activity_at, started_at) DESC, started_at DESC LIMIT ?`
       )
-      .all(recent) as HermesSessionRow[]
+      .all(recent)
     source = lazySessionRows(db, select, newest)
     // A recent continuation stands for the conversation it continues.
     const heads = new Map<string, HermesSessionRow>()
@@ -234,18 +232,18 @@ function lazySessionRows(
   seed: readonly HermesSessionRow[]
 ): SessionRowSource {
   const rows = new Map<string, HermesSessionRow | undefined>(seed.map((row) => [row.id, row]))
-  const byId = db.prepare(`SELECT ${select} FROM sessions WHERE id = ?`)
-  const byParent = db.prepare(`SELECT ${select} FROM sessions WHERE parent_session_id = ?`)
+  const byId = db.prepare<HermesSessionRow>(`SELECT ${select} FROM sessions WHERE id = ?`)
+  const byParent = db.prepare<HermesSessionRow>(
+    `SELECT ${select} FROM sessions WHERE parent_session_id = ?`
+  )
   return {
     row: (id) => {
       if (!rows.has(id)) {
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
-        rows.set(id, byId.get(id) as HermesSessionRow | undefined)
+        rows.set(id, byId.get(id))
       }
       return rows.get(id)
     },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
-    children: (row) => byParent.all(row.id) as HermesSessionRow[]
+    children: (row) => byParent.all(row.id)
   }
 }
 
@@ -256,16 +254,16 @@ export function readHermesConversation(
   id: string
 ): HermesConversation | null {
   const select = sessionSelect(schema)
-  const byId = db.prepare(`SELECT ${select} FROM sessions WHERE id = ?`)
-  const childrenOf = db.prepare(`SELECT ${select} FROM sessions WHERE parent_session_id = ?`)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
-  const row = (sessionId: string) => byId.get(sessionId) as HermesSessionRow | undefined
+  const byId = db.prepare<HermesSessionRow>(`SELECT ${select} FROM sessions WHERE id = ?`)
+  const childrenOf = db.prepare<HermesSessionRow>(
+    `SELECT ${select} FROM sessions WHERE parent_session_id = ?`
+  )
+  const row = (sessionId: string) => byId.get(sessionId)
   let start = id
   if (schema.hasStateMeta) {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the query projects the value column.
     const stored = db
-      .prepare('SELECT value FROM state_meta WHERE key = ?')
-      .get(`${LOCAL_POLICY_PREFIX}${id}`) as { value: unknown } | undefined
+      .prepare<SqliteRow>('SELECT value FROM state_meta WHERE key = ?')
+      .get(`${LOCAL_POLICY_PREFIX}${id}`)
     const receipt = parseReceipt(stored?.value)
     if (receipt && receipt.lineage.length > 1) {
       start = resetSegmentStarts(receipt.lineage, (segment) => row(segment)?.end_reason).at(-1)!
@@ -277,10 +275,6 @@ export function readHermesConversation(
   }
   return {
     id,
-    segments: compressionChain(
-      head,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: sessionSelect projects every HermesSessionRow column.
-      (segment) => childrenOf.all(segment.id) as HermesSessionRow[]
-    )
+    segments: compressionChain(head, (segment) => childrenOf.all(segment.id))
   }
 }
