@@ -11,23 +11,24 @@ import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import {
   isInitializeRequest,
   LoggingMessageNotificationSchema,
   ResourceUpdatedNotificationSchema,
   ResultSchema,
+  type InitializeResult,
   type JSONRPCRequest,
-  type Result,
-  type ServerNotification,
-  type ServerRequest
+  type LoggingLevel,
+  type Notification,
+  type Request,
+  type Result
 } from '@modelcontextprotocol/sdk/types.js'
 import type { RequestHandlerExtra } from '@modelcontextprotocol/sdk/shared/protocol.js'
 import { ChildStdioMcpTransport, logChildStderr } from './child-stdio-mcp-transport'
 import { answerNoSession, answerSessionGone, cut } from './shared-mcp-http-answers'
 import { SharedMcpResourceSubscriptions } from './shared-mcp-resource-subscriptions'
+import { agentSessionPeer, initializeChild, McpPeer } from './shared-mcp-peer'
 
 /** What starts the child: an absolute program, its args and env, run in the user's home. */
 export type SharedMcpLaunch = {
@@ -49,7 +50,9 @@ const MAX_SESSIONS = 256
 const STOP_GRACE_MS = 2_000
 
 type AgentSession = {
-  server: Server
+  server: McpPeer
+  /** Whether its `logging/setLevel` lets a log line at this level through. */
+  wants: (level: LoggingLevel) => boolean
   transport: StreamableHTTPServerTransport
   /** Requests of this session whose response is still open (an event stream, a streamed reply). */
   open: number
@@ -68,10 +71,12 @@ export class SharedMcpStartFailed extends Error {
 export class SharedMcpProcess {
   /** Settles once the child answered initialize; rejects when it couldn't start. */
   readonly ready: Promise<void>
-  private readonly client = new Client({ name: 'orca', version: '1.0.0' }, { capabilities: {} })
+  private readonly client = new McpPeer()
+  /** The child's answer to Orca's initialize, which every agent session is introduced with. */
+  private child: InitializeResult | null = null
   private readonly sessions = new Map<string, AgentSession>()
   private readonly subscriptions = new SharedMcpResourceSubscriptions()
-  private child: ChildProcessWithoutNullStreams | null = null
+  private process: ChildProcessWithoutNullStreams | null = null
   /** Settles once its child has exited, or at once if it never started one. */
   exited: Promise<void> = Promise.resolve()
   /** Initializes waiting for the child; it isn't stopped as unused while one waits. */
@@ -96,14 +101,10 @@ export class SharedMcpProcess {
       const updated = ResourceUpdatedNotificationSchema.safeParse(notification)
       const to = updated.success ? this.subscriptions.subscribers(updated.data.params.uri) : null
       for (const [id, session] of this.sessions) {
-        if (to && !to.has(id)) {
+        if ((to && !to.has(id)) || (log.success && !session.wants(log.data.params.level))) {
           continue
         }
-        const sent = log.success
-          ? session.server.sendLoggingMessage(log.data.params, id)
-          : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the child is an MCP server, so what it notifies is a server notification; it goes on unchanged.
-            session.server.notification(notification as ServerNotification)
-        void sent.catch(() => {})
+        void session.server.notification(notification).catch(() => {})
       }
     }
     this.client.onclose = () => this.stop()
@@ -138,12 +139,12 @@ export class SharedMcpProcess {
       } catch (error) {
         throw new SharedMcpStartFailed(error)
       }
-      if (this.stopped) {
+      if (this.stopped || !this.child) {
         return false
       }
       // An agent that gave up while the child started opens no session.
       if (!cut(res)) {
-        const session = await this.open()
+        const session = await this.open(this.child)
         await this.serve(session, req, res, body)
         if (session.transport.sessionId === undefined) {
           // The initialize was refused, so no session started.
@@ -160,8 +161,8 @@ export class SharedMcpProcess {
   /** Ends every agent's session and the child; `now` kills it at once (Orca is quitting). */
   stop(now = false): void {
     if (this.stopped) {
-      if (now && this.child) {
-        void signalProcessTree(this.child, 'SIGKILL')
+      if (now && this.process) {
+        void signalProcessTree(this.process, 'SIGKILL')
       }
       return
     }
@@ -173,7 +174,7 @@ export class SharedMcpProcess {
     this.sessions.clear()
     void this.client.close()
     // The whole tree, even once the root exited: a wrapper such as `npx` can leave its server behind.
-    const child = this.child
+    const child = this.process
     if (child) {
       void signalProcessTree(child, now ? 'SIGKILL' : 'SIGTERM')
       if (!now) {
@@ -198,7 +199,7 @@ export class SharedMcpProcess {
       detached: process.platform !== 'win32',
       timeoutMs: null
     })
-    this.child = child
+    this.process = child
     this.exited = new Promise((resolve) => child.once('close', () => resolve()))
     logChildStderr(this.name, child)
     child.once('error', (error) => {
@@ -210,16 +211,15 @@ export class SharedMcpProcess {
         this.stop()
       }
     })
-    await this.client.connect(new ChildStdioMcpTransport(child), { timeout: START_TIMEOUT_MS })
+    const transport = new ChildStdioMcpTransport(child)
+    this.child = await initializeChild(this.client, transport, START_TIMEOUT_MS)
   }
 
-  private async open(): Promise<AgentSession> {
-    const server = new Server(this.client.getServerVersion() ?? { name: this.name, version: '0' }, {
-      capabilities: this.client.getServerCapabilities() ?? {},
-      ...(this.client.getInstructions() ? { instructions: this.client.getInstructions() } : {})
-    })
+  private async open(child: InitializeResult): Promise<AgentSession> {
+    const { peer: server, wants } = agentSessionPeer(child)
     const session: AgentSession = {
       server,
+      wants,
       transport: new StreamableHTTPServerTransport({
         sessionIdGenerator: randomUUID,
         onsessioninitialized: (id) => {
@@ -280,7 +280,7 @@ export class SharedMcpProcess {
   private forward(
     session: AgentSession,
     request: JSONRPCRequest,
-    extra: RequestHandlerExtra<ServerRequest, ServerNotification>
+    extra: RequestHandlerExtra<Request, Notification>
   ): Promise<Result> {
     const send = () => this.send(session, request, extra)
     return this.subscriptions.forward(request, session.transport.sessionId ?? '', send) ?? send()
@@ -290,7 +290,7 @@ export class SharedMcpProcess {
   private send(
     session: AgentSession,
     { method, params }: JSONRPCRequest,
-    extra: RequestHandlerExtra<ServerRequest, ServerNotification>
+    extra: RequestHandlerExtra<Request, Notification>
   ): Promise<Result> {
     const token = params?._meta?.progressToken
     // A call its agent cancelled gets no reply, so its response stream ends here instead.
