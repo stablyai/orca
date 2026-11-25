@@ -40,7 +40,8 @@ export function AutomationEditorSheet(props: {
   leaveGuard?: AutomationLeaveSlot
   onDraftChange: (draft: AutomationDraft) => void
   onClose: () => void
-  onAfterClose: () => void
+  /** The sheet for request `key` finished closing; a newer request stays. */
+  onAfterClose: (key: number) => void
   onSave: (draft: AutomationDraft, original: AutomationDraft, targets: AutomationTargets) => void
   onBotSaved: (row: MobileAutomationRow) => void
   /** Drawers a save may raise over the editor, e.g. the setup trust prompt. */
@@ -63,7 +64,7 @@ export function AutomationEditorSheet(props: {
           present={present}
           leaveGuard={props.leaveGuard}
           onClose={props.onClose}
-          onAfterClose={props.onAfterClose}
+          onAfterClose={() => props.onAfterClose(request.key)}
           onSaved={props.onBotSaved}
         />
       ) : request && props.client && catalog.loaded ? (
@@ -83,7 +84,7 @@ export function AutomationEditorSheet(props: {
           connected={catalog.connected}
           present={present}
           onClose={props.onClose}
-          onAfterClose={props.onAfterClose}
+          onAfterClose={() => props.onAfterClose(request.key)}
           onSave={props.onSave}
         />
       ) : null}
