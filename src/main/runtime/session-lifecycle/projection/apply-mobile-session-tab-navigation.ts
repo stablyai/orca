@@ -51,11 +51,12 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
   }
 
   protected abstract getPtyRecordForPaneKey(paneKey: string): { ptyId: string } | null
+  protected abstract getMobileDisplayMode(ptyId: string): 'auto' | 'desktop'
 
   private readonly mobileBrowserOpenHost = createMobileBrowserOpenRuntimeHost({
     getLeafPtyId: (t, l) => this.leaves.get(this.getLeafKey(t, l))?.ptyId,
     getPanePtyId: (k) => this.getPtyRecordForPaneKey(k)?.ptyId,
-    getDisplayMode: (id) => this.mobileDisplayModes.get(id) ?? 'auto',
+    getDisplayMode: (id) => this.getMobileDisplayMode(id),
     getSubscribers: (id) => this.mobileSubscribers.get(id)?.values(),
     getMobileListenerIds: (id) =>
       this.selectMobileSessionTabsListeners(id)

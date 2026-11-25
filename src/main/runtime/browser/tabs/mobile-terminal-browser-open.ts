@@ -110,11 +110,17 @@ export function selectTargetMobileNavigationIds(
   paneViewerClientIds?: readonly string[]
 ): string[] {
   const uniqueListeners = [...new Set(listenerIds)]
-  if (!paneViewerClientIds || paneViewerClientIds.length === 0) {
+  if (!paneViewerClientIds) {
     return uniqueListeners
+  }
+  // If the initiating phone left the pane while tab creation was in flight, do not broadcast to other phones.
+  if (paneViewerClientIds.length === 0) {
+    return []
   }
   const viewerSet = new Set(paneViewerClientIds)
   const matched = uniqueListeners.filter((id) => viewerSet.has(id))
+  // Terminal subscribers key by deviceToken while session.tabs keys by pairedDeviceId;
+  // fall back to the worktree's mobile listeners when those ID namespaces differ.
   return matched.length > 0 ? matched : uniqueListeners
 }
 

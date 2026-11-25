@@ -29,7 +29,6 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   hostEnabled: boolean
   registry: DesktopBrowserBridgeRegistry
   localBrowserAvailable: boolean
-  hasMobileTerminalViewer?(paneKey: string): boolean
   resolveWorkspace(selector: string): Promise<{ id: string }>
   signal?: AbortSignal
 }): Promise<DesktopBrowserBridgeRoute> {
@@ -41,14 +40,11 @@ export async function routeDesktopBrowserBridgeRpc(options: {
   ) {
     return { handled: false }
   }
-  // Keep mobile-viewing open-url checks on this runtime so desktop bridges never hijack or break fallback.
+  // Keep mobile-only open-url checks on this runtime so desktop bridges never hijack or break fallback.
   if (
     method === 'browser.openUrl' &&
     isRecord(options.params) &&
-    (options.params.onlyWhenMobileViewing === true ||
-      (typeof options.params.paneKey === 'string' &&
-        options.params.paneKey.length > 0 &&
-        options.hasMobileTerminalViewer?.(options.params.paneKey) === true))
+    options.params.onlyWhenMobileViewing === true
   ) {
     return { handled: false }
   }

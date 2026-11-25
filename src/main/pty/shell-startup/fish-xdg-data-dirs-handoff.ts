@@ -67,7 +67,10 @@ function __orca_fish_xdg_handoff
         if not contains -- "$ORCA_OPEN_SHIM_DIR" $PATH
             set -gx PATH "$ORCA_OPEN_SHIM_DIR" $PATH
         else if test "$PATH[1]" != "$ORCA_OPEN_SHIM_DIR"
-            set -l rest (string match -v -- "$ORCA_OPEN_SHIM_DIR" $PATH)
+            set -l rest
+            for entry in $PATH
+                test "$entry" != "$ORCA_OPEN_SHIM_DIR"; and set -a rest "$entry"
+            end
             set -gx PATH "$ORCA_OPEN_SHIM_DIR" $rest
         end
     end
