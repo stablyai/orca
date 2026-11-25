@@ -16,7 +16,10 @@ import {
   createAgentSessionMcpPanelHook,
   type AgentSessionMcpPanelState
 } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
-import { groupAgentSessionMcpServers } from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
+import {
+  groupAgentSessionMcpServers,
+  ORCA_MCP_SOURCE
+} from '../../../../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import { MCP_SERVERS_RUNTIME_CAPABILITY } from '../../../../../shared/mcp-servers/mcp-servers'
 import { useStructuredAgentSessionHostCapability } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { openMcpServersSettings } from '@/components/settings/navigation/open-mcp-servers-settings'
@@ -223,9 +226,17 @@ function McpTrayList({
 }: McpTrayViewProps): React.JSX.Element {
   const t = useTranslate()
   const pending = state.pending
+  const groups = groupAgentSessionMcpServers(state.servers)
+  // Orca's group sits above the agent's own, so the list grows to keep them in view.
+  const tall = groups.some((group) => group.source === ORCA_MCP_SOURCE)
   return (
-    <div className="scrollbar-sleek max-h-80 overflow-y-auto border-t border-border py-1">
-      {groupAgentSessionMcpServers(state.servers).map((group) => {
+    <div
+      className={cn(
+        'scrollbar-sleek overflow-y-auto border-t border-border py-1',
+        tall ? 'max-h-80' : 'max-h-52'
+      )}
+    >
+      {groups.map((group) => {
         const label = group.source === null ? undefined : mcpSourceLabel(group.source, t)
         return (
           <div key={group.source ?? ''}>

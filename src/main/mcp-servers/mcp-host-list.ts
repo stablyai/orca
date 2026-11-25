@@ -2,7 +2,6 @@
 // sign-ins and relay addresses key by that folder exactly as a bot's do. Each server's id, agents,
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
-import { join } from 'node:path'
 import { z } from 'zod'
 import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
 import {
@@ -28,11 +27,8 @@ import {
 } from '../bots/bot-tools-file'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
-
-/** `<userData>/mcp-servers`; the list is `.orca/bot-tools.json` inside, as in a bot's home. */
-export const mcpHostListFolder = (): string => join(getProfileUserDataPath(), 'mcp-servers')
 
 const AgentFilesSchema = z.record(z.string(), z.unknown())
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/

@@ -27,7 +27,6 @@ import {
   addMcpServer,
   readMcpHostList,
   setMcpAgentFileAllowed,
-  mcpHostListFolder,
   mcpServerDetails,
   mcpServerIdsByName,
   removeMcpServer,
@@ -38,6 +37,7 @@ import {
 } from '../../../mcp-servers/mcp-host-list'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
+import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
 import { withMcpAgentProblems } from '../../../mcp-servers/mcp-agent-problems'
 import { defineMethod, type RpcContext } from '../core'
 import { botToolServerOf, toolsHomeFor } from './bots-tools'

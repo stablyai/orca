@@ -2,11 +2,9 @@
 // its `/mcp` tray can show them as Orca's.
 import type { AgentSessionMcpResult } from '../../shared/agent-session/options/protocol/agent-session-mcp'
 import { BoundedMap } from '../../shared/collections/bounded-map'
+import { ORCA_MCP_SOURCE } from '../../shared/agent-session/view/agent-session-mcp-server-presentation'
 import type { SessionMcpTools } from './session-mcp-tools'
 import { agentOwnMcpServerNames } from './agent-own-mcp-server-names'
-
-/** The tray's group for servers from the host's list. */
-export const ORCA_MCP_SOURCE = 'orca'
 
 const delivered = new BoundedMap<string, ReadonlySet<string>>({ maxEntries: 2_000 })
 

@@ -6,7 +6,9 @@ import type { Bot } from '../../shared/bot-types'
 import { readBotLaunchServers } from '../bots/bot-tools-file'
 import type { BotLaunchedTools } from '../bots/bot-tools-revision'
 import { botToolRelay, type BotToolRelay } from '../bots/tool-relay/bot-tool-relay'
-import { mcpHostListFolder, mcpServersForLaunch } from './mcp-host-list'
+import { mcpServersForLaunch } from './mcp-host-list'
+import { mcpHostListFolder } from './mcp-host-list-folder'
+import { botHostMcpAccess } from './bot-host-mcp-access'
 import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
 import { SessionMcpTools, type SessionHostMcpServers } from './session-mcp-tools'
 
@@ -72,17 +74,4 @@ export async function sessionMcpLaunchTools(
     tools: await SessionMcpTools.for(relay, { bot: null, agent: record.provider }, { host }),
     launched: null
   }
-}
-
-/**
- * The host list a bot's token may reach while it opts in and the switch is on, with none of its
- * servers: Orca's own checks of the bot's tools grant its token again and must keep that access.
- */
-export function botHostMcpAccess(
-  hostMcpServers: boolean,
-  folder?: string
-): SessionHostMcpServers | undefined {
-  return hostMcpServers && isMcpServersFeatureEnabled()
-    ? { folder: folder ?? mcpHostListFolder(), servers: [] }
-    : undefined
 }

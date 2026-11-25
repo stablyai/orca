@@ -4,7 +4,7 @@ import type { BotToolProblem, BotToolServer } from '../../shared/bot-tools'
 import type { BotToolsCli } from './bot-tools-host'
 import { botToolRelay, MCP_HOST_LIST_RELAY_OWNER } from './tool-relay/bot-tool-relay'
 import { SessionMcpTools, withSessionMcpToolsEnv } from '../mcp-servers/session-mcp-tools'
-import { botHostMcpAccess } from '../mcp-servers/session-mcp-launch'
+import { botHostMcpAccess } from '../mcp-servers/bot-host-mcp-access'
 
 /** The bot's servers as its CLI gets them for a turn, and the CLI with the env that goes with them. */
 export async function cliWithLaunchTools(
