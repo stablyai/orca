@@ -34,96 +34,107 @@ export const createRefreshRoutingActions = (
   | 'bumpGitHubPRVisibleRefreshGeneration'
   | 'setVisibleReviewCardWorktreeIds'
   | 'setVisibleItemPageReviewWorktreeIds'
-> => ({
-  setVisibleReviewCardWorktreeIds: (ids) => {
-    set((s) =>
-      sameIds(s.visibleReviewCardWorktreeIds, ids) ? s : { visibleReviewCardWorktreeIds: ids }
-    )
-  },
-  setVisibleItemPageReviewWorktreeIds: (ids) => {
-    set((s) =>
-      sameIds(s.visibleItemPageReviewWorktreeIds, ids)
-        ? s
-        : { visibleItemPageReviewWorktreeIds: ids }
-    )
-  },
-  enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0, executionHostId) => {
-    const state = get()
-    const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
-    if (!owner) {
-      return
-    }
-    const { worktree, repo } = owner
-    const candidate = buildPRRefreshCandidate(state, worktree, undefined, repo)
-    if (!candidate) {
-      return
-    }
-    if (hasNonGitHubReview(state, worktree, candidate)) {
-      return
-    }
-    if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
-      void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
-        force: bypassesGitHubPRRefreshFreshness(reason),
-        repoId: candidate.repoId,
-        repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
-        worktreeId: candidate.worktreeId,
-        linkedPRNumber: candidate.linkedPRNumber ?? null,
-        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-        fallbackPRSource: candidate.fallbackPRSource ?? null,
-        reason
-      })
-      return
-    }
-    if (!shouldEnqueueLocalPRRefresh(candidate)) {
-      return
-    }
-    enqueueLocalGitHubPRRefresh({ candidate, reason, priority }, async () => {
-      await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
-        force: bypassesGitHubPRRefreshFreshness(reason),
-        repoId: candidate.repoId,
-        repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
-        worktreeId: candidate.worktreeId,
-        linkedPRNumber: candidate.linkedPRNumber ?? null,
-        fallbackPRNumber: candidate.fallbackPRNumber ?? null,
-        fallbackPRSource: candidate.fallbackPRSource ?? null,
-        reason
-      })
-    })
-  },
-
-  reportVisibleGitHubPRRefreshCandidates: async (worktreeIds, generation) => {
-    set((s) =>
-      sameIds(s.visibleReviewWorktreeIds, worktreeIds)
-        ? s
-        : { visibleReviewWorktreeIds: worktreeIds }
-    )
-    const state = get()
-    const localCandidates: GitHubPRRefreshCandidate[] = []
-    for (const { worktree, candidate } of getVisibleHostedReviewWorkspaces(state, {
-      worktreeIds
-    })) {
-      if (
-        findWorktreeById(state, worktree.id, getRepoExecutionHostId(candidate)) !== worktree ||
-        !shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
-      ) {
-        continue
+> => {
+  const visibleCardReports = new Map<string, readonly string[]>()
+  return {
+    setVisibleReviewCardWorktreeIds: (ids, owner) => {
+      if (ids.length === 0) {
+        visibleCardReports.delete(owner)
+      } else {
+        visibleCardReports.set(owner, ids)
+      }
+      const combined = [...new Set([...visibleCardReports.values()].flat())]
+      set((s) =>
+        sameIds(s.visibleReviewCardWorktreeIds, combined)
+          ? s
+          : { visibleReviewCardWorktreeIds: combined }
+      )
+    },
+    setVisibleItemPageReviewWorktreeIds: (ids) => {
+      set((s) =>
+        sameIds(s.visibleItemPageReviewWorktreeIds, ids)
+          ? s
+          : { visibleItemPageReviewWorktreeIds: ids }
+      )
+    },
+    enqueueGitHubPRRefresh: (worktreeId, reason, priority = 0, executionHostId) => {
+      const state = get()
+      const owner = findWorktreeReviewOwner(state, worktreeId, executionHostId)
+      if (!owner) {
+        return
+      }
+      const { worktree, repo } = owner
+      const candidate = buildPRRefreshCandidate(state, worktree, undefined, repo)
+      if (!candidate) {
+        return
+      }
+      if (hasNonGitHubReview(state, worktree, candidate)) {
+        return
       }
       if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
-        continue
+        void get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+          force: bypassesGitHubPRRefreshFreshness(reason),
+          repoId: candidate.repoId,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
+          worktreeId: candidate.worktreeId,
+          linkedPRNumber: candidate.linkedPRNumber ?? null,
+          fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+          fallbackPRSource: candidate.fallbackPRSource ?? null,
+          reason
+        })
+        return
       }
-      if (shouldEnqueueLocalPRRefresh(candidate)) {
-        localCandidates.push(candidate)
+      if (!shouldEnqueueLocalPRRefresh(candidate)) {
+        return
       }
-    }
-    const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
-    if (reportVisible) {
-      await reportVisible({ candidates: localCandidates, generation }).catch((err) => {
-        console.warn('Failed to report visible PR refresh candidates:', err)
+      enqueueLocalGitHubPRRefresh({ candidate, reason, priority }, async () => {
+        await get().fetchPRForBranch(candidate.repoPath, candidate.branch, {
+          force: bypassesGitHubPRRefreshFreshness(reason),
+          repoId: candidate.repoId,
+          repoOwnerExecutionHostId: getRepoExecutionHostId(candidate),
+          worktreeId: candidate.worktreeId,
+          linkedPRNumber: candidate.linkedPRNumber ?? null,
+          fallbackPRNumber: candidate.fallbackPRNumber ?? null,
+          fallbackPRSource: candidate.fallbackPRSource ?? null,
+          reason
+        })
       })
-    }
-  },
+    },
 
-  bumpGitHubPRVisibleRefreshGeneration: () => {
-    set((s) => ({ prVisibleRefreshGeneration: s.prVisibleRefreshGeneration + 1 }))
+    reportVisibleGitHubPRRefreshCandidates: async (worktreeIds, generation) => {
+      set((s) =>
+        sameIds(s.visibleReviewWorktreeIds, worktreeIds)
+          ? s
+          : { visibleReviewWorktreeIds: worktreeIds }
+      )
+      const state = get()
+      const localCandidates: GitHubPRRefreshCandidate[] = []
+      for (const { worktree, candidate } of getVisibleHostedReviewWorkspaces(state, {
+        worktreeIds
+      })) {
+        if (
+          findWorktreeById(state, worktree.id, getRepoExecutionHostId(candidate)) !== worktree ||
+          !shouldCoordinateVisibleGitHubReview(state, worktree, candidate)
+        ) {
+          continue
+        }
+        if (getPRRefreshRuntimeRepoTarget(state, candidate)) {
+          continue
+        }
+        if (shouldEnqueueLocalPRRefresh(candidate)) {
+          localCandidates.push(candidate)
+        }
+      }
+      const reportVisible = window.api.gh.reportVisiblePRRefreshCandidates
+      if (reportVisible) {
+        await reportVisible({ candidates: localCandidates, generation }).catch((err) => {
+          console.warn('Failed to report visible PR refresh candidates:', err)
+        })
+      }
+    },
+
+    bumpGitHubPRVisibleRefreshGeneration: () => {
+      set((s) => ({ prVisibleRefreshGeneration: s.prVisibleRefreshGeneration + 1 }))
+    }
   }
-})
+}
