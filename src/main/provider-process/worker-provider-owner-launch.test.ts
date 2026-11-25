@@ -150,4 +150,41 @@ describe.skipIf(process.platform === 'win32')('launchProviderOwnerOnWorker', () 
     expect(spawnHere).toHaveBeenCalledTimes(1)
     expect(errors[0]?.message).toBe('fallback-ran')
   })
+
+  it('falls back to spawnHere once when the worker cannot start the owner', async () => {
+    const setup = createInProcessWorkerHost()
+    closeHost = setup.close
+    workerMock.host = setup.host
+    workerMock.readyNow = true
+    expect(await setup.host.whenReady()).toBe(true)
+
+    const spec: ProviderSpawnSpec = {
+      program: '/nonexistent/orca-provider-exec',
+      args: [],
+      command: process.execPath,
+      env: process.env,
+      cwd: process.cwd(),
+      detached: true,
+      supervised: true,
+      lifetime: 'one-shot',
+      closeRequest: 'stdin-end-and-sigterm',
+      stdinEndGraceMs: 1_000,
+      sigtermGraceMs: 3_000
+    }
+    const owner = new DeferredProviderOwner()
+    for (const stream of owner.stdio) {
+      stream?.on('error', () => {})
+    }
+    const spawnHere = vi.fn(() => {
+      throw new Error('fallback-ran')
+    })
+    const errors: Error[] = []
+    owner.on('error', (err: Error) => errors.push(err))
+
+    await launchProviderOwnerOnWorker(owner, spec, spawnHere, 5_000)
+
+    expect(spawnHere).toHaveBeenCalledTimes(1)
+    expect(errors.map((error) => error.message)).toEqual(['fallback-ran'])
+    expect(owner.pid).toBeUndefined()
+  })
 })
