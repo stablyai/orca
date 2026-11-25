@@ -10,7 +10,7 @@ export type RunTarget = {
   from: string
   to: string
 }
-export type TargetPhase = 'running' | 'failed' | 'done'
+export type TargetPhase = 'queued' | 'running' | 'failed' | 'done'
 
 export function rowFor(
   target: RunTarget,
@@ -22,5 +22,5 @@ export function rowFor(
 // A finished update drops its row from the store, so a missing run means it landed.
 export function targetPhase(target: RunTarget, rows: readonly AgentCliUpdateRow[]): TargetPhase {
   const phase = rowFor(target, rows)?.run?.phase
-  return phase === 'running' ? 'running' : phase === 'failed' ? 'failed' : 'done'
+  return phase === 'queued' || phase === 'running' || phase === 'failed' ? phase : 'done'
 }

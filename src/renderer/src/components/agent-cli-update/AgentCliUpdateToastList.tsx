@@ -1,11 +1,12 @@
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, Loader2 } from 'lucide-react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { Check, CircleAlert, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { workerDockScrollFade } from '@/components/native-chat/tools/tasks/dock/worker-dock-scroll-anchor'
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { agentCliProductName } from './agent-cli-product-name'
 import { copyAgentCliUpdateCommand } from '../status-bar/updates/AgentCliUpdateList'
-import { AgentCliUpdateFailedChip } from './AgentCliUpdateFailedChip'
 import type { AgentCliUpdateAgent } from '../../../../shared/agent-launch/installation/agent-cli-update'
 
 const COPIED_MS = 1200
@@ -18,7 +19,7 @@ export type AgentCliUpdateToastItem = {
   agent: AgentCliUpdateAgent
   from: string
   to: string
-  status: 'idle' | 'running' | 'failed' | 'done'
+  status: 'idle' | 'queued' | 'running' | 'failed' | 'done'
   /** Set for a CLI Orca can't update: the command the user runs in a terminal. */
   manualCommand: string | null
   onOpenFailure?: () => void
@@ -60,7 +61,7 @@ function CopyButton({ command }: { command: string }): React.JSX.Element {
       type="button"
       variant="ghost"
       size="xs"
-      className="-my-1 shrink-0"
+      className="-my-1"
       onClick={() =>
         void copyAgentCliUpdateCommand(command, t, { announce: false }).then((ok) => {
           if (!ok) {
@@ -79,6 +80,52 @@ function CopyButton({ command }: { command: string }): React.JSX.Element {
   )
 }
 
+function Status({ item }: { item: AgentCliUpdateToastItem }): React.JSX.Element | null {
+  const t = useTranslate()
+  if (item.manualCommand) {
+    return <CopyButton command={item.manualCommand} />
+  }
+  switch (item.status) {
+    case 'queued':
+      return (
+        <span className="text-xs text-muted-foreground">
+          {t('agentCliUpdate.queued', 'Queued')}
+        </span>
+      )
+    case 'running':
+      return (
+        <Loader2 className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
+      )
+    case 'done':
+      return <Check className="size-3.5 text-status-success" />
+    case 'failed':
+      return item.onOpenFailure ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost-destructive"
+              size="icon-xs"
+              // The glyph, not the hit area, ends on the column edge.
+              className="-mr-[5px]"
+              aria-label={t('agentCliUpdate.failedChipLabel', 'Update failed: view error')}
+              onClick={item.onOpenFailure}
+            >
+              <CircleAlert className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">
+            {t('agentCliUpdate.failedChipTooltip', 'Update failed. Click to see details.')}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <CircleAlert className="size-3.5 text-destructive" />
+      )
+    case 'idle':
+      return null
+  }
+}
+
 function Row({ item }: { item: AgentCliUpdateToastItem }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -86,27 +133,16 @@ function Row({ item }: { item: AgentCliUpdateToastItem }): React.JSX.Element {
       <span className="min-w-0 flex-1 truncate text-[13px]">
         {agentCliProductName(item.agent, t, 'short')}
       </span>
-      {item.status === 'failed' && item.onOpenFailure ? (
-        <AgentCliUpdateFailedChip onOpen={item.onOpenFailure} />
-      ) : (
-        <span className="min-w-32 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-          {t('agentCliUpdate.versions', '{{installed}} → {{latest}}', {
-            installed: item.from,
-            latest: item.to
-          })}
-        </span>
-      )}
-      {item.manualCommand ? (
-        <CopyButton command={item.manualCommand} />
-      ) : (
-        <span className="flex w-5 shrink-0 justify-center">
-          {item.status === 'running' ? (
-            <Loader2 className="size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
-          ) : item.status === 'done' ? (
-            <Check className="size-3.5 text-status-success" />
-          ) : null}
-        </span>
-      )}
+      <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+        {t('agentCliUpdate.versions', '{{installed}} → {{latest}}', {
+          installed: item.from,
+          latest: item.to
+        })}
+      </span>
+      {/* One fixed trailing column in every state, so versions end on the same edge. */}
+      <span className="flex w-14 shrink-0 justify-end">
+        <Status item={item} />
+      </span>
     </div>
   )
 }
@@ -137,9 +173,23 @@ export function AgentCliUpdateToastList({
   const t = useTranslate()
   const auto = items.filter((item) => !item.manualCommand)
   const manual = items.filter((item) => item.manualCommand)
+  const [fade, setFade] = useState<string | undefined>(undefined)
+  const viewport = useRef<HTMLDivElement>(null)
+  const refade = (): void =>
+    setFade(viewport.current ? workerDockScrollFade(viewport.current) : undefined)
+  useLayoutEffect(() => {
+    setFade(viewport.current ? workerDockScrollFade(viewport.current) : undefined)
+  }, [open, items.length])
   return (
     <Reveal open={open}>
-      <div className="mt-2 max-h-[300px] overflow-y-auto border-t border-border pt-1 scrollbar-sleek">
+      <div className="mx-2 mt-2 border-t border-border" />
+      <div
+        ref={viewport}
+        className="max-h-[300px] scroll-py-1 overflow-y-auto pt-1 scrollbar-sleek"
+        // Fades the edge rows continue past, so a clipped row or heading reads as more below.
+        style={{ maskImage: fade }}
+        onScroll={refade}
+      >
         <Rows items={auto} />
         {manual.length > 0 ? (
           <>

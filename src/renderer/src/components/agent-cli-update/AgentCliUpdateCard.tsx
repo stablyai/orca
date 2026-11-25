@@ -44,7 +44,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
   const view =
     session === null
       ? 'offer'
-      : phases.includes('running')
+      : phases.includes('running') || phases.includes('queued')
         ? 'updating'
         : phases.includes('failed')
           ? 'failed'
@@ -156,12 +156,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
                   agent: row.agent,
                   from: row.update.installedVersion,
                   to: row.update.latestVersion,
-                  status:
-                    row.run?.phase === 'running'
-                      ? 'running'
-                      : row.run?.phase === 'failed'
-                        ? 'failed'
-                        : 'idle',
+                  status: row.run?.phase ?? 'idle',
                   manualCommand: row.update.runnable ? null : row.update.command,
                   onOpenFailure: failure(row.hostKey, row.agent, () => runAgentCliUpdateRow(row))
                 }
@@ -203,7 +198,7 @@ export function AgentCliUpdateCard(): React.JSX.Element | null {
       <AgentCliUpdateToast
         view={view}
         total={view === 'offer' ? startable.length || offerRows.length : targets.length}
-        settled={phases.filter((phase) => phase !== 'running').length}
+        settled={phases.filter((phase) => phase === 'done' || phase === 'failed').length}
         failed={phases.filter((phase) => phase === 'failed').length}
         canUpdate={startable.length > 0}
         items={items}

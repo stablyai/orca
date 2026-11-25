@@ -50,10 +50,9 @@ export function AgentCliUpdateToast({
             defaultValue_one: 'Updating {{current}} of {{count}} CLI'
           })
         : view === 'failed'
-          ? t('agentCliUpdate.toastFailed', '{{failed}} of {{count}} CLI updates failed', {
-              failed,
-              count: total,
-              defaultValue_one: '{{failed}} of {{count}} CLI update failed'
+          ? t('agentCliUpdate.toastFailedCount', '{{count}} updates failed', {
+              count: failed,
+              defaultValue_one: '{{count}} update failed'
             })
           : t('agentCliUpdate.toastDone', '{{count}} CLIs updated', {
               count: total,
@@ -75,7 +74,7 @@ export function AgentCliUpdateToast({
         {announcement}
       </p>
       <div className="p-2">
-        <div className="flex items-center gap-2.5 px-2 py-1">
+        <div className="flex items-center gap-2 px-2 py-1">
           <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
             {view === 'updating' ? (
               <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
@@ -88,7 +87,7 @@ export function AgentCliUpdateToast({
             )}
           </span>
           <div className="flex min-w-0 flex-1 flex-col items-start">
-            <p className="text-sm leading-snug font-semibold" aria-hidden>
+            <p className="w-full truncate text-[13px] font-semibold" aria-hidden>
               {title}
             </p>
             <Button
@@ -108,7 +107,7 @@ export function AgentCliUpdateToast({
             {view === 'updating' ? (
               // Updates keep running; the status bar still shows them, with Try again on a failure.
               <Button type="button" variant="ghost" size="sm" onClick={onClose}>
-                {t('agentCliUpdate.toastHide', 'Hide')}
+                {t('agentCliUpdate.toastClose', 'Close')}
               </Button>
             ) : view !== 'done' ? (
               <Button type="button" variant="ghost" size="sm" onClick={onClose}>

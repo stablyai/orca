@@ -24,8 +24,8 @@
     "statusCount_other": "{{count}} CLI updates",
     "toastDone_one": "{{count}} CLI updated",
     "toastDone_other": "{{count}} CLIs updated",
-    "toastFailed_one": "{{failed}} of {{count}} CLI update failed",
-    "toastFailed_other": "{{failed}} of {{count}} CLI updates failed",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
     "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
     "toastUpdating_other": "Updating {{current}} of {{count}} CLIs"
   },

@@ -31029,17 +31029,18 @@
     "cardLater": "Later",
     "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
     "toastUpdating_other": "Updating {{current}} of {{count}} CLIs",
-    "toastFailed_one": "{{failed}} of {{count}} CLI update failed",
-    "toastFailed_other": "{{failed}} of {{count}} CLI updates failed",
     "toastDone_one": "{{count}} CLI updated",
     "toastDone_other": "{{count}} CLIs updated",
     "hideList": "Hide list",
     "showList": "Show list",
-    "toastHide": "Hide",
     "toastUpdate": "Update {{total}}",
     "toastRetry": "Retry {{failed}}",
     "copied": "Copied",
-    "manualSection": "Manual"
+    "manualSection": "Manual",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastClose": "Close",
+    "queued": "Queued"
   },
   "backgroundWorkerPaused": {
     "title": "Some background work paused after crashing repeatedly",

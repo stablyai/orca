@@ -41,7 +41,9 @@ function items(view: AgentCliUpdateToastView, count: number): AgentCliUpdateToas
           : view === 'updating'
             ? index < 3
               ? 'done'
-              : 'running'
+              : index < 6
+                ? 'running'
+                : 'queued'
             : index === 0 || index === 3
               ? 'failed'
               : 'done'
@@ -84,7 +86,13 @@ function Guides({ children }: { children: React.ReactNode }): React.JSX.Element 
   )
 }
 
-function toast(view: AgentCliUpdateToastView, count: number, listOpen: boolean, guides = false) {
+function toast(
+  view: AgentCliUpdateToastView,
+  count: number,
+  listOpen: boolean,
+  guides = false,
+  width = 360
+) {
   const settled = view === 'updating' ? 3 : count
   const element = (
     <AgentCliUpdateToast
@@ -102,7 +110,7 @@ function toast(view: AgentCliUpdateToastView, count: number, listOpen: boolean, 
     />
   )
   return defineFixture({
-    width: 360,
+    width,
     render: () => (guides ? <Guides>{element}</Guides> : element)
   })
 }
@@ -129,3 +137,6 @@ export const available8Manual = {
     }
   }
 }
+export const narrowAvailable30 = toast('offer', 30, false, true, 343)
+export const narrowUpdating30 = toast('updating', 30, true, true, 343)
+export const narrowFailed30 = toast('failed', 30, true, true, 343)

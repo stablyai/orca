@@ -121,7 +121,7 @@ describe('forgetAgentCliUpdateHosts', () => {
     })
     const late = store.getState().checkAgentCliUpdates(agentCliUpdateHostTarget('left'))
     const run = store.getState().runAgentCliUpdate(agentCliUpdateHostTarget('left'), 'claude')
-    expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledTimes(2))
     store.getState().setRuntimeEnvironments([publicRuntimeEnvironment({ id: 'kept' })])
     answers[0]({ updates: [stale] })
     answers[1]({ ok: false, output: 'failed' })
@@ -172,11 +172,40 @@ describe('runAgentCliUpdate', () => {
     const store = createTestStore()
     store.setState({ agentCliUpdates: new Map([['', listed]]) })
     const run = store.getState().runAgentCliUpdate(LOCAL, 'claude')
+    await vi.advanceTimersByTimeAsync(0)
     expect(store.getState().agentCliUpdates.get('')?.runs.claude?.phase).toBe('running')
 
     await vi.advanceTimersByTimeAsync(3 * 60_000)
 
     expect(await run).toBe(false)
     expect(store.getState().agentCliUpdates.get('')?.runs.claude?.phase).toBe('failed')
+  })
+
+  it('runs three updates on a host at once and queues the rest', async () => {
+    callRuntimeRpc.mockReset()
+    const answers: (() => void)[] = []
+    callRuntimeRpc.mockImplementation(
+      () => new Promise((resolve) => answers.push(() => resolve({ ok: true })))
+    )
+    const store = createTestStore()
+    const agents = ['claude', 'codex', 'grok', 'opencode'] as const
+    store.setState({
+      agentCliUpdates: new Map([
+        ['', { updates: agents.map((agent) => ({ ...stale, agent })), runs: {} }]
+      ])
+    })
+    const runs = agents.map((agent) => store.getState().runAgentCliUpdate(LOCAL, agent))
+    await vi.waitFor(() => expect(answers).toHaveLength(3))
+    const phases = () =>
+      agents.map((agent) => store.getState().agentCliUpdates.get('')?.runs[agent]?.phase)
+    expect(phases()).toEqual(['running', 'running', 'running', 'queued'])
+
+    answers[0]()
+    await runs[0]
+    await vi.waitFor(() => expect(phases()[3]).toBe('running'))
+    answers.slice(1).forEach((answer) => answer())
+    await vi.waitFor(() => expect(answers).toHaveLength(4))
+    answers[3]()
+    expect(await Promise.all(runs)).toEqual([true, true, true, true])
   })
 })
