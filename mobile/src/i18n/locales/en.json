@@ -5006,9 +5006,6 @@
       "openView": "Open view in GitHub"
     },
     "itemActions": {
-      "creating": "Creating...",
-      "copyLinearLink": "Copy Linear link",
-      "copyGitHubLink": "Copy GitHub link",
       "mergePullRequest": "Merge pull request",
       "mergeConflicts": "GitHub reports merge conflicts.",
       "mergeMergeRequest": "Merge merge request",
@@ -5018,32 +5015,20 @@
       "moreActions": "More actions"
     },
     "itemDetailContent": {
-      "pipelineJobs_one": "{{count}} jobs",
-      "pipelineJobs_other": "{{count}} jobs",
       "description": "Description",
       "checks": "Checks",
-      "rerunAll": "Rerun all",
-      "noChecks": "No checks found.",
-      "pipeline": "Pipeline",
-      "none": "None",
-      "noPipelineRuns": "No pipeline runs for this MR.",
       "subIssues": "Sub-issues",
-      "noSubIssues": "No sub-issues.",
-      "subIssueTitle": "Sub-issue title",
-      "addSubIssue": "Add sub-issue",
       "discussion": "Discussion",
-      "noComments": "No comments.",
-      "details": "Details",
-      "type": "Type",
-      "status": "Status",
-      "assignee": "Assignee",
       "project": "Project",
       "priority": "Priority",
       "assignees": "Assignees",
-      "loading": "Loading details…"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Refresh details"
+      "loading": "Loading details…",
+      "checksFailing": "{{count}} failing",
+      "checksPending": "{{count}} pending",
+      "checksPassed": "All passed",
+      "labels": "Labels",
+      "checksCancelled": "Cancelled",
+      "checksUnresolved": "Unresolved"
     },
     "itemFieldEditors": {
       "title": "Title",
@@ -5244,11 +5229,9 @@
       "more": "More"
     },
     "workspaceCreateDrawer": {
-      "title": "Create Workspace",
       "repository": "Repository",
       "selectRepository": "Select a repository",
       "remoteRepository": "Remote repository",
-      "workspaceName": "Workspace Name",
       "agent": "Agent",
       "connectFirst": "Connect repository first",
       "detectingAgents": "Detecting agents...",
@@ -5257,8 +5240,9 @@
       "defaultBranch": "Default branch",
       "addRepository": "Add a Git repository before creating a Linear workspace.",
       "repositoryNotFound": "Repository not found.",
-      "connectRepository": "Connect Repository",
-      "optionalLabel": "Optional"
+      "createWorkspace": "Create workspace",
+      "nameSection": "Workspace name",
+      "connectRepositoryAction": "Connect repository"
     },
     "workspaceOptionPickers": {
       "baseBranchTitle": "Start From",
@@ -5435,6 +5419,13 @@
       "needsYourReview": "Needs your review",
       "openIssues": "Open issues",
       "todos": "To-dos"
+    },
+    "itemDetailPage": {
+      "checkPassed": "Passed",
+      "checkFailed": "Failed",
+      "checkSkipped": "Skipped",
+      "checkPending": "Pending",
+      "checkNeutral": "Neutral"
     }
   },
   "terminal": {

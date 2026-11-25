@@ -3566,32 +3566,15 @@
     },
     "itemActions": {
       "changeStatus": "ステータスを変更",
-      "copyGitHubLink": "GitHub リンクをコピーする",
-      "copyLinearLink": "Linear リンクをコピーする",
-      "creating": "作成中…",
       "mergeConflicts": "GitHub でマージの競合が報告されています。",
       "mergeMergeRequest": "MR をマージ",
       "mergePullRequest": "PR をマージ"
     },
     "itemDetailContent": {
-      "addSubIssue": "サブ Issue を追加",
       "checks": "チェック",
       "description": "説明",
       "discussion": "ディスカッション",
-      "noChecks": "チェックが見つかりません。",
-      "noComments": "コメントはありません。",
-      "noPipelineRuns": "この MR のパイプライン実行履歴はありません。",
-      "noSubIssues": "サブ Issue はありません。",
-      "none": "なし",
-      "pipeline": "パイプライン",
-      "pipelineJobs_one": "{{count}} 件のジョブ",
-      "pipelineJobs_other": "{{count}} 件のジョブ",
-      "rerunAll": "すべて再実行",
-      "subIssueTitle": "サブ Issue のタイトル",
       "subIssues": "サブ Issue"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "詳細を更新"
     },
     "itemFieldEditors": {
       "addLabels": "追加するラベル（カンマ区切り）",
@@ -3902,16 +3885,13 @@
       "advanced": "詳細設定",
       "agent": "Agent",
       "connectFirst": "先にリポジトリに接続",
-      "connectRepository": "リポジトリに接続",
       "defaultBranch": "デフォルトブランチ",
       "detectingAgents": "Agent を検出中…",
       "remoteRepository": "リモートリポジトリ",
       "repository": "リポジトリ",
       "repositoryNotFound": "リポジトリが見つかりません。",
       "selectRepository": "リポジトリを選択",
-      "startFrom": "作成元",
-      "title": "ワークスペースを作成",
-      "workspaceName": "ワークスペース名"
+      "startFrom": "作成元"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "「{{name}}」は既に存在します。",

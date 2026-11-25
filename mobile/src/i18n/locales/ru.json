@@ -5173,9 +5173,6 @@
     },
     "itemActions": {
       "changeStatus": "Изменить статус",
-      "copyGitHubLink": "Скопировать ссылку на GitHub",
-      "copyLinearLink": "Скопировать ссылку на Linear",
-      "creating": "Создание…",
       "mergeConflicts": "GitHub сообщает о конфликтах слияния.",
       "mergeMergeRequest": "Слить запрос на слияние",
       "mergePullRequest": "Слить пул-реквест",
@@ -5184,34 +5181,14 @@
       "moreActions": "Дополнительные действия"
     },
     "itemDetailContent": {
-      "addSubIssue": "Добавить подзадачу",
       "checks": "Проверки",
       "description": "Описание",
       "discussion": "Обсуждение",
-      "noChecks": "Проверки не найдены.",
-      "noComments": "Комментариев нет.",
-      "noPipelineRuns": "Для этого MR нет запусков конвейера.",
-      "noSubIssues": "Нет подзадач.",
-      "none": "Нет",
-      "pipeline": "Конвейер",
-      "pipelineJobs_few": "{{count}} задания",
-      "pipelineJobs_many": "{{count}} заданий",
-      "pipelineJobs_one": "{{count}} задание",
-      "pipelineJobs_other": "{{count}} задания",
-      "rerunAll": "Повторить все",
-      "subIssueTitle": "Название подзадачи",
       "subIssues": "Подзадачи",
-      "details": "Подробности",
-      "type": "Тип",
-      "status": "Статус",
-      "assignee": "Исполнитель",
       "project": "Проект",
       "priority": "Приоритет",
       "assignees": "Исполнители",
       "loading": "Загрузка подробностей…"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Обновить данные"
     },
     "itemFieldEditors": {
       "addLabels": "Метки для добавления (через запятую)",
@@ -5526,17 +5503,13 @@
       "advanced": "Дополнительно",
       "agent": "Агент",
       "connectFirst": "Сначала подключите репозиторий",
-      "connectRepository": "Подключить репозиторий",
       "defaultBranch": "Ветка по умолчанию",
       "detectingAgents": "Поиск агентов…",
       "remoteRepository": "Удалённый репозиторий",
       "repository": "Репозиторий",
       "repositoryNotFound": "Репозиторий не найден.",
       "selectRepository": "Выберите репозиторий",
-      "startFrom": "Начать с",
-      "title": "Создать рабочее пространство",
-      "workspaceName": "Название рабочего пространства",
-      "optionalLabel": "Необязательно"
+      "startFrom": "Начать с"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "«{{name}}» уже существует.",

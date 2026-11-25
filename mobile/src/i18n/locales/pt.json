@@ -4167,9 +4167,6 @@
     },
     "itemActions": {
       "changeStatus": "Alterar status",
-      "copyGitHubLink": "Copiar link do GitHub",
-      "copyLinearLink": "Copiar link do Linear",
-      "creating": "Criando…",
       "mergeConflicts": "O GitHub informa conflitos de merge.",
       "mergeMergeRequest": "Fazer merge do merge request",
       "mergePullRequest": "Fazer merge do pull request",
@@ -4178,33 +4175,14 @@
       "moreActions": "Mais ações"
     },
     "itemDetailContent": {
-      "addSubIssue": "Adicionar sub-issue",
       "checks": "Verificações",
       "description": "Descrição",
       "discussion": "Discussão",
-      "noChecks": "Nenhuma verificação encontrada.",
-      "noComments": "Sem comentários.",
-      "noPipelineRuns": "Nenhuma execução de pipeline para este MR.",
-      "noSubIssues": "Nenhuma sub-issue.",
-      "none": "Nenhum item",
-      "pipeline": "Pipeline",
-      "pipelineJobs_many": "{{count}} jobs",
-      "pipelineJobs_one": "{{count}} job",
-      "pipelineJobs_other": "{{count}} jobs",
-      "rerunAll": "Reexecutar todas",
-      "subIssueTitle": "Título da sub-issue",
       "subIssues": "Sub-issues",
-      "details": "Detalhes",
-      "type": "Tipo",
-      "status": "Status",
-      "assignee": "Responsável",
       "project": "Projeto",
       "priority": "Prioridade",
       "assignees": "Responsáveis",
       "loading": "Carregando detalhes…"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Atualizar detalhes"
     },
     "itemFieldEditors": {
       "addLabels": "Adicionar rótulos, separados por vírgula",
@@ -4515,17 +4493,13 @@
       "advanced": "Avançado",
       "agent": "Agente",
       "connectFirst": "Conecte o repositório primeiro",
-      "connectRepository": "Conectar Repositório",
       "defaultBranch": "Branch padrão",
       "detectingAgents": "Detectando agentes…",
       "remoteRepository": "Repositório remoto",
       "repository": "Repositório",
       "repositoryNotFound": "Repositório não encontrado.",
       "selectRepository": "Selecione um repositório",
-      "startFrom": "Iniciar a partir de",
-      "title": "Criar Espaço de Trabalho",
-      "workspaceName": "Nome do Espaço de Trabalho",
-      "optionalLabel": "Opcional"
+      "startFrom": "Iniciar a partir de"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "\"{{name}}\" já existe.",

@@ -357,8 +357,6 @@ export const SHOW_MOBILE_DETAIL_METADATA_EDITORS = false
 
 export const SHOW_MOBILE_DETAIL_REVIEW_PANELS = false
 
-export const SHOW_MOBILE_LINEAR_DETAIL_TOOLS = false
-
 export const SHOW_MOBILE_COMMENT_THREAD_TOOLS = false
 
 export const SHOW_MOBILE_PROJECT_METADATA_EDITORS = false

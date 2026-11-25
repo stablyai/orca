@@ -3670,33 +3670,15 @@
     },
     "itemActions": {
       "changeStatus": "Changer le statut",
-      "copyGitHubLink": "Copier le lien GitHub",
-      "copyLinearLink": "Copier le lien Linear",
-      "creating": "Création…",
       "mergeConflicts": "GitHub signale des conflits de fusion.",
       "mergeMergeRequest": "Fusionner la merge request",
       "mergePullRequest": "Fusionner la pull request"
     },
     "itemDetailContent": {
-      "addSubIssue": "Ajouter un sous-ticket",
       "checks": "Vérifications",
       "description": "Description",
       "discussion": "Discussion",
-      "noChecks": "Aucune vérification trouvée.",
-      "noComments": "Aucun commentaire.",
-      "noPipelineRuns": "Aucune exécution de pipeline pour cette MR.",
-      "noSubIssues": "Aucun sous-ticket.",
-      "none": "Aucun",
-      "pipeline": "Pipeline",
-      "pipelineJobs_many": "{{count}} jobs",
-      "pipelineJobs_one": "{{count}} job",
-      "pipelineJobs_other": "{{count}} jobs",
-      "rerunAll": "Tout relancer",
-      "subIssueTitle": "Titre du sous-ticket",
       "subIssues": "Sous-tickets"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Actualiser les détails"
     },
     "itemFieldEditors": {
       "addLabels": "Étiquettes à ajouter, séparées par des virgules",
@@ -4007,16 +3989,13 @@
       "advanced": "Avancé",
       "agent": "Agent",
       "connectFirst": "Connectez d'abord le dépôt",
-      "connectRepository": "Connecter le dépôt",
       "defaultBranch": "Branche par défaut",
       "detectingAgents": "Détection des agents…",
       "remoteRepository": "Dépôt distant",
       "repository": "Dépôt",
       "repositoryNotFound": "Dépôt introuvable.",
       "selectRepository": "Sélectionner un dépôt",
-      "startFrom": "À partir de",
-      "title": "Créer un espace de travail",
-      "workspaceName": "Nom de l'espace de travail"
+      "startFrom": "À partir de"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "Un préréglage nommé « {{name}} » existe déjà.",

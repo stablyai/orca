@@ -3670,33 +3670,15 @@
     },
     "itemActions": {
       "changeStatus": "Cambiar estado",
-      "copyGitHubLink": "Copiar enlace de GitHub",
-      "copyLinearLink": "Copiar enlace de Linear",
-      "creating": "Creando…",
       "mergeConflicts": "GitHub informa de conflictos de merge.",
       "mergeMergeRequest": "Hacer merge de la merge request",
       "mergePullRequest": "Hacer merge del pull request"
     },
     "itemDetailContent": {
-      "addSubIssue": "Añadir sub-issue",
       "checks": "Checks",
       "description": "Descripción",
       "discussion": "Discusión",
-      "noChecks": "No se encontraron checks.",
-      "noComments": "No hay comentarios.",
-      "noPipelineRuns": "No hay ejecuciones de pipeline para este MR.",
-      "noSubIssues": "No hay sub-issues.",
-      "none": "Ninguno",
-      "pipeline": "Pipeline",
-      "pipelineJobs_many": "{{count}} trabajos",
-      "pipelineJobs_one": "{{count}} trabajo",
-      "pipelineJobs_other": "{{count}} trabajos",
-      "rerunAll": "Reejecutar todos",
-      "subIssueTitle": "Título del sub-issue",
       "subIssues": "Sub-issues"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Actualizar detalles"
     },
     "itemFieldEditors": {
       "addLabels": "Añade etiquetas, separadas por comas",
@@ -4007,16 +3989,13 @@
       "advanced": "Avanzado",
       "agent": "Agente",
       "connectFirst": "Conecta primero el repositorio",
-      "connectRepository": "Conectar repositorio",
       "defaultBranch": "Rama predeterminada",
       "detectingAgents": "Detectando agentes…",
       "remoteRepository": "Repositorio remoto",
       "repository": "Repositorio",
       "repositoryNotFound": "No se encontró el repositorio.",
       "selectRepository": "Selecciona un repositorio",
-      "startFrom": "Iniciar desde",
-      "title": "Crear espacio de trabajo",
-      "workspaceName": "Nombre del espacio de trabajo"
+      "startFrom": "Iniciar desde"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "\"{{name}}\" ya existe.",

@@ -4895,9 +4895,6 @@
     },
     "itemActions": {
       "changeStatus": "Durumu değiştir",
-      "copyGitHubLink": "GitHub bağlantısını kopyala",
-      "copyLinearLink": "Linear bağlantısını kopyala",
-      "creating": "Oluşturuluyor…",
       "mergeConflicts": "GitHub merge çakışmaları olduğunu bildiriyor.",
       "mergeMergeRequest": "Merge request'i merge et",
       "mergePullRequest": "Pull request'i merge et",
@@ -4906,32 +4903,14 @@
       "moreActions": "Diğer işlemler"
     },
     "itemDetailContent": {
-      "addSubIssue": "Alt sorun ekle",
       "checks": "Kontroller",
       "description": "Açıklama",
       "discussion": "Tartışma",
-      "noChecks": "Kontrol bulunamadı.",
-      "noComments": "Yorum yok.",
-      "noPipelineRuns": "Bu MR için pipeline çalıştırması yok.",
-      "noSubIssues": "Alt sorun yok.",
-      "none": "Yok",
-      "pipeline": "Pipeline",
-      "pipelineJobs_one": "{{count}} iş",
-      "pipelineJobs_other": "{{count}} iş",
-      "rerunAll": "Tümünü yeniden çalıştır",
-      "subIssueTitle": "Alt sorun başlığı",
       "subIssues": "Alt sorunlar",
-      "details": "Ayrıntılar",
-      "type": "Tür",
-      "status": "Durum",
-      "assignee": "Atanan kişi",
       "project": "Proje",
       "priority": "Öncelik",
       "assignees": "Atanan kişiler",
       "loading": "Ayrıntılar yükleniyor…"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "Ayrıntıları yenile"
     },
     "itemFieldEditors": {
       "addLabels": "Eklenecek etiketleri virgülle ayırın",
@@ -5238,17 +5217,13 @@
       "advanced": "Gelişmiş",
       "agent": "Ajan",
       "connectFirst": "Önce repository'ye bağlanın",
-      "connectRepository": "Repository'ye Bağlan",
       "defaultBranch": "Varsayılan branch",
       "detectingAgents": "Ajanlar algılanıyor…",
       "remoteRepository": "Uzak repository",
       "repository": "Repository",
       "repositoryNotFound": "Repository bulunamadı.",
       "selectRepository": "Bir repository seçin",
-      "startFrom": "Başlangıç noktası",
-      "title": "Çalışma Alanı Oluştur",
-      "workspaceName": "Çalışma Alanı Adı",
-      "optionalLabel": "İsteğe bağlı"
+      "startFrom": "Başlangıç noktası"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "“{{name}}” zaten var.",

@@ -9,12 +9,6 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   topChrome: {
     backgroundColor: colors.bgBase
   },
-  iconButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
   errorBanner: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,

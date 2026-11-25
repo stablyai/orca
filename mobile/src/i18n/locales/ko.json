@@ -3748,32 +3748,15 @@
     },
     "itemActions": {
       "changeStatus": "상태 변경",
-      "copyGitHubLink": "GitHub 링크 복사",
-      "copyLinearLink": "Linear 링크 복사",
-      "creating": "만드는 중…",
       "mergeConflicts": "GitHub에서 병합 충돌이 보고되었습니다.",
       "mergeMergeRequest": "MR 병합",
       "mergePullRequest": "PR 병합"
     },
     "itemDetailContent": {
-      "addSubIssue": "하위 이슈 추가",
       "checks": "체크",
       "description": "설명",
       "discussion": "토론",
-      "noChecks": "체크를 찾을 수 없습니다.",
-      "noComments": "댓글이 없습니다.",
-      "noPipelineRuns": "이 MR에 실행된 파이프라인이 없습니다.",
-      "noSubIssues": "하위 이슈가 없습니다.",
-      "none": "없음",
-      "pipeline": "파이프라인",
-      "pipelineJobs_one": "작업 {{count}}개",
-      "pipelineJobs_other": "작업 {{count}}개",
-      "rerunAll": "모두 재실행",
-      "subIssueTitle": "하위 이슈 제목",
       "subIssues": "하위 이슈"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "상세 정보 새로고침"
     },
     "itemFieldEditors": {
       "addLabels": "추가할 라벨(쉼표로 구분)",
@@ -4080,16 +4063,13 @@
       "advanced": "고급",
       "agent": "에이전트",
       "connectFirst": "먼저 저장소를 연결하세요",
-      "connectRepository": "저장소 연결",
       "defaultBranch": "기본 브랜치",
       "detectingAgents": "에이전트 감지 중…",
       "remoteRepository": "원격 저장소",
       "repository": "저장소",
       "repositoryNotFound": "저장소를 찾을 수 없습니다.",
       "selectRepository": "저장소 선택",
-      "startFrom": "시작 기준",
-      "title": "워크스페이스 생성",
-      "workspaceName": "워크스페이스 이름"
+      "startFrom": "시작 기준"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "\"{{name}}\"이(가) 이미 존재합니다.",

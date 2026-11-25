@@ -3567,32 +3567,15 @@
     },
     "itemActions": {
       "changeStatus": "更改狀態",
-      "copyGitHubLink": "複製 GitHub 連結",
-      "copyLinearLink": "複製 Linear 連結",
-      "creating": "建立中…",
       "mergeConflicts": "GitHub 回報有合併衝突。",
       "mergeMergeRequest": "合併 MR",
       "mergePullRequest": "合併 PR"
     },
     "itemDetailContent": {
-      "addSubIssue": "新增子議題",
       "checks": "檢查項目",
       "description": "描述",
       "discussion": "討論",
-      "noChecks": "找不到檢查項目。",
-      "noComments": "沒有留言。",
-      "noPipelineRuns": "此 MR 沒有管線執行紀錄。",
-      "noSubIssues": "沒有子議題。",
-      "none": "無",
-      "pipeline": "管線",
-      "pipelineJobs_one": "{{count}} 項作業",
-      "pipelineJobs_other": "{{count}} 項作業",
-      "rerunAll": "全部重新執行",
-      "subIssueTitle": "子議題標題",
       "subIssues": "子議題"
-    },
-    "itemDetailDrawer": {
-      "refreshDetails": "重新整理詳細資訊"
     },
     "itemFieldEditors": {
       "addLabels": "新增標籤，以逗號分隔",
@@ -3899,16 +3882,13 @@
       "advanced": "進階",
       "agent": "代理程式",
       "connectFirst": "請先連線存放庫",
-      "connectRepository": "連線存放庫",
       "defaultBranch": "預設分支",
       "detectingAgents": "正在偵測代理程式…",
       "remoteRepository": "遠端存放庫",
       "repository": "存放庫",
       "repositoryNotFound": "找不到存放庫。",
       "selectRepository": "選擇存放庫",
-      "startFrom": "起始來源",
-      "title": "建立工作區",
-      "workspaceName": "工作區名稱"
+      "startFrom": "起始來源"
     },
     "workspaceCreateProjection": {
       "nameAlreadyExists": "「{{name}}」已存在。",
