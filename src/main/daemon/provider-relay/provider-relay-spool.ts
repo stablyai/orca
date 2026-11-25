@@ -376,7 +376,8 @@ export class ProviderRelaySpool {
       return [memory + (this.mode === 'attached' ? queued : 0), this.memoryCap]
     }
     const unacked = this.file.index.unackedBytes - this.file.index.bytesThrough(releasedThrough)
-    return [Math.max(unacked, queued) + memory, this.fileCap]
+    // A held replay keeps to 4× the cap: a reopening chat can't save it yet, and a pause would stall it.
+    return [Math.max(unacked, queued) + memory, this.fileCap * (this.keepingLive ? 4 : 1)]
   }
 
   private writeToFile(record: HeldRecord): void {
