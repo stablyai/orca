@@ -242,7 +242,8 @@ export function openFileInBrowserTab(
     title: plan.title,
     ...(params.targetGroupId ? { targetGroupId: params.targetGroupId } : {}),
     activate: true,
-    ...(params.clientLocal ? { browserRuntimeEnvironmentId: null } : {})
+    // Why null: this plan is only a desktop file: URL; a remote placement host could not read it.
+    browserRuntimeEnvironmentId: null
   })
   return plan
 }
