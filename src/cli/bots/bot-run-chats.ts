@@ -24,7 +24,8 @@ export function formatRunChats(preview: BotRunChatsPreview): string {
   return [
     `${preview.bot}: closing ended run chats is ${preview.on ? 'on' : 'off'}.`,
     `Open chats: ${preview.open} (${runChats} opened by a run, ${preview.notRunChats} not${preview.unreadable > 0 ? `, ${preview.unreadable} could not be read and stay open` : ''}).`,
-    `Would close now: ${preview.close.length}${owning > 0 ? ` (${owning} own items; their mail then reaches the Home Chat)` : ''}.`,
+    // A cut page can miss a chat's items, so the count is then only a floor.
+    `Would close now: ${preview.close.length}${owning > 0 ? ` (${preview.itemsCut ? 'at least ' : ''}${owning} own items; their mail then reaches the Home Chat)` : ''}.`,
     `Would keep: ${preview.keep.length}${reasons.length > 0 ? ', by reason (a chat can have several):' : '.'}`,
     ...reasons,
     ...(preview.itemsCut ? ['Items listed are one page; a chat can own more than it shows.'] : [])

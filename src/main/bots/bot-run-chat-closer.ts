@@ -285,6 +285,7 @@ export async function closeEndedRunChats(
       } else if (outcome === 'failed') {
         failed += 1
       }
+      // 'stopping' counts nowhere yet: the chat closes once its agent's start ends.
     }
     // Counted by reading the chats again, not by the closes called.
     const stillOpen = new Set((await readBotChats(runtime, bot, null)).map((row) => row.id))

@@ -541,7 +541,7 @@ describe('when a bot looks at its run chats', () => {
 describe('closing one run chat under the bot lock', () => {
   /** `owed` stands for the database, so a second `sessions` over it is the same Orca restarted. */
   function sessions(
-    closed: { stopped: boolean; tabOpen?: boolean },
+    closed: Awaited<ReturnType<CloseStep.RunChatCloseSteps['close']>>,
     owed = new Map<string, string>()
   ) {
     const calls: string[] = []
@@ -712,6 +712,42 @@ describe('closing one run chat under the bot lock', () => {
     await expect(forget.close('run-chat', true)).resolves.toBe('closed')
     expect(forget.calls).toEqual(['close run-chat', ...moves('run-chat')])
     expect(forget.owed.size).toBe(1)
+  })
+
+  it('closes a chat whose agent was still starting once that start ends, and moves what it left then', async () => {
+    let startEnds: (stopped: boolean) => void = () => {}
+    const whenStopped = new Promise<boolean>((resolve) => (startEnds = resolve))
+    const starting = sessions({ stopped: false, whenStopped })
+    await expect(starting.close('run-chat', true)).resolves.toBe('stopping')
+    expect(starting.calls).toEqual(['close run-chat'])
+    expect(starting.owed.size).toBe(1)
+    startEnds(true)
+    await vi.waitFor(() => expect(starting.owed.size).toBe(0))
+    expect(starting.calls).toEqual(['close run-chat', ...moves('run-chat')])
+
+    // A start that ended with no proof the chat closed leaves the record for the next look to judge.
+    const unproven = Promise.resolve(false)
+    const unprovenClose = sessions({ stopped: false, whenStopped: unproven })
+    await expect(unprovenClose.close('run-chat', true)).resolves.toBe('stopping')
+    await unproven
+    expect(unprovenClose.calls).toEqual(['close run-chat'])
+    expect(unprovenClose.owed.size).toBe(1)
+  })
+
+  it('holds up nothing on a record it cannot drop: a tab still refuses as tab-open, and the next records settle', async () => {
+    const shown = sessions({ stopped: false, tabOpen: true })
+    shown.fail.forget = true
+    await expect(shown.close('run-chat', true)).resolves.toBe('tab-open')
+    expect(shown.owed.size).toBe(1)
+
+    const owed = new Map([
+      ['reopened', 'bot-1'],
+      ['run-chat', 'bot-1']
+    ])
+    const { calls, settle, fail } = sessions({ stopped: true }, owed)
+    fail.forget = true
+    await settle(['run-chat'], ['reopened'])
+    expect(calls).toEqual(moves('run-chat'))
   })
 
   it('drops the record of a chat open again, or never closed, and moves nothing of it', async () => {

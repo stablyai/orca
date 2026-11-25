@@ -6,10 +6,16 @@ import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { unfinishedRunChatCloses } from '../runtime/orchestration/db/bot-requests/bot-run-chat-unfinished-closes-store'
 
 const lane = vi.hoisted(() => {
-  const now: { tabs: Set<string>; state: StructuredAgentSessionCloseWork['state'] } = {
+  const now: {
+    tabs: Set<string>
+    state: StructuredAgentSessionCloseWork['state']
+    startEnds: Promise<boolean> | null
+  } = {
     /** Chats a tab shows by the time the close reaches its last word. */
     tabs: new Set<string>(),
-    state: 'idle'
+    state: 'idle',
+    /** An agent still starting: the stop waits for that start to end. */
+    startEnds: null
   }
   return now
 })
@@ -20,7 +26,9 @@ vi.mock('../runtime/agent-session/lifecycle/structured-agent-session-close', () 
     options: { admitClose: (work: StructuredAgentSessionCloseWork) => boolean }
   ) => {
     const stopped = options.admitClose({ sessionId, state: lane.state })
-    return { stopped, closeAttempted: true }
+    return stopped && lane.startEnds
+      ? { stopped: false, closeAttempted: true, whenStartEnds: lane.startEnds }
+      : { stopped, closeAttempted: true }
   }
 }))
 vi.mock('../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
@@ -52,6 +60,7 @@ afterEach(() => {
   db.close()
   lane.tabs.clear()
   lane.state = 'idle'
+  lane.startEnds = null
 })
 
 function closer() {
@@ -76,5 +85,15 @@ describe("a run chat close's last word", () => {
     lane.state = 'idle'
     await expect(close('bot-1', 'run-chat', async () => true)).resolves.toBe('closed')
     expect(unfinishedRunChatCloses(db, 'bot-1')).toEqual([])
+  })
+
+  it('keeps the record while the stop waits for its agent to start, and finishes once it stopped', async () => {
+    const { close } = closer()
+    let startEnds: (stopped: boolean) => void = () => {}
+    lane.startEnds = new Promise((resolve) => (startEnds = resolve))
+    await expect(close('bot-1', 'run-chat', async () => true)).resolves.toBe('stopping')
+    expect(unfinishedRunChatCloses(db, 'bot-1')).toEqual(['run-chat'])
+    startEnds(true)
+    await vi.waitFor(() => expect(unfinishedRunChatCloses(db, 'bot-1')).toEqual([]))
   })
 })

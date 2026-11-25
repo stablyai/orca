@@ -18,8 +18,11 @@ import { carryQueuedMessages } from './bot-chat-queued-carry'
 import { dropReplacedChatMail } from './bot-chat-replacement'
 
 export type RunChatCloseSteps = {
-  /** `tabOpen` when a tab showed the chat at the last word before Stop, which refuses it. */
-  close: (sessionId: string) => Promise<{ stopped: boolean; tabOpen?: boolean }>
+  /** `tabOpen` when a tab showed the chat at the last word before Stop, which refuses it.
+   *  `whenStopped` when the stop waits for the agent's start to end: true once the chat closed. */
+  close: (
+    sessionId: string
+  ) => Promise<{ stopped: boolean; tabOpen?: boolean; whenStopped?: Promise<boolean> }>
   /** False when a card that moves stayed behind. */
   carry: (host: BotChatHost, from: string, to: string) => Promise<boolean>
   handOver: (from: string, to: string) => void
@@ -33,7 +36,8 @@ export type RunChatCloseSteps = {
   }
 }
 
-export type RunChatCloseOutcome = 'kept' | 'tab-open' | 'failed' | 'closed'
+/** `stopping`: the chat closes once its agent's start ends, and the moves follow then. */
+export type RunChatCloseOutcome = 'kept' | 'tab-open' | 'failed' | 'stopping' | 'closed'
 
 type ChatLock = Pick<ReturnType<typeof botChatSessions>, 'underChatLock'>
 
@@ -43,6 +47,16 @@ const warned =
     console.warn(`[bots] could not ${what} of a closed run chat`, error)
     return false
   }
+
+/** A record that cannot be dropped now is dropped on a later look, which finds the chat open, or
+ *  finishes its moves again, which is safe; so the failure holds up nothing. */
+function forget(steps: RunChatCloseSteps, sessionId: string): void {
+  try {
+    steps.owed.forget(sessionId)
+  } catch (error) {
+    warned('forget the record')(error)
+  }
+}
 
 /** Every move is tried, so one failing does not hold up the rest, and each is safe to repeat. The
  *  record goes only once all three finished; until then the next look finds the chat and tries
@@ -65,13 +79,19 @@ async function finishClose(
     .dropUnreadMail(bot, from)
     .then(() => true, warned('tell the senders of the unread mail'))
   if (moved && handedOver && told) {
-    try {
-      steps.owed.forget(from)
-    } catch (error) {
-      warned('forget the finished close')(error)
-    }
+    forget(steps, from)
   }
 }
+
+const finishUnderLock = (
+  chats: ChatLock,
+  steps: RunChatCloseSteps,
+  botId: string,
+  sessionId: string
+): Promise<void> =>
+  chats.underChatLock(botId, async (host, bot, chat) =>
+    finishClose(steps, host, bot, sessionId, await chat())
+  )
 
 export function closeRunChatUnderLock(
   chats: ChatLock,
@@ -90,8 +110,16 @@ export function closeRunChatUnderLock(
     // Recorded before the close, so a crash between the close and the moves still leaves it.
     steps.owed.add(botId, sessionId)
     const closed = await steps.close(sessionId)
+    if (!closed.stopped && closed.whenStopped) {
+      // That start may end long after, so the moves wait for it outside the lock. The record stays
+      // until they finish, so a stop that never proves itself is judged on a later look.
+      void closed.whenStopped
+        .then((stopped) => (stopped ? finishUnderLock(chats, steps, botId, sessionId) : undefined))
+        .catch(warned('finish the moves'))
+      return 'stopping'
+    }
     if (!closed.stopped) {
-      steps.owed.forget(sessionId)
+      forget(steps, sessionId)
       return closed.tabOpen ? 'tab-open' : 'failed'
     }
     await finishClose(steps, host, bot, sessionId, home)
@@ -112,14 +140,10 @@ export async function settleClosedRunChats(
 ): Promise<void> {
   for (const sessionId of steps.owed.list(botId)) {
     if (now.open.has(sessionId)) {
-      steps.owed.forget(sessionId)
+      forget(steps, sessionId)
     } else if (now.closed.has(sessionId)) {
       // One chat that cannot be moved now is tried again on the next look; the rest go on.
-      await chats
-        .underChatLock(botId, async (host, bot, chat) =>
-          finishClose(steps, host, bot, sessionId, await chat())
-        )
-        .catch(warned('finish the moves'))
+      await finishUnderLock(chats, steps, botId, sessionId).catch(warned('finish the moves'))
     }
   }
 }
@@ -144,7 +168,11 @@ export function runtimeRunChatClose(runtime: OrcaRuntimeService) {
           return work.state === 'idle' && !tabOpen
         }
       })
-      return { stopped: outcome.stopped, tabOpen }
+      return {
+        stopped: outcome.stopped,
+        tabOpen,
+        ...(outcome.whenStartEnds ? { whenStopped: outcome.whenStartEnds } : {})
+      }
     },
     carry: carryQueuedMessages,
     handOver: (from, to) => {

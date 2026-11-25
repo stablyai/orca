@@ -31,14 +31,16 @@ describe('orca bot run-chats', () => {
     expect(text).not.toMatch(/Customer|Home title/)
   })
 
-  it('says how many chats it could not read and when the items listed are cut', () => {
+  it('says how many chats it could not read, and when the items listed are cut, that the count of owners is a floor', () => {
     const text = formatRunChats({
       bot: 'Nightly',
       on: true,
       open: 4,
       notRunChats: 1,
       unreadable: 2,
-      close: [{ chatId: 'c1', title: null, lastActivityAt: 0, items: [] }],
+      close: [
+        { chatId: 'c1', title: null, lastActivityAt: 0, items: [{ number: 3, status: 'done' }] }
+      ],
       keep: [],
       itemMailTo: null,
       itemsCut: true
@@ -46,7 +48,8 @@ describe('orca bot run-chats', () => {
     expect(text.split('\n')).toEqual([
       'Nightly: closing ended run chats is on.',
       'Open chats: 4 (1 opened by a run, 1 not, 2 could not be read and stay open).',
-      'Would close now: 1.',
+      // The page may have missed another chat's items.
+      'Would close now: 1 (at least 1 own items; their mail then reaches the Home Chat).',
       'Would keep: 0.',
       'Items listed are one page; a chat can own more than it shows.'
     ])
