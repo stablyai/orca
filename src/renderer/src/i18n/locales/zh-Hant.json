@@ -19421,7 +19421,6 @@
         "moreControls": "更多聊天控制項",
         "exitPlanMode": "結束計畫模式",
         "permissionAppliesNextMessage": "{{saved}} 將從下一則訊息生效；目前使用 {{active}}",
-        "botFor": "用途：{{detail}}",
         "bots": "機器人",
         "backToBots": "返回機器人",
         "loadingBotChats": "正在載入 {{name}} 的聊天…"

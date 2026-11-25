@@ -1211,7 +1211,7 @@
     "App": {
       "221a95ba38": "온보딩을 다시 시도하거나 닫고 앱에서 계속하세요.",
       "f02d37278a": "온보딩 중 오류가 발생했습니다.",
-      "acd66311dc": "여전히 진단이 필요한 경우 다시 시도한 후 도움말 메뉴를 사용하십시오.",
+      "acd66311dc": "여전히 진단이 필요한 경우 다시 시도한 후 도움말 메뉴를 사용하세요.",
       "722d03aa62": "크래시 보고서 대화 상자에 오류가 발생했습니다.",
       "8a023cea1f": "상태 표시줄을 다시 시도하여 컨트롤을 다시 탑재하세요.",
       "2e8ff36f94": "상태 표시줄에 오류가 발생했습니다.",
@@ -1469,7 +1469,7 @@
         },
         "runtime": {
           "status": {
-            "runtimeHostDisconnectedDescription": "Orca가 이 서버에서 실행 중이고 네트워크 연결이 작동하는지 확인한 후 다시 시도하십시오.",
+            "runtimeHostDisconnectedDescription": "Orca가 이 서버에서 실행 중이고 네트워크 연결이 작동하는지 확인한 후 다시 시도하세요.",
             "runtimeHostUnreachableNamed": "{{hostName}}에 연결할 수 없습니다.",
             "runtimeHostUnreachable": "Orca 서버에 연결할 수 없습니다.",
             "tryAgain": "다시 시도하세요"
@@ -1557,7 +1557,7 @@
               "2db0bd7515": "Orca CLI 등록을 사용할 수 없습니다.",
               "8d6eedf97e": "PATH에 Orca CLI를 등록하지 못했습니다.",
               "0f116999f1": "설정하기 전에 셸을 다시 시작하거나 Orca CLI 디렉터리를 PATH에 추가하세요.",
-              "15cbedc3e3": "에이전트 스킬 설정을 실행하기 전에 Orca CLI를 설치하십시오.",
+              "15cbedc3e3": "에이전트 스킬 설정을 실행하기 전에 Orca CLI를 설치하세요.",
               "windowsPathUnknown": "Orca에서 Windows 사용자 PATH를 확인하지 못했습니다",
               "refreshCliRegistration": "CLI 등록 상태를 새로 고친 후 다시 시도하세요."
             }
@@ -3499,7 +3499,7 @@
         "b1e390250d": "로컬 빌드 전환을 완료할 수 없었습니다.",
         "d29740d175": "선택한 빌드를 사용할 수 없었습니다.",
         "37d45c9ec1": "다른 빌드 선택",
-        "7f1a4c9e02": "시스템 패키지 관리자가 Orca를 설치했으므로 거기에서 업데이트하십시오. Orca는 이 릴리스 자체를 설치할 수 없습니다.",
+        "7f1a4c9e02": "시스템 패키지 관리자가 Orca를 설치했으므로 거기에서 업데이트하세요. Orca는 이 릴리스 자체를 설치할 수 없습니다.",
         "compatibilityModeFailed": "호환 모드를 활성화할 수 없습니다. {{message}}",
         "moreSinceLastUpdate": "지난 업데이트 이후 +{{count}}개",
         "downloadingPercent": "다운로드 중... {{percent}}%",
@@ -5912,9 +5912,9 @@
         },
         "SkillInstallReviewContent": {
           "89e2601162": "폐기 및 교체",
-          "a5675fb371": "내용을 그대로 두고 그대로 두었습니다. 이를 유지하거나 명시적으로 폐기하고 이 버전으로 교체하세요.",
-          "37d990b94c": "변경됨",
-          "2a31912f14": "Orca 발견",
+          "a5675fb371": "상태의 로컬 사본을 찾았지만 손대지 않았습니다. 그대로 두거나 명시적으로 폐기하고 이 버전으로 교체하세요.",
+          "37d990b94c": "변경된",
+          "2a31912f14": "Orca가",
           "651b7d8a57": "로컬 사본에는 결정이 필요합니다",
           "66270286ac": "· 안전하게 재시도할 수 있습니다.",
           "157de228b4": "스킬 점검",
@@ -6094,7 +6094,7 @@
           "bundleDescription": "모든 경고 수준을 다루는 미리보기 번들입니다.",
           "instructionsOnlyDescription": "SKILL.md에 전체 내용이 포함되어 있습니다.",
           "supportingFilesDescription": "기본 지침 외에 읽을 수 있는 참조 파일이 포함되어 있습니다.",
-          "runnableFilesDescription": "귀하의 액세스 권한으로 에이전트가 실행할 수 있는 스크립트가 포함되어 있습니다.",
+          "runnableFilesDescription": "내 액세스 권한으로 에이전트가 실행할 수 있는 스크립트가 포함되어 있습니다.",
           "binaryFilesDescription": "불투명 자산과 실행 가능한 바이너리를 포함합니다."
         },
         "SkillDelete": {
@@ -7053,9 +7053,9 @@
               "0899ebdb28": "Git은 이미 이 워크스페이스를 잊어버렸지만 해당 디렉터리는 여전히 디스크에 있습니다. 강제 삭제를 사용하여 분리된 디렉터리를 제거합니다.",
               "locked": "이 워크트리는 Git에 의해 잠겨 있습니다. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요.",
               "lockedReason": "이 워크트리는 Git에 의해 잠겨 있습니다. Git 보고: {{value0}}. 저장소에서 git worktree unlock <worktree-path>을 실행한 후 삭제를 다시 시도하세요.",
-              "unstoppedPty": "Orca는 이 워크스페이스의 모든 터미널이 종료되었는지 확인할 수 없어 파일을 삭제하기 전에 중지되었습니다. 어쨌든 제거하려면 강제 삭제를 사용하십시오.",
+              "unstoppedPty": "Orca는 이 워크스페이스의 모든 터미널이 종료되었는지 확인할 수 없어 파일을 삭제하기 전에 중지되었습니다. 어쨌든 제거하려면 강제 삭제를 사용하세요.",
               "unstoppedPtyLive": "이 워크스페이스에는 여전히 실행 중인 터미널이 있으므로 Orca는 파일을 삭제하기 전에 중지되었습니다. 강제 삭제는 해당 작업을 종료하고 해당 작업에 포함된 커밋되지 않은 작업을 모두 삭제합니다.",
-              "runningAgentSession": "Orca는 이 워크스페이스의 모든 에이전트 세션이 닫혔는지 확인할 수 없어 파일을 삭제하기 전에 중지되었습니다. 어쨌든 제거하려면 강제 삭제를 사용하십시오.",
+              "runningAgentSession": "Orca는 이 워크스페이스의 모든 에이전트 세션이 닫혔는지 확인할 수 없어 파일을 삭제하기 전에 중지되었습니다. 어쨌든 제거하려면 강제 삭제를 사용하세요.",
               "runningAgentSessionLive": "이 워크스페이스에는 Orca가 닫을 수 없는 실행 중인 에이전트 세션이 아직 있으므로 파일을 삭제하기 전에 중지되었습니다. 강제 삭제는 보유하고 있는 모든 작업을 삭제합니다.",
               "submodules": "이 워크스페이스에는 하위 모듈이 포함되어 있어 Git에서 강제 삭제로만 삭제할 수 있습니다. 강제 삭제는 하위 모듈에서 푸시하지 않은 커밋, 로컬 브랜치, 스태시도 모두 영구적으로 삭제합니다."
             },
@@ -7781,9 +7781,9 @@
           "67e3c33670": "OpenCode Go 세션 쿠키",
           "ea631977b5": "OpenCode Go 공급자 설정을 구성합니다.",
           "4ac10b4d08": "OpenCode Go",
-          "c2aee76420": "{{value0}}에서 Google에 인증하기 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
+          "c2aee76420": "{{value0}}에서 Google에 인증하기 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하세요.",
           "96f3649526": "Gemini CLI 자격 증명 사용(실험적)",
-          "d676c41fc6": "Google 인증을 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하십시오.",
+          "d676c41fc6": "Google 인증을 위해 로컬 Gemini CLI 설치에서 OAuth 자격 증명을 추출합니다. 이는 Orca가 아닌 Gemini CLI 앱에 발급된 자격 증명을 사용합니다. Google이 CLI를 업데이트하면 중단될 수 있습니다. 자신의 책임하에 사용하세요.",
           "0c7f915b01": "Gemini CLI 자격 증명 사용",
           "973741a871": "기존 Gemini CLI 세션은 계속 사용할 수 있습니다. Gemini 자격 증명으로는 Antigravity에 로그인되지 않습니다.",
           "0c64dc2a64": "Gemini CLI (레거시)",
@@ -7878,11 +7878,11 @@
           "7c5d8a4e1b": "MiniMax API 키가 저장되지 않았습니다.",
           "4d2c7b9e83": "MiniMax API 키가 저장되었습니다.",
           "f8a4b9d210": "MiniMax 엔드포인트",
-          "0b3a9f6c2e": "귀하의 계정과 일치하는 호스트를 선택하십시오. 해외(platform.minimax.io)와 중국(platform.minimaxi.com) 모두 세션 쿠키 또는 API 키를 허용합니다.",
+          "0b3a9f6c2e": "계정과 일치하는 호스트를 선택하세요. 해외(platform.minimax.io)와 중국(platform.minimaxi.com) 모두 세션 쿠키 또는 API 키를 허용합니다.",
           "83b6a1f7c4": "MiniMax API 키",
           "4f2c8a7e1b": "MiniMax API 키를 붙여넣으세요.",
           "a7b1e3c5d2": "저장된 키 삭제",
-          "usageTracking": "귀하의 계정에 대한 MiniMax 사용량 추적을 구성하십시오.",
+          "usageTracking": "계정에 대한 MiniMax 사용량 추적을 구성하세요.",
           "credentialsNotSet": "자격 증명이 설정되지 않았습니다.",
           "selectedEndpointStorage": "로컬에 저장되고 사용량 새로 고침을 위해 선택한 MiniMax 엔드포인트로 전송됩니다.",
           "endpointOverseas": "해외 (platform.minimax.io)",
@@ -7918,7 +7918,7 @@
           "40b29e0bf3": "다시 시작",
           "87a2cb2ac8": "Orca는 시작 시 이 네트워킹 모드를 적용합니다.",
           "89958d7edf": "다시 시작해야 함",
-          "b3ad629640": "회사 VPN 또는 프록시가 HTTP/2 프로토콜 오류로 인해 업데이트 다운로드를 중단하는 경우에만 사용하십시오. 다시 시작한 후 모든 Electron 네트워킹에 영향을 미칩니다.",
+          "b3ad629640": "회사 VPN 또는 프록시가 HTTP/2 프로토콜 오류로 인해 업데이트 다운로드를 중단하는 경우에만 사용하세요. 다시 시작한 후 모든 Electron 네트워킹에 영향을 미칩니다.",
           "6627e75c92": "HTTP/1.1 호환성 설명",
           "e9506d3377": "HTTP/1.1 호환성",
           "8b7a8df299": "지원 문제 해결을 위한 낮은 수준의 해결 방법입니다.",
@@ -8105,7 +8105,7 @@
           "bd7d68f138": "파일에서…"
         },
         "BrowserUseComputerUseNotice": {
-          "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Orca Computer Use 스킬을 설치하십시오. macOS에도 개인정보 보호 권한이 필요합니다.",
+          "79209b37b9": "쿠키 가져오기가 적합하지 않은 경우 컴퓨터 사용은 로컬 앱을 제어할 수 있으며 해당되는 경우 기존 로그인 브라우저 세션을 사용할 수 있습니다. Orca Computer Use 스킬을 설치하세요. macOS에도 개인정보 보호 권한이 필요합니다.",
           "333984cf90": "기존 브라우저 세션 사용",
           "9895ed44de": "컴퓨터 사용 열기"
         },
@@ -8244,7 +8244,7 @@
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "새로고침",
-          "6326a4c5cc": "CLI, 로컬 앱 또는 자동화 도구에 macOS 개인 정보 보호 액세스가 필요한 경우 이러한 컨트롤을 사용하십시오. Orca는 시작 시 묻지 않습니다.",
+          "6326a4c5cc": "CLI, 로컬 앱 또는 자동화 도구에 macOS 개인 정보 보호 액세스가 필요한 경우 이러한 컨트롤을 사용하세요. Orca는 시작 시 묻지 않습니다.",
           "6f011b9bf6": "터미널 도구는 Orca의 macOS 개인정보 보호 환경 안에서 실행됩니다.",
           "bfa3402305": "권한을 요청할 수 없습니다.",
           "66e94d6cf3": "권한 요청이 전송되었습니다.",
@@ -8276,7 +8276,7 @@
           "statusEntitled": "자격 있음",
           "statusCheckManually": "수동으로 확인",
           "localNetworkPromptCheck": "macOS 프롬프트 확인",
-          "localNetworkPromptGuidance": "메시지가 나타나면 허용을 선택합니다. 메시지가 나타나지 않으면 시스템 설정을 열고 개인 정보 보호 및 보안 → 로컬 네트워크에서 Orca를 활성화하십시오.",
+          "localNetworkPromptGuidance": "메시지가 나타나면 허용을 선택하세요. 메시지가 나타나지 않으면 시스템 설정을 열고 개인 정보 보호 및 보안 → 로컬 네트워크에서 Orca를 활성화하세요.",
           "localNetworkOpenSettings": "시스템 설정 열기",
           "openSettingsFailed": "시스템 설정을 열 수 없습니다.",
           "localNetworkOpenSystemSettings": "시스템 설정 열기",
@@ -8853,7 +8853,7 @@
           "e3970bbbf5": "CI 환경 변수가 설정되었기 때문에 텔레메트리가 비활성화되었습니다. 설정을 해제하고 다시 시작하세요.",
           "fe904ac984": "익명의 사용 데이터 공유",
           "77410e0566": "개인 정보 보호 정책",
-          "8bfdd23a88": "다음에 무엇을 빌드할지 알아내도록 도와주세요. Orca는 귀하가 사용하는 기능과 문제가 발생한 부분에 대한 개수를 익명으로 보냅니다."
+          "8bfdd23a88": "다음에 무엇을 빌드할지 알아내도록 도와주세요. Orca는 사용하는 기능과 문제가 발생한 부분에 대한 개수를 익명으로 보냅니다."
         },
         "QuickCommandsPane": {
           "8764c6e9e4": "{{value0}} 제거",
@@ -8930,11 +8930,11 @@
           "a3fc966677": "# 예: pnpm install cp \"$ORCA_ROOT_PATH/.env\" \"$ORCA_WORKTREE_PATH/.env\"",
           "f0710e1c83": "새 작업 트리가 생성된 후 실행됩니다. deps를 설치하고, env 파일을 복사하고, 마이그레이션을 실행하세요.",
           "8561b0665f": "orca.yaml을 먼저 사용한 다음 로컬 명령을 실행합니다.",
-          "0e8b2a520d": "orca.yaml을 무시하십시오. 로컬 명령만 실행하세요.",
+          "0e8b2a520d": "orca.yaml을 무시하고 로컬 명령만 실행합니다.",
           "83dc78202a": "로컬 전용",
           "29397e8bbc": "저장소에 커밋된 명령만 실행하고 로컬 명령은 무시합니다.",
           "d88b6ff88f": "orca.yaml 전용",
-          "99e3264a49": "선택한 경우에만 설정을 실행하세요.",
+          "99e3264a49": "선택한 경우에만 설정을 실행합니다.",
           "15debc1fd9": "기본적으로 건너뛰기",
           "022ba10cf2": "자동으로 설정을 실행합니다.",
           "d3ef1ab247": "기본적으로 실행",
@@ -9371,7 +9371,7 @@
           "fb09da4345": "명령 템플릿",
           "0740d30915": "사용자 지정 명령",
           "ee0e5c2a48": "기본 에이전트 사용",
-          "bf84dea6af": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하십시오. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 둡니다.",
+          "bf84dea6af": "Orca가 컨텍스트를 삽입하도록 하려는 경우에만 변수를 사용하세요. 일반 에이전트 기본 설정을 따르려면 에이전트를 기본값으로 두세요.",
           "a79c567194": "액션 레시피",
           "cf01d41bce": "각 소스 제어 AI 버튼에서 사용되는 에이전트, CLI 인수 및 명령 템플릿입니다.",
           "b5f46664d3": "소스 제어 AI 작업 기본값을 저장하지 못했습니다: {{value0}}",
@@ -9953,7 +9953,7 @@
             "4d44352eea": "네트워크",
             "2b4d26d11e": "네트워킹",
             "e04e9db503": "고급",
-            "585f56fae0": "프록시 뒤에서 HTTP/2가 실패하는 경우 Electron 네트워킹에 HTTP/1.1을 사용하십시오.",
+            "585f56fae0": "프록시 뒤에서 HTTP/2가 실패하는 경우 Electron 네트워킹에 HTTP/1.1을 사용하세요.",
             "11eea3da72": "HTTP/1.1 호환성"
           }
         },
@@ -12925,7 +12925,7 @@
           "manageTitle": "링크 관리 또는 취소",
           "manageDescription": "취소하면 향후 액세스가 차단됩니다. 다른 컴퓨터에 이미 설치된 스킬은 그대로 유지됩니다.",
           "linkTitle": "미등록 스킬 링크",
-          "linkDescription": "공유 번들은 Orca에서 검색하거나 나열할 수 없습니다. 링크는 자격 증명이므로 신뢰하는 사람에게만 보내십시오.",
+          "linkDescription": "공유 번들은 Orca에서 검색하거나 나열할 수 없습니다. 링크는 자격 증명이므로 신뢰하는 사람에게만 보내세요.",
           "signInTitle": "스킬을 공유하려면 로그인하세요.",
           "signInWebDescription": "게시 및 링크 관리는 Orca 데스크톱 앱에서 사용할 수 있습니다.",
           "signInDescription": "Orca 계정을 사용하여 번들을 게시하고 해당 링크를 관리하세요. 수신자에게는 계정이 필요하지 않습니다.",
@@ -15154,7 +15154,7 @@
                   "640f6fdb36": "이 워크스페이스에는 변경 사항이 없으며 이 브랜치에는 {{value0}}보다 앞선 변경 사항이 없습니다.",
                   "8deb86bbec": "베이스",
                   "978eba351e": "검색 텍스트가 너무 큽니다.",
-                  "0bce43409f": "더 짧은 파일 필터를 사용하십시오.",
+                  "0bce43409f": "더 짧은 파일 필터를 사용하세요.",
                   "1b6caf533d": "일치하는 파일이 없습니다.",
                   "00c07771b7": "변경된 파일이 \"{{value0}}\"과(와) 일치하지 않습니다."
                 }
@@ -15901,7 +15901,7 @@
             "title": "프로젝트 위치 설정",
             "description": "{{host}}에서 {{project}}의 위치를 선택하세요.",
             "browseFolder": "폴더 찾아보기",
-            "browseFolderHelp": "이 호스트의 기존 체크아웃 또는 폴더를 사용하십시오.",
+            "browseFolderHelp": "이 호스트의 기존 체크아웃 또는 폴더를 사용하세요.",
             "cloneFromUrl": "URL에서 복제",
             "cloneFromUrlHelp": "이 저장소를 {{host}}에 복제하세요.",
             "saveLocation": "위치 설정"
@@ -15972,7 +15972,7 @@
           "pairingCodeReady": "페어링 코드 준비됨",
           "pairThisMac": "이 Mac을 페어링하세요.",
           "pairThisPc": "이 PC를 페어링하세요.",
-          "pairThisComputer": "이 컴퓨터를 페어링하십시오.",
+          "pairThisComputer": "이 컴퓨터를 페어링하세요.",
           "androidHelp": {
             "guide": "설치 가이드"
           },
@@ -17495,7 +17495,7 @@
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 가져온 파일이 보관되었습니다.",
-          "destinationChanged": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 다시 시도하십시오."
+          "destinationChanged": "목적지가 변경되어 이미지 삽입이 취소되었습니다. 다시 시도하세요."
         },
         "useMarkdownDocuments": {
           "listFailed": "Markdown 문서를 나열하지 못했습니다."
@@ -19419,8 +19419,8 @@
         "e3de29c86a": "패키지 표시",
         "55c86654b7": "설치 명령 복사",
         "53e1559f99": "수동 설치 필요",
-        "a7ac6ec78b": "Orca가 시스템 패키지를 다운로드했습니다. 터미널에서 업데이트를 완료하기 전에 Orca를 종료하십시오.",
-        "82c6dbea00": "명령을 복사하고 Orca를 종료한 다음 Orca가 설치된 컴퓨터의 시스템 터미널에서 실행하십시오. Orca가 완료된 후 다시 엽니다.",
+        "a7ac6ec78b": "Orca가 시스템 패키지를 다운로드했습니다. 터미널에서 업데이트를 완료하기 전에 Orca를 종료하세요.",
+        "82c6dbea00": "명령을 복사하고 Orca를 종료한 다음 Orca가 설치된 컴퓨터의 시스템 터미널에서 실행하세요. 명령이 끝나면 Orca를 다시 여세요.",
         "53c4b8e148": "사용 가능한 인증 에이전트가 권한 있는 설치 요청에 응답하지 않았습니다.",
         "c732bcbf8f": "패키지를 확인하는 중...",
         "aa57fa4f80": "명령이 복사되었습니다. Orca를 종료하고 시스템 터미널에서 실행하여 {{value0}}을 설치한 다음 Orca를 다시 엽니다.",
@@ -20272,7 +20272,7 @@
         "compactAfterRetry": "이전 메시지를 다시 시도한 다음 /compact를 실행하세요.",
         "clearAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /clear를 실행하세요.",
         "compactAfterSending": "이전 메시지를 아직 보내는 중입니다. 전송이 끝나면 /compact를 실행하세요.",
-        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리십시오.",
+        "pendingWork": "이 명령을 사용하기 전에 보류 중인 작업과 메시지가 완료될 때까지 기다리세요.",
         "notDoneGoalChangeIncomplete": "목표 변경을 완료하지 못했습니다. 채팅을 확인하세요."
       },
       "composer": {
@@ -20412,7 +20412,6 @@
         "permissionAppliesNextMessage": "{{saved}}은(는) 다음 메시지부터 적용됩니다. 현재 {{active}} 사용 중",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "모델 및 추론 수준",
-        "botFor": "대상: {{detail}}",
         "agents": "에이전트",
         "recent": "최근",
         "bots": "봇",
@@ -20821,7 +20820,7 @@
         "subagentBadge": "서브에이전트",
         "nameInMessage": "메시지에 {{name}} 추가"
       },
-      "railLabel": "귀하의 메시지",
+      "railLabel": "내 메시지",
       "railImageMessage": "이미지 첨부",
       "railEmptyMessage": "메시지",
       "railFilterPlaceholder": "메시지 필터",
@@ -23463,7 +23462,7 @@
     },
     "guestRecovery": {
       "title": "브라우저 페이지가 중지되었습니다.",
-      "failed": "브라우저 페이지가 예기치 않게 중지되었습니다. 복원을 다시 시도하십시오."
+      "failed": "브라우저 페이지가 예기치 않게 중지되었습니다. 복원을 다시 시도하세요."
     },
     "serverPage": {
       "download": {
@@ -23496,7 +23495,7 @@
       "hostPaneOfflineDescription": "이 페이지는 계속 나열되므로 여기에서 닫을 수 있습니다. 장치가 다시 연결되면 다시 나타납니다.",
       "hostPaneDescription": "이 페이지는 페이지를 연 페어링된 데스크톱에서 렌더링됩니다.",
       "hostRowClose": "호스팅된 페이지 닫기",
-      "hostRowCloseFailed": "이 페이지를 닫을 수 없습니다. 이를 호스팅하는 장치가 사용 중일 수 있습니다. 다시 시도하십시오.",
+      "hostRowCloseFailed": "이 페이지를 닫을 수 없습니다. 이를 호스팅하는 장치가 사용 중일 수 있습니다. 다시 시도하세요.",
       "hostRowOfflineNamed": "오프라인 — {{device}}에서 호스팅되었습니다.",
       "hostRowOffline": "오프라인 — 이를 호스팅하는 장치가 종료되었습니다.",
       "hostRowNamed": "{{device}}에서 호스팅됨",
@@ -23550,8 +23549,8 @@
       "selectionTooLargeToCopy": "선택 영역이 너무 커서 원격 호스트에서 스트리밍되는 페이지에서 복사할 수 없습니다."
     },
     "userAgentMigration": {
-      "degradedDescription": "이전 브라우저 ID 선택을 검사할 수 없습니다. 브라우저 설정에서 정리됨 또는 기본을 선택하십시오. 변경 사항은 다시 시작한 후에 적용됩니다.",
-      "description": "프로필별 사용자 에이전트 설정이 제거되었습니다. 브라우저 설정에서 정리됨 또는 기본을 선택하십시오. 변경 사항은 다시 시작한 후에 적용됩니다.",
+      "degradedDescription": "이전 브라우저 ID 선택을 검사할 수 없습니다. 브라우저 설정에서 정리됨 또는 기본을 선택하세요. 변경 사항은 다시 시작한 후에 적용됩니다.",
+      "description": "프로필별 사용자 에이전트 설정이 제거되었습니다. 브라우저 설정에서 정리됨 또는 기본을 선택하세요. 변경 사항은 다시 시작한 후에 적용됩니다.",
       "title": "브라우저 ID는 이제 앱 전체에 적용됩니다.",
       "openSettings": "설정 열기"
     },
@@ -24602,7 +24601,7 @@
       "sortRelevance": "관련성이 가장 높은",
       "sortNewest": "최신",
       "sortResultsAriaLabel": "결과 정렬: {{value0}}",
-      "remoteDisabled": "이 컴퓨터에서는 검색이 비활성화되어 있습니다. 세션을 검색하려면 해당 컴퓨터에서 기록 색인화를 활성화하십시오.",
+      "remoteDisabled": "이 컴퓨터에서는 검색이 비활성화되어 있습니다. 세션을 검색하려면 해당 컴퓨터에서 기록 색인화를 활성화하세요.",
       "titleOnly": "이 컴퓨터에서는 전체 텍스트 검색이 꺼져 있어 세션 제목만 일치시킵니다.",
       "notReady": "검색 색인이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
       "noService": "이 컴퓨터에서는 검색을 사용할 수 없습니다. Orca 업데이트나 검색 지원이 가능한 런타임이 필요할 수 있습니다.",
@@ -24617,7 +24616,7 @@
       "showMoreSessions": "더 많은 세션 보기",
       "loadingMoreSessions": "추가 세션 로드 중…",
       "resultCount_one": "결과 {{count}}개",
-      "unsupportedAgent": "이 컴퓨터는 선택한 에이전트에 대한 이력 검색을 지원하지 않습니다. 해당 컴퓨터에서 ORCA를 업데이트하거나 다른 에이전트를 선택하십시오.",
+      "unsupportedAgent": "이 컴퓨터는 선택한 에이전트에 대한 이력 검색을 지원하지 않습니다. 해당 컴퓨터에서 Orca를 업데이트하거나 다른 에이전트를 선택하세요.",
       "resultCount_other": "결과 {{count}}개",
       "sessionCount_one": "세션 {{count}}개",
       "sessionCount_other": "세션 {{count}}개",
@@ -24659,7 +24658,7 @@
       "delete": "지우기",
       "cleared": "검색 데이터가 삭제되었습니다.",
       "clearError": "검색 데이터를 지울 수 없습니다. 다시 시도해 보세요.",
-      "webUnsupported": "해당 컴퓨터의 Orca 데스크탑 앱에서 세션 검색을 켜십시오.",
+      "webUnsupported": "해당 컴퓨터의 Orca 데스크탑 앱에서 세션 검색을 켜세요.",
       "title": "에이전트 세션 검색",
       "description": "이 컴퓨터와 페어링된 Orca 서버에서 에이전트가 말하고 행한 모든 내용을 검색하세요.",
       "searchDescription": "이 컴퓨터와 페어링된 서버에 대한 세션 검색을 켜거나 검색 데이터를 지웁니다.",
@@ -25055,7 +25054,7 @@
     },
     "sessionSaveFailure": {
       "title": "터미널 세션을 저장할 수 없습니다",
-      "capacity": "이 터미널을 저장하는 장치가 전체 스토리지 또는 초과된 스토리지 할당량을 보고했습니다. 해당 장치의 여유 공간을 확보한 다음 다시 시도하십시오.",
+      "capacity": "이 터미널을 저장하는 장치가 전체 스토리지 또는 초과된 스토리지 할당량을 보고했습니다. 해당 장치의 여유 공간을 확보한 다음 다시 시도하세요.",
       "unknown": "ORCA는 터미널 상태를 저장할 수 없습니다. 다시 시도하세요. 이 문제가 계속되면 원인을 파악할 수 있도록 지원팀과 ORCA 로그를 공유하세요."
     },
     "codexTerminalServerIsolationNotice": {
