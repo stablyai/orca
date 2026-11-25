@@ -2,8 +2,12 @@
 // read from the chat's journal as it moves. For IMs that reply through the account's reply outbox,
 // where a delivery's own send id is never returned to them.
 import type { JournalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSnapshot
+} from '../../shared/agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
+import { connectorReplyTurnStamps } from '../../shared/agent-session/journal/journal-connector-reply-turn'
 import { imTurnViewOf, type ImTurnView } from './im-stream-turn-view'
 
 export type ImDeliveryTurn = {
@@ -14,36 +18,32 @@ export type ImDeliveryTurn = {
   view: ImTurnView
 }
 
+type ImStreamReads = Pick<JournalSqlReads, 'operationWindow' | 'canonicalItemId' | 'item'>
+
 export type ImStreamJournal = {
   observeJournalPublications(sessionId: string, observer: () => void): () => void
-  journalReads(sessionId: string): Promise<Pick<JournalSqlReads, 'operationWindow'>>
+  journalReads(sessionId: string): Promise<ImStreamReads>
 }
 
 // A streamed token publishes; the IM edit gap is longer than this anyway.
 const READ_GAP_MS = 500
 
 /** The newest root turn among these rows, or null when they hold none. */
-export function imDeliveryTurnOf(
-  items: readonly AgentJournalRenderItem[],
+function newestImTurn(items: readonly AgentJournalRenderItem[]): AgentJournalRenderItem | null {
+  return items.findLast((item) => item.body.kind === 'turn' && isRootAgentJournalItem(item)) ?? null
+}
+
+/** The turn's deliveries as the reply outbox credits them: its opener's (and those it carried),
+ *  then each send the provider took into it as a steer. */
+function imDeliveryTurnOf(
+  window: Pick<AgentJournalSnapshot, 'items' | 'submissions'>,
+  turn: AgentJournalRenderItem,
+  opener: AgentJournalRenderItem | null,
   account: string
-): ImDeliveryTurn | null {
-  const turn = items.findLast((item) => item.body.kind === 'turn' && isRootAgentJournalItem(item))
-  if (turn?.body.kind !== 'turn') {
-    return null
-  }
-  const opener = turn.body.userItemId
-  const users = items.filter(
-    (item) =>
-      item.body.kind === 'message' &&
-      item.body.role === 'user' &&
-      (item.itemId === opener ||
-        (item.turnScope?.kind === 'turn' && item.turnScope.turnItemId === turn.itemId))
-  )
-  users.sort((a, b) => Number(b.itemId === opener) - Number(a.itemId === opener))
+): ImDeliveryTurn {
   const deliveries: string[] = []
-  for (const { body } of users) {
-    const stamp = body.kind === 'message' ? body.connectorDelivery : undefined
-    if (stamp?.account !== account) {
+  for (const stamp of connectorReplyTurnStamps(window, opener, turn.itemId)) {
+    if (stamp.account !== account) {
       continue
     }
     for (const id of [stamp.deliveryId, ...(stamp.carried ?? [])]) {
@@ -52,10 +52,11 @@ export function imDeliveryTurnOf(
       }
     }
   }
+  const running = turn.body.kind === 'turn' && turn.body.state === 'running'
   return {
     turnItemId: turn.itemId,
     deliveries,
-    view: imTurnViewOf(items, turn.itemId, turn.body.state === 'running', false)
+    view: imTurnViewOf(window.items, turn.itemId, running, false)
   }
 }
 
@@ -71,21 +72,33 @@ export function watchImDeliveryTurns(
   let reading = false
   let dirty = false
   let timer: ReturnType<typeof setTimeout> | null = null
+  // A turn's opener never changes, so each turn's is read once.
+  let opened: { turnItemId: string; opener: AgentJournalRenderItem } | null = null
   const read = async (): Promise<void> => {
     reading = true
     dirty = false
     try {
       const reads = await journal.journalReads(sessionId)
-      // Indexed only: every publication reads, so a chat with a long unsettled backlog shows no
-      // progress rather than pay for its whole history each time.
+      // The turn's own rows, by index alone: every publication reads, so neither the turn ahead
+      // (its send pins the read to the whole chat) nor an old unanswered send may widen it.
       const { snapshot } = await reads.operationWindow({
         latestTurns: 1,
+        withoutTurnAhead: true,
+        anchorsOnly: true,
         withoutToolOutput: true,
         indexedOnly: true
       })
-      const turn = imDeliveryTurnOf(snapshot.items, account)
-      if (turn && !released) {
-        onTurn(turn)
+      const turn = newestImTurn(snapshot.items)
+      if (!turn || turn.body.kind !== 'turn') {
+        return
+      }
+      if (opened?.turnItemId !== turn.itemId) {
+        const named = turn.body.userItemId
+        const opener = named ? await reads.item(await reads.canonicalItemId(named)) : null
+        opened = opener ? { turnItemId: turn.itemId, opener } : null
+      }
+      if (!released) {
+        onTurn(imDeliveryTurnOf(snapshot, turn, opened?.opener ?? null, account))
       }
     } catch {
       // A chat closing or a read racing its writer; the next publication reads again.
