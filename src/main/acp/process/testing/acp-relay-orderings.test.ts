@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import type { ProviderRelayAttachResult } from '../../../daemon/protocol/daemon-provider-relay-protocol'
 import { ProviderRelayCut } from '../../../daemon/provider-relay/provider-relay-cut'
 import { ProviderRelayCarriedWork } from '../../../provider-relay/provider-relay-carried-work'
@@ -146,8 +147,16 @@ class Daemon {
   }
 }
 
-const field = (value: unknown, name: string): unknown =>
-  typeof value === 'object' && value !== null ? Reflect.get(value, name) : undefined
+const ChunkLine = z.object({
+  params: z.object({
+    sessionId: z.string().optional(),
+    childSessionId: z.string().optional(),
+    update: z.object({
+      messageId: z.string(),
+      content: z.object({ text: z.string() })
+    })
+  })
+})
 
 /** Saved rows: each attach's text for a key replaces its row, as the journal does mid-turn. */
 class Journal {
@@ -159,15 +168,12 @@ class Journal {
   }
 
   read(line: string): void {
-    const params = field(JSON.parse(line), 'params')
-    const update = field(params, 'update')
-    const id = field(update, 'messageId')
-    if (typeof id !== 'string') {
+    const params = ChunkLine.safeParse(JSON.parse(line)).data?.params
+    if (!params) {
       return
     }
-    const session = field(params, 'childSessionId') ?? field(params, 'sessionId')
-    const key = JSON.stringify([session, id])
-    const text = (this.attachText.get(key) ?? '') + String(field(field(update, 'content'), 'text'))
+    const key = JSON.stringify([params.childSessionId ?? params.sessionId, params.update.messageId])
+    const text = (this.attachText.get(key) ?? '') + params.update.content.text
     this.attachText.set(key, text)
     this.rows.set(key, text)
   }
@@ -329,5 +335,6 @@ describe('ACP relay orderings', () => {
       }
     }
     expect(failures).toEqual([])
-  }, 300_000)
+    // Thousands of seeded runs take a few seconds, past the default on slow runners.
+  }, 60_000)
 })
