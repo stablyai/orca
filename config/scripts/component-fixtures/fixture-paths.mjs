@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import path from 'node:path'
 
 export const repoRoot = path.resolve(import.meta.dirname, '../../..')
@@ -13,6 +13,15 @@ export const serverScriptPath = path.join(
   'component-fixtures',
   'fixture-server.mjs'
 )
+
+// Why a token: a late server must not delete a lock that a successor has since taken.
+export function releaseStartLock(token) {
+  try {
+    if (token && readFileSync(serverLockPath, 'utf8') === token) {
+      unlinkSync(serverLockPath)
+    }
+  } catch {}
+}
 
 // Why: a detached server outlives edits to these scripts; clients restart it on mismatch.
 export function fixtureServerCodeStamp() {

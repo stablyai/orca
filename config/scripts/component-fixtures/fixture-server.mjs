@@ -1,5 +1,5 @@
 // Share detached Vite/headless Chromium between fixtures-shot.mjs and the fixtures MCP server.
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
@@ -9,8 +9,8 @@ import {
   fixtureCacheDir,
   fixtureServerCodeStamp,
   matchFixtureIds,
+  releaseStartLock,
   repoRoot,
-  serverLockPath,
   serverStatePath
 } from './fixture-paths.mjs'
 
@@ -18,6 +18,7 @@ const fixtureRegistryPath = path
   .join(repoRoot, 'src/renderer/src/component-fixtures/component-fixture-registry.ts')
   .replaceAll('\\', '/')
 const codeStamp = fixtureServerCodeStamp()
+const lockToken = process.env.ORCA_FIXTURES_LOCK_TOKEN
 const IDLE_SHUTDOWN_MS = Number(process.env.ORCA_FIXTURES_IDLE_MS) || 20 * 60 * 1000
 
 process.chdir(repoRoot)
@@ -105,16 +106,20 @@ async function handleShot(runner, body) {
   return { results }
 }
 
-async function routeFixtureRequest(req, res, runner, stop) {
+async function routeFixtureRequest(req, res, session) {
+  const { runner } = session
   if (req.url === '/__fixtures/health') {
-    sendJson(res, 200, { ok: true, pid: process.pid, codeStamp })
+    // Why stopping: the retiring server keeps its endpoint so clients can wait for it to exit.
+    sendJson(res, 200, { ok: true, pid: process.pid, codeStamp, stopping: session.stopping })
+  } else if (req.url === '/__fixtures/stop' && req.method === 'POST') {
+    session.stop()
+    sendJson(res, 200, { ok: true })
+  } else if (session.stopping) {
+    sendJson(res, 503, { error: 'Fixture server is stopping.' })
   } else if (req.url === '/__fixtures/list') {
     sendJson(res, 200, { fixtures: await runner.listFixtures() })
   } else if (req.url === '/__fixtures/shot' && req.method === 'POST') {
     sendJson(res, 200, await handleShot(runner, await readJsonBody(req)))
-  } else if (req.url === '/__fixtures/stop' && req.method === 'POST') {
-    sendJson(res, 200, { ok: true })
-    setImmediate(stop)
   } else {
     sendJson(res, 404, { error: `Unknown fixture endpoint ${req.url}` })
   }
@@ -149,7 +154,7 @@ function createFixtureApiPlugin(session) {
           sendJson(res, 503, { error: 'Fixture browser is still starting.' })
           return
         }
-        routeFixtureRequest(req, res, session.runner, session.stop).catch((error) => {
+        routeFixtureRequest(req, res, session).catch((error) => {
           sendJson(res, 500, { error: String(error?.message ?? error) })
         })
       })
@@ -164,7 +169,7 @@ async function main() {
   // Why parallel: browser launch and Vite startup are independent cold costs.
   const browserPromise = launchHeadlessBrowser()
   browserPromise.catch(() => {})
-  const session = { runner: null, lastActivity: Date.now(), stop: () => {} }
+  const session = { runner: null, lastActivity: Date.now(), stopping: false, stop: () => {} }
   const vite = await createViteServer({
     configFile: 'config/vite.fixtures.config.ts',
     clearScreen: false,
@@ -176,12 +181,12 @@ async function main() {
   await vite.listen()
   await browserPromise
 
-  let stopping = false
   const stop = async () => {
-    if (stopping) {
+    if (session.stopping) {
       return
     }
-    stopping = true
+    // Why first: health must stop admitting this server before its browser starts closing.
+    session.stopping = true
     clearInterval(idleTimer)
     // Leave the last endpoint for the client to probe. A successor may already own it.
     await (await browserPromise.catch(() => null))?.close()
@@ -202,12 +207,12 @@ async function main() {
   const pendingState = `${serverStatePath}.${process.pid}.tmp`
   await writeFile(pendingState, JSON.stringify({ pid: process.pid, port, url: baseUrl, codeStamp }))
   await rename(pendingState, serverStatePath)
-  await rm(serverLockPath, { force: true })
+  releaseStartLock(lockToken)
   console.log(`[fixtures] ready at ${baseUrl}/fixtures.html`)
 }
 
 main().catch(async (error) => {
   console.error(`[fixtures] server failed: ${error?.stack ?? error}`)
-  await rm(serverLockPath, { force: true })
+  releaseStartLock(lockToken)
   process.exit(1)
 })
