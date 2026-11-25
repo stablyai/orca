@@ -1,4 +1,4 @@
-// A bot's worker as a row: under its chat in the chat tree, and in an item's Links.
+// A bot worker's row: the Chats tab lists it under its chat, an item's Links and a chat's worker strip list it flat.
 import { View } from 'react-native'
 import { CircleX } from 'lucide-react-native'
 import { AGENT_FAILURE_COLOR, AgentStateDot } from '../agents/presentation/AgentStateDot'
@@ -34,13 +34,16 @@ export function MobileBotWorkerRow({
   worker,
   onOpen,
   onLongPress,
-  nested = true
+  nested = true,
+  subtitle
 }: {
   bot: TreeBot
   worker: BotChatTreeWorker
   onOpen: (() => void) | undefined
   onLongPress?: () => void
   nested?: boolean
+  /** In place of its note and branch, as a chat's worker strip says what it is doing. */
+  subtitle?: string
 }) {
   const t = useMobileTranslation()
   const counting = worker.state === 'running'
@@ -69,7 +72,8 @@ export function MobileBotWorkerRow({
     <View style={nested ? styles.nested : undefined}>
       <ListRow
         title={worker.title || t('bots.chats.untitledWorker', 'Worker')}
-        subtitle={line2 || undefined}
+        subtitle={subtitle ?? (line2 || undefined)}
+        subtitleLines={subtitle === undefined ? undefined : 1}
         leading={<WorkerIcon state={worker.state} />}
         value={value}
         onPress={onOpen}

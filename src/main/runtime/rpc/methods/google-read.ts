@@ -33,7 +33,8 @@ export const GOOGLE_READ_METHODS = [
     permission: 'workspace',
     share: 'not-shared',
     params: GmailReadParams,
-    handler: async (params, context) => readGmail(await googleApiForCaller(params, context), params)
+    handler: async (params, context) =>
+      readGmail(await googleApiForCaller(params, context, [params.ref]), params)
   }),
   defineMethod({
     name: 'google.gmail.attachment',

@@ -11,6 +11,7 @@ import {
   recordCodexPaneAccountForSpawn
 } from '../host-env/codex-home'
 import { closeStartupQueryAuthorityForPty } from '../provider/registry'
+import { recordTerminalMcpPaneForSpawn } from '../../../mcp-servers/terminal/terminal-mcp-panes'
 import { commitAttachedPtySize } from '../delivery/attached-pty-size'
 import { ptySizes } from '../delivery/visibility-state'
 import { rememberPaneKeyForPty } from '../pane/key-state'
@@ -53,6 +54,11 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
     launchCodexHomePath: state.selectedCodexHomePath,
     target: state.codexSelectionTarget,
     settings: deps.getSettings?.()
+  })
+  recordTerminalMcpPaneForSpawn({
+    ptyId: result.id,
+    isReattach: result.isReattach === true,
+    pane: state.terminalMcp
   })
   if (input.hiddenDelivery === 'renderer-scoped' && input.initiallyHidden) {
     markRendererScopedHiddenAtCommit(state)

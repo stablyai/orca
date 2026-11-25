@@ -244,9 +244,7 @@ export const BotChatReset = z.object({
 
 /** A fact to take out of a bot's MEMORY.md, by its words; from a bot's own chat with no botId,
  *  that bot's. */
-export const BotMemoryForget = BotChatReset.extend({
-  fact: requiredString('Missing fact')
-})
+export const BotMemoryForget = BotChatReset.extend({ fact: requiredString('Missing fact') })
 
 /** From Settings: a new fact, or `fact` (its words as they are) reworded to `text`. */
 export const BotMemoryEdit = BotChat.extend({
@@ -289,9 +287,11 @@ export const BotTakeOverParams = BotChat.extend({
 
 export type BotCreateParams = z.infer<typeof BotCreate>
 export type BotUpdateParams = z.infer<typeof BotUpdate>
-/** What the host itself may change: an update, or the Google toggle, which only google.bot.set sets. */
+/** What the host itself may change: an update, the Google toggle, which only google.bot.set sets,
+ *  or the host MCP list, which only bots.tools.setHostMcpServers sets. */
 export type BotHostUpdates = BotUpdateParams['updates'] &
-  Pick<Bot, 'google' | 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen' | 'shares'> & {
+  Pick<Bot, 'google' | 'googleAccounts' | 'hostMcpServers'> &
+  Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen' | 'shares'> & {
     /** Host-only: a wait of this bot's was cancelled. */
     cancelledWait?: BotCancelledWait
   }

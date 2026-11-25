@@ -22,6 +22,8 @@ export class PortForwardTornDownError extends Error {
 type ForwardInTransit = {
   kind: 'starting' | 'closing'
   connectionId: string
+  /** 0 while the OS picks a port for a start. */
+  localPort: number
   closed: boolean
   settled: Promise<unknown>
 }
@@ -91,6 +93,7 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
     const starting: ForwardInTransit = {
       kind: 'starting',
       connectionId,
+      localPort,
       closed: false,
       settled: Promise.resolve()
     }
@@ -201,6 +204,7 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
     const closing: ForwardInTransit = {
       kind: 'closing',
       connectionId: forward.entry.connectionId,
+      localPort: forward.entry.localPort,
       closed: true,
       settled: forward.close()
     }
@@ -216,6 +220,20 @@ export class SshPortForwardManager<TConnection extends PortForwardConnection = S
       }
     }
     return entries
+  }
+
+  /** Whether a listed forward still rides `conn`: a reconnect leaves an ssh2 listener on its old client. */
+  isForwardServing(id: string, conn: TConnection): boolean {
+    const forward = this.forwards.get(id)
+    return forward !== undefined && forward.isLive?.(conn) !== false
+  }
+
+  /** Local ports held by forwards, including ones still starting or closing. */
+  heldLocalPorts(): number[] {
+    return [
+      ...[...this.forwards.values()].map(({ entry }) => entry.localPort),
+      ...[...this.inTransit].map((forward) => forward.localPort).filter((port) => port > 0)
+    ]
   }
 
   async removeAllForwards(connectionId: string): Promise<void> {

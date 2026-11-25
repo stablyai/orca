@@ -14,11 +14,15 @@ export type ClipboardEventLike = {
 
 /** Use drop-style resolution only when every copied file has a local path and text contains labels alone. */
 export function clipboardEventCopiedFilePaths(event: ClipboardEventLike): string[] {
-  const files = Array.from(event.clipboardData?.files ?? [])
   const fs = window.api?.fs
   // The web fallback proxy fabricates methods absent from the concrete namespace.
   const getPathForFile = fs && 'getPathForFile' in fs ? fs.getPathForFile : undefined
-  if (files.length === 0 || !getPathForFile) {
+  if (!getPathForFile) {
+    return []
+  }
+  // Read files only once a path can resolve; Chromium encodes clipboard bitmaps synchronously here.
+  const files = Array.from(event.clipboardData?.files ?? [])
+  if (files.length === 0) {
     return []
   }
   const paths: string[] = []

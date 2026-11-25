@@ -9,7 +9,7 @@ import {
   hasShallowWatchDelivered,
   noteShallowWatchDelivered
 } from '../native-subscriptions/shallow-watch-delivery-probe'
-import { watchedDirectoryDeletionCheck } from '../native-subscriptions/windows-deleted-directory-watch'
+import { watchedDirectoryDeletionCheck } from '../../../../../shared/file-watch/windows-deleted-directory-watch'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 
 const CANARY_INTERVAL_MS = 10_000

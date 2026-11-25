@@ -87,7 +87,9 @@ export const CONNECTOR_REFUSALS = [
   // A send whose linked chat was deleted (CHAT_GONE_REFUSAL), to a cloud that then starts anew.
   'chat_gone',
   // A resume whose chat's newest turn no longer failed (NOT_FAILED_REFUSAL).
-  'not_failed'
+  'not_failed',
+  // A Slack thread's mute or unmute that could not be saved to disk.
+  'thread_mute_not_saved'
 ] as const
 export type ConnectorRefusal = (typeof CONNECTOR_REFUSALS)[number]
 

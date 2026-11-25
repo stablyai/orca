@@ -7,7 +7,7 @@ import { isCursorUsageBucket } from '../../../../../shared/agent-usage/rate-limi
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatRateLimitWindowChipLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
-import { getUsageHeadlineSection } from '../usage/usage-headline-sections'
+import { getUsageHeadlineSection, isScopedUsageWindow } from '../usage/usage-headline-sections'
 
 export type StatusBarUsageSection = {
   key: string
@@ -15,8 +15,6 @@ export type StatusBarUsageSection = {
   label: string
   labelFirst?: boolean
 }
-
-const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
 
 export function getStatusBarUsageSections(
   p: ProviderRateLimits | null,
@@ -34,15 +32,24 @@ export function getStatusBarUsageSections(
     }
     // Why: named pools read "Cursor Models 64%" in Detailed, so Compact keeps that order.
     const isNamedBucket = p.buckets?.some((bucket) => bucket === headline.window) ?? false
-    return [{ key: 'headline', ...headline, labelFirst: isNamedBucket }]
+    // Why: Compact shows the percent only; names (Fable, pools) stay, reset countdowns live in the tooltip.
+    const isTimeWindow =
+      !isNamedBucket &&
+      !isScopedUsageWindow(p, headline.window) &&
+      [p.session, p.weekly, p.monthly].includes(headline.window)
+    return [
+      {
+        key: 'headline',
+        ...headline,
+        label: isTimeWindow ? '' : headline.label,
+        labelFirst: isNamedBucket
+      }
+    ]
   }
   if (p.buckets?.length) {
-    // Antigravity pool names vary by account tier; Gemini's experimental pools stay hidden.
+    // Antigravity pool names vary by account tier.
     const buckets = p.buckets.filter(
-      (bucket) =>
-        p.provider === 'antigravity' ||
-        STATUS_BAR_BUCKET_NAMES.has(bucket.name) ||
-        isCursorUsageBucket(bucket.name)
+      (bucket) => p.provider === 'antigravity' || isCursorUsageBucket(bucket.name)
     )
     if (buckets.length > 0) {
       return buckets.map((bucket) => ({
