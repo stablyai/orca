@@ -1,3 +1,5 @@
+import { homedir } from 'node:os'
+import { join } from 'node:path'
 import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 
@@ -27,7 +29,7 @@ export function resolveCodexHomeProcessLockKeyForSpawnEnv(
   }
   // Explicit child envs can strip CODEX_HOME; do not restore it from the host environment.
   const codexHome = env === undefined ? process.env.CODEX_HOME : env.CODEX_HOME
-  return normalizeRuntimePathForComparison(codexHome ?? defaultAgentHomeDir('CODEX_HOME', '.codex'))
+  return normalizeRuntimePathForComparison(codexHome ?? join(homedir(), '.codex'))
 }
 
 export function withCodexHomeProcessLock<T>(lockKey: string, fn: () => Promise<T>): Promise<T> {

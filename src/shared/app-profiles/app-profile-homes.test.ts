@@ -10,7 +10,9 @@ let second: string
 beforeEach(() => {
   first = mkdtempSync(join(tmpdir(), 'orca-homes-first-'))
   second = mkdtempSync(join(tmpdir(), 'orca-homes-second-'))
+  // os.homedir() reads USERPROFILE on Windows.
   vi.stubEnv('HOME', first)
+  vi.stubEnv('USERPROFILE', first)
   for (const variable of ['CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'GROK_HOME', 'KIRO_HOME']) {
     vi.stubEnv(variable, undefined)
   }
@@ -40,6 +42,7 @@ it("builds each rewritten site's path in the user's home when it runs", async ()
   const { buildSkillDiscoverySources } =
     await import('../../main/skills/discovery/skill-discovery-sources')
   vi.stubEnv('HOME', second)
+  vi.stubEnv('USERPROFILE', second)
   expect(homedir()).toBe(second)
   const sources = buildSkillDiscoverySources({ homeDir: homedir(), cwd: '/repo' })
   const skillRoot = (id: string): string => sources.find((source) => source.id === id)!.path
@@ -47,7 +50,7 @@ it("builds each rewritten site's path in the user's home when it runs", async ()
     hookScript: getSharedManagedScriptPath('claude-hook.sh'),
     keybindings: getUserKeybindingsPath(homedir()),
     codexHome: getSystemCodexHomePath(),
-    linear: getWorkspaceFilePath(),
+    linear: getWorkspaceFilePath().startsWith(join(second, '.orca') + sep),
     codexSessions: codexHomeSessionsDir(),
     codexDefault: defaultCodexHomeDir(),
     claudePlugins: getClaudePluginMetadataPaths(homedir(), '/repo').installedPlugins,
@@ -58,7 +61,7 @@ it("builds each rewritten site's path in the user's home when it runs", async ()
     hookScript: join(second, '.orca', 'agent-hooks', 'claude-hook.sh'),
     keybindings: join(second, '.orca', 'keybindings.json'),
     codexHome: join(second, '.codex'),
-    linear: expect.stringMatching(new RegExp(`^${second}\\${sep}\\.orca\\${sep}`)),
+    linear: true,
     codexSessions: join(second, '.codex', 'sessions'),
     codexDefault: join(second, '.codex'),
     claudePlugins: join(second, '.claude', 'plugins', 'installed_plugins.json'),

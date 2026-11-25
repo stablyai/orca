@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs'
-import { join, relative } from 'node:path'
+import { join, relative, sep } from 'node:path'
 import ts from 'typescript-api'
 import { describe, expect, it } from 'vitest'
 
@@ -218,6 +218,11 @@ const ALLOWED: Allowed[] = [
     reason: 'userConfigDir reads CLAUDE_CONFIG_DIR before the default'
   },
   {
+    file: 'src/main/codex-cli/codex-home-process-lock.ts',
+    line: "codexHome ?? join(homedir(), '.codex')",
+    reason: 'a child env without CODEX_HOME runs Codex in the real home'
+  },
+  {
     file: 'src/main/bots/bot-home.ts',
     reason: "the bots folder in ~/.orca or in Orca's userData, chosen per setup"
   }
@@ -239,7 +244,7 @@ describe('paths into the home folder', () => {
   it('go through the path helpers', () => {
     const raw: string[] = []
     for (const file of productionFiles(join(ROOT, 'src'))) {
-      const path = relative(ROOT, file)
+      const path = relative(ROOT, file).split(sep).join('/')
       const text = readFileSync(file, 'utf8')
       for (const pattern of RAW_PATTERNS) {
         for (const match of text.matchAll(pattern)) {
