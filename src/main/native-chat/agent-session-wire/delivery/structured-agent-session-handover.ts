@@ -231,7 +231,7 @@ export async function beginSubmissionHandover(
             await rideAlong.taken(ctx.fence)
           }
           await ctx.settleProviderSwitch?.(
-            outcome === null || outcome.state === 'rejected' ? 'failed' : 'delivered'
+            outcome?.state === 'accepted' || outcome?.state === 'admitted' ? 'delivered' : 'failed'
           )
         })
       } finally {

@@ -36,6 +36,7 @@ export function ModelPill({
   warning,
   icon: Icon,
   leading,
+  leadingContent,
   accessibleName,
   disabled,
   onPress
@@ -46,6 +47,7 @@ export function ModelPill({
   icon?: LucideIcon
   /** Shown before the label, unlike `icon`, which replaces it. */
   leading?: LucideIcon
+  leadingContent?: ReactNode
   accessibleName: string
   disabled: boolean
   onPress: () => void
@@ -63,6 +65,7 @@ export function ModelPill({
       disabled={disabled}
       hitSlop={6}
     >
+      {leadingContent}
       {PillIcon ? (
         <PillIcon
           size={15}

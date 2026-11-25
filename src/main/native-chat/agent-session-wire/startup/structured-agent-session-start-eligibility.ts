@@ -10,6 +10,7 @@ import { terminalOwnerRefusalMessage } from '../../../../shared/agent-session/li
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
 import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-agent-start'
 import { hostCanStartRecord } from '../providers/structured-agent-session-provider-support'
+import { isCurrentProviderSwitch } from '../delivery/structured-agent-session-provider-switch'
 import {
   structuredAgentSessionResumeOperationId,
   structuredAgentSessionResumeParams
@@ -43,7 +44,10 @@ export async function structuredAgentSessionStartParams(
       'No structured session exists by that id.'
     )
   }
-  if (!hostCanStartRecord(context.deps, record)) {
+  if (
+    !hostCanStartRecord(context.deps, record) ||
+    (record.providerSwitch && !isCurrentProviderSwitch(record, startedFor))
+  ) {
     return refusedStructuredAgentSessionStart(
       'structured_agent_session_unsupported',
       { reason: 'hostUnsupported' },

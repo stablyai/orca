@@ -1,6 +1,7 @@
 import { agentSessionLeaseIsReleased } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type {
   AgentSessionProviderSelection,
   AgentSessionProviderSetup
@@ -12,6 +13,7 @@ export type AgentSessionProviderCommand =
       kind: 'begin-provider-switch'
       target: AgentSessionProviderSetup
       clientMessageId: string
+      hostRunId: string
       through: AgentJournalCursor
       now: number
     }
@@ -75,12 +77,14 @@ function beginProviderSwitch(
           {
             ...head,
             seenThrough: command.through,
-            accountHome: launchedAccount?.accountHome ?? accountHome
+            accountHome: launchedAccount?.accountHome ?? accountHome,
+            permissionMode: isAgentChatPermissionMode(permissionMode) ? permissionMode : 'ask'
           }
         ]
       : record.providerHandleChain,
     providerSwitch: {
       clientMessageId: command.clientMessageId,
+      hostRunId: command.hostRunId,
       through: command.through,
       ...(head ? { fromLinkId: head.linkId } : {}),
       from: {

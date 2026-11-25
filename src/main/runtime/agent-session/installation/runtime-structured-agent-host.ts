@@ -146,6 +146,14 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
     OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['prepareStructuredAgentLaunchAccountHome']
   >
 
+  abstract prepareProviderSwitchAccount(
+    ...args: Parameters<
+      OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['prepareProviderSwitchAccount']
+    >
+  ): ReturnType<
+    OrcaRuntimeWithGetStructuredAgentSessionCreateSupport['prepareProviderSwitchAccount']
+  >
+
   protected abstract assertStructuredChatAcquireAdmissible(
     record: AgentSessionRecord
   ): Promise<void>

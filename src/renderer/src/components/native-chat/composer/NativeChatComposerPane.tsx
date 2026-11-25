@@ -1,7 +1,10 @@
 import { useNativeChatComposerEditSession } from '../queue/editing/use-native-chat-composer-edit-session'
 import { useNativeChatComposerNotice } from './controls/use-native-chat-composer-notice'
 import { useNativeChatMobileHoldNotice } from '../host-access/use-native-chat-mobile-hold-notice'
-import { forwardRef, useCallback, useState, useRef } from 'react'
+import { forwardRef, useCallback, useContext, useState, useRef } from 'react'
+import { NativeChatProviderPickerContext } from './controls/native-chat-provider-picker-context'
+import { useTranslate } from '@/i18n/use-translate'
+import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { useNativeChatComposerInterrupt } from './submit/use-native-chat-composer-interrupt'
 import { useNativeChatContextUsageSummary } from '../usage/use-native-chat-context-usage-summary'
 import { useNativeChatDraft } from '../drafts/use-native-chat-draft'
@@ -71,6 +74,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     },
     ref
   ): React.JSX.Element {
+    const nextAgent = useContext(NativeChatProviderPickerContext)?.selected?.agent
+    const t = useTranslate()
     // Own drafts and attachments by pane/conversation so reconnect PTY replacement and UI mode changes cannot discard unsent input.
     const imeEnterGesture = useImeEnterGestureOwnership()
     const draftState = useNativeChatDraft(draftScopeKey, imeEnterGesture.isComposing)
@@ -373,7 +378,14 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
             disabled={disabled}
             hasPty={hasPty}
             canSend={canSend}
-            placeholderHint={unavailableHint}
+            placeholderHint={
+              unavailableHint ??
+              (nextAgent
+                ? t('chat.providerSwitch.nextMessage', 'Message {{agent}}…', {
+                    agent: tuiAgentDisplayName(nextAgent) ?? nextAgent
+                  })
+                : undefined)
+            }
             idleHint={afterStop ? undefined : mentions.hint}
             autocomplete={autocomplete}
             mentionFiles={mentions.listed}

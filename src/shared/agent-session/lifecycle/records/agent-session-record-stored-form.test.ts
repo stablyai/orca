@@ -161,10 +161,12 @@ it('keeps both native handles across a switch and puts the current chain where o
     appendAgentSessionProviderHandleLink([claude], codex),
     resumed
   )
-  const record = agentSessionRecordFixture({
-    providerHandleChain,
-    lease: agentSessionLeaseFixture({ runtimeFence: 8, provenHandleLinkId: 'claude-2' })
-  })
+  const record = {
+    ...agentSessionRecordFixture(
+      agentSessionLeaseFixture({ runtimeFence: 8, provenHandleLinkId: 'claude-2' })
+    ),
+    providerHandleChain
+  }
   const stored = encodeAgentSessionRecord(record)
   expect(stored.providerHandleChain.map(({ linkId }) => linkId)).toEqual(['claude-1', 'claude-2'])
   expect(stored.inactiveProviderHandleLinks?.map(({ linkId }) => linkId)).toEqual(['codex-1'])

@@ -4,7 +4,13 @@ import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
 /** A quiet line across the transcript with a label in the middle. */
-export function MobileNativeChatDivider({ label }: { label: string }): React.JSX.Element {
+export function MobileNativeChatDivider({
+  label,
+  failed
+}: {
+  label: string
+  failed?: boolean
+}): React.JSX.Element {
   useMobileColorScheme()
   return (
     <View
@@ -13,7 +19,11 @@ export function MobileNativeChatDivider({ label }: { label: string }): React.JSX
       accessibilityLabel={label}
     >
       <View style={mobileNativeChatDividerStyles.rule} />
-      <Text style={mobileNativeChatDividerStyles.dividerLabel}>{label}</Text>
+      <Text
+        style={[mobileNativeChatDividerStyles.dividerLabel, failed && { color: colors.statusRed }]}
+      >
+        {label}
+      </Text>
       <View style={mobileNativeChatDividerStyles.rule} />
     </View>
   )

@@ -1,6 +1,10 @@
 /** Handles expose transport, agent and conversation ID; adapters alone read resumeCursor (encoding lives separately). Resumes extend a chain; forks change its root. Supersede unsaved creations in place; replace lost saved conversations with a following creation so forgotten history remains attributable. */
 
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
+import {
+  isAgentChatPermissionMode,
+  type AgentChatPermissionMode
+} from '../../../agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import {
   isAgentSessionAccountHome,
@@ -70,6 +74,7 @@ export type AgentSessionProviderHandleLink = {
   /** Journal position at the end of this handle's last active period. */
   seenThrough?: AgentJournalCursor
   accountHome?: AgentSessionAccountHome
+  permissionMode?: AgentChatPermissionMode
   /** Key of the link a fork was seeded from. Only set when `origin` is `forked`. */
   forkedFromKey?: string
   /** Key of the unsaved creation this creation replaced. Only set when `origin` is `created`. */
@@ -142,6 +147,7 @@ export function isAgentSessionProviderHandleLink(
         Number.isSafeInteger(link.seenThrough.sequence) &&
         link.seenThrough.sequence >= 0)) &&
     (link.accountHome === undefined || isAgentSessionAccountHome(link.accountHome)) &&
+    (link.permissionMode === undefined || isAgentChatPermissionMode(link.permissionMode)) &&
     (link.origin === 'forked'
       ? isAgentSessionProviderHandleKeyFor(handle, link.forkedFromKey)
       : link.forkedFromKey === undefined) &&

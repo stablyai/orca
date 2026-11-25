@@ -22,6 +22,7 @@ import { waitsForCodexTurnOptions } from '../options/structured-agent-session-me
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
+import { isCurrentProviderSwitch } from './structured-agent-session-provider-switch'
 
 type Prepared =
   | 'stop'
@@ -189,8 +190,9 @@ export class StructuredAgentSessionDeliveryLoop {
     // Commands block while their child lives; ended command commits wake delivery again.
     const work = await this.deps.currentWork(sessionId)
     const oldest = await selectableStructuredSubmission(session.journal, work)
-    const switching = this.deps.record(sessionId)?.providerSwitch
-    if (switching && switching.clientMessageId !== oldest?.clientMessageId) {
+    const record = this.deps.record(sessionId)
+    const switching = record?.providerSwitch
+    if (record && switching && !isCurrentProviderSwitch(record, oldest?.clientMessageId)) {
       const original = await session.journal.reads.submission(switching.clientMessageId)
       await this.deps.settleProviderSwitch?.(
         session,

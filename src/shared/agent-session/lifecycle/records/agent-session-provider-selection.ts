@@ -1,3 +1,4 @@
+import * as z from 'zod'
 import type { AgentSessionRecord } from '../agent-session-record'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import {
@@ -19,9 +20,18 @@ export type AgentSessionProviderSelection = {
   }
 }
 
-export type AgentSessionSelectProviderResult =
-  | { status: 'selected' }
-  | { status: 'consent-required'; from: string; fromPermission: AgentChatPermissionMode }
+export const AgentSessionSelectProviderResultSchema = z.discriminatedUnion('status', [
+  z.strictObject({ status: z.literal('selected') }),
+  z.strictObject({
+    status: z.literal('consent-required'),
+    from: z.string().min(1),
+    fromPermission: z.enum(AGENT_CHAT_PERMISSION_MODES)
+  })
+])
+
+export type AgentSessionSelectProviderResult = z.infer<
+  typeof AgentSessionSelectProviderResultSchema
+>
 
 export type AgentSessionSelectProviderParams = {
   sessionId: string
@@ -64,6 +74,7 @@ export type AgentSessionProviderSetup = Pick<
 /** A new provider owns the launch, but the selected send may still fail before reaching it. */
 export type AgentSessionProviderSwitch = {
   clientMessageId: string
+  hostRunId: string
   from: AgentSessionProviderSetup
   fromLinkId?: string
   through: AgentJournalCursor

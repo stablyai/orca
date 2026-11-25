@@ -2,6 +2,7 @@
 import type { Bot } from '../../shared/bot-types'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 /** Publishes `sessionId`'s tab in the bot's home without focus; publishing records it visible, so it
  *  lists under the bot and comes back after a restart. */
@@ -13,7 +14,7 @@ export function showBotSessionTab(
   return runtime.publishStructuredAgentSessionTab({
     workspaceId: folderWorkspaceKey(bot.folderWorkspaceId),
     sessionId,
-    agent: bot.agent,
+    agent: getStructuredAgentSessionHost()?.sessionAgent(sessionId) ?? bot.agent,
     activate: false
   })
 }

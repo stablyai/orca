@@ -18,6 +18,7 @@ import { useMobileNativeChatPromptController } from './input/prompts/use-mobile-
 import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scope-key'
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
+import { useMobileChatProviderPicker } from './input/session-options/use-mobile-chat-provider-picker'
 
 export function useMobileNativeChatController(args: {
   itemLink?: Parameters<typeof useMobileNativeChatSessionLane>[0]['itemLink']
@@ -71,6 +72,12 @@ export function useMobileNativeChatController(args: {
     streamIdentity,
     toggleTabChatView
   } = useMobileNativeChatActiveResolution(args)
+  const providerPicker = useMobileChatProviderPicker(
+    client,
+    activeChatStructured && agentSessionHostSupport?.selectProvider ? activeChatSessionId : null,
+    worktreeId,
+    hostId
+  )
 
   // Fixed hook order mounts the lane before drafts; defer Edit’s append through a ref and delete nothing until copying succeeds.
   const appendComposerTextRef = useRef<(text: string) => boolean>(() => false)
@@ -224,7 +231,8 @@ export function useMobileNativeChatController(args: {
       client,
       activeChatStructured,
       activeSessionTabId,
-      agent: activeChatResolution?.agent ?? null,
+      agent: providerPicker?.active ?? activeChatResolution?.agent ?? null,
+      providerPicker,
       dispatchCommand: handleNativeChatDispatchCommand,
       hostId,
       isTabChatView,
@@ -259,7 +267,7 @@ export function useMobileNativeChatController(args: {
     toggleTabChatView,
     showNativeChat,
     showNativeChatRef,
-    nativeChatAgent: activeChatResolution?.agent ?? null,
+    nativeChatAgent: providerPicker?.active ?? activeChatResolution?.agent ?? null,
     nativeChatSessionLive: activeChatResolution?.sessionLive === true,
     chatDraftKey,
     setChatComposerText,

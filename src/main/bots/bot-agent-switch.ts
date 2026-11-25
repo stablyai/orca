@@ -1,5 +1,6 @@
 import type { Bot, BotAgent } from '../../shared/bot-types'
 import {
+  AGENT_CHAT_PERMISSION_MODES,
   isAgentChatPermissionMode,
   newChatPermissionModeForSettings
 } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -57,6 +58,19 @@ export async function changeBotAgentInPlace(
       consent?.home?.permission !== expected.home?.permission)
   ) {
     throw new Error('Confirm that the new agent may use tools without Orca approval.')
+  }
+  const settings = runtime.requireStore().getSettings()
+  const previousPermission =
+    bot.permissionMode ?? newChatPermissionModeForSettings(bot.agent, settings)
+  const nextPermission =
+    next.permissionMode ?? newChatPermissionModeForSettings(next.agent, settings)
+  const maximum = providerSwitchPermission(previousPermission, next.agent)
+  if (
+    isAgentChatPermissionMode(nextPermission) &&
+    AGENT_CHAT_PERMISSION_MODES.indexOf(nextPermission) >
+      AGENT_CHAT_PERMISSION_MODES.indexOf(maximum.permission)
+  ) {
+    next.permissionMode = maximum.permission
   }
   const sessionId = bot.chatSessionId
   if (!sessionId || !host.deps.store.getConversation(sessionId)) {

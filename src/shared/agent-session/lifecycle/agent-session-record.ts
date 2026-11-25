@@ -408,6 +408,7 @@ function isAgentSessionProviderSwitch(value: unknown): value is AgentSessionProv
   const { from } = transition
   return (
     typeof transition.clientMessageId === 'string' &&
+    typeof transition.hostRunId === 'string' &&
     (transition.fromLinkId === undefined || typeof transition.fromLinkId === 'string') &&
     isProviderSwitchCursor(transition.through) &&
     typeof from === 'object' &&

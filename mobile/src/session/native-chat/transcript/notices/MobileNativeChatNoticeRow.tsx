@@ -159,7 +159,7 @@ export function MobileNativeChatNoticeRow({
   )
   switch (look.kind) {
     case 'context-handoff':
-      return <MobileNativeChatDivider label={notice.text} />
+      return <MobileNativeChatDivider label={notice.text} failed={look.failed} />
     case 'auto-review-denied':
     case 'settled-permission': {
       const summary = nativeChatReviewNoticeSummary(look, names.agentName ?? look.agent, t)

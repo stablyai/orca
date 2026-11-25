@@ -58,6 +58,8 @@ import { MobileNativeChatLowerRegion } from './lower-region/MobileNativeChatLowe
 import { MobileNativeChatQueueAbovePromptContext } from './lower-region/mobile-native-chat-lower-region-context'
 import { MobileNativeChatPromptStrip } from './input/prompts/MobileNativeChatPromptStrip'
 import { MobileNativeChatOfflineQueue } from './input/queued-messages/MobileNativeChatOfflineQueue'
+import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
+import { MobileNativeChatDivider } from './transcript/MobileNativeChatDivider'
 import { useMobileNativeChatOfflineQueue } from './composer/delivery/use-mobile-native-chat-offline-sends'
 
 export type { MobileNativeChatInputLockReason } from './mobile-native-chat-view-props'
@@ -413,6 +415,20 @@ export function MobileNativeChatView({
           </GestureHandlerRootView>
         )}
         <MobileNativeChatLowerRegion scopeKey={sendSurfaceId} composerPresent={!promptOwnsInput}>
+          {sessionOptions?.providerPicker?.selection && agent ? (
+            <MobileNativeChatDivider
+              label={t(
+                'chat.providerSwitch.pending',
+                'Context handoff pending · {{from}} → {{to}}',
+                {
+                  from: tuiAgentDisplayName(agent) ?? agent,
+                  to:
+                    tuiAgentDisplayName(sessionOptions.providerPicker.selection.agent) ??
+                    sessionOptions.providerPicker.selection.agent
+                }
+              )}
+            />
+          ) : null}
           {lowerContent}
         </MobileNativeChatLowerRegion>
       </MobileNativeChatComposerMenuHost>

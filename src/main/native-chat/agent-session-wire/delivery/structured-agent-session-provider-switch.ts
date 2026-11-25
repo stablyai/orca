@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
+  AGENT_CHAT_PERMISSION_MODES,
   isAgentChatPermissionMode,
   type AgentChatPermissionMode
 } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -68,6 +69,24 @@ export async function selectStructuredChatProvider(
     }
     const fromPermission = providerSwitchSourcePermission(record)
     if (providerSwitchPermission(fromPermission, agent).requiresConsent) {
+      const previous = record.selectedProvider
+      const previousConsent = previous?.consent
+      const cursor = await session.journal.reads.cursor()
+      if (
+        !consent &&
+        previous?.agent === agent &&
+        previousConsent?.from === record.provider &&
+        previousConsent.fromPermission === fromPermission &&
+        previousConsent.hostRunId === hostRunId &&
+        previousConsent.through.epoch === cursor.epoch
+      ) {
+        await deps.store.updateRecord(sessionId, {
+          kind: 'select-provider',
+          selection: { ...selection, consent: previousConsent },
+          now: host.now()
+        })
+        return { status: 'selected' }
+      }
       if (
         consent?.from !== record.provider ||
         consent.fromPermission !== fromPermission ||
@@ -75,12 +94,11 @@ export async function selectStructuredChatProvider(
       ) {
         return { status: 'consent-required', from: record.provider, fromPermission }
       }
-      const through = await session.journal.reads.cursor()
       await deps.store.updateRecord(sessionId, {
         kind: 'select-provider',
         selection: {
           ...selection,
-          consent: { from: record.provider, fromPermission, through, hostRunId }
+          consent: { from: record.provider, fromPermission, through: cursor, hostRunId }
         },
         now: host.now()
       })
@@ -110,7 +128,17 @@ export async function prepareStructuredChatProviderSwitch(
     return 'none'
   }
   const fromPermission = providerSwitchSourcePermission(record)
+  const previous = record.providerHandleChain.findLast(
+    ({ handle }) => handle.agent === selection.agent
+  )
   const { permission, requiresConsent } = providerSwitchPermission(fromPermission, selection.agent)
+  const maximumReturningPermission = previous?.permissionMode
+  const returningPermission =
+    maximumReturningPermission &&
+    AGENT_CHAT_PERMISSION_MODES.indexOf(maximumReturningPermission) <
+      AGENT_CHAT_PERMISSION_MODES.indexOf(permission)
+      ? providerSwitchPermission(maximumReturningPermission, selection.agent).permission
+      : permission
   if (requiresConsent) {
     const consent = selection.consent
     const cursor = session.journal.cursor()
@@ -155,15 +183,20 @@ export async function prepareStructuredChatProviderSwitch(
   if (await hasWork()) {
     return 'blocked'
   }
+  if (record.provider === 'claude' && record.options?.interactionMode === 'plan') {
+    throw new Error('Exit plan mode before switching agents.')
+  }
+  if (!adapterSupportsCreateIfDeclared(deps.adapter, record.location, selection.agent)) {
+    throw agentSessionRefusalError('structured_agent_session_unsupported', {
+      reason: 'hostUnsupported'
+    })
+  }
   if (session.child) {
     await stop()
   }
-  const previous = record.providerHandleChain.findLast(
-    ({ handle }) => handle.agent === selection.agent
-  )
   const accountHome =
     previous?.accountHome ??
-    (await deps.resolveProviderSwitchAccount?.(record, selection.agent, permission))
+    (await deps.resolveProviderSwitchAccount?.(record, selection.agent, returningPermission))
   if (!accountHome) {
     throw new Error('agent_session_provider_switch_unavailable')
   }
@@ -171,19 +204,30 @@ export async function prepareStructuredChatProviderSwitch(
   const switched = await deps.store.updateRecord(sessionId, {
     kind: 'begin-provider-switch',
     clientMessageId: next.clientMessageId,
+    hostRunId,
     through,
     target: {
       provider: selection.agent,
       accountHome,
       ...(selection.options ? { options: selection.options } : {}),
       // A grant meant for a provider with no Orca permission control does not widen the retained preference.
-      permissionMode: requiresConsent ? fromPermission : permission
+      permissionMode: requiresConsent ? fromPermission : returningPermission
     },
     now: host.now()
   })
   setProviderSwitchSessionParams(session, switched)
   host.publish(sessionId)
   return 'changed'
+}
+
+export function isCurrentProviderSwitch(
+  record: Pick<AgentSessionRecord, 'providerSwitch'>,
+  clientMessageId: string | undefined
+): boolean {
+  return (
+    record.providerSwitch?.hostRunId === hostRunId &&
+    record.providerSwitch.clientMessageId === clientMessageId
+  )
 }
 
 export function setProviderSwitchSessionParams(
