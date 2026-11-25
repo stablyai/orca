@@ -13,6 +13,7 @@ import {
 import { botToolCredentialFingerprints } from '../bots/bot-tool-credentials'
 import { botToolEntries, readBotToolsSnapshot } from '../bots/bot-tools-file'
 import { mcpHostListFolder } from './mcp-host-list-folder'
+import { sharedIds, type McpLaunchServers } from './mcp-shared-process-servers'
 
 // An entry whose workspaces Orca can't read is on nowhere, never everywhere.
 const NO_WORKSPACES: McpServerWorkspaces = { later: false, on: [], off: [] }
@@ -59,8 +60,9 @@ export async function mcpServersForLaunch(
   agent: string,
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
-): Promise<BotToolServer[]> {
-  return (await launchEntries(agent, workspace, folder)).map(({ server }) => server)
+): Promise<McpLaunchServers> {
+  const entries = await launchEntries(agent, workspace, folder)
+  return { servers: entries.map(({ server }) => server), sharedProcesses: sharedIds(entries) }
 }
 
 /**
@@ -72,8 +74,8 @@ export async function mcpServersWithDigestsForLaunch(
   agent: string,
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
-): Promise<{ servers: BotToolServer[]; digests: Record<string, string> }> {
-  const servers = await mcpServersForLaunch(agent, workspace, folder)
+): Promise<McpLaunchServers & { digests: Record<string, string> }> {
+  const { servers, sharedProcesses } = await mcpServersForLaunch(agent, workspace, folder)
   const saved = savedValues(
     folder,
     new Set(
@@ -90,10 +92,12 @@ export async function mcpServersWithDigestsForLaunch(
             ? JSON.stringify(saved.get(server.credential) ?? null)
             : ''
         )
+        // Sharing switched on or off changes where its sessions reach it.
+        .update(sharedProcesses.has(server.name) ? 'shared' : '')
         .digest('hex')
     ])
   )
-  return { servers, digests }
+  return { servers, sharedProcesses, digests }
 }
 
 /**

@@ -5,6 +5,7 @@ import type { BotToolsCli } from './bot-tools-host'
 import { botToolRelay, MCP_HOST_LIST_RELAY_OWNER } from './tool-relay/bot-tool-relay'
 import { SessionMcpTools, withSessionMcpToolsEnv } from '../mcp-servers/session-mcp-tools'
 import { botHostMcpAccess } from '../mcp-servers/bot-host-mcp-access'
+import { sharedMcpProcessIds } from '../mcp-servers/mcp-shared-process-servers'
 
 /** The bot's servers as its CLI gets them for a turn, and the CLI with the env that goes with them. */
 export async function cliWithLaunchTools(
@@ -17,7 +18,14 @@ export async function cliWithLaunchTools(
       ? await SessionMcpTools.for(
           botToolRelay,
           { bot: null, agent: cli.agent },
-          { host: { folder: cli.folder, servers } }
+          // A shared server is checked through its one process, as sessions reach it.
+          {
+            host: {
+              folder: cli.folder,
+              servers,
+              sharedProcesses: await sharedMcpProcessIds(cli.folder)
+            }
+          }
         )
       : await SessionMcpTools.for(
           botToolRelay,
