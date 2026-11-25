@@ -6,11 +6,13 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import type * as Os from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { parse as parseToml } from 'smol-toml'
 
 const { home } = vi.hoisted(() => ({ home: { path: '' } }))
 
@@ -133,6 +135,49 @@ describe.skipIf(process.platform === 'win32')('WSL Codex settings sync inside th
 
     // A second definition would leave the user's config unparseable.
     expect(systemToml()).toBe(distro)
+  })
+
+  it('still promotes a new plugin table beside dotted plugin keys in the distro', () => {
+    writeFileSync(
+      join(systemHome, 'config.toml'),
+      'model = "gpt-a"\nplugins."docs@market".enabled = true\n'
+    )
+    writeFileSync(
+      join(runtimeHome, 'config.toml'),
+      'model = "gpt-a"\nplugins."docs@market".enabled = true\n\n[plugins."new@market"]\nenabled = true\n'
+    )
+    writeBaseline({})
+
+    sync()
+
+    expect(systemToml()).toContain('[plugins."new@market"]')
+    expect(() => parseToml(systemToml())).not.toThrow()
+  })
+
+  it('syncs a home whose account store was moved off $HOME through a link', () => {
+    const elsewhere = realpathSync(mkdtempSync(join(tmpdir(), 'orca-wsl-store-')))
+    try {
+      rmSync(join(home.path, '.local/share/orca/codex-accounts'), { recursive: true })
+      symlinkSync(elsewhere, join(home.path, '.local/share/orca/codex-accounts'))
+      const movedHome = join(elsewhere, 'acct/home')
+      mkdirSync(movedHome, { recursive: true })
+      writeFileSync(join(systemHome, 'config.toml'), 'model = "gpt-a"\n')
+
+      const output = runCodexConfigSyncWslPass([
+        'sync',
+        '--system-home',
+        systemHome,
+        '--runtime-home',
+        movedHome,
+        '--protocol',
+        '1'
+      ])
+
+      expect(output.homes[0]).toMatchObject({ complete: true, error: null })
+      expect(readFileSync(join(movedHome, 'config.toml'), 'utf-8')).toContain('model = "gpt-a"')
+    } finally {
+      rmSync(elsewhere, { recursive: true, force: true })
+    }
   })
 
   it('refuses paths outside the guest home and drive mounts', () => {

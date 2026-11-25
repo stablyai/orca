@@ -34,6 +34,9 @@ async function findBundledHelper(filename: string): Promise<string | null> {
   return null
 }
 
+// Per distro: the pinned Node and each helper's guest path, so a warm run is one wsl.exe, not six.
+const resolvedGuests = new Map<string, { node: string; helpers: Map<string, string> }>()
+
 /** Runs a bundled guest helper on Orca's pinned Node inside the distro; returns its stdout. */
 export async function runWslGuestNodeHelper(args: {
   distro: string
@@ -55,6 +58,32 @@ export async function runWslGuestNodeHelper(args: {
     await requireRunning()
     return runGuest(args.distro, spec, timeoutMs)
   }
+  const key = args.distro.toLowerCase()
+  const runHelper = async (node: string, guestHelper: string): Promise<string> => {
+    await requireRunning()
+    return runGuest(
+      args.distro,
+      {
+        program: '/usr/bin/env',
+        args: ['-u', 'NODE_OPTIONS', node, guestHelper, ...args.helperArgs],
+        loginPath: 'none'
+      },
+      args.timeoutMs,
+      args.maxOutputBytes
+    )
+  }
+  const cached = resolvedGuests.get(key)
+  const cachedHelper = cached?.helpers.get(helper)
+  if (cached && cachedHelper) {
+    try {
+      return await runHelper(cached.node, cachedHelper)
+    } catch (error) {
+      // The runtime may have been removed: the next run resolves it again (a retry here would
+      // double a long helper's timeout).
+      resolvedGuests.delete(key)
+      throw error
+    }
+  }
   const node = await ensureWslPinnedRuntime(
     run,
     join(getAppEnvironment().getPath('userData'), 'orcad-artifacts'),
@@ -65,15 +94,14 @@ export async function runWslGuestNodeHelper(args: {
     args: ['-a', '-u', helper],
     loginPath: 'none'
   })
-  await requireRunning()
-  return runGuest(
-    args.distro,
-    {
-      program: '/usr/bin/env',
-      args: ['-u', 'NODE_OPTIONS', node, guestHelper, ...args.helperArgs],
-      loginPath: 'none'
-    },
-    args.timeoutMs,
-    args.maxOutputBytes
-  )
+  const entry = resolvedGuests.get(key)
+  const resolved = entry?.node === node ? entry : { node, helpers: new Map<string, string>() }
+  resolved.helpers.set(helper, guestHelper)
+  resolvedGuests.set(key, resolved)
+  try {
+    return await runHelper(node, guestHelper)
+  } catch (error) {
+    resolvedGuests.delete(key)
+    throw error
+  }
 }

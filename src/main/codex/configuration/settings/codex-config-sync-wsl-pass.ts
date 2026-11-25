@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { format } from 'node:util'
@@ -100,9 +100,11 @@ function syncGuarded(homes: { runtimeHomePath: string; systemHomePath: string })
 
 const PASS_ATTEMPTS = 3
 
-// The guest's $HOME and its Windows drive mounts; nothing else in the distro is Orca's to touch.
+// The guest's $HOME, Orca's account store and the Windows drive mounts, each also by its real path:
+// a launch may pass a home already resolved through a link (say the store moved to another disk).
 function allowedRoots(): string[] {
-  const roots = [homedir()]
+  const home = homedir()
+  const roots = [home, join(home, '.local', 'share', 'orca', 'codex-accounts')]
   try {
     for (const line of readFileSync('/proc/mounts', 'utf-8').split('\n')) {
       const [, mountPoint, type, options = ''] = line.split(' ')
@@ -111,9 +113,17 @@ function allowedRoots(): string[] {
       }
     }
   } catch {
-    // Without /proc/mounts only $HOME is allowed.
+    // Without /proc/mounts only $HOME and the store are allowed.
   }
-  return roots
+  return [...roots, ...roots.map(realPathOrNull).filter((root) => root !== null)]
+}
+
+function realPathOrNull(path: string): string | null {
+  try {
+    return realpathSync(path)
+  } catch {
+    return null
+  }
 }
 
 function assertAllowedPath(path: string, roots: readonly string[]): void {
