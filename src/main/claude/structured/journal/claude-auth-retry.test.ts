@@ -85,3 +85,20 @@ it('leaves a turn whose retries were for a temporary error as Claude ended it', 
   expect(failureKinds(items)).toEqual([])
   expect(turnOutcome(items)).toBe('cancellation')
 })
+
+it("never fails a later turn with an earlier turn's credential retry", () => {
+  const { items, send } = claudeChat()
+  send(retry(401))
+  // The turn ends on idle, with no result to read the retry.
+  send({ type: 'system', subtype: 'session_state_changed', state: 'idle' })
+  send(
+    {
+      type: 'user',
+      uuid: 'prompt-2',
+      message: { role: 'user', content: [{ type: 'text', text: 'again' }] }
+    },
+    true
+  )
+  send(interrupted)
+  expect(failureKinds(items)).toEqual([])
+})

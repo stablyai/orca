@@ -127,7 +127,7 @@ export function journalClaudeResult(
   // labels a 403 access denial authentication_failed; its result, not sign-in guidance, says why.
   const notice = compactionFailure && message.api_error_status !== 403 ? command?.notice : null
   // Orca interrupted the retries of a rejected credential, so the cut-short result is that failure.
-  const authRetry = settlesTurn && !command ? assistantFailures.takeAuthFailure() : null
+  const authRetry = settlesTurn && !command ? assistantFailures.takeAuthFailure(turnId) : null
   // A retry that got through before the interrupt landed is no failure.
   const authFailure = claudeResultOutcome(message) === 'success' ? null : authRetry
   const terminalFailure = notice || usageLimit || authFailure

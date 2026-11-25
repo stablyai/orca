@@ -221,7 +221,7 @@ export function createClaudeJournalTranslator(
     } else if (event.type === 'message') {
       backgroundTasks.observe(event.message, event.observedAt ?? Date.now())
       messageContext.usageLimits.observe(event.message, turn.command?.rejections)
-      messageContext.assistantFailures.authRetry(event.message)
+      messageContext.assistantFailures.authRetry(event.message, turn.id)
       if (
         !journalClaudeMessage(
           messageContext,

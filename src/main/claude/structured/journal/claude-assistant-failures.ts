@@ -24,17 +24,26 @@ type ClaudeFailureRow = AgentSessionFailureRowWords & { kind: 'status'; tone: 'e
 /** Associates the assistant's typed error with its duplicate result, never with error text. */
 export class ClaudeAssistantFailures {
   private readonly shown = new BoundedMap<string, string | null>({ maxEntries: 128 })
-  private authFailure: ClaudeFailureRow | null = null
+  /** The turn a credential retry failed, and its row; another turn never reads it. */
+  private authFailure: { turnId: string; row: ClaudeFailureRow } | null = null
   constructor(
     private readonly account?: () => AgentSessionAccountKind | undefined,
     private readonly model?: () => string | undefined
   ) {}
 
   assistant(message: Record<string, unknown>) {
-    const row = this.notice(message)
-    if (row) {
-      // Claude ended the turn on its own credential error first; its row is the one.
+    const notice = this.notice(message)
+    // Claude ended the turn on its own credential error first: the retry's row says which (a 403
+    // is also labelled authentication_failed), and the result has nothing left to add.
+    const pending =
+      notice && isRootClaudeFrame(message) && message.error === 'authentication_failed'
+        ? this.authFailure
+        : null
+    if (pending) {
       this.authFailure = null
+    }
+    const row = pending?.row ?? notice
+    if (row) {
       this.shown.set(this.scopeKey(message), claudeText(message.user_message_uuid))
     } else if (message.type === 'user' || message.type === 'assistant') {
       this.shown.delete(this.scopeKey(message))
@@ -70,25 +79,27 @@ export class ClaudeAssistantFailures {
   }
 
   /** Record a turn's first credential retry; its result ends the turn with this failure. */
-  authRetry(message: Record<string, unknown>): boolean {
+  authRetry(message: Record<string, unknown>, turnId: string | null): void {
     const status = claudeAuthRetryStatus(message)
-    if (status === null) {
-      return false
+    // Without an open turn there is no result to end, so nothing waits on this retry.
+    if (status === null || turnId === null) {
+      return
     }
     const detail = providerDiagnostic(claudeText(message.error) ?? `HTTP ${status}`, 'person')
-    // A 403 is also an access denial, so only a 401 earns sign-in guidance.
-    this.authFailure ??= this.failureRow(
-      status === 401 ? 'notSignedIn' : 'providerResponseFailed',
-      detail
-    )
-    return true
+    if (this.authFailure?.turnId !== turnId) {
+      this.authFailure = {
+        turnId,
+        // A 403 is also an access denial, so only a 401 earns sign-in guidance.
+        row: this.failureRow(status === 401 ? 'notSignedIn' : 'providerResponseFailed', detail)
+      }
+    }
   }
 
   /** The failure an auth retry left for the result that ends its turn, read once. */
-  takeAuthFailure(): ClaudeFailureRow | null {
+  takeAuthFailure(turnId: string | null): ClaudeFailureRow | null {
     const failure = this.authFailure
     this.authFailure = null
-    return failure
+    return turnId !== null && failure?.turnId === turnId ? failure.row : null
   }
 
   private failureRow(
