@@ -1,4 +1,3 @@
-import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
 import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import { agentPickerModelFromCatalogModel } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
@@ -21,12 +20,15 @@ export function agentPickerListsCliModels(entry: Pick<AgentPickerEntry, 'agent'>
 export async function readAgentPickerCliModelCatalog(
   agent: AgentPickerEntry['agent'],
   runtime: RuntimeGitContext
-): Promise<AgentSessionModelCatalogResult> {
+): Promise<AgentPickerEntry['catalog']> {
   const catalog = getAgentSessionOptionCatalog(agent)
   if (!catalog) {
     return { origin: 'unknown' }
   }
   const result = await discoverRuntimeCommitMessageModels(runtime, agent)
+  if (!result.success && agent === 'dima') {
+    return { origin: 'unknown', discoveryError: result.error }
+  }
   // Only a real listing may replace the seed: the picker retires saved picks missing from it.
   const discovered =
     result.success && result.catalogOrigin === 'probe'
@@ -36,6 +38,7 @@ export async function readAgentPickerCliModelCatalog(
     ? {
         origin: 'probe',
         fetchedAt: Date.now(),
+        ...(result.success && result.partial ? { partial: true as const } : {}),
         models: mergeDiscoveredCatalogModels(agent, catalog, discovered).map(
           agentPickerModelFromCatalogModel
         )

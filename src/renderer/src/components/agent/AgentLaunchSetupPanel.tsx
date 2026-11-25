@@ -8,7 +8,7 @@ import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from './use-legacy-models-expanded'
 import { AgentLaunchInstallPrompt } from './AgentLaunchInstallPrompt'
 import { AgentPickerRefreshModelsButton } from './AgentPickerRefreshModelsButton'
-import { retryAgentPickerCatalog } from './agent-launch-picker-acquisition'
+import { useSetupModelListing } from './use-setup-model-listing'
 import {
   AgentPickerChoiceRows,
   AgentPickerSearchResults,
@@ -85,6 +85,7 @@ export function AgentLaunchSetupPanel({
   search,
   children
 }: AgentLaunchSetupPanelProps) {
+  const retryModels = useSetupModelListing(entry)
   const t = useTranslate()
   const footer = useRef<AgentLaunchSetupFooterHandle>(null)
   // Why: cmdk runs a row's onSelect for both Enter and a click; only Enter also closes.
@@ -292,12 +293,7 @@ export function AgentLaunchSetupPanel({
               >
                 <span className="min-w-0 flex-1">{catalogMessage}</span>
                 {state.catalogRetryable && ownerKey ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => retryAgentPickerCatalog(ownerKey, entry.agent)}
-                  >
+                  <Button type="button" variant="ghost" size="xs" onClick={retryModels}>
                     {t('agentPicker.retryModels', 'Retry')}
                   </Button>
                 ) : null}

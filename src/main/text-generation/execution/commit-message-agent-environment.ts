@@ -64,11 +64,13 @@ function prepareShellConfigDirEnv(
   const configVar =
     agentId === 'opencode' || agentId === 'opencode2'
       ? 'OPENCODE_CONFIG_DIR'
-      : agentId === 'pi' || agentId === 'omp'
-        ? 'PI_CODING_AGENT_DIR'
-        : agentId === 'grok'
-          ? 'GROK_HOME'
-          : null
+      : agentId === 'dima'
+        ? 'DIMCODE_HOME'
+        : agentId === 'pi' || agentId === 'omp'
+          ? 'PI_CODING_AGENT_DIR'
+          : agentId === 'grok'
+            ? 'GROK_HOME'
+            : null
   if (!configVar) {
     return null
   }

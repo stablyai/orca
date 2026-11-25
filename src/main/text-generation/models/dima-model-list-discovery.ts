@@ -13,10 +13,11 @@ import {
 } from '../../../shared/agent-session/options/model-catalog/dima-model-list-probe'
 import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
-import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../execution/source-control-generation-limits'
 import { staticModelDiscoveryResult } from './commit-message-model-discovery-policy'
 import type { DiscoverCommitMessageModelsResult } from '../source-control-text-generation-types'
 
+// dima's native client accepts up to 16 MiB per JSON frame, including a full provider catalog.
+const DIMA_FRAME_BYTES = 16 * 1024 * 1024
 const PROBE_TIMEOUT_MS = 10_000
 const PAGE_LIMIT = 128
 const MAX_PAGES = 64
@@ -94,7 +95,6 @@ function openDaemon(endpoint: string, signal: AbortSignal): Promise<Daemon | nul
     const pending = new Map<number, (reply: DaemonReply) => void>()
     const decoder = new StringDecoder('utf8')
     let nextId = 0
-    let received = 0
     const close = (): void => {
       socket.destroy()
     }
@@ -109,14 +109,9 @@ function openDaemon(endpoint: string, signal: AbortSignal): Promise<Daemon | nul
         answer?.(message)
       },
       close,
-      { maxLineBytes: MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES }
+      { maxLineBytes: DIMA_FRAME_BYTES }
     )
     socket.on('data', (chunk: Buffer) => {
-      received += chunk.byteLength
-      if (received > MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES) {
-        close()
-        return
-      }
       framer.feed(decoder.write(chunk))
     })
     socket.on('error', () => settle(null))
@@ -222,7 +217,8 @@ function listedProviders(value: unknown): ListedProvider[] {
 }
 
 /** Older daemons' picker read: enabled static providers and signed-in accounts, then each stored catalog. */
-async function readProviderCatalogs(call: DaemonCall): Promise<DimaListedModel[]> {
+async function readProviderCatalogs(call: DaemonCall) {
+  let partial = false
   const providers = new Map<string, string | undefined>()
   for (const provider of listedProviders(
     result(await call('provider.list', {}), 'provider.list')
@@ -231,24 +227,37 @@ async function readProviderCatalogs(call: DaemonCall): Promise<DimaListedModel[]
       providers.set(provider.providerId, provider.providerName)
     }
   }
-  // provider.list leaves out managed accounts; a daemon without them answers unknown_method.
-  for (const provider of listedProviders((await call('account.providers', {})).result)) {
+  // provider.list leaves out managed accounts. Older daemons may have no account API.
+  const managed = await call('account.providers', {})
+  if (managed.error !== undefined) {
+    const data = isProviderRecord(managed.error) ? managed.error.data : undefined
+    partial = !isProviderRecord(data) || data.appError !== 'unknown_method'
+  }
+  for (const provider of listedProviders(managed.result)) {
     if (providers.has(provider.providerId)) {
       continue
     }
     const status = await call('account.status', { providerId: provider.providerId })
-    if (isProviderRecord(status.result) && status.result.account != null) {
+    if (status.error !== undefined) {
+      partial = true
+    } else if (isProviderRecord(status.result) && status.result.account != null) {
       providers.set(provider.providerId, provider.providerName)
     }
   }
   const models: DimaListedModel[] = []
   for (const [providerId, providerName] of providers) {
     const reply = await call('provider.catalog', { providerId })
-    models.push(
-      ...dimaCatalogReplyModels({ providerId, providerName }, result(reply, 'provider.catalog'))
-    )
+    // Like alpha.25's /models: one unreadable provider must not hide another's selectable rows.
+    if (reply.error !== undefined) {
+      partial = true
+    } else {
+      models.push(...dimaCatalogReplyModels({ providerId, providerName }, reply.result))
+    }
   }
-  return models
+  if (partial && !models.length) {
+    throw new Error('No complete model listing')
+  }
+  return { models, partial }
 }
 
 /** Read the execution host's selectable models without creating a session or sending a prompt. */
@@ -291,10 +300,13 @@ export async function discoverDimaModels(
         error: `${spec.label} could not reach its model catalog. Check the dima installation and refresh the list.`
       }
     }
-    const rows = daemon.features.includes('provider.models.query')
-      ? await querySelectableModels(daemon.call)
+    const { models, partial } = daemon.features.includes('provider.models.query')
+      ? { models: await querySelectableModels(daemon.call), partial: false }
       : await readProviderCatalogs(daemon.call)
-    return staticModelDiscoveryResult(spec, dimaCatalogModels(rows), spec.defaultModelId, 'probe')
+    return {
+      ...staticModelDiscoveryResult(spec, dimaCatalogModels(models), spec.defaultModelId, 'probe'),
+      ...(partial ? { partial: true } : {})
+    }
   } catch {
     return { success: false, error: `${spec.label} could not read its model list.` }
   } finally {

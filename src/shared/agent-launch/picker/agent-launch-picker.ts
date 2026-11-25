@@ -42,7 +42,7 @@ export type AgentPickerEntry = {
   terminal: AgentDedicatedChoices
   structured: AgentDedicatedChoices
   arguments?: string | null
-  catalog: AgentSessionModelCatalogResult
+  catalog: AgentSessionModelCatalogResult & { partial?: true; discoveryError?: string }
   coherentCatalog?: boolean
   catalogRead?: 'pending' | 'settled' | 'failed' | 'unsupported'
   ownerKey?: string

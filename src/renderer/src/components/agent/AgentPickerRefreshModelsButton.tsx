@@ -24,25 +24,9 @@ export function AgentPickerRefreshModelsButton({
   const spin = useRef<ReturnType<typeof setTimeout>>(undefined)
   useEffect(() => () => clearTimeout(spin.current), [])
   const { ownerKey } = entry
-  const installed = entry.surfaces.length > 0
-  // DimAgent shares a persistent daemon with its terminal. Start discovery only when its own
-  // setup is open and the initial inventory read has settled.
-  const dimaSetup = useRef<string | undefined>(undefined)
-  useEffect(() => {
-    if (entry.agent !== 'dima' || !installed || !ownerKey) {
-      dimaSetup.current = undefined
-    } else if (
-      dimaSetup.current !== ownerKey &&
-      entry.catalogRead !== 'pending' &&
-      entry.catalogRead !== 'unsupported'
-    ) {
-      dimaSetup.current = ownerKey
-      retryAgentPickerCatalog(ownerKey, 'dima', true)
-    }
-  }, [entry.agent, entry.catalogRead, installed, ownerKey])
   if (
     !ownerKey ||
-    !installed ||
+    !entry.surfaces.length ||
     entry.catalogRead === 'unsupported' ||
     (entry.agent !== 'dima' && !keepsRicherAgentModelListing(entry.agent))
   ) {

@@ -22,6 +22,8 @@ export type DiscoverCommitMessageModelsResult =
       models: CommitMessageModelCapability[]
       defaultModelId: string
       catalogOrigin: 'probe' | 'spec'
+      /** Some providers could not be read. Their saved choices are still valid. */
+      partial?: true
     }
   | { success: false; error: string; unavailable?: AgentSessionUnavailable }
 

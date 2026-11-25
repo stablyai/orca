@@ -245,7 +245,8 @@ export function agentLaunchSetupCatalogState(
             '{{agent}} models are unavailable on this host. Your current choices still apply.',
             { agent: entry.label }
           )
-        : (missing ??
+        : (entry.catalog.discoveryError ??
+          missing ??
           (settled && !hasModels
             ? t('agentPicker.catalogEmpty', '{{agent}} has no available models.', {
                 agent: entry.label
