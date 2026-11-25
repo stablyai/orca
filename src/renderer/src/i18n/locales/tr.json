@@ -21909,6 +21909,12 @@
       "copyCode": "Kodu kopyala",
       "wrapLines": "Satırları kaydır",
       "disableLineWrap": "Satır kaydırmayı kapat",
+      "runInTerminal": "Çalıştır",
+      "runRunning": "Çalışıyor…",
+      "runExited": "Çıkış {{code}}",
+      "runTimedOut": "5 dakika sonra durduruldu",
+      "runClosed": "Terminal bitmeden kapandı",
+      "runFailed": "Çalıştırılamadı",
       "context": {
         "unavailable": "Bağlam kullanımı henüz bilinmiyor. Ajanın bir sonraki yanıtından sonra görüntülenebilir.",
         "summary": "Bağlam: {{used}} / {{window}} token (%{{percent}}), son yanıta göre tahmini değer.",

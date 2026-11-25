@@ -20998,6 +20998,12 @@
       "copyCode": "复制代码",
       "wrapLines": "自动换行",
       "disableLineWrap": "关闭自动换行",
+      "runInTerminal": "运行",
+      "runRunning": "正在运行…",
+      "runExited": "退出码 {{code}}",
+      "runTimedOut": "5 分钟后已停止",
+      "runClosed": "终端在完成前关闭了",
+      "runFailed": "无法运行",
       "context": {
         "unavailable": "上下文用量暂时未知，将在代理下次响应后提供",
         "summary": "上下文：{{used}}/{{window}} token（{{percent}}%），根据上一次响应的估算值",

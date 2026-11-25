@@ -19,6 +19,7 @@ import type { AgentSessionAccountKind } from '../../../../../shared/agent-sessio
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
+import type { AgentStartupShell } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -79,6 +80,8 @@ type NativeChatInstall = {
 export type NativeChatHostSetup = {
   signIn: NativeChatSignIn | null
   install: NativeChatInstall | null
+  /** The chat's workspace on `host`, where Play runs its shell blocks; null when that host's terminals aren't POSIX. */
+  codeBlockWorktreeId?: string | null
   /** The user's own CLI update on the chat's host; null for agents Orca can't update. */
   update?: AgentCliUpdateView | null
   /** The chat's host, so setup links open Settings on it. */
@@ -179,9 +182,32 @@ type NativeChatHostSetupInput = {
   onRechecked: () => void
 }
 
+/** The shell family a new terminal on the chat's host opens; null when it isn't known. */
+function useNativeChatHostShell(target: RuntimeClientTarget): AgentStartupShell | null {
+  return useAppStoreWithHostStatuses((s, statuses) => {
+    const status =
+      target.kind === 'environment'
+        ? lastVerifiedRuntimeStatus(statuses.get(target.environmentId))
+        : null
+    const platform = target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
+    if (!platform) {
+      return null
+    }
+    return (
+      resolveHostAgentStartupShell({
+        platform,
+        isRemote: target.kind !== 'local',
+        hostTerminalWindowsShell:
+          target.kind === 'local' ? s.settings?.terminalWindowsShell : status?.terminalWindowsShell
+      }) ?? (platform === 'win32' ? null : 'posix')
+    )
+  })
+}
+
 function useNativeChatSignIn(
   input: NativeChatHostSetupInput,
-  terminal: NativeChatHostCommandTerminal | null
+  terminal: NativeChatHostCommandTerminal | null,
+  shell: AgentStartupShell | null
 ): NativeChatSignIn | null {
   // Why local only: the hidden sign-in runs on this device, and Claude chats run on its host.
   const accountId = useAppStore((s) =>
@@ -196,26 +222,6 @@ function useNativeChatSignIn(
     input.failure,
     input.startFailures.filter((fact) => isNativeChatSignInFailureKind(fact.kind)).length
   )
-  const shell = useAppStoreWithHostStatuses((s, statuses) => {
-    const status =
-      input.target.kind === 'environment'
-        ? lastVerifiedRuntimeStatus(statuses.get(input.target.environmentId))
-        : null
-    const platform = input.target.kind === 'local' ? getRendererAppPlatform() : status?.hostPlatform
-    if (!platform) {
-      return null
-    }
-    return (
-      resolveHostAgentStartupShell({
-        platform,
-        isRemote: input.target.kind !== 'local',
-        hostTerminalWindowsShell:
-          input.target.kind === 'local'
-            ? s.settings?.terminalWindowsShell
-            : status?.terminalWindowsShell
-      }) ?? (platform === 'win32' ? null : 'posix')
-    )
-  })
   // agy signs in from Orca, so its terminal command (`system`) never runs from here.
   const antigravity = useNativeChatAgySignIn(input.agent, input.account, input.target)
   const command = agentSessionSignInCommand(input.agent, {
@@ -311,19 +317,23 @@ function useNativeChatInstall(
 export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeChatHostSetup {
   // One terminal for both, so a double press across them can't open two.
   const terminal = useNativeChatHostCommandTerminal(input)
-  const signIn = useNativeChatSignIn(input, terminal)
+  const shell = useNativeChatHostShell(input.target)
+  const signIn = useNativeChatSignIn(input, terminal, shell)
   const install = useNativeChatInstall(input, terminal)
   const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
   const { target } = input
+  // Play's done mark reads `$?`, so only a POSIX shell can run a block.
+  const codeBlockWorktreeId = shell === 'posix' ? input.worktreeId : null
   const unresolvedFailureRows = useNativeChatUnresolvedFailureRows(input.journalItems)
   return useMemo(
     () => ({
       signIn,
       install,
       update,
+      codeBlockWorktreeId,
       host: target,
       unresolvedFailureRows
     }),
-    [signIn, install, update, target, unresolvedFailureRows]
+    [signIn, install, update, codeBlockWorktreeId, target, unresolvedFailureRows]
   )
 }

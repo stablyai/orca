@@ -1,6 +1,6 @@
 // @protected-copy: preserve code controls used by approval prompts.
-import React, { useContext } from 'react'
-import { WrapText } from 'lucide-react'
+import React, { useContext, useMemo, useState } from 'react'
+import { Play, WrapText } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { getCodeFenceLanguageLabel } from './code-fence-language-label'
@@ -10,18 +10,26 @@ import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-d
 import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
 import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
+import { useNativeChatHostSetupView } from '../../host-access/native-chat-host-setup'
+import { nativeChatCodeBlockRunner } from '../../host-access/native-chat-code-block-run'
+import { codeBlockTerminalScript } from '../../../../../../shared/code-block-terminal-script'
+import type { CodeBlockRunState } from '../../../../../../shared/code-block-terminal-run'
+import { NativeChatCodeBlockRunOutput } from './NativeChatCodeBlockRunOutput'
 
 /** Code fences need their own copy target rather than the whole chat message. */
 export function NativeChatCodeBlock({
   children,
   language,
   sourceLine,
-  plain = false
+  plain = false,
+  runnable = false
 }: {
   children?: React.ReactNode
   language?: string
   sourceLine?: number
   plain?: boolean
+  /** Only an agent's own reply offers Play; approval prompts and notices never do. */
+  runnable?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const code = extractCodeText(children)
@@ -39,8 +47,26 @@ export function NativeChatCodeBlock({
     false
   )
   const previewing = htmlDocument && previewOpen
+  const setup = useNativeChatHostSetupView()
+  const host = setup?.host
+  const worktreeId = setup?.codeBlockWorktreeId
+  const runScript = useMemo(
+    () => (runnable && host && worktreeId ? nativeChatCodeBlockRunner(host, worktreeId) : null),
+    [runnable, host, worktreeId]
+  )
+  const script = useMemo(
+    () => (runScript ? codeBlockTerminalScript(code, language) : null),
+    [runScript, code, language]
+  )
+  const [runState, setRunState] = useState<CodeBlockRunState | null>(null)
   const actions = code ? (
     <>
+      {runScript && script ? (
+        <NativeChatCodeRunButton
+          running={runState?.status === 'running'}
+          onRun={() => void runScript(script, setRunState)}
+        />
+      ) : null}
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
       <NativeChatCopyButton
         platformLineEndings
@@ -93,6 +119,7 @@ export function NativeChatCodeBlock({
           children
         )}
       </pre>
+      {runState ? <NativeChatCodeBlockRunOutput state={runState} /> : null}
       {code && !language ? (
         <div className="absolute right-2 top-2 flex items-center gap-0.5 opacity-100 transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover/code:pointer-events-auto group-hover/code:opacity-100 [[class~='group/code']:has(:focus-visible)_&]:pointer-events-auto [[class~='group/code']:has(:focus-visible)_&]:opacity-100">
           {actions}
@@ -125,6 +152,38 @@ function NativeChatCodeWrapButton({
       <WrapText className="size-3.5" />
     </button>
   )
+}
+
+function NativeChatCodeRunButton({
+  running,
+  onRun
+}: {
+  running: boolean
+  onRun: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const label = t('components.native-chat.runInTerminal', 'Run')
+  return (
+    <button
+      type="button"
+      onClick={onRun}
+      disabled={running}
+      aria-label={label}
+      title={label}
+      className="flex size-6 shrink-0 items-center justify-center rounded-md text-chat-foreground-faint transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+    >
+      <Play className="size-3.5" />
+    </button>
+  )
+}
+
+/** An agent reply's code block, which can run in the chat's workspace. */
+export function NativeChatRunnableCodeBlock(props: {
+  children?: React.ReactNode
+  language?: string
+  sourceLine?: number
+}): React.JSX.Element {
+  return <NativeChatCodeBlock {...props} runnable />
 }
 
 /** For dimmed rows: their code keeps the row's faint color, so it is not tokenized at all. */
