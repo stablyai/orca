@@ -9,8 +9,13 @@ import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './profile-writing/write-scheduling'
 import { scheduleSave } from './profile-writing/write-scheduling'
 import { pruneCollectionMemberships } from './worktree-collection-membership'
+import { WORKTREE_METADATA_DOMAINS } from '../profile-save-domains'
 
 type CollectionOperationsRuntime = Pick<StoreRuntimeState, 'state'>
+
+const COLLECTION_DOMAINS = ['collections']
+// Deleting a collection also strips its memberships from worktree metadata.
+const COLLECTION_REMOVAL_DOMAINS = ['collections', ...WORKTREE_METADATA_DOMAINS]
 
 const collectionOperationsContext = Symbol('CollectionOperations')
 type CollectionOperationsContext = {
@@ -38,7 +43,7 @@ export class CollectionOperations {
       order: getNextCollectionOrder(state.collections ?? [])
     })
     state.collections = [...(state.collections ?? []), collection]
-    scheduleSave(this[collectionOperationsContext].scheduling)
+    scheduleSave(this[collectionOperationsContext].scheduling, COLLECTION_DOMAINS)
     return collection
   }
 
@@ -64,7 +69,7 @@ export class CollectionOperations {
       collection.color = typeof updates.color === 'string' ? updates.color : null
     }
     collection.updatedAt = Date.now()
-    scheduleSave(this[collectionOperationsContext].scheduling)
+    scheduleSave(this[collectionOperationsContext].scheduling, COLLECTION_DOMAINS)
     return collection
   }
 
@@ -77,7 +82,7 @@ export class CollectionOperations {
     }
     // Why: purely-visual grouping — deleting a collection strips memberships, never worktrees.
     pruneCollectionMemberships(state)
-    scheduleSave(this[collectionOperationsContext].scheduling)
+    scheduleSave(this[collectionOperationsContext].scheduling, COLLECTION_REMOVAL_DOMAINS)
     return true
   }
 }
