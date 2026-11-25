@@ -11,11 +11,7 @@ import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
 import { placeCursorOpeningRule } from '../../cursor/cursor-opening-rule'
 import { writeFolderContextFile } from './acp-folder-context-file'
-import {
-  listProviderRelaysAtLaunch,
-  liveProviderRelayChats
-} from '../../provider-relay/app-provider-relays'
-import { keptProviderRelaysComplete } from '../../provider-relay/provider-relay-launch-inventory'
+import { clearEarlierRunsOnce } from './acp-instructions-earlier-runs'
 import {
   openCodeSourceConfigDirectory,
   openCodeTakesConfigDirInstructions,
@@ -213,37 +209,9 @@ export const deliverCopilotInstructions: AcpInstructionsDelivery = async ({
   return { env: { COPILOT_CUSTOM_INSTRUCTIONS_DIRS: inherited ? `${inherited},${dir}` : dir } }
 }
 
-const cleared = new Map<string, Promise<void>>()
-/** Removals run this many at a time, so a large leftover folder doesn't hold the launch long. */
-const REMOVE_BATCH = 16
-
-/** An earlier run's leftovers go on first use in a run, except those of chats whose agent the
- *  terminal host kept running: that agent still reads them. One host holds a profile. */
-async function clearEarlierRuns(root: string, remove: (path: string) => Promise<void>) {
-  await listProviderRelaysAtLaunch()
-  // A daemon that didn't answer may still run agents reading these; they wait for a later run.
-  if (!keptProviderRelaysComplete()) {
-    return
-  }
-  // Every chat's folder name has the same length; its entries are it, `<it>.md` or `<it>-<uuid>`.
-  const kept = new Set([...liveProviderRelayChats()].map(nativeChatScratchFolderName))
-  const length = nativeChatScratchFolderName('').length
-  const keptBy = (name: string): boolean =>
-    kept.has(name.slice(0, length)) && ['', '.', '-'].includes(name.charAt(length))
-  const gone = (await readdir(root).catch(() => [])).filter((name) => !keptBy(name))
-  for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
-    await Promise.all(gone.slice(at, at + REMOVE_BATCH).map((name) => remove(join(root, name))))
-  }
-}
-
-async function instructionsRoot(dataDirectory: string): Promise<string> {
+async function instructionsRoot(dataDirectory: string, sessionId: string): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions')
-  let clearing = cleared.get(root)
-  if (!clearing) {
-    clearing = clearEarlierRuns(root, (path) => rm(path, { recursive: true, force: true }))
-    cleared.set(root, clearing)
-  }
-  await clearing
+  await clearEarlierRunsOnce(root, sessionId, (path) => rm(path, { recursive: true, force: true }))
   await mkdir(root, { recursive: true, mode: 0o700 })
   return root
 }
@@ -262,7 +230,7 @@ export async function writeAcpInstructionsFile(
   text: string
 ): Promise<string> {
   const path = join(
-    await instructionsRoot(dataDirectory),
+    await instructionsRoot(dataDirectory, sessionId),
     `${nativeChatScratchFolderName(sessionId)}.md`
   )
   await replaceFile(path, text)
@@ -276,7 +244,10 @@ export async function writeAcpInstructionsFolder(
   path: string,
   content: string
 ): Promise<string> {
-  const dir = join(await instructionsRoot(dataDirectory), nativeChatScratchFolderName(sessionId))
+  const dir = join(
+    await instructionsRoot(dataDirectory, sessionId),
+    nativeChatScratchFolderName(sessionId)
+  )
   const target = join(dir, path)
   await mkdir(dirname(target), { recursive: true, mode: 0o700 })
   await replaceFile(target, content)
@@ -299,8 +270,6 @@ async function removeTreeKeepingLinkTargets(path: string): Promise<void> {
   await rmdir(path).catch(() => undefined)
 }
 
-const clearedFolders = new Map<string, Promise<void>>()
-
 /** A new folder per launch, so a child still running from an earlier one keeps reading its own.
  *  Folders may link into the user's files, so clearing never follows a link (#1083). */
 export async function makeAcpInstructionsFolder(
@@ -308,12 +277,7 @@ export async function makeAcpInstructionsFolder(
   sessionId: string
 ): Promise<string> {
   const root = join(dataDirectory, 'acp-instructions-folders')
-  let clearing = clearedFolders.get(root)
-  if (!clearing) {
-    clearing = clearEarlierRuns(root, removeTreeKeepingLinkTargets)
-    clearedFolders.set(root, clearing)
-  }
-  await clearing
+  await clearEarlierRunsOnce(root, sessionId, removeTreeKeepingLinkTargets)
   const path = join(root, `${nativeChatScratchFolderName(sessionId)}-${randomUUID()}`)
   await mkdir(path, { recursive: true, mode: 0o700 })
   return path

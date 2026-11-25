@@ -25,7 +25,7 @@ type Send = { clientMessageId: string; prompt: ContentBlock[]; requestedAt: numb
 
 export class AcpStructuredTurns {
   private active: Send | null = null
-  /** The earlier app's prompt this kept agent still runs: a send waits for it, never cancels it. */
+  /** The earlier app's prompt this kept agent still runs: a permission change waits for it. */
   adopted: Send | null = null
   // One cancel per prompt; failed writes allow a later steer to retry.
   private steerCancelled: Send | null = null
@@ -325,8 +325,7 @@ export class AcpStructuredTurns {
   /** Steering waits indefinitely for cancellation; Stop can still end the child. */
   private cancelForSteer(): void {
     const send = this.active
-    // An earlier app's prompt runs to its end; Stop still cancels it.
-    if (!send || send === this.adopted) {
+    if (!send) {
       return
     }
     this.deps.withdrawRequests()

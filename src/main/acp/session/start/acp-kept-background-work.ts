@@ -32,6 +32,7 @@ export async function carryKeptAcpBackgroundWork(
     const join = { thread: translator.providerSessionId }
     const working = subagentIds.map((id) => ({ id, state: 'working' as const }))
     child.lane?.apply(translator.subagents.translate(working, join, Date.now()))
+    translator.children.carryRunning(kept?.openWork('subagent') ?? [])
   }
   const history = child.events?.journalHistory?.()
   if (taskIds.length === 0 || !translator || !history) {

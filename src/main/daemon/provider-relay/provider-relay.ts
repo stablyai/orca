@@ -162,6 +162,8 @@ export class ProviderRelay {
     // The initialize answer, kept lines and held requests go first, as events, so no reply line has to carry them.
     const { initializeResult } = this.pending
     const kept = this.pending.kept.records()
+    // Named as sent: a line kept while this attach awaits would name a seq never sent as kept.
+    const keptLines = this.pending.kept.lines()
     const pending = this.pending.records()
     const sent =
       (initializeResult === null ||
@@ -189,7 +191,7 @@ export class ProviderRelay {
       this.sendExit()
     }
     return {
-      ...this.pending.kept.attachDetails(Math.max(cursor, this.spool.ackedSeq)),
+      ...this.pending.kept.attachDetails(Math.max(cursor, this.spool.ackedSeq), keptLines),
       replayThroughSeq,
       pending: pending.map((record) => record.seq),
       maxClientRequestId: this.pending.maxClientRequestId,

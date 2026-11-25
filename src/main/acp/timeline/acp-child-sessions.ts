@@ -51,6 +51,16 @@ export class AcpChildSessions {
     return this.executing.has(id)
   }
 
+  /** Children a kept agent still ran when the earlier app quit: a user's Stop ends them too. */
+  carryRunning(ids: readonly string[]): void {
+    if (this.dialect.childSessionStop) {
+      for (const id of ids) {
+        this.running.add(id)
+        this.executing.add(id)
+      }
+    }
+  }
+
   /** A child session's events, or undefined when the notification is the root's own. */
   notification(
     method: string,
