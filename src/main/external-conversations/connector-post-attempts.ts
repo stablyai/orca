@@ -9,20 +9,22 @@ const MAX_CHATS = 1000
 const MAX_ATTEMPTS = 32
 
 export class ConnectorPostAttempts {
-  /** Per chat, each post (by its id; a check of a queued post sends the same one) and when it was first tried. */
-  private readonly attempts = new Map<string, Map<unknown, number>>()
+  /** Per chat, each post (by its id; a check of a queued post sends the same one): when it was first
+   *  tried, and the thread (external id) it went to. */
+  private readonly attempts = new Map<string, Map<unknown, { at: number; conversation?: string }>>()
 
   constructor(private readonly now: () => number = Date.now) {}
 
   /** Notes an attempt at post `postId`; the returned call takes that post back when it was refused
    *  outright. */
-  attempted(paneKey: string, postId?: string): () => void {
+  attempted(paneKey: string, postId?: string, conversation?: string): () => void {
     const key = postId ?? {}
-    const chat = this.attempts.get(paneKey) ?? new Map<unknown, number>()
+    const chat =
+      this.attempts.get(paneKey) ?? new Map<unknown, { at: number; conversation?: string }>()
     this.attempts.delete(paneKey)
     this.attempts.set(paneKey, chat)
     if (!chat.has(key)) {
-      chat.set(key, this.now())
+      chat.set(key, { at: this.now(), ...(conversation === undefined ? {} : { conversation }) })
     }
     if (chat.size > MAX_ATTEMPTS) {
       chat.delete(chat.keys().next().value)
@@ -35,10 +37,20 @@ export class ConnectorPostAttempts {
     }
   }
 
-  /** Whether the chat tried a post, not taken back, from `at` to `until` (its turn's start and end). */
-  since(paneKey: string, at: number, until = Number.POSITIVE_INFINITY): boolean {
+  /** Whether the chat tried a post, not taken back, from `at` to `until` (its turn's start and end),
+   *  into `conversation` when named (a post whose thread isn't known counts for any). */
+  since(
+    paneKey: string,
+    at: number,
+    until = Number.POSITIVE_INFINITY,
+    conversation?: string
+  ): boolean {
     for (const tried of this.attempts.get(paneKey)?.values() ?? []) {
-      if (tried >= at && tried <= until) {
+      const there =
+        conversation === undefined ||
+        tried.conversation === undefined ||
+        tried.conversation === conversation
+      if (there && tried.at >= at && tried.at <= until) {
         return true
       }
     }

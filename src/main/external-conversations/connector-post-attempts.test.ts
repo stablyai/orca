@@ -31,4 +31,11 @@ it('takes back only a refused attempt, leaving earlier and later ones', () => {
   now = 80
   attempts.attempted('chat', 'post-1')()
   expect(attempts.since('chat', 65)).toBe(false)
+  // A post into one thread never counts against another thread the same chat answers.
+  now = 90
+  attempts.attempted('chat', 'post-2', 'thread-b')
+  expect([
+    attempts.since('chat', 85, 95, 'thread-a'),
+    attempts.since('chat', 85, 95, 'thread-b')
+  ]).toEqual([false, true])
 })

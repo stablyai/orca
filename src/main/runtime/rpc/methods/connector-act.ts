@@ -246,7 +246,7 @@ export async function actAsBot(
     !staging &&
     (verb === 'reply' || ((verb === 'post' || verb === 'attach') && !ref && conversation !== null))
   const refused = intoThread
-    ? connectorPostAttempts.attempted(chatPaneKey(sessionId), args.postId)
+    ? connectorPostAttempts.attempted(chatPaneKey(sessionId), args.postId, target?.key.externalId)
     : () => {}
   const answer = await postConnectorAction(
     cloud,

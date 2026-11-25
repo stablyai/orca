@@ -150,19 +150,23 @@ export function conversationReplyFill(
     if (await retry?.hold(turn, own)) {
       return { covered, paused: false }
     }
-    // No retry asks again: words before the last tool answer, unless the chat posted its own.
-    const earlier = turn.prose || retry?.posted(turn) ? undefined : turn.earlierProse
-    const answered = earlier ? { ...turn, prose: earlier } : turn
+    // No retry asks again: words before the last tool answer, except where the chat posted its own.
+    const answeredIn = (row: JournalConnectorReplyRow): EndedTurnReplies =>
+      turn.prose || !turn.earlierProse || retry?.posted(turn, row.conversation.externalId)
+        ? turn
+        : { ...turn, prose: turn.earlierProse }
     // One answer per conversation, under the rule its turn began with: its head's (its earliest row
     // still kept, filled or not). A row an older build admitted silences the whole reply, except to
     // its owner in their own DM.
-    const markerMayQuiet =
-      answered.bot && answered.outcome === 'success' && isQuietBotResult(answered.prose)
+    const quietIn = (row: JournalConnectorReplyRow) => {
+      const answered = answeredIn(row)
+      return answered.bot && answered.outcome === 'success' && isQuietBotResult(answered.prose)
+    }
     const filling = new Set(own.map((row) => JSON.stringify([row.account, row.conversation])))
     const silencedWhole = new Map<string, boolean>()
-    for (const row of markerMayQuiet ? rows : []) {
+    for (const row of rows) {
       const conversation = JSON.stringify([row.account, row.conversation])
-      if (!filling.has(conversation) || silencedWhole.has(conversation)) {
+      if (!filling.has(conversation) || silencedWhole.has(conversation) || !quietIn(row)) {
         continue
       }
       const ownerDm =
@@ -176,7 +180,7 @@ export function conversationReplyFill(
     for (const row of own) {
       const conversation = JSON.stringify([row.account, row.conversation])
       const { outcome, prose } = connectorReplyTurnOutcome({
-        ...answered,
+        ...answeredIn(row),
         silencedWhole: silencedWhole.get(conversation) === true
       })
       const answerDeliveryId = answers.get(conversation) ?? row.deliveryId

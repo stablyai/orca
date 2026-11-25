@@ -273,7 +273,7 @@ export function turnReply(link: ExternalConversationLink, turn: EndedChatTurn): 
  *  request) and the turn answered no other. A turn that answered several requests gets no retry. */
 export function retryAskerOf(
   body: AgentJournalItemBody | undefined,
-  stamps: readonly { account: string; deliveryId: string }[]
+  stamps: readonly { account: string; deliveryId: string; carried?: readonly string[] }[]
 ): Pick<EndedTurnReplies, 'askedBy'> {
   const opener = body?.kind === 'message' ? body : undefined
   const claimed = opener?.connectorClaim?.origin
@@ -281,7 +281,14 @@ export function retryAskerOf(
   if (
     !opener ||
     !one ||
-    !stamps.every((stamp) => stamp.account === one.account && stamp.deliveryId === one.deliveryId)
+    // A carried delivery is another request folded into this one: no single request then.
+    one.carried?.length ||
+    !stamps.every(
+      (stamp) =>
+        stamp.account === one.account &&
+        stamp.deliveryId === one.deliveryId &&
+        !stamp.carried?.length
+    )
   ) {
     return {}
   }
