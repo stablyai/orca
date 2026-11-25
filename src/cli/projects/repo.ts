@@ -7,6 +7,7 @@ import { formatRepoList, formatRepoRefs, formatRepoShow } from './repo-format'
 import { printResult } from '../output/command-result-output'
 import type { BrowserProfileListResult } from '../../shared/browser/runtime/runtime-browser-contracts'
 import {
+  getOptionalNumberFlag,
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,
   getOptionalStringFlag,
@@ -16,6 +17,37 @@ import { resolveRepoPathArgument } from './repo-path-arguments'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from '../workspaces/worktree-setup-decision-recovery'
 import { resolveHostFlagTarget } from '../hosts/execution-host-flag'
+import {
+  REPO_LUCIDE_ICON_NAMES,
+  findRepoLucideIconName
+} from '../../shared/repository/appearance/repo-lucide-icon-names'
+import { listProjectGroups, resolveProjectGroupSelector } from './project-group-selector'
+import { getOptionalHexColorFlag } from './sidebar-color-flag'
+
+const REPO_SET_FLAGS = [
+  'external-worktree-visibility',
+  'browser-profile',
+  'group',
+  'group-order',
+  'display-name',
+  'badge-color',
+  'icon'
+]
+
+/** `none` clears the icon back to the project's default mark. */
+function resolveRepoIconFlag(value: string): { type: 'lucide'; name: string } | null {
+  if (value === 'none') {
+    return null
+  }
+  const name = findRepoLucideIconName(value)
+  if (!name) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--icon must be none or one of: ${REPO_LUCIDE_ICON_NAMES.join(', ')}.`
+    )
+  }
+  return { type: 'lucide', name }
+}
 
 /** `inherit` clears the pick; anything else must name a profile on the repo's Orca host. */
 async function resolveBrowserProfileFlag(
@@ -88,10 +120,15 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
     const repo = getRequiredStringFlag(flags, 'repo')
     const visibility = getOptionalStringFlag(flags, 'external-worktree-visibility')
     const browserProfile = getOptionalStringFlag(flags, 'browser-profile')
-    if (visibility === undefined && browserProfile === undefined) {
+    const group = getOptionalStringFlag(flags, 'group')
+    const groupOrder = getOptionalNumberFlag(flags, 'group-order')
+    const displayName = getOptionalStringFlag(flags, 'display-name')
+    const badgeColor = getOptionalHexColorFlag(flags, 'badge-color', { allowNone: false })
+    const icon = getOptionalStringFlag(flags, 'icon')
+    if (!REPO_SET_FLAGS.some((flag) => flags.has(flag))) {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Pass --external-worktree-visibility or --browser-profile.'
+        `Pass at least one of ${REPO_SET_FLAGS.map((flag) => `--${flag}`).join(', ')}.`
       )
     }
     if (
@@ -109,14 +146,38 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
       browserProfile === undefined
         ? undefined
         : await resolveBrowserProfileFlag(client, browserProfile)
+    const repoIcon = icon === undefined ? undefined : resolveRepoIconFlag(icon)
+    // Resolved before any write, so an unknown group leaves the repo untouched.
+    const groupId =
+      group === undefined || group === 'none'
+        ? null
+        : resolveProjectGroupSelector(await listProjectGroups(client), group, 'group').id
+    const updates = {
+      ...(visibility === undefined
+        ? {}
+        : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
+      ...(browserProfileId === undefined ? {} : { browserProfileId }),
+      ...(displayName === undefined ? {} : { displayName }),
+      ...(badgeColor === undefined ? {} : { badgeColor }),
+      ...(repoIcon === undefined ? {} : { repoIcon }),
+      // With --group the move itself places the repo.
+      ...(groupOrder === undefined || group !== undefined ? {} : { projectGroupOrder: groupOrder })
+    }
+    const moveToGroup = (
+      selector: string
+    ): ReturnType<typeof client.call<{ repo: Record<string, unknown> }>> =>
+      client.call('projectGroup.moveProject', {
+        repo: selector,
+        groupId,
+        ...(groupOrder === undefined ? {} : { order: groupOrder })
+      })
+    if (Object.keys(updates).length === 0) {
+      printResult(await moveToGroup(repo), json, formatRepoShow)
+      return
+    }
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
       repo,
-      updates: {
-        ...(visibility === undefined
-          ? {}
-          : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
-        ...(browserProfileId === undefined ? {} : { browserProfileId })
-      }
+      updates
     })
     // A host from before per-repo browser profiles drops the field and still answers with its row.
     if (
@@ -130,7 +191,12 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
           : 'This Orca host does not support per-repo browser profiles, so only the worktree visibility was saved. Update Orca on that host.'
       )
     }
-    printResult(result, json, formatRepoShow)
+    // By id: --display-name may just have changed the name the selector matched.
+    printResult(
+      group === undefined ? result : await moveToGroup(`id:${String(result.result.repo.id)}`),
+      json,
+      formatRepoShow
+    )
   },
   'repo hide': (context) => setRepoHidden(context, true),
   'repo unhide': (context) => setRepoHidden(context, false),

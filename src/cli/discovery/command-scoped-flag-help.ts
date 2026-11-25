@@ -111,6 +111,24 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'file open-changed': {
     focus: FILE_OPEN_FOCUS_HELP
   },
+  'repo set': {
+    'display-name': '--display-name <name>  Name shown for the project in Orca'
+  },
+  'group create': {
+    name: '--name <name>          Name for the new group',
+    parent: '--parent <group>       Group to nest the new group in',
+    color: '--color <hex>          Group color, as a hex value such as #22c55e'
+  },
+  'group set': {
+    name: '--name <name>          New name for the group',
+    parent: '--parent <group>|none  Group to nest this group in; none moves it to the top level',
+    color: '--color <hex>|none     Group color, as a hex value such as #22c55e; none clears it',
+    order: '--order <n>            Sort position among sibling groups, lowest first'
+  },
+  'group rm': {
+    force:
+      '--force                Remove a group that still holds projects, nested groups or folder workspaces'
+  },
   'repo hide': {
     host: "--host <host>          Which host's copy to hide: local, ssh:<target-id>, runtime:<id>, or a host name"
   },

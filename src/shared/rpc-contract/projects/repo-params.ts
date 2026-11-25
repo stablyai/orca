@@ -106,6 +106,11 @@ export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
 })
 
+/** `projectGroup.setParent`: a null parent moves the group to the sidebar's top level. */
+export const ProjectGroupSetParent = ProjectGroupSelector.extend({
+  parentGroupId: z.string().min(1).nullable()
+})
+
 export const ProjectGroupHooksCheck = ProjectGroupSelector.extend({
   background: z.boolean().optional()
 })

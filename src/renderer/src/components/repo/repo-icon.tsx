@@ -24,13 +24,17 @@ import {
   type LucideIcon
 } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repository/appearance/repo-icon'
+import type { RepoLucideIconName } from '../../../../shared/repository/appearance/repo-lucide-icon-names'
 import { cn } from '@/lib/class-names'
 import { softMarkColors } from '../../../../shared/repository/appearance/repo-badge-color'
 import { monogramFontScale } from '../../../../shared/repository/appearance/repo-monogram'
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
-export const getRepoLucideIconOptions = createLocalizedCatalog(() => [
+// Names come from the shared list the CLI validates `repo set --icon` against.
+type RepoLucideIconOption = { name: RepoLucideIconName; label: string; icon: LucideIcon }
+
+export const getRepoLucideIconOptions = createLocalizedCatalog((): RepoLucideIconOption[] => [
   {
     name: 'Folder',
     label: translate('auto.components.repo.repo.icon.bed2674f9d', 'Folder'),

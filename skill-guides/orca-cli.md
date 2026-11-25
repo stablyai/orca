@@ -141,6 +141,11 @@ ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
 ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
+ORCA repo set --repo id:<repoId> --group name:<group> --json
+ORCA repo set --repo id:<repoId> --display-name "<name>" --badge-color "#22c55e" --icon rocket --json
+ORCA group list --json
+ORCA group create --name <name> --parent name:<group> --json
+ORCA group set --group id:<groupId> --name <name> --parent none --json
 ORCA repo hide --repo id:<repoId> --json
 ORCA repo unhide --repo id:<repoId> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
