@@ -41,8 +41,7 @@ export function recoveryRouteOf(
   return {
     environment,
     pairingEnv,
-    profileFromEnv:
-      Boolean(profile) && client.userDataPath === profile && !isPlatformDefault(profile)
+    profileFromEnv: profile ? client.userDataPath === profile && !isPlatformDefault(profile) : false
   }
 }
 

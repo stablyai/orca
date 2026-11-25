@@ -11,8 +11,9 @@ const { ledgers } = vi.hoisted(() => ({ ledgers: new Map<string, Set<string>>() 
 
 vi.mock('../../runtime/client', async (importOriginal) => {
   const actual = await importOriginal<typeof ClientModule>()
-  const { RuntimeClientError } = await import('../../runtime/connection/types')
-  const { attachMutationRecovery } = await import('../../runtime/connection/client-error-recovery')
+  const { RuntimeClientError } = await import('../../runtime/connection/types.js')
+  const { attachMutationRecovery } =
+    await import('../../runtime/connection/client-error-recovery.js')
   type Args = ConstructorParameters<typeof actual.RuntimeClient>
   /** The real client's route selection, with each reachable Orca played by an in-memory ledger. */
   class LedgerClient extends actual.RuntimeClient {

@@ -390,8 +390,12 @@ describe('worker_done retry after a possibly delivered timeout', () => {
       const admitted = peerState(db, conversationId)
       expect(admitted.peerRun).toMatchObject({ home_label: 'Home Run', home_run_id: 'run_on_peer' })
       expect(admitted.run).not.toBeNull()
+      const peerRunId = admitted.peerRun?.run_id
+      if (!peerRunId) {
+        throw new Error('expected the v1 call to admit a peer Run')
+      }
       // A reset here removed the Run row; only a real peer call may restore it.
-      db.db.prepare('DELETE FROM runs WHERE id = ?').run(admitted.peerRun?.run_id)
+      db.db.prepare('DELETE FROM runs WHERE id = ?').run(peerRunId)
       const before = peerState(db, conversationId)
       expect(before.run).toBeNull()
       const receiptsBefore = receiptCount(db)
