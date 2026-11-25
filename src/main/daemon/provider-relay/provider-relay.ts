@@ -230,7 +230,9 @@ export class ProviderRelay {
   }
 
   ack(seq: number, keepFrom?: number, cut = false): void {
-    this.cutThrough = cut ? Math.max(this.cutThrough, seq) : this.cutThrough
+    // Kept from `keepFrom` on, the cut is before it: a replay from there starts inside the item.
+    const cutAt = keepFrom === undefined ? seq : keepFrom - 1
+    this.cutThrough = cut ? Math.max(this.cutThrough, cutAt) : this.cutThrough
     this.spool.ack(seq, keepFrom)
   }
 

@@ -105,6 +105,12 @@ describe('provider relay pending requests', () => {
     await relay.detach()
     expect(relay.info().ackedSeq).toBe(3)
     expect((await relay.attach('app-3', stream, 3)).truncatedThrough).toBe(3)
+    // A floor that rose past an open item's start on purpose: the cut is just before what it keeps.
+    stdout.write('d\ne\nf\n')
+    await tick()
+    relay.ack(6, 5, true)
+    await relay.detach()
+    expect((await relay.attach('app-4', stream, relay.info().ackedSeq)).truncatedThrough).toBe(4)
     await relay.dispose()
   })
 
