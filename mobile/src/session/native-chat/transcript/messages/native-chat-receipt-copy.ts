@@ -7,6 +7,11 @@ export function nativeChatReceiptCopy(t: Translate, device?: string) {
     resolved: t('chat.receipt.resolved', 'Resolved'),
     cancelled: t('chat.receipt.cancelled', 'Cancelled'),
     resolver: t('chat.receipt.resolver', 'Answered on {{device}}', { device }),
-    cancelledBy: t('chat.receipt.cancelledBy', 'Cancelled on {{device}}', { device })
+    cancelledBy: t('chat.receipt.cancelledBy', 'Cancelled on {{device}}', { device }),
+    questionCancelled: t('chat.receipt.questionCancelled', 'Question cancelled'),
+    answeredCount: (count: number) =>
+      t('chat.receipt.answeredCount', 'You answered <answer>{{count}} questions</answer>', {
+        count
+      })
   }
 }

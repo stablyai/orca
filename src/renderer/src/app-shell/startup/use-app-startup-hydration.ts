@@ -26,10 +26,8 @@ import { restoreSshConnectionsForStartup } from '../../startup/startup-ssh-conne
 import { collectActiveWorkspaceSshTargetIds } from '../../startup/active-workspace-ssh-targets'
 import { publishTerminalViewAttributesAtAppStart } from '../../components/terminal-pane/appearance/terminal-appearance'
 import { getSystemPrefersDark } from '../../lib/terminal/appearance/terminal-theme'
-import {
-  collectTerminalProviderSnapshotPtyIds,
-  refreshTerminalProviderSnapshotCapabilities
-} from '../../components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { refreshTerminalProviderSnapshotCapabilities } from '../../components/terminal/provider-snapshots/terminal-provider-snapshot-capability'
+import { collectTerminalProviderSnapshotPtyIds } from '../../components/terminal/provider-snapshots/terminal-provider-snapshot-pty-inventory'
 import { probeTerminalProviderGoneSessions } from '../../components/terminal/provider-snapshots/terminal-provider-gone-sessions'
 import {
   getRepoExecutionHostId,

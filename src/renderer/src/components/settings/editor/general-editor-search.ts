@@ -206,7 +206,11 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('settings.general.search.keywords.diff', 'diff'),
       ...translateSearchKeyword('settings.general.search.keywords.whitespace', 'whitespace'),
       ...translateSearchKeyword('settings.general.search.keywords.spaces', 'spaces'),
-      ...translateSearchKeyword('settings.general.search.keywords.tabs', 'tabs'),
+      ...translateSearchKeyword(
+        'settings.general.search.keywords.tab_characters',
+        'tab characters',
+        { aliases: ['tabs'] }
+      ),
       ...translateSearchKeyword('settings.general.search.keywords.trim', 'trim'),
       ...translateSearchKeyword('settings.general.search.keywords.indentation', 'indentation')
     ]
