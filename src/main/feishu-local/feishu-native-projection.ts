@@ -3,7 +3,7 @@ import type {
   AgentSessionSubscribeEvent,
   AgentSessionLatestTurn
 } from '../../shared/agent-session/agent-session-wire'
-import { formatToolInputPreview } from '../../shared/native-chat/tools/native-chat-tool-summary'
+import { describeToolInput } from '../../shared/native-chat/tools/native-chat-tool-summary'
 import { connectorTurnActivityStepTitle } from '../../shared/connectors/connector-turn-activity-line'
 import type { FeishuNativeResponse } from './feishu-native-data'
 
@@ -98,7 +98,7 @@ export class FeishuNativeProjection {
           id,
           title: label?.[1] ?? connectorTurnActivityStepTitle(body.name),
           iconToken: label?.[2] ?? 'app-default_outlined',
-          detail: connectorTurnActivityStepTitle(formatToolInputPreview(body.input)),
+          detail: connectorTurnActivityStepTitle(describeToolInput(body.input)),
           status:
             body.state === 'running'
               ? ('running' as const)
