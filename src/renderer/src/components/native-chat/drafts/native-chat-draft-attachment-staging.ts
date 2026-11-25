@@ -23,8 +23,8 @@ export type StagedFiles = {
   textReferences: Set<string>
   movedTo?: StagedFiles
   uploads: Map<string, Map<string, Promise<string>>>
-  /** Host path of each finished upload → its upload target and the staged original it came from. */
-  uploaded: Map<string, { target: string; source: string }>
+  /** Host path of each finished upload → its record (see `NativeChatStagedUpload`). */
+  uploaded: Map<string, NativeChatStagedUpload>
 }
 const staged = new Map<string, StagedFiles>()
 
@@ -33,6 +33,64 @@ export function stagedNativeChatFiles(scope: string): StagedFiles | undefined {
 }
 
 /** Scopes holding staged files, recorded draft or not: deliberate teardown must reach them too. */
+/**
+ * One finished upload of a staged original: the upload target it went to (cache key), the original,
+ * the conversation it was made for, and the cached upload that produced it.
+ */
+export type NativeChatStagedUpload = {
+  target: string
+  source: string
+  sessionId: string
+  upload: Promise<string>
+}
+
+/** Every live staging owner once, however many scopes or moves lead to it. */
+export function nativeChatStagedFileOwners(): StagedFiles[] {
+  return [...new Set([...staged.values()].map(currentFiles))]
+}
+
+/**
+ * Hand one staged original, with its upload records and cached uploads, to another draft, which becomes
+ * its only owner: it leaves the old owner's files, leases and holds, so neither owner can release it for
+ * the other.
+ */
+export function adoptNativeChatStagedFile(from: StagedFiles, path: string, toScope: string): void {
+  const current = staged.get(toScope)
+  if (current && currentFiles(current) === from) {
+    return
+  }
+  stageNativeChatDraftFile(toScope, path)
+  const owner = currentFiles(staged.get(toScope)!)
+  for (const [host, origin] of from.uploaded) {
+    if (origin.source === path) {
+      owner.uploaded.set(host, origin)
+      from.uploaded.delete(host)
+    }
+  }
+  for (const [target, uploads] of from.uploads) {
+    const upload = uploads.get(path)
+    if (upload) {
+      uploads.delete(path)
+      const into = owner.uploads.get(target) ?? new Map<string, Promise<string>>()
+      into.set(path, into.get(path) ?? upload)
+      owner.uploads.set(target, into)
+    }
+  }
+  from.paths.delete(path)
+  from.draftPaths.delete(path)
+  from.textReferences.delete(path)
+  for (const held of [...from.leases, ...from.heldInputs, ...from.pendingLeases]) {
+    held.delete(path)
+  }
+  if (!from.paths.size) {
+    for (const [scope, held] of staged) {
+      if (held === from) {
+        staged.delete(scope)
+      }
+    }
+  }
+}
+
 export function nativeChatStagedScopes(): string[] {
   return [...staged.keys()]
 }

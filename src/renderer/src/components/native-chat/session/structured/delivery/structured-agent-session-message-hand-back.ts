@@ -2,7 +2,6 @@ import { agentSessionAttachmentUploadIdOfPath } from '../../../../../../../share
 import { formatNativeChatFileReference } from '../../../../../../../shared/native-chat/input/composer/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import { restoreNativeChatExpiredUploads } from '../../../drafts/native-chat-staged-input'
-import { noteNativeChatUnrestoredExpiredUploads } from '../../../drafts/native-chat-expired-upload-repair'
 import type { AgentJournalMessageItem } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatComposerDraftImage } from '../../../drafts/native-chat-composer-draft-storage'
 import { appendToNativeChatComposerDraft } from '../../../drafts/native-chat-composer-draft-store'
@@ -28,7 +27,9 @@ export function returnMessageToComposer(
   imageConnectionIds?: readonly (string | null)[],
   /** Uploads the host no longer stores: their chips come back asking to be attached again. */
   expiredUploadIds?: ReadonlySet<string>,
-  skills?: AgentJournalMessageItem['skills']
+  skills?: AgentJournalMessageItem['skills'],
+  /** The conversation the refused message was sent in: only its own uploads may be restored. */
+  uploadSessionId?: string
 ): boolean {
   // Its `[Image #k]` markers become chips for its k-th image, by the ids its images get below.
   const imageIds = blocks.flatMap((block, index) =>
@@ -40,16 +41,20 @@ export function returnMessageToComposer(
     return !!uploadId && !!expiredUploadIds?.has(uploadId)
   }
   const messageText = structuredAgentSessionMessageText({ kind: 'message', role: 'user', blocks })
-  // An expired upload whose staged original this draft still holds comes back as that original, so
-  // Send uploads it afresh; only one the draft never held asks to be attached again.
-  const restored = restoreNativeChatExpiredUploads(composerScopeKey, [
-    ...blocks.flatMap((block) =>
-      block.type === 'image-ref' && block.path && expired(block.path) ? [block.path] : []
-    ),
-    ...nativeChatTextAttachmentParts(messageText, true, expired).flatMap((part) =>
-      part.path ? [part.path] : []
-    )
-  ])
+  // An expired upload this conversation made, whose original is still staged anywhere (here, or still
+  // at a pending worktree's source), comes back as that original and becomes this draft's: Send uploads
+  // it afresh. This is the only restore: the returned content is Orca's own here, so nothing rewrites
+  // the person's draft later. Any other expired upload asks to be attached again.
+  const restored = uploadSessionId
+    ? restoreNativeChatExpiredUploads(composerScopeKey, uploadSessionId, [
+        ...blocks.flatMap((block) =>
+          block.type === 'image-ref' && block.path && expired(block.path) ? [block.path] : []
+        ),
+        ...nativeChatTextAttachmentParts(messageText, true, expired).flatMap((part) =>
+          part.path ? [part.path] : []
+        )
+      ])
+    : new Map<string, string>()
   // Not the attachment hook's helper: its imports reach the store, whose teardown imports this.
   const images = blocks.flatMap((block, index): NativeChatComposerDraftImage[] => {
     if (block.type !== 'image-ref') {
@@ -75,21 +80,6 @@ export function returnMessageToComposer(
       )
       .join(''),
     imageIds
-  )
-  // Not this draft's yet (a first send refused before its draft moved in): repaired when they arrive.
-  noteNativeChatUnrestoredExpiredUploads(
-    composerScopeKey,
-    images,
-    new Map(
-      blocks.flatMap((block, index) =>
-        block.type === 'image-ref' && block.path && expired(block.path) && !restored.has(block.path)
-          ? [[`${attachmentIdPrefix}-${index}`, block.path] as const]
-          : []
-      )
-    ),
-    nativeChatTextAttachmentParts(messageText, true, expired).flatMap((part) =>
-      part.path && !restored.has(part.path) ? [part.path] : []
-    )
   )
   if (text === '' && images.length === 0) {
     return true
@@ -118,6 +108,7 @@ export function handBackStructuredAgentSessionMessage(
     body.blocks,
     imageConnectionIds,
     expiredUploadIds,
-    body.skills
+    body.skills,
+    sessionId
   )
 }

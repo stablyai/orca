@@ -6,9 +6,10 @@ import { noteStructuredAgentSessionFence } from '@/components/native-chat/sessio
 import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
+  finishStagedLaunchPromptWithHandBack,
+  stagedDeliveryFromSlotOutcome,
   unconfirmedStructuredLaunchDelivery,
   unstageStructuredLaunchPrompt,
-  handBackStagedLaunchPrompt,
   type StagedStructuredLaunchPrompt,
   type StagedDelivery,
   type StructuredLaunchPromptOptions
@@ -40,13 +41,9 @@ function sendStagedPrompt(
         prompt.attachments = input.attachments
         prompt.skills = input.skills
         if (prompt.slot && !prompt.slot.prepare(input)) {
+          // The reservation already ended: its own outcome is the result.
           unstageStructuredLaunchPrompt(prompt)
-          const outcome = await prompt.slot.outcome
-          return {
-            delivered: false,
-            inComposer: !prompt.callerKeepsText && outcome === 'returned',
-            ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
-          }
+          return stagedDeliveryFromSlotOutcome(prompt, await prompt.slot.outcome)
         }
       } catch (error) {
         if (prompt.discarded) {
@@ -54,19 +51,15 @@ function sendStagedPrompt(
         }
         if (prompt.slot && !prompt.slot.active()) {
           unstageStructuredLaunchPrompt(prompt)
-          const outcome = await prompt.slot.outcome
-          return {
-            delivered: false,
-            inComposer: !prompt.callerKeepsText && outcome === 'returned',
-            ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
-          }
+          return stagedDeliveryFromSlotOutcome(prompt, await prompt.slot.outcome)
         }
-        unstageStructuredLaunchPrompt(prompt)
-        const inComposer = handBackStagedLaunchPrompt(prompt)
+        // Preparation failed with the reservation still held (also after a paired create succeeded):
+        // the terminal hand-back is published before the reservation is released.
+        const result = finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
         publishStructuredAgentSessionSends(prompt.sessionId, {
           notice: error instanceof Error ? error.message : String(error)
         })
-        return { delivered: false, inComposer, failureNotified: true, handBackFinished: true }
+        return result
       }
     }
     const sent = prompt.slot
@@ -80,13 +73,7 @@ function sendStagedPrompt(
         })
     if (!sent) {
       // Another send of the chat holds its slot: the launch text waits in the composer instead.
-      unstageStructuredLaunchPrompt(prompt)
-      return {
-        delivered: false,
-        inComposer: handBackStagedLaunchPrompt(prompt),
-        busy: true,
-        handBackFinished: true
-      }
+      return finishStagedLaunchPromptWithHandBack(prompt, { busy: true })
     }
     try {
       const outcome = await sent.outcome
@@ -122,15 +109,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
         return { delivered: false, failureNotified: true }
       }
       if (receipt.configurationFailure) {
-        const result = {
-          delivered: false,
-          inComposer: handBackStagedLaunchPrompt(prompt),
-          failureNotified: true,
-          handBackFinished: true as const
-        }
-        prompt.delivery = Promise.resolve(result)
-        prompt.settleCreate(result)
-        unstageStructuredLaunchPrompt(prompt)
+        const result = finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
         prompt.discarded = true
         return promptDeliveryResult(result)
       }
@@ -158,16 +137,11 @@ export function settleStructuredAgentLaunchPrompt(args: {
       }
       // The launch did not submit: its text waits in the chat's composer for the person's own Send.
       if (prompt && !prompt.discarded && !prompt.delivery) {
-        unstageStructuredLaunchPrompt(prompt)
         prompt.discarded = true
         // The hand-back's durability is separate from its end: either way nothing later takes custody.
-        const inComposer = handBackStagedLaunchPrompt(prompt)
-        return {
-          delivered: false,
-          failureNotified: true,
-          handBackFinished: true as const,
-          ...(inComposer ? { inComposer: true as const } : {})
-        }
+        return promptDeliveryResult(
+          finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
+        )
       }
       // The reserved sender may already have returned/retained the input during create rejection.
       return prompt?.delivery

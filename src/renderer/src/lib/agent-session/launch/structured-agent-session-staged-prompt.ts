@@ -110,11 +110,7 @@ export function stageStructuredLaunchPrompt(
   forSession.add(prompt)
   staged.set(sessionId, forSession)
   void prompt.slot?.outcome.then((outcome) => {
-    const result: StagedDelivery = {
-      delivered: outcome === 'recorded',
-      inComposer: !prompt.callerKeepsText && outcome === 'returned',
-      ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
-    }
+    const result = stagedDeliveryFromSlotOutcome(prompt, outcome)
     if (!prompt.delivery) {
       prompt.delivery = Promise.resolve(result)
       unstageStructuredLaunchPrompt(prompt)
@@ -122,6 +118,40 @@ export function stageStructuredLaunchPrompt(
     prompt.settleCreate(result)
   })
   return prompt
+}
+
+/** The public result of the prompt's reservation outcome: one mapping wherever either promise is read. */
+export function stagedDeliveryFromSlotOutcome(
+  prompt: StagedStructuredLaunchPrompt,
+  outcome: StructuredAgentSessionSendOutcome
+): StagedDelivery {
+  return {
+    delivered: outcome === 'recorded',
+    inComposer: !prompt.callerKeepsText && outcome === 'returned',
+    ...unconfirmedStructuredLaunchDelivery(outcome, prompt.slot?.recorded)
+  }
+}
+
+/**
+ * End a staged prompt by handing its message back without a send. The terminal result
+ * (`handBackFinished`, plus `inComposer` for a durable write) is published to `prompt.delivery` and
+ * `whenCreateSettled` BEFORE the prompt is unstaged: unstaging releases the reservation, whose own
+ * generic "dropped" outcome would otherwise win the public race without the terminal signal.
+ */
+export function finishStagedLaunchPromptWithHandBack(
+  prompt: StagedStructuredLaunchPrompt,
+  extra: Partial<StagedDelivery> = {}
+): StagedDelivery {
+  const result: StagedDelivery = {
+    delivered: false,
+    inComposer: handBackStagedLaunchPrompt(prompt),
+    handBackFinished: true,
+    ...extra
+  }
+  prompt.delivery ??= Promise.resolve(result)
+  prompt.settleCreate(result)
+  unstageStructuredLaunchPrompt(prompt)
+  return result
 }
 
 export function unstageStructuredLaunchPrompt(prompt: StagedStructuredLaunchPrompt): void {
@@ -159,15 +189,9 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
     if (prompt.delivery || prompt.createOwned) {
       continue
     }
-    unstageStructuredLaunchPrompt(prompt)
     prompt.discarded = true
-    const inComposer = handBackStagedLaunchPrompt(prompt)
-    prompt.settleCreate({
-      delivered: false,
-      inComposer,
-      failureNotified: true,
-      handBackFinished: true
-    })
+    // Settled before its reservation is released and before the discard is announced.
+    finishStagedLaunchPromptWithHandBack(prompt, { failureNotified: true })
     prompt.discard()
   }
 }
@@ -197,19 +221,26 @@ export function prepareStructuredLaunchPromptForCreate(
   prompt.createOwned = true
   const sent = prompt.slot?.create(target)
   prompt.createSend = sent ?? undefined
-  prompt.delivery = sent
-    ? sent.outcome.then((outcome) => {
-        unstageStructuredLaunchPrompt(prompt)
-        return {
-          delivered: outcome === 'recorded',
-          inComposer: !prompt.callerKeepsText && outcome === 'returned',
-          ...unconfirmedStructuredLaunchDelivery(outcome, sent.recorded)
-        }
-      })
-    : Promise.resolve({ delivered: false, inComposer: !prompt.callerKeepsText }).then((outcome) => {
-        unstageStructuredLaunchPrompt(prompt)
-        return outcome
-      })
+  // No create send: a reservation that already settled reports its own real outcome; with no
+  // reservation at all, nothing took the message, so it is handed back here (never assumed).
+  const slot = prompt.slot
+  if (sent) {
+    prompt.delivery = sent.outcome.then((outcome) => {
+      unstageStructuredLaunchPrompt(prompt)
+      return {
+        delivered: outcome === 'recorded',
+        inComposer: !prompt.callerKeepsText && outcome === 'returned',
+        ...unconfirmedStructuredLaunchDelivery(outcome, sent.recorded)
+      }
+    })
+  } else if (slot) {
+    prompt.delivery = slot.outcome.then((outcome) => {
+      unstageStructuredLaunchPrompt(prompt)
+      return stagedDeliveryFromSlotOutcome(prompt, outcome)
+    })
+  } else {
+    prompt.delivery = Promise.resolve(finishStagedLaunchPromptWithHandBack(prompt))
+  }
   void prompt.delivery.then(prompt.settleCreate)
   if (sent && !takesSkills && sent.message.body.skills) {
     const { skills: _skills, ...body } = sent.message.body

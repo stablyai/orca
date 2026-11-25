@@ -15,7 +15,6 @@ import {
   releaseNativeChatStagedFiles
 } from './native-chat-draft-attachment-staging'
 import { retireDeferredNativeChatComposerNoticesWhere } from '../composer/controls/native-chat-deferred-composer-notice'
-import { forgetNativeChatUnrestoredExpiredUploads } from './native-chat-expired-upload-repair'
 import type {
   StoredNativeChatComposerDraft,
   NativeChatComposerDraftOwner
@@ -41,14 +40,12 @@ export function deleteNativeChatComposerDraftsWhere(
   for (const scope of nativeChatStagedScopes()) {
     if (!records.has(scope) && !scopeListeners.has(scope) && matches(scope, undefined)) {
       releaseNativeChatStagedFiles(scope)
-      forgetNativeChatUnrestoredExpiredUploads(scope)
     }
   }
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {
     const draft = records.get(scope)
     if (matches(scope, draft)) {
       releaseNativeChatStagedFiles(scope)
-      forgetNativeChatUnrestoredExpiredUploads(scope)
       installNativeChatDraftRecord(scope)
       reconcileRestoredImageChecks(scope, [])
       notifyScope(scope)

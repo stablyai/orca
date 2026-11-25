@@ -86,6 +86,7 @@ const { findStructuredAgentSessionPendingSend } =
   await import('@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends')
 const {
   discardStructuredAgentSessionChatSends,
+  prepareStructuredLaunchPromptForCreate,
   stageStructuredLaunchPrompt,
   unconfirmedStructuredLaunchDelivery
 } = await import('@/lib/agent-session/launch/structured-agent-session-staged-prompt')
@@ -201,4 +202,54 @@ it('ends a moved first-send lease after a create refusal whose hand-back was not
   await Promise.resolve()
 
   expect(hasNativeChatStagedFiles(scope)).toBe(false)
+})
+
+// Paired create succeeded, then attachment preparation rejects while the reservation is still held:
+// the terminal hand-back is published before the reservation is released, so the public result (not
+// the reservation's generic "dropped") carries `handBackFinished` and the moved lease ends.
+it('reports a finished hand-back when preparation fails after a successful create', async () => {
+  const sessionId = 'prepare-rejected-after-create'
+  const scope = structuredAgentSessionDraftScopeKey(sessionId)
+  stageNativeChatDraftFile(scope, 'blob:prepare-rejected')
+  const files = captureNativeChatStagedInput(scope, {
+    text: '',
+    attachments: [{ path: 'blob:prepare-rejected' }]
+  })
+  reconcileNativeChatStagedDraft(scope, { text: '', images: [] })
+  const stagedPrompt = stageStructuredLaunchPrompt(sessionId, 'hi', {
+    prepare: async () => {
+      throw new Error('preparation failed')
+    }
+  })
+  expect(stagedPrompt.slot).not.toBeNull()
+
+  const delivery = settleStructuredAgentLaunchPrompt({
+    launchResult: Promise.resolve({ sessionId, fence: 1 }),
+    target: { kind: 'environment', environmentId: 'env' },
+    options: { prompt: 'hi' },
+    stagedPrompt
+  })!
+  const result = await delivery
+  expect(result.handBackFinished).toBe(true)
+
+  releaseFirstSendFilesWhenHeld(delivery, () => true, files)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(hasNativeChatStagedFiles(scope)).toBe(false)
+})
+
+// A create-owned prompt that never had a reservation (another send held the slot) was taken by
+// nothing: it is handed back for real and reports that, never an assumed "in the composer".
+it('hands back a create-owned prompt with no reservation instead of assuming the composer has it', async () => {
+  const sessionId = 'create-owned-without-slot'
+  const holder = reserveStructuredAgentSessionSend({ sessionId, text: 'already sending' })!
+  const stagedPrompt = stageStructuredLaunchPrompt(sessionId, 'hi')
+  expect(stagedPrompt.slot).toBeNull()
+
+  prepareStructuredLaunchPromptForCreate(sessionId, { kind: 'local' })
+  const settled = await stagedPrompt.whenCreateSettled
+
+  expect(settled.handBackFinished).toBe(true)
+  expect(settled.inComposer).toBe(false)
+  holder.release()
 })
