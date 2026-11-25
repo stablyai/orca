@@ -5,6 +5,9 @@ type StreamLine = Record<string, unknown>
 
 const STREAM_EVENT = '{"type":"stream_event","event":{"type":"'
 const ASSISTANT = '{"type":"assistant"'
+/** Statuses that end a task, as `terminalClaudeTaskRunState` reads them. */
+export const CLAUDE_TERMINAL_TASK_STATUSES = ['completed', 'failed', 'killed', 'stopped'] as const
+const TERMINAL_TASK_STATUSES: ReadonlySet<string> = new Set(CLAUDE_TERMINAL_TASK_STATUSES)
 
 /** The scope a line belongs to, from its trailing keys: the session and the launching call. */
 function scopeKey(line: string): string {
@@ -69,19 +72,36 @@ export const CLAUDE_RELAY_ITEM_CONTINUATION: ProviderRelayItemContinuation = {
       end: event === 'message_stop'
     }
   },
-  // Keys as CLAUDE_RELAY_WORK_MARKERS' `turn` group: [session_id], ended by a result or idle state.
-  openGroup: 'turn',
+  // Keys as CLAUDE_RELAY_WORK_MARKERS' groups: `turn` [session_id], ended by a result or idle
+  // state; `task` [task_id], ended by its notification or a terminal status (a background
+  // subagent streams past its turn's result).
+  openGroup: ['turn', 'task'],
   settles: (line) => {
-    const ends =
+    if (!line.startsWith('{"type":"result"') && !line.startsWith('{"type":"system"')) {
+      return null
+    }
+    const turnEnds =
       line.startsWith('{"type":"result"') ||
-      (line.startsWith('{"type":"system"') &&
-        line.includes('"session_state_changed"') &&
-        line.includes('"idle"'))
-    if (!ends) {
+      (line.includes('"session_state_changed"') && line.includes('"idle"'))
+    const taskEnds =
+      !turnEnds && (line.includes('"task_notification"') || line.includes('"task_updated"'))
+    if (!turnEnds && !taskEnds) {
       return null
     }
     const frame = streamLineAny(line)
-    return frame && typeof frame.session_id === 'string' ? JSON.stringify([frame.session_id]) : null
+    if (!frame) {
+      return null
+    }
+    if (turnEnds) {
+      return typeof frame.session_id === 'string' ? JSON.stringify([frame.session_id]) : null
+    }
+    const status = isRecord(frame.patch) ? frame.patch.status : undefined
+    const ended =
+      frame.subtype === 'task_notification' ||
+      (frame.subtype === 'task_updated' &&
+        typeof status === 'string' &&
+        TERMINAL_TASK_STATUSES.has(status))
+    return ended && typeof frame.task_id === 'string' ? JSON.stringify([frame.task_id]) : null
   },
   rekey: (line, tag) => {
     const frame = streamLine(line)

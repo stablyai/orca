@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { RelayedProviderContinuation } from '../../provider-relay/relayed-provider-continuation'
-import { createClaudeStreamedBlockRegistry } from '../structured/journal/claude-streamed-block-identity'
+import {
+  RelayedProviderContinuation,
+  attachContinuation
+} from '../../provider-relay/relayed-provider-continuation'
+import { EMPTY_RELAY_ATTACH } from '../../provider-relay/fake-provider-relay-channel.test-fixture'
+import {
+  CLAUDE_RELAY_CONTINUATION_KEY,
+  createClaudeStreamedBlockRegistry
+} from '../structured/journal/claude-streamed-block-identity'
 import { CLAUDE_RELAY_ITEM_CONTINUATION } from './claude-relay-continuation'
 
 const scope = { session_id: 's', parent_tool_use_id: null }
@@ -32,5 +39,37 @@ describe('a Claude reply a cut replay starts inside', () => {
       sessionId: 's',
       uuid: 'block:relay:r1:5:0'
     })
+  })
+})
+
+describe("a background subagent's reply streaming past its turn's result", () => {
+  it('re-keys after an attach with only the task open, until the task ends', () => {
+    const child = (uuid: string): string =>
+      JSON.stringify({
+        type: 'stream_event',
+        event: { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'x' } },
+        session_id: 's',
+        parent_tool_use_id: 'call_1',
+        uuid
+      })
+    const continuation = attachContinuation(CLAUDE_RELAY_ITEM_CONTINUATION, 'r1', 8, {
+      ...EMPTY_RELAY_ATTACH,
+      replayThroughSeq: 9,
+      openWork: { turn: [], task: [['t1']] }
+    })
+    expect(continuation).not.toBeNull()
+    const [tagged] = continuation!.lines(9, child('u9'), undefined)
+    expect(JSON.parse(tagged)).toHaveProperty(CLAUDE_RELAY_CONTINUATION_KEY, 'relay:r1:9')
+    continuation!.lines(
+      10,
+      JSON.stringify({
+        type: 'system',
+        subtype: 'task_notification',
+        task_id: 't1',
+        session_id: 's'
+      }),
+      undefined
+    )
+    expect(continuation!.done).toBe(true)
   })
 })

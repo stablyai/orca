@@ -3,7 +3,10 @@ import {
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
 import { claudeRelayAckFloor } from './claude-relay-ack-floor'
-import { CLAUDE_RELAY_ITEM_CONTINUATION } from './claude-relay-continuation'
+import {
+  CLAUDE_RELAY_ITEM_CONTINUATION,
+  CLAUDE_TERMINAL_TASK_STATUSES
+} from './claude-relay-continuation'
 
 /** Recorded with each Claude relay; this build reattaches it. */
 export const CLAUDE_RELAY_AGENT = 'claude-code'
@@ -13,8 +16,6 @@ const SESSION = [['session_id']]
 const TASK = [['task_id']]
 const subtype = (is: string) => ({ path: ['subtype'], is })
 const state = (is: string) => ({ path: ['state'], is })
-/** Statuses that end a task, as `terminalClaudeTaskRunState` reads them. */
-const TERMINAL_STATUSES = ['completed', 'failed', 'killed', 'stopped']
 
 /**
  * What the open app's idle stop counts for Claude: the running turn (from Claude's own session
@@ -57,7 +58,7 @@ export const CLAUDE_RELAY_WORK_MARKERS: ProviderRelayWorkMarkers = {
       when: [subtype('task_notification')],
       key: [TASK]
     },
-    ...TERMINAL_STATUSES.map((status) => ({
+    ...CLAUDE_TERMINAL_TASK_STATUSES.map((status) => ({
       group: 'task',
       name: 'system',
       effect: 'end' as const,
