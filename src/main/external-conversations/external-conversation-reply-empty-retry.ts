@@ -111,7 +111,7 @@ export function emptyTurnRetry(deps: {
         kind: 'message',
         role: 'user',
         blocks: [{ type: 'text', text: RETRY_PROMPT }],
-        // Asked for the one person who asked the turn, where they asked it.
+        // Orca's own ask in the conversation the turn answered, naming no one.
         ...turn.askedBy,
         connectorClaim: {
           cutTurnId: cut.turnId,

@@ -18,11 +18,12 @@ const message = (fields: Partial<AgentJournalMessageItem>): AgentJournalMessageI
 const place = { kind: 'channel', id: 'C1' } as const
 const asker = { source: 'slack', userId: 'U1', role: 'member', place } as const
 
-// A retry acts for one asker only: a turn that answered several gets none, never an unnamed one.
+// A retry runs only for a turn one request opened and no other joined; it never carries that person's
+// name, so Orca's own ask isn't shown as theirs.
 describe('retryAskerOf', () => {
-  it('names the opener’s asker only when the opener carried every request', () => {
+  it('retries, naming no one, only when the opener carried every request', () => {
     const opener = message({ connectorDelivery: stamp('d1'), asker, origin: 'connector' })
-    expect(retryAskerOf(opener, [stamp('d1')]).askedBy).toEqual({ origin: 'connector', asker })
+    expect(retryAskerOf(opener, [stamp('d1')]).askedBy).toEqual({ origin: 'connector' })
     expect(retryAskerOf(opener, [stamp('d1'), stamp('d2')]).askedBy).toBeUndefined()
     expect(retryAskerOf(message({}), [stamp('d1')]).askedBy).toBeUndefined()
     const elsewhere = { ...stamp('d1'), account: 'account-b' }

@@ -269,9 +269,8 @@ export function turnReply(link: ExternalConversationLink, turn: EndedChatTurn): 
   return link.bot && message && isQuietBotResult(message) ? undefined : message
 }
 
-/** Who a retry of the turn asks for, only when one request opened it and the turn answered no other:
- *  its opener's asker, or no one named for a continuation of one cut request. A turn that answered
- *  several requests gets no retry, so none acts for the wrong asker. */
+/** How a retry of the turn is asked, only when one request opened it (or a continuation of one cut
+ *  request) and the turn answered no other. A turn that answered several requests gets no retry. */
 export function retryAskerOf(
   body: AgentJournalItemBody | undefined,
   stamps: readonly { account: string; deliveryId: string }[]
@@ -286,13 +285,10 @@ export function retryAskerOf(
   ) {
     return {}
   }
-  const { origin, asker, connectorConversation } = opener
-  const own = opener.connectorDelivery !== undefined
+  // Orca's own ask, like its continuations: no person's name on it, so the chat never shows it as
+  // theirs, and it acts for someone Orca can't name, never the owner.
+  const { connectorConversation } = opener
   return {
-    askedBy: {
-      origin: own && origin ? origin : 'connector',
-      ...(own && asker ? { asker } : {}),
-      ...(connectorConversation ? { connectorConversation } : {})
-    }
+    askedBy: { origin: 'connector', ...(connectorConversation ? { connectorConversation } : {}) }
   }
 }

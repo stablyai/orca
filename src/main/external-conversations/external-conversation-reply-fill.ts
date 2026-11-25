@@ -45,7 +45,7 @@ export type EndedTurnReplies = {
   postsUntil?: number
   /** The live turn end's, never boot recovery's: only it may retry an empty turn. */
   live?: true
-  /** Who asked the turn and through what, from its opener: a retry asks for them. */
+  /** How a retry of the turn is asked (retryAskerOf): absent when the turn gets none. */
   askedBy?: Pick<AgentJournalMessageItem, 'origin' | 'asker' | 'connectorConversation'>
 }
 
