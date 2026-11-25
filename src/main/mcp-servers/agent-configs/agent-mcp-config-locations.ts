@@ -96,9 +96,9 @@ async function userFiles(agent: McpConfigAgent, context: AgentMcpConfigContext):
     case 'grok':
       return [join(envDir(env, 'GROK_HOME') ?? join(homeDir, '.grok'), 'config.toml')]
     case 'cursor':
-      return [join(homeDir, '.cursor', 'mcp.json')]
+      return [join(envDir(env, 'CURSOR_CONFIG_DIR') ?? join(homeDir, '.cursor'), 'mcp.json')]
     case 'droid':
-      return [join(homeDir, '.factory', 'mcp.json')]
+      return [join(envDir(env, 'FACTORY_HOME_OVERRIDE') ?? homeDir, '.factory', 'mcp.json')]
     case 'amp':
       return [join(xdgConfigHome(context), 'amp', 'settings.json')]
   }

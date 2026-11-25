@@ -2,17 +2,13 @@
 // sign-ins and relay addresses key by that folder exactly as a bot's do. Each server's id, agents,
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
-import { join } from 'node:path'
 import { z } from 'zod'
 import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
-import {
-  ALL_MCP_SERVER_WORKSPACES,
-  MCP_SERVER_AGENT_PATTERN,
-  McpServerWorkspacesSchema,
-  type McpAgentFiles,
-  type McpFileAgent,
-  type McpServer,
-  type McpServerWorkspaces
+import type {
+  McpAgentFiles,
+  McpFileAgent,
+  McpServer,
+  McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
 import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
 import {
@@ -25,19 +21,15 @@ import {
   changeBotToolEntries,
   readBotToolsSnapshot
 } from '../bots/bot-tools-file'
+import { mcpServerSettingsOf as settingsOf } from './mcp-host-list-launch'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
-import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
+import { mcpHostListFolder } from './mcp-host-list-folder'
 import { McpServersError } from './mcp-servers-error'
 import { assertNotFromPlugin, pluginViewOf } from './mcp-plugin-server-mark'
 
-/** `<userData>/mcp-servers`; the list is `.orca/bot-tools.json` inside, as in a bot's home. */
-export const mcpHostListFolder = (): string => join(getProfileUserDataPath(), 'mcp-servers')
-
 const AgentFilesSchema = z.record(z.string(), z.unknown())
 const ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/
-// An entry whose workspaces Orca can't read is on nowhere, never everywhere.
-const NO_WORKSPACES: McpServerWorkspaces = { later: false, on: [], off: [] }
 
 export type HostEntry = BotToolEntry & { id: string }
 
@@ -45,26 +37,6 @@ const gone = (): McpServersError =>
   new McpServersError('mcp_server_gone', 'This server is no longer on this host.')
 const nameTaken = (name: string): McpServersError =>
   new McpServersError('mcp_server_name_taken', `This host already has a server named ${name}.`)
-
-type ServerSettings = Pick<McpServer, 'agentsOff' | 'workspaces' | 'sharedProcess'>
-
-function settingsOf(extras: Record<string, unknown>): ServerSettings {
-  const agentsOff = Array.isArray(extras.agentsOff)
-    ? extras.agentsOff.filter(
-        (agent): agent is string =>
-          typeof agent === 'string' && MCP_SERVER_AGENT_PATTERN.test(agent)
-      )
-    : []
-  const workspaces =
-    extras.workspaces === undefined
-      ? ALL_MCP_SERVER_WORKSPACES
-      : (McpServerWorkspacesSchema.safeParse(extras.workspaces).data ?? NO_WORKSPACES)
-  return {
-    agentsOff: [...new Set(agentsOff)],
-    workspaces,
-    sharedProcess: extras.sharedProcess === true
-  }
-}
 
 function viewOf(entry: HostEntry, folder: string): McpServer {
   const { signIn, ...tool } = botOwnTool(entry.server, folder)
