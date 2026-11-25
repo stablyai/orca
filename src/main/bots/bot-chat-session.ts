@@ -271,6 +271,8 @@ export async function startBotSession(
     sessionId?: string
     message?: { text: string; clientMessageId: string; run?: BotRunFields }
     background?: true
+    /** False: no tab here, yet a person's chat (a teammate's, whose tab is on their computer). */
+    hostTab?: false
     /** Whom the conversation acts for, recorded before it starts; unrecorded, its first message says. */
     actsFor?: BotConversationActsFor
   } & Pick<StructuredAgentSessionCreateOptions, 'beforeFirstMessage' | 'beforeDelivery'> = {}
@@ -281,11 +283,8 @@ export async function startBotSession(
   }
   const permissionMode = bot.permissionMode && newChatPermissionMode(bot.agent, bot.permissionMode)
   // A model the agent no longer lists still goes through: the agent's own failure names it, as for any chat.
-  const saved = botStartOptions(
-    () => runtime.requireStore().getSettings(),
-    bot,
-    input.background === true
-  )
+  const settings = () => runtime.requireStore().getSettings()
+  const saved = botStartOptions(settings, bot, input.background === true)
   const launch = supportedStructuredSeedOptions(bot.agent, saved)
   const dropped = Object.keys(saved).filter((key) => !(key in launch))
   if (dropped.length) {
@@ -298,9 +297,10 @@ export async function startBotSession(
     ...(permissionMode ? { [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode } : {})
   }
   const host = () => requireStructuredHost(runtime)
-  const create = input.background
-    ? createBackgroundStructuredAgentSession
-    : createStructuredAgentSessionForWorktree
+  const create =
+    input.background || input.hostTab === false
+      ? createBackgroundStructuredAgentSession
+      : createStructuredAgentSessionForWorktree
   const created = await create({
     runtime,
     ensureHost: host,

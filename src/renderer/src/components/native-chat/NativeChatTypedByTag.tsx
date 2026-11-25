@@ -1,12 +1,20 @@
 import { Badge } from '@/components/ui/badge'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
 import {
   otherPersonTypistWords,
-  type OtherPersonTypist
+  typistOtherThanViewer,
+  type PersonTypist
 } from '../../../../shared/agent-session/journal/agent-journal-typed-by'
 
+/** The typist when it is someone other than this window's Orca account, else undefined. */
+export function useOtherPersonTypist(typist: PersonTypist | undefined): PersonTypist | undefined {
+  const viewer = useAppStore((state) => state.orcaProfileAuthStatus?.cloud?.userId)
+  return typistOtherThanViewer(typist, viewer)
+}
+
 /** "Sam Lee · Sam's MacBook Pro" over a message another person typed on their paired computer. */
-export function NativeChatTypedByTag({ typist }: { typist: OtherPersonTypist }): React.JSX.Element {
+export function NativeChatTypedByTag({ typist }: { typist: PersonTypist }): React.JSX.Element {
   const t = useTranslate()
   const { name, computer, label } = otherPersonTypistWords(typist, t)
   return (
@@ -22,7 +30,7 @@ export function NativeChatTypedByTag({ typist }: { typist: OtherPersonTypist }):
 export function NativeChatTypedByQueuedLine({
   typist
 }: {
-  typist: OtherPersonTypist
+  typist: PersonTypist
 }): React.JSX.Element {
   const t = useTranslate()
   const { name, computer, label } = otherPersonTypistWords(typist, t)

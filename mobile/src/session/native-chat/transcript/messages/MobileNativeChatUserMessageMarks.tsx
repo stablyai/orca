@@ -24,10 +24,17 @@ import { useMobileSlackMirrorContext } from '../../slack-mirror/use-mobile-slack
 import { slackMirrorPostedAsker } from '../../../../../../src/shared/connectors/slack-mirror-state'
 import {
   otherPersonTypistWords,
-  type OtherPersonTypist
+  typistOtherThanViewer,
+  type PersonTypist
 } from '../../../../../../src/shared/agent-session/journal/agent-journal-typed-by'
 
 const ICON_SIZE = 12
+
+/** The typist when someone other than the viewer: the phone has no Orca sign-in of its own, so the
+ *  host's comparison decides. */
+export function phoneOtherPersonTypist(typist: PersonTypist | undefined): PersonTypist | undefined {
+  return typistOtherThanViewer(typist, null)
+}
 
 // The phone has no avatar cache, so a person shows by initials, as the desktop does when it can't load one.
 function Initials({ name }: { name: string }): React.JSX.Element {
@@ -90,7 +97,7 @@ export function MobileNativeChatConnectorAskerTag({
 }
 
 /** "Sam Lee · Sam's MacBook Pro"; the phone has no tooltip, so it speaks the full line. */
-function MobileNativeChatTypedByTag({ typist }: { typist: OtherPersonTypist }): React.JSX.Element {
+function MobileNativeChatTypedByTag({ typist }: { typist: PersonTypist }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const { name, computer, label } = otherPersonTypistWords(typist, t)
@@ -116,7 +123,7 @@ function MobileTypedMessageTags({
 }): React.JSX.Element | null {
   const mirror = useMobileSlackMirrorContext()
   const posted = mirror?.link.mirrorPosts?.[message.id]?.state === 'posted'
-  const typist = message.typedByOther
+  const typist = phoneOtherPersonTypist(message.typist)
   if (!posted && !typist) {
     return null
   }
@@ -140,7 +147,7 @@ export function MobileQueuedTypedByLine({
   typist,
   textStyle
 }: {
-  typist: OtherPersonTypist
+  typist: PersonTypist
   textStyle: StyleProp<TextStyle>
 }): React.JSX.Element {
   const t = useMobileTranslation()
