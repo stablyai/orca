@@ -1080,7 +1080,7 @@
         "importInvalid": "{{count}} satır okunamadı",
         "importUndecryptable": "{{count}} kayıt tarayıcı tarafından korunuyor. Bu kayıtları tarayıcıdan CSV olarak dışa aktarın.",
         "imported": "{{count}} parola içe aktarıldı",
-        "deleteAllConfirmDescription": "{{profile}} profilinde kayıtlı tüm parolalar kalıcı olarak silinecek. Bu işlem geri alınamaz.",
+        "deleteAllConfirmDescription": "{{profile}} profilindeki tüm kayıtlı parolalar, notlar ve parolası hiç kaydedilmeyecek siteler kalıcı olarak silinecek. Bu işlem geri alınamaz.",
         "deletedAll": "Parola verileri silindi",
         "form": {
           "invalidSite": "example.com gibi bir web sitesi adresi girin.",

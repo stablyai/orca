@@ -1755,7 +1755,7 @@
         "importInvalid": "{{count}} linhas ilegíveis",
         "importUndecryptable": "{{count}} protegido pelo navegador; exporte um CSV dele",
         "imported": "{{count}} senhas importadas",
-        "deleteAllConfirmDescription": "Cada senha salva no perfil {{profile}} é excluída permanentemente. Isso não pode ser desfeito.",
+        "deleteAllConfirmDescription": "Todas as senhas salvas, notas e sites marcados para nunca salvar no perfil {{profile}} serão excluídos permanentemente. Isso não pode ser desfeito.",
         "deletedAll": "Dados de senha excluídos",
         "form": {
           "invalidSite": "Insira um endereço de site, como exemplo.com.",

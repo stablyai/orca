@@ -406,7 +406,7 @@
         "importInvalid": "{{count}} 行无法读取",
         "importUndecryptable": "{{count}} 个受浏览器保护，请改为从该浏览器导出 CSV",
         "imported": "已导入 {{count}} 个密码",
-        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码都将被永久删除，此操作无法撤销",
+        "deleteAllConfirmDescription": "{{profile}} 配置文件中所有已保存的密码、备注和永不保存密码的网站都将被永久删除。此操作无法撤销。",
         "deletedAll": "密码数据已删除",
         "form": {
           "invalidSite": "请输入网站地址，例如 example.com",
