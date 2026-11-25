@@ -89,7 +89,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       visible,
       ...(folderLaunch
         ? {
-            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId }
+            initialRepo: { id: folderLaunch.repoId, executionHostId: folderLaunch.executionHostId },
+            onlyInitialRepoHost: true
           }
         : initialRepo
           ? { initialRepo }

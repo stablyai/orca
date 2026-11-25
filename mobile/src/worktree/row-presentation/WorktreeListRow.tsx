@@ -182,7 +182,8 @@ function WorktreeListRowComponent({
         {unsavedName ? <WorktreeUnsavedName name={unsavedName} /> : null}
       </View>
       <View style={styles.trailing}>
-        {view.botWorkspace && view.hostContextLabel ? (
+        {/* A row on a computer that is down says so, or nothing on it explains why it won't open. */}
+        {(view.botWorkspace && view.hostContextLabel) || view.hostContextHealthLabel ? (
           <HostContextPill
             hostId={hostId}
             label={view.hostContextLabel}
