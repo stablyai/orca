@@ -28,7 +28,8 @@ import type {
 // Orca Cloud's requestWaitMs: a held message not delivered by then is dropped.
 export const HELD_WAIT_MS = 24 * 60 * 60 * 1000
 
-export type HoldResult = 'held' | 'too-large' | 'failed'
+/** `unshared`: Orca Cloud knows no such share for this credential any more (revoked). */
+export type HoldResult = 'held' | 'too-large' | 'unshared' | 'failed'
 
 export class PhoneSharedAgentHeld {
   private states = new Map<string, SharedBotHeldState>()
@@ -102,7 +103,7 @@ export class PhoneSharedAgentHeld {
       sealed
     })
     if (!answer.ok) {
-      return 'failed'
+      return answer.status === 404 ? 'unshared' : 'failed'
     }
     const current = this.deps.store.get(entry.shareId) ?? entry
     const held: Held = { ...message, sentAt }

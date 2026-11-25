@@ -17,8 +17,24 @@ import {
 import { MOBILE_PAIRED_E2EE_PRIMITIVES as PRIMITIVES } from '../../transport/encryption/mobile-paired-e2ee-primitives'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import type { PhoneSharedAgent, PhoneSharedAgentStore } from './phone-shared-agent-store'
+import type { SharedBotHostView } from '../../../../src/shared/bots/shared-bot-hosts'
 
 type Computer = { pairedHostId: string; client: UnvalidatedRpcRequestPort }
+
+/** A listed share the phone has no key to yet: shown, unreachable, nothing held, until a key comes. */
+export function awaitingKeyView(share: SharedBotPhoneShare): SharedBotHostView {
+  return {
+    environmentId: share.environmentId,
+    shareId: share.shareId,
+    botId: share.botId,
+    botName: share.botName,
+    ownerName: share.ownerName,
+    homeWorkspaceId: null,
+    link: 'unpaired',
+    holds: false,
+    held: []
+  }
+}
 
 /** The computer's list, or null when it gave none (offline, or too old to list shared agents). */
 export async function readComputerShares(

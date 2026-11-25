@@ -20,8 +20,13 @@ import { MOBILE_RELAY_CLIENT_PLATFORM } from '../../transport/encryption/mobile-
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { PhoneSharedAgentHeld } from './phone-shared-agent-held'
-import { readComputerShares, syncComputerShares } from './phone-shared-agent-provisioning'
+import {
+  awaitingKeyView,
+  readComputerShares,
+  syncComputerShares
+} from './phone-shared-agent-provisioning'
 import { PhoneSharedAgentStore, type PhoneSharedAgent } from './phone-shared-agent-store'
+import type { SharedBotPhoneShare } from '../../../../src/shared/bots/bot-share-phone'
 
 type Link = SharedHostRelayLink<PhoneSharedAgent>
 
@@ -58,6 +63,8 @@ export class PhoneSharedAgents {
   private readonly held: PhoneSharedAgentHeld
   private heldTimer: ReturnType<typeof setTimeout> | null = null
   private heldReadFailures = 0
+  // Listed by a computer but with no key here yet (its host wasn't reached): shown, not callable.
+  private readonly awaitingKey = new Map<string, readonly SharedBotPhoneShare[]>()
 
   constructor(private readonly now: () => number = Date.now) {
     this.held = new PhoneSharedAgentHeld({
@@ -138,6 +145,10 @@ export class PhoneSharedAgents {
         shares,
         (entry) => phoneSharedAgentCredential(entry, this.now()) === null
       )
+      this.awaitingKey.set(
+        pairedHostId,
+        shares.filter((share) => !this.store.get(share.shareId))
+      )
     }
     await Promise.all(
       this.store
@@ -156,7 +167,7 @@ export class PhoneSharedAgents {
     return this.store
       .list()
       .filter((entry) => entry.pairedHostId === pairedHostId)
-      .map((entry) => ({
+      .map((entry): SharedBotHostView => ({
         environmentId: entry.environmentId,
         shareId: entry.shareId,
         botId: entry.botId,
@@ -167,6 +178,7 @@ export class PhoneSharedAgents {
         holds: true,
         held: this.held.views(entry)
       }))
+      .concat((this.awaitingKey.get(pairedHostId) ?? []).map(awaitingKeyView))
   }
 
   /** The shared agent the computer `pairedHostId` names `environmentId`, when this phone has a key. */
@@ -241,6 +253,14 @@ export class PhoneSharedAgents {
         `Waiting for ${entry.ownerName}’s computer`
       )
     }
+    if (result === 'unshared') {
+      this.forget(entry.shareId)
+      return failure(
+        method,
+        SHARED_BOT_HOST_ERRORS.unshared,
+        `${entry.ownerName} no longer shares this agent with you`
+      )
+    }
     return result === 'too-large'
       ? failure(
           method,
@@ -273,9 +293,19 @@ export class PhoneSharedAgents {
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),
         onLinkChanged: (next) => {
+          const current = this.store.get(entry.shareId)
+          // The host refused this phone's key (revoked) and nothing kept can dial it: dropped until
+          // the computer lists it again and the host gives a new key.
+          if (
+            next === 'unpaired' &&
+            current &&
+            phoneSharedAgentCredential(current, this.now()) === null
+          ) {
+            this.forget(entry.shareId)
+            return
+          }
           this.changed()
           // The host is back: its journal has what it took while away, so ask how they stand.
-          const current = this.store.get(entry.shareId)
           if (next === 'live' && current) {
             void this.refreshHeld([current])
           }
@@ -288,6 +318,13 @@ export class PhoneSharedAgents {
       this.links.set(entry.shareId, link)
     }
     return link
+  }
+
+  private forget(shareId: string): void {
+    this.store.remove(new Set([shareId]))
+    this.links.get(shareId)?.close()
+    this.links.delete(shareId)
+    this.changed()
   }
 
   private changed(): void {
