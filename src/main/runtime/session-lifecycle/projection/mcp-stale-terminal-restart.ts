@@ -9,6 +9,7 @@ import {
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { readAgentPaneForeground } from './agent-pane-foreground-read'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
 import { terminalMcpPanes } from '../../../mcp-servers/terminal/terminal-mcp-panes'
 import { currentTerminalMcpFingerprints } from '../../../mcp-servers/terminal/terminal-mcp-launch'
@@ -57,23 +58,31 @@ export abstract class OrcaRuntimeWithMcpStaleTerminals extends OrcaRuntimeWithCl
       const now = current.get(pane) ?? null
       return now !== null && now !== pane.fingerprint
     })
-    // Read together: their fresh foreground reads then share one process-table capture.
     const checked = await Promise.all(
       changed.map(async ({ pty, pane }): Promise<StaleTerminal | null> => {
-        // After a main restart its launch evidence is unknown: only its foreground says the agent runs.
-        const agent = mcpTerminalAgent(pty, pane)
-        const running = await this.mcpTerminalAgentRunning(pty, agent)
-        if (running === false) {
+        // After a main restart its launch evidence is unknown: a shell in front says the agent exited.
+        if (await this.mcpTerminalShellInFront(pty)) {
           return null
         }
-        const session = running === true ? await this.mcpTerminalSession(pty, agent) : null
-        return { pty, pane, session }
+        const agent = mcpTerminalAgent(pty, pane)
+        return { pty, pane, session: agent ? await this.mcpTerminalSession(pty, agent) : null }
       })
     )
     return checked.filter((entry): entry is StaleTerminal => entry !== null)
   }
 
-  /** Whether the pane's foreground process is the agent it launched; unchecked when unreadable. */
+  /**
+   * The count's read: the pane's cached foreground name, with no process scan, since it runs for
+   * every stale terminal at once. A shell there means its agent exited; anything else is counted.
+   * The cached name of a running agent can be its binary's (a version number), so whether the
+   * agent itself is in front is read afresh only when a restart is about to stop it.
+   */
+  private async mcpTerminalShellInFront(pty: RuntimePtyWorktreeRecord): Promise<boolean> {
+    const name = await this.ptyController?.getForegroundProcess(pty.ptyId).catch(() => null)
+    return !!name && isShellProcess(name.replace(/^-/, ''))
+  }
+
+  /** Whether the pane's foreground process is the agent it launched, read afresh; unchecked when unreadable. */
   private async mcpTerminalAgentRunning(
     pty: RuntimePtyWorktreeRecord,
     agent: TuiAgent | null
