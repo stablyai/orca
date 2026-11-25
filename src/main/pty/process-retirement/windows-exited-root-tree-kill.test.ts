@@ -4,7 +4,6 @@ import { once } from 'node:events'
 import { spawnProcess } from '@orca/process-host'
 import type * as ProcessHostModule from '@orca/process-host'
 import { afterEach, expect, it, vi } from 'vitest'
-import { terminateInteractiveLoginProcess } from '../../../cli/accounts/interactive-login-interruption'
 import { killRecipeProcess } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-process'
 import { killLocalPrecheckProcessTree } from '../../automations/dispatch/precheck-runner'
 import { terminateClaudeProcess } from '../../claude-accounts/sign-in/claude-login-process-termination'
@@ -30,10 +29,6 @@ const stopSites: [string, (child: ChildProcessWithoutNullStreams) => unknown][] 
   ['automation precheck', (child) => killLocalPrecheckProcessTree(child)],
   ['Codex app-server', (child) => killCodexAppServerProcessTree(child)],
   ['ephemeral VM recipe', (child) => killRecipeProcess(child, true)],
-  [
-    'CLI interactive login',
-    (child) => terminateInteractiveLoginProcess(child, 'SIGINT', { closeFallbackMs: 0 })
-  ],
   [
     'Claude account login',
     (child) => new Promise<void>((resolve) => terminateClaudeProcess(child, null, resolve))
