@@ -49,3 +49,13 @@ it('treats only the spellings of a space alike and fails closed on undecodable q
   expect(() => verify('q=%25zz', 'q=%zz')).toThrow()
   expect(() => verify('q=%zz', 'q=%zz')).toThrow()
 })
+
+it('accepts its own redacted receipt back as the expected URL', () => {
+  const live = ['https://kagi.com/search?q=~a:b,c/d&token=secret']
+  const discovery = new ExpectedPageUrlGuard(live[0], 'page')
+  discovery.verify(live)
+  const receipt: Record<string, unknown> = discovery.withReceipt({})
+  const checkedUrl = String(receipt.checkedUrl)
+  expect(checkedUrl).toBe('https://kagi.com/search?q=~a:b,c/d')
+  expect(() => new ExpectedPageUrlGuard(checkedUrl, 'page').verify(live)).not.toThrow()
+})

@@ -1,4 +1,5 @@
 import { normalizeBrowserNavigationUrl } from './browser-url'
+import { kagiQueryWithoutToken } from './kagi-token-query'
 
 /**
  * A Kagi URL without its token, for comparing addresses: every other query byte stays as written,
@@ -19,23 +20,10 @@ export function comparableKagiSessionUrl(rawUrl: string): string | null {
   if (parsed.protocol !== 'https:' || (hostname !== 'kagi.com' && hostname !== 'www.kagi.com')) {
     return rawUrl
   }
-  const query = parsed.search.slice(1)
-  if (/%(?![0-9A-Fa-f]{2})/.test(query)) {
+  const kept = kagiQueryWithoutToken(parsed.search)
+  if (kept === null) {
     return null
   }
-  const kept: string[] = []
-  for (const parameter of query.split('&')) {
-    let name: string
-    try {
-      // Same name decoding as URLSearchParams, so every spelling of `token` is dropped.
-      name = decodeURIComponent(parameter.split('=')[0].replaceAll('+', ' '))
-    } catch {
-      return null
-    }
-    if (name !== 'token') {
-      kept.push(parameter.replaceAll('%20', '+'))
-    }
-  }
-  parsed.search = kept.length > 0 ? `?${kept.join('&')}` : ''
+  parsed.search = kept.replaceAll('%20', '+')
   return parsed.href
 }

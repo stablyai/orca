@@ -20,7 +20,7 @@ it.each([
   ],
   [
     'https://www.kagi.com/search/?q=%20%2B&token=test-only#two',
-    'https://www.kagi.com/search/?q=+%2B#two'
+    'https://www.kagi.com/search/?q=%20%2B#two'
   ]
 ])('delivers the original private request once, keeping a safe model: %s', (raw, safe) => {
   queueKagiPrivateInitialNavigation('page', raw)
@@ -77,6 +77,6 @@ it('normalizes an admitted schemeless search and rewrites only duplicate bearer 
     'https://kagi.com/search?q=a%20b&flag&x=~&token=first&token=second#result'
   )
   expect(
-    takeKagiPrivateInitialNavigation('encoded', 'https://kagi.com/search?q=a+b&flag=&x=%7E#result')
+    takeKagiPrivateInitialNavigation('encoded', 'https://kagi.com/search?q=a%20b&flag&x=~#result')
   ).toBe('https://kagi.com/search?q=a%20b&flag&x=~&token=first#result')
 })

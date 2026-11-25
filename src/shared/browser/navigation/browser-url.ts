@@ -1,5 +1,6 @@
 import '../../orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../browser-blank-page'
+import { kagiQueryWithoutToken } from './kagi-token-query'
 import { getCurrentLocalPlatform } from '../../execution-host/execution-host'
 import { encodeWellFormedURIComponent } from '../../text/well-formed-uri-component'
 
@@ -186,8 +187,14 @@ export function redactKagiSessionToken(rawUrl: string): string {
       (hostname === 'kagi.com' || hostname === 'www.kagi.com') &&
       parsed.searchParams.has('token')
     ) {
-      // Strip Kagi bearer tokens before display, history or persisted tab state.
-      parsed.searchParams.delete('token')
+      // Strip Kagi bearer tokens before display, history or persisted tab state, keeping the
+      // rest of the query as written; an undecodable query falls back to re-serializing it.
+      const kept = kagiQueryWithoutToken(parsed.search)
+      if (kept === null) {
+        parsed.searchParams.delete('token')
+      } else {
+        parsed.search = kept
+      }
       return parsed.toString()
     }
   } catch {
