@@ -217,3 +217,61 @@ it('takes the start from the message that opened the turn, not from ones steered
     request: 'Build a board'
   })
 })
+
+it('keeps the chain of the message that opened the turn when the other kind is steered in', () => {
+  const start = { kind: 'bot', at: 10, request: 'Plan the launch' } as const
+  const admitted = db.admitBotRequest({
+    rootKey: 'chain:launch',
+    fromBotId: 'planner',
+    toBotId: 'home',
+    purpose: 'handoff',
+    depth: 2,
+    record: JSON.stringify({ askers: [{ kind: 'owner' }], start }),
+    message: { from: `run:${runId}`, to: HOME, subject: 'Help', type: 'handoff', runId }
+  })
+  if (admitted.kind !== 'sent') {
+    throw new Error(`not admitted: ${admitted.kind}`)
+  }
+  const mail = (itemId: string, at: number, turnItemId?: string): AgentJournalRenderItem => ({
+    ...row(itemId, at, {
+      kind: 'message',
+      role: 'user',
+      blocks: [],
+      from: {
+        kind: 'agent',
+        senders: [],
+        orchestration: {
+          message: 'mail-notice',
+          mailbox: HOME,
+          dispatchId: null,
+          messages: [{ messageId: admitted.message.id, runId, from: 'bot:planner' }]
+        }
+      }
+    }),
+    ...(turnItemId ? { turnScope: { kind: 'turn', turnItemId } } : {})
+  })
+  const owner = (itemId: string, at: number, turnItemId?: string): AgentJournalRenderItem => ({
+    ...row(itemId, at, { ...text('Build a board'), typedBy: { by: 'host' } }),
+    ...(turnItemId ? { turnScope: { kind: 'turn', turnItemId } } : {})
+  })
+
+  // The owner opened the turn; a bot's request steered in later changes neither key nor start.
+  const opened = [owner('u1', 1000), turnRow('t1', 'u1', 1001)]
+  const before = botTurnRequestOrigin(db, HOME, read(opened, [typedInOrca('u1')]))
+  const steeredIn = read([...opened, mail('m1', 2000, 't1')], [typedInOrca('u1')])
+  expect(before).toEqual({
+    rootKey: `${HOME}:u1`,
+    kind: 'owner',
+    at: 1000,
+    request: 'Build a board'
+  })
+  expect(botTurnRequestOrigin(db, HOME, steeredIn)).toEqual(before)
+  expect(botRequestChain(db, HOME, steeredIn)).toMatchObject({ depth: 3 })
+
+  // A request opened the turn; the owner's message steered in later leaves it the request's.
+  const woken = read(
+    [mail('m2', 5000), turnRow('t2', 'm2', 5001), owner('u2', 6000, 't2')],
+    [typedInOrca('u2')]
+  )
+  expect(botTurnRequestOrigin(db, HOME, woken)).toEqual({ rootKey: 'chain:launch', ...start })
+})

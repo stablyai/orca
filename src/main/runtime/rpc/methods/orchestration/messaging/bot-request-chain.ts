@@ -1,5 +1,5 @@
-// Where a new bot request sits in its chain, kept on its record for tracing: a turn a request woke
-// continues that request's chain. An item made in a turn records the same chain as its origin.
+// Where a new bot request sits in its chain, kept on its record for tracing: a turn a request opened
+// continues that request's chain; one a person opened keeps its own, whatever is steered in after. An item made in a turn records the same chain as its origin.
 import { createHash } from 'node:crypto'
 import type { BotActingTurn } from '../../../../../bots/bot-request-asker'
 import { requestStartOf } from '../../../../../bots/bot-items-rows'
@@ -12,19 +12,25 @@ import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group
 export type BotRequestStart = Omit<BotItemOrigin, 'rootKey'>
 
 export type BotRequestChain = {
-  /** The new request's hop: 1 from a person's turn, one past the deepest request that woke the turn. */
+  /** The new request's hop: 1 from a turn that took no request, one past the deepest one it took. */
   depth: number
-  /** The chain's key, its first waking request's; null for a send no turn names, which starts its own. */
+  /** The chain's key, the request's that opened the turn; null for a send no turn names, which starts its own. */
   rootKey: string | null
   /** The sending turn, which with a send's target and text names that send; null when no turn does. */
   turnKey: string | null
-  /** How the chain started: the turn's own start, or the one its first waking request recorded. */
+  /** How the chain started: the turn's own start, or the one its opening request recorded. */
   start: BotRequestStart
 }
 
 type ChainTurn = Pick<
   BotActingTurn,
-  'rootItemId' | 'requestIds' | 'askedBy' | 'openedBy' | 'openedAt' | 'ownerRequest'
+  | 'rootItemId'
+  | 'requestIds'
+  | 'askedBy'
+  | 'openedBy'
+  | 'openedAt'
+  | 'ownerRequest'
+  | 'openedItemId'
 >
 
 /** A turn no request woke starts its chain: who or what sent the message that opened it. */
@@ -73,14 +79,18 @@ export function botRequestChain(
     const row = db.getBotRequest(id)
     return row ? [row] : []
   })
-  if (parents.length === 0) {
-    return { depth: 1, rootKey: fromItemKey ?? turnKey, turnKey, start: turnStart(sessionId, turn) }
+  const depth = parents.length === 0 ? 1 : Math.max(...parents.map((row) => row.depth)) + 1
+  // Only a turn a request opened has no openedBy; a request steered in later still counts for depth.
+  const openingRequest = turn.openedBy === undefined ? parents[0] : undefined
+  if (!openingRequest) {
+    const ownKey = sessionId && turn.openedItemId ? `${sessionId}:${turn.openedItemId}` : turnKey
+    return { depth, rootKey: fromItemKey ?? ownKey, turnKey, start: turnStart(sessionId, turn) }
   }
   return {
-    depth: Math.max(...parents.map((row) => row.depth)) + 1,
-    rootKey: fromItemKey ?? parents[0].root_key,
+    depth,
+    rootKey: fromItemKey ?? openingRequest.root_key,
     turnKey,
-    start: recordedStart(parents[0].record)
+    start: recordedStart(openingRequest.record)
   }
 }
 

@@ -2,6 +2,8 @@
 // host checks.
 import type { BotItemStatus } from '../../shared/bots/bot-items'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { BOTS_ITEM_FROM_ITEM_RUNTIME_CAPABILITY } from '../../shared/bot-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
@@ -78,6 +80,22 @@ function optional(name: string, value: string | undefined): Record<string, strin
   return value === undefined ? {} : { [name]: value }
 }
 
+/** `--from-item`, checked before the write: an older host drops it and makes the item on its own. */
+async function fromItemFlag({ client, flags }: HandlerContext): Promise<string | undefined> {
+  const fromItem = getPresentStringFlag(flags, 'from-item')
+  if (fromItem === undefined) {
+    return undefined
+  }
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (!status.result.capabilities?.includes(BOTS_ITEM_FROM_ITEM_RUNTIME_CAPABILITY)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca host cannot add items with --from-item. Update Orca on that host.'
+    )
+  }
+  return fromItem
+}
+
 /** `--file`, each resolved against the caller's folder: the host copies them from its own disk. */
 function files(flags: Flags, cwd: string): { files?: string[] } {
   const paths = getRepeatedStringFlag(flags, 'file').map((path) => resolve(cwd, path))
@@ -89,6 +107,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     const { flags, cwd } = ctx
     const status = getOptionalStringFlag(flags, 'status')
     const links = getRepeatedStringFlag(flags, 'link')
+    const fromItem = await fromItemFlag(ctx)
     await write(ctx, 'bots.items.add', {
       title: getRequiredStringFlag(flags, 'title'),
       ...optional('description', await readTextOrFileFlag(flags, cwd, 'description', false)),
@@ -97,7 +116,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(links.length > 0 ? { links } : {}),
       ...optional('forBot', getOptionalStringFlag(flags, 'for')),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
-      ...optional('fromItem', getPresentStringFlag(flags, 'from-item'))
+      ...optional('fromItem', fromItem)
     })
   },
   'bot item set': async (ctx) => {

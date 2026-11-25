@@ -17,11 +17,10 @@ import {
 import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
 import { personSendsOf, typedInOrcaByOwner, typedOnAnotherDevice } from './bot-typed-in-orca'
-import { ownerRequestOf } from './bot-owner-request-text'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 import { requestTextOf } from './bot-request-text'
 import { requestTurnAskedBy } from './bot-request-askers-of'
-import { turnOpenedBy, type BotTurnOpenedBy } from './bot-turn-opener'
+import { askedByOf, isOpener, openedFields, type BotTurnOpenedBy } from './bot-turn-opener'
 
 /** The conversation a request came in, as Orca Cloud names it. */
 export type BotRequestConversation = { source: ConnectorSource; externalId: string }
@@ -68,9 +67,12 @@ export type BotActingTurn = {
   /** When the message that opened the turn arrived (its row's observedAt). */
   openedAt?: number
   /** The owner's own words that opened the turn (bot-request-chain.ts reads them as the request's):
-   *  a message Orca's record shows the owner typed in Orca. Never anyone else's text, an automation's
-   *  prompt or event, or Orca's own prompt. */
+   *  a message Orca's record shows the owner typed at the host's own window. Never a paired device's
+   *  or anyone else's text, an automation's prompt or event, or Orca's own prompt. */
   ownerRequest?: string
+  /** The message that opened the turn when rootItemId is a bot request steered in after it: the
+   *  turn's chain is keyed by the opener's id, so the request never moves it. */
+  openedItemId?: string
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
@@ -105,7 +107,7 @@ export type BotRequestActsFor = {
   wantsNothing?: true
 }
 
-type ItemReading =
+export type ItemReading =
   | { kind: 'asker'; asker: BotRequestAsker; wokenAt?: BotWakingPlace | null }
   /** The owner's own message or an automation's prompt: it acts for the conversation, except an
    *  automation's run (`run`), which acts for the owner in whichever chat it lands. */
@@ -266,6 +268,12 @@ export function readBotActingTurnWithin(
     )
     const first = readings.find((entry) => entry.reading.kind === 'request')
     if (first) {
+      // A request steered into a turn a person's message opened keeps that message's start and key.
+      const opener = readings.find((entry) => entry.reading.kind !== 'agent')
+      const openedByPerson =
+        opener && isOpener(opener)
+          ? { ...openedFields(opener, lookups, sends), openedItemId: opener.item.itemId }
+          : {}
       // The people each request was for, from Orca's records, never the sending bot's text; with the
       // conversation's and anyone stamped in the same turn, so a mixed turn is held to the least trusted.
       const records = requestIds.map((messageId) => lookups.botRequestActsFor(messageId))
@@ -297,15 +305,12 @@ export function readBotActingTurnWithin(
         requestIds,
         wokenAt: null,
         ...(typedByAnother ? { typedByAnother: true as const } : {}),
+        ...openedByPerson,
         ...(origin ? { origin } : {}),
         ...(originPlace ? { originPlace } : {})
       }
     }
-    const openers = readings.flatMap((entry) =>
-      entry.reading.kind === 'asker' || entry.reading.kind === 'conversation'
-        ? [{ item: entry.item, reading: entry.reading }]
-        : []
-    )
+    const openers = readings.filter(isOpener)
     const opener = openers[0]
     if (opener) {
       const stamped = openers.flatMap((entry): BotRequestAsker[] =>
@@ -322,21 +327,9 @@ export function readBotActingTurnWithin(
       const ran = openers.some(
         (entry) => entry.reading.kind === 'conversation' && entry.reading.run
       )
-      const ownerRequest = ownerRequestOf(opener.item, sends)
       // Only the newest turn: one a worker's report reads back to is not the turn now running.
       const typedByOwner = index === 0 && window.every((item) => typedInOrcaByOwner(item, sends))
-      // A paired device Orca can't place as the owner asked as someone it can't name.
-      const askedByOf = (entry: (typeof openers)[number]): readonly BotRequestAsker[] =>
-        entry.reading.kind === 'asker'
-          ? [entry.reading.asker]
-          : entry.reading.kind === 'conversation' && entry.reading.run
-            ? OWNER_ACTS_FOR
-            : entry.item.body.kind === 'message' && entry.item.body.memorySource
-              ? lookups.conversationActsFor
-              : typedOnAnotherDevice(entry.item)
-                ? [{ kind: 'unknown' }]
-                : OWNER_ACTS_FOR
-      const askedBy = openers.flatMap(askedByOf)
+      const askedBy = openers.flatMap((entry) => askedByOf(entry, lookups))
       return {
         rootItemId: opener.item.itemId,
         // Anyone stamped in the same turn still holds a mixed turn to the least trusted.
@@ -358,10 +351,7 @@ export function readBotActingTurnWithin(
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
-        // The opener alone, so the start's kind, time and words are one message's.
-        openedBy: turnOpenedBy(opener.item.body, askedByOf(opener)),
-        openedAt: opener.item.observedAt,
-        ...(ownerRequest ? { ownerRequest } : {}),
+        ...openedFields(opener, lookups, sends),
         ...(origin ? { origin } : {})
       }
     }
