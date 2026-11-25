@@ -58,35 +58,18 @@ async function waitForLoopbackListener(
   }
 }
 
-type ForwardPortHolder = {
-  heldLocalPorts: () => readonly number[]
-  /** Whether its forwards listen on 127.0.0.1 only, leaving [::1] to other local servers. */
-  ipv4Only: boolean
-}
-
-const portHolders = new Set<ForwardPortHolder>()
+const portHolders = new Set<() => readonly number[]>()
 
 /** A forward manager besides SSH's names the local ports its forwards hold or are binding. */
-export function registerForwardPortHolder(
-  heldLocalPorts: ForwardPortHolder['heldLocalPorts'],
-  ipv4Only: boolean
-): void {
-  portHolders.add({ heldLocalPorts, ipv4Only })
+export function registerForwardPortHolder(holder: () => readonly number[]): void {
+  portHolders.add(holder)
 }
 
 /** Taken without probing: connecting to a forward's own listener would open its remote stream. */
 function heldByForwardHere(port: number): boolean {
   return (
     (sshPortForwardManager?.heldLocalPorts().includes(port) ?? false) ||
-    [...portHolders].some((holder) => holder.heldLocalPorts().includes(port))
-  )
-}
-
-/** Whether a forward here holds 127.0.0.1:`port` but not [::1]:`port`; SSH forwards always do. */
-export function heldByIpv4OnlyForward(port: number): boolean {
-  return (
-    (sshPortForwardManager?.heldLocalPorts().includes(port) ?? false) ||
-    [...portHolders].some((holder) => holder.ipv4Only && holder.heldLocalPorts().includes(port))
+    [...portHolders].some((holder) => holder().includes(port))
   )
 }
 

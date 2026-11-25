@@ -99,6 +99,14 @@ export function forwardedUrlForRemoteUrl(
   rawUrl: string,
   forwards: readonly PortForwardEntry[]
 ): string | null {
+  return forwardedTargetForRemoteUrl(rawUrl, forwards)?.url ?? null
+}
+
+/** The forward of a remote loopback URL's port and the local URL through it. */
+export function forwardedTargetForRemoteUrl(
+  rawUrl: string,
+  forwards: readonly PortForwardEntry[]
+): { url: string; forward: PortForwardEntry } | null {
   let url: URL
   try {
     url = new URL(rawUrl)
@@ -117,13 +125,13 @@ export function forwardedUrlForRemoteUrl(
     return null
   }
   const hostname = url.hostname.toLowerCase()
-  // Keep the page's own localhost name for its Host header, cookies and redirect URIs; main opens
-  // 127.0.0.1 instead when another local server holds [::1] on the port, since the listener is IPv4 only.
+  // Keep the page's own localhost name for its Host header, cookies and redirect URIs; opening it
+  // through its forward names 127.0.0.1 instead when another local app holds [::1] on the port.
   if (hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1') {
     url.hostname = '127.0.0.1'
   }
   url.port = String(forward.localPort)
-  return url.toString()
+  return { url: url.toString(), forward }
 }
 
 export function addressForPortForwardEntry(entry: PortForwardEntry): string {

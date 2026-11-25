@@ -47,7 +47,7 @@ const manager = new SshPortForwardManager<PairedPortForwardTunnel>(
   { onForwardClosed: (entry) => deps?.onChanged(entry.connectionId) },
   [new PairedPortForwardProvider()]
 )
-registerForwardPortHolder(() => manager.heldLocalPorts(), !holdsIpv6Loopback(process.platform))
+registerForwardPortHolder(() => manager.heldLocalPorts())
 
 export function configurePairedPortForwards(next: PairedPortForwardsDeps): void {
   deps = next
