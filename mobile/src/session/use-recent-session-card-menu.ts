@@ -12,7 +12,7 @@ import {
 } from './tabs/mobile-session-tab-activation'
 import { recentCardExecutionHostKey, recentCardRowKey } from './recent-session-card-snapshot'
 import {
-  EMPTY_RECENT_CARDS_POLL_STATE,
+  getCachedRecentCardsPollState,
   pollRecentCardsAcrossHosts,
   resolveRecentCardClient,
   sameRecentCardsPollState,
@@ -55,9 +55,14 @@ export function useRecentSessionCardMenu(scope: MobileSessionPresentationModel) 
   const jumpLockRef = useRef(false)
   const recentCardsPollInFlightRef = useRef(false)
   const [recentCardsRevision, setRecentCardsRevision] = useState(0)
-  const [recentCardsPollState, setRecentCardsPollState] = useState<RecentCardsPollState>(
-    EMPTY_RECENT_CARDS_POLL_STATE
+  const [recentCardsPollState, setRecentCardsPollState] = useState<RecentCardsPollState>(() =>
+    getCachedRecentCardsPollState(hostId)
   )
+
+  useEffect(() => {
+    const cached = getCachedRecentCardsPollState(hostId)
+    setRecentCardsPollState((prev) => (sameRecentCardsPollState(prev, cached) ? prev : cached))
+  }, [hostId])
 
   useEffect(() => {
     if (!isRecentCardsOpen) {

@@ -10,6 +10,11 @@ import {
 } from './tabs/mobile-session-tab-activation'
 import { recentCardSnapshotTabs } from './recent-session-card-snapshot'
 import {
+  clearRecentCardsPollStateForTests,
+  pollRecentCardsAcrossHosts
+} from './recent-session-card-routing'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import {
   MAX_RECENT_SESSION_CARDS_DISPLAY,
   MAX_RECENT_SESSION_CARDS_LIMIT,
   MAX_RECENT_SESSION_CARDS_STORED,
@@ -368,5 +373,132 @@ describe('removal, reconciliation, and pending cross-worktree targets', () => {
 
     const afterLocalRemove = removeRecentSessionCard('host-1', 'wt-1', 'tab-local')
     expect(afterLocalRemove.map((item) => item.tabId)).toEqual(['tab-r2', 'tab-remote-keep'])
+  })
+
+  it('dedupes legacy unscoped and same-handle duplicates and prunes stale worktrees on catalog poll', async () => {
+    try {
+      await persistMirrored(
+        RECENT_SESSION_CARDS_STORAGE_KEY,
+        JSON.stringify([
+          card({
+            worktreeId: 'wt-remote',
+            tabId: 'tab-ssh',
+            terminalHandle: 'term-ssh',
+            executionHost: 'runtime:zreators-app',
+            lastVisitedAt: 40
+          }),
+          // Legacy pre-fix visit to the same SSH tab stored without executionHost.
+          card({
+            worktreeId: 'wt-remote',
+            tabId: 'tab-ssh',
+            terminalHandle: 'term-ssh',
+            lastVisitedAt: 35
+          }),
+          // Stale legacy entry on another removed remote worktree (different tabId).
+          card({
+            worktreeId: 'wt-gone',
+            tabId: 'tab-stale',
+            lastVisitedAt: 30
+          }),
+          card({
+            worktreeId: 'wt-local',
+            tabId: 'tab-local',
+            terminalHandle: 'term-local-1',
+            lastVisitedAt: 20
+          })
+        ])
+      )
+      const hydrated = await hydrateRecentSessionCards()
+      expect(hydrated.map((item) => [item.worktreeId, item.tabId, item.executionHost])).toEqual([
+        ['wt-remote', 'tab-ssh', 'runtime:zreators-app'],
+        ['wt-gone', 'tab-stale', undefined],
+        ['wt-local', 'tab-local', undefined]
+      ])
+
+      // Recording a re-created tab carrying the same terminal handle drops the superseded tab entry.
+      const afterHandleRevisit = recordRecentSessionCardVisit(
+        card({
+          worktreeId: 'wt-local',
+          tabId: 'tab-local-rebound',
+          terminalHandle: 'term-local-1',
+          lastVisitedAt: 50
+        })
+      )
+      expect(afterHandleRevisit.map((item) => item.tabId)).toEqual([
+        'tab-local-rebound',
+        'tab-ssh',
+        'tab-stale'
+      ])
+
+      const fakePairedClient: RpcClient = {
+        sendRequest: async (method, _params, options) => {
+          const execHost = options?.envelope?.executionHost
+          if (method === 'worktree.ps') {
+            return {
+              ok: true,
+              result: {
+                snapshotId: 'snap-1',
+                worktrees: execHost
+                  ? [{ worktreeId: 'wt-remote', displayName: 'Remote App' }]
+                  : [{ worktreeId: 'wt-local', displayName: 'Local Main' }]
+              }
+            }
+          }
+          if (method === 'session.tabs.list') {
+            return {
+              ok: true,
+              result: {
+                worktree: execHost ? 'id:wt-remote' : 'id:wt-local',
+                tabs: execHost
+                  ? [{ id: 'tab-ssh', type: 'terminal', title: 'bash', terminal: 'term-ssh' }]
+                  : [
+                      {
+                        id: 'tab-local-rebound',
+                        type: 'terminal',
+                        title: 'bash',
+                        terminal: 'term-local-1'
+                      }
+                    ]
+              }
+            }
+          }
+          return { ok: false, error: { code: 'unsupported', message: method } }
+        },
+        subscribe: () => () => {},
+        updateTerminalSubscriptionViewport: () => {},
+        getState: () => 'connected',
+        getReconnectAttempt: () => 0,
+        getLastConnectedAt: () => null,
+        onStateChange: () => () => {},
+        notifyForeground: () => {},
+        close: () => {}
+      }
+
+      await pollRecentCardsAcrossHosts({
+        hostId: 'host-1',
+        worktreeId: 'wt-remote',
+        sessionTabsCount: 1,
+        currentExecutionHost: 'runtime:zreators-app',
+        currentClient: fakePairedClient,
+        currentConnState: 'connected',
+        pairedHostClient: fakePairedClient,
+        pairedHostState: 'connected',
+        hostCapabilities: ['mobile-desktop-relay-runtime'],
+        isCancelled: () => false
+      })
+
+      expect(
+        readAllRecentSessionCardsSync().map((item) => [
+          item.worktreeId,
+          item.tabId,
+          item.executionHost
+        ])
+      ).toEqual([
+        ['wt-local', 'tab-local-rebound', undefined],
+        ['wt-remote', 'tab-ssh', 'runtime:zreators-app']
+      ])
+    } finally {
+      clearRecentCardsPollStateForTests()
+    }
   })
 })

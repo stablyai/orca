@@ -42,6 +42,50 @@ export function capRecentCardList(
     .slice(0, maxTotal)
 }
 
+export function dedupeRecentSessionCards(
+  cards: readonly RecentSessionCardSnapshot[]
+): RecentSessionCardSnapshot[] {
+  const remoteTabKeys = new Set<string>()
+  const remoteHandleKeys = new Set<string>()
+  for (const card of cards) {
+    if (recentCardExecutionHostKey(card.executionHost) === '') {
+      continue
+    }
+    remoteTabKeys.add(`${card.hostId}\0${card.worktreeId}\0${card.tabId}`)
+    if (card.terminalHandle) {
+      remoteHandleKeys.add(`${card.hostId}\0${card.worktreeId}\0${card.terminalHandle}`)
+    }
+  }
+  const seenKeys = new Set<string>()
+  const seenHandles = new Set<string>()
+  return cards.filter((card) => {
+    const execKey = recentCardExecutionHostKey(card.executionHost)
+    if (
+      execKey === '' &&
+      (remoteTabKeys.has(`${card.hostId}\0${card.worktreeId}\0${card.tabId}`) ||
+        (card.terminalHandle &&
+          remoteHandleKeys.has(`${card.hostId}\0${card.worktreeId}\0${card.terminalHandle}`)))
+    ) {
+      return false
+    }
+    const key = recentCardStorageKey(card)
+    if (seenKeys.has(key)) {
+      return false
+    }
+    const handleKey = card.terminalHandle
+      ? `${card.hostId}\0${recentCardWorktreeScopeKey(card.worktreeId, card.executionHost)}\0handle:${card.terminalHandle}`
+      : null
+    if (handleKey && seenHandles.has(handleKey)) {
+      return false
+    }
+    seenKeys.add(key)
+    if (handleKey) {
+      seenHandles.add(handleKey)
+    }
+    return true
+  })
+}
+
 export function mergeRecentCardListsByRecency(
   primary: readonly RecentSessionCardSnapshot[],
   secondary: readonly RecentSessionCardSnapshot[]
@@ -52,7 +96,9 @@ export function mergeRecentCardListsByRecency(
       byKey.set(recentCardStorageKey(c), c)
     }
   }
-  return [...byKey.values()].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
+  return dedupeRecentSessionCards(
+    [...byKey.values()].sort((a, b) => b.lastVisitedAt - a.lastVisitedAt)
+  )
 }
 
 export function reconcileRecentSessionCardList(

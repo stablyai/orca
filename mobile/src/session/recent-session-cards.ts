@@ -28,9 +28,9 @@ import {
 } from './recent-session-card-snapshot'
 import {
   capRecentCardList,
+  dedupeRecentSessionCards,
   filterVisibleRecentSessionCards,
   mergeRecentCardListsByRecency,
-  recentCardStorageKey,
   reconcileRecentSessionCardList,
   type LiveRecentCardWorktree
 } from './recent-session-card-visibility'
@@ -129,7 +129,7 @@ export function setRecentSessionCardsMaxDisplay(limit: number): number {
 
 const applyVisit = (existing: ReadonlyCards, record: RecentSessionCardRecord): Cards =>
   capRecentCardList(
-    [record, ...existing.filter((i) => recentCardStorageKey(i) !== recentCardStorageKey(record))],
+    dedupeRecentSessionCards([record, ...existing]),
     MAX_RECENT_SESSION_CARDS_STORED,
     MAX_TOTAL
   )
@@ -138,7 +138,9 @@ export function readAllRecentSessionCardsSync(): Cards {
   if (!memory) {
     const m = readMirroredStorage(M_KEYS)
     const d = parseRecentSessionCards(m[RECENT_SESSION_CARDS_STORAGE_KEY])
-    const cards = d.length ? d : parseRecentSessionCards(m[LAST_VISITED_WORKTREE_STORAGE_KEY])
+    const cards = dedupeRecentSessionCards(
+      d.length ? d : parseRecentSessionCards(m[LAST_VISITED_WORKTREE_STORAGE_KEY])
+    )
     if (cards.length > 0) {
       memory = cards
       hydrated = true
@@ -154,10 +156,8 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
     parseRecentSessionCardsMaxDisplay(dRaw) ?? parseRecentSessionCardsMaxDisplay(lRaw)
   maxDisplayMemory ??= storedLimit
   const storedPrefs = hydrateSessionTabPreferencesFromRaw(dRaw, lRaw)
-  const merged = mergeRecentCardListsByRecency(
-    parseRecentSessionCards(dRaw),
-    parseRecentSessionCards(lRaw)
-  )
+  const [dParsed, lParsed] = [parseRecentSessionCards(dRaw), parseRecentSessionCards(lRaw)]
+  const merged = mergeRecentCardListsByRecency(dParsed, lParsed)
   const stored = capRecentCardList(
     withoutPendingRemovals(merged),
     MAX_RECENT_SESSION_CARDS_STORED,
@@ -171,6 +171,9 @@ export async function hydrateRecentSessionCards(): Promise<Cards> {
     return combined[0] ? persistCards(combined).slice() : (notify(), combined.slice())
   }
   hydrated = true
+  if (stored.length < Math.max(dParsed.length, lParsed.length)) {
+    return persistCards(stored).slice()
+  }
   memory = stored.length > 0 ? stored : memory
   if (stored.length > 0 || storedLimit !== null || storedPrefs) {
     notify()

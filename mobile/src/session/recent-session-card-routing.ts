@@ -11,8 +11,10 @@ import {
 } from './recent-session-card-snapshot'
 import {
   readAllRecentSessionCardsSync,
-  reconcileRecentSessionCardsForWorktree
+  reconcileRecentSessionCardsForWorktree,
+  removeRecentSessionCard
 } from './recent-session-cards'
+import { recentCardWorktreeScopeKey } from './recent-session-card-visibility'
 
 export type RecentCardWorktree = {
   worktreeId: string
@@ -29,6 +31,16 @@ export type RecentCardsPollState = {
 export const EMPTY_RECENT_CARDS_POLL_STATE: RecentCardsPollState = {
   worktrees: [],
   confirmedExecutionHosts: new Set()
+}
+
+const cachedPollStateByHost = new Map<string, RecentCardsPollState>()
+
+export function getCachedRecentCardsPollState(hostId: string | undefined): RecentCardsPollState {
+  return (hostId && cachedPollStateByHost.get(hostId)) || EMPTY_RECENT_CARDS_POLL_STATE
+}
+
+export function clearRecentCardsPollStateForTests(): void {
+  cachedPollStateByHost.clear()
 }
 
 type ClientResolutionArgs = {
@@ -137,6 +149,7 @@ export async function pollRecentCardsAcrossHosts(
 
   const worktrees: RecentCardWorktree[] = []
   const confirmedExecutionHosts = new Set<string>()
+  const populatedExecutionHosts = new Set<string>()
   await Promise.allSettled(
     [...catalogTargets.entries()].map(async ([execKey, execHost]) => {
       const targetClient = resolveRecentCardClient({
@@ -149,8 +162,15 @@ export async function pollRecentCardsAcrossHosts(
       }
       const reply = await worktreeCatalogRead.request(targetClient, { limit: 10000 })
       const catalog = !isCancelled() ? worktreeCatalogRead.interpret(reply) : null
-      if (catalog?.accepted && Array.isArray(catalog.value.worktrees)) {
+      if (
+        catalog?.accepted &&
+        Array.isArray(catalog.value.worktrees) &&
+        catalog.value.unchanged !== true
+      ) {
         confirmedExecutionHosts.add(execKey)
+        if (catalog.value.worktrees.length > 0) {
+          populatedExecutionHosts.add(execKey)
+        }
         worktrees.push(...toRecentCardWorktrees(catalog.value.worktrees, execHost))
       }
     })
@@ -160,8 +180,27 @@ export async function pollRecentCardsAcrossHosts(
     return null
   }
 
+  const activeWorktreeKeys = new Set(
+    worktrees
+      .filter((w) => !w.isArchived)
+      .map((w) => recentCardWorktreeScopeKey(w.worktreeId, w.executionHost))
+  )
+  const prunedScopeKeys = new Set<string>()
+  for (const item of cardsForHost) {
+    const itemExecKey = recentCardExecutionHostKey(item.executionHost)
+    const scopeKey = recentCardWorktreeScopeKey(item.worktreeId, item.executionHost)
+    if (
+      populatedExecutionHosts.has(itemExecKey) &&
+      !activeWorktreeKeys.has(scopeKey) &&
+      !prunedScopeKeys.has(scopeKey)
+    ) {
+      prunedScopeKeys.add(scopeKey)
+      removeRecentSessionCard(hostId, item.worktreeId, undefined, undefined, item.executionHost)
+    }
+  }
+
   const confirmedWorktreeKeys = new Set(
-    worktrees.map((w) => `${recentCardExecutionHostKey(w.executionHost)}\0${w.worktreeId}`)
+    worktrees.map((w) => recentCardWorktreeScopeKey(w.worktreeId, w.executionHost))
   )
   const currentExecKey = recentCardExecutionHostKey(currentExecutionHost)
   const tabTargets = new Map<string, { worktreeId: string; executionHost?: ExecutionHostId }>()
@@ -170,8 +209,8 @@ export async function pollRecentCardsAcrossHosts(
     if (item.worktreeId === worktreeId && itemExecKey === currentExecKey && sessionTabsCount > 0) {
       continue
     }
-    const key = `${itemExecKey}\0${item.worktreeId}`
-    if (!confirmedWorktreeKeys.has(key)) {
+    const key = recentCardWorktreeScopeKey(item.worktreeId, item.executionHost)
+    if (!confirmedWorktreeKeys.has(key) || prunedScopeKeys.has(key)) {
       continue
     }
     if (!tabTargets.has(key)) {
@@ -215,5 +254,10 @@ export async function pollRecentCardsAcrossHosts(
   if (isCancelled()) {
     return null
   }
-  return { worktrees, confirmedExecutionHosts }
+  const nextState: RecentCardsPollState = { worktrees, confirmedExecutionHosts }
+  const prevCached = cachedPollStateByHost.get(hostId)
+  if (!prevCached || !sameRecentCardsPollState(prevCached, nextState)) {
+    cachedPollStateByHost.set(hostId, nextState)
+  }
+  return nextState
 }
