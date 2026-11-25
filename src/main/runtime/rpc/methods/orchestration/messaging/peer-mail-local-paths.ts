@@ -114,11 +114,16 @@ export async function localPathWarning(
   if (local.length === 0) {
     return null
   }
-  const named = local.slice(0, NAMED_MAX).join(', ')
-  const more = local.length > NAMED_MAX ? ` and ${local.length - NAMED_MAX} more` : ''
+  const shown = local.slice(0, NAMED_MAX)
+  const items = local.length > NAMED_MAX ? [...shown, `${local.length - NAMED_MAX} more`] : shown
+  // "a", "a and b", "a, b, and c".
+  const named =
+    items.length <= 2
+      ? items.join(' and ')
+      : `${items.slice(0, -1).join(', ')}, and ${items.at(-1)}`
   return {
     code: 'local_paths_unreadable',
     recipient,
-    message: `The body names ${named}${more} on this computer, which ${serverName} can't open. The message went as written; to share the contents, put the text in the body (--body-file reads a file into it), or attach the file with --file on a bot's item.`
+    message: `The body names ${named} on this computer, which ${serverName} can't open. The message went as written; to share the contents, put the text in the body (--body-file reads a file into it), or attach it to a bot item with --file.`
   }
 }

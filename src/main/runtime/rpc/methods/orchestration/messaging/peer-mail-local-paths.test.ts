@@ -61,7 +61,9 @@ describe('local paths in mail to another computer', () => {
 
   it('sends without the warning when the disk stalls, leaving a bounded set of lookups', async () => {
     vi.useFakeTimers()
-    onTestFinished(() => vi.useRealTimers())
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const held: (() => void)[] = []
     const statPath = () => new Promise<void>((done) => held.push(done))
     const body = Array.from({ length: 30 }, (_, n) => `${join(dir, `f${n}.md`)} a b c d`).join('\n')
@@ -73,5 +75,17 @@ describe('local paths in mail to another computer', () => {
     expect(held.length).toBeLessThanOrEqual(50)
     expect(held.length).toBeGreaterThan(0)
     held.forEach((release) => release())
+  })
+
+  it('names several files as a list, and counts the rest', async () => {
+    const files = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md'].map((name) => join(dir, name))
+    files.forEach((file) => writeFileSync(file, ''))
+    const named = async (count: number) =>
+      (await localPathWarning(files.slice(0, count).join('\n'), 'bot:Docs', 'm4'))?.message
+    const [a, b, c] = files
+    expect(await named(2)).toContain(`names ${a} and ${b} on this computer`)
+    expect(await named(3)).toContain(`names ${a}, ${b}, and ${c} on this computer`)
+    expect(await named(5)).toContain(`names ${a}, ${b}, ${c}, and 2 more on this computer`)
+    expect(await named(1)).toContain('or attach it to a bot item with --file.')
   })
 })
