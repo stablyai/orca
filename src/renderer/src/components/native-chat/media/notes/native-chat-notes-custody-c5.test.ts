@@ -326,6 +326,62 @@ it('a claim left by a window that went away is cleared, and the next Send goes a
   await vi.waitFor(() => expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(false))
 })
 
+it('an edit whose marker storage refused is still announced to the other windows', async () => {
+  installLocks()
+  const otherWindow = new BroadcastChannel('orca-native-chat-notes-edit')
+  const heard: unknown[] = []
+  otherWindow.onmessage = (event) => heard.push(event.data)
+  const refused = refuseStorageWrites()
+  const end = claimNativeChatNotesEdit(SCOPE, 'img')
+  refused.mockRestore()
+  await vi.waitFor(() =>
+    expect(heard).toContainEqual(
+      expect.objectContaining({ type: 'claim', scopeKey: SCOPE, id: 'img' })
+    )
+  )
+  end()
+  await vi.waitFor(() => expect(heard).toContainEqual(expect.objectContaining({ type: 'release' })))
+  otherWindow.close()
+})
+
+it('a claim another window announced holds Send until it is released, with no marker in storage', async () => {
+  installLocks()
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'img', path: '/i.png' }] })
+  const otherWindow = new BroadcastChannel('orca-native-chat-notes-edit')
+  // That window holds its lock and could not write its marker.
+  heldLocks.add('orca.nativeChat.notesEditing.v2:other-window-1')
+  otherWindow.postMessage({
+    type: 'claim',
+    token: 'other-window-1',
+    scopeKey: SCOPE,
+    id: 'img',
+    at: 1
+  })
+  await vi.waitFor(() => expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true))
+  otherWindow.postMessage({ type: 'release', token: 'other-window-1' })
+  heldLocks.delete('orca.nativeChat.notesEditing.v2:other-window-1')
+  await vi.waitFor(() => expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(false))
+  otherWindow.close()
+})
+
+it('a claim whose lock is still being acquired is never taken for abandoned', async () => {
+  const pendingName = 'orca.nativeChat.notesEditing.v2:slow-window-1'
+  Object.defineProperty(globalThis.navigator, 'locks', {
+    configurable: true,
+    value: {
+      request: async () => {},
+      query: async () => ({ held: [], pending: [{ name: pendingName }] })
+    }
+  })
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'img', path: '/i.png' }] })
+  localStorage.setItem(`${EDIT_PREFIX}slow-window-1`, '1')
+  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(localStorage.getItem(`${EDIT_PREFIX}slow-window-1`)).toBe('1')
+  expect(nativeChatDraftHasEditingImage(SCOPE)).toBe(true)
+})
+
 it('a viewer that goes away without closing keeps its new notes for the chat and media', () => {
   const { unmount } = renderHook(() =>
     useNativeChatNotesKeptOnUnmount({

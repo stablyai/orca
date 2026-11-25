@@ -1,8 +1,10 @@
 // Which marked images are open for editing in any window of this origin. Each open editor has a
-// claim of its own: a shared marker under its own key, so closing one editor never ends another's,
-// and a Web Lock it holds for as long as it edits. The browser releases a window's locks when that
-// window goes away, so a marker whose lock is no longer held was abandoned and is cleared, while a
-// live edit counts for as long as it lasts.
+// claim of its own, so closing one editor never ends another's, and a Web Lock it holds for as long
+// as it edits. The claim is published twice: as a shared marker under its own key, and announced to
+// the other windows on a channel, which still tells them when storage refuses the marker. The
+// browser releases a window's locks when that window goes away, so a claim whose lock is neither
+// held nor being acquired was abandoned and is cleared, while a live edit counts for as long as it
+// lasts.
 
 const CLAIM_KEY = 'orca.nativeChat.notesEditing.v2'
 /** A claim this new may not hold its lock yet: never taken for abandoned. */
@@ -16,7 +18,56 @@ const lockName = (token: string): string => `${CLAIM_KEY}:${token}`
 const windowToken = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
 let claimSequence = 0
 
-type Claim = { item: string; token: string; at: number }
+type Claim = { item: string | null; token: string; at: number }
+type Announced = { scopeKey: string; id: string; at: number }
+
+const CHANNEL_NAME = 'orca-native-chat-notes-edit'
+// This window's live claims, and those other windows announced.
+const ownClaims = new Map<string, Announced>()
+const announcedClaims = new Map<string, Announced>()
+
+function isAnnounced(value: unknown): value is Announced & { token: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'token' in value &&
+    typeof value.token === 'string' &&
+    'scopeKey' in value &&
+    typeof value.scopeKey === 'string' &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'at' in value &&
+    typeof value.at === 'number'
+  )
+}
+
+function receive(data: unknown): void {
+  if (typeof data !== 'object' || data === null || !('type' in data)) {
+    return
+  }
+  if (data.type === 'claim' && isAnnounced(data)) {
+    announcedClaims.set(data.token, { scopeKey: data.scopeKey, id: data.id, at: data.at })
+  } else if (data.type === 'release' && 'token' in data && typeof data.token === 'string') {
+    announcedClaims.delete(data.token)
+  } else if (data.type === 'query') {
+    // A window that just opened asks who is editing.
+    for (const [token, claim] of ownClaims) {
+      channel?.postMessage({ type: 'claim', token, ...claim })
+    }
+  }
+}
+
+// Listening from the start, so a window knows other windows' edits before its first Send.
+const channel: BroadcastChannel | null =
+  typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel(CHANNEL_NAME)
+if (channel) {
+  channel.onmessage = (event) => receive(event.data)
+  // Why: Node's channel (unit tests) would otherwise keep the process alive.
+  if ('unref' in channel && typeof channel.unref === 'function') {
+    channel.unref()
+  }
+  channel.postMessage({ type: 'query' })
+}
 
 function claimsOf(scopeKey: string, id: string): Claim[] {
   const storage = globalThis.localStorage
@@ -36,6 +87,11 @@ function claimsOf(scopeKey: string, id: string): Claim[] {
   } catch {
     // Unreadable storage: only this window's own edits are known.
   }
+  for (const [token, claim] of announcedClaims) {
+    if (claim.scopeKey === scopeKey && claim.id === id && !claims.some((c) => c.token === token)) {
+      claims.push({ item: null, token, at: claim.at })
+    }
+  }
   return claims
 }
 
@@ -49,12 +105,16 @@ async function reapAbandonedClaims(claims: readonly Claim[]): Promise<void> {
   if (!manager) {
     return
   }
-  const { held = [] } = await manager.query()
-  const live = new Set(held.map(({ name }) => name))
+  // A lock still being acquired is as live as a held one.
+  const { held = [], pending = [] } = await manager.query()
+  const live = new Set([...held, ...pending].map(({ name }) => name))
   for (const claim of claims) {
     if (!live.has(lockName(claim.token)) && claim.at < Date.now() - CLAIM_SETTLING_MS) {
+      announcedClaims.delete(claim.token)
       try {
-        globalThis.localStorage?.removeItem(claim.item)
+        if (claim.item) {
+          globalThis.localStorage?.removeItem(claim.item)
+        }
       } catch {
         // Left for the next check.
       }
@@ -80,13 +140,18 @@ export function claimNativeChatNotesEdit(scopeKey: string, id: string): () => vo
         }
       })
   )
+  const at = Date.now()
+  ownClaims.set(token, { scopeKey, id, at })
+  channel?.postMessage({ type: 'claim', token, scopeKey, id, at })
   try {
-    globalThis.localStorage?.setItem(item, String(Date.now()))
+    globalThis.localStorage?.setItem(item, String(at))
   } catch {
-    // Without shared storage the edit is still held back in this window.
+    // Refused: the announcement above still tells the other windows.
   }
   return () => {
     ended = true
+    ownClaims.delete(token)
+    channel?.postMessage({ type: 'release', token })
     releaseLock()
     try {
       globalThis.localStorage?.removeItem(item)
