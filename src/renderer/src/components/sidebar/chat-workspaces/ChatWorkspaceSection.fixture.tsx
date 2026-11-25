@@ -8,6 +8,7 @@ import { ConfirmationDialogProvider } from '../../dismiss/confirmation/confirmat
 import SidebarHeader from '../chrome/SidebarHeader'
 import { SidebarSectionHeader } from '../SidebarSectionHeader'
 import { SidebarProjectsListSlot } from '../SidebarBotsSplit'
+import { SidebarContentViewport } from '../SidebarContentViewport'
 import { useAppStore } from '@/store'
 import { PROJECTS_SECTION_GROUP_KEY } from '../../../../../shared/sidebar-list/sections/group-keys'
 
@@ -15,21 +16,31 @@ function ProjectsHeader() {
   return <SidebarHeader collapsible reorderable={false} onWorkspaceBoardMenuOpenChange={() => {}} />
 }
 
-function PopulatedSidebar() {
+function PopulatedSidebar({ height = 520 }: { height?: number }) {
   const collapsed = useAppStore((state) => state.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY))
   return (
-    <div className="flex h-[520px] flex-col bg-worktree-sidebar text-worktree-sidebar-foreground">
-      <ProjectsHeader />
-      <SidebarProjectsListSlot botsShown collapsed={collapsed}>
-        <WorktreeList scrollOffsetRef={offset} scrollAnchorRef={anchor} />
-      </SidebarProjectsListSlot>
-      <ChatWorkspaceSection scrollOffsetRef={chatOffset} scrollAnchorRef={chatAnchor} />
-      <SidebarSectionHeader
-        title="Bots"
-        sectionId="bots"
-        actions={null}
-        fold={{ collapsed: true, label: 'Expand Bots', onToggle: () => {} }}
-      />
+    <div
+      className="flex flex-col bg-worktree-sidebar text-worktree-sidebar-foreground"
+      style={{ height }}
+    >
+      <SidebarContentViewport>
+        <ProjectsHeader />
+        <SidebarProjectsListSlot botsShown fill={!collapsed} contentSized>
+          <div
+            data-sidebar-project-workspaces=""
+            className={collapsed ? 'hidden' : 'flex min-h-0 shrink flex-col'}
+          >
+            <WorktreeList contentSized scrollOffsetRef={offset} scrollAnchorRef={anchor} />
+          </div>
+          <ChatWorkspaceSection scrollOffsetRef={chatOffset} scrollAnchorRef={chatAnchor} />
+        </SidebarProjectsListSlot>
+        <SidebarSectionHeader
+          title="Bots"
+          sectionId="bots"
+          actions={null}
+          fold={{ collapsed: true, label: 'Expand Bots', onToggle: () => {} }}
+        />
+      </SidebarContentViewport>
     </div>
   )
 }
@@ -143,6 +154,42 @@ export const populated = defineFixture({
     <DndContext>
       <ConfirmationDialogProvider>
         <PopulatedSidebar />
+      </ConfirmationDialogProvider>
+    </DndContext>
+  )
+})
+
+export const manyProjects = defineFixture({
+  ...populated,
+  store: {
+    ...populated.store,
+    worktreesByRepo: {
+      chat: [chatRoot],
+      'repo-1': [
+        projectRoot,
+        ...Array.from({ length: 40 }, (_, index) =>
+          makeWorktree(`feature-${index}`, `feature-${index}`, {
+            repoId: project.id,
+            path: `${project.path}/feature-${index}`,
+            branch: `feature-${index}`
+          })
+        )
+      ]
+    }
+  }
+})
+
+export const noProjects = defineFixture({
+  ...populated,
+  store: { ...populated.store, repos: [chat], worktreesByRepo: { chat: [chatRoot] } }
+})
+
+export const shortSidebar = defineFixture({
+  ...manyProjects,
+  render: () => (
+    <DndContext>
+      <ConfirmationDialogProvider>
+        <PopulatedSidebar height={260} />
       </ConfirmationDialogProvider>
     </DndContext>
   )

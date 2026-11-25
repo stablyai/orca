@@ -1,4 +1,9 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useLayoutEffect, useRef } from 'react'
+import {
+  measureSidebarProjectsContent,
+  observeSidebarProjectsContent,
+  PROJECTS_CONTENT_MIN_HEIGHT
+} from './sidebar-projects-content-size'
 import { useAppStore } from '@/store'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { cn } from '@/lib/class-names'
@@ -19,7 +24,11 @@ const SPLIT_SCROLL_GUTTER = '[&_.worktree-sidebar-scrollbar]:[scrollbar-gutter:s
 /** Tallest the Bots section may be dragged right now, from the Projects list's live height. */
 export function measureSidebarBotsMaxHeight(section: HTMLElement): number {
   const list = section.parentElement?.querySelector<HTMLElement>(PROJECTS_LIST_SELECTOR)
-  return computeSidebarBotsMaxHeight(section.offsetHeight, list?.offsetHeight ?? Infinity)
+  const otherHeight = list ? (measureSidebarProjectsContent(list)?.otherHeight ?? 0) : 0
+  return computeSidebarBotsMaxHeight(
+    section.offsetHeight,
+    (list?.offsetHeight ?? Infinity) - otherHeight
+  )
 }
 
 const SPLIT_SELECTOR = '[data-sidebar-bots-split]'
@@ -60,22 +69,42 @@ export function holdSidebarBotsHeightForSearch(inside: Element): () => void {
 export function SidebarProjectsListSlot({
   botsShown,
   collapsed = false,
+  fill = true,
+  contentSized = false,
   children
 }: {
   botsShown: boolean
   /** Hidden, not unmounted, so the list keeps its scroll and open dialogs. */
   collapsed?: boolean
+  fill?: boolean
+  contentSized?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
+  const slotRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(
+    () =>
+      contentSized && slotRef.current ? observeSidebarProjectsContent(slotRef.current) : undefined,
+    [contentSized]
+  )
   return (
     <div
+      ref={slotRef}
       data-sidebar-projects-list=""
       className={cn(
-        'flex min-h-0 flex-1 flex-col',
+        'flex min-h-0 flex-col',
+        fill ? 'flex-1' : 'shrink-0',
         botsShown && SPLIT_SCROLL_GUTTER,
         collapsed && 'hidden'
       )}
-      style={botsShown ? { minHeight: SIDEBAR_PROJECTS_MIN_LIST_HEIGHT } : undefined}
+      style={
+        contentSized
+          ? {
+              minHeight: `var(${PROJECTS_CONTENT_MIN_HEIGHT}, ${SIDEBAR_PROJECTS_MIN_LIST_HEIGHT}px)`
+            }
+          : botsShown && fill
+            ? { minHeight: SIDEBAR_PROJECTS_MIN_LIST_HEIGHT }
+            : undefined
+      }
     >
       {children}
     </div>

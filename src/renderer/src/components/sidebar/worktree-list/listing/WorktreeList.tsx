@@ -50,6 +50,7 @@ import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/worksp
 
 type WorktreeListProps = {
   workspaceSection?: 'projects' | 'chats'
+  contentSized?: boolean
   scrollOffsetRef: React.MutableRefObject<number>
   scrollAnchorRef: React.MutableRefObject<VirtualizedScrollAnchor>
   workspaceBoardOpen?: boolean
@@ -68,6 +69,7 @@ const useSidebarListModel =
 
 const WorktreeList = React.memo(function WorktreeList({
   workspaceSection = 'projects',
+  contentSized,
   scrollOffsetRef,
   scrollAnchorRef,
   workspaceBoardOpen = false,
@@ -319,6 +321,7 @@ const WorktreeList = React.memo(function WorktreeList({
       />
       <VirtualizedWorktreeViewport
         workspaceSection={workspaceSection}
+        contentSized={contentSized}
         // Wake moves status headers; preserve viewport identity across those changes.
         key={`group:${groupBy}:host:${filterState.visibleWorkspaceHostIds?.join(',') ?? 'all'}:lineage`}
         rows={rowModel.sectionRows}

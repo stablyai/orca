@@ -36,6 +36,7 @@ import type {
 export const EMPTY_PROJECT_GROUPS: readonly ProjectGroup[] = []
 export type VirtualizedWorktreeViewportProps = {
   workspaceSection?: 'projects' | 'chats'
+  contentSized?: boolean
   occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   visibleProjectRepoIdsBySection?: ReadonlyMap<string, ReadonlySet<string>>
   rows: HostSectionRow[]

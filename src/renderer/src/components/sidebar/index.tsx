@@ -16,8 +16,7 @@ import SidebarNav from './chrome/SidebarNav'
 import { setSidebarLiveWidth } from './chrome/sidebar-live-width'
 import SetupScriptPromptCard from './setup-script-prompts/SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
-import WslMovedProjectsSection from '../wsl-move/WslMovedProjectsSection'
-import HiddenProjectsSection from './hidden-projects/HiddenProjectsSection'
+import { SidebarProjectWorkspaces } from './SidebarProjectWorkspaces'
 import SidebarToolbar from './chrome/SidebarToolbar'
 import WorkspaceKanbanDrawer from './workspace-board/surface/WorkspaceKanbanDrawer'
 import type { VirtualizedScrollAnchor } from '@/lib/list-interaction/virtualized-scrolling/useVirtualizedScrollAnchor'
@@ -283,21 +282,22 @@ function Sidebar({
               <WorktreeCardsIntroNotice />
             </>
           )}
-          <SidebarProjectsListSlot botsShown={botsShown} collapsed={projectsCollapsed}>
-            <WorktreeList
-              scrollOffsetRef={worktreeScrollOffsetRef}
-              scrollAnchorRef={worktreeScrollAnchorRef}
-              workspaceBoardOpen={workspaceBoardOpen}
-              onWorktreeCardClick={closeWorkspaceBoard}
-              onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
-              onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
-              projectsCollapseTarget={projectsCollapseTarget}
-            />
+          <SidebarProjectsListSlot botsShown={botsShown} fill={!projectsCollapsed} contentSized>
+            <SidebarProjectWorkspaces collapsed={projectsCollapsed}>
+              <WorktreeList
+                contentSized
+                scrollOffsetRef={worktreeScrollOffsetRef}
+                scrollAnchorRef={worktreeScrollAnchorRef}
+                workspaceBoardOpen={workspaceBoardOpen}
+                onWorktreeCardClick={closeWorkspaceBoard}
+                onWorkspaceBoardDragPreviewStart={previewWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCommit={solidifyWorkspaceBoardFromDrag}
+                onWorkspaceBoardDragPreviewCancel={cancelWorkspaceBoardDragPreview}
+                projectsCollapseTarget={projectsCollapseTarget}
+              />
+            </SidebarProjectWorkspaces>
+            <Chats.ChatWorkspaceSection {...chatScroll} onWorktreeCardClick={closeWorkspaceBoard} />
           </SidebarProjectsListSlot>
-          {projectsCollapsed ? null : <WslMovedProjectsSection />}
-          {projectsCollapsed ? null : <HiddenProjectsSection />}
-          <Chats.ChatWorkspaceSection {...chatScroll} onWorktreeCardClick={closeWorkspaceBoard} />
         </>
       )}
     </React.Fragment>
