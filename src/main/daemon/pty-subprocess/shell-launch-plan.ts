@@ -45,6 +45,7 @@ import {
 } from '../../../shared/agent-accounts/claude/claude-profile-routing'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/shell/launch/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-readiness/shell-ready'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
 import type { PtySubprocessOptions } from './pty-subprocess'
@@ -206,6 +207,8 @@ export function createPtyShellLaunchPlan(
     }
     const waitsForShellReady = Boolean(opts.command)
     delete env.ORCA_SHELL_FEATURES
+    // Only this launch may hand the wrapper a command; an inherited one would run in an unrelated pane.
+    delete env[POSIX_SHELL_STARTUP_COMMAND_ENV]
     const userShellArgs = !opts.command && !opts.launchAgent ? opts.terminalShellArgs : undefined
     const shellLaunch = getShellLaunchConfig(
       shellPath,
@@ -218,12 +221,14 @@ export function createPtyShellLaunchPlan(
       }),
       {
         hasStartupCommand: Boolean(opts.command),
+        ...(opts.command && !userShellArgs ? { startupCommand: opts.command } : {}),
         inheritedXdgDataDirs: env.XDG_DATA_DIRS,
         shellArgs: userShellArgs
       }
     )
     Object.assign(env, shellLaunch.env)
     shellArgs = userShellArgs ?? shellLaunch.args ?? ['-l']
+    startupCommandDeliveredInShellArgs = shellLaunch.startupCommandDeliveredByWrapper === true
   }
 
   seedPowerlevel10kWizardEnv(env, { envToDelete: opts.envToDelete })
