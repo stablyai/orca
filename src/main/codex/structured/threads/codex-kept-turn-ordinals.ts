@@ -38,7 +38,7 @@ async function latestTurn(
  */
 export async function seedKeptCodexTurnOrdinals(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
-  translator: Pick<CodexJournalTranslator, 'seedTurnOrdinals'>
+  translator: Pick<CodexJournalTranslator, 'seedTurnOrdinals' | 'seedRunningItems'>
   threadId: string
   timeoutMs: number
   onError?: (threadId: string, error: unknown) => void
@@ -69,6 +69,12 @@ export async function seedKeptCodexTurnOrdinals(input: {
     )
     const status = readCodexTurnStatus(turn)
     fetched.push({ threadId, turnId: turn.id, status, items })
+    // A command still running (a background one outlives its turn) streams on after the reattach.
+    input.translator.seedRunningItems(
+      threadId,
+      turn.id,
+      items.filter((item) => item.type === 'commandExecution' && item.status === 'inProgress')
+    )
     // A subagent spawned in a finished turn can still be running, so every spawn is followed.
     for (const item of items) {
       if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {

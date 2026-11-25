@@ -209,6 +209,11 @@ export class CodexJournalItems {
       : (this.deps.sink.publish(options), CODEX_JOURNAL_ADMITTED)
   }
 
+  /** A kept agent's running command: later output streams onto its row with its saved fields. */
+  seedRunning(threadId: string, turnId: string, item: CodexThreadItem): void {
+    this.track(threadId, turnId, item, this.identityFor(threadId, turnId, item))
+  }
+
   private track(
     threadId: string,
     turnId: string | null,
