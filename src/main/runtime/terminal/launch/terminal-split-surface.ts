@@ -15,10 +15,11 @@ import { spawnInAdmittedPane, withdrawRuntimePane } from './runtime-pane-admissi
 import { UNMEASURED_PTY_SIZE } from '../../../ipc/pty/delivery/pty-first-size'
 import { resolveLaunchCommandPaneAgent } from './runtime-agent-launch-resolution'
 import { recordFreshLaunch } from './launch-evidence'
+import type { TerminalCreateOptions } from './terminal-create-options'
 // Rejected splits need only a quick teardown verdict before fallback kill; unreachable hosts must not stall rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
 
-export type TerminalSplitOptions = {
+export type TerminalSplitOptions = Pick<TerminalCreateOptions, 'terminalImageViewerSupported'> & {
   direction?: 'horizontal' | 'vertical'
   command?: string
   env?: Record<string, string>

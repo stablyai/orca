@@ -56,7 +56,8 @@ export async function subscribeSessionTabsInventory(
     projectSessionTabsForInventoryStream(
       snapshot,
       context.clientKind,
-      context.capabilitySource?.current ?? context.clientCapabilities
+      context.capabilitySource?.current ?? context.clientCapabilities,
+      context.runtime
     ) as SessionTabsChange
   const withoutNavigationIntent = (snapshot: SessionTabsChange): SessionTabsChange => {
     if (snapshot.navigationIntent === undefined) {

@@ -1,29 +1,22 @@
 import type { BranchContext } from './worktree-agent-branch-context'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
+import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/lib/window-activity/use-now'
-import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
-import {
-  selectSendTargetControlInputs,
-  selectSendTargetInputs
-} from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
 import { KeyedSummary, CompactHeaderAgentList } from './worktree-card-agent-keyed-summary'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
-import { recomputeOn } from '@/lib/recompute-on'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { useTranslate } from '@/i18n/use-translate'
-import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useWorktreeAgentSendTargets } from './use-worktree-agent-send-targets'
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
@@ -72,45 +65,14 @@ function WorktreeCardAgentsBody({
   className,
   renderHeader
 }: Props & { roots: readonly string[]; hostFiltered: boolean }) {
-  const t = useTranslate(),
-    languageRevision = useUiLanguageRevision()
+  const t = useTranslate()
   const display = useWorktreeAgentDisplay()
   const expansion = useWorktreeAgentExpansionState(worktreeId, executionHostId)
   const focusedPaneKey = useFocusedAgentPaneKey(worktreeId)
   const onActivate = useWorktreeAgentActivation(worktreeId, executionHostId)
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
-  const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
-  const inputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
-  const targets = useMemo(
-    () =>
-      recomputeOn([languageRevision], () => {
-        if (!control.targetMode) {
-          return null
-        }
-        return new Map(
-          deriveRunningAgentSendTargets(inputs, worktreeId).map((target) => [
-            target.paneKey,
-            control.targetMode?.status === 'sending' &&
-            control.targetMode.sendingPaneKey === target.paneKey
-              ? {
-                  status: 'sending' as const,
-                  disabledReason: t(
-                    'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
-                    'Sending...'
-                  )
-                }
-              : {
-                  status: target.status,
-                  ...(target.disabledReason
-                    ? { disabledReason: agentSendDisabledReasonLabel(target.disabledReason) }
-                    : {})
-                }
-          ])
-        )
-      }),
-    [control, inputs, worktreeId, t, languageRevision]
-  )
+  const targets = useWorktreeAgentSendTargets(worktreeId)
   const onSend = useCallback((key: string) => void send(key), [send])
   const { toggleLineageParent: toggleLineage, toggleIdleChildGroup: toggleIdle } = expansion
   const now = useNow(30_000)
@@ -296,7 +258,7 @@ const AgentBranch = React.memo(function AgentBranch({
     agent: row,
     showModel: context.showAgentModels,
     now: context.now,
-    isUnvisited: row.rowSource === 'live' && acknowledgedAt < row.entry.stateStartedAt,
+    isUnvisited: row.rowSource === 'live' && acknowledgedAt < agentAttentionTurnAt(row.entry),
     onActivate: context.onActivate,
     childAgentCount: hasChildren ? children.keys.length : undefined,
     childAgentsExpanded: expanded,

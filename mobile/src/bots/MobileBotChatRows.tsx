@@ -8,6 +8,7 @@ import {
   BOT_WORKSPACE_LINE_LOGO,
   botWorkspaceLineAgent
 } from '../../../src/shared/bots/bot-sidebar-workspaces'
+import { chatFoldSummary } from '../../../src/shared/bots/bot-chat-tree'
 import { botSidebarWorkerPagingLabel } from '../../../src/shared/bots/bot-sidebar-tree'
 import { structuredAgentSessionStatusPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-tab'
 import type { WorktreeStatus } from '../../../src/shared/worktree/row-display/worktree-status-rollup'
@@ -34,10 +35,10 @@ import type {
 import { ChatBadgedIcon, useMobileBotChatLabel } from './MobileBotChatLeading'
 import { MobileBotTextButton } from './MobileBotTextButton'
 
-// The chat's slot sits under the bot's avatar, its title at the avatar's right edge; a worker's
-// status under the chat's title, each child one step further in.
-const CHAT_INDENT = 24
-const LINE_INDENT = 48
+// The chat's icon sits centred under the bot's 32 pt avatar and its title starts where the bot's
+// does; a worker's status under the chat's title, each child one step further in.
+const AVATAR = 32
+const LINE_INDENT = spacing.lg + AVATAR + spacing.md
 const DEPTH_STEP = 24
 // Grows the chevron's 20 pt column to a 44 pt target.
 const CHEVRON_HIT_SLOP = { top: 12, bottom: 12, left: 12, right: 12 } as const
@@ -64,7 +65,7 @@ function ChatRowComponent({
   const label = useMobileBotChatLabel(chat, title)
   const text =
     trailing?.kind === 'summary'
-      ? trailing.text
+      ? chatFoldSummary(t, trailing.counts)
       : trailing?.kind === 'time'
         ? formatTimeAgo(trailing.at, now)
         : null
@@ -92,7 +93,7 @@ function ChatRowComponent({
       accessibilityLabel={[label, text].filter(Boolean).join(', ')}
       accessibilityState={foldable ? { expanded: open } : undefined}
     >
-      <View style={styles.slot}>
+      <View style={styles.chatSlot}>
         <ChatBadgedIcon chat={chat} />
       </View>
       <Text style={[styles.chatTitle, chat.unread && styles.unread]} numberOfLines={1}>
@@ -103,9 +104,8 @@ function ChatRowComponent({
           {text}
         </Text>
       ) : null}
-      {/* Always reserved, so times line up whether or not a chat folds. */}
-      <View style={styles.chevron}>
-        {toggle ? (
+      {toggle ? (
+        <View style={styles.chevron}>
           <Pressable
             hitSlop={CHEVRON_HIT_SLOP}
             disabled={isReadOnly}
@@ -126,8 +126,8 @@ function ChatRowComponent({
               <ChevronRight size={14} color={colors.textMuted} />
             )}
           </Pressable>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
     </Pressable>
   )
 }
@@ -152,7 +152,7 @@ function PagingRowComponent({
           onPress={() => setBotChatSteps(stepsKey, steps + 1)}
         />
       ) : null}
-      {paging && steps > 0 ? <Text style={styles.trailing}>·</Text> : null}
+      {paging && steps > 0 ? <Text style={styles.pagingDot}>·</Text> : null}
       {steps > 0 ? (
         <MobileBotTextButton
           label={t('bots.chats.showFewer', 'Show fewer')}
@@ -164,17 +164,6 @@ function PagingRowComponent({
 }
 
 export const MobileBotChatPaging = memo(PagingRowComponent, areStructurallyEqual)
-
-/** One chat row's height, in the paging row's muted text, until the bot's first chats read lands. */
-export function MobileBotChatLoading({ dimmed }: { dimmed: boolean }) {
-  useMobileColorScheme()
-  const t = useMobileTranslation()
-  return (
-    <View style={[styles.chatRow, dimmed && styles.dimmed]}>
-      <Text style={styles.trailing}>{t('bots.chats.loadingChats', 'Loading chats')}</Text>
-    </View>
-  )
-}
 
 function LineNote({ note }: { note: MobileBotChatLineFacts['note'] }) {
   const t = useMobileTranslation()
@@ -271,14 +260,15 @@ function WorkerLineComponent({
 export const MobileBotWorkerLine = memo(WorkerLineComponent, areStructurallyEqual)
 
 const styles = themedStyleSheet(() => ({
+  // The bot row's grid: its padding, the avatar's column and its gap.
   chatRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.md,
     minHeight: 44,
-    paddingLeft: CHAT_INDENT,
-    paddingRight: spacing.lg
+    paddingHorizontal: spacing.lg
   },
+  chatSlot: { width: AVATAR, alignItems: 'center', justifyContent: 'center' },
   line: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -287,11 +277,13 @@ const styles = themedStyleSheet(() => ({
     paddingRight: spacing.lg
   },
   slot: { width: 16, height: 16, alignItems: 'center', justifyContent: 'center' },
-  chatTitle: { flex: 1, minWidth: 0, fontSize: 15, color: colors.textPrimary },
+  chatTitle: { flex: 1, minWidth: 0, fontSize: 14, color: colors.textSecondary },
   lineName: { flex: 1, minWidth: 0, fontSize: 14, color: colors.textSecondary },
   unread: { fontWeight: '700', color: colors.textPrimary },
   note: { color: colors.textMuted, fontWeight: '400' },
-  trailing: { fontSize: 13, color: colors.textMuted, flexShrink: 0, maxWidth: '46%' },
+  // The bot row's age type, so a list's times share one size and edge.
+  trailing: { fontSize: 11, color: colors.textMuted, flexShrink: 0, maxWidth: '46%' },
+  pagingDot: { fontSize: 13, color: colors.textMuted },
   chevron: { width: 20, alignItems: 'flex-end' },
   pill: { flexShrink: 0, maxWidth: '40%' },
   noLogo: { width: BOT_WORKSPACE_LINE_LOGO.size },

@@ -1,3 +1,4 @@
+import { buildAgentLaunchRouteView, type AgentLaunchRouteView } from './agent-launch-route-view'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { authorityKey } from '../../../../../../shared/execution-host/host-authority'
@@ -38,6 +39,10 @@ import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/h
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
 import type { AppState } from '@/store/types'
+import {
+  readRuntimeStatuses,
+  type RuntimeStatuses
+} from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchRoutingInput } from '@/lib/agent-session/launch/routing/agent-launch-routing'
@@ -60,7 +65,8 @@ export type ProspectiveWorkspace = {
 
 export type AgentLaunchRouteStore = {
   settings?: AgentLaunchRoutingInput['settings']
-  runtimeStatusByEnvironmentId?: AppState['runtimeStatusByEnvironmentId']
+  /** Pinned by a route view; absent, routes read host statuses from their owner. */
+  hostStatuses?: RuntimeStatuses
   /** Workspace roots distinguish a root cwd from a custom one; place these first so intersection lookups retain full records. */
   worktreesByRepo?: AppState['worktreesByRepo']
   detectedWorktreesByRepo?: AppState['detectedWorktreesByRepo']
@@ -69,59 +75,11 @@ export type AgentLaunchRouteStore = {
   Parameters<typeof getLocalProjectExecutionRuntimeContext>[0] &
   Parameters<typeof getConnectionIdFromState>[0]
 
-const AGENT_LAUNCH_ROUTE_KEYS = [
-  'settings',
-  'runtimeStatusByEnvironmentId',
-  'worktreesByRepo',
-  'folderWorkspaces',
-  'repos',
-  'detectedWorktreesByRepo',
-  'projectGroups',
-  'restoredRuntimeHostIdByWorkspaceSessionKey',
-  'activeWorktreeId',
-  'activeWorkspaceExecutionHostId',
-  'runtimeEnvironments',
-  'runtimeEnvironmentCatalogHydrated',
-  'removedRuntimeEnvironmentIds',
-  'activeRepoId',
-  'projects'
-] as const satisfies readonly (keyof AgentLaunchRouteStore)[]
-type AgentLaunchRouteKey = (typeof AGENT_LAUNCH_ROUTE_KEYS)[number]
-// Completeness, not just membership: a reader input missing from the list fails to compile.
-type AssertNoMissingRouteKey<T extends never> = T
-export type AgentLaunchRouteKeysAreComplete = AssertNoMissingRouteKey<
-  Exclude<keyof AgentLaunchRouteStore, AgentLaunchRouteKey>
->
-export type AgentLaunchRouteView = { [K in AgentLaunchRouteKey]: AppState[K] }
-
-export const agentLaunchRouteInputsChanged = (
-  next: AgentLaunchRouteView,
-  previous: AgentLaunchRouteView
-): boolean => AGENT_LAUNCH_ROUTE_KEYS.some((key) => next[key] !== previous[key])
-
-let lastRouteView: AgentLaunchRouteView | undefined
-export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteView {
-  if (!lastRouteView || agentLaunchRouteInputsChanged(state, lastRouteView)) {
-    lastRouteView = {
-      settings: state.settings,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-      worktreesByRepo: selectWorktreesByRepo(state),
-      folderWorkspaces: selectFolderWorkspaces(state),
-      repos: state.repos,
-      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
-      projectGroups: state.projectGroups,
-      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
-      activeWorktreeId: state.activeWorktreeId,
-      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
-      runtimeEnvironments: state.runtimeEnvironments,
-      runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
-      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
-      activeRepoId: state.activeRepoId,
-      projects: state.projects
-    }
-  }
-  return lastRouteView
-}
+export { buildAgentLaunchRouteView, selectAgentLaunchRouteView } from './agent-launch-route-view'
+export type {
+  AgentLaunchRouteView,
+  AgentLaunchRouteKeysAreComplete
+} from './agent-launch-route-view'
 
 export type AgentLaunchRouteArgs = {
   selectedExecutionHostId?: ExecutionHostId
@@ -147,14 +105,44 @@ function resolveExecutionHostId(store: AgentLaunchRouteStore, workspace: Prospec
   return workspace.executionHostId ?? LOCAL_EXECUTION_HOST_ID
 }
 
+/** The route store for these statuses; only a retained view's frozen map needs a pinned view. */
+export function agentLaunchRouteStoreFor(
+  state: AppState,
+  statuses: RuntimeStatuses
+): AppState | AgentLaunchRouteView {
+  // The live map needs no pinned view: routes read the owner's statuses themselves.
+  return statuses === readRuntimeStatuses() ? state : buildAgentLaunchRouteView(state, statuses)
+}
+
+/** A route input read against the given statuses, so a retained view stays frozen. */
+export function buildRouteInputForStatuses(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  args: AgentLaunchRouteArgs
+): AgentLaunchRoutingInput {
+  return buildAgentLaunchRouteInput(agentLaunchRouteStoreFor(state, statuses), args)
+}
+
+/** Host statuses a route reads: the view's pinned snapshot, else the owner's. */
+export function routeHostStatuses(store: Pick<AgentLaunchRouteStore, 'hostStatuses'>) {
+  return store.hostStatuses ?? readRuntimeStatuses()
+}
+
 export function resolveHostCapabilities(
-  store: Pick<AgentLaunchRouteStore, 'runtimeStatusByEnvironmentId'>,
+  store: Pick<AgentLaunchRouteStore, 'hostStatuses'>,
+  executionHostId: string
+): readonly string[] | null {
+  return hostCapabilitiesFrom(routeHostStatuses(store), executionHostId)
+}
+
+/** A host's verified capabilities read from these statuses; the local host reads its own. */
+export function hostCapabilitiesFrom(
+  statuses: RuntimeStatuses,
   executionHostId: string
 ): readonly string[] | null {
   const host = parseExecutionHostId(executionHostId)
   return host?.kind === 'runtime'
-    ? (lastVerifiedRuntimeStatus(store.runtimeStatusByEnvironmentId?.get(host.environmentId))
-        ?.capabilities ?? null)
+    ? (lastVerifiedRuntimeStatus(statuses.get(host.environmentId))?.capabilities ?? null)
     : readLocalRuntimeCapabilitiesOrUnknown()
 }
 
@@ -202,6 +190,14 @@ function resolveTranscriptIsLocalReadable(
   }
   const host = parseExecutionHostId(executionHostId)
   return host?.kind === 'ssh' ? isNativeChatTranscriptLocalReadable(host.targetId) : true
+}
+
+function hostStructuredAgentsInput(
+  store: AgentLaunchRouteStore,
+  executionHostId: string
+): Pick<AgentLaunchRoutingInput, 'hostStructuredAgents'> {
+  const agents = readHostStructuredAgents(executionHostId, routeHostStatuses(store))
+  return agents ? { hostStructuredAgents: agents.map((row) => row.agent) } : {}
 }
 
 export function resolveAgentLaunchOwner(
@@ -260,10 +256,6 @@ export function buildAgentLaunchRouteInput(
     ? { ...args.workspace, hostId: args.selectedExecutionHostId }
     : args.workspace
   const { executionHostId, hostCapabilities } = resolveAgentLaunchHost(store, workspace)
-  const structuredAgents = readHostStructuredAgents(
-    executionHostId,
-    store.runtimeStatusByEnvironmentId
-  )
   const selectedWorkspace =
     workspace.worktreeId && workspace.hostId
       ? findKnownWorktreeById(
@@ -320,8 +312,6 @@ export function buildAgentLaunchRouteInput(
                   ?.folderPath
         })
       : false,
-    ...(structuredAgents
-      ? { hostStructuredAgents: structuredAgents.map(({ agent }) => agent) }
-      : {})
+    ...hostStructuredAgentsInput(store, executionHostId)
   }
 }

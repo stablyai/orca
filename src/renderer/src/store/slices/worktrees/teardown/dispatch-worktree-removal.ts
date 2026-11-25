@@ -99,7 +99,9 @@ async function requestWorktreeRemoval(
         !skipArchive,
         options?.approvedNestedWorktrees?.length
       ),
-      beforeSend
+      beforeSend,
+      // Deleting a workspace is the user's act: it may wake an idle-stopped WSL host (#46567).
+      wake: true
     }
   )
 }

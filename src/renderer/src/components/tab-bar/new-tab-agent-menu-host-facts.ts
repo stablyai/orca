@@ -1,7 +1,10 @@
+import { shallow } from 'zustand/shallow'
+import { useAppStateValueWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { readAgentMenuLaunchFacts } from '../agent/launch-menu/agent-menu-launch-facts'
 import type { AppState } from '@/store/types'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
-  buildAgentLaunchRouteInput,
+  buildRouteInputForStatuses,
   resolveAgentLaunchInventoryHost,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -13,19 +16,20 @@ import {
 } from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
-export function newTabAgentMenuHostFacts(state: AppState, workspace: ProspectiveWorkspace) {
-  const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
+export function newTabAgentMenuHostFacts(
+  state: AppState,
+  statuses: RuntimeStatuses,
+  workspace: ProspectiveWorkspace
+) {
+  const input = buildRouteInputForStatuses(state, statuses, { agent: 'claude', workspace })
   const inventoryExecutionHostId = resolveAgentLaunchInventoryHost(state, workspace)
   const host = parseExecutionHostId(inventoryExecutionHostId)
-  const status =
-    host?.kind === 'runtime'
-      ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
-      : undefined
+  const status = host?.kind === 'runtime' ? statuses.get(host.environmentId) : undefined
   const contact = runtimeHostContactForEntry(status)
   return {
     executionHostId: input.executionHostId,
     inventoryExecutionHostId,
-    hostPlatform: readAgentMenuLaunchFacts(state, workspace).hostPlatform,
+    hostPlatform: readAgentMenuLaunchFacts(state, statuses, workspace).hostPlatform,
     runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
     pairingRevision:
       host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
@@ -35,4 +39,11 @@ export function newTabAgentMenuHostFacts(state: AppState, workspace: Prospective
       ['checking', 'transport-connecting'].includes(contact.reason),
     capabilities: input.hostCapabilities?.join(',')
   }
+}
+
+export function useNewTabAgentMenuHostFacts(workspace: ProspectiveWorkspace) {
+  return useAppStateValueWithHostStatuses(
+    (state, statuses) => newTabAgentMenuHostFacts(state, statuses, workspace),
+    shallow
+  )
 }

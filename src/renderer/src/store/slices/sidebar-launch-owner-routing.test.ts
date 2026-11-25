@@ -1,19 +1,41 @@
 import { makeFolderWorkspace } from '@/store/folder-workspaces/folder-workspace.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import * as rendererPlatform from '@/app-shell/platform/renderer-app-platform'
-import { makeDetectedResult } from './worktrees/listing/worktrees-detected-listing-fixtures'
+import type { Worktree, DetectedWorktreeListResult } from '../../../../shared/worktree/types'
+import * as hostStatusOwner from '@/store/slices/runtime-status/views/runtime-status-owner'
 
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
 import { runtimeStatuses } from './browser/browser-slice-test-harness'
 import { getAgentDetectionTargetKeyForWorktree } from '@/lib/agent-session/launch/inventory/useAgentDetectionTarget'
 import {
-  buildAgentLaunchRouteInput,
+  buildRouteInputForStatuses,
   worktreeLaunchWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
+
+function makeDetectedResult(repoId: string, worktrees: Worktree[]): DetectedWorktreeListResult {
+  return {
+    repoId,
+    authoritative: true,
+    source: 'git',
+    worktrees: worktrees.map((worktree) => ({
+      ...worktree,
+      ownership: 'orca-managed',
+      selectedCheckout: false,
+      visible: true
+    }))
+  }
+}
+
+const buildAgentLaunchRouteInput = (
+  state: Parameters<typeof buildRouteInputForStatuses>[0],
+  args: Parameters<typeof buildRouteInputForStatuses>[2]
+) => buildRouteInputForStatuses(state, state.runtimeStatusByEnvironmentId, args)
+
+afterEach(() => vi.restoreAllMocks())
 
 const id = 'repo1::/path/twin'
 function setup() {
@@ -35,6 +57,9 @@ function setup() {
     },
     runtimeStatusByEnvironmentId: runtimeStatuses(['browser.screencast.v1'])
   })
+  vi.spyOn(hostStatusOwner, 'readRuntimeStatuses').mockImplementation(
+    () => store.getState().runtimeStatusByEnvironmentId
+  )
   return store
 }
 
@@ -56,10 +81,20 @@ describe('captured sidebar workspace copy', () => {
     try {
       const state = setup().getState()
       expect(
-        getWorkspaceClientCreationActionPolicy(state, id, 'runtime:env-1')['managed-browser']
+        getWorkspaceClientCreationActionPolicy(
+          state,
+          id,
+          state.runtimeStatusByEnvironmentId,
+          'runtime:env-1'
+        )['managed-browser']
       ).toEqual({ state: 'enabled', provider: 'paired-runtime' })
       expect(
-        getWorkspaceClientCreationActionPolicy(state, id, 'runtime:absent')['managed-browser'].state
+        getWorkspaceClientCreationActionPolicy(
+          state,
+          id,
+          state.runtimeStatusByEnvironmentId,
+          'runtime:absent'
+        )['managed-browser'].state
       ).toBe('hidden')
     } finally {
       vi.unstubAllGlobals()

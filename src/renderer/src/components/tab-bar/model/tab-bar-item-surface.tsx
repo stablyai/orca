@@ -45,11 +45,14 @@ export function renderTabBarItems({
   dropIndicatorByVisibleId,
   includeTopTabBorder,
   activeClientHostedBrowserRowId,
-  segments
+  segments,
+  itemOffset = 0
 }: {
   items: TabBarItem[]
-  /** Mounted runs of `items`; gaps render as fixed-width spacers. */
+  /** Mounted runs of `items` from `itemOffset` on; gaps render as fixed-width spacers. */
   segments: readonly TabStripSegment[]
+  /** Items before the strip, such as a pinned Home: segment indices start after them. */
+  itemOffset?: number
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -101,7 +104,11 @@ export function renderTabBarItems({
     return (activeTabType === 'editor' || activeTabType === 'simulator') && activeFileId === item.id
   }
 
+  const unpinnedCount = items.filter((item) => !item.isPinned).length
+
   function renderRow(item: TabBarItem, index: number): React.ReactNode {
+    // "Close others" enables at tabCount > 1: count what it closes, pinned never.
+    const closableOthers = unpinnedCount - (item.isPinned ? 0 : 1)
     let canToggleViewMode = false
     let isChatView = false
     let viewModeTabId: string | undefined
@@ -134,7 +141,7 @@ export function renderTabBarItems({
         worktreeId={worktreeId}
         groupId={resolvedGroupId}
         generatedTabTitlesEnabled={generatedTabTitlesEnabled}
-        tabCount={items.length}
+        tabCount={closableOthers + 1}
         hasTabsToLeft={index > 0}
         hasTabsToRight={index < items.length - 1}
         isActive={isActiveItem(item)}
@@ -169,7 +176,7 @@ export function renderTabBarItems({
       )
       continue
     }
-    for (let index = segment.start; index < segment.end; index++) {
+    for (let index = segment.start + itemOffset; index < segment.end + itemOffset; index++) {
       rows.push(renderRow(items[index], index))
     }
   }

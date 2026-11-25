@@ -1,6 +1,6 @@
 // Dispatch rows a trigger said changed, read once the writing transaction ends and applied, in the
 // order they changed, to every bot whose chats or workers they belong to.
-import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-context-store'
+import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-links-by-id'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import type { DispatchRowChange } from '../runtime/orchestration/db/worker-status-notice'
 import type { BotDispatchPlacement } from './bot-chat-dispatches'

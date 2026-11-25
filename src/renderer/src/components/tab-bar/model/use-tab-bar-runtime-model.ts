@@ -1,6 +1,12 @@
+import {
+  getProjectRuntimeShellMenuMode,
+  resolveWindowsPowerShellImplementationSetting
+} from './tab-bar-windows-shell-settings'
 import { getSimulatorTabForWorktree } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
-import { useMemo } from 'react'
+import { shallow } from 'zustand/shallow'
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { buildStatusMap } from '../../../../../shared/git/status/git-path-decoration'
@@ -21,6 +27,11 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import {
+  isReturningToHeldWindowsTerminalCapabilities,
+  holdWindowsTerminalCapabilitiesForReleasedStrip,
+  takeWindowsTerminalCapabilityHold
+} from '@/runtime/hosts/capabilities/windows-terminal-capability-holds'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { shouldShowMobileEmulatorTabIntro } from '../../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
@@ -30,9 +41,7 @@ import { createUnifiedTabLookup } from './tab-bar-item-model'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { GitFileStatus } from '../../../../../shared/git/status/git-status-types'
-import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 
 const isWindows = navigator.userAgent.includes('Windows')
@@ -44,22 +53,6 @@ const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 const EMPTY_PROJECTS: AppStoreState['projects'] = []
 const EMPTY_REPOS: AppStoreState['repos'] = []
 const EMPTY_WORKTREES_BY_REPO: AppStoreState['worktreesByRepo'] = {}
-
-export function getProjectRuntimeShellMenuMode(
-  projectRuntime: ProjectExecutionRuntimeResolution | undefined
-): 'host' | 'wsl' | null {
-  if (!projectRuntime) {
-    return null
-  }
-  if (projectRuntime.status === 'repair-required') {
-    return 'wsl'
-  }
-  return projectRuntime.runtime.kind === 'wsl' ? 'wsl' : 'host'
-}
-
-export function resolveWindowsPowerShellImplementationSetting(settings: GlobalSettings | null) {
-  return settings?.terminalWindowsPowerShellImplementation ?? 'auto'
-}
 
 export type TabBarRuntimeModel = {
   generatedTabTitlesEnabled: boolean
@@ -165,12 +158,41 @@ export function useTabBarRuntimeModel({
     Boolean(ownerRuntimeEnvironmentId?.trim()) ||
     isWebClient ||
     Boolean(worktreeConnectionId)
+  const [returningStrip] = useState(
+    // A different host on return (e.g. host-qualified activation) takes the normal TTL load.
+    () =>
+      groupId !== undefined &&
+      isReturningToHeldWindowsTerminalCapabilities(
+        worktreeId,
+        groupId,
+        windowsTerminalCapabilityOwnerKey
+      )
+  )
+  useEffect(() => {
+    if (!groupId) {
+      return
+    }
+    // Runs after every dependency change too, so a hold the previous cleanup left for a still-mounted strip is dropped here.
+    takeWindowsTerminalCapabilityHold(worktreeId, groupId)
+    if (!shouldProbeWindowsShellCapabilities) {
+      return
+    }
+    return () => {
+      // Unmounting with the group still open means its workspace released the layout; keep the answer for the return.
+      holdWindowsTerminalCapabilitiesForReleasedStrip(
+        worktreeId,
+        groupId,
+        windowsTerminalCapabilityOwnerKey
+      )
+    }
+  }, [groupId, worktreeId, shouldProbeWindowsShellCapabilities, windowsTerminalCapabilityOwnerKey])
   const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
     shouldProbeWindowsShellCapabilities,
     false,
     windowsTerminalCapabilityOwnerKey,
     runtimeTarget,
-    worktreeConnectionId
+    worktreeConnectionId,
+    returningStrip
   )
   const shellMenuHostPlatform = worktreeConnectionId
     ? (worktreeRemotePlatform ?? windowsTerminalCapabilities.hostPlatform)
@@ -240,15 +262,19 @@ export function useTabBarRuntimeModel({
           (tab) => tab.contentType === 'simulator'
         )
   )
-  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] = useAppStore(
-    useShallow((state) => {
-      const policy = getWorkspaceClientCreationActionPolicy(state, worktreeId, executionHostId)
+  const [managedBrowserCreationEnabled, mobileEmulatorCreationEnabled] =
+    useAppStoreWithHostStatuses((state, statuses) => {
+      const policy = getWorkspaceClientCreationActionPolicy(
+        state,
+        worktreeId,
+        statuses,
+        executionHostId
+      )
       return [
         policy['managed-browser'].state === 'enabled',
         policy['mobile-emulator'].state === 'enabled'
       ] as const
-    })
-  )
+    }, shallow)
   // Why: tab-wide launch/title hints are safe only before split; gate the view-mode toggle to the active leaf's agent.
   const toggleTabViewMode = useAppStore((s) => s.toggleTabViewMode)
   // Why: every retained TabBar observes the same hot maps; one selector shares their projections.

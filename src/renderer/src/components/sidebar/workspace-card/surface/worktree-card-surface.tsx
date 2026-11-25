@@ -99,6 +99,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         isRuntimeDisconnected && !isDeleting && 'opacity-60'
       )}
       data-worktree-card-surface="true"
+      data-worktree-card-single-line={titleOnlyCard || undefined}
       data-worktree-card-active={
         isActiveSurface && !isLineageDropTarget ? activeSurfaceVariant : undefined
       }
@@ -106,6 +107,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         (isMultiSelected && !isActiveSurface && !isLineageDropTarget) || undefined
       }
       data-worktree-lineage-drop-target={isLineageDropTarget || undefined}
+      data-worktree-card-menu-open={card.detailsHoverControl.contextMenuOpen ? 'true' : undefined}
       onClick={handleClick}
       onPointerDown={affiliateListMode ? undefined : handlePointerDown}
       onPointerEnter={affiliateListMode ? undefined : handlePointerEnter}
@@ -127,9 +129,12 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
           </div>
         </div>
       )}
-      {isSleeping && newCardStyle && !isDeleting ? (
+      {newCardStyle ? (
         // Mix tokens for background-independent sleep dimming; scope to the parent so awake children stay bright.
-        <div data-worktree-sleeping-dim="">{parentCardContent}</div>
+        // Toggle the attribute, not the wrapper: waking must not remount the title mid-rename.
+        <div data-worktree-sleeping-dim={isSleeping && !isDeleting ? '' : undefined}>
+          {parentCardContent}
+        </div>
       ) : (
         parentCardContent
       )}

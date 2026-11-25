@@ -7,12 +7,15 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from '../../composition/status-bar-context-menu-policy'
 
+export function focusResourceManagerTrigger(): void {
+  document.querySelector<HTMLElement>('[data-resource-manager-trigger]')?.focus()
+}
+
 export function renderResourceUsageStatusTrigger(
   {
     daemonUnreachable,
     resourceManagerAriaLabel,
     spaceScanReady,
-    iconOnly,
     commitToneClass,
     triggerSessionCount,
     orphanCount,
@@ -21,7 +24,6 @@ export function renderResourceUsageStatusTrigger(
     daemonUnreachable: boolean
     resourceManagerAriaLabel: string
     spaceScanReady: boolean
-    iconOnly: boolean
     commitToneClass: string | null
     triggerSessionCount: number | null
     orphanCount: number
@@ -35,6 +37,7 @@ export function renderResourceUsageStatusTrigger(
         <PopoverTrigger asChild>
           <button
             type="button"
+            data-resource-manager-trigger=""
             {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
             className="relative inline-flex items-center gap-1.5 cursor-pointer rounded px-1 py-0.5 hover:bg-accent/70"
             aria-label={
@@ -55,22 +58,13 @@ export function renderResourceUsageStatusTrigger(
             ) : null}
             {/* Why no memory total: it read as Orca's own usage; the tooltip names each owner. */}
             <MemoryStick className={cn('size-3', commitToneClass ?? 'text-muted-foreground')} />
-            {!iconOnly && (
-              <>
-                <Terminal className="size-3 text-muted-foreground" />
-                <span className="text-[11px] tabular-nums text-muted-foreground">
-                  {triggerSessionCount}
-                  {orphanCount > 0 && (
-                    <span className="text-yellow-500 ml-0.5">({orphanCount})</span>
-                  )}
-                </span>
-              </>
-            )}
-            {iconOnly && triggerSessionCount !== null && triggerSessionCount > 0 && (
-              <span className="text-[11px] tabular-nums text-muted-foreground">
-                {triggerSessionCount}
-              </span>
-            )}
+            <Terminal className="size-3 text-muted-foreground" />
+            <span className="text-[11px] tabular-nums text-muted-foreground">
+              {triggerSessionCount}
+              {orphanCount > 0 && (
+                <span className="ml-0.5 text-status-warning-text">({orphanCount})</span>
+              )}
+            </span>
             {daemonUnreachable && (
               <AlertTriangle
                 className="size-3 text-yellow-500"

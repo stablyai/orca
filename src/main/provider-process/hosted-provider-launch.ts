@@ -14,6 +14,7 @@ import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-pro
 import { inspectMacProcessCodeIdentity } from '../daemon/executable-host/macos/daemon-mac-code-identity'
 import type { DirectoryEnumerationOutcome } from '../daemon/permissions/directory-enumeration-probe'
 import { sameDaemonIdentity } from '../daemon/transport/client/daemon-client-hello-handshake'
+import { launchProviderOwnerOnWorker } from './worker-provider-owner-launch'
 
 export type HostedCwdReporter = (verdict: {
   cwd: string
@@ -167,10 +168,19 @@ export async function launchProviderOwner(
   owner: DeferredProviderOwner,
   spec: ProviderSpawnSpec,
   route: ProviderHostRoute,
-  spawnHere: () => ChildProcess
+  spawnHere: () => ChildProcess,
+  allowWorkerFallback = false
 ): Promise<void> {
   const deadline = performance.now() + HOSTED_START_BUDGET_MS
   const remainingMs = (): number => Math.max(0, deadline - performance.now())
+  const launchFallback = (): void => {
+    if (allowWorkerFallback) {
+      // Reserve at least 1s for the off-main worker fallback even if the daemon burned its budget.
+      void launchProviderOwnerOnWorker(owner, spec, spawnHere, Math.max(remainingMs(), 1_000))
+    } else {
+      launchHere(owner, spawnHere)
+    }
+  }
   // Checks still running past the budget must not report a verdict the direct launch has outlived.
   const abandoned = (): boolean => owner.canceled || remainingMs() === 0
   // Connecting, signature and folder checks share the budget, so a slow host can't spend it all.
@@ -190,7 +200,7 @@ export async function launchProviderOwner(
     return
   }
   if (!client || !isCurrentHostedIdentity(client, identity)) {
-    launchHere(owner, spawnHere)
+    launchFallback()
     return
   }
   const listener = new ProviderOwnerListener()
@@ -241,7 +251,7 @@ export async function launchProviderOwner(
     if (attached || owner.canceled) {
       owner.fail(error instanceof Error ? error : new Error('Provider could not start'))
     } else {
-      launchHere(owner, spawnHere)
+      launchFallback()
     }
   }
 }

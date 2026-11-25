@@ -15,6 +15,8 @@ import {
 } from '../composition/status-bar-provider-visibility'
 import { hasUsageData } from '../../../../../shared/agent-usage/display/usage-provider-windows'
 import { describeOwnerNotSetUp } from '../../../../../shared/agent-usage/status-copy/owner-not-set-up-copy'
+import type { OwnerAccountsFailure } from '@/runtime/provider-accounts/observations/owner-accounts-stream'
+import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 
 /** Whose usage the status bar shows: this device, or the remote host that owns the accounts. */
 export type OwnerUsageState =
@@ -31,8 +33,7 @@ export type OwnerUsageState =
       lastKnown: RateLimitState | null
     }
 
-/** A host that answers without usage is reachable, so "cannot reach" would be false. */
-export type OwnerUsageFailureReason = 'unreachable' | 'usage-not-published'
+export type OwnerUsageFailureReason = OwnerAccountsFailure | 'unsupported-owner'
 
 type UsageProviderKey = {
   [K in keyof RateLimitState]-?: RateLimitState[K] extends ProviderRateLimits | null ? K : never
@@ -42,7 +43,6 @@ type UsageProviderKey = {
 const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider']> = {
   claude: 'claude',
   codex: 'codex',
-  gemini: 'gemini',
   opencodeGo: 'opencode-go',
   kimi: 'kimi',
   antigravity: 'antigravity',
@@ -56,7 +56,7 @@ const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider'
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the keys of a Record<UsageProviderKey, …>.
 const USAGE_PROVIDER_KEYS = Object.keys(USAGE_PROVIDER_IDS) as UsageProviderKey[]
 
-function mapProviders(
+export function mapProviders(
   build: (key: UsageProviderKey) => ProviderRateLimits | null
 ): Pick<RateLimitState, UsageProviderKey> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: one entry per UsageProviderKey.
@@ -66,11 +66,18 @@ function mapProviders(
   >
 }
 
-function describeUnverifiableOwner(
+export function describeUnverifiableOwner(
   ownerLabel: string,
   reason: OwnerUsageFailureReason,
   t: Translate = translate
 ): string {
+  if (reason === 'unsupported-owner') {
+    return t(
+      'auto.components.status.bar.tooltip.unsupportedOwner',
+      'Usage unavailable for {{server}}',
+      { server: ownerLabel }
+    )
+  }
   return reason === 'usage-not-published'
     ? t(
         'auto.components.status.bar.tooltip.remoteOwnerNoUsage',
@@ -102,6 +109,18 @@ function adoptRemoteRateLimits(remote: RateLimitState): RateLimitState {
     inactiveCodexAccounts: partial.inactiveCodexAccounts ?? [],
     antigravityAccounts: partial.antigravityAccounts ?? []
   }
+}
+
+export function isOwnerReturnToLocal(
+  previousOwner: AccountOwner | null,
+  owner: AccountOwner | null
+): boolean {
+  return (
+    previousOwner?.target.kind === 'environment' &&
+    previousOwner.wslHostDistro === null &&
+    owner?.target.kind === 'local' &&
+    owner.wslHostDistro === null
+  )
 }
 
 export function isOwnerNotSetUpPlaceholder(provider: ProviderRateLimits): boolean {
@@ -180,7 +199,7 @@ function describePlaceholder(
     : null
 }
 
-function ownerPlaceholderSnapshot(
+export function ownerPlaceholderSnapshot(
   key: UsageProviderKey,
   error: string,
   usageMetadata: UsageRateLimitMetadata

@@ -15,7 +15,7 @@ import {
   useSessionScreenHandlers,
   type SessionScreenHandlers
 } from '../session/session-screen-handlers'
-import { terminalTabPaneKey } from '../session/tabs/notification-pane-tab'
+import { terminalTabPaneKey } from '../../../src/shared/remote-runtime/session-graph/session-tab-pane-key'
 
 /** Shows a terminal resumed from history in its session, selecting it rather than the session's previous tab. */
 export function openResumedHistoryTerminal(args: {

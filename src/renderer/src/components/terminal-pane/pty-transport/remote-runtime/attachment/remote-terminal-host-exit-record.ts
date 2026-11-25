@@ -1,3 +1,4 @@
+import { isUnobservedTerminalExit } from '../../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { RuntimeTerminalSummary } from '../../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 type HostTerminalExitFacts = Partial<
@@ -18,8 +19,7 @@ export function hostRecordsTerminalExit(
   if (!cause || terminal.connected !== false) {
     return false
   }
-  // Why: stop_unverified is a stop nobody saw land, so the process may still run.
-  return !(cause.kind === 'unknown' && cause.reason === 'stop_unverified')
+  return !isUnobservedTerminalExit(cause)
 }
 
 export function hostRecordedExitCode(

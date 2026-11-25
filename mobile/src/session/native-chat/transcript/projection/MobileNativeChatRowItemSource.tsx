@@ -4,14 +4,16 @@ import {
 } from '../../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 import { MobileNativeChatTurnDiffRollup } from '../tool-results/MobileNativeChatTurnDiffRollup'
 import { memo, useContext, useMemo, type ComponentProps } from 'react'
+import { View } from 'react-native'
 import {
   MobileNativeChatItemSourceContext,
   MobileNativeChatRootItemSourceContext
 } from './mobile-native-chat-item-read'
 import { MobileNativeChatMessage } from '../messages/MobileNativeChatMessage'
-import { MobileNativeChatItemNoteJoinContext } from '../messages/MobileNativeChatBotItemNoteRow'
+import { MobileNativeChatWorkerApprovalReceipts } from '../messages/MobileNativeChatWorkerApprovalReceipts'
+import { mobileNativeChatActivityJoinMargins } from '../messages/mobile-native-chat-activity-join'
 import { MobileNativeChatQuietTurnContext } from '../message-content/MobileNativeChatAnswerProse'
-import type { BotItemNoteJoin } from '../../../../../../src/shared/bots/bot-item-note-runs'
+import type { NativeChatActivityJoin } from '../../../../../../src/shared/native-chat/transcript/events/native-chat-activity-rows'
 import {
   resolveMobileNativeChatRowProps,
   type MobileNativeChatRowLookups
@@ -32,8 +34,8 @@ type Recovery = MobileNativeChatVisualSource & {
 export type MobileNativeChatRowContentProps = ComponentProps<typeof MobileNativeChatMessage> & {
   scope: string
   turnDiff?: NativeChatTurnDiff
-  /** The sides where this item-note row touches another. */
-  itemNoteJoin?: BotItemNoteJoin
+  /** The sides where this activity row touches another. */
+  activityJoin?: NativeChatActivityJoin
   inAutomationTurn?: true
   inActingTurn?: true
   source: Recovery | null
@@ -50,7 +52,7 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   source,
   scope: _scope,
   turnDiff,
-  itemNoteJoin,
+  activityJoin,
   inAutomationTurn,
   inActingTurn,
   ...props
@@ -76,11 +78,12 @@ export const MobileNativeChatRowContent = memo(function MobileNativeChatRowConte
   )
   return (
     <MobileNativeChatItemSourceContext.Provider value={value}>
-      <MobileNativeChatItemNoteJoinContext.Provider value={itemNoteJoin}>
+      {/* Always this View, so a row a new one joins keeps its mounted content. */}
+      <View style={mobileNativeChatActivityJoinMargins(activityJoin, props.message)}>
         <MobileNativeChatQuietTurnContext.Provider value={quietTurn}>
           <MobileNativeChatMessage {...props} />
         </MobileNativeChatQuietTurnContext.Provider>
-      </MobileNativeChatItemNoteJoinContext.Provider>
+      </View>
       {turnDiff ? <TurnDiffOutcome diff={turnDiff} fontScale={props.fontScale ?? 1} /> : null}
     </MobileNativeChatItemSourceContext.Provider>
   )
@@ -113,7 +116,15 @@ export function MobileNativeChatRow({
         })
       }
     : null
-  return <MobileNativeChatRowContent {...props} {...outer} source={source} />
+  return (
+    <>
+      <MobileNativeChatRowContent {...props} {...outer} source={source} />
+      <MobileNativeChatWorkerApprovalReceipts
+        messageId={message.id}
+        fontScale={outer.fontScale ?? 1}
+      />
+    </>
+  )
 }
 async function unavailable(): Promise<void> {
   throw new Error('Message unavailable')

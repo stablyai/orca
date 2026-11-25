@@ -31,11 +31,16 @@ import { getStatusBarUsageFormatEntry } from './appearance-status-bar-usage-form
 import { StatusBarUsageFormatSetting } from './StatusBarUsageFormatSetting'
 
 import { useTranslate } from '@/i18n/use-translate'
-import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
+import {
+  matchesSettingsSearch,
+  normalizeSettingsSearchQuery,
+  type SettingsSearchEntry
+} from '../search/settings-search'
 
 type AppearanceWindowSidebarSectionProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  tilingWindowModeEntry?: SettingsSearchEntry
   forceVisiblePrimary?: boolean
 }
 
@@ -52,7 +57,6 @@ function recordStatusBarToggleInteraction(
   } else if (
     id === 'claude' ||
     id === 'codex' ||
-    id === 'gemini' ||
     id === 'opencode-go' ||
     id === 'kimi' ||
     id === 'antigravity' ||
@@ -69,6 +73,7 @@ function recordStatusBarToggleInteraction(
 export function AppearanceWindowSidebarSection({
   settings,
   updateSettings,
+  tilingWindowModeEntry,
   forceVisiblePrimary = false
 }: AppearanceWindowSidebarSectionProps): React.JSX.Element {
   const t = useTranslate()
@@ -123,6 +128,18 @@ export function AppearanceWindowSidebarSection({
 
   return (
     <>
+      {tilingWindowModeEntry && (
+        <SearchableSetting {...tilingWindowModeEntry} forceVisible={forceVisiblePrimary}>
+          <SettingsSwitchRow
+            label={tilingWindowModeEntry.title}
+            description={tilingWindowModeEntry.description}
+            checked={settings.linuxTilingWindowMode === true}
+            onChange={() =>
+              updateSettings({ linuxTilingWindowMode: settings.linuxTilingWindowMode !== true })
+            }
+          />
+        </SearchableSetting>
+      )}
       <SearchableSetting
         title={leftSidebarAppearanceEntry.title}
         description={leftSidebarAppearanceEntry.description}

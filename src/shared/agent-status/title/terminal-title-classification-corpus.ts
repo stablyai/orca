@@ -45,12 +45,7 @@ export const TERMINAL_TITLE_CLASSIFICATION_CORPUS: readonly string[] = [
   '\u280b Cursor Agent',
   '\u280b Droid',
   '\u280b Hermes',
-  // Gemini glyph vocabulary.
-  '\u2726 gemini',
-  '\u23f2 Gemini CLI',
-  '\u25c7 Gemini CLI',
-  '\u270b Gemini CLI',
-  'gemini',
+  // agy titles that name Gemini models.
   'antigravity gemini 3 pro',
   'agy - gemini 2 flash',
   // Named agents with status words.

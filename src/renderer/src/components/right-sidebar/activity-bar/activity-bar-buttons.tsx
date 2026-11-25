@@ -1,10 +1,15 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { MoreHorizontal } from 'lucide-react'
-import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type {
+  ActivityBarPosition,
+  ActiveRightSidebarTab
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
+import { ActivityBarPositionMenu } from './activity-bar-position-menu'
 import { RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME } from '../layout/right-sidebar-titlebar-drag-regions'
 import {
   DropdownMenu,
@@ -13,21 +18,23 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate } from '@/i18n/use-translate'
+import { keepPaneFocusPressProps } from '@/lib/overlay-interaction/focus-keeping-press'
+import { activityItemAriaLabel, activityItemTooltip } from './activity-bar-item-names'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
   pluginKey?: string
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
+  accessibleTitle?: string
   shortcut: string
   /** When true, hidden for non-git (folder-mode) repos. */
   gitOnly?: boolean
   /** When true, shown only for folder workspaces. */
   folderOnly?: boolean
-  /** When true, shown only for workspaces on an SSH host. */
-  sshOnly?: boolean
+  /** When true, shown only for workspaces on an SSH host or a paired server. */
+  remoteHostOnly?: boolean
   /** When true, shown on a bot's page, and for a chat whose workers it lists. */
   botOnly?: boolean
   /** When true, shown only on a bot's page. */
@@ -52,34 +59,47 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   cancelled: 'bg-muted-foreground'
 }
 
-function activityItemAriaLabel(
-  item: ActivityBarItem,
-  status?: CheckStatus | null,
-  t: Translate = translate
-): string {
-  const titled = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
-  const base = item.count
-    ? `${titled}, ${item.countLabel ?? t('bots.upNext.newCount', '{{count}} new', { count: item.count })}`
-    : titled
-  return status === 'failure'
-    ? `${base} — ${t('auto.components.right.sidebar.activityBar.error', 'Error')}`
-    : status === 'cancelled'
-      ? `${base} — ${t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
-      : base
+function openKeyboardContextMenu(event: React.KeyboardEvent<HTMLElement>): void {
+  if (event.key !== 'ContextMenu' && !(event.shiftKey && event.key === 'F10')) {
+    return
+  }
+  event.preventDefault()
+  const rect = event.currentTarget.getBoundingClientRect()
+  event.currentTarget.dispatchEvent(
+    new MouseEvent('contextmenu', {
+      bubbles: true,
+      cancelable: true,
+      clientX: rect.left,
+      clientY: rect.bottom
+    })
+  )
 }
 
 export function TopActivityOverflowMenu({
   items,
   activeTab,
   onSelect,
-  checksStatus
+  checksStatus,
+  arrangementItems,
+  activityBarPosition,
+  onChangeActivityBarPosition,
+  isBotPage,
+  stripItemIds
 }: {
+  arrangementItems: ActivityBarItem[]
+  activityBarPosition: ActivityBarPosition
+  onChangeActivityBarPosition: (position: ActivityBarPosition) => void
+  isBotPage?: boolean
+  stripItemIds?: ReadonlySet<string>
   items: ActivityBarItem[]
   activeTab: ActiveRightSidebarTab
-  onSelect: (tab: ActiveRightSidebarTab) => void
+  onSelect: (tab: ActiveRightSidebarTab, fromKeyboard: boolean) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const focusBeforeOpenRef = useRef<Element | null>(null)
+  const holdsActiveTab = items.some((item) => item.id === activeTab)
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
       ? checksStatus
@@ -93,12 +113,23 @@ export function TopActivityOverflowMenu({
   )
 
   return (
-    <DropdownMenu>
+    <DropdownMenu
+      onOpenChange={(open) => {
+        if (open) {
+          focusBeforeOpenRef.current = document.activeElement
+        }
+      }}
+    >
       <DropdownMenuTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
+          {...keepPaneFocusPressProps}
+          data-activity-overflow-trigger=""
+          data-holds-active-tab={holdsActiveTab ? '' : undefined}
           className={cn(
-            'relative flex h-[36px] w-8 shrink-0 items-center justify-center text-muted-foreground/60 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            'relative flex h-[36px] w-8 shrink-0 items-center justify-center transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
+            holdsActiveTab ? 'text-foreground' : 'text-muted-foreground/60',
             RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME
           )}
           aria-label={
@@ -120,30 +151,66 @@ export function TopActivityOverflowMenu({
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="bottom" sideOffset={6}>
+      <DropdownMenuContent
+        data-activity-bar-menu=""
+        align="end"
+        side="bottom"
+        sideOffset={6}
+        onCloseAutoFocus={(event) => {
+          const before = focusBeforeOpenRef.current
+          focusBeforeOpenRef.current = null
+          // Keep focus that moved on (e.g. into Agents search); else return it to where the menu opened from.
+          event.preventDefault()
+          const active = document.activeElement
+          if (
+            (!active || active === document.body) &&
+            before instanceof HTMLElement &&
+            before.isConnected
+          ) {
+            before.focus({ preventScroll: true })
+          }
+        }}
+      >
         {items.map((item) => {
           const Icon = item.icon
           const active = item.id === activeTab
           return (
-            <DropdownMenuItem
-              key={item.id}
-              onSelect={() => onSelect(item.id)}
-              data-workspace-board-dismiss=""
-              data-activity-plugin-key={item.pluginKey}
-              className={cn(active && 'bg-accent text-accent-foreground')}
-              aria-current={active ? 'page' : undefined}
-              aria-label={activityItemAriaLabel(item, item.statusIndicator, t)}
-            >
-              <Icon size={14} />
-              <span>{item.title}</span>
-              {item.statusIndicator === 'failure' ? (
-                <span
-                  className={cn('ml-auto size-2 rounded-full', STATUS_DOT_COLOR.failure)}
-                  aria-hidden="true"
-                />
-              ) : null}
-              {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
-            </DropdownMenuItem>
+            <ContextMenu key={item.id}>
+              <ContextMenuTrigger asChild>
+                <DropdownMenuItem
+                  // Focus on More when it opened means the keyboard opened it.
+                  onSelect={() =>
+                    onSelect(item.id, focusBeforeOpenRef.current === triggerRef.current)
+                  }
+                  onKeyDown={openKeyboardContextMenu}
+                  data-activity-item-id={item.id}
+                  data-workspace-board-dismiss=""
+                  data-activity-plugin-key={item.pluginKey}
+                  className={cn(active && 'bg-accent text-accent-foreground')}
+                  aria-current={active ? 'page' : undefined}
+                  aria-label={activityItemAriaLabel(item, item.statusIndicator, t)}
+                >
+                  <Icon size={14} />
+                  <span>{item.title}</span>
+                  {item.statusIndicator === 'failure' ? (
+                    <span
+                      className={cn('ml-auto size-2 rounded-full', STATUS_DOT_COLOR.failure)}
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  {item.shortcut && <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>}
+                </DropdownMenuItem>
+              </ContextMenuTrigger>
+              <ActivityBarPositionMenu
+                currentPosition={activityBarPosition}
+                onChangePosition={onChangeActivityBarPosition}
+                pluginKey={item.pluginKey}
+                itemId={item.id}
+                items={arrangementItems}
+                isBotPage={isBotPage}
+                stripItemIds={stripItemIds}
+              />
+            </ContextMenu>
           )
         })}
       </DropdownMenuContent>
@@ -168,17 +235,25 @@ export function ActivityBarButton({
   onClick,
   layout,
   statusIndicator,
-  compact = false
+  compact = false,
+  buttonProps
 }: {
   item: ActivityBarItem
   active: boolean
-  onClick: () => void
+  onClick: (fromKeyboard: boolean) => void
   layout: 'top' | 'side'
   statusIndicator?: CheckStatus | null
   /** A labeled tab that isn't open shows its icon alone, for a bar too narrow for every title. */
   compact?: boolean
+  buttonProps?: React.ComponentPropsWithRef<'button'>
 }): React.JSX.Element {
   const t = useTranslate()
+  const [tooltipOpen, setTooltipOpen] = React.useState(false)
+  React.useEffect(() => {
+    const close = (): void => setTooltipOpen(false)
+    document.addEventListener('contextmenu', close)
+    return () => document.removeEventListener('contextmenu', close)
+  }, [])
   const Icon = item.icon
   const isTop = layout === 'top'
   const effectiveStatus = item.statusIndicator ?? statusIndicator
@@ -187,7 +262,12 @@ export function ActivityBarButton({
 
   const button = (
     <button
+      {...buttonProps}
       type="button"
+      onKeyDown={(event) => {
+        buttonProps?.onKeyDown?.(event)
+        openKeyboardContextMenu(event)
+      }}
       className={cn(
         'relative flex items-center justify-center transition-colors',
         RIGHT_SIDEBAR_HEADER_NO_DRAG_CLASS_NAME,
@@ -200,16 +280,21 @@ export function ActivityBarButton({
                 : 'text-muted-foreground hover:bg-foreground/5 hover:text-foreground'
             )
           : cn(
-              'shrink-0',
+              'shrink-0 [&>svg]:transition-opacity',
               isTop ? 'h-[36px] w-9' : 'w-10 h-10',
-              active ? 'text-foreground' : 'text-muted-foreground/60 hover:text-muted-foreground'
+              active
+                ? 'text-foreground'
+                : 'text-muted-foreground [&>svg]:opacity-60 hover:[&>svg]:opacity-100 forced-colors:[&>svg]:opacity-100'
             )
       )}
-      onClick={onClick}
+      // Enter and Space fire click with detail 0.
+      onClick={(event) => onClick(event.detail === 0)}
+      {...keepPaneFocusPressProps}
       data-workspace-board-dismiss=""
       data-activity-plugin-key={item.pluginKey}
       aria-label={activityItemAriaLabel(item, effectiveStatus, t)}
       aria-current={active ? 'page' : undefined}
+      data-activity-item-id={item.id}
     >
       {showLabel ? (
         <>
@@ -262,10 +347,10 @@ export function ActivityBarButton({
     return button
   }
   return (
-    <Tooltip>
+    <Tooltip open={tooltipOpen} onOpenChange={setTooltipOpen}>
       <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent side={isTop ? 'bottom' : 'left'} sideOffset={6}>
-        {item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
+        {activityItemTooltip(item)}
       </TooltipContent>
     </Tooltip>
   )

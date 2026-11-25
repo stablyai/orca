@@ -78,11 +78,17 @@ export function updateSettings(
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }
+  if ('linuxTilingWindowMode' in updates) {
+    sanitizedUpdates.linuxTilingWindowMode = updates.linuxTilingWindowMode === true
+  }
   if ('artifactSharingEnabled' in updates) {
     sanitizedUpdates.artifactSharingEnabled = updates.artifactSharingEnabled === true
   }
   if ('agentSkillSharingEnabled' in updates) {
     sanitizedUpdates.agentSkillSharingEnabled = updates.agentSkillSharingEnabled === true
+  }
+  if ('experimentalAppRail' in updates) {
+    sanitizedUpdates.experimentalAppRail = updates.experimentalAppRail === true
   }
   if ('nestedWorkerMaxDepth' in updates) {
     sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({

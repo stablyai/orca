@@ -1,4 +1,3 @@
-import { configureDevKeychain } from './chromium-policy/configure-dev-keychain'
 import { installElectronNativeServices } from '../host/electron-native-services'
 import { captureBackendBootstrap } from '../backend-desktop/backend-supervisor'
 import { antigravityHookService } from '../antigravity/hook-service'
@@ -53,6 +52,8 @@ import {
   startMainThreadChurnProbe
 } from '../diagnostics/main-thread-churn-probe'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { setDefaultProcessLauncher } from '@orca/process-host'
+import { launchPlainProcessSpecOnPosixWorker } from '../git/command-runner/process-capture/process-spec-worker-launch'
 import { settledDiffCache } from '../git/source-control/git-read-cache-invalidation'
 import { reserveServeStdoutForReadiness } from '../server/serve-stdout-boundary'
 import { createServeDesktopActivationGate } from './serve-launch/serve-desktop-activation'
@@ -193,7 +194,6 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   // Register before spawning so CLI/relay-shared tree killing can reach main's gate and breadcrumbs.
   installMainProcessTreeKillGate()
   configureDevUserDataPath(isDev)
-  configureDevKeychain()
   configureOrcaUserDataPathEnv()
   // #16761: install the lazy environment accessor immediately after userData selection or early resolves can throw/memoize the wrong profile.
   setAppEnvironment(new ElectronAppEnvironment())
@@ -224,6 +224,10 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   if (isMainThreadDiagnosticsEnabled()) {
     // Include process-host spawns too; Git-only probe sites miss rg/ps/PTY helpers.
     setSpawnObserver(recordSubprocessSpawn)
+  }
+  // posix_spawn blocks its caller; under memory/disk pressure a launch on main froze the window for minutes.
+  if (process.platform !== 'win32' && process.env.ORCA_CHILD_PROCESS_WORKER_DISABLED !== '1') {
+    setDefaultProcessLauncher(launchPlainProcessSpecOnPosixWorker)
   }
   startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
   // Lock after userData override so dev/packaged namespaces differ; concurrent dev copies also need separate profiles to avoid store corruption (#1326, #1312).

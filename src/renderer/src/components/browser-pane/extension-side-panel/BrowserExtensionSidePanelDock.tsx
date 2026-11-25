@@ -21,7 +21,6 @@ import {
   type BrowserExtensionSidePanel
 } from '../../../../../shared/browser/extensions/browser-extension-side-panel-types'
 import {
-  BROWSER_SIDE_PANEL_WIDTH_VARIABLE,
   getBrowserOverlaySlotViewport,
   subscribeBrowserOverlaySlotViewport
 } from '../host-guest/viewport/browser-page-viewport'
@@ -38,8 +37,11 @@ import {
 import {
   ensureBrowserExtensionSidePanelHost,
   layoutBrowserExtensionSidePanelHost,
+  setBrowserExtensionSidePanelWidth,
   syncBrowserExtensionSidePanelWebviews
 } from './browser-extension-side-panel-webviews'
+import { isClientHostedBrowserPageHandle } from '@/store/slices/browser/hosts/browser-host-state'
+import { useServerBrowserPageProfileId } from '../assemble-chrome/profile-routing/use-server-browser-page-profile-id'
 
 // Why a cap: a wide panel must leave the page usable, as Chrome's two-thirds limit does.
 const MAX_PANE_SHARE = '66.667%'
@@ -121,7 +123,7 @@ function SidePanelResizeHandle({
         }
         width = Math.min(max, Math.max(MIN_WIDTH, startWidth + startX - moveEvent.clientX))
         // Why straight to the style: one store write per drag, not one per frame.
-        slotRoot.style.setProperty(BROWSER_SIDE_PANEL_WIDTH_VARIABLE, panelWidthValue(width))
+        setBrowserExtensionSidePanelWidth(slotRoot, panelWidthValue(width))
       }
       const cleanup = (): void => {
         handle.removeEventListener('pointermove', onMove)
@@ -197,21 +199,26 @@ function SidePanelHeader({ panel }: { panel: BrowserExtensionSidePanel }): React
 function SidePanelDockBody({
   workspace,
   isPaintable,
+  clientPageId,
   panels: allPanels
 }: {
   workspace: BrowserWorkspace
   isPaintable: boolean
+  clientPageId: string | null
   panels: readonly BrowserExtensionSidePanel[]
 }): React.JSX.Element | null {
   // Why: a workspace switched to another profile must not keep the old profile's extensions open.
-  const profileId = workspace.sessionProfileId ?? 'default'
+  // SSH and This-device pages run their local profile's extensions as an instance of their own; a
+  // This-device page switches profile on its server, so only its page snapshot has the current one.
+  const serverProfileId = useServerBrowserPageProfileId(clientPageId ?? '')
+  const profileId = (clientPageId ? serverProfileId : workspace.sessionProfileId) ?? 'default'
   const panels = useMemo(
-    () => allPanels.filter((panel) => panel.profileId === profileId),
+    () => allPanels.filter((panel) => panel.browserProfileId === profileId),
     [allPanels, profileId]
   )
   useEffect(() => {
     for (const panel of allPanels) {
-      if (panel.profileId !== profileId) {
+      if (panel.browserProfileId !== profileId) {
         void window.api.browser.extensionsSidePanelClose({ panelId: panel.id })
       }
     }
@@ -231,11 +238,12 @@ function SidePanelDockBody({
     runtimeEnvironmentIdOrLocalUnlessTwin(s, workspace.worktreeId)
   )
   const width = useAppStore((s) => s.browserExtensionSidePanelWidth)
-  // Only local URL pages lay out beside the panel; streamed and document pages draw elsewhere.
+  // Only this desktop's URL pages lay out beside the panel; streamed and document pages draw elsewhere.
   const pageIsLocal = Boolean(
     activePage &&
     !activePage.docLocation &&
-    !getBrowserPageRuntimeEnvironmentId(activePage, activeRuntimeEnvironmentId)
+    (activePage.id === clientPageId ||
+      !getBrowserPageRuntimeEnvironmentId(activePage, activeRuntimeEnvironmentId))
   )
   const activePageId = activePage?.id ?? null
   const visible = pageIsLocal ? resolveVisibleBrowserExtensionSidePanel(panels, activePageId) : null
@@ -300,8 +308,23 @@ export function BrowserExtensionSidePanelDock({
   /** False while the workspace's slot is hidden; panels get their guest once it can paint. */
   isPaintable: boolean
 }): React.JSX.Element | null {
-  const panels = useBrowserExtensionSidePanels(workspace.id)
+  // A This-device page's panels are keyed by the page: main has no workspace for it (see main's
+  // browserExtensionSidePanelWorkspaceForPage), and it sits alone in its browser tab.
+  const clientPageId = useAppStore((s) => {
+    const handle = workspace.activePageId
+      ? s.remoteBrowserPageHandlesByPageId[workspace.activePageId]
+      : undefined
+    return handle && isClientHostedBrowserPageHandle(handle)
+      ? (workspace.activePageId ?? null)
+      : null
+  })
+  const panels = useBrowserExtensionSidePanels(clientPageId ?? workspace.id)
   return panels.length > 0 ? (
-    <SidePanelDockBody workspace={workspace} isPaintable={isPaintable} panels={panels} />
+    <SidePanelDockBody
+      workspace={workspace}
+      isPaintable={isPaintable}
+      clientPageId={clientPageId}
+      panels={panels}
+    />
   ) : null
 }

@@ -32,12 +32,14 @@ import type { TaskItem } from '../mobile-tasks-project-workspace-types'
 import { createGitHubTask, mapWithConcurrency } from '../item-detail/mobile-tasks-item-mapping'
 import { reconcileTeamSelection } from '../item-detail/mobile-tasks-reviewer-linear'
 import { scopeGitHubTaskSearch } from '../../../../src/shared/work-items/task-github-search'
+import { sortWorkItemsByRecency } from '../../../../src/shared/work-items/work-item-order'
 import {
   githubWorkItemCountRead,
   linearAccountStatusRead,
   linearWorkspaceTeamListRead
 } from './mobile-task-list-operations'
 import { githubWorkItemSearchRead } from '../providers/mobile-task-source-search-operations'
+import { linearAccountClient } from './linear-account-host'
 import { taskSettingsWrite } from '../screen-state/mobile-task-runtime-operations'
 
 export type ProviderLoadActionsInput = Pick<
@@ -49,6 +51,7 @@ export type ProviderLoadActionsInput = Pick<
   | 'defaultLinearTeamSelectionRef'
   | 'githubKind'
   | 'keepSettings'
+  | 'linearAccountBindingRef'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
   | 'setLinearConnected'
@@ -71,6 +74,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     defaultLinearTeamSelectionRef,
     githubKind,
     keepSettings,
+    linearAccountBindingRef,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setLinearConnected,
@@ -97,7 +101,9 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     if (!client || connState !== 'connected' || !tasksSupported) {
       return
     }
-    const statusReply = await linearAccountStatusRead.request(client)
+    const statusReply = await linearAccountStatusRead.request(
+      await linearAccountClient(linearAccountBindingRef.current, client)
+    )
     const status = linearAccountStatusRead.interpret(statusReply)
     setLinearConnected(status.connected === true)
     if (status.connected !== true) {
@@ -220,10 +226,10 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
 
       return {
-        // Host pagination orders by issue number; merge in that order so rows cannot reshuffle between pages.
-        items: results
-          .flatMap((result) => result.items)
-          .sort((a, b) => b.source.number - a.source.number),
+        items: sortWorkItemsByRecency(
+          results.flatMap((result) => result.items),
+          (item) => item.source
+        ),
         failedCount: results.filter((result) => result.error).length,
         errorTypes: results.flatMap((result) => result.errorTypes ?? []),
         sourcesByRepoId,

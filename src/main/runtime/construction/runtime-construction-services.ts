@@ -9,6 +9,7 @@ import type {
   RuntimeVisibleTerminalState,
   RuntimeLeafRecord
 } from '../terminal/records/runtime-terminal-state-records'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { TerminalAgent } from '../../../shared/agent-status/identity/terminal-agent'
 import type { AgentStatus } from '../../../shared/agent-status/title/agent-title-core'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -24,6 +25,7 @@ import type { TitleDisplayClear } from '../workspaces/process-listing/runtime-wo
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
+import type { ScopedWorktreeReads } from '../workspaces/catalog/scoped-worktree-row-resolution'
 import type {
   RuntimeTerminalShow,
   RuntimeTerminalSummary
@@ -39,7 +41,7 @@ import type { RuntimeTerminalAgentPresenceOptions } from '../terminal/query/runt
 import type { resolveTerminalOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
-import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
+import type { OrchestrationPointerPty } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-delivery-contract'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
@@ -114,7 +116,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): TuiIdleHookTurn | null
   protected abstract readLiveTerminalScreenLines(ptyId: string | null | undefined): string[] | null
   protected abstract readCaughtUpRuledScreen(ptyId: string): RuledScreen | null
-  protected abstract clearWaitBlockedStamp(ptyId: string): void
+  protected abstract readScreenClearingBlockedTailForPty(ptyId: string): string | null
+  protected abstract isAgentSettledForDelivery(ptyId: string): boolean
   protected abstract readRuledScreen(ptyId: string | null | undefined): RuledScreen | null
   protected abstract readOutputClockAt(ptyId: string | null | undefined): number | null
   protected abstract requestReattachedRepaint(ptyId: string): void
@@ -133,6 +136,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   ): TerminalHandlePty | null
   protected abstract getLiveLeafForHandle(handle: string): TerminalHandleLeaf
   protected abstract getTerminalPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
+  abstract getTerminalPtyIdForHandle(handle: string): string | null
   protected abstract getExitWaitPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
   protected abstract getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined
   protected abstract getOrchestrationMailboxTerminal(
@@ -180,7 +184,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
     terminalHandle: string
   ): OrchestrationCompatibilityTerminalAuthority | null
   abstract getOrchestrationFleetAgentStatusSnapshot(
-    context?: IdentityRead
+    context?: IdentityRead,
+    rows?: AgentStatusIpcPayload[]
   ): ReturnType<typeof readOrchestrationFleetAgentStatusSnapshot>
   protected abstract assertStableReadyGraph(expectedGraphEpoch: number): void
   protected abstract getValidatedExplicitWorktreeIdSelector(
@@ -267,10 +272,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
     handle: string,
     reservedTypes?: ReadonlySet<string>
   ): void
-  protected abstract writeOrchestrationPointerPty(
-    ptyId: string,
-    data: string
-  ): WriteSettlement | Promise<WriteSettlement>
+  protected abstract orchestrationPointerPty(): OrchestrationPointerPty
   protected abstract resolveStructuredMailboxTarget(
     mailboxHandle: string
   ): StructuredPointerTarget | null
@@ -278,6 +280,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract isWorkerAgentInTurn(
     resource: Pick<WorkerTerminalResourceRow, 'pane_key' | 'terminal_handle'>
   ): boolean
+  abstract isSetupTerminalRunning(handle: string): boolean
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
@@ -286,7 +289,8 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract notifyMessageArrived(handle: string, messageType?: string): void
   protected abstract resolveGitWorktreeSelector(
     selector: string,
-    requiredHostId?: ExecutionHostId
+    requiredHostId?: ExecutionHostId,
+    reads?: ScopedWorktreeReads
   ): Promise<ResolvedWorktree>
   protected abstract resolveWorkspaceSelector(...args: Calls.SelectorArgs): Calls.SelectorResult
   protected abstract resolveWorkspaceCandidate(...args: Calls.SelectorArgs): Calls.CandidateResult

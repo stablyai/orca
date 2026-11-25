@@ -12,17 +12,50 @@ import { journalDatabasePath } from './database/journal-host-database'
 import { JournalSqlBatch } from './journal-sql-batch'
 import { applyJournalSqlMaintenance, type JournalSqlMaintenance } from './journal-sql-maintenance'
 import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
-import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
+import type { JournalSqlConversionReader, JournalSqlReaderPool } from './journal-sql-reader-pool'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { prepareJournalDomainImport } from './journal-domain-import'
-import { journalLegacyConversionSource } from './database/journal-legacy-source'
+import {
+  journalLegacyConversionSource,
+  openJournalLegacySource
+} from './database/journal-legacy-source'
 import { journalSqlRetryRows } from './journal-sql-retry-rows.test-fixture'
 import { insertJournalRow, publishJournalSessionEpoch } from './durable-rows/journal-row-table'
 import { acquireJournalLegacyFileLock } from './journal-legacy-file-lock'
 import { JournalLegacyRetirement } from './journal-legacy-retirement'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
+import { JournalSqlConversions } from './journal-sql-conversions'
+import { readJournalSqlDatabase } from './journal-sql-database-read'
+import type { JournalConversionStorage } from './journal-conversion-storage'
 
 export const cleanup: (() => void)[] = []
+
+export const companions = (filename: string) =>
+  [filename, `${filename}-wal`, `${filename}-shm`].filter((name) => existsSync(name))
+
+/** A message an older Orca left waiting in the original's queue. */
+export function queue(filename: string, sessionId: string, text: string) {
+  const db = new Database(filename)
+  db.prepare(
+    `INSERT INTO queued_messages
+    (session_id,message_id,position,body_json,fingerprint,created_at,host_instance,state)
+    VALUES(?,?,?,?,?,?,?,?)`
+  ).run(
+    sessionId,
+    'queued-after-copy',
+    1,
+    JSON.stringify({
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text }]
+    }),
+    'fingerprint',
+    1000,
+    'older-host',
+    'waiting'
+  )
+  db.close()
+}
 afterEach(() => {
   vi.unstubAllEnvs()
   for (const close of cleanup.splice(0).toReversed()) {
@@ -33,7 +66,7 @@ afterEach(() => {
 const native = process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
 
 /** Without the built helper, the same removal the helper performs once it holds the lock. */
-async function fakeLock(filename: string) {
+export async function fakeLease(filename: string) {
   return {
     held: () => true,
     close: async () => {},
@@ -81,15 +114,23 @@ export function continueInOlderOrca(filename: string, sessionId: string): void {
 export async function profile(
   options: {
     copiedBy?: string
+    /** Writes the original's chat, as an older Orca did; by default one unconverted chat. */
+    original?: (filename: string) => void
     seed?: (db: Database.Database) => void
     /** Converting this chat fails with this error, as a reader would. */
     failConversion?: { sessionId: string; error: Error }
+    /** Converts through the real conversion lock, measuring the disk with this. */
+    storage?: () => Promise<JournalConversionStorage>
   } = {}
 ) {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const filename = journalDatabasePath(root)
-  olderOrcaChat(filename, 'unopened')
+  if (options.original) {
+    options.original(filename)
+  } else {
+    olderOrcaChat(filename, 'unopened')
+  }
   if (options.seed) {
     const { db: legacy } = openJournalDatabase(filename)
     options.seed(legacy)
@@ -100,8 +141,8 @@ export async function profile(
   const { db } = openJournalDomainDatabase(domainFile)
   cleanup.push(() => db.close())
   let original: Database.Database | undefined
-  const source = () =>
-    (original ??= new Database(filename, { readonly: true, fileMustExist: true }))
+  // As the readers open it: tables an older build never created read as empty.
+  const source = () => (original ??= openJournalLegacySource(filename))
   cleanup.push(() => original?.close())
   const batch = new JournalSqlBatch(db)
   const writer = {
@@ -127,7 +168,13 @@ export async function profile(
         if (!(error instanceof JournalLegacyRetentionError)) {
           throw error
         }
-        return { next: null, sessions: [], retained: error.message, reason: error.reason }
+        return {
+          next: null,
+          sessions: [],
+          retained: error.message,
+          reason: error.reason,
+          artifact: error.artifact
+        }
       }
     },
     importState: async (id) => journalDomainImportState(db, id),
@@ -144,8 +191,40 @@ export async function profile(
   const ensured: string[] = []
   /** Converting a chat named here fails once with its error, as a lost reader would. */
   const failOnce = new Map<string, Error>()
+  const guarded =
+    options.storage &&
+    new JournalSqlConversions(
+      writer,
+      {
+        importState: readers.importState,
+        conversionStorage: options.storage,
+        database: async (read) => readJournalSqlDatabase(db, read),
+        compareLegacyChat: async () => null,
+        // As the reader does: a copy takes its original chat's history under its own id.
+        prepareConversion: async (id: string) => {
+          const from = journalLegacyConversionSource(db, id)
+          const prepared = prepareJournalDomainImport(source(), from)
+          if (!prepared) {
+            return null
+          }
+          const { pages, ...header } = prepared
+          const reader = {
+            header: from === id ? header : { ...header, sessionId: id, sourceRevision: null },
+            next: async () => pages.next().value ?? null,
+            close: async () => {}
+          }
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: conversions use only header, next and close.
+          return reader as unknown as JournalSqlConversionReader
+        }
+      },
+      async () => {}
+    )
   const conversions = {
-    ensure: async (id: string) => {
+    ensure: async (id: string, foreground = true) => {
+      if (guarded) {
+        ensured.push(id)
+        return guarded.ensure(id, foreground)
+      }
       ensured.push(id)
       if (options.failConversion?.sessionId === id) {
         throw options.failConversion.error
@@ -175,10 +254,12 @@ export async function profile(
   const errors: unknown[] = []
   /** A launch of the Orca at `version`, owning the profile unless told otherwise. */
   const launch = (
-    version = '1.0.1',
+    version: string | null = '1.0.1',
     owns = true,
-    lock = native ? acquireJournalLegacyFileLock : fakeLock,
-    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
+    lock = native ? acquireJournalLegacyFileLock : fakeLease,
+    eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9],
+    // A build that deletes unless a test says otherwise: most of these test what the proof requires.
+    deletes = true
   ) =>
     new JournalLegacyRetirement(
       root,
@@ -191,7 +272,8 @@ export async function profile(
       lock,
       undefined,
       eligibility ?? (native ? undefined : { check: async () => {}, present: () => {} }),
-      version
+      version,
+      deletes
     )
   return {
     root,
@@ -201,6 +283,7 @@ export async function profile(
     errors,
     source,
     readers,
+    writer,
     convert: conversions.ensure,
     ensured,
     failOnce

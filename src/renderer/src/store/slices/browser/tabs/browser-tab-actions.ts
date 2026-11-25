@@ -193,9 +193,12 @@ export function createBrowserTabActions(
       if (!worktreeId) {
         return
       }
-      const browserAvailability = getClientCreationActionPolicy(state, worktreeId, executionHostId)[
-        'managed-browser'
-      ]
+      const browserAvailability = getClientCreationActionPolicy(
+        state,
+        worktreeId,
+        undefined,
+        executionHostId
+      )['managed-browser']
       if (browserAvailability.state !== 'enabled') {
         throw new Error(browserAvailability.reason)
       }

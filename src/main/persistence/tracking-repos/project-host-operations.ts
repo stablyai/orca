@@ -63,6 +63,11 @@ export class ProjectHostPersistenceOperations {
 
   /** The repo registered under `id` on `hostId`, by key: never a pass over every registration. */
   getRepoForHost(id: string, hostId: ExecutionHostId): Repo | undefined {
+    const repo = this.repoLookup().byHost(id, hostId)
+    return repo ? this.readHydratedRepo(repo) : undefined
+  }
+
+  private repoLookup(): RepoRowExecutionHostLookup<Repo> {
     // A replaced collection is a new array, even with no write notice.
     if (this.repoIndex?.source !== this.state.repos) {
       this.repoIndex = {
@@ -70,8 +75,7 @@ export class ProjectHostPersistenceOperations {
         lookup: createRepoRowExecutionHostLookup(this.state.repos)
       }
     }
-    const repo = this.repoIndex.lookup.byHost(id, hostId)
-    return repo ? this.readHydratedRepo(repo) : undefined
+    return this.repoIndex.lookup
   }
 
   private readHydratedRepo(repo: Repo): Repo {
@@ -259,8 +263,9 @@ export class ProjectHostPersistenceOperations {
     return this.state.repos.length
   }
 
+  /** The first registration under `id`, by key. */
   getRepo(id: string): Repo | undefined {
-    const repo = this.state.repos.find((r) => r.id === id)
+    const repo = this.repoLookup().rowsFor(id)[0]
     return repo ? this.readHydratedRepo(repo) : undefined
   }
 

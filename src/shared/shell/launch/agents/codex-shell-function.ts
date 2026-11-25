@@ -2,6 +2,11 @@ import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
 } from '../../../clipboard/remote-viewer-clipboard-env'
+import {
+  CODEX_KITTY_WINDOW_ID,
+  ORCA_IMAGE_PROTOCOL_ENV,
+  ORCA_IMAGE_PROTOCOL_VALUE
+} from '../../../terminal/images/terminal-image-protocol'
 
 // Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const
@@ -61,6 +66,9 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\
     if [[ "$__orca_codex_isolate" != 0 ]]; then
       case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
     fi
+    if [[ "\${${ORCA_IMAGE_PROTOCOL_ENV}:-}" == '${ORCA_IMAGE_PROTOCOL_VALUE}' && -z "\${KITTY_WINDOW_ID+x}" ]]; then
+      local -x KITTY_WINDOW_ID='${CODEX_KITTY_WINDOW_ID}'
+    fi
     command codex "$@"
   }
 fi
@@ -87,6 +95,8 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
     end
+    # A top-level and-chain keeps -l scoped to this function on fish before 3.5.
+    test "$${ORCA_IMAGE_PROTOCOL_ENV}" = '${ORCA_IMAGE_PROTOCOL_VALUE}'; and not set -q KITTY_WINDOW_ID; and set -lx KITTY_WINDOW_ID '${CODEX_KITTY_WINDOW_ID}'
     if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
       set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
       command codex $argv
@@ -104,13 +114,20 @@ export function getPowerShellCodexShellLaunchPreflight(): string {
 if ($orcaCodexCommand -and
     $orcaCodexCommand.CommandType -in @("Application", "ExternalScript")) {
     function Global:codex {
-        $orcaCodexExecutable = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1
-        if (-not $orcaCodexExecutable) {
+        $exe = Get-Command codex -CommandType Application,ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty Source
+        if (-not $exe) {
             Write-Error "codex executable not found"
             $global:LASTEXITCODE = 127
             return
         }
-        $orcaCodexFlags = @()
+        $flags = @()
+        # Why: execution policy can block npm's codex.ps1 shim, so run the Node entry point it wraps.
+        $dir = Split-Path $exe
+        $js = "$dir/node_modules/@openai/codex/bin/codex.js"
+        if ($exe -like '*.ps1' -and (Test-Path -LiteralPath $js)) {
+            $exe = if (Test-Path -LiteralPath "$dir/node.exe") { "$dir/node.exe" } else { 'node.exe' }
+            $flags = @($js)
+        }
         # Why try/catch: under the user's $ErrorActionPreference = 'Stop', a failing prep or probe must not abort the launch.
         if ($env:ORCA_CODEX_LAUNCH_PREFLIGHT) {
             try {
@@ -120,29 +137,32 @@ if ($orcaCodexCommand -and
         }
         if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}')) {
             try {
-                if ((& $orcaCodexExecutable.Source --help 2>$null) -match '--no-daemon') {
-                    $orcaCodexFlags = @('--no-daemon')
+                if ((& $exe @flags --help 2>$null) -match '--no-daemon') {
+                    $flags += '--no-daemon'
                 }
             } catch {
             }
         }
-        $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
-        $orcaCodexIdentity = @()
+        $remoteClip = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
+        $identity = @()
         if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) {
-            foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }
-            if ($orcaCodexRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" }
+            foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $identity += '-c', "${identitySetArg('$k', '$v')}" } }
+            if ($remoteClip -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $identity += '-c', "${CLEAR_SSH_MARKER_ARG}" }
         }
-        $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
-        if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
+        $argv = @(__OrcaEscapeNativeArgs $exe (@($identity) + @($args)))
+        if ($remoteClip) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
+        $kitty = $env:${ORCA_IMAGE_PROTOCOL_ENV} -ceq '${ORCA_IMAGE_PROTOCOL_VALUE}' -and -not (Test-Path Env:KITTY_WINDOW_ID)
+        if ($kitty) { $env:KITTY_WINDOW_ID = '${CODEX_KITTY_WINDOW_ID}' }
         # Why: a native command inside a function never sees the function's pipeline input on its own.
         try {
             if ($MyInvocation.ExpectingInput) {
-                $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+                $input | & $exe @flags @argv
             } else {
-                & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
+                & $exe @flags @argv
             }
         } finally {
-            if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
+            if ($remoteClip) { Remove-Item Env:SSH_CONNECTION }
+            if ($kitty) { Remove-Item Env:KITTY_WINDOW_ID }
         }
         $global:LASTEXITCODE = $LASTEXITCODE
     }

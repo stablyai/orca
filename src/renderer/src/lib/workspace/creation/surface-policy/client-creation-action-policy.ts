@@ -12,7 +12,10 @@ import { expectsBrowserClientHosting } from '../../../../../../shared/browser/cl
 import { getOrcadSshDeployment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { BrowserClientHostPlacementPreference } from '../../../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { AppState } from '@/store/types'
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
+import type { RuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-subscriptions'
 import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export const MANAGED_BROWSER_UNAVAILABLE_MESSAGE =
@@ -73,23 +76,27 @@ export function resolveClientCreationActionPolicy(args: {
   }
 }
 
+/** Render paths pass the statuses their hook read; actions default to the owner's current map. */
 export function getClientCreationActionPolicy(
   state: AppState,
   worktreeId: string | null,
+  statuses: RuntimeStatuses = readAppRuntimeStatuses(),
   executionHostId?: ExecutionHostId
 ): ClientCreationActionPolicy {
   return worktreeId
-    ? getWorkspaceClientCreationActionPolicy(state, worktreeId, executionHostId)
+    ? getWorkspaceClientCreationActionPolicy(state, worktreeId, statuses, executionHostId)
     : creationPolicyForRuntime(
         state,
         state.settings?.activeRuntimeEnvironmentId?.trim() ?? null,
-        false
+        false,
+        statuses
       )
 }
 
 export function getWorkspaceClientCreationActionPolicy(
   state: AppState,
   worktreeId: string,
+  statuses: RuntimeStatuses = readAppRuntimeStatuses(),
   executionHostId?: ExecutionHostId
 ): ClientCreationActionPolicy {
   const ownerRef = { workspaceId: worktreeId, hostId: executionHostId }
@@ -109,17 +116,19 @@ export function getWorkspaceClientCreationActionPolicy(
       : owner?.kind === 'resolved'
         ? owner.environmentId
         : runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId),
-    floatingWorkspace
+    floatingWorkspace,
+    statuses
   )
 }
 
 function creationPolicyForRuntime(
   state: AppState,
   runtimeEnvironmentId: string | null,
-  floatingWorkspace: boolean
+  floatingWorkspace: boolean,
+  statuses: RuntimeStatuses
 ): ClientCreationActionPolicy {
   const runtimeStatus = runtimeEnvironmentId
-    ? (state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status ?? null)
+    ? (statuses.get(runtimeEnvironmentId)?.status ?? null)
     : null
 
   return resolveClientCreationActionPolicy({
@@ -127,15 +136,17 @@ function creationPolicyForRuntime(
     runtimeStatus,
     floatingWorkspace,
     runtimeHostsPagesOnThisDesktop:
-      runtimeEnvironmentId !== null && runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId)
+      runtimeEnvironmentId !== null &&
+      runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId, statuses)
   })
 }
 
+type RuntimeBrowserHostingStatuses = ReadonlyMap<
+  string,
+  { status: Pick<RuntimeStatus, 'capabilities' | 'deviceScope'> | null }
+>
+
 export type RuntimeBrowserHostingState = {
-  runtimeStatusByEnvironmentId?: ReadonlyMap<
-    string,
-    { status: Pick<RuntimeStatus, 'capabilities' | 'deviceScope'> | null }
-  >
   runtimeEnvironments?: readonly Pick<PublicKnownRuntimeEnvironment, 'id' | 'orcadDeployment'>[]
   settings?: Pick<GlobalSettings, 'browserClientHostedRemoteEnabled'> | null
 }
@@ -143,7 +154,9 @@ export type RuntimeBrowserHostingState = {
 /** Host orcad browser pages on this desktop through runtime tunnels; managed SSH deployments retain the SSH browser route. */
 export function runtimeHostsPagesOnThisDesktop(
   state: RuntimeBrowserHostingState,
-  runtimeEnvironmentId: string
+  runtimeEnvironmentId: string,
+  statuses: RuntimeBrowserHostingStatuses = readAppRuntimeStatuses(),
+  preference?: BrowserClientHostPlacementPreference
 ): boolean {
   if (isPairedWebClientWindow()) {
     return false
@@ -152,10 +165,10 @@ export function runtimeHostsPagesOnThisDesktop(
   if (environment && getOrcadSshDeployment(environment)) {
     return false
   }
-  const status = state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status
+  const status = statuses.get(runtimeEnvironmentId)?.status
   return expectsBrowserClientHosting({
     enabled: state.settings?.browserClientHostedRemoteEnabled !== false,
-    preference: undefined,
+    preference,
     deviceScope: status?.deviceScope,
     capabilities: status?.capabilities
   })
@@ -167,7 +180,12 @@ export function assertClientCreationActionAvailable(
   action: ClientCreationAction,
   executionHostId?: ExecutionHostId
 ): void {
-  const availability = getClientCreationActionPolicy(state, worktreeId, executionHostId)[action]
+  const availability = getClientCreationActionPolicy(
+    state,
+    worktreeId,
+    readAppRuntimeStatuses(),
+    executionHostId
+  )[action]
   if (availability.state !== 'enabled') {
     throw new Error(availability.reason)
   }
@@ -177,11 +195,11 @@ export function assertRuntimeManagedBrowserCreationAvailable(
   state: RuntimeBrowserHostingState,
   runtimeEnvironmentId: string
 ): void {
-  const capabilities =
-    state.runtimeStatusByEnvironmentId?.get(runtimeEnvironmentId)?.status?.capabilities
+  const statuses = readAppRuntimeStatuses()
+  const capabilities = statuses.get(runtimeEnvironmentId)?.status?.capabilities
   if (
     !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
-    !runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId)
+    !runtimeHostsPagesOnThisDesktop(state, runtimeEnvironmentId, statuses)
   ) {
     throw new Error(RUNTIME_BROWSER_UNAVAILABLE_MESSAGE)
   }

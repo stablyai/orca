@@ -51,10 +51,10 @@ const block: NativeChatSubagentGroupBlock = {
   ]
 }
 
-function Roster() {
+function Roster({ roster = block }: { roster?: NativeChatSubagentGroupBlock }) {
   return (
     <div className="native-chat-appearance p-4">
-      <NativeChatSubagentRun block={block} onOpenSubagent={() => {}} />
+      <NativeChatSubagentRun block={roster} onOpenSubagent={() => {}} />
     </div>
   )
 }
@@ -64,10 +64,9 @@ export const enriched = defineFixture({
   render: () => <Roster />
 })
 
-export const opened = defineFixture({
-  width: 560,
-  render: () => <Roster />,
-  interact: async (frame) => {
+async function openToggles(frame: HTMLElement, rounds: number): Promise<void> {
+  // Each round opens what the previous one revealed: the summary first, then each row.
+  for (let round = 0; round < rounds; round++) {
     for (const toggle of frame.querySelectorAll<HTMLButtonElement>(
       'button[aria-expanded="false"]'
     )) {
@@ -75,9 +74,26 @@ export const opened = defineFixture({
     }
     await new Promise((resolve) => setTimeout(resolve, 300))
   }
+}
+
+export const listed = defineFixture({
+  width: 560,
+  render: () => <Roster />,
+  interact: (frame) => openToggles(frame, 1)
+})
+
+export const opened = defineFixture({
+  width: 560,
+  render: () => <Roster />,
+  interact: (frame) => openToggles(frame, 2)
 })
 
 export const narrow = defineFixture({
   width: 320,
   render: () => <Roster />
+})
+
+export const single = defineFixture({
+  width: 560,
+  render: () => <Roster roster={{ ...block, agents: block.agents.slice(0, 1) }} />
 })

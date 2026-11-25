@@ -11,7 +11,6 @@ import { getInitialClaudeRateLimitTarget } from '../../rate-limits/providers/cla
 import { resolveKimiHome } from '../../kimi/kimi-runtime-home'
 import { resolveLocalAccountUsageTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/providers/codex/codex-rate-limit-wsl-home-gate'
-import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
 import { readMiniMaxApiKey } from '../../minimax/minimax-api-key-store'
 import { readZcodePlanApiKey } from '../../zcode/zcode-plan-api-key-store'
@@ -21,8 +20,9 @@ import {
   setAntigravityNativeCredentialChangeListener
 } from '../../antigravity/native-account-host'
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
-import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
+import { resolveInactiveCodexAccounts } from '../../rate-limits/inactive-codex-accounts'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
+import { HOST_SYSTEM_DEFAULT_USAGE_IDS } from '../../../shared/agent-accounts/host-system-default-usage'
 import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
@@ -73,7 +73,8 @@ export function createProviderAccountServices(
       rateLimits.discardClaudeOAuthUsage()
     } else if (updates.claudeOAuthUsageEnabled === true) {
       void rateLimits
-        .refreshClaudeForTarget(rateLimits.getState().claudeTarget)
+        .getState()
+        .then((state) => rateLimits.refreshClaudeForTarget(state.claudeTarget))
         .catch((error: unknown) => {
           console.warn(
             '[rate-limits] Failed to refresh Claude usage after enabling polling:',
@@ -133,22 +134,21 @@ export function createProviderAccountServices(
       workspaceIdOverride: settings.opencodeWorkspaceId
     }
   }, readOpenCodeGoApiKey)
-  rateLimits.setMiniMaxConfigResolver(() => {
+  rateLimits.setMiniMaxConfigResolver(async () => {
     const settings = store.getSettings()
-    const apiKey = readMiniMaxApiKey() ?? ''
+    const apiKey = (await readMiniMaxApiKey()) ?? ''
     return {
-      sessionCookie: apiKey ? '' : (readMiniMaxSessionCookie() ?? ''),
+      sessionCookie: apiKey ? '' : ((await readMiniMaxSessionCookie()) ?? ''),
       groupId: settings.minimaxGroupId,
       models: settings.minimaxUsageModels,
       endpoint: settings.minimaxEndpoint,
       apiKey
     }
   })
-  rateLimits.setZcodePlanConfigResolver(() => ({
+  rateLimits.setZcodePlanConfigResolver(async () => ({
     site: store.getSettings().zcodePlanSite ?? 'zai',
-    apiKey: readZcodePlanApiKey() ?? ''
+    apiKey: (await readZcodePlanApiKey()) ?? ''
   }))
-  rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
   rateLimits.setClaudeOAuthUsageEnabledResolver(() => store.getSettings().claudeOAuthUsageEnabled)
   // Reuse the meter switch so hidden Antigravity usage does not spawn agy.
   rateLimits.setAntigravityUsageEnabledResolver(() =>
@@ -168,13 +168,9 @@ export function createProviderAccountServices(
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeClaudeRuntimeSelection(settings).host,
-        ...Object.values(normalizeClaudeRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
-    )
-    return settings.claudeManagedAccounts
+    const selection = normalizeClaudeRuntimeSelection(settings)
+    const activeIds = new Set([selection.host, ...Object.values(selection.wsl)].filter(Boolean))
+    const inactive = settings.claudeManagedAccounts
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
@@ -182,38 +178,14 @@ export function createProviderAccountServices(
         wslDistro: account.wslDistro,
         wslLinuxAuthPath: account.wslLinuxAuthPath
       }))
+    // System default has no saved id, so it is read under its own key while a saved host account is selected.
+    return selection.host ? [...inactive, { id: HOST_SYSTEM_DEFAULT_USAGE_IDS.claude }] : inactive
   })
-  rateLimits.setInactiveCodexAccountsResolver(() => {
-    const settings = store.getSettings()
-    const activeIds = new Set(
-      [
-        normalizeCodexRuntimeSelection(settings).host,
-        ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
-      ].filter(Boolean)
+  rateLimits.setInactiveCodexAccountsResolver(() =>
+    resolveInactiveCodexAccounts(store.getSettings(), (account) =>
+      codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
     )
-    return settings.codexManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
-      .map((account) => ({
-        id: account.id,
-        ...(account.managedHomeRuntime === 'wsl'
-          ? account.wslDistro
-            ? {
-                readingAccount: {
-                  accountId: account.id,
-                  runtime: 'wsl' as const,
-                  wslDistro: account.wslDistro
-                }
-              }
-            : {}
-          : {
-              readingAccount: { accountId: account.id, runtime: 'host' as const, wslDistro: null }
-            }),
-        resolveHome: () =>
-          inactiveCodexHomeUnlessStopped(
-            codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)
-          )
-      }))
-  })
+  )
   // Every host runs the poll timer; ticks fetch only while a window or remote reader watches.
   rateLimits.start({ fetchImmediately: false })
   return { rateLimits, codexRuntimeHome, codexAccounts, claudeRuntimeAuth, claudeAccounts }

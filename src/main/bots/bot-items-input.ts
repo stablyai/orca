@@ -3,9 +3,12 @@ import { join } from 'node:path'
 import {
   BOT_ITEM_LIMITS,
   type BotItemActor,
+  type BotItemCommentImage,
   type BotItemLinkKind,
   type BotItemStatus
 } from '../../shared/bots/bot-items'
+import { BotItemAskSchema, botItemAskText, type BotItemAsk } from '../../shared/bots/bot-item-ask'
+import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { BotItemError } from './bot-item-error'
 import type { BotItemMadeBy, BotItemRecord, BotItemSource } from './bot-items-schema'
 
@@ -29,6 +32,8 @@ export type BotItemAddInput = {
   doneMeans?: string
   status: 'planned' | 'working'
   links: BotItemLinkInput[]
+  /** The thread, issue or pull request the adding turn's work started in, kept on its `made` event. */
+  startedIn?: string
 }
 
 export type BotItemSetInput = {
@@ -39,8 +44,19 @@ export type BotItemSetInput = {
   note?: string
   /** With Canceled, which needs it: the reason. */
   reason?: string
-  /** With a status move, written as the bot's comment; with Needs you, the question. */
+  /** With a status move, written as the agent's comment. With `ask`, only the readable copy a
+   *  v1.4.265 CLI sends for hosts without asks; the comment's body is the ask's context. */
   comment?: string
+  /** With Needs you: the question line (`--ask`), its quick replies (`--option`) and its context. */
+  ask?: BotItemAsk
+  /** On the comment `comment` or `ask` writes; admitted and claimed on the host first. */
+  images?: readonly BotItemCommentImage[]
+  /** Set by the host, never a client: the chat whose conversation's turn asked `ask`, so the
+   *  owner's answer goes back to that conversation. */
+  askedInConversation?: string
+  /** Set by the host, never a client: whom the chat that closes the item acts for, kept on the
+   *  close so the journal says whose work it was. */
+  closedFor?: readonly BotRequestAsker[]
 }
 
 /** What a write did. */
@@ -74,6 +90,41 @@ export function assertBotItemText(
   }
 }
 
+/** What a Waiting item waits on: one line, refused when missing or longer, in the caller's words (an
+ *  agent's name its CLI flags; the owner's don't). */
+export function botItemWaitText(
+  note: string | undefined,
+  words: { missing: string; tooLong: string }
+): string {
+  const text = note?.trim() ?? ''
+  if (!text) {
+    throw new BotItemError('invalid_argument', words.missing)
+  }
+  if (text.length > BOT_ITEM_LIMITS.wait || /[\r\n]/.test(text)) {
+    throw new BotItemError('invalid_argument', words.tooLong)
+  }
+  return text
+}
+
+/** A status move's comment data. With an ask, it holds the question lines and their quick replies, and
+ *  a host-built `text` spelling them out for readers without the ask; the sent `comment` (a copy for
+ *  hosts without asks) is not kept. */
+export function botItemCommentData(
+  comment: string | undefined,
+  ask: BotItemAsk | undefined
+): { text: string; ask?: BotItemAsk } {
+  if (!ask) {
+    return { text: comment ?? '' }
+  }
+  const parsed = BotItemAskSchema.safeParse(ask)
+  if (!parsed.success) {
+    throw new BotItemError('invalid_argument', parsed.error.issues[0]?.message ?? 'Invalid --ask.')
+  }
+  const text = botItemAskText(parsed.data)
+  assertBotItemText('text', text)
+  return { text, ask: parsed.data }
+}
+
 /** Each link once, first spelling kept: what an add checks and then stores. */
 export function uniqueBotItemLinks(links: readonly BotItemLinkInput[]): BotItemLinkInput[] {
   const seen = new Set<string>()
@@ -96,7 +147,12 @@ export function assertBotItemAddable(input: {
   if (!input.title.trim()) {
     throw new BotItemError('invalid_argument', 'An item needs a title.')
   }
-  if (input.links.length > BOT_ITEM_LIMITS.links) {
+  assertBotItemLinkRoom(0, input.links.length)
+}
+
+/** The one link bound, on every path that adds links: `held` on the item now, `adding` new ones. */
+export function assertBotItemLinkRoom(held: number, adding = 1): void {
+  if (held + adding > BOT_ITEM_LIMITS.links) {
     throw new BotItemError(
       'invalid_argument',
       `An item takes up to ${BOT_ITEM_LIMITS.links} links.`

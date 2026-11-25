@@ -1,8 +1,18 @@
 import {
   BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY,
+  BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY,
   BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
+  BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY,
+  BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
+  BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
+  BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY,
+  BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
+  BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY,
   BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+  BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_GRAB_RUNTIME_CAPABILITY,
+  BROWSER_DROP_FILES_RUNTIME_CAPABILITY,
   BROWSER_HEADLESS_RUNTIME_CAPABILITY,
   BROWSER_IDENTITY_RUNTIME_CAPABILITY,
   BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
@@ -11,7 +21,8 @@ import { orcaAccountRuntimeCapabilities } from '../../orca-profiles/orca-server-
 import { googleRuntimeCapabilities } from '../../google/google-connect'
 import {
   runtimeBrowserCommandsFactoryIsHeadless,
-  runtimeBrowserCommandsFactorySupportsGoogleCookieClear,
+  runtimeBrowserCommandsFactorySupportsEngineCapability,
+  runtimeBrowserEngineIdentity,
   runtimeBrowserCommandsFactorySupportsClientHosting,
   runtimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
@@ -55,6 +66,8 @@ import { WORKTREE_CREATE_RESULT_TTL_MS } from '../workspaces/creation/worktree-c
 
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from './platform-probe/runtime-machine-name'
 import { getManagedServerActions } from './management/managed-server-actions-registry'
+import { isRemoteServerUpdaterConfigured } from './management/remote-server-updater'
+import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../../../shared/remote-runtime/host-catalog/remote-server-update'
 import { getRecipeVmWaker } from '../workspaces/sleep/recipe-vm-waker-registry'
 import { HOST_RECIPE_VM_WAKE_CAPABILITY } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { isDesktopBrowserBridgeHostEnabled } from '../desktop-browser-bridge/desktop-browser-bridge-registry'
@@ -66,7 +79,7 @@ import { RuntimeWorkspaceChangeEvents } from '../workspaces/catalog/runtime-work
 export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEvents {
   getStatus(): RuntimeStatus {
     // Advertise screencast for renderer/offscreen backends; headless ownership prevents client-local fallback.
-    const hasRenderer = Boolean(this.getAvailableAuthoritativeWindow())
+    const hasRenderer = Boolean(this.hasAuthoritativeWindow())
     const hasOffscreen = !hasRenderer && Boolean(this.offscreenBrowserBackend)
     const hasHeadlessCommands = runtimeBrowserCommandsFactoryIsHeadless()
     const canBrowse = hasRenderer || hasOffscreen
@@ -76,8 +89,10 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: NonNullable<RuntimeStatus['capabilities']> = RUNTIME_CAPABILITIES.filter(
       (capability) =>
-        (capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY ||
-          runtimeBrowserCommandsFactorySupportsGoogleCookieClear()) &&
+        // The browser engine (an orcad's sidecar app may be older) holds the profiles these clear.
+        ((capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY &&
+          capability !== BROWSER_PROFILE_COOKIE_CLEAR_CAPABILITY) ||
+          runtimeBrowserCommandsFactorySupportsEngineCapability(capability)) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
         (capability !== BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY || canHostClientPages) &&
         (capability !== BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY ||
@@ -93,14 +108,15 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
           capability !== SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY) &&
         (capability !== TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY ||
           supportsDurableTerminalPromptDelivery()) &&
+        (capability !== REMOTE_SERVER_UPDATE_CAPABILITY || isRemoteServerUpdaterConfigured()) &&
         // Only hosts running their own usage poller can consume saved keys.
         (capability !== USAGE_CREDENTIALS_RUNTIME_CAPABILITY || this.getUsageRateLimits() !== null)
     )
     if (hasOffscreen || hasHeadlessCommands) {
       capabilities.push(BROWSER_HEADLESS_RUNTIME_CAPABILITY)
     }
-    // Only initialized identity stores can serve this process-wide, pre-ready mode.
-    if (isBrowserIdentityModeStoreInitialized()) {
+    // Only initialized identity stores can serve this process-wide, pre-ready mode; orcad serves its engine's.
+    if (isBrowserIdentityModeStoreInitialized() || runtimeBrowserEngineIdentity()) {
       capabilities.push(BROWSER_IDENTITY_RUNTIME_CAPABILITY)
     }
     // Only the daemon inside a distro can receive that distro's projects.
@@ -113,8 +129,20 @@ export abstract class OrcaRuntimeWithGetStatus extends RuntimeWorkspaceChangeEve
     if (canBrowse) {
       capabilities.push(
         BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY,
-        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY
+        BROWSER_PAGE_ZOOM_RUNTIME_CAPABILITY,
+        BROWSER_SITE_DISPLAY_RUNTIME_CAPABILITY,
+        BROWSER_STOP_HARD_RELOAD_RUNTIME_CAPABILITY,
+        BROWSER_FIND_IN_PAGE_RUNTIME_CAPABILITY,
+        BROWSER_MOBILE_STOP_RUNTIME_CAPABILITY,
+        BROWSER_GRAB_RUNTIME_CAPABILITY,
+        BROWSER_AUDIO_MUTE_RUNTIME_CAPABILITY,
+        BROWSER_DROP_FILES_RUNTIME_CAPABILITY,
+        BROWSER_PAGE_PROMPTS_RUNTIME_CAPABILITY
       )
+    }
+    // Only an offscreen page swap keeps its viewers' streams; a window's webview remount does not yet.
+    if (hasOffscreen) {
+      capabilities.push(BROWSER_TAB_PROFILE_SWITCH_RUNTIME_CAPABILITY)
     }
     capabilities.push(...orcaAccountRuntimeCapabilities())
     capabilities.push(...googleRuntimeCapabilities())

@@ -14,6 +14,7 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   thinking: 'Thinking',
   standard: 'Standard',
   none: 'None',
+  off: 'Off',
   minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
@@ -30,6 +31,8 @@ export const NATIVE_CHAT_SESSION_OPTION_COPY = {
   chooseInAgentPicker: 'Choose in agent picker…',
   setWhenSessionStarts: 'Set when the session starts.',
   availableAfterSessionStarts: 'Available after the session starts.',
+  modelsLoading: 'Loading models…',
+  signInForModels: 'Sign in to see the models you can use.',
   sessionOptions: 'Session options'
 } as const
 
@@ -47,6 +50,7 @@ export const sayNativeChatSessionOptionEnglish: NativeChatSessionOptionSay = (id
 
 const LEVEL_IDS = {
   none: 'none',
+  off: 'off',
   minimal: 'minimal',
   low: 'low',
   medium: 'medium',
@@ -152,6 +156,10 @@ export function nativeChatSessionOptionDisabledReason(
       return say('setWhenSessionStarts')
     case 'available-after-session-start':
       return say('availableAfterSessionStarts')
+    case 'models-loading':
+      return say('modelsLoading')
+    case 'sign-in-for-models':
+      return say('signInForModels')
     case undefined:
       return null
   }
@@ -161,6 +169,13 @@ export function nativeChatModelPillLabel(
   descriptor: SessionOptionDescriptor,
   say: NativeChatSessionOptionSay
 ): string {
+  const fallback =
+    descriptor.fallbackModel && descriptor.kind.type === 'select'
+      ? descriptor.kind.choices.find((entry) => entry.value === descriptor.fallbackModel)
+      : undefined
+  if (fallback) {
+    return nativeChatSessionChoiceLabel(fallback, say)
+  }
   // The tooltip names the category; default sources still identify a model, while unknown sources do not.
   const choice = descriptor.valueSource === 'unknown' ? null : selectedNativeChatChoice(descriptor)
   if (choice) {

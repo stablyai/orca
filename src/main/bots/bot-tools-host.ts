@@ -1,5 +1,6 @@
 // A bot's tools on the host that runs it: kept in its home folder, checked and signed in through its
 // agent's own CLI, under the account its next turn uses.
+import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import { setTimeout as delay } from 'node:timers/promises'
 import { mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -23,8 +24,10 @@ import {
 } from './bot-tools-claude'
 import {
   codexBotToolsThreadConfig,
+  codexTakenToolProblems,
   codexToolProblems,
-  readCodexInheritedToolNames
+  readCodexInheritedToolNames,
+  readCodexStdioToolNames
 } from './bot-tools-codex'
 import {
   botOwnTool,
@@ -34,25 +37,43 @@ import {
 } from './bot-tools-file'
 import { resolveBotToolInput } from './bot-tool-details'
 import { claudeBotToolProblems } from './bot-tools-claude-check'
+import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { redactBotToolProblems } from './bot-tool-redaction'
-import { cliWithLaunchTools, withRelayProblems, type BotLaunchTools } from './bot-launch-tools'
+import { cliWithLaunchTools, withRelayProblems } from './bot-launch-tools'
+import type { SessionMcpTools } from '../mcp-servers/session-mcp-tools'
+import type { BotAgent } from '../../shared/bot-types'
 import { readBotToolOAuth, withSavedBotToolHeaders } from './bot-tool-credentials'
 
-/** The agent CLI a bot's turns run, as the host would launch it now. */
-export type BotToolsCli = {
+export type BotToolsFolder = {
+  /** The relay grant's owner: the bot, or the host list's reserved owner. */
   botId: string
-  agent: 'claude' | 'codex'
   folder: string
   /** Claude: a folder of Orca's own where the CLI keeps the bot's servers to sign them in. */
   signInFolder: string
+  /** The home folders of this host's other bots on the same agent, which may share a sign-in. */
+  otherBotFolders: readonly string[]
+  /** The bot takes the host's MCP list too, so its token keeps reaching it; absent for the list's own. */
+  hostMcpServers?: boolean
+}
+
+/** The agent CLI a Claude Code or Codex bot's turns run, as the host would launch it now. */
+export type BotToolsCli = BotToolsFolder & {
+  agent: 'claude' | 'codex'
   command: string
   prefixArgs: string[]
   env: Record<string, string>
   /** Claude: its config dir when not the default; Codex: its CODEX_HOME. */
   accountHome: string | null
-  /** The home folders of this host's other bots on the same agent, which may share a sign-in. */
-  otherBotFolders: readonly string[]
 }
+
+/** A bot's tools on this host. Only Claude Code and Codex have a CLI Orca checks and signs them in
+ *  through; another agent's tools are its folder's file, delivered at launch. */
+export type BotToolsHome =
+  | BotToolsCli
+  | (BotToolsFolder & { agent: Exclude<BotAgent, BotToolsCli['agent']> })
+
+export const hasBotToolsCli = (home: BotToolsHome): home is BotToolsCli =>
+  home.agent === 'claude' || home.agent === 'codex'
 
 const StartedThread = z.object({ thread: z.object({ id: z.string() }) })
 
@@ -90,7 +111,7 @@ export function codexSession<T>(
     },
     body
   ).catch(() => {
-    throw new Error('Codex could not check or connect the tools. Check its setup and try again.')
+    throw new BotFailureError('toolCodexCheckFailed')
   })
 }
 
@@ -98,30 +119,39 @@ export function codexSession<T>(
 export async function codexThread(
   rpc: Parameters<Parameters<typeof runCodexAppServerSession>[1]>[0],
   cli: BotToolsCli,
-  tools: BotLaunchTools
+  tools: SessionMcpTools,
+  ownerStdioNames: readonly string[]
 ): Promise<string> {
   const started = await rpc.request('thread/start', {
     cwd: cli.folder,
     ephemeral: true,
-    config: codexBotToolsThreadConfig(tools)
+    config: codexBotToolsThreadConfig(tools, ownerStdioNames)
   })
   const id = StartedThread.safeParse(started).data?.thread.id
   if (!id) {
-    throw new Error('Codex started no thread to check the tools in.')
+    throw new BotFailureError('toolCodexNoThread')
   }
   return id
 }
 
-/** The tools the bot gets from its owner's own Claude Code or Codex config. */
-export async function inheritedTools(cli: BotToolsCli): Promise<BotInheritedTool[]> {
+/** The tools the bot gets from its owner's own Claude Code or Codex config; none read for another agent. */
+export async function inheritedTools(cli: BotToolsHome): Promise<BotInheritedTool[]> {
   if (cli.agent === 'claude') {
     return await readClaudeInheritedTools(cli.accountHome)
+  }
+  if (cli.agent !== 'codex') {
+    return []
   }
   const names = cli.accountHome ? await readCodexInheritedToolNames(cli.accountHome) : []
   return names.map((name) => ({ name }))
 }
 
-export async function listBotTools(cli: BotToolsCli): Promise<BotTools> {
+/** The owner's Codex stdio servers, read from the same config.toml as its inherited tools. */
+export async function codexStdioToolNames(cli: BotToolsCli): Promise<string[]> {
+  return cli.accountHome ? await readCodexStdioToolNames(cli.accountHome) : []
+}
+
+export async function listBotTools(cli: BotToolsHome): Promise<BotTools> {
   const [servers, inherited] = await Promise.all([
     readBotToolServers(cli.folder),
     inheritedTools(cli)
@@ -148,9 +178,9 @@ export async function claudeSignInFolder(
   if (!existsSync(join(folder, '.git'))) {
     const made = await runProcess({ program: 'git', args: ['init', '-q'], cwd: folder })
     if (made.code !== 0) {
-      throw new Error(
-        `Couldn't prepare the sign-in folder: ${made.stderr.trim() || 'git init failed'}`
-      )
+      throw new BotFailureError('toolSignInFolderFailed', {
+        detail: made.stderr.trim() || 'git init failed'
+      })
     }
   }
   const mirror = await readClaudeMirror(cli.accountHome, folder)
@@ -164,9 +194,7 @@ export async function claudeSignInFolder(
     await runBotToolsCli(cli, claudeUnmirrorArgs(server.name), folder)
     const added = await runBotToolsCli(cli, claudeMirrorArgs(server), folder)
     if (added.code !== 0) {
-      throw new Error(
-        `Couldn't prepare ${server.name} in Claude Code. Check its tool configuration.`
-      )
+      throw new BotFailureError('toolClaudePrepareFailed', { name: server.name })
     }
   }
   return folder
@@ -177,17 +205,30 @@ export async function claudeSignInFolder(
  * the URL servers, so no command is started; `signal` stops the check and closes its session.
  */
 export async function botToolProblems(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   { remote = false, signal }: { remote?: boolean; signal?: AbortSignal } = {}
 ): Promise<Record<string, BotToolProblem>> {
+  const own = await readBotToolServers(cli.folder)
+  // Its chats start without them, so each row says why instead of looking ready.
+  const off = acpLaunchSpecFor(cli.agent)?.botToolsOff
+  if (off) {
+    return Object.fromEntries(
+      own.map((server) => [server.name, { kind: 'failed', detail: `Off: ${off}.` }])
+    )
+  }
+  const scoped = own.filter((server) => !remote || 'url' in server)
+  // Codex runs the owner's stdio server of a taken name instead, even for a tool Orca signs in to.
+  const ownerStdioNames = cli.agent === 'codex' ? await codexStdioToolNames(cli) : []
+  const taken = codexTakenToolProblems(scoped, ownerStdioNames)
   // A tool Orca signs in to has its state from Orca's own store; checking it would start it.
-  const servers = (await readBotToolServers(cli.folder)).filter(
+  const servers = scoped.filter(
     (server) =>
-      (!remote || 'url' in server) &&
+      !Object.hasOwn(taken, server.name) &&
       !('url' in server && server.credential && readBotToolOAuth(cli.folder, server.credential))
   )
-  if (servers.length === 0) {
-    return {}
+  // Another agent has no CLI check, so its rows show no problem, as a Claude or Codex row it confirmed.
+  if (servers.length === 0 || !hasBotToolsCli(cli)) {
+    return taken
   }
   signal?.throwIfAborted()
   const names = servers.map((server) => server.name)
@@ -203,7 +244,7 @@ export async function botToolProblems(
     launch.cli,
     CLI_TIMEOUT_MS,
     async (rpc) => {
-      const threadId = await codexThread(rpc, launch.cli, launch.tools)
+      const threadId = await codexThread(rpc, launch.cli, launch.tools, ownerStdioNames)
       const deadline = Date.now() + 30_000
       let problems: Map<string, BotToolProblem>
       do {
@@ -218,7 +259,10 @@ export async function botToolProblems(
         }
         await delay(100, undefined, { signal })
       } while (Date.now() < deadline)
-      return withRelayProblems(cli, servers, redactBotToolProblems(problems, servers))
+      return {
+        ...withRelayProblems(cli, servers, redactBotToolProblems(problems, servers)),
+        ...taken
+      }
     },
     signal
   )
@@ -226,37 +270,37 @@ export async function botToolProblems(
 
 /** A name the bot or its owner already uses would merge into, or shadow, the other server. */
 export async function botToolNameTaken(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   name: string,
   editingName?: string
-): Promise<string | null> {
+): Promise<BotFailureError | null> {
   const [servers, inherited] = await Promise.all([
     readBotToolServers(cli.folder),
     inheritedTools(cli)
   ])
   if (servers.some((server) => server.name === name && server.name !== editingName)) {
-    return `This bot already has a tool named ${name}.`
+    return new BotFailureError('toolNameTaken', { name })
   }
   const agent = cli.agent === 'claude' ? 'Claude Code' : 'Codex'
   return inherited.some((tool) => !tool.plugin && tool.name === name)
-    ? `Your ${agent} already has a tool named ${name}, which this bot gets too. Pick another name with --name.`
+    ? new BotFailureError('toolNameTakenByAgent', { agent, name })
     : null
 }
 
 export async function addBotTool(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   server: BotToolServer,
   credentials?: ReadonlyMap<string, BotToolNewCredential>
 ): Promise<void> {
   const taken = await botToolNameTaken(cli, server.name)
   if (taken) {
-    throw new Error(taken)
+    throw taken
   }
   await changeBotToolServers(
     cli.folder,
     (servers) => {
       if (servers.some((entry) => entry.name === server.name)) {
-        throw new Error(`This bot already has a tool named ${server.name}.`)
+        throw new BotFailureError('toolNameTaken', { name: server.name })
       }
       return [...servers, server]
     },
@@ -267,14 +311,14 @@ export async function addBotTool(
 }
 
 export async function updateBotTool(
-  cli: BotToolsCli,
+  cli: BotToolsHome,
   name: string,
   version: string,
   input: BotToolInput
 ): Promise<BotToolServer> {
   const taken = await botToolNameTaken(cli, input.name, name)
   if (taken) {
-    throw new Error(taken)
+    throw taken
   }
   let updated: BotToolServer | undefined
   await changeBotToolServers(
@@ -282,7 +326,7 @@ export async function updateBotTool(
     (servers) => {
       const previous = servers.find((entry) => entry.name === name)
       if (!previous) {
-        throw new Error('This bot no longer has that tool.')
+        throw new BotFailureError('toolGone')
       }
       updated = resolveBotToolInput(input, withSavedBotToolHeaders(cli.folder, previous))
       const replacement = updated
@@ -292,7 +336,7 @@ export async function updateBotTool(
     { from: name, to: input.name }
   )
   if (!updated) {
-    throw new Error('The tool was not updated.')
+    throw new BotFailureError('toolNotUpdated')
   }
   return updated
 }

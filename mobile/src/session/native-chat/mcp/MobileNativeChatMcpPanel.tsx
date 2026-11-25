@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import { X } from 'lucide-react-native'
+import { ChevronRight, X } from 'lucide-react-native'
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
@@ -12,6 +12,7 @@ import {
   agentSessionMcpServerDisplayName,
   groupAgentSessionMcpServers
 } from '../../../../../src/shared/agent-session/view/agent-session-mcp-server-presentation'
+import { MobilePendingButton } from '../../../components/controls/MobilePendingButton'
 import { MobileSwitch } from '../../../components/controls/MobileSwitch'
 import { TextField } from '../../../components/composer-input/TextField'
 import type { Translate } from '../../../i18n/mobile-i18n'
@@ -35,6 +36,8 @@ export type MobileNativeChatMcpPanelProps = AgentSessionMcpPanelState & {
   dismissSignIn: () => void
   openUrl: (url: string) => void
   onClose: () => void
+  /** Opens the host's MCP servers page; null on a host without one. */
+  onManage?: (() => void) | null
   /** The server list's cap, so the tray and composer stay on screen above the keyboard. */
   listMaxHeight: number
 }
@@ -74,6 +77,16 @@ export function MobileNativeChatMcpPanel(props: MobileNativeChatMcpPanelProps): 
         </Pressable>
       </View>
       <McpTrayBody {...props} t={t} />
+      {props.onManage ? (
+        <Pressable
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.footer, pressed && styles.pressed]}
+          onPress={props.onManage}
+        >
+          <Text style={styles.footerText}>{t('chat.mcp.manage', 'Manage MCP servers')}</Text>
+          <ChevronRight size={15} color={colors.textMuted} strokeWidth={2.2} />
+        </Pressable>
+      ) : null}
     </View>
   )
 }
@@ -265,6 +278,7 @@ function StatusMark({ status }: { status: AgentSessionMcpServer['status'] }) {
     case 'failed':
       return <View style={[styles.dot, styles.dotFailed]} />
     case 'disabled':
+    case 'not-started':
       return <View style={[styles.dot, styles.dotDisabled]} />
     case 'pending':
       return <View style={styles.dotPending} />
@@ -341,40 +355,26 @@ function McpButton({
   disabled?: boolean
   onPress: () => void
 }) {
-  const foreground = tone === 'primary' ? colors.bgBase : colors.textPrimary
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ disabled: disabled || busy, busy }}
-      disabled={disabled || busy}
+    <MobilePendingButton
+      label={label}
+      pending={busy}
+      disabled={disabled}
       onPress={onPress}
       hitSlop={tall ? undefined : 6}
-      style={({ pressed }) => [
+      style={[
         styles.button,
         tall && styles.buttonTall,
         tone === 'primary' && styles.buttonPrimary,
         tone === 'secondary' && styles.buttonSecondary,
-        tone === 'plain' && styles.buttonPlain,
-        pressed && styles.buttonPressed,
-        disabled && !busy && styles.buttonDisabled
+        tone === 'plain' && styles.buttonPlain
       ]}
-    >
-      {/* The label keeps the button's width while it spins. */}
-      <Text
-        style={[
-          styles.buttonLabel,
-          tone === 'primary' && styles.buttonLabelPrimary,
-          tone === 'plain' && styles.buttonLabelPlain,
-          busy && styles.buttonLabelHidden
-        ]}
-        numberOfLines={1}
-      >
-        {label}
-      </Text>
-      {busy ? (
-        <ActivityIndicator size="small" color={foreground} style={styles.buttonSpinner} />
-      ) : null}
-    </Pressable>
+      labelStyle={[
+        styles.buttonLabel,
+        tone === 'primary' && styles.buttonLabelPrimary,
+        tone === 'plain' && styles.buttonLabelPlain
+      ]}
+      spinnerColor={tone === 'primary' ? colors.bgBase : colors.textPrimary}
+    />
   )
 }

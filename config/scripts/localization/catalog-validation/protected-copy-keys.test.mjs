@@ -1,57 +1,17 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { main, PROTECTED_COPY_KEYS_PATH } from './protected-copy-keys.mjs'
-import { LOCALIZATION_SOURCE_ROOTS } from './verify-localization-catalog.mjs'
+import { describe, expect, it } from 'vitest'
+import { findPinViolations, PINNED_PROTECTED_COPY } from './protected-copy-keys.mjs'
 
-let dirs = []
-afterEach(() => {
-  vi.restoreAllMocks()
-  for (const dir of dirs) {
-    rmSync(dir, { recursive: true, force: true })
-  }
-  dirs = []
-})
+const root = path.join(path.sep, 'repo')
+const pin = PINNED_PROTECTED_COPY[0]
+const generated = { keys: pin.keys, prefixes: [] }
 
-function sourcesFrom(files) {
-  const root = mkdtempSync(path.join(tmpdir(), 'orca-protected-copy-'))
-  dirs.push(root)
-  const sources = new Map()
-  for (const [name, text] of Object.entries(files)) {
-    const file = path.join(root, ...name.split('/'))
-    mkdirSync(path.dirname(file), { recursive: true })
-    writeFileSync(file, text)
-    sources.set(file, text)
-  }
-  return sources
-}
+describe('protected copy pins', () => {
+  it('fails when a pinned file is missing instead of scanning it as empty', () => {
+    const sources = new Map(pin.files.slice(1).map((file) => [path.join(root, file), '']))
 
-describe('protected copy check', () => {
-  it('fails when a security dialog uses a key the generated list lacks, until synced', async () => {
-    sourcesFrom({
-      'src/renderer/src/i18n/locales/en.json': JSON.stringify({ trust: { allow: 'Allow' } }),
-      'src/renderer/src/Dialog.tsx': `<SecuritySurface>{translate('trust.allow', 'Allow')}`,
-      'src/main/ready.ts': '',
-      ...Object.fromEntries(
-        LOCALIZATION_SOURCE_ROOTS.filter((root) => path.extname(root)).map((root) => [
-          root.split(path.sep).join('/'),
-          ''
-        ])
-      ),
-      'src/shared/agent-usage/status-copy/empty.ts': '',
-      [PROTECTED_COPY_KEYS_PATH.split(path.sep).join('/')]: '{}'
-    })
-    const root = dirs.at(-1)
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    expect(await main(root, [])).toBe(1)
-    expect(await main(root, ['--fix'])).toBe(0)
-    expect(await main(root, [])).toBe(0)
-    expect(JSON.parse(readFileSync(path.join(root, PROTECTED_COPY_KEYS_PATH), 'utf8'))).toEqual({
-      keys: ['trust.allow'],
-      prefixes: []
-    })
+    expect(findPinViolations(sources, new Set(pin.keys), generated, root)).toEqual([
+      `pinned file ${pin.files[0]} not found; update its path in PINNED_PROTECTED_COPY`
+    ])
   })
 })

@@ -3,13 +3,17 @@ import path from 'node:path'
 import { BrowserError } from '../../browser-error'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
+import {
+  AGENT_DOWNLOAD_REPLY_DEADLINE_MS,
+  AGENT_DOWNLOAD_START_TIMEOUT_MS
+} from '../../../../shared/browser/downloads/agent-download-timing'
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from '../protocol/agent-browser-text-argument-budget'
 import type {
   BrowserBackResult,
   BrowserReloadResult,
   BrowserStopResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
+import { AgentBrowserBridgeSiteDisplayCommands } from './agent-browser-bridge-site-display-commands'
 import {
   answerBrowserJavaScriptDialog,
   getBrowserJavaScriptDialog
@@ -30,7 +34,7 @@ import {
 /** Keep JSON results stable across CLI payload versions. */
 export type BrowserDialogAnswer = { accepted: boolean; browserPageId?: string; checkedUrl?: string }
 
-export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
+export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeSiteDisplayCommands {
   async clipboardRead(worktreeId?: string, browserPageId?: string): Promise<unknown> {
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
       return await this.execAgentBrowser(sessionName, ['clipboard', 'read'])
@@ -303,8 +307,3 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     })
   }
 }
-
-export const AGENT_DOWNLOAD_START_TIMEOUT_MS = 10_000
-
-// Counted from the request, so the reply beats the CLI's 60s timeout; the download keeps going after.
-export const AGENT_DOWNLOAD_REPLY_DEADLINE_MS = 50_000

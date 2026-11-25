@@ -69,6 +69,7 @@ export const AgentLaunchPicker = memo(
     entries: suppliedEntries,
     triggerLabel,
     triggerDetail,
+    defaultModelLabel,
     inline,
     draftScope,
     worktreeId,
@@ -97,6 +98,8 @@ export const AgentLaunchPicker = memo(
     triggerLabel?: string
     /** Muted after triggerLabel, as the launch summary follows an agent's name. */
     triggerDetail?: string
+    /** Model already resolved by the owning settings page, for the trigger summary only. */
+    defaultModelLabel?: string
     inline?: boolean
     draftScope?: object
     worktreeId?: string
@@ -130,7 +133,9 @@ export const AgentLaunchPicker = memo(
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
       entry?: AgentPickerEntry,
-      surface?: AgentPickerDraft['surface']
+      surface?: AgentPickerDraft['surface'],
+      /** The user chose the draft's permission, even one it already showed. */
+      permissionPicked?: boolean
     ) => void
   }) {
     const t = useTranslate()
@@ -204,11 +209,11 @@ export const AgentLaunchPicker = memo(
       }
     }, [catalogAgent, onCatalogOpen])
     const pick = useCallback<typeof onPick>(
-      (picked, next, from, surface) => {
+      (picked, next, from, surface, permissionPicked) => {
         if (next && from) {
           rememberPickedAgentModel(from, next)
         }
-        onPick(picked, next, from, surface)
+        onPick(picked, next, from, surface, permissionPicked)
       },
       [onPick]
     )
@@ -234,8 +239,8 @@ export const AgentLaunchPicker = memo(
         return ''
       }
       const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
-      return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
-    }, [entry, summaryKey, pickedModel])
+      return agentLaunchSetupSummary(entry, parsed, pickedModel, defaultModelLabel).join(' · ')
+    }, [entry, summaryKey, pickedModel, defaultModelLabel])
     const surface =
       entry && !setupDisabled && !selectAgentOnTab && !entry.textGeneration
         ? cli

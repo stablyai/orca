@@ -1,31 +1,25 @@
-import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
-import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusState } from '../../shared/agent-status/contracts/agent-status-types'
-import type { AgentJournalRenderItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type {
-  ConnectorPrompt,
-  ConnectorTurnOrigin
-} from '../../shared/connectors/connector-cloud-contract'
-import type { ConnectorWorkLink } from '../../shared/connector-work-link-contract'
+import type { ConnectorPrompt } from '../../shared/connectors/connector-cloud-contract'
 import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
-import { isQuietBotResult } from '../../shared/bot-quiet-result'
 import { chatPaneKey, type ChatNews } from './external-conversation-chat'
 import { promptRaisedBy } from './external-conversation-prompt-audience'
 import { PromptTurns } from './external-conversation-prompt-turns'
-import { connectorFailure } from './external-conversation-failure'
 import type { LinkedConversation } from './external-conversation-links'
 import { conversationPane } from './external-conversation-types'
 import { isConversationReport } from './external-conversation-turn-opener'
+import { turnLeave } from './external-conversation-thread-leaves'
 import { ToldWorkLinks } from './external-conversation-told-work-links'
-import { ConversationWorkers, type ConversationWorkersDeps } from './external-conversation-workers'
+import { ConversationWorkers } from './external-conversation-workers'
+import type { ChatTurnsDeps } from './external-conversation-chat-turns-deps'
 import {
   endAdoptedTurn,
   endMirroredTurn,
   endRepliedTurn,
+  legacyTurnWords,
   readOnce,
-  type ChatTurnEnd,
-  type ChatTurnReplies,
-  type SlackMirrorTurn
+  turnFailure,
+  turnReply,
+  type ChatTurnEnd
 } from './external-conversation-turn-ends'
 
 import { chatTurnFor, conversationOwnsTurn, leadOf } from './external-conversation-turn-state'
@@ -47,43 +41,7 @@ export class ChatTurns {
   private readonly prompts: PromptTurns
   readonly workers: ConversationWorkers
 
-  constructor(
-    private readonly deps: ConversationWorkersDeps &
-      ChatTurnReplies & {
-        readHookRow: (paneKey: string) => AgentStatusIpcPayload | null
-        pendingPrompt: (link: ExternalConversationLink) => PendingPrompt | null
-        /** Read once per ended turn. */
-        chatTurnOrigin: (sessionId: string, turnAt: number | null) => ConnectorTurnOrigin
-        /** Whether a delivery was sent to the chat and its turn hasn't ended. */
-        chatTurnDelivered: (sessionId: string) => boolean
-        /** The delivery a chat turn that began at `turnAt` answers; taken once. */
-        chatTurnDelivery: (sessionId: string, turnAt: number) => string | undefined
-        /** Whether a delivery the chat took waits for a turn to name it. */
-        chatTurnWaiting: (sessionId: string) => boolean
-        /** Whether reports from workers its conversation's turns started opened the chat's running turn. */
-        runningTurnReported: (sessionId: string) => boolean
-        /** Read once per ended turn of a bot conversation. */
-        workLinks: (link: ExternalConversationLink) => Promise<ConnectorWorkLink[]>
-        /** The ended Orca-typed turn's owner posts to its Slack thread (taken once), else null. */
-        mirrorTurn?: (sessionId: string) => SlackMirrorTurn | null
-        /** Whom a chat's conversation acts for, as Orca recorded it (ConnectorActsFor). */
-        actsForOf?: (sessionId: string) => string | undefined
-        /** Whether the cloud routes or masks a prompt by who raised it (prompts.audience). Without
-         *  it a prompt of a turn its conversation didn't ask for goes nowhere, as before. */
-        promptsAudience: () => boolean
-        /** The message that opened the chat's running turn; null when none runs. Read once per shown
-         *  prompt, and per watch for a link that kept an adopted turn. */
-        turnOpener: (sessionId: string) => AgentJournalRenderItem | null
-        /** Keeps (or, with undefined, clears) the adopted turn's opener on the link. */
-        turnStartedAt?: (sessionId: string) => number | null
-        keepAdoptedTurn: (
-          linked: LinkedConversation,
-          opener: ExternalConversationLink['adoptedTurn']
-        ) => void
-        /** A chat's turn ended, heard or not. */
-        turnEnded?: (paneKey: string) => void
-      }
-  ) {
+  constructor(private readonly deps: ChatTurnsDeps) {
     this.workers = new ConversationWorkers(deps)
     this.toldLinks = new ToldWorkLinks(deps.workLinks)
     this.prompts = new PromptTurns({
@@ -269,16 +227,14 @@ export class ChatTurns {
       }
       return
     }
-    // The turn's identity is fixed now; its message is read from the journal after.
-    // Read in the same tick as its end's turn id, so both name one turn.
+    // Read with the end's turn id in one tick so both name one turn; its message is read later.
     const origin = this.deps.chatTurnOrigin(news.sessionId, this.turnOf(paneKey))
     const ended = {
       kind: 'turn-ended' as const,
       ...at,
       turnId: this.turnOf(paneKey),
       stopReason: news.outcome,
-      at: news.at,
-      ...chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId))
+      at: news.at
     }
     this.startedAt.delete(paneKey)
     const heard = this.told.delete(paneKey) || origin === 'delivery'
@@ -286,13 +242,16 @@ export class ChatTurns {
     if (linked.link.adoptedTurn) {
       this.deps.keepAdoptedTurn(linked, undefined)
     }
+    const live = () => generation === this.generation
     const end: ChatTurnEnd = {
       ended,
       news,
       agent: linked.link.agent,
       emit: this.deps.emit,
+      turnFor: chatTurnFor(origin, this.deps.actsForOf?.(news.sessionId)),
       workersChecked: () => this.workers.check(paneKey, 'turn-ended'),
-      current: () => generation === this.generation
+      current: live,
+      leave: turnLeave(linked.link, ended.turnId, this.deps.leaveLines, live)
     }
     // A synced Orca-typed turn the thread didn't hear posts its reply too.
     if (mirrored && !heard) {
@@ -301,20 +260,22 @@ export class ChatTurns {
     // Someone in the thread spoke during it: the thread mirrors the chat, so it gets the answer
     // whatever opened the turn.
     if (adopted && !heard) {
+      end.leave.settle()
       return endAdoptedTurn(end, this.deps.promptsAudience)
     }
     // A turn begun in Orca never reached the conversation, so its end doesn't either.
     if (shared && !heard) {
-      return
+      return end.leave.settle()
     }
-    // A bot's quiet message is not posted: it said there is nothing to tell.
-    const quiet = (message: string) => Boolean(linked.link.bot) && isQuietBotResult(message)
     void news.readTurn().then(async (turn) => {
-      const { lastAssistantMessage: message, failure } = turn
+      const reply = turnReply(linked.link, turn)
       const links = readOnce(() => this.toldLinks.next(paneKey, linked.link))
-      if (await endRepliedTurn(end, turn, linked.link, links, this.deps.replyFill?.())) {
+      const fill = this.deps.replyFill?.()
+      const replied = await endRepliedTurn(end, turn, linked.link, links, fill)
+      if (replied === 'told') {
         return
       }
+      const words = legacyTurnWords(turn, linked.link, replied, reply)
       // Mail finishing what its conversation asked (its workers' reports, another bot's answer to its
       // request) woke the chat, so the answer goes back there; other mail is answered in Orca.
       const opener = turn.opener ?? turn.latestOpener
@@ -323,10 +284,9 @@ export class ChatTurns {
       if (!heard && !reported) {
         // No one in the thread asked: a bot's turn Orca raised tells how it went, never what it said.
         if (linked.link.bot && promptRaisedBy(linked.link, turn.opener ?? null) === 'orca') {
-          const read = { ...end, news: { ...news, readTurn: async () => turn } }
-          endAdoptedTurn(read, this.deps.promptsAudience)
+          endAdoptedTurn(end, this.deps.promptsAudience, turn)
         }
-        return
+        return end.leave.settle()
       }
       const [workLinks] = await Promise.all([links(), this.workers.check(paneKey, 'turn-ended')])
       if (generation !== this.generation) {
@@ -335,13 +295,13 @@ export class ChatTurns {
       // Owner words steered in and posted to the thread go before the answer.
       ;(mirrored ? mirrored.release : this.deps.emit)({
         ...ended,
+        ...end.turnFor(turn),
         origin: reported ? 'delivery' : origin,
-        ...(message && !quiet(message) ? { lastAssistantMessage: message } : {}),
-        ...(news.outcome === 'failure'
-          ? { failure: connectorFailure(failure, linked.link.agent) }
-          : {}),
+        ...(words ? { lastAssistantMessage: words } : {}),
+        ...turnFailure(end, turn),
         ...(workLinks.length > 0 ? { links: workLinks } : {})
       })
+      end.leave.settle(mirrored ? 'held' : 'end')
     })
   }
 

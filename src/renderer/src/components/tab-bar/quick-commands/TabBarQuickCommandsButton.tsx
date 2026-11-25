@@ -1,3 +1,4 @@
+import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useMemo, useState } from 'react'
 import { Play } from 'lucide-react'
 import { useAppStore } from '@/store/index'
@@ -18,6 +19,7 @@ import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-
 import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { useTranslate } from '@/i18n/use-translate'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
+import { useQuickCommandEditorPresence } from './quick-command-editor-presence'
 import {
   flattenTerminalQuickCommandHosts,
   type HostedTerminalQuickCommand,
@@ -104,6 +106,7 @@ export function TabBarQuickCommandsButton({
     | { mode: 'edit'; command: TerminalQuickCommand; hostId: ExecutionHostId }
     | null
   >(null)
+  useQuickCommandEditorPresence(worktreeId, editor !== null)
 
   const totalVisible = repoCommands.length + globalCommands.length
   const hasAnyCommands = totalVisible > 0
@@ -150,8 +153,8 @@ export function TabBarQuickCommandsButton({
       historyId: entry.key
     })
   }
-  const editorPromptMaxLength = useAppStore((state) =>
-    editor ? getTerminalQuickCommandHostPromptMaxLength(state, editor.hostId) : undefined
+  const editorPromptMaxLength = useAppStoreWithHostStatuses((_state, statuses) =>
+    editor ? getTerminalQuickCommandHostPromptMaxLength(statuses, editor.hostId) : undefined
   )
   const editorRepos = editor?.hostId.startsWith('runtime:')
     ? repos.filter((repo) => getRepoExecutionHostId(repo) === editor.hostId)

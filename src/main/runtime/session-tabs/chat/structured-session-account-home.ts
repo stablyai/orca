@@ -6,7 +6,6 @@ import { agentWorkspaceTrustDecisionForWorkspace } from '../../../agent-launch/t
 import { OrcaRuntimeWithStructuredSessionCliWriterHost } from './structured-session-cli-writer-host'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { botOfHomeWorkspace } from '../../../../shared/bots/bot-homes'
 
 export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRuntimeWithStructuredSessionCliWriterHost {
   /** Resolve account home through this host's agent registration; null means unregistered and create refuses. */
@@ -27,9 +26,6 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           location: location ?? null,
           purpose,
           ...(permissionMode ? { permissionMode } : {}),
-          ...(botOfHomeWorkspace(this.requireStore().getBots?.() ?? [], location?.workspaceId)
-            ? { bot: true as const }
-            : {}),
           workspacePath:
             purpose === 'launch'
               ? async () =>
@@ -66,10 +62,18 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     purpose: 'read' | 'identity' = 'read'
   ): Promise<AgentSessionAccountHome | null> {
     const { provider, location } = record
-    if (!structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.()) {
+    const metadata = structuredAgentRuntimeMetadata(provider)
+    // A chat with no conversation yet starts wherever the selection now points (its catalog read).
+    const beforeFirstTurn =
+      metadata?.followsSelectionBeforeFirstTurn === true && record.providerHandleChain.length === 0
+    if (!metadata?.launchFollowsSelection?.() && !beforeFirstTurn) {
       return null
     }
-    const read = this.structuredAgentAccountHomeResolver(provider, '', purpose)
+    const read = this.structuredAgentAccountHomeResolver(
+      provider,
+      '',
+      beforeFirstTurn ? 'catalog' : purpose
+    )
     const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
     return (await read?.({ launchEnv, location })) ?? null
   }

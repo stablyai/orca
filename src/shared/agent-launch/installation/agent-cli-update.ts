@@ -1,8 +1,30 @@
 // The host answers agentCliUpdate.check and agentCliUpdate.run.
 export const AGENT_CLI_UPDATE_RUNTIME_CAPABILITY = 'agent-cli-update.v1' as const
 
-export const AGENT_CLI_UPDATE_AGENTS = ['claude', 'codex'] as const
+/** Every agent whose own CLI a native chat runs; Antigravity runs Orca's fixed-version copy. */
+export const AGENT_CLI_UPDATE_AGENTS = [
+  'claude',
+  'codex',
+  'grok',
+  'opencode',
+  'opencode2',
+  'omp',
+  'copilot',
+  'kimi',
+  'cursor',
+  'hermes',
+  'goose',
+  'aug',
+  'kilo',
+  'mimo-code',
+  'qwen-code',
+  'devin',
+  'codebuddy'
+] as const
 export type AgentCliUpdateAgent = (typeof AGENT_CLI_UPDATE_AGENTS)[number]
+
+/** What a check without `agents` answers, so clients that predate the list never see an agent they can't name. */
+export const LEGACY_AGENT_CLI_UPDATE_AGENTS: readonly AgentCliUpdateAgent[] = ['claude', 'codex']
 
 export function isAgentCliUpdateAgent(agent: string): agent is AgentCliUpdateAgent {
   return AGENT_CLI_UPDATE_AGENTS.some((known) => known === agent)

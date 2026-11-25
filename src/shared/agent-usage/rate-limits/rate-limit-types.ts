@@ -94,13 +94,14 @@ export type UsageRateLimitMetadata = {
   account?: { id: string | null; email: string | null }
   /** Claude/Codex: set only on a successful reading of one saved account; older hosts omit it. */
   readingAccount?: UsageReadingAccount
+  /** Codex: the managed login this auth rejection actually came from. */
+  authFailureAccount?: UsageReadingAccount
 }
 
 export type ProviderRateLimits = {
   provider:
     | 'claude'
     | 'codex'
-    | 'gemini'
     | 'opencode-go'
     | 'kimi'
     | 'minimax'
@@ -119,7 +120,7 @@ export type ProviderRateLimits = {
   monthly?: RateLimitWindow | null
   /** Overage / pay-as-you-go balance the plan spends into once its windows cap. */
   extraUsage?: ExtraUsageBalance | null
-  /** Named per-model buckets (Gemini models, Cursor plan pools). */
+  /** Named per-model buckets (Antigravity models, Cursor plan pools). */
   buckets?: RateLimitBucket[]
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {
@@ -185,7 +186,7 @@ export type CursorAccountStatus = {
   signedIn: boolean
   email: string | null
   displayName: string | null
-  /** Which local store the session came from: the macOS Keychain, the CLI auth file, or Cursor IDE. */
+  /** Which local store the session came from: the OS keychain (macOS Keychain or Linux keyring), the CLI auth file, or Cursor IDE. */
   credentialSource: 'keychain' | 'cli' | 'desktop' | null
   planType: string | null
   tokenFresh: boolean
@@ -195,7 +196,6 @@ export type CursorAccountStatus = {
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
@@ -223,3 +223,16 @@ export type RateLimitState = {
   /** Saved Antigravity accounts; agy has one shared login, so only the active one is ever read. */
   antigravityAccounts: AntigravityAccountUsage[]
 }
+
+export type RuntimeTargetUsageProvider = 'claude' | 'codex'
+
+/** A reading and the account it was taken for; null is the target's System default. */
+export type AttributedProviderUsage = {
+  accountId: string | null
+  reading: ProviderRateLimits | null
+}
+
+/** One runtime target's selected-account usage; a provider is absent when its account is unknown. */
+export type RuntimeTargetUsageRead = Partial<
+  Record<RuntimeTargetUsageProvider, AttributedProviderUsage>
+>

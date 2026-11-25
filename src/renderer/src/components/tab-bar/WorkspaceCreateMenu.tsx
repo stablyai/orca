@@ -32,6 +32,7 @@ export function WorkspaceCreateMenu({
   runtime,
   createMenu,
   trigger,
+  triggerClassName,
   hideTriggerWhenNarrow = false,
   onClosed,
   onOpenChange,
@@ -45,6 +46,7 @@ export function WorkspaceCreateMenu({
   runtime: TabBarRuntimeModel
   createMenu: TabBarCreateMenuController
   trigger?: React.ReactNode
+  triggerClassName?: string
   hideTriggerWhenNarrow?: boolean
   onClosed?: () => void
   onOpenChange?: (open: boolean) => void
@@ -107,7 +109,8 @@ export function WorkspaceCreateMenu({
           <button
             className={cn(
               'ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-              hideTriggerWhenNarrow && '@max-[86px]/tab-strip:hidden'
+              hideTriggerWhenNarrow && '@max-[86px]/tab-strip:hidden',
+              triggerClassName
             )}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
@@ -137,7 +140,8 @@ export function WorkspaceCreateMenu({
               inventory={agentPickerInventory}
               terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
               excludedTabId={excludedTabId}
-              hideAgents={bot != null || botGroup != null}
+              hideAgents={botGroup != null}
+              botHome={bot && !terminalOnly ? { bot, agentMenu } : null}
               worktreeId={worktreeId}
               groupId={resolvedGroupId}
               menuOpen={newTabMenuOpen}
@@ -156,7 +160,9 @@ export function WorkspaceCreateMenu({
             {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
           </>
         ) : null}
-        {bot && !terminalOnly ? <BotNewChatMenuItems bot={bot} model={agentMenu} /> : null}
+        {bot && !terminalOnly && showStaticCreateMenuItems ? (
+          <BotNewChatMenuItems bot={bot} model={agentMenu} />
+        ) : null}
         {botGroup && !terminalOnly ? (
           <>
             <BotGroupNewThreadMenuItems group={botGroup} />

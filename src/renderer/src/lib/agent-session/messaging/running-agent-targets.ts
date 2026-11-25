@@ -1,3 +1,4 @@
+import { readAppRuntimeStatuses } from '@/store/slices/runtime-status/views/app-runtime-status-binding'
 import type { AppState } from '@/store/types'
 import type {
   AgentStatusEntry,
@@ -26,8 +27,9 @@ export type RunningAgentTargetState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
 > &
-  Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId'>> & {
-    /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets. */
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>> & {
+    /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets;
+     *  absent, the host status owner's current map decides. */
     sendApprovalGuardEnvironmentIds?: ReadonlySet<string>
   }
 
@@ -54,8 +56,7 @@ export type StructuredAgentSendTarget = RunningAgentSendTargetEligibility & {
   sessionId: string
   agentType: AgentType
   title: string
-  /** Null before the chat's first turn (the host publishes no status before one); only the
-   *  notes menu lists such chats, as the sidebar has no row for them. */
+  /** Null while the host has not published the chat yet; only the notes menu lists such chats. */
   entry: AgentStatusEntry | null
 }
 
@@ -83,7 +84,7 @@ export function deriveRunningAgentSendTargets(
   ]
 }
 
-/** Chats of the worktree that have not had their first turn yet, so no status entry exists. */
+/** Chats of the worktree with no status entry yet: the host has not published them. */
 export function deriveStatuslessStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string
@@ -151,7 +152,7 @@ function deriveTerminalAgentSendTargets(
   return targets
 }
 
-// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes first-turn chats.
+// Chats have workspace tabs without PTYs; list only those with status because sidebar reveal/visibility/pills require a row. Notes separately exposes chats the host has not published yet.
 function deriveStructuredAgentSendTargets(
   state: RunningAgentTargetState,
   worktreeId: string,
@@ -201,8 +202,6 @@ function resolveLeafTitle(
   return paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
 }
 
-const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
-
 /** launchAgent names the tab's original PTY locally; a paired tab's ptyId follows its active pane, so any pane may be the launched one. */
 export function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
   return ptyId === tab.ptyId || isRemoteRuntimePtyId(ptyId)
@@ -226,9 +225,7 @@ export function hookSilentAgentSendRefusal(
   }
   const guardedHosts =
     state.sendApprovalGuardEnvironmentIds ??
-    (state.runtimeStatusByEnvironmentId
-      ? selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId)
-      : NO_GUARDED_HOSTS)
+    selectSendApprovalGuardEnvironmentIds(readAppRuntimeStatuses())
   if (!ptyHostGuardsSendApprovals(guardedHosts, ptyId)) {
     return 'Update Orca on this host to send to this agent'
   }

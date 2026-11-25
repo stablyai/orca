@@ -1,11 +1,15 @@
 import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/index'
+import { useRuntimeHostStatusViewSelector } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { getLocalAgentPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/runtime/hosts/preflight/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/agent-inventory/runtime-agent-inventory-key'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { observedAgentTargetsForGroup } from './observed-agent-targets'
+
+export type AgentObservationGroup = { worktreeId: string; groupId: string }
 
 export type UseDetectedAgentsResult = {
   /** Null while detection is in flight on first load. */
@@ -44,11 +48,22 @@ function normalizeAgentDetectionTarget(
 /** Local Settings requests a complete inventory; launch surfaces use enabled agents. Remote inventories remain complete. */
 export function useDetectedAgents(
   connectionId: AgentDetectionTarget | string | null | undefined,
-  inventory: 'enabled' | 'all' = 'enabled'
+  inventory: 'enabled' | 'all' = 'enabled',
+  /** A tab group's launch surface keeps what it observed across a released layout's remount. */
+  observationGroup?: AgentObservationGroup
 ): UseDetectedAgentsResult {
   const viewActive = useAppStateViewActive()
   const target = normalizeAgentDetectionTarget(connectionId)
-  const observedRemoteTargetKeysRef = useRef<Set<string>>(new Set())
+  const observationWorktreeId = observationGroup?.worktreeId
+  const observationGroupId = observationGroup?.groupId
+  // Keyed on the group so a strip moved to another group reads that group's hosts; resolved once, not per render.
+  const observedRemoteTargetKeys = useMemo(
+    () =>
+      observationWorktreeId && observationGroupId
+        ? observedAgentTargetsForGroup(observationWorktreeId, observationGroupId)
+        : new Set<string>(),
+    [observationWorktreeId, observationGroupId]
+  )
   // Undefined ownership stays loading so remote hydration cannot flash local agents.
   const isUnknown = target === undefined
   const targetKind = target?.kind
@@ -93,12 +108,8 @@ export function useDetectedAgents(
 
   // Why: a probe that failed while the host was down must re-run once contact returns, and only then.
   // 'down' only when the host's status says so; a never-asked host is still probed as before.
-  const runtimeContactEpoch = useAppStateValue((s) => {
-    if (targetKind !== 'runtime' || !targetId) {
-      return null
-    }
-    const entry = s.runtimeStatusByEnvironmentId.get(targetId)
-    if (!entry) {
+  const runtimeContactEpoch = useRuntimeHostStatusViewSelector(targetId, (entry) => {
+    if (targetKind !== 'runtime' || !targetId || !entry) {
       return null
     }
     return runtimeHostContactForEntry(entry).verdict === 'live'
@@ -166,7 +177,7 @@ export function useDetectedAgents(
     !isLoading &&
     !isRefreshing &&
     remoteTargetKey !== null &&
-    observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+    observedRemoteTargetKeys.has(remoteTargetKey)
   const localProbePending = targetKind === 'local' && (isLoading || isRefreshing)
   // Refresh the inventory’s host; refreshing local PATH while showing remote agents would silently do nothing.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
@@ -197,10 +208,10 @@ export function useDetectedAgents(
       return
     }
     const isNewRemoteTarget =
-      remoteTargetKey !== null && !observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+      remoteTargetKey !== null && !observedRemoteTargetKeys.has(remoteTargetKey)
     // Remember every target seen by this mount so A → B → A does not repeatedly spawn probes for empty hosts.
     if (remoteTargetKey !== null) {
-      observedRemoteTargetKeysRef.current.add(remoteTargetKey)
+      observedRemoteTargetKeys.add(remoteTargetKey)
     }
     const state = useAppStore.getState()
     if (targetKind === 'ssh' && targetId) {
@@ -247,6 +258,7 @@ export function useDetectedAgents(
     targetKind,
     targetId,
     remoteTargetKey,
+    observedRemoteTargetKeys,
     recordKey,
     pairingRevision,
     runtimeContactEpoch,

@@ -38,9 +38,9 @@ import type { ExecutionHostId } from '../../../../shared/execution-host/executio
 import { useBotsRevealSettle } from './bots-sidebar-reveal-context'
 
 // The bot row's status lane and gap, so a line's status glyph lands under the bot's avatar.
-export const BOT_WORKSPACE_LINE_INDENT = 21
+export const BOT_WORKSPACE_LINE_INDENT = 19
 // The new card style's wider lane; the line itself is always a Compact card.
-const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 29
+const BOT_WORKSPACE_LINE_INDENT_NEW_CARD_STYLE = 27
 
 /** A bot's row with the workspaces its workers made, one Compact line each under the bot's avatar. */
 /** The Bots section's reorder, which measures each entry, workspaces included, by these attributes. */
@@ -169,6 +169,7 @@ export function BotSidebarEntry({
           <BotSidebarList
             bot={bot}
             workspaces={workspaces}
+            allWorkspaces={ordered}
             lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
             activeLine={activeLine}
             onFoldBot={() => toggleCollapsedGroup(groupKey)}
@@ -185,6 +186,7 @@ export function BotSidebarEntry({
 function BotSidebarList({
   bot,
   workspaces,
+  allWorkspaces,
   lineageChildrenByParentIdentity,
   activeLine,
   onFoldBot,
@@ -192,6 +194,8 @@ function BotSidebarList({
 }: {
   bot: Bot
   workspaces: Worktree[]
+  /** Every worker line, sleeping ones too, for what the fold of old chats must see. */
+  allWorkspaces: readonly Worktree[]
   lineageChildrenByParentIdentity: ReadonlyMap<string, Worktree[]>
   activeLine: Worktree | undefined
   onFoldBot: () => void
@@ -205,8 +209,14 @@ function BotSidebarList({
       setBotSidebarChildren(entryKey, { chats: chatTree.chats.length > 0 })
     }
   }, [entryKey, chatTree.state, chatTree.chats.length])
-  const { showAllWorkspaces, toggleWorkspaces, chatSteps, setChatSteps } =
-    useBotSidebarPaging(entryKey)
+  const {
+    showAllWorkspaces,
+    toggleWorkspaces,
+    chatSteps,
+    setChatSteps,
+    showOlderChats,
+    toggleOlderChats
+  } = useBotSidebarPaging(entryKey)
   // Once the host answers (or can't), the rows a reveal waits for are as listed as they will get.
   useBotsRevealSettle(entryKey, chatTree.state !== 'loading')
   if (chatTree.state === 'loading') {
@@ -218,10 +228,13 @@ function BotSidebarList({
         bot={bot}
         tree={chatTree}
         workspaces={workspaces}
+        allWorkspaces={allWorkspaces}
         lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
         activeLine={activeLine}
         steps={chatSteps}
         onStep={setChatSteps}
+        showOlder={showOlderChats}
+        onToggleOlder={toggleOlderChats}
         onOpen={onOpen}
       />
     )

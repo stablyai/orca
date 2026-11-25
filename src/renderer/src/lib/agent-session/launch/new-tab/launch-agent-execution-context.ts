@@ -4,6 +4,7 @@ import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { launchHostIsRemote } from '../../../../../../shared/agent-launch/startup/agent-launch-remote'
 import '@/lib/workspace/ownership/connection-context'
@@ -78,6 +79,7 @@ export function resolveAgentLaunchExecutionContext(
   // Why: the agent runs on the workspace's execution host, so its OS and shell decide quoting (#22204).
   const fact = resolveWorktreeExecutionHostPlatform(
     store,
+    readRuntimeStatuses(),
     args.worktreeId,
     workspacePath,
     executionHostId

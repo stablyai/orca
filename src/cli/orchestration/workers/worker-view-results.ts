@@ -6,7 +6,8 @@ export type WorkerProjection = {
   provider?: { id: string; model: string | null } | null
   host: { id: string }
   workspace?: { id: string } | null
-  stage: { activity: string }
+  /** `backgroundWait`: its turn ended while its own background tasks still run (absent from older hosts). */
+  stage: { activity: string; backgroundWait?: { since: number; commands: string[] } }
   liveness: { verdict: string; detail?: string }
   evidence?: { lastObservedAt: number | null }
   nextAction: { argv: string[] }
@@ -37,6 +38,8 @@ export type WorkerShowResult = {
     releaseState?: string | null
     terminalHandle?: string | null
   } | null
+  /** The follow-up this worker's terminal went to. */
+  handedOnTo?: string | null
   observation?: { agentWait?: { source: string; reason?: string } | null; reason?: string }
   /** Present only for a worker a paired server runs, which this Orca's record answers. */
   server?: RemoteWorkerServer & { reachable?: boolean }

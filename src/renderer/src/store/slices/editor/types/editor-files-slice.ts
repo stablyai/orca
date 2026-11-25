@@ -210,7 +210,12 @@ export type EditorFilesSlice = {
     alternate?: CombinedDiffAlternate,
     areaFilter?: string,
     entriesSnapshot?: GitStatusEntry[],
-    options?: EditorOpenTargetOptions
+    options?: EditorOpenTargetOptions & {
+      /** Only uncommitted changes, in their own tab ("Uncommitted Changes"). */
+      uncommittedOnly?: boolean
+      /** Uncommitted + branch; falls back to uncommittedOnly when branch compare is not ready. */
+      wholeScope?: boolean
+    }
   ) => void
   openConflictFile: (
     worktreeId: string,

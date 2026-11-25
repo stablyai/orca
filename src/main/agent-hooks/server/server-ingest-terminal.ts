@@ -1,4 +1,3 @@
-import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 import {
@@ -7,12 +6,10 @@ import {
 } from '../../../shared/workspace-layout/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
 import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-status/lifecycle/agent-lead-status-fold'
-import { AgentHookServerIngestNormalization } from './server-ingest-normalization'
+import { AgentHookServerIngestLaunch } from './server-ingest-launch'
 import {
   antigravityRefusedDoneRetryMs,
   programStatusHookYieldEndsAt
@@ -22,44 +19,7 @@ import type { ProgramStatusFacet } from '../../../shared/program-status/facet'
 
 const PROGRAM_STATUS_FACET_REPUBLISH_MS = 250
 
-export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
-  /** Seed resume identity before the first hook; Codex SessionStart waits for the first turn (#10923). */
-  recordLaunchResumeIdentity(event: LaunchResumeIdentityEvent): void {
-    const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
-    const parsedPaneKey = parsePaneKey(paneKey)
-    if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {
-      return
-    }
-    const previous = this.state.lastStatusByPaneKey.get(paneKey)
-    if (
-      previous &&
-      (previous.providerSessionOnly === true
-        ? agentProviderSessionsEqual(
-            event.agentType,
-            previous.providerSession,
-            event.providerSession
-          )
-        : 'receivedAt' in previous &&
-          typeof previous.receivedAt === 'number' &&
-          previous.receivedAt >= event.launchedAt)
-    ) {
-      return
-    }
-    const identity: AgentHookEventPayload &
-      Pick<EnrichedAgentHookEventPayload, 'retainedForLiveness'> = {
-      paneKey,
-      tabId: parsedPaneKey.tabId,
-      ...(event.worktreeId?.trim() ? { worktreeId: event.worktreeId.trim() } : {}),
-      connectionId: null,
-      providerSession: event.providerSession,
-      providerSessionOnly: true,
-      // Hydration must retain this identity even if no first turn occurs before restart.
-      retainedForLiveness: true,
-      payload: { state: 'done', prompt: '', agentType: event.agentType }
-    }
-    this.applyNormalizedStatus(identity, undefined, 'launch')
-  }
-
+export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestLaunch {
   ingestProgramStatusFacet(event: { paneKey: string; facet: ProgramStatusFacet | null }): void {
     const paneKey = this.resolvePaneKeyAlias(event.paneKey.trim())
     if (
@@ -203,7 +163,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? this.programStatusFacets.noteState(paneKey, payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
-      if (this.preservesStoppingDone(paneKey)) {
+      if (this.preservesStoppingAgent(paneKey)) {
         return
       }
       this.hookSilenceRechecks.cancel(paneKey)

@@ -20,6 +20,11 @@ const ROW_SIZE = 13
 const ROW_LEADING = 7
 const ICON = 14
 
+/** The row words' type, for a part drawn beside them such as an action that reads as words. */
+export function mobileNativeChatEventRowType(fontScale: number) {
+  return scaledType(ROW_SIZE, fontScale, ROW_LEADING)
+}
+
 export type MobileNativeChatEventBadge = 'running' | 'failed'
 
 /** The row's 14pt mark with its state in a badge at the bottom right: a spinner while it runs, a red ✕ when it failed. */
@@ -65,13 +70,15 @@ export function MobileNativeChatEventRow({
   disclosureKey,
   fontScale,
   onLongPress,
+  wordsLines = 1,
+  subtitle,
   testID
 }: {
   icon: ReactNode
   /** Its state on the mark; VoiceOver hears it with the row's words. */
   badge?: MobileNativeChatEventBadge | null
-  /** The row's words: the name in primary text, the rest muted. */
-  children: ReactNode
+  /** The row's words: the name in primary text, the rest muted; given whether its details are open. */
+  children: ReactNode | ((open: boolean) => ReactNode)
   /** The words as plain text: the row button's name, with the time. */
   label: string
   /** Right after the words, such as an open button. */
@@ -82,6 +89,10 @@ export function MobileNativeChatEventRow({
   disclosureKey?: string
   fontScale: number
   onLongPress?: () => void
+  /** Lines the words may take; 0 lets a summary whose facts must all show wrap freely. */
+  wordsLines?: number
+  /** A second line under the words, always shown; the action then sits at the row's end. */
+  subtitle?: ReactNode
   testID?: string
 }): React.JSX.Element {
   useMobileColorScheme()
@@ -95,7 +106,7 @@ export function MobileNativeChatEventRow({
   const [open, setOpen] = useMobileNativeChatDisclosure(disclosureKey, false)
   const time = useMobileNativeChatMessageTimeLabel(timestamp)
   const toggles = details !== undefined && details !== null && details !== false
-  const type = scaledType(ROW_SIZE, fontScale, ROW_LEADING)
+  const type = mobileNativeChatEventRowType(fontScale)
   const line = { height: type.lineHeight }
   return (
     <View testID={testID}>
@@ -119,17 +130,26 @@ export function MobileNativeChatEventRow({
         >
           <MobileNativeChatEventIcon badge={badge}>{icon}</MobileNativeChatEventIcon>
         </View>
-        <Text
-          pointerEvents={toggles ? 'none' : 'auto'}
-          numberOfLines={2}
-          style={[styles.words, type]}
-        >
-          {children}
-        </Text>
-        {action ? <View style={[styles.action, line]}>{action}</View> : null}
-        <View pointerEvents="none" style={styles.spacer} />
+        {/* box-none keeps a subtitle's own buttons tappable over the row's button. */}
+        <View pointerEvents="box-none" style={subtitle ? styles.stack : styles.wordsBox}>
+          <Text
+            pointerEvents={toggles ? 'none' : 'auto'}
+            numberOfLines={wordsLines}
+            style={[styles.words, type]}
+          >
+            {typeof children === 'function' ? children(toggles && open) : children}
+          </Text>
+          {subtitle}
+        </View>
+        {action ? (
+          <View style={subtitle ? styles.trailing : [styles.action, line]}>{action}</View>
+        ) : null}
+        {subtitle ? null : <View pointerEvents="none" style={styles.spacer} />}
         {toggles ? (
-          <View pointerEvents="none" style={[styles.icon, line, open && styles.chevronOpen]}>
+          <View
+            pointerEvents="none"
+            style={[styles.icon, subtitle ? styles.trailing : line, open && styles.chevronOpen]}
+          >
             <ChevronRight size={ICON} color={colors.textMuted} strokeWidth={2} />
           </View>
         ) : null}
@@ -171,7 +191,11 @@ const styles = themedStyleSheet(() => ({
   pressed: { backgroundColor: colors.translucentFill },
   icon: { flexShrink: 0, justifyContent: 'center' },
   chevronOpen: { transform: [{ rotate: '90deg' }] },
-  words: { flexShrink: 1, minWidth: 0, color: colors.textMuted },
+  wordsBox: { flexShrink: 1, minWidth: 0 },
+  stack: { flex: 1, minWidth: 0 },
+  words: { color: colors.textMuted },
+  // Centred on the words and their subtitle, past the stack's minimum gap.
+  trailing: { flexShrink: 0, alignSelf: 'center', marginLeft: spacing.xxs },
   name: { color: colors.textPrimary },
   action: { flexShrink: 0, justifyContent: 'center' },
   spacer: { flex: 1, minWidth: spacing.sm },

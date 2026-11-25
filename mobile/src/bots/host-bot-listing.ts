@@ -1,4 +1,5 @@
 import type { BotGroup } from '../../../src/shared/bots/bot-group'
+import type { ConnectorAccessRequest } from '../../../src/shared/connector-bot-access-contract'
 import type { BotSidebarView } from '../../../src/shared/bots/bot-sidebar-view'
 import type { BotListWaits } from '../../../src/shared/bots/bot-list-waits'
 import type { BotRowLineChat, BotRowLineLink } from '../../../src/shared/bots/bot-row-line'
@@ -19,6 +20,21 @@ import { translate } from '../i18n/mobile-i18n'
 /** Why a host takes no new bot from this phone: its Bots switch, its build, or the paired desktop's. */
 export type NewBotRefusal = 'bots-off' | 'update' | 'update-desktop'
 
+/** Why this host takes no new bot from the phone; undefined when it takes one. `relaysCreate`: the
+ *  route reaches its bots.create. */
+export function newBotRefusal(
+  bots: { enabled: boolean; takesCreate: boolean },
+  relaysCreate: boolean
+): NewBotRefusal | undefined {
+  if (!bots.enabled) {
+    return 'bots-off'
+  }
+  if (!bots.takesCreate) {
+    return 'update'
+  }
+  return relaysCreate ? undefined : 'update-desktop'
+}
+
 export type ListedHostBots = {
   kind: 'listed'
   hostId: ExecutionHostId
@@ -32,8 +48,6 @@ export type ListedHostBots = {
   view: BotSidebarView
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>
   worktreeLineage: Readonly<Record<string, WorktreeLineage>>
-  /** Uploaded pictures read so far, by bot id. */
-  avatarUris: ReadonlyMap<string, string>
   unseen?: Readonly<Record<string, number>>
   /** Each bot's waits still waiting, by bot id, for its row's line. */
   waits?: BotListWaits
@@ -43,6 +57,9 @@ export type ListedHostBots = {
   needsYouChangeInMs?: number
   /** Each bot home's thread links, by folder workspace id, for its row's line. */
   links?: Readonly<Record<string, readonly BotRowLineLink[]>>
+  /** The host's waiting access requests, every bot's, for each row's Needs you line; absent while
+   *  their read fails or the host is signed out of Orca. */
+  accessRequests?: readonly ConnectorAccessRequest[]
   /** Each bot's own side chats, by bot id, for its row's line; absent from an older host. */
   ownChats?: Readonly<Record<string, readonly BotRowLineChat[]>>
   /** Absent when the host takes a new bot from this phone. */
@@ -55,12 +72,14 @@ export type ListedHostBots = {
   offline?: string
 }
 
-/** One host's bots as the phone read them; `update-needed` is a host too old to serve them, and
- *  `unreachable` a server down since before this screen read it. */
+/** One host's bots as the phone read them; `update-needed` is a host too old to serve them,
+ *  `unreachable` a server down since before this screen read it, and `read-failed` this computer's
+ *  first read failing. */
 export type HostBotListing =
   | ListedHostBots
   | { kind: 'update-needed'; hostId: ExecutionHostId; hostLabel: string }
   | { kind: 'unreachable'; hostId: ExecutionHostId; hostLabel: string }
+  | { kind: 'read-failed'; hostId: ExecutionHostId; hostLabel: string }
 
 /** A down server's word, as its workspace pill says it; a computer that's simply away is "Offline",
  *  the one word bots use for it everywhere. */

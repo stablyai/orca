@@ -22,6 +22,8 @@ export function useNativeChatQuestionKeys(
       (isEditableTarget(target) && !(inField && isArrow)) ||
       target?.closest('[data-native-chat-find-bar], [data-queued-message-editor]') ||
       !isInNativeChatPaneOf(card, target) ||
+      // A card under an open subagent sheet is out of reach; its digits must not answer it.
+      card?.closest('[inert]') ||
       (!isNumberKey && !card?.contains(target))
     ) {
       return
@@ -71,7 +73,10 @@ export function useNativeChatQuestionKeys(
       }
     } else if (
       (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
-      (focusedIndex !== -1 || target?.closest('[data-native-chat-question-step]'))
+      // The card itself holds focus as it opens, so ←/→ step from there too.
+      (focusedIndex !== -1 ||
+        target === card ||
+        target?.closest('[data-native-chat-question-step]'))
     ) {
       if (onStep(event.key === 'ArrowRight' ? 1 : -1)) {
         event.preventDefault()

@@ -63,7 +63,8 @@ const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   'claude-agent-teams': CLAUDE_PERMISSION_OPTIONS,
   codex: ['-a', '--ask-for-approval', '-s', '--sandbox', '--yolo', '--not-so-yolo', '--full-auto'],
   grok: ['--permission-mode', '--always-approve', '--yolo', '--dangerously-skip-permissions'],
-  gemini: ['--approval-mode', '-y'],
+  // Why: Cursor exits when --auto-review meets --force (or its -f, --yolo aliases).
+  cursor: ['-f', '--force'],
   // Why: Kimi rejects --yolo (and its aliases) combined with --auto.
   kimi: ['-y', '--yolo', '--yes', '--auto-approve']
 }

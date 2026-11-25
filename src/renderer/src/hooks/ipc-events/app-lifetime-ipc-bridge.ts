@@ -4,6 +4,8 @@ import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pendin
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { emitBotsChangedWindowEvent } from '@/lib/bots-changed-window-event'
+import { emitPeerMailReturnedWindowEvent } from '@/lib/peer-mail-returned-window-event'
+import { emitMcpServersChangedWindowEvent } from '@/lib/mcp-servers-changed-window-event'
 import { installBotHostListing } from '@/lib/bot-host-listing'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
@@ -23,6 +25,7 @@ import { registerBrowserTabActivateIpcBridge } from './browser/browser-tab-activ
 import { registerBrowserStateIpcBridge } from './browser/browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from '../../lib/simulator/launch/content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh/direct-ssh-state-ipc-bridge'
+import { registerRuntimePortForwardsIpcBridge } from './runtime-events/runtime-port-forwards-ipc-bridge'
 import { registerEphemeralVmLifecycleIpcBridge } from '../../runtime/ephemeral-vm/ephemeral-vm-lifecycle-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-driver/mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver/mobile-driver-ipc-bridge'
@@ -87,6 +90,18 @@ export function installAppLifetimeIpcEvents(): () => void {
   if (stopSessionWorkerNotices) {
     unsubs.push(stopSessionWorkerNotices)
   }
+  const stopPeerMailReturns = window.api.runtime.onPeerMailReturned?.(() =>
+    emitPeerMailReturnedWindowEvent(LOCAL_EXECUTION_HOST_ID)
+  )
+  if (stopPeerMailReturns) {
+    unsubs.push(stopPeerMailReturns)
+  }
+  const stopMcpServerChanges = window.api.runtime.onMcpServersChanged?.(() =>
+    emitMcpServersChangedWindowEvent(LOCAL_EXECUTION_HOST_ID)
+  )
+  if (stopMcpServerChanges) {
+    unsubs.push(stopMcpServerChanges)
+  }
   unsubs.push(
     window.api.workspaceCleanup.onRunFinished((run) =>
       emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
@@ -118,6 +133,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
+  registerRuntimePortForwardsIpcBridge(unsubs)
   registerEphemeralVmLifecycleIpcBridge(unsubs)
   registerProjectCatalogIpcBridge(
     unsubs,

@@ -17,6 +17,8 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate('chat.sessionOptionCopy.standard', 'Standard')
     case 'none':
       return translate('chat.sessionOptionCopy.none', 'None')
+    case 'off':
+      return translate('chat.sessionOptionCopy.off', 'Off')
     case 'minimal':
       return translate('chat.sessionOptionCopy.minimal', 'Minimal')
     case 'low':
@@ -54,6 +56,13 @@ export const sayMobileNativeChatSessionOption: NativeChatSessionOptionSay = (id,
       return translate(
         'chat.sessionOptionCopy.availableAfterSessionStarts',
         'Available after the session starts.'
+      )
+    case 'modelsLoading':
+      return translate('chat.sessionOptionCopy.modelsLoading', 'Loading models…')
+    case 'signInForModels':
+      return translate(
+        'chat.sessionOptionCopy.signInForModels',
+        'Sign in to see the models you can use.'
       )
     case 'sessionOptions':
       return translate('chat.sessionOptionCopy.sessionOptions', 'Session options')

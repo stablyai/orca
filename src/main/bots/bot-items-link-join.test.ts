@@ -1,101 +1,125 @@
-import { expect, it, vi } from 'vitest'
-import type { IssueInfo, PRInfo } from '../../shared/github/pull-requests/pull-request-types'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 import { BotItemLinkJoin } from './bot-items-link-join'
-import type { BotItemLinkKind } from '../../shared/bots/bot-items'
 import type { BotWorkRuntime } from './bot-work-runtime'
-import type { BotWorkWorker } from './bot-work-types'
+import { botItemWorkerStopReason } from '../../shared/bots/bot-item-activity'
+import type { BotItemLinkView } from '../../shared/bots/bot-items'
 
-const worker: BotWorkWorker = {
-  dispatchId: 'ctx_1',
-  taskId: 'task_1',
-  title: 'Fix share dialog',
-  agent: 'codex',
-  state: 'completed',
-  stopped: false,
-  startFailed: false,
-  host: 'local',
-  hostName: null,
-  worktreeId: 'repo-1::/wt/share',
-  startedAt: 1,
-  settledAt: 2
-}
-// The same Task's earlier attempt on a paired server; a local retry (ctx_1) finished it.
-const serverAttempt: BotWorkWorker = { ...worker, dispatchId: 'ctx_srv', host: 'env-1' }
-vi.mock('./bot-work-runtime', () => ({
-  readWorkers: async (_runtime: unknown, ids: readonly string[]) =>
-    new Map(ids.map((id) => [id, id === 'ctx_srv' ? serverAttempt : worker])),
-  readWorkspace: async () => ({
-    name: 'share',
-    branch: 'share',
-    head: 'abc',
-    pullRequest: {
-      number: 9,
-      url: pr.url,
-      state: 'open',
-      checks: 'failure',
-      review: null,
-      headSha: null
-    }
-  })
-}))
-
-const pr: PRInfo = {
-  number: 9,
-  title: 'Share dialog',
-  state: 'open',
-  url: 'https://github.com/acme/app/pull/9',
-  checksStatus: 'failure',
-  updatedAt: '2026-11-14T00:00:00Z',
-  mergeable: 'MERGEABLE'
-}
-const issue: IssueInfo = {
-  number: 7,
-  title: 'Viewers can edit',
-  state: 'closed',
-  url: 'https://github.com/acme/app/issues/7',
-  labels: []
-}
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pr and url links never read workers
-const join = new BotItemLinkJoin({} as BotWorkRuntime, () => ({
-  pr: { 'acme/app#9': { data: pr, fetchedAt: 5 } },
-  issue: { 'acme/app#7': { data: issue, fetchedAt: 5 } }
-}))
-const link = (kind: BotItemLinkKind, ref: string) => ({ itemUid: 'i1', kind, ref, addedEvent: 1 })
-
-it('passes a cached issue link its title and state; an unread one stays a plain link', () => {
-  expect(join.linkView(link('url', 'https://github.com/Acme/App/issues/7#top'), undefined)).toEqual(
-    {
-      kind: 'url',
-      ref: 'https://github.com/Acme/App/issues/7#top',
-      issue: { title: 'Viewers can edit', state: 'closed' }
-    }
-  )
-  expect(join.linkView(link('url', 'https://github.com/acme/app/issues/8'), undefined)).toEqual({
-    kind: 'url',
-    ref: 'https://github.com/acme/app/issues/8'
-  })
+let db: OrchestrationDb
+beforeEach(() => {
+  db = new OrchestrationDb(':memory:')
 })
+afterEach(() => db.close())
 
-it('passes a local worker’s PR the worktree it is read for, so a stale read can be refreshed', async () => {
-  const reads = await join.readLinkedWorkers(['ctx_1'])
-  expect(reads.get('ctx_1')?.pr).toMatchObject({
-    shown: true,
-    state: 'open',
-    checkedAt: 5,
-    worktreeId: 'repo-1::/wt/share'
+function failedWorker(error: string): string {
+  const task = db.createTask({ runId: 'run_legacy_local', spec: 'Polish the strip' })
+  const { dispatch } = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskId: task.id,
+    startOptions: { agent: 'codex' }
   })
-})
+  db.failDispatch(dispatch.id, error, { workerProcessExited: true })
+  return dispatch.id
+}
 
-it("keeps a server attempt's report empty when a local retry of its Task reported", async () => {
+function newJoin(): BotItemLinkJoin {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker with no terminal reads the DB and an empty status snapshot only.
   const runtime = {
-    getOrchestrationDb: () => ({ getTask: () => ({ result: '{"subject":"Local result"}' }) })
+    getOrchestrationDb: () => db,
+    getOrchestrationFleetAgentStatusSnapshot: () => []
+  } as unknown as BotWorkRuntime
+  const join = new BotItemLinkJoin(runtime, () => ({ pr: {}, issue: {} }))
+  db.workerStatusListener = (dispatchId, change) =>
+    join.workersWritten(dispatchId === null ? [] : [dispatchId], change === 'deleted')
+  return join
+}
+
+/** A read keeps what it found finished on the turns after it replies. */
+async function itemLinkKept(dispatchId: string, join: BotItemLinkJoin) {
+  const link = await itemLink(dispatchId, join)
+  for (let turn = 0; turn < 2; turn++) {
+    await new Promise((resolve) => setImmediate(resolve))
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: report() reads only getTask
-  const withTasks = new BotItemLinkJoin(runtime as unknown as BotWorkRuntime, () => ({
-    pr: {},
-    issue: {}
-  }))
-  const reads = await withTasks.readLinkedWorkers(['ctx_1', 'ctx_srv'])
-  expect(reads.get('ctx_1')?.report).toEqual({ subject: 'Local result', body: null })
-  expect(reads.get('ctx_srv')?.report).toBeNull()
+  return link
+}
+
+async function itemLink(
+  dispatchId: string,
+  join = newJoin()
+): Promise<Extract<BotItemLinkView, { kind: 'dispatch' }>> {
+  const reads = await join.readLinkedWorkers([dispatchId])
+  const view = join.linkView(
+    { itemUid: 'item', kind: 'dispatch', ref: dispatchId, addedEvent: 1 },
+    reads.get(dispatchId)
+  )
+  if (view.kind !== 'dispatch') {
+    throw new Error('expected a dispatch link')
+  }
+  return view
+}
+
+describe('item worker links', () => {
+  it('show the reason the worker strip shows for a worker that stopped without a report', async () => {
+    const link = await itemLink(failedWorker('Agent process exited with code 137'))
+    expect(link.state).toBe('failed')
+    expect(botItemWorkerStopReason(link)).toBe('Agent process exited with code 137')
+  })
+
+  it('keep a settled worker until its lineage is written, then follow its new follow-up', async () => {
+    const first = failedWorker('Agent process exited with code 1')
+    const join = newJoin()
+    expect((await itemLinkKept(first, join)).state).toBe('failed')
+    const walks = vi.spyOn(db, 'getDispatchContextById')
+    expect((await itemLink(first, join)).state).toBe('failed')
+    expect(walks).not.toHaveBeenCalled()
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'Continue the strip' })
+    const { dispatch: next } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 10,
+      taskId: task.id,
+      followUpOf: first,
+      startOptions: { agent: 'codex' }
+    })
+    expect((await itemLink(first, join)).latest).toBe(next.id)
+  })
+
+  it('show a long report on a kept read, which keeps the read but not the report', async () => {
+    const id = failedWorker('Agent process exited with code 1')
+    // Past the kept-report budget, so a kept read rereads it from the Task.
+    const body = 'x'.repeat(1_100_000)
+    db.updateTaskStatus(
+      db.getDispatchContextById(id)!.task_id,
+      'failed',
+      JSON.stringify({ subject: 'Done', body })
+    )
+    const join = newJoin()
+    await itemLinkKept(id, join)
+    const walks = vi.spyOn(db, 'getDispatchContextById')
+    expect((await itemLink(id, join)).report).toEqual({ subject: 'Done', body })
+    expect(walks).not.toHaveBeenCalled()
+  })
+
+  it('show a kept worker’s new report once its Task changes', async () => {
+    const id = failedWorker('Agent process exited with code 1')
+    const join = newJoin()
+    expect((await itemLinkKept(id, join)).report).toBeNull()
+    db.updateTaskStatus(
+      db.getDispatchContextById(id)!.task_id,
+      'failed',
+      JSON.stringify({ subject: 'Late report', body: null })
+    )
+    expect((await itemLink(id, join)).report).toEqual({ subject: 'Late report', body: null })
+  })
+
+  it('show a kept worker’s report rewritten to the same length', async () => {
+    const id = failedWorker('Agent process exited with code 1')
+    const taskId = db.getDispatchContextById(id)!.task_id
+    const report = (body: string) => JSON.stringify({ subject: 'Done', body })
+    db.updateTaskStatus(taskId, 'failed', report(`a${'x'.repeat(100)}a`))
+    const join = newJoin()
+    await itemLinkKept(id, join)
+    db.updateTaskStatus(taskId, 'failed', report(`a${'y'.repeat(100)}a`))
+    expect((await itemLink(id, join)).report?.body).toBe(`a${'y'.repeat(100)}a`)
+  })
 })

@@ -5,9 +5,15 @@ import { buildObservedSetupCommand } from '../../orchestration/workers/launch/se
 import { buildSetupRunnerCommand } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { DefaultTerminalTab } from '../../../../shared/workspace-layout/workspace-layout-command-types'
+import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 
 type TerminalResult = { handle: string }
-export type WorktreeProvisionTerminalOptions = {
+type TerminalSurfacing = Pick<
+  TerminalCreateOptions,
+  'surfaceOwner' | 'wslUserAct' | 'terminalImageViewerSupported'
+>
+
+export type WorktreeProvisionTerminalOptions = TerminalSurfacing & {
   /** The pane main already wrote (layout-owner build): the terminal starts in it. */
   tabId?: string
   leafId?: string
@@ -16,10 +22,7 @@ export type WorktreeProvisionTerminalOptions = {
   command?: string
   env?: Record<string, string>
   activate?: boolean
-  surfaceOwner?: false
   keepPaneOnStartFailure?: true
-  /** The worktree's create was the user's act (E9). */
-  wslUserAct?: true
 }
 
 export type WorktreeTerminalProvisioningHost = {
@@ -42,12 +45,7 @@ export type WorktreeTerminalProvisioningHost = {
   recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
 
-// What every terminal of this create shares: who surfaces it, and whether the create was the user's act (E9).
-type TerminalSurfacing = { surfaceOwner?: false; wslUserAct?: true }
-
-export type WorktreeTerminalProvisioningArgs = {
-  /** The create was the user's act: its terminals may start a stopped WSL distro. */
-  wslUserAct?: true
+export type WorktreeTerminalProvisioningArgs = TerminalSurfacing & {
   worktreeSelector: string
   worktreeId: string
   worktreePath: string
@@ -63,8 +61,7 @@ export type WorktreeTerminalProvisioningArgs = {
   setupCommandPlatform: 'windows' | 'posix'
   observeSetupCompletion?: boolean
   // Why: setup and startup must use the same wrapper when startup waits for setup.
-  wrappedSetupCommand?: string
-  surfaceOwner?: false
+  wrappedSetup?: { command: string; completionToken?: string }
 }
 
 export async function createWorktreeDefaultTabTerminals(
@@ -203,7 +200,10 @@ export async function provisionWorktreeTerminals(
   }
   const surfacing: TerminalSurfacing = {
     ...(args.surfaceOwner === false ? { surfaceOwner: false as const } : {}),
-    ...(args.wslUserAct ? { wslUserAct: true as const } : {})
+    ...(args.wslUserAct ? { wslUserAct: true as const } : {}),
+    ...(args.terminalImageViewerSupported !== undefined
+      ? { terminalImageViewerSupported: args.terminalImageViewerSupported }
+      : {})
   }
   let setupSpawned = false
   let setupTerminalHandle: string | null = null
@@ -236,18 +236,23 @@ export async function provisionWorktreeTerminals(
       await host.createTerminal(args.worktreeSelector, surfacing)
     }
     if (args.setup) {
-      const completionToken =
-        args.observeSetupCompletion && !args.wrappedSetupCommand ? randomUUID() : null
-      const observed = completionToken
-        ? buildObservedSetupCommand(
-            args.setup.runnerScriptPath,
-            args.setupCommandPlatform,
-            completionToken,
-            args.setup.shell
-          )
-        : null
+      // A wrapped setup prints the token its wrapper was built with.
+      const completionToken = !args.observeSetupCompletion
+        ? null
+        : args.wrappedSetup
+          ? (args.wrappedSetup.completionToken ?? null)
+          : randomUUID()
+      const observed =
+        completionToken && !args.wrappedSetup
+          ? buildObservedSetupCommand(
+              args.setup.runnerScriptPath,
+              args.setupCommandPlatform,
+              completionToken,
+              args.setup.shell
+            )
+          : null
       const command =
-        args.wrappedSetupCommand ??
+        args.wrappedSetup?.command ??
         observed?.command ??
         buildSetupRunnerCommand(
           args.setup.runnerScriptPath,

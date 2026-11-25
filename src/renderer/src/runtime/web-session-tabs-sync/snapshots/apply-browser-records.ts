@@ -10,7 +10,9 @@ import {
   sameBrowserPages
 } from './state-equality-tabs'
 import { writableWebSessionTabsRecord } from './state-equality-core'
+import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from '../state'
 import { markWebSessionBrowserPlacementAdopted } from '../../browser/placement/web-session-browser-placement'
+import { mirrorBrowserAgentPageActive } from '@/components/browser-pane/agent-cursor/browser-agent-activity-state'
 
 type BrowserRecordContext = ReturnType<typeof applyTerminalRecordUpdates>
 
@@ -29,6 +31,8 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
   let nextBrowserPagesByWorkspace = state.browserPagesByWorkspace
   let nextRemoteBrowserPageHandlesByPageId = state.remoteBrowserPageHandlesByPageId
   let nextBrowserCertificateFailuresByPageId = state.browserCertificateFailuresByPageId
+  let nextBrowserAudiblePageIds = state.browserAudiblePageIds
+  let nextBrowserAudioMutedTabIds = state.browserAudioMutedTabIds
 
   if (removedBrowserWorkspaceIds.size > 0) {
     const nextBrowserWorkspaceIds = new Set(nextBrowserTabs?.map((tab) => tab.id) ?? [])
@@ -49,12 +53,29 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
             ? writableWebSessionTabsRecord(state, 'browserPagesByWorkspace', batchContext)
             : nextBrowserPagesByWorkspace
         delete nextBrowserPagesByWorkspace[removedWorkspaceId]
+        nextBrowserAudioMutedTabIds = withAudioFlag(
+          state,
+          batchContext,
+          'browserAudioMutedTabIds',
+          nextBrowserAudioMutedTabIds,
+          removedWorkspaceId,
+          false
+        )
       }
       for (const page of pages) {
         if (nextBrowserPageIds.has(page.id)) {
           continue
         }
         revokeBrowserPageLoadingOwner(page)
+        mirrorBrowserAgentPageActive(page.id, false, worktreeId)
+        nextBrowserAudiblePageIds = withAudioFlag(
+          state,
+          batchContext,
+          'browserAudiblePageIds',
+          nextBrowserAudiblePageIds,
+          page.id,
+          false
+        )
         if (nextBrowserCertificateFailuresByPageId[page.id]) {
           nextBrowserCertificateFailuresByPageId =
             nextBrowserCertificateFailuresByPageId === state.browserCertificateFailuresByPageId
@@ -87,6 +108,9 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
     previousPage,
     preservesLoading,
     certificateFailure,
+    audible,
+    audioMuted,
+    agentDriving,
     remotePageId,
     browserProfileId,
     placement,
@@ -124,9 +148,16 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
           ? writableWebSessionTabsRecord(state, 'remoteBrowserPageHandlesByPageId', batchContext)
           : nextRemoteBrowserPageHandlesByPageId
       annotateBrowserPageHandles(nextRemoteBrowserPageHandlesByPageId, [page.id])
+      // Re-placed on the server, it is no longer this desktop's to keep hosting.
+      const placedHere =
+        currentHandle?.placedHere === true &&
+        placement?.kind !== 'server' &&
+        currentHandle.environmentId === environmentId &&
+        currentHandle.remotePageId === remotePageId
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
         remotePageId,
+        ...(placedHere ? { placedHere: true as const } : {}),
         ...(initializationPresentation ? { initializationPresentation } : {}),
         ...(browserProfileId ? { browserProfileId } : {}),
         ...(placement ? { placement } : {})
@@ -150,12 +181,58 @@ export function applyBrowserRecordUpdates(context: BrowserRecordContext) {
         delete nextBrowserCertificateFailuresByPageId[page.id]
       }
     }
+    // A streamed page plays on its host, so the host's row is the only source of its sound state.
+    if (placement?.kind !== 'client') {
+      nextBrowserAudiblePageIds = withAudioFlag(
+        state,
+        batchContext,
+        'browserAudiblePageIds',
+        nextBrowserAudiblePageIds,
+        page.id,
+        audible
+      )
+      nextBrowserAudioMutedTabIds = withAudioFlag(
+        state,
+        batchContext,
+        'browserAudioMutedTabIds',
+        nextBrowserAudioMutedTabIds,
+        page.workspaceId,
+        audioMuted
+      )
+      // Agents drive it on its host, whose row is the only source of the tab's agent mark.
+      mirrorBrowserAgentPageActive(page.id, agentDriving, worktreeId)
+    }
   }
 
   return {
     ...context,
     nextBrowserPagesByWorkspace,
     nextRemoteBrowserPageHandlesByPageId,
-    nextBrowserCertificateFailuresByPageId
+    nextBrowserCertificateFailuresByPageId,
+    nextBrowserAudiblePageIds,
+    nextBrowserAudioMutedTabIds
   }
+}
+
+function withAudioFlag(
+  state: WebSessionTabsSyncState,
+  batchContext: WebSessionTabsBatchContext | undefined,
+  recordKey: 'browserAudiblePageIds' | 'browserAudioMutedTabIds',
+  record: Record<string, true>,
+  id: string,
+  on: boolean
+): Record<string, true> {
+  if (Boolean(record[id]) === on) {
+    return record
+  }
+  const next =
+    record === state[recordKey]
+      ? writableWebSessionTabsRecord(state, recordKey, batchContext)
+      : record
+  if (on) {
+    next[id] = true
+  } else {
+    delete next[id]
+  }
+  return next
 }

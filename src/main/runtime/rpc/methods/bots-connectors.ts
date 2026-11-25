@@ -7,6 +7,7 @@ import {
 import { BotConnectors } from '../../../../shared/rpc-contract/bots-look-around-params'
 import { readGhSignIn } from '../../../bots/bot-local-sign-ins'
 import { getGoogleConnect } from '../../../google/google-connect'
+import { readGoogleDefaultAccount } from '../../../google/google-credential-store'
 import { botOfSession } from '../../../bots/bot-session-tabs'
 import { defineMethod, InvalidArgumentError } from '../core'
 import { CONNECTOR_ACT_METHOD } from './connector-act'
@@ -48,7 +49,6 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
     const sources = capabilities?.ok
       ? CapabilitiesResult.safeParse(capabilities.result).data?.sources
       : undefined
-    const approveUrl = sources?.find((source) => source.source === 'slack')?.approveUrl
     const listed =
       places && !(places instanceof Error) && places.ok
         ? PlacesResult.safeParse(places.result).data
@@ -70,11 +70,12 @@ export const BOT_CONNECTORS_METHOD = defineMethod({
         bot,
         {
           gh,
-          linear: runtime.linearStatus().connected,
-          google: getGoogleConnect()?.accounts() ?? [],
-          googleApp: Boolean(getGoogleConnect()?.client())
+          linear: (await runtime.linearStatus()).connected,
+          google: (await getGoogleConnect()?.accounts()) ?? [],
+          googleApp: Boolean(await getGoogleConnect()?.client()),
+          googleDefault: getGoogleConnect() ? await readGoogleDefaultAccount() : { email: null }
         },
-        approveUrl
+        sources
       ),
       ...workspaces
     }

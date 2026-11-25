@@ -1,3 +1,4 @@
+import { cancelWorkerStartWait } from './start/readiness/worker-start-waits'
 import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -20,11 +21,12 @@ import { readStructuredWorkerOutput } from '../structured-workers/orchestration-
 import { releaseStructuredWorkerSession } from '../structured-workers/orchestration-structured-worker-session'
 import { sessionIdFromStructuredWorkerIncarnation } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { readExactWorkerOutput } from './output/worker-output'
-import { exposeWorkerTerminalResource } from './release/worker-terminal-resource-presentation'
+import { projectWorkerShowCustody } from './observation/worker-show-custody'
 import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
+import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
 import {
   WorkerDispatchParams,
   WorkerReadParams
@@ -59,30 +61,26 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       if (!worker) {
         return showContextOnlyWorker(runtime, db, dispatch)
       }
-      if (worker.runtime_epoch && worker.runtime_epoch !== runtime.getRuntimeId()) {
-        if (worker.state === 'starting') {
-          worker = db.markWorkerStartUnknown(
-            params.dispatch,
-            worker.stage,
-            'The runtime restarted before worker-start reached a terminal receipt.'
-          )
-        } else if (worker.state === 'stopping') {
-          worker = db.markWorkerStopUnknown(
-            params.dispatch,
-            'The runtime restarted before worker-stop reached a terminal receipt.'
-          )
-        }
+      if (worker.state === 'starting') {
+        worker = settleRestartCutStart(db, params.dispatch, runtime) ?? worker
+      } else if (
+        worker.state === 'stopping' &&
+        worker.runtime_epoch &&
+        worker.runtime_epoch !== runtime.getRuntimeId()
+      ) {
+        worker = db.markWorkerStopUnknown(
+          params.dispatch,
+          'The runtime restarted before worker-stop reached a terminal receipt.'
+        )
       }
       const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
       const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
       return {
         dispatch: exposeDispatchContext(dispatch),
         worker: exposeWorker(worker),
-        // Why: the fleet verdict, so worker-show and worker-list cannot disagree.
-        projection: projectFleetWorker(runtime, db, params.dispatch),
+        ...projectWorkerShowCustody(runtime, db, params.dispatch, resource),
         terminal: observation.exact ? observation.terminal : null,
         observation: exposeObservation(observation),
-        terminalResource: resource ? exposeWorkerTerminalResource(resource) : null,
         autoReleaseAt: liveWorkerTerminalAutoReleaseAt(resource),
         coordinatedFrom: db.getPeerRun(dispatch.run_id)?.home_label ?? null
       }
@@ -167,6 +165,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         // Why: only a session caller is verified; terminal env could name anyone.
         orchestrationCaller?.address
       )
+      cancelWorkerStartWait(params.dispatch)
       // Mail still queued as cards for the abandoned Dispatch must not run.
       runtime.withdrawStaleChatMail([`dispatch:${params.dispatch}`])
       if (abandoned.disposition === 'context_only') {

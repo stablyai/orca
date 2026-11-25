@@ -15,6 +15,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { WslHostDistro } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { getWslHostServerFilesMissingLabel } from './wsl-host-row-status'
 import { wslSetVersion2Command } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
+import { wslMoveAutoMovesBridgeProjects } from '../../../../../../shared/wsl-move/wsl-move-rollout-stage'
 
 export function wslDistroStateLabel(distro: WslHostDistro, t: Translate = translate): string {
   if (distro.version === 1) {
@@ -101,10 +102,15 @@ export function AddWslHostFormPanel({
           {t('auto.components.sidebar.AddWslHostFormPanel.title', 'Add WSL distro')}
         </DialogTitle>
         <DialogDescription>
-          {t(
-            'auto.components.sidebar.AddWslHostFormPanel.description',
-            'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
-          )}
+          {wslMoveAutoMovesBridgeProjects()
+            ? t(
+                'auto.components.sidebar.AddWslHostFormPanel.descriptionAutoMove',
+                'Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.'
+              )
+            : t(
+                'auto.components.sidebar.AddWslHostFormPanel.descriptionMoveFromSidebar',
+                'Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.'
+              )}
         </DialogDescription>
       </DialogHeader>
 

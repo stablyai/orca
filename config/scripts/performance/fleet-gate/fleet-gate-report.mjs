@@ -84,12 +84,12 @@ export function compareRuns(runs, scenarios) {
   return rows
 }
 
-/** Launch bursts are absolute: any NEW chat that doesn't start fails, whatever OLD did (OLD is shown for contrast). */
+/** Launch bursts are absolute and run on NEW only: any chat that doesn't start fails. */
 export function burstRows(bursts) {
   if (bursts.length === 0) {
     return []
   }
-  const byArm = Object.fromEntries(bursts.map((burst) => [burst.arm, burst]))
+  const newBurst = bursts.find((burst) => burst.arm === 'new')
   const metrics = [
     {
       phase: 'mid-turn',
@@ -129,15 +129,13 @@ export function burstRows(bursts) {
     }
   ]
   return metrics.map((metric) => {
-    const oldBurst = byArm.old
-    const newBurst = byArm.new
     // A phase whose batch couldn't be filled has no workload to judge: its rows are n/a (INCOMPLETE), never FAIL.
     // Rows of a full phase, and ownership refusals, are still judged.
     if (metric.phase && newBurst?.undersizedPhases?.includes(metric.phase)) {
       return {
         scenario: 'burst',
         metric: { label: metric.label },
-        old: oldBurst ? (metric.read(oldBurst) ?? '—') : null,
+        old: null,
         new: metric.read(newBurst) ?? '—',
         verdict: 'n/a'
       }
@@ -145,7 +143,7 @@ export function burstRows(bursts) {
     return {
       scenario: 'burst',
       metric: { label: metric.label },
-      old: oldBurst ? (metric.read(oldBurst) ?? '—') : null,
+      old: null,
       new: newBurst ? (metric.read(newBurst) ?? '—') : null,
       verdict: !newBurst ? 'n/a' : metric.bad(newBurst) ? 'FAIL' : 'ok'
     }

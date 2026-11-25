@@ -8,10 +8,8 @@ import { useAppStore } from '@/store/index'
 import { usePluginNewFiles } from '@/store/plugins/file-creation/plugin-new-files'
 import { PluginContributionIcon } from '../../plugins/PluginContributionIcon'
 import type { WindowsShellMenuEntry } from './tab-bar-windows-shell-options'
-import {
-  isMacOs,
-  type resolveWindowsPowerShellImplementationSetting
-} from '../model/use-tab-bar-runtime-model'
+import { isMacOs } from '../model/use-tab-bar-runtime-model'
+import type { resolveWindowsPowerShellImplementationSetting } from '../model/tab-bar-windows-shell-settings'
 import type { TabBarProps } from '../tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { TabBarCreateRow } from './TabBarCreateRow'

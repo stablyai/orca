@@ -85,6 +85,11 @@ export function formatCleanupKeepCause(
       return t('components.settings.workspaceCleanup.keep.archiveScript', 'Has an archive script')
     case 'removing':
       return t('components.settings.workspaceCleanup.keep.removing', 'Already being removed')
+    case 'folder-workspace-sibling':
+      return t(
+        'components.settings.workspaceCleanup.keep.folderWorkspaceSibling',
+        'Another repository in this workspace is still in use'
+      )
     case 'waiting':
       return t('components.settings.workspaceCleanup.keep.waiting', 'Waiting')
     case 'not-removable':

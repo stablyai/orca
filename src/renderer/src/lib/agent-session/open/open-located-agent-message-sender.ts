@@ -2,6 +2,7 @@
 // tab, else that same pane through its host. Never whatever the card's saved address names now.
 
 import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
@@ -19,6 +20,7 @@ import type { StructuredSessionOpenFeedback } from './activate-ai-vault-structur
 import { agentMessageSenderUnavailableText } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import type { AgentMessageSenderTarget } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { activateWorktreeAgentPane } from '@/components/sidebar/workspace-card/activity/use-worktree-agent-activation'
+import { findTabByIdOrChatAlias } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '@/store/types'
@@ -66,7 +68,7 @@ async function openLocatedChat(
 ): Promise<void> {
   const host = structuredAgentSessionTargetForHost(location.host)
   if (!host) {
-    showLookupFailure('unreachable', name)
+    structuredSessionOpenFeedback.unavailable(name)
     return
   }
   const session = {
@@ -84,12 +86,11 @@ function heldTabId(
   if (!tabId) {
     return null
   }
-  const held =
-    (state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId) ||
-    (state.unifiedTabsByWorktree[location.worktreeId] ?? []).some(
-      (tab) => tab.id === tabId && tab.contentType === 'agent-session'
-    )
-  return held ? tabId : null
+  if ((state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId)) {
+    return tabId
+  }
+  const chat = findTabByIdOrChatAlias(state.unifiedTabsByWorktree[location.worktreeId], tabId)
+  return chat?.contentType === 'agent-session' ? chat.id : null
 }
 
 /** The handle the located pane holds: its status row's, when that row is known to be this pane's
@@ -170,7 +171,9 @@ export function showLookupFailure(
   feedback: StructuredSessionOpenFeedback = structuredSessionOpenFeedback
 ): void {
   if (failure === 'unreachable') {
-    feedback.unavailable(name)
+    toast.error(
+      translate('components.native-chat.writeNotice.unreachable', "Orca couldn't reach the agent.")
+    )
   } else {
     feedback.hostCannotOpen(name)
   }

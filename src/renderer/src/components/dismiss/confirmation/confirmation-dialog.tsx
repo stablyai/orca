@@ -96,7 +96,8 @@ export function ConfirmationDialogProvider({
           : firstInputRef.current
     target?.focus()
   }, [activeRequestId, initialFocus])
-  const guarded = displayedRequest?.options.ignoresOpeningGesture === true
+  const openingGesture = displayedRequest?.options.ignoresOpeningGesture
+  const guarded = openingGesture === true || openingGesture === 'buttons'
   // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
   const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
     if (guarded && event.repeat) {
@@ -183,9 +184,11 @@ export function ConfirmationDialogProvider({
         <DialogContent
           size="confirm"
           surface={options?.surface}
+          className={options?.aboveMenus ? 'z-[80]' : undefined}
+          overlayClassName={options?.aboveMenus ? 'z-[80]' : undefined}
           initialFocus={initialFocus === 'cancel' ? 'cancel' : undefined}
           onInteractOutside={(event) => {
-            if (guarded) {
+            if (openingGesture === true) {
               event.preventDefault()
             }
           }}

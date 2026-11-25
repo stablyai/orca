@@ -21,9 +21,12 @@ import type { TabStripSegment } from './tab-strip-window'
 import ClientHostedBrowserTabRows from '../browser-tabs/ClientHostedBrowserTabRows'
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotGroup } from '../../../../../shared/bots/bot-group'
-import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
-
-const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
+import { PinnedHomeTabSlot } from './PinnedHomeTabSlot'
+import {
+  newTabButtonHideClassName,
+  type RenderedTabStrip,
+  stripSizeClassName
+} from './rendered-tab-strip'
 
 export function renderTabBarSurface(
   {
@@ -31,6 +34,7 @@ export function renderTabBarSurface(
     runtime,
     createMenu,
     itemProjection,
+    strip,
     tabStripNavigation,
     tabStripDragScroll,
     activeClientHostedBrowserRowId,
@@ -43,6 +47,8 @@ export function renderTabBarSurface(
     runtime: TabBarRuntimeModel
     createMenu: TabBarCreateMenuController
     itemProjection: TabBarItemProjection
+    /** What renders: a pinned bot Home in its own slot, then the scrolling strip's tabs. */
+    strip: RenderedTabStrip
     tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
     tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
     activeClientHostedBrowserRowId: string | null
@@ -57,8 +63,14 @@ export function renderTabBarSurface(
 ): React.JSX.Element {
   const { worktreeId, tabStripChrome = 'default' } = props
   const { resolvedGroupId } = runtime
-  const { orderedItems, sortableIds, dropIndicatorByVisibleId, activeVisibleTabId } = itemProjection
-  const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
+  const { activeVisibleTabId } = itemProjection
+  const {
+    orderedItems,
+    sortableIds,
+    dropIndicatorByVisibleId,
+    clientHostedBrowserRows,
+    pinnedCount
+  } = strip
   const {
     tabStripRef,
     tabStripOverflowState,
@@ -68,7 +80,10 @@ export function renderTabBarSurface(
   } = tabStripNavigation
   const singleTab = orderedItems.length + clientHostedBrowserRows.length === 1
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
-  const renderItems = (segments: readonly TabStripSegment[]): React.ReactNode[] =>
+  const renderItems = (
+    segments: readonly TabStripSegment[],
+    itemOffset = pinnedCount
+  ): React.ReactNode[] =>
     renderTabBarItems({
       items: orderedItems,
       props,
@@ -77,12 +92,21 @@ export function renderTabBarSurface(
       dropIndicatorByVisibleId,
       includeTopTabBorder,
       activeClientHostedBrowserRowId,
-      segments
+      segments,
+      itemOffset
     })
 
-  const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+      {pinnedCount > 0 ? (
+        <PinnedHomeTabSlot
+          sortableIds={strip.pinnedSortableIds}
+          singleTab={singleTab}
+          withStrip={strip.stripHasTabs}
+        >
+          {renderItems([{ kind: 'tabs', start: 0, end: pinnedCount }], 0)}
+        </PinnedHomeTabSlot>
+      ) : null}
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -119,9 +143,7 @@ export function renderTabBarSurface(
           <div
             data-single-tab={singleTab ? '' : undefined}
             // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
-            className={`group/tab-strip relative flex min-h-0 w-max max-w-full shrink ${
-              hasTabs ? 'min-w-10' : 'min-w-0'
-            }`}
+            className={`group/tab-strip relative flex min-h-0 w-max max-w-full ${stripSizeClassName(strip)}`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
           >
             <div
@@ -192,7 +214,7 @@ export function renderTabBarSurface(
         }
         runtime={runtime}
         createMenu={createMenu}
-        hideTriggerWhenNarrow={hasTabs}
+        triggerClassName={newTabButtonHideClassName(strip)}
       />
     </div>
   )

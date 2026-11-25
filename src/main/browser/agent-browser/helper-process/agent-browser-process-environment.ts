@@ -31,6 +31,8 @@ export function createAgentBrowserProcessEnvironment(options: {
     String(AGENT_BROWSER_IDLE_TIMEOUT_MS)
   // Its auto-accept dropped alert text; Orca keeps every dialog open until someone answers it.
   env.AGENT_BROWSER_NO_AUTO_DIALOG = '1'
+  // Electron's Chromium updates only with Orca; skip the CVE feed fetch 0.41.2+ awaits on each session's first command.
+  env.AGENT_BROWSER_NO_VERSION_CHECK = '1'
   if (options.platform === 'win32' || env.AGENT_BROWSER_SOCKET_DIR?.trim()) {
     return { env, ownsSocketDirectory: false }
   }

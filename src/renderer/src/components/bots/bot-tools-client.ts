@@ -2,7 +2,7 @@
 import { useEffect, useSyncExternalStore } from 'react'
 import { callBotRpc, type BotRef } from '@/lib/bot-hosts'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import { botErrorMessage } from './bot-presentation'
+import { botErrorMessage, botFailureMessage } from './bot-presentation'
 import { changed, subscribe } from './bot-tools-revision'
 import type {
   BotOwnTool,
@@ -50,6 +50,10 @@ export { botToolHostName, signInOnHost, useBotToolHostSignIn } from './bot-tool-
 export function botToolErrorMessage(error: unknown): string {
   if (error instanceof BotToolPasteRefused) {
     return error.message
+  }
+  const coded = botFailureMessage(error)
+  if (coded) {
+    return coded
   }
   return error instanceof RuntimeRpcCallError && error.code === 'runtime_error' && error.message
     ? error.message
@@ -237,10 +241,10 @@ export function useBotToolSignIn(bot: BotRef, name: string): BotToolSignInView {
   return { active, outcome, failure, hostName }
 }
 
-/** The names of the bot's own tools as the host has them now, past any cached read. */
-export async function readBotToolNames(bot: BotRef): Promise<ReadonlySet<string>> {
+/** The bot's own tools as the host has them now, past any cached read. */
+export async function readBotOwnTools(bot: BotRef): Promise<readonly BotOwnTool[]> {
   const tools = await callBotRpc<BotTools>(bot, 'bots.tools.list', { botId: bot.id })
-  return new Set('own' in tools ? tools.own.map((tool) => tool.name) : [])
+  return 'own' in tools ? tools.own : []
 }
 
 /** Forgets every sign-in this window started, for fixtures that share one page. */

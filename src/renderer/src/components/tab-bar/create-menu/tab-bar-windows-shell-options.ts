@@ -3,7 +3,7 @@ import { WINDOWS_GIT_BASH_SHELL } from '../../../../../shared/shell/launch/windo
 import { listWindowsTerminalShellChoices } from '../../../../../shared/shell/launch/windows-terminal-shell-choices'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { getProjectRuntimeShellMenuMode } from '../model/use-tab-bar-runtime-model'
+import type { getProjectRuntimeShellMenuMode } from '../model/tab-bar-windows-shell-settings'
 
 export type WindowsShellMenuEntry = {
   label: string

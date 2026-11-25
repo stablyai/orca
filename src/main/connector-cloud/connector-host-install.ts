@@ -13,7 +13,9 @@ import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upke
 import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
-import { withGitHubMembersTagged } from '../../shared/bot-types'
+import { splitBotsByOlderBuildSupport, withGitHubMembersTagged } from '../../shared/bot-types'
+import { ORCA_CLOUD_TEAM_POLICY_FLAGS } from '../../shared/orca-profiles/orca-cloud-team-policy'
+import { onTeamFeatureBlockChanged } from '../orca-profiles/cloud-auth/active-team-capabilities'
 
 const LINEAR_LOGIN_REFRESH_DELAY_MS = 30_000
 
@@ -81,6 +83,8 @@ export function installConnectorHost({
         return folder ? [folder] : []
       }),
     botExists: (botId) => store.getBots().some((entry) => entry.id === botId),
+    newerAgentBotIds: () =>
+      new Set(splitBotsByOlderBuildSupport(store.getBots()).newer.map((bot) => bot.id)),
     bot: (botId) => store.getBots().find((entry) => entry.id === botId),
     notifyOwner: (bot, automation, notice) =>
       notifyBotCouldNotFinish(runtimeBotOwnerNotice(runtime), bot, automation, notice),
@@ -100,12 +104,17 @@ export function installConnectorHost({
   )
   const stops: (() => void)[] = []
   // Only a host with Orca Cloud makes webhooks, as it alone hosts the connector.
-  if (runtime.getConnectorCloud()) {
+  const connector = runtime.getConnectorCloud()
+  if (connector) {
     runtime.setWebhooks(webhooks)
     const composio = installComposioUpkeep(runtime, webhooks)
     stops.push(
       () => webhooks.stop(),
-      () => composio.stop()
+      () => composio.stop(),
+      onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => {
+        connector.helloInputsChanged()
+        runtime.notifyBotsChanged({ kinds: ['settings', 'bot'] })
+      })
     )
     runtime.onClientEvent(
       (event) => {
@@ -119,7 +128,7 @@ export function installConnectorHost({
       },
       { consumesTerminalSideEffects: false }
     )
-    runtime.onBotsWritten(() => webhooks.changed())
+    runtime.onBotsWritten(() => webhooks.botsWritten())
     void webhooks.start()
   }
   // Once the account's orgs are known, people saved before orgs had rows go in each of them.
@@ -138,6 +147,24 @@ export function installConnectorHost({
     cloud: () => runtime.getConnectorCloud()
   })
   runtime.onBotsWritten(() => avatars.changed())
+  stops.push(runtime.bots.slackIcons.onStored((botId) => avatars.iconStored(botId)))
+  // Turning bots on or off runs a pass of the pictures.
+  stops.push(
+    store.onSettingsChanged((updates) => {
+      // On, what was owed goes; off, the bytes kept for retries are let go. Clients hear it too, so a
+      // window that this host told its bots were off asks for their drawings again.
+      if (updates.botsEnabled !== undefined) {
+        avatars.changed()
+        runtime.notifyBotsChanged({ kinds: ['settings'] })
+      }
+    })
+  )
+  // A team turning bots on or off, Orca Cloud answering again, or a sign-in: each is a real step for the
+  // pictures, so one that failed to send goes then.
+  stops.push(onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => avatars.changed()))
+  if (connector) {
+    stops.push(connector.onBack((why) => avatars.retryOwed(why)))
+  }
   avatars.changed()
   // The host's store of Request access asks for its bots: their list, and the phones' push of new ones.
   const accessWatch = createBotAccessRequestWatch({

@@ -3,7 +3,7 @@ import type { CodexRateLimitAccountsState } from '../../../../../../shared/agent
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getCodexAccountDisplayDetail } from '../../../../../../shared/agent-accounts/codex-account-display-label'
-import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'

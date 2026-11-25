@@ -14,6 +14,8 @@ export type AcpSkillRootsLaunch = {
   /** The roots the agent loads; the rest reach it only through its instructions. */
   loaded: readonly NativeChatSkillRoot[]
   pluginDirs: readonly string[]
+  /** After the agent's own arguments. */
+  args?: readonly string[]
   env?: Record<string, string>
 }
 
@@ -90,3 +92,24 @@ export const loadOmpSkillRoots: AcpSkillRootsLoader = async ({ roots, version })
   !hasReachedAppVersion(version, OMP_PLUGIN_SKILLS_SKIPPED.after)
     ? null
     : pluginDirsLaunch(roots)
+
+// Copilot adds these to its own skill folders and follows linked skills; the list is comma-separated.
+export const loadCopilotSkillRoots: AcpSkillRootsLoader = async ({ roots, env }) => {
+  const loaded = roots.filter((root) => !root.skillsRoot.includes(','))
+  if (loaded.length === 0) {
+    return null
+  }
+  const dirs = loaded.map((root) => root.skillsRoot).join(',')
+  const inherited = env.COPILOT_SKILLS_DIRS?.trim()
+  return {
+    loaded,
+    pluginDirs: [],
+    env: { COPILOT_SKILLS_DIRS: inherited ? `${inherited},${dirs}` : dirs }
+  }
+}
+
+// Auggie, like Pi, loads each skills folder `--skill` names, following linked skills.
+export const loadAuggieSkillRoots: AcpSkillRootsLoader = async ({ roots }) =>
+  roots.length > 0
+    ? { loaded: roots, pluginDirs: [], args: roots.flatMap((root) => ['--skill', root.skillsRoot]) }
+    : null

@@ -26,6 +26,7 @@ import {
   setSelectedClaudeAccountIdForTarget,
   type ClaudeAccountSelectionTarget
 } from './runtime-selection'
+import { hostSystemDefaultUsageId } from '../../../shared/agent-accounts/host-system-default-usage'
 
 export const CLAUDE_ACCOUNT_NEEDS_SIGN_IN_MESSAGE =
   'Sign in to this Claude account again before selecting it.'
@@ -266,7 +267,11 @@ export class ClaudeAccountSelection {
       })
       throw error
     }
-    this.refreshUsage(outgoingAccountId, effectiveTarget)
+    // Keep System default's last reading on its row, as an outgoing saved account's is kept.
+    this.refreshUsage(
+      outgoingAccountId ?? hostSystemDefaultUsageId('claude', effectiveTarget),
+      effectiveTarget
+    )
     return this.list()
   }
 

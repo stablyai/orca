@@ -22,6 +22,7 @@ import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from '../project/groups/project-group-types'
 import type { RemoteLayoutSnapshot } from '../remote-runtime/session-graph/remote-layout-snapshot'
 import type { HostRepoCatalogSnapshot } from '../execution-host/host-repo-catalog-snapshot'
+import type { PairedServerSavedPortForwards } from '../remote-runtime/host-catalog/paired-server-saved-port-forwards'
 import type { Project, ProjectHostSetup } from '../project/project-types'
 import type { Repo } from '../repository/repo-types'
 import type { SparsePreset } from '../worktree/create-types'
@@ -104,6 +105,8 @@ export type PersistedState = {
   remoteLayoutSnapshots?: Record<string, RemoteLayoutSnapshot>
   /** WSL host's last project list, keyed by environment; display-only until the host answers again. */
   hostRepoCatalogSnapshots?: Record<string, HostRepoCatalogSnapshot>
+  /** Paired servers' port forwards to this computer, keyed by environment; restored when each reconnects. */
+  pairedPortForwards?: Record<string, PairedServerSavedPortForwards>
   sshTargets: SshTarget[]
   /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
   sshTargetGenerationCounter?: number
@@ -120,6 +123,10 @@ export type PersistedState = {
   automationRuns: AutomationRun[]
   /** Absent until the first bot is created, so profiles without bots save unchanged. */
   bots?: Bot[]
+  /** Bots on agents an older build cannot read, kept apart so a rollback's save leaves them be. */
+  botsNewerAgents?: Bot[]
+  /** Ids of `bots` and `botsNewerAgents` in the order saved, which the two lists alone lose. */
+  botOrder?: string[]
   /** Legacy forced 'ask' defaults have been removed; preserve later explicit overrides. */
   botsPermissionDefaultMigrated?: true
   /** Catalogs an orcad imported, so a retried commit returns the same receipt. */

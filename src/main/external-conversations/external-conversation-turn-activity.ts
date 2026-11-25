@@ -5,8 +5,8 @@ import {
   type ConnectorTurnActivityStep
 } from '../../shared/connectors/connector-turn-activity-contract'
 import {
-  clipActivityText,
-  connectorTurnActivityLine
+  connectorTurnActivityLine,
+  connectorTurnActivityStepTitle
 } from '../../shared/connectors/connector-turn-activity-line'
 import {
   nativeChatTaskListTool,
@@ -33,7 +33,7 @@ type Told = { turnId: number; said: string; at: number; steps?: ConnectorTurnAct
 function stepsOf(list: NativeChatTaskList | null): ConnectorTurnActivityStep[] | undefined {
   const steps = list?.tasks
     .slice(0, CONNECTOR_TURN_ACTIVITY_LIMITS.maxActivitySteps)
-    .map((task) => ({ title: clipActivityText(task.content), status: task.status }))
+    .map((task) => ({ title: connectorTurnActivityStepTitle(task.content), status: task.status }))
   return steps?.length ? steps : undefined
 }
 

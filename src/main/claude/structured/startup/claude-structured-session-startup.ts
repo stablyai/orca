@@ -16,6 +16,7 @@ import {
   readClaudeCapabilities,
   readClaudeReportedPermissionMode,
   readClaudeModels,
+  readClaudeOpenedPermissionMode,
   type ClaudeInitObservation,
   type ClaudeInitProof
 } from './claude-structured-init-proof'
@@ -36,6 +37,10 @@ import {
   claudeStartupAnswerAfterExit
 } from './claude-structured-session-startup-exit'
 import type { ClaudeSession } from '../claude-structured-session-state'
+import {
+  readClaudeSettingsAutoDisabled,
+  readClaudeSettingsBypassDisabled
+} from '../permissions/claude-full-access-refusal'
 import type {
   ClaudeAuthDiagnostic,
   ClaudeStructuredSessionEvent
@@ -133,6 +138,10 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
     session.reportedOptions.reportedPermissionMode = permission
   }
   const { init, initialization } = facts
+  const opened = readClaudeOpenedPermissionMode(initialization)
+  if (opened) {
+    session.firstRootInit ??= { permissionMode: opened }
+  }
   // Preserve a running model already reported by a turn's init frame.
   if (init?.model && session.reportedOptions.model === undefined) {
     session.reportedOptions.model = init.model
@@ -143,9 +152,11 @@ function applyClaudeInitializeFacts(session: ClaudeSession, facts: ClaudeInitial
     session.fastModeState = fastModeFacts.state
   }
   session.capabilities = readClaudeCapabilities(session.capabilities, initialization, init?.message)
-  // Streamed catalog updates take precedence over initialize.
+  // Streamed catalog updates take precedence; a late initialize only respells and describes them.
   if (session.commands.commands === undefined) {
     session.commands = new ClaudeSlashCommandCatalog(init?.message, initialization)
+  } else {
+    session.commands.adoptInitialization(initialization)
   }
   session.events?.publish()
 }
@@ -218,6 +229,12 @@ export async function openClaudeSession(input: {
       new Error('claude session closed before startup completed')
     )
   }
+  // Facts can settle long before the host opens; a refusal in that gap had no listener yet.
+  const refused = initialized.initProof.refusal()
+  if (refused) {
+    input.onLateRefusal(refused)
+    throw refused
+  }
   initialized.initProof.onRefusal = (error) => {
     if (input.isCurrent()) {
       input.onLateRefusal(error)
@@ -227,8 +244,17 @@ export async function openClaudeSession(input: {
   const result: ClaudeOpenFacts = {
     ...claudeStartedReportedOptions(session, readClaudeModels(initialized.initialization))
   }
-  void settleClaudeStartupSettings(input, initialized)
+  // A refused Full access chat's first send waits on this read to choose its mode.
+  session.startupSettings = settleClaudeStartupSettings(input, initialized).catch(() => {})
   return result
+}
+
+// What Claude answered to a mode switch outranks a read that may predate it, either way.
+function settledClaudeRefusalFact(
+  known: boolean | undefined,
+  read: boolean | undefined
+): boolean | undefined {
+  return known ?? read
 }
 
 async function settleClaudeStartupSettings(
@@ -240,6 +266,18 @@ async function settleClaudeStartupSettings(
   const token = { pending: session.settingsObservation?.pending ?? false }
   session.settingsObservation = token
   const settings = await input.readSettings()
+  // A process policy fact: a newer option write cannot make it stale, and a refusal Claude already
+  // gave outranks a read that may predate it.
+  if (input.isCurrent()) {
+    session.bypassDisabled = settledClaudeRefusalFact(
+      session.bypassDisabled,
+      readClaudeSettingsBypassDisabled(settings)
+    )
+    session.autoDisabled = settledClaudeRefusalFact(
+      session.autoDisabled,
+      readClaudeSettingsAutoDisabled(settings)
+    )
+  }
   if (!input.isCurrent() || token.pending || session.settingsObservation !== token) {
     return
   }

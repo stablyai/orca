@@ -53,9 +53,6 @@ export type StructuredAgentAccountHomeRequest = {
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */
   permissionMode?: string
-  /** A bot's chat, which runs only Orca's own runtime: its pinned version is the one checked to
-   *  take a bot's standing instructions. */
-  bot?: true
 }
 
 /** What resolving an account may ask of the runtime around it. */
@@ -146,6 +143,9 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
   /** Whether a start of an existing chat launches under the account `resolveAccountHome` picks now
    *  rather than the one its record pins; absent keeps the record's. */
   launchFollowsSelection?: () => boolean
+  /** A chat with no conversation yet follows the selection: its launch, model list and sign-in
+   *  verdict use the account `resolveAccountHome` picks now. */
+  followsSelectionBeforeFirstTurn?: true
 }
 
 export type StructuredAgentRuntimeRegistration = StructuredAgentRuntimeMetadata & {

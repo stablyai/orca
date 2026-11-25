@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
@@ -11,6 +12,8 @@ import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { isWorkspaceSleepRecord } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { launchStatement, type PtyLaunchFacts } from '../launch/launch-evidence'
+import { agentPaneSleepStatus } from '../../../../shared/agent-status/lifecycle/agent-pane-sleep-status'
+import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 
 /** Per slept PTY: the resume records captured, and the panes the hook store proves moved on. */
 export type WorktreeSleepResumeCapture = Map<
@@ -41,6 +44,12 @@ export async function captureWorktreeSleepResumeRecords(args: {
   launchByPtyId: ReadonlyMap<string, PtyLaunchFacts | undefined>
   /** Read after each presence probe, so a conversation started during it is the one captured. */
   readRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
+  readSavedRecord?: (paneKey: string) => Promise<SleepingAgentSessionRecord | undefined>
+  /** `savedRecord` null: read and absent. */
+  readIdentity?: (
+    paneKey: string,
+    savedRecord?: SleepingAgentSessionRecord | null
+  ) => ReturnType<typeof paneAgentIdentity>
   checkAgentPresence:
     | ((paneKey: string, exitedSince?: number) => Promise<AgentProcessVerdict | null>)
     | null
@@ -57,19 +66,35 @@ export async function captureWorktreeSleepResumeRecords(args: {
     const launch = args.launchByPtyId.get(ptyId)
     let launchUnknown = false
     for (const { paneKey, tabId } of panes) {
-      // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
-      if ((await args.checkAgentPresence?.(paneKey, 0).catch(() => null)) === 'exited') {
+      const savedBeforeProbe = await args.readSavedRecord?.(paneKey)
+      const presence = await args
+        .checkAgentPresence?.(paneKey, savedBeforeProbe?.updatedAt ?? 0)
+        .catch(() => null)
+      const savedRecord = await args.readSavedRecord?.(paneKey)
+      const identity = args.readIdentity
+        ? args.readIdentity(paneKey, savedRecord ?? (args.readSavedRecord ? null : undefined))
+        : paneAgentIdentity({
+            paneKey,
+            row: args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey),
+            savedRecord,
+            worktreeId: args.worktreeId,
+            ended: presence === 'exited'
+          })
+      if (
+        identity?.ended ||
+        identity?.executionHost === 'shared' ||
+        (presence === 'exited' && !identity?.status.paneSleep)
+      ) {
         retiredPaneKeys.push(paneKey)
         continue
       }
-      const row = args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey)
+      const row = identity?.status
       const agent = row?.agentType
       const providerSession = normalizeAgentProviderSession(row?.providerSession)
       if (!row) {
         continue
       }
       if (!isResumableTuiAgent(agent) || !providerSession) {
-        // Why: the hook store names another agent here now, so an older capture no longer applies.
         retiredPaneKeys.push(paneKey)
         continue
       }
@@ -85,6 +110,7 @@ export async function captureWorktreeSleepResumeRecords(args: {
         prompt: row.prompt,
         // Why done: a pane-owned capture whose `--resume` waits for the tab open (#11598).
         state: 'done',
+        ...agentVerdictFields(agentPaneSleepStatus(row, args.capturedAt)),
         capturedAt: args.capturedAt,
         updatedAt: row.receivedAt,
         origin: 'worktree-sleep',

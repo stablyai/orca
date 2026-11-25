@@ -1,4 +1,3 @@
-import type { isGeminiTerminalTitle } from '../../../../../shared/agent-status/title/agent-title-core'
 import type { isClaudeAgent } from '../../../../../shared/agent-status/title/agent-title-identity'
 import type { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalLaunchInputAttemptOwner } from './startup/terminal-launch-input-attempt'
@@ -19,7 +18,6 @@ import type { PaneProcessExit } from '../process-exit/pane-process-exit'
 export type PtyConnectionDeps = {
   detectAgentStatusFromTitle?: typeof detectAgentStatusFromTitle
   isClaudeAgent?: typeof isClaudeAgent
-  isGeminiTerminalTitle?: typeof isGeminiTerminalTitle
   tabId: string
   worktreeId: string
   cwd?: string
@@ -67,7 +65,12 @@ export type PtyConnectionDeps = {
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void
-  setRuntimePaneTitle: (tabId: string, paneId: number, title: string) => void
+  setRuntimePaneTitle: (
+    tabId: string,
+    paneId: number,
+    title: string,
+    options?: { alsoTabTitle?: boolean }
+  ) => void
   clearRuntimePaneTitle: (tabId: string, paneId: number) => void
   updateTabPtyId: (tabId: string, ptyId: string, replacedPtyId?: string) => void
   markTerminalBell: WorkspaceAttentionSlice['markTerminalBell']

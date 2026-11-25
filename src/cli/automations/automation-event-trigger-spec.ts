@@ -8,7 +8,11 @@ import {
   type AutomationEventSource,
   type AutomationEventTrigger
 } from '../../shared/automation-event-triggers'
-import { botEventSources, type BotConnectors } from '../../shared/bot-event-sources'
+import {
+  botEventSources,
+  signedOutTriggerOptionsNote,
+  type BotConnectors
+} from '../../shared/bot-event-sources'
 import { CONNECTOR_SOURCE_NAMES } from '../../shared/connectors/external-conversation-link'
 import { legacyPlaceOf, legacySubjectOf } from '../../shared/connector-place-names'
 import { RuntimeClientError } from '../runtime/connection/types'
@@ -306,13 +310,9 @@ export function formatAutomationTriggerOptions(
           "First run `orca bot connectors`: it lists each workspace the bot is in (and each Linear workspace's teams) as refs for in=, and `orca slack find <name>` finds one Slack channel by name. A workspace ref listens anywhere in that workspace; when the bot is in more than one, ask which."
         ]
       : []),
-    ...(bot?.cloudSignedOut
-      ? [
-          `This computer is signed out of Orca, and Slack, GitHub, Linear and webhook events reach ${bot.name} through Orca Cloud: before saving one, run \`orca bot connectors --offer <source>\` so your owner sees a Sign in line in this chat, and save it once they say they're signed in.`
-        ]
-      : []),
+    ...(bot?.cloudSignedOut ? [signedOutTriggerOptionsNote(bot)] : []),
     ...sources,
-    "Nothing else can start an automation. For an event that isn't listed, tell your owner instead of polling for it on a schedule. This list grows as connectors and Orca update: run this again before saying an event can't start one.",
+    'Besides these, only a time starts one: `--trigger` for a schedule, or `--once --by <ISO time>` alone for a one-time reminder ("in 10 minutes"). For an event that isn\'t listed, tell your owner instead of polling for it on a schedule. This list grows as connectors and Orca update: run this again before saying an event can\'t start one.',
     "A run gets your prompt, then the event: its source, kind and time; for Slack, the channel id and message ts (and thread ts in a thread); then, quoted, who did it, where, a link and the text. With --results-to thread (the default when only these events start it), the run answers in the event's thread: `orca bot reply` posts there, and so does its final message. `orca skills get orca-cli --reference automations` has each source's fields."
   ].join('\n\n')
 }

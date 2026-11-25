@@ -27,16 +27,16 @@ import { WslCodexAccountHistoryLaunches } from '../../../codex/history/shared-st
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import { CodexRuntimeHomeSync } from '../runtime-home-service-sync'
+import type { CodexHomeLaunchOptions } from '../runtime-home-service-types'
 
 export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
-  private readonly accountHistoryPasses = new CodexAccountHistoryPasses((home) => {
-    const key = normalizeRuntimePathForComparison(home)
-    return (
-      isCodexHistorySharedAcrossAccounts(this.store.getSettings()) &&
-      this.getManagedHostAccountHomesForSessionDiscovery().some(
-        (candidate) => normalizeRuntimePathForComparison(candidate) === key
-      )
-    )
+  protected readonly accountHistoryPasses = new CodexAccountHistoryPasses({
+    sharedHomes: () =>
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+        ? this.getManagedHostAccountHomesForSessionDiscovery()
+        : null,
+    wslHomeCount: () =>
+      this.store.getSettings().codexManagedAccounts.filter(this.getWslManagedHomePath, this).length
   })
   private readonly wslAccountHistory = new WslCodexAccountHistoryLaunches()
 
@@ -104,7 +104,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
   protected prepareSelfContainedManagedHomeForLaunch(
     account: CodexManagedAccount,
     unavailableManagedHomePath?: string,
-    deferConfigSync?: (syncConfig: () => boolean) => void
+    deferConfigSync?: CodexHomeLaunchOptions['deferConfigSync']
   ): string | null {
     const resolved = this.resolveSelfContainedManagedHome(account)
     if (resolved.kind === 'indeterminate') {
@@ -134,15 +134,14 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
     syncSystemCodexResourcesIntoManagedHome(perAccountHome)
-    const syncConfig = (): boolean =>
-      syncSystemConfigIntoManagedCodexHome({
-        runtimeHomePath: perAccountHome,
-        systemHomePath: getSystemCodexHomePath()
-      })
+    const mirrorHomes = {
+      runtimeHomePath: perAccountHome,
+      systemHomePath: getSystemCodexHomePath()
+    }
     if (deferConfigSync) {
-      deferConfigSync(syncConfig)
+      deferConfigSync(mirrorHomes)
     } else {
-      syncConfig()
+      syncSystemConfigIntoManagedCodexHome(mirrorHomes)
     }
     return perAccountHome
   }
@@ -156,11 +155,17 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
     )
   }
 
+  /** Copies conversations from the import folder setting into ~/.codex; only while sharing is on. */
+  importCodexHistoryInBackground(options: { settingChanged?: boolean } = {}): void {
+    void this.accountHistoryPasses.importHistory(() => this.store.getSettings(), options)
+  }
+
   /** Brings every trusted host account's history into the store without waiting for its launch. */
   protected prepareAllAccountHistoryInBackground(): void {
-    for (const home of this.getManagedHostAccountHomesForSessionDiscovery()) {
-      void this.prepareAccountHistory(home)
-    }
+    this.accountHistoryPasses.runAll(
+      this.getManagedHostAccountHomesForSessionDiscovery(),
+      isCodexHistorySharedAcrossAccounts(this.store.getSettings())
+    )
   }
 
   /**
@@ -203,6 +208,7 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       this.markSharedRuntimeAuthManaged(account.id)
       // Link history at selection so the next launch finds it done.
       void this.prepareAccountHistory(perAccountHome)
+      this.importCodexHistoryInBackground()
       return
     }
     this.clearSelfContainedManagedSelection(account)
