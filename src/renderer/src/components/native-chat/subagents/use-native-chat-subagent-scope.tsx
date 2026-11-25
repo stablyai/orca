@@ -30,6 +30,10 @@ import {
   nativeChatSubagentEndingMessage,
   type NativeChatSubagentAside
 } from './native-chat-subagent-ending'
+import {
+  NativeChatSubagentNeedsYouLine,
+  NativeChatSubagentSheetHeader
+} from './NativeChatSubagentSheetHeader'
 import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
@@ -77,7 +81,7 @@ export function useNativeChatSubagentScope({
   isWorking: boolean
 }) {
   const agentId = view?.agentId ?? null
-  // The conversation names its subagents only for heads, which need rows; a subagent's bar lists them all.
+  // The conversation names its subagents only for heads, which need rows; a subagent's header lists them all.
   const entries = useMemo(
     () =>
       agentId === null && subagentRows.size === 0
@@ -158,17 +162,44 @@ export function useNativeChatSubagentScope({
     [agentId, conversationTurns, messages]
   )
   const open = view?.open
+  const sheetWaiting = view?.sheet?.waiting
   return {
     agentId,
     open,
     /** Leads a subagent's transcript: what the main agent asked of it. */
     lead:
-      agentId !== null && handoff?.prompt ? (
-        <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
+      agentId === null ? null : (
+        <>
+          {sheetWaiting !== undefined && sheetWaiting !== agentId && view?.sheet ? (
+            <NativeChatSubagentNeedsYouLine
+              label={
+                sheetWaiting === null
+                  ? null
+                  : (entries.get(sheetWaiting)?.label ??
+                    t('components.native-chat.subagents.unnamed', 'Subagent'))
+              }
+              onShow={() => view.sheet?.showWaiting(sheetWaiting)}
+            />
+          ) : null}
+          {handoff?.prompt ? (
+            <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
+          ) : null}
+        </>
+      ),
+    /** Drawn above a subagent's own transcript in its sheet. */
+    header:
+      agentId !== null && open && view?.sheet ? (
+        <NativeChatSubagentSheetHeader
+          chain={chain}
+          entries={entries}
+          subagentRows={subagentRows}
+          onOpen={open}
+          controls={view.sheet}
+        />
       ) : null,
-    /** Drawn above a subagent's own transcript. */
+    /** Drawn above a subagent's own transcript where it opens in place (a bot group's turn). */
     bar:
-      agentId !== null && open ? (
+      agentId !== null && open && !view?.sheet ? (
         <NativeChatSubagentViewBar
           chain={chain}
           entries={entries}
@@ -176,6 +207,7 @@ export function useNativeChatSubagentScope({
           onOpen={open}
         />
       ) : null,
+    inSheet: view?.sheet !== undefined,
     messages,
     heads,
     rowsInOrder,

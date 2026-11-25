@@ -86,6 +86,7 @@ export class LoadedStateParsingOperations {
 
     let result: PersistedState | null = null
     let parsed: LoadedProfileState | undefined
+    let rawSavedProfile: unknown
     let chatUiLaunchTipAudience: ChatUiLaunchTipAudience | null = null
     try {
       if (fileExistedOnLoad) {
@@ -106,6 +107,7 @@ export class LoadedStateParsingOperations {
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
         }
+        rawSavedProfile = parsed
         parsed = this.cohorts.migrateCohortSeeds(parsed, true)
         // Freeze audience before defaults or migrations alter the saved Chat UI state.
         chatUiLaunchTipAudience = this.cohorts.captureChatUiLaunchTipAudience(parsed)
@@ -251,12 +253,15 @@ export class LoadedStateParsingOperations {
       chatUiLaunchTipAudience ?? this.cohorts.captureChatUiLaunchTipAudience(undefined)
     const migrated = {
       ...this.cohorts.carryChatUiChoices(
-        this.cohorts.seedWorktreeCardStyle(
-          this.cohorts.keepResumeOnRestartOffForExistingProfiles(
-            this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+        this.cohorts.keepAppRailOffForExistingProfiles(
+          this.cohorts.seedWorktreeCardStyle(
+            this.cohorts.keepResumeOnRestartOffForExistingProfiles(
+              this.cohorts.migrateTelemetry(current, fileExistedOnLoad),
+              parsed
+            ),
             parsed
           ),
-          parsed
+          rawSavedProfile
         ),
         parsed,
         audience

@@ -49,8 +49,10 @@
 - `newFiles` (NewFileContribution[], since 1.4.245): Untitled files the user can create from the + menu and the command palette. At most 16.
 - `settings` (SettingContribution[], since 1.4.246): Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64.
 - `statusBarItems` (StatusBarItemContribution[], since 1.4.248): Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8.
+- `mcpServers` (McpServerContribution[], since 1.4.276): MCP servers Orca offers to the agents it launches on this host, listed under From plugins in Settings → MCP servers. At most 16.
+- `taskSources` (object[], since 1.4.245): Task lists shown on the Tasks page, filled by the plugin worker. At most 8.
 
-Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `mcpServers`, `taskSources`, `connections`, `sidebarCards`.
+Reserved (must stay empty arrays): `agentHarnesses`, `skills`, `connections`, `sidebarCards`.
 
 ## PanelContribution
 
@@ -194,11 +196,21 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 - `tooltip` (string, since 1.4.248): Shown on hover. Defaults to the plugin name.
 - `command` (string, since 1.4.248): Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed.
 
+## McpServerContribution
+
+An MCP server Orca offers to the agents it launches, beside the user’s own.
+
+- `name` (string, required, since 1.4.276): Server name agents see, unique in this plugin: letters, digits, `-` and `_`, at most 64.
+- `url` (string, since 1.4.276): Streamable HTTP address of a remote server. Give either `url` or `command`.
+- `command` (string, since 1.4.276): Executable that starts a local (stdio) server.
+- `args` (string[], since 1.4.276): Arguments for `command`.
+- `env` (object, since 1.4.276): Environment variables for `command`; nothing secret.
+
 ## Capability
 
 A host API the plugin may call once the user consents.
 
-- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, workspace:create, automation:read, automation:write, history:read, required, since 1.4.160): Capability granted on user consent.
+- `kind` (one of workspace:read, workspace:write, agent:read, agent:launch, terminal:send, terminal:read, notifications:show, storage:own, secrets:own, settings:own, appearance:write, workspace:create, automation:read, automation:write, history:read, tasks:provide, required, since 1.4.160): Capability granted on user consent.
 
 ## Screenshot
 
