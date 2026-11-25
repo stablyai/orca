@@ -1,7 +1,6 @@
 // A bot's MEMORY.md as Settings and the bot's own commands change it: every change goes through the
 // host's memory record, so it lands in history and no turn end undoes it.
 import {
-  applyBotMemoryChange,
   botMemoryChange,
   botMemoryDate,
   editBotMemoryFact,
@@ -74,7 +73,7 @@ export const BOT_MEMORY_METHODS = [
         throw new InvalidArgumentError('Missing text')
       }
       // A Quick add the file already states changes nothing on disk and leaves nothing to undo,
-      // even when Orca's record takes it.
+      // even when Orca's record adopts it.
       let stated = false
       await context.runtime.bots.memory.change(
         bot.id,
@@ -88,8 +87,8 @@ export const BOT_MEMORY_METHODS = [
               params.text,
               botMemoryDate(new Date())
             )
-            stated = applyBotMemoryChange(file, asked) === file
-            return asked
+            stated = asked.stated
+            return asked.change
           }
           const fact = parseBotMemoryFacts(file).find((entry) => entry.text === params.fact)
           if (!fact) {

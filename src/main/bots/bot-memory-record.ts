@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   applyBotMemoryChange,
   type BotMemoryChange,
+  type BotMemoryLine,
   botMemoryChange,
   botMemoryFactKeys,
   botMemoryLineKey,
@@ -24,20 +25,37 @@ import {
 const REWRITE_ATTEMPTS = 3
 const NO_CHANGE: BotMemoryChange = { added: [], removed: [] }
 
+/** Of the facts a change adds, those the file already states and the record lacks. */
+function adoptable(file: string, record: string, added: BotMemoryLine[]): BotMemoryLine[] {
+  if (added.length === 0) {
+    return []
+  }
+  const [stated, known] = [botMemoryFactKeys(file), botMemoryFactKeys(record)]
+  return added.filter((line) => {
+    const key = botMemoryLineKey(line)
+    return key !== null && stated.has(key) && !known.has(key)
+  })
+}
+
 /** Null: not known yet, so a turn end takes everything in the file as new. `version` counts the
- *  record's changes; `writers` holds the last one each chat made ('' for any other writer). */
+ *  record's changes; `writers` holds the last one each chat made ('' for any other writer).
+ *  `adopted`, by fact: what a change asked for that the file already stated and the record
+ *  didn't, which a chat wrote; left to the next turn end to record with where it came from, and
+ *  put back if lost before then. */
 type Recorded = {
   text: string | null
   settled: Promise<unknown>
   version: number
   writers: Map<string, number>
+  adopted: Map<string, BotMemoryLine>
 }
 
 const unknownRecord = (text: string | null): Recorded => ({
   text,
   settled: Promise.resolve(),
   version: 0,
-  writers: new Map()
+  writers: new Map(),
+  adopted: new Map()
 })
 
 export type BotMemoryRecord = ReturnType<typeof createBotMemoryRecord>
@@ -105,7 +123,14 @@ export function createBotMemoryRecord(
           const base = current ?? ''
           const asked = await make(base, text)
           const next = applyBotMemoryChange(base, asked)
-          const recorded = text === null ? next : applyBotMemoryChange(text, asked)
+          const adopt = text === null ? [] : adoptable(base, text, asked.added)
+          const recorded =
+            text === null
+              ? next
+              : applyBotMemoryChange(text, {
+                  added: asked.added.filter((line) => !adopt.includes(line)),
+                  removed: asked.removed
+                })
           unreadable = current === null
           await beforeWrite?.(botMemoryChange(base, next))
           const wrote =
@@ -113,17 +138,33 @@ export function createBotMemoryRecord(
               ? await fs.writeText(path, next, { exclusive: true })
               : next === current || (await fs.replaceText(path, current, next))
           if (wrote) {
-            made = mergeBotMemoryChanges(
+            const took = mergeBotMemoryChanges(
               botMemoryChange(base, next),
               text === null ? NO_CHANGE : botMemoryChange(text, recorded)
             )
-            // The record taking a fact the file already stated changed nothing on disk; a row for
-            // it would let Undo delete that fact, which predates the change.
-            const stated = botMemoryFactKeys(base)
-            noted(botId, by, {
-              added: made.added.filter((line) => !stated.has(botMemoryLineKey(line) ?? '')),
-              removed: made.removed
-            })
+            made = { added: [...took.added, ...adopt], removed: took.removed }
+            const adopted = bots.get(botId)?.adopted
+            for (const line of asked.removed) {
+              adopted?.delete(botMemoryLineKey(line) ?? '')
+            }
+            for (const line of adopt) {
+              adopted?.set(botMemoryLineKey(line) ?? '', line)
+            }
+            // A row leaves out what changed nothing for the record: an adopted fact (the file had it)
+            // and one the record already had (a chat dropped it, so a turn end puts it back). Its
+            // Undo would delete the chat's copies or make the drop stick. An Undo's row keeps all,
+            // so it still marks what it undid.
+            const known = botMemoryFactKeys(text ?? '')
+            noted(
+              botId,
+              by,
+              by.kind === 'undo'
+                ? made
+                : {
+                    added: took.added.filter((line) => !known.has(botMemoryLineKey(line) ?? '')),
+                    removed: took.removed
+                  }
+            )
             return recorded
           }
         }
@@ -159,6 +200,12 @@ export function createBotMemoryRecord(
     after,
     change,
     noted,
+    /** The facts the record adopted (see Recorded), for a turn end to put back and then call
+     *  `recorded` once it has. */
+    adopted: (botId: string): { lines: BotMemoryLine[]; recorded: () => void } => {
+      const adopted = bots.get(botId)?.adopted
+      return { lines: [...(adopted?.values() ?? [])], recorded: () => adopted?.clear() }
+    },
     history: (botId: string) => history.list(botId),
     undoneKnown: (botId: string, rowId: string) => history.undoneKnown(botId, rowId),
     whenUndoneKnown: (botId: string, then: () => void) => history.whenUndoneKnown(botId, then),
@@ -228,26 +275,31 @@ export function createBotMemoryRecord(
  *  record stays and the next turn end tries again. */
 export async function tagBotMemoryFile(
   fs: Pick<BotHomeFilesystem, 'readText' | 'replaceText'>,
-  folder: string,
+  { botId, folder }: { botId: string; folder: string },
   before: string,
   /** Read only when the file has a fact `before` lacks: the only line a label marks. */
   label: () => Promise<string | null>,
   /** Of the lines the file has that `before` lacks, those to take back out (see readdGuard). */
-  keepOut?: (added: string[]) => Promise<string[]>
+  keepOut?: (added: string[]) => Promise<string[]>,
+  /** Its facts adopted (see Recorded) are put back when lost, new like the rest, never kept out. */
+  record?: Pick<BotMemoryRecord, 'adopted'>
 ): Promise<{ text: string; kept: BotMemoryChange } | null> {
   const path = join(folder, 'MEMORY.md')
+  const { lines: adopted, recorded } = record?.adopted(botId) ?? { lines: [], recorded: () => {} }
   for (let attempt = 0; attempt < REWRITE_ATTEMPTS; attempt += 1) {
     const current = await fs.readText(path)
     if (current === null) {
       return null
     }
     const lost = botMemoryChange(before, current).removed
-    const restored = applyBotMemoryChange(current, { added: lost, removed: [] })
+    const restored = applyBotMemoryChange(current, { added: [...lost, ...adopted], removed: [] })
     const fresh = botMemoryChange(before, restored).added
+    const asked = new Set(adopted.map(botMemoryLineKey))
+    const guarded = fresh.filter((line) => !asked.has(botMemoryLineKey(line)))
     // Before the record knew the file, every line reads as new: nothing to keep out then.
     const out =
-      keepOut && before !== '' && fresh.length > 0
-        ? await keepOut(fresh.map(({ line }) => line))
+      keepOut && before !== '' && guarded.length > 0
+        ? await keepOut(guarded.map(({ line }) => line))
         : []
     const kept = applyBotMemoryChange(restored, {
       added: [],
@@ -256,6 +308,7 @@ export async function tagBotMemoryFile(
     const added = fresh.length > out.length
     const tagged = tagBotMemoryChanges(before, kept, added ? await label() : null)
     if (tagged === current || (await fs.replaceText(path, current, tagged))) {
+      recorded()
       return { text: tagged, kept: botMemoryChange(current, kept) }
     }
   }

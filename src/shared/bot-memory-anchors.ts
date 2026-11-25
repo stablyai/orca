@@ -19,8 +19,7 @@ export function isBotMemoryAnchorLine(openers: readonly number[] | null, index: 
 /**
  * Puts facts back into `lines`, in place and one by one: after the copy of the line a fact
  * followed; after the last copy for an older row without an occurrence, or when fewer copies are
- * left; at the end when none is; above a fence that place is in. Searches run from the end, so
- * putting back facts a write cut from the end never reads the unchanged start of the file.
+ * left; at the end when none is; above a fence that place is in.
  */
 export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMemoryAnchor) => void {
   const found = botMemoryFenceOpeners(lines)
@@ -42,13 +41,19 @@ export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMem
     if (copies === 0) {
       return lines.findLastIndex((raw) => raw.trim() !== '') + 1
     }
+    // The same copy counted from both ends at once, so one near either end is found without
+    // reading the rest of the file.
     let fromEnd = afterOccurrence === undefined ? 1 : Math.max(1, copies - afterOccurrence + 1)
-    for (let index = lines.length - 1; index >= 0; index -= 1) {
-      if (lines[index] === after && isBotMemoryAnchorLine(openers, index)) {
-        fromEnd -= 1
-        if (fromEnd === 0) {
-          return index + 1
-        }
+    let fromStart = copies - fromEnd + 1
+    const copy = (index: number): boolean =>
+      lines[index] === after && isBotMemoryAnchorLine(openers, index)
+    for (let step = 0; step < lines.length; step += 1) {
+      if (copy(step) && (fromStart -= 1) === 0) {
+        return step + 1
+      }
+      const back = lines.length - 1 - step
+      if (copy(back) && (fromEnd -= 1) === 0) {
+        return back + 1
       }
     }
     return lines.length

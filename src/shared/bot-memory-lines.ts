@@ -241,6 +241,9 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
  *  botMemoryPutBack puts it. `text` itself when that
  *  changes no line, so its line endings stay as they are. */
 export function applyBotMemoryChange(text: string, change: BotMemoryChange): string {
+  if (isEmptyBotMemoryChange(change)) {
+    return text
+  }
   const gone = new Set(change.removed.map(({ line }) => rawFactKey(line)))
   const { lines, eol } = splitLines(text)
   const keys = lineKeys(lines)
@@ -249,8 +252,9 @@ export function applyBotMemoryChange(text: string, change: BotMemoryChange): str
     return key === null || !gone.has(key)
   })
   let changed = kept.length !== lines.length
-  const present = new Set(lineKeys(kept))
-  const putBack = botMemoryPutBack(kept)
+  // Nothing to add reads no more of the file.
+  const present = new Set(change.added.length > 0 ? lineKeys(kept) : [])
+  const putBack = change.added.length > 0 ? botMemoryPutBack(kept) : () => {}
   for (const added of change.added) {
     const key = rawFactKey(added.line)
     if (key === null || present.has(key)) {

@@ -80,8 +80,11 @@ function bot(memory: string, start = Date.UTC(2026, 10, 6)) {
     forget: (fact: string) => record.forget('bot-1', FOLDER, fact, { kind: 'owner' }),
     /** The owner's Quick add, as Settings and the phone make it. */
     quickAdd: (fact: string) =>
-      record.change('bot-1', FOLDER, { kind: 'owner' }, (file, known) =>
-        quickAddBotMemoryChange(file, known, fact, '2026-11-06')
+      record.change(
+        'bot-1',
+        FOLDER,
+        { kind: 'owner' },
+        (file, known) => quickAddBotMemoryChange(file, known, fact, '2026-11-06').change
       ),
     rows: () => record.history('bot-1'),
     record,
@@ -203,7 +206,7 @@ describe("a bot's memory history", () => {
     await turnEnded()
 
     expect(read()).toBe(
-      '- 2026-11-06 releases go out Tuesdays\n- 2026-11-06 deploys at noon\n```sh\npnpm build\n'
+      '- 2026-11-06 deploys at noon\n- 2026-11-06 releases go out Tuesdays\n```sh\npnpm build\n'
     )
   })
 
@@ -224,23 +227,82 @@ describe("a bot's memory history", () => {
   })
 
   it('never lets Undo take out a fact the file had before a Quick add of it', async () => {
-    const { quickAdd, read, reopened, rows, turnEnded, write } = bot(OLD)
+    const { quickAdd, read, reopened, rows, stored, turnEnded, write } = bot(OLD)
     // A chat wrote two copies mid-turn, which the owner then added too.
     const written = `# Memory\n- 2026-11-06 releases go out Tuesdays\n- 2026-11-01 owner fact\n## Later\n- releases go out Tuesdays\n`
     write(written)
     await quickAdd('releases go out Tuesdays')
+    // Nothing changed on disk, so no owner row offers an Undo that would delete either copy.
+    expect(await rows()).toEqual([])
     await turnEnded()
 
-    // Nothing changed on disk, so no row offers an Undo that would delete either copy.
     expect(read()).toBe(written)
-    expect(await rows()).toEqual([])
-    expect(await reopened().list('bot-1')).toEqual([])
-    // Orca's record has it, so a later turn that drops both copies gets it back.
+    await stored()
+    const listed = await reopened().list('bot-1')
+    expect(listed.map(({ by }) => by.kind)).toEqual(['chat'])
+    // Orca's record has it now, so a later turn that drops both copies gets it back.
     write(OLD)
     await turnEnded()
     expect(parseBotMemoryFacts(read()).map(({ text }) => text)).toContain(
       'releases go out Tuesdays'
     )
+  })
+
+  it("keeps where a chat's fact came from when the owner Quick adds it before the turn ends", async () => {
+    const ended = async (ownerAdds: boolean): Promise<string> => {
+      const { quickAdd, read, turnEnded, write } = bot(OLD)
+      write(`${OLD}- 2026-11-06 releases go out Tuesdays\n`)
+      if (ownerAdds) {
+        await quickAdd('releases go out Tuesdays')
+      }
+      await turnEnded('Slack, Dana')
+      return read()
+    }
+    const alone = await ended(false)
+    expect(alone).toContain('releases go out Tuesdays · from: Slack, Dana')
+    expect(await ended(true)).toBe(alone)
+  })
+
+  it('leaves no Undo that would make a chat’s drop stick when the owner adds back a fact the record had', async () => {
+    const { quickAdd, read, rows, turnEnded, write } = bot(OLD)
+    // A chat dropped the owner's fact mid-turn; the owner adds it back before the turn ends.
+    write('# Memory\n')
+    await quickAdd('owner fact')
+    // The record still had it, so the add leaves no row whose Undo would take it from the record.
+    expect(await rows()).toEqual([])
+    write('# Memory\n')
+    await turnEnded()
+    expect(read()).toBe(OLD)
+  })
+
+  it('marks an Undo done when a chat already wrote back what it puts back', async () => {
+    const undone = async (chatWroteBack: boolean) => {
+      const { read, record, reopened, rows, stored, undo, write } = bot(OLD)
+      await record.change('bot-1', FOLDER, { kind: 'tidy-up' }, (file) =>
+        botMemoryChange(file, file.replace('- 2026-11-01 owner fact\n', ''))
+      )
+      const [tidied] = await rows()
+      if (chatWroteBack) {
+        write(OLD)
+      }
+      expect(await undo(tidied.id)).toBe(true)
+      expect(read()).toBe(OLD)
+      await stored()
+      return { by: (await reopened().list('bot-1'))[0].by, of: tidied.id }
+    }
+    for (const chatWroteBack of [false, true]) {
+      const { by, of } = await undone(chatWroteBack)
+      expect(by).toEqual({ kind: 'undo', of })
+    }
+  })
+
+  it('rejects a Quick add that is only a bullet or separator, saving nothing', async () => {
+    const { quickAdd, read, rows } = bot(OLD)
+    for (const fact of ['-', ':', ' - ']) {
+      await expect(quickAdd(fact)).rejects.toThrow('Missing text')
+    }
+    expect(read()).toBe(OLD)
+    expect(await rows()).toEqual([])
   })
 
   it('puts an older row without an occurrence back after the last copy outside a fence', async () => {
