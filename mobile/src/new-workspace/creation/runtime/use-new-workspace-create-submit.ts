@@ -1,3 +1,4 @@
+import { resolveMobileLinkedWorkItemPromptTemplate } from '../../../tasks/linked-work-item-prompt-template'
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
@@ -17,11 +18,7 @@ import {
 } from '../source-workspace-create'
 import { createdSetupReviewPrompt } from '../created-worktree-setup-review'
 import { saveStartupPolicy } from './setup-agent-startup-policy-save'
-import {
-  useNewWorkspaceSetupTrust,
-  type CreateOptions,
-  type SheetSetupTrustPrompt
-} from './use-new-workspace-setup-trust'
+import { useNewWorkspaceSetupTrust, type CreateOptions } from './use-new-workspace-setup-trust'
 import { normalizeWorkspaceAgent } from '../workspace-agent-selection'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { AgentLaunchSupport } from '../../../session/agent-launch/agent-launch-request'
@@ -83,14 +80,7 @@ export function useNewWorkspaceCreateSubmit(args: {
     executionHostId: ExecutionHostId
     parent: WorktreeCreateParent
   }
-}): {
-  creating: boolean
-  setupTrustPrompt: SheetSetupTrustPrompt | null
-  create: () => Promise<void>
-  approveSetupTrust: (alwaysTrust: boolean) => Promise<void>
-  closeSetupTrust: () => void
-  skipSetupTrust: () => void
-} {
+}) {
   const createInFlightRef = useRef(false)
   const [creating, setCreating] = useState(false)
   const setupTrust = useNewWorkspaceSetupTrust({
@@ -232,6 +222,14 @@ export function useNewWorkspaceCreateSubmit(args: {
             agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
+            linkedWorkItemPromptTemplate:
+              selection.kind === 'work-item' && createdWithAgentId
+                ? await resolveMobileLinkedWorkItemPromptTemplate(
+                    client,
+                    setupRepo,
+                    latestRuntimeSettings
+                  )
+                : undefined,
             nameIsAutoManaged: args.composer.isNameAutoManaged,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport(),

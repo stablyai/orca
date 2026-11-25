@@ -93,6 +93,7 @@ export class RuntimeClientSettingsController {
       ),
       terminalWordSeparator: settings.terminalWordSeparator ?? TERMINAL_DEFAULT_WORD_SEPARATOR,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
+      linkedWorkItemPromptTemplate: settings.linkedWorkItemPromptTemplate,
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,

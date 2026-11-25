@@ -1,8 +1,5 @@
 import { toast } from 'sonner'
-import {
-  buildFolderWorkspaceStartupPayload,
-  buildFolderWorkspaceHostStartupPayload
-} from './folder-workspace-startup-payload'
+import * as startupPayload from './folder-workspace-startup-payload'
 import { reviewSetupTrustMismatch } from '@/store/slices/worktrees/create/created-worktree-setup-trust'
 import { projectGroupHookTrustKey } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -16,10 +13,7 @@ import '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import './folder-workspace-source-repos'
-import {
-  resolveFolderWorkspaceName,
-  toFolderWorkspaceLinkedTask
-} from './folder-workspace-source-selection'
+import * as folderSource from './folder-workspace-source-selection'
 import {
   planAgentSessionLaunch,
   adoptAgentSessionLaunchVerdict
@@ -31,6 +25,7 @@ import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/
 import { useAppStore } from '@/store/index'
 import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
+import { getDesktopLinkedWorkItemPromptTemplate } from '@/lib/work-items/linked-work-item-context'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,
@@ -74,14 +69,22 @@ export async function submitFolderWorkspaceCreate({
   const chatSessionOptions = launchInputs
     ? launchInputs.chatSessionOptions
     : requestedChatSessionOptions
-  const workspaceName = resolveFolderWorkspaceName({
+  const workspaceName = folderSource.resolveFolderWorkspaceName({
     projectGroup,
     name,
     lastAutoName,
     linkedWorkItem
   })
+  const launchState = useAppStore.getState()
+  const promptTemplate = linkedWorkItem
+    ? getDesktopLinkedWorkItemPromptTemplate(
+        launchState,
+        linkedWorkItem.repoId,
+        getRepoExecutionHostId(projectGroup)
+      )
+    : undefined
   const launchHost = getFolderWorkspaceAgentLaunchFact(
-    useAppStore.getState(),
+    launchState,
     readRuntimeStatuses(),
     projectGroup
   )
@@ -112,6 +115,7 @@ export async function submitFolderWorkspaceCreate({
           settings: effectiveSettings,
           linkedWorkItem,
           note,
+          promptTemplate,
           agentCmdOverrides,
           agentArgs,
           sessionOptions,
@@ -138,7 +142,9 @@ export async function submitFolderWorkspaceCreate({
         : null
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    quickAgent && linkedWorkItem
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note, promptTemplate)
+      : null
   const launchRequest = quickAgent
     ? {
         requestId: createBrowserUuid(),
@@ -194,22 +200,20 @@ export async function submitFolderWorkspaceCreate({
     ...(setupSupported ? setupApproval : {}),
     ...(setupSupported && structuredLaunch ? { agentLaunchMode: 'structured' as const } : {}),
     ...(hostStartsTerminal
-      ? {
-          ...buildFolderWorkspaceHostStartupPayload({
-            quickAgent,
-            note,
-            launchDraftPrompt,
-            agentArgs,
-            sessionOptions,
-            launchSource
-          })
-        }
+      ? startupPayload.buildFolderWorkspaceHostStartupPayload({
+          quickAgent,
+          note,
+          launchDraftPrompt,
+          agentArgs,
+          sessionOptions,
+          launchSource
+        })
       : {}),
     projectGroupId: projectGroup.id,
     name: workspaceName,
     // Retain the SSH target even when another host owns the focused runtime.
     connectionId: projectGroup.connectionId ?? null,
-    linkedTask: toFolderWorkspaceLinkedTask(linkedWorkItem),
+    linkedTask: folderSource.toFolderWorkspaceLinkedTask(linkedWorkItem),
     ...(linkedTaskSourceContext ? { linkedTaskSourceContext } : {}),
     ...(quickAgent ? { createdWithAgent: quickAgent } : {}),
     ...(pendingFirstAgentMessageRename ? { pendingFirstAgentMessageRename: true } : {})
@@ -229,7 +233,7 @@ export async function submitFolderWorkspaceCreate({
   )
   const launchFailed = isCancelled()
 
-  const startup = buildFolderWorkspaceStartupPayload({
+  const startup = startupPayload.buildFolderWorkspaceStartupPayload({
     quickAgent,
     startupPlan,
     launchInputs,

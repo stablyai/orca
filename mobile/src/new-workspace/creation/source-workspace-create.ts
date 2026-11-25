@@ -39,6 +39,7 @@ export type CreateWorkspaceFromComposerArgs = {
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
   note: string | undefined
+  linkedWorkItemPromptTemplate?: string
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
   branchIntentSupported?: boolean | Promise<boolean>
@@ -120,19 +121,11 @@ function resolveComposerAgentLaunch(
   return agentId ? { agent: agentId, supported } : undefined
 }
 
-async function createWorkItemWorkspace(args: {
-  client: RpcClient
-  selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
-  targetRepoId: string
-  setupDecision: WorkspaceCreateSetupDecision
-  approvedSetupHash?: string
-  agent: WorkspaceCreateAgentBundle
-  workspaceName: string | undefined
-  nameIsAutoManaged?: boolean
-  note: string | undefined
-  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
-  parent?: WorktreeCreateParent
-}): Promise<WorktreeCreateResult> {
+async function createWorkItemWorkspace(
+  args: Omit<CreateWorkspaceFromComposerArgs, 'selection'> & {
+    selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
+  }
+): Promise<WorktreeCreateResult> {
   // The caller resolved the start point before showing its setup; creating from another could run unseen setup.
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
@@ -150,7 +143,8 @@ async function createWorkItemWorkspace(args: {
     compareBaseRef,
     branchNameOverride,
     pushTarget,
-    nameIsAutoManaged: args.nameIsAutoManaged
+    nameIsAutoManaged: args.nameIsAutoManaged,
+    linkedWorkItemPromptTemplate: args.linkedWorkItemPromptTemplate
   })
   // Reuse the computed name for collision suffixes, matching blank-workspace creation.
   const baseName = String(params.name)

@@ -20,6 +20,7 @@ import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
+import { getTaskPromptTemplateSearchEntry } from '../task-prompt-template-search'
 
 type RepositoryPaneSearchOptions = {
   isLocalWindowsProject?: boolean
@@ -209,6 +210,7 @@ function getRepositorySearchParts(
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
     browserProfile: getRepositoryBrowserProfileSearchEntry(t),
+    taskPrompt: getTaskPromptTemplateSearchEntry(t),
     jira,
     displayName,
     icon,
@@ -233,6 +235,7 @@ export function getRepositoryPaneSearchEntries(
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
     parts.browserProfile,
+    parts.taskPrompt,
     parts.jira,
     parts.displayName,
     parts.icon
@@ -251,15 +254,7 @@ export function getRepositoryPaneSearchEntries(
     entries.push(getRepositoryWorkspaceCleanupSearchEntry(repo, t))
   }
   entries.push(parts.sidebarVisibility, parts.removeProject)
-  if (parts.sourceControlAi) {
-    entries.push(...parts.sourceControlAi)
-  }
-  if (parts.mcp) {
-    entries.push(...parts.mcp)
-  }
-  if (parts.hooks) {
-    entries.push(...parts.hooks)
-  }
+  entries.push(...(parts.sourceControlAi ?? []), ...(parts.mcp ?? []), ...(parts.hooks ?? []))
   return entries
 }
 
@@ -273,6 +268,7 @@ export function getRepositoryPaneSearchMetadata(
   const identity = [
     parts.agentTrust,
     parts.browserProfile,
+    parts.taskPrompt,
     parts.jira,
     parts.displayName,
     parts.icon

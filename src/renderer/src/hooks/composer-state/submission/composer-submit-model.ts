@@ -7,6 +7,39 @@ import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspa
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { ComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
 import type { PendingSmartGitHubSubmitResolution } from '../linked-work-items/source-selection-decisions'
+import type { ComposerModel } from '../composer-model'
+
+export type QuickCreationExecutionInput = Pick<
+  ComposerModel,
+  | 'clearNewWorkspaceDraft'
+  | 'createMultiple'
+  | 'effectivePresetId'
+  | 'ephemeralVmRecipes'
+  | 'ephemeralVmsEnabled'
+  | 'isSubmissionCancelled'
+  | 'linkedGitLabIssue'
+  | 'linkedGitLabMR'
+  | 'normalizedSparseDirectories'
+  | 'onCreated'
+  | 'parentWorktreeId'
+  | 'persistDraft'
+  | 'persistSetupAgentStartupPolicy'
+  | 'prepareQuickSubmit'
+  | 'resetForNextCreate'
+  | 'resolvedInitialWorkspaceStatus'
+  | 'selectedEphemeralVmRecipeId'
+  | 'selectedRepoAgentLaunchFact'
+  | 'selectedRepoExecutionHostId'
+  | 'selectedRepoIsGit'
+  | 'selectedRepoIsRemote'
+  | 'selectedRepoTarget'
+  | 'selectedRepoStartupShell'
+  | 'selectedWorkspaceTarget'
+  | 'settings'
+  | 'sparseEnabled'
+  | 'taskSourceContext'
+  | 'telemetrySource'
+>
 
 type SmartCreateNames = {
   workspaceName: string

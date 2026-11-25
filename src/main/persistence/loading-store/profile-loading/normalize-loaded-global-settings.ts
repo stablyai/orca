@@ -2,6 +2,7 @@ import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/set
 import { normalizeUsageLimitAutoContinueDefaultOn } from '../../../../shared/native-chat/settings/native-chat-usage-limit-auto-continue'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../../../shared/linked-work-item-prompt-settings'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
@@ -101,6 +102,9 @@ export function normalizeLoadedGlobalSettings(
     agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
+    ),
+    linkedWorkItemPromptTemplate: normalizeLinkedWorkItemPromptTemplate(
+      parsed.settings?.linkedWorkItemPromptTemplate
     ),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     workspaceCleanupPolicy: normalizeWorkspaceCleanupRules(parsed.settings?.workspaceCleanupPolicy),

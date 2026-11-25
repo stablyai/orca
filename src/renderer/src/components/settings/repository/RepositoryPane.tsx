@@ -1,8 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import type {
-  OrcaHooks,
-  RepoHookSettings
-} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -50,6 +47,9 @@ import {
   RepositoryFormatterSection,
   getRepositoryFormatterSearchEntry
 } from './RepositoryFormatterSection'
+import { RepositoryTaskPromptTemplateSetting } from './RepositoryTaskPromptTemplateSetting'
+
+export { getRepositoryPaneSearchEntries } from './repository-search'
 
 const EMPTY_WSL_DISTROS: string[] = []
 const EMPTY_REMOVAL_SETUPS: ProjectHostSetup[] = []
@@ -159,12 +159,6 @@ export function RepositoryPane({
     [clearCopiedTemplateResetTimer]
   )
 
-  const updateSelectedRepoHookSettings = (nextSettings: RepoHookSettings) => {
-    updateSelectedRepo(repo.id, {
-      hookSettings: nextSettings
-    })
-  }
-
   const handleCopyTemplate = async () => {
     // Make missing-orca.yaml migration a one-click copy of the expected shared-template shape.
     await window.api.ui.writeClipboardText(`scripts:
@@ -183,22 +177,11 @@ export function RepositoryPane({
     }, 1500)
   }
 
-  const {
-    identity: identityEntries,
-    sparsePresets: sparsePresetEntries,
-    hooks: hooksEntries,
-    mcp: mcpEntries,
-    sharedPaths: symlinkEntries,
-    sourceControlAi: sourceControlAiEntries,
-    hostSetups: hostSetupEntries,
-    projectRuntime: projectRuntimeEntries,
-    removeProject: removeProjectEntry,
-    sidebarVisibility: sidebarVisibilityEntry
-  } = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
+  const searchEntries = getRepositoryPaneSearchMetadata(repo, { isLocalWindowsProject }, t)
 
   const hooksSection =
     hooksSupported &&
-    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, hooksEntries)) ? (
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, searchEntries.hooks)) ? (
       <RepositoryHooksSection
         key="hooks"
         repo={repo}
@@ -210,13 +193,13 @@ export function RepositoryPane({
         copiedTemplate={copiedTemplate}
         forceVisible={forceFullPaneForRepoMatch}
         onCopyTemplate={() => void handleCopyTemplate()}
-        onUpdateHookSettings={updateSelectedRepoHookSettings}
+        onUpdateHookSettings={(hookSettings) => updateSelectedRepo(repo.id, { hookSettings })}
       />
     ) : null
 
   // Lead with identity, then frequently edited setup commands, before secondary repository controls.
   const visibleSections = [
-    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, identityEntries) ? (
+    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, searchEntries.identity) ? (
       <SettingsGroup
         key="identity"
         title={t('auto.components.settings.RepositoryPane.499a437335', 'Identity')}
@@ -293,6 +276,15 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         />
 
+        {project && updateProject ? (
+          <RepositoryTaskPromptTemplateSetting
+            project={project}
+            globalTemplate={settings?.linkedWorkItemPromptTemplate}
+            updateProject={updateProject}
+            forceVisible={forceFullPaneForRepoMatch}
+          />
+        ) : null}
+
         <RepositoryAgentTrustSection
           repo={repo}
           updateRepo={updateSelectedRepo}
@@ -314,7 +306,7 @@ export function RepositoryPane({
               settingsEntryRepoIds={settingsEntryRepoIds}
               forceVisible={forceFullPaneForRepoMatch}
               searchQuery={searchQuery}
-              searchEntries={hostSetupEntries}
+              searchEntries={searchEntries.hostSetups}
             />
 
             <RepositoryWindowsRuntimeSection
@@ -330,7 +322,7 @@ export function RepositoryPane({
               updateProject={updateProject}
               forceVisible={forceFullPaneForRepoMatch}
               searchQuery={searchQuery}
-              searchEntries={projectRuntimeEntries}
+              searchEntries={searchEntries.projectRuntime}
             />
 
             <RepositoryForkSyncSection
@@ -378,7 +370,8 @@ export function RepositoryPane({
       />
     ) : null,
     !isFolder &&
-    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sourceControlAiEntries)) ? (
+    (forceFullPaneForRepoMatch ||
+      matchesSettingsSearch(searchQuery, searchEntries.sourceControlAi)) ? (
       <RepositorySourceControlAiSection
         key="source-control-ai"
         repo={repo}
@@ -388,32 +381,36 @@ export function RepositoryPane({
     ) : null,
     !isFolder &&
     !repo.connectionId &&
-    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, symlinkEntries)) ? (
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, searchEntries.sharedPaths)) ? (
       <WorktreeSymlinksSection key="symlinks" repo={repo} updateRepo={updateSelectedRepo} />
     ) : null,
     !isFolder &&
-    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, sparsePresetEntries)) ? (
+    (forceFullPaneForRepoMatch ||
+      matchesSettingsSearch(searchQuery, searchEntries.sparsePresets)) ? (
       <SparsePresetSettingsSection key={`sparse-presets:${repo.id}`} repoId={repo.id} />
     ) : null,
-    !isFolder && (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, mcpEntries)) ? (
+    !isFolder &&
+    (forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, searchEntries.mcp)) ? (
       <McpConfigSection key={`mcp-configs:${selectedHostId}:${repo.id}`} repo={repo} />
     ) : null,
-    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [sidebarVisibilityEntry]) ? (
+    forceFullPaneForRepoMatch ||
+    matchesSettingsSearch(searchQuery, [searchEntries.sidebarVisibility]) ? (
       <RepositorySidebarVisibilitySection
         key="sidebar-visibility"
         repo={repo}
-        searchEntry={sidebarVisibilityEntry}
+        searchEntry={searchEntries.sidebarVisibility}
         forceVisible={forceFullPaneForRepoMatch}
       />
     ) : null,
     // Last on the page: removal is rare and should not sit above everyday settings.
-    forceFullPaneForRepoMatch || matchesSettingsSearch(searchQuery, [removeProjectEntry]) ? (
+    forceFullPaneForRepoMatch ||
+    matchesSettingsSearch(searchQuery, [searchEntries.removeProject]) ? (
       <RepositoryRemoveProjectSection
         key="remove-project"
         repo={repo}
         setups={removalSetups}
         removalScope={removalScope}
-        searchEntry={removeProjectEntry}
+        searchEntry={searchEntries.removeProject}
         forceVisible={forceFullPaneForRepoMatch}
         removeProject={removeProject}
       />

@@ -1,5 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import type { Project, ProjectHostSetup } from '../project-types'
+import { normalizeLinkedWorkItemPromptTemplate } from '../../linked-work-item-prompt-settings'
 
 /** Normalize persisted/mixed-version Project/ProjectHostSetup rows at ingress; null/missing strings otherwise crash trim consumers
  * (3bcc5be3). Coerce only: keep row membership, optional-key presence and valid references for selector/useMemo stability.
@@ -62,18 +63,24 @@ export function normalizeProjectHostSetupRow(setup: ProjectHostSetup): ProjectHo
 export function normalizeProjectRow(project: Project): Project {
   const row: Record<string, unknown> = isRecord(project) ? project : {}
   const sourceRepoIdsConform = Array.isArray(row.sourceRepoIds) && row.sourceRepoIds.every(isString)
+  const linkedWorkItemPromptTemplate = normalizeLinkedWorkItemPromptTemplate(
+    row.linkedWorkItemPromptTemplate
+  )
   const needsRepair =
     !isString(row.id) ||
     !isString(row.displayName) ||
     !isString(row.badgeColor) ||
     !sourceRepoIdsConform ||
+    row.linkedWorkItemPromptTemplate !== linkedWorkItemPromptTemplate ||
     !isTimestamp(row.createdAt) ||
     !isTimestamp(row.updatedAt)
   if (!needsRepair) {
     return project
   }
+  const { linkedWorkItemPromptTemplate: _template, ...metadata } = row
   return {
-    ...row,
+    ...metadata,
+    ...(linkedWorkItemPromptTemplate !== undefined ? { linkedWorkItemPromptTemplate } : {}),
     id: stringValue(row.id),
     displayName: stringValue(row.displayName),
     badgeColor: stringValue(row.badgeColor),
