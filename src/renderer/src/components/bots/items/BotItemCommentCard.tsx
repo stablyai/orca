@@ -2,7 +2,9 @@
 // the text as Markdown, its images and its file links. An agent's Needs you question is a comment too:
 // its body and attachments, then its question footer (BotItemQuestionLines). A reply to a question quotes it, and leads back to it.
 // While the item waits on it, the asking comment stands out, shown whole: a Needs you tag by its time
-// and its question ruled off from the body. Answered, it reads as any other comment.
+// and its question ruled off from the body. Answered, it reads as any other comment, but stays whole
+// until the item is closed, so answering never folds what was just read.
+import { useState } from 'react'
 import { CornerDownRight } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -30,10 +32,8 @@ import { botItemActorName } from '../../../../../shared/bots/bot-item-actor-name
 import { botItemQuestionShape } from '../../../../../shared/bots/bot-item-ask'
 import { BotItemQuestionLines } from './BotItemQuestionLines'
 import { BOT_ITEM_COMMENT_ATTRIBUTE } from './bot-item-comment-reveal'
-import {
-  botItemHeldAnswersScope,
-  type BotItemQuickReplyActions
-} from './use-bot-item-question-steps'
+import { botItemHeldAnswersScope } from './bot-item-held-answers'
+import type { BotItemQuickReplyActions } from './use-bot-item-question-steps'
 
 /** The asking comment's question, ruled off across the card's full width, its words still on the body's
  *  edge: bleeds past the body's `pl-7` and the card's `px-2`, then pads back. It stops a pixel short of
@@ -79,7 +79,7 @@ function Avatar({
 
 type CommentEntry = Pick<
   Extract<BotItemActivityEntry, { kind: 'comment' }>,
-  'event' | 'replyTo' | 'answers' | 'byOrder'
+  'event' | 'replyTo' | 'answers' | 'byOrder' | 'ended'
 > & { waiting?: boolean }
 
 export function BotItemCommentCard({
@@ -87,6 +87,7 @@ export function BotItemCommentCard({
   item,
   entry,
   onJump,
+  liveAskId,
   failed,
   quickReplies
 }: {
@@ -95,6 +96,8 @@ export function BotItemCommentCard({
   entry: CommentEntry
   /** Scrolls to and focuses another comment, by its event id. */
   onJump?: (eventId: string) => void
+  /** The ask the item waits on now, which a replaced ask leads to. */
+  liveAskId?: string | null
   /** A comment sent from the box that the host refused. */
   failed?: { retry: () => void; discard: () => void }
   /** On the question the item waits on, until the owner replies. */
@@ -103,6 +106,11 @@ export function BotItemCommentCard({
   const t = useTranslate()
   const { event, replyTo } = entry
   const waiting = entry.waiting === true
+  // Waited on while shown: whole until this view unmounts (Show less still folds it).
+  const [askedHere, setAskedHere] = useState(waiting)
+  if (waiting && !askedHere) {
+    setAskedHere(true)
+  }
   const images = botItemCommentImages(event.data)
   const shape = botItemQuestionShape(event.data)
   // Its images show after the words, so the [Image #N] its send wrote go, as in chat's sent messages.
@@ -178,6 +186,7 @@ export function BotItemCommentCard({
               clampClassName="max-h-[152px]"
               fade
               quietToggle={shape.decisions.length > 0}
+              startOpen={askedHere}
             />
           )}
           <BotItemCommentImages images={images} />
@@ -194,6 +203,10 @@ export function BotItemCommentCard({
               waiting={waiting}
               answers={entry.answers}
               byOrder={entry.byOrder}
+              ended={entry.ended}
+              onShowLive={
+                onJump && liveAskId && liveAskId !== event.id ? () => onJump(liveAskId) : undefined
+              }
               actions={quickReplies}
               // Ruled off only below something: a question with no body stays under the name.
               className={waiting && shape.body.trim() ? QUESTION_RULE : undefined}

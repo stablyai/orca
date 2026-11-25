@@ -15,10 +15,7 @@ import {
 import { structuredAgentSessionThreadGoalReport } from '../operations/structured-agent-session-thread-goal'
 // Saved choices, catalog defaults and actual execution reports remain separate facts.
 
-import type {
-  AgentSessionOptionsResult,
-  AgentSessionAcceptedInputSources
-} from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   confirmedCurrentOptions,
@@ -31,6 +28,7 @@ import type { StructuredAgentSessionMutationContext } from '../operations/struct
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
 import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
 import { effectiveAgentContextMode } from '../../../../shared/agent-session/options/model-catalog/agent-session-context-mode'
+import { structuredAgentSessionAcceptedInputSources } from './structured-agent-session-option-sources'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(
@@ -163,7 +161,9 @@ export async function readStructuredAgentSessionOptions(
           (row) => row.isDefault
         )?.id
       : undefined
-  const saved = record?.options ?? {}
+  const stored = record?.options ?? {}
+  const saved =
+    agents.definition(agent)?.restingOptions.listedSelection?.(stored, options.models) ?? stored
   const model = saved.model ?? (options.current.model || selected.current.model || displayDefault)
   const projected = live?.projectCurrent?.({ ...saved, ...(model ? { model } : {}) })
   const reportedEffort = projected?.confirmed?.includes('effort') ? projected.effort : undefined
@@ -200,22 +200,11 @@ export async function readStructuredAgentSessionOptions(
   const defaulted = (['model', 'effort'] as const).filter(
     (key) => saved[key] === undefined && defaultedBy(key)
   )
-  const acceptedInputSources: AgentSessionAcceptedInputSources = {}
-  for (const key of [
-    'model',
-    'effort',
-    'fastMode',
-    'serviceTier',
-    'interactionMode',
-    'contextMode'
-  ] as const) {
-    if (current[key] !== undefined && saved[key] !== undefined) {
-      acceptedInputSources[key] = 'saved'
-    }
-  }
-  if (saved.fastMode === undefined && selected.current.fastMode === false) {
-    acceptedInputSources.fastMode = 'policy'
-  }
+  const acceptedInputSources = structuredAgentSessionAcceptedInputSources(
+    current,
+    saved,
+    selected.current.fastMode
+  )
   const confirmed = confirmedCurrentOptions(current, projected ?? options.current)
   if (independent) {
     const { inventory, fallback, listedModelIds } = restingOptions

@@ -4,6 +4,7 @@ import { makeTestBotItem } from '../../../../../shared/bots/bot-item.test-fixtur
 import type { BotItem, BotItemEvent, BotItemLinkView } from '../../../../../shared/bots/bot-items'
 import { BotItemPaneFrame } from './BotItemPane'
 import { BotItemBody, BotItemDeletedNotice } from './BotItemView'
+import { BotItemLoading } from './BotItemLoading'
 import type { BotItemWalkState } from './use-bot-item-walk'
 import { botRefKey } from '@/lib/bot-hosts'
 import { updateNativeChatComposerDraft } from '../../native-chat/drafts/native-chat-composer-draft-store'
@@ -191,6 +192,16 @@ export const manyLinksTop = defineFixture({
 export const noLinksScrolled = defineFixture({
   ...frozenScrolled,
   render: () => <Pane state={walk(3, 14)} activity={longActivity} />
+})
+export const loading = defineFixture({
+  width: 340,
+  render: () => (
+    <div className="flex h-[420px] flex-col">
+      <BotItemPaneFrame walk={walk(3, 14, { pending: true })} offline={false} onBack={() => {}}>
+        {() => <BotItemLoading />}
+      </BotItemPaneFrame>
+    </div>
+  )
 })
 export const keyboard = defineFixture({
   ...longTitleScrolled,

@@ -8,7 +8,6 @@ export const RESUMABLE_TUI_AGENTS = [
   'qoder',
   'qoder-cn',
   'qwen-code',
-  'gemini',
   'antigravity',
   'opencode',
   'opencode2',

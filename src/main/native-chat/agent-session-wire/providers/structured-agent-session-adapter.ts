@@ -73,6 +73,8 @@ export type AgentSessionAcquisition = {
   acquisitionGeneration: string
   /** The account home this child launched under, when its launch follows the selection. */
   accountHome?: AgentSessionAccountHome
+  /** The home a chat with no conversation yet moved to at this launch, which it keeps. */
+  movedAccountHome?: AgentSessionAccountHome
 }
 
 /** Commands may answer in place without echoing provider items. */

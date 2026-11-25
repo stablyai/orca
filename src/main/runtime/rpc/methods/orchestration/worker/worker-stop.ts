@@ -13,6 +13,11 @@ import type {
 } from '../../../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
 import { stopSingleWorker, type StopMutation } from './stop/single-worker-stop'
 import { settleRestartCutStart } from '../../../../orchestration/workers/turn-stops/awaiting-worker-start-report'
+import { closeStoppedWorkerTerminals } from './release/worker-bound-terminal-close'
+import {
+  holdWorkerDockStopping,
+  recordWorkerStop
+} from '../../../../orchestration/dock/worker-dock-owner-stop'
 
 export const ORCHESTRATION_WORKER_STOP_METHODS = [
   defineOrchestrationMethod({
@@ -20,8 +25,14 @@ export const ORCHESTRATION_WORKER_STOP_METHODS = [
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
     params: WorkerDispatchParams,
-    handler: (params, { runtime, orchestrationMutation }) =>
-      stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
+    handler: (params, { runtime, orchestrationMutation }) => {
+      const db = runtime.getOrchestrationDb()
+      return holdWorkerDockStopping(db, params.dispatch, async () => {
+        const receipt = await stopWorkerAndHelpers(runtime, params.dispatch, orchestrationMutation)
+        recordWorkerStop(db, params.dispatch, receipt)
+        return receipt
+      })
+    }
   })
 ]
 
@@ -31,14 +42,13 @@ export function stopWorkerAndHelpers(
   dispatchId: string,
   mutation: StopMutation
 ): Promise<WorkerStopReceipt> {
-  return dedupeWorkerStop(runtime, dispatchId, async () =>
-    withStoppedHelpers(
-      runtime,
-      dispatchId,
-      mutation,
-      await stopSingleWorker(runtime, dispatchId, mutation)
-    )
-  )
+  return dedupeWorkerStop(runtime, dispatchId, async () => {
+    const stopped = await stopSingleWorker(runtime, dispatchId, mutation)
+    if (stopped.state === 'stopped' && !stopped.alreadySettled) {
+      await closeStoppedWorkerTerminals(runtime, runtime.getOrchestrationDb(), dispatchId)
+    }
+    return withStoppedHelpers(runtime, dispatchId, mutation, stopped)
+  })
 }
 
 /** Runs after the creator's fence commits, so a helper started later was refused, or is stopped when its start finishes. */

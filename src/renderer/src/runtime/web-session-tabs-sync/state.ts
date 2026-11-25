@@ -222,6 +222,7 @@ export type MirroredBrowserTab = {
   certificateFailure: BrowserCertificateFailure | null
   audible: boolean
   audioMuted: boolean
+  agentDriving: boolean
   remotePageId: string
   browserProfileId?: string
   placement?: RuntimeBrowserPlacement

@@ -39,7 +39,6 @@ const logFileResolvers = {
   omp: jsonlLog,
   'prime-agent': jsonlLog,
   cursor: jsonlLog,
-  gemini: (filePath) => jsonLog(filePath) ?? jsonlLog(filePath),
   antigravity: jsonlLog,
   rovo: (filePath) =>
     getRuntimePathBasename(filePath) === 'metadata.json'

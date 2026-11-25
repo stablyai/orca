@@ -31,18 +31,7 @@ import { structuredAgentSessionPermissionDescriptor } from '../permissions/struc
 import { structuredAgentSessionInteractionDescriptor } from '../permissions/agent-session-interaction-mode'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
 import { effectiveAgentContextMode } from '../model-catalog/agent-session-context-mode'
-
-/** Unpickable placeholder cannot become a launch selection before a real model answer. */
-const PROVIDER_DEFAULT_MODEL_PLACEHOLDER: SessionOptionDescriptor = {
-  id: 'model',
-  label: 'Model',
-  category: 'model',
-  kind: { type: 'select', choices: [] },
-  valueSource: 'unknown',
-  transport: 'agent-session',
-  settable: false,
-  disabledReason: 'available-after-session-start'
-}
+import { modelPlaceholder } from './structured-agent-session-model-placeholder'
 
 /** A session that lists no models picks one itself; display-only, so Send never captures it. */
 const AGENT_CHOSEN_MODEL: SessionOptionDescriptor = {
@@ -235,7 +224,7 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
   const drawn = drawnModelControls(state)
   // Wait for host labels instead of flashing built-in names the answer may replace.
   if (!drawn) {
-    return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+    return [modelPlaceholder(state)]
   }
   const { catalog, models, shown, controlsModelId, isCliDefault, controls, values } = drawn
   const snapshot =
@@ -255,7 +244,7 @@ function modelOptionSnapshot(state: StructuredAgentSessionOptionState): SessionO
           modelIsCliDefault: isCliDefault
         })
   if (snapshot.length === 0 && state.catalogSource !== 'live') {
-    return [PROVIDER_DEFAULT_MODEL_PLACEHOLDER]
+    return [modelPlaceholder(state)]
   }
   const shownSnapshot = withUnlistedEffort(
     catalog,

@@ -4,6 +4,7 @@ export const TRAEX_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
   agent: 'trae',
   handleTransport: 'traex-app-server',
   accountHomeVariable: 'TRAECLI_HOME',
+  instructionsEachStart: false,
   capabilities: {
     rewind: true,
     fork: 'checkpoint',

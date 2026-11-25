@@ -56,7 +56,6 @@ export function isolatedScanRoots(root: string) {
     qoderProjectsDir: join(root, 'qoder-projects'),
     codexSessionsDir: join(root, 'codex-sessions'),
     traeSessionsDir: join(root, 'trae-sessions'),
-    geminiSessionsDir: join(root, 'gemini-sessions'),
     antigravityBrainDir: join(root, 'antigravity-brain'),
     copilotSessionsDir: join(root, 'copilot-sessions'),
     cursorProjectsDir: join(root, 'cursor-projects'),

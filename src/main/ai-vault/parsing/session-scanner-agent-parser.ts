@@ -32,7 +32,6 @@ import {
   parseZcodeSqliteSessionViaWorker
 } from '../scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { parseClaudeSessionFile } from '../scanners/claude/session-scanner-primary-parsers'
-import { parseGeminiSessionFile } from '../scanners/gemini/session-scanner-gemini-parsers'
 import { parseTraexSessionHistory } from '../../traex/traex-session-history-scan'
 import { parseCodexSessionFile } from '../scanners/codex/session-scanner-codex-parser'
 import { parseCopilotSessionFile } from '../scanners/copilot/session-scanner-copilot-parser'
@@ -110,8 +109,6 @@ export async function parseAgentSessionFile(
         undefined,
         messages
       )
-    case 'gemini':
-      return parseGeminiSessionFile(candidate.file, platform, messages, signal)
     case 'antigravity':
       return parseAntigravitySessionFile(candidate.file, platform, messages)
     case 'copilot':

@@ -25,6 +25,8 @@ export type BotChatTreeWorker = {
   host?: 'local' | 'remote'
   agent?: string
   summary?: string
+  /** Its start failed before an agent ran, so there is no worker to open. Absent from older hosts. */
+  neverStarted?: true
   /** A terminal-only automation run, opened as a run rather than a pane. */
   run?: { automationId: string; runId: string }
 }
@@ -132,6 +134,12 @@ export function chatFoldCounts(chat: BotChatTreeChat): ChatFoldCounts | null {
   return waiting > 0 || running > 0 ? { waiting, running } : null
 }
 
+/** Delete chat's rows: a terminal-only run has no chat, and the live Home, where the agent's mail
+ *  and connectors land, stays. */
+export function botChatOffersDelete(chat: BotChatTreeChat): boolean {
+  return !chat.run && !(chat.origin === 'home' && !chat.closed)
+}
+
 /** Each client's `t`: the desktop's and the phone's both fit. */
 export type BotChatTranslate = (
   key: string,
@@ -139,11 +147,12 @@ export type BotChatTranslate = (
   values?: Record<string, unknown>
 ) => string
 
-/** '1 waiting · 3 running' in the reader's language; a zero count drops out. */
+/** '1 needs you · 3 running' in the reader's language; a zero count drops out. Waiting is an item
+ *  status for work waiting on something else, so workers asking the owner say Needs you. */
 export function chatFoldSummary(t: BotChatTranslate, counts: ChatFoldCounts): string {
   const { waiting, running } = counts
   return [
-    waiting > 0 ? t('bots.chats.waitingCount', '{{count}} waiting', { count: waiting }) : null,
+    waiting > 0 ? t('bots.chats.needsYouCount', '{{count}} needs you', { count: waiting }) : null,
     running > 0 ? t('bots.chats.runningCount', '{{count}} running', { count: running }) : null
   ]
     .filter(Boolean)

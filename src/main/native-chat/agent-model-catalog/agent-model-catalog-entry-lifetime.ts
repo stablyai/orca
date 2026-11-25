@@ -2,6 +2,7 @@ import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
 } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
+import { seenAgentModelRows, seenRowsTiebreak, withSeenRows } from './agent-model-catalog-seen-rows'
 import type { AgentModelCatalogFailures } from './agent-model-catalog-failures'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
 import type { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
@@ -18,7 +19,12 @@ export function agentModelCatalogEntryIsStale(
   due: boolean,
   now: number
 ): boolean {
-  return due || !entry.discovered || (entry.agent === 'trae' && now - entry.discovered.at >= 30_000)
+  return (
+    due ||
+    !entry.discovered ||
+    now >= (entry.seen?.relistAfter ?? Infinity) ||
+    (entry.agent === 'trae' && now - entry.discovered.at >= 30_000)
+  )
 }
 
 export function recordAgentModelCatalogPartialAttempt(
@@ -106,14 +112,17 @@ export function createAgentModelCatalogEntryFactory(
     agent: string,
     success: AgentModelCatalogSuccess,
     source: AgentModelCatalogSource
-  ) =>
-    agentModelCatalogEntryWithSuccess(
-      retiredObservations.has(fingerprint) ? undefined : entries.get(fingerprint),
-      { agent, fingerprint },
-      success,
-      source,
-      now()
+  ) => {
+    const previous = retiredObservations.has(fingerprint) ? undefined : entries.get(fingerprint)
+    // A later write is newer even within one millisecond, so an equally long probe replaces a chat's.
+    const clock = now()
+    const at = Math.max(clock, seenRowsTiebreak(agent, previous))
+    return withSeenRows(
+      agentModelCatalogEntryWithSuccess(previous, { agent, fingerprint }, success, source, at),
+      // The retry is 5 minutes of the clock, whatever order the listings were stamped in.
+      seenAgentModelRows(agent, previous?.seen, success.models, source, clock)
     )
+  }
 }
 
 function writeAgentModelCatalogSuccess(

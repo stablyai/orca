@@ -135,7 +135,11 @@ async function readRuntimeDocPreviewFile(
     environmentId,
     'files.readDocPreview',
     params,
-    DOC_PREVIEW_READ_TIMEOUT_MS
+    DOC_PREVIEW_READ_TIMEOUT_MS,
+    undefined,
+    undefined,
+    // Opening a preview is the user's own act: it may wake an idle-stopped WSL host (#46567).
+    { wake: true }
   )
   if (!response.ok) {
     // Old hosts lack scoped reads; report the required update instead of method_not_found.

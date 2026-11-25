@@ -214,7 +214,6 @@ function buildAgentResumeInvocation(
     case 'claude':
     case 'zcode':
     case 'cursor':
-    case 'gemini':
     case 'grok':
     case 'hermes':
     case 'devin':

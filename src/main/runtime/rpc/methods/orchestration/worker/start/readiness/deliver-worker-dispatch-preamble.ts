@@ -20,6 +20,7 @@ import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
 import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
+import { STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS } from '../../../../../../../native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt-contract'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 
 type StructuredSession = Awaited<ReturnType<typeof createStructuredWorkerSessionForWorktree>> | null
@@ -85,6 +86,10 @@ export async function deliverWorkerDispatchPreamble(args: {
     return { structuredTurnStart: chatTaskTurnStart(delivery) }
   }
   if (structuredSession) {
+    // A stop that landed after the start's last wait hands the worker back, as the terminal path does.
+    if (args.db.getWorkerDispatch(args.dispatchId)?.state !== 'starting') {
+      throw new Error('request_aborted')
+    }
     const delivery = await sendStructuredWorkerPreamble({
       host: structuredSession.host,
       sessionId: structuredSession.identity.sessionId,
@@ -97,13 +102,22 @@ export async function deliverWorkerDispatchPreamble(args: {
       structuredTurnStart:
         delivery === 'accepted'
           ? { verdict: 'observed' }
-          : {
-              verdict: 'unobserved',
-              reason:
-                'The dispatch preamble was accepted, but the agent had not started to take it. It ' +
-                'is delivered when the agent starts; if the worker then reports, this Dispatch ' +
-                'settles normally.'
-            }
+          : delivery === 'starting'
+            ? {
+                verdict: 'unobserved',
+                agentStarting: true,
+                reason:
+                  "The worker's agent hasn't finished starting. Orca holds the task and hands it " +
+                  `over once the agent is up. If the start fails, or the agent isn't up within ${agentStartCeilingText()}, ` +
+                  'Orca sends an error report.'
+              }
+            : {
+                verdict: 'unobserved',
+                reason:
+                  'The dispatch preamble was accepted, but the agent had not started to take it. It ' +
+                  'is delivered when the agent starts; if the worker then reports, this Dispatch ' +
+                  'settles normally.'
+              }
     }
   }
   // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
@@ -134,6 +148,14 @@ export async function deliverWorkerDispatchPreamble(args: {
   } finally {
     briefGuard?.dispose()
   }
+}
+
+/** The startup ceiling after which Orca fails a structured agent's start, as a person reads it. */
+export function agentStartCeilingText(): string {
+  const minutes = STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS / 60_000
+  return Number.isInteger(minutes)
+    ? `${minutes} minute${minutes === 1 ? '' : 's'}`
+    : `${Math.round(STRUCTURED_AGENT_SESSION_STARTUP_CEILING_MS / 1000)} seconds`
 }
 
 function chatTaskTurnStart(delivery: ChatTaskDelivery): WorkerTurnStartObservation {

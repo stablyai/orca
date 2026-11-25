@@ -39,6 +39,7 @@ import {
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
 import type { AgentDetectionTarget } from '@/lib/agent-session/launch/inventory/useDetectedAgents'
+import type { AgentMenuObservationOptions } from './agent-menu-observation-options'
 import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/agent-session/launch/inventory/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/agent-session/launch/inventory/host-chat-program'
@@ -55,14 +56,11 @@ export function useNewTabAgentMenuRows(
   options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
   // Only the new-tab menu opens setup chats; pickers that save an agent need one that runs.
-  return useAgentMenuObservation(target, open, detectionTarget, {
-    ...options,
-    offerAgentSetup: true
-  }).model
+  const observationOptions = { ...options, offerAgentSetup: true }
+  return useAgentMenuObservation(target, open, detectionTarget, observationOptions).model
 }
 
-/** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
-export type AgentMenuObservationOptions = { wakeOnOpen?: boolean; offerAgentSetup?: boolean }
+export type { AgentMenuObservationOptions }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
@@ -81,7 +79,8 @@ export function useAgentMenuObservation(
     (state) => typeof target === 'string' && state.activeWorktreeId === worktreeId
   )
   // Why: acquiring while the workspace is shown means the first open already knows its agents.
-  const acquired = useDetectedAgents(viewActive && (open || shown) ? detectionTarget : undefined)
+  const acquireTarget = viewActive && (open || shown) ? detectionTarget : undefined
+  const acquired = useDetectedAgents(acquireTarget, 'enabled', options?.observationGroup)
   useAgentPickerRefusedWake(viewActive && options?.wakeOnOpen === true && open, detectionTarget)
   // Closing the menu or leaving the workspace must not erase the known inventory.
   const storedIds = useAppStateValue((state) =>

@@ -28,6 +28,7 @@ import {
 import type { Bot } from '../../../../../shared/bot-types'
 import type { BotUpdateParams } from '../../../../../shared/rpc-contract/bots-params'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
+import { useBotSettingsModel } from './use-bot-settings-model'
 
 type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 
@@ -35,6 +36,8 @@ type Update = (updates: BotUpdateParams['updates']) => Promise<Bot | null>
 export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }): React.JSX.Element {
   const t = useTranslate()
   const menu = useBotAgentMenu(bot.hostId, true, bot.agent)
+  const worktreeId = folderWorkspaceKey(bot.folderWorkspaceId)
+  const defaultModelHint = useBotSettingsModel(bot, worktreeId)
   const confirmAgentSwitch = useConfirmBotAgentSwitch()
   // The permission has its own subpage; the picker sets the agent and what it runs on.
   const setAgentSetup = async ({ agent, launch }: BotAgentSetup): Promise<void> => {
@@ -69,7 +72,8 @@ export function BotAgentSettings({ bot, update }: { bot: Bot; update: Update }):
           model={menu.model}
           choices={menu.choices}
           value={{ agent: bot.agent, launch: bot.launch, permissionMode: bot.permissionMode }}
-          worktreeId={folderWorkspaceKey(bot.folderWorkspaceId)}
+          worktreeId={worktreeId}
+          defaultModelHint={defaultModelHint}
           withPermission={false}
           onChange={(setup) => void setAgentSetup(setup)}
         />
