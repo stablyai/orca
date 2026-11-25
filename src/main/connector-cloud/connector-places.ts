@@ -82,9 +82,9 @@ function purposeField(botPurpose: string | undefined): { botPurpose?: string } {
   return botPurpose ? { botPurpose } : {}
 }
 
-// Only a shared agent's: nobody else is shown it.
+// Only an agent the hello lists as shared: nobody else is shown it.
 function cardField(bot: Bot): { agentCard?: AgentCard } {
-  const agentCard = (bot.shares?.length ?? 0) > 0 ? agentCardOf(bot) : undefined
+  const agentCard = sharedWith(bot.shares).sharedWith ? agentCardOf(bot) : undefined
   return agentCard ? { agentCard } : {}
 }
 

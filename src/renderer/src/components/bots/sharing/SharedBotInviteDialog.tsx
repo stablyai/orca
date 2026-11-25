@@ -78,22 +78,26 @@ export function SharedBotInviteDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="form" busy={answering} aria-describedby={undefined}>
-        <DialogHeader className="flex-row items-center gap-3.5">
-          <SharedBotRequestAvatar
-            request={request}
-            size="large"
-            className="size-14 rounded-xl text-2xl"
-          />
-          <div className="min-w-0">
-            <DialogTitle className="flex min-w-0 items-center gap-1.5">
-              <span className="truncate">{request.botName}</span>
-              <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
-            </DialogTitle>
-            <DialogDescription>
-              {t('bots.share.invite.sharedWithYou', '{{owner}} shared it with you', {
-                owner: request.ownerName
-              })}
-            </DialogDescription>
+        <DialogHeader>
+          <div className="flex items-center gap-3.5">
+            <SharedBotRequestAvatar
+              request={request}
+              size="large"
+              className="size-14 rounded-xl text-2xl"
+            />
+            <div className="min-w-0">
+              <DialogTitle>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <span className="truncate">{request.botName}</span>
+                  <Users className="size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+                </span>
+              </DialogTitle>
+              <DialogDescription>
+                {t('bots.share.invite.sharedWithYou', '{{owner}} shared it with you', {
+                  owner: request.ownerName
+                })}
+              </DialogDescription>
+            </div>
           </div>
         </DialogHeader>
         {request.botPurpose ? (

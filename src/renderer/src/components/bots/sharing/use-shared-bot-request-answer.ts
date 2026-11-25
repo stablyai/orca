@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 
-/** Accept or Decline of one request, as its row and its page both answer it. */
+/** Accept or Decline of one request, as its invite dialog answers it. */
 export function useSharedBotRequestAnswer(shareId: string): {
   answering: boolean
   answer: (accept: boolean) => Promise<void>

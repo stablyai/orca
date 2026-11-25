@@ -81,7 +81,6 @@ export function SharedBotRequestRow({
           variant="ghost"
           size="xs"
           tabIndex={-1}
-          className="shrink-0 px-1 text-foreground"
           onClick={(event) => {
             event.stopPropagation()
             setOpen(true)
