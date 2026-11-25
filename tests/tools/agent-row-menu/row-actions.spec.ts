@@ -4,10 +4,23 @@ import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from '../../e2e/desktop/electron-fixtures/orca-app'
+import { expect } from '@stablyai/playwright-test'
+import { test } from '../../e2e/desktop/electron-fixtures/orca-app'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import { toRuntimeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { toRemoteRuntimePtyId } from '../../../src/shared/remote-runtime/remote-runtime-pty-id'
+
+type ProofRequest = {
+  selector?: string
+  method?: string
+  sourceChat?: { workspaceId?: string }
+  params?: { tabId?: string; leafId?: string }
+  expectedEnvironmentPairingRevision?: number
+}
+
+declare global {
+  var rowMenuProofCalls: { channel: string; args: ProofRequest }[] | undefined
+}
 
 const fixture = {
   chatTabId: 'proof-agent-row-chat',
@@ -68,11 +81,18 @@ test('agent row Open and Continue in terminal use the target captured by the men
   )
   const identity = await electronApp.evaluate(({ app, BrowserWindow }) => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
-    const preferences =
+    const preferences: unknown =
       'getLastWebPreferences' in contents && typeof contents.getLastWebPreferences === 'function'
-        ? (contents.getLastWebPreferences() as { preload?: string })
+        ? contents.getLastWebPreferences()
         : null
-    return { appPath: app.getAppPath(), preload: preferences?.preload, versions: process.versions }
+    const preload =
+      preferences &&
+      typeof preferences === 'object' &&
+      'preload' in preferences &&
+      typeof preferences.preload === 'string'
+        ? preferences.preload
+        : null
+    return { appPath: app.getAppPath(), preload, versions: process.versions }
   })
   assert.equal(realpathSync(identity.appPath), root)
   assert.ok(identity.preload && artifacts[relative(root, identity.preload)])
@@ -117,12 +137,13 @@ test('agent row Open and Continue in terminal use the target captured by the men
   }, seededRepoPath)
   await electronApp.evaluate(
     ({ ipcMain }, config) => {
-      type Request = { selector?: string; method?: string; sourceChat?: { workspaceId?: string } }
-      type Handler = (event: unknown, args: Request) => unknown
-      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, Handler> })
-        ._invokeHandlers
-      const calls: { channel: string; args: Request }[] = []
-      Object.assign(globalThis, { rowMenuProofCalls: calls })
+      type Handler = (event: unknown, args: ProofRequest) => unknown
+      if (!('_invokeHandlers' in ipcMain) || !(ipcMain._invokeHandlers instanceof Map)) {
+        throw new Error('Electron IPC fixture cannot locate invoke handlers')
+      }
+      const handlers: Map<string, Handler> = ipcMain._invokeHandlers
+      const calls: NonNullable<typeof globalThis.rowMenuProofCalls> = []
+      globalThis.rowMenuProofCalls = calls
       const localPrepare = handlers.get('aiVault:prepareSessionResume')!
       handlers.set('aiVault:prepareSessionResume', (event, args) => {
         if (args.sourceChat?.workspaceId !== config.workspaceId) {
@@ -166,17 +187,12 @@ test('agent row Open and Continue in terminal use the target captured by the men
     }
   )
   const calls = () =>
-    electronApp.evaluate(
-      () =>
-        Reflect.get(globalThis, 'rowMenuProofCalls') as {
-          channel: string
-          args: {
-            method?: string
-            params?: { tabId?: string; leafId?: string }
-            expectedEnvironmentPairingRevision?: number
-          }
-        }[]
-    )
+    electronApp.evaluate(() => {
+      if (!globalThis.rowMenuProofCalls) {
+        throw new Error('Electron IPC fixture did not initialize call capture')
+      }
+      return globalThis.rowMenuProofCalls
+    })
   const snapshot = (name: string) => page.screenshot({ path: testInfo.outputPath(`${name}.png`) })
   const sidebar = page.locator('[data-worktree-sidebar]')
   const menu = page.getByRole('menu', { name: /^Agent: / })
@@ -426,7 +442,11 @@ test('agent row Open and Continue in terminal use the target captured by the men
               state: 'working',
               agentType: 'codex',
               prompt: 'Inspect the sample work',
-              orchestration: { role: 'worker', runId: 'proof-paired-run' }
+              orchestration: {
+                taskId: 'proof-paired-task',
+                dispatchId: 'proof-paired-dispatch',
+                orchestrationRunId: 'proof-paired-run'
+              }
             },
             'Paired proof worker',
             undefined,
