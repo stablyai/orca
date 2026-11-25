@@ -2053,7 +2053,8 @@
         "projectRemoved": "Das Projekt wurde aus Orca entfernt.",
         "folderWorkspaceRemoved": "Der Ordner-Arbeitsbereich wurde entfernt.",
         "chatStillStarting": "Chat startet noch. Versuche es gleich erneut.",
-        "chatOpenFailed": "Chat konnte nicht geöffnet werden.",
+        "chatOpenFailed": "Chat konnte nicht geöffnet werden",
+        "chatOpenDismiss": "Verwerfen",
         "chatOpenRetry": "Erneut versuchen",
         "chatOpenShowDetails": "Details anzeigen",
         "chatOpenHideDetails": "Details ausblenden"
@@ -20759,7 +20760,7 @@
         "task": "Aufgabe",
         "workerCount_one": "{{count}} Worker",
         "workerCount_other": "{{count}} Worker",
-        "stoppedByYou": "Von dir gestoppt",
+        "stopped": "Gestoppt",
         "finished": "Abgeschlossen",
         "failedCount": "{{count}} fehlgeschlagen",
         "needsYouCount": "{{count}} mit Rückfrage",
@@ -24844,7 +24845,9 @@
       "untitled": "Neuer Chat",
       "searchRetry": "Erneut versuchen",
       "loading": "Chats werden geladen…",
-      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden."
+      "readFailed": "Die Chats dieses Bots konnten nicht gelesen werden.",
+      "older": "{{count}} ältere anzeigen",
+      "hideOlder": "Ältere ausblenden"
     },
     "needs": {
       "chat": "Dein Chat mit {{name}}",

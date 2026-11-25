@@ -1770,7 +1770,8 @@
         "projectRemoved": "Le projet a été retiré d’Orca.",
         "folderWorkspaceRemoved": "L’espace de travail de type dossier a été retiré.",
         "chatStillStarting": "Le chat démarre encore. Réessayez bientôt.",
-        "chatOpenFailed": "Impossible d'ouvrir ce chat.",
+        "chatOpenFailed": "Impossible d'ouvrir ce chat",
+        "chatOpenDismiss": "Ignorer",
         "chatOpenRetry": "Réessayer",
         "chatOpenShowDetails": "Afficher les détails",
         "chatOpenHideDetails": "Masquer les détails"
@@ -20771,7 +20772,7 @@
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
         "workerCount_many": "{{count}} workers",
-        "stoppedByYou": "Arrêté par vous",
+        "stopped": "Arrêté",
         "finished": "Terminé",
         "failedCount": "{{count}} en échec",
         "needsYouCount": "En attente de votre réponse : {{count}}",
@@ -25443,7 +25444,9 @@
       "untitled": "Nouveau chat",
       "searchRetry": "Réessayer",
       "loading": "Chargement des chats…",
-      "readFailed": "Impossible de lire les chats de ce bot."
+      "readFailed": "Impossible de lire les chats de ce bot.",
+      "older": "Afficher {{count}} plus anciens",
+      "hideOlder": "Masquer les plus anciens"
     },
     "needs": {
       "chat": "Votre chat avec {{name}}",

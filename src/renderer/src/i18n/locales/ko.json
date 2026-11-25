@@ -1942,7 +1942,8 @@
         "projectRemoved": "프로젝트가 Orca에서 제거되었습니다.",
         "folderWorkspaceRemoved": "폴더 워크스페이스가 제거되었습니다.",
         "chatStillStarting": "채팅이 시작 중입니다. 잠시 후 다시 시도하세요.",
-        "chatOpenFailed": "이 채팅을 열 수 없습니다.",
+        "chatOpenFailed": "이 채팅을 열 수 없습니다",
+        "chatOpenDismiss": "무시",
         "chatOpenRetry": "다시 시도",
         "chatOpenShowDetails": "세부 정보 표시",
         "chatOpenHideDetails": "세부 정보 숨기기"
@@ -15684,8 +15685,6 @@
           "noRemote": "로컬 git 저장소 · 원격 없음",
           "openUpstream": "브라우저에서 {{value0}} 열기",
           "forkOf": "{{value0}}의 포크",
-          "openSettingsPage": "설정 페이지 열기",
-          "done": "완료",
           "resetDone": "아이콘과 색상이 재설정됨",
           "undo": "실행 취소",
           "styleLetters": "글자",
@@ -21819,7 +21818,7 @@
         "task": "작업",
         "workerCount_one": "워커 {{count}}개",
         "workerCount_other": "워커 {{count}}개",
-        "stoppedByYou": "사용자가 중지함",
+        "stopped": "중지됨",
         "finished": "완료",
         "failedCount": "{{count}}개 실패",
         "needsYouCount": "확인 필요 {{count}}개",
@@ -27922,7 +27921,9 @@
       "delete": "채팅 삭제",
       "open": "열기",
       "actions": "채팅 작업",
-      "needsYouCount": "확인 필요 {{count}}개"
+      "needsYouCount": "확인 필요 {{count}}개",
+      "older": "이전 항목 {{count}}개 보기",
+      "hideOlder": "이전 항목 숨기기"
     },
     "needs": {
       "chat": "{{name}} 채팅",
@@ -28661,6 +28662,7 @@
     "toolsLabel": "앱 도구",
     "workspaces": "워크스페이스",
     "more": "더 보기",
+    "customize": "사용자 지정",
     "pageRegion": "페이지"
   },
   "chats": {

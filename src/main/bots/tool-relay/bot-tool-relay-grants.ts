@@ -1,6 +1,7 @@
 // Who may use Orca's relay in this run, and where each tool sits on it. A bot's token reaches its
 // home's tools under /bot-tools; the host's token, shared by every non-bot session, reaches the host
-// MCP list's under /mcp-servers. A bot that takes the host list reaches both with its own token.
+// MCP list's under /mcp-servers, and its command servers Orca runs once under /mcp-processes. A bot
+// that takes the host list reaches all of them with its own token.
 import { createHash, randomBytes } from 'node:crypto'
 import { resolve } from 'node:path'
 
@@ -13,7 +14,7 @@ export type RelayGrant = { owner: string; folders: RelayFolders }
 /** The one owner every non-bot session's grant is under; it never names a bot (bot ids are UUIDs). */
 export const MCP_HOST_LIST_RELAY_OWNER = 'mcp-host-list'
 
-const PATH = /^\/(bot-tools|mcp-servers)\/([A-Za-z0-9_-]{8,64})\/mcp(?:\?.*)?$/
+const PATH = /^\/(bot-tools|mcp-servers|mcp-processes)\/([A-Za-z0-9_-]{8,64})\/mcp(?:\?.*)?$/
 
 const hashToken = (token: string): string => createHash('sha256').update(token).digest('hex')
 
@@ -26,14 +27,27 @@ export function relayToolUrl(
   return `${origin}/${scope === 'bot' ? 'bot-tools' : 'mcp-servers'}/${credentialId}/mcp`
 }
 
-/** The tool a request path names and which of its grant's folders holds it; null for any other path. */
-export function relayToolPath(
-  path: string
-): { scope: keyof RelayFolders; credentialId: string } | null {
+/** A host list command server's address: Orca runs it once on the host for every session. */
+export function relayProcessUrl(origin: string, serverId: string): string {
+  return `${origin}/mcp-processes/${serverId}/mcp`
+}
+
+/** What a request path names; null for any other path. */
+export type RelayToolPath =
+  /** A tool whose saved values Orca adds, by its credential id, in its grant's folder. */
+  | { scope: keyof RelayFolders; credentialId: string; process?: undefined }
+  /** A command server in the host's list that Orca runs once, by its id. */
+  | { scope: 'host'; process: string; credentialId?: undefined }
+
+export function relayToolPath(path: string): RelayToolPath | null {
   const match = PATH.exec(path)
-  return match
-    ? { scope: match[1] === 'mcp-servers' ? 'host' : 'bot', credentialId: match[2]! }
-    : null
+  if (!match) {
+    return null
+  }
+  if (match[1] === 'mcp-processes') {
+    return { scope: 'host', process: match[2]! }
+  }
+  return { scope: match[1] === 'mcp-servers' ? 'host' : 'bot', credentialId: match[2]! }
 }
 
 /** One token per owner for this run of Orca; only a hash of it is kept as the grant's key. */

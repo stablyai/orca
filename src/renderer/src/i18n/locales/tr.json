@@ -2882,7 +2882,8 @@
         "notLocatedNamed": "Orca, {{agent}} ajanının nerede çalıştığını bulamadığı için ajanı açamıyor.",
         "notLocated": "Orca, bu ajanın nerede çalıştığını bulamadığı için ajanı açamıyor.",
         "chatStillStarting": "Sohbet hâlâ başlatılıyor. Birazdan tekrar deneyin.",
-        "chatOpenFailed": "Bu sohbet açılamadı.",
+        "chatOpenFailed": "Bu sohbet açılamadı",
+        "chatOpenDismiss": "Kaldır",
         "chatOpenRetry": "Tekrar dene",
         "chatOpenShowDetails": "Ayrıntıları göster",
         "chatOpenHideDetails": "Ayrıntıları gizle"
@@ -16644,8 +16645,6 @@
           "noRemote": "Yerel Git repository’si · remote yok",
           "openUpstream": "{{value0}} adresini tarayıcıda aç",
           "forkOf": "{{value0}} fork’u",
-          "openSettingsPage": "Ayarlar sayfasını aç",
-          "done": "Bitti",
           "resetDone": "Simge ve renk sıfırlandı",
           "undo": "Geri al",
           "styleLetters": "Harfler",
@@ -22749,7 +22748,7 @@
         "task": "Görev",
         "workerCount_one": "{{count}} çalışan",
         "workerCount_other": "{{count}} çalışan",
-        "stoppedByYou": "Sizin tarafınızdan durduruldu",
+        "stopped": "Durduruldu",
         "finished": "Tamamlandı",
         "failedCount": "{{count}} başarısız",
         "needsYouCount": "{{count}} sizi bekliyor",
@@ -28448,7 +28447,8 @@
       "delete": "Sohbeti sil",
       "open": "Aç",
       "actions": "Sohbet işlemleri",
-      "needsYouCount": "{{count}} sizi bekliyor"
+      "needsYouCount": "{{count}} sizi bekliyor",
+      "hideOlder": "Eski kayıtları gizle"
     },
     "needs": {
       "chat": "{{name}} ile sohbetiniz",
@@ -30892,6 +30892,7 @@
     "toolsLabel": "Uygulama araçları",
     "workspaces": "Çalışma Alanları",
     "more": "Daha fazla",
+    "customize": "Özelleştir",
     "pageRegion": "Sayfa"
   },
   "chats": {

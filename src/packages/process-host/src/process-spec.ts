@@ -37,7 +37,7 @@ export type ProcessSpec = {
   /** Every raw stderr chunk as it arrives, including any past the capture cap. */
   onStderr?: (chunk: Buffer | string) => void
   /** Starts the child off this thread; null spawns it here. */
-  launch?: (spec: ProcessSpec) => LaunchedProcess | null
+  launch?: (spec: ProcessSpec, outputCapture?: 'head' | 'tail') => LaunchedProcess | null
 }
 
 /** A child started elsewhere: its pid arrives with 'spawn', and a launch not yet started can be withdrawn. */

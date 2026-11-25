@@ -95,8 +95,7 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
-1 src/main/bots/bot-structured-session-wiring.ts
-14 src/main/bots/bot-tool-credentials.ts
+15 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential
 3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
 3 src/main/bots/bot-tool-secret-scrub.ts
 4 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: the user and per-folder config reads readClaudeInheritedTools and readClaudeMirror already do, once per chat launch that has host servers
@@ -240,6 +239,7 @@
 5 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
 14 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 1 src/main/cli/launchers/orca-cli-child-path.ts
+1 src/main/cli/launchers/this-app-orca-cli-launcher.ts # resolves this app's CLI launcher once per data folder per run (the Linux packaged shim check), for the MCP agent-file and terminal entries
 1 src/main/cli/wsl/wsl-cli-installer.ts
 1 src/main/cli/wsl/wsl-cli-registration-reconciliation.ts
 6 src/main/cli/wsl/wsl-cli-registration-registry.ts
@@ -754,9 +754,11 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+3 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect; +2 the saved-values digests, read at launch and after Orca writes the list
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
-9 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does; +1 mcpServersForLaunch reads it per chat launch
-1 src/main/mcp-servers/session-mcp-launch.ts # the bot launch read of its tools file, moved here from bot-tools-file.ts
+8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
+3 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file, its revision check (moved from bot-structured-session-wiring.ts), and the host list read
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts

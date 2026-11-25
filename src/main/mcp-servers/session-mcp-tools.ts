@@ -1,6 +1,7 @@
 // A session's MCP servers as its agent CLI gets them: a bot's own tools and the host list's servers.
 // A server with saved headers or Orca's own sign-in becomes Orca's relay address plus a token, so no
-// saved value reaches the CLI's argv, env or config. A bot's token also names the bot to the runtime.
+// saved value reaches the CLI's argv, env or config, and so does a command server Orca runs once for
+// every session. A bot's token also names the bot to the runtime.
 import { BotFailureError } from '../../shared/bots/bot-failure-copy'
 import type { BotToolServer } from '../../shared/bot-tools'
 import {
@@ -13,6 +14,7 @@ import {
   type BotToolRelay,
   type RelayFolders
 } from '../bots/tool-relay/bot-tool-relay'
+import { relayProcessUrl } from '../bots/tool-relay/bot-tool-relay-grants'
 
 const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1']
 
@@ -20,7 +22,12 @@ const LOOPBACK_HOSTS = ['127.0.0.1', 'localhost', '::1']
 export type SessionMcpBot = { botId: string; folder: string } | null
 
 /** The host list's servers a session gets, from the list kept in `folder`. */
-export type SessionHostMcpServers = { folder: string; servers: readonly BotToolServer[] }
+export type SessionHostMcpServers = {
+  folder: string
+  servers: readonly BotToolServer[]
+  /** The command servers among them Orca runs once on the host, by name to their id. */
+  sharedProcesses?: ReadonlyMap<string, string>
+}
 
 const relayed = (server: BotToolServer): server is BotToolServer & { credential: string } =>
   'url' in server && server.credential !== undefined
@@ -47,11 +54,12 @@ export class SessionMcpTools {
    * A bot's launch always gets its token, whichever agent runs it: its tools present it to the
    * relay, and the `orca` calls the session makes name the bot by it. Any other session gets the
    * host's token, which names no bot, and only when one of its servers goes through the relay. On
-   * a shared name the bot's own server wins over the host list's.
+   * a shared name the bot's own server wins over the host list's. A terminal's launch (`terminal`)
+   * always names the token by its variable and carries it in env: its argv lands in shell history.
    */
   static async for(
     relay: Pick<BotToolRelay, 'grant'>,
-    launch: { bot: SessionMcpBot; agent: string },
+    launch: { bot: SessionMcpBot; agent: string; terminal?: boolean },
     sources: { own?: readonly BotToolServer[]; host?: SessionHostMcpServers | undefined }
   ): Promise<SessionMcpTools> {
     const own = sources.own ?? []
@@ -61,7 +69,10 @@ export class SessionMcpTools {
       // Header values live in the credential store; one here was never migrated, so it never launches.
       throw new BotFailureError('toolValuesUnmoved')
     }
-    const hostRelayed = host.some(relayed)
+    const sharedProcesses = sources.host?.sharedProcesses ?? new Map<string, string>()
+    const sharedId = (server: BotToolServer): string | undefined =>
+      'url' in server ? undefined : sharedProcesses.get(server.name)
+    const hostRelayed = host.some((server) => relayed(server) || sharedId(server) !== undefined)
     if (!launch.bot && !hostRelayed) {
       return host.length === 0
         ? SessionMcpTools.none
@@ -78,24 +89,28 @@ export class SessionMcpTools {
     )
     const tokenName = launch.bot ? BOT_TOOLS_TOKEN_ENV : MCP_TOKEN_ENV
     // Claude and Pi expand `${VAR}` in a server's headers, so their config names only the variable.
-    const referencesEnv = ENV_REFERENCING_AGENTS.has(launch.agent)
+    const referencesEnv = launch.terminal === true || ENV_REFERENCING_AGENTS.has(launch.agent)
     // A bot's token also names it to the runtime; the host's only opens servers, so an agent whose
     // config carries it outright never gets it in env, where every command it runs would see it.
     const tokenEnv = launch.bot || referencesEnv ? { [tokenName]: token } : {}
     const authorization = referencesEnv ? `Bearer \${${tokenName}}` : `Bearer ${token}`
+    const viaRelay = (server: BotToolServer, url: string): BotToolServer => ({
+      name: server.name,
+      url,
+      transport: 'http',
+      headers: { authorization }
+    })
     const throughRelay =
       (scope: keyof RelayFolders) =>
-      (server: BotToolServer): BotToolServer =>
-        relayed(server)
-          ? {
-              name: server.name,
-              url: relayToolUrl(origin, scope, server.credential),
-              transport: 'http',
-              headers: { authorization }
-            }
-          : server
+      (server: BotToolServer): BotToolServer => {
+        if (relayed(server)) {
+          return viaRelay(server, relayToolUrl(origin, scope, server.credential))
+        }
+        const process = scope === 'host' ? sharedId(server) : undefined
+        return process === undefined ? server : viaRelay(server, relayProcessUrl(origin, process))
+      }
     // Codex saves its own env into shell snapshots on disk, so only the commands it runs get the token.
-    const commandsOnly = launch.agent === 'codex'
+    const commandsOnly = launch.agent === 'codex' && launch.terminal !== true
     return new SessionMcpTools(
       [...own.map(throughRelay('bot')), ...host.map(throughRelay('host'))],
       commandsOnly ? {} : tokenEnv,

@@ -39,6 +39,8 @@ export type BrowserPageContextMenuActions = {
   openInNewTab: (url: string, activate: boolean) => void
   /** The address the OS browser should open, or null to leave the item out. */
   externalUrl: (url: string) => string | null
+  /** Opens what externalUrl returned; the OS browser as is when left out. */
+  openExternal?: (url: string) => void
   /** Left out where the page's downloads, pixels or DevTools are not on this machine. */
   saveImage?: (url: string) => void
   copyImage?: () => void
@@ -101,7 +103,8 @@ function buildMenuSections(
   })
   const externalItem = (label: string, url: string): MenuItem[] => {
     const targetUrl = actions.externalUrl(url)
-    return targetUrl ? [item(label, () => void window.api.shell.openUrl(targetUrl))] : []
+    const open = actions.openExternal ?? ((target: string) => void window.api.shell.openUrl(target))
+    return targetUrl ? [item(label, () => open(targetUrl))] : []
   }
   const { replaceMisspelling, addWordToDictionary, saveImage, copyImage, inspect } = actions
 

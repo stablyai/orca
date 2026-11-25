@@ -3,7 +3,7 @@ import {
   buildNewTabAgentMenuRows,
   type NewTabAgentMenuRow
 } from '../agent-launch/picker/agent-launch-picker-rows'
-import { botNewChatAgents, type BotAgentMenuModel } from './bot-agent-choices'
+import { botAgentChoices, botNewChatAgents, type BotAgentMenuModel } from './bot-agent-choices'
 
 const settled = (
   rows: NewTabAgentMenuRow[],
@@ -53,5 +53,24 @@ describe('botNewChatAgents', () => {
     expect(botNewChatAgents({ agent: 'claude' }, settled([], null))).toEqual([
       { agent: 'claude', unavailable: 'check-failed' }
     ])
+  })
+})
+
+describe('botAgentChoices', () => {
+  it('never offers an agent the host lacks as the first choice when installed agents are required', () => {
+    // A WSL distro without Linux agents: only chats that would install one first.
+    const setupOnly = settled(
+      [
+        { kind: 'chat', agent: 'grok', setup: true },
+        { kind: 'chat', agent: 'claude', setup: true }
+      ],
+      []
+    )
+    expect(botAgentChoices(setupOnly, undefined, true)).toEqual([])
+    const mixed = settled([
+      { kind: 'chat', agent: 'claude', setup: true },
+      { kind: 'cli', agent: 'codex', chat: true }
+    ])
+    expect(botAgentChoices(mixed, undefined, true)).toEqual(['codex'])
   })
 })

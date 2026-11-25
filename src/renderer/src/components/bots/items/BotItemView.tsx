@@ -201,7 +201,7 @@ export function BotItemBody({
     )
   const notes = useBotItemStatusNotes((_items, to, note) => setStatus(to, note))
   const ChatIcon = item.chat.kind === 'home' ? House : MessageSquare
-  const pending = useBotItemPendingComments(bot, item.uid, view.events, view.retry)
+  const pending = useBotItemPendingComments(bot, item.uid, view.events)
   // The header and comment box paint first; the Activity, the costly part, renders right after.
   const activityMounted = useDeferredValue(true, false)
   const activityShown = view.eventsRead && activityMounted

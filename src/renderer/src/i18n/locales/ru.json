@@ -2103,7 +2103,8 @@
         "projectRemoved": "Проект удалён из Orca.",
         "folderWorkspaceRemoved": "Рабочее пространство папки удалено.",
         "chatStillStarting": "Чат ещё запускается. Повторите чуть позже.",
-        "chatOpenFailed": "Не удалось открыть чат.",
+        "chatOpenFailed": "Не удалось открыть чат",
+        "chatOpenDismiss": "Скрыть",
         "chatOpenRetry": "Повторить",
         "chatOpenShowDetails": "Показать подробности",
         "chatOpenHideDetails": "Скрыть подробности"
@@ -21451,7 +21452,7 @@
         "workerCount_few": "{{count}} исполнителя",
         "workerCount_many": "{{count}} исполнителей",
         "workerCount_other": "{{count}} исполнителя",
-        "stoppedByYou": "Остановлено вами",
+        "stopped": "Остановлен",
         "finished": "Завершено",
         "failedCount": "С ошибками: {{count}}",
         "needsYouCount": "Ждут вашего ответа: {{count}}",
@@ -25647,7 +25648,9 @@
       "untitled": "Новый чат",
       "loading": "Загрузка чатов…",
       "readFailed": "Не удалось прочитать чаты этого бота.",
-      "searchRetry": "Повторить попытку"
+      "searchRetry": "Повторить попытку",
+      "older": "Показать старые: {{count}}",
+      "hideOlder": "Скрыть старые"
     },
     "needs": {
       "chat": "Ваш чат с {{name}}",

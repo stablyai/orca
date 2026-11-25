@@ -2198,6 +2198,7 @@
         "folderWorkspaceRemoved": "文件夹工作区已移除。",
         "chatStillStarting": "此聊天仍在启动，请稍后重试",
         "chatOpenFailed": "无法打开此聊天",
+        "chatOpenDismiss": "忽略",
         "chatOpenRetry": "重试",
         "chatOpenShowDetails": "显示详情",
         "chatOpenHideDetails": "隐藏详情"
@@ -21311,7 +21312,7 @@
         "monitor": "监控任务",
         "task": "任务",
         "workerCount_other": "{{count}} 个工作者",
-        "stoppedByYou": "已由你停止",
+        "stopped": "已停止",
         "finished": "已完成",
         "failedCount": "{{count}} 个失败",
         "needsYouCount": "{{count}} 个等待你处理",
@@ -28005,7 +28006,8 @@
       "readFailed": "无法读取此 bot 的聊天",
       "delete": "删除聊天",
       "open": "打开",
-      "actions": "聊天操作"
+      "actions": "聊天操作",
+      "hideOlder": "隐藏更早的"
     },
     "items": {
       "view": {
@@ -30412,7 +30414,8 @@
     "navigationLabel": "应用导航",
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
-    "more": "更多"
+    "more": "更多",
+    "customize": "自定义"
   },
   "chats": {
     "delete": {

@@ -1571,6 +1571,8 @@
         "nothingToUndo": "Nothing left to undo: those lines changed since.",
         "empty": "No changes yet."
       },
+      "muteNotifications": "Mute notifications",
+      "muteNotificationsDescription": "Stop sending system notifications. Unread indicators still appear.",
       "notifyNeedsPermission": "Needs permission",
       "notifyNeedsPermissionDescription": "When the bot or a worker needs your approval.",
       "notifyTaskComplete": "Task complete",
@@ -2737,6 +2739,10 @@
             "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
             "restoredMoved": "Forwarded port {{port}} from {{host}} to localhost:{{localPort}}",
             "restoredMovedReason": "localhost:{{previousPort}} is in use on this computer."
+          },
+          "forwardedUrl": {
+            "openedIpv4": "Opened 127.0.0.1:{{port}} instead of localhost",
+            "openedIpv4Reason": "Another app on this computer uses localhost:{{port}}."
           }
         }
       },
@@ -2887,7 +2893,8 @@
         "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed.",
         "chatStillStarting": "This chat is still starting. Try again in a moment.",
-        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenFailed": "Couldn't open chat",
+        "chatOpenDismiss": "Dismiss",
         "chatOpenRetry": "Retry",
         "chatOpenShowDetails": "Show details",
         "chatOpenHideDetails": "Hide details"
@@ -16665,8 +16672,6 @@
           "noRemote": "Local git repo · no remote",
           "openUpstream": "Open {{value0}} in browser",
           "forkOf": "Fork of {{value0}}",
-          "openSettingsPage": "Open settings page",
-          "done": "Done",
           "resetDone": "Icon and color reset",
           "undo": "Undo",
           "styleLetters": "Letters",
@@ -16676,7 +16681,8 @@
           "lettersInput": "Up to 2 letters",
           "lettersPlaceholder": "1–2 letters",
           "useLetters": "Use “{{value0}}”",
-          "usingGitHubAvatar": "Using the GitHub avatar"
+          "usingGitHubAvatar": "Using the GitHub avatar",
+          "openSettings": "Open Settings"
         }
       },
       "pet": {
@@ -20778,6 +20784,11 @@
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
         "stateStopped": "Stopped"
+      },
+      "RunTargetCombobox": {
+        "noWslDistros": "No WSL distros found",
+        "wslDistro": "WSL distro",
+        "wslDistroHint": "A Linux distro on this PC"
       }
     },
     "i18n": {
@@ -22868,6 +22879,7 @@
         "dismiss": "Dismiss",
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
+        "workspaceRemoved": "This worker's workspace was removed",
         "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
@@ -22903,7 +22915,7 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stoppedByYou": "Stopped by you",
+        "stopped": "Stopped",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
@@ -27602,7 +27614,36 @@
         "setUpInFirstChat": "Set up in first chat"
       },
       "identityWatches": "Watches {{what}}",
-      "identityReports": "Reports {{what}}"
+      "identityReports": "Reports {{what}}",
+      "wslSetupFailedShort": "Setup didn’t finish",
+      "wslSettingUp": "Setting up…",
+      "wslSetup": {
+        "waiting": "Waiting for {{distro}}…",
+        "starting": "Starting {{distro}}",
+        "installing": "Installing Orca’s server in ~/.orca-remote",
+        "connecting": "Connecting",
+        "findingAgents": "Looking for agents in {{distro}}",
+        "installingHint": "The first time also downloads its Linux Node runtime.",
+        "failedTitle": "Couldn’t set up {{distro}}",
+        "details": "Details",
+        "retry": "Retry",
+        "chooseAnother": "Choose another computer",
+        "title": "Setting up {{distro}} as a host",
+        "subtitle": "About a minute the first time. Your Windows files and other distros aren’t touched.",
+        "cancel": "Cancel",
+        "failedGeneric": "Orca’s server didn’t start in the distro. Details say what stopped it."
+      },
+      "wslNoAgent": {
+        "field": "No agent in {{distro}}",
+        "title": "Install an agent inside {{distro}}",
+        "body": "Agents installed on Windows can’t run inside WSL. Install one in the distro and sign in, and it shows up here.",
+        "copied": "Copied",
+        "copy": "Copy",
+        "checking": "Checking again…"
+      },
+      "hostSleeping": "Sleeping · wakes when used",
+      "wslWaking": "Waking {{distro}}…",
+      "hostWaking": "Waking…"
     },
     "section": {
       "scrollLeft": "Scroll left · {{amount}} hidden",
@@ -30152,7 +30193,8 @@
       "delete": "Delete chat",
       "open": "Open",
       "actions": "Chat actions",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "hideOlder": "Hide older"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -31020,31 +31062,21 @@
     "failedDescription": "Orca ran <code>{{command}}</code> on <strong>{{host}}</strong> to update your {{product}} from <strong>{{installedVersion}}</strong> to <strong>{{latestVersion}}</strong>, and it failed.",
     "failedDescriptionNoCommand": "Orca couldn't update your {{product}} on <strong>{{host}}</strong>.",
     "cardLabel": "Agent CLI updates",
-    "cardSingleTitle": "{{name}} {{version}} is out",
-    "cardSingleInstalled": "You have {{version}}",
-    "cardNamesTwo": "{{first}} and {{second}}",
-    "cardNamesThree": "{{first}}, {{second}} and {{third}}",
-    "cardDismiss": "Dismiss",
-    "cardDetails": "Details",
     "cardLater": "Later",
-    "copyCommandFull": "Copy command",
-    "cardDoneOne": "{{name}} is up to date",
-    "cardFailedOne": "{{name}} didn’t update",
-    "cardProgress": "{{done}} of {{total}}",
-    "cardShowEach": "Show each CLI",
-    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
-    "cardNamesMany_one": "{{first}} and {{count}} more",
-    "cardNamesMany_other": "{{first}} and {{count}} more",
-    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
-    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
-    "cardUpdateSome_one": "Update {{count}} CLI",
-    "cardUpdateSome_other": "Update {{count}} CLIs",
-    "cardDone_one": "{{count}} CLI is up to date",
-    "cardDone_other": "All {{count}} CLIs are up to date",
-    "cardFailed_one": "{{count}} CLI didn’t update",
-    "cardFailed_other": "{{count}} CLIs didn’t update",
-    "cardSingleInstalledOn": "{{host}} has {{version}}"
+    "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
+    "toastUpdating_other": "Updating {{current}} of {{count}} CLIs",
+    "toastDone_one": "{{count}} CLI updated",
+    "toastDone_other": "{{count}} CLIs updated",
+    "hideList": "Hide list",
+    "showList": "Show list",
+    "toastUpdate": "Update {{total}}",
+    "toastRetry": "Retry {{failed}}",
+    "copied": "Copied",
+    "manualSection": "Manual",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastClose": "Close",
+    "queued": "Queued"
   },
   "backgroundWorkerPaused": {
     "title": "Some background work paused after crashing repeatedly",
@@ -31078,7 +31110,10 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More",
-    "pageRegion": "Page"
+    "customize": "Customize",
+    "pageRegion": "Page",
+    "account": "Account",
+    "signIn": "Sign in"
   },
   "chats": {
     "delete": {
