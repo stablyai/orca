@@ -77,4 +77,16 @@ describe('bots.items.link from another agent', () => {
     expect(store.links(uid).map((entry) => entry.ref)).toEqual(['ctx_owner'])
     store.dispose()
   })
+
+  it('refuses with check set on a full item, as the write would, unless the link is already there', async () => {
+    const { store, uid, call } = setup()
+    const urls = Array.from(
+      { length: 999 },
+      (_, i) => ({ kind: 'url', ref: `https://e.test/${i}` }) as const
+    )
+    store.link(uid, urls, OWNER)
+    await expect(call(['automation:new'], true)).rejects.toThrow('An item takes up to 1000 links.')
+    await expect(call(['https://e.test/0'], true)).resolves.toBeNull()
+    store.dispose()
+  })
 })

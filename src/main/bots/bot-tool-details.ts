@@ -7,7 +7,7 @@ import {
   type BotToolSecretInput,
   type BotToolServer
 } from '../../shared/bot-tools'
-import { readBotToolsSnapshot } from './bot-tools-file'
+import { readBotToolsSnapshot, type BotToolsSnapshot } from './bot-tools-file'
 import { isBotVaultSource } from './bot-tool-vault-source'
 
 export async function readBotToolDetails(folder: string, name: string): Promise<BotToolDetails> {
@@ -16,6 +16,15 @@ export async function readBotToolDetails(folder: string, name: string): Promise<
   if (!server) {
     throw new BotFailureError('toolGone')
   }
+  return botToolDetailsOf(credentials, server, version)
+}
+
+/** `server` for the editor, its saved values masked; `credentials` is its folder's store. */
+export function botToolDetailsOf(
+  credentials: BotToolsSnapshot['credentials'],
+  server: BotToolServer,
+  version: string
+): BotToolDetails {
   const masked = (values: Record<string, string> | undefined) =>
     Object.keys(values ?? {}).map((key) => ({ key, configured: true }))
   const credential =

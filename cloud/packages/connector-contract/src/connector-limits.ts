@@ -90,5 +90,17 @@ export const CONNECTOR_LIMITS = {
   maxEarlierOwnText: 4000,
   maxEarlierOwnFiles: 10,
   // Orca's note on where a bot was asked (asker.note).
-  maxAskerNoteLength: 4000
+  maxAskerNoteLength: 4000,
+  // People one bot's hello lists in sharedWith: a size budget, not a product limit. At every cap they
+  // add under 24 KB to the bot, inside its share of a hello.
+  maxBotShares: 50,
+  // A bot's purpose, as its owner wrote it, in its hello and on a teammate's share list.
+  maxBotPurposeLength: 1000,
+  maxShareEmailLength: 254,
+  // One held message, sealed and in base64, with room for its request beside it under maxRequestBytes.
+  maxHeldMessageChars: 1024 * 1024 - 4 * 1024,
+  // A host's sealed relay offer for one teammate device.
+  maxShareOfferChars: 8 * 1024,
+  // Held-message states one share answers with: a day of messages at a brisk pace.
+  maxShareHeldStates: 500
 } as const

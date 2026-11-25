@@ -4,6 +4,7 @@ import { hookIdOfRule, WEBHOOK_HOOK_ID_PATTERN } from '../../shared/connector-we
 import { readBotToolServers } from '../bots/bot-tools-file'
 import type { BotThreadPosts } from '../bots/bot-thread-posts'
 import { botToolRelay } from '../bots/tool-relay/bot-tool-relay'
+import { setRelayRequestBinding } from '../bots/tool-relay/bot-tool-relay-grants'
 import { getMainHttpClient } from '../network/http-client'
 import type { WebhookCallRouter } from '../webhooks/webhook-call-outcomes'
 import { spcMcpReader, spcRequestBinding } from './spc-mcp'
@@ -42,7 +43,7 @@ export function installSpcHost(deps: {
       const rule = automationWebhookTrigger(entry)
       return rule && hookIdOfRule(rule.id) === hookId
     })?.bot?.botId
-  botToolRelay.setRequestBinding(
+  setRelayRequestBinding(
     spcRequestBinding({
       url: url.href,
       account: deps.account,
@@ -52,7 +53,7 @@ export function installSpcHost(deps: {
     })
   )
   return {
-    stop: () => botToolRelay.setRequestBinding(null),
+    stop: () => setRelayRequestBinding(null),
     route: async (id, call, incomplete) => {
       if (id !== hookId) {
         return null

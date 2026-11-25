@@ -31,6 +31,7 @@ import { BotGroupTranscriptOwner, type useBotGroupFileContexts } from './BotGrou
 import { useNativeChatFileLinkClick } from '../native-chat/links/actions/use-native-chat-file-link-click'
 import { useRecheckNativeChatFileLinksWhenSettled } from '../native-chat/links/actions/use-native-chat-file-link-existence'
 import { NativeChatLinkClickContext } from '../native-chat/links/actions/native-chat-link-click-context'
+import { NativeChatBotAnswerContext } from '../native-chat/messages/rows/native-chat-bot-answer-context'
 import type { CommentMarkdownLinkClickHandler } from '@/components/comment-markdown/comment-markdown-element-renderers'
 import { routeNativeChatHref } from '../../../../shared/native-chat/file-access/native-chat-href-routing'
 import type { BotGroupRoomLinks } from './use-bot-group-room-links'
@@ -293,7 +294,9 @@ export const BotGroupTurn = memo(function BotGroupTurn({
           ) : null}
           {scope.bar}
           {scope.lead}
-          <NativeChatTranscriptRowStack slots={rows} context={context} />
+          <NativeChatBotAnswerContext value>
+            <NativeChatTranscriptRowStack slots={rows} context={context} />
+          </NativeChatBotAnswerContext>
         </section>
       </NativeChatLinkClickContext>
     </BotGroupTranscriptOwner>

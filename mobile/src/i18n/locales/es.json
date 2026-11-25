@@ -1259,7 +1259,7 @@
       "pairingInvalid": "Emparejamiento no válido — vuelve a emparejar tu escritorio",
       "rePairDetail": "Vuelve a emparejar tu escritorio.",
       "reconnecting": "Reconectando…",
-      "relayAccessExpired": "El acceso a {{host}} por Relay ha caducado",
+      "relayAccessRefused": "Relay rechazó el acceso a {{host}}",
       "relayConnectFailed": "No se puede conectar a través de Relay",
       "relayUnreachable": "No se puede acceder a Relay",
       "signInDetail": "Inicia sesión en Orca en tu escritorio para volver a conectarte.",
@@ -5232,7 +5232,13 @@
         "github": "Menciones y eventos en issues y PR",
         "slack": "Mensajes y menciones",
         "linear": "Issues asignados y menciones",
-        "google": "Gmail, Calendar y Drive, como tú"
+        "google": "Gmail, Calendar y Drive, como tú",
+        "clickup": "Gestiona tareas, listas y documentos",
+        "airtable": "Consulta y edita bases, tablas y registros",
+        "todoist": "Añade, ordena y completa tareas",
+        "zapier": "Ejecuta acciones en las apps que configuraste en Zapier",
+        "granola": "Busca notas y transcripciones de reuniones",
+        "intercom": "Busca conversaciones, contactos y artículos"
       },
       "composioLine": {
         "outlook": "Correo, calendario y contactos",
@@ -5281,6 +5287,9 @@
       "continuesAt": "Continúa a las {{time}}",
       "continues": "Continúa a las {{time}}",
       "hitLimit": "Límite alcanzado · se restablece a las {{time}}"
+    },
+    "new": {
+      "purposeTooLongForHost": "Orca en {{host}} admite hasta 200 caracteres para el propósito. Acórtalo o actualiza Orca en {{host}}."
     }
   },
   "sidebar": {

@@ -5,6 +5,9 @@ import type {
   BundledSkillPlan
 } from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import { Button } from '@/components/ui/button'
+import { useIntlLocale } from '@/i18n/use-translate'
+import type { BuiltInUiLanguage } from '../../../../../shared/i18n/ui-language'
+import { pinFixtureLanguage, waitForFixtureLanguage } from '../skill-fixture-language'
 import { BrowserAction } from '../../feature-wall/setup/browser/FeatureWallBrowserAction'
 import { BundledSkillInstallStatus } from './BundledSkillInstallStatus'
 import { BundledSkillReplaceHint } from './BundledSkillReplaceHint'
@@ -153,10 +156,15 @@ export const featureWallReplace = defineFixture({
   interact: openReplaceTooltip
 })
 
-/** Settings' line for a copy Orca won't replace (a former skill name). */
-export const attentionLine = defineFixture({
-  width: 420,
-  render: () => (
+// Why remount per locale: the message is memoized without the language, so a line first rendered
+// before the pinned language applied would keep the earlier one.
+function AttentionLine(): React.JSX.Element {
+  const locale = useIntlLocale()
+  return <AttentionLineInLocale key={locale} />
+}
+
+function AttentionLineInLocale(): React.JSX.Element {
+  return (
     <div className="p-3">
       <BundledSkillInstallStatus
         install={{ state: { kind: 'idle' }, retry: () => undefined }}
@@ -167,4 +175,19 @@ export const attentionLine = defineFixture({
       />
     </div>
   )
-})
+}
+
+function attentionLineFixture(language: BuiltInUiLanguage = 'en') {
+  return defineFixture({
+    width: 420,
+    render: () => <AttentionLine />,
+    setup: () => pinFixtureLanguage(language),
+    interact: (frame) => waitForFixtureLanguage(frame, language)
+  })
+}
+
+/** Settings' line for a copy Orca won't replace (a former skill name). */
+export const attentionLine = attentionLineFixture()
+/** The longest locales beside Retry at the Settings row width. */
+export const attentionLineGerman = attentionLineFixture('de')
+export const attentionLineRussian = attentionLineFixture('ru')

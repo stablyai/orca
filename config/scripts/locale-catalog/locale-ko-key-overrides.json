@@ -1394,12 +1394,6 @@
   "auto.components.right.sidebar.FileExplorerRow.revealInFinder": {
     "ko": "Finder에서 보기"
   },
-  "auto.components.right.sidebar.GitHistoryPanel.8232c8b2f2": {
-    "ko": "{{value0}} 커밋 열기: {{value1}}"
-  },
-  "auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9": {
-    "ko": "refs란 무엇인가요?"
-  },
   "auto.components.right.sidebar.GitHubPRStackMap.316039b5db": {
     "ko": "검사 결과 대기 중"
   },

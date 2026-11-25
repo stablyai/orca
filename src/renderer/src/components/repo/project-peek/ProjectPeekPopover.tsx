@@ -88,7 +88,7 @@ export function ProjectPeekPopover({
         className="w-[296px] max-w-[calc(100vw-2rem)]"
         // Why: marks the popover as a row control so a host card's details hover stands down while it's used.
         data-activity-thread-control=""
-        // Why: Radix would focus Done first; landing on the current style tab puts keys where editing starts.
+        // Why: Radix would focus the header action first; landing on the current style tab puts keys where editing starts.
         onOpenAutoFocus={(event) => {
           const tab = contentRef.current?.querySelector<HTMLElement>(
             '[role="tab"][data-state="active"]'

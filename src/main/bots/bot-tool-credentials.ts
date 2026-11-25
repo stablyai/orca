@@ -163,7 +163,19 @@ export function botToolCredentialsFingerprint(folder: string, ids: ReadonlySet<s
 }
 
 function credentialFingerprint(sealed: Stored, ids: ReadonlySet<string>): string {
-  return JSON.stringify(
+  return JSON.stringify([...credentialFingerprints(sealed, ids)])
+}
+
+/** `botToolCredentialsFingerprint`'s part for each credential, by id, from one read of the store. */
+export function botToolCredentialFingerprints(
+  folder: string,
+  ids: ReadonlySet<string>
+): Map<string, unknown> {
+  return credentialFingerprints(readSealed(folder), ids)
+}
+
+function credentialFingerprints(sealed: Stored, ids: ReadonlySet<string>): Map<string, unknown> {
+  return new Map(
     [...ids].sort().map((id) => {
       const slot = sealed[id]
       const entry = slot?.entry
@@ -278,7 +290,7 @@ export async function commitBotToolOAuth(
   if (current && (next === null || next.grant !== current.grant || next.url !== current.url)) {
     announceBotToolCredentialsEnded(folder, [id])
   }
-  announceIfShownChanged(current, next)
+  announceIfShownChanged(folder, current, next)
   return next === null ? null : { ...next, revision }
 }
 

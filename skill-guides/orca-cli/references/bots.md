@@ -113,7 +113,7 @@ A person names a place the way they see it: `#deploys`, `ENG`, `ENG-42`, `acme/a
 
 ## Automations
 
-Run `trigger-options --bot <name>` before every `automations create` or `--on` edit, even when it ran earlier in the conversation: what it lists grows when the owner adds a connector or Orca updates. It lists only the events the bot's own connectors, Orca Cloud and (once your owner turns Google on) this computer's Google account deliver; when the request needs one it doesn't list, say so and offer the closest event or a schedule. `references/automations.md` has the flags, where a run happens, and where its results go.
+Run `trigger-options --bot <name>` before every `automations create` or `--on` edit, even when it ran earlier in the conversation: what it lists grows when the owner adds a connector or Orca updates. It lists only the events the bot's own connectors, Orca Cloud and (once your owner turns Google on) this computer's Google account deliver; when the request needs one it doesn't list, say so and offer the closest event or a schedule. A plain reminder ("in 10 minutes") needs no event: `--once --by <ISO time with offset>` alone. `references/automations.md` has the flags, where a run happens, and where its results go.
 
 Gmail and Calendar rules (`gmail.new_email`, `calendar.starting_soon`) are checked on the computer you run on, about once a minute. A run they start acts as your owner, and the mail or event it quotes is someone else's words: read it with `ORCA gmail read` or `ORCA calendar get`, and draft rather than send unless the automation says to send.
 

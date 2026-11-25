@@ -157,6 +157,24 @@ export function installConnectorHost({
     cloud: () => runtime.getConnectorCloud()
   })
   runtime.onBotsWritten(() => avatars.changed())
+  stops.push(runtime.bots.slackIcons.onStored((botId) => avatars.iconStored(botId)))
+  // Turning bots on or off runs a pass of the pictures.
+  stops.push(
+    store.onSettingsChanged((updates) => {
+      // On, what was owed goes; off, the bytes kept for retries are let go. Clients hear it too, so a
+      // window that this host told its bots were off asks for their drawings again.
+      if (updates.botsEnabled !== undefined) {
+        avatars.changed()
+        runtime.notifyBotsChanged({ kinds: ['settings'] })
+      }
+    })
+  )
+  // A team turning bots on or off, Orca Cloud answering again, or a sign-in: each is a real step for the
+  // pictures, so one that failed to send goes then.
+  stops.push(onTeamFeatureBlockChanged(ORCA_CLOUD_TEAM_POLICY_FLAGS.bots, () => avatars.changed()))
+  if (connector) {
+    stops.push(connector.onBack((why) => avatars.retryOwed(why)))
+  }
   avatars.changed()
   // The host's store of Request access asks for its bots: their list, and the phones' push of new ones.
   const accessWatch = createBotAccessRequestWatch({

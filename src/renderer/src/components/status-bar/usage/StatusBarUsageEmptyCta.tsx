@@ -5,7 +5,7 @@ import { EyeOffDismissButton } from '@/components/dismiss/EyeOffDismissButton'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useAppStore } from '../../../store/index'
-import { ClaudeIcon, GeminiIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
+import { ClaudeIcon, OpenAIIcon, OpenCodeGoIcon } from '../accounts/provider-icons'
 import { useTranslate } from '@/i18n/use-translate'
 import { getUsageOwnerHostScope, type RemoteUsageOwner } from './use-owner-usage-rate-limits'
 
@@ -108,7 +108,7 @@ export function StatusBarUsageEmptyCta({
                 </span>
                 <ClaudeIcon size={13} />
                 <OpenAIIcon size={13} />
-                <GeminiIcon size={13} />
+                <AgentIcon agent="antigravity" size={13} />
                 <OpenCodeGoIcon size={13} />
                 <AgentIcon agent="kimi" size={13} />
               </div>

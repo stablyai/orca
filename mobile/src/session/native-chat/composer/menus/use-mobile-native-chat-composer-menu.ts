@@ -281,7 +281,7 @@ export function useMobileNativeChatComposerMenu(input: {
     // A skill at the start becomes the leading chip; mid-prompt it stays plain text like desktop.
     const leadingSkill =
       row.kind === 'skill' && next.insertedToken && next.caret === row.token.length + 1
-    setDraft(leadingSkill ? `${row.token} ${value.slice(cursor).trimStart()}` : next.draft)
+    setDraft(leadingSkill ? `${row.token} ${next.draft.slice(next.caret).trimStart()}` : next.draft)
     if (row.kind === 'skill') {
       input.onPickSkill?.(row)
     }

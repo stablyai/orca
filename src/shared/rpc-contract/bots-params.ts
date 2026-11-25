@@ -283,9 +283,11 @@ export const BotTakeOverParams = BotChat.extend({
 
 export type BotCreateParams = z.infer<typeof BotCreate>
 export type BotUpdateParams = z.infer<typeof BotUpdate>
-/** What the host itself may change: an update, or the Google toggle, which only google.bot.set sets. */
+/** What the host itself may change: an update, the Google toggle, which only google.bot.set sets,
+ *  or the host MCP list, which only bots.tools.setHostMcpServers sets. */
 export type BotHostUpdates = BotUpdateParams['updates'] &
-  Pick<Bot, 'google' | 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen'> & {
+  Pick<Bot, 'google' | 'googleAccounts' | 'hostMcpServers'> &
+  Pick<Bot, 'acceptedOffers' | 'handedPairedWorkspaces' | 'itemsSeen'> & {
     /** Host-only: a wait of this bot's was cancelled. */
     cancelledWait?: BotCancelledWait
   }

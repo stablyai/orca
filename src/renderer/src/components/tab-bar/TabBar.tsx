@@ -11,18 +11,24 @@ import { renderTabBarSurface } from './strip/tab-bar-surface'
 import { useTabBarItemActions } from './model/use-tab-bar-item-actions'
 import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
-import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import { findBotByWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
+import { homeBotLookupFor } from '../bots/bot-home-tab-order'
+import { useBots, useBotsEnabled } from '@/lib/bot-catalog'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { useTranslate } from '@/i18n/use-translate'
-import { useTabDragActive } from '../tab-group/drag/tab-drag-context'
-import { useTabStripCondense } from './strip/use-tab-strip-condense'
-import type { TabStripEntry } from './strip/TabStripOverflowChip'
-import { useTerminalTabAttentionIds } from './terminal-tabs/use-terminal-tab-attention-ids'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { useTabStripScrollMemory } from './strip/tab-strip-scroll-memory'
 import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
+import { buildTabDropIndicators } from './model/tab-bar-item-model'
+import {
+  findPinnedHomeTabId,
+  stripSortableIdsWithoutPinnedHome,
+  withPinnedHomeFirst
+} from './model/pinned-home-tab'
+import { resolveRenderedTabStrip } from './strip/rendered-tab-strip'
 
 const EMPTY_ROWS: readonly ClientHostedBrowserRow[] = []
-const NO_TERMINAL_TABS: readonly TerminalTab[] = []
-const NO_IDS: readonly string[] = []
+const itemIdOf = (item: TabBarItem): string => item.id
+const idOf = (id: string): string => id
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const t = useTranslate()
@@ -39,7 +45,6 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onPinFile
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
-  const bot = useBotForWorkspace(worktreeId)
   const botGroup = useBotGroupForWorkspace(worktreeId)
   const baseCreateMenu = useTabBarCreateMenuController({
     worktreeId,
@@ -73,7 +78,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     createMenuOptions: pluginCreateMenu.menuOptions,
     handleSelectCreateMenuOption: pluginCreateMenu.onSelectMenuOption
   }
-  const itemProjection = useTabBarItemProjection({
+  const projectedItems = useTabBarItemProjection({
     props,
     resolvedGroupId: runtime.resolvedGroupId,
     unifiedTabs: runtime.unifiedTabs,
@@ -81,6 +86,44 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     generatedTabTitlesEnabled: runtime.generatedTabTitlesEnabled,
     statusByRelativePath: runtime.statusByRelativePath
   })
+  const botsEnabled = useBotsEnabled()
+  const bots = useBots(botsEnabled && parseWorkspaceKey(worktreeId)?.type === 'folder')
+  // One catalog subscription: the page's bot (as useBotForWorkspace finds it) and each chat's Home lookup.
+  const bot = findBotByWorkspace(bots, worktreeId)
+  // Each chat asks for the bot on its own host, as its row does, so a mixed-host group never borrows another's Home.
+  // Null on a strip no bot calls home (any Git worktree, bots off), which then skips the walk over its tabs.
+  const homeBotFor = useMemo(() => homeBotLookupFor(bots, worktreeId), [bots, worktreeId])
+  const pinnedHomeId = useMemo(
+    () => findPinnedHomeTabId(projectedItems.orderedItems, homeBotFor),
+    [projectedItems.orderedItems, homeBotFor]
+  )
+  // Why memoized: dnd-kit re-renders every tab in a context whose items array changes identity.
+  const orderedItems = useMemo(
+    () => withPinnedHomeFirst(projectedItems.orderedItems, pinnedHomeId, itemIdOf),
+    [projectedItems.orderedItems, pinnedHomeId]
+  )
+  const sortableIds = useMemo(
+    () => withPinnedHomeFirst(projectedItems.sortableIds, pinnedHomeId, idOf),
+    [projectedItems.sortableIds, pinnedHomeId]
+  )
+  const reorderedDropIndicators = useMemo(
+    () =>
+      orderedItems === projectedItems.orderedItems
+        ? null
+        : buildTabDropIndicators(orderedItems, projectedItems.hoveredInsertion),
+    [orderedItems, projectedItems.orderedItems, projectedItems.hoveredInsertion]
+  )
+  const itemProjection = {
+    ...projectedItems,
+    orderedItems,
+    sortableIds,
+    dropIndicatorByVisibleId: reorderedDropIndicators ?? projectedItems.dropIndicatorByVisibleId
+  }
+  const pinnedSortableIds = useMemo(() => (pinnedHomeId ? [pinnedHomeId] : []), [pinnedHomeId])
+  const stripSortableIds = useMemo(
+    () => stripSortableIdsWithoutPinnedHome(sortableIds, pinnedHomeId),
+    [sortableIds, pinnedHomeId]
+  )
   const togglePinned = (item: TabBarItem): void => {
     // pinTab/unpinTab mirror the change to the host for remote-server tabs.
     if (item.isPinned) {
@@ -105,31 +148,16 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     groupActiveTabId: props.groupActiveTabId ?? null
   })
   const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_ROWS
-  const stripEntries = useMemo<TabStripEntry[]>(
-    () => [
-      ...itemProjection.orderedItems.map((item) => ({ id: item.id, kind: 'item' as const, item })),
-      ...clientHostedBrowserRows.map((row) => ({
-        id: row.browserPageId,
-        kind: 'paired' as const,
-        row
-      }))
-    ],
-    [itemProjection.orderedItems, clientHostedBrowserRows]
-  )
-  const stripIds = useMemo(() => stripEntries.map((entry) => entry.id), [stripEntries])
   const slotIds = useMemo(
-    () => [
-      ...itemProjection.sortableIds,
-      ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
-    ],
-    [clientHostedBrowserRows, itemProjection.sortableIds]
+    () => [...stripSortableIds, ...clientHostedBrowserRows.map((row) => row.browserPageId)],
+    [clientHostedBrowserRows, stripSortableIds]
   )
   // Why memoized: the key spans every tab, and a windowed strip re-renders as it scrolls.
   const stripLayoutKey = useMemo(
     () =>
       [
         itemProjection.tabStripLayoutKey,
-        ...(clientHostedBrowserRows ?? []).map((row) => row.browserPageId)
+        ...clientHostedBrowserRows.map((row) => row.browserPageId)
       ].join('|'),
     [clientHostedBrowserRows, itemProjection.tabStripLayoutKey]
   )
@@ -140,43 +168,20 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     slotIds,
     worktreeId
   })
-  const isTabDragActive = useTabDragActive()
-  const condense = useTabStripCondense({
-    ids: stripIds,
-    activeId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
-    frozen: isTabDragActive,
-    hasOverflow: tabStripNavigation.tabStripOverflowState.hasOverflow
-  })
-  // Only an overflowing strip has a chip whose dot and list need attention state.
-  const attentionTerminalTabs = useMemo(
-    () =>
-      condense.hiddenIds.size === 0
-        ? NO_TERMINAL_TABS
-        : itemProjection.orderedItems.flatMap((item) =>
-            item.type === 'terminal' ? [item.data] : []
-          ),
-    [condense.hiddenIds, itemProjection.orderedItems]
+  useTabStripScrollMemory(
+    groupId,
+    worktreeId,
+    tabStripNavigation.tabStripRef,
+    itemProjection.activeVisibleTabId
   )
-  const attentionChatTabIds = useMemo(
-    () =>
-      condense.hiddenIds.size === 0
-        ? NO_IDS
-        : itemProjection.orderedItems.flatMap((item) =>
-            item.type === 'agent-session' ? [item.id] : []
-          ),
-    [condense.hiddenIds, itemProjection.orderedItems]
-  )
-  const attentionIds = useTerminalTabAttentionIds(attentionTerminalTabs, attentionChatTabIds)
   const attachFileDropOwner = useEditorGroupFileDropOwner({ worktreeId, groupId })
   const { clearPendingNewTabMenuFocusOnUnmount } = createMenu
-  const { setSurface } = condense
   const surfaceRef = useCallback(
     (node: HTMLDivElement | null) => {
       clearPendingNewTabMenuFocusOnUnmount(node)
       attachFileDropOwner(node)
-      setSurface(node)
     },
-    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount, setSurface]
+    [attachFileDropOwner, clearPendingNewTabMenuFocusOnUnmount]
   )
   const tabStripDragScroll = useTabStripDragScrollHandlers(tabStripNavigation.scrollTabStrip, {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
@@ -189,16 +194,19 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       runtime,
       createMenu,
       itemProjection,
+      strip: resolveRenderedTabStrip({
+        itemProjection,
+        pinnedSortableIds,
+        stripSortableIds,
+        clientHostedBrowserRows
+      }),
       tabStripNavigation,
       tabStripDragScroll,
       activeClientHostedBrowserRowId,
       itemActions,
       surfaceRef,
       bot,
-      botGroup,
-      condense,
-      stripEntries,
-      attentionIds
+      botGroup
     },
     t
   )
