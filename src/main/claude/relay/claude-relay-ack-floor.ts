@@ -80,6 +80,21 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
     }
   }
   return {
+    released: (seq) => {
+      // The daemon dropped them through `seq`: they can't replay whole, so they hold nothing.
+      for (const map of [open, starts]) {
+        for (const [scope, from] of map) {
+          if (from <= seq) {
+            map.delete(scope)
+          }
+        }
+      }
+      for (const [id, tool] of tools) {
+        if (tool.seq <= seq) {
+          dropTool(id)
+        }
+      }
+    },
     tookCut: () => {
       const took = cut
       cut = false

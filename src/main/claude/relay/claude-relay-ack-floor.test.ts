@@ -95,4 +95,13 @@ describe('Claude relay ack floor', () => {
     expect(floor.tookCut?.()).toBe(true)
     expect(floor.tookCut?.()).toBe(false)
   })
+
+  it('lets go of items a cap release dropped, so a newer open message holds the floor', () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, toolUse('t1'))
+    floor.observe(2, stream('message_start', 'agent-1'))
+    expect(floor.floor()).toBe(1)
+    floor.released?.(1)
+    expect(floor.floor()).toBe(2)
+  })
 })

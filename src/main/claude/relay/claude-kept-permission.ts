@@ -188,8 +188,12 @@ export function requiresAcquisition(
 ): NonNullable<Adapter['permissionModeRequiresAcquisition']> {
   return (sessionId, mode) => {
     const session = keptSession(sessions, sessionId)
-    if (!session || mode === 'own') {
+    if (!session) {
       return undefined
+    }
+    // Claude's own settings have no mode to send: after a live pick only a fresh agent has them.
+    if (mode === 'own') {
+      return session.keptModeTurn !== undefined ? true : undefined
     }
     return bypassRefused(session, mode)
   }
