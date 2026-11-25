@@ -21,7 +21,8 @@ export type ChatApproval = {
   blockedPath?: string
   subject?: AgentJournalApprovalSubject
   detail?: string
-  options: { label: string; send: string }[]
+  /** `declines`: the choice refuses the request (a deny), drawn as such. */
+  options: { label: string; send: string; declines?: true }[]
   /**
    * The screen-read startup dialog envelope this card answers. It can't collapse (a freed composer's
    * Return would answer the dialog), and the host writes a choice only while its screen still reads as it.
@@ -42,7 +43,11 @@ export function chatApprovalFromJournal(body: AgentJournalApprovalItem): ChatApp
     ...(body.blockedPath ? { blockedPath: body.blockedPath } : {}),
     ...(body.subject ? { subject: body.subject } : {}),
     ...(body.detail ? { detail: body.detail } : {}),
-    options: body.options.map((option) => ({ label: option.label, send: option.id }))
+    options: body.options.map((option) => ({
+      label: option.label,
+      send: option.id,
+      ...(option.intent?.startsWith('reject') ? { declines: true as const } : {})
+    }))
   }
 }
 
@@ -124,7 +129,7 @@ export function parseApprovalFromStatus(
     detail: envelope.summary,
     options: [
       { label: say('allow'), send: envelope.allowSend },
-      { label: say('deny'), send: envelope.denySend }
+      { label: say('deny'), send: envelope.denySend, declines: true }
     ]
   }
 }

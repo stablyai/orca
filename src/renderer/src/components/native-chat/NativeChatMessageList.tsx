@@ -1,6 +1,7 @@
 import type { BotChatIdentity } from '../bots/use-bot-chat-identity'
 import { nativeChatTranscriptOuterClass } from './appearance/native-chat-appearance-style'
 import { NativeChatTranscriptViewport } from './NativeChatTranscriptViewport'
+import { useNativeChatToolRunScroll as useToolRunScroll } from './viewport/scroll/native-chat-transcript-scroll-context'
 import { NativeChatTranscriptColumn } from './NativeChatTranscriptColumn'
 import { NativeChatNewRowsAnnouncement } from './viewport/new-rows/NativeChatNewRowsMarker'
 import { useNativeChatNewRowsMarker } from './viewport/new-rows/native-chat-new-rows-marker'
@@ -278,6 +279,7 @@ export function NativeChatMessageList({
   })
   const { showJump, onScroll, scrollToBottom, readerAtEnd, scrollMessageToTop, readerLeavesEnd } =
     transcriptScroll
+  const toolRunScroll = useToolRunScroll(scrollRef, isVisible, transcriptWindow, transcriptScroll)
   const { recordReaderScroll } = transcriptScroll
   const olderHistory = useNativeChatOlderHistoryAutoload({
     scrollRef,
@@ -368,6 +370,7 @@ export function NativeChatMessageList({
           <NativeChatTranscriptViewport
             scrollRef={scrollRef}
             scrollerProps={{ onScroll: onTranscriptScroll, ...readerInput.scrollerProps }}
+            toolRunScroll={toolRunScroll}
             forwardedGesture={readerInput.forwardedGesture}
             showJump={showJump}
             onJump={jumpToLatest}

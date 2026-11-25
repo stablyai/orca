@@ -76,8 +76,7 @@ export function useNativeChatTranscriptScroll({
         forwardedFrameRef.current = window.requestAnimationFrame(() => {
           const resumePin = deferredPinRef.current && followingRef.current
           clearForwardedScroll()
-          const element = scrollRef.current
-          if (resumePin && isVisibleRef.current && hasMeasurableViewport(element)) {
+          if (resumePin && isVisibleRef.current && hasMeasurableViewport(scrollRef.current)) {
             performApplicationScroll(scrollToEnd)
           }
         })
@@ -313,6 +312,7 @@ export function useNativeChatTranscriptScroll({
     readerAtEnd: readerReturn.readerAtEnd,
     scrollMessageToTop,
     readerLeavesEnd,
+    isFollowingEnd: readerReturn.isFollowingEnd,
     forwardedGesture
   }
 }

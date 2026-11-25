@@ -6089,7 +6089,16 @@
           "repairAvailable": "Onarılabilir",
           "installAvailable": "Yüklenebilir",
           "otherBuild": "Orca'nın başka bir sürümü tarafından yüklendi",
-          "otherBuildKept": "Korundu: Orca'nın başka bir sürümü tarafından yazıldı"
+          "otherBuildKept": "Korundu: Orca'nın başka bir sürümü tarafından yazıldı",
+          "differsFromOrca": "Bu kopya Orca'nın kopyasından farklı",
+          "replaceMovesFolder": "Değiştirme işlemi, ek dosyalar dahil tüm klasörü {{folder}} konumuna taşır.",
+          "replaceMovesFolderOnHost": "Değiştirme işlemi, ek dosyalar dahil tüm klasörü {{host}} üzerindeki {{folder}} konumuna taşır.",
+          "replaceMovesLink": "Değiştirme işlemi bu bağlantıyı {{folder}} konumuna taşır.",
+          "replaceMovesLinkOnHost": "Değiştirme işlemi bu bağlantıyı {{host}} üzerindeki {{folder}} konumuna taşır.",
+          "replaceMovesFile": "Değiştirme işlemi bu dosyayı {{folder}} konumuna taşır.",
+          "replaceMovesFileOnHost": "Değiştirme işlemi bu dosyayı {{host}} üzerindeki {{folder}} konumuna taşır.",
+          "replaceMovesCopy": "Değiştirme işlemi bu kopyayı {{folder}} konumuna taşır.",
+          "replaceMovesCopyOnHost": "Değiştirme işlemi bu kopyayı {{host}} üzerindeki {{folder}} konumuna taşır."
         },
         "installResult": {
           "installed": "Yüklendi ve doğrulandı.",
@@ -6104,6 +6113,11 @@
           "removed": "{{removed}} kaldırıldı.",
           "removedPreserved_other": "{{removed}} kaldırıldı · değiştirilmiş {{count}} beceri korundu.",
           "removedPreserved_one": "{{removed}} kaldırıldı · değiştirilmiş {{count}} beceri korundu."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Eski kopyanın taşındığı yer:",
+          "movedToOnHost": "Eski kopyanın taşındığı yer ({{host}}):",
+          "showFolder": "Klasörü göster"
         }
       },
       "sidebar": {
@@ -13231,7 +13245,11 @@
           "attentionOther": "Dikkat gerekiyor · Bu adı zaten başka bir beceri kullanıyor",
           "attentionSharedNotCurrent": "Dikkat gerekiyor · Bu klasörün kullandığı paylaşılan kopya Orca'ya ait değil",
           "resultUpdateSkippedPlaces": "{{result}} · {{places}} konumda güncelleme atlandı: {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · {{agent}} için güncelleme atlandı: {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · {{agent}} için güncelleme atlandı: {{reason}}",
+          "attentionDiffersFromOrca": "Dikkat gerekiyor · Bu kopya Orca'nın kopyasından farklı",
+          "replaceMovesCopyToBackup": "Değiştirme işlemi, ek dosyalar dahil mevcut kopyayı bir yedeğe taşır.",
+          "replaceMovesCopyToFolder": "Değiştirme işlemi, ek dosyalar dahil mevcut kopyayı {{folder}} konumuna taşır.",
+          "replaceMovesCopyToFolderOnHost": "Değiştirme işlemi, ek dosyalar dahil mevcut kopyayı {{host}} üzerindeki {{folder}} konumuna taşır."
         },
         "recoverServer": {
           "checking": "Kilit kontrol ediliyor…",
@@ -13823,13 +13841,6 @@
             "c76693e456": "Bu çalışma alanı için dosyalar yüklenemedi:"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Henüz commit yok",
-            "d0fb0f4bf2": "Commit'leri yenile",
-            "9f7535d22b": "Ref'ler, tam olarak o commit'i işaret eden branch veya tag adlarıdır. Yalnızca Git'in commit için adlandırılmış bir ref'i olduğu yerlerde görünürler.",
-            "9289ba0cb9": "Ref nedir?",
-            "d836037d02": "Commit'ler",
-            "8232c8b2f2": "{{value0}} commit'ini aç: {{value1}}",
-            "e5e81e59a6": "Commit'leri yeniden boyutlandır",
             "6d1e0a7c3b": "Commit dosyaları yüklenemedi"
           },
           "HostedReviewActions": {
@@ -14201,7 +14212,59 @@
             "markResolved": "Çözüldü olarak işaretle",
             "keepFile": "Dosyayı koru",
             "keepDeletion": "Silmeyi koru",
-            "refreshAll": "Tümünü yenile"
+            "refreshAll": "Tümünü yenile",
+            "baseUpToDate": "Güncel",
+            "rebaseOperationInProgress": "Geçerli Git işleminin bitmesini bekleyin",
+            "rebaseButton": "Rebase",
+            "rebaseConflictCount_one": "{{count}} çakışma",
+            "rebaseConflictCount_other": "{{count}} çakışma",
+            "rebasePaused": "Rebase duraklatıldı",
+            "rebaseResolveConflictsFirst": "Önce çakışmaları çözün",
+            "rebaseAbort": "İptal et",
+            "rebaseContinue": "Devam et",
+            "continueRebasePausedAgain": "Rebase sonraki çakışmada duraklatıldı",
+            "continueRebaseFailed": "Rebase sürdürülemedi",
+            "rebaseAutostashConflict": "Rebase tamamlandı. Commit edilmemiş değişiklikleriniz temiz biçimde yeniden uygulanamadı; stash içinde saklandı.",
+            "rebaseStoppedByGit": "Git rebase’i duraklattı",
+            "continueRebaseUnconfirmed": "Sonuç doğrulanamadı. Kaynak denetimi güncel durumu göstermek için yenilendi.",
+            "noRebaseInProgress": "Devam eden rebase yok",
+            "rebaseStopMovedOn": "Rebase zaten ilerledi. Paneli kontrol edip yeniden deneyin.",
+            "rebaseEmptyStep": "Bu adımda commit edilecek bir şey yok. Rebase’i iptal edin veya bir terminalde tamamlayın.",
+            "rebaseStepUnreadableShort": "Kontrol başarısız",
+            "rebaseCheckAgain": "Tekrar kontrol et",
+            "rebaseRetryInspect": "Yeniden dene",
+            "rebaseRetryInspectLabel": "Rebase adımını yeniden denetle",
+            "rebaseStoppedFinishInTerminal": "Git bu adımda durakladı. Bir terminalde tamamla veya iptal et.",
+            "rebaseCheckingStep": "Rebase adımı denetleniyor",
+            "rebaseEmptyStepShort": "Boş adım",
+            "rebaseAbortLabel": "Rebase işlemini iptal et",
+            "scopeFileCount_one": "{{count}} dosya",
+            "scopeFileCount_other": "{{count}} dosya",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commit",
+            "scopeUncommitted": "Commit edilmemiş",
+            "scopeAllChanges": "Tüm değişiklikler",
+            "scopeNone": "Yok",
+            "scopeOpenDiff": "Diff aç",
+            "scopeShowAll": "Tüm değişiklikleri göster",
+            "scopeLoadingBranchChanges": "Dal değişiklikleri yükleniyor…",
+            "scopeBranchCommits": "Bu daldaki commitler",
+            "scopeRecentCommits": "Son commitler",
+            "scopeCompareTo": "{{ref}} ile karşılaştır",
+            "scopeFilterCommits": "Commitleri filtrele",
+            "scopeCommitsFailed": "Commitler yüklenemedi.",
+            "scopeFilesFailed": "Dosyalar yüklenemedi.",
+            "scopeLoadingFiles": "Dosyalar yükleniyor…",
+            "scopeNoSharedHistory": "{{ref}} ile ortak geçmiş yok",
+            "scopeRetryCommits": "Yeniden dene",
+            "scopeLoadingCommits": "Commitler yükleniyor…",
+            "scopeNoMatchingCommits": "Eşleşen commit yok",
+            "scopeNoBranchCommitsYet": "Bu dalda henüz commit yok",
+            "scopeNoCommitsYet": "Henüz commit yok",
+            "scopeOlderHistory": "Git Graph içinde daha eski geçmiş",
+            "scopeNoUncommitted": "Commit edilmemiş değişiklik yok.",
+            "scopeCommitFiles": "Dosyalar",
+            "gitGraphButton": "Grafik"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Seçilen ajan başlatılamadı.",
@@ -14635,10 +14698,8 @@
                   "titlePublishBranchFirst": "Commit'leri senkronize etmek için önce branch'i yayımlayın",
                   "titleUseForcePush": "Commit ve force push seçeneğini kullanın — remote'da yalnızca yerel commit'lerin eski kopyaları var",
                   "titleCommitThenPullPush": "Commit'leyin, ardından pull ve push yapın",
-                  "rebaseFromNamedBase": "{{baseRef}} üzerinden rebase et",
                   "rebaseFromBase": "Temel branch'ten rebase et",
                   "rebaseChooseRemoteBase": "Rebase için remote'daki bir temel branch'i seçin",
-                  "rebaseDirtyHint": "Rebase etmeyi deneyin; git önce yerel değişiklikleri commit'lemenizi veya stash etmenizi gerektirebilir",
                   "rebaseWithLatestFrom": "Mevcut branch'i {{baseRef}} üzerindeki en son commit'lerle rebase edin",
                   "blockedCommitFirst": "Önce değişiklikleri commit'leyin",
                   "blockedCheckOutBranchFirst": "Önce bir branch'i checkout edin",
@@ -14660,7 +14721,6 @@
                   "titleCommitAndPush": "Stage edilen değişiklikleri commit'leyin ve push edin",
                   "commitForcePush": "Commit'le ve force push et",
                   "commitPush": "Commit'le ve push et",
-                  "titleOperationInProgress": "İşlem devam ediyor…",
                   "titleAbortRebaseInProgress": "Devam eden rebase işlemini iptal edin",
                   "titleAbortMergeInProgress": "Devam eden merge işlemini iptal edin",
                   "titleNothingToPushTo": "{{upstreamName}} hedefine push edilecek bir şey yok",
@@ -14711,7 +14771,13 @@
                   "titleManualForcePush_other": "{{upstreamName}} hedefini güncellemek için {{count}} yerel commit'i lease korumasıyla force push edin.",
                   "titleUnpublishedForcePushBranch": "Bu branch'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
                   "titleUnpublishedForcePushCount_one": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
-                  "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın."
+                  "titleUnpublishedForcePushCount_other": "Branch'teki {{count}} commit'i lease korumasıyla force push edin ve gerekirse bir upstream ayarlayın.",
+                  "rebaseOntoNamedBase": "{{base}} üzerine rebase",
+                  "rebaseCommitOrStashFirst": "Önce değişiklikleri commit edin veya stash’leyin",
+                  "continueRebase": "Rebase’e devam et",
+                  "titleContinueRebase": "Duraklatılmış rebase’e devam et",
+                  "rebaseFromNamedBase": "{{baseRef}} üzerinden rebase et",
+                  "rebaseDirtyHint": "Rebase etmeyi deneyin; git önce yerel değişiklikleri commit'lemenizi veya stash etmenizi gerektirebilir"
                 }
               },
               "primary": {
@@ -14754,7 +14820,8 @@
                   "e9b5d1f470": "Bir {{value0}} oluşturmadan önce bir branch'e geçiş yapın (checkout).",
                   "f0c6e2a581": "Bu branch henüz bir {{value0}} için hazır değil.",
                   "8f9a0b1c2d": "Commit edilecek bir şey yok. Branch güncel.",
-                  "h3i4j5k607": "Bu branch'in bir {{value0}} oluşturup oluşturamayacağı kontrol ediliyor…"
+                  "h3i4j5k607": "Bu branch'in bir {{value0}} oluşturup oluşturamayacağı kontrol ediliyor…",
+                  "nothingToCommit": "Commit edilecek bir şey yok"
                 }
               },
               "branch": {
@@ -15049,12 +15116,7 @@
             "f8a2c4d1e0": "Gezgin arama modu"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok",
-            "c3d4e5f6a7": "Tüm Değişiklikleri Aç"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "{{value0}} commit'indeki dosyaları göster: {{value1}}",
-            "4a8d9e0c1f": "{{value0}} commit'indeki dosyaları gizle: {{value1}}"
+            "b2c3d4e5f6": "Bu commit'te dosya değişikliği yok"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Commit'i tarayıcıda aç",
@@ -19263,7 +19325,8 @@
         "thisComputer": "bu bilgisayar"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Birleştirmeyi tamamlamak için bu ana makinede daha yeni bir Orca sürümü gerekir. Bu ana makinedeki Orca’yı güncelleyin."
+        "completeMergeNeedsNewerHost": "Birleştirmeyi tamamlamak için bu ana makinede daha yeni bir Orca sürümü gerekir. Bu ana makinedeki Orca’yı güncelleyin.",
+        "continueRebaseNeedsNewerHost": "Rebase’e devam etmek için bu ana bilgisayarda daha yeni bir Orca gerekir. O ana bilgisayarda Orca’yı güncelleyin."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Çakışmaları çözmek için bu ana makinede daha yeni bir Orca sürümü gerekir. Bu ana makinedeki Orca’yı güncelleyin."
@@ -19808,7 +19871,6 @@
         "exitPlanMode": "Plan modundan çık",
         "moreControls": "Diğer sohbet kontrolleri",
         "permissionAppliesNextMessage": "{{saved}} sonraki mesajınızda geçerli olur; şu anda {{active}} kullanılıyor",
-        "botFor": "Amaç: {{detail}}",
         "bots": "Botlar"
       },
       "tool": {
@@ -20164,7 +20226,10 @@
         "paused": "Hedef duraklatıldı",
         "blocked": "Hedef engellendi",
         "limited": "Hedef sınırına ulaşıldı",
-        "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın."
+        "attachmentsUnsupported": "Hedef belirlemeden önce ekleri kaldırın.",
+        "checks_one": "{{count}} kontrol",
+        "checks_other": "{{count}} kontrol",
+        "last-check": "Son hedef kontrolü"
       },
       "fileLinks": {
         "notFound": "Dosya bulunamadı: {{value0}}",
@@ -20285,7 +20350,16 @@
         "settingsRejected": "Seçilen model ve akıl yürütme düzeyi Codex tarafından uygulanamadı. Bu hedef değişikliği gönderilmedi. Seçimi kontrol edin ve yeniden deneyin.",
         "settingsUnconfirmed": "Seçilen model ve akıl yürütme düzeyi Codex tarafından doğrulanmadı. Bu hedef değişikliği gönderilmedi. Sohbeti kontrol edin ve yeniden deneyin.",
         "pauseUnconfirmed": "Codex durdu, ancak hedefinin duraklatıldığı doğrulanmadı. Devam etmeden önce hedefi kontrol edin.",
-        "stopUnconfirmed": "Durdur işlemi Codex tarafından doğrulanamadı. Devam etmeden önce sohbeti kontrol edin."
+        "stopUnconfirmed": "Durdur işlemi Codex tarafından doğrulanamadı. Devam etmeden önce sohbeti kontrol edin.",
+        "noGoal": "Bu sohbette Codex'in değiştirilecek bir hedefi yok. /goal ve ardından hedefi yazarak bir hedef belirleyin."
+      },
+      "automationResult": {
+        "openRun": "Çalıştırmayı aç",
+        "notRead": "{{name}} bunu henüz okumadı. Sonraki mesajınızla birlikte gönderilecek.",
+        "read": "{{name}} bunu sonraki mesajınızla birlikte okudu.",
+        "sentWithOne": "1 otomasyon sonucuyla birlikte gönderildi",
+        "sentWithMany": "{{count}} otomasyon sonucuyla birlikte gönderildi",
+        "cleared": "Sohbet temizlenmeden önce ulaştı. {{name}} bunu görmeyecek."
       },
       "slashCommandDescriptions": {
         "clearConversation": "Sohbeti temizle",
@@ -20453,6 +20527,27 @@
         "sourceTooltip": "{{name}} sohbetinin çatalı",
         "unknownSourceTooltip": "Başka bir sohbetin çatalı"
       },
+      "importPlan": {
+        "comes": "İçe aktarılacak",
+        "changed": "Değişikliklerle içe aktarılacak",
+        "already": "Zaten burada",
+        "stays": "{{app}} içinde kalacak",
+        "fromAgain": "{{app}} kaynağından, yeniden",
+        "from": "{{app}} kaynağından",
+        "selected": "{{total}} öğeden {{chosen}} tanesi seçili · anahtarlar ve oturum bilgileri asla kopyalanmaz",
+        "importOne": "1 öğeyi içe aktar",
+        "importMany": "{{count}} öğeyi içe aktar",
+        "askedOne": "1 öğenin içe aktarılması istendi",
+        "askedMany": "{{count}} öğenin içe aktarılması istendi"
+      },
+      "importDone": {
+        "heading": "İçe aktarma tamamlandı",
+        "title": "{{name}}, {{app}} kaynağından aktarıldı",
+        "open": "Aç",
+        "stayed": "{{app}} içinde kalanlar: {{things}}. {{app}} içinde hiçbir şey değiştirilmedi.",
+        "unchanged": "{{app}} içinde hiçbir şey değiştirilmedi.",
+        "paused": "Hiçbir şey iki kez çalışmasın diye otomasyonlar duraklatıldı. Eski bot {{app}} içinde kapatıldıktan sonra otomasyonları açın."
+      },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",
         "settingsLink": "Ayarlar > Chat UI > Tur etkinliği",
@@ -20467,11 +20562,149 @@
       },
       "splitRight": "Sağa Böl",
       "splitDown": "Aşağı Böl",
+      "automationRun": {
+        "waitOver": "Bekleme sona erdi",
+        "scheduled": "Zamanlanmış",
+        "runNow": "Şimdi çalıştır",
+        "github": "GitHub",
+        "slack": "Slack",
+        "linear": "Linear",
+        "webhook": "Webhook",
+        "gmail": "Gmail",
+        "calendar": "Takvim",
+        "instructions": "Talimatlar",
+        "event": "Olay",
+        "startError": "Hata",
+        "couldNotStart": "Başlatılamadı",
+        "queued": "Sırada",
+        "deadlineReached": "Son tarihe ulaşıldı",
+        "due": "Planlanan: {{time}}",
+        "dueRan": "planlanan: {{due}}, çalıştı: {{ran}}",
+        "reused": "Yeniden kullanıldı: {{what}}",
+        "reusedFrom": "Yeniden kullanılan olay: {{what}} · {{time}}",
+        "whatOn": "{{where}} üzerinde: {{what}}",
+        "whatIn": "{{where}} içinde: {{what}}",
+        "whatAt": "{{what}} · {{where}}",
+        "factsAt": "{{facts}} · {{time}}",
+        "someoneWrote": "Biri şunu yazdı",
+        "personWrote": "{{name}} şunu yazdı",
+        "callerSent": "Çağıran şunu gönderdi",
+        "external": "Harici içerik · bota bilgi olarak gönderildi, talimat olarak değil",
+        "shortened": "Bota gönderildiği şekliyle 4.096 karaktere kısaltıldı.",
+        "memberAccess": "Bu çalıştırıldığında {{name}}, Kimler sorabilir listesindeydi.",
+        "someMemberAccess": "Bu çalıştırıldığında Kimler sorabilir listesindeki biri gönderdi.",
+        "otherAccess": "Kimler sorabilir listesinde değil veya erişim bilinmiyor.",
+        "ownerAccess": "Botun sahibinden.",
+        "sampleCall": "Örnek çağrı",
+        "firstCall": "İlk çağrı",
+        "webhookCall": "Webhook çağrısı",
+        "openOnGitHub": "GitHub'da aç",
+        "openInSlack": "Slack'te aç",
+        "openInLinear": "Linear'da aç",
+        "openLink": "Bağlantıyı aç",
+        "accessibleName": "Otomasyon çalıştırması. {{label}}: {{name}}. {{reason}}.",
+        "accessibleNameAt": "Otomasyon çalıştırması. {{label}}: {{name}}. {{reason}}. {{time}}.",
+        "accessibleNameNoReason": "Otomasyon çalıştırması. {{label}}: {{name}}.",
+        "accessibleNameNoReasonAt": "Otomasyon çalıştırması. {{label}}: {{name}}. {{time}}.",
+        "copyInstructions": "Talimatları kopyala",
+        "copyEvent": "Olayı kopyala",
+        "openAutomation": "Otomasyonu aç",
+        "sendAgain": "Yeniden gönder",
+        "sentAgain": "Yeniden gönderildi",
+        "showAll": "Tümünü göster",
+        "showLess": "Daha az göster",
+        "what": {
+          "github": {
+            "issue_opened": "Sorun açıldı",
+            "pr_opened": "Pull request açıldı",
+            "pr_pushed": "Push",
+            "pr_merged": "Merge edildi",
+            "comment": "Yorum",
+            "review_comment": "İnceleme yorumu",
+            "review": "İnceleme",
+            "mentioned": "Bahsetme",
+            "review_requested": "İnceleme istendi",
+            "assigned": "Atandı",
+            "ci_failed": "CI başarısız oldu",
+            "ci_finished": "CI tamamlandı",
+            "ci_passed": "CI başarılı oldu",
+            "pr_conflicted": "Conflict'ler",
+            "pr_closed": "Kapatıldı",
+            "pr_ready": "İncelemeye hazır",
+            "labeled": "Etiketlendi",
+            "issue_closed": "Sorun kapatıldı",
+            "deploy_finished": "Dağıtım tamamlandı",
+            "security_alert": "Güvenlik uyarısı",
+            "workflow_finished": "Workflow çalıştırması tamamlandı"
+          },
+          "slack": {
+            "mentioned": "Bahsetme",
+            "message": "Mesaj",
+            "reaction": "Tepki"
+          },
+          "linear": {
+            "assigned": "Atandı",
+            "mentioned": "Bahsetme",
+            "issue_created": "Sorun oluşturuldu",
+            "issue_moved": "Sorun taşındı"
+          },
+          "gmail": {
+            "new_email": "Yeni e-posta"
+          },
+          "calendar": {
+            "starting_soon": "Toplantı yakında başlıyor"
+          },
+          "other": "Olay"
+        },
+        "afterThirtyDays": "30 gün sonra",
+        "cancel": "İptal",
+        "cancelled": "İptal edildi",
+        "couldNotFinish": "Tamamlanamadı",
+        "createdAutomation": "Otomasyon oluşturuldu",
+        "finished": "Tamamlandı",
+        "happened": "Gerçekleşti",
+        "noDeadline": "Son tarih yok",
+        "noReplyBy": "{{time}} zamanına kadar yanıt yok",
+        "nothingBy": "{{time}} zamanına kadar bir şey olmadı",
+        "paused": "Duraklatıldı",
+        "replied": "{{actor}} yanıtladı",
+        "rowAccessibleName": "{{label}}: {{name}}. {{details}}",
+        "thenLine": "Ardından",
+        "thenOnce": "Gerçekleştiğinde bir kez çalışır",
+        "thenOnceBy": "Bir kez çalışır; hiçbir şey gelmezse {{time}} zamanında",
+        "until": "{{time}} zamanına kadar",
+        "updatedAutomation": "Otomasyon güncellendi",
+        "waiting": "Bekliyor",
+        "waitsFor": "Şunu bekler"
+      },
+      "eventRow": {
+        "showLess": "Daha az göster",
+        "showMore": "Daha fazla göster",
+        "running": "Çalışıyor",
+        "failed": "Başarısız"
+      },
       "dock": {
         "label": "Mesaj kutusu ve istemler"
       },
       "automationSaved": {
-        "openFullPage": "Sayfayı aç"
+        "resultsInRuns": "her çalıştırmada sonuçlar",
+        "paused": "duraklatıldı",
+        "webhookHint": "Hizmetinizi bu URL'ye yönlendirin",
+        "gettingUrl": "URL alınıyor…",
+        "editDraft": "“{{name}}” otomasyonunu şu şekilde değiştir: ",
+        "resultsInEachRun": "Her çalıştırmada",
+        "resultsChat": "Sohbet",
+        "noRuns": "Henüz çalıştırma yok",
+        "recentRuns": "Son çalıştırmalar",
+        "when": "Ne zaman",
+        "results": "Sonuçlar",
+        "agent": "Ajan",
+        "runNow": "Şimdi çalıştır",
+        "loading": "Yükleniyor",
+        "deleted": "Bu otomasyon silindi",
+        "loadFailed": "Bu otomasyon okunamadı",
+        "openFullPage": "Sayfayı aç",
+        "onAgent": "{{name}} üzerinde"
       },
       "usageLimitActions": {
         "handOff": "Ajana devret"
@@ -21010,7 +21243,7 @@
         "turnDiffsSearchChangedFiles": "değişen dosyalar",
         "turnDiffsSearchEdits": "düzenlemeler",
         "promptSuggestionsTitle": "Önerilen istemler",
-        "promptSuggestionsCopy": "Claude yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, Claude kullanımınıza sayılan ek bir istektir.",
+        "promptSuggestionsCopy": "Claude veya Codex yanıt verdikten sonra, bir sonraki mesajınız için tahmini boş mesaj kutusunda görünür. Kullanmak için Tab tuşuna basın. Her tahmin, o ajanın kullanımına sayılan ek bir istektir.",
         "promptSuggestionsSearchNext": "sonraki istem",
         "promptSuggestionsSearchGhost": "hayalet metin"
       },
@@ -24308,7 +24541,6 @@
       "paste": {
         "remoteSignIn": "Uzaktan oturum açma"
       },
-      "allApps": "Tüm uygulamalar",
       "composio": {
         "withComposio": "Composio ile"
       },
@@ -24336,7 +24568,6 @@
           "usWest": "Batı ABD"
         }
       },
-      "onBot": "{{bot}} üzerinde",
       "line": {
         "vercel": "Dağıtımları kontrol edin ve günlüklerini okuyun",
         "sentry": "Hataları ve arkalarındaki olayları inceleyin",
@@ -24515,7 +24746,7 @@
       "controlOne": "{{person}}, {{name}} botunu kullanarak {{computer}} üzerinde sizin adınıza çalışabilir: komut çalıştırabilir, dosyaları açıp değiştirebilir ve bağlı hesaplarınızı kullanabilir.",
       "executionComputer": "bu ajanın çalıştığı bilgisayar",
       "here": "burada",
-      "reachSlack": "Slack'te @{{name}} olarak mesaj gönderme",
+      "reachSlack": "Slack'te {{name}} olarak mesaj gönderme",
       "reject": "Reddet",
       "there": "orada",
       "thisComputer": "bu bilgisayar",
@@ -24530,7 +24761,10 @@
       "paused": "Duraklatıldı",
       "resumeShort": "Devam ettir",
       "runNow": "Şimdi çalıştır",
-      "running": "Çalışıyor"
+      "running": "Çalışıyor",
+      "deleting": "Siliniyor…",
+      "deleteFailed": "{{name}} silinemedi",
+      "deleteDescription": "<name/> ve çalıştırma geçmişini sil."
     },
     "cloudSignIn": {
       "eventsHostChat": "{{source}} olayları için {{host}} üzerinde Orca Cloud oturumu açılması gerekiyor. Oturum açıldığında bu kuralı kaydedeceğim.",
@@ -24905,7 +25139,8 @@
     "branchCreated": "{{commit}} üzerinde {{branch}} oluşturuldu",
     "branchName": "Dal adı",
     "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
-    "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
+    "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin.",
+    "openDiff": "Diff aç"
   },
   "speechModelUpdate": {
     "update": "Güncelle",

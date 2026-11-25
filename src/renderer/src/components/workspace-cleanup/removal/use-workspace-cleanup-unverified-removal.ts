@@ -17,11 +17,12 @@ import { createWorkspaceCleanupRunReporter } from './run/workspace-cleanup-run-r
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
 import {
   mergeWorkspaceCleanupRowFailures,
-  startWorkspaceCleanupRowAttempt
+  startWorkspaceCleanupRowAttempt,
+  type WorkspaceCleanupRowAttempts
 } from './workspace-cleanup-row-failures'
 
 type UnverifiedRemovalArgs = {
-  browseAttempts: { current: Map<string, symbol> }
+  browseAttempts: { current: WorkspaceCleanupRowAttempts }
   setRowFailures: Dispatch<SetStateAction<Record<string, WorkspaceCleanupFailure>>>
   setDeletionPhaseByIdentity: Dispatch<
     SetStateAction<Record<string, WorkspaceCleanupDeletionPhase>>
@@ -81,6 +82,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
       startWorkspaceCleanupBackgroundRemoval({
         candidates: [candidate],
         removeCandidates,
+        canReportFailure: browseAttempt.canReportFailure,
         snapshotPruneBatch: createWorkspaceCleanupSnapshotPruneBatch(),
         getRemoveOptions: () => ({
           unverifiedRemovalConsent: { identity, attemptId }

@@ -83,7 +83,8 @@ export function useBotDraftImages({
   draftKey,
   sessionId,
   editText,
-  showToast
+  showToast,
+  markersInText = true
 }: {
   client: RpcClient | null
   draftKey: string
@@ -92,6 +93,8 @@ export function useBotDraftImages({
   /** Changes the draft, even after its box closed. */
   editText: (change: (text: string) => string) => void
   showToast: (message: string) => void
+  /** False keeps the words free of [Image #N], as a chat's composer does; the photos ride in order. */
+  markersInText?: boolean
 }) {
   const t = useMobileTranslation()
   const picker = useMediaPicker()
@@ -107,7 +110,7 @@ export function useBotDraftImages({
     change(draftKey, (current) => current.filter((image) => !gone.includes(image.id)))
     const after = ids()
     // Their [Image #N] go with them and the later ones count down; nothing to renumber when none are left of a send.
-    if (inText || after.length > 0) {
+    if (markersInText && (inText || after.length > 0)) {
       editText((text) => queuedEditTextForKeptImages(text, before, after))
     }
   }
@@ -151,10 +154,12 @@ export function useBotDraftImages({
         const previewUri = picked.uri ?? `data:image/png;base64,${picked.base64}`
         change(draft, (current) => [...current, { id, path: '', previewUri }])
         const all = ids()
-        editText(
-          (text) =>
-            text + imageReferencesToPromptMarkers(imageReferenceInsertion(text, '', [id]), all)
-        )
+        if (markersInText) {
+          editText(
+            (text) =>
+              text + imageReferencesToPromptMarkers(imageReferenceInsertion(text, '', [id]), all)
+          )
+        }
         await upload(client, sessionId, draft, id, picked).catch((error: unknown) => {
           if (!draft.active || !ids().includes(id)) {
             return

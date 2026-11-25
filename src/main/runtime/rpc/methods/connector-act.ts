@@ -218,14 +218,16 @@ export const CONNECTOR_ACT_METHOD = defineMethod({
     const target = runtime.getExternalConversationSeam()?.replyTarget(chatPaneKey(sessionId))
     const conversation = target ? cloudConversation(target.key) : null
     const place = verb === 'find' && args.search && !ref ? searchedWorkspace(target?.key) : ref
-    // Only a post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.
+    const actsFor = await botTurnFor(
+      runtime,
+      sessionId,
+      sessionCallerOf(context.orchestrationCaller)?.sessionId
+    )
+    // A post (its words, or a file and its comment) shows another Orca bot whom its turn acts for.
+    // Any other verb says only owner: the cloud believes a host's other answer over its own record.
     const turnFor =
-      verb === 'post' || verb === 'reply' || verb === 'attach'
-        ? await botTurnFor(
-            runtime,
-            sessionId,
-            sessionCallerOf(context.orchestrationCaller)?.sessionId
-          )
+      verb === 'post' || verb === 'reply' || verb === 'attach' || actsFor === 'owner'
+        ? actsFor
         : undefined
     // Asked again here, after the awaits above: a post for later must never go to a cloud that
     // has stopped saying it schedules.

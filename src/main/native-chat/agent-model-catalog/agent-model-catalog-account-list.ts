@@ -73,7 +73,10 @@ export function readAccountList(
     ? {
         ...agentModelCatalogResultFromEntry(entry, false, false, false),
         modelsDifferByWorkspace: true,
-        ...(result.listingInProgress ? { listingInProgress: true as const } : {})
+        ...(result.listingInProgress ? { listingInProgress: true as const } : {}),
+        ...(result.unavailable?.reason === 'agentCommandNotRunnable'
+          ? { unavailable: result.unavailable }
+          : {})
       }
     : result
 }
