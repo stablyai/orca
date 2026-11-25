@@ -23022,6 +23022,7 @@
         },
         "rulesLoadFailed": "无法加载此主机的清理规则：{{error}}",
         "retry": "重试",
+        "listSeparator": "、",
         "summary": {
           "merged": "删除已合并",
           "unchanged": "删除无改动",

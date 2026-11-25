@@ -24012,6 +24012,7 @@
         },
         "rulesLoadFailed": "Couldn't load this host's cleanup rules: {{error}}",
         "retry": "Try again",
+        "listSeparator": ", ",
         "summary": {
           "merged": "Delete merged",
           "unchanged": "Delete unchanged",

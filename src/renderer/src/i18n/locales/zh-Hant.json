@@ -23352,6 +23352,7 @@
         },
         "rulesLoadFailed": "無法載入此主機的清理規則：{{error}}",
         "retry": "重試",
+        "listSeparator": "、",
         "summary": {
           "merged": "刪除已合併",
           "unchanged": "刪除未變更",
