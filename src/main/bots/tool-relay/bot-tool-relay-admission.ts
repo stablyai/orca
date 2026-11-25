@@ -28,13 +28,21 @@ export class RelayAdmission {
   private readonly perHost = new Map<Pool, number>()
   private readonly open = new Set<RelayCall>()
 
-  /** The call's slot, or null when the bot or this computer has too many of its kind open. */
-  admit(botId: string, method: string, credentialKey: string): RelayCall | null {
+  /**
+   * The call's slot, or null when the bot or this computer has too many of its kind open. A token
+   * many sessions share (`perBotLimit` false) is bound by this computer's limit alone.
+   */
+  admit(
+    botId: string,
+    method: string,
+    credentialKey: string,
+    perBotLimit = true
+  ): RelayCall | null {
     const pool = poolOf(method)
     const botKey = `${pool}\0${botId}`
     const forBot = this.perBot.get(botKey) ?? 0
     const forHost = this.perHost.get(pool) ?? 0
-    if (forBot >= LIMITS[pool].perBot || forHost >= LIMITS[pool].perHost) {
+    if ((perBotLimit && forBot >= LIMITS[pool].perBot) || forHost >= LIMITS[pool].perHost) {
       return null
     }
     this.perBot.set(botKey, forBot + 1)

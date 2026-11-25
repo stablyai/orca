@@ -25952,7 +25952,11 @@
           "hostLabel": "GitLab アドレス（任意）",
           "hostHint": "セルフマネージド版または Dedicated 向けです。GitLab.com の場合は空欄にしてください。"
         },
+        "intercom": {
+          "siteLabel": "Intercom のリージョン"
+        },
         "place": {
+          "unitedStates": "米国",
           "usEast": "米国東部",
           "usWest": "米国西部",
           "usCentral": "米国中部",
@@ -25982,7 +25986,13 @@
         "github": "Issue と PR でのメンションとイベント",
         "slack": "メッセージとメンション",
         "linear": "割り当てられた Issue とメンション",
-        "google": "あなたとして Gmail、カレンダー、ドライブを使う"
+        "google": "あなたとして Gmail、カレンダー、ドライブを使う",
+        "clickup": "タスク、リスト、ドキュメントを管理",
+        "airtable": "ベース、テーブル、レコードを照会・編集",
+        "todoist": "タスクを追加、整理、完了",
+        "zapier": "Zapier で設定したアプリでアクションを実行",
+        "granola": "会議メモと文字起こしを検索",
+        "intercom": "会話、連絡先、記事を検索"
       },
       "composioLine": {
         "outlook": "メール、カレンダー、連絡先",

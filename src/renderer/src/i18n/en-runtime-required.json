@@ -21,7 +21,19 @@
     "heading_one": "{{count}} CLI update available",
     "heading_other": "{{count}} CLI updates available",
     "statusCount_one": "{{count}} CLI update",
-    "statusCount_other": "{{count}} CLI updates"
+    "statusCount_other": "{{count}} CLI updates",
+    "cardNamesSome_one": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesSome_other": "{{first}}, {{second}} and {{count}} more",
+    "cardNamesMany_one": "{{first}} and {{count}} more",
+    "cardNamesMany_other": "{{first}} and {{count}} more",
+    "cardHostsTitle_one": "{{count}} CLI update on {{hosts}} hosts",
+    "cardHostsTitle_other": "{{count}} CLI updates on {{hosts}} hosts",
+    "cardUpdateSome_one": "Update {{count}} CLI",
+    "cardUpdateSome_other": "Update {{count}} CLIs",
+    "cardDone_one": "{{count}} CLI is up to date",
+    "cardDone_other": "All {{count}} CLIs are up to date",
+    "cardFailed_one": "{{count}} CLI didn’t update",
+    "cardFailed_other": "{{count}} CLIs didn’t update"
   },
   "agentLaunch": {
     "opencode": {
@@ -1616,11 +1628,15 @@
         "zoom": "Meetings, recordings and transcripts"
       },
       "line": {
+        "airtable": "Query and edit bases, tables and records",
         "atlassian": "Jira issues and Confluence pages",
+        "clickup": "Manage tasks, lists and docs",
         "cloudflare": "Manage Workers, DNS and the rest of an account",
         "context7": "Current docs and examples for code libraries",
         "datadog": "Search logs, metrics and monitors",
         "gitlab": "Read and update issues and merge requests",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles",
         "neon": "Run SQL and manage Postgres branches",
         "netlify": "Deploy sites and check their builds",
         "notion": "Search, read and edit pages",
@@ -1628,7 +1644,9 @@
         "sentry": "Look into errors and the events behind them",
         "stripe": "Look up payments, customers and subscriptions",
         "supabase": "Query databases and manage projects",
-        "vercel": "Check deployments and read their logs"
+        "todoist": "Add, sort and complete tasks",
+        "vercel": "Check deployments and read their logs",
+        "zapier": "Run actions in the apps you set up in Zapier"
       }
     },
     "chats": {

@@ -72,19 +72,34 @@ export function formatBotItemWrite(view: BotItemWriteView): string {
   return lines.join('\n')
 }
 
+/** A list row stays one line: past this many PRs, the newest and a count. */
+const ROW_PRS = 5
+
 function linkSummary(links: readonly BotItemLinkView[]): string[] {
   const workers = links.filter((link) => link.kind === 'dispatch')
-  const parts =
-    workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []
+  const prs: string[] = []
+  let serverPr = false
   for (const link of links) {
     const pr = link.kind === 'pr' || link.kind === 'dispatch' ? link.pr : null
     if (pr?.shown) {
-      parts.push(`#${pr.number}`)
-    } else if (pr && !pr.shown) {
-      parts.push('PR not shown for server work yet')
+      prs.push(`#${pr.number}`)
+    } else if (pr) {
+      serverPr = true
     }
   }
-  return [...new Set(parts)]
+  const unique = [...new Set(prs)]
+  // Past the cap, the newest distinct PRs: a later link to an earlier PR counts as new.
+  const shown =
+    unique.length <= ROW_PRS
+      ? unique
+      : [...new Set(prs.toReversed())].slice(0, ROW_PRS).toReversed()
+  const hidden = unique.length - shown.length
+  return [
+    ...(workers.length > 0 ? [`${workers.length} worker${workers.length === 1 ? '' : 's'}`] : []),
+    ...shown,
+    ...(hidden > 0 ? [`${hidden} more PR${hidden === 1 ? '' : 's'}`] : []),
+    ...(serverPr ? ['PR not shown for server work yet'] : [])
+  ]
 }
 
 function age(at: number, now: number): string {
@@ -146,6 +161,17 @@ function linkLine(link: BotItemLinkView): string {
   }
 }
 
+/** Links `show` prints: the newest page, so a busy item's 1,000 never flood each read. */
+const SHOWN_LINKS = 50
+
+function shownLinkLines(links: readonly BotItemLinkView[]): string[] {
+  const earlier = links.length - SHOWN_LINKS
+  return [
+    ...(earlier > 0 ? [`  ${earlier} earlier links; --json lists them all`] : []),
+    ...links.slice(-SHOWN_LINKS).map((link) => `  ${linkLine(link)}`)
+  ]
+}
+
 function eventLine(event: BotItemEvent): string {
   const who = event.actor.kind === 'bot' ? '' : event.actor.kind === 'owner' ? 'Owner: ' : 'Orca: '
   const data = event.data
@@ -185,7 +211,7 @@ export function formatBotItemShow(view: BotItemShowView, now = Date.now()): stri
     ...(item.question ? [`Asks your owner: ${item.question.text}`] : []),
     ...(item.wait ? [`Waits on: ${item.wait.text}`] : []),
     ...(item.closeNote ? [`Closed: ${item.closeNote}`] : []),
-    ...item.links.map((link) => `  ${linkLine(link)}`),
+    ...shownLinkLines(item.links),
     '',
     ...view.events.map(eventLine),
     ...(view.nextCursor ? [`More: --after ${view.nextCursor}`] : [])

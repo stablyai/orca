@@ -115,6 +115,7 @@ import { BOT_SHARE_METHODS } from './bots-share'
 import { BOT_SHARE_RECEIVE_METHODS } from './bots-share-receive'
 import { BOT_CONNECTORS_METHOD } from './bots-connectors'
 import { BOT_TOOLS_METHODS } from './bots-tools'
+import { BOT_TOOLS_HOST_MCP_METHODS } from './bots-tools-host-mcp'
 import { BOT_TOOLS_OWNED_SIGN_IN_METHODS } from './bots-tools-owned-sign-in'
 import { MCP_SERVER_METHODS } from './mcp-servers'
 import { MCP_SERVER_SIGN_IN_METHODS } from './mcp-servers-sign-in'
@@ -186,6 +187,7 @@ const BOT_RPC_METHODS = [
   ...BOT_SHARE_RECEIVE_METHODS,
   BOT_CONNECTORS_METHOD,
   ...BOT_TOOLS_METHODS,
+  ...BOT_TOOLS_HOST_MCP_METHODS,
   ...BOT_TOOLS_OWNED_SIGN_IN_METHODS,
   ...MCP_SERVER_METHODS,
   ...MCP_SERVER_SIGN_IN_METHODS,
