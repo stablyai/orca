@@ -108,7 +108,6 @@ function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFai
         hideDefaultBranchWorkspace: true,
         filterRepoIds: [],
         showSleepingWorkspaces: true,
-        setHideDefaultBranchWorkspace: (hide: boolean) => set({ hideDefaultBranchWorkspace: hide }),
         setActiveRepo: vi.fn(),
         setProjectFilterIds: vi.fn(),
         ...createRepoUpdateActions(set, get),
@@ -172,8 +171,7 @@ describe('selected checkout handoff', () => {
       source: 'local_folder_picker',
       selectedPath: '/selected',
       executionHostId: 'local',
-      closeModal: () => store.setState({ activeModal: 'none', modalData: {} }),
-      setHideDefaultBranchWorkspace: store.getState().setHideDefaultBranchWorkspace
+      closeModal: () => store.setState({ activeModal: 'none', modalData: {} })
     })
     store.setState({
       activeWorktreeId: 'other::/newer',
@@ -198,8 +196,7 @@ describe('selected checkout handoff', () => {
       source: 'local_folder_picker',
       selectedPath: '/selected',
       executionHostId: 'local',
-      closeModal: () => store.setState({ activeModal: 'none', modalData: {} }),
-      setHideDefaultBranchWorkspace: store.getState().setHideDefaultBranchWorkspace
+      closeModal: () => store.setState({ activeModal: 'none', modalData: {} })
     })
     await open('/newer', 'local')
     harness.activate.mockClear()
