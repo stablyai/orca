@@ -44,7 +44,7 @@ export class FeishuCardStore {
       ) {
         throw new Error('Card identity changed')
       }
-      if (data.kind !== 'status') {
+      if (data.kind !== 'status' && data.kind !== 'response') {
         return
       }
       this.db
@@ -78,7 +78,7 @@ export class FeishuCardStore {
   pending(account: string) {
     return this.db
       .prepare(
-        "SELECT * FROM feishu_cards WHERE account=? AND review=0 AND (revision>sent OR state='claimed') ORDER BY rowid LIMIT 32"
+        "SELECT * FROM feishu_cards WHERE account=? AND review=0 AND (revision>sent OR state='claimed') ORDER BY (state='claimed') DESC,rowid LIMIT 32"
       )
       .all(account)
       .map((r) => row.parse(r))
@@ -96,15 +96,24 @@ export class FeishuCardStore {
       card.state !== 'open' ||
       card.review ||
       data.kind === 'status' ||
+      data.kind === 'response' ||
       !data.options.some((o) => o.id === option)
     ) {
       return null
     }
     const changed = this.db
       .prepare(
-        "UPDATE feishu_cards SET state='claimed',selected=? WHERE account=? AND id=? AND state='open'"
+        "UPDATE feishu_cards SET state='claimed',selected=?,body=?,revision=revision+1 WHERE account=? AND id=? AND state='open'"
       )
-      .run(option, account, card.id).changes
+      .run(
+        option,
+        JSON.stringify({
+          ...data,
+          note: `已选择：${data.options.find((o) => o.id === option)!.label}`
+        }),
+        account,
+        card.id
+      ).changes
     return changed ? this.get(account, card.id) : null
   }
   close(account: string, id: string, note: string) {

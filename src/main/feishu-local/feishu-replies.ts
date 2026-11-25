@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto'
 import { z } from 'zod'
-import type { Binding } from './feishu-binding'
-import type { FeishuStore } from './feishu-store-ops'
 import { feishuCommand } from './feishu-cli'
 export async function replyFeishu(
   app: string,
@@ -44,40 +42,6 @@ export async function replyFeishu(
     .parse(response).data.message_id
 }
 
-/** Raw card content never invokes the CLI Markdown helper's URL fetcher. */
-export function feishuReplyMessage(
-  text: string,
-  botName: string
-): { type: 'interactive' | 'post' | 'text'; content: unknown } {
-  const structured = /^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|>\s|`{3}|~{3}|\|.+\|)/m.test(text)
-  if (!text.trim() || text.includes('![') || /<img\b/i.test(text)) {
-    return { type: 'text', content: { text } }
-  }
-  if (!structured && text.length <= 240) {
-    return { type: 'post', content: { zh_cn: { title: '', content: [[{ tag: 'md', text }]] } } }
-  }
-  return {
-    type: 'interactive',
-    content: {
-      schema: '2.0',
-      config: {
-        update_multi: true,
-        width_mode: 'default',
-        summary: { content: [...text.trim().replace(/\s+/g, ' ')].slice(0, 160).join('') }
-      },
-      header: {
-        title: { tag: 'plain_text', content: botName },
-        template: 'default',
-        icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
-      },
-      body: {
-        direction: 'vertical',
-        padding: '12px 12px 20px 12px',
-        elements: [{ tag: 'markdown', content: text, text_size: 'normal' }]
-      }
-    }
-  }
-}
 export async function uploadFeishuFile(
   app: string,
   name: string,
@@ -111,38 +75,4 @@ export async function uploadFeishuFile(
       data: z.object({ file_key: z.string().regex(/^file_[a-zA-Z0-9_-]+$/) })
     })
     .parse(reply).data.file_key
-}
-
-/** A best-effort receipt on the original message consumes no reply in the chat. */
-export async function acknowledgeFeishuMessage(
-  inbox: FeishuStore,
-  b: Binding,
-  mid: string,
-  signal: AbortSignal,
-  active: () => boolean
-): Promise<void> {
-  if (
-    !b.chat ||
-    signal.aborted ||
-    !active() ||
-    !(await inbox.takeProgress(b.account, mid)) ||
-    !active()
-  ) {
-    return
-  }
-  await feishuCommand(
-    [
-      '--profile',
-      b.app,
-      'api',
-      'POST',
-      `/open-apis/im/v1/messages/${mid}/reactions`,
-      '--as',
-      'bot',
-      '--data',
-      '-'
-    ],
-    signal,
-    JSON.stringify({ reaction_type: { emoji_type: 'OK' } })
-  ).catch(() => {})
 }

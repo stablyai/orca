@@ -44,7 +44,7 @@ it('persists one answer per card, rejects cross-chat and invalid options, and ne
     store.postedCard(b.account, 'p1', 1, 'om_card')
     expect(store.pendingCards(b.account)[0]).toMatchObject({
       state: 'closed',
-      revision: 2,
+      revision: 3,
       sent: 1
     })
     store.putCard(b.account, 'p2', 'lane', 'om_origin', 'oc_chat', { ...data, promptId: 'p2' })

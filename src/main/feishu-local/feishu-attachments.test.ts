@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { originalResource } from './feishu-resources'
-import { feishuReplyMessage } from './feishu-replies'
+import { feishuResponseCard } from './feishu-response-render'
 import { dmKey } from './feishu-binding'
 import { FeishuInbox } from './feishu-inbox'
 
@@ -44,7 +44,16 @@ it('leaves external image references in plain text without activating card resou
     '![photo](https://example.org/test.png)',
     '<IMG src="https://example.org/test.png">'
   ]) {
-    expect(feishuReplyMessage(text, 'Example')).toEqual({ type: 'text', content: { text } })
+    const card = feishuResponseCard(
+      {
+        kind: 'response',
+        text: 'Done',
+        options: [],
+        response: { phase: 'done', final: text, progress: [], trace: [] }
+      },
+      'Example'
+    )
+    expect(card.body.elements).toEqual([{ tag: 'div', text: { tag: 'plain_text', content: text } }])
   }
 })
 

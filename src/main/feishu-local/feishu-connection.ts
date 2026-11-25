@@ -255,8 +255,7 @@ export class FeishuConnection {
       () => Boolean(this.bot()),
       () => this.checkProfile(),
       () => this.retryWork(),
-      () => this.changed(),
-      this.interactions
+      () => this.changed()
     )
     const displayName = await this.ingress.displayName(b.app)
     // Answer cards before draining their resulting user messages on the next pass.
@@ -286,7 +285,8 @@ export class FeishuConnection {
       () => !this.signal.aborted && Boolean(this.bot()),
       () => this.checkProfile(),
       () => this.changed(),
-      displayName
+      displayName,
+      this.interactions.cards
     )
   }
 }

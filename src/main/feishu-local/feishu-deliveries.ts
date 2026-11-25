@@ -3,8 +3,6 @@ import type { Bot } from '../../shared/bot-types'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import { dmKey, type Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
-import type { FeishuInteractions } from './feishu-interactions'
-import { acknowledgeFeishuMessage } from './feishu-replies'
 import { feishuInput } from './feishu-resources'
 
 export async function deliverFeishuMessages(
@@ -16,8 +14,7 @@ export async function deliverFeishuMessages(
   active: () => boolean,
   checkProfile: () => Promise<void>,
   retry: () => void,
-  changed: () => void,
-  interactions: FeishuInteractions
+  changed: () => void
 ) {
   const seam = runtime.getExternalConversationSeam()
   if (!seam || !b.owner || !b.chat) {
@@ -38,6 +35,9 @@ export async function deliverFeishuMessages(
       bot.agent,
       signal
     )
+    await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
+      kind: 'begin'
+    })
     const { initial } = await seam.start(host, key, row.mid, {
       agent: bot.agent,
       transportSignal: signal,
@@ -63,15 +63,21 @@ export async function deliverFeishuMessages(
       retry()
       break
     }
-    if (initial.outcome === 'accepted') {
-      await acknowledgeFeishuMessage(inbox, b, row.mid, signal, () => Boolean(active()))
-    } else {
+    if (initial.outcome !== 'accepted') {
+      await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
+        kind: 'final',
+        text: '本次请求未能开始，请在 Orca 中检查。',
+        failed: true
+      })
       await inbox.review(b.account, row.mid)
       changed()
     }
     await inbox.admitted(b.account, row.mid)
     if (initial.outcome === 'accepted') {
-      await interactions.status('feishu-local', key.externalId, '正在处理')
+      await inbox.updateResponse(b.account, key.externalId, row.mid, route?.chat ?? b.chat, {
+        kind: 'status',
+        text: '正在处理'
+      })
     }
     row = await inbox.next(b.account)
   }

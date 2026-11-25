@@ -14,9 +14,16 @@ export function feishuControlCard(data: FeishuCardData, botName: string, open: b
       title: { tag: 'plain_text', content: botName },
       subtitle: {
         tag: 'plain_text',
-        content: data.kind === 'status' ? '工作状态' : data.note ? '已处理' : '等待你的选择'
+        content:
+          data.kind === 'status'
+            ? '工作状态'
+            : data.note?.startsWith('已选择：')
+              ? '已选择'
+              : data.note
+                ? '已处理'
+                : '等待你的选择'
       },
-      template: data.note ? 'grey' : 'default',
+      template: data.note?.startsWith('已选择：') ? 'green' : data.note ? 'grey' : 'default',
       icon: { tag: 'standard_icon', token: 'ai-common_colorful' }
     },
     body: {

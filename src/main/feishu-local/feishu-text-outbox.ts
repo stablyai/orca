@@ -1,15 +1,15 @@
 import type { Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
-import { feishuReplyMessage, replyFeishu } from './feishu-replies'
+import { dmKey } from './feishu-binding'
+import type { FeishuCardDelivery } from './feishu-card-delivery'
 
 export async function drainFeishuTextOutbox(
   inbox: FeishuStore,
   b: Binding,
-  signal: AbortSignal,
   active: () => boolean,
   checkProfile: () => Promise<void>,
   changed: () => void,
-  botName: string
+  cards: FeishuCardDelivery
 ): Promise<void> {
   if (!b.chat) {
     return
@@ -24,25 +24,22 @@ export async function drainFeishuTextOutbox(
       if (!active()) {
         return
       }
-      if (!(await inbox.mayPostReply(b.account, row.id, Date.now()))) {
-        changed()
-        continue
-      }
-      if (!active()) {
-        return
-      }
       const route = await inbox.messageRoute(b.account, row.mid)
-      const messageId = await replyFeishu(
-        b.app,
+      const id = await inbox.updateResponse(
         b.account,
+        route?.external ?? dmKey(b).externalId,
         row.mid,
         route?.chat ?? b.chat,
-        feishuReplyMessage(row.text, botName),
-        `reply:${row.id}`,
-        signal
+        {
+          kind: 'progress',
+          id: row.id,
+          text: row.text
+        }
       )
-      if (route) {
-        await inbox.putRoute(b.account, messageId, route)
+      const messageId = id && (await cards.publish(id))
+      if (!messageId) {
+        changed()
+        return
       }
       await inbox.replyPosted(b.account, row.id, messageId)
     }

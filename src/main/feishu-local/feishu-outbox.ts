@@ -1,8 +1,9 @@
 import type { ConnectorReplyJournal } from '../connector-cloud/connector-reply-outbox'
 import { outcomeSentence } from '../connector-cloud/connector-reply-outcome-sentence'
 import { dmKey, type Binding } from './feishu-binding'
-import { replyFeishu, feishuReplyMessage, uploadFeishuFile } from './feishu-replies'
+import { replyFeishu, uploadFeishuFile } from './feishu-replies'
 import type { FeishuStore } from './feishu-store-ops'
+import type { FeishuCardDelivery } from './feishu-card-delivery'
 import { drainFeishuTextOutbox } from './feishu-text-outbox'
 
 /** Only the delivery named by the native turn's stamps owns the answer. */
@@ -14,12 +15,14 @@ export async function drainFeishuOutbox(
   active: () => boolean,
   checkProfile: () => Promise<void>,
   changed: () => void,
-  botName: string
+  botName: string,
+  cards: FeishuCardDelivery
 ): Promise<void> {
   if (!b.chat) {
     return
   }
-  await drainFeishuTextOutbox(inbox, b, signal, active, checkProfile, changed, botName)
+  cards.name = botName
+  await drainFeishuTextOutbox(inbox, b, active, checkProfile, changed, cards)
   let after: string | null = null
   do {
     const rows = await journal.readOwed(b.account, after, 32)
@@ -45,14 +48,6 @@ export async function drainFeishuOutbox(
       }
       if (fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet') {
         await checkProfile()
-        if (!active()) {
-          return
-        }
-        if (!(await inbox.mayPost(b.account, row.deliveryId, Date.now()))) {
-          await inbox.review(b.account, row.deliveryId)
-          changed()
-          continue
-        }
         if (!active()) {
           return
         }
@@ -86,18 +81,24 @@ export async function drainFeishuOutbox(
         if (!active()) {
           return
         }
-        const finalId = await replyFeishu(
-          b.app,
-          b.account,
-          row.deliveryId,
-          chat,
-          feishuReplyMessage(fill.prose || outcomeSentence(fill.outcome, 'Orca'), botName),
-          'final',
-          signal
-        )
-        if (route) {
-          await inbox.putRoute(b.account, finalId, route)
+      }
+      const id = await inbox.updateResponse(
+        b.account,
+        row.conversation.externalId,
+        row.deliveryId,
+        chat,
+        {
+          kind: 'final',
+          text:
+            fill.answerDeliveryId === row.deliveryId && fill.outcome !== 'quiet'
+              ? fill.prose || outcomeSentence(fill.outcome, 'Orca')
+              : '',
+          failed: fill.outcome === 'failed'
         }
+      )
+      if (!id || !(await cards.publish(id))) {
+        changed()
+        continue
       }
       await journal.sent([{ account: b.account, deliveryId: row.deliveryId }])
     }

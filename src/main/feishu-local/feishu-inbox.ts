@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import Database from '../sqlite/sync-database'
 import type { FeishuMessage, FeishuProfile } from './feishu-cli'
+import { FeishuResponseStore } from './feishu-response-store'
 import { FeishuCardStore } from './feishu-card-store'
-import type { FeishuCardData } from './feishu-card-data'
 import { FeishuRoutes } from './feishu-routes'
 import type { FeishuRoute } from './feishu-route-key'
 import { binding, type Binding } from './feishu-binding'
@@ -15,6 +15,7 @@ const inReplyWindow = (first: number, now: number): boolean =>
 export class FeishuInbox {
   private db: Database.Database
   private cards: FeishuCardStore
+  private responses: FeishuResponseStore
   private routes: FeishuRoutes
   constructor(path: string) {
     this.db = new Database(path)
@@ -27,6 +28,7 @@ export class FeishuInbox {
       CREATE INDEX IF NOT EXISTS pending_feishu_replies ON text_replies(account) WHERE message_id IS NULL AND review=0;
       CREATE INDEX IF NOT EXISTS review_feishu_messages ON inbox(account) WHERE review=1;`)
     this.cards = new FeishuCardStore(this.db)
+    this.responses = new FeishuResponseStore(this.db, this.cards)
     this.routes = new FeishuRoutes(this.db)
     const columns = this.db.prepare('PRAGMA table_info(inbox)').all()
     if (!columns.some((c) => c.name === 'progress')) {
@@ -48,25 +50,14 @@ export class FeishuInbox {
   laneRoute(account: string, external: string) {
     return this.routes.lane(account, external)
   }
-  putCard(
-    account: string,
-    id: string,
-    external: string,
-    original: string,
-    chat: string,
-    data: FeishuCardData
-  ) {
-    this.cards.put(account, id, external, original, chat, data)
-  }
-  pendingChoice(account: string, original: string) {
-    return this.cards.pendingChoice(account, original)
-  }
-  pendingCards(account: string) {
-    return this.cards.pending(account)
-  }
-  claimCard(account: string, message: string, chat: string, option: string) {
-    return this.cards.claim(account, message, chat, option)
-  }
+  getCard = (...args: Parameters<FeishuCardStore['get']>) => this.cards.get(...args)
+  updateResponse = (...args: Parameters<FeishuResponseStore['update']>) =>
+    this.responses.update(...args)
+  putCard = (...args: Parameters<FeishuCardStore['put']>) => this.cards.put(...args)
+  pendingChoice = (...args: Parameters<FeishuCardStore['pendingChoice']>) =>
+    this.cards.pendingChoice(...args)
+  pendingCards = (...args: Parameters<FeishuCardStore['pending']>) => this.cards.pending(...args)
+  claimCard = (...args: Parameters<FeishuCardStore['claim']>) => this.cards.claim(...args)
   closeCard = (...args: Parameters<FeishuCardStore['close']>) => this.cards.close(...args)
   closePrompts(
     account: string,

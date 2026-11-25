@@ -5,6 +5,8 @@ const OPS = [
   'messageRoute',
   'laneRoute',
   'putCard',
+  'getCard',
+  'updateResponse',
   'pendingCards',
   'pendingChoice',
   'claimCard',

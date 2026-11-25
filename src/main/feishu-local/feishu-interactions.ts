@@ -3,7 +3,6 @@ import {
   type PromptPublication
 } from '../external-conversations/external-conversation-prompt-publication'
 import { FeishuAsyncQuestions } from './feishu-async-questions'
-import { z } from 'zod'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { runtimeConversationHost } from '../external-conversations/external-conversation-runtime-host'
 import type {
@@ -13,13 +12,14 @@ import type {
 import { dmKey, type Binding } from './feishu-binding'
 import type { FeishuStore } from './feishu-store-ops'
 import { cardData } from './feishu-card-data'
-import { feishuControlCard, feishuPromptData } from './feishu-card-render'
-import { feishuCommand, consumeFeishuEvent } from './feishu-cli'
+import { feishuPromptData } from './feishu-card-render'
+import { consumeFeishuEvent } from './feishu-cli'
 import { setTimeout as delay } from 'node:timers/promises'
-import { replyFeishu } from './feishu-replies'
+import { FeishuCardDelivery } from './feishu-card-delivery'
 import { readFeishuClick } from './feishu-card-events'
 
 export class FeishuInteractions {
+  readonly cards: FeishuCardDelivery
   private events: Promise<void> = Promise.resolve()
   private readonly asyncQuestions: FeishuAsyncQuestions
   constructor(
@@ -30,6 +30,7 @@ export class FeishuInteractions {
     private readonly active: () => boolean,
     private readonly wake: () => void
   ) {
+    this.cards = new FeishuCardDelivery(store, b, signal, active)
     this.asyncQuestions = new FeishuAsyncQuestions(runtime, store, b, signal, active, wake)
   }
 
@@ -66,8 +67,19 @@ export class FeishuInteractions {
     if (!click || click.operator_id !== this.b.owner || !this.active()) {
       return
     }
-    await this.store.claimCard(this.b.account, click.message_id, click.chat_id, click.option)
-    this.wake()
+    const card = await this.store.claimCard(
+      this.b.account,
+      click.message_id,
+      click.chat_id,
+      click.option
+    )
+    try {
+      if (card) {
+        await this.cards.publish(card.id)
+      }
+    } finally {
+      this.wake()
+    }
   }
   private async record(
     event: ConversationEvent | ConversationSnapshot,
@@ -160,9 +172,19 @@ export class FeishuInteractions {
               : '已完成'
       )
     } else if (event.kind === 'turn-started') {
-      await this.status(source, externalId, '正在处理')
+      await this.store.updateResponse(
+        this.b.account,
+        externalId,
+        event.deliveryId ?? null,
+        route.chat,
+        { kind: 'start', turn: event.at }
+      )
     } else if (event.kind === 'activity' && event.text) {
-      await this.status(source, externalId, event.text)
+      await this.store.updateResponse(this.b.account, externalId, null, route.chat, {
+        kind: 'trace',
+        text: event.text,
+        turn: event.turnId
+      })
     } else if (event.kind === 'workers') {
       await this.status(
         source,
@@ -178,17 +200,14 @@ export class FeishuInteractions {
     }
     const route = await this.store.laneRoute(this.b.account, external)
     if (route) {
-      await this.store.putCard(
-        this.b.account,
-        `status:${external}`,
-        external,
-        route.root,
-        route.chat,
-        { kind: 'status', text, options: [] }
-      )
+      await this.store.updateResponse(this.b.account, external, null, route.chat, {
+        kind: 'status',
+        text
+      })
     }
   }
   async drain(botName: string): Promise<void> {
+    this.cards.name = botName
     await this.events
     await this.asyncQuestions.flush()
     const b = this.b
@@ -198,6 +217,9 @@ export class FeishuInteractions {
       }
       const data = cardData.parse(JSON.parse(card.body))
       if (card.state === 'claimed' && card.selected !== null) {
+        if (!(await this.cards.publish(card.id))) {
+          continue
+        }
         const option = data.options.find((o) => o.id === card.selected)
         if (!option) {
           await this.store.closeCard(b.account, card.id, '选项已失效')
@@ -251,47 +273,7 @@ export class FeishuInteractions {
         this.wake()
         continue
       }
-      if (
-        card.revision <= card.sent ||
-        !(await this.store.sendingCard(b.account, card.id, Date.now()))
-      ) {
-        continue
-      }
-      const content = feishuControlCard(data, botName, card.state === 'open')
-      let message = card.message
-      if (message) {
-        const result = await feishuCommand(
-          [
-            '--profile',
-            b.app,
-            'api',
-            'PATCH',
-            `/open-apis/im/v1/messages/${message}`,
-            '--as',
-            'bot',
-            '--data',
-            '-'
-          ],
-          this.signal,
-          JSON.stringify({ content: JSON.stringify(content) })
-        )
-        z.object({ ok: z.literal(true), identity: z.literal('bot') }).parse(result)
-      } else {
-        message = await replyFeishu(
-          b.app,
-          b.account,
-          card.original,
-          card.chat,
-          { type: 'interactive', content },
-          `card:${card.id}`,
-          this.signal
-        )
-      }
-      await this.store.postedCard(b.account, card.id, card.revision, message)
-      const route = await this.store.laneRoute(b.account, card.external)
-      if (route) {
-        await this.store.putRoute(b.account, message, route)
-      }
+      await this.cards.publish(card.id)
     }
   }
 }
