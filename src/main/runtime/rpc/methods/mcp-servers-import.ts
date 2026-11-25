@@ -2,7 +2,6 @@
 // the host list. Only reached through mcpServers.*, which refuses while the switch is off.
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { BotToolServer } from '../../../../shared/bot-tools'
 import { MCP_FILE_AGENTS, type McpServer } from '../../../../shared/mcp-servers/mcp-servers'
 import { agentMcpServerMergeKey } from '../../../../shared/mcp/agent-mcp-config-entry'
 import {
@@ -25,15 +24,11 @@ import { hasMcpAgentProblem } from '../../../mcp-servers/mcp-agent-problems'
 import { terminalMcpAdapterFor } from '../../../mcp-servers/terminal/terminal-mcp-adapters'
 import {
   addMcpServer,
-  readHostEntries,
-  readMcpAgentFiles,
   removeMcpServer,
   setMcpServerAgentEnabled,
-  setMcpServerWorkspaces,
-  storedView
+  setMcpServerWorkspaces
 } from '../../../mcp-servers/mcp-host-list'
-import { mcpHostListFolder } from '../../../mcp-servers/mcp-host-list-folder'
-import { pluginMarkOf } from '../../../mcp-servers/mcp-plugin-server-mark'
+import { findOwnMcpServer, readMcpAgentFiles } from '../../../mcp-servers/mcp-host-list-file-reads'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -95,22 +90,6 @@ function editFailure(error: AgentMcpConfigEditError): string {
   }
 }
 
-/**
- * The user's own Orca server with this one's definition (URL or command line), whatever its name.
- * A plugin's entry is its plugin's, and one with a saved sign-in or headers can't be compared.
- */
-async function hostServerLike(server: BotToolServer): Promise<McpServer | null> {
-  const folder = mcpHostListFolder()
-  const definition = agentMcpServerMergeKey('', server)
-  const same = (await readHostEntries(folder)).entries.find(
-    (entry) =>
-      !pluginMarkOf(entry.extras) &&
-      !('credential' in entry.server && entry.server.credential) &&
-      agentMcpServerMergeKey('', entry.server) === definition
-  )
-  return same ? storedView(folder, same.id) : null
-}
-
 type AgentMcpImport = (
   host: AgentMcpImportHost,
   key: string,
@@ -131,7 +110,10 @@ export async function importAgentMcpServer(
   ) => {
     // Already Orca's (a copy an agent Orca's list doesn't reach kept after a Move): nothing is added
     // twice. A Move that takes copies out adds its own, scoped like them: Orca's may reach less.
-    const existing = keepsCopies ? await hostServerLike(server) : null
+    const definition = agentMcpServerMergeKey('', server)
+    const existing = keepsCopies
+      ? await findOwnMcpServer((own) => agentMcpServerMergeKey('', own) === definition)
+      : null
     if (existing) {
       return existing
     }

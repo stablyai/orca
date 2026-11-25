@@ -2,7 +2,6 @@
 // sign-ins and relay addresses key by that folder exactly as a bot's do. Each server's id, agents,
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import {
   freeBotToolName,
@@ -34,8 +33,6 @@ import { mcpServerSettingsOf as settingsOf } from './mcp-host-list-launch'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
 import { mcpHostListFolder } from './mcp-host-list-folder'
-import { botToolsPath } from '../bots/bot-tools-path'
-import { parseJsonObject } from '../../shared/workspace-setup/setup-script-import-parsers'
 import { McpServersError } from './mcp-servers-error'
 import { assertNotFromPlugin, pluginViewOf } from './mcp-plugin-server-mark'
 
@@ -102,7 +99,7 @@ export async function readHostEntries(folder: string): Promise<HostList> {
 }
 
 /** The file's `agentFiles`: which agents' own MCP file the user let Orca keep its servers in. */
-function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
+export function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
   const stored = AgentFilesSchema.safeParse(file.agentFiles).data ?? {}
   const allowed = (agent: McpFileAgent): boolean => stored[agent] === true
   return { grok: allowed('grok'), cursor: allowed('cursor'), droid: allowed('droid') }
@@ -148,13 +145,6 @@ export async function readMcpHostList(
     servers: entries.map((entry, i) => viewOf(entry, tools[i]!)),
     agentFiles: agentFilesOf(file)
   }
-}
-
-/** Which agents' own MCP file the user let Orca keep its servers in; no server or sign-in is read. */
-export async function readMcpAgentFiles(folder = mcpHostListFolder()): Promise<McpAgentFiles> {
-  const text = await readFile(botToolsPath(folder), 'utf8').catch(() => null)
-  // Unreadable or absent: Orca keeps its servers in no agent's file.
-  return agentFilesOf(parseJsonObject(text) ?? {})
 }
 
 /** The user's consent, or its withdrawal, for Orca to keep its servers in `agent`'s own MCP file. */

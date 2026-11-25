@@ -153,13 +153,15 @@ function importRow(
   }
 }
 
+/** `removals`: whether the rows need what Move would take out (no Copy does). */
 async function importRows(
   host: AgentMcpImportHost,
-  found: readonly DiscoveredAgentMcpServer[]
+  found: readonly DiscoveredAgentMcpServer[],
+  removals = true
 ): Promise<ImportRow[]> {
   const limits = found.map(limitedTo)
   const workspaceFor = limits.some((paths) => paths !== null) ? await host.workspaceFor() : null
-  const reaches = await host.listReaches()
+  const reaches = removals && found.length > 0 ? await host.listReaches() : () => false
   return found.map((server, index) =>
     importRow(
       server,
@@ -183,12 +185,16 @@ const importQueue = new Map<string, Promise<void>>()
 const oneImportAtATime = <T>(run: () => Promise<T>): Promise<T> =>
   runKeyedSerializedOperation(importQueue, 'import', run)
 
-async function movableRow(host: AgentMcpImportHost, key: string): Promise<ImportRow> {
+async function movableRow(
+  host: AgentMcpImportHost,
+  key: string,
+  removals: boolean
+): Promise<ImportRow> {
   const server = (await discover(host)).find((candidate) => candidate.key === key)
   if (!server) {
     throw new AgentMcpServerImportError('gone')
   }
-  const [found] = await importRows(host, [server])
+  const [found] = await importRows(host, [server], removals)
   if (!found.row.movable) {
     throw new AgentMcpServerImportError('not-movable')
   }
@@ -202,7 +208,7 @@ export async function copyAgentMcpServer<T>(
   add: AddImportedMcpServer<T>
 ): Promise<T> {
   return oneImportAtATime(async () => {
-    const { found, scope } = await movableRow(host, key)
+    const { found, scope } = await movableRow(host, key, false)
     return add(found.server, scope, true)
   })
 }
@@ -232,7 +238,7 @@ export async function moveAgentMcpServer<T>(
   add: AddImportedMcpServer<T>
 ): Promise<T> {
   return oneImportAtATime(async () => {
-    const { found, removing, scope } = await movableRow(host, key)
+    const { found, removing, scope } = await movableRow(host, key, true)
     const added = await add(found.server, scope, removing.length === 0)
     const configName = found.sources[0]!.keyPath.at(-1)!
     const mergeKey = agentMcpServerMergeKey(configName, found.server)

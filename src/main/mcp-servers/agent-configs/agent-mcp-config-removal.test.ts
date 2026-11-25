@@ -160,18 +160,17 @@ describe('agent MCP config discovery and move', () => {
     await moveAgentMcpServer(host, row('db').key, add)
     await moveAgentMcpServer(host, row('grk').key, add)
     expect(added).toEqual([
-      [
-        { name: 'github', url: GITHUB },
-        { workspaces: null, agentsOff: [] }
-      ],
+      [{ name: 'github', url: GITHUB }, { workspaces: null, agentsOff: [] }, false],
       [
         { name: 'db', command: 'pg-mcp', args: [] },
         // Off in orca and in Droid, on in docs: only docs gets it, and Droid stays off.
-        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: ['droid'] }
+        { workspaces: { later: false, on: ['repo-2'], off: [] }, agentsOff: ['droid'] },
+        false
       ],
       [
         { name: 'grk', command: 'grk', args: ['a'] },
-        { workspaces: null, agentsOff: ['grok'] }
+        { workspaces: null, agentsOff: ['grok'] },
+        false
       ]
     ])
     // The last server out of a TOML file takes its emptied table with it.
