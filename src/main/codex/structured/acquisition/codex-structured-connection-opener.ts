@@ -5,6 +5,7 @@ import {
 import { sharedCodexServerPool } from '../../app-server/shared-servers/codex-shared-server-pool'
 import { CodexSharedServerUncontainedError } from '../../app-server/shared-servers/codex-shared-server-windows-job'
 import { codexSkillRoots } from '../launch/codex-structured-skill-roots'
+import { takeProviderRelayHandedBack } from '../../../provider-relay/app-provider-relays'
 import type {
   CodexStructuredLaunch,
   CodexStructuredSessionAdapterDeps
@@ -48,8 +49,10 @@ export function codexConnectionOpener(
     ...(launch.visuals ? { visualsSkillsRoot: launch.visuals.skill.skillsRoot } : {}),
     ...(launch.linkedSkillsRoot ? { linkedSkillsRoot: launch.linkedSkillsRoot } : {})
   })
-  const open: CodexConnectionOpen = (connectionLaunch, handlers) =>
-    pool()
+  const open: CodexConnectionOpen = (connectionLaunch, handlers) => {
+    // A pooled launch retires a hand-back's exemption, as a relayed one does.
+    takeProviderRelayHandedBack(sessionId)
+    return pool()
       .open(connectionLaunch, handlers ?? {}, {
         sessionId,
         skillRoots,
@@ -65,6 +68,7 @@ export function codexConnectionOpener(
         }
         throw error
       })
+  }
   sharedOpeners.add(open)
   return open
 }

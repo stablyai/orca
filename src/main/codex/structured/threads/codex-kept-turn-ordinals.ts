@@ -4,11 +4,8 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { jsonObject } from '../../../../shared/json-stream/json-value-property'
-import {
-  codexNonMessageIdentity,
-  isCodexMessageItemType,
-  type CodexThreadItem
-} from '../items/codex-thread-item-identity'
+import { codexNonMessageIdentity, type CodexThreadItem } from '../items/codex-thread-item-identity'
+import { codexChildMessageText } from '../background-work/codex-child-work-translation'
 import type { CodexBackgroundTaskTracker } from '../background-work/codex-background-task-tracker'
 import { CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE } from '../items/codex-collab-agent-tool-call'
 
@@ -143,11 +140,10 @@ export function restateKeptCodexBackgroundWork(
       const started = { id: turnId, status: 'inProgress' }
       tracker.observe({ method: 'turn/started', threadId, params: { turn: started } })
     }
-    // Its messages too, so its end carries its own last message, never the card's older one.
-    for (const item of endedChild ? items : []) {
-      if (isCodexMessageItemType(item.type)) {
-        tracker.observe({ method: 'item/completed', threadId, params: { turnId, item } })
-      }
+    // Its final message too (only that: each one is a store write), so its end carries it.
+    const final = endedChild ? items.findLast((item) => codexChildMessageText(item)) : undefined
+    if (final) {
+      tracker.observe({ method: 'item/completed', threadId, params: { turnId, item: final } })
     }
     for (const item of items) {
       if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {

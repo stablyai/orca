@@ -5,7 +5,9 @@ import {
   loadedChildren,
   loadedThreadIds,
   MAX_SNAPSHOT_THREADS,
+  readBounded,
   readSource,
+  SKIPPED_READ_GRACE_MS,
   SOFT_READ_TIMEOUT_MS,
   type ChildSource
 } from './codex-kept-loaded-threads'
@@ -32,6 +34,7 @@ import type { StructuredAgentSessionHistoryJournal } from '../../../native-chat/
 
 const PRIMARY_RETRY_MS = 500
 const LOADED_TURN_TIMEOUT_MS = 10_000
+const SKIPPED_READ_CONCURRENCY = 8
 const KEPT_UNREACHABLE_DETAIL =
   "Orca couldn't reconnect to this chat's agent, which is still running. Send again to reconnect."
 
@@ -196,41 +199,53 @@ export async function readKeptCodexSnapshot(input: {
     const reading = fresh.slice(0, Math.max(0, room))
     reading.forEach(({ threadId }) => seen.add(threadId))
     const reads = await Promise.all(
-      reading.map(({ threadId, source }) =>
-        readKeptThread({
-          connection: input.connection,
-          translator: input.translator,
-          threadId,
-          primary: threadId === input.threadId,
-          ...(source !== undefined ? { source } : {}),
-          timeoutMs,
-          onError: input.onError
-        })
-      )
+      reading.map(({ threadId, source }) => readThread(threadId, timeoutMs, source))
     )
-    const named: string[] = []
-    reads.forEach(({ turn, source }, i) => {
-      const threadId = reading[i]!.threadId
-      if (threadId !== input.threadId) {
-        if (source?.parentThreadId) {
-          spawns.push(spawnOf(source.parentThreadId, threadId, source.label))
-        } else {
-          unparented.push(threadId)
-        }
+    const named = reads.flatMap((read, i) => record(reading[i]!.threadId, read))
+    return [...new Set(named)].map((threadId) => ({ threadId }))
+  }
+  const readThread = (threadId: string, timeoutMs: number, source?: ChildSource | null) =>
+    readKeptThread({
+      connection: input.connection,
+      translator: input.translator,
+      threadId,
+      primary: threadId === input.threadId,
+      ...(source !== undefined ? { source } : {}),
+      timeoutMs,
+      onError: input.onError
+    })
+  /** Registers a read thread and seeds its turn; returns the children that turn spawned. */
+  const record = (threadId: string, { turn, source }: ThreadRead): string[] => {
+    if (threadId !== input.threadId) {
+      if (source?.parentThreadId) {
+        spawns.push(spawnOf(source.parentThreadId, threadId, source.label))
+      } else {
+        unparented.push(threadId)
       }
-      if (!turn) {
+    }
+    if (!turn) {
+      return []
+    }
+    turns.push(turn)
+    seedTurn(input.translator, turn)
+    // A child spawned in this turn may still run though no carried work names it.
+    return turn.items.flatMap((item) =>
+      item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE ? readReceiverThreadIds(item) : []
+    )
+  }
+  // Loaded threads the budget skipped get one turns-only read past it, so a running child among
+  // them still keeps its numbering and Stop target; one that answers nothing is left out.
+  const readSkipped = async (skipped: readonly string[], deadline: number) => {
+    await readBounded(skipped, SKIPPED_READ_CONCURRENCY, deadline, async (threadId, ms) => {
+      if (seen.has(threadId) || seen.size >= MAX_SNAPSHOT_THREADS) {
         return
       }
-      turns.push(turn)
-      seedTurn(input.translator, turn)
-      // A child spawned in this turn may still run though no carried work names it.
-      for (const item of turn.items) {
-        if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
-          named.push(...readReceiverThreadIds(item))
-        }
+      seen.add(threadId)
+      const read = await readThread(threadId, ms, null)
+      if (read.turn) {
+        record(threadId, read)
       }
     })
-    return [...new Set(named)].map((threadId) => ({ threadId }))
   }
   // The chat's thread and the children named by carried work or a read turn come first.
   let wave = [input.threadId, ...(input.carriedThreadIds ?? [])].map((threadId) => ({ threadId }))
@@ -239,16 +254,19 @@ export async function readKeptCodexSnapshot(input: {
   }
   const extra = (await loading).filter((threadId) => !seen.has(threadId))
   if (extra.length > 0) {
-    wave = await loadedChildren({
+    const loaded = await loadedChildren({
       connection: input.connection,
       ids: extra,
       room: MAX_SNAPSHOT_THREADS - seen.size,
       onError: input.onError
     })
+    const following = readSkipped(loaded.skipped, loaded.deadline + SKIPPED_READ_GRACE_MS)
     // Children only the inventory found are read on a short leash: they hold this chat's launch slot.
+    wave = loaded.children
     while (wave.length > 0) {
       wave = await readWave(wave, Math.min(input.timeoutMs, LOADED_TURN_TIMEOUT_MS))
     }
+    await following
   }
   // A spawn in a read turn names the real parent (restated with that turn); a guess must not win.
   const spawned = new Set(

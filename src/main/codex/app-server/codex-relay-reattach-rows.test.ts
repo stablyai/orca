@@ -23,6 +23,7 @@ import {
 import { KeptProviderRelayUnreachableError } from '../../provider-relay/provider-relay-kept-rebind'
 import { AgentSessionStartFailure } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { readRecord } from './codex-item-field-readers'
+import { CodexAppServerTimeoutError } from './codex-app-server-request-error'
 import { CodexBackgroundTaskTracker } from '../structured/background-work/codex-background-task-tracker'
 import { CodexTurnOrdinals } from '../structured/journal/codex-turn-ordinals'
 import {
@@ -431,13 +432,15 @@ describe('codex rows across a reattach', () => {
       // Finished before the chat's latest turn began: retired then, and left so.
       old: { id: 'turn-o', status: 'completed', items: [], completedAt: 50 },
       // Running, but its metadata read fails: still followed by its turns.
-      lost: { id: 'turn-l', status: 'inProgress', items: [] }
+      lost: { id: 'turn-l', status: 'inProgress', items: [] },
+      // Running, but its metadata read runs out of time: one turns-only read still finds it.
+      slow: { id: 'turn-s', status: 'inProgress', items: [{ type: 'agentMessage', id: 's0' }] }
     }
     const request = async (method: string, params?: unknown) => {
       const threadId = String(readRecord(params).threadId)
       // Only the app-server's loaded threads name the child: no carried work does.
       if (method === 'thread/loaded/list') {
-        return { data: ['main', 'child', 'grand', 'done', 'old', 'review', 'lost'] }
+        return { data: ['main', 'child', 'grand', 'done', 'old', 'review', 'lost', 'slow'] }
       }
       // Loaded, but not a spawned agent: never one of the chat's children.
       if (method === 'thread/read' && threadId === 'review') {
@@ -445,6 +448,9 @@ describe('codex rows across a reattach', () => {
       }
       if (method === 'thread/read' && (threadId === 'grand' || threadId === 'lost')) {
         throw new Error('timed out')
+      }
+      if (method === 'thread/read' && threadId === 'slow') {
+        throw new CodexAppServerTimeoutError('thread/read timed out')
       }
       if (method === 'thread/read') {
         const spawn = { parent_thread_id: 'main', agent_path: `/root/${threadId}_agent` }
@@ -479,9 +485,11 @@ describe('codex rows across a reattach', () => {
     })
     restateKeptCodexBackgroundWork(tracker, turns, [], [], spawns)
     expect(turns.map(({ threadId }) => threadId)).not.toContain('review')
-    expect(tracker.subagentStopTargets(['lost']).turns).toEqual([
+    expect(tracker.subagentStopTargets(['lost', 'slow']).turns).toEqual([
+      { threadId: 'slow', turnId: 'turn-s' },
       { threadId: 'lost', turnId: 'turn-l' }
     ])
+    expect(turns.map(({ threadId }) => threadId)).toContain('slow')
     expect(evidence).not.toContainEqual(
       expect.objectContaining({
         type: 'live',

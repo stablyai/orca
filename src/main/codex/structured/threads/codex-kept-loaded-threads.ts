@@ -14,6 +14,8 @@ const MAX_LOADED_THREADS = 512
 const LOADED_READ_CONCURRENCY = 8
 /** The whole loaded phase's budget: past it no read starts, and what is in flight is let go. */
 const LOADED_PHASE_BUDGET_MS = 5_000
+/** Past the budget, threads it skipped get this long for one turns-only read. */
+export const SKIPPED_READ_GRACE_MS = 2_000
 /** A short bound for reads that only add to the snapshot (and for the chat thread's retry). */
 export const SOFT_READ_TIMEOUT_MS = 5_000
 
@@ -71,14 +73,17 @@ export async function loadedThreadIds(
   return ids
 }
 
-/** Runs `read` over `items` in order, at most `limit` in flight, starting none past `deadline`. */
-async function readBounded<T, R>(
+/**
+ * Runs `read` over `items` in order, at most `limit` in flight, starting none past `deadline`.
+ * Each result sits at its item's index; one never started is undefined.
+ */
+export async function readBounded<T, R>(
   items: readonly T[],
   limit: number,
   deadline: number,
   read: (item: T, remainingMs: number) => Promise<R>
-): Promise<R[]> {
-  const results: R[] = []
+): Promise<(R | undefined)[]> {
+  const results: (R | undefined)[] = Array.from({ length: items.length }, () => undefined)
   let next = 0
   const worker = async (): Promise<void> => {
     for (let at = next++; at < items.length; at = next++) {
@@ -90,26 +95,31 @@ async function readBounded<T, R>(
     }
   }
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker))
-  return results.filter((result) => result !== undefined)
+  return results
 }
 
 /**
  * Loaded threads nothing else named, under one budget: newest first (ids are time-ordered), as a
  * running child is likeliest among them. Only spawned agents count, running ones first, then the
  * most recently active idle ones (a child that ended while no app was attached is among them). One
- * whose metadata read failed (not merely ran out of budget) is still followed by its turns.
+ * whose metadata read failed (not merely ran out of budget) is still followed by its turns; those
+ * that ran out of time or were never reached are `skipped`, newest first, for a turns-only read.
  */
 export async function loadedChildren(input: {
   connection: Connection
   ids: readonly string[]
   room: number
   onError: (threadId: string, error: unknown) => void
-}): Promise<{ threadId: string; source: ChildSource | null }[]> {
+}): Promise<{
+  children: { threadId: string; source: ChildSource | null }[]
+  skipped: string[]
+  deadline: number
+}> {
+  const deadline = Date.now() + LOADED_PHASE_BUDGET_MS
   if (input.room <= 0 || input.ids.length === 0) {
-    return []
+    return { children: [], skipped: [], deadline }
   }
   const newestFirst = [...input.ids].sort((a, b) => (a < b ? 1 : a > b ? -1 : 0))
-  const deadline = Date.now() + LOADED_PHASE_BUDGET_MS
   const read = await readBounded(
     newestFirst,
     LOADED_READ_CONCURRENCY,
@@ -125,6 +135,7 @@ export async function loadedChildren(input: {
       )
   )
   const answered = read.flatMap((child) => (child ? [child] : []))
+  const skipped = newestFirst.filter((_, at) => !read[at])
   const known = answered.flatMap((child) =>
     child.source?.spawned ? [{ ...child, source: child.source }] : []
   )
@@ -134,5 +145,6 @@ export async function loadedChildren(input: {
     .filter(({ source }) => !source.active)
     .sort((a, b) => b.source.updatedAt - a.source.updatedAt)
     .slice(0, MAX_IDLE_LOADED_CHILDREN)
-  return [...active, ...unknown, ...idle].slice(0, Math.max(0, input.room))
+  const children = [...active, ...unknown, ...idle].slice(0, Math.max(0, input.room))
+  return { children, skipped, deadline }
 }
