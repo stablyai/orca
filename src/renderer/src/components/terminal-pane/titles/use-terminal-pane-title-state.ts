@@ -11,7 +11,6 @@ import type { TerminalPaneFoundation } from '../controller/use-terminal-pane-fou
 export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   const {
     containerRef,
-    managerRef,
     paneTransportsRef,
     setPtyRecoveryStatesByPaneId,
     setSessionStateSaveFailureMessage,
@@ -83,7 +82,6 @@ export function useTerminalPaneTitleState(controller: TerminalPaneFoundation) {
   )
   const { onPtyErrorRef, onPtyErrorClearedRef, dismissTerminalError } =
     useTerminalPaneErrorCallbacks({
-      managerRef,
       paneTransportsRef,
       setSessionStateSaveFailureMessage,
       setTerminalError,

@@ -7,9 +7,8 @@
  * the pid of the process that received typed input.
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
-import os from 'node:os'
 import path from 'node:path'
-import { expect } from '@stablyai/playwright-test'
+import { expect, type ElectronApplication, type Page } from '@stablyai/playwright-test'
 import { test } from '../desktop/electron-fixtures/orca-app'
 import {
   ensureTerminalVisible,
@@ -30,10 +29,7 @@ const fixtureDir = path.join(
   'fixtures',
   'account-restart-stub-codex'
 )
-const recordPath = path.join(
-  os.tmpdir(),
-  `orca-e2e-account-restart-${process.pid}-${Date.now()}.jsonl`
-)
+const RECORD_NAME = 'account-restart-launches.jsonl'
 
 type LaunchRecord = {
   pid: number
@@ -44,7 +40,7 @@ type LaunchRecord = {
   rolloutExisted: boolean
 }
 
-function readLaunches(): LaunchRecord[] {
+function readLaunches(recordPath: string): LaunchRecord[] {
   if (!existsSync(recordPath)) {
     return []
   }
@@ -58,26 +54,32 @@ function readLaunches(): LaunchRecord[] {
 }
 
 const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === 'path') ?? 'PATH'
-test.use({
-  launchEnv: {
-    [pathKey]: [fixtureDir, process.env[pathKey] ?? ''].filter(Boolean).join(path.delimiter),
-    ORCA_E2E_RESTART_RECORD: recordPath,
-    ORCA_E2E_RESTART_THREAD_ID: THREAD_ID
-  }
-})
+const stubEnv = {
+  [pathKey]: [fixtureDir, process.env[pathKey] ?? ''].filter(Boolean).join(path.delimiter),
+  ORCA_E2E_RESTART_RECORD_NAME: RECORD_NAME,
+  ORCA_E2E_RESTART_THREAD_ID: THREAD_ID
+}
 
 test.skip(process.platform === 'win32', 'the stand-in Codex is a POSIX script')
 
-test('restart only stops Codex; the pane resumes the same conversation on the new account', async ({
-  orcaPage,
-  electronApp
-}) => {
+async function launchCodex(orcaPage: Page): Promise<void> {
+  await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
+  const codexItem = orcaPage.getByRole('menuitem', { name: /^Codex(?:\s|$)/i }).first()
+  await expect(codexItem).toBeVisible({ timeout: 15_000 })
+  await codexItem.click({ force: true })
+  await waitForTerminalOutput(orcaPage, READY_MARKER, 30_000)
+  await expect(orcaPage.getByRole('treeitem', { name: /Codex/ })).toBeVisible()
+}
+
+/** Seeds accounts A (selected) and B, launches Codex on A, then switches to B from Settings. */
+async function launchOnAThenSelectB(orcaPage: Page, electronApp: ElectronApplication) {
   await waitForSessionReady(orcaPage)
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
 
   // Two managed accounts with Orca-owned homes; A is selected.
   const userData = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const launches = () => readLaunches(path.join(userData, RECORD_NAME))
   const now = Date.now()
   const accounts = ['acct-a', 'acct-b'].map((id) => {
     const home = path.join(userData, 'codex-accounts', id, 'home')
@@ -106,15 +108,8 @@ test('restart only stops Codex; the pane resumes the same conversation on the ne
     })
   }, accounts)
 
-  // Launch Codex in a new tab through Orca's normal agent launch.
-  await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
-  const codexItem = orcaPage.getByRole('menuitem', { name: /^Codex(?:\s|$)/i }).first()
-  await expect(codexItem).toBeVisible({ timeout: 15_000 })
-  await codexItem.click({ force: true })
-  await waitForTerminalOutput(orcaPage, READY_MARKER, 30_000)
-  await expect.poll(() => readLaunches().length, { timeout: 15_000 }).toBe(1)
-  const first = readLaunches()[0]!
-  expect(first.codexHome).toBe(accounts[0]!.managedHomePath)
+  await launchCodex(orcaPage)
+  await expect.poll(() => launches().length, { timeout: 15_000 }).toBe(1)
 
   // Switch to B the way a user does (Settings > Accounts); the pane is now stale and offers the restart.
   await orcaPage.evaluate(() => {
@@ -135,26 +130,79 @@ test('restart only stops Codex; the pane resumes the same conversation on the ne
     )
     .toBe('acct-b')
   await orcaPage.evaluate(() => window.__store!.getState().closeSettingsPage())
-  const restart = orcaPage.getByRole('button', { name: 'Restart', exact: true })
-  await expect(restart).toBeVisible({ timeout: 30_000 })
-  await restart.click()
+  return { accounts, launches, userData }
+}
 
-  // Exactly one resume of the same thread, on B's home, with the transcript carried over.
-  await expect.poll(() => readLaunches().length, { timeout: 60_000 }).toBe(2)
-  const resumed = readLaunches()[1]!
-  expect(resumed.argv).toContain('resume')
-  expect(resumed.threadId).toBe(THREAD_ID)
-  expect(resumed.codexHome).toBe(accounts[1]!.managedHomePath)
-  expect(resumed.rolloutExisted).toBe(true)
-  await expect(orcaPage.getByText("Can't restart automatically")).toHaveCount(0)
+test.describe('on the planned account home', () => {
+  test.use({ launchEnv: stubEnv })
 
-  // Typed input reaches the resumed process, not the stopped one.
-  await focusActiveTerminalInput(orcaPage)
-  await orcaPage.keyboard.type('after restart')
-  await orcaPage.keyboard.press('Enter')
-  await expect
-    .poll(() => getTerminalContent(orcaPage), { timeout: 15_000 })
-    .toContain(`[${SUBMITTED_MARKER}] ${resumed.pid} after restart`)
-  // No third launch appeared while the pane settled.
-  expect(readLaunches()).toHaveLength(2)
+  test('restart only stops Codex; the pane resumes the same conversation on the new account', async ({
+    orcaPage,
+    electronApp
+  }) => {
+    const { accounts, launches } = await launchOnAThenSelectB(orcaPage, electronApp)
+    expect(launches()[0]!.codexHome).toBe(accounts[0]!.managedHomePath)
+    const restart = orcaPage.getByRole('button', { name: 'Restart', exact: true })
+    await expect(restart).toBeVisible({ timeout: 30_000 })
+    await restart.click()
+
+    // Exactly one resume of the same thread, on B's home, with the transcript carried over.
+    await expect.poll(() => launches().length, { timeout: 60_000 }).toBe(2)
+    const resumed = launches()[1]!
+    expect(resumed.argv).toContain('resume')
+    expect(resumed.threadId).toBe(THREAD_ID)
+    expect(resumed.codexHome).toBe(accounts[1]!.managedHomePath)
+    expect(resumed.rolloutExisted).toBe(true)
+    await expect(orcaPage.getByText("Can't restart automatically")).toHaveCount(0)
+
+    // Typed input reaches the resumed process, not the stopped one.
+    await focusActiveTerminalInput(orcaPage)
+    await orcaPage.keyboard.type('after restart')
+    await orcaPage.keyboard.press('Enter')
+    await expect
+      .poll(() => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .toContain(`[${SUBMITTED_MARKER}] ${resumed.pid} after restart`)
+    // No third launch appeared while the pane settled.
+    expect(launches()).toHaveLength(2)
+    await expect(orcaPage.getByRole('treeitem', { name: /Codex/ })).toBeVisible()
+  })
+})
+
+test.describe('on a home Orca did not plan', () => {
+  test.use({
+    launchEnv: {
+      ...stubEnv,
+      ORCA_E2E_RESTART_CUSTOM_HOME: '1'
+    }
+  })
+
+  test('the restart stops nothing and shows the manual line', async ({ orcaPage, electronApp }) => {
+    const { accounts, launches, userData } = await launchOnAThenSelectB(orcaPage, electronApp)
+    const original = launches()[0]!
+    expect(original.codexHome).toBe(path.join(userData, 'custom-codex-home'))
+    const restart = orcaPage.getByRole('button', { name: 'Restart', exact: true })
+    await expect(restart).toBeVisible({ timeout: 30_000 })
+    await restart.click()
+    await expect(
+      orcaPage.getByText(
+        "Can't restart automatically. Close this pane and start Codex in a new one."
+      )
+    ).toBeVisible({ timeout: 30_000 })
+    await orcaPage.getByRole('button', { name: 'Dismiss', exact: true }).click()
+    await focusActiveTerminalInput(orcaPage)
+    await orcaPage.keyboard.type('still here')
+    await orcaPage.keyboard.press('Enter')
+    await expect
+      .poll(() => getTerminalContent(orcaPage), { timeout: 15_000 })
+      .toContain(`[${SUBMITTED_MARKER}] ${original.pid} still here`)
+    expect(launches()).toHaveLength(1)
+
+    const close = orcaPage.getByRole('button', { name: /^Close tab Codex/ })
+    await close.click()
+    await orcaPage.getByRole('button', { name: /^(Stop agent|Stop and close)$/ }).click()
+    await expect(close).toHaveCount(0)
+    await launchCodex(orcaPage)
+    await expect.poll(() => launches().length).toBe(2)
+    expect(launches()[1]!.codexHome).toBe(accounts[1]!.managedHomePath)
+  })
 })

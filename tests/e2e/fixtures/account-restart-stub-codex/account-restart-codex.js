@@ -28,7 +28,13 @@ const threadId =
   resumeIndex !== -1 && argv[resumeIndex + 1]
     ? argv[resumeIndex + 1]
     : process.env.ORCA_E2E_RESTART_THREAD_ID || '00000000-0000-4000-8000-0000000000e2'
-const codexHome = process.env.CODEX_HOME || path.join(require('node:os').homedir(), '.codex')
+const userData = process.env.ORCA_E2E_USER_DATA_DIR
+const plannedHome = process.env.CODEX_HOME
+const codexHome =
+  process.env.ORCA_E2E_RESTART_CUSTOM_HOME === '1' &&
+  plannedHome === path.join(userData, 'codex-accounts', 'acct-a', 'home')
+    ? path.join(userData, 'custom-codex-home')
+    : plannedHome
 const rolloutPath = path.join(
   codexHome,
   'sessions',
@@ -40,12 +46,14 @@ if (!rolloutExisted) {
   fs.mkdirSync(path.dirname(rolloutPath), { recursive: true })
   fs.writeFileSync(rolloutPath, `${JSON.stringify({ type: 'session_meta', id: threadId })}\n`)
 }
+// The actual Codex rollout recorder keeps this handle until the process exits.
+const writer = fs.openSync(rolloutPath, 'a')
 
-const recordPath = process.env.ORCA_E2E_RESTART_RECORD
-if (recordPath) {
+const recordName = process.env.ORCA_E2E_RESTART_RECORD_NAME
+if (recordName) {
   fs.appendFileSync(
-    recordPath,
-    `${JSON.stringify({ pid: process.pid, codexHome: process.env.CODEX_HOME ?? null, argv, threadId, rolloutPath, rolloutExisted, at: Date.now() })}\n`
+    path.join(userData, recordName),
+    `${JSON.stringify({ pid: process.pid, codexHome, argv, threadId, rolloutPath, rolloutExisted })}\n`
   )
 }
 
@@ -89,11 +97,12 @@ let composer = ''
 let lastSubmission = ''
 function render() {
   process.stdout.write(
-    `\x1b]0;Codex\x07\x1b[H\x1b[2JAccount Restart Stub\r\n[${READY_MARKER}] ${threadId}\r\n> ${composer}${lastSubmission ? `\r\n[${SUBMITTED_MARKER}] ${process.pid} ${lastSubmission}` : ''}`
+    `\x1b]0;Codex\x07\x1b[H\x1b[2JAccount Restart Stub\r\nCODEX_HOME: ${path.relative(userData, codexHome)}\r\n[${READY_MARKER}] ${threadId}\r\n> ${composer}${lastSubmission ? `\r\n[${SUBMITTED_MARKER}] ${process.pid} ${lastSubmission}` : ''}`
   )
 }
 
 function exit() {
+  fs.closeSync(writer)
   if (process.stdin.isTTY) {
     process.stdin.setRawMode(false)
   }

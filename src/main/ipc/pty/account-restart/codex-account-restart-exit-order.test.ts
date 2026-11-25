@@ -19,7 +19,8 @@ type HoistedState = {
   selectedAccount: string
   homeRoute: string
   transcriptPath: string
-  writerGone: boolean
+  writerGone: boolean | null
+  writerPid: number
   providerStartup: Promise<void> | undefined
 }
 
@@ -34,6 +35,7 @@ const h = vi.hoisted((): HoistedState => ({
   homeRoute: 'account-home',
   transcriptPath: '/old/sessions/2026/11/01/rollout-thread-1.jsonl',
   writerGone: true,
+  writerPid: 101,
   providerStartup: undefined
 }))
 
@@ -54,6 +56,8 @@ vi.mock('../provider/registry', () => ({
   resolvePtyExecutionHost: () => 'local',
   tryGetProviderForPty: () => ({
     killFenced: (...args: unknown[]) => h.killFenced(...args),
+    listProcesses: async ({ ptyIds }: { ptyIds: string[] }) =>
+      ptyIds.map((id) => ({ id, incarnationId: ptyIncarnationById.get(id), rootProcessId: 100 })),
     supportsFencedTermination: () => h.fencedTerminationSupported
   })
 }))
@@ -167,7 +171,16 @@ function setup() {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: staleness is mocked.
       ({ codexManagedAccounts: [{ id: 'old', managedHomePath: '/old' }] }) as never,
     isRendererLive: () => h.rendererLive,
-    transcriptHasNoOpenWriter: async () => h.writerGone
+    listTranscriptHolders:
+      h.writerGone === null
+        ? null
+        : async () => (h.killFenced.mock.calls.length && h.writerGone ? [] : [h.writerPid]),
+    captureDescendants: async () => ({
+      root: { pid: 100, startedAt: 'owner' },
+      rootPgid: 100,
+      descendants: [{ pid: 101, ppid: 100, pgid: 100, startedAt: 'writer' }],
+      capturedAtMs: 0
+    })
   })
   const pane = nextPane()
   currentOwnerByPaneKey.set(`tab:${pane.leafId}`, {
@@ -216,6 +229,7 @@ describe('account restart exits arriving out of order', () => {
     h.homeRoute = 'account-home'
     h.transcriptPath = '/old/sessions/2026/11/01/rollout-thread-1.jsonl'
     h.writerGone = true
+    h.writerPid = 101
     h.providerStartup = undefined
   })
 
@@ -547,6 +561,23 @@ describe('account restart exits arriving out of order', () => {
     await expect(result).resolves.toMatchObject({ outcome: 'unknown' })
     // The stopped pane still resumes, pinned to the account it ran on.
     expect(t.sendPtyExitToRenderer).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the pane manual before any stop on a host without transcript writer proof', async () => {
+    h.writerGone = null
+    const t = setup()
+    await expect(t.request()).resolves.toMatchObject({
+      outcome: 'not-started',
+      reason: 'resume-unavailable'
+    })
+    expect(h.killFenced).not.toHaveBeenCalled()
+  })
+
+  it('sends no stop when the transcript holder is outside the exact pane tree', async () => {
+    const t = setup()
+    h.writerPid = 202
+    await expect(t.request()).resolves.toMatchObject({ outcome: 'not-started', reason: 'refused' })
+    expect(h.killFenced).not.toHaveBeenCalled()
   })
 
   it('stops nothing when the child wrote its transcript outside the home main attributed', async () => {

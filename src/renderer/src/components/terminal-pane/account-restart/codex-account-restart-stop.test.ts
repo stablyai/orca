@@ -44,7 +44,6 @@ const notifyStore = (): void => {
 
 import {
   _testing,
-  releaseCodexAccountRestartRefusal,
   stopCodexPaneForAccountRestart,
   withdrawCodexPaneAccountRestart
 } from './codex-account-restart-stop'
@@ -60,17 +59,15 @@ function heldReplies() {
       })
   )
   const withdraw = vi.fn(async () => true)
-  const releasePane = vi.fn(async () => {})
   vi.stubGlobal('window', {
     api: {
       pty: {
         stopCodexForAccountRestart: stop,
-        withdrawCodexAccountRestart: withdraw,
-        releaseCodexAccountRestartPane: releasePane
+        withdrawCodexAccountRestart: withdraw
       }
     }
   })
-  return { replies, stop, withdraw, releasePane }
+  return { replies, stop, withdraw }
 }
 
 describe('renderer account restart stop', () => {
@@ -227,32 +224,6 @@ describe('renderer account restart stop', () => {
     replies[0]({ outcome: 'not-started', reason: 'superseded', opIds: ['op-1'] })
     await pending
     expect(store.reopenCodexRestartPrompt).toHaveBeenCalledWith('pty-a')
-  })
-
-  it('dismissing the failed resume releases only the refusal of the stop that ran', async () => {
-    const { replies, releasePane } = heldReplies()
-    const stopped = stopCodexPaneForAccountRestart(pane)
-    replies[0]({ outcome: 'stopped', opIds: ['op-1'] })
-    await stopped
-    releaseCodexAccountRestartRefusal('Something else failed.', 'wt', 'tab', 'leaf')
-    expect(releasePane).not.toHaveBeenCalled()
-    const refusal = "Couldn't resume on the new account. Restart the pane to try again."
-    releaseCodexAccountRestartRefusal(refusal, 'wt', 'tab', 'leaf')
-    // Main releases only a refusal that stop caused; a newer stop's refusal names other operations.
-    expect(releasePane).toHaveBeenCalledWith({
-      worktreeId: 'wt',
-      tabId: 'tab',
-      leafId: 'leaf',
-      opIds: ['op-1']
-    })
-    // A second, late Dismiss names nothing, so it cannot release a later refusal.
-    releaseCodexAccountRestartRefusal(refusal, 'wt', 'tab', 'leaf')
-    expect(releasePane).toHaveBeenLastCalledWith({
-      worktreeId: 'wt',
-      tabId: 'tab',
-      leafId: 'leaf',
-      opIds: []
-    })
   })
 
   it("the accepted stop's own exit removing the notice is not a withdrawal", async () => {

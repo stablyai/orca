@@ -212,7 +212,7 @@ export function TerminalPaneSurface({
               error={visibleTerminalError.error}
               agentId={activeAgentId}
               paneOnClient={paneOnClient}
-              onDismiss={dismissTerminalError}
+              onDismiss={() => dismissTerminalError(visibleTerminalError.error, activePane)}
               onRestartDaemon={() => daemonActions.setPending('restart')}
               onRestoreTerminalFocus={() => activePane.terminal.focus()}
               onRetry={

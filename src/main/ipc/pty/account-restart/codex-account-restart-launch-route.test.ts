@@ -38,6 +38,9 @@ describe('the Codex home a launch really ran on', () => {
     )
     // A sibling whose name only starts with the home's.
     expect(transcriptIsUnderCodexHome('/u/.codex-other/sessions/r.jsonl', '/u/.codex')).toBe(false)
+    expect(transcriptIsUnderCodexHome('/u/.codex/sessions/../../custom/r.jsonl', '/u/.codex')).toBe(
+      false
+    )
     expect(
       transcriptIsUnderCodexHome('C:\\Users\\u\\.codex\\sessions\\r.jsonl', 'C:\\Users\\u\\.codex')
     ).toBe(true)

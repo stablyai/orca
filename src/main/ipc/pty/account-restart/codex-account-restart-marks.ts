@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CodexAccountRestartStopRequest } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type {
@@ -41,9 +42,7 @@ export class CodexAccountRestartMarks {
   protected readonly markByPane = new Map<string, RestartMark>()
   // A granted intent stays reachable until its launch starts, so Dismiss still applies to it.
   protected readonly spentMarkByPane = new Map<string, RestartMark>()
-  // Panes whose stopped conversation came back missing, with the operations of the stop that did it;
-  // bounded by panes.
-  protected readonly refusedPanes = new Map<string, ReadonlySet<string>>()
+  protected readonly refusedPanes = new Map<string, string>()
   protected readonly retiredIncarnations = new Set<string>()
   // Restart exits sent while no ready window existed; the next window that signals ready gets them.
   protected readonly rendererOwed = new Set<RestartMark>()
@@ -109,29 +108,29 @@ export class CodexAccountRestartMarks {
     return owed
   }
   /** A proven restart whose pane comes back without its conversation must fail once, not open a shell. */
-  async refusesResumeWithoutConversation(paneKey: string): Promise<boolean> {
+  async refuseResumeWithoutConversation(paneKey: string): Promise<string | undefined> {
     // Automatic remounts keep failing until the user dismisses the failure or closes the pane.
-    if (this.refusedPanes.has(paneKey)) {
-      return true
+    const refusal = this.refusedPanes.get(paneKey)
+    if (refusal) {
+      return refusal
     }
     const mark = this.markByPane.get(paneKey)
     if (!mark || mark.withdrawn) {
-      return false
+      return undefined
     }
     await mark.settled
     if (this.markByPane.get(paneKey) !== mark || mark.state !== 'ready') {
-      return false
+      return this.refusedPanes.get(paneKey)
     }
     this.retireMark(mark)
-    this.refusedPanes.set(paneKey, new Set(mark.opIds))
-    return true
+    const refusalId = randomUUID()
+    this.refusedPanes.set(paneKey, refusalId)
+    return refusalId
   }
 
-  /** The user dismissed this failure: the pane's next start is ordinary. A Dismiss naming another
-   *  stop's operations (a late one, from an earlier refusal) leaves a newer refusal standing. */
-  releaseRefusedPane(paneKey: string, opIds: readonly string[]): boolean {
-    const refusedBy = this.refusedPanes.get(paneKey)
-    if (!refusedBy || !opIds.some((opId) => refusedBy.has(opId))) {
+  /** A Dismiss of an earlier failure leaves a newer refusal standing. */
+  releaseRefusedPane(paneKey: string, refusalId: string): boolean {
+    if (this.refusedPanes.get(paneKey) !== refusalId) {
       return false
     }
     this.refusedPanes.delete(paneKey)

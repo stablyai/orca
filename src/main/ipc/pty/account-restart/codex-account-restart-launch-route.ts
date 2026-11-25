@@ -30,5 +30,6 @@ export function attributedCodexHome(
  */
 export function transcriptIsUnderCodexHome(transcriptPath: string, codexHome: string): boolean {
   const sessions = `${normalizeRuntimePathForComparison(codexHome)}/sessions/`
-  return normalizeRuntimePathForComparison(transcriptPath).startsWith(sessions)
+  const transcript = normalizeRuntimePathForComparison(transcriptPath)
+  return transcript.startsWith(sessions) && !transcript.split('/').includes('..')
 }

@@ -17,7 +17,11 @@ import {
   attributedCodexHome,
   transcriptIsUnderCodexHome
 } from './codex-account-restart-launch-route'
-import { transcriptHasNoOpenWriter } from './codex-transcript-writer-check'
+import {
+  ownsTranscriptWriters,
+  resolveTranscriptHolderLookup,
+  type CodexTranscriptWriterDeps
+} from './codex-transcript-writer-check'
 import { PtyExitProof } from '../../../pty/process-retirement/pty-exit-proof'
 import { getPtyIpc } from '../pty-host-bindings'
 import { resolvePersistedStablePaneOwner } from '../pane/stable-owner'
@@ -34,13 +38,12 @@ import {
   type CodexRestartStopOutcome
 } from './codex-account-restart-stops'
 
-export type CodexAccountRestartIpcDeps = PtyKillIpcDeps & {
-  getSettings?: () => GlobalSettings | undefined
-  /** Whether a ready window would receive an exit sent now; absent means yes. */
-  isRendererLive?: () => boolean
-  /** Whether no process still holds the transcript open; absent means the platform check. */
-  transcriptHasNoOpenWriter?: (transcriptPath: string) => Promise<boolean>
-}
+export type CodexAccountRestartIpcDeps = PtyKillIpcDeps &
+  CodexTranscriptWriterDeps & {
+    getSettings?: () => GlobalSettings | undefined
+    /** Whether a ready window would receive an exit sent now; absent means yes. */
+    isRendererLive?: () => boolean
+  }
 
 // A stop can outlive the window that asked for it; every step reads the deps current at that moment.
 let currentDeps: CodexAccountRestartIpcDeps | null = null
@@ -63,11 +66,11 @@ export function installCodexAccountRestartIpcHandlers(deps: CodexAccountRestartI
         typeof args?.worktreeId === 'string' &&
         typeof args.tabId === 'string' &&
         typeof args.leafId === 'string' &&
-        Array.isArray(args.opIds)
+        typeof args.refusalId === 'string'
       ) {
         codexAccountRestartStops.releaseRefusedPane(
           codexAccountRestartPaneKey(args),
-          args.opIds.filter((opId): opId is string => typeof opId === 'string')
+          args.refusalId
         )
       }
     }
@@ -120,6 +123,9 @@ export function resolveCodexRestartOccupant(
   if (account.homeRoute !== 'account-home' && account.homeRoute !== 'real-home') {
     return 'resume-unavailable'
   }
+  if (!resolveTranscriptHolderLookup(deps)) {
+    return 'resume-unavailable'
+  }
   const settings = deps.getSettings?.()
   if (
     !settings ||
@@ -160,6 +166,12 @@ async function stopCodexRestartOccupant(
     return 'service-outdated'
   }
   // The last boundary main controls: Dismiss or reselection during the waits above sends nothing.
+  if (!authorize()) {
+    return 'not-authorized'
+  }
+  if (!(await ownsTranscriptWriters(current(), provider, occupant))) {
+    return 'refused'
+  }
   if (!authorize()) {
     return 'not-authorized'
   }
@@ -226,10 +238,10 @@ async function killCodexRestartOccupant(
       return 'ended-unproven'
     }
     // The descendants the stop saw are gone; the transcript's own writer must be too, before any read.
-    const writerGone = await (current().transcriptHasNoOpenWriter ?? transcriptHasNoOpenWriter)(
+    const holders = await resolveTranscriptHolderLookup(current())?.(
       occupant.provenance.transcriptPath
     )
-    return writerGone ? 'ended' : 'ended-unproven'
+    return holders?.length === 0 ? 'ended' : 'ended-unproven'
   }
   if (outcome.outcome === 'refused' && outcome.reason === 'unsupported') {
     return 'service-outdated'

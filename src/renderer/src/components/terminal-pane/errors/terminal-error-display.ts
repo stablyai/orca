@@ -9,6 +9,7 @@ import { agentLaunchErrorText } from '../launch-outcome/agent-launch-pane-notice
 import { stripClientEnvironmentFooter } from '../../../../../shared/feedback/client-environment-info'
 import { localizeTerminalSpawnHints } from './terminal-spawn-error-display'
 import { localizeWslDistroHoldText } from '../../../runtime/hosts/wsl/wsl-distro-hold-copy'
+import { stripCodexAccountRestartRefusalIds } from '../../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import {
   describeSshSignInRequiredTerminalError,
   isSshSignInRequiredTerminalError
@@ -157,7 +158,10 @@ export function humanizeTerminalError(
     return describeSshSignInRequiredTerminalError(error, t)
   }
   // Hosts send a held start as its code (older) or English sentence (newer); either reads in the user's language.
-  const unwrapped = localizeWslDistroHoldText(unwrapHostRefusalIpcLines(error, t), t)
+  const unwrapped = localizeWslDistroHoldText(
+    unwrapHostRefusalIpcLines(stripCodexAccountRestartRefusalIds(error), t),
+    t
+  )
   let humanized = humanizeFolderWorkspacePathErrors(
     localizeTerminalSpawnHints(agentLaunchErrorText(unwrapped, agentId, t) ?? unwrapped, t)
   )

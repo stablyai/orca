@@ -13,15 +13,29 @@ export type CodexAccountRestartStopRequest = {
 export const CODEX_ACCOUNT_RESTART_RESUME_ERROR =
   "Couldn't resume on the new account. Restart the pane to try again."
 
+const REFUSAL_MARKER = / \[codex_restart_refusal:([a-f0-9-]{36})\]/
+
+export function codexAccountRestartRefusalMessage(refusalId: string): string {
+  return `${CODEX_ACCOUNT_RESTART_RESUME_ERROR} [codex_restart_refusal:${refusalId}]`
+}
+
+export function readCodexAccountRestartRefusalId(message: string): string | undefined {
+  return REFUSAL_MARKER.exec(message)?.[1]
+}
+
+export function stripCodexAccountRestartRefusalIds(message: string): string {
+  return message.replaceAll(new RegExp(REFUSAL_MARKER, 'g'), '')
+}
+
 /** The pane a release or close names; it carries no operation. */
 export type CodexAccountRestartPane = Pick<
   CodexAccountRestartStopRequest,
   'worktreeId' | 'tabId' | 'leafId'
 >
 
-/** Dismissing a failed resume names the stop it followed; another stop's refusal stays. */
+/** Dismissing a failed resume names that specific refusal. */
 export type CodexAccountRestartReleaseRequest = CodexAccountRestartPane & {
-  opIds: readonly string[]
+  refusalId: string
 }
 
 /** Dismiss for one pane and operation; a stale opId changes nothing. */

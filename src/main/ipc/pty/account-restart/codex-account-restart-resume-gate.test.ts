@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readCodexAccountRestartRefusalId } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import {
   CodexAccountRestartResumeUnavailableError,
   resolveCodexAccountRestartResume
@@ -53,6 +54,21 @@ function resume(
     },
     stops
   )
+}
+
+async function readRefusal(stops: CodexAccountRestartStops): Promise<string> {
+  try {
+    await resume(stops, { launchAgent: undefined, resumeProviderSession: undefined })
+  } catch (error) {
+    if (error instanceof CodexAccountRestartResumeUnavailableError) {
+      const refusalId = readCodexAccountRestartRefusalId(error.message)
+      if (refusalId) {
+        return refusalId
+      }
+    }
+    throw error
+  }
+  throw new Error('Expected a refusal tied to the failed resume')
 }
 
 describe('account restart resume reopens the exact conversation', () => {
@@ -154,36 +170,32 @@ describe('account restart resume reopens the exact conversation', () => {
     const { result, release } = admitStop(stops)
     release()
     await result
-    const withoutConversation = { launchAgent: undefined, resumeProviderSession: undefined }
-    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
-      CodexAccountRestartResumeUnavailableError
-    )
+    const refusalId = await readRefusal(stops)
     // An automatic remount is refused again: no shell appears behind the user's back.
-    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
-      CodexAccountRestartResumeUnavailableError
-    )
-    stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), ['op-1'])
-    await expect(resume(stops, withoutConversation)).resolves.toMatchObject({
+    expect(await readRefusal(stops)).toBe(refusalId)
+    stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), refusalId)
+    await expect(
+      resume(stops, { launchAgent: undefined, resumeProviderSession: undefined })
+    ).resolves.toMatchObject({
       resumeOnSelectedAccount: false
     })
   })
 
   it('a late Dismiss of an earlier refusal leaves the newer refusal standing', async () => {
     const stops = new CodexAccountRestartStops()
-    const { result, release } = admitStop(stops)
-    release()
-    await result
-    const withoutConversation = { launchAgent: undefined, resumeProviderSession: undefined }
-    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
-      CodexAccountRestartResumeUnavailableError
-    )
-    // The Dismiss of an older stop's failure (op-0) names none of this refusal's operations.
-    expect(stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), ['op-0'])).toBe(false)
-    expect(stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), [])).toBe(false)
-    await expect(resume(stops, withoutConversation)).rejects.toBeInstanceOf(
-      CodexAccountRestartResumeUnavailableError
-    )
-    expect(stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), ['op-1'])).toBe(true)
+    const first = admitStop(stops)
+    first.release()
+    await first.result
+    const oldRefusal = await readRefusal(stops)
+    stops.forgetPane(codexAccountRestartPaneKey(pane))
+    const second = admitStop(stops)
+    second.release()
+    await second.result
+    const newRefusal = await readRefusal(stops)
+
+    expect(stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), oldRefusal)).toBe(false)
+    expect(await readRefusal(stops)).toBe(newRefusal)
+    expect(stops.releaseRefusedPane(codexAccountRestartPaneKey(pane), newRefusal)).toBe(true)
   })
 
   it('closing the refused pane also ends the refusal', async () => {

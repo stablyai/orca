@@ -1,4 +1,7 @@
-import { CODEX_ACCOUNT_RESTART_RESUME_ERROR } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
+import {
+  CODEX_ACCOUNT_RESTART_RESUME_ERROR,
+  codexAccountRestartRefusalMessage
+} from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   codexAccountRestartPaneKey,
@@ -7,8 +10,10 @@ import {
 } from './codex-account-restart-stops'
 
 export class CodexAccountRestartResumeUnavailableError extends Error {
-  constructor() {
-    super(CODEX_ACCOUNT_RESTART_RESUME_ERROR)
+  constructor(refusalId?: string) {
+    super(
+      refusalId ? codexAccountRestartRefusalMessage(refusalId) : CODEX_ACCOUNT_RESTART_RESUME_ERROR
+    )
     this.name = 'CodexAccountRestartResumeUnavailableError'
   }
 }
@@ -52,8 +57,9 @@ export async function resolveCodexAccountRestartResume(
   })
   if (args.launchAgent !== 'codex' || !args.resumeProviderSession) {
     // Missing restore metadata would start a plain shell where the stopped conversation was.
-    if (await stops.refusesResumeWithoutConversation(paneKey)) {
-      throw new CodexAccountRestartResumeUnavailableError()
+    const refusalId = await stops.refuseResumeWithoutConversation(paneKey)
+    if (refusalId) {
+      throw new CodexAccountRestartResumeUnavailableError(refusalId)
     }
     return passthrough
   }
