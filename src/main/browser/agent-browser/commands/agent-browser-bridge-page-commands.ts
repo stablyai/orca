@@ -247,7 +247,7 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
       throw new BrowserError('browser_no_tab', 'Tab is no longer available')
     }
     wc.stop()
-    return { url: wc.getURL(), title: wc.getTitle() }
+    return redactBrowserMetadata({ url: wc.getURL(), title: wc.getTitle() })
   }
 
   async reload(

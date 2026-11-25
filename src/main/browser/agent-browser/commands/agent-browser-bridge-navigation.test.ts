@@ -111,6 +111,14 @@ describe('AgentBrowserBridge', () => {
       title: 'https://kagi.com/search?q=one'
     })
     expect(wc.loadURL).toHaveBeenCalledWith(raw)
+    // Stop is not queued and reads the committed page directly, so it needs its own redaction.
+    const stop = vi.fn()
+    Object.assign(wc, { stop })
+    expect(privateBridge.stop(undefined, 'tab-1')).toEqual({
+      url: 'https://kagi.com/search?q=one',
+      title: 'https://kagi.com/search?q=one'
+    })
+    expect(stop).toHaveBeenCalled()
   })
 
   it('keeps target-bearing Kagi failures out of replies but retains ordinary failure diagnostics', async () => {
