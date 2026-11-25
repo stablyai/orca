@@ -318,8 +318,8 @@ export function WorktreeCardDeleteQuickAction({
           onPointerDown={onPointerDown}
           onClick={onClick}
           className={cn(
-            'inline-flex size-4 items-center justify-center rounded bg-transparent opacity-0 transition-colors transition-opacity',
-            'group-hover/worktree-card:opacity-100 group-focus-within/worktree-card:opacity-100 focus-visible:opacity-100',
+            // Rendered only while Option/Alt is held, so it shows on every card at once, not just a hovered one.
+            'inline-flex size-4 items-center justify-center rounded bg-transparent transition-colors',
             'text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:bg-destructive/10 focus-visible:text-destructive'
           )}
           aria-label={t('auto.components.sidebar.WorktreeCard.6f09f58541', 'Delete workspace')}
