@@ -3,6 +3,7 @@
 // off; a message to a host that is away is held in Orca Cloud with the phone's share credential.
 import nacl from 'tweetnacl'
 import {
+  SHARED_BOT_UNSHARED_MESSAGE,
   sharedBotHostView,
   type SharedBotHostView
 } from '../../../../src/shared/bots/shared-bot-hosts'
@@ -17,9 +18,14 @@ import { MOBILE_RELAY_CLIENT_PLATFORM } from '../../transport/encryption/mobile-
 import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../transport/connection/mobile-runtime-client-capabilities'
 import type { UnvalidatedRpcRequestPort } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { randomV4Uuid } from '../../platform/random-v4-uuid'
-import { heldSendFailure, sharedAgentOffline } from './phone-shared-agent-failures'
+import {
+  heldSendFailure,
+  sharedAgentOffline,
+  sharedAgentUnshared
+} from './phone-shared-agent-failures'
 import { PhoneSharedAgentFollows } from './phone-shared-agent-follows'
 import { PhoneSharedAgentHeld } from './phone-shared-agent-held'
+import { PhoneSharedAgentHeldPoll } from './phone-shared-agent-held-poll'
 import { PhoneSharedAgentKeptReads } from './phone-shared-agent-kept-reads'
 import {
   awaitingKeyView,
@@ -31,11 +37,6 @@ import type { SharedBotPhoneShare } from '../../../../src/shared/bots/bot-share-
 
 type Link = SharedHostRelayLink<PhoneSharedAgent>
 type Computer = { pairedHostId: string; client: UnvalidatedRpcRequestPort }
-
-// While a message waits, Orca Cloud is asked how it stands this often (the desktop's busy read),
-// backing off to at most HELD_POLL_MAX_MS while it doesn't answer.
-const HELD_POLL_MS = 30_000
-const HELD_POLL_MAX_MS = 5 * 60_000
 
 /** How the phone reaches the host with what it keeps: its resume credential, else an unexpired invite
  *  the relay hasn't refused; null when only a fresh key (through the computer) would. */
@@ -57,13 +58,17 @@ export class PhoneSharedAgents {
   private readonly links = new Map<string, Link>()
   private readonly listeners = new Set<() => void>()
   private readonly held: PhoneSharedAgentHeld
-  private heldTimer: ReturnType<typeof setTimeout> | null = null
-  private heldReadFailures = 0
+  private readonly heldPoll = new PhoneSharedAgentHeldPoll({
+    store: this.store,
+    held: () => this.held
+  })
   // Listed by a computer but with no key here yet (its host wasn't reached): shown, not callable.
   private readonly awaitingKey = new Map<string, readonly SharedBotPhoneShare[]>()
   private readonly follows = new PhoneSharedAgentFollows<UnvalidatedRpcRequestPort>(
     (pairedHostId, client) => this.followComputer({ pairedHostId, client })
   )
+  // Each computer's client its shares were last followed with, to follow them again.
+  private readonly computers = new Map<string, UnvalidatedRpcRequestPort>()
   private readonly kept = new PhoneSharedAgentKeptReads()
 
   constructor(private readonly now: () => number = Date.now) {
@@ -72,7 +77,7 @@ export class PhoneSharedAgents {
       now,
       changed: () => {
         this.changed()
-        this.pollHeld()
+        this.heldPoll.poll()
       }
     })
   }
@@ -86,37 +91,9 @@ export class PhoneSharedAgents {
     return this.store.hasLoaded()
   }
 
-  /**
-   * Reads Orca Cloud's states for the agents with a message waiting, and again every HELD_POLL_MS
-   * while one still waits: a delivered message lets that chat's later sends go live again.
-   */
-  async refreshHeld(entries = this.store.list()): Promise<void> {
-    const answered = await Promise.all(
-      entries
-        .filter((entry) => entry.held.some((held) => this.held.isWaiting(held)))
-        .map((entry) => this.held.refresh(entry))
-    )
-    this.heldReadFailures = answered.includes(false) ? this.heldReadFailures + 1 : 0
-    this.pollHeld()
-  }
-
-  private pollHeld(): void {
-    const waiting = this.store
-      .list()
-      .some((entry) => entry.held.some((held) => this.held.isWaiting(held)))
-    if (!waiting) {
-      clearTimeout(this.heldTimer ?? undefined)
-      this.heldTimer = null
-      return
-    }
-    if (this.heldTimer) {
-      return
-    }
-    const delay = Math.min(HELD_POLL_MS * 2 ** this.heldReadFailures, HELD_POLL_MAX_MS)
-    this.heldTimer = setTimeout(() => {
-      this.heldTimer = null
-      void this.refreshHeld()
-    }, delay)
+  /** Reads Orca Cloud's states for the agents with a message waiting, and again while one waits. */
+  refreshHeld(entries?: readonly PhoneSharedAgent[]): Promise<void> {
+    return this.heldPoll.refresh(entries)
   }
 
   onChanged(listener: () => void): () => void {
@@ -126,7 +103,15 @@ export class PhoneSharedAgents {
 
   /** Follows the computer's list: new shares get a key, gone ones are forgotten, the rest dial. */
   async syncComputer(pairedHostId: string, client: UnvalidatedRpcRequestPort): Promise<void> {
+    this.computers.set(pairedHostId, client)
     await this.follows.run(pairedHostId, client)
+  }
+
+  /** Whether the computer still lists `entry` once its follow under way, if any, lands: a link that
+   *  dropped may be a revoke, which ends the follow it started without the share. */
+  private async stillShared(entry: PhoneSharedAgent): Promise<boolean> {
+    await this.follows.current(entry.pairedHostId)
+    return this.store.get(entry.shareId) !== undefined
   }
 
   private async followComputer(computer: Computer): Promise<void> {
@@ -183,6 +168,9 @@ export class PhoneSharedAgents {
 
   async call(entry: PhoneSharedAgent, method: string, params: unknown): Promise<RpcResponse> {
     const link = await this.reach(entry)
+    if (link !== 'live' && !(await this.stillShared(entry))) {
+      return sharedAgentUnshared(method)
+    }
     // Answered on the phone: a new chat's placeholder, or a send held (or refused) for the host.
     const here =
       this.held.startHere(this.view(entry).holds, link, method, params) ??
@@ -213,8 +201,13 @@ export class PhoneSharedAgents {
   ): () => void {
     let stop: (() => void) | null = null
     let released = false
-    void this.reach(entry).then((link) => {
+    void this.reach(entry).then(async (link) => {
+      const shared = link === 'live' || (await this.stillShared(entry))
       if (released) {
+        return
+      }
+      if (!shared) {
+        onData({ type: 'error', message: SHARED_BOT_UNSHARED_MESSAGE })
         return
       }
       if (link !== 'live') {
@@ -300,8 +293,13 @@ export class PhoneSharedAgents {
         clientCapabilities: MOBILE_RUNTIME_CLIENT_CAPABILITIES,
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),
-        onLinkChanged: (next) => {
+        onLinkChanged: (next, previous) => {
           const current = this.store.get(entry.shareId)
+          const computer = this.computers.get(entry.pairedHostId)
+          // The host dropped the live link (a revoke closes it): the computer's list says whether.
+          if (previous === 'live' && next === 'offline' && computer) {
+            void this.syncComputer(entry.pairedHostId, computer)
+          }
           // The host refused this phone's key (revoked) and nothing kept can dial it: dropped until
           // the computer lists it again and the host gives a new key.
           if (

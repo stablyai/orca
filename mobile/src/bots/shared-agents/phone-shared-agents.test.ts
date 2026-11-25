@@ -212,6 +212,38 @@ describe('following a computer’s shares', () => {
   })
 })
 
+describe('a call to a shared agent whose owner stopped sharing it', () => {
+  it('answers no longer shared, never offline, once the computer’s list read under way drops it', async () => {
+    const agents = new PhoneSharedAgents(() => 1_000)
+    const desktop = computer()
+    cloud()
+    let release: (() => void) | null = null
+    let unshared = false
+    const client = {
+      sendRequest: async (method: string, params?: unknown) => {
+        if (method === 'sharedBots.phone.list' && unshared) {
+          await new Promise<void>((resolve) => (release = resolve))
+          return { id: method, ok: true as const, result: { shares: [] } }
+        }
+        return await desktop.client.sendRequest(method, params)
+      }
+    }
+    await agents.syncComputer('computer-1', client)
+    const entry = agents.find('computer-1', 'env-1')!
+    unshared = true
+    const follow = agents.syncComputer('computer-1', client)
+    await vi.waitFor(() => expect(release).not.toBeNull())
+    const answer = agents.call(entry, 'bots.list', {})
+    release!()
+    await follow
+    const response = await answer
+    expect(response.ok ? null : response.error).toEqual({
+      code: SHARED_BOT_HOST_ERRORS.unshared,
+      message: 'This agent is no longer shared.'
+    })
+  })
+})
+
 describe('a page frame before the phone’s shared agents are loaded', () => {
   it('waits for the computer’s verdict, and only a shared agent’s leaves once they load', async () => {
     const first = new PhoneSharedAgents(() => 1_000)

@@ -72,6 +72,7 @@ let store = new SharedBotHostStore('/nowhere')
 const sharedEntry = () => ({ ...newSharedBotHostEntry(view), environmentId: SHARED })
 const hosts = {
   ready: vi.fn(async () => {}),
+  settled: async () => {},
   views: () => views,
   get store() {
     return store

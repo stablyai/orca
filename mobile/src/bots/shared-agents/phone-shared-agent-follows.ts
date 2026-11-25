@@ -7,6 +7,11 @@ export class PhoneSharedAgentFollows<C> {
 
   constructor(private readonly follow: (pairedHostId: string, client: C) => Promise<void>) {}
 
+  /** The follow of `pairedHostId` under way, with any asked for meanwhile; none: resolved. */
+  current(pairedHostId: string): Promise<void> {
+    return this.running.get(pairedHostId)?.done ?? Promise.resolve()
+  }
+
   async run(pairedHostId: string, client: C): Promise<void> {
     const running = this.running.get(pairedHostId)
     if (running) {

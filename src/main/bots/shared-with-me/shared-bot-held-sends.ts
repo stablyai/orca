@@ -8,6 +8,7 @@ import {
   isSharedBotNewChatId,
   newSharedBotChatId,
   SHARED_BOT_HOST_ERRORS,
+  SHARED_BOT_UNSHARED_MESSAGE,
   SHARED_HOSTS_HOLD_WHILE_AWAY,
   type SharedBotHeldState,
   type SharedBotHeldView
@@ -350,4 +351,9 @@ export function sharedBotOffline(
     SHARED_BOT_HOST_ERRORS.offline,
     `${entry.ownerName}’s computer is offline`
   )
+}
+
+/** A call to a host whose share the owner ended: never offline, and never an unknown host. */
+export function sharedBotUnshared(method: string): RuntimeRpcResponse<unknown> {
+  return sharedBotFailure(method, SHARED_BOT_HOST_ERRORS.unshared, SHARED_BOT_UNSHARED_MESSAGE)
 }

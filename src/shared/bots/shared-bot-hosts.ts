@@ -88,3 +88,6 @@ export const SHARED_BOT_HOST_ERRORS = {
   // The owner stopped sharing it: nothing is sent or held.
   unshared: 'shared_host_unshared'
 } as const
+
+/** What a call to a host whose share ended answers, on the desktop and the phone. */
+export const SHARED_BOT_UNSHARED_MESSAGE = 'This agent is no longer shared.'

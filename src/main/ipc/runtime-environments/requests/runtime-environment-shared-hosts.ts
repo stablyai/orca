@@ -16,7 +16,7 @@ import { SharedHostStatuses } from './runtime-environment-shared-host-status'
 
 type SharedHosts = Pick<
   SharedBotHosts,
-  'ready' | 'reaches' | 'call' | 'subscribe' | 'views' | 'store' | 'phones'
+  'ready' | 'settled' | 'reaches' | 'call' | 'subscribe' | 'views' | 'store' | 'phones'
 >
 type OnResponse = (response: RuntimeRpcResponse<unknown>) => void
 type StatusOptions = Parameters<RuntimeHostStatusOwner['refresh']>[0]
@@ -108,6 +108,8 @@ async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null
 export async function sharedHostPhoneGrants(): Promise<SharedBotHosts['phones'] | null> {
   const hosts = sharedHosts?.hosts
   await hosts?.ready()
+  // A phone whose link dropped asks the list to learn whether it was a revoke: the read says.
+  await hosts?.settled()
   return hosts?.phones ?? null
 }
 

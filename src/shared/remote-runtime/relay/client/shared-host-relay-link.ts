@@ -40,7 +40,7 @@ export type SharedHostRelayLinkDeps<Entry extends SharedHostLinkEntry> = {
   clientCapabilities: readonly string[]
   entry: () => Entry | undefined
   save: (entry: Entry) => void
-  onLinkChanged: (link: SharedHostLink) => void
+  onLinkChanged: (link: SharedHostLink, previous: SharedHostLink) => void
   /** Signs with the device key the host's offer names; the private key stays with the caller. */
   sign: (entry: Entry, message: Uint8Array) => Promise<Uint8Array>
   randomBytes: (length: number) => Uint8Array
@@ -128,8 +128,9 @@ export class SharedHostRelayLink<Entry extends SharedHostLinkEntry> {
       this.offlineAt = Date.now()
     }
     if (link !== this.link) {
+      const previous = this.link
       this.link = link
-      this.deps.onLinkChanged(link)
+      this.deps.onLinkChanged(link, previous)
     }
   }
 

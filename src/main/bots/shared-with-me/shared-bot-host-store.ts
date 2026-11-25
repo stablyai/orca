@@ -133,6 +133,8 @@ export class SharedBotHostStore {
   private readonly path: string
   private entries: SharedBotHostEntry[] = []
   private writes: Promise<void> = Promise.resolve()
+  // Hosts whose share ended this launch: their calls still answer, as no longer shared.
+  private readonly removed = new Set<string>()
 
   constructor(userDataPath: string) {
     this.path = join(userDataPath, SHARED_BOT_HOSTS_FILENAME)
@@ -168,9 +170,17 @@ export class SharedBotHostStore {
   }
 
   remove(shareIds: ReadonlySet<string>): void {
+    for (const entry of this.entries.filter((candidate) => shareIds.has(candidate.shareId))) {
+      this.removed.add(entry.environmentId)
+    }
     if (this.entries.some((entry) => shareIds.has(entry.shareId))) {
       this.write(this.entries.filter((entry) => !shareIds.has(entry.shareId)))
     }
+  }
+
+  /** Whether `environmentId` named a share this launch removed. */
+  wasRemoved(environmentId: string): boolean {
+    return this.removed.has(environmentId)
   }
 
   /** Every write so far is on disk. */
