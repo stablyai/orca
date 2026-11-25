@@ -29819,7 +29819,7 @@
       "allHidden": "All bots are paused and hidden."
     },
     "share": {
-      "shareBot": "Share bot…",
+      "shareCopy": "Share a copy…",
       "none": "None",
       "noPurpose": "No purpose yet",
       "updatedAt": "Updated {{date}}",
@@ -30916,9 +30916,12 @@
       "remove": "Remove",
       "removePerson": "Remove {{name}}",
       "resendInvite": "Resend invite",
+      "share": "Share…",
       "slackLine": "{{handle}} on Slack · {{workspace}}",
       "slackOnly": "Slack only",
+      "slackPlace": "Slack · {{workspace}}",
       "suggestions": "Suggestions",
+      "thisComputer": "this computer",
       "title": "Share {{name}}",
       "warning": "Anyone you share with can do anything {{name}} can on {{host}}, including using your accounts, files and chats.",
       "you": "{{name}} (you)"

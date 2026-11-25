@@ -4,13 +4,14 @@ import { withBotsCloudClient } from './bots-cloud-client'
 import { createConnectorCloud } from './connector-cloud-install'
 import { ConnectorGitHubInstallations } from './connector-github-installations'
 import type { ConnectorRuntimeKind } from './connector-machine'
-import { connectorAccount } from './connector-token-mint'
+import { connectorAccount, connectorAccountCloudCall } from './connector-token-mint'
 import { botAccessHost } from '../bots/bot-access-host'
 import { botAccessSeenFile, createBotAccessRequestWatch } from '../bots/bot-access-request-watch'
 import { notifyBotCouldNotFinish, runtimeBotOwnerNotice } from '../bots/bot-could-not-finish'
 import { WebhookHostService } from '../webhooks/webhook-host-service'
 import { installComposioUpkeep } from '../runtime/rpc/methods/bots-composio-upkeep'
 import { refreshDueLinearLogins } from '../linear/accounts/linear-login-refresh'
+import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { Store } from '../persistence/loading-store/store'
 import { splitBotsByOlderBuildSupport, withGitHubMembersTagged } from '../../shared/bot-types'
@@ -49,8 +50,14 @@ export function installConnectorHost({
   kind,
   isFenced
 }: ConnectorHostOptions): ConnectorHost {
+  const account = () => connectorAccount(userDataPath)
+  // The connector's own account sends a share's invite email too, so every host kind emails it.
+  const authConfig = getOrcaCloudAuthConfig()
+  runtime.botCloudAuth = authConfig.configured
+    ? connectorAccountCloudCall(authConfig.config, userDataPath)
+    : null
   const gitHubInstallations = new ConnectorGitHubInstallations({
-    account: () => connectorAccount(userDataPath),
+    account,
     fetchState: () =>
       withBotsCloudClient(runtime.getConnectorCloud(), (client) => client.githubState())
   })
@@ -64,7 +71,7 @@ export function installConnectorHost({
   }
   const webhooks = new WebhookHostService({
     userDataPath,
-    account: () => connectorAccount(userDataPath),
+    account,
     cloud: () => runtime.getConnectorCloud(),
     automations: {
       list: () => store.listAutomations(),

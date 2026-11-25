@@ -24,6 +24,7 @@ import { journaledItemsNotice } from '../bots/bot-memory-journal-runtime'
 import { BotSharePicksStore } from '../bots/sharing/bot-share-picks-store'
 import { BotShareCandidates } from '../bots/sharing/bot-package-export'
 import type { BotShareClient } from '../bots/sharing/bot-share-client'
+import type { BotInviteCloudCall } from '../bots/team-share/bot-invite-email'
 import type { BotShareDownloadPolicy } from '../bots/sharing/bot-share-receive'
 import { BotShareService } from '../bots/sharing/bot-share-service'
 import { readBotShareable } from '../bots/sharing/bot-share-sources'
@@ -153,6 +154,9 @@ export abstract class OrcaRuntimeWithBots extends OrcaRuntimeWithLinearCommands 
     this.botShareClient = { client, download }
     this.botShareService = null
   }
+
+  /** This host's signed-in Orca Cloud calls, set where its connector installs (desktop, serve, orcad). */
+  botCloudAuth: BotInviteCloudCall | null = null
 
   /** Sharing bots by link, made on first use (it needs the app's data folder). */
   botShares(): BotShareService {

@@ -6,6 +6,7 @@ import {
   BotSharesSchema,
   withBotShareInvites,
   withBotShareResolved,
+  withBotSharesEmailed,
   type BotShare
 } from './bot-team-shares'
 
@@ -62,5 +63,12 @@ describe('bot share list', () => {
     expect(BotSharesSchema.parse([invite, { kind: 'team', shareId: 'c' }])).toEqual([invite])
     expect(BotSchema.shape.shares.parse(null)).toBeUndefined()
     expect(BotSchema.shape.shares.parse({ kind: 'invite' })).toBeUndefined()
+  })
+
+  it('keeps when an invite was emailed across a save, and marks only invites', () => {
+    const account: BotShare = { ...withBotShareResolved([invite], resolved)![0]!, shareId: 'b' }
+    const marked = withBotSharesEmailed([invite, account], new Set(['a', 'b']), 7)
+    expect(marked).toEqual([{ ...invite, emailedAt: 7 }, account])
+    expect(BotSharesSchema.parse(JSON.parse(JSON.stringify(marked)))).toEqual(marked)
   })
 })

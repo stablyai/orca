@@ -83,10 +83,12 @@ function useSubline(person: TeamSharePerson): string {
         ? t('bots.teamShare.invited', 'Invited')
         : t('bots.teamShare.emailNotSent', 'Email not sent yet')
     case 'slack':
-      return t('bots.teamShare.slackLine', '{{handle}} on Slack · {{workspace}}', {
-        handle: person.handle,
-        workspace: person.workspace
-      })
+      return person.handle
+        ? t('bots.teamShare.slackLine', '{{handle}} on Slack · {{workspace}}', {
+            handle: person.handle,
+            workspace: person.workspace
+          })
+        : t('bots.teamShare.slackPlace', 'Slack · {{workspace}}', { workspace: person.workspace })
     case 'github':
       return (person.linkedAccounts ?? 0) > 1
         ? t('bots.teamShare.githubLinkedLine', 'GitHub · linked to {{count}} Orca accounts', {
@@ -148,14 +150,15 @@ export function TeamSharePersonRow({
 }: {
   person: TeamSharePerson
   onRemove: (person: TeamSharePerson) => void
-  onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
+  /** Only an invite's row offers Resend. */
+  onResend?: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const name = teamSharePersonName(person)
   const subline = useSubline(person)
   const removeLabel = t('bots.teamShare.remove', 'Remove')
   const trailing =
-    person.kind === 'invite' ? (
+    person.kind === 'invite' && onResend ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button

@@ -29,12 +29,14 @@ export function BotTeamShareDialog({
   onAdd,
   onRemove,
   onResend,
-  onClose
+  onClose,
+  children
 }: {
   bot: Bot
   /** The computer the agent runs on, named in the footer warning. */
   hostName: string
-  owner: TeamShareOwner
+  /** The account the agent's host is signed in as; null while it isn't. */
+  owner: TeamShareOwner | null
   people: readonly TeamSharePerson[]
   query: string
   onQueryChange: (query: string) => void
@@ -44,6 +46,8 @@ export function BotTeamShareDialog({
   onRemove: (person: TeamSharePerson) => void
   onResend: (person: Extract<TeamSharePerson, { kind: 'invite' }>) => void
   onClose: () => void
+  /** Rows the caller draws itself after `people`: Slack- and GitHub-only people, from Who can ask. */
+  children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const listId = useId()
@@ -164,7 +168,7 @@ export function BotTeamShareDialog({
             {t('bots.teamShare.peopleWithAccess', 'People with access')}
           </h3>
           <ul>
-            <TeamShareOwnerRow owner={owner} />
+            {owner ? <TeamShareOwnerRow owner={owner} /> : null}
             {people.map((person) => (
               <TeamSharePersonRow
                 key={person.key}
@@ -173,6 +177,7 @@ export function BotTeamShareDialog({
                 onResend={onResend}
               />
             ))}
+            {children}
           </ul>
         </div>
         <div className="flex items-center gap-2 border-t border-border px-6 py-4">

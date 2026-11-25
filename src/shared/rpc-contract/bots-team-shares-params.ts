@@ -17,3 +17,6 @@ export const BotTeamSharesRemove = z.object({
   botId: BotId,
   shareId: requiredString('Missing share')
 })
+
+/** Sends an invite's email again. */
+export const BotTeamSharesResend = BotTeamSharesRemove
