@@ -5,6 +5,12 @@ import { getAgentSessionOptionCatalog } from '../../../../../../src/shared/agent
 import type { AgentSessionOptionCatalog } from '../../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
+import {
+  summarizeTranscriptContextUsage,
+  type NativeChatContextUsageSummary
+} from '../../../../../../src/shared/native-chat/native-chat-context-usage-summary'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import { ompModelSelector } from '../../../../../../src/shared/agent-session/options/model-catalog/omp-model-list-probe'
 import type { AgentStatusEntry } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
@@ -35,7 +41,9 @@ export function useMobileNativeChatSessionOptionController(args: {
   isWorking: boolean
   /** The terminal agent's status row: its model, live effort and session, as desktop reads them. */
   reportedStatus?: Pick<AgentStatusEntry, 'model' | 'modelSwitchCommand' | 'providerSession'> | null
+  messages: readonly NativeChatMessage[]
   structured: {
+    contextUsage: NativeChatContextUsageSummary | null
     optionSurface?: SessionOptionsSurface
     conversationCommands?: readonly AgentSessionConversationCommand[]
     compactInstructions?: boolean
@@ -52,6 +60,7 @@ export function useMobileNativeChatSessionOptionController(args: {
 }): {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   recordCommand: (command: string) => void
+  nativeChatContextUsage: NativeChatContextUsageSummary | null
 } {
   const {
     activeChatStructured,
@@ -156,5 +165,20 @@ export function useMobileNativeChatSessionOptionController(args: {
     [activeChatStructured, isWorking, sessionOptions, structuredController]
   )
 
-  return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }
+  const nativeChatContextUsage = useMemo(() => {
+    if (activeChatStructured) {
+      return structured.contextUsage
+    }
+    return summarizeTranscriptContextUsage(args.messages, (message) => {
+      const model =
+        agent === 'omp' ? ompModelSelector(message.provider, message.model) : message.model
+      return model ? (sessionOptions.contextWindowTokens?.(model) ?? null) : null
+    })
+  }, [activeChatStructured, structured.contextUsage, args.messages, agent, sessionOptions])
+
+  return {
+    nativeChatSessionOptions,
+    recordCommand: sessionOptions.recordCommand,
+    nativeChatContextUsage
+  }
 }

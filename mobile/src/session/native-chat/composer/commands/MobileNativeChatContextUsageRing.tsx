@@ -22,6 +22,7 @@ import {
 } from '../../../../components/detail-cards/use-anchored-detail-card'
 import { useDetailCardScope } from '../../../../components/detail-cards/use-detail-card-scope'
 import {
+  COMPOSER_CONTROL_SIZE,
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles
 } from '../../../../components/composer-input/composer-input-styles'
@@ -129,11 +130,14 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
   const counted = rows.filter(({ row }) => !row.deferred)
   const deferred = rows.filter(({ row }) => row.deferred)
   const tint = critical ? colors.statusRed : colors.textMuted
-  const label = t(
-    'chat.contextUsage.label',
-    'Context {{used}} of {{window}} tokens, {{percent}}% used',
-    { used, window, percent: String(usage.percentage) }
-  )
+  const label = window
+    ? t('chat.contextUsage.label', 'Context {{used}} of {{window}} tokens, {{percent}}% used', {
+        used,
+        window,
+        percent: String(usage.percentage)
+      })
+    : `${t('chat.contextUsage.title', 'Context')}: ${used}`
+  const tokenReadout = window ? `${used}/${window}` : used
   return (
     <>
       <DetailCardFocusBoundary refs={card.boundaryRefs} index={0} active={card.active} />
@@ -143,7 +147,11 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
         accessibilityLabel={label}
         aria-expanded={card.requestedOpen}
         testID="native-chat-context-usage"
-        style={({ pressed }) => [inputStyles.ghostButton, pressed && inputStyles.pressed]}
+        style={({ pressed }) => [
+          inputStyles.ghostButton,
+          styles.trigger,
+          pressed && inputStyles.pressed
+        ]}
         onLayout={card.onAnchorLayout}
         onPress={card.toggle}
         hitSlop={COMPOSER_CONTROL_HIT_SLOP}
@@ -176,6 +184,9 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
             strokeDashoffset={RING_CIRCUMFERENCE * (1 - filled / 100)}
           />
         </Svg>
+        <Text style={[styles.triggerLabel, critical && styles.triggerLabelCritical]}>
+          {tokenReadout}
+        </Text>
       </Pressable>
       <DetailCardFocusBoundary refs={card.boundaryRefs} index={1} active={card.active} />
       <AnchoredDetailCardLayer
@@ -183,11 +194,13 @@ const MobileNativeChatContextUsageRing = memo(function MobileNativeChatContextUs
         obscured={obscured}
         layerRef={attachLayer}
         title={t('chat.contextUsage.title', 'Context')}
-        titleTrailing={`${used}/${window}`}
+        titleTrailing={tokenReadout}
       >
-        <View style={styles.track}>
-          <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
-        </View>
+        {window ? (
+          <View style={styles.track}>
+            <View style={[styles.fill, critical && styles.fillCritical, { width: `${filled}%` }]} />
+          </View>
+        ) : null}
         {counted.length > 0 ? (
           <View style={styles.rows}>{counted.map(renderContextUsageRow)}</View>
         ) : null}
@@ -234,6 +247,21 @@ const ringStyles = StyleSheet.create({
 })
 
 const styles = themedStyleSheet(() => ({
+  trigger: {
+    width: 'auto',
+    minWidth: COMPOSER_CONTROL_SIZE,
+    flexDirection: 'row',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm
+  },
+  triggerLabel: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    fontVariant: ['tabular-nums']
+  },
+  triggerLabelCritical: {
+    color: colors.statusRed
+  },
   track: {
     height: 6,
     marginTop: spacing.sm,

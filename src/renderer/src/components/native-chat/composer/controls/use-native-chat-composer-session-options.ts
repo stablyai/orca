@@ -1,5 +1,6 @@
 import { useNativeChatSessionOptionCommand } from '../../session/options/terminal/use-native-chat-session-option-command'
 import { useNativeChatSessionOptions } from '../../session/options/terminal/use-native-chat-session-options'
+import { useNativeChatContextUsageSummary } from '../../usage/use-native-chat-context-usage-summary'
 import type { NativeChatComposerProps } from '../native-chat-composer-types'
 import type { NativeChatSendHandle } from '../../session/terminal/send/native-chat-runtime-send'
 import type { NativeChatPtySessionOptionsSurface } from '../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
@@ -20,6 +21,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSubmitted'
   | 'onSwitchToTerminal'
   | 'structuredTransport'
+  | 'contextMessages'
 > &
   Pick<
     Parameters<typeof useNativeChatSessionOptionCommand>[0],
@@ -37,7 +39,8 @@ export function useNativeChatComposerSessionOptions({
   targetPtyId,
   onSwitchToTerminal,
   paneKey,
-  structuredTransport
+  structuredTransport,
+  contextMessages
 }: ComposerSessionOptionsArgs): {
   /** What a PTY command send needs from the session options. */
   ptyCommandRouting: {
@@ -48,6 +51,7 @@ export function useNativeChatComposerSessionOptions({
   }
   surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
+  contextUsage: ReturnType<typeof useNativeChatContextUsageSummary>
 } {
   const { dispatch, isDispatching } = useNativeChatSessionOptionCommand({
     agent,
@@ -65,6 +69,11 @@ export function useNativeChatComposerSessionOptions({
     onAgentPicker: onSwitchToTerminal,
     paneKey
   })
+  const contextUsage = useNativeChatContextUsageSummary(structuredTransport, {
+    agent,
+    messages: contextMessages,
+    surface: pty.surface
+  })
   const onCommandSent = useCallback(
     (command: string, delivery: NativeChatSendHandle) => {
       if (!onSwitchToTerminal || !nativeChatCommandOpensTerminal(agent, command)) {
@@ -80,6 +89,7 @@ export function useNativeChatComposerSessionOptions({
     [agent, onSwitchToTerminal]
   )
   return {
+    contextUsage,
     ptyCommandRouting: {
       isDispatchingSessionOption: isDispatching,
       sessionOptionsSurface: pty.surface,

@@ -51,6 +51,7 @@ export type MobileNativeChatSessionOptionsController = {
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   invokeAction: (id: string) => Promise<boolean>
   recordCommand: (command: string) => void
+  contextWindowTokens?: (modelId: string) => number | null
 }
 
 type PendingOperation = { identity: string; id: string }
@@ -301,7 +302,14 @@ export function useMobileNativeChatSessionOptions(
   const pendingId = pending && pending.identity === identity ? pending.id : null
 
   return useMemo(
-    () => ({ snapshot, pendingId, setOption, invokeAction, recordCommand }),
-    [snapshot, pendingId, setOption, invokeAction, recordCommand]
+    () => ({
+      snapshot,
+      pendingId,
+      setOption,
+      invokeAction,
+      recordCommand,
+      contextWindowTokens: surface?.contextWindowTokens
+    }),
+    [snapshot, pendingId, setOption, invokeAction, recordCommand, surface]
   )
 }

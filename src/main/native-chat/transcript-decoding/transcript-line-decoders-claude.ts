@@ -18,6 +18,8 @@ import { unwrapClaudeBashInputBlock } from '../../../shared/agent-hook-listener/
 import { claudeInterruptedMessageId } from './transcript-turn-markers'
 import { claudeStopHookFeedbackRow } from '../../claude/structured/journal/claude-stop-hook-feedback'
 import { structuredAgentSessionStatusBlock } from '../../../shared/agent-session/view/structured-agent-session-status-block'
+import { claudeTokenUsage } from '../../claude/context-usage/claude-context-usage'
+import { NATIVE_CHAT_NOTICE_COPY } from '../../../shared/native-chat/transcript/notices/native-chat-notice'
 import {
   claudeMessageWithoutSyntheticText,
   isClaudeInjectedUserMessage,
@@ -83,6 +85,21 @@ export function decodeClaudeTranscriptLine(
   if (!parsed) {
     return null
   }
+  if (
+    parsed.type === 'system' &&
+    parsed.subtype === 'compact_boundary' &&
+    parsed.isSidechain !== true
+  ) {
+    return {
+      id: extractString(parsed.uuid) ?? fallbackId,
+      role: 'system',
+      blocks: [
+        { type: 'text', text: NATIVE_CHAT_NOTICE_COPY.compaction, presentation: 'compaction' }
+      ],
+      timestamp: parseTimestamp(parsed.timestamp),
+      source: 'transcript'
+    }
+  }
   const record = claudeMessageWithoutSyntheticText(claudeQueuedPromptAsUserRecord(parsed) ?? parsed)
   if (!record) {
     return null
@@ -119,10 +136,13 @@ export function decodeClaudeTranscriptLine(
     }
   }
   const message = asRecord(record.message)
+  const usage =
+    role === 'assistant' && record.isSidechain !== true ? claudeTokenUsage(message?.usage) : null
+  const hasReasoningUsage = usage !== null && isThinkingOnlyContent(message?.content)
   const editPatch = claudeEditPatch(record)
   const contentBlocks = claudeContentBlocks(message?.content)
   const decodedBlocks = editPatch ? withEditPatch(contentBlocks, editPatch) : contentBlocks
-  if (decodedBlocks.length === 0) {
+  if (decodedBlocks.length === 0 && !hasReasoningUsage) {
     return null
   }
   // Meta user turns may still contain genuine tool output.
@@ -137,10 +157,11 @@ export function decodeClaudeTranscriptLine(
       ? decodedBlocks
       : decodedBlocks.filter((block) => block.type === 'tool-result')
     : decodedBlocks
-  if (blocks.length === 0) {
+  if (blocks.length === 0 && !hasReasoningUsage) {
     return null
   }
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
+  const model = role === 'assistant' ? extractString(message?.model) : null
   return {
     id: messageId ?? fallbackId,
     role: claudeMessageRole(role, blocks, message?.content),
@@ -151,6 +172,8 @@ export function decodeClaudeTranscriptLine(
         : blocks,
     timestamp,
     source: 'transcript',
+    ...(model ? { model } : {}),
+    ...(usage ? { usage } : {}),
     ...parent
   }
 }
