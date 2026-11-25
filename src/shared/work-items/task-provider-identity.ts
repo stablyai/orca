@@ -29,11 +29,17 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type LocalTaskProviderIdentity = {
+  provider: 'local'
+  folder?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | LocalTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +85,8 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'local':
+      return { provider, folder: normalizeNonEmptyString(raw.folder) }
   }
 }
 
@@ -112,6 +120,8 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'local':
+      return isNullableOptionalString(raw.folder)
   }
 }
 
@@ -119,7 +129,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  local: ['folder']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +168,8 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'local':
+      return identity.folder ?? ''
   }
 }
 

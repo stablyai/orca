@@ -652,6 +652,7 @@ import {
 } from './linear/linear-params'
 import { CreateProject } from './linear/linear-project-create-params'
 import { LinkPreviewGetParams } from './link-preview/link-preview-params'
+import { ClaimLocalTask, CreateLocalTask, UpdateLocalTask } from './local-tasks/local-tasks-params'
 import { NativeChatSession, NativeChatUnsubscribe } from './native-chat/native-chat-params'
 import {
   NotificationGetMissedSinceParams,
@@ -1874,6 +1875,11 @@ export const RPC_PARAMS_BY_METHOD = {
   'linear.testConnection': WorkspaceSelection,
   'linear.updateIssue': IssueUpdateOfLinearParams,
   'linkPreview.get': LinkPreviewGetParams,
+  'localTasks.claim': ClaimLocalTask,
+  'localTasks.create': CreateLocalTask,
+  'localTasks.list': null,
+  'localTasks.release': ClaimLocalTask,
+  'localTasks.update': UpdateLocalTask,
   'managedRuntime.cancel': ManagedRuntimeCancelParams,
   'managedRuntime.install': ManagedRuntimeAgentParams,
   'managedRuntime.remove': ManagedRuntimeAgentParams,
