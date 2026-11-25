@@ -47,6 +47,7 @@ import { botGroupRoomChat } from './bot-group-automation-run'
 import { nameBotGroupMemberChats } from './bot-group-member-chat-names'
 import type { BotChatLookup } from '../runtime/integrations/automations/runtime-automation-target'
 import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const runtimes = new WeakMap<OrcaRuntimeService, BotGroupRuntime>()
 export function configureBotGroupChats(
@@ -58,6 +59,11 @@ export function configureBotGroupChats(
     const groups = runtimes.get(runtime)
     if (updates.botsEnabled === true && groups?.store.db.isOpen) {
       try {
+        const host = getStructuredAgentSessionHost()
+        for (const sessionId of groups.deferredContinuationSessions) {
+          host?.wakeQueuedMessages(sessionId)
+        }
+        groups.deferredContinuationSessions.clear()
         settleStoredRoomMail(groups)
         groups.resumePending()
       } catch (error) {
@@ -158,6 +164,8 @@ export class BotGroupRuntime {
   readonly queues = new Map<string, Promise<void>>()
   /** Operations whose native admission is in flight. */
   readonly deliveries = new Set<string>()
+  /** Native cards remain waiting in their own journal; enable only wakes these sessions. */
+  readonly deferredContinuationSessions = new Set<string>()
   /** Mail turns being checked for a dead attempt, last found open, or whose chat answers for them now. */
   readonly mailTurnChecks = new Map<
     string,

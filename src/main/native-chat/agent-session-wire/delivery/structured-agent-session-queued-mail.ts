@@ -5,6 +5,9 @@ import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-se
 
 type OwedDeps = Pick<StructuredAgentSessionHostDeps, 'queuedAgentMessageOwed'>
 
+/** A host gate needs a wake before reconsidering this card; do not persist a send failure. */
+export class QueuedMessageAdmissionDeferred extends Error {}
+
 /** A mail card asks whether it is still owed when it is handed over; anything else always is, and
  *  never waits on the mail's records to be read. */
 export function queuedMessageOwed(

@@ -15,6 +15,7 @@ import {
   getAgentSessionAttachmentClaimer,
   getAgentSessionAttachmentStore
 } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import { QueuedMessageAdmissionDeferred } from '../native-chat/agent-session-wire/delivery/structured-agent-session-queued-mail'
 import { hasAttachmentStoreReference } from './bot-attachment-images'
 import { admitBotGroupMessageAttachments, botGroupMessageSummary } from './bot-group-attachments'
 import { requireStructuredHost, type BotRunFields } from './bot-chat-session'
@@ -161,6 +162,10 @@ export function assertGroupQueuedMessageAllowed(
   )
   if (!message || !turn) {
     throw new BotFailureError('groupRequestUnverifiable')
+  }
+  if (message.continuation && !groups.runtime.bots.enabled()) {
+    groups.deferredContinuationSessions.add(sessionId)
+    throw new QueuedMessageAdmissionDeferred('Bots are turned off on this host.')
   }
   try {
     assertTurnActive(groups, message, turn)

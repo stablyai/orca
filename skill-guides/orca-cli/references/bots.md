@@ -127,6 +127,8 @@ Stop blocks further routing under that request; it doesn't cancel an already-run
 turn, and its first answer may still appear in the room.
 Turning bots off on the group host pauses pending group routing and delivery until bots are turned
 back on. Answers can still appear in the room while their delivery to the requester is paused.
+An answer already queued in the requesting chat stays queued, unless Stop or another room change
+invalidates it.
 
 Update the group host and each participating remote bot's computer. Older peers can still answer
 the owner's first question. After updating, start with a new group question so the host can pin
