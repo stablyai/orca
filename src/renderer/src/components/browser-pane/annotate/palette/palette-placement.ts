@@ -107,11 +107,84 @@ export function paletteRatioPercent(ratio: number): number {
   return Math.round(Math.min(1, Math.max(0, ratio)) * 100)
 }
 
-/** The hint sits under the palette, or above it near the page's bottom where there's no room under it. */
-export function paletteHintPlacement(left: number, top: number, spaceBelow: number): CSSProperties {
-  return spaceBelow < HINT_ROOM_PX
+/**
+ * The hint sits under the palette, or above it near the page's bottom where there's no room under it.
+ * Measured height: at the last fit level a row can wrap and make the palette taller than one line.
+ */
+export function paletteHintPlacement(layout: PaletteLayout): CSSProperties {
+  const { left, top, paletteHeight } = layout
+  return layout.boundsHeight - top - paletteHeight < HINT_ROOM_PX
     ? { left, bottom: `calc(100% - ${top - HINT_GAP_PX}px)` }
-    : { left, top: top + 38 + HINT_GAP_PX }
+    : { left, top: top + paletteHeight + HINT_GAP_PX }
+}
+
+/** Re-places the palette at its saved position; `axis` limits it to the one a grip key moved. */
+export function paletteReanchor(
+  layout: PaletteLayout,
+  saved: AnnotatePalettePosition,
+  topMin: number,
+  axis?: 'x' | 'y'
+): PaletteLayout {
+  const { boundsWidth, boundsHeight, paletteWidth, paletteHeight } = layout
+  return {
+    ...layout,
+    left: axis === 'y' ? layout.left : paletteOffsetForRatio(saved.x, boundsWidth, paletteWidth),
+    top:
+      axis === 'x'
+        ? layout.top
+        : clampPaletteOffset(
+            paletteOffsetForRatio(saved.y, boundsHeight, paletteHeight, topMin),
+            boundsHeight,
+            paletteHeight,
+            topMin
+          ),
+    topMin
+  }
+}
+
+/** The sizes a drag was measured against, where it started, and the saved position it started from. */
+export type PaletteDragStart = {
+  boundsWidth: number
+  boundsHeight: number
+  paletteWidth: number
+  paletteHeight: number
+  left: number
+  top: number
+  topMin: number
+  saved: AnnotatePalettePosition
+}
+
+/**
+ * Where a drag comes to rest and what it saves. `released` is null for a cancelled drag; a press that never moved
+ * saves nothing either (converting its anchored edge back to a fraction would drift the saved place). An axis with
+ * no room to move keeps its saved fraction.
+ */
+export function paletteDragRest(
+  start: PaletteDragStart,
+  released: { left: number; top: number } | null,
+  topMin: number
+): { left: number; top: number; save: AnnotatePalettePosition | null; snapped: boolean } {
+  const { boundsWidth, boundsHeight, paletteWidth, paletteHeight, saved } = start
+  if (!released || (released.left === start.left && released.top === start.top)) {
+    // A find bar that opened or closed meanwhile moved the top limit: place the saved height against the new one.
+    const top =
+      topMin === start.topMin
+        ? start.top
+        : clampPaletteOffset(
+            paletteOffsetForRatio(saved.y, boundsHeight, paletteHeight, topMin),
+            boundsHeight,
+            paletteHeight,
+            topMin
+          )
+    return { left: start.left, top, save: null, snapped: false }
+  }
+  const canMoveX = boundsWidth - paletteWidth - PALETTE_EDGE_INSET_PX * 2 > 0
+  const rawX = paletteRatioForOffset(released.left, boundsWidth, paletteWidth, saved.x)
+  const x = canMoveX ? snapPaletteRatio(rawX) : saved.x
+  const left = x === rawX ? released.left : paletteOffsetForRatio(x, boundsWidth, paletteWidth)
+  const top = clampPaletteOffset(released.top, boundsHeight, paletteHeight, topMin)
+  const y = paletteRatioForOffset(top, boundsHeight, paletteHeight, saved.y, topMin)
+  return { left, top, save: { x, y }, snapped: x !== rawX }
 }
 
 /**

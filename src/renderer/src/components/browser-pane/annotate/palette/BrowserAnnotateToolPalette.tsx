@@ -7,11 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import type { BrowserAnnotateTool } from './use-browser-annotate-tool-switch'
-import {
-  PALETTE_EDGE_INSET_PX,
-  paletteHintPlacement,
-  paletteRatioPercent
-} from './palette-placement'
+import { PALETTE_EDGE_INSET_PX, paletteRatioPercent } from './palette-placement'
 import { usePaletteDrag } from './use-palette-drag'
 import { usePaletteFitLevel } from './use-palette-fit-level'
 import type { MarkupPaletteDensity } from './MarkupPaletteTools'
@@ -129,7 +125,7 @@ export function BrowserAnnotateToolPalette({
   // Read here, not by the always-mounted overlays, so no page subscribes while its palette is closed.
   const position = useAnnotatePalettePosition()
   const [findBarMinTop, setFindBarMinTop] = useState(PALETTE_EDGE_INSET_PX)
-  const { left, top, canMove, dragging, snapping, shownPosition, spaceBelow, gripProps } =
+  const { left, top, canMove, dragging, snapping, shownPosition, hintPlacement, gripProps } =
     usePaletteDrag({
       bounds,
       paletteRef,
@@ -347,7 +343,7 @@ export function BrowserAnnotateToolPalette({
                     {showToolLabels ? <span>{option.label}</span> : null}
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
+                <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
                   {unavailable && unavailableReason
                     ? unavailableReason
                     : waiting
@@ -398,7 +394,7 @@ export function BrowserAnnotateToolPalette({
               <X className="size-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
+          <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
             {t('browser.annotatePalette.doneTitle', 'Done (Esc)')}
           </TooltipContent>
         </Tooltip>
@@ -422,7 +418,7 @@ export function BrowserAnnotateToolPalette({
             seeThrough && 'opacity-15',
             hintIsError ? 'text-destructive' : 'text-muted-foreground'
           )}
-          style={paletteHintPlacement(left ?? 0, top, spaceBelow)}
+          style={hintPlacement}
         >
           {hint}
         </div>

@@ -130,7 +130,7 @@ export function PaletteGrip({
           <GripVertical className="size-3" />
         </div>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
         {t(
           'browser.annotatePalette.moveAnywhereTooltip',
           'Drag or use arrow keys to move · hold {{key}} to see under',

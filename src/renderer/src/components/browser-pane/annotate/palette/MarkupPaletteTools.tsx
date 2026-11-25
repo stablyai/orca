@@ -53,7 +53,7 @@ function PaletteIconButton({
           {children}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
+      <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
         {label}
       </TooltipContent>
     </Tooltip>
@@ -126,7 +126,7 @@ export function MarkupPaletteTools({
                 </Button>
               </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
+            <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
               {moreLabel}
             </TooltipContent>
           </Tooltip>
@@ -168,7 +168,7 @@ export function MarkupPaletteTools({
               </Button>
             </PopoverTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={6}>
+          <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
             {styleLabel}
           </TooltipContent>
         </Tooltip>
@@ -223,7 +223,7 @@ export function MarkupPaletteTools({
                 </Button>
               </PopoverTrigger>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={6}>
+            <TooltipContent data-annotate-palette-tooltip="" side="bottom" sideOffset={6}>
               {fontSizeLabel}
             </TooltipContent>
           </Tooltip>

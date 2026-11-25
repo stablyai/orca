@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject
+} from 'react'
 import { acquireWebviewsDragPassthrough } from '../../host-guest/drag/webview-drag-passthrough'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import {
@@ -10,10 +17,11 @@ import {
   clampPaletteOffset,
   paletteKeyMove,
   paletteOffsetForRatio,
-  paletteRatioForOffset,
+  paletteDragRest,
+  paletteHintPlacement,
+  paletteReanchor,
   paletteShownPosition,
   samePaletteLayout,
-  snapPaletteRatio,
   type PaletteLayout
 } from './palette-placement'
 
@@ -47,8 +55,8 @@ export function usePaletteDrag({
   snapping: boolean
   /** Fractions the palette shows at now (its anchored edges can differ from the saved position). */
   shownPosition: AnnotatePalettePosition
-  /** Px between the palette's bottom and the page's; the hint flips above when it's short. */
-  spaceBelow: number
+  /** Where the hint goes: under the palette, or above it when the page has no room under it. */
+  hintPlacement: CSSProperties
   gripProps: Pick<
     React.HTMLAttributes<HTMLElement>,
     'onPointerDown' | 'onDoubleClick' | 'onKeyDown'
@@ -168,7 +176,12 @@ export function usePaletteDrag({
   const canMove = canMoveX || canMoveY
   const shownPosition = layout ? paletteShownPosition(layout) : position
 
-  const commitPosition = (next: AnnotatePalettePosition, animate: boolean): void => {
+  /** `axis`: a grip key re-anchors only the axis it moves; a reset re-anchors both. */
+  const commitPosition = (
+    next: AnnotatePalettePosition,
+    animate: boolean,
+    axis?: 'x' | 'y'
+  ): void => {
     if (animate) {
       setSnapping(true)
       window.clearTimeout(snapTimerRef.current)
@@ -177,22 +190,7 @@ export function usePaletteDrag({
     const clamped = { x: Math.min(1, Math.max(0, next.x)), y: Math.min(1, Math.max(0, next.y)) }
     if (clamped.x === x && clamped.y === y && layout) {
       // Same saved value: re-anchor to it anyway (the edges may have drifted with content changes).
-      setLayout({
-        ...layout,
-        left: paletteOffsetForRatio(clamped.x, layout.boundsWidth, layout.paletteWidth),
-        top: clampPaletteOffset(
-          paletteOffsetForRatio(
-            clamped.y,
-            layout.boundsHeight,
-            layout.paletteHeight,
-            topMinRef.current
-          ),
-          layout.boundsHeight,
-          layout.paletteHeight,
-          topMinRef.current
-        ),
-        topMin: topMinRef.current
-      })
+      setLayout(paletteReanchor(layout, clamped, topMinRef.current, axis))
     }
     onPositionChange(clamped)
   }
@@ -204,9 +202,7 @@ export function usePaletteDrag({
     dragging,
     snapping,
     shownPosition,
-    spaceBelow: layout
-      ? layout.boundsHeight - layout.top - layout.paletteHeight
-      : Number.POSITIVE_INFINITY,
+    hintPlacement: layout ? paletteHintPlacement(layout) : {},
     gripProps: {
       onPointerDown: (event) => {
         const palette = paletteRef.current
@@ -227,6 +223,7 @@ export function usePaletteDrag({
         const startY = event.clientY
         const startLeft = layout.left
         const startTop = layout.top
+        const dragStart = { ...layout, saved: position }
         let currentLeft = startLeft
         let currentTop = startTop
         setDragging(true)
@@ -282,31 +279,22 @@ export function usePaletteDrag({
           // A top limit raised mid-drag (the find bar opened) applies where the palette comes to rest too: the
           // measure effect skipped it while the drag owned the position.
           const restTopMin = topMinRef.current
-          if (!commit) {
-            const restTop = clampPaletteOffset(startTop, boundsHeight, paletteHeight, restTopMin)
-            palette.style.left = `${startLeft}px`
-            palette.style.top = `${restTop}px`
-            setLayout((prev) => (prev ? { ...prev, top: restTop, topMin: restTopMin } : prev))
-            setDragging(false)
-            return
-          }
-          const rawX = paletteRatioForOffset(currentLeft, boundsWidth, paletteWidth, 0.5)
-          const snappedX = snapPaletteRatio(rawX)
-          const restLeft =
-            snappedX === rawX
-              ? currentLeft
-              : paletteOffsetForRatio(snappedX, boundsWidth, paletteWidth)
-          const restTop = clampPaletteOffset(currentTop, boundsHeight, paletteHeight, restTopMin)
-          const nextY = paletteRatioForOffset(restTop, boundsHeight, paletteHeight, 0, restTopMin)
+          const rest = paletteDragRest(
+            dragStart,
+            commit ? { left: currentLeft, top: currentTop } : null,
+            restTopMin
+          )
           setLayout((prev) =>
-            prev ? { ...prev, left: restLeft, top: restTop, topMin: restTopMin } : prev
+            prev ? { ...prev, left: rest.left, top: rest.top, topMin: restTopMin } : prev
           )
           // The drag wrote the style directly, and React skips a value equal to its last render (a snap back to
           // where the drag started): write the resting place too.
-          palette.style.left = `${restLeft}px`
-          palette.style.top = `${restTop}px`
+          palette.style.left = `${rest.left}px`
+          palette.style.top = `${rest.top}px`
           setDragging(false)
-          commitPosition({ x: snappedX, y: nextY }, snappedX !== rawX)
+          if (rest.save) {
+            commitPosition(rest.save, rest.snapped)
+          }
         }
         grip.addEventListener('pointermove', onMove)
         grip.addEventListener('pointerup', onUp)
@@ -330,7 +318,11 @@ export function usePaletteDrag({
           return
         }
         event.preventDefault()
-        commitPosition(next, false)
+        commitPosition(
+          next,
+          false,
+          event.key === 'ArrowUp' || event.key === 'ArrowDown' ? 'y' : 'x'
+        )
       }
     }
   }
