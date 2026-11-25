@@ -153,7 +153,7 @@ test.describe('on the planned account home', () => {
     expect(resumed.threadId).toBe(THREAD_ID)
     expect(resumed.codexHome).toBe(accounts[1]!.managedHomePath)
     expect(resumed.rolloutExisted).toBe(true)
-    await expect(orcaPage.getByText("Can't restart automatically")).toHaveCount(0)
+    await expect(orcaPage.getByRole('dialog', { name: /Codex is still signed in/ })).toHaveCount(0)
 
     // Typed input reaches the resumed process, not the stopped one.
     await focusActiveTerminalInput(orcaPage)
@@ -183,11 +183,9 @@ test.describe('on a home Orca did not plan', () => {
     const restart = orcaPage.getByRole('button', { name: 'Restart', exact: true })
     await expect(restart).toBeVisible({ timeout: 30_000 })
     await restart.click()
-    await expect(
-      orcaPage.getByText(
-        "Can't restart automatically. Close this pane and start Codex in a new one."
-      )
-    ).toBeVisible({ timeout: 30_000 })
+    await expect(orcaPage.getByText('Close this pane and start Codex in a new one.')).toBeVisible({
+      timeout: 30_000
+    })
     await orcaPage.getByRole('button', { name: 'Dismiss', exact: true }).click()
     await focusActiveTerminalInput(orcaPage)
     await orcaPage.keyboard.type('still here')

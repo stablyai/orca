@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,7 +13,6 @@ function deps(overrides: Partial<TranscriptWriterCheckDeps>): TranscriptWriterCh
     platform: 'darwin',
     exec: async () => ({ code: 1, stdout: '', stderr: '' }),
     findProcHolders: async () => [],
-    realpath: async (path) => path,
     ...overrides
   }
 }
@@ -30,13 +29,15 @@ describe('Codex transcript holders', () => {
     async () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-writer-check-'))
       const transcript = join(dir, 'rollout.jsonl')
+      const alias = join(dir, 'rollout-alias.jsonl')
       writeFileSync(transcript, '{}\n')
-      // Opens the file for append and keeps it, as Codex's rollout recorder does.
-      const holder = spawn('sh', ['-c', 'exec 3>>"$1"; echo open; exec sleep 30', 'sh', transcript])
+      linkSync(transcript, alias)
+      // The recorder's open descriptor can name another link to the same rollout inode.
+      const holder = spawn('sh', ['-c', 'exec 3>>"$1"; echo open; exec sleep 30', 'sh', alias])
       try {
         await new Promise<void>((resolve) => holder.stdout.once('data', () => resolve()))
         await vi.waitFor(
-          async () => expect(await listCodexTranscriptHolders(transcript)).toContain(holder.pid),
+          async () => expect(await listCodexTranscriptHolders(transcript)).toEqual([holder.pid]),
           // Why a real-time bound: lsof and /proc read the live process table.
           { timeout: 10_000 }
         )

@@ -2385,7 +2385,7 @@
         "a4c8e1b2f7": "Codex hâlâ {{value0}} olarak oturum açmış durumda",
         "c72a5fb234": "Yeniden Başlat",
         "d3e8a1f4b2": "Hesap değiştirildi",
-        "9375620cc3": "{{value0}} hesabını kullanmak için bu oturumu yeniden başlatın. Siz yapana kadar önceki hesapta kalır.",
+        "9375620cc3": "{{value0}} hesabını kullanmak için yeniden başlatın.",
         "6133594b12": "Eski hesabı koru"
       },
       "FirstLaunchBanner": {

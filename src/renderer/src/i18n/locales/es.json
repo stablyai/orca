@@ -1756,7 +1756,7 @@
         "c72a5fb234": "Reiniciar",
         "a4c8e1b2f7": "Codex sigue conectado como {{value0}}",
         "d3e8a1f4b2": "Cuenta cambiada",
-        "9375620cc3": "Reinicia esta sesión para usar {{value0}}. Se mantiene en la cuenta anterior hasta que lo hagas.",
+        "9375620cc3": "Reinicia para usar {{value0}}.",
         "6133594b12": "Mantener cuenta anterior"
       },
       "FirstLaunchBanner": {

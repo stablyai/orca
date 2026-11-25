@@ -3341,8 +3341,8 @@
         "a4c8e1b2f7": "Codex is still signed in as {{value0}}",
         "c72a5fb234": "Restart",
         "d3e8a1f4b2": "Account switched",
-        "9375620cc3": "Restart this session to use {{value0}}. It stays on the previous account until you do.",
-        "5b8e1d2f40": "Can't restart automatically. Close this pane and start Codex in a new one.",
+        "9375620cc3": "Restart to use {{value0}}.",
+        "5b8e1d2f40": "Close this pane and start Codex in a new one.",
         "7f2e9b4c10": "Dismiss",
         "6133594b12": "Keep old account"
       },

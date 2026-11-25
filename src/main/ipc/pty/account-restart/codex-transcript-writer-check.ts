@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { readdir, readlink, realpath, stat } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { captureDescendantSnapshot } from '../../../pty/process-retirement/pty-descendant-termination'
@@ -12,7 +12,6 @@ type TranscriptWriterCheckDeps = {
   platform: NodeJS.Platform
   exec: Exec
   findProcHolders: (path: string) => Promise<readonly number[] | null>
-  realpath: (path: string) => Promise<string>
 }
 
 export type CodexTranscriptWriterDeps = {
@@ -76,30 +75,30 @@ export async function listCodexTranscriptHolders(
 ): Promise<readonly number[] | null> {
   try {
     if (deps.platform === 'darwin') {
-      // lsof matches by inode, so a linked sessions folder still names the same file. Exit 1 with no
-      // output and no error is "no process has it open"; anything else is not proof.
       // Absolute: a GUI app's stripped PATH may not reach /usr/sbin.
-      const result = await deps.exec('/usr/sbin/lsof', ['-t', '--', transcriptPath])
-      if (result.stderr.trim() !== '') {
-        return null
-      }
-      const output = result.stdout.trim()
-      if (result.code === 1 && output === '') {
-        return []
-      }
-      if (result.code === 0 && /^\d+(?:\n\d+)*$/.test(output)) {
-        return output.split('\n').map(Number)
-      }
-      return null
+      return await listLsofHolders(deps.exec, '/usr/sbin/lsof', transcriptPath)
     }
-    if (deps.platform !== 'linux') {
-      return null
-    }
-    const target = await deps.realpath(transcriptPath)
-    return await deps.findProcHolders(target)
+    return deps.platform === 'linux' ? await deps.findProcHolders(transcriptPath) : null
   } catch {
     return null
   }
+}
+
+async function listLsofHolders(
+  exec: Exec,
+  program: string,
+  transcriptPath: string
+): Promise<readonly number[] | null> {
+  const result = await exec(program, ['-t', '--', transcriptPath])
+  if (result.stderr.trim() !== '') {
+    return null
+  }
+  const output = result.stdout.trim()
+  // Exit 1 with no output or diagnostics means lsof found no matching inode.
+  if (result.code === 1 && output === '') {
+    return []
+  }
+  return result.code === 0 && /^\d+(?:\n\d+)*$/.test(output) ? output.split('\n').map(Number) : null
 }
 
 const defaultDeps: TranscriptWriterCheckDeps = {
@@ -112,15 +111,12 @@ const defaultDeps: TranscriptWriterCheckDeps = {
       stderr: result.stderr
     }
   },
-  findProcHolders: readProcTranscriptHolders,
-  realpath: (path) => realpath(path)
+  findProcHolders: readProcTranscriptHolders
 }
 
 async function readProcTranscriptHolders(target: string): Promise<number[] | null> {
-  const uid = process.geteuid?.()
-  if (uid === undefined) {
-    return null
-  }
+  const { uid } = await stat('/proc/self')
+  const { dev, ino } = await stat(target, { bigint: true })
   const deadline = performance.now() + HOLDER_CHECK_TIMEOUT_MS
   const pids = (await readdir('/proc')).filter((entry) => /^\d+$/.test(entry))
   const holders: number[] = []
@@ -137,7 +133,7 @@ async function readProcTranscriptHolders(target: string): Promise<number[] | nul
       fds = await readdir(join(processDir, 'fd'))
     } catch (error) {
       // A process that exits while we enumerate /proc has no open descriptors left.
-      if (!isMissingProcEntry(error)) {
+      if (!(await procEntryNoLongerRelevant(error, processDir, uid))) {
         return null
       }
       continue
@@ -147,12 +143,13 @@ async function readProcTranscriptHolders(target: string): Promise<number[] | nul
         return null
       }
       try {
-        if ((await readlink(join(processDir, 'fd', fd))) === target) {
+        const descriptor = await stat(join(processDir, 'fd', fd), { bigint: true })
+        if (descriptor.dev === dev && descriptor.ino === ino) {
           holders.push(Number(pid))
           break
         }
       } catch (error) {
-        if (!isMissingProcEntry(error)) {
+        if (!(await procEntryNoLongerRelevant(error, processDir, uid))) {
           return null
         }
       }
@@ -161,6 +158,23 @@ async function readProcTranscriptHolders(target: string): Promise<number[] | nul
   return holders
 }
 
+async function procEntryNoLongerRelevant(error: unknown, processDir: string, uid: number) {
+  if (isMissingProcEntry(error)) {
+    return true
+  }
+  // The process may have exited or changed credentials after the first ownership read.
+  try {
+    return (await stat(processDir)).uid !== uid
+  } catch (inspectError) {
+    return isMissingProcEntry(inspectError)
+  }
+}
+
 function isMissingProcEntry(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT'
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ESRCH')
+  )
 }
