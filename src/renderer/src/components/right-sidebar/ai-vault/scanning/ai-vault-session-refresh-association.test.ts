@@ -144,7 +144,7 @@ beforeEach(() => {
       'listSessions' | 'cancelListSessions' | 'onWindowFocused'
     >
   }
-  if (!Reflect.set(window, 'api', api) || window.api !== api) {
+  if (!Reflect.set(window, 'api', api) || !Object.is(window.api, api)) {
     throw new Error('Session refresh API fixture did not install')
   }
   useAppStore.setState(initialAppState, true)
