@@ -8,7 +8,8 @@ import {
   AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
   AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
   AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY
+  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
+  AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY
 } from '../../../../../shared/automations/automation-runtime-capabilities'
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
@@ -136,6 +137,17 @@ export async function assertOwnerFencingSupported(
     authority,
     AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
     AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
+    { cacheConfirmation: false }
+  )
+}
+
+export async function assertAutomationHistorySupported(
+  authority: AutomationAuthorityRef
+): Promise<void> {
+  await assertAuthorityCapability(
+    authority,
+    AUTOMATION_BOUNDED_HISTORY_RUNTIME_CAPABILITY,
+    'Update Orca on this computer to read automation history here.',
     { cacheConfirmation: false }
   )
 }

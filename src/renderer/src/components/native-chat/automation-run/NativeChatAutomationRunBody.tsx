@@ -123,7 +123,14 @@ function RunActions({
         <button
           type="button"
           className={RUN_LINK_BUTTON}
-          onClick={() => openBotAutomation(openOn, run.automation.id, run.runId)}
+          onClick={() =>
+            openBotAutomation({
+              bot,
+              automationId: run.automation.id,
+              runId: run.runId,
+              hostId: openOn
+            })
+          }
         >
           {say('openAutomation')}
         </button>

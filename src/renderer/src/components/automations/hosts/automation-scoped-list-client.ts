@@ -1,3 +1,4 @@
+import { prepareAutomationUpdateGuard, type AutomationUpdateGuard } from './automation-update-guard'
 /** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -32,6 +33,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
+  assertAutomationHistorySupported,
   prepareAutomationLaunchSetup,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
@@ -91,7 +93,7 @@ export function ownerPrecondition(owner: AutomationOwnerRef): AutomationOwnerPre
   }
 }
 
-async function callAuthority<TResult>(
+export async function callAuthority<TResult>(
   authority: AutomationAuthorityRef,
   method: string,
   params: unknown
@@ -151,13 +153,14 @@ export async function listAutomationsForOwner(
   return await listScopedAutomations(owner.authority, scopeSelector(owner))
 }
 
-/** Owned and orphan history reads do not probe. Old hosts may ignore preconditions and return their stored rows; read-only calls cannot mutate behind an unhonored fence. */
+/** Admission precedes transport: older hosts can ignore both the limit and the preview. */
 async function listRunsPageFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
   expectedOwner: AutomationOwnerPrecondition,
   options: { limit?: number; cursor?: string } = {}
 ): Promise<AutomationRunsPage> {
+  await assertAutomationHistorySupported(authority)
   const result = await callAuthority<AutomationRunsPage | { runs: AutomationRun[] }>(
     authority,
     'automation.runs',
@@ -166,7 +169,7 @@ async function listRunsPageFenced(
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
-/** Every run as previews; old hosts ignore `preview` and answer once with full rows and no cursor. */
+/** Every run as bounded previews. */
 async function listRunsFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
@@ -193,11 +196,11 @@ export async function readFullAutomationRun(
   expectedOwner: AutomationOwnerPrecondition,
   run: Pick<AutomationRun, 'automationId' | 'id'>
 ): Promise<AutomationRun | null> {
+  await assertAutomationHistorySupported(authority)
   const result = await callAuthority<{ run?: AutomationRun }>(authority, 'automation.runs', {
     automationId: run.automationId,
     expectedOwner,
     runId: run.id,
-    // An old host ignores `runId` and lists; one row keeps that answer small.
     limit: 1
   })
   return result.run?.id === run.id ? result.run : null
@@ -224,15 +227,18 @@ async function updateFenced(
   id: string,
   updates: AutomationUpdateInput,
   expectedOwner: AutomationOwnerPrecondition,
-  destination?: AutomationDestination
+  destination?: AutomationDestination,
+  guard?: AutomationUpdateGuard
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
+  const unchangedSince = await prepareAutomationUpdateGuard(authority, guard)
   const prepared = await prepareAutomationLaunchSetup(authority, updates)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
     updates: toRuntimeAutomationUpdateInput(prepared),
     expectedOwner,
-    destination
+    destination,
+    ...(unchangedSince ? { unchangedSince } : {})
   })
   return result.automation
 }
@@ -250,9 +256,17 @@ export async function updateAutomationForOwner(
   owner: AutomationOwnerRef,
   id: string,
   updates: AutomationUpdateInput,
-  destination?: AutomationDestination
+  destination?: AutomationDestination,
+  guard?: AutomationUpdateGuard
 ): Promise<Automation> {
-  return await updateFenced(owner.authority, id, updates, ownerPrecondition(owner), destination)
+  return await updateFenced(
+    owner.authority,
+    id,
+    updates,
+    ownerPrecondition(owner),
+    destination,
+    guard
+  )
 }
 
 export async function deleteAutomationForOwner(
@@ -267,9 +281,10 @@ export async function updateOrphanAutomation(
   authority: AutomationAuthorityRef,
   id: string,
   updates: AutomationUpdateInput,
-  destination?: AutomationDestination
+  destination?: AutomationDestination,
+  guard?: AutomationUpdateGuard
 ): Promise<Automation> {
-  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION, destination)
+  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION, destination, guard)
 }
 
 export async function deleteOrphanAutomation(

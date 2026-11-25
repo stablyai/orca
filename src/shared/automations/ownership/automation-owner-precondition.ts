@@ -1,6 +1,7 @@
 /** Keep owner capture optional for legacy wire clients; current clients echo it for strict read/write/execute fencing. */
 
 import type { Automation } from '../automation-definition'
+import type { AutomationEditPrecondition } from '../automation-edit-precondition'
 import type { AutomationExecutionTargetSelection } from './automation-execution-target'
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
 import {
@@ -37,8 +38,8 @@ export type AutomationUpdatePreconditions = {
   destination?: AutomationDestination
   /** Sent by an edit whose explicit setup choice relies on the stored mode still being new-per-run. */
   expectedWorkspaceMode?: 'new_per_run'
-  /** Writes only if its rules and bot target are still these; the runtime controller checks it. */
-  unchangedSince?: Pick<Automation, 'on' | 'bot'>
+  /** Checked at write time against the captured rules, bot target and optional schedule. */
+  unchangedSince?: AutomationEditPrecondition
 }
 
 export type AutomationOwnerFenceOperation = 'read' | 'mutate' | 'execute'

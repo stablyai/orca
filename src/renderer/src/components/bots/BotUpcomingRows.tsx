@@ -2,7 +2,6 @@
 // leading icon is the state (failed, can't run, running, paused), details sit in the hover card, and
 // Pause/Resume, Run now and the row's other commands show on hover or focus. Folded, only trouble stays.
 import { useLayoutEffect, useState } from 'react'
-import { botTarget } from '@/lib/bot-hosts'
 import {
   ArrowUpRight,
   CalendarClock,
@@ -23,10 +22,14 @@ import type { BotAutomationRow } from '../../../../shared/bots/bot-automation-ro
 import type { UpNextState } from '../../../../shared/bots/bot-look-around'
 import { botTidyUp, TIDY_UP_HOURS } from '../../../../shared/bots/bot-tidy-up'
 import {
-  deleteAutomationForTarget,
-  runAutomationNowForTarget,
-  updateAutomationForTarget
-} from '../automations/hosts/automation-host-client'
+  deleteAutomationForOwner,
+  runAutomationNowForOwner,
+  updateAutomationForOwner
+} from '../automations/hosts/automation-scoped-list-client'
+import {
+  botAutomationRowOwner,
+  actOnBotAutomationRow
+} from '../automations/hosts/bot-automation-row-owner'
 import type { BotAutomationCardRow } from './bot-automation-card'
 import {
   automationEnabled,
@@ -135,7 +138,7 @@ export type BotAutomationRowDeletion = {
   commitSaved: (rowKey: string, saved: AutomationEnabledOverride | null) => void
 }
 
-/** A click opens it on the Automations page, at its failed run if it failed. */
+/** Opens in the bot's panel, at its failed run if it failed. */
 function AutomationRow({
   card,
   membership,
@@ -153,6 +156,8 @@ function AutomationRow({
   const row = card.row
   const { automation } = row
   const { bot } = membership
+  // The host owner captured when this row was read; a row from a replaced pairing acts on nothing.
+  const rowOwner = botAutomationRowOwner(automation, bot)
   const [saving, setSaving] = useState(false)
   const [starting, setStarting] = useState(false)
   // The saved state until the list re-reads; a newer record from the host replaces it.
@@ -183,14 +188,18 @@ function AutomationRow({
     const asked = owner
     const from = automation.updatedAt
     setSaving(true)
-    void updateAutomationForTarget(automation, { enabled: next }, botTarget(bot))
+    void actOnBotAutomationRow(rowOwner, (captured) =>
+      updateAutomationForOwner(captured, automation.id, { enabled: next })
+    )
       .then((updated) => setSaved(asked ? { enabled: updated.enabled, from, owner: asked } : null))
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setSaving(false))
   }
   const runNow = (): void => {
     setStarting(true)
-    void runAutomationNowForTarget(automation, botTarget(bot))
+    void actOnBotAutomationRow(rowOwner, (captured) =>
+      runAutomationNowForOwner(captured, automation.id)
+    )
       .then(() =>
         toast.message(
           t('auto.components.automations.AutomationsPage.a1bdb57008', 'Automation run queued.')
@@ -200,7 +209,12 @@ function AutomationRow({
       .finally(() => setStarting(false))
   }
   const open = (): void =>
-    openBotAutomation(bot.hostId, automation.id, card.failed ? (row.latestRunId ?? null) : null)
+    openBotAutomation({
+      bot,
+      automationId: automation.id,
+      runId: card.failed ? (row.latestRunId ?? null) : null,
+      originRowKey: card.key
+    })
   const toggle = pauseResume(t, enabled, setEnabled, saving || pending)
   const deleteItem: BotRowMenuItem | null = deletion
     ? {
@@ -259,7 +273,13 @@ function AutomationRow({
                 {
                   icon: <ArrowUpRight />,
                   label: t('bots.automations.openOnPage', 'Open on Automations page'),
-                  onSelect: () => openBotAutomation(bot.hostId, automation.id, null)
+                  onSelect: () =>
+                    openBotAutomation({
+                      bot,
+                      automationId: automation.id,
+                      runId: null,
+                      intent: 'page'
+                    })
                 }
               ],
               deleteItem ? [deleteItem] : []
@@ -283,13 +303,16 @@ function WaitRow({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { automation } = row
+  const owner = botAutomationRowOwner(automation, bot)
   const [cancelling, setCancelling] = useState(false)
   if (folded) {
     return null
   }
   const cancel = (): void => {
     setCancelling(true)
-    void deleteAutomationForTarget(automation, botTarget(bot))
+    void actOnBotAutomationRow(owner, (captured) =>
+      deleteAutomationForOwner(captured, automation.id)
+    )
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setCancelling(false))
   }

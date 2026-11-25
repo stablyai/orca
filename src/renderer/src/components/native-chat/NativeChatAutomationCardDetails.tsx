@@ -3,62 +3,31 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
-import { botAgentLabel, botErrorMessage } from '@/components/bots/bot-presentation'
-import { botResultsPlace } from '../../../../shared/automation-bot-target'
+import { botErrorMessage } from '@/components/bots/bot-presentation'
 import { botTargetChatTitle } from '@/components/automations/authoring/automation-bot-runs-in-chat'
-import { eventTriggerLine } from '@/components/automations/authoring/AutomationBotEventsField'
-import { formatUiAutomationScheduleDescriptor } from '@/components/automations/details/automation-schedule-label'
 import {
-  runAutomationNowForTarget,
-  updateAutomationForTarget,
-  type AutomationHostTarget
-} from '@/components/automations/hosts/automation-host-client'
-import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { botAutomationWhenParts } from '../../../../shared/bots/bot-automation-when'
-import type {
-  Automation,
-  AutomationBotResultsTo
-} from '../../../../shared/automations/automation-definition'
+  automationAgentLabel,
+  automationResultsPlace,
+  automationWhenLines
+} from '@/components/automations/details/automation-bot-facts'
+import { useAutomationDetails } from '@/components/automations/details/use-automation-details'
+import type { AutomationDetailsController } from '@/components/automations/details/automation-details-controller'
+import { automationOwnerForEnvironment } from '@/components/automations/hosts/automation-host-owner'
+import {
+  runAutomationNowForOwner,
+  updateAutomationForOwner
+} from '@/components/automations/hosts/automation-scoped-list-client'
+import { AutomationRecentRunList } from '@/components/automations/runs/AutomationRecentRunList'
+import { useAppStore } from '@/store'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { useNow } from '@/lib/window-activity/use-now'
-import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
-import { useAutomationCardDetails } from './use-automation-card-details'
+import { useNativeChatVisualOwner } from './media/visuals/native-chat-visual-owner'
+import { automationOpenFromCard } from './native-chat-automation-open'
 
-function whenLines(automation: Automation): string[] {
-  return botAutomationWhenParts(automation).map((part) =>
-    part.kind === 'schedule'
-      ? formatUiAutomationScheduleDescriptor(part.schedule)
-      : eventTriggerLine(part.trigger)
-  )
-}
-
-function resultsPlace(resultsTo: AutomationBotResultsTo | undefined): string {
-  if (resultsTo === undefined) {
-    return translate('components.native-chat.automationSaved.resultsInEachRun', 'In each run')
-  }
-  if (resultsTo === 'chat') {
-    return translate('components.native-chat.automationSaved.resultsChat', 'Chat')
-  }
-  if (resultsTo === 'thread') {
-    return translate('automations.botTarget.resultsToThread', "The event's thread")
-  }
-  if (resultsTo === 'none') {
-    return translate('automations.botTarget.resultsToNone', 'Nowhere')
-  }
-  return botResultsPlace(resultsTo)
-}
-
-function agentLabel(automation: Automation): string {
-  return automation.bot
-    ? botAgentLabel(automation.agentId)
-    : (getAgentCatalog().find((agent) => agent.id === automation.agentId)?.label ??
-        automation.agentId)
-}
+export const AUTOMATION_CARD_RECENT_RUNS = 3
 
 /** One label/value row of a card's opened details, inside a two-column `dl`. */
 export function NativeChatCardFact({
@@ -79,16 +48,15 @@ export function NativeChatCardFact({
 }
 
 function RecentRuns({
-  hostId,
-  automationId,
+  automation,
   runs
 }: {
-  hostId: ExecutionHostId
-  automationId: string
+  automation: Pick<Automation, 'id'> & { bot?: { botId: string } }
   runs: readonly AutomationRun[]
 }): React.JSX.Element {
   const t = useTranslate()
   const now = useNow(60_000)
+  const owner = useNativeChatVisualOwner()
   if (runs.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -97,61 +65,46 @@ function RecentRuns({
     )
   }
   return (
-    <ul
-      aria-label={t('components.native-chat.automationSaved.recentRuns', 'Recent runs')}
-      className="-mx-1 flex min-w-0 flex-col divide-y divide-border"
-    >
-      {runs.map((run) => (
-        <li key={run.id}>
-          <button
-            type="button"
-            className="flex w-full min-w-0 items-baseline justify-between gap-3 rounded-md px-1 py-1 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => openBotAutomation(hostId, automationId, run.id)}
-          >
-            <span className="min-w-0 truncate text-sm text-foreground">{run.title}</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {formatUiRelativeTime(run.createdAt - now)}
-            </span>
-          </button>
-        </li>
-      ))}
-    </ul>
+    <AutomationRecentRunList
+      ariaLabel={t('components.native-chat.automationSaved.recentRuns', 'Recent runs')}
+      runs={runs}
+      now={now}
+      onPress={(run) => openBotAutomation(automationOpenFromCard(owner, automation, run.id))}
+    />
   )
 }
 
 function ReadyDetails({
   automation,
   runs,
-  target,
-  onEditInChat,
-  onSaved,
-  onRan
+  controller,
+  mutating,
+  onEditInChat
 }: {
   automation: Automation
   runs: readonly AutomationRun[]
-  target: AutomationHostTarget
+  controller: AutomationDetailsController
+  mutating: boolean
   onEditInChat: (() => void) | null
-  onSaved: (next: Automation) => void
-  onRan: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const [saving, setSaving] = useState(false)
   const [running, setRunning] = useState(false)
   const setEnabled = (enabled: boolean): void => {
-    setSaving(true)
-    void updateAutomationForTarget(automation, { enabled }, target)
-      .then(onSaved)
+    void controller
+      .mutate(
+        (owner) => updateAutomationForOwner(owner, automation.id, { enabled }),
+        (next) => next
+      )
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
-      .finally(() => setSaving(false))
   }
   const runNow = (): void => {
     setRunning(true)
-    void runAutomationNowForTarget(automation, target)
+    void controller
+      .act((owner) => runAutomationNowForOwner(owner, automation.id))
       .then(() => {
         toast.message(
           t('auto.components.automations.AutomationsPage.a1bdb57008', 'Automation run queued.')
         )
-        onRan()
       })
       .catch((error: unknown) => toast.error(botErrorMessage(error)))
       .finally(() => setRunning(false))
@@ -162,7 +115,7 @@ function ReadyDetails({
       <div className="grid gap-3 @md:grid-cols-2">
         <dl className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1">
           <NativeChatCardFact label={t('components.native-chat.automationSaved.when', 'When')}>
-            {whenLines(automation).map((line) => (
+            {automationWhenLines(automation).map((line) => (
               <div key={line}>{line}</div>
             ))}
           </NativeChatCardFact>
@@ -174,17 +127,13 @@ function ReadyDetails({
           <NativeChatCardFact
             label={t('components.native-chat.automationSaved.results', 'Results')}
           >
-            {resultsPlace(automation.bot?.resultsTo)}
+            {automationResultsPlace(automation.bot?.resultsTo)}
           </NativeChatCardFact>
           <NativeChatCardFact label={t('components.native-chat.automationSaved.agent', 'Agent')}>
-            {agentLabel(automation)}
+            {automationAgentLabel(automation)}
           </NativeChatCardFact>
         </dl>
-        <RecentRuns
-          hostId={getRuntimeTargetHostId(target)}
-          automationId={automation.id}
-          runs={runs}
-        />
+        <RecentRuns automation={automation} runs={runs} />
       </div>
       {automation.prompt ? (
         <p className="mt-3 line-clamp-6 whitespace-pre-wrap break-words rounded-md border border-border px-3 py-2 text-sm text-foreground">
@@ -203,7 +152,7 @@ function ReadyDetails({
         <Switch
           className="ml-auto"
           checked={automation.enabled}
-          disabled={saving}
+          disabled={mutating}
           onCheckedChange={setEnabled}
           aria-label={
             automation.enabled
@@ -222,52 +171,62 @@ function ReadyDetails({
 
 /** An opened automation card: its live settings, newest runs and actions, read from its host. */
 export function NativeChatAutomationCardDetails({
-  automationId,
+  automation,
   environmentId,
   onEditInChat
 }: {
-  automationId: string
+  automation: Pick<Automation, 'id'> & { bot?: { botId: string } }
   /** The chat's host; null for this computer. */
   environmentId: string | null
   /** Null outside a chat, where there is no chat box to draft into. */
   onEditInChat: (() => void) | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const { details, reload, replace } = useAutomationCardDetails(environmentId, automationId)
-  const target: AutomationHostTarget =
-    environmentId === null ? { kind: 'local' } : { kind: 'environment', environmentId }
+  const visualOwner = useNativeChatVisualOwner()
+  // Captured once per host: a re-pair to another machine retires what was read.
+  const [owner] = useState(() =>
+    automationOwnerForEnvironment(environmentId, useAppStore.getState())
+  )
+  const { controller, snapshot } = useAutomationDetails({
+    owner,
+    automationId: automation.id,
+    recentLimit: AUTOMATION_CARD_RECENT_RUNS
+  })
+  const { definition, runs } = snapshot
   return (
     <div className="@container mt-3 border-t border-border pt-3">
-      {details.status === 'loading' ? (
+      {definition.status === 'loading' ? (
         <Loader2
           className="size-4 animate-spin text-muted-foreground"
           aria-label={t('components.native-chat.automationSaved.loading', 'Loading')}
         />
-      ) : details.status === 'deleted' ? (
+      ) : definition.status === 'deleted' ? (
         <p className="text-sm text-muted-foreground">
           {t('components.native-chat.automationSaved.deleted', 'This automation was deleted')}
         </p>
-      ) : details.status === 'error' ? (
+      ) : !definition.value ? (
         <p className="text-sm text-muted-foreground">
           {t('components.native-chat.automationSaved.loadFailed', 'Couldn’t read this automation')}
         </p>
       ) : (
+        // A failed runs read keeps the settings: the runs are just left out.
         <ReadyDetails
-          automation={details.automation}
-          runs={details.runs}
-          target={target}
+          automation={definition.value}
+          runs={runs.value}
+          controller={controller}
+          mutating={snapshot.mutating}
           onEditInChat={onEditInChat}
-          onSaved={replace}
-          onRan={reload}
         />
       )}
-      {details.status === 'deleted' ? null : (
+      {definition.status === 'deleted' ? null : (
         <Button
           type="button"
           variant="link"
           size="inlineText"
           className="mt-3"
-          onClick={() => openBotAutomation(getRuntimeTargetHostId(target), automationId, null)}
+          onClick={() =>
+            openBotAutomation(automationOpenFromCard(visualOwner, automation, null, 'page'))
+          }
         >
           {t('components.native-chat.automationSaved.openFullPage', 'Open page')}
         </Button>

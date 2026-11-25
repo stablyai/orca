@@ -86,11 +86,11 @@ export async function activateAiVaultStructuredSession(
     await openBotGroupRoom(room.group, room.roomId, room.label)
     return true
   }
-  await openDesktopStructuredSession(
+  const result = await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
     { target, deps, retry: () => activateAiVaultStructuredSession(session, deps, target) }
   )
-  return true
+  return result.kind === 'opened'
 }
 
 type DesktopStructuredSessionOpenOptions = {

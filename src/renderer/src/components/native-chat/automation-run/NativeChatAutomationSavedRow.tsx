@@ -3,13 +3,13 @@ import { useTranslation } from 'react-i18next'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { openBotAutomation } from '@/components/bots/bot-automation-open'
+import { automationOpenFromCard } from '../native-chat-automation-open'
 import { botAutomationWhen } from '@/components/bots/bot-automation-when'
 import { useBotForWorkspace } from '@/components/bots/bot-workspace'
 import { botAgentLabel } from '@/components/bots/bot-presentation'
 import { launchModelLabel } from '@/components/agent/AgentLaunchPicker'
 import { webhookResultsTo, webhookUnknownBotName } from '@/components/bots/webhooks/webhook-copy'
 import { automationHookId } from '../../../../../shared/automation-event-triggers'
-import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { automationRowMark } from '../../../../../shared/automations/automation-chat-row'
 import { useAutomationRunWording } from './automation-run-wording'
@@ -133,7 +133,7 @@ export function NativeChatAutomationSavedRow({
           <p className={ROW_NOTE}>{facts.join(' · ')}</p>
           {open ? (
             <NativeChatAutomationCardDetails
-              automationId={automation.id}
+              automation={automation}
               environmentId={
                 owner?.target.kind === 'environment' ? owner.target.environmentId : null
               }
@@ -144,13 +144,7 @@ export function NativeChatAutomationSavedRow({
             <button
               type="button"
               className={RUN_LINK_BUTTON}
-              onClick={() =>
-                openBotAutomation(
-                  getRuntimeTargetHostId(owner?.target ?? { kind: 'local' }),
-                  automation.id,
-                  null
-                )
-              }
+              onClick={() => openBotAutomation(automationOpenFromCard(owner, automation, null))}
             >
               {wording.say('openAutomation')}
             </button>

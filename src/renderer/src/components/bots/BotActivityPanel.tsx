@@ -43,6 +43,12 @@ import { useBotItemsSeenAtOpen } from './items/use-bot-items-seen-mark'
 import { useBotItemWalk } from './items/use-bot-item-walk'
 import { useBotItemsShownList } from './items/use-bot-items-shown-list'
 import { useRightSidebarGutterResize } from '@/components/right-sidebar/layout/right-sidebar-gutter-resize'
+import {
+  useBotAutomationOpenCount,
+  useBotAutomationPlace,
+  returnToActivity
+} from './bot-automation-place'
+import { BotAutomationPanel } from './BotAutomationPanel'
 
 /** Focus after the panel shows Activity again: the gear that opened settings. */
 function focusGearAfterClose(panel: HTMLElement | null): void {
@@ -66,7 +72,23 @@ export default function BotActivityPanel(): React.JSX.Element | null {
 
 function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {
   const settings = useBotSettingsPlace('panel', bot.id)
+  const automation = useBotAutomationPlace(bot)
+  const openCount = useBotAutomationOpenCount()
   const panel = React.useRef<HTMLDivElement | null>(null)
+  if (!settings && automation) {
+    return (
+      <div ref={panel} className="flex min-h-0 flex-1 flex-col">
+        <BotAutomationPanel
+          // Every open is a fresh screen, so opening the same automation again re-reads it.
+          key={openCount}
+          bot={bot}
+          place={automation}
+          onBack={() => returnToActivity(panel.current, automation, 'origin')}
+          onDeleted={() => returnToActivity(panel.current, automation, 'automations')}
+        />
+      </div>
+    )
+  }
   if (!settings) {
     return (
       <div ref={panel} className="flex min-h-0 flex-1 flex-col">
@@ -193,6 +215,7 @@ function BotActivityTab({ bot }: { bot: Bot }): React.JSX.Element {
       tabIndex={-1}
       // The bot row's hover card moves focus here when it opens the bot's Home.
       data-bot-home-panel=""
+      data-bot-activity-scroller=""
       // The wider left padding is the sidebar's resize grab area, 4 px clear of every row.
       className="@container scrollbar-sleek flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto pl-3.5 pr-2 py-3 outline-none"
       {...gutterResize}

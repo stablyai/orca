@@ -256,6 +256,7 @@ export function BotUpcomingSection({
                 ref={newButton}
                 variant="ghost"
                 size="icon-xs"
+                data-bot-automations-new=""
                 aria-label={newLabel}
                 onBlur={() => setNewShown(false)}
                 onClick={() =>

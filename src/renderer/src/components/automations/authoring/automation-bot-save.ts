@@ -32,6 +32,7 @@ import { botAutomationSetup } from '../../../../../shared/bots/bot-agent-setup'
 import { isBotAgent } from '../../../../../shared/bot-types'
 import type { AutomationHostCatalogEntry } from '../hosts/automation-host-catalog-types'
 import { automationHostRecoveryActions } from '../hosts/automation-host-status-descriptors'
+import type { AutomationDraft } from './AutomationEditorDialog'
 
 /** Why the target cannot be saved yet, or null when it can. */
 export function botTargetError(target: AutomationBotTarget): string | null {
@@ -76,6 +77,23 @@ export function botHostUnavailableNotice(
   }
 }
 
+/**
+ * An edit's schedule fields. The zone is never sent: the draft shows the saved hours as they read in
+ * the zone the host uses, so sending this viewer's zone would move them (a server keeps the zone
+ * saved with the record; a desktop follows its own clock). Only a create names a zone.
+ */
+export function botScheduleUpdates(
+  draft: Pick<
+    AutomationDraft,
+    'preset' | 'customSchedule' | 'dayOfWeek' | 'missedRunGraceMinutes' | 'eventsOnly'
+  >,
+  current: Pick<Automation, 'rrule' | 'dtstart'> | null,
+  time: { hour: number; minute: number; now: number }
+): Partial<Pick<AutomationUpdateInput, 'rrule' | 'dtstart'>> {
+  const { rrule } = buildDraftSchedule(draft, time)
+  return botSchedulePatch(draft.eventsOnly === true, current, { rrule, dtstart: time.now })
+}
+
 /** Saves an automation that runs as a bot; it lives beside its bot, on the bot's host. */
 export async function saveBotAutomation(
   context: AutomationSaveContext,
@@ -110,9 +128,9 @@ export async function saveBotAutomation(
       prompt: draft.prompt,
       // Unchanged, it is left out, so an automation whose bot was deleted can still be renamed.
       ...(isSameBotTarget(current?.bot, bot) ? {} : { bot }),
-      timezone,
       missedRunGraceMinutes,
-      ...botSchedulePatch(draft.eventsOnly === true, current, { rrule, dtstart: time.now })
+      // No zone: an edit keeps the one the host reads its hours in (see botScheduleUpdates).
+      ...botScheduleUpdates(draft, current, time)
     }
     const saved = await saveExistingAutomation(
       context,

@@ -57,6 +57,7 @@ export function ActivityRow({
   note,
   alert,
   aside,
+  rowKey,
   onOpen
 }: {
   icon: React.ReactNode
@@ -67,11 +68,14 @@ export function ActivityRow({
   /** A quiet warning under the detail, marked with a dot. */
   note?: string
   alert?: string
+  /** Names the row so focus can come back to it, e.g. after the bot panel's Automation screen. */
+  rowKey?: string
   onOpen?: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
+      data-activity-row-key={rowKey}
       className="flex w-full min-w-0 items-start gap-2 rounded-sm px-2 py-1.5 text-left enabled:cursor-pointer hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:hover:bg-transparent"
       disabled={!onOpen}
       onClick={onOpen}

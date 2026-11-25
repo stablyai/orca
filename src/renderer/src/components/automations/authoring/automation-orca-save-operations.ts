@@ -1,3 +1,4 @@
+import { automationEditPrecondition } from '../../../../../shared/automations/automation-edit-precondition'
 import { toast } from 'sonner'
 import type {
   Automation,
@@ -250,6 +251,9 @@ export async function saveExistingAutomation(
   fallbackTarget: AutomationHostTarget | null,
   rowKey: string | null
 ): Promise<AutomationDispatchResult<Automation>> {
+  const guard = currentAutomation
+    ? { unchangedSince: automationEditPrecondition(currentAutomation) }
+    : undefined
   return await dispatchAutomationUpdate(
     context.destination.automationDispatchContext,
     { rowKey: rowKey ?? '', automationId },
@@ -263,10 +267,11 @@ export async function saveExistingAutomation(
           )
         )
       }
-      return updateAutomationForTarget(currentAutomation, updates, fallbackTarget)
+      return updateAutomationForTarget(currentAutomation, updates, fallbackTarget, guard)
     },
     'save',
-    destination
+    destination,
+    guard
   )
 }
 
