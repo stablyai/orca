@@ -1,7 +1,6 @@
 import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-prose'
 // Keep estimates arithmetic over cached metrics; per-measurement block scans would traverse the whole transcript.
 
-import { NATIVE_CHAT_TURN_DIFF_FILE_LIMIT } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import { agentMessageIsCompact } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { withoutSentImagePromptMarkers } from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
@@ -28,7 +27,6 @@ export type NativeChatRowChromeMetrics = {
   hasReceipt: boolean
   hasStatus: boolean
   hasTurnDiff: boolean
-  turnDiffFileCount?: number
   hasOpenedPullRequests?: boolean
   /** Folded prose/tools paint only a roster and must not reserve their expanded height. */
   folded?: boolean
@@ -203,15 +201,7 @@ export function estimateNativeChatRowHeight(
     partCount += 1
   }
   if (chrome.hasTurnDiff) {
-    height +=
-      TURN_DIFF_PX *
-      scale *
-      (1 +
-        Math.min(chrome.turnDiffFileCount ?? 0, NATIVE_CHAT_TURN_DIFF_FILE_LIMIT) +
-        (chrome.turnDiffFileCount !== undefined &&
-        chrome.turnDiffFileCount > NATIVE_CHAT_TURN_DIFF_FILE_LIMIT
-          ? 1
-          : 0))
+    height += TURN_DIFF_PX * scale
     partCount += 1
   }
   if (chrome.hasOpenedPullRequests) {

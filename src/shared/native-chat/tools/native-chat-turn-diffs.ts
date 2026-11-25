@@ -34,6 +34,8 @@ export type NativeChatTurnDiffFile = {
 }
 
 export type NativeChatTurnDiff = {
+  /** Keys reader state: a turn's first edit moves when earlier history loads into it. */
+  turnKey: string
   files: NativeChatTurnDiffFile[]
   added: number
   removed: number
@@ -113,6 +115,7 @@ export function nativeChatTurnDiffs(
       return [
         key,
         {
+          turnKey: key,
           files,
           added: files.reduce((sum, file) => sum + file.added, 0),
           removed: files.reduce((sum, file) => sum + file.removed, 0),
@@ -134,6 +137,7 @@ export function sameNativeChatTurnDiff(
     left === right ||
     (!!left &&
       !!right &&
+      left.turnKey === right.turnKey &&
       left.added === right.added &&
       left.removed === right.removed &&
       left.truncated === right.truncated &&
