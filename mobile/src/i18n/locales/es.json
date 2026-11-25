@@ -5730,11 +5730,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Ningún agente coincide con «{{query}}»",
       "emptyTitle": "No hay agentes en ejecución",
-      "pairDesktop": "Empareja un escritorio para ver aquí sus agentes.",
       "emptyBody": "Inicia un agente en cualquier espacio de trabajo y aparecerá aquí.",
       "unread": "Sin leer",
-      "noDesktopTitle": "No hay ningún escritorio conectado",
-      "noDesktopBody": "Los agentes aparecen aquí cuando se conecta un escritorio.",
       "hideWorkers": "Ocultar {{workers}}",
       "showWorkers": "Mostrar {{workers}}"
     },
@@ -5753,31 +5750,17 @@
       "status": "Estado",
       "workspace": "Espacio de trabajo",
       "project": "Proyecto",
-      "agent": "Agente",
-      "desktop": "Escritorio"
+      "agent": "Agente"
     },
     "options": {
       "groupBy": "Agrupar por",
       "showWorkers": "Mostrar agentes worker",
-      "open": "Opciones de la lista de agentes",
       "unreadOnly": "Solo sin leer",
       "markAllRead": "Marcar todo como leído",
       "clearFinished": "Quitar agentes terminados"
     },
     "search": {
-      "toggle": "Buscar agentes",
       "placeholder": "Buscar agentes"
-    },
-    "desktops": {
-      "pickerTitle": "Mostrar agentes de",
-      "agents_many": "{{count}} agentes",
-      "agents_one": "{{count}} agente",
-      "agents_other": "{{count}} agentes",
-      "all": "Todos los escritorios",
-      "offline": "Sin conexión",
-      "needsYou_many": "{{count}} te necesitan",
-      "needsYou_one": "{{count}} te necesita",
-      "needsYou_other": "{{count}} te necesitan"
     },
     "sections": {
       "needsYou": "Requieren tu atención",
@@ -5801,7 +5784,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

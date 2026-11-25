@@ -5730,11 +5730,8 @@
       "workers_other": "{{count}} workers",
       "noMatches": "Aucun agent ne correspond à « {{query}} »",
       "emptyTitle": "Aucun agent en cours d'exécution",
-      "pairDesktop": "Appairez un ordinateur pour voir ses agents ici.",
       "emptyBody": "Démarrez un agent dans n'importe quel espace de travail : il apparaîtra ici.",
       "unread": "Non lu",
-      "noDesktopTitle": "Aucun ordinateur connecté",
-      "noDesktopBody": "Les agents apparaîtront ici dès qu'un ordinateur sera connecté.",
       "hideWorkers": "Masquer {{workers}}",
       "showWorkers": "Afficher {{workers}}"
     },
@@ -5753,31 +5750,17 @@
       "status": "Statut",
       "workspace": "Espace de travail",
       "project": "Projet",
-      "agent": "Agent",
-      "desktop": "Ordinateur"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "Grouper par",
       "showWorkers": "Afficher les workers",
-      "open": "Options de la liste des agents",
       "unreadOnly": "Non lus uniquement",
       "markAllRead": "Tout marquer comme lu",
       "clearFinished": "Retirer les agents terminés"
     },
     "search": {
-      "toggle": "Rechercher des agents",
       "placeholder": "Rechercher des agents"
-    },
-    "desktops": {
-      "pickerTitle": "Afficher les agents sur",
-      "agents_many": "{{count}} agents",
-      "agents_one": "{{count}} agent",
-      "agents_other": "{{count}} agents",
-      "all": "Tous les ordinateurs",
-      "offline": "Hors ligne",
-      "needsYou_many": "{{count}} ont besoin de vous",
-      "needsYou_one": "{{count}} a besoin de vous",
-      "needsYou_other": "{{count}} ont besoin de vous"
     },
     "sections": {
       "needsYou": "Nécessitent votre attention",
@@ -5801,7 +5784,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Jumeler un ordinateur",
       "pairRequired": "Pour ouvrir ce lien, jumelez ce téléphone à un ordinateur, puis rouvrez le lien.",

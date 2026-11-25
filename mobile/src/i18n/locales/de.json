@@ -5585,11 +5585,8 @@
       "workers_other": "{{count}} Worker",
       "noMatches": "Keine Agenten zu „{{query}}“ gefunden",
       "emptyTitle": "Keine laufenden Agenten",
-      "pairDesktop": "Einen Desktop koppeln, um hier seine Agenten zu sehen.",
       "emptyBody": "Ein in einem beliebigen Arbeitsbereich gestarteter Agent erscheint hier.",
       "unread": "Ungelesen",
-      "noDesktopTitle": "Kein Desktop verbunden",
-      "noDesktopBody": "Agenten erscheinen hier, sobald ein Desktop verbunden ist.",
       "hideWorkers": "{{workers}} ausblenden",
       "showWorkers": "{{workers}} anzeigen"
     },
@@ -5608,29 +5605,17 @@
       "status": "Status",
       "workspace": "Arbeitsbereich",
       "project": "Projekt",
-      "agent": "Agent",
-      "desktop": "Desktop"
+      "agent": "Agent"
     },
     "options": {
       "groupBy": "Gruppieren nach",
       "showWorkers": "Worker-Agenten anzeigen",
-      "open": "Optionen der Agentenliste",
       "unreadOnly": "Nur ungelesene",
       "markAllRead": "Alle als gelesen markieren",
       "clearFinished": "Erledigte entfernen"
     },
     "search": {
-      "toggle": "Agenten suchen",
       "placeholder": "Agenten suchen"
-    },
-    "desktops": {
-      "pickerTitle": "Desktop auswählen",
-      "agents_one": "{{count}} Agent",
-      "agents_other": "{{count}} Agenten",
-      "all": "Alle Desktops",
-      "offline": "Offline",
-      "needsYou_one": "{{count}} braucht dich",
-      "needsYou_other": "{{count}} brauchen dich"
     },
     "sections": {
       "needsYou": "Benötigt dich",
@@ -5654,7 +5639,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Computer koppeln",
       "pairRequired": "Kopple dieses Telefon mit einem Computer, um diesen Link zu öffnen, und öffne den Link dann erneut.",

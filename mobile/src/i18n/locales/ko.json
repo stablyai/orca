@@ -5954,11 +5954,8 @@
       "workers_other": "워커 {{count}}개",
       "noMatches": "“{{query}}”와(과) 일치하는 에이전트가 없습니다",
       "emptyTitle": "실행 중인 에이전트 없음",
-      "pairDesktop": "데스크톱을 페어링하면 에이전트가 여기에 표시됩니다.",
       "emptyBody": "워크스페이스에서 에이전트를 시작하면 여기에 표시됩니다.",
       "unread": "읽지 않음",
-      "noDesktopTitle": "연결된 데스크톱 없음",
-      "noDesktopBody": "데스크톱이 연결되면 에이전트가 여기에 표시됩니다.",
       "hideWorkers": "{{workers}} 숨기기",
       "showWorkers": "{{workers}} 표시"
     },
@@ -5977,29 +5974,17 @@
       "status": "상태",
       "workspace": "워크스페이스",
       "project": "프로젝트",
-      "agent": "에이전트",
-      "desktop": "데스크톱"
+      "agent": "에이전트"
     },
     "options": {
       "groupBy": "그룹화 기준",
       "showWorkers": "워커 에이전트 표시",
-      "open": "에이전트 목록 옵션",
       "unreadOnly": "읽지 않은 항목만",
       "markAllRead": "모두 읽은 것으로 표시",
       "clearFinished": "완료된 항목 지우기"
     },
     "search": {
-      "toggle": "에이전트 검색",
       "placeholder": "에이전트 검색"
-    },
-    "desktops": {
-      "pickerTitle": "에이전트를 표시할 데스크톱",
-      "agents_one": "에이전트 {{count}}개",
-      "agents_other": "에이전트 {{count}}개",
-      "all": "모든 데스크톱",
-      "offline": "오프라인",
-      "needsYou_one": "확인 필요 {{count}}개",
-      "needsYou_other": "확인 필요 {{count}}개"
     },
     "sections": {
       "needsYou": "확인 필요",

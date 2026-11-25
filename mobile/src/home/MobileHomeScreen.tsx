@@ -1,5 +1,5 @@
 import { useFocusEffect } from 'expo-router'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -10,6 +10,8 @@ import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { getHostListActionSheetActions } from '../host-list-action-sheet-actions'
 import { triggerMediumImpact } from '../platform/haptics/haptics'
+import { useSoftKeyboard } from '../platform/keyboard/keyboard-occlusion'
+import { useMobileDictationClearance } from '../dictation/mobile-dictation-host-context'
 import { useAgentListRowActions } from '../agents/use-agent-list-row-actions'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
 import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
@@ -69,8 +71,20 @@ export function MobileHomeScreen() {
   const [newBotOpen, setNewBotOpen] = useState(false)
   const openBotHome = useOpenBotHome({ standalone: true })
   const [tabBarHeight, setTabBarHeight] = useState(0)
+  const [agentsBarHeight, setAgentsBarHeight] = useState(0)
+  const [focused, setFocused] = useState(true)
+  useFocusEffect(
+    useCallback(() => {
+      setFocused(true)
+      return () => setFocused(false)
+    }, [])
+  )
+  // What Home's bottom chrome covers: the tab bar, plus the Agents bar above it.
+  const bottomCovered = tabBarHeight + (tab === 'agents' ? agentsBarHeight : 0)
+  // The pill floats over whatever screen is on top, so only a focused Home asks it to clear Home's bars.
+  useMobileDictationClearance(focused ? bottomCovered : 0)
   const agentActions = useAgentListRowActions(
-    tabBarHeight,
+    bottomCovered,
     data.sortedHosts,
     data.applyAgentActivity
   )
@@ -184,6 +198,8 @@ export function MobileHomeScreen() {
   const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
+  const newWorkspace = () =>
+    data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
   const fab =
     tab === 'feed' && paired
       ? {
@@ -193,8 +209,7 @@ export function MobileHomeScreen() {
           hint: data.hostsConnecting
             ? undefined
             : t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.'),
-          onPress: () =>
-            data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
+          onPress: newWorkspace
         }
       : tab === 'automations' && automationsHostId && automationsHostConnected
         ? {
@@ -239,8 +254,10 @@ export function MobileHomeScreen() {
                 ) : id === 'agents' ? (
                   <MobileHomeAgentsTab
                     data={data}
-                    bottomInset={contentBottom}
                     handlers={agentActions.handlers}
+                    active={id === tab}
+                    onBarHeightChange={setAgentsBarHeight}
+                    onNewWorkspace={data.connectedHosts.length > 0 ? newWorkspace : undefined}
                   />
                 ) : id === 'usage' ? (
                   <MobileHomeUsageTab
@@ -275,14 +292,16 @@ export function MobileHomeScreen() {
           onPress={() => fab?.onPress()}
         />
         <View onLayout={(event) => setTabBarHeight(event.nativeEvent.layout.height)}>
-          <MobileHomeTabBar
-            tabs={HOME_TABS}
-            active={tab}
-            bottomInset={insets.bottom}
-            agentsBadge={data.agentsNeedingYou.length}
-            botsBadge={data.bots.needsYou}
-            onSelect={selectTab}
-          />
+          <HomeTabBarUnderKeyboard focused={focused}>
+            <MobileHomeTabBar
+              tabs={HOME_TABS}
+              active={tab}
+              bottomInset={insets.bottom}
+              agentsBadge={data.agentsNeedingYou.length}
+              botsBadge={data.bots.needsYou}
+              onSelect={selectTab}
+            />
+          </HomeTabBarUnderKeyboard>
         </View>
         {agentActions.sheet}
         <HomeNewBotSheet
@@ -342,6 +361,13 @@ export function MobileHomeScreen() {
       </SafeAreaView>
     </GestureHandlerRootView>
   )
+}
+
+// The keyboard covers the tab bar, so it steps out and a tab's bottom search bar sits right on the keyboard.
+function HomeTabBarUnderKeyboard(props: { focused: boolean; children: ReactNode }) {
+  const keyboardUp = useSoftKeyboard().visible
+  // Hidden, not unmounted, so its badges don't replay their entrance; a keyboard above Home leaves it be.
+  return <View style={props.focused && keyboardUp && styles.hidden}>{props.children}</View>
 }
 
 const styles = themedStyleSheet(() => ({
