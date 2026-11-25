@@ -15,10 +15,27 @@ function enterBody(session: NativeChatMediaViewerFocusSession): () => void {
   }
 }
 
+// The control the pointer last pressed. A mouse click on a tile may leave focus on the page (macOS
+// does not focus buttons on click), and that control is still what opened the viewer.
+let pressed: Element | null = null
+if (typeof document !== 'undefined') {
+  document.addEventListener(
+    'pointerdown',
+    (event) => {
+      pressed =
+        event.target instanceof Element
+          ? event.target.closest('button, a[href], [tabindex]:not([tabindex="-1"])')
+          : null
+    },
+    true
+  )
+}
+
 function openBody(session: NativeChatMediaViewerFocusSession, event: Event): void {
   // The first image records the opener; a stepped-to image finds focus already inside the viewer.
   if (session.opener === null) {
-    session.opener = document.activeElement
+    const active = document.activeElement
+    session.opener = active && active !== document.body ? active : pressed
   }
   event.preventDefault()
 }

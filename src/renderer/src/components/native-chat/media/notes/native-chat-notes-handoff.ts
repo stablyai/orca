@@ -28,7 +28,14 @@ import { showNativeChatNotesNotice } from './native-chat-notes-notice'
 import { translate } from '@/i18n/i18n'
 import { groupNativeChatNotesByFrame, type NativeChatMediaNote } from './native-chat-media-notes'
 
-export type NativeChatNotesComposer = { scopeKey: string; handle: NativeChatComposerHandle }
+/** `element`: the message box's mounted element. Its handle object is replaced as the box
+ *  re-renders (attaching the marked image does), so the element is what tells one mounted box from
+ *  another. */
+export type NativeChatNotesComposer = {
+  scopeKey: string
+  handle: NativeChatComposerHandle
+  element?: HTMLElement
+}
 
 /** The chat's message box, found from inside its chat; null outside a chat or with no box. */
 export function nativeChatNotesComposer(from: Element | null): NativeChatNotesComposer | null {
@@ -36,7 +43,9 @@ export function nativeChatNotesComposer(from: Element | null): NativeChatNotesCo
   // The draft the image goes into and the draft its notes are kept with are the same message box's.
   const destination = root ? nativeChatComposerDestinationIn(root) : null
   const scopeKey = destination?.element.dataset.nativeChatComposerScope
-  return destination && scopeKey ? { scopeKey, handle: destination.handle } : null
+  return destination && scopeKey
+    ? { scopeKey, handle: destination.handle, element: destination.element }
+    : null
 }
 
 /** The chat's draft scope, even while its message box is hidden behind a question card. */
@@ -112,6 +121,8 @@ export function settleNativeChatNotesReplacement(
 export type NativeChatNotesSendApproval = {
   root: Element | null
   composer: NativeChatNotesComposer
+  /** The message box's mounted element at the press: a remount is another box. */
+  element: HTMLElement | undefined
   text: string
   imageIds: readonly string[]
 }
@@ -121,9 +132,11 @@ export function captureNativeChatNotesSend(
   composer: NativeChatNotesComposer
 ): NativeChatNotesSendApproval {
   const draft = readNativeChatComposerDraft(composer.scopeKey)
+  const root = opener.current?.closest('[data-native-chat-root]') ?? null
   return {
-    root: opener.current?.closest('[data-native-chat-root]') ?? null,
+    root,
     composer,
+    element: (root ? nativeChatNotesComposer(root)?.element : undefined) ?? composer.element,
     text: draft.text,
     imageIds: draft.images.map(({ id }) => id)
   }
@@ -153,7 +166,8 @@ export function submitNativeChatNotesIfApproved(
     )
   if (
     now?.scopeKey !== scopeKey ||
-    now.handle !== approved.composer.handle ||
+    // The same mounted message box; its current handle is the one that sends.
+    now.element !== approved.element ||
     now.handle.notesBlocked?.() !== null ||
     words(draft.text, [...ids, replacedId]) !== words(approved.text, [replacedId]) ||
     draft.images.length !== expected.size ||

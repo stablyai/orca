@@ -357,26 +357,51 @@ it('the viewer follows the open image when the message’s images reorder', () =
   expect(result.current[0]).toBeNull()
 })
 
+/** A chat with a message box registered the way the composer registers itself: its handle ref,
+ *  whose object the composer replaces as it re-renders, on its mounted element. */
 function chatWithComposer(handle: NativeChatComposerHandle): {
   opener: { current: Element | null }
+  rerender: (next: NativeChatComposerHandle) => void
   remount: (next: NativeChatComposerHandle) => void
 } {
   const root = document.createElement('div')
   root.dataset.nativeChatRoot = 'true'
-  const box = document.createElement('div')
+  let box = document.createElement('div')
   box.dataset.nativeChatComposerScope = SCOPE
   const chip = document.createElement('button')
   root.append(box, chip)
   document.body.append(root)
-  let unregister = registerNativeChatComposerDestination(box, { current: handle }, true, SCOPE)
+  const handleRef = { current: handle }
+  let unregister = registerNativeChatComposerDestination(box, handleRef, true, SCOPE)
   return {
     opener: { current: chip },
+    rerender: (next) => {
+      handleRef.current = next
+    },
     remount: (next) => {
       unregister()
+      const fresh = document.createElement('div')
+      fresh.dataset.nativeChatComposerScope = SCOPE
+      box.replaceWith(fresh)
+      box = fresh
       unregister = registerNativeChatComposerDestination(box, { current: next }, true, SCOPE)
     }
   }
 }
+
+it('Send goes out through the message box’s current handle after the box re-renders with a new one', () => {
+  const before = composerHandle()
+  const chat = chatWithComposer(before)
+  appendToNativeChatComposerDraft(SCOPE, { text: 'look', images: [] })
+  const approved = captureNativeChatNotesSend(chat.opener, { scopeKey: SCOPE, handle: before })
+  // Attaching the marked image re-renders the message box, which publishes a new handle object.
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
+  const after = composerHandle()
+  chat.rerender(after)
+  expect(submitNativeChatNotesIfApproved(approved, ['marked'], undefined)).toBe(true)
+  expect(after.submit).toHaveBeenCalledTimes(1)
+  expect(before.submit).not.toHaveBeenCalled()
+})
 
 const composerHandle = (): NativeChatComposerHandle & { submit: Mock<() => void> } => ({
   insertAgentReferences: () => false,
