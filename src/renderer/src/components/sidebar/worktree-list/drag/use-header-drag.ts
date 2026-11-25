@@ -28,6 +28,7 @@ import {
   getRootProjectHeaderCountByOccurrenceKey,
   getSidebarRootProjectHeaderKeys
 } from './root-project-header-drop'
+import { useProjectHeaderGroupMove } from './use-project-header-group-move'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 
@@ -89,6 +90,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
   const hasProjectGroups = projectGroups.length > 0
   const canReorderRepoHeaders = groupBy === 'repo' && projectOrderBy === 'manual'
   const canReorderProjectGroupHeaders = groupBy === 'repo' && hasProjectGroups
+  const canMoveRepoHeadersBetweenGroups = groupBy === 'repo' && hasProjectGroups
   const rootProjectHeaderKeys = useMemo(
     () =>
       hasProjectGroups
@@ -177,7 +179,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     [sidebarProjectGroupHeaderIdsByBucket]
   )
   const commitProjectGroupOrder = useCallback(
-    (project: Repo, projectGroupId: string | null, order: number) => {
+    (project: Repo, projectGroupId: string | null, order?: number) => {
       void moveProjectToGroup(project, projectGroupId, order)
     },
     [moveProjectToGroup]
@@ -219,13 +221,24 @@ export function useWorktreeSidebarHeaderDrag(args: {
     },
     [onScrollIntent]
   )
-  // Drag applies only in manual order; still construct the controller inert for stable hook order.
+  const groupMove = useProjectHeaderGroupMove({
+    enabled: canMoveRepoHeadersBetweenGroups,
+    renderRows,
+    sidebarRepoHeaderIdsByBucket,
+    projectGroupOwnerHostIdByGroupId,
+    moveProjectToGroup,
+    onCommitRootProjectOrder: commitRootProjectOrder,
+    onScrollIntent
+  })
+  // Drag applies in manual order or between groups; still construct the controller inert for stable hook order.
   const repoDrag = useRepoHeaderDrag({
     orderedRepoIds: allRepoIds,
     sidebarRepoHeaderIdsByBucket,
     repoById: repoMap,
     getLiveRepos: readLiveRepos,
     usesProjectGroupOrdering: hasProjectGroups,
+    canReorder: canReorderRepoHeaders,
+    groupMove,
     onCommitRepoOrder: commitRepoReorder,
     onCommitProjectGroupOrder: commitProjectGroupOrder,
     rootProjectHeaderKeys,
@@ -270,6 +283,7 @@ export function useWorktreeSidebarHeaderDrag(args: {
     rootProjectHeaderSectionEndByKey,
     canReorderRepoHeaders,
     canReorderProjectGroupHeaders,
+    canMoveRepoHeadersBetweenGroups,
     rootProjectHeaderKeys,
     orderedHostIds,
     hostDrag,

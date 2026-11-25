@@ -1,10 +1,11 @@
 import React, { useCallback, useRef, useState } from 'react'
-import { FolderOpen, Globe, Plus, type LucideIcon } from 'lucide-react'
+import { FolderOpen, FolderTree, Globe, Plus, type LucideIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
@@ -56,6 +57,8 @@ type AddProjectMenuProps = {
   onOpenChange?: (open: boolean) => void
   defaultHostId?: ExecutionHostId | null
   onOpenEntryRequest: (request: AddRepoDialogEntryRequest) => void
+  /** Adds a "New project group" item that creates an empty group on the picked host. */
+  onCreateProjectGroup?: (hostId: ExecutionHostId) => void
   onBeforeLaunchAction?: () => void
   onOpenRemoteHostDialog?: (mode: AddRemoteHostMode) => void
   onRemoteHostDialogOpenChange?: (open: boolean) => void
@@ -73,6 +76,7 @@ type AddProjectMenuProps = {
 function AddProjectMenuOpenContent({
   defaultHostId,
   onOpenEntryRequest,
+  onCreateProjectGroup,
   onBeforeLaunchAction,
   onOpenRemoteHostDialog,
   onNavigateBack,
@@ -86,6 +90,7 @@ function AddProjectMenuOpenContent({
 }: {
   defaultHostId: ExecutionHostId | null
   onOpenEntryRequest: (request: AddRepoDialogEntryRequest) => void
+  onCreateProjectGroup?: (hostId: ExecutionHostId) => void
   onBeforeLaunchAction?: () => void
   onOpenRemoteHostDialog: (mode: AddRemoteHostMode) => void
   onNavigateBack?: () => void
@@ -187,6 +192,26 @@ function AddProjectMenuOpenContent({
           {showShortcut ? <DropdownMenuShortcut>↵</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
       ))}
+      {onCreateProjectGroup ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            disabled={actionsDisabled}
+            onPointerMove={closeHostSubmenu}
+            onSelect={() => {
+              if (hostSelection.selectedHostId) {
+                onCloseMenu()
+                onCreateProjectGroup(hostSelection.selectedHostId)
+              }
+            }}
+          >
+            <FolderTree />
+            <span className="truncate">
+              {t('auto.components.sidebar.AddProjectMenu.newProjectGroup', 'New project group…')}
+            </span>
+          </DropdownMenuItem>
+        </>
+      ) : null}
     </DropdownMenuContent>
   )
 }
@@ -197,6 +222,7 @@ export function AddProjectMenu({
   onOpenChange,
   defaultHostId = null,
   onOpenEntryRequest,
+  onCreateProjectGroup,
   onBeforeLaunchAction,
   onOpenRemoteHostDialog,
   onRemoteHostDialogOpenChange,
@@ -251,6 +277,7 @@ export function AddProjectMenu({
           <AddProjectMenuOpenContent
             defaultHostId={defaultHostId}
             onOpenEntryRequest={onOpenEntryRequest}
+            onCreateProjectGroup={onCreateProjectGroup}
             onBeforeLaunchAction={onBeforeLaunchAction}
             onOpenRemoteHostDialog={onOpenRemoteHostDialog ?? handleRemoteHostModeChange}
             onNavigateBack={onNavigateBack}

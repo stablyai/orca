@@ -108,12 +108,13 @@ export function renderWorktreeSectionHeaderRow(
       ))
     : undefined
   const isDraggableRepoHeader = Boolean(
-    headerDrag.canReorderRepoHeaders &&
     projectIdForHeader &&
     repoHeaderBucketKey &&
-    (rootProjectHeaderCount !== undefined
-      ? rootProjectHeaderCount > 1
-      : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)
+    (headerDrag.canMoveRepoHeadersBetweenGroups ||
+      (headerDrag.canReorderRepoHeaders &&
+        (rootProjectHeaderCount !== undefined
+          ? rootProjectHeaderCount > 1
+          : (headerDrag.sidebarRepoHeaderIdsByBucket.get(repoHeaderBucketKey)?.length ?? 0) > 1)))
   )
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
@@ -125,8 +126,10 @@ export function renderWorktreeSectionHeaderRow(
           0) > 1)
   )
   const isDraggingThis =
-    headerDrag.canReorderRepoHeaders &&
-    headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
+    isDraggableRepoHeader && headerDrag.repoDrag.state.draggingRepoId === projectIdForHeader
+  const isProjectDropTarget =
+    projectGroupIdForHeader !== undefined &&
+    headerDrag.repoDrag.state.dropTargetGroupId === projectGroupIdForHeader
   const isDraggingThisProjectGroup =
     headerDrag.canReorderProjectGroupHeaders &&
     headerDrag.projectGroupDrag.state.draggingGroupId === projectGroupDragIdForHeader
@@ -239,6 +242,8 @@ export function renderWorktreeSectionHeaderRow(
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/50',
             (isDraggingThis || isDraggingThisProjectGroup) &&
               'bg-accent/80 ring-1 ring-ring/40 shadow-md rounded-md scale-[1.01]',
+            isProjectDropTarget &&
+              'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',
             headerWorkspaceStatus &&
               ctx.dragOverStatus === headerWorkspaceStatus &&
               'rounded-md bg-worktree-sidebar-accent ring-1 ring-worktree-sidebar-ring/40',

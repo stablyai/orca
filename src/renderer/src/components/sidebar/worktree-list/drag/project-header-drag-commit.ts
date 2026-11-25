@@ -10,24 +10,42 @@ import type { ProjectHeaderDragSession } from './project-header-drag-contract'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isSameRepoRow } from '@/store/repos/repo-host-identity'
 import type { RootProjectHeaderDrag } from './root-project-header-drop'
+import {
+  commitProjectHeaderGroupMove,
+  type ProjectHeaderDrop,
+  type ProjectHeaderGroupMove
+} from './project-header-group-move'
 
 export function commitProjectHeaderDragDrop(
   args: RootProjectHeaderDrag & {
     session: ProjectHeaderDragSession
-    sidebarDropIndex: number
+    drop: ProjectHeaderDrop
+    groupMove: ProjectHeaderGroupMove | undefined
     orderedRepoIds: readonly string[]
     repoById: ReadonlyMap<string, Repo>
     liveRepos: readonly Repo[]
     usesProjectGroupOrdering: boolean
     onCommitRepoOrder: (orderedIds: string[]) => void
-    onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+    onCommitProjectGroupOrder: (
+      project: Repo,
+      projectGroupId: string | null,
+      order?: number
+    ) => void
   }
 ): void {
+  const { drop } = args
+  if (drop.kind !== 'reorder') {
+    if (args.groupMove) {
+      commitProjectHeaderGroupMove({ ...args, drop, groupMove: args.groupMove })
+    }
+    return
+  }
+  const sidebarDropIndex = drop.dropIndex
   if (args.session.rootProjectHeaderKeys) {
     args.onCommitRootProjectOrder?.(
       args.session.rootProjectHeaderKeys,
       `repo:${args.session.repo.id}`,
-      args.sidebarDropIndex
+      sidebarDropIndex
     )
     return
   }
@@ -42,8 +60,8 @@ export function commitProjectHeaderDragDrop(
   // Both slots beside the dragged header are no-ops; do not compact paired-host occurrences.
   if (
     sourceIndex === -1 ||
-    args.sidebarDropIndex === sourceIndex ||
-    args.sidebarDropIndex === sourceIndex + 1
+    sidebarDropIndex === sourceIndex ||
+    sidebarDropIndex === sourceIndex + 1
   ) {
     return
   }
@@ -54,7 +72,7 @@ export function commitProjectHeaderDragDrop(
       .map((repoId) => args.repoById.get(repoId))
       .filter((repo): repo is Repo => repo !== undefined)
     const siblingDropIndex = mapSidebarProjectHeaderDropIndexToSiblingInsertIndex({
-      sidebarDropIndex: args.sidebarDropIndex,
+      sidebarDropIndex,
       sourceIndex,
       siblingCount: siblings.length
     })
@@ -74,7 +92,7 @@ export function commitProjectHeaderDragDrop(
   }
 
   const insertAt = mapSidebarRepoDropIndexToAllRepoInsertAt(
-    args.sidebarDropIndex,
+    sidebarDropIndex,
     sidebarRepoHeaderIds,
     args.orderedRepoIds
   )
