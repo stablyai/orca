@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { hostSnapshotAffirmsWorktreeContents } from '../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
@@ -21,7 +22,7 @@ import { buildMirroredAgentTabs } from '../tab-projection/terminal-surfaces'
 import { recordDirectlyOpenedChat } from '../tracking/directly-opened-chat-tabs'
 import { getSessionTabsRuntimeIdFromResponse } from '../tracking/publisher-identity-fences'
 import { isWebSessionTabsWorktreeRemovalFrame } from '../tracking/session-tabs-inventory-absence'
-import { canProjectWebSessionTabsRead } from '../tracking/tracking'
+import { admitWebSessionTabsChatRead } from '../tracking/tracking'
 import { waitForChatLinkSessionTabs } from './remote-runtime-session-tabs-inflight'
 
 /** Materialize one listed chat before its subscription frame arrives. */
@@ -79,7 +80,6 @@ export async function readPairedChatTab(args: {
     snapshot?.worktree !== worktreeId ||
     isWebSessionTabsWorktreeRemovalFrame(snapshot) ||
     !hostSnapshotAffirmsWorktreeContents(snapshot) ||
-    !canProjectWebSessionTabsRead(environmentId, snapshot, receivedFrame, runtimeId) ||
     isServerFrameDrawnWorkspace(environmentId, worktreeId)
   ) {
     return
@@ -135,7 +135,16 @@ export async function readPairedChatTab(args: {
     now,
     { mayAdopt: isOwnerTab }
   )
-  if (!mirror) {
+  if (
+    !mirror ||
+    !admitWebSessionTabsChatRead(
+      environmentId,
+      snapshot,
+      receivedFrame,
+      runtimeId,
+      readRuntimeStatuses().get(environmentId)?.status?.runtimeId
+    )
+  ) {
     return
   }
   const tab = state.createUnifiedTab(worktreeId, 'agent-session', {

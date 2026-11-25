@@ -2,13 +2,50 @@ import { expect, it } from 'vitest'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { applyWebSessionTabsSnapshot } from '../snapshots/snapshot-api'
 import {
+  latestReceivedSessionTabsSnapshotByWorktree,
+  latestSessionTabsSnapshotByWorktree,
+  sessionTabsFreshnessKey
+} from '../state'
+import {
   ENV,
   NOW,
   WT,
   makeSnapshot,
-  makeState
+  makeState,
+  resetWebSessionTabsSyncTestState
 } from '../testing/web-session-tabs-sync.test-fixture'
 import { recordDirectlyOpenedChat } from './directly-opened-chat-tabs'
+import { isRetiredSessionTabsRuntimeId } from './publisher-identity-fences'
+import {
+  admitWebSessionTabsChatRead,
+  recordReceivedWebSessionTabsSnapshot,
+  shouldApplyRecoveredWebSessionTabsSnapshot
+} from './tracking'
+
+it('admits a verified restarted host without advancing the worktree publication', () => {
+  resetWebSessionTabsSyncTestState()
+  try {
+    const previous = makeSnapshot([], { publicationEpoch: 'previous', snapshotVersion: 9 })
+    const linked = makeSnapshot([], { publicationEpoch: 'replacement', snapshotVersion: 3 })
+    const key = sessionTabsFreshnessKey(ENV, WT)
+    recordReceivedWebSessionTabsSnapshot(ENV, previous, 2, 'old-runtime')
+    const lastReceipt = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+
+    expect(admitWebSessionTabsChatRead(ENV, linked, 3, 'new-runtime', undefined)).toBe(false)
+    expect(admitWebSessionTabsChatRead(ENV, linked, 1, 'new-runtime', 'new-runtime')).toBe(false)
+    expect(admitWebSessionTabsChatRead(ENV, linked, 3, 'new-runtime', 'new-runtime')).toBe(true)
+    expect(isRetiredSessionTabsRuntimeId(ENV, 'old-runtime')).toBe(true)
+    expect(latestReceivedSessionTabsSnapshotByWorktree.get(key)).toBe(lastReceipt)
+    expect(latestSessionTabsSnapshotByWorktree.has(key)).toBe(false)
+    expect(admitWebSessionTabsChatRead(ENV, previous, 4, 'old-runtime', 'old-runtime')).toBe(false)
+
+    const full = { ...linked, snapshotVersion: 2 }
+    recordReceivedWebSessionTabsSnapshot(ENV, full, 5, 'new-runtime')
+    expect(shouldApplyRecoveredWebSessionTabsSnapshot(ENV, full, 5, 'new-runtime')).toBe(true)
+  } finally {
+    resetWebSessionTabsSyncTestState()
+  }
+})
 
 it('startup and older inventories cannot erase an early chat before the current inventory', () => {
   const chat: Tab = {
