@@ -66,9 +66,7 @@ export function useSourceControlPanelViewState({
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
-  // Store-backed so diff-change navigation can follow the panel's active filter.
-  const filterQuery = useAppStore((s) => s.sourceControlFilterQuery)
-  const setFilterQuery = useAppStore((s) => s.setSourceControlFilterQuery)
+  const [filterQuery, setFilterQuery] = useState('')
   const [changeScope, setChangeScopeState] = useState<SourceControlChangeScope>(() =>
     readRememberedChangeScope(activeWorktreeId, owner)
   )

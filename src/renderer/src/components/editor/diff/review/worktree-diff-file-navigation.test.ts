@@ -1,182 +1,119 @@
 import { describe, expect, it } from 'vitest'
-import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import { resolveSourceControlGroupOrder } from '../../../../../../shared/source-control/listing/source-control-section-order'
+import type { SourceControlVisibleRow } from '../../../../../../shared/source-control/listing/source-control-visible-row'
 import {
-  getAdjacentWorktreeDiffCandidate,
-  getWorktreeDiffNavigationCandidates,
-  type WorktreeDiffNavigationOrder
+  getAdjacentWorktreeDiffRow,
+  isWorktreeDiffNavigationRow
 } from './worktree-diff-file-navigation'
 
-const order = (
-  overrides: Partial<WorktreeDiffNavigationOrder> = {}
-): WorktreeDiffNavigationOrder => ({
-  groupOrder: resolveSourceControlGroupOrder(undefined),
-  viewMode: 'list',
-  ...overrides
+const row = (
+  area: 'unstaged' | 'staged' | 'untracked',
+  path: string,
+  conflictKind?: 'both_modified'
+): SourceControlVisibleRow => ({
+  key: `${area}::${path}`,
+  entry: { path, status: 'modified', area, ...(conflictKind ? { conflictKind } : {}) }
 })
 
-const unstaged = (path: string): GitStatusEntry => ({
-  path,
-  status: 'modified',
-  area: 'unstaged'
-})
-const untracked = (path: string): GitStatusEntry => ({
-  path,
-  status: 'untracked',
-  area: 'untracked'
-})
-const deleted = (path: string): GitStatusEntry => ({ path, status: 'deleted', area: 'unstaged' })
-
-const candidatePaths = (entries: GitStatusEntry[], listOrder = order()): string[] =>
-  getWorktreeDiffNavigationCandidates(entries, listOrder).map((candidate) => candidate.path)
+const rows = [row('unstaged', 'src/a.ts'), row('staged', 'src/b.ts'), row('untracked', 'src/c.ts')]
 
 describe('worktree diff file navigation', () => {
-  it('keeps each path once, in Source Control Changes-section order', () => {
-    expect(
-      candidatePaths([
-        { path: 'src/10.ts', status: 'modified', area: 'staged' },
-        unstaged('src/2.ts'),
-        unstaged('src/10.ts'),
-        untracked('src/new.ts')
-      ])
-    ).toEqual(['src/2.ts', 'src/10.ts', 'src/new.ts'])
-  })
-
-  it('excludes staged-only, pinned-conflict and unresolved-conflict entries', () => {
-    expect(
-      candidatePaths([
-        { path: 'src/staged.ts', status: 'modified', area: 'staged' },
-        {
-          path: 'src/conflict.ts',
-          status: 'modified',
-          area: 'unstaged',
-          conflictStatus: 'unresolved'
-        },
-        {
-          path: 'src/resolved.ts',
-          status: 'modified',
-          area: 'unstaged',
-          conflictStatus: 'resolved_locally'
-        },
-        unstaged('src/eligible.ts')
-      ])
-    ).toEqual(['src/eligible.ts'])
-  })
-
-  it('sorts untracked entries together with unstaged ones like the Changes section', () => {
-    const candidates = getWorktreeDiffNavigationCandidates(
-      [untracked('src/r-new.ts'), deleted('src/a-removed.ts')],
-      order()
-    )
-
-    expect(candidates).toEqual([
-      expect.objectContaining({ path: 'src/a-removed.ts', status: 'deleted', area: 'unstaged' }),
-      expect.objectContaining({ path: 'src/r-new.ts', status: 'untracked', area: 'untracked' })
-    ])
-  })
-
-  it('applies the live Source Control filter to the sweep', () => {
-    expect(
-      candidatePaths([unstaged('src/a.ts'), unstaged('src/b.ts')], order({ filterQuery: 'a.' }))
-    ).toEqual(['src/a.ts'])
-    expect(
-      candidatePaths([unstaged('src/a.ts'), unstaged('src/b.ts')], order({ filterQuery: 'zzz' }))
-    ).toEqual([])
-  })
-
-  it('walks tree view files depth-first, directories first, like the Source Control tree', () => {
-    expect(
-      candidatePaths(
-        [untracked('src/z.ts'), unstaged('src/a/deep/x.ts'), unstaged('src/a/b.ts')],
-        order({ viewMode: 'tree' })
-      )
-    ).toEqual(['src/a/deep/x.ts', 'src/a/b.ts', 'src/z.ts'])
-  })
-
-  it('steps to the interior neighbor in both directions', () => {
-    const entries = [unstaged('src/a.ts'), unstaged('src/b.ts'), unstaged('src/c.ts')]
+  it('steps to the displayed neighbor across staging areas in both directions', () => {
+    const args = { rows, previousKeys: null }
 
     expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/a.ts',
-        direction: 'next'
-      })
-    ).toMatchObject({ path: 'src/b.ts' })
+      getAdjacentWorktreeDiffRow({ ...args, currentKey: 'unstaged::src/a.ts', direction: 'next' })
+    ).toMatchObject({ key: 'staged::src/b.ts' })
     expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/c.ts',
+      getAdjacentWorktreeDiffRow({
+        ...args,
+        currentKey: 'untracked::src/c.ts',
         direction: 'previous'
       })
-    ).toMatchObject({ path: 'src/b.ts' })
+    ).toMatchObject({ key: 'staged::src/b.ts' })
   })
 
   it('stops at the list ends instead of wrapping across files', () => {
-    const entries = [unstaged('src/a.ts'), unstaged('src/b.ts')]
+    const args = { rows, previousKeys: null }
 
     expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/b.ts',
-        direction: 'next'
-      })
+      getAdjacentWorktreeDiffRow({ ...args, currentKey: 'staged::src/b.ts', direction: 'next' })
+    ).toMatchObject({ key: 'untracked::src/c.ts' })
+    expect(
+      getAdjacentWorktreeDiffRow({ ...args, currentKey: 'untracked::src/c.ts', direction: 'next' })
     ).toBeNull()
     expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/a.ts',
+      getAdjacentWorktreeDiffRow({
+        ...args,
+        currentKey: 'unstaged::src/a.ts',
         direction: 'previous'
       })
     ).toBeNull()
-    expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/a.ts',
-        direction: 'next'
-      })
-    ).toMatchObject({ path: 'src/b.ts' })
   })
 
-  it('places a disappeared path between its projected neighbors across mixed areas', () => {
-    const entries = [
-      unstaged('src/a.ts'),
-      untracked('src/b.ts'),
-      unstaged('src/d.ts'),
-      unstaged('src/f.ts')
-    ]
-
+  it('reaches the sole remaining row after the current row left the list', () => {
     expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/e.ts',
+      getAdjacentWorktreeDiffRow({
+        rows: [row('unstaged', 'src/b.ts')],
+        currentKey: 'unstaged::src/a.ts',
+        previousKeys: ['unstaged::src/a.ts', 'unstaged::src/b.ts'],
         direction: 'next'
       })
-    ).toMatchObject({ path: 'src/f.ts' })
+    ).toMatchObject({ key: 'unstaged::src/b.ts' })
     expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries,
-        order: order(),
-        currentPath: 'src/e.ts',
-        direction: 'previous'
-      })
-    ).toMatchObject({ path: 'src/d.ts' })
-  })
-
-  it('returns no adjacent candidate for a single-file sweep', () => {
-    expect(
-      getAdjacentWorktreeDiffCandidate({
-        entries: [unstaged('src/a.ts')],
-        order: order(),
-        currentPath: 'src/a.ts',
+      getAdjacentWorktreeDiffRow({
+        rows: [row('unstaged', 'src/b.ts')],
+        currentKey: 'unstaged::src/b.ts',
+        previousKeys: ['unstaged::src/a.ts', 'unstaged::src/b.ts'],
         direction: 'next'
       })
     ).toBeNull()
+  })
+
+  it('continues from where a vanished row last sat, skipping the same file other side', () => {
+    // Staged first: p was partly staged and had working-tree changes; it is now fully staged.
+    const previousKeys = ['staged::src/p.ts', 'unstaged::src/p.ts', 'staged::src/q.ts']
+
+    expect(
+      getAdjacentWorktreeDiffRow({
+        rows: [row('staged', 'src/p.ts'), row('staged', 'src/q.ts')],
+        currentKey: 'unstaged::src/p.ts',
+        previousKeys,
+        direction: 'next'
+      })
+    ).toMatchObject({ key: 'staged::src/q.ts' })
+    expect(
+      getAdjacentWorktreeDiffRow({
+        rows: [row('staged', 'src/p.ts'), row('staged', 'src/q.ts')],
+        currentKey: 'unstaged::src/p.ts',
+        previousKeys,
+        direction: 'previous'
+      })
+    ).toBeNull()
+  })
+
+  it('declines a vanished row it never saw', () => {
+    expect(
+      getAdjacentWorktreeDiffRow({
+        rows,
+        currentKey: 'unstaged::src/never-opened.ts',
+        previousKeys: null,
+        direction: 'next'
+      })
+    ).toBeNull()
+    expect(
+      getAdjacentWorktreeDiffRow({
+        rows,
+        currentKey: 'unstaged::src/never-opened.ts',
+        previousKeys: ['unstaged::src/other.ts'],
+        direction: 'previous'
+      })
+    ).toBeNull()
+  })
+
+  it('keeps conflict rows outside the sweep', () => {
+    expect(isWorktreeDiffNavigationRow(row('unstaged', 'src/a.ts'))).toBe(true)
+    expect(isWorktreeDiffNavigationRow(row('unstaged', 'src/conflict.ts', 'both_modified'))).toBe(
+      false
+    )
   })
 })

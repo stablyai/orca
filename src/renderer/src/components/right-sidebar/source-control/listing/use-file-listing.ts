@@ -10,6 +10,7 @@ import { useSourceControlGitHistory } from '../sync/use-git-history'
 import type { SourceControlStatusRefresh } from '../sync/use-status-refresh'
 import { useSourceControlFileProjection } from './use-file-projection'
 import { useSourceControlRowOpening } from './use-row-opening'
+import { useSourceControlVisibleRowsPublish } from './visible-rows-publish'
 import type { SourceControlWorktreeContext } from './use-worktree-context'
 import {
   changeScopeKey,
@@ -114,6 +115,7 @@ export function useSourceControlFileListing({
     sourceControlViewMode,
     collapsedSections
   })
+  useSourceControlVisibleRowsPublish({ activeWorktreeId, visibleSelectionEntries })
   const { gitHistoryContextKey, gitHistoryState, refreshGitHistory, refreshGitHistoryRef } =
     useSourceControlGitHistory({
       activeRepoTarget,

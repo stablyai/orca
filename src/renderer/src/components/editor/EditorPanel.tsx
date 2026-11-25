@@ -185,7 +185,7 @@ function EditorPanelInner({
     handleNavigateWorktreeFile,
     isWorktreeFileNavigationSurface,
     worktreeFileArrivalReveal
-  } = useWorktreeDiffFileNavigation({ activeFile, gitStatusEntries, requestedChangesMode })
+  } = useWorktreeDiffFileNavigation({ activeFile, requestedChangesMode })
   useEditorCmdSaveRequest({
     activeFile,
     openFiles,

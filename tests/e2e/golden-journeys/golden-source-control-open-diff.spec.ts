@@ -54,7 +54,7 @@ test('@golden opens an unstaged file diff from Source Control', async ({
   await expect(probe).toBeFocused()
 })
 
-test('@golden navigates unstaged and untracked files from diff controls', async ({
+test('@golden navigates changed files in panel order from diff controls', async ({
   orcaPage,
   testRepoPath,
   registerPostElectronShutdownCleanup
@@ -66,38 +66,91 @@ test('@golden navigates unstaged and untracked files from diff controls', async 
   await waitForSessionReady(orcaPage)
   await openGoldenSourceControl(orcaPage, testRepoPath, fixture)
 
-  const initialFile = orcaPage
-    .locator('[data-testid="source-control-entry"]')
-    .filter({ hasText: 'unstaged.ts' })
-  await expect(initialFile).toBeVisible({ timeout: 15_000 })
-  await initialFile.click()
-  await expect(orcaPage.locator('.monaco-diff-editor')).toBeVisible({ timeout: 20_000 })
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts', true)
+  await openEntry(orcaPage, 'unstaged.ts')
+  await expectActiveEditor(orcaPage, fixture.worktreePath, 'unstaged.ts', UNSTAGED_DIFF)
 
-  // Sweep order is the panel's: deleted.ts, unstaged.ts, untracked.ts.
-  await navigateWithHeaderUntil(orcaPage, 'Next change', 'untracked.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'untracked.ts')
-  // untracked.ts is the last candidate: next falls back to the same-file wrap instead of crossing files.
-  await pressAndExpectStay(orcaPage, 'Next change', 'untracked.ts')
-
-  await navigateWithHeaderUntil(orcaPage, 'Previous change', 'unstaged.ts')
-  // Non-deleted targets open as Changes-mode edit tabs, so the hop lands without the (diff) title.
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
-  await navigateWithHeaderUntil(orcaPage, 'Previous change', 'deleted.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
-  // deleted.ts is the first candidate: previous wraps within the file.
-  await pressAndExpectStay(orcaPage, 'Previous change', 'deleted.ts')
-
-  await pressDiffShortcutUntil(orcaPage, 'F7', 'unstaged.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'unstaged.ts')
-  await pressDiffShortcutUntil(orcaPage, 'Shift+F7', 'deleted.ts')
-  await expectActiveEditorPath(orcaPage, fixture.worktreePath, 'deleted.ts', true)
-
-  const openedPaths = await orcaPage.evaluate(
-    () => window.__store?.getState().openFiles.map((file) => file.relativePath) ?? []
+  // Sweep order is the panel's: Changes (deleted.ts, unstaged.ts, untracked.ts), then Staged.
+  await navigateWithHeaderUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Next change',
+    'untracked.ts',
+    UNTRACKED_CHANGES
   )
-  expect(openedPaths).not.toContain('staged-only.ts')
+  await navigateWithHeaderUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Next change',
+    'staged-only.ts',
+    STAGED_DIFF
+  )
+  // staged-only.ts is the last row: next wraps within the file instead of crossing files.
+  await pressAndExpectStay(
+    orcaPage,
+    fixture.worktreePath,
+    'Next change',
+    'staged-only.ts',
+    STAGED_DIFF
+  )
+
+  await navigateWithHeaderUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Previous change',
+    'untracked.ts',
+    UNTRACKED_CHANGES
+  )
+  await navigateWithHeaderUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Previous change',
+    'unstaged.ts',
+    UNSTAGED_CHANGES
+  )
+  await navigateWithHeaderUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Previous change',
+    'deleted.ts',
+    DELETED_DIFF
+  )
+  // deleted.ts is the first row: previous wraps within the file.
+  await pressAndExpectStay(
+    orcaPage,
+    fixture.worktreePath,
+    'Previous change',
+    'deleted.ts',
+    DELETED_DIFF
+  )
+
+  // F7/Shift+F7 are captured by diff tabs; hops land on Changes tabs, which step through the header arrows.
+  await pressDiffShortcutUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'F7',
+    'unstaged.ts',
+    UNSTAGED_CHANGES
+  )
+  await openEntry(orcaPage, 'staged-only.ts')
+  await expectActiveEditor(orcaPage, fixture.worktreePath, 'staged-only.ts', STAGED_DIFF)
+  await pressDiffShortcutUntil(
+    orcaPage,
+    fixture.worktreePath,
+    'Shift+F7',
+    'untracked.ts',
+    UNTRACKED_CHANGES
+  )
 })
+
+const UNSTAGED_DIFF: RenderedEditor = { title: ' (diff)', addedLine: 'two' }
+const DELETED_DIFF: RenderedEditor = { title: ' (diff)', removedLine: 'one' }
+const STAGED_DIFF: RenderedEditor = { title: ' (staged diff)', addedLine: 'two' }
+// Hops into working-tree rows land on Changes tabs.
+const UNSTAGED_CHANGES: RenderedEditor = { title: '', addedLine: 'two' }
+const UNTRACKED_CHANGES: RenderedEditor = { title: '', addedLine: 'new' }
+
+// Header title suffix and the lines the rendered editor must show.
+type RenderedEditor = { title: string; removedLine?: string; addedLine?: string }
 
 function seedMultiFileNavigationFixture(worktreePath: string): void {
   writeFileSync(path.join(worktreePath, 'unstaged.ts'), 'one\n')
@@ -125,37 +178,60 @@ async function getActiveEditorRelativePath(page: Page): Promise<string | null> {
   })
 }
 
-async function expectActiveEditorPath(
+async function openEntry(page: Page, relativePath: string): Promise<void> {
+  await page
+    .locator('[data-testid="source-control-entry"]')
+    .filter({ hasText: relativePath })
+    .click()
+}
+
+// Store state alone passes even when the pane renders nothing: assert what the user sees.
+async function expectActiveEditor(
   page: Page,
   worktreePath: string,
   relativePath: string,
-  isDiff = false
+  rendered: RenderedEditor
 ): Promise<void> {
   await expect.poll(() => getActiveEditorRelativePath(page), { timeout: 10_000 }).toBe(relativePath)
-  const title = `${path.join(realpathSync(worktreePath), relativePath).replaceAll('\\', '/')}${
-    isDiff ? ' (diff)' : ''
-  }`
-  await expect(page.locator('.editor-header-path').first()).toHaveAttribute('title', title)
+  await expect(page.locator('.editor-header-path').first()).toHaveAttribute(
+    'title',
+    `${path.join(realpathSync(worktreePath), relativePath).replaceAll('\\', '/')}${rendered.title}`
+  )
+  const viewLines = page.locator(
+    rendered.title ? '.modified-in-monaco-diff-editor .view-line' : '.monaco-editor .view-line'
+  )
+  if (rendered.removedLine) {
+    await expect(
+      page
+        .locator('.original-in-monaco-diff-editor .view-line')
+        .filter({ hasText: rendered.removedLine })
+    ).toBeVisible()
+  }
+  if (rendered.addedLine) {
+    await expect(viewLines.filter({ hasText: rendered.addedLine })).toBeVisible()
+  }
 }
 
 async function pressAndExpectStay(
   page: Page,
+  worktreePath: string,
   buttonName: 'Next change' | 'Previous change',
-  expectedRelativePath: string
+  expectedRelativePath: string,
+  rendered: RenderedEditor
 ): Promise<void> {
   const button = page.getByRole('button', { name: buttonName })
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await button.click()
   }
-  await expect
-    .poll(() => getActiveEditorRelativePath(page), { timeout: 2_000 })
-    .toBe(expectedRelativePath)
+  await expectActiveEditor(page, worktreePath, expectedRelativePath, rendered)
 }
 
 async function navigateWithHeaderUntil(
   page: Page,
+  worktreePath: string,
   buttonName: 'Next change' | 'Previous change',
-  expectedRelativePath: string
+  expectedRelativePath: string,
+  rendered: RenderedEditor
 ): Promise<void> {
   const button = page.getByRole('button', { name: buttonName })
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -164,20 +240,21 @@ async function navigateWithHeaderUntil(
       await expect
         .poll(() => getActiveEditorRelativePath(page), { timeout: 2_000 })
         .toBe(expectedRelativePath)
+      await expectActiveEditor(page, worktreePath, expectedRelativePath, rendered)
       return
     } catch {
       // Keep stepping through any remaining hunks in the current file.
     }
   }
-  await expect
-    .poll(() => getActiveEditorRelativePath(page), { timeout: 1 })
-    .toBe(expectedRelativePath)
+  await expectActiveEditor(page, worktreePath, expectedRelativePath, rendered)
 }
 
 async function pressDiffShortcutUntil(
   page: Page,
+  worktreePath: string,
   shortcut: 'F7' | 'Shift+F7',
-  expectedRelativePath: string
+  expectedRelativePath: string,
+  rendered: RenderedEditor
 ): Promise<void> {
   await page.locator('.monaco-diff-editor textarea').first().focus()
   for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -186,12 +263,11 @@ async function pressDiffShortcutUntil(
       await expect
         .poll(() => getActiveEditorRelativePath(page), { timeout: 2_000 })
         .toBe(expectedRelativePath)
+      await expectActiveEditor(page, worktreePath, expectedRelativePath, rendered)
       return
     } catch {
       // Keep stepping through any remaining hunks in the current file.
     }
   }
-  await expect
-    .poll(() => getActiveEditorRelativePath(page), { timeout: 1 })
-    .toBe(expectedRelativePath)
+  await expectActiveEditor(page, worktreePath, expectedRelativePath, rendered)
 }
