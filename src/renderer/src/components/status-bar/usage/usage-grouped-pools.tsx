@@ -71,9 +71,10 @@ export function GroupedPoolUsage({
             </span>
             {windows.map(({ bucket, key }, index) => {
               const percentage = formatBareUsagePercentage(bucket.usedPercent, display, t)
-              const window = showResetCountdown
-                ? formatRateLimitWindowChipLabel(bucket, now)
-                : formatPoolWindowLabel(bucket, now, t)
+              const window =
+                showResetCountdown && bucket.resetsAt != null
+                  ? formatRateLimitWindowChipLabel(bucket, now)
+                  : formatPoolWindowLabel(bucket, now, t)
               return (
                 <React.Fragment key={key}>
                   {index > 0 ? <span className="text-muted-foreground">·</span> : null}

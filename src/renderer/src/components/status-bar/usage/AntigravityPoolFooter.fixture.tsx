@@ -40,19 +40,31 @@ function pools(sessionUsed: number, weeklyUsed: number): ProviderRateLimits {
   }
 }
 
-function footer(
-  display: UsagePercentageDisplay,
-  mode: StatusBarUsageMode,
-  sessionUsed: number,
-  weeklyUsed: number
-) {
+function unknownWindowPools(): ProviderRateLimits {
+  return {
+    ...pools(18, 9),
+    buckets: [
+      {
+        usedPercent: 9,
+        windowMinutes: 0,
+        resetsAt: null,
+        resetDescription: null,
+        windowName: 'Weekly Limit Remaining',
+        name: 'Gemini weekly',
+        group: 'Gemini models'
+      }
+    ]
+  }
+}
+
+function footer(p: ProviderRateLimits, display: UsagePercentageDisplay, mode: StatusBarUsageMode) {
   return defineFixture({
     width: 480,
     store: { usagePercentageDisplay: display, statusBarUsageMode: mode },
     render: () => (
       <div className="flex h-[120px] items-start bg-background p-3">
         <div className="flex items-center gap-x-3 whitespace-nowrap rounded border border-border px-2 py-1 text-xs">
-          <ProviderSegment p={pools(sessionUsed, weeklyUsed)} display={display} mode={mode} />
+          <ProviderSegment p={p} display={display} mode={mode} />
         </div>
       </div>
     )
@@ -60,6 +72,11 @@ function footer(
 }
 
 // Why: the reported footer shows 82%/91% left, where the 80%-used gate hides both countdowns.
-export const rosterAntigravityPoolsLeft = footer('remaining', 'verbose', 18, 9)
-export const rosterAntigravityPools = footer('used', 'verbose', 82, 91)
-export const rosterAntigravityPoolsCompact = footer('remaining', 'compact', 18, 9)
+export const rosterAntigravityPoolsLeft = footer(pools(18, 9), 'remaining', 'verbose')
+export const rosterAntigravityPools = footer(pools(82, 91), 'used', 'verbose')
+export const rosterAntigravityPoolsCompact = footer(pools(18, 9), 'remaining', 'compact')
+export const rosterAntigravityPoolUnknownWindow = footer(
+  unknownWindowPools(),
+  'remaining',
+  'verbose'
+)
