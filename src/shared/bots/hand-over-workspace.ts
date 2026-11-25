@@ -37,9 +37,9 @@ export function suggestedBotPurpose(worktree: { comment?: string; branch: string
   )
 }
 
-/** The workspace's agent when a bot can run on it, else Claude. */
-export function suggestedBotAgent(agentTypes: readonly string[]): BotAgent {
-  return agentTypes.find(isBotAgent) ?? 'claude'
+/** The workspace's agent when a bot can run on it; else none, so New bot starts on the host's default. */
+export function suggestedBotAgent(agentTypes: readonly string[]): BotAgent | undefined {
+  return agentTypes.find(isBotAgent)
 }
 
 /** The owning store refused a conditional move back: the owner moved the workspace since. */

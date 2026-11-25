@@ -16,7 +16,11 @@ import type { MobileBotAvatarSource } from './host-bot-row-facts'
 import { botAgentLabel } from './mobile-bot-sheet-copy'
 import { MobileBotAvatar } from './MobileBotAvatar'
 import type { NewBotComputer } from './new-bot-computers'
-import { readBotAgentChoices, readSignedInEmail } from './new-bot-host-reads'
+import {
+  readNewBotAgentChoices,
+  readSignedInEmail,
+  type NewBotAgentChoices
+} from './new-bot-host-reads'
 
 /** New bot's picture, with Another picture's shuffle on its corner. */
 export function NewBotPicture(props: { avatar: MobileBotAvatarSource; onShuffle: () => void }) {
@@ -39,23 +43,25 @@ export function NewBotPicture(props: { avatar: MobileBotAvatarSource; onShuffle:
 }
 
 /** The chosen computer's agent choices; null until it answers. */
-export function useNewBotAgentChoices(client: RpcClient | null): BotAgent[] | null {
-  const [answer, setAnswer] = useState<{ client: RpcClient; agents: BotAgent[] } | null>(null)
+export function useNewBotAgentChoices(client: RpcClient | null): NewBotAgentChoices | null {
+  const [answer, setAnswer] = useState<{ client: RpcClient; choices: NewBotAgentChoices } | null>(
+    null
+  )
   useEffect(() => {
     if (!client) {
       return
     }
     let live = true
-    void readBotAgentChoices(client).then((agents) => {
+    void readNewBotAgentChoices(client).then((choices) => {
       if (live) {
-        setAnswer({ client, agents })
+        setAnswer({ client, choices })
       }
     })
     return () => {
       live = false
     }
   }, [client])
-  return answer && answer.client === client ? answer.agents : null
+  return answer && answer.client === client ? answer.choices : null
 }
 
 /** A server signed in to another Orca account than the paired computer's: that account's email. */
