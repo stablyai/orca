@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useId, useMemo, useState } from 'react'
 import { Loader2, LogIn, LogOut, Settings } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
@@ -76,7 +76,7 @@ function SetupRing({ milestones }: { milestones: SetupMilestones }): React.JSX.E
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
-        className="opacity-25"
+        className="opacity-35 dark:opacity-25"
       />
       <circle
         cx="13"
@@ -125,6 +125,7 @@ export function AppRailAccountMenu({
   const reconnect = useAppStore((s) => s.orcaProfileAuthStatus?.state === 'reconnect-required')
   const signingIn = useAppStore((s) => Boolean(s.orcaProfileSignInProgress))
   const settingsShortcut = useOptionalShortcutLabel('app.settings')
+  const setupDescriptionId = useId()
   const [signOutOpen, setSignOutOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
@@ -158,6 +159,8 @@ export function AppRailAccountMenu({
               <AppRailButton
                 itemId="account"
                 label={label}
+                // The ring is visual only; screen readers hear the same progress as its description.
+                aria-describedby={milestones ? setupDescriptionId : undefined}
                 active={settingsActive}
                 tabStop={tabStop}
                 icon={
@@ -240,6 +243,15 @@ export function AppRailAccountMenu({
           ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
+      {milestones ? (
+        <span id={setupDescriptionId} className="sr-only">
+          {t(
+            'auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a',
+            '{{value0}} of {{value1}} setup steps complete',
+            { value0: milestones.done, value1: milestones.total }
+          )}
+        </span>
+      ) : null}
       <OrcaProfileSignOutConfirmDialog
         open={signOutOpen}
         onOpenChange={setSignOutOpen}

@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import '@testing-library/jest-dom/vitest'
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -45,7 +46,7 @@ function Harness({
   milestones?: SetupMilestones | null
   onOpenSettings?: () => void
 }): React.JSX.Element {
-  const help = useHelpMenuController(null)
+  const help = useHelpMenuController(null, 'grouped')
   return (
     <TooltipProvider>
       <AppRailAccountMenu
@@ -142,6 +143,49 @@ describe('AppRailAccountMenu', () => {
     render(<Harness />)
     openWithKey(screen.getByRole('button', { name: 'Settings' }), 'Enter')
     expect(menuRowLabels()[0]).toMatch(/^Settings/)
+  })
+})
+
+describe('AppRailAccountMenu groups and setup description', () => {
+  it('signed in: four dividers (account | Milestones + Settings | links | updates + restart | Sign out)', () => {
+    useAppStore.setState({ orcaProfileAuthStatus: SIGNED_IN })
+    render(<Harness milestones={{ done: 3, total: 5 }} />)
+    openWithKey(screen.getByRole('button', { name: 'Account' }), 'Enter')
+    const menu = screen.getByRole('menu')
+    const groups: string[][] = [[]]
+    for (const node of Array.from(menu.querySelectorAll('[role="separator"],[role="menuitem"]'))) {
+      if (node.getAttribute('role') === 'separator') {
+        groups.push([])
+      } else {
+        groups.at(-1)!.push(node.textContent?.trim() ?? '')
+      }
+    }
+    expect(groups).toHaveLength(5)
+    expect(groups[1].map((row) => row.replace(/[^A-Za-z ]/g, '').trim())).toEqual([
+      'Milestones',
+      'Settings'
+    ])
+    expect(groups[2][0]).toBe('Keyboard Shortcuts')
+    expect(groups[2].at(-1)).toBe('X')
+    expect(groups[3]).toEqual(['Check for Updates', 'Restart Orca'])
+    expect(groups[4]).toEqual(['Sign out'])
+  })
+
+  it('describes the setup ring to screen readers, signed in and signed out', () => {
+    useAppStore.setState({ orcaProfileAuthStatus: SIGNED_OUT })
+    const { rerender } = render(<Harness milestones={{ done: 3, total: 5 }} />)
+    expect(screen.getByRole('button', { name: 'Settings' })).toHaveAccessibleDescription(
+      '3 of 5 setup steps complete'
+    )
+    act(() => {
+      useAppStore.setState({ orcaProfileAuthStatus: SIGNED_IN })
+    })
+    rerender(<Harness milestones={{ done: 3, total: 5 }} />)
+    expect(screen.getByRole('button', { name: 'Account' })).toHaveAccessibleDescription(
+      '3 of 5 setup steps complete'
+    )
+    rerender(<Harness milestones={null} />)
+    expect(screen.getByRole('button', { name: 'Account' })).not.toHaveAttribute('aria-describedby')
   })
 })
 

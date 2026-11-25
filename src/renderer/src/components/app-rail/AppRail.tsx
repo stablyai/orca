@@ -61,9 +61,9 @@ export function AppRail({
         : null,
     [setupProgress]
   )
-  // Milestones sits at the top of the account menu, so Help's own list leaves it out. The rail owns the controller so
-  // its feedback dialog outlives the account menu closing.
-  const help = useHelpMenuController(null)
+  // Milestones sits at the top of the account menu, so Help's own list leaves it out; the menu has its own groups, so
+  // Help's rows come grouped. The rail owns the controller so its feedback dialog outlives the account menu closing.
+  const help = useHelpMenuController(null, 'grouped')
 
   const toolbarRef = useRef<HTMLDivElement | null>(null)
   const [toolbar, setToolbar] = useState<HTMLDivElement | null>(null)
