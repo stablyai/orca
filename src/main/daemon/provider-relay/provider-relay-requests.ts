@@ -3,8 +3,10 @@ import type { ConnectedDaemonClient } from '../server/daemon-client-connections'
 import { NOTIFY_PREFIX, type DaemonRequest } from '../protocol/daemon-rpc-contract'
 import {
   PROVIDER_RELAY_REQUEST_TYPES,
+  RELAY_ACKS_MAX,
   type ProviderRelayRequest
 } from '../protocol/daemon-provider-relay-protocol'
+import { jsonObject } from '../../../shared/json-stream/json-value-property'
 import type { ProviderRelayHost } from './provider-relay-host'
 
 function isRelayRequest(request: DaemonRequest): request is ProviderRelayRequest {
@@ -60,11 +62,34 @@ export function answerProviderRelayRequest(
       return Promise.resolve({})
     case 'relayAck':
       return Promise.resolve(relays.ack(clientId, relayId, payload.seq, payload.keepFrom, payload))
+    case 'relayAcks':
+      return Promise.resolve(ackEach(relays, clientId, payload.acks))
     case 'relayClose':
       return relays.close(relayId, payload.grace).then(() => ({}))
     case 'relayList':
       return Promise.resolve(relays.list())
     case 'relayDetach':
       return relays.detach(clientId, relayId, payload.policy).then(() => ({}))
+  }
+}
+
+/** Each ack on its own: one refused (its relay gone or taken over) doesn't fail the rest. */
+function ackEach(
+  relays: ProviderRelayHost,
+  clientId: string,
+  acks: unknown
+): { results: unknown[] } {
+  if (!Array.isArray(acks) || acks.length > RELAY_ACKS_MAX) {
+    throw new Error('Invalid relay acks')
+  }
+  return {
+    results: acks.map((ack: unknown) => {
+      const fields = jsonObject(ack) ?? {}
+      try {
+        return relays.ack(clientId, fields.relayId, fields.seq, fields.keepFrom, fields)
+      } catch (error) {
+        return { error: error instanceof Error ? error.message : String(error) }
+      }
+    })
   }
 }

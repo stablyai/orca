@@ -21,6 +21,8 @@ export type DaemonEndpointIdentity = {
   providerRelay?: true
   /** Honors `relaySpawn`'s `keep` and sends `relayKept` lines on attach. */
   providerRelayKeep?: true
+  /** Takes several relays' acks in one `relayAcks`; without it the app sends `relayAck` each. */
+  providerRelayAcks?: true
 }
 
 export type HelloResponse = {
