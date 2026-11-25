@@ -114,4 +114,12 @@ describe('Claude relay ack floor', () => {
     floor.observe(2, stream('message_stop'))
     expect(floor.tookCut?.()).toBe(false)
   })
+
+  it("keeps a stopped message's start until the reader is past its stop", () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, stream('message_start'))
+    floor.observe(2, stream('message_stop'))
+    expect(floor.floor(1)).toBe(1)
+    expect(floor.floor(2)).toBe(null)
+  })
 })

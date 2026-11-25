@@ -33,9 +33,14 @@ const NEEDLES: Readonly<Record<string, string | null>> = {
 /** A line that doesn't start with its type (no CLI writes one) is checked the slow way. */
 const UNORDERED_NEEDLES = ['"message_st', '"assistant"', '"result"', '"tool_result"', '"task_']
 
-export function claudeRelayAckFloor(): ProviderRelayAckFloor {
+export function claudeRelayAckFloor(): ProviderRelayAckFloor & {
+  floor: (through?: number) => number | null
+} {
   /** Each stream scope's open message, by the seq of its `message_start`. */
   const open = new Map<string, number>()
+  /** Each scope's last stopped message, held until the reader is past its stop: the floor sees a
+   *  line when it is pushed, ahead of a paused reader. */
+  const closed = new Map<string, { start: number; stop: number }>()
   /** Each scope's latest `message_start`, for the tool calls in its later final frames. */
   const starts = new Map<string, number>()
   /** Unreturned tool calls, by the seq of their message's `message_start`, and their scope. */
@@ -101,6 +106,11 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
       for (const [id, tool] of tools) {
         if (tool.seq <= seq) {
           dropTool(id)
+        }
+      }
+      for (const [scope, { start }] of closed) {
+        if (start <= seq) {
+          closed.delete(scope)
         }
       }
     },
@@ -176,6 +186,10 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         isRecord(frame.event) &&
         frame.event.type === 'message_stop'
       ) {
+        const start = open.get(scopeOf(frame))
+        if (start !== undefined) {
+          closed.set(scopeOf(frame), { start, stop: seq })
+        }
         open.delete(scopeOf(frame))
         releasedOpen.delete(scopeOf(frame))
       } else if (
@@ -188,9 +202,19 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         starts.set(scopeOf(frame), seq)
       }
     },
-    floor: () =>
-      open.size === 0 && tools.size === 0
+    // `through`: how far the reader took; without it a stopped message holds nothing.
+    floor: (through?: number) => {
+      const held: number[] = []
+      for (const [scope, { start, stop }] of closed) {
+        if (through === undefined || stop <= through) {
+          closed.delete(scope)
+        } else {
+          held.push(start)
+        }
+      }
+      return open.size === 0 && tools.size === 0 && held.length === 0
         ? null
-        : Math.min(...open.values(), ...[...tools.values()].map((tool) => tool.seq))
+        : Math.min(...open.values(), ...held, ...[...tools.values()].map((tool) => tool.seq))
+    }
   }
 }

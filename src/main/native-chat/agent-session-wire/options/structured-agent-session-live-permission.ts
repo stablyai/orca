@@ -16,7 +16,8 @@ export function applyStructuredAgentSessionPermissionPick(
   const child = context.sessions.get(sessionId)?.child
   const record = store.getRecord(sessionId)
   const mode = record ? structuredAgentSessionImmediatePermission(context.deps, record) : null
-  if (mode && child?.phase === 'starting' && child.fence === fence && !child.close) {
+  // No child yet (an acquisition the host hasn't published) counts as starting too.
+  if (mode && (!child || (child.phase === 'starting' && child.fence === fence && !child.close))) {
     adapter.permissionPickedWhileStarting?.({ sessionId, mode })
     return
   }
