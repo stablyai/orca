@@ -1,12 +1,6 @@
-import { useState, useSyncExternalStore } from 'react'
+import { useState } from 'react'
 import { setRendererUiLanguage } from '@/i18n/i18n'
-import {
-  getTranslationResourceVersion,
-  subscribeTranslationResourceVersion
-} from '@/i18n/translation-resource-version'
-import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
-import { buildNewTabAgentMenuRows } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { agentPickerEntriesFromRows } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { Terminal } from 'lucide-react'
 import {
   DropdownMenu,
@@ -16,6 +10,7 @@ import {
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { AgentLaunchPicker } from './AgentLaunchPicker'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import { qwenWorkPickerEntries } from './agent-launch-picker-qwenwork-fixture-entries'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
 import type {
   AgentPickerDraft,
@@ -353,25 +348,8 @@ export const newTabSubmenuCodex = defineFixture({
 })
 
 function QwenWorkMenu(): React.JSX.Element {
-  const version = useSyncExternalStore(
-    subscribeTranslationResourceVersion,
-    getTranslationResourceVersion
-  )
-  const rows = buildNewTabAgentMenuRows({
-    settings: null,
-    detectedOnHost: [],
-    chatAgents: ['qwenwork'],
-    hostChatAnswer: (agent) => (agent === 'qwenwork' ? 'yes' : 'not-on-host'),
-    chatProgram: (agent) => (agent === 'qwenwork' ? 'available' : 'missing')
-  })
-  const chats = agentPickerEntriesFromRows(
-    rows,
-    [],
-    () => ({ terminal: {}, structured: {} }),
-    getAgentLabel,
-    null
-  )
-  return <NewTabMenu key={version} entries={[...ENTRIES, ...chats]} />
+  const version = useUiLanguageRevision()
+  return <NewTabMenu key={version} entries={[...ENTRIES, ...qwenWorkPickerEntries()]} />
 }
 
 export const qwenWorkChat = defineFixture({
