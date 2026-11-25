@@ -195,7 +195,19 @@ export async function withTerminalMcpServers(
         env: input.env,
         envToDelete: input.envToDelete,
         cwd: input.cwd,
-        ...(input.wsl ? { wsl: input.wsl } : {})
+        ...(input.wsl
+          ? {
+              wsl: {
+                ...input.wsl,
+                // In WSL each rewritten server runs the guest's `orca`, which needs interop.
+                interop: new Set(
+                  offered.bridged
+                    .map((server) => server.name)
+                    .filter((name) => tools.servers.some((server) => server.name === name))
+                )
+              }
+            }
+          : {})
       },
       executable
     )
@@ -206,7 +218,11 @@ export async function withTerminalMcpServers(
     }))
   noteTerminalMcpDelivery(
     adapter.agent,
-    delivery.delivered ? null : delivery.agentWide ? delivery.reason : undefined
+    delivery.delivered
+      ? (delivery.problem ?? null)
+      : delivery.agentWide
+        ? delivery.reason
+        : undefined
   )
   if (!delivery.delivered) {
     console.warn(

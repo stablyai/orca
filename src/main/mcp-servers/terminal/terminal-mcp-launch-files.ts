@@ -21,7 +21,9 @@ async function launchDir(): Promise<string> {
     // An earlier run's files name tokens that died with it; a terminal that survived the restart
     // already read its file at start.
     sweep = readdir(dir).then(async (names) => {
-      for (const name of names) {
+      // Config files only: a Pi extension holds no token, and a Pi that outlived the restart
+      // reloads it from here.
+      for (const name of names.filter((file) => file.endsWith('.json'))) {
         await rm(join(dir, name), { force: true })
       }
     })
@@ -31,11 +33,14 @@ async function launchDir(): Promise<string> {
   return dir
 }
 
-/** Writes `config` as JSON for `agent`'s launch and answers its path on this host. */
-export async function writeTerminalMcpLaunchFile(agent: string, config: unknown): Promise<string> {
-  const contents = `${JSON.stringify(config, null, 2)}\n`
+/** Writes `contents` for `agent`'s launch and answers its path on this host. */
+export async function writeTerminalMcpLaunchFile(
+  agent: string,
+  contents: string,
+  extension = 'json'
+): Promise<string> {
   const digest = createHash('sha256').update(contents).digest('hex').slice(0, 24)
-  const path = join(await launchDir(), `${agent}-${digest}.json`)
+  const path = join(await launchDir(), `${agent}-${digest}.${extension}`)
   await writePluginFileAtomically(path, contents, { mode: 0o600 })
   return path
 }

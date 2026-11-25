@@ -58,8 +58,8 @@ export type WslServerLaunch = {
   launcher: string | null
 }
 
-/** `orca mcp connect <id>` in the guest; the workspace crosses interop through WSLENV, since an
- *  agent starts its servers with a trimmed environment. */
+/** `orca mcp connect <id>` in the guest, naming the launch's workspace outright as the env wrapper
+ *  does, so both resolve it the same way (mcp-caller-workspace.ts). */
 export function wslConnectServer(
   entry: McpLaunchEntry,
   launch: WslServerLaunch
@@ -70,12 +70,20 @@ export function wslConnectServer(
   return {
     name: entry.server.name,
     command: launch.launcher,
-    args: ['mcp', 'connect', entry.id, '--agent', launch.agent],
-    env: launch.workspaceId
-      ? { ORCA_WORKSPACE_ID: launch.workspaceId, WSLENV: 'ORCA_WORKSPACE_ID' }
-      : {}
+    args: [
+      'mcp',
+      'connect',
+      entry.id,
+      '--agent',
+      launch.agent,
+      ...(launch.workspaceId ? ['--workspace', launch.workspaceId] : ['--outside-workspace'])
+    ]
   }
 }
+
+/** What an agent that starts its servers with a trimmed environment must pass on for the guest's
+ *  `orca` to reach Windows: the interop socket, and the distro its bridge names. */
+export const WSL_INTEROP_ENV = ['WSL_INTEROP', 'WSL_DISTRO_NAME'] as const
 
 /** The command server in the guest, its saved env read from this Orca by the wrapper. */
 export function wslSavedEnvServer(

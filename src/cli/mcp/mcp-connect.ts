@@ -8,38 +8,23 @@ import {
   readInjectedBotToken
 } from '../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
 import type { CommandHandler } from '../dispatch/dispatch'
-import { getRequiredStringFlag } from '../arguments/flags'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
+import { RuntimeRpcFailureError } from '../runtime/connection/types'
 import { isLaunchedByAnotherRuntime } from '../runtime/connection/runtime-source-fence'
-import { resolveCurrentWorktreeSelection } from '../workspace-selection/workspace-selector'
+import { mcpCallerWorkspace } from './mcp-caller-workspace'
 import { readOrcaCliVersion } from '../cli-version'
 import { bridgeMcpServer } from '../../main/mcp-servers/agent-files/mcp-connect-bridge'
-
-/**
- * The session's workspace: the Orca pane's own (WSL forwards it), else the one holding cwd; null
- * outside every workspace, undefined when cwd can't be pinned to one (two repos claim it).
- */
-async function workspaceOf(client: RuntimeClient, cwd: string): Promise<string | null | undefined> {
-  const own = process.env.ORCA_WORKSPACE_ID?.trim()
-  if (own) {
-    return own
-  }
-  try {
-    return (await resolveCurrentWorktreeSelection(cwd, client, 'current')).worktreeId
-  } catch (error) {
-    if (!(error instanceof RuntimeClientError) || !error.code.startsWith('selector_')) {
-      throw error
-    }
-    // Outside every workspace, the server follows its "workspaces added later" choice.
-    return error.code === 'selector_not_found' ? null : undefined
-  }
-}
 
 /** The host's answer; any refusal (switch off, a Look around, an older host) is a server with no tools. */
 async function readConnection(
   client: RuntimeClient,
-  params: { id: string; agent: string; cwd: string }
+  params: {
+    id: string
+    agent: string
+    cwd: string
+    given: { workspace: string | undefined; outside: boolean }
+  }
 ): Promise<McpServerConnection> {
   if (isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {
     // Another Orca's session (its pane, chat or bot) also loads this Orca's entries from the shared
@@ -49,7 +34,7 @@ async function readConnection(
   const botToken = readInjectedBotToken()
   const callerSessionId = readInjectedAgentSessionId()
   try {
-    const workspaceId = await workspaceOf(client, params.cwd)
+    const workspaceId = await mcpCallerWorkspace(client, params.cwd, params.given)
     if (workspaceId === undefined) {
       // A server may be off in one of the workspaces: offer none rather than guess.
       return { on: false }
@@ -74,9 +59,13 @@ async function readConnection(
 const connect: CommandHandler = async ({ flags, client, cwd }) => {
   const id = getRequiredStringFlag(flags, 'id')
   const agent = getRequiredStringFlag(flags, 'agent')
+  const given = {
+    workspace: getOptionalStringFlag(flags, 'workspace'),
+    outside: flags.get('outside-workspace') === true
+  }
   try {
     process.exitCode = await bridgeMcpServer(
-      () => readConnection(client, { id, agent, cwd }),
+      () => readConnection(client, { id, agent, cwd, given }),
       readOrcaCliVersion() ?? '0.0.0'
     )
   } catch (error) {
