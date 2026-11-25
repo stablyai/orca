@@ -39,6 +39,20 @@ export type TerminalMcpLaunch = {
   wsl?: { distro: string | null }
 }
 
+/** How one agent's CLI takes servers for one run. */
+export type TerminalMcpAdapter = {
+  /** The agent the host list's switches name. */
+  agent: string
+  /** The CLI's executable names, for the launch command's agent token. */
+  executables: readonly string[]
+  /** Set when `executables` name a launcher whose subcommand runs the CLI: its args go after the
+   *  subcommand, and the CLI it runs is the one checked. */
+  launcher?: { subcommand: string; runs: string }
+  /** It delivers to a WSL distro too (with the servers WSL gets). */
+  wsl: boolean
+  deliver(launch: TerminalMcpLaunch, executable: string): Promise<TerminalMcpDelivery>
+}
+
 export type TerminalMcpDelivery =
   | {
       delivered: true
@@ -113,7 +127,8 @@ export async function launchFilePath(
 export function withArgs(
   launch: TerminalMcpLaunch,
   executables: readonly string[],
-  args: readonly string[]
+  args: readonly string[],
+  subcommand?: string
 ): string | null {
   return withArgsAfterAgentExecutable(
     launch.command,
@@ -122,7 +137,8 @@ export function withArgs(
       findAgentExecutableIndex(tokens, shell, (token) =>
         isAgentExecutableToken(token, executables)
       ),
-    args.map((arg) => ` ${quoteStartupArg(arg, launch.shell)}`).join('')
+    args.map((arg) => ` ${quoteStartupArg(arg, launch.shell)}`).join(''),
+    subcommand
   )
 }
 

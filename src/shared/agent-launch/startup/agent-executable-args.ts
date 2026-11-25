@@ -45,14 +45,16 @@ export function findAgentExecutableIndex(
 
 /**
  * `command` with `quotedArgs` (already quoted for `shell`, led by a space) right after the agent's
- * executable; null when that can't be done safely: a wrapper or prefix the args might not reach, or
- * a span whose shell parse differs from Orca's.
+ * executable, or after the `subcommand` that must follow it (`orca claude-teams`); null when that
+ * can't be done safely: a wrapper or prefix the args might not reach, or a span whose shell parse
+ * differs from Orca's.
  */
 export function withArgsAfterAgentExecutable(
   command: string,
   shell: AgentStartupShell,
   findIndex: (tokens: readonly string[], shell: AgentStartupShell) => number,
-  quotedArgs: string
+  quotedArgs: string,
+  subcommand?: string
 ): string | null {
   const parsed = tokenizeStartupCommand(command, shell)
   if (!parsed.ok) {
@@ -61,6 +63,7 @@ export function withArgsAfterAgentExecutable(
   const index = findIndex(parsed.tokens, shell)
   if (
     index < 0 ||
+    (subcommand !== undefined && parsed.tokens[index + 1] !== subcommand) ||
     parsed.tokens
       .slice(0, index)
       .some(
@@ -87,6 +90,6 @@ export function withArgsAfterAgentExecutable(
       return null
     }
   }
-  const end = parsed.spans[index].end
+  const end = parsed.spans[subcommand === undefined ? index : index + 1].end
   return `${command.slice(0, end)}${quotedArgs}${command.slice(end)}`
 }
