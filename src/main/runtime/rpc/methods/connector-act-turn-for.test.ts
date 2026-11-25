@@ -158,6 +158,12 @@ describe('connector.act read on a chat a teammate started', () => {
       true
     )
     expect(await readSends()).toBeUndefined()
+    // A paired device declaring the host's own account: a claim, never over the teammate's chat.
+    runningTurn(
+      { ...message, typedBy: { by: 'device', deviceId: 'd1', accountId: 'a1', own: true } },
+      true
+    )
+    expect(await readSends(CHAT)).toBeUndefined()
     // The owner's turn, asked from a session other than the chat's own.
     runningTurn(typed, true)
     expect(await readSends(OTHER_CHAT)).toBeUndefined()

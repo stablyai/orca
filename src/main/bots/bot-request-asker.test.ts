@@ -3,12 +3,11 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import type { BotRequestAsker } from '../../shared/bots/bot-acts-for'
+import { actsForOwner, OWNER_ACTS_FOR, type BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import { askedByLine } from './bot-owner-writes'
 import { connectorAskerHeader } from '../../shared/connector-asker-prompt'
 import { ConnectorAsker } from '../../shared/connector-asker-contract'
 import { storedConnectorAsker } from '../../shared/connector-message-asker'
-import { actsForOwner } from '../../shared/bots/bot-acts-for'
 import { connectorAskerTagView } from '../../shared/connectors/connector-message-asker-view'
 import {
   firstMessageActsFor,
@@ -90,6 +89,11 @@ const workerMail = {
     orchestration: { message: 'mail-notice', messages: [{ messageId: 'mail-1' }] }
   }
 }
+// A paired phone or computer that declares the host's own account.
+const sameAccountDevice = {
+  ...message,
+  typedBy: { by: 'device', deviceId: 'd1', accountId: 'a1', account: 'Me', own: true }
+}
 type Sent = Pick<AgentJournalSubmission, 'origin' | 'source' | 'queuedMessageId'>
 const OWNER_SEND: Sent = { origin: 'client', source: { kind: 'user' } }
 
@@ -105,12 +109,27 @@ const journalRow = (itemId: string, body: unknown, extra: Partial<AgentJournalRe
     ...extra
   }) as AgentJournalRenderItem
 
+type Turn = [unknown, Sent | null, unknown[]?]
+
 /** Dana's finished Slack turn, then the turns given as [opener, how it was sent, steered in]; a null
  *  opener is a turn no message opened. */
-function chat(...turns: [unknown, Sent | null, unknown[]?][]) {
+function chat(...turns: Turn[]) {
+  return chatActingFor([DANA], fromDana, turns)
+}
+
+/** The owner's chat (Home Chat, or one the owner started): the owner's finished turn, then `turns`. */
+function ownerChat(...turns: Turn[]) {
+  return chatActingFor(OWNER_ACTS_FOR, typed, turns)
+}
+
+function chatActingFor(
+  conversationActsFor: readonly BotRequestAsker[],
+  first: unknown,
+  turns: Turn[]
+) {
   seq = 0
   const items = [
-    journalRow('u0', fromDana),
+    journalRow('u0', first),
     journalRow('t0', { kind: 'turn', turnId: 'p0', state: 'completed', userItemId: 'u0' })
   ]
   const submissions: AgentJournalSubmission[] = []
@@ -137,7 +156,7 @@ function chat(...turns: [unknown, Sent | null, unknown[]?][]) {
       } as AgentJournalSubmission)
     }
   })
-  const turn = readBotActingTurn(items, lookups, submissions)
+  const turn = readBotActingTurn(items, { ...lookups, conversationActsFor }, submissions)
   return {
     owner: turnActsForOwner(turn),
     line: askedByLine({ bot: { name: 'Scout' }, turn, inConversation: true })
@@ -148,12 +167,18 @@ function chat(...turns: [unknown, Sent | null, unknown[]?][]) {
 describe('a turn the owner typed in Orca', () => {
   it('acts for the owner though the chat acts for a teammate', () => {
     expect(chat([typed, OWNER_SEND])).toEqual({ owner: true, line: null })
-    // From the owner's phone, signed in to the same account.
-    const ownPhone = {
-      ...typed,
-      typedBy: { by: 'device', deviceId: 'd1', accountId: 'a1', account: 'Me', own: true }
-    }
-    expect(chat([ownPhone, OWNER_SEND]).owner).toBe(true)
+  })
+
+  it('takes a paired device’s account as a claim: never over the teammate the chat acts for', () => {
+    // A device that declares the host's own account: its say-so, not proof it is the owner.
+    expect(chat([sameAccountDevice, OWNER_SEND])).toEqual({
+      owner: false,
+      line: 'asked by Dana via Scout'
+    })
+    expect(chat([typed, OWNER_SEND, [sameAccountDevice]]).owner).toBe(false)
+    // The owner's own phone or computer in the owner's chats still acts for the owner.
+    expect(ownerChat([sameAccountDevice, OWNER_SEND])).toEqual({ owner: true, line: null })
+    expect(ownerChat([typed, OWNER_SEND])).toEqual({ owner: true, line: null })
   })
 
   it('stays the teammate’s when anyone but the owner typing opened or joined it', () => {

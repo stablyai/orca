@@ -51,8 +51,8 @@ export type BotActingTurn = {
   requestIds: string[]
   /** Where the message that opened the turn was asked; null for the owner's own or a bot request. */
   wokenAt: BotWakingPlace | null
-  /** The owner typed every message this turn took, in Orca: it acts for the owner, whomever its
-   *  conversation acts for. */
+  /** The owner typed every message this turn took at the host's own window: it acts for the owner,
+   *  whomever its conversation acts for. */
   typedByOwner?: true
   /** Who did the event behind the automation prompt that opened the turn, for the record only. */
   triggeredBy?: AutomationTriggeredBy
@@ -369,8 +369,8 @@ export function readBotActingTurnWithin(
   }
 }
 
-/** Whether the turn acts for the owner: the owner typed it in Orca, or everyone it acts for is the
- *  owner. Every Slack action's turnFor and the "asked by" line on owner writes read this. */
+/** Whether the turn acts for the owner: the owner typed it at the host's window, or everyone it acts
+ *  for is the owner. Every Slack action's turnFor and the "asked by" line on owner writes read this. */
 export function turnActsForOwner(turn: Pick<BotActingTurn, 'askers' | 'typedByOwner'>): boolean {
   return turn.typedByOwner === true || actsForOwner(turn.askers)
 }
