@@ -6,28 +6,38 @@ import type { NativeChatStructuredComposerTransport } from './native-chat-struct
 import { nativeChatStructuredStoredPrompt } from './native-chat-structured-composer-dispatch'
 
 /** The words a structured send's message stores, for recording which message its reply answers.
- *  Staging (a remote host) rewrites file paths while preparing the message, so then the stored
- *  words are the prepared text; otherwise they're the prompt as dispatched. */
+ *  The reservation holds the prompt as dispatched until staging (a remote host) finishes rewriting
+ *  file paths, so a send stopped or refused meanwhile comes back with those words; once prepared,
+ *  the message stores the prepared text instead. */
 export function trackNativeChatStructuredStoredText(
   stagedInput: ReturnType<typeof captureNativeChatStagedInput> | undefined,
   transport: NativeChatStructuredComposerTransport
 ): {
   prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined
-  storedText: (
+  /** The words the reservation holds from admission. */
+  admittedText: (
     draftText: string,
     attachments: readonly NativeChatComposerImageAttachment[]
-  ) => Promise<string>
+  ) => string
+  /** The prepared words, only once the reservation took them; null when it was stopped, dropped
+   *  or failed first, so its message never stores them. */
+  preparedText: () => Promise<string | null> | undefined
 } {
-  let prepared: Promise<string> | undefined
+  let prepared: Promise<string | null> | undefined
   return {
     prepareAttachments: stagedInput
-      ? (input) => {
+      ? (input, isCurrent) => {
           const preparing = stagedInput.prepare(input, transport)
-          prepared = preparing.then((output) => structuredAgentSessionStoredText(output.text))
+          // Checked as the upload settles, just before the sender installs this body under the
+          // same check: a reservation stopped or dropped meanwhile never sends it.
+          prepared = preparing.then(
+            (output) => (isCurrent() ? structuredAgentSessionStoredText(output.text) : null),
+            () => null
+          )
           return preparing
         }
       : undefined,
-    storedText: (draftText, attachments) =>
-      prepared ?? Promise.resolve(nativeChatStructuredStoredPrompt(draftText, attachments))
+    admittedText: nativeChatStructuredStoredPrompt,
+    preparedText: () => prepared
   }
 }

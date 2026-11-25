@@ -259,11 +259,16 @@ export function useNativeChatStructuredComposerSend({
           // Only accepted text is remembered: it quotes the reply captured at send, even if a newer
           // one was picked meanwhile.
           if (reply) {
-            // Keyed by the words the message stores, as Rewind and a queued edit read them back.
-            void stored.storedText(text, attachments).then(
-              (words) => rememberNativeChatReplySource(draftScopeKey, words, reply.messageId),
-              () => {}
-            )
+            // Keyed by the words the message stores, as Rewind and a queued edit read them back:
+            // the admitted words at once, since a send stopped or refused before its upload
+            // finishes returns with them, then the prepared words only if the reservation sent them.
+            const admitted = stored.admittedText(text, attachments)
+            rememberNativeChatReplySource(draftScopeKey, admitted, reply.messageId)
+            void stored.preparedText()?.then((words) => {
+              if (words !== null && words !== admitted) {
+                rememberNativeChatReplySource(draftScopeKey, words, reply.messageId)
+              }
+            })
           }
           return true
         })
