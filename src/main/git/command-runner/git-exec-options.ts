@@ -24,7 +24,7 @@ export type GitExecOptions = {
   hostGit?: true
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
-  terminationBarrier?: boolean
+  terminationBarrier?: boolean | 'wait-for-posix-group'
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier

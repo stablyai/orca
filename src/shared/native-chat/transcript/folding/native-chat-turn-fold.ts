@@ -167,6 +167,9 @@ export function nativeChatTurnAnswerRows(
   const answers = new Set<number>()
   const latest = new Map<string, number>()
   const previousDrawn = new Map<string, number>()
+  const lastThought = new Map<string, number>()
+  // Later piece -> earlier piece of one reply split by thinking; the pieces show or fold together.
+  const splitFrom = new Map<number, number>()
   for (const [index, row] of rows.entries()) {
     if (row.goalCheckAnswer) {
       answers.add(index)
@@ -180,10 +183,16 @@ export function nativeChatTurnAnswerRows(
       answers.add(answer)
       latest.delete(row.turnKey)
     }
-    if (row.draws) {
+    if (row.draws && row.role === 'reasoning') {
+      lastThought.set(row.turnKey, index)
+    } else if (row.draws) {
       // Back-to-back replies within a turn all stay visible; a reply that work follows folds.
       if (previous !== undefined && rows[previous]?.replyEnd === 'words' && row.replyEnd) {
-        answers.add(previous)
+        if ((lastThought.get(row.turnKey) ?? -1) > previous) {
+          splitFrom.set(index, previous)
+        } else {
+          answers.add(previous)
+        }
       }
       previousDrawn.set(row.turnKey, index)
     }
@@ -201,6 +210,12 @@ export function nativeChatTurnAnswerRows(
   }
   for (const index of latest.values()) {
     answers.add(index)
+  }
+  for (const answer of answers) {
+    const piece = splitFrom.get(answer)
+    if (piece !== undefined) {
+      answers.add(piece)
+    }
   }
   return answers
 }

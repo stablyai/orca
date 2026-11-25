@@ -24,10 +24,12 @@ function actionLabel(action: BotCreateHostAction, t: Translate): string {
 
 export function BotComputerPicker({
   hostChoice,
-  onAddHost
+  onAddHost,
+  errorId
 }: {
   hostChoice: BotCreateHostChoice
   onAddHost?: (mode: 'ssh' | 'server') => void
+  errorId?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const { host, hosts } = hostChoice
@@ -112,6 +114,7 @@ export function BotComputerPicker({
     <RunTargetCombobox
       selectedHostId={host.hostId}
       fieldName={t('bots.new.computer', 'Computer')}
+      errorId={errorId}
       emptyMessage={noHostsMatchLabel(t)}
       onOpenChange={(open) =>
         setReadyAtOpen(

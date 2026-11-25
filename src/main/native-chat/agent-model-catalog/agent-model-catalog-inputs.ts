@@ -1,4 +1,4 @@
-import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
+import { agentModelCatalogEntry, type AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import type { AgentModelCatalogFailures } from './agent-model-catalog-failures'
 import type { AgentModelCatalogListingWaiters } from './agent-model-catalog-listing-waiters'
 import { retireAgentModelCatalogListing, type InFlightListing } from './agent-model-catalog-lister'
@@ -51,6 +51,31 @@ export class AgentModelCatalogInputs {
     for (const key of this.state.partialAttempts.keys()) {
       if (key.startsWith(prefix)) {
         this.state.partialAttempts.delete(key)
+      }
+    }
+  }
+
+  relistScope(fingerprint: string): void {
+    if (!this.state.refreshes.get(fingerprint)?.current()) {
+      this.expireScope(fingerprint)
+    }
+  }
+
+  /** With `before`, the listings running at the switch: one started after it is the new account's. */
+  forgetSeenRows(fingerprints: readonly string[], before?: ReadonlySet<InFlightListing>): void {
+    for (const fingerprint of fingerprints) {
+      const entry = this.state.entries.get(fingerprint)
+      if (entry) {
+        const { agent, discovered, live, configured } = entry
+        const unseen = agentModelCatalogEntry(agent, fingerprint, discovered, live, configured)
+        if (unseen) {
+          this.state.entries.set(fingerprint, unseen)
+        }
+      }
+      // Also a first listing still running under the previous login: what it finds is dropped.
+      const flight = this.state.refreshes.get(fingerprint)
+      if (!before || !flight || before.has(flight)) {
+        this.expireScope(fingerprint)
       }
     }
   }

@@ -4,7 +4,9 @@ import { CONNECTOR_LIMITS } from './connector-limits.js'
 import { readHelloTriggers } from './trigger-messages.js'
 import { WebhookHookIdSchema } from './webhook-messages.js'
 import { webhookRuleId } from './webhook-names.js'
-import { CONNECTOR_SOURCES, ConnectorHostDescription } from './connector-wire-scalars.js'
+import { CONNECTOR_PLACE_SOURCES, ConnectorHostDescription } from './connector-wire-scalars.js'
+import { ConnectorBotShareSchema, SharePublicKeySchema } from './share-messages.js'
+import { ConnectorHelloWakeOfferSchema } from './wake-messages.js'
 
 export const CONNECTOR_PROMPT_KINDS = ['approval', 'question'] as const
 // trigger: takes trigger deliveries, which start its bot automations. webhook: also those of its hooks'
@@ -40,7 +42,7 @@ const DisplayText = z.string().min(1).max(CONNECTOR_LIMITS.maxDisplayTextLength)
 // the bot on, and the people there (that source's user ids) the owner lets ask it.
 export const ConnectorBotWorkspaceSchema = z
   .object({
-    source: z.enum(CONNECTOR_SOURCES),
+    source: z.enum(CONNECTOR_PLACE_SOURCES),
     workspaceId: z.string().min(1).max(CONNECTOR_LIMITS.maxBotIdLength),
     members: z
       .array(z.string().min(1).max(CONNECTOR_LIMITS.maxBotWorkspaceMemberIdLength))
@@ -55,19 +57,19 @@ export const ConnectorBotWorkspaceSchema = z
 
 const isSlackRow = (workspace: { source: string }) => workspace.source === 'slack'
 
-// A string source this cloud doesn't list (a newer machine's).
-const isUnknownSource = (entry: unknown) =>
+// A string source with no workspaces this cloud knows (a newer machine's, or a hook or Orca).
+const isNotPlaceSource = (entry: unknown) =>
   typeof entry === 'object' &&
   entry !== null &&
   'source' in entry &&
   typeof entry.source === 'string' &&
-  !CONNECTOR_SOURCES.some((known) => known === entry.source)
+  !CONNECTOR_PLACE_SOURCES.some((known) => known === entry.source)
 
 // A workspace of a source this cloud doesn't know yet is dropped, not refused, so a newer machine's
 // hello still lands.
 const BotWorkspacesSchema = z.preprocess(
   (entries) =>
-    Array.isArray(entries) ? entries.filter((entry: unknown) => !isUnknownSource(entry)) : entries,
+    Array.isArray(entries) ? entries.filter((entry: unknown) => !isNotPlaceSource(entry)) : entries,
   z
     .array(ConnectorBotWorkspaceSchema)
     .max(CONNECTOR_LIMITS.maxBotWorkspaces + CONNECTOR_LIMITS.maxBotSlackWorkspaces)
@@ -97,7 +99,10 @@ export const ConnectorBotSchema = z.object({
     .max(CONNECTOR_LIMITS.maxBotHandleLength)
     .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
     .optional(),
-  sharedAppWorkspaces: BotWorkspacesSchema
+  sharedAppWorkspaces: BotWorkspacesSchema,
+  // The Orca accounts and invited emails the owner shared the bot with, to a cloud listing
+  // bots.shares. Replaces the cloud's list for the bot; absent, it isn't shared.
+  sharedWith: z.array(ConnectorBotShareSchema).max(CONNECTOR_LIMITS.maxBotShares).optional()
 })
 
 export const ConnectorHelloRequestSchema = z
@@ -123,7 +128,10 @@ export const ConnectorHelloRequestSchema = z
     // readHelloTriggers.
     triggers: z.array(z.unknown()).max(CONNECTOR_LIMITS.maxHelloTriggers).optional(),
     // Some rules didn't fit; an older machine omits it. See helloShowsHookRuleGone.
-    triggersTruncated: z.boolean().optional()
+    triggersTruncated: z.boolean().optional(),
+    // The machine's pairing E2EE public key, which teammates seal held messages to. Sent by a machine
+    // that takes share_send, and only then: its presence is what tells teammates they may hand off.
+    hostKey: SharePublicKeySchema.optional()
   })
   .refine((hello) => hello.bots === undefined || hello.botPages === undefined)
   .transform(({ triggers, ...hello }) => ({ ...hello, ...readHelloTriggers(triggers) }))
@@ -199,6 +207,10 @@ export const CONNECTOR_CLOUD_REPLY_CHOICES_FEATURE = 'reply.choices'
 // The cloud takes the `activity` event and shows it on a working thread. Kept out of
 // CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that reads the event lists it.
 export const CONNECTOR_CLOUD_TURN_ACTIVITY_FEATURE = 'turn.activity'
+// The cloud keeps a bot's sharedWith and hostKey, answers the shares routes and sends share_resolved,
+// share_accept and share_send (share-messages.ts); a machine lists it too once it takes them. Kept
+// out of CONNECTOR_CLOUD_FEATURES, as prompts.audience is: only the code that serves shares lists it.
+export const CONNECTOR_CLOUD_BOT_SHARES_FEATURE = 'bots.shares'
 // Listed by a machine that keeps a reply outbox, and by a cloud that takes its `reply` events (kept
 // out of CONNECTOR_CLOUD_FEATURES: the cloud lists it only while its switch is on). Under a hello
 // whose answer doesn't list it, the machine posts the same outcomes through replies instead.
@@ -208,11 +220,15 @@ export const CONNECTOR_REPLIES_OUTBOX_FEATURE = 'replies.outbox'
 export const CONNECTOR_REPLIES_PAUSED_FEATURE = 'replies.paused'
 // A machine feature: it answers a byReply prompt from an answer delivery's text.
 export const CONNECTOR_ANSWER_TEXT_FEATURE = 'answer.text'
+// A machine feature: it takes a send's `resume`, which continues a chat whose newest turn failed.
+export const CONNECTOR_RESUME_FEATURE = 'resume'
 export const ConnectorHelloResponseSchema = z.object({
   helloRev: SequenceSchema,
   features: z.array(z.string()).optional(),
   // Hooks of this machine deleted while it was away, so it drops their rules, files and calls.
-  webhookTombstones: z.array(WebhookHookIdSchema).optional()
+  webhookTombstones: z.array(WebhookHookIdSchema).optional(),
+  // Only to a machine that listed connector-wake-v1 (wake-messages.ts).
+  wake: ConnectorHelloWakeOfferSchema
 })
 
 export type ConnectorBot = z.infer<typeof ConnectorBotSchema>

@@ -16,8 +16,15 @@ import {
   stampPageMountState,
   type PageMountTarget
 } from '../src/mobile-web-shell/bridge/page-lifecycle/page-bootstrap'
-import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
-import { BRIDGE_HOST_CATALOGS_GRANT } from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import {
+  linkOpenResultSchema,
+  storageReadResultSchema
+} from '../src/mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import {
+  BRIDGE_DEFERRED_CODE_VERB,
+  BRIDGE_HOST_CATALOGS_GRANT
+} from '../src/mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import { publishPageMermaidFetch } from '../src/components/mermaid/mermaid-page-engine'
 import {
   publishPageStorage,
   refreshPageTerminalSettings
@@ -166,6 +173,12 @@ bootstrapShellPage({
     if (session.grants.native.includes(BRIDGE_HOST_CATALOGS_GRANT)) {
       startPageLocaleCatalogs({ client, store: deviceStore })
     }
+    // A shell that skipped the diagram engine fetches it from the desktop before the first diagram imports it.
+    if (session.grants.native.includes(BRIDGE_DEFERRED_CODE_VERB)) {
+      publishPageMermaidFetch(async () => {
+        await client.callNativeVerb(BRIDGE_DEFERRED_CODE_VERB, {})
+      })
+    }
     // Subscribe before the first catalog load so a switch during startup is not lost; the latest request wins.
     let uiLocaleActivation = activatePageUiLocale(session.uiLocale)
     client.onUiLocaleUpdate((locale) => {
@@ -173,7 +186,21 @@ bootstrapShellPage({
     })
     // Publish plain-function seams before first render because effects and initial list paint already read them.
     publishPageHostProfile(session.host)
-    publishExternalLinkOpener((url) => client.notifyExternalLink(url))
+    publishExternalLinkOpener(
+      // Older shells only take the link; this one says whether an app opened it.
+      session.grants.native.includes('native.link.open')
+        ? async (url) => {
+            try {
+              return linkOpenResultSchema.parse(
+                (await client.callNativeVerb('native.link.open', { url })).result
+              ).opened
+            } catch {
+              // A reply lost while the phone was in the other app doesn't mean nothing opened.
+              return true
+            }
+          }
+        : (url) => client.notifyExternalLink(url)
+    )
     publishHapticsNotifier((kind) => client.notifyHaptics(kind))
     // Expose shell keyboard height to hooks and plain functions.
     publishShellKeyboardSource({

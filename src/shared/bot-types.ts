@@ -11,6 +11,7 @@ import { BotTidyUpSchema } from './bots/bot-tidy-up'
 import { BotOfferAnswerSchema } from './bots/bot-offer-answers'
 import { BotCancelledWaitSchema } from './bots/bot-cancelled-waits'
 import { BotAvatarColorSchema } from './bots/bot-avatar-color'
+import { BotStoredOutfitSchema } from './bots/bot-avatar-outfit'
 
 /** Native-chat agents a bot cannot run on yet; each waits on a live check of its preamble delivery. */
 export const BOT_HELD_BACK_AGENTS = [] as const
@@ -36,7 +37,10 @@ export const BOT_AGENTS = [
   'mimo-code',
   'gemini',
   'droid',
-  'qwen-code'
+  'qwen-code',
+  'cline',
+  'devin',
+  'codebuddy'
 ] as const satisfies readonly Exclude<NativeChatAgent, (typeof BOT_HELD_BACK_AGENTS)[number]>[]
 
 /** Agents the previous release's bot schema reads; it drops bots on any other agent when it loads. */
@@ -58,11 +62,8 @@ export function splitBotsByOlderBuildSupport(bots: readonly Bot[]): {
   const readable: Bot[] = []
   const newer: Bot[] = []
   for (const bot of bots) {
-    if (BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent)) {
-      readable.push(bot)
-    } else {
-      newer.push(bot)
-    }
+    const side = BOT_AGENTS_OLDER_BUILDS_READ.has(bot.agent) ? readable : newer
+    side.push(bot)
   }
   return { readable, newer }
 }
@@ -173,6 +174,16 @@ export const BotSchema = z.object({
   avatar: z.string().nullable(),
   /** The mascot's tile color; absent or null, its own sky blue. Older hosts drop it. */
   avatarColor: BotAvatarColorSchema.nullable().optional().catch(undefined),
+  /** What the mascot wears; absent or null, nothing. Kept as stored: one this version doesn't know draws
+   *  as none (wornBotOutfit) but survives a save, for the version that added it. */
+  avatarOutfit: BotStoredOutfitSchema.nullable().optional().catch(undefined),
+  /** Mascot replaced by an automatic upload at the current revision. */
+  generatedOverMascot: z.string().optional().catch(undefined),
+  /** Bumped by every picture, color or outfit write, so a write can require that none landed since it was
+   *  asked for (bots.avatar.upload `expectedAvatarRevision`). Absent is 0; older hosts drop it. */
+  avatarRevision: z.number().int().nonnegative().optional().catch(undefined),
+  /** Rotated when an explicit picture choice repairs a lost revision history. */
+  avatarRevisionEpoch: z.uuid().optional().catch(undefined),
   paused: z.boolean(),
   /** An owner's override; absent, the bot's chats start like any native chat. */
   permissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
@@ -194,6 +205,9 @@ export const BotSchema = z.object({
   slackMirror: z.boolean().optional().catch(undefined),
   /** The bot may use the Google accounts signed in on its host, for its owner's own requests. Absent is off. */
   google: z.boolean().optional(),
+  /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed
+   *  list reads as none, never as every account. */
+  googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
   skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
   /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
@@ -385,19 +399,4 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   return bots
 }
 
-const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
-
-/** A folder name every supported filesystem accepts. */
-export function botFolderName(botName: string): string {
-  const slug = botName
-    .normalize('NFKD')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/, '')
-  if (!slug) {
-    return 'bot'
-  }
-  return WINDOWS_RESERVED_NAME.test(slug) ? `${slug}-bot` : slug
-}
+export { botFolderName } from './bots/bot-folder-name'

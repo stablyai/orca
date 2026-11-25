@@ -7,6 +7,10 @@ import { createWorkerBriefWriteGuard } from '../../terminal/wait/launched-agent-
 import { OrchestrationError } from '../orchestration-error'
 import { defineOrchestrationMethod } from '../../rpc/methods/orchestration/access/orchestration-method-access'
 import {
+  refuseUnmatchedWorkerSelector,
+  workerStartTargetLabel
+} from '../../rpc/methods/orchestration/worker/start/worker-start-selector-refusal'
+import {
   resolveFederatedExistingWorktreePreflight,
   validateFederatedCreationPreflight
 } from './federation-agent-preflight'
@@ -65,16 +69,21 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         )
       }
       const createsWorktree = params.worktree === 'new-top-level'
-      const { agent, launch } = await prepareFederationWorkerLaunchOnHost({
-        params,
+      const targetLabel = workerStartTargetLabel({
+        ...params,
         createsWorktree,
-        runtime
+        requestedWorktree: params.worktree
       })
+      const { agent, launch } = await refuseUnmatchedWorkerSelector(targetLabel, () =>
+        prepareFederationWorkerLaunchOnHost({ params, createsWorktree, runtime })
+      )
       const existingWorktree = createsWorktree
         ? undefined
         : await resolveFederatedExistingWorktreePreflight(runtime, agent, params.worktree)
       if (createsWorktree) {
-        await validateFederatedCreationPreflight(runtime, agent, params.repo)
+        await refuseUnmatchedWorkerSelector(targetLabel, () =>
+          validateFederatedCreationPreflight(runtime, agent, params.repo)
+        )
       }
 
       const db = runtime.getOrchestrationDb()

@@ -9,6 +9,7 @@ import {
   hasAppEnvironment
 } from '../../../../shared/app-lifecycle/app-environment'
 import {
+  CALLER_IDENTITY_ENV,
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
 } from '../../../../shared/agent-session/lifecycle/launch/agent-session-caller-env'
@@ -108,8 +109,6 @@ function applyThisAppCli(env: Record<string, string>): Record<string, string> {
   }
   return set
 }
-
-const CALLER_IDENTITY_ENV = [ORCA_AGENT_SESSION_ID_ENV, 'ORCA_TERMINAL_HANDLE']
 
 /** A sealed child's environment without its caller identity; the structured marker stays, so
  *  Orca's CLI refuses to guess a caller rather than name another chat. */
