@@ -48,6 +48,16 @@ export type GitCommonEntrySnapshot = {
   headLogSignature: string | null
 }
 
+/** False while `git worktree add` is still writing the entry (or it stays locked), so pollers keep re-reading it. */
+export function isGitCommonEntrySettled(entry: GitCommonEntrySnapshot): boolean {
+  return (
+    entry.structuralSignatures.has('HEAD') &&
+    entry.structuralSignatures.has('gitdir') &&
+    !entry.structuralSignatures.has('locked') &&
+    entry.indexSignature !== null
+  )
+}
+
 // In-place gitdir/reflog writes do not alter entry signatures; slow-cadence callers must stat these leaves.
 async function inPlaceLeavesChanged(
   entryPath: string,
