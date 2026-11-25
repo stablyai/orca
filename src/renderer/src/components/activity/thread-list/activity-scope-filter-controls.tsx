@@ -1,5 +1,4 @@
 import React from 'react'
-import { ChevronDown } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   DropdownMenuCheckboxItem,
@@ -125,17 +124,11 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
   const agentTypes = useAppStore((s) => s.agentsFilterAgentTypes)
   const setAgentTypes = useAppStore((s) => s.setAgentsFilterAgentTypes)
   const { allThreads } = useAllAgentPaneThreads()
-  const [expandedFromTypes, setExpandedFromTypes] = React.useState<ReadonlySet<string> | null>(null)
-  const catalog = getAgentCatalog()
   const availableTypes = new Set<string>(agentTypes)
   for (const thread of allThreads) {
     availableTypes.add(thread.agentType)
   }
-  const primaryTypes = expandedFromTypes ?? availableTypes
-  const activityAgents = catalog.filter((agent) => primaryTypes.has(agent.id))
-  const moreAgents = expandedFromTypes
-    ? catalog.filter((agent) => !expandedFromTypes.has(agent.id))
-    : []
+  const activityAgents = getAgentCatalog().filter((agent) => availableTypes.has(agent.id))
   const allAgentsLabel = t('auto.components.skills.filter.allAgents', 'All agents')
   const visibilityLabel =
     agentTypes.length === 0
@@ -147,26 +140,8 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
             defaultValue_one: '{{count}} agent'
           })
 
-  const renderAgentOption = ({ id, label }: (typeof catalog)[number]) => {
-    const checked = agentTypes.includes(id)
-    return (
-      <DropdownMenuCheckboxItem
-        key={id}
-        checked={checked}
-        disabled={checked && agentTypes.length === 1}
-        onCheckedChange={() =>
-          setAgentTypes(checked ? agentTypes.filter((type) => type !== id) : [...agentTypes, id])
-        }
-        onSelect={(event) => event.preventDefault()}
-      >
-        <AgentIcon agent={id} size={13} />
-        <span className="truncate">{label}</span>
-      </DropdownMenuCheckboxItem>
-    )
-  }
-
   return (
-    <DropdownMenuSub onOpenChange={(open) => !open && setExpandedFromTypes(null)}>
+    <DropdownMenuSub>
       <DropdownMenuSubTrigger>
         <span className="flex flex-1 items-center justify-between gap-3">
           <span>{t('auto.components.activity.ActivityScopeFilterControls.agents', 'Agents')}</span>
@@ -184,37 +159,25 @@ function ActivityAgentFilterMenu(): React.JSX.Element {
           {allAgentsLabel}
         </DropdownMenuCheckboxItem>
         {activityAgents.length > 0 ? <DropdownMenuSeparator /> : null}
-        {activityAgents.map(renderAgentOption)}
-        {activityAgents.length < catalog.length ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              inset
-              aria-expanded={expandedFromTypes !== null}
-              onSelect={(event) => {
-                event.preventDefault()
-                // Keep newly selected rows in place until the expanded list is collapsed.
-                setExpandedFromTypes(expandedFromTypes ? null : availableTypes)
-              }}
+        {activityAgents.map(({ id, label }) => {
+          const checked = agentTypes.includes(id)
+          return (
+            <DropdownMenuCheckboxItem
+              key={id}
+              checked={checked}
+              disabled={checked && agentTypes.length === 1}
+              onCheckedChange={() =>
+                setAgentTypes(
+                  checked ? agentTypes.filter((type) => type !== id) : [...agentTypes, id]
+                )
+              }
+              onSelect={(event) => event.preventDefault()}
             >
-              {expandedFromTypes
-                ? t(
-                    'auto.components.activity.ActivityScopeFilterControls.showFewerAgents',
-                    'Show fewer agents'
-                  )
-                : t(
-                    'auto.components.activity.ActivityScopeFilterControls.showMoreAgents',
-                    'Show more agents'
-                  )}
-              <ChevronDown
-                aria-hidden="true"
-                data-expanded={expandedFromTypes !== null}
-                className="ml-auto data-[expanded=true]:rotate-180"
-              />
-            </DropdownMenuItem>
-            {moreAgents.map(renderAgentOption)}
-          </>
-        ) : null}
+              <AgentIcon agent={id} size={13} />
+              <span className="truncate">{label}</span>
+            </DropdownMenuCheckboxItem>
+          )
+        })}
       </DropdownMenuSubContent>
     </DropdownMenuSub>
   )

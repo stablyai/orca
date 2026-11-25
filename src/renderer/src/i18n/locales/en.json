@@ -20042,8 +20042,6 @@
         },
         "ActivityScopeFilterControls": {
           "agents": "Agents",
-          "showMoreAgents": "Show more agents",
-          "showFewerAgents": "Show fewer agents",
           "resetScope": "Show all hosts and projects",
           "hideAutomationCreated": "Hide automation-created",
           "hideCliCreated": "Hide CLI-created",
