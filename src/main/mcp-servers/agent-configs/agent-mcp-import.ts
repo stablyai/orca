@@ -69,7 +69,7 @@ export type AgentMcpImportHost = {
   /** Claude projects Orca made itself (bots' sign-in folders), never the user's. */
   isOrcaProject: (projectPath: string) => boolean
   /** Whether each agent's new sessions on this host get Orca's list, so Move may take its copy. */
-  listReaches: () => Promise<AgentMcpReach>
+  listReaches: (agents: readonly string[]) => Promise<AgentMcpReach>
 }
 
 export type AgentMcpReach = (agent: string) => boolean
@@ -114,6 +114,9 @@ function limitedTo(found: DiscoveredAgentMcpServer): string[] | null {
   }
   return reach.flatMap((source) => (source.projectPath === undefined ? [] : [source.projectPath]))
 }
+
+const agentsOf = (sources: readonly AgentMcpConfigSource[]): string[] =>
+  sources.map((source) => source.agent)
 
 type MappedPath = { path: string; workspace: ReturnType<WorkspaceForPath> }
 
@@ -161,7 +164,8 @@ async function importRows(
 ): Promise<ImportRow[]> {
   const limits = found.map(limitedTo)
   const workspaceFor = limits.some((paths) => paths !== null) ? await host.workspaceFor() : null
-  const reaches = removals && found.length > 0 ? await host.listReaches() : () => false
+  const agents = removals ? [...new Set(found.flatMap((server) => agentsOf(server.sources)))] : []
+  const reaches = agents.length > 0 ? await host.listReaches(agents) : () => false
   return found.map((server, index) =>
     importRow(
       server,
@@ -230,20 +234,25 @@ async function claudeProfileCopies(
 /**
  * Move to Orca: adds it (limited to the workspaces a project-scoped copy was for), then removes it
  * from the files of the agents Orca's list reaches and from Orca's Claude account profiles, keeping
- * a backup of each. With no such agent it is a Copy.
+ * a backup of each. With no such agent it is a Copy. `confirmed`: the agents the user was shown it
+ * leaves (absent from older clients); no other agent ever loses its copy.
  */
 export async function moveAgentMcpServer<T>(
   host: AgentMcpImportHost,
   key: string,
-  add: AddImportedMcpServer<T>
+  add: AddImportedMcpServer<T>,
+  confirmed?: readonly string[]
 ): Promise<T> {
   return oneImportAtATime(async () => {
-    const { found, removing: listed, scope } = await movableRow(host, key, true)
+    const { found, removing: reached, scope } = await movableRow(host, key, true)
+    const listed = confirmed
+      ? reached.filter((source) => confirmed.includes(source.agent))
+      : reached
     const added = await add(found.server, scope, listed.length === 0)
     // Reach can shrink while the add runs (consent withdrawn, a launch learned the agent can't
     // take the servers): an agent that lost it keeps its copy. One that gained it wasn't confirmed.
-    const reaches = await host.listReaches()
-    const removing = listed.filter((source) => reaches(source.agent))
+    const reaches = listed.length > 0 ? await host.listReaches(agentsOf(listed)) : null
+    const removing = listed.filter((source) => reaches?.(source.agent))
     const configName = found.sources[0]!.keyPath.at(-1)!
     const mergeKey = agentMcpServerMergeKey(configName, found.server)
     await removeAgentMcpServerEntries(removing, mergeKey)

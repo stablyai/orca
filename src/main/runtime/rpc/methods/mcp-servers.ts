@@ -8,6 +8,7 @@ import {
   McpServerConnect,
   McpServerDiscover,
   McpServerImport,
+  McpServerMove,
   McpServerProblems,
   McpServerSessions,
   McpServerSetAgentEnabled,
@@ -262,16 +263,16 @@ export const MCP_SERVER_METHODS = [
   defineMethod({
     name: 'mcpServers.move',
     permission: 'workspace',
-    params: McpServerImport,
+    params: McpServerMove,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
+      onHost(context, () => importAgentMcpServer(context, params, moveAgentMcpServer), 'written')
   }),
   defineMethod({
     name: 'mcpServers.copy',
     permission: 'workspace',
     params: McpServerImport,
     handler: (params, context) =>
-      onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
+      onHost(context, () => importAgentMcpServer(context, params, copyAgentMcpServer), 'written')
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',
