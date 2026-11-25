@@ -29,17 +29,15 @@ const CMD_CODEX_LAUNCH_PREFLIGHT = `if defined ORCA_CODEX_LAUNCH_PREFLIGHT call 
 // Git Bash inherits OEM codepage; select UTF-8 before TUIs write bytes, but keep startup working if chcp.com is missing.
 const GIT_BASH_UTF8_LOGIN_COMMAND = 'chcp.com 65001 >/dev/null 2>&1; exec "$BASH" --login -i'
 
-// Every Bash pane needs account-following wrappers; the rcfile also owns login startup.
-function getGitBashLaunchCommand(): string {
+// Every Bash pane needs account-following wrappers; the rcfile also owns UTF-8 setup and login startup.
+// Passing --rcfile directly avoids a -c `exec "$BASH"` shim that stays resident as an extra bash.exe on MSYS2.
+function getGitBashLaunchArgs(): string[] {
   ensureShellReadyWrappersAt()
   const wrapperArgs = getBashWrapperLaunchArgs()
   if (!wrapperArgs) {
-    return GIT_BASH_UTF8_LOGIN_COMMAND
+    return ['-c', GIT_BASH_UTF8_LOGIN_COMMAND]
   }
-  const bashArgs = [...wrapperArgs, '-i']
-    .map((arg) => (arg.startsWith('-') ? arg : quotePosixShell(arg.replace(/\\/g, '/'))))
-    .join(' ')
-  return `chcp.com 65001 >/dev/null 2>&1; exec "$BASH" ${bashArgs}`
+  return [...wrapperArgs.map((arg) => (arg.startsWith('-') ? arg : arg.replace(/\\/g, '/'))), '-i']
 }
 
 /** Shared local/daemon resolution prevents shell-preference drift between execution paths. */
@@ -161,7 +159,7 @@ export function resolveWindowsShellLaunchArgs(
 
   if (isWindowsGitBashShellPath(shellPath)) {
     return {
-      shellArgs: ['-c', getGitBashLaunchCommand()],
+      shellArgs: getGitBashLaunchArgs(),
       effectiveCwd: nativeCwd,
       validationCwd: nativeCwd
     }

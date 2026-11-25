@@ -12,6 +12,8 @@ import {
 
 export function getDaemonBashShellReadyRcfileContent(): string {
   return `# Orca daemon bash shell-ready wrapper
+# Git Bash inherits OEM codepage; select UTF-8 before profiles or TUIs write bytes.
+[[ -n "\${MSYSTEM:-}" && -z "\${WSL_DISTRO_NAME:-}" ]] && chcp.com 65001 >/dev/null 2>&1
 ${BASH_FEATURE_CHANNEL_BLOCK}
 ${SHELL_STARTUP_IDENTITY_MARKER_BLOCK}
 # Consume the feature channel before profiles so child processes cannot inherit the selection.
