@@ -52,5 +52,5 @@ it('reads the cursor-agent token from auth.dpapi when auth.json points to the Wi
   // The encrypted credential travels over stdin, never argv.
   const spec = vi.mocked(runProcess).mock.calls[0]?.[0]
   expect(spec?.input).toBe(blob)
-  expect(spec?.args.join(' ')).not.toContain(blob)
+  expect(spec?.args?.join(' ')).not.toContain(blob)
 })
