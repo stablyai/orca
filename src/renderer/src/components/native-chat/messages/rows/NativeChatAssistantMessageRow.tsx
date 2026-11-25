@@ -112,13 +112,8 @@ export function NativeChatAssistantMessageRow({
           content={shownWords}
           variant="document"
           className="text-sm"
-          renderCodeBlock={
-            isSystem
-              ? NativeChatPlainCodeBlock
-              : streaming
-                ? NativeChatCodeBlock
-                : NativeChatRunnableCodeBlock
-          }
+          renderCodeBlock={isSystem ? NativeChatPlainCodeBlock : NativeChatCodeBlock}
+          renderSettledCodeBlock={isSystem ? undefined : NativeChatRunnableCodeBlock}
           linkifyFilePaths
           {...(isSystem ? {} : NATIVE_CHAT_QUOTE_SOURCE_PROPS)}
           visualMessageId={message.role === 'assistant' ? message.id : undefined}

@@ -322,7 +322,7 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const install = useNativeChatInstall(input, terminal)
   const update = useNativeChatCliUpdate(input.target, input.agent, input.onRechecked)
   const { target } = input
-  // Play's done mark reads `$?`, so only a POSIX shell can run a block.
+  // Play types a POSIX-quoted `sh` line; PowerShell and cmd can't run it, while fish, bash and zsh can.
   const codeBlockWorktreeId = shell === 'posix' ? input.worktreeId : null
   const unresolvedFailureRows = useNativeChatUnresolvedFailureRows(input.journalItems)
   return useMemo(

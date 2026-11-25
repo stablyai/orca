@@ -1,5 +1,5 @@
 // @protected-copy: preserve code controls used by approval prompts.
-import React, { useContext, useMemo, useState } from 'react'
+import React, { useContext, useId, useMemo } from 'react'
 import { Play, WrapText } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -11,9 +11,11 @@ import { NativeChatHighlightedCode } from './NativeChatHighlightedCode'
 import { NativeChatHtmlPreview, NativeChatHtmlViewToggle } from './NativeChatHtmlPreview'
 import { isHtmlDocumentCodeBlock } from '../../../../../../shared/markdown/html-document-fences'
 import { useNativeChatHostSetupView } from '../../host-access/native-chat-host-setup'
-import { nativeChatCodeBlockRunner } from '../../host-access/native-chat-code-block-run'
+import {
+  startNativeChatCodeBlockRun,
+  useNativeChatCodeBlockRun
+} from '../../host-access/native-chat-code-block-run'
 import { codeBlockTerminalScript } from '../../../../../../shared/code-block-terminal-script'
-import type { CodeBlockRunState } from '../../../../../../shared/code-block-terminal-run'
 import { NativeChatCodeBlockRunOutput } from './NativeChatCodeBlockRunOutput'
 
 /** Code fences need their own copy target rather than the whole chat message. */
@@ -50,21 +52,20 @@ export function NativeChatCodeBlock({
   const setup = useNativeChatHostSetupView()
   const host = setup?.host
   const worktreeId = setup?.codeBlockWorktreeId
-  const runScript = useMemo(
-    () => (runnable && host && worktreeId ? nativeChatCodeBlockRunner(host, worktreeId) : null),
-    [runnable, host, worktreeId]
-  )
+  const canRun = runnable && host && worktreeId
   const script = useMemo(
-    () => (runScript ? codeBlockTerminalScript(code, language) : null),
-    [runScript, code, language]
+    () => (canRun ? codeBlockTerminalScript(code, language) : null),
+    [canRun, code, language]
   )
-  const [runState, setRunState] = useState<CodeBlockRunState | null>(null)
+  const fallbackKey = useId()
+  const runKey = `code-run:${blockKey ?? fallbackKey}`
+  const runState = useNativeChatCodeBlockRun(runKey)
   const actions = code ? (
     <>
-      {runScript && script ? (
+      {host && worktreeId && script ? (
         <NativeChatCodeRunButton
           running={runState?.status === 'running'}
-          onRun={() => void runScript(script, setRunState)}
+          onRun={() => startNativeChatCodeBlockRun(runKey, host, worktreeId, script)}
         />
       ) : null}
       <NativeChatCodeWrapButton wrapped={wrapped} onToggle={() => setWrapped(!wrapped)} />
