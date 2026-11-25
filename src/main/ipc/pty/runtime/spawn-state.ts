@@ -1,4 +1,5 @@
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
+import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { PtySpawnSizeSeed } from '../spawn/spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn/spawn-outcome'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
@@ -61,6 +62,8 @@ export type RuntimePtySpawnState = {
   resumeAdmission: ResumeSpawnAdmission | null
   codexSelectionTarget: CodexAccountSelectionTarget
   launchCommand: string | undefined
+  /** What the host's MCP server list gave the pane, recorded at commit. */
+  terminalMcp?: TerminalMcpPaneLaunch | null
   claudeAuth: ClaudeRuntimeAuthPreparation | null
   shouldPersistHostSessionBinding: boolean
   hostSessionBinding:

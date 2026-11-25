@@ -136,3 +136,25 @@ async function launchEntries(agent: string, workspace: LaunchWorkspace, folder: 
   const all = botToolEntries(await readBotToolsSnapshot(folder))
   return { all, on: all.filter(({ extras }) => isOnForLaunch(extras, agent, workspace)) }
 }
+
+/** A server a launch gets, with its id (null for an entry edited outside Orca that has none yet). */
+export type McpLaunchEntry = { id: string | null; server: BotToolServer }
+
+/** `mcpServersForLaunch` with each server's id: a repeated id names its first entry, as
+ *  `mcpServerForLaunch` finds it. */
+export async function mcpServerEntriesForLaunch(
+  agent: string,
+  workspace: LaunchWorkspace,
+  folder = mcpHostListFolder()
+): Promise<McpLaunchEntry[]> {
+  const seen = new Set<string>()
+  return (await launchEntries(agent, workspace, folder)).map(({ server, extras }) => {
+    const given =
+      typeof extras.id === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(extras.id) ? extras.id : null
+    const id = given && !seen.has(given) ? given : null
+    if (given) {
+      seen.add(given)
+    }
+    return { id, server }
+  })
+}
