@@ -39,7 +39,7 @@ describe.skipIf(process.platform === 'win32')('WSL Codex settings sync inside th
     rmSync(home.path, { recursive: true, force: true })
   })
 
-  const writeBaseline = (extra: object): void => {
+  const writeBaseline = (extra: Record<string, unknown>): void => {
     writeFileSync(
       join(runtimeHome, '.orca-config-settings-baseline.json'),
       JSON.stringify({

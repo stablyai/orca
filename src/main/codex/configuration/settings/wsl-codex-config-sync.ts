@@ -101,12 +101,23 @@ async function runPass({
 
 // Login scripts may print before the helper, so only the last line is its result.
 function parseOutput(stdout: string): CodexConfigSyncWslHomeResult[] | null {
+  let output: unknown
   try {
-    const output = JSON.parse(stdout.split(/\r?\n/).at(-1) ?? '') as CodexConfigSyncWslOutput
-    return output.protocol === CODEX_CONFIG_SYNC_WSL_PROTOCOL && Array.isArray(output.homes)
-      ? output.homes
-      : null
+    output = JSON.parse(stdout.split(/\r?\n/).at(-1) ?? '')
   } catch {
     return null
   }
+  return isHelperOutput(output) ? output.homes : null
+}
+
+// The bundle comes from the running install, so a matching protocol vouches for the home shape.
+function isHelperOutput(value: unknown): value is CodexConfigSyncWslOutput {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'protocol' in value &&
+    value.protocol === CODEX_CONFIG_SYNC_WSL_PROTOCOL &&
+    'homes' in value &&
+    Array.isArray(value.homes)
+  )
 }
