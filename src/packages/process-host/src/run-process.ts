@@ -28,7 +28,7 @@ export function runProcess(
     let child: ChildProcess
     let launched: LaunchedProcess | null = null
     try {
-      launched = launchWithDefaultProcessLauncher(spec)
+      launched = launchWithDefaultProcessLauncher(spec, outputCapture)
       child = launched?.child ?? spawnProcess(spec)
     } catch (error) {
       terminationReporter.report()

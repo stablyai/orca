@@ -26,7 +26,10 @@ export function spawnProcess(
   )
 }
 
-export type ProcessLauncher = (spec: ProcessSpec) => LaunchedProcess | null
+export type ProcessLauncher = (
+  spec: ProcessSpec,
+  outputCapture?: 'head' | 'tail'
+) => LaunchedProcess | null
 
 // Main installs this; daemon, relay, and CLI cannot depend on main code.
 let defaultLauncher: ProcessLauncher | null = null
@@ -36,6 +39,11 @@ export function setDefaultProcessLauncher(next: ProcessLauncher | null): void {
   defaultLauncher = next
 }
 
-export function launchWithDefaultProcessLauncher(spec: ProcessSpec): LaunchedProcess | null {
-  return spec.launch ? spec.launch(spec) : (defaultLauncher?.(spec) ?? null)
+export function launchWithDefaultProcessLauncher(
+  spec: ProcessSpec,
+  outputCapture: 'head' | 'tail' = 'head'
+): LaunchedProcess | null {
+  return spec.launch
+    ? spec.launch(spec, outputCapture)
+    : (defaultLauncher?.(spec, outputCapture) ?? null)
 }

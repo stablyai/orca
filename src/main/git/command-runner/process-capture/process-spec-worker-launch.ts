@@ -9,7 +9,8 @@ import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-pr
 import {
   canSpawnOnWorkerThread,
   isAbandonedWorkerChildError,
-  spawnProcessOnWorkerThread
+  spawnProcessOnWorkerThread,
+  spawnWorkerReadyNow
 } from '../../../worker-thread-child-process/worker-thread-child-process'
 import {
   killAbandonedWorkerChildTree,
@@ -31,31 +32,47 @@ export function launchProcessSpecOnWindowsWorker(
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
   /** The caller holds no mutation fence: worker loss ends its lifetime without proof. */
-  lifetimeEndsOnLoss = false
+  lifetimeEndsOnLoss = false,
+  outputCapture: 'head' | 'tail' = 'head'
 ): LaunchedProcess | null {
-  if (process.platform !== 'win32') {
+  if (process.platform !== 'win32' || !canSpawnOnWorkerThread()) {
     return null
   }
-  return launchProcessSpecOnWorker(spec, onWorkerLost, onTerminated, lifetimeEndsOnLoss)
+  return launchProcessSpecOnWorker(
+    spec,
+    onWorkerLost,
+    onTerminated,
+    lifetimeEndsOnLoss,
+    outputCapture
+  )
 }
 
 /** Main's default runProcess launcher on POSIX: posix_spawn blocks its calling thread, for minutes under memory or disk pressure.
- * Specs that own a process group or termination barrier keep their proven launch on main. */
-export function launchPlainProcessSpecOnPosixWorker(spec: ProcessSpec): LaunchedProcess | null {
-  if (process.platform === 'win32' || spec.terminationBarrier) {
+ * Specs that own a process group, termination barrier, or termination-proof callback keep their proven launch on main.
+ * Uses spawnWorkerReadyNow() so a cold or broken worker falls back to main rather than rejecting early callers. */
+export function launchPlainProcessSpecOnPosixWorker(
+  spec: ProcessSpec,
+  outputCapture: 'head' | 'tail' = 'head'
+): LaunchedProcess | null {
+  if (
+    process.platform === 'win32' ||
+    spec.terminationBarrier ||
+    spec.onChildTerminated ||
+    !spawnWorkerReadyNow()
+  ) {
     return null
   }
-  const onTerminated = spec.onChildTerminated ?? (() => {})
-  return launchProcessSpecOnWorker(spec, undefined, onTerminated, !spec.onChildTerminated)
+  return launchProcessSpecOnWorker(spec, undefined, () => {}, true, outputCapture)
 }
 
 function launchProcessSpecOnWorker(
   spec: ProcessSpec,
   onWorkerLost: (() => void) | undefined,
   onTerminated: () => void,
-  lifetimeEndsOnLoss: boolean
+  lifetimeEndsOnLoss: boolean,
+  outputCapture: 'head' | 'tail'
 ): LaunchedProcess | null {
-  if (!isPlainPiped(spec) || !canSpawnOnWorkerThread()) {
+  if (!isPlainPiped(spec)) {
     return null
   }
   const args = [...(spec.args ?? [])]
@@ -68,18 +85,27 @@ function launchProcessSpecOnWorker(
     env: spec.env ?? process.env
   })
   recordSubprocessSpawn(spec.program, args, performance.now() - startedAt)
-  // runProcess keeps the head of each stream; past the cap, the rest stays on the worker.
-  const cap = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
-  for (const stream of ['stdout', 'stderr'] as const) {
-    let received = 0
-    const onData = (chunk: Buffer): void => {
-      received += chunk.byteLength
-      if (received > cap) {
-        child[stream].off('data', onData)
-        child.discardOutput(stream)
+  // Only discard past the cap for head-captured streams with no full-stream observer.
+  if (outputCapture === 'head') {
+    const cap = spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES
+    const hasStderrObserver =
+      Boolean(spec.onStderr) ||
+      (typeof spec.terminationBarrier === 'object' &&
+        Boolean(spec.terminationBarrier.observeStderr))
+    const discardableStreams: readonly ('stdout' | 'stderr')[] = hasStderrObserver
+      ? ['stdout']
+      : ['stdout', 'stderr']
+    for (const stream of discardableStreams) {
+      let received = 0
+      const onData = (chunk: Buffer): void => {
+        received += chunk.byteLength
+        if (received > cap) {
+          child[stream].off('data', onData)
+          child.discardOutput(stream)
+        }
       }
+      child[stream].on('data', onData)
     }
-    child[stream].on('data', onData)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the stand-in carries the piped surface runProcess and its tree kill read: pid, exitCode, signalCode, kill, stdio streams, and spawn/error/exit/close events.
   const launched = child as unknown as ChildProcess
@@ -89,12 +115,10 @@ function launchProcessSpecOnWorker(
     }
     onWorkerLost?.()
     if (process.platform !== 'win32') {
-      const ended = killAbandonedPosixWorkerChild(child)
+      // Worker death closes stdio pipes (EOF/SIGPIPE); avoid SIGKILLing a pid the dead worker may already have reaped.
       if (lifetimeEndsOnLoss) {
         onTerminated()
-        return
       }
-      reportWhenAbandonedRootEnds(child.pid, Promise.resolve(ended), onTerminated)
       return
     }
     // runProcess's own stop may already be walking this tree; join its verdict rather than walk the pid again.
@@ -119,21 +143,4 @@ function launchProcessSpecOnWorker(
     reportWhenAbandonedRootEnds(child.pid, proven, onTerminated)
   })
   return { child: launched, withdrawPendingLaunch: () => child.cancelPendingSpawn() }
-}
-
-// The dead worker never reaped this child, so its pid cannot have been reused; true once the root is known to end.
-function killAbandonedPosixWorkerChild(child: {
-  pid: number | undefined
-  exitCode: number | null
-  signalCode: NodeJS.Signals | null
-}): boolean {
-  if (!child.pid || child.exitCode !== null || child.signalCode !== null) {
-    return true
-  }
-  try {
-    process.kill(child.pid, 'SIGKILL')
-    return true
-  } catch {
-    return false
-  }
 }
