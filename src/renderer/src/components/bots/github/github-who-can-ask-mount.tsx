@@ -3,7 +3,7 @@
 // grant writer; every login, name and id here is synthetic.
 import React from 'react'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { vi } from 'vitest'
+import { expect, vi } from 'vitest'
 import type { Bot } from '../../../../../shared/bot-types'
 import type {
   BotGitHubRoster,
@@ -142,11 +142,9 @@ export const usersOf = (members: { id: string; name: string }[]): Users => ({
 
 /** Ticks the row whose text is exactly `text`. */
 export function pickRow(text: string): void {
+  expect(optionTexts()).toContain(text)
   const row = screen.getAllByRole('option').find((option) => option.textContent === text)
-  if (!row) {
-    throw new Error(`no row ${text} in ${optionTexts().join(' | ')}`)
-  }
-  fireEvent.click(row)
+  fireEvent.click(row ?? document.body)
 }
 
 /** The Add button, by its visible name. */

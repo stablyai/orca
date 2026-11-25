@@ -2,12 +2,13 @@
 // admitted; elsewhere every request in the process shares one admitted read, whatever its scope,
 // timing or outcome. This is about logical reads only, not OS processes. Synthetic data only.
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { BOT_GITHUB_METHODS } from './bots-github'
 
-const gh = vi.hoisted(() => ({ run: vi.fn<(args: string[]) => Promise<{ stdout: string }>>() }))
+const gh = vi.hoisted(() => ({ run: vi.fn<typeof ghExecFileAsync>() }))
 vi.mock(import('../../../git/command-runner/hosted-cli/gh-exec-file'), async (original) => ({
   ...(await original()),
-  ghExecFileAsync: gh.run as never
+  ghExecFileAsync: gh.run
 }))
 
 const repos = (...names: string[]) => ({ repositories: names, owners: [], more: false })
@@ -35,7 +36,7 @@ afterEach(() => {
 describe('the people list request elsewhere', () => {
   it('shares one admitted read across concurrent requests, a changed scope and a failure', async () => {
     onPlatform('linux')
-    let finish = (_value: { stdout: string }): void => {}
+    let finish = (_value: { stdout: string; stderr: string }): void => {}
     gh.run.mockReturnValue(
       new Promise((resolve) => {
         finish = resolve
@@ -44,7 +45,7 @@ describe('the people list request elsewhere', () => {
     const ask = people()
     const first = ask(repos('acme/web'))
     const concurrent = ask(repos('acme/api'))
-    finish({ stdout: '' })
+    finish({ stdout: '', stderr: '' })
     expect(await first).toEqual({ ok: true, value: { status: 'unavailable', spent: true } })
     expect(await concurrent).toEqual({ ok: true, value: { status: 'unavailable', spent: true } })
     // After that failure, a later request for yet another scope is not admitted either.
