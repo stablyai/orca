@@ -36,6 +36,7 @@ import { formatStatusBarSectionLabel } from './usage-pool-label'
 import { isGroupedUsagePool } from '../../../../../shared/agent-usage/display/grouped-usage-pool'
 import { useResetCountdownClock } from '@/components/status-bar/usage/useResetCountdownClock'
 import { useNow } from '@/lib/window-activity/use-now'
+import { isExtraUsageActive } from './extra-usage-active'
 
 const CALM_STALE_USAGE_MAX_AGE_MS = 30 * 60_000
 
@@ -177,23 +178,6 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
     case 'codex':
       return 'X'
   }
-}
-
-// Treat 99.5% as capped to tolerate rounding before revealing spendable overage.
-const CAP_THRESHOLD_PERCENT = 99.5
-
-function isExtraUsageActive(p: ProviderRateLimits): boolean {
-  if (
-    !p.extraUsage ||
-    !p.extraUsage.enabled ||
-    (p.extraUsage.unit === 'currency' &&
-      (p.extraUsage.balance === null || p.extraUsage.balance <= 0))
-  ) {
-    return false
-  }
-  return [p.session, p.weekly, p.monthly, p.fableWeekly].some(
-    (w) => w != null && clampUsedPercent(w.usedPercent) >= CAP_THRESHOLD_PERCENT
-  )
 }
 
 function formatCompactExtraUsage(

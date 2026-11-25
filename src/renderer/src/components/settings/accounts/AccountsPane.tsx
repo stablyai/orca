@@ -401,7 +401,7 @@ export function AccountsPane({
       <CursorAccountsSection key="cursor" />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsCommandCodeSearchEntries())
-      ? renderCommandCodeAccountsSection(accountOwnerKey, usageCredentialHost)
+      ? renderCommandCodeAccountsSection(accountOwnerKey, usageCredentialHost, ownerUsage)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsZcodePlanSearchEntries()) ? (
       <ZcodePlanAccountsSection

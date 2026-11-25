@@ -12,7 +12,6 @@ import {
   saveMiniMaxSessionCookieCredential
 } from '../../../../minimax/minimax-credential-commands'
 import {
-  assertCommandCodeApiKeyOpensHere,
   clearCommandCodeApiKeyCredential,
   getCommandCodeCredentialsStatus,
   saveCommandCodeApiKeyCredential
@@ -117,7 +116,6 @@ export const USAGE_CREDENTIAL_METHODS = [
     params: UsageCredentialApiKeyParams,
     handler: async ({ apiKey }, { runtime }) => {
       const rateLimits = runtime.requireUsageRateLimits()
-      await assertCommandCodeApiKeyOpensHere()
       return saveCommandCodeApiKeyCredential(rateLimits, apiKey)
     }
   }),

@@ -69,8 +69,9 @@ async function getJson(path: string, apiKey: string, signal?: AbortSignal): Prom
   try {
     const value: unknown = JSON.parse(await response.text())
     return { kind: 'ok', value }
-  } catch {
-    return { kind: 'failed', failureKind: 'parse' }
+  } catch (error) {
+    // A body read can fail for transport reasons too; keep those distinct from JSON syntax errors.
+    return { kind: 'failed', failureKind: classifyThrownUsageRequestError(error) }
   }
 }
 

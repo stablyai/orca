@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setMainHttpClient } from '../../../network/http-client'
 import { COMMAND_CODE_CREDITS_PATH, fetchCommandCodeRateLimits } from './command-code-usage-api'
 
@@ -75,5 +75,14 @@ describe('fetchCommandCodeRateLimits', () => {
     expect(result.error).toBe(
       'Command Code rejected the saved API key (subscriptions returned HTTP 401)'
     )
+  })
+
+  it('reports a body-read transport failure as network, not parse', async () => {
+    const response = new Response('{}', { status: 200 })
+    vi.spyOn(response, 'text').mockRejectedValue(new Error('socket hang up'))
+    routeBy(() => response)
+    const result = await fetchCommandCodeRateLimits({ apiKey: KEY })
+    expect(result.status).toBe('error')
+    expect(result.usageMetadata?.failureKind).toBe('network')
   })
 })

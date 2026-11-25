@@ -46,6 +46,8 @@ export async function saveCommandCodeApiKeyCredential(
   if (typeof key !== 'string') {
     throw new Error('Command Code API key must be a string')
   }
+  // Desktop IPC and remote RPC saves both run here; refuse a key sealed by another Orca app.
+  await assertCommandCodeApiKeyOpensHere()
   await saveCommandCodeApiKey(key)
   refreshAfterChange(rateLimits, 'save')
   return getCommandCodeCredentialsStatus()

@@ -9052,6 +9052,7 @@
             },
             "checking": "Checking…",
             "unavailable": "Status unavailable",
+            "retry": "Retry",
             "credits": "Credits remaining: {{credits}}",
             "plan": "Plan: {{plan}}",
             "clearFailed": "Could not clear the Command Code key",

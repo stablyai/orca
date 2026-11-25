@@ -3,6 +3,10 @@ import { toast } from 'sonner'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '../../../../store/index'
 import type { CommandCodeCredentialsStatus } from '../../../../../../shared/agent-accounts/usage-credentials/command-code-credentials'
+import type {
+  ProviderRateLimits,
+  RateLimitState
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   callCommandCodeCredentials,
@@ -25,8 +29,32 @@ type CredentialStatus = CommandCodeCredentialsStatus | null
 
 const LOCAL_OWNER: RuntimeClientTarget = { kind: 'local' }
 
+/** The selected remote host's streamed usage snapshot, as AccountsPane receives it. */
+export type OwnerUsageSnapshot = {
+  environmentId: string
+  rateLimits: RateLimitState | null
+} | null
+
+/** Local scope shows this computer's poll; a remote host shows the reading streamed from that host. */
+export function selectCommandCodeUsage(
+  host: UsageCredentialHost,
+  storeUsage: ProviderRateLimits | null,
+  ownerUsage: OwnerUsageSnapshot
+): ProviderRateLimits | null {
+  if (host.label === null) {
+    return storeUsage
+  }
+  const environmentId = host.owner.kind === 'environment' ? host.owner.environmentId : null
+  return ownerUsage && environmentId !== null && ownerUsage.environmentId === environmentId
+    ? (ownerUsage.rateLimits?.commandCode ?? null)
+    : null
+}
+
 /** Remote hosts read and save the key on their own runtime; this device cannot see it. */
-function useCommandCodeCredentials(updatedAt: number | undefined, owner: RuntimeClientTarget) {
+export function useCommandCodeCredentials(
+  updatedAt: number | undefined,
+  owner: RuntimeClientTarget
+) {
   const t = useTranslate()
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const [status, setStatus] = useState<CredentialStatus>(null)
@@ -35,6 +63,7 @@ function useCommandCodeCredentials(updatedAt: number | undefined, owner: Runtime
   )
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  const [retryNonce, setRetryNonce] = useState(0)
   const readGeneration = useRef(0)
   const mutationPending = useRef(false)
   const ownerEnvironmentId = owner.kind === 'environment' ? owner.environmentId : null
@@ -64,7 +93,15 @@ function useCommandCodeCredentials(updatedAt: number | undefined, owner: Runtime
     return () => {
       readGeneration.current += 1
     }
-  }, [updatedAt, busy, ownerEnvironmentId])
+  }, [updatedAt, busy, ownerEnvironmentId, retryNonce])
+
+  const retry = (): void => {
+    if (busy) {
+      return
+    }
+    setAccess('checking')
+    setRetryNonce((nonce) => nonce + 1)
+  }
 
   const runMutation = async (
     action: 'saveApiKey' | 'clearApiKey',
@@ -105,7 +142,7 @@ function useCommandCodeCredentials(updatedAt: number | undefined, owner: Runtime
     recordFeatureInteraction('usage-tracking')
   }
 
-  return { status, access, draft, setDraft, busy, updateCredential }
+  return { status, access, draft, setDraft, busy, updateCredential, retry }
 }
 
 function formatCredits(balance: number, locale: string): string {
@@ -138,19 +175,19 @@ function mutationFailureCopy(clear: boolean, t: Translate): { title: string; des
 
 /** Saves one Command Code key on the selected host; switching accounts means replacing that key. */
 export function CommandCodeAccountsSection({
-  host
+  host,
+  ownerUsage
 }: {
   host: UsageCredentialHost
+  /** The selected remote host's streamed usage snapshot; this computer's poll cannot describe it. */
+  ownerUsage: OwnerUsageSnapshot
 }): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const storeUsage = useAppStore((s) => s.rateLimits.commandCode)
-  // This computer's usage poll cannot describe another host's key.
-  const usage = host.label === null ? storeUsage : null
-  const { status, access, draft, setDraft, busy, updateCredential } = useCommandCodeCredentials(
-    usage?.updatedAt,
-    host.owner
-  )
+  const usage = selectCommandCodeUsage(host, storeUsage, ownerUsage)
+  const { status, access, draft, setDraft, busy, updateCredential, retry } =
+    useCommandCodeCredentials(usage?.updatedAt, host.owner)
   const configured = status?.apiKeyConfigured === true
   const sessionPercent = usage?.session ? Math.round(usage.session.usedPercent) : null
   const weeklyPercent = usage?.weekly ? Math.round(usage.weekly.usedPercent) : null
@@ -206,6 +243,11 @@ export function CommandCodeAccountsSection({
             spellCheck={false}
             className="flex-1"
           />
+          {access === 'unreachable' && (
+            <Button size="xs" variant="outline" disabled={busy} onClick={retry}>
+              {t('auto.components.settings.AccountsPane.commandCode.retry', 'Retry')}
+            </Button>
+          )}
           <Button
             size="xs"
             disabled={busy || access !== 'ready' || !draft.trim()}
@@ -272,7 +314,14 @@ export function CommandCodeAccountsSection({
 
 export function renderCommandCodeAccountsSection(
   ownerKey: string,
-  host: UsageCredentialHost
+  host: UsageCredentialHost,
+  ownerUsage: OwnerUsageSnapshot
 ): React.JSX.Element {
-  return <CommandCodeAccountsSection key={`command-code:${ownerKey}`} host={host} />
+  return (
+    <CommandCodeAccountsSection
+      key={`command-code:${ownerKey}`}
+      host={host}
+      ownerUsage={ownerUsage}
+    />
+  )
 }
