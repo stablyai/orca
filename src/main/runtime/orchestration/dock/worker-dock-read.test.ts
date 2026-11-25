@@ -7,6 +7,7 @@ import { subscribeWorkerDock } from './worker-dock-stream'
 import { refreshWorkerDockActivity, workerDockActivitySource } from './worker-dock-activity'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { installWorkerDockSchema } from '../db/schema/worker-dock-schema'
+import { holdWorkerDockStopping, recordWorkerStop } from './worker-dock-owner-stop'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -440,6 +441,58 @@ describe('worker dock lifecycle projection', () => {
       acknowledged: true
     })
     expect(read().rows[0].dispatchId).toBe(id)
+  })
+
+  it('shows a requested stop as stopping until it finishes, then drops it once it proved the exit', async () => {
+    const stopped = (
+      id: string,
+      processAction: string,
+      outcome?: 'kept_open' | 'starting' | 'unconfirmed'
+    ) => {
+      db.db.prepare("UPDATE worker_dispatches SET state = 'stopped' WHERE dispatch_id = ?").run(id)
+      const helpers = outcome ? [{ dispatchId: 'helper', creatorDispatchId: id, outcome }] : []
+      return { dispatchId: id, state: 'stopped', alreadySettled: false, processAction, helpers }
+    }
+    const states = () => new Map(read().rows.map((row) => [row.dispatchId, row.state]))
+    const requested = worker()
+    let finish = () => {}
+    const holding = holdWorkerDockStopping(db, requested, async () => {
+      const receipt = stopped(requested, 'closed_agent_terminal')
+      await new Promise<void>((resolve) => (finish = resolve))
+      recordWorkerStop(db, requested, receipt)
+    })
+    expect(states().get(requested)).toBe('stopping')
+    finish()
+    await holding
+    const keptOpen = worker()
+    recordWorkerStop(db, keptOpen, stopped(keptOpen, 'closed_agent_terminal', 'kept_open'))
+    const unproven = worker()
+    await holdWorkerDockStopping(db, unproven, async () =>
+      recordWorkerStop(db, unproven, stopped(unproven, 'none'))
+    )
+    const helperLeft = worker()
+    recordWorkerStop(db, helperLeft, stopped(helperLeft, 'closed_agent_terminal', 'unconfirmed'))
+    const helperStarting = worker()
+    recordWorkerStop(
+      db,
+      helperStarting,
+      stopped(helperStarting, 'closed_agent_terminal', 'starting')
+    )
+    const crashed = worker()
+    stopped(crashed, 'closed_agent_terminal')
+    let crashedWhileHeld: string | undefined
+    await holdWorkerDockStopping(db, crashed, async () => {
+      crashedWhileHeld = states().get(crashed)
+    })
+    expect(crashedWhileHeld).toBe('unexpected')
+    expect(states()).toEqual(
+      new Map([
+        [unproven, 'unexpected'],
+        [helperLeft, 'unexpected'],
+        [helperStarting, 'unexpected'],
+        [crashed, 'unexpected']
+      ])
+    )
   })
 
   it('rolls projection changes back with lifecycle writes, and keeps status age stable on stage updates', () => {

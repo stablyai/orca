@@ -3,6 +3,9 @@
 
 const ATTR = 'data-keyboard-nav'
 
+/** A field's reason it blocks Create, under it in red: the name's and the identity's alike. */
+export const FIELD_ERROR = 'mt-1 text-xs text-destructive'
+
 /** Spread onto the DialogContent that holds the fields. */
 export const keyboardNavMarkerHandlers = {
   onKeyDown: (event: React.KeyboardEvent<HTMLElement>): void => {

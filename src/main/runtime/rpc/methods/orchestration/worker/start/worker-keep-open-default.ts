@@ -36,7 +36,7 @@ export function coordinatorKeepOpenByDefault(
 }
 
 // Walks the recorded creators up to the root coordinator, whose session is the Run's when unrecorded.
-function startedForBot(
+export function startedForBot(
   db: OrchestrationDb,
   dispatchId: string,
   isBotChat: (sessionId: string) => boolean

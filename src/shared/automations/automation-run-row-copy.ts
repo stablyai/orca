@@ -62,6 +62,7 @@ export const AUTOMATION_RUN_COPY = {
   afterThirtyDays: 'After 30 days',
   waitsFor: 'Waits for',
   thenLine: 'Then',
+  thenAt: 'Runs once at {{time}}',
   thenOnce: 'Runs once, when it happens',
   thenOnceBy: 'Runs once; at {{time}} if nothing came',
   cancel: 'Cancel',
