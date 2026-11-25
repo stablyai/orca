@@ -1,5 +1,9 @@
+import type { ProviderRelayAttachResult } from '../../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayItemContinuation } from '../../provider-relay/relayed-provider-continuation'
+import { jsonRpcAnswerId } from '../../provider-relay/relayed-json-rpc-lines'
 import { ACP_MESSAGE_CHUNKS, ACP_MESSAGE_ENDS, acpSessionUpdateFields } from './acp-relay-ack-floor'
+
+const PROMPT = 'session/prompt'
 
 /** More messages than this in one cut replay can't be real; later ones read as started. */
 const MAX_SEEN_MESSAGES = 1_024
@@ -63,6 +67,20 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     } catch {
       return line
     }
+  }
+
+  /** The earlier app's prompts whose turn starts before this replay: a cap release may have left
+   *  the cursor inside one of their messages, so the continuation reads until each is answered. */
+  openAt(result: ProviderRelayAttachResult): string[] | null {
+    const cut = (result.outstanding ?? []).filter(
+      (request) => request.method === PROMPT && !request.replayedWhole
+    )
+    return cut.length > 0 ? cut.map((request) => JSON.stringify(request.id)) : null
+  }
+
+  settles(line: string): string | null {
+    const id = jsonRpcAnswerId(line)
+    return id === null ? null : JSON.stringify(id)
   }
 
   /** The moved chunk itself opens the continuation for the floor. */
