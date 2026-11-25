@@ -238,8 +238,12 @@ export async function moveAgentMcpServer<T>(
   add: AddImportedMcpServer<T>
 ): Promise<T> {
   return oneImportAtATime(async () => {
-    const { found, removing, scope } = await movableRow(host, key, true)
-    const added = await add(found.server, scope, removing.length === 0)
+    const { found, removing: listed, scope } = await movableRow(host, key, true)
+    const added = await add(found.server, scope, listed.length === 0)
+    // Reach can shrink while the add runs (consent withdrawn, a launch learned the agent can't
+    // take the servers): an agent that lost it keeps its copy. One that gained it wasn't confirmed.
+    const reaches = await host.listReaches()
+    const removing = listed.filter((source) => reaches(source.agent))
     const configName = found.sources[0]!.keyPath.at(-1)!
     const mergeKey = agentMcpServerMergeKey(configName, found.server)
     await removeAgentMcpServerEntries(removing, mergeKey)

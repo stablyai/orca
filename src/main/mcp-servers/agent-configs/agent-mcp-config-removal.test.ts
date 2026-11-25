@@ -195,6 +195,25 @@ describe('agent MCP config discovery and move', () => {
     expect(read('orca-data/claude-profiles/edited/home/.claude.json')).toContain('github')
   })
 
+  it('keeps an agent’s copy when Orca stops reaching that agent while Move adds the server', async () => {
+    const reached = new Set(['cursor'])
+    const host: AgentMcpImportHost = {
+      context: context(),
+      userDataPath: join(home, 'orca-data'),
+      workspaceFor: async () => () => null,
+      isOrcaProject: () => false,
+      listReaches: async () => (agent) => reached.has(agent)
+    }
+    const cursor = read('.cursor/mcp.json')
+    const row = (await listAgentMcpServers(host)).find((found) => found.name === 'cur')!
+    expect(row.removesFrom).toEqual(['cursor'])
+
+    // The user withdraws Orca from Cursor's file while the add is saving.
+    await moveAgentMcpServer(host, row.key, async () => reached.delete('cursor'))
+
+    expect(read('.cursor/mcp.json')).toBe(cursor)
+  })
+
   it('reads Grok’s file-wide disable list and leaves servers with tool limits in Grok', () => {
     const grok = {
       agent: 'grok' as const,
