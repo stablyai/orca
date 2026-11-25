@@ -15,8 +15,6 @@ import {
   AcpConnectionClosedError
 } from '../transport/acp-errors'
 import { acpPromptRejection } from './acp-prompt-failure'
-import { acpPromptTurnId } from '../timeline/acp-prompt-turns'
-import { spellProviderTimelineKey } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
 
 export class AcpStructuredTurns {
   private active: Send | null = null
@@ -32,22 +30,24 @@ export class AcpStructuredTurns {
   private withdrawals = 0
 
   constructor(private readonly deps: AcpStructuredTurnsDeps) {
+    const joinableTurn = () =>
+      this.active && this.acceptsRequests
+        ? deps.lane.promptTurnIdentity(this.active.clientMessageId)
+        : null
     this.steers = new AcpPendingSteers(deps, {
       running: () => this.running,
-      joinableTurn: () => {
-        if (!this.active || !this.acceptsRequests || deps.steeringSessionId === undefined) {
-          return null
-        }
-        const turnId = spellProviderTimelineKey(deps.steeringSessionId, {
-          source: 'provider',
-          value: acpPromptTurnId(this.active.clientMessageId)
-        })
-        return deps.lane.openTurnId === turnId ? deps.lane.openTurnIdentity : null
-      },
+      joinableTurn,
       start: (send) => this.start(send),
       cancel: () => this.cancelForSteer(),
       onSettled: () => this.notifyIdle()
     })
+    if (deps.steeringSessionId !== undefined) {
+      deps.lane.onTurnOpened(() => {
+        if (this.steers.held && joinableTurn()) {
+          this.steers.advance()
+        }
+      })
+    }
   }
 
   capturePendingSend(clientMessageId: string): () => boolean {
