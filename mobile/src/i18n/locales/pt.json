@@ -2314,7 +2314,6 @@
       "openOnGitHub": "Abrir no GitHub",
       "failedAfter": "Falha após {{duration}}",
       "failed": "Falhou",
-      "rerun": "Executar novamente",
       "copyErrorFailed": "Não foi possível copiar o erro.",
       "durationMinutes": "{{minutes}}min {{seconds}}s",
       "failing": "Com falha",
@@ -5140,7 +5139,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

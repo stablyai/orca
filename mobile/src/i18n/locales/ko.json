@@ -2101,7 +2101,6 @@
       "failedAfter": "{{duration}} 후 실패",
       "failed": "실패",
       "checkActions": "{{name}} 작업 더 보기",
-      "rerun": "재실행",
       "copyErrorFailed": "오류를 복사하지 못했습니다.",
       "durationSeconds": "{{seconds}}초",
       "durationMinutes": "{{minutes}}분 {{seconds}}초",
@@ -4635,7 +4634,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",

@@ -2054,7 +2054,6 @@
       "failedAfter": "Failed after {{duration}}",
       "failed": "Failed",
       "checkActions": "More for {{name}}",
-      "rerun": "Rerun",
       "copyErrorFailed": "Could not copy the error.",
       "durationSeconds": "{{seconds}}s",
       "durationMinutes": "{{minutes}}m {{seconds}}s",
@@ -2093,7 +2092,8 @@
       "fixWith": "Fix with {{agent}}",
       "live": "Live",
       "askToFix": "Ask {{agent}} to fix",
-      "askAiToFix": "Ask AI to fix"
+      "askAiToFix": "Ask AI to fix",
+      "rerunFailed": "Rerun failed checks"
     },
     "reviewersSheet": {
       "approvals_one": "{{count}} approval",

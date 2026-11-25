@@ -2790,7 +2790,6 @@
       "failedAfter": "{{duration}} 后失败",
       "failed": "失败",
       "checkActions": "{{name}} 的更多操作",
-      "rerun": "重新运行",
       "copyErrorFailed": "无法复制错误信息",
       "durationSeconds": "{{seconds}} 秒",
       "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
