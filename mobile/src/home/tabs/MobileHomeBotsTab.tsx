@@ -51,7 +51,7 @@ export function MobileHomeBotsTab(props: {
         <MobileHomeTabEmpty
           icon={Bot}
           title={t('home.bots.noBotsTitle', 'No bots yet')}
-          message={t('home.bots.pairDesktop', 'Pair a desktop to see its bots here.')}
+          message={t('home.bots.pairComputer', 'Pair a computer to see its bots here.')}
         />
       </>
     )

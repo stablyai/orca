@@ -1049,10 +1049,9 @@
       "openHost": "Abrir {{title}}",
       "pairingInvalid": "Pareamento inválido",
       "pairingTemporarilyUnavailable": "Pareamento temporariamente indisponível",
-      "repairHint": "Toque para parear novamente com seu desktop",
-      "sameNetworkOnlyHint": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente",
       "unlockHint": "Desbloqueie seu celular e depois toque para tentar novamente",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} em atividade",
+      "tapToPairAgain": "Toque para parear novamente com seu desktop"
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "Ver diagnósticos de rede"
@@ -1114,15 +1113,14 @@
       "agent": "Agente",
       "connectTarget": "Conectar destino",
       "connectTargetFirst": "Conecte o destino primeiro",
-      "createWorktree": "Criar worktree",
       "noProjectsFound": "Nenhum projeto encontrado",
       "note": "Nota",
       "notePlaceholder": "Escreva uma nota",
       "workspaceName": "Nome do espaço de trabalho",
       "options": "Opções",
-      "createWorkspace": "Criar espaço de trabalho",
       "startFrom": "Iniciar a partir de",
-      "loadingProjects": "Carregando projetos…"
+      "loadingProjects": "Carregando projetos…",
+      "newWorkspace": "Novo espaço de trabalho"
     },
     "newWorktreeModal": {
       "remoteRepository": "Repositório remoto"
@@ -1740,12 +1738,12 @@
       "lastStatus": "Última: {{status}}",
       "newAutomation": "Nova automação",
       "noAutomations": "Ainda não há automações",
-      "pairDesktop": "Pareie um desktop para ver e executar automações.",
       "paused": "Pausada",
       "scheduled": "Agendadas",
       "showFor": "Mostrar automações de",
       "toggleFailed": "Não foi possível atualizar {{name}}",
-      "updateDesktop": "Atualize o Orca em {{desktop}} para usar automações."
+      "updateDesktop": "Atualize o Orca em {{desktop}} para usar automações.",
+      "pairComputer": "Pareie um desktop para ver e executar automações."
     },
     "emptyState": {
       "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
@@ -1759,17 +1757,18 @@
       "scanCodeBelowDescription": "Toque em Emparelhar computador abaixo e aponte a câmera para o código QR na tela."
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tarefas em"
+      "openTasksOn": "Abrir tarefas em"
     },
     "listHeader": {
-      "desktopsHeading": "Desktops"
+      "computersHeading": "Desktops"
     },
     "screen": {
       "pairingCheckFailed": "Não foi possível verificar o pareamento",
-      "removeHostFailed": "Não foi possível remover o host",
-      "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
-      "removeHostTitle": "Remover host",
-      "tryAgain": "Tente novamente."
+      "tryAgain": "Tente novamente.",
+      "removeComputerFailed": "Não foi possível remover o host",
+      "removeComputerTitle": "Remover host",
+      "removeComputerMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
+      "sameNetworkOnly": "Só conecta na mesma rede Wi-Fi ou pelo Tailscale. Para se conectar de qualquer lugar, entre na sua conta no desktop e pareie novamente"
     },
     "stats": {
       "agentTime": "Tempo de agente",
@@ -1782,32 +1781,30 @@
     },
     "tabs": {
       "automations": "Automações",
-      "chooseDesktop": "{{desktop}}, escolher outro desktop",
       "feed": "Atividade",
-      "usage": "Uso"
+      "usage": "Uso",
+      "chooseComputer": "{{desktop}}, escolher outro desktop"
     },
     "usage": {
       "active": "Ativa",
-      "addAccounts": "Adicione contas em Configurações → Contas no desktop.",
       "connectDesktop": "Conecte {{desktop}} para ver o uso das contas de agentes.",
       "emptyTitle": "Ainda não há dados de uso",
-      "openAccountsHint": "Abre as contas deste desktop",
-      "pairDesktop": "Pareie um desktop para ver o uso das contas de agentes.",
       "refresh": "Atualizar uso",
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Atualizado há {{time}}",
-      "updatedJustNow": "Atualizado agora mesmo"
+      "updatedJustNow": "Atualizado agora mesmo",
+      "pairComputer": "Pareie um desktop para ver o uso das contas de agentes.",
+      "addAccountsOnComputer": "Adicione contas em Configurações → Contas no desktop.",
+      "openComputerAccountsHint": "Abre as contas deste desktop"
     },
     "bottomBar": {
-      "connectFirst": "Conecte um computador para iniciar um novo trabalho.",
       "newWorkspace": "Novo espaço de trabalho"
     },
-    "desktops": {
-      "pairDesktop": "Emparelhe um computador"
-    },
     "sections": {
-      "tasks": "Tarefas",
-      "tasksSubtitle": "Explore suas issues e revisões"
+      "tasks": "Tarefas"
+    },
+    "computers": {
+      "pairComputer": "Emparelhe um computador"
     }
   },
   "hooks": {
@@ -1830,24 +1827,22 @@
       "address": "Endereço",
       "connectionPreview": "Conecta a {{endpoint}}",
       "goBack": "Voltar",
-      "hostNamePlaceholder": "Nome do host",
-      "hostRemoved": "Este host foi removido deste celular.",
-      "loadFailed": "Falha ao carregar o host.",
-      "missingHost": "Host não informado.",
       "name": "Nome",
-      "saveFailed": "Falha ao salvar o host.",
-      "saveHost": "Salvar host",
-      "title": "Editar host",
-      "removeHost": "Remover host"
+      "editComputer": "Editar host",
+      "removeComputer": "Remover host",
+      "computerRemoved": "Este host foi removido deste celular.",
+      "couldNotLoad": "Falha ao carregar o host.",
+      "couldNotSave": "Falha ao salvar o host.",
+      "save": "Salvar"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Conectar",
       "disconnect": "Desconectar",
-      "editHost": "Editar host",
       "networkDiagnostics": "Diagnóstico de rede",
-      "reconnect": "Reconectar"
+      "reconnect": "Reconectar",
+      "editComputer": "Editar host"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Criando espaço de trabalho…"
@@ -1984,19 +1979,19 @@
       "accounts": "Contas",
       "agentSessionHistory": "Histórico de Sessões de Agente",
       "changes": "Alterações",
-      "editHost": "Editar host",
       "host": "Host",
       "pullRequest": "Pull Request",
       "sourceControl": "Controle de Código-Fonte",
       "tasks": "Tarefas",
       "terminal": "Terminal",
       "workspace": "Espaço de Trabalho",
-      "automations": "Automações"
+      "automations": "Automações",
+      "editComputer": "Editar host"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Criar Espaço de Trabalho em"
+      "newWorkspaceOn": "Criar Espaço de Trabalho em"
     },
     "loadingDrawer": {
       "downloadProgress": "Baixando… {{progress}}",
@@ -5140,7 +5135,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Emparelhar um computador",
       "pairRequired": "Para abrir este link, emparelhe este telefone com um computador e abra o link novamente.",

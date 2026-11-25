@@ -1442,10 +1442,9 @@
       "openHost": "打开 {{title}}",
       "pairingInvalid": "配对无效",
       "pairingTemporarilyUnavailable": "配对暂时不可用",
-      "repairHint": "轻点以重新与桌面配对",
-      "sameNetworkOnlyHint": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对",
       "unlockHint": "解锁手机后，轻点重试",
-      "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃"
+      "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 个活跃",
+      "tapToPairAgain": "轻点以重新与桌面配对"
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "查看网络诊断"
@@ -1507,15 +1506,14 @@
       "agent": "智能体",
       "connectTarget": "连接目标主机",
       "options": "选项",
-      "createWorkspace": "创建工作区",
       "startFrom": "创建起点",
       "loadingProjects": "正在加载项目…",
       "connectTargetFirst": "请先连接目标主机",
-      "createWorktree": "创建工作树",
       "noProjectsFound": "未找到项目",
       "note": "备注",
       "notePlaceholder": "写备注",
-      "workspaceName": "工作区名称"
+      "workspaceName": "工作区名称",
+      "newWorkspace": "新建工作区"
     },
     "newWorktreeModal": {
       "remoteRepository": "远程仓库"
@@ -2212,12 +2210,12 @@
       "lastStatus": "上次：{{status}}",
       "newAutomation": "新建自动化",
       "noAutomations": "暂无自动化",
-      "pairDesktop": "请先配对桌面，才能查看和运行自动化。",
       "paused": "已暂停",
       "scheduled": "已计划",
       "showFor": "选择要显示自动化的桌面",
       "toggleFailed": "无法更新 {{name}}",
-      "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化。"
+      "updateDesktop": "请更新 {{desktop}} 上的 Orca，以使用自动化。",
+      "pairComputer": "请先配对桌面，才能查看和运行自动化。"
     },
     "emptyState": {
       "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密",
@@ -2231,28 +2229,24 @@
       "title": "连接桌面"
     },
     "listFooter": {
-      "hostPickerTitle": "选择打开任务的主机"
+      "openTasksOn": "选择打开任务的主机"
     },
     "listHeader": {
-      "desktopsHeading": "台式机"
+      "computersHeading": "台式机"
     },
     "screen": {
       "pairingCheckFailed": "无法检查配对状态",
-      "removeHostFailed": "无法移除主机",
-      "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对",
-      "removeHostTitle": "移除主机",
-      "tryAgain": "请重试"
+      "tryAgain": "请重试",
+      "removeComputerFailed": "无法移除主机",
+      "removeComputerTitle": "移除主机",
+      "removeComputerMessage": "要移除“{{name}}”吗？之后可重新配对",
+      "sameNetworkOnly": "仅能在同一 Wi-Fi 或 Tailscale 下连接。如需随时随地连接，请在桌面端登录并重新配对"
     },
     "bottomBar": {
-      "connectFirst": "连接桌面后即可开始新工作",
       "newWorkspace": "新建工作区"
     },
-    "desktops": {
-      "pairDesktop": "配对桌面"
-    },
     "sections": {
-      "tasks": "任务",
-      "tasksSubtitle": "浏览你的议题和评审"
+      "tasks": "任务"
     },
     "stats": {
       "agentTime": "智能体时间",
@@ -2265,23 +2259,23 @@
     },
     "tabs": {
       "automations": "自动化",
-      "chooseDesktop": "{{desktop}}，选择其他桌面",
       "feed": "动态",
       "usage": "使用情况",
       "agents": "智能体",
-      "bots": "Bots"
+      "bots": "Bots",
+      "chooseComputer": "{{desktop}}，选择其他桌面"
     },
     "usage": {
       "active": "使用中",
-      "addAccounts": "请在桌面的“设置 → 账户”中添加账户。",
       "connectDesktop": "请连接 {{desktop}}，才能查看智能体账户使用情况。",
       "emptyTitle": "暂无使用情况",
-      "openAccountsHint": "打开此桌面的账户",
-      "pairDesktop": "请先配对桌面，才能查看智能体账户使用情况。",
       "refresh": "刷新使用情况",
       "showUsageFor": "选择要显示使用情况的桌面",
       "updatedAgo": "{{time}}前更新",
-      "updatedJustNow": "刚刚更新"
+      "updatedJustNow": "刚刚更新",
+      "pairComputer": "请先配对桌面，才能查看智能体账户使用情况。",
+      "addAccountsOnComputer": "请在桌面的“设置 → 账户”中添加账户。",
+      "openComputerAccountsHint": "打开此桌面的账户"
     },
     "activeAgents": {
       "heading": "活跃",
@@ -2289,7 +2283,6 @@
     },
     "bots": {
       "noBotsTitle": "还没有 bots",
-      "pairDesktop": "配对一台桌面端，即可在这里查看它的 bots",
       "seeAll": "查看全部 bots",
       "updateOneBody": "它的 Orca 版本还无法在手机上显示 bots",
       "updateManyTitle": "更新你各台电脑上的 Orca",
@@ -2297,7 +2290,11 @@
       "offOneBody": "要开启 bots，请在 {{host}} 上打开 Orca，然后前往“设置 › Bots › 启用 bots”",
       "offServerBody": "要开启 bots，请在 {{desktop}} 上打开 Orca，然后前往“设置 › Bots › 在 {{host}} 上启用 bots”",
       "offManyTitle": "你各台电脑上的 Bots 都已关闭",
-      "offManyBody": "要开启 bots，请在每台电脑上打开 Orca，然后前往“设置 › Bots › 启用 bots”"
+      "offManyBody": "要开启 bots，请在每台电脑上打开 Orca，然后前往“设置 › Bots › 启用 bots”",
+      "pairComputer": "配对一台桌面端，即可在这里查看它的 bots"
+    },
+    "computers": {
+      "pairComputer": "配对桌面"
     }
   },
   "hooks": {
@@ -2324,24 +2321,22 @@
       "updateStepsServer": "请更新服务器上的 Orca，然后重新启动",
       "orcaVersion": "Orca 版本",
       "goBack": "返回",
-      "hostNamePlaceholder": "主机名",
-      "hostRemoved": "此主机已从这部手机上移除",
-      "loadFailed": "加载主机失败",
-      "missingHost": "缺少主机信息",
       "name": "名称",
-      "saveFailed": "保存主机失败",
-      "saveHost": "保存主机",
-      "title": "编辑主机",
-      "removeHost": "移除主机"
+      "editComputer": "编辑主机",
+      "removeComputer": "移除主机",
+      "computerRemoved": "此主机已从这部手机上移除",
+      "couldNotLoad": "加载主机失败",
+      "couldNotSave": "保存主机失败",
+      "save": "保存"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "连接",
       "disconnect": "断开连接",
-      "editHost": "编辑主机",
       "networkDiagnostics": "网络诊断",
-      "reconnect": "重新连接"
+      "reconnect": "重新连接",
+      "editComputer": "编辑主机"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在创建工作区…"
@@ -2495,19 +2490,19 @@
       "accounts": "账户",
       "agentSessionHistory": "智能体会话历史",
       "changes": "更改",
-      "editHost": "编辑主机",
       "host": "主机",
       "pullRequest": "PR",
       "sourceControl": "源代码控制",
       "tasks": "任务",
       "terminal": "终端",
       "workspace": "工作区",
-      "automations": "自动化"
+      "automations": "自动化",
+      "editComputer": "编辑主机"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "选择创建工作区的主机"
+      "newWorkspaceOn": "选择创建工作区的主机"
     },
     "loadingDrawer": {
       "downloadProgress": "正在下载… {{progress}}",

@@ -982,10 +982,9 @@
       "openHost": "Abrir {{title}}",
       "pairingInvalid": "Emparejamiento no válido",
       "pairingTemporarilyUnavailable": "Emparejamiento no disponible temporalmente",
-      "repairHint": "Toca para volver a emparejar tu escritorio.",
-      "sameNetworkOnlyHint": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar",
       "unlockHint": "Desbloquea tu teléfono y toca para reintentar.",
-      "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}"
+      "worktreeAccessibilitySummary": "{{summary}}, activos: {{activeCount}}",
+      "tapToPairAgain": "Toca para volver a emparejar tu escritorio."
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "Ver diagnósticos de red"
@@ -1047,7 +1046,6 @@
       "agent": "Agente",
       "connectTarget": "Conectar destino",
       "connectTargetFirst": "Conecta primero el destino",
-      "createWorktree": "Crear worktree",
       "noProjectsFound": "No se encontraron proyectos",
       "note": "Nota",
       "notePlaceholder": "Escribe una nota",
@@ -1618,12 +1616,12 @@
       "lastStatus": "Última: {{status}}",
       "newAutomation": "Nueva automatización",
       "noAutomations": "Aún no hay automatizaciones",
-      "pairDesktop": "Empareja un escritorio para ver y ejecutar automatizaciones.",
       "paused": "En pausa",
       "scheduled": "Programadas",
       "showFor": "Mostrar automatizaciones de",
       "toggleFailed": "No se pudo actualizar {{name}}",
-      "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones."
+      "updateDesktop": "Actualiza Orca en {{desktop}} para usar las automatizaciones.",
+      "pairComputer": "Empareja un escritorio para ver y ejecutar automatizaciones."
     },
     "emptyState": {
       "connectedDescription": "Tu escritorio aparecerá aquí. Todo está cifrado de extremo a extremo.",
@@ -1635,17 +1633,18 @@
       "title": "Conecta tu escritorio"
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tareas en"
+      "openTasksOn": "Abrir tareas en"
     },
     "listHeader": {
-      "desktopsHeading": "Escritorios"
+      "computersHeading": "Escritorios"
     },
     "screen": {
       "pairingCheckFailed": "No se pudo comprobar el emparejamiento",
-      "removeHostFailed": "No se pudo eliminar el host",
-      "removeHostMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
-      "removeHostTitle": "Eliminar host",
-      "tryAgain": "Por favor, vuelve a intentarlo."
+      "tryAgain": "Por favor, vuelve a intentarlo.",
+      "removeComputerFailed": "No se pudo eliminar el host",
+      "removeComputerTitle": "Eliminar host",
+      "removeComputerMessage": "¿Eliminar \"{{name}}\"? Puedes volver a emparejarlo más tarde.",
+      "sameNetworkOnly": "Solo se conecta en la misma red Wi-Fi o por Tailscale. Para conectarte desde cualquier lugar, inicia sesión en tu escritorio y vuelve a emparejar"
     },
     "stats": {
       "agentTime": "Tiempo de agentes",
@@ -1658,21 +1657,21 @@
     },
     "tabs": {
       "automations": "Automatizaciones",
-      "chooseDesktop": "{{desktop}}, elegir otro escritorio",
       "feed": "Actividad",
-      "usage": "Uso"
+      "usage": "Uso",
+      "chooseComputer": "{{desktop}}, elegir otro escritorio"
     },
     "usage": {
       "active": "Activa",
-      "addAccounts": "Añade cuentas desde Ajustes → Cuentas en el escritorio.",
       "connectDesktop": "Conecta {{desktop}} para ver el uso de las cuentas de agentes.",
       "emptyTitle": "Aún no hay datos de uso",
-      "openAccountsHint": "Abre las cuentas de este escritorio",
-      "pairDesktop": "Empareja un escritorio para ver el uso de las cuentas de agentes.",
       "refresh": "Actualizar uso",
       "showUsageFor": "Mostrar uso de",
       "updatedAgo": "Actualizado hace {{time}}",
-      "updatedJustNow": "Actualizado ahora mismo"
+      "updatedJustNow": "Actualizado ahora mismo",
+      "pairComputer": "Empareja un escritorio para ver el uso de las cuentas de agentes.",
+      "addAccountsOnComputer": "Añade cuentas desde Ajustes → Cuentas en el escritorio.",
+      "openComputerAccountsHint": "Abre las cuentas de este escritorio"
     }
   },
   "hooks": {
@@ -1695,23 +1694,21 @@
       "address": "Dirección",
       "connectionPreview": "Se conecta a {{endpoint}}",
       "goBack": "Volver",
-      "hostNamePlaceholder": "Nombre del host",
-      "hostRemoved": "Este host se eliminó de este teléfono.",
-      "loadFailed": "No se pudo cargar el host.",
-      "missingHost": "Falta el host.",
       "name": "Nombre",
-      "saveFailed": "No se pudo guardar el host.",
-      "saveHost": "Guardar host",
-      "title": "Editar host"
+      "editComputer": "Editar host",
+      "computerRemoved": "Este host se eliminó de este teléfono.",
+      "couldNotLoad": "No se pudo cargar el host.",
+      "couldNotSave": "No se pudo guardar el host.",
+      "save": "Guardar"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Conectar",
       "disconnect": "Desconectar",
-      "editHost": "Editar host",
       "networkDiagnostics": "Diagnóstico de red",
-      "reconnect": "Reconectar"
+      "reconnect": "Reconectar",
+      "editComputer": "Editar host"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Creando espacio de trabajo…"
@@ -1835,19 +1832,19 @@
       "accounts": "Cuentas",
       "agentSessionHistory": "Historial de sesiones de agentes",
       "changes": "Cambios",
-      "editHost": "Editar host",
       "host": "Host",
       "pullRequest": "Solicitud de extracción",
       "sourceControl": "Control de código fuente",
       "tasks": "Tareas",
       "terminal": "Terminal",
       "workspace": "Espacio de trabajo",
-      "automations": "Automatizaciones"
+      "automations": "Automatizaciones",
+      "editComputer": "Editar host"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Crear espacio de trabajo en"
+      "newWorkspaceOn": "Crear espacio de trabajo en"
     },
     "loadingDrawer": {
       "downloadProgress": "Descargando… {{progress}}",
@@ -4566,7 +4563,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "Vincular un ordenador",
       "pairRequired": "Para abrir este enlace, vincula este teléfono con un ordenador y vuelve a abrir el enlace.",

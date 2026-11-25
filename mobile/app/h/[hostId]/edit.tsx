@@ -73,7 +73,7 @@ export default function EditHostScreen() {
   const load = useCallback(
     async (revision: number) => {
       if (!hostId) {
-        setLoadError(translate('host.edit.missingHost', 'Missing host.'))
+        setLoadError(translate('host.edit.computerNotFound', 'This computer isn’t on this phone.'))
         return
       }
       try {
@@ -83,7 +83,7 @@ export default function EditHostScreen() {
         }
         const found = hosts.find((h) => h.id === hostId) ?? null
         if (!found) {
-          setLoadError(translate('host.edit.hostRemoved', 'This host was removed from this phone.'))
+          setLoadError(translate('host.edit.computerRemoved', 'This computer was removed.'))
           setHost(null)
           return
         }
@@ -99,7 +99,7 @@ export default function EditHostScreen() {
         setLoadError(
           err instanceof Error
             ? err.message
-            : translate('host.edit.loadFailed', 'Failed to load host.')
+            : translate('host.edit.couldNotLoad', 'Couldn’t load this computer.')
         )
         setHost(null)
       }
@@ -178,7 +178,9 @@ export default function EditHostScreen() {
     } catch (err) {
       if (revision === routeRevision.current) {
         setSaveError(
-          err instanceof Error ? err.message : t('host.edit.saveFailed', 'Failed to save host.')
+          err instanceof Error
+            ? err.message
+            : t('host.edit.couldNotSave', 'Couldn’t save this computer.')
         )
         savingRef.current = false
         setSaving(false)
@@ -215,7 +217,7 @@ export default function EditHostScreen() {
     } catch {
       setConfirmRemove(true)
       Alert.alert(
-        t('home.screen.removeHostFailed', 'Could not remove host'),
+        t('home.screen.removeComputerFailed', 'Couldn’t remove computer'),
         t('home.screen.tryAgain', 'Please try again.')
       )
       return
@@ -234,13 +236,13 @@ export default function EditHostScreen() {
             accessibilityLabel={t('common.back', 'Back')}
           />
         }
-        title={t('host.edit.title', 'Edit host')}
+        title={t('host.edit.editComputer', 'Edit computer')}
         trailing={
           <NavBarButton
             icon={Check}
             onPress={() => void handleSave()}
             disabled={!canSave}
-            accessibilityLabel={t('host.edit.saveHost', 'Save host')}
+            accessibilityLabel={t('host.edit.save', 'Save')}
           />
         }
       />
@@ -281,9 +283,7 @@ export default function EditHostScreen() {
                   setSaveError(null)
                 }}
                 // An empty name falls back to the one the host reports, which the placeholder shows.
-                placeholder={
-                  host.lastKnownMachineName ?? t('host.edit.hostNamePlaceholder', 'Host name')
-                }
+                placeholder={host.lastKnownMachineName ?? t('host.edit.name', 'Name')}
                 autoCapitalize="words"
                 autoCorrect={false}
                 returnKeyType="next"
@@ -315,7 +315,7 @@ export default function EditHostScreen() {
             <SettingsSection>
               <ListRow
                 key="remove"
-                title={t('host.edit.removeHost', 'Remove host')}
+                title={t('host.edit.removeComputer', 'Remove computer')}
                 destructive
                 disabled={saving}
                 onPress={() => setConfirmRemove(true)}
@@ -326,10 +326,14 @@ export default function EditHostScreen() {
       )}
       <ConfirmModal
         visible={confirmRemove}
-        title={t('home.screen.removeHostTitle', 'Remove Host')}
-        message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
-          name: hostTitle
-        })}
+        title={t('home.screen.removeComputerTitle', 'Remove computer')}
+        message={t(
+          'home.screen.removeComputerMessage',
+          'Remove “{{name}}”? You can pair it again later.',
+          {
+            name: hostTitle
+          }
+        )}
         confirmLabel={t('common.remove', 'Remove')}
         destructive
         onConfirm={() => void handleRemove()}

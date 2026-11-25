@@ -77,8 +77,8 @@ export function MobileHomeAutomationsTab(props: {
           <AutomationsEmpty
             title={t('home.automationsTab.emptyTitle', 'Schedule agent work')}
             message={t(
-              'home.automationsTab.pairDesktop',
-              'Pair a desktop to view and run automations.'
+              'home.automationsTab.pairComputer',
+              'Pair a computer to view and run automations.'
             )}
           />
         )}

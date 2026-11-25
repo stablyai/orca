@@ -1543,10 +1543,9 @@
       "openHost": "Aç: {{title}}",
       "pairingInvalid": "Eşleştirme geçersiz",
       "pairingTemporarilyUnavailable": "Eşleştirme geçici olarak kullanılamıyor",
-      "repairHint": "Masaüstünüzle yeniden eşleştirmek için dokunun",
-      "sameNetworkOnlyHint": "Yalnızca aynı Wi-Fi ağında veya Tailscale üzerinden bağlanır. Her yerden bağlanmak için masaüstünde oturum açıp yeniden eşleştirin",
       "unlockHint": "Telefonunuzun kilidini açın, ardından yeniden denemek için dokunun",
-      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} etkin"
+      "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} etkin",
+      "tapToPairAgain": "Masaüstünüzle yeniden eşleştirmek için dokunun"
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "Ağ tanılamasını görüntüle"
@@ -1608,15 +1607,14 @@
       "agent": "Ajan",
       "connectTarget": "Hedefe bağlan",
       "connectTargetFirst": "Önce hedefe bağlanın",
-      "createWorktree": "Worktree oluştur",
       "noProjectsFound": "Proje bulunamadı",
       "note": "Not",
       "notePlaceholder": "Bir not yazın",
       "workspaceName": "Çalışma alanı adı",
       "options": "Seçenekler",
-      "createWorkspace": "Çalışma alanı oluştur",
       "startFrom": "Başlangıç noktası",
-      "loadingProjects": "Projeler yükleniyor…"
+      "loadingProjects": "Projeler yükleniyor…",
+      "newWorkspace": "Yeni çalışma alanı"
     },
     "newWorktreeModal": {
       "remoteRepository": "Uzak repository"
@@ -2331,12 +2329,12 @@
       "lastStatus": "Son: {{status}}",
       "newAutomation": "Yeni otomasyon",
       "noAutomations": "Henüz otomasyon yok",
-      "pairDesktop": "Otomasyonları görüntülemek ve çalıştırmak için bir masaüstü bilgisayarla eşleştirin.",
       "paused": "Duraklatıldı",
       "scheduled": "Zamanlanmış",
       "showFor": "Otomasyonları gösterilecek masaüstü",
       "toggleFailed": "{{name}} güncellenemedi",
-      "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin."
+      "updateDesktop": "Otomasyonları kullanmak için {{desktop}} üzerindeki Orca'yı güncelleyin.",
+      "pairComputer": "Otomasyonları görüntülemek ve çalıştırmak için bir masaüstü bilgisayarla eşleştirin."
     },
     "emptyState": {
       "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
@@ -2350,17 +2348,18 @@
       "scanCodeBelowDescription": "Aşağıdaki Bilgisayarı eşleştir düğmesine dokunun, ardından kameranızı ekrandaki QR koduna tutun."
     },
     "listFooter": {
-      "hostPickerTitle": "Görevlerin Açılacağı Sunucu"
+      "openTasksOn": "Görevlerin Açılacağı Sunucu"
     },
     "listHeader": {
-      "desktopsHeading": "Masaüstleri"
+      "computersHeading": "Masaüstleri"
     },
     "screen": {
       "pairingCheckFailed": "Eşleştirme kontrol edilemedi",
-      "removeHostFailed": "Sunucu kaldırılamadı",
-      "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
-      "removeHostTitle": "Sunucuyu Kaldır",
-      "tryAgain": "Lütfen tekrar deneyin."
+      "tryAgain": "Lütfen tekrar deneyin.",
+      "removeComputerFailed": "Sunucu kaldırılamadı",
+      "removeComputerTitle": "Sunucuyu Kaldır",
+      "removeComputerMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
+      "sameNetworkOnly": "Yalnızca aynı Wi-Fi ağında veya Tailscale üzerinden bağlanır. Her yerden bağlanmak için masaüstünde oturum açıp yeniden eşleştirin"
     },
     "stats": {
       "agentTime": "Ajan süresi",
@@ -2373,34 +2372,29 @@
     },
     "tabs": {
       "automations": "Otomasyonlar",
-      "chooseDesktop": "{{desktop}}, başka bir masaüstü seçin",
       "feed": "Akış",
       "usage": "Kullanım",
       "agents": "Ajanlar",
-      "bots": "Botlar"
+      "bots": "Botlar",
+      "chooseComputer": "{{desktop}}, başka bir masaüstü seçin"
     },
     "usage": {
       "active": "Etkin",
-      "addAccounts": "Masaüstünde Ayarlar → Hesaplar bölümünden hesap ekleyin.",
       "connectDesktop": "Ajan hesabı kullanımını görmek için {{desktop}} ile bağlantı kurun.",
       "emptyTitle": "Henüz kullanım yok",
-      "openAccountsHint": "Bu masaüstünün hesaplarını açar",
-      "pairDesktop": "Ajan hesabı kullanımını görmek için bir masaüstü bilgisayarla eşleştirin.",
       "refresh": "Kullanımı yenile",
       "showUsageFor": "Kullanımı gösterilecek masaüstü",
       "updatedAgo": "{{time}} önce güncellendi",
-      "updatedJustNow": "Az önce güncellendi"
+      "updatedJustNow": "Az önce güncellendi",
+      "pairComputer": "Ajan hesabı kullanımını görmek için bir masaüstü bilgisayarla eşleştirin.",
+      "addAccountsOnComputer": "Masaüstünde Ayarlar → Hesaplar bölümünden hesap ekleyin.",
+      "openComputerAccountsHint": "Bu masaüstünün hesaplarını açar"
     },
     "bottomBar": {
-      "connectFirst": "Yeni bir işe başlamak için bilgisayar bağlayın.",
       "newWorkspace": "Yeni çalışma alanı"
     },
-    "desktops": {
-      "pairDesktop": "Bir bilgisayar eşleştir"
-    },
     "sections": {
-      "tasks": "Görevler",
-      "tasksSubtitle": "Kayıtlarınıza ve incelemelerinize göz atın"
+      "tasks": "Görevler"
     },
     "activeAgents": {
       "heading": "Etkin",
@@ -2408,7 +2402,6 @@
     },
     "bots": {
       "noBotsTitle": "Henüz bot yok",
-      "pairDesktop": "Botları burada görmek için bir bilgisayarı eşleştirin.",
       "seeAll": "Tüm botları gör",
       "updateOneBody": "Bu bilgisayardaki Orca sürümü botları henüz telefonunuzda gösteremiyor.",
       "updateManyTitle": "Bilgisayarlarınızdaki Orca’yı güncelleyin",
@@ -2426,7 +2419,11 @@
         "workers_other": "{{count}} alt ajan",
         "items_one": "öğe",
         "items_other": "{{count}} öğe"
-      }
+      },
+      "pairComputer": "Botları burada görmek için bir bilgisayarı eşleştirin."
+    },
+    "computers": {
+      "pairComputer": "Bir bilgisayar eşleştir"
     }
   },
   "hooks": {
@@ -2449,28 +2446,26 @@
       "address": "Adres",
       "connectionPreview": "Bağlanılacak adres: {{endpoint}}",
       "goBack": "Geri git",
-      "hostNamePlaceholder": "Sunucu adı",
-      "hostRemoved": "Bu sunucu bu telefondan kaldırıldı.",
-      "loadFailed": "Sunucu yüklenemedi.",
-      "missingHost": "Sunucu bilgisi eksik.",
       "name": "Ad",
-      "saveFailed": "Sunucu kaydedilemedi.",
-      "saveHost": "Sunucuyu kaydet",
-      "title": "Sunucuyu düzenle",
-      "removeHost": "Sunucuyu kaldır",
       "updateStepsServiceManager": "Paket yöneticisi veya hizmet yöneticisiyle güncelleyin.",
       "updateStepsSourceCheckout": "Kaynak kodun bulunduğu Git çalışma kopyasından güncelleyin.",
       "updateStepsServer": "Sunucuda Orca’yı güncelleyip yeniden başlatın.",
-      "orcaVersion": "Orca sürümü"
+      "orcaVersion": "Orca sürümü",
+      "editComputer": "Sunucuyu düzenle",
+      "removeComputer": "Sunucuyu kaldır",
+      "computerRemoved": "Bu sunucu bu telefondan kaldırıldı.",
+      "couldNotLoad": "Sunucu yüklenemedi.",
+      "couldNotSave": "Sunucu kaydedilemedi.",
+      "save": "Kaydet"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Bağlan",
       "disconnect": "Bağlantıyı kes",
-      "editHost": "Sunucuyu düzenle",
       "networkDiagnostics": "Ağ tanılama",
-      "reconnect": "Yeniden bağlan"
+      "reconnect": "Yeniden bağlan",
+      "editComputer": "Sunucuyu düzenle"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Çalışma alanı oluşturuluyor…"
@@ -2624,19 +2619,19 @@
       "accounts": "Hesaplar",
       "agentSessionHistory": "Ajan Oturum Geçmişi",
       "changes": "Değişiklikler",
-      "editHost": "Sunucuyu düzenle",
       "host": "Sunucu",
       "pullRequest": "Pull Request",
       "sourceControl": "Kaynak Kontrolü",
       "tasks": "Görevler",
       "terminal": "Terminal",
       "workspace": "Çalışma Alanı",
-      "automations": "Otomasyonlar"
+      "automations": "Otomasyonlar",
+      "editComputer": "Sunucuyu düzenle"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Çalışma Alanı İçin Sunucu"
+      "newWorkspaceOn": "Çalışma Alanı İçin Sunucu"
     },
     "loadingDrawer": {
       "downloadProgress": "İndiriliyor… {{progress}}",

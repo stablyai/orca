@@ -937,10 +937,9 @@
       "openHost": "開啟 {{title}}",
       "pairingInvalid": "配對已失效",
       "pairingTemporarilyUnavailable": "配對暫時無法使用",
-      "repairHint": "點一下以重新與電腦配對",
-      "sameNetworkOnlyHint": "僅能在同一 Wi-Fi 或 Tailscale 下連線。若要隨時隨地連線，請在電腦上登入並重新配對",
       "unlockHint": "解鎖手機後，點一下以重試",
-      "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 個使用中"
+      "worktreeAccessibilitySummary": "{{summary}}，{{activeCount}} 個使用中",
+      "tapToPairAgain": "點一下以重新與電腦配對"
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "檢視網路診斷"
@@ -1002,7 +1001,6 @@
       "agent": "代理程式",
       "connectTarget": "連線至目標",
       "connectTargetFirst": "請先連線至目標",
-      "createWorktree": "建立工作樹",
       "noProjectsFound": "找不到專案",
       "note": "備註",
       "notePlaceholder": "寫備註",
@@ -1570,12 +1568,12 @@
       "lastStatus": "上次：{{status}}",
       "newAutomation": "新增自動化",
       "noAutomations": "尚無自動化",
-      "pairDesktop": "請先配對電腦，才能檢視及執行自動化。",
       "paused": "已暫停",
       "scheduled": "已排定",
       "showFor": "選擇要顯示自動化的電腦",
       "toggleFailed": "無法更新 {{name}}",
-      "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。"
+      "updateDesktop": "請更新 {{desktop}} 上的 Orca，以使用自動化。",
+      "pairComputer": "請先配對電腦，才能檢視及執行自動化。"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1587,17 +1585,18 @@
       "title": "連線至您的電腦"
     },
     "listFooter": {
-      "hostPickerTitle": "選擇開啟任務的主機"
+      "openTasksOn": "選擇開啟任務的主機"
     },
     "listHeader": {
-      "desktopsHeading": "電腦"
+      "computersHeading": "電腦"
     },
     "screen": {
       "pairingCheckFailed": "無法檢查配對狀態",
-      "removeHostFailed": "無法移除主機",
-      "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
-      "removeHostTitle": "移除主機",
-      "tryAgain": "請再試一次。"
+      "tryAgain": "請再試一次。",
+      "removeComputerFailed": "無法移除主機",
+      "removeComputerTitle": "移除主機",
+      "removeComputerMessage": "要移除「{{name}}」嗎？之後可重新配對。",
+      "sameNetworkOnly": "僅能在同一 Wi-Fi 或 Tailscale 下連線。若要隨時隨地連線，請在電腦上登入並重新配對"
     },
     "stats": {
       "agentTime": "代理程式時間",
@@ -1610,21 +1609,21 @@
     },
     "tabs": {
       "automations": "自動化",
-      "chooseDesktop": "{{desktop}}，選擇其他電腦",
       "feed": "動態",
-      "usage": "用量"
+      "usage": "用量",
+      "chooseComputer": "{{desktop}}，選擇其他電腦"
     },
     "usage": {
       "active": "使用中",
-      "addAccounts": "請至桌面版的「設定」→「帳戶」新增帳戶。",
       "connectDesktop": "請連線 {{desktop}}，才能查看代理程式帳戶用量。",
       "emptyTitle": "尚無用量",
-      "openAccountsHint": "開啟這台電腦的帳戶",
-      "pairDesktop": "請先配對電腦，才能查看代理程式帳戶用量。",
       "refresh": "重新整理用量",
       "showUsageFor": "選擇要顯示用量的電腦",
       "updatedAgo": "{{time}}前更新",
-      "updatedJustNow": "剛剛更新"
+      "updatedJustNow": "剛剛更新",
+      "pairComputer": "請先配對電腦，才能查看代理程式帳戶用量。",
+      "addAccountsOnComputer": "請至桌面版的「設定」→「帳戶」新增帳戶。",
+      "openComputerAccountsHint": "開啟這台電腦的帳戶"
     }
   },
   "hooks": {
@@ -1647,23 +1646,21 @@
       "address": "位址",
       "connectionPreview": "將連線至 {{endpoint}}",
       "goBack": "返回",
-      "hostNamePlaceholder": "主機名稱",
-      "hostRemoved": "此主機已從這支手機移除。",
-      "loadFailed": "無法載入主機資料。",
-      "missingHost": "未指定主機。",
       "name": "名稱",
-      "saveFailed": "無法儲存主機資料。",
-      "saveHost": "儲存主機",
-      "title": "編輯主機"
+      "editComputer": "編輯主機",
+      "computerRemoved": "此主機已從這支手機移除。",
+      "couldNotLoad": "無法載入主機資料。",
+      "couldNotSave": "無法儲存主機資料。",
+      "save": "儲存"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "連線",
       "disconnect": "中斷連線",
-      "editHost": "編輯主機",
       "networkDiagnostics": "網路診斷",
-      "reconnect": "重新連線"
+      "reconnect": "重新連線",
+      "editComputer": "編輯主機"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在建立工作區…"
@@ -1782,19 +1779,19 @@
       "accounts": "帳戶",
       "agentSessionHistory": "代理程式工作階段歷史",
       "changes": "變更",
-      "editHost": "編輯主機",
       "host": "主機",
       "pullRequest": "PR",
       "sourceControl": "原始碼控制",
       "tasks": "任務",
       "terminal": "終端機",
       "workspace": "工作區",
-      "automations": "自動化"
+      "automations": "自動化",
+      "editComputer": "編輯主機"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "選擇建立工作區的主機"
+      "newWorkspaceOn": "選擇建立工作區的主機"
     },
     "loadingDrawer": {
       "downloadProgress": "正在下載… {{progress}}",
@@ -4454,7 +4451,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "配對電腦",
       "pairRequired": "若要開啟此連結，請將這部手機與電腦配對，然後重新開啟該連結。",

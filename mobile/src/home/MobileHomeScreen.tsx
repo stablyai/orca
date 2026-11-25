@@ -156,7 +156,7 @@ export function MobileHomeScreen() {
     } catch {
       setConfirmRemove(host)
       Alert.alert(
-        t('home.screen.removeHostFailed', 'Could not remove host'),
+        t('home.screen.removeComputerFailed', 'Couldn’t remove computer'),
         t('home.screen.tryAgain', 'Please try again.')
       )
     }
@@ -195,27 +195,17 @@ export function MobileHomeScreen() {
   const actionTargetConnected =
     actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
 
-  const paired = data.hostCatalogLoaded && data.hostCatalog.length > 0
   const automationsHostConnected =
     automationsHostId != null && data.hostStates[automationsHostId] === 'connected'
   const newWorkspace = () =>
     data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
+  // + shows only where it can work: Feed with a computer connected, Automations on a connected one.
   const fab =
-    tab === 'feed' && paired
-      ? {
-          label: t('home.bottomBar.newWorkspace', 'New workspace'),
-          disabled: data.connectedHosts.length === 0,
-          // A desktop still on its first connect would make the hint flash at launch.
-          hint: data.hostsConnecting
-            ? undefined
-            : t('home.bottomBar.connectFirst', 'Connect a desktop to start new work.'),
-          onPress: newWorkspace
-        }
+    tab === 'feed' && data.connectedHosts.length > 0
+      ? { label: t('home.bottomBar.newWorkspace', 'New workspace'), onPress: newWorkspace }
       : tab === 'automations' && automationsHostId && automationsHostConnected
         ? {
             label: t('home.automationsTab.newAutomation', 'New automation'),
-            disabled: false,
-            hint: undefined,
             onPress: () => openMobileAutomations(automationsHostId, { create: true })
           }
         : null
@@ -285,9 +275,7 @@ export function MobileHomeScreen() {
         </View>
         <MobileHomeFab
           visible={fab != null}
-          disabled={fab?.disabled ?? false}
           accessibilityLabel={fab?.label ?? ''}
-          disabledHint={fab?.hint}
           bottom={tabBarHeight + spacing.lg}
           onPress={() => fab?.onPress()}
         />
@@ -316,13 +304,24 @@ export function MobileHomeScreen() {
           message={
             actionTarget
               ? [
-                  actionTargetConnected && actionTargetPath
-                    ? mobileConnectionPathLabel(actionTargetPath)
-                    : null,
-                  hostEndpointLabel(actionTarget.endpoint)
+                  [
+                    actionTargetConnected && actionTargetPath
+                      ? mobileConnectionPathLabel(actionTargetPath)
+                      : null,
+                    hostEndpointLabel(actionTarget.endpoint)
+                  ]
+                    .filter(Boolean)
+                    .join(' · '),
+                  // The why behind a row's "same Wi-Fi only".
+                  actionTarget.relay
+                    ? null
+                    : t(
+                        'home.screen.sameNetworkOnly',
+                        'Connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in to Orca on your computer and pair again.'
+                      )
                 ]
                   .filter(Boolean)
-                  .join(' · ')
+                  .join('\n')
               : undefined
           }
           actions={getHostListActionSheetActions({
@@ -349,10 +348,14 @@ export function MobileHomeScreen() {
         />
         <ConfirmModal
           visible={confirmRemove != null}
-          title={t('home.screen.removeHostTitle', 'Remove Host')}
-          message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
-            name: confirmRemove?.name
-          })}
+          title={t('home.screen.removeComputerTitle', 'Remove computer')}
+          message={t(
+            'home.screen.removeComputerMessage',
+            'Remove “{{name}}”? You can pair it again later.',
+            {
+              name: confirmRemove?.name
+            }
+          )}
           confirmLabel={t('common.remove', 'Remove')}
           destructive
           onConfirm={() => void handleRemove()}

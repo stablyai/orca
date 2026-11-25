@@ -1645,10 +1645,9 @@
       "openHost": "Открыть {{title}}",
       "pairingInvalid": "Сопряжение недействительно",
       "pairingTemporarilyUnavailable": "Сопряжение временно недоступно",
-      "repairHint": "Нажмите, чтобы повторно выполнить сопряжение с компьютером",
-      "sameNetworkOnlyHint": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново",
       "unlockHint": "Разблокируйте телефон, затем нажмите, чтобы повторить попытку",
-      "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}"
+      "worktreeAccessibilitySummary": "{{summary}}, активных: {{activeCount}}",
+      "tapToPairAgain": "Нажмите, чтобы повторно выполнить сопряжение с компьютером"
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "Открыть диагностику сети"
@@ -1710,15 +1709,14 @@
       "agent": "Агент",
       "connectTarget": "Подключить целевой сервер",
       "connectTargetFirst": "Сначала подключите целевой сервер",
-      "createWorktree": "Создать рабочее дерево",
       "noProjectsFound": "Проекты не найдены",
       "note": "Заметка",
       "notePlaceholder": "Написать заметку",
       "workspaceName": "Название рабочего пространства",
       "options": "Параметры",
-      "createWorkspace": "Создать рабочее пространство",
       "startFrom": "Начать с",
-      "loadingProjects": "Загрузка проектов…"
+      "loadingProjects": "Загрузка проектов…",
+      "newWorkspace": "Новое рабочее пространство"
     },
     "newWorktreeModal": {
       "remoteRepository": "Удалённый репозиторий"
@@ -2451,12 +2449,12 @@
       "lastStatus": "Последний: {{status}}",
       "newAutomation": "Новая автоматизация",
       "noAutomations": "Автоматизаций пока нет",
-      "pairDesktop": "Выполните сопряжение с компьютером, чтобы просматривать и запускать автоматизации.",
       "paused": "Приостановлена",
       "scheduled": "По расписанию",
       "showFor": "Показать автоматизации для",
       "toggleFailed": "Не удалось обновить {{name}}",
-      "updateDesktop": "Обновите Orca на {{desktop}}, чтобы использовать автоматизации."
+      "updateDesktop": "Обновите Orca на {{desktop}}, чтобы использовать автоматизации.",
+      "pairComputer": "Выполните сопряжение с компьютером, чтобы просматривать и запускать автоматизации."
     },
     "emptyState": {
       "connectedDescription": "Здесь появится ваш компьютер. Все данные защищены сквозным шифрованием.",
@@ -2470,17 +2468,18 @@
       "scanCodeBelowDescription": "Нажмите «Сопрячь компьютер» ниже, затем наведите камеру на QR-код на экране."
     },
     "listFooter": {
-      "hostPickerTitle": "Открыть задачи на сервере"
+      "openTasksOn": "Открыть задачи на сервере"
     },
     "listHeader": {
-      "desktopsHeading": "Компьютеры"
+      "computersHeading": "Компьютеры"
     },
     "screen": {
       "pairingCheckFailed": "Не удалось проверить сопряжение",
-      "removeHostFailed": "Не удалось удалить сервер",
-      "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
-      "removeHostTitle": "Удалить сервер",
-      "tryAgain": "Попробуйте ещё раз."
+      "tryAgain": "Попробуйте ещё раз.",
+      "removeComputerFailed": "Не удалось удалить сервер",
+      "removeComputerTitle": "Удалить сервер",
+      "removeComputerMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
+      "sameNetworkOnly": "Подключается только в той же сети Wi-Fi или через Tailscale. Чтобы подключаться откуда угодно, войдите в учётную запись на компьютере и выполните сопряжение заново"
     },
     "stats": {
       "agentTime": "Время агентов",
@@ -2493,34 +2492,29 @@
     },
     "tabs": {
       "automations": "Автоматизации",
-      "chooseDesktop": "{{desktop}}, выбрать другой компьютер",
       "feed": "Лента",
       "usage": "Использование",
       "agents": "Агенты",
-      "bots": "Боты"
+      "bots": "Боты",
+      "chooseComputer": "{{desktop}}, выбрать другой компьютер"
     },
     "usage": {
       "active": "Активна",
-      "addAccounts": "Добавьте учётные записи в разделе «Настройки → Учётные записи» в приложении на компьютере.",
       "connectDesktop": "Подключите {{desktop}}, чтобы видеть использование учётных записей агентов.",
       "emptyTitle": "Данных об использовании пока нет",
-      "openAccountsHint": "Открывает учётные записи этого компьютера",
-      "pairDesktop": "Выполните сопряжение с компьютером, чтобы видеть использование учётных записей агентов.",
       "refresh": "Обновить данные об использовании",
       "showUsageFor": "Показать использование для",
       "updatedAgo": "Обновлено {{time}} назад",
-      "updatedJustNow": "Обновлено только что"
+      "updatedJustNow": "Обновлено только что",
+      "pairComputer": "Выполните сопряжение с компьютером, чтобы видеть использование учётных записей агентов.",
+      "addAccountsOnComputer": "Добавьте учётные записи в разделе «Настройки → Учётные записи» в приложении на компьютере.",
+      "openComputerAccountsHint": "Открывает учётные записи этого компьютера"
     },
     "bottomBar": {
-      "connectFirst": "Подключите компьютер, чтобы начать новую работу.",
       "newWorkspace": "Новое рабочее пространство"
     },
-    "desktops": {
-      "pairDesktop": "Сопрячь компьютер"
-    },
     "sections": {
-      "tasks": "Задачи",
-      "tasksSubtitle": "Просматривайте свои задачи и проверки"
+      "tasks": "Задачи"
     },
     "activeAgents": {
       "heading": "Активные",
@@ -2528,7 +2522,6 @@
     },
     "bots": {
       "noBotsTitle": "Ботов пока нет",
-      "pairDesktop": "Сопрягите компьютер, чтобы увидеть здесь его ботов.",
       "seeAll": "Показать всех ботов",
       "updateOneBody": "Его версия Orca пока не может показывать ботов на вашем телефоне.",
       "updateManyTitle": "Обновите Orca на ваших компьютерах",
@@ -2554,7 +2547,11 @@
         "items_few": "{{count}} элемента",
         "items_many": "{{count}} элементов",
         "items_other": "{{count}} элемента"
-      }
+      },
+      "pairComputer": "Сопрягите компьютер, чтобы увидеть здесь его ботов."
+    },
+    "computers": {
+      "pairComputer": "Сопрячь компьютер"
     }
   },
   "hooks": {
@@ -2577,28 +2574,26 @@
       "address": "Адрес",
       "connectionPreview": "Подключение к {{endpoint}}",
       "goBack": "Назад",
-      "hostNamePlaceholder": "Название сервера",
-      "hostRemoved": "Этот сервер удалён из списка на этом телефоне.",
-      "loadFailed": "Не удалось загрузить данные сервера.",
-      "missingHost": "Не указан сервер.",
       "name": "Название",
-      "saveFailed": "Не удалось сохранить данные сервера.",
-      "saveHost": "Сохранить сервер",
-      "title": "Изменить сервер",
-      "removeHost": "Удалить сервер",
       "updateStepsServiceManager": "Обновите его через менеджер пакетов или менеджер служб.",
       "updateStepsSourceCheckout": "Обновите его из исходного репозитория.",
       "updateStepsServer": "Обновите Orca на сервере и перезапустите её.",
-      "orcaVersion": "Версия Orca"
+      "orcaVersion": "Версия Orca",
+      "editComputer": "Изменить сервер",
+      "removeComputer": "Удалить сервер",
+      "computerRemoved": "Этот сервер удалён из списка на этом телефоне.",
+      "couldNotLoad": "Не удалось загрузить данные сервера.",
+      "couldNotSave": "Не удалось сохранить данные сервера.",
+      "save": "Сохранить"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "Подключиться",
       "disconnect": "Отключить",
-      "editHost": "Изменить сервер",
       "networkDiagnostics": "Диагностика сети",
-      "reconnect": "Подключиться снова"
+      "reconnect": "Подключиться снова",
+      "editComputer": "Изменить сервер"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "Создание рабочего пространства…"
@@ -2756,19 +2751,19 @@
       "accounts": "Учётные записи",
       "agentSessionHistory": "История сессий агентов",
       "changes": "Изменения",
-      "editHost": "Изменить сервер",
       "host": "Сервер",
       "pullRequest": "Пул-реквест",
       "sourceControl": "Управление версиями",
       "tasks": "Задачи",
       "terminal": "Терминал",
       "workspace": "Рабочее пространство",
-      "automations": "Автоматизации"
+      "automations": "Автоматизации",
+      "editComputer": "Изменить сервер"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "Где создать рабочее пространство"
+      "newWorkspaceOn": "Где создать рабочее пространство"
     },
     "loadingDrawer": {
       "downloadProgress": "Скачивание… {{progress}}",

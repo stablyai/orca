@@ -934,10 +934,9 @@
       "openHost": "{{title}} 열기",
       "pairingInvalid": "페어링이 유효하지 않음",
       "pairingTemporarilyUnavailable": "페어링 일시 사용 불가",
-      "repairHint": "탭하여 데스크톱과 다시 페어링하세요.",
-      "sameNetworkOnlyHint": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요",
       "unlockHint": "휴대폰 잠금을 해제한 후 탭하여 다시 시도하세요.",
-      "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개"
+      "worktreeAccessibilitySummary": "{{summary}}, 활성 {{activeCount}}개",
+      "tapToPairAgain": "탭하여 데스크톱과 다시 페어링하세요."
     },
     "hostDiagnosticsLink": {
       "viewDiagnostics": "네트워크 진단 보기"
@@ -999,7 +998,6 @@
       "agent": "에이전트",
       "connectTarget": "대상 연결",
       "connectTargetFirst": "먼저 대상에 연결하세요",
-      "createWorktree": "작업 트리 만들기",
       "noProjectsFound": "프로젝트를 찾을 수 없습니다.",
       "note": "메모",
       "notePlaceholder": "메모 쓰기",
@@ -1567,12 +1565,12 @@
       "lastStatus": "최근: {{status}}",
       "newAutomation": "새 자동화",
       "noAutomations": "아직 자동화가 없습니다",
-      "pairDesktop": "자동화를 보고 실행하려면 데스크톱을 페어링하세요.",
       "paused": "일시 중지됨",
       "scheduled": "예약됨",
       "showFor": "자동화를 볼 데스크톱",
       "toggleFailed": "{{name}}을(를) 업데이트할 수 없습니다",
-      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요."
+      "updateDesktop": "자동화를 사용하려면 {{desktop}}의 Orca를 업데이트하세요.",
+      "pairComputer": "자동화를 보고 실행하려면 데스크톱을 페어링하세요."
     },
     "emptyState": {
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
@@ -1584,17 +1582,18 @@
       "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
-      "hostPickerTitle": "작업을 열 호스트"
+      "openTasksOn": "작업을 열 호스트"
     },
     "listHeader": {
-      "desktopsHeading": "데스크탑"
+      "computersHeading": "데스크탑"
     },
     "screen": {
       "pairingCheckFailed": "페어링 확인 실패",
-      "removeHostFailed": "호스트 제거 실패",
-      "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
-      "removeHostTitle": "호스트 제거",
-      "tryAgain": "다시 시도하세요."
+      "tryAgain": "다시 시도하세요.",
+      "removeComputerFailed": "호스트 제거 실패",
+      "removeComputerTitle": "호스트 제거",
+      "removeComputerMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
+      "sameNetworkOnly": "같은 Wi-Fi 또는 Tailscale에서만 연결됩니다. 어디서나 연결하려면 데스크톱에서 로그인한 후 다시 페어링하세요"
     },
     "stats": {
       "agentTime": "에이전트 시간",
@@ -1607,21 +1606,21 @@
     },
     "tabs": {
       "automations": "자동화",
-      "chooseDesktop": "{{desktop}}, 다른 데스크톱 선택",
       "feed": "피드",
-      "usage": "사용량"
+      "usage": "사용량",
+      "chooseComputer": "{{desktop}}, 다른 데스크톱 선택"
     },
     "usage": {
       "active": "사용 중",
-      "addAccounts": "데스크톱의 설정 → 계정에서 계정을 추가하세요.",
       "connectDesktop": "에이전트 계정 사용량을 보려면 {{desktop}}에 연결하세요.",
       "emptyTitle": "아직 사용량이 없습니다",
-      "openAccountsHint": "이 데스크톱의 계정을 엽니다",
-      "pairDesktop": "에이전트 계정 사용량을 보려면 데스크톱을 페어링하세요.",
       "refresh": "사용량 새로고침",
       "showUsageFor": "사용량을 볼 데스크톱",
       "updatedAgo": "{{time}} 전 업데이트됨",
-      "updatedJustNow": "방금 업데이트됨"
+      "updatedJustNow": "방금 업데이트됨",
+      "pairComputer": "에이전트 계정 사용량을 보려면 데스크톱을 페어링하세요.",
+      "addAccountsOnComputer": "데스크톱의 설정 → 계정에서 계정을 추가하세요.",
+      "openComputerAccountsHint": "이 데스크톱의 계정을 엽니다"
     }
   },
   "hooks": {
@@ -1644,23 +1643,21 @@
       "address": "주소",
       "connectionPreview": "{{endpoint}}에 연결",
       "goBack": "돌아가기",
-      "hostNamePlaceholder": "호스트 이름",
-      "hostRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
-      "loadFailed": "호스트 정보를 불러오지 못했습니다.",
-      "missingHost": "호스트가 없습니다.",
       "name": "이름",
-      "saveFailed": "호스트를 저장하지 못했습니다.",
-      "saveHost": "호스트 저장",
-      "title": "호스트 편집"
+      "editComputer": "호스트 편집",
+      "computerRemoved": "이 호스트는 이 휴대폰에서 제거되었습니다.",
+      "couldNotLoad": "호스트 정보를 불러오지 못했습니다.",
+      "couldNotSave": "호스트를 저장하지 못했습니다.",
+      "save": "저장"
     }
   },
   "hostScreen": {
     "hostListActionSheetActions": {
       "connect": "연결",
       "disconnect": "연결 해제",
-      "editHost": "호스트 편집",
       "networkDiagnostics": "네트워크 진단",
-      "reconnect": "다시 연결"
+      "reconnect": "다시 연결",
+      "editComputer": "호스트 편집"
     },
     "hostPendingCreationRow": {
       "creatingWorkspace": "워크스페이스 만드는 중…"
@@ -1784,19 +1781,19 @@
       "accounts": "계정",
       "agentSessionHistory": "에이전트 세션 기록",
       "changes": "변경 사항",
-      "editHost": "호스트 편집",
       "host": "호스트",
       "pullRequest": "PR",
       "sourceControl": "소스 제어",
       "tasks": "작업",
       "terminal": "터미널",
       "workspace": "워크스페이스",
-      "automations": "자동화"
+      "automations": "자동화",
+      "editComputer": "호스트 편집"
     }
   },
   "newWorkspace": {
     "hostPicker": {
-      "title": "워크스페이스 생성 호스트"
+      "newWorkspaceOn": "워크스페이스 생성 호스트"
     },
     "loadingDrawer": {
       "downloadProgress": "다운로드 중… {{progress}}",
@@ -4635,7 +4632,6 @@
     }
   },
   "bots": {
-    "section": {},
     "link": {
       "pairTitle": "컴퓨터 페어링",
       "pairRequired": "이 링크를 열려면 이 휴대폰을 컴퓨터와 페어링한 다음 링크를 다시 여세요.",
