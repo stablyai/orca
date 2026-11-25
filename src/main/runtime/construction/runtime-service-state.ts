@@ -1,3 +1,4 @@
+import { orchestrationPointerInputDeps } from '../orchestration-pointer-input-deps'
 import { backgroundWaitReportDeps } from '../orchestration/workers/turn-stops/worker-background-wait-rows'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
@@ -206,8 +207,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
     onRoutedMessageTypes: (mailboxHandle, types) =>
       this.messageWaiters.notifyRouted(mailboxHandle, types),
-    onForeignMailboxRouted: (mailboxHandle, messageType) =>
-      this.notifyMessageArrived(mailboxHandle, messageType)
+    onForeignMailboxRouted: (handle, type) => this.notifyMessageArrived(handle, type)
   })
 
   protected readonly orchestrationMailboxDeliveryTarget = new OrchestrationMailboxDeliveryTarget({
@@ -233,9 +233,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
-    redriveMailbox: (mailboxHandle, reservedTypes) =>
-      this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-    ...this.orchestrationPointerPty()
+    redriveMailbox: (handle, types) => this.deliverPendingMessagesForHandle(handle, types),
+    ...this.orchestrationPointerPty(),
+    ...orchestrationPointerInputDeps(this.terminalRunFacts)
   })
 
   protected readonly orchestrationStructuredMailboxPointerDelivery =

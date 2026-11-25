@@ -6,6 +6,8 @@ export type OrchestrationMailboxDeliveryFlight = {
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
+  /** When the pointer write began: typing after it lands in the same composer line. */
+  pointerWriteStartedAt?: number
 }
 
 /** A mailbox waiting behind a terminal's in-flight pointer, with the types its waiters reserve. */

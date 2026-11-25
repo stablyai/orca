@@ -5,6 +5,7 @@ import {
 import { hookRootAnswerDeadline } from '../../../shared/agent-hook-listener/presence/hook-root-attempts'
 import { AgentHookServerRuntimeEnv } from './server-runtime-env'
 import { ClaudeAgentViewBridge } from '../../claude/agent-view/agent-view-bridge'
+import { ClaudeTerminalMailBridge } from '../../claude/terminal-mail/claude-terminal-mail-bridge'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -14,6 +15,7 @@ import { ClaudePermissionHookHolds } from './claude-permission-hook-hold'
 
 export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServerRuntimeEnv {
   readonly claudeAgentViews = this.createClaudeAgentViews()
+  readonly claudeTerminalMail = new ClaudeTerminalMailBridge()
   protected readonly claudePermissionHooks = new ClaudePermissionHookHolds()
   private statusHookInitialization: Promise<void> | null = null
   private restoredOwnersChecked: Promise<void> = Promise.resolve()
@@ -137,6 +139,7 @@ export abstract class AgentHookServerStatusHookLifecycle extends AgentHookServer
     this.statusHookGeneration += 1
     if (!enabled) {
       this.claudeAgentViews.release()
+      this.claudeTerminalMail.clear()
       this.flushStatusPersistSync()
       this.stopOpenCodeBinderLoop()
       this.clearAllAssistantMessageRetries()

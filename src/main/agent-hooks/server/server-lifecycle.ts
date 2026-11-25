@@ -21,7 +21,10 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerClaudeStatusLineModel } from './server-claude-statusline-model'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
-import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
+import {
+  CLAUDE_AGENT_VIEW_PATH,
+  CLAUDE_TERMINAL_MAIL_PATH
+} from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 import type { HookServerStartOptions, NormalizedLocalHook } from './server-types'
 import { withPrefetchedRolloutReads } from '../../../shared/agent-hook-listener/providers/codex/codex-rollout-prefetch-scope'
@@ -106,6 +109,11 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
         if (!isStatusCurrent()) {
           res.writeHead(404)
           res.end()
+          return
+        }
+        if (pathname === CLAUDE_TERMINAL_MAIL_PATH) {
+          res.writeHead(200, { 'content-type': 'application/json' })
+          res.end(JSON.stringify(this.claudeTerminalMail.receive(body)))
           return
         }
         if (pathname === CLAUDE_AGENT_VIEW_PATH) {
@@ -238,6 +246,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerClaudeStat
   stop(options?: { keepStatus?: boolean }): void {
     this.startup.stop()
     this.claudeAgentViews.close()
+    this.claudeTerminalMail.clear()
     this.claudePermissionHooks.drain()
     // Terminal status may still have a pending write while hook ingress is disabled.
     if (this.statusHooksEnabled || this.statusPersistTimer) {
