@@ -66,6 +66,11 @@ it('leaves words that are not a clean mark, or a label cleaning would confuse, a
   asWritten(['Audit (Recommended)', 'Notify', 'Audit, Notify'], 0, true)
   asWritten(['A, B (Recommended)', 'C', 'A', 'B, C'], undefined, true)
   asWritten(['Audit,  Notify (Recommended)', 'Audit', 'Notify'], undefined, true)
+  // ... or a ", " a cleaned label would join into: "Audit" picked with "(Recommended)".
+  asWritten(['Audit, (Recommended)', 'Audit,', 'Audit [recommended]', '(Recommended)'], 2, true)
+  // A cleaned label still ending in a mark, which the phone would read as one.
+  asWritten(['Wait', 'Go(Recommended) [recommended]'], 0)
+  asWritten(['Wait', 'Go [recommended) (Recommended)'], 0)
   // Twins keep their words while a sibling is still cleaned.
   expect(labelsOf(ask(['Go (Recommended)', 'Go [recommended]', 'Wait (Recommended)'], 2))).toEqual([
     'Go (Recommended)',

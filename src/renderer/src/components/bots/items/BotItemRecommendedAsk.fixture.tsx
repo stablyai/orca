@@ -80,3 +80,15 @@ export const several = defineFixture({
   width: 360,
   render: () => <WaitingAsk ask={RECOMMENDED_ASKS.several.stored} />
 })
+export const delimited = defineFixture({
+  width: 360,
+  render: () => <WaitingAsk ask={RECOMMENDED_ASKS.delimited.stored} />
+})
+export const attached = defineFixture({
+  width: 360,
+  render: () => <WaitingAsk ask={RECOMMENDED_ASKS.attached.stored} />
+})
+export const twinFlagged = defineFixture({
+  width: 360,
+  render: () => <WaitingAsk ask={RECOMMENDED_ASKS.twinFlagged.stored} />
+})

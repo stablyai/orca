@@ -184,3 +184,58 @@ it('steps several questions, one pill each, and posts both answers in one commen
   await press('No')
   expect(sent).toEqual([{ text: RECOMMENDED_ASK_ANSWERS.several, askId: 'e2', skipped: [] }])
 })
+
+/** What the card posts for `taps` on a fresh mount of the ask; pick several waits for Send. */
+async function posts(ask: BotItemAsk, taps: string[], multi: boolean): Promise<string | undefined> {
+  if (tree) {
+    act(() => tree!.unmount())
+    tree = null
+    await queries?.end()
+  }
+  const sent = mount(ask)
+  for (const label of taps) {
+    await press(label)
+  }
+  if (multi) {
+    await send()
+  }
+  return sent[0]?.text
+}
+
+it('posts one option and two picks that join into it as different words, in either order', async () => {
+  vi.useFakeTimers()
+  const { delimited, delimitedReordered } = RECOMMENDED_ASKS
+  // Taps in reverse; the card joins picks in display order.
+  expect([
+    await posts(delimited.stored, ['Audit, (Recommended)'], true),
+    await posts(delimited.stored, ['(Recommended)', 'Audit [recommended]'], true),
+    await posts(delimitedReordered.stored, ['Audit, (Recommended)'], true),
+    await posts(delimitedReordered.stored, ['Audit [recommended]', '(Recommended)'], true)
+  ]).toEqual([
+    RECOMMENDED_ASK_ANSWERS.delimitedOne,
+    RECOMMENDED_ASK_ANSWERS.delimitedPair,
+    RECOMMENDED_ASK_ANSWERS.delimitedReorderedOne,
+    RECOMMENDED_ASK_ANSWERS.delimitedReorderedPair
+  ])
+})
+
+it('shows a label kept for its attached mark as written, with the flag pill only on the flag', async () => {
+  vi.useFakeTimers()
+  mount(RECOMMENDED_ASKS.attached.stored)
+  expect(shown()).toEqual(['Wait  Recommended', 'Go(Recommended) [recommended]'])
+  expect(
+    await posts(RECOMMENDED_ASKS.attached.stored, ['Go(Recommended) [recommended]'], false)
+  ).toBe(RECOMMENDED_ASK_ANSWERS.attached)
+})
+
+it('posts each twin as stored when the flag is on the plain one', async () => {
+  vi.useFakeTimers()
+  const { twinFlagged } = RECOMMENDED_ASKS
+  mount(twinFlagged.stored)
+  // As before this change, the phone's own reading of the kept label adds its pill there too.
+  expect(shown()).toEqual(['Go  Recommended', 'Go  Recommended'])
+  expect([
+    await posts(twinFlagged.stored, ['Go'], false),
+    await posts(twinFlagged.stored, ['Go (Recommended)'], false)
+  ]).toEqual([RECOMMENDED_ASK_ANSWERS.twinFlaggedPlain, RECOMMENDED_ASK_ANSWERS.twinFlaggedMarked])
+})

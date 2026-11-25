@@ -98,3 +98,50 @@ it('keeps two pick-several answers apart when a label reads like two picks', () 
   fenced(two.mail, RECOMMENDED_ASK_ANSWERS.joinedTwo)
   fenced(bundled.mail, RECOMMENDED_ASK_ANSWERS.joinedBundled)
 })
+
+// Two choices that were told apart before cleaning are still told apart: each posted on its own fresh
+// ask, as its surface sends it, then read back from the owner event and the owner mail.
+type Choice = { words: string; picks: string[] }
+const pairs: [keyof typeof RECOMMENDED_ASKS, Choice, Choice][] = [
+  [
+    'delimited',
+    { words: RECOMMENDED_ASK_ANSWERS.delimitedOne, picks: ['Audit, (Recommended)'] },
+    {
+      words: RECOMMENDED_ASK_ANSWERS.delimitedPair,
+      picks: ['Audit [recommended]', '(Recommended)']
+    }
+  ],
+  [
+    'delimitedReordered',
+    { words: RECOMMENDED_ASK_ANSWERS.delimitedReorderedOne, picks: ['Audit, (Recommended)'] },
+    {
+      words: RECOMMENDED_ASK_ANSWERS.delimitedReorderedPair,
+      picks: ['(Recommended)', 'Audit [recommended]']
+    }
+  ],
+  [
+    'twinFlagged',
+    { words: RECOMMENDED_ASK_ANSWERS.twinFlaggedPlain, picks: ['Go'] },
+    { words: RECOMMENDED_ASK_ANSWERS.twinFlaggedMarked, picks: ['Go (Recommended)'] }
+  ]
+]
+it.each(pairs)('keeps the %s choices apart from the post to the owner mail', (name, ...choices) => {
+  const read = choices.map(({ words, picks }) => {
+    const { shape, answer } = asked(RECOMMENDED_ASKS[name].written)
+    const { reply, mail } = answer(words)
+    expect(reply.data.text).toBe(words)
+    expect(botItemPickedReplies(shape, reply.data)[0]!.map((pick) => pick.label)).toEqual(picks)
+    fenced(mail, words)
+    return reply.data.text
+  })
+  expect(new Set(read).size).toBe(2)
+})
+
+it('posts a label kept for its attached mark as written', () => {
+  const { shape, answer } = asked(RECOMMENDED_ASKS.attached.written)
+  const { reply, mail } = answer(RECOMMENDED_ASK_ANSWERS.attached)
+  expect(botItemPickedReplies(shape, reply.data)[0]!.map((pick) => pick.label)).toEqual([
+    'Go(Recommended) [recommended]'
+  ])
+  fenced(mail, RECOMMENDED_ASK_ANSWERS.attached)
+})

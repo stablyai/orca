@@ -116,6 +116,114 @@ export const RECOMMENDED_ASKS = {
         }
       ]
     }
+  },
+  // Pick several where a cleaned label would join into a sibling ("Audit" + "(Recommended)"): all stay.
+  delimited: {
+    written: {
+      questions: [
+        {
+          prompt: 'Which follow-ups?',
+          options: [
+            { label: 'Audit, (Recommended)' },
+            { label: 'Audit,' },
+            { label: 'Audit [recommended]' },
+            { label: '(Recommended)' }
+          ],
+          recommended: 2,
+          multi: true
+        }
+      ]
+    },
+    stored: {
+      questions: [
+        {
+          prompt: 'Which follow-ups?',
+          options: [
+            { label: 'Audit, (Recommended)' },
+            { label: 'Audit,' },
+            { label: 'Audit [recommended]' },
+            { label: '(Recommended)' }
+          ],
+          recommended: 2,
+          multi: true
+        }
+      ]
+    }
+  },
+  // The same options reordered, the flag moving with its option.
+  delimitedReordered: {
+    written: {
+      questions: [
+        {
+          prompt: 'Which follow-ups?',
+          options: [
+            { label: '(Recommended)' },
+            { label: 'Audit [recommended]' },
+            { label: 'Audit,' },
+            { label: 'Audit, (Recommended)' }
+          ],
+          recommended: 1,
+          multi: true
+        }
+      ]
+    },
+    stored: {
+      questions: [
+        {
+          prompt: 'Which follow-ups?',
+          options: [
+            { label: '(Recommended)' },
+            { label: 'Audit [recommended]' },
+            { label: 'Audit,' },
+            { label: 'Audit, (Recommended)' }
+          ],
+          recommended: 1,
+          multi: true
+        }
+      ]
+    }
+  },
+  // Cleaning would leave an attached mark the phone reads as one: the words stay.
+  attached: {
+    written: {
+      questions: [
+        {
+          prompt: 'Go?',
+          options: [{ label: 'Wait' }, { label: 'Go(Recommended) [recommended]' }],
+          recommended: 0
+        }
+      ]
+    },
+    stored: {
+      questions: [
+        {
+          prompt: 'Go?',
+          options: [{ label: 'Wait' }, { label: 'Go(Recommended) [recommended]' }],
+          recommended: 0
+        }
+      ]
+    }
+  },
+  // A flag on the plain twin: the marked twin keeps its words.
+  twinFlagged: {
+    written: {
+      questions: [
+        {
+          prompt: 'Close it?',
+          options: [{ label: 'Go' }, { label: 'Go (Recommended)' }],
+          recommended: 0
+        }
+      ]
+    },
+    stored: {
+      questions: [
+        {
+          prompt: 'Close it?',
+          options: [{ label: 'Go' }, { label: 'Go (Recommended)' }],
+          recommended: 0
+        }
+      ]
+    }
   }
 } satisfies Record<string, { written: BotItemAsk; stored: BotItemAsk }>
 
@@ -128,5 +236,14 @@ export const RECOMMENDED_ASK_ANSWERS = {
   // Pick several: two picks joined, and the one option that reads like them.
   joinedTwo: 'Audit, Notify',
   joinedBundled: 'Audit, Notify (Recommended)',
-  several: 'Ship the sidebar? → Ship it\nKeep the old layout? → No'
+  several: 'Ship the sidebar? → Ship it\nKeep the old layout? → No',
+  // Option 0 alone, and options 2 and 3 together (tapped 3 then 2): different words.
+  delimitedOne: 'Audit, (Recommended)',
+  delimitedPair: 'Audit [recommended], (Recommended)',
+  // Reordered: the same two choices, picks joined in display order.
+  delimitedReorderedOne: 'Audit, (Recommended)',
+  delimitedReorderedPair: '(Recommended), Audit [recommended]',
+  attached: 'Go(Recommended) [recommended]',
+  twinFlaggedPlain: 'Go',
+  twinFlaggedMarked: 'Go (Recommended)'
 } as const
