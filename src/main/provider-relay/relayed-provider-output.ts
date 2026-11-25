@@ -56,6 +56,8 @@ type OutputOptions = {
    * journal can't save yet. The reply's `ackedThrough` says how far the daemon really released.
    */
   ack: (seq: number, keepFrom?: number, flags?: ProviderRelayAckFlags) => Promise<unknown>
+  /** A shared tick for the next ack (one timer per daemon connection); its own timer otherwise. */
+  scheduleAck?: (run: () => void) => () => void
 }
 
 /**
@@ -97,7 +99,7 @@ export class RelayedProviderOutput {
   })
   /** The hook the stream's record reader calls (`claim`, then `taken` per record). */
   readonly recordTaking = this.consumption.taking
-  private ackTimer: ReturnType<typeof setTimeout> | null = null
+  private cancelAck: (() => void) | null = null
   private acking: Promise<void> = Promise.resolve()
   private stopped = false
 
@@ -295,21 +297,19 @@ export class RelayedProviderOutput {
   }
 
   private scheduleAck(): void {
-    if (this.ackTimer || this.stopped) {
+    if (this.cancelAck || this.stopped) {
       return
     }
-    this.ackTimer = setTimeout(() => {
-      this.ackTimer = null
+    const run = () => {
+      this.cancelAck = null
       void this.ack()
-    }, ACK_DELAY_MS)
-    this.ackTimer.unref?.()
+    }
+    this.cancelAck = this.options.scheduleAck?.(run) ?? ownAckTimer(run)
   }
 
   private clearAckTimer(): void {
-    if (this.ackTimer) {
-      clearTimeout(this.ackTimer)
-      this.ackTimer = null
-    }
+    this.cancelAck?.()
+    this.cancelAck = null
   }
 
   private ack(force = false): Promise<void> {
@@ -388,4 +388,10 @@ export class RelayedProviderOutput {
     })
     return this.acking
   }
+}
+
+function ownAckTimer(run: () => void): () => void {
+  const timer = setTimeout(run, ACK_DELAY_MS)
+  timer.unref?.()
+  return () => clearTimeout(timer)
 }

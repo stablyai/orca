@@ -24,10 +24,14 @@ export function fakeProviderRelayChannel(members: {
     },
     attach: members.attach,
     ack: members.ack ?? (async () => ({})),
+    scheduleAck: (run: () => void) => {
+      const timer = setTimeout(run, 1_000)
+      return () => clearTimeout(timer)
+    },
     close: async () => ({})
   }
   return {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a relayed child calls only these four members
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a relayed child calls only these members
     channel: fake as unknown as ProviderRelayChannel,
     sink: () => {
       if (!bound) {

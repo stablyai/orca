@@ -56,18 +56,9 @@ export type ProviderRelayRequest =
    * `cutKeys` (with `cut`, opaque to the daemon) name the items the cut split; each cut ack replaces
    * them, and a later attach reports them next to `truncatedThrough`. Older daemons ignore them.
    */
-  | {
-      id: string
-      type: 'relayAck'
-      payload: {
-        relayId: string
-        seq: number
-        keepFrom?: number
-        cut?: true
-        held?: true
-        cutKeys?: string[]
-      }
-    }
+  | { id: string; type: 'relayAck'; payload: ProviderRelayAckPayload }
+  /** Several relays' acks in one request; `results` answers each in order, `{ error }` for a refused one. */
+  | { id: string; type: 'relayAcks'; payload: { acks: ProviderRelayAckPayload[] } }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
   | {
@@ -78,7 +69,28 @@ export type ProviderRelayRequest =
 
 export const PROVIDER_RELAY_REQUEST_TYPES: ReadonlySet<string> = new Set<
   ProviderRelayRequest['type']
->(['relaySpawn', 'relayAttach', 'relayWrite', 'relayAck', 'relayClose', 'relayList', 'relayDetach'])
+>([
+  'relaySpawn',
+  'relayAttach',
+  'relayWrite',
+  'relayAck',
+  'relayAcks',
+  'relayClose',
+  'relayList',
+  'relayDetach'
+])
+
+export type ProviderRelayAckPayload = {
+  relayId: string
+  seq: number
+  keepFrom?: number
+  cut?: true
+  held?: true
+  cutKeys?: string[]
+}
+
+/** More acks than this in one `relayAcks` is refused whole. */
+export const RELAY_ACKS_MAX = 1024
 
 export type ProviderRelaySpawnResult =
   | { relayId: string; pid: number }
