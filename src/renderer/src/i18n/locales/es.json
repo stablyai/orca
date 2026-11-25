@@ -19061,7 +19061,8 @@
         "checking": "Comprobando si {{agent}} está listo en este host…",
         "cliInstall": "Instalar",
         "cliRecheck": "Verificar de nuevo",
-        "openAgentSettings": "Abrir ajustes"
+        "openAgentSettings": "Abrir ajustes",
+        "cliRecheckFailed": "No se pudieron comprobar los agentes instalados en este host. Inténtalo de nuevo."
       },
       "reasoning": "Razonamiento",
       "contextMenu": {
@@ -19982,6 +19983,9 @@
         "explanation": "Continúa y el agente comprobará primero si su último paso terminó.",
         "usageLimitExplanation": "Pide al agente que continúe donde lo dejó. Úsalo cuando se restablezca el límite."
       },
+      "signIn": {
+        "title": "Inicia sesión en {{agent}} para empezar a chatear"
+      },
       "rewind": {
         "unsupported": "Este chat no puede volver a un mensaje anterior.",
         "historyNotPaginated": "Este chat de Codex más antiguo no puede volver a un mensaje anterior. Inicia un chat nuevo para usar Rebobinar hasta aquí.",
@@ -20165,8 +20169,34 @@
         "modelApplyFailed": "No se pudo aplicar el modelo {{value}}.",
         "effortApplyFailed": "No se pudo aplicar el esfuerzo {{value}}."
       },
+      "githubPeek": {
+        "updated": "actualizado {{time}}",
+        "oneComment": "1 comentario",
+        "comments": "{{count}} comentarios",
+        "unavailable": "Vista previa no disponible.",
+        "retry": "Reintentar",
+        "retryKeyHint": "Vista previa no disponible. Pulsa {{key}} para reintentar."
+      },
+      "webPeek": {
+        "unavailable": "No hay vista previa de esta página."
+      },
       "workers": {
         "stopUnconfirmed": "Orca no pudo confirmar que el trabajador se detuviera."
+      },
+      "connectorAsker": {
+        "anApp": "Una app",
+        "directMessage": "DM de {{source}}",
+        "earlierMessages": "{{count}} mensajes anteriores en el hilo",
+        "earlierMessages_one": "{{count}} mensaje anterior en el hilo",
+        "earlierMessages_other": "{{count}} mensajes anteriores en el hilo",
+        "earlierMessages_many": "{{count}} mensajes anteriores en el hilo",
+        "groupMessage": "DM de grupo de {{source}}",
+        "label": "{{name}} en {{place}}",
+        "noAccess": "sin acceso",
+        "open": "Abrir en {{source}}",
+        "someone": "Alguien",
+        "via": "{{name}} mediante {{bot}}",
+        "you": "Tú"
       },
       "usageLimitActions": {
         "switchAccount": "Cambiar de cuenta",
@@ -20274,6 +20304,20 @@
         "questionNotSentDetail": "Tu pregunta sigue en este chat. Vuelve a enviar /btw para reintentarlo.",
         "questionUnconfirmed": "{{agent}} no pudo confirmar que el chat lateral recibiera tu pregunta",
         "questionUnconfirmedDetail": "Revisa el chat lateral antes de volver a preguntar. Tu pregunta sigue en este chat."
+      },
+      "urlRequest": {
+        "title": "Inicio de sesión solicitado",
+        "open": "Abrir página de inicio de sesión",
+        "decline": "Rechazar",
+        "opened": "Se abrió la página de inicio de sesión en tu navegador.",
+        "openAgain": "Abrir de nuevo",
+        "finished": "Inicio de sesión completado",
+        "finishedWith": "Inicio de sesión completado · {{message}}"
+      },
+      "offerCard": {
+        "notNow": "Ahora no",
+        "dismiss": "Descartar",
+        "notSent": "No se pudo enviar eso al bot. Inténtalo de nuevo."
       },
       "memoryUpdated": {
         "added": "Añadido",
@@ -20398,6 +20442,44 @@
         "waiting": "En espera",
         "waitsFor": "Espera"
       },
+      "slackMirror": {
+        "ownDm": "También se publica en tu DM con {{bot}}",
+        "theirDm": "También se publica en el DM de {{name}} con {{bot}}",
+        "someonesDm": "También se publica en un DM con {{bot}}",
+        "channel": "También se publica en el hilo de {{channel}}",
+        "thread": "También se publica en el hilo de Slack",
+        "offUnavailable": "Solo en Orca · hilo no disponible",
+        "offNotInChannel": "Solo en Orca · no está en el canal",
+        "off": "Solo en Orca",
+        "shortDm": "DM de Slack",
+        "shortChannel": "Hilo de {{channel}}",
+        "shortThread": "Hilo de Slack",
+        "headingDm": "DM de Slack",
+        "headingChannel": "Hilo de Slack en {{channel}}",
+        "headingThread": "Hilo de Slack",
+        "detailUnavailable": "Este hilo de Slack se eliminó o su canal se archivó.",
+        "detailRemovedFrom": "{{bot}} se eliminó de {{channel}}.",
+        "detailRemoved": "{{bot}} se eliminó del canal.",
+        "detailFallback": "Se publica como {{bot}} con tu nombre. Actualiza en Slack para publicar como tú.",
+        "detailOwnDm": "Tus mensajes y las respuestas de {{bot}}. Solo tú ves este DM. Las llamadas a herramientas y los trabajadores se quedan en Orca.",
+        "detailTheirDm": "Tus mensajes y las respuestas de {{bot}}. {{name}} los ve en su DM. Las llamadas a herramientas y los trabajadores se quedan en Orca.",
+        "detailSomeonesDm": "Tus mensajes y las respuestas de {{bot}}. La persona de este DM los ve. Las llamadas a herramientas y los trabajadores se quedan en Orca.",
+        "detailThread": "Tus mensajes y las respuestas de {{bot}}. Todos los del canal pueden verlos. Las llamadas a herramientas y los trabajadores se quedan en Orca.",
+        "detailExternal": "Tus mensajes y las respuestas de {{bot}}. Todos los de {{channel}} pueden verlos, incluidas las personas ajenas a tu espacio de trabajo. Las llamadas a herramientas y los trabajadores se quedan en Orca.",
+        "detailChannel": "Tus mensajes y las respuestas de {{bot}}. Todos los de {{channel}} pueden verlos. Las llamadas a herramientas y los trabajadores se quedan en Orca.",
+        "posting": "Publicando en Slack…",
+        "failedFile": "No se publicó en Slack · archivo demasiado grande",
+        "failedEmpty": "No se publicó en Slack · nada que publicar",
+        "failedTooLong": "No se publicó en Slack · mensaje demasiado largo",
+        "failed": "No se publicó en Slack",
+        "delete": "Eliminar de Slack",
+        "postedFrom": "Publicado en {{place}} desde Orca",
+        "retry": "Reintentar",
+        "rewindStays": "Los mensajes que ya están en Slack se quedan allí.",
+        "switch": "Publicar este chat en Slack",
+        "tooltipOff": "Tus mensajes se quedan en Orca",
+        "tooltipOn": "Tus mensajes y las respuestas de {{bot}} también se publican en este hilo de Slack"
+      },
       "typedBy": {
         "anotherComputer": "otro equipo",
         "fromVia": "De {{name}} a través de {{computer}}",
@@ -20409,8 +20491,83 @@
         "running": "En ejecución",
         "failed": "Fallido"
       },
+      "signInNotice": {
+        "signedIn": "Sesión iniciada. Vuelve a enviarlo.",
+        "notSent": "No se envió: {{agent}} no ha iniciado sesión.",
+        "notSignedIn": "{{agent}} no ha iniciado sesión.",
+        "opensAntigravitySettings": "Abre Ajustes → Cuentas → Antigravity",
+        "signIn": "Iniciar sesión",
+        "signsInClaudeAccount": "Inicia sesión en esta cuenta de Claude",
+        "runsCommand": "Ejecuta {{command}} en un terminal",
+        "thenSlashCommand": "Inicia sesión y luego escribe {{slashCommand}}.",
+        "signsInAgy": "Inicia sesión en agy con Google en tu navegador"
+      },
+      "antigravityAuth": {
+        "chipLabel": "Antigravity inicia sesión con {{method}}. Cambiar",
+        "chipTitle": "Antigravity inicia sesión con {{method}}",
+        "menuTitle": "Antigravity inicia sesión con",
+        "detected": "Detectado",
+        "settings": "Ajustes de inicio de sesión…",
+        "switched": "Antigravity ahora usa {{method}}.",
+        "switchFailed": "Orca no pudo cambiar cómo inicia sesión Antigravity. Inténtalo de nuevo.",
+        "confirmTitle": "¿Cambiar a {{method}}?",
+        "confirmBody": "Los chats de Antigravity que se ejecutan en este host se reiniciarán. Una respuesta en curso se detiene; tus conversaciones se conservan.",
+        "cancel": "Cancelar",
+        "confirm": "Cambiar",
+        "otherWays": "En su lugar, puedes iniciar sesión con una clave de API o con gcloud.",
+        "moreOptions": "Más opciones…",
+        "useApiKey": "Usar tu clave de API de Gemini",
+        "useGoogle": "Usar tu inicio de sesión de Google",
+        "apiKeySaved": "Guardada en Orca",
+        "googleFound": "Ya iniciaste sesión con Google en este host antes",
+        "askApiKeyEnvironment": "¿Usar en su lugar la clave de API de Gemini que se encontró en tu entorno?",
+        "askApiKeySaved": "¿Usar en su lugar la clave de API de Gemini guardada en Orca?",
+        "askGcloud": "¿Usar en su lugar tu inicio de sesión de gcloud (proyecto {{project}})?",
+        "askGoogle": "¿Usar en su lugar tu inicio de sesión de Google?",
+        "noSubscription": "Esta cuenta de Google no tiene una suscripción a Antigravity.",
+        "ineligible": "Esta cuenta de Google no puede usar Antigravity.",
+        "signedOut": "Antigravity no ha iniciado sesión.",
+        "refused": "Google rechazó las credenciales de este chat.",
+        "usageLimit": "Este inicio de sesión alcanzó su límite de uso.",
+        "signInGoogle": "Iniciar sesión con Google",
+        "yourAgy": "Tu agy",
+        "yourAgyVersion": "Tu agy · v{{version}}",
+        "orcasAgy": "El agy de Orca",
+        "orcasAgyVersion": "El agy de Orca · v{{version}}",
+        "runsOn": "Se ejecuta en: {{program}}",
+        "keepsOwnLogin": "Este chat conserva el inicio de sesión de Google propio de agy. Los chats nuevos usan {{method}}.",
+        "apiKeyEnvironment": "Desde tu entorno",
+        "foundGcloud": "Tu inicio de sesión de gcloud también funciona.",
+        "foundKey": "Tu clave de API de Gemini también funciona.",
+        "foundKeyAndGcloud": "Tu clave de API de Gemini y tu inicio de sesión de gcloud también funcionan.",
+        "gcloudProject": "Proyecto {{project}}",
+        "otherWaysMenu": "Otras formas de iniciar sesión…",
+        "useGcloudLogin": "Usar tu inicio de sesión de gcloud",
+        "otherWaysLabel": "Otras formas de iniciar sesión"
+      },
+      "pairedServerAsk": {
+        "always": "Permitir siempre {{server}}",
+        "deny": "Denegar",
+        "once": "Permitir una vez",
+        "thisServer": "este servidor",
+        "title": "{{from}} quiere enviar un mensaje a {{to}} en este equipo",
+        "titlePills": "<from>{{from}}</from> quiere enviar un mensaje a <to>{{to}}</to> en este equipo"
+      },
+      "clientAsk": {
+        "declined": "Rechazada",
+        "notConnected": "No estaba conectado",
+        "pairedComputer": "Equipo emparejado",
+        "waitingForYou": "Esperándote",
+        "waitingOn": "Esperando aprobación en {{computer}}"
+      },
       "dock": {
         "label": "Cuadro de mensaje y solicitudes"
+      },
+      "googleOffer": {
+        "useAccount": "Usar {{email}} para Google.",
+        "reconnect": "Volver a conectar {{email}}",
+        "use": "Usar {{email}}",
+        "staysDefault": "{{email}} sigue como predeterminada"
       },
       "workerDock": {
         "commandOutputPending": "La salida del comando aún no está disponible.",
@@ -20478,6 +20635,17 @@
         "unreadDetail": "Los trabajadores aparecerán aquí cuando se carguen",
         "chipLabel": "{{label}}, el más reciente: {{title}}"
       },
+      "webhookSetup": {
+        "heading": "Configura un webhook",
+        "keyAndSecret": "Clave y secreto de firma",
+        "copiedReceipt": "✓ URL copiada",
+        "signingSecret": "Secreto de firma",
+        "addSecret": "Agregar…",
+        "noSecret": "Ninguno",
+        "sampleCall": "Llamada de ejemplo",
+        "sampleNote": "Inicia una ejecución real",
+        "send": "Enviar"
+      },
       "automationSaved": {
         "resultsInRuns": "resultados en cada ejecución",
         "paused": "en pausa",
@@ -20497,6 +20665,22 @@
         "loadFailed": "No se pudo leer esta automatización",
         "openFullPage": "Abrir página",
         "onAgent": "con {{name}}"
+      },
+      "connectorOffer": {
+        "heading": "Conecta un servicio",
+        "connectService": "Conectar {{service}}",
+        "connected": "Conectado",
+        "connectedIn": "Conectado en {{places}}",
+        "pausedStatus": "En pausa",
+        "addOrg": "Agregar organización",
+        "addWorkspace": "Agregar espacio de trabajo",
+        "githubAsYou": "También puede trabajar en GitHub como tú, a través de tu inicio de sesión de gh.",
+        "linearAsYou": "También puede trabajar en Linear como tú, a través de tu propio inicio de sesión de Linear en Orca."
+      },
+      "toolAdded": {
+        "removed": "Eliminada",
+        "remove": "Eliminar",
+        "added": "Agregada"
       },
       "mcp": {
         "status": {
@@ -20522,8 +20706,10 @@
           "finish": "Finalizar",
           "openAgain": "Volver a abrir",
           "addressLabel": "Dirección de la página de inicio de sesión",
-          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo»."
+          "unfinished": "El inicio de sesión aún no ha terminado. Complétalo en la página que se abrió y luego pulsa «Listo».",
+          "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "Gestionar servidores MCP",
         "title": "Servidores MCP",
         "close": "Cerrar",
         "loading": "Cargando…",
