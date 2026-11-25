@@ -100,6 +100,16 @@ export async function hostBotAgentChoices(
   return { agents: botAgentChoices(model), newChatAgents: hostNewChatAgents(model) }
 }
 
+/** Whether this host's + menu offers a new chat on `agent` that can start: the one list a teammate's
+ *  pick is held to. */
+export async function hostOffersNewChatAgent(
+  runtime: OrcaRuntimeService,
+  agent: BotAgent
+): Promise<boolean> {
+  const { newChatAgents } = await hostBotAgentChoices(runtime)
+  return newChatAgents.some((entry) => entry.agent === agent && !entry.unavailable)
+}
+
 export const BOT_AGENT_CHOICES_METHOD = defineMethod({
   name: 'bots.agentChoices',
   permission: 'workspace',

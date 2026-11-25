@@ -1,3 +1,4 @@
+import { hostOffersNewChatAgent } from './bots-agent-choices'
 import { SHARE_BY_BOT, SHARE_SCOPED } from '../../../../shared/bots/bot-share-rpc-methods'
 import {
   BotActivityRead,
@@ -293,10 +294,16 @@ export const BOT_METHODS = [
       if (!bot) {
         throw new Error('bot_not_found')
       }
-      // A teammate picks the agent as the owner does.
       const onAgent = botOnAgent(bot, params.agent)
       const share = botShareScopeOf(context)
       if (share) {
+        // A teammate picks from the agents the owner's + menu offers, and no other.
+        if (
+          onAgent.agent !== bot.agent &&
+          !(await hostOffersNewChatAgent(runtime, onAgent.agent))
+        ) {
+          throw new Error('agent_not_offered')
+        }
         return { sessionId: await startBotShareSession(runtime, onAgent, share, params.newChatId) }
       }
       // Like a blank page: an empty chat already open is the new chat, not one more.
