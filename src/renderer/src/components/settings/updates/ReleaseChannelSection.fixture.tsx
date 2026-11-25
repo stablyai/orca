@@ -19,18 +19,17 @@ function build(version: string, daysAgo: number): ReleaseBuild {
 
 const BUILDS = [build('1.4.274', 1), build('1.4.273', 2), build(RUNNING_VERSION, 3)]
 
-// Records switch requests the fixture received, so an interaction check can tell a live click from a dead one.
-const fixtureWindow = window as Window & { __releaseSwitchRequests?: unknown[] }
-
 function stubUpdater(): void {
-  fixtureWindow.__releaseSwitchRequests = []
+  // Records switch requests the fixture received, so an interaction check can tell a live click from a dead one.
+  const switchRequests: unknown[] = []
+  Reflect.set(window, '__releaseSwitchRequests', switchRequests)
   Object.assign(window.api, {
     updater: {
       ...window.api.updater,
       getVersion: async () => RUNNING_VERSION,
       listBuilds: async () => ({ ok: true, builds: BUILDS }),
       check: async (options: unknown) => {
-        fixtureWindow.__releaseSwitchRequests?.push(options)
+        switchRequests.push(options)
       }
     }
   })

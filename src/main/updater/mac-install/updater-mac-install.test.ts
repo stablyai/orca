@@ -30,7 +30,7 @@ vi.mock('../releases/updater-changelog', () => ({ fetchChangelog: async () => nu
 
 const version = '1.4.273'
 const jsUpdater = Object.assign(new EventEmitter(), {
-  setFeedURL: vi.fn(),
+  setFeedURL: vi.fn((_options: { url?: string }) => {}),
   checkForUpdates: async () => {
     jsUpdater.emit('checking-for-update')
     jsUpdater.emit('update-available', { version })
@@ -153,9 +153,7 @@ it.runIf(process.platform === 'darwin')(
     const updater = await startStaging()
     vi.advanceTimersByTime(900_000)
     const pinnedFeedCalls = (): unknown[] =>
-      jsUpdater.setFeedURL.mock.calls.filter(([options]) =>
-        String((options as { url?: string }).url).includes('v1.4.274')
-      )
+      jsUpdater.setFeedURL.mock.calls.filter(([options]) => options.url?.includes('v1.4.274'))
 
     updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.4.274' })
     await vi.advanceTimersByTimeAsync(0)
