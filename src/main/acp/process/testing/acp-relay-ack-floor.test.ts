@@ -81,12 +81,11 @@ describe('ACP relay ack floor', () => {
     await send(done)
     parsed(done)
     expect(await send()).toEqual([])
-    // Another message ends it; that one holds until its prompt's answer.
-    expect(await send(chunk('c', 'm2'))).toEqual([5])
+    // Another message doesn't end it (OpenCode resumes ids after another's): both hold until the
+    // prompt's answer.
+    expect(await send(chunk('c', 'm2'))).toEqual([])
     answer.resolve()
-    await vi.waitFor(async () =>
-      expect(await send(update('plan', { entries: [] }))).toEqual([5, 7])
-    )
+    await vi.waitFor(async () => expect(await send(update('plan', { entries: [] }))).toEqual([7]))
   })
 
   it("holds an unnumbered agent's prompt from its first line until it ends, even by failing", async () => {
@@ -141,15 +140,14 @@ describe('ACP relay ack floor', () => {
     expect(acks.at(-1)).toBe(3)
   })
 
-  it('never holds a cut message that resumes after another message, as OpenCode resumes ids', async () => {
+  it('keeps a message held from its start across another message, cut or not, as OpenCode resumes ids', async () => {
     const { output, acks, cutKeys, send, prompt } = rig()
     prompt()
-    await send(chunk('a', 'm1'))
+    await send(chunk('a', 'm1'), chunk('b', 'm2'), chunk('a2', 'm1'))
+    // m1 holds from its first line, so a replay rewrites it whole, not from where it resumed.
+    expect(acks).toEqual([])
     await output.settle(true)
-    await send(chunk('b', 'm2'), chunk('a2', 'm1'))
-    expect(acks.at(-1)).toBeGreaterThanOrEqual(2)
-    await send(chunk('a3', 'm1'))
-    expect(acks.at(-1)).toBe(4)
+    await send(chunk('c', 'm2'), chunk('a3', 'm1'))
     expect(cutKeys.at(-1)).toContain(JSON.stringify(['s', 'm1']))
   })
 

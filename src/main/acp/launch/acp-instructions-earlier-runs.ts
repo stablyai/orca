@@ -13,8 +13,10 @@ const REMOVE_BATCH = 16
 const SPAWN_SLACK_MS = 2_000
 /** Per root, until its clear runs: chats this run wrote instructions for, by folder name. */
 const launched = new Map<string, Set<string>>()
-/** Per root: whether its clear ran, or the attempt in flight. */
-const cleared = new Map<string, Promise<boolean>>()
+/** Per root: the clear in flight. */
+const clearing = new Map<string, Promise<boolean>>()
+/** Roots whose clear ran this run. */
+const cleared = new Set<string>()
 
 /**
  * Per-launch folders (`<chat>-<uuid>`) of each chat but its newest and, for a kept chat, the newest
@@ -77,10 +79,15 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
       at
     ])
   )
-  const kept = new Set([...spawnedAt.keys(), ...(launched.get(root) ?? [])])
   const length = nativeChatScratchFolderName('').length
-  const keptBy = (name: string): boolean =>
-    kept.has(name.slice(0, length)) && ['', '.', '-'].includes(name.charAt(length))
+  // Read live: a launch that didn't wait for this names its chat before writing its folder.
+  const keptBy = (name: string): boolean => {
+    const chat = name.slice(0, length)
+    return (
+      (spawnedAt.has(chat) || launched.get(root)?.has(chat) === true) &&
+      ['', '.', '-'].includes(name.charAt(length))
+    )
+  }
   const names = await readdir(root).catch(() => [])
   const gone = [
     ...names.filter((name) => !keptBy(name)),
@@ -89,34 +96,35 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
   for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
     await Promise.all(gone.slice(at, at + REMOVE_BATCH).map((name) => remove(join(root, name))))
   }
-  launched.delete(root)
   return true
 }
 
-/** The first launch in a run waits for the clear; one skipped while a daemon was late is tried
- *  again behind later launches, which don't wait for it. */
-export async function clearEarlierRunsOnce(
+/** A launch never waits for the clear: it names its chat first, which keeps its folder. A clear
+ *  skipped while a daemon was late is tried again by a later launch. Resolves when the clear ends. */
+export function clearEarlierRunsOnce(
   root: string,
   sessionId: string,
   remove: (path: string) => Promise<void>
 ): Promise<void> {
-  const attempt = cleared.get(root)
-  if (attempt === undefined || !(await attempt)) {
-    // Only a clear still to come needs to know this run's chats.
-    const names = launched.get(root) ?? new Set<string>()
-    names.add(nativeChatScratchFolderName(sessionId))
-    launched.set(root, names)
+  if (cleared.has(root)) {
+    return Promise.resolve()
   }
+  const names = launched.get(root) ?? new Set<string>()
+  names.add(nativeChatScratchFolderName(sessionId))
+  launched.set(root, names)
+  let attempt = clearing.get(root)
   if (!attempt) {
-    const first = clearEarlierRuns(root, remove).catch(() => false)
-    cleared.set(root, first)
-    await first
-    return
+    attempt = clearEarlierRuns(root, remove)
+      .catch(() => false)
+      .then((done) => {
+        clearing.delete(root)
+        if (done) {
+          cleared.add(root)
+          launched.delete(root)
+        }
+        return done
+      })
+    clearing.set(root, attempt)
   }
-  if (!(await attempt) && cleared.get(root) === attempt) {
-    cleared.set(
-      root,
-      clearEarlierRuns(root, remove).catch(() => false)
-    )
-  }
+  return attempt.then(() => undefined)
 }

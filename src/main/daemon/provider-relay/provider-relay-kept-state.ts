@@ -60,6 +60,11 @@ export class ProviderRelayKeptState {
     this.markerPrefix = commonPrefix(this.spec?.lines ?? [])
   }
 
+  /** The quoted methods the spec answers itself; a held line naming none needs no parse. */
+  get replyMethods(): string[] {
+    return Object.keys(this.spec?.replies ?? {}).map((method) => JSON.stringify(method))
+  }
+
   /** The fixed answer the spec gives an agent request, if any. */
   reply(method: string): unknown {
     const replies = this.spec?.replies

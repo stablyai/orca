@@ -438,7 +438,8 @@ describe('provider relay kept lines', () => {
     pending.kept.configure({ answers: [], lines: [], outstanding: [], replies })
     const written: string[] = []
     let attached = true
-    pending.toAgent = (line) => !attached && written.push(line) > 0
+    // An empty line is the daemon ending an app's cut-off line, a no-op when it ended.
+    pending.toAgent = (line) => !attached && (line === '' || written.push(line) > 0)
     // Both arrive while the app still holds the relay; the app is writing its answer to id 2.
     agent(pending, 1, { id: 1, method: 'craft/drainMidTurnQueue', params: {} })
     agent(pending, 2, { id: 2, method: 'craft/drainMidTurnQueue', params: {} })

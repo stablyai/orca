@@ -121,6 +121,8 @@ export class ProviderRelayPendingRequests {
   }
 
   private hold(key: string, record: ProviderRelayRecord): void {
+    // Re-sent under its id: an answer once being written (maybe failed) is not this one's.
+    this.writing.delete(key)
     this.release(key)
     this.pending.set(key, record)
     this.pendingChars += record.line.length
@@ -280,11 +282,17 @@ export class ProviderRelayPendingRequests {
     return answered
   }
 
-  /** Once no app is attached: held requests with a fixed reply are answered, but not one whose
-   *  answer from the app is still being written. */
+  /** Once no app is attached: an app's cut-off line is ended (for the agent and for this table),
+   *  and held requests with a fixed reply are answered, but not one whose answer from the app is
+   *  still being written. */
   answerHeld(): void {
-    for (const [key, record] of this.pending) {
-      const message = this.writing.has(key) ? null : parseObject(record.line)
+    this.clientLinePartial = ''
+    this.skippingClientLine = false
+    this.toAgent?.('')
+    const methods = this.kept.replyMethods
+    for (const [key, record] of methods.length > 0 ? this.pending : []) {
+      const named = methods.some((method) => record.line.includes(method))
+      const message = named && !this.writing.has(key) ? parseObject(record.line) : null
       if (
         message &&
         typeof message.method === 'string' &&

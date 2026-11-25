@@ -116,7 +116,7 @@ function moveSession(
   except?: string
 ): void {
   for (const [id, item] of from) {
-    if (item.session === session && id !== except) {
+    if (item.session === session && id !== except && (to.has(id) || to.size < MAX_OPEN_ITEMS)) {
       from.delete(id)
       to.set(id, item)
     }
@@ -298,16 +298,14 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
 
   /** Ends a session's messages, all but `except`. */
   private closeMessages(session: string | undefined, except?: string): void {
-    if (except === undefined) {
-      this.current.delete(session)
-    } else {
-      // Another message only pauses a cut one: OpenCode resumes a message's id after another's.
+    if (except !== undefined) {
+      // Another message ends none: OpenCode resumes a message's id after another's, so each stays
+      // held from its start (a cut one only pauses) until a user chunk, child status or turn end.
       moveSession(this.cutMessages, this.pausedCuts, session, except)
+      return
     }
-    for (const open of [this.messages, this.cutMessages, except ? null : this.pausedCuts]) {
-      if (!open) {
-        continue
-      }
+    this.current.delete(session)
+    for (const open of [this.messages, this.cutMessages, this.pausedCuts]) {
       for (const [id, item] of open) {
         if (id !== except && item.session === session) {
           open.delete(id)
