@@ -66,6 +66,8 @@ export class OrcaAccountService {
   private readonly userDataPath: () => string
   private readonly hooks: OrcaAccountLifecycleHooks
   private readonly accountBoundLinks: AccountBoundLinks | undefined
+  private switchingCloudServer = false
+  private cloudServerGeneration = 0
   private readonly signOutListeners = new Set<() => void>()
 
   constructor(ports: OrcaAccountServicePorts) {
@@ -104,6 +106,7 @@ export class OrcaAccountService {
   }
 
   async connect(): Promise<ConnectCurrentOrcaProfileResult> {
+    this.assertCloudServerStable()
     const result = await connectCurrentOrcaProfile(
       this.userDataPath(),
       this.openBrowser,
@@ -125,6 +128,7 @@ export class OrcaAccountService {
       'signal' | 'requireSealedStorage' | 'expectedLinkEpoch'
     > = {}
   ): Promise<ConnectCurrentOrcaProfileResult> {
+    this.assertCloudServerStable()
     const result = await signInCurrentOrcaProfileWithCode(this.userDataPath(), config, code, {
       ...guards,
       mayCommit: this.mayCommit
@@ -141,7 +145,13 @@ export class OrcaAccountService {
     args: CreateCloudLinkedOrcaProfileArgs,
     onCreated?: (profileId: string) => void
   ): Promise<CreateCloudLinkedOrcaProfileResult> {
-    const result = await createCloudLinkedOrcaProfile(this.userDataPath(), args)
+    this.assertCloudServerStable()
+    const generation = this.cloudServerGeneration
+    const result = await createCloudLinkedOrcaProfile(
+      this.userDataPath(),
+      args,
+      () => generation === this.cloudServerGeneration
+    )
     if (result.status === 'created') {
       onCreated?.(result.profile.id)
       this.hooks.onAuthMutation?.()
@@ -156,6 +166,7 @@ export class OrcaAccountService {
   async refreshAuth(options?: {
     notifyUnchanged?: boolean
   }): Promise<RefreshCurrentOrcaProfileAuthResult> {
+    this.assertCloudServerStable()
     const previous = options?.notifyUnchanged === false ? this.getAuthStatus() : undefined
     const result = await refreshCurrentOrcaProfileAuth(this.userDataPath())
     if (result.status === 'refreshed' && (!previous || authPolicyChanged(previous, result.auth))) {
@@ -165,11 +176,33 @@ export class OrcaAccountService {
   }
 
   async selectOrg(orgId: string): Promise<SelectOrcaProfileOrgResult> {
+    this.assertCloudServerStable()
     const result = await selectCurrentOrcaProfileOrg(this.userDataPath(), orgId)
     if (result.status === 'selected') {
       this.hooks.onAuthMutation?.()
     }
     return result
+  }
+
+  // `serverChanging` fences in-flight profile creation; a save that keeps the effective server must not.
+  async withCloudServerSwitch<T>(
+    operation: (serverChanging: () => void) => Promise<T>
+  ): Promise<T> {
+    this.assertCloudServerStable()
+    this.switchingCloudServer = true
+    try {
+      return await operation(() => {
+        this.cloudServerGeneration++
+      })
+    } finally {
+      this.switchingCloudServer = false
+    }
+  }
+
+  private assertCloudServerStable(): void {
+    if (this.switchingCloudServer) {
+      throw new Error('cloud_server_switch_in_progress')
+    }
   }
 
   /** Every sign-out, whichever caller (window or runtime RPC) made it. */

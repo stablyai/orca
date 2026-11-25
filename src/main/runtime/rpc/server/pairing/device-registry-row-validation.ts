@@ -33,6 +33,9 @@ export function validRelayBinding(
     typeof value.relayHostId === 'string' &&
     typeof value.ownerIdentityKey === 'string'
     ? {
+        ...(typeof value.relayDirectorUrl === 'string'
+          ? { relayDirectorUrl: value.relayDirectorUrl }
+          : {}),
         relayHostId: value.relayHostId,
         relayDeviceId: deviceId,
         ownerIdentityKey: value.ownerIdentityKey,

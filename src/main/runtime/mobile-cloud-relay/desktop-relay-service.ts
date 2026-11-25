@@ -40,6 +40,7 @@ const PAIRING_MINT_READINESS_WAIT_MS = 20_000
 const PHONE_REQUEST_READINESS_WAIT_MS = 10_000
 
 export class DesktopRelayService {
+  private readonly relayDirectorUrl: string
   private readonly coordinator: RelayAuthCoordinator
   private readonly revokeOutbox: RelayRevokeOutbox
   private readonly runtimeRpc: OrcaRuntimeRpcServer
@@ -55,11 +56,13 @@ export class DesktopRelayService {
       throw new Error('mobile_runtime_not_ready')
     }
     this.runtimeRpc = options.runtimeRpc
+    this.relayDirectorUrl = options.authConfig.relayDirectorUrl
     this.revokeOutbox = options.runtimeRpc.getRelayRevokeOutbox()
     this.demandLedger = new RelayDemandLedger({
       deviceRegistry: options.runtimeRpc.getDeviceRegistry()!,
       revokeOutbox: this.revokeOutbox,
-      relayHostId: deriveRelayHostId(keypair.publicKey)
+      relayHostId: deriveRelayHostId(keypair.publicKey),
+      relayDirectorUrl: this.relayDirectorUrl
     })
     const regionPreference = createRelayRegionPreferenceReader(options)
     this.coordinator = new RelayAuthCoordinator({
@@ -122,6 +125,7 @@ export class DesktopRelayService {
       return {
         relay,
         binding: {
+          relayDirectorUrl: this.relayDirectorUrl,
           relayHostId: broker.hostId,
           relayDeviceId,
           ownerIdentityKey: broker.ownerIdentityKey,
@@ -135,6 +139,7 @@ export class DesktopRelayService {
     this.refreshDemand()
     const broker = this.coordinator.getActiveBroker()
     if (
+      (!item.relayDirectorUrl || item.relayDirectorUrl === this.relayDirectorUrl) &&
       broker instanceof RelaySessionBroker &&
       broker.hostId === item.relayHostId &&
       broker.ownerIdentityKey === item.ownerIdentityKey
@@ -158,7 +163,7 @@ export class DesktopRelayService {
       const broker = await this.requireActiveBroker(PHONE_REQUEST_READINESS_WAIT_MS).catch(
         () => null
       )
-      if (!broker?.endpoint) {
+      if (this.stopped || !broker?.endpoint) {
         return { v: 1, relay: null }
       }
       this.assertRelayHost(context, broker)
@@ -198,7 +203,8 @@ export class DesktopRelayService {
     }
     return await this.withTransientDemand(`provision:${context.deviceId}`, async () => {
       const broker = await this.requireActiveBroker(PHONE_REQUEST_READINESS_WAIT_MS)
-      if (!broker.endpoint) {
+      // Readiness may resolve after stop; never bind a surviving LAN device to the retired server.
+      if (this.stopped || !broker.endpoint) {
         throw new Error('relay_control_not_active')
       }
       this.assertRelayHost(context, broker)
@@ -209,6 +215,7 @@ export class DesktopRelayService {
       }
       if (
         !this.runtimeRpc.setMobileRelayBinding(context.deviceId, {
+          relayDirectorUrl: this.relayDirectorUrl,
           relayHostId: broker.hostId,
           relayDeviceId: context.deviceId,
           ownerIdentityKey: broker.ownerIdentityKey
@@ -239,7 +246,11 @@ export class DesktopRelayService {
   }
 
   private async flushRevokeOutbox(broker: RelaySessionBroker): Promise<void> {
-    for (const item of this.revokeOutbox.pendingFor(broker.ownerIdentityKey, broker.hostId)) {
+    for (const item of this.revokeOutbox.pendingFor(
+      broker.ownerIdentityKey,
+      broker.hostId,
+      this.relayDirectorUrl
+    )) {
       await this.flushRevoke(broker, item)
     }
   }

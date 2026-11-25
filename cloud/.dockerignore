@@ -21,3 +21,8 @@ coverage/
 **/*.tfstate
 **/*.tfstate.*
 
+
+**/data/
+**/*.sqlite
+**/*.sqlite-*
+**/signing-key.pem

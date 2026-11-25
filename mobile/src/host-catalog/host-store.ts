@@ -5,6 +5,8 @@ import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './host-pr
 import { getNextHostNameFromHosts } from './host-names'
 import { mergeHostNameIdentity, withPersonalName } from './host-name-identity'
 import * as hostListLoads from './host-list-load-sharing'
+import { trackPairingPublication } from './pairing-publication-fence'
+import { loadSettledHostListSnapshot } from './host-list-settled-load'
 import { joinHostCatalogCredentials } from './host-catalog-credential-join'
 import {
   readHostDeviceToken,
@@ -57,9 +59,7 @@ export const loadHostCatalog = async (): Promise<HostCatalogEntry[]> =>
   (await loadHostListSnapshot()).catalog
 
 async function loadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
-  // Wait for full serialized mutations so loads cannot read half-written state.
-  await hostListMutationsSettled()
-  return hostListLoads.shareHostListLoad(doLoadHostListSnapshot)
+  return loadSettledHostListSnapshot(doLoadHostListSnapshot)
 }
 
 async function doLoadHostListSnapshot(): Promise<hostListLoads.HostListSnapshot> {
@@ -168,7 +168,10 @@ export async function setRelayRouting(hostId: string, relay: MobileRelayEndpoint
 }
 
 /** Pairing only (a census fences the importers): it creates or re-pairs the whole host. */
-export async function savePairedHost(host: HostProfile): Promise<void> {
+export const savePairedHost = (host: HostProfile): Promise<void> =>
+  trackPairingPublication(() => publishPairedHost(host))
+
+async function publishPairedHost(host: HostProfile): Promise<void> {
   const validated = HostProfileSchema.parse(host)
   const stored = toStoredHostProfile(validated)
   const duplicateHostIds = new Set<string>()

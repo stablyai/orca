@@ -193,7 +193,8 @@ export async function signOutCurrentOrcaProfile(
 
 export async function createCloudLinkedOrcaProfile(
   userDataPath: string,
-  args: CreateCloudLinkedOrcaProfileArgs
+  args: CreateCloudLinkedOrcaProfileArgs,
+  mayCommit: () => boolean = () => true
 ): Promise<CreateCloudLinkedOrcaProfileResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
@@ -227,7 +228,7 @@ export async function createCloudLinkedOrcaProfile(
       userDataPath,
       (session) => createOrcaCloudProfile(configState.config, session, args)
     )
-    if (operation.status !== 'ok') {
+    if (!mayCommit() || operation.status !== 'ok') {
       return {
         status: 'reconnect-required',
         auth: getOrcaProfileAuthStatusFromProfile(active, userDataPath)

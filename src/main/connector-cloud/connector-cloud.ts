@@ -199,6 +199,7 @@ export class ConnectorCloud {
   /** Just before the desktop signs out: stop now, and drop turn ends no other account can report. */
   signOutStarted(): void {
     this.signingOut = true
+    this.transport = null
     this.noteAccount()
     this.stopClient()
     if (this.events) {
@@ -243,13 +244,10 @@ export class ConnectorCloud {
 
   private transportFor(account: string): ConnectorAccountTransport {
     if (this.transport?.account !== account) {
+      const { origin, fetchImpl } = this.options
       this.transport = {
         account,
-        transport: new ConnectorAccountTransport(
-          this.options.origin,
-          this.options.mintFor(account),
-          this.options.fetchImpl
-        )
+        transport: new ConnectorAccountTransport(origin, this.options.mintFor(account), fetchImpl)
       }
     }
     return this.transport.transport
