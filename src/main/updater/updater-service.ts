@@ -13,6 +13,7 @@ import type { ReleaseBuild, ReleaseChannel } from '../../shared/updater/release-
 import type { ReleaseBuildListOptions } from './releases/updater-release-build-cache'
 import { UpdaterSetup, type UpdaterSetupOptions } from './lifecycle/updater-setup'
 import type { UpdateInstallMode } from './lifecycle/updater-state'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { setDesktopReportUpdateStatus } from '../orca-profiles/cloud-auth/desktop-client-report'
 
 const updater = new UpdaterSetup()
@@ -57,9 +58,12 @@ export function checkForUpdatesFromMenu(options?: UpdateCheckOptions): void {
   updater.checkForUpdatesFromMenu(options)
 }
 
-export function applyAutomaticUpdatesSetting(enabled: boolean | undefined): void {
-  if (enabled === true) {
+export function applyUpdaterSettings(updates: Readonly<Partial<GlobalSettings>>): void {
+  if (updates.automaticUpdates === true) {
     updater.applyAutomaticUpdatesSetting()
+  }
+  if (updates.automaticUpdateChecks !== undefined) {
+    updater.applyAutomaticUpdateChecksSetting()
   }
 }
 

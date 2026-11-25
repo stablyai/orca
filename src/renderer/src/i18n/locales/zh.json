@@ -1387,6 +1387,12 @@
       "description": "在支持此功能的桌面安装中，Orca 会在定期检查时下载符合条件的更新，并自动重启以完成安装。",
       "info": "关于自动更新",
       "saveFailed": "无法保存自动更新设置。"
+    },
+    "automaticUpdateChecks": {
+      "title": "自动检查更新",
+      "description": "Orca 会在启动、唤醒时以及每天检查一次新版本。关闭后，仅在你点击“检查更新”时才会检查。",
+      "info": "关于自动检查更新",
+      "saveFailed": "无法保存自动检查更新设置。"
     }
   },
   "menu": {

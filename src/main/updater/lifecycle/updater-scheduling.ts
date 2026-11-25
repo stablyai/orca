@@ -10,13 +10,27 @@ import {
 } from './updater-state'
 import { UpdaterCheckFailure } from './updater-check-failure'
 import { getDelayedUpdateWakeDelayMs } from '../releases/updater-release-delay'
+import { managesUpdates, requiredMinimumVersion } from '../releases/updater-release-policy'
 
 export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected getAutomaticRetryInterval(): number {
     return AUTO_UPDATE_RETRY_INTERVAL_MS
   }
 
+  /** Team-managed update policies keep enforcing themselves even when the user turned background checks off. */
+  protected automaticUpdateChecksAllowed(): boolean {
+    return (
+      this.getAutomaticUpdateChecks?.() === true ||
+      this.teamPolicyCheckPending ||
+      managesUpdates(this.getTeamUpdatePolicy?.())
+    )
+  }
+
   protected scheduleAutomaticUpdateCheck(delayMs: number): void {
+    if (!this.automaticUpdateChecksAllowed()) {
+      this.clearAutomaticUpdateCheckTimer()
+      return
+    }
     let effectiveDelayMs = delayMs
     // The retry constant identifies all retry-cadence callers, keeping backoff centralized.
     if (delayMs === AUTO_UPDATE_RETRY_INTERVAL_MS) {
@@ -29,9 +43,7 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
     if (this.teamPolicyCheckPending) {
       effectiveDelayMs = Math.min(effectiveDelayMs, TEAM_POLICY_CHECK_RETRY_MS)
     }
-    if (this.autoUpdateCheckTimer) {
-      clearTimeout(this.autoUpdateCheckTimer)
-    }
+    this.clearAutomaticUpdateCheckTimer()
     this.autoUpdateCheckTimer = setTimeout(() => {
       // Long-running apps need main-process timers independent of renderer/relaunch lifetime.
       if (!this.runBackgroundUpdateCheck()) {
@@ -39,6 +51,41 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
         this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
       }
     }, effectiveDelayMs)
+  }
+
+  applyAutomaticUpdateChecksSetting(): void {
+    if (!this.autoUpdaterInitialized) {
+      return
+    }
+    if (this.automaticUpdateChecksAllowed()) {
+      this.startAutomaticUpdateChecks()
+    } else {
+      this.clearAutomaticUpdateCheckTimer()
+    }
+  }
+
+  protected startAutomaticUpdateChecks(): void {
+    const policy = this.getTeamUpdatePolicy?.()
+    const lastUpdateCheckAt = this._getLastUpdateCheckAt?.() ?? null
+    const msSinceLastCheck =
+      lastUpdateCheckAt === null ? Number.POSITIVE_INFINITY : Date.now() - lastUpdateCheckAt
+    if (
+      msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS ||
+      policy?.forceUpdates ||
+      requiredMinimumVersion(policy, app.getVersion())
+    ) {
+      this.runBackgroundUpdateCheck()
+      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
+    } else {
+      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS - msSinceLastCheck)
+    }
+  }
+
+  protected clearAutomaticUpdateCheckTimer(): void {
+    if (this.autoUpdateCheckTimer) {
+      clearTimeout(this.autoUpdateCheckTimer)
+      this.autoUpdateCheckTimer = null
+    }
   }
 
   protected recordCompletedUpdateCheck(): void {
@@ -50,6 +97,9 @@ export abstract class UpdaterScheduling extends UpdaterCheckFailure {
   protected runBackgroundUpdateCheck(
     nudgeId: string | null = this.getPersistedPendingUpdateNudgeId()
   ): boolean {
+    if (!this.automaticUpdateChecksAllowed()) {
+      return false
+    }
     if (
       this.pendingQuitAndInstallTimer ||
       this.quitAndInstallInProgress ||

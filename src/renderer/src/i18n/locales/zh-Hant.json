@@ -1174,6 +1174,12 @@
       "info": "關於自動更新",
       "saveFailed": "無法儲存自動更新設定。"
     },
+    "automaticUpdateChecks": {
+      "title": "自動檢查更新",
+      "description": "Orca 會在啟動、喚醒時以及每天檢查一次新版本。關閉後，僅在你點擊「檢查更新」時才會檢查。",
+      "info": "關於自動檢查更新",
+      "saveFailed": "無法儲存自動檢查更新設定。"
+    },
     "general": {
       "about": {
         "title": "關於",

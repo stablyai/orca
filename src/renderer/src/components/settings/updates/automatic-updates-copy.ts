@@ -10,3 +10,13 @@ export function getAutomaticUpdatesSettingCopy(t: Translate = translate) {
     )
   }
 }
+
+export function getAutomaticUpdateChecksSettingCopy(t: Translate = translate) {
+  return {
+    title: t('settings.automaticUpdateChecks.title', 'Check for updates automatically'),
+    description: t(
+      'settings.automaticUpdateChecks.description',
+      'Orca checks for new versions at startup, on wake, and once a day. When off, Orca only checks when you click Check for updates.'
+    )
+  }
+}

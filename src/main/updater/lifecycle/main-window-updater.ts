@@ -135,6 +135,7 @@ function buildUpdaterSetupOptions(
     getUpdateDelayDays: () =>
       normalizeUpdateDelayDays(nativeSettings.getSettings().updateDelayDays),
     getAutomaticUpdates: () => nativeSettings.getSettings().automaticUpdates === true,
+    getAutomaticUpdateChecks: () => nativeSettings.getSettings().automaticUpdateChecks === true,
     onBeforeQuitFailure: options?.onBeforeUpdateQuitFailure,
     installMode: options?.updateInstallMode
   }
