@@ -245,23 +245,23 @@ export async function renderFixture(page, url, name, theme, viewport) {
   if (viewport) {
     await page.setViewportSize(viewport)
   }
-  if (page.url() === 'about:blank') {
-    await page.goto(`${url}/fixtures.html?worker`, {
-      waitUntil: 'domcontentloaded',
-      timeout: 120_000
-    })
-    await page.evaluate(() => {
-      window.__railProofFrames = {
-        request: window.requestAnimationFrame.bind(window),
-        cancel: window.cancelAnimationFrame.bind(window)
-      }
-    })
+  const entry = `${url}/fixtures.html?worker`
+  if (page.url() !== entry) {
+    await page.goto(entry, { waitUntil: 'commit', timeout: 30_000 })
   }
+  await page.waitForFunction(() => Boolean(window.__orcaComponentFixtureHost), null, {
+    polling: 250,
+    timeout: 120_000
+  })
   await page.evaluate(
     async ({ id, theme }) => {
       // Each fixture gets a fresh root and store. Restore the browser frame functions instrumented by a prior case.
-      window.requestAnimationFrame = window.__railProofFrames.request
-      window.cancelAnimationFrame = window.__railProofFrames.cancel
+      const frames = (window.__railProofFrames ??= {
+        request: window.requestAnimationFrame.bind(window),
+        cancel: window.cancelAnimationFrame.bind(window)
+      })
+      window.requestAnimationFrame = frames.request
+      window.cancelAnimationFrame = frames.cancel
       await window.__orcaComponentFixtureHost.render(id, theme)
     },
     { id: `app-rail/AppRail:${name}`, theme }
