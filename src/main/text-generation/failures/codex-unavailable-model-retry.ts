@@ -90,19 +90,23 @@ export function codexUnavailableModelRetryPlan<T extends GenerationArgument>(
   if (!sent || !isModelUnavailableFailure(sent.model, failure)) {
     return null
   }
+  // Generated args precede recipe args, so Orca's effort is the plan's first effort override.
+  const firstEffort = tokens.findIndex(
+    (token, index) => token === '-c' && tokens[index + 1]?.startsWith('model_reasoning_effort=')
+  )
+  const orcaEffort =
+    params.thinkingLevel !== undefined &&
+    tokens[firstEffort + 1] === `model_reasoning_effort=${params.thinkingLevel}`
+      ? firstEffort
+      : -1
   const removed = new Set<number>()
   for (const span of sent.spans) {
     for (let offset = 0; offset < span.consumed; offset += 1) {
       removed.add(span.index + offset)
     }
     // Orca's effort follows its own --model and may not fit Codex's default; recipe effort is kept.
-    const next = span.index + span.consumed
-    if (
-      params.thinkingLevel !== undefined &&
-      tokens[next] === '-c' &&
-      tokens[next + 1] === `model_reasoning_effort=${params.thinkingLevel}`
-    ) {
-      removed.add(next).add(next + 1)
+    if (orcaEffort >= 0 && span.index + span.consumed === orcaEffort) {
+      removed.add(orcaEffort).add(orcaEffort + 1)
     }
   }
   return {

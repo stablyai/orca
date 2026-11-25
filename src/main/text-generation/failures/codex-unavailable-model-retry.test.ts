@@ -39,6 +39,22 @@ describe('codexUnavailableModelRetryPlan', () => {
     expect(orcaRetry?.refusedModel).toBe('gpt-5.5')
     expect(orcaRetry?.plan.args).toEqual(BASE_ARGS)
 
+    // Recipe effort after the recipe's model survives even when it equals Orca's level.
+    const both = plan([
+      ...BASE_ARGS,
+      '--model',
+      'gpt-5.5',
+      '-c',
+      'model_reasoning_effort=low',
+      '-c',
+      'model=gpt-5.4-mini',
+      '-c',
+      'model_reasoning_effort=low'
+    ])
+    expect(
+      codexUnavailableModelRetryPlan(both, { thinkingLevel: 'low' }, refused('gpt-5.5'))?.plan.args
+    ).toEqual([...BASE_ARGS, '-c', 'model_reasoning_effort=low'])
+
     // A refusal of another model, or a run that sent none, is not blamed on anything.
     expect(codexUnavailableModelRetryPlan(orcaModel, {}, refused('gpt-5.4-mini'))).toBeNull()
     expect(codexUnavailableModelRetryPlan(plan(BASE_ARGS), {}, refused('gpt-5.5'))).toBeNull()

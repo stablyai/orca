@@ -221,7 +221,8 @@ export function resolveSourceControlAiForOperation(
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
   const listing = getFreshAccountModelListing(source, legacy, hostKey, resolvedAgent)
-  const models = getTextGenerationModels(spec.models, source, legacy, hostKey, resolvedAgent)
+  const models =
+    listing ?? getTextGenerationModels(spec.models, source, legacy, hostKey, resolvedAgent)
   // Without a fresh account listing a pick may be newer than Orca knows; Codex's refusal retry covers a bad one.
   const runsUnlistedPicks = !listing && listsAccountModels(resolvedAgent)
   const persistedModelId = selectPersistedModelId({
