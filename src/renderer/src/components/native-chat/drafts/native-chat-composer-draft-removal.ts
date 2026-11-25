@@ -41,6 +41,7 @@ export function deleteNativeChatComposerDraftsWhere(
   for (const scope of nativeChatStagedScopes()) {
     if (!records.has(scope) && !scopeListeners.has(scope) && matches(scope, undefined)) {
       releaseNativeChatStagedFiles(scope)
+      forgetNativeChatUnrestoredExpiredUploads(scope)
     }
   }
   for (const scope of new Set([...records.keys(), ...scopeListeners.keys()])) {

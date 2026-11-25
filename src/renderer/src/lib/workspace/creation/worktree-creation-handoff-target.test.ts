@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionPendingSend } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import type * as HandBack from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 
 const tabs = new Map<string, Record<string, unknown>>()
 vi.mock('@/store/index', () => ({
@@ -22,6 +23,15 @@ vi.mock(
       })
     }
   }
+)
+// The draft journal's synchronous answer is the other stand-in: a full or refused journal (quota)
+// makes the returned launch message non-durable although its hand-back has happened.
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof HandBack>()),
+    handBackStructuredAgentSessionMessage: () => false
+  })
 )
 
 const {
@@ -74,8 +84,15 @@ const { retainUnconfirmed, settleRecorded, structuredAgentSessionSendRecorded } 
   await import('@/components/native-chat/session/structured/delivery/structured-agent-session-send-runtime')
 const { findStructuredAgentSessionPendingSend } =
   await import('@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends')
-const { unconfirmedStructuredLaunchDelivery, discardStructuredAgentSessionChatSends } =
-  await import('@/lib/agent-session/launch/structured-agent-session-staged-prompt')
+const {
+  discardStructuredAgentSessionChatSends,
+  stageStructuredLaunchPrompt,
+  unconfirmedStructuredLaunchDelivery
+} = await import('@/lib/agent-session/launch/structured-agent-session-staged-prompt')
+const { settleStructuredAgentLaunchPrompt } =
+  await import('@/lib/agent-session/launch/structured-agent-session-launch-prompt')
+const { StructuredAgentSessionCreateRefusalError } =
+  await import('@/lib/agent-session/launch/structured-agent-session-launch-errors')
 const { captureNativeChatStagedInput } =
   await import('@/components/native-chat/drafts/native-chat-staged-input')
 const { hasNativeChatStagedFiles, reconcileNativeChatStagedDraft, stageNativeChatDraftFile } =
@@ -153,4 +170,35 @@ it('releases moved first-send files when the recipient was discarded before the 
 
     expect(hasNativeChatStagedFiles(scope)).toBe(false)
   }
+})
+
+// A deferred launch whose create is refused hands its message back before any send. When the draft
+// journal refuses that write, the result is not `inComposer`, yet the operation is over: it reports
+// `handBackFinished`, and a moved first send's lease ends instead of waiting on a send that never comes.
+it('ends a moved first-send lease after a create refusal whose hand-back was not durable', async () => {
+  const sessionId = 'create-refused-quota'
+  const scope = structuredAgentSessionDraftScopeKey(sessionId)
+  stageNativeChatDraftFile(scope, 'blob:create-refused')
+  const files = captureNativeChatStagedInput(scope, {
+    text: '',
+    attachments: [{ path: 'blob:create-refused' }]
+  })
+  reconcileNativeChatStagedDraft(scope, { text: '', images: [] })
+  const stagedPrompt = stageStructuredLaunchPrompt(sessionId, 'hi')
+
+  const delivery = settleStructuredAgentLaunchPrompt({
+    launchResult: Promise.reject(new StructuredAgentSessionCreateRefusalError('refused')),
+    target: { kind: 'local' },
+    options: { prompt: 'hi' },
+    stagedPrompt
+  })!
+  const result = await delivery
+  expect(result.inComposer).toBeUndefined()
+  expect(result.handBackFinished).toBe(true)
+
+  releaseFirstSendFilesWhenHeld(delivery, () => true, files)
+  await Promise.resolve()
+  await Promise.resolve()
+
+  expect(hasNativeChatStagedFiles(scope)).toBe(false)
 })

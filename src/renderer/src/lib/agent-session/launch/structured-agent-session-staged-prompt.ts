@@ -162,7 +162,12 @@ export function takeBackLegacyStructuredLaunchPrompts(sessionId: string): void {
     unstageStructuredLaunchPrompt(prompt)
     prompt.discarded = true
     const inComposer = handBackStagedLaunchPrompt(prompt)
-    prompt.settleCreate({ delivered: false, inComposer, failureNotified: true })
+    prompt.settleCreate({
+      delivered: false,
+      inComposer,
+      failureNotified: true,
+      handBackFinished: true
+    })
     prompt.discard()
   }
 }

@@ -66,7 +66,7 @@ function sendStagedPrompt(
         publishStructuredAgentSessionSends(prompt.sessionId, {
           notice: error instanceof Error ? error.message : String(error)
         })
-        return { delivered: false, inComposer, failureNotified: true }
+        return { delivered: false, inComposer, failureNotified: true, handBackFinished: true }
       }
     }
     const sent = prompt.slot
@@ -81,7 +81,12 @@ function sendStagedPrompt(
     if (!sent) {
       // Another send of the chat holds its slot: the launch text waits in the composer instead.
       unstageStructuredLaunchPrompt(prompt)
-      return { delivered: false, inComposer: handBackStagedLaunchPrompt(prompt), busy: true }
+      return {
+        delivered: false,
+        inComposer: handBackStagedLaunchPrompt(prompt),
+        busy: true,
+        handBackFinished: true
+      }
     }
     try {
       const outcome = await sent.outcome
@@ -120,7 +125,8 @@ export function settleStructuredAgentLaunchPrompt(args: {
         const result = {
           delivered: false,
           inComposer: handBackStagedLaunchPrompt(prompt),
-          failureNotified: true
+          failureNotified: true,
+          handBackFinished: true as const
         }
         prompt.delivery = Promise.resolve(result)
         prompt.settleCreate(result)
@@ -154,10 +160,12 @@ export function settleStructuredAgentLaunchPrompt(args: {
       if (prompt && !prompt.discarded && !prompt.delivery) {
         unstageStructuredLaunchPrompt(prompt)
         prompt.discarded = true
+        // The hand-back's durability is separate from its end: either way nothing later takes custody.
         const inComposer = handBackStagedLaunchPrompt(prompt)
         return {
           delivered: false,
           failureNotified: true,
+          handBackFinished: true as const,
           ...(inComposer ? { inComposer: true as const } : {})
         }
       }

@@ -1,5 +1,12 @@
 import { formatNativeChatFileReference } from '../../../../../shared/native-chat/input/composer/agent-image-paste'
+import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import type { JSONContent } from '@tiptap/react'
+import { FILE_REFERENCE_NODE } from '../composer/editor/native-chat-prompt-document-text'
+import {
+  nativeChatDraftPositions,
+  records,
+  type NativeChatDraftPosition
+} from './native-chat-composer-draft-memory'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
@@ -35,38 +42,100 @@ export function noteNativeChatUnrestoredExpiredUploads(
   unrestored.set(scope, note)
 }
 
-/** Literal replacement of each expired host reference, quoted or not, with its original. */
-function rewriteReferences(value: string, restored: ReadonlyMap<string, string>): string {
-  let next = value
-  for (const [host, original] of restored) {
-    next = next
-      .split(formatNativeChatFileReference(host))
-      .join(formatNativeChatFileReference(original))
-      .split(host)
-      .join(original)
+/**
+ * Rewrite only exact file references to an expired host path (the attachment parser's own tokens, quoted
+ * or not), never a substring: `@…/file.txt.bak`, prose quoting the path and other atoms stay as they are.
+ * `offset` maps a position in the old text to the new one.
+ */
+function rewriteReferences(
+  value: string,
+  restored: ReadonlyMap<string, string>
+): { text: string; offset: (at: number) => number } {
+  const parts = nativeChatTextAttachmentParts(value, true, (path) => restored.has(path))
+  const shifts: { end: number; delta: number }[] = []
+  let oldEnd = 0
+  let delta = 0
+  const text = parts
+    .map((part) => {
+      const next = part.path ? formatNativeChatFileReference(restored.get(part.path)!) : part.text
+      oldEnd += part.text.length
+      delta += next.length - part.text.length
+      shifts.push({ end: oldEnd, delta })
+      return next
+    })
+    .join('')
+  // Shift by the length change of every part that ends at or before the position.
+  const offset = (at: number): number => {
+    let shift = 0
+    for (const { end, delta: through } of shifts) {
+      if (end > at) {
+        break
+      }
+      shift = through
+    }
+    return at + shift
   }
-  return next
+  return { text, offset }
 }
 
-/** The same rewrite through the stored rich document, so its other content (skills, marks) survives. */
+/** Expired references the text still holds as exact attachment tokens. */
+function referencedHosts(text: string, hosts: readonly string[]): string[] {
+  const exact = new Set(
+    nativeChatTextAttachmentParts(text, true, (path) => hosts.includes(path)).flatMap((part) =>
+      part.path ? [part.path] : []
+    )
+  )
+  return hosts.filter((host) => exact.has(host))
+}
+
+/**
+ * The same exact rewrite through the stored rich document, so its other content (skills, mentions,
+ * marks) survives: text nodes by exact token, and file-reference atoms whose path (or, for a typed
+ * atom without one, whose token) names the expired host path exactly.
+ */
 function rewriteDocument(node: JSONContent, restored: ReadonlyMap<string, string>): JSONContent {
+  if (node.type === FILE_REFERENCE_NODE && node.attrs) {
+    const path = typeof node.attrs.path === 'string' ? node.attrs.path : ''
+    const host =
+      path !== ''
+        ? path
+        : [...restored.keys()].find(
+            (key) => node.attrs?.token === formatNativeChatFileReference(key)
+          )
+    const original = host === undefined ? undefined : restored.get(host)
+    return original
+      ? {
+          ...node,
+          attrs: {
+            ...node.attrs,
+            token: formatNativeChatFileReference(original),
+            path: path === '' ? '' : original
+          }
+        }
+      : node
+  }
   return {
     ...node,
-    ...(node.text !== undefined ? { text: rewriteReferences(node.text, restored) } : {}),
-    ...(node.attrs
-      ? {
-          attrs: Object.fromEntries(
-            Object.entries(node.attrs).map(([key, value]) => [
-              key,
-              typeof value === 'string' ? rewriteReferences(value, restored) : value
-            ])
-          )
-        }
-      : {}),
+    ...(node.text !== undefined ? { text: rewriteReferences(node.text, restored).text } : {}),
     ...(node.content
       ? { content: node.content.map((child) => rewriteDocument(child, restored)) }
       : {})
   }
+}
+
+/** A handoff's pending caret/selection survives the repair write, shifted past rewritten tokens. */
+function carriedPosition(
+  scope: string,
+  offset: (at: number) => number
+): NativeChatDraftPosition | undefined {
+  const current = records.get(scope)
+  const position = current && nativeChatDraftPositions.get(current)
+  if (!position?.pending) {
+    return undefined
+  }
+  return position.at === 'selection'
+    ? { ...position, from: offset(position.from), to: offset(position.to) }
+    : { ...position }
 }
 
 /**
@@ -91,7 +160,7 @@ export function repairNativeChatExpiredUploads(scope: string): void {
         : []
     })
   )
-  const unresolvedText = [...note.text].filter((host) => draft.text.includes(host))
+  const unresolvedText = referencedHosts(draft.text, [...note.text])
   const restored = restoreNativeChatExpiredUploads(scope, [
     ...unresolvedChips.values(),
     ...unresolvedText
@@ -114,7 +183,7 @@ export function repairNativeChatExpiredUploads(scope: string): void {
     return original ? { id: image.id, path: original } : image
   })
   const textRestored = new Map([...restored].filter(([host]) => unresolvedText.includes(host)))
-  const text = rewriteReferences(draft.text, textRestored)
+  const { text, offset } = rewriteReferences(draft.text, textRestored)
   updateNativeChatComposerDraft(
     scope,
     text === draft.text
@@ -124,7 +193,9 @@ export function repairNativeChatExpiredUploads(scope: string): void {
           text,
           document: draft.document && rewriteDocument(draft.document, textRestored)
         },
-    'immediate'
+    'immediate',
+    undefined,
+    carriedPosition(scope, offset)
   )
 }
 

@@ -38,8 +38,12 @@ vi.mock('../attachments/uploads/native-chat-session-attachment-upload', () => ({
 const { reconcileNativeChatStagedDraft, stageNativeChatDraftFile } =
   await import('./native-chat-draft-attachment-staging')
 const { captureNativeChatStagedInput } = await import('./native-chat-staged-input')
-const { appendToNativeChatComposerDraft, readNativeChatComposerDraft } =
-  await import('./native-chat-composer-draft-store')
+const {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft
+} = await import('./native-chat-composer-draft-store')
+const { nativeChatDraftPositions, records } = await import('./native-chat-composer-draft-memory')
 const { deleteNativeChatComposerDraft } = await import('./native-chat-composer-draft-removal')
 const { structuredAgentSessionDraftScopeKey } = await import('./native-chat-draft-scope')
 const { handBackStructuredAgentSessionMessage } =
@@ -233,4 +237,106 @@ it('keeps a newer image put in the unavailable slot and the draft document when 
   expect(document).toContain(skill.path)
   expect(document).toContain(text)
   expect(document).not.toContain(textHost)
+})
+
+/** Refuse a first send for its expired text file before the draft moves, then return the host path. */
+const refuseTextBeforeHandoff = async (name: string) => {
+  const sessionId = `staged-exact-${name}`
+  const source = `pending-creation:staged-exact-${name}`
+  const recipient = structuredAgentSessionDraftScopeKey(sessionId)
+  const text = `blob:exact-${name}`
+  stageNativeChatDraftFile(source, text)
+  const input = { text: formatNativeChatFileReference(text) }
+  const send = captureNativeChatStagedInput(source, input)
+  reconcileNativeChatStagedDraft(source, { text: '', images: [] })
+  await send.prepare(input, { ...session, sessionId })
+  const host = [...uploadedHosts.entries()].find(([, from]) => from === text)![0]
+  const refused: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: formatNativeChatFileReference(host) }]
+  }
+  const expired = new Set([agentSessionAttachmentUploadIdOfPath(host)!])
+  handBackStructuredAgentSessionMessage(sessionId, 'exact', refused, undefined, expired)
+  return { source, recipient, text, host }
+}
+
+const fileAtom = (path: string) => ({
+  type: 'nativeChatFileReference',
+  attrs: { token: formatNativeChatFileReference(path), path }
+})
+
+// Only the exact expired reference is repaired: a longer sibling path (`….bak`), prose quoting the
+// path and a file atom for the sibling stay exactly as the person left them, in text and document.
+it('repairs only the exact expired reference, not a longer path or quoted prose', async () => {
+  const { source, recipient, text, host } = await refuseTextBeforeHandoff('intact')
+  const sibling = `${host}.bak`
+  const draftText = `see ${formatNativeChatFileReference(host)} and ${formatNativeChatFileReference(sibling)} quoted "${host}"`
+  updateNativeChatComposerDraft(
+    recipient,
+    {
+      text: draftText,
+      document: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'see ' },
+              fileAtom(host),
+              { type: 'text', text: ' and ' },
+              fileAtom(sibling),
+              { type: 'text', text: ` quoted "${host}"` }
+            ]
+          }
+        ]
+      }
+    },
+    'immediate'
+  )
+
+  moveNativeChatComposerDraft(source, recipient, { workspaceId: 'wt', executionHostId: 'local' })
+
+  const repaired = readNativeChatComposerDraft(recipient)
+  expect(repaired.text).toBe(
+    `see ${formatNativeChatFileReference(text)} and ${formatNativeChatFileReference(sibling)} quoted "${host}"`
+  )
+  const atoms = JSON.stringify(repaired.document)
+  expect(atoms).toContain(JSON.stringify(fileAtom(sibling)))
+  expect(atoms).toContain(`"path":"${text}"`)
+  expect(atoms).toContain(` quoted \\"${host}\\"`)
+})
+
+// With the returned reference removed, nothing is repaired: the longer sibling path stays untouched.
+it('leaves a longer sibling path alone once the expired reference was removed', async () => {
+  const { source, recipient, host } = await refuseTextBeforeHandoff('removed')
+  const kept = `keep ${formatNativeChatFileReference(`${host}.bak`)}`
+  updateNativeChatComposerDraft(recipient, { text: kept, document: undefined }, 'immediate')
+
+  moveNativeChatComposerDraft(source, recipient, { workspaceId: 'wt', executionHostId: 'local' })
+
+  expect(readNativeChatComposerDraft(recipient).text).toBe(kept)
+})
+
+// The move installs a pending caret for the moved typing; the repair write that follows carries it,
+// shifted by the length change of the rewritten reference.
+it('carries the handoff caret through the repair write', async () => {
+  const { source, recipient, text, host } = await refuseTextBeforeHandoff('caret')
+  updateNativeChatComposerDraft(source, { text: 'typed later' }, 'immediate')
+  const position = (merged: { text: string }) => ({
+    at: 'selection' as const,
+    from: merged.text.length,
+    to: merged.text.length,
+    pending: true
+  })
+
+  moveNativeChatComposerDraft(source, recipient, undefined, position)
+
+  const repaired = readNativeChatComposerDraft(recipient)
+  expect(repaired.text).toContain(formatNativeChatFileReference(text))
+  expect(repaired.text).not.toContain(host)
+  const record = records.get(recipient)
+  const carried = record && nativeChatDraftPositions.get(record)
+  expect(carried).toMatchObject({ at: 'selection', pending: true })
+  expect(carried && 'from' in carried ? carried.from : -1).toBe(repaired.text.length)
 })

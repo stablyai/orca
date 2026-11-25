@@ -138,6 +138,11 @@ export type StructuredPromptDeliveryResult = {
   failureNotified: boolean
   /** Not sent, and waiting in the new chat's composer, which now owns the text. */
   inComposer?: true
+  /**
+   * The operation ended by handing its input back without a send, whether or not that write was
+   * durable: no later send, hand-back or recording follows, so nothing else will take custody.
+   */
+  handBackFinished?: true
   /** An admitted recipient took ownership before it was explicitly discarded. */
   recipientOwned?: true
   /** Nobody could confirm it went: the host may hold it. */

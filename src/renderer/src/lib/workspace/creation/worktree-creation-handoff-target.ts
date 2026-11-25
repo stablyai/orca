@@ -78,7 +78,8 @@ export function moveWorktreeCreationDraftToTarget(
  * An unconfirmed send that the host records later, by reply or journal, is a recorded delivery too.
  * After a confirmed move, a send that has already been handed back into the chat's composer, or whose
  * recipient chat was discarded, has no custody left to wait for: the lease ends at once and the draft
- * keeps only what it references. That holds even when the discard came before this result.
+ * keeps only what it references. That holds even when the discard came before this result, and for a
+ * hand-back whose draft write could not be made durable: it still ended the operation.
  */
 export function releaseFirstSendFilesWhenHeld(
   delivery: Promise<StructuredPromptDeliveryResult> | undefined,
@@ -91,7 +92,7 @@ export function releaseFirstSendFilesWhenHeld(
       return
     }
     if (draftTransferred()) {
-      if (result.inComposer || result.recipientOwned) {
+      if (result.inComposer || result.handBackFinished || result.recipientOwned) {
         files.release()
         return
       }
