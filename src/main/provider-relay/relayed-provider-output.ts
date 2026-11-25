@@ -212,7 +212,9 @@ export class RelayedProviderOutput {
 
   /** Before a hand-off: streamed text is saved first, so the last ack covers every line handed on
    *  (a cut item isn't kept whole, so a replay of a line the journal holds would show it twice). */
-  flush(): Promise<void> {
+  async flush(waitMs = 0): Promise<void> {
+    // A reader paused by its sink takes its buffered lines once that drains; they count too.
+    await this.allTaken(waitMs)
     this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
     this.clearAckTimer()
     return this.ack(false)
