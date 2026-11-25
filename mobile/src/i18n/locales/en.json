@@ -893,6 +893,7 @@
       "ignoredUnchecked": "Ignored files could not be fully checked",
       "needsUpdate": "Update Orca on your computer to delete this workspace from your phone.",
       "deleteTitle": "Delete Workspace",
+      "rowNotFound": "Couldn't find that workspace. Try again from the list.",
       "removeTitle": "Remove Workspace",
       "removeFolderMessage": "Remove \"{{name}}\" from Orca? The folder on disk is kept."
     },

@@ -2606,6 +2606,7 @@
       "ignoredUnchecked": "Yok sayılan dosyalar tam olarak kontrol edilemedi",
       "needsUpdate": "Bu çalışma alanını telefonunuzdan silebilmek için bilgisayarınızdaki Orca’yı güncelleyin.",
       "deleteTitle": "Çalışma alanını sil",
+      "rowNotFound": "Bu çalışma alanı bulunamadı. Listeden yeniden deneyin.",
       "removeTitle": "Çalışma alanını kaldır",
       "removeFolderMessage": "“{{name}}” Orca’dan kaldırılsın mı? Diskteki klasör korunur."
     },

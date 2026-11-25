@@ -1779,7 +1779,8 @@
       "failed": "ワークスペースの名前を変更できませんでした。{{reason}}"
     },
     "deleteConfirm": {
-      "deleteTitle": "ワークスペースを削除"
+      "deleteTitle": "ワークスペースを削除",
+      "rowNotFound": "そのワークスペースが見つかりませんでした。一覧からもう一度お試しください。"
     }
   },
   "navigation": {

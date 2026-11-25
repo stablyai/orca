@@ -2370,6 +2370,7 @@
       "ignoredUnchecked": "无法完整检查 Git 忽略的文件",
       "needsUpdate": "请更新电脑上的 Orca，以便在手机上删除此工作区",
       "deleteTitle": "删除工作区",
+      "rowNotFound": "找不到该工作区。请从列表中重试。",
       "removeTitle": "移除工作区",
       "removeFolderMessage": "要从 Orca 中移除“{{name}}”吗？磁盘上的文件夹会保留"
     },

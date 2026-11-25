@@ -1777,7 +1777,8 @@
       "failed": "無法重新命名工作區。{{reason}}"
     },
     "deleteConfirm": {
-      "deleteTitle": "刪除工作區"
+      "deleteTitle": "刪除工作區",
+      "rowNotFound": "找不到該工作區。請從清單中重試。"
     }
   },
   "navigation": {

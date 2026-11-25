@@ -1979,7 +1979,8 @@
       "hostNotFound": "Host não encontrado"
     },
     "deleteConfirm": {
-      "deleteTitle": "Excluir espaço de trabalho"
+      "deleteTitle": "Excluir espaço de trabalho",
+      "rowNotFound": "Não foi possível encontrar esse espaço de trabalho. Tente novamente pela lista."
     }
   },
   "navigation": {

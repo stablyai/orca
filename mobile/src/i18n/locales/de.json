@@ -1783,7 +1783,8 @@
       "failed": "Der Arbeitsbereich konnte nicht umbenannt werden. {{reason}}"
     },
     "deleteConfirm": {
-      "deleteTitle": "Arbeitsbereich löschen"
+      "deleteTitle": "Arbeitsbereich löschen",
+      "rowNotFound": "Dieser Arbeitsbereich wurde nicht gefunden. Versuche es noch einmal über die Liste."
     }
   },
   "navigation": {

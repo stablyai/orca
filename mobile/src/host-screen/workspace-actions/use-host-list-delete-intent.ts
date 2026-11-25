@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useGlobalSearchParams, useLocalSearchParams, useRouter } from 'expo-router'
+import { translate } from '../../i18n/mobile-i18n'
 import { firstParam } from '../../navigation/route-param-reader'
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { HostScreenState } from '../use-host-screen-state'
@@ -18,10 +19,10 @@ export function useHostListDeleteIntent(args: {
   embedded: boolean
   hostId: string | undefined
   rows: readonly Worktree[]
-  state: Pick<HostScreenState, 'setActionTarget' | 'setConfirmDelete'>
+  state: Pick<HostScreenState, 'setActionTarget' | 'setConfirmDelete' | 'setActionError'>
 }): void {
   const { embedded, hostId, rows } = args
-  const { setActionTarget, setConfirmDelete } = args.state
+  const { setActionTarget, setConfirmDelete, setActionError } = args.state
   // A layout-mounted sidebar has no route params of its own; a stacked list reads only its own,
   // so a list hidden under another screen never takes the focused list's token.
   const globalParams = useGlobalSearchParams<DeleteParams>()
@@ -56,8 +57,19 @@ export function useHostListDeleteIntent(args: {
       setConfirmDelete(row.isMainWorktree === true ? null : row)
       return
     }
-    // The row may still be loading; a list that never shows it drops the intent unseen.
-    const timer = setTimeout(() => setClaimed(null), Math.max(0, claimed.deadline - Date.now()))
+    // The row may still be loading; a list that never shows it says so rather than opening nothing.
+    const timer = setTimeout(
+      () => {
+        setClaimed(null)
+        setActionError(
+          translate(
+            'hostScreen.deleteConfirm.rowNotFound',
+            "Couldn't find that workspace. Try again from the list."
+          )
+        )
+      },
+      Math.max(0, claimed.deadline - Date.now())
+    )
     return () => clearTimeout(timer)
-  }, [claimed, rows, setActionTarget, setConfirmDelete])
+  }, [claimed, rows, setActionTarget, setConfirmDelete, setActionError])
 }

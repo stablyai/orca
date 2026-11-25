@@ -1830,7 +1830,8 @@
       "failed": "Impossible de renommer l’espace de travail. {{reason}}"
     },
     "deleteConfirm": {
-      "deleteTitle": "Supprimer l’espace de travail"
+      "deleteTitle": "Supprimer l’espace de travail",
+      "rowNotFound": "Espace de travail introuvable. Réessayez depuis la liste."
     }
   },
   "navigation": {
