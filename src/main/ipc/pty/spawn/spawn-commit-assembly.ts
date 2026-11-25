@@ -13,6 +13,7 @@ import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { PtySpawnTiming } from './pty-spawn-timing'
+import type { TerminalMcpPaneLaunch } from '../../../mcp-servers/terminal/terminal-mcp-launch'
 import type { CodexHomePtySpawnedLifecycleArgs } from '../host-env/types'
 import {
   codexReattachedHomeRouteField,
@@ -76,6 +77,7 @@ export type PtySpawnCommitState = {
   spawnRequestedAt?: number
   reattachedCodexHomeRoutes: Map<string, CodexPaneHomeRoute | null>
   launchCommand: string | undefined
+  terminalMcp?: TerminalMcpPaneLaunch | null
   preSpawnHiddenMarkId: string | null
   replacedPaneOwner?: ReplacedPaneOwner | null
   agentTeamsLeaderHandle?: string | null

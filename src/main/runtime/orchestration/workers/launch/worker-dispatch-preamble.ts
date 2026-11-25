@@ -156,10 +156,10 @@ export function dispatchPreambleSendOptions(requestId: string): DispatchPreamble
 }
 
 export const TERMINAL_REDISPATCH_PARAGRAPH = `Do not exit the shell. More supervised work arrives here as a fresh preamble
-and TASK block; follow it under its new Dispatch.`
+and TASK block; follow it under its new Dispatch, using that preamble's --task-id and --dispatch-id.`
 
 export const CHAT_REDISPATCH_PARAGRAPH = `More supervised work arrives in this chat as a fresh preamble and TASK
-block; follow it under its new Dispatch.`
+block; follow it under its new Dispatch, using that preamble's --task-id and --dispatch-id.`
 
 function buildPostWorkerDoneInstructions({
   cli,

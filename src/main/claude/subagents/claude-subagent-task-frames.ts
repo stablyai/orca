@@ -27,6 +27,18 @@ export type ClaudeSubagentTaskFrame = {
   excluded: boolean
 }
 
+// Claude flags a forked slash command's agent as ambient, yet it is that turn's whole work.
+export function isClaudeForkedCommandTask(message: Record<string, unknown>): boolean {
+  return (
+    message.subtype === 'task_started' &&
+    message.task_type === 'local_agent' &&
+    message.is_backgrounded === false &&
+    message.spawn_depth === 1 &&
+    claudeText(message.tool_use_id) === null &&
+    claudeText(message.description)?.startsWith('/') === true
+  )
+}
+
 export function isClaudeSubagentTask(message: Record<string, unknown>): boolean {
   if (isAgentChildWorkKind(classifyClaudeBackgroundTaskKind(message.task_type))) {
     return true
@@ -55,7 +67,9 @@ export function readClaudeSubagentTaskFrame(
   const toolUseId =
     claudeText(message.tool_use_id) ?? claudeText(claudeRecord(message.patch)?.tool_use_id)
   const announcement = subtype === 'task_started'
-  const suppressed = message.ambient === true || message.skip_transcript === true
+  const suppressed =
+    !isClaudeForkedCommandTask(message) &&
+    (message.ambient === true || message.skip_transcript === true)
   const subagent = announcement && !suppressed && isClaudeSubagentTask(message)
   return {
     taskId,

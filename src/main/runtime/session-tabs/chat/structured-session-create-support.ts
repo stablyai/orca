@@ -16,12 +16,9 @@ import {
   type StructuredAgentSessionCreateIntentInput
 } from '../../agent-session/ownership/structured-agent-session-create-adoption'
 import type { AgentSessionAttachParams } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
-import {
-  resolveHostStructuredAgentCreateSupport,
-  resolveHostStructuredAgentLaunchEnvironment
-} from '../../agent-session/launch/structured-agent-launch-support'
+import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
+import { structuredAgentCreateSupportAt } from '../../agent-session/launch/structured-agent-create-support-at'
 import { structuredAgentRuntimeMetadata } from '../../agent-session/installation/structured-agent-runtime-metadata'
-import { structuredAgentChatProgramNeedsInstall } from '../../agent-session/launch/structured-agent-availability'
 import { structuredLaunchSeedOptions } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../agent-session/installation/structured-agent-session-host-refusal'
@@ -32,6 +29,11 @@ import type { StructuredAgentId } from '../../../../shared/agent-session/lifecyc
 import type { StructuredAgentCreateSupportReply } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 import type { AgentCliInstallationProblem } from '../../../../shared/agent-launch/catalog/agent-cli-installation-problem'
 
+type CreateSupportOptions = { requireInstalledChatProgram?: boolean }
+type CreateSupport = StructuredAgentCreateSupportReply & {
+  installation?: AgentCliInstallationProblem
+}
+
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends OrcaRuntimeWithStructuredResumeFolderCheck {
   protected abstract restoreStructuredAgentSessionTabsOnce(
     ...args: Parameters<
@@ -41,26 +43,26 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     RestoreStructuredAgentSessionTabsOnceMethods['restoreStructuredAgentSessionTabsOnce']
   >
 
-  /** `requireInstalledChatProgram` is for launches with no chat tab to offer Orca's install. */
+  /** A workspace, or a repo a workspace is about to be created in, which runs where the repo does.
+   *  `requireInstalledChatProgram` is for launches with no chat tab to offer Orca's install. */
   async getStructuredAgentSessionCreateSupport(
-    worktreeSelector: string,
+    place: string | { repo: string },
     agent: StructuredAgentId,
-    options?: { requireInstalledChatProgram?: boolean }
-  ): Promise<StructuredAgentCreateSupportReply & { installation?: AgentCliInstallationProblem }> {
-    const support = await resolveHostStructuredAgentCreateSupport({
-      agent,
-      worktreeSelector,
-      location: await this.resolveStructuredAgentSessionLocation(worktreeSelector),
-      runtime: this
-    })
-    if (
-      support.supported &&
-      options?.requireInstalledChatProgram &&
-      (await structuredAgentChatProgramNeedsInstall(agent, this))
-    ) {
-      return { supported: false, reason: 'chat-program' }
+    options?: CreateSupportOptions
+  ): Promise<CreateSupport> {
+    const at = { ...options, agent, runtime: this }
+    if (typeof place === 'string') {
+      const target = () => this.resolveRuntimeFileTarget(place)
+      const location = await this.resolveStructuredAgentSessionLocation(place)
+      return structuredAgentCreateSupportAt({
+        ...at,
+        location,
+        workspacePath: async () => (await target()).worktree.path
+      })
     }
-    return support
+    const repo = await this.resolveRepoSelector(place.repo)
+    const location = this.structuredAgentSessionLocationForRepo(repo)
+    return structuredAgentCreateSupportAt({ ...at, location, workspacePath: async () => repo.path })
   }
 
   /** Use this runtime's registered definition to pin account home; reads/create must not install the host just to inspect it. */

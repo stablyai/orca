@@ -5740,6 +5740,12 @@
                 "message": "Claude 用量将在下次运行 Claude 时更新"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
+              }
+            },
             "1804cd8c3f": "正在刷新登录",
             "bf2e739f18": "登录不可用",
             "f8f0f9d8cc": "网络问题",
@@ -6026,6 +6032,7 @@
       "shuffle": "换一张头像",
       "namePlaceholder": "为你的 bot 命名",
       "purposeLabel": "身份",
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "purposePlaceholder": "它是谁，负责做什么",
       "create": "创建",
       "fromTemplate": "使用模板",
@@ -6798,7 +6805,9 @@
         "replaced": "智能体提出了新问题。请先阅读，再回复",
         "replacedByNewer": "已由较新的问题取代",
         "skipped": "已跳过",
-        "notNow": "暂不"
+        "notNow": "暂不",
+        "heldImagesLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 张照片。请移除一些后重试。",
+        "heldSkillsLimit": "你的回答会作为一条评论发送，一条评论最多包含 {{max}} 个技能。请移除一些后重试。"
       },
       "write": {
         "unknown": "发送时连接中断，内容可能已经送达。重新连接后请先查看“活动”，再决定是否重新发送",
@@ -7489,7 +7498,13 @@
         "context7": "代码库的最新文档和示例",
         "atlassian": "Jira 议题和 Confluence 页面",
         "notion": "搜索、阅读和编辑页面",
-        "stripe": "查询付款、客户和订阅"
+        "stripe": "查询付款、客户和订阅",
+        "clickup": "管理任务、列表和文档",
+        "airtable": "查询和编辑 Base、数据表和记录",
+        "todoist": "添加、整理和完成任务",
+        "zapier": "在你于 Zapier 中设置的应用里执行操作",
+        "granola": "搜索会议笔记和转录",
+        "intercom": "搜索对话、联系人和文章"
       },
       "webhooks": {
         "line": "来自任意工具或脚本的事件"
@@ -8339,5 +8354,8 @@
     "cardSlot": {
       "working": "工作中"
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "已被你所在组织的 Claude 设置阻止"
   }
 }

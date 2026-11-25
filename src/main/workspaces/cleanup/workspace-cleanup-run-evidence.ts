@@ -122,7 +122,7 @@ function inputWithoutGit(summary: RuntimeWorktreePsSummary): WorkspaceCleanupEva
   }
 }
 
-/** This host's own window persists its unsaved drafts in the session; remote clients report theirs. Keyed by identity so path spellings match. */
+/** Every connected window, this host's own included, reports its unsaved buffers; the session adds drafts no window holds open. Keyed by identity so path spellings match. */
 function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService): Set<string> {
   const session = store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
   const ids = new Set([...listClientUnsavedEditorWorktreeIds(runtime)].map(worktreeIdentityKey))

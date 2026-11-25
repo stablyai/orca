@@ -4624,6 +4624,12 @@
                 "message": "Claude 사용량은 다음에 Claude를 실행할 때 업데이트됩니다."
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "Codex 실행 시 업데이트됨",
+                "message": "Codex 사용량은 다음에 Codex를 실행할 때 업데이트됩니다."
+              }
+            },
             "1804cd8c3f": "로그인 새로 고치는 중",
             "bf2e739f18": "로그인할 수 없음",
             "f8f0f9d8cc": "네트워크 문제",
@@ -5214,7 +5220,9 @@
       "ask": {
         "replaced": "에이전트가 새 질문을 했습니다. 읽은 다음 답장하세요.",
         "replacedByNewer": "새 질문으로 대체됨",
-        "skipped": "건너뜀"
+        "skipped": "건너뜀",
+        "heldImagesLimit": "답변은 댓글 하나로 보내지며, 사진은 최대 {{max}}장까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요.",
+        "heldSkillsLimit": "답변은 댓글 하나로 보내지며, 스킬은 최대 {{max}}개까지 담을 수 있어요. 일부를 빼고 다시 시도해 주세요."
       }
     },
     "needs": {
@@ -5744,7 +5752,13 @@
         "github": "이슈와 PR의 멘션 및 이벤트",
         "slack": "메시지 및 멘션",
         "linear": "할당된 이슈 및 멘션",
-        "google": "내 계정으로 Gmail, 캘린더, 드라이브 사용"
+        "google": "내 계정으로 Gmail, 캘린더, 드라이브 사용",
+        "clickup": "작업, 목록, 문서 관리",
+        "airtable": "베이스, 테이블, 레코드 조회 및 편집",
+        "todoist": "작업 추가, 정리, 완료",
+        "zapier": "Zapier에 설정한 앱에서 작업 실행",
+        "granola": "회의 노트와 녹취록 검색",
+        "intercom": "대화, 연락처, 문서 검색"
       },
       "composioLine": {
         "outlook": "메일, 캘린더, 연락처",
@@ -5793,6 +5807,9 @@
       "continuesAt": "{{time}}에 계속",
       "continues": "{{time}}에 계속",
       "hitLimit": "한도 도달 · {{time}}에 초기화"
+    },
+    "new": {
+      "purposeTooLongForHost": "{{host}}의 Orca는 용도를 200자까지만 받을 수 있습니다. 줄이거나 {{host}}의 Orca를 업데이트하세요."
     }
   },
   "sidebar": {
@@ -5801,5 +5818,8 @@
     }
   },
   "recentSessionCardsSectionTitle": "최근 사용",
-  "recentSessionCardsEmpty": "다른 최근 카드가 없습니다"
+  "recentSessionCardsEmpty": "다른 최근 카드가 없습니다",
+  "mcpServers": {
+    "agentBlocked": "조직의 Claude 설정에 의해 차단됨"
+  }
 }
