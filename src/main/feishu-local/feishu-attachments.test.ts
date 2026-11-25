@@ -1,5 +1,11 @@
-import { expect, it } from 'vitest'
-import { originalResource } from './feishu-resources'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { expect, it, vi } from 'vitest'
+import { AgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store'
+import * as attachmentRegistry from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
+import * as cli from './feishu-cli'
+import { feishuInput, originalResource } from './feishu-resources'
 import { finalFeishuMessage } from './feishu-replies'
 import { dmKey } from './feishu-binding'
 import { FeishuInbox } from './feishu-inbox'
@@ -108,5 +114,32 @@ it('keeps identically named original messages and generated uploads separate acr
     expect(db.next(second.account)?.mid).toBe(mid)
   } finally {
     db.close()
+  }
+})
+
+it('reuses a present inbox attachment but rechecks the original after the unclaimed file is swept', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'feishu-retry-'))
+  const store = new AgentSessionAttachmentStore(dir, { hasSession: () => true })
+  const current = vi
+    .spyOn(attachmentRegistry, 'getAgentSessionAttachmentStore')
+    .mockReturnValue(store)
+  const read = vi.spyOn(cli, 'feishuCommand').mockResolvedValue(reply(original, 'user'))
+  try {
+    const path = await store.storeFile('example.png', Buffer.from('synthetic existing upload'))
+    const row = { mid: original.message_id, kind: 'image' as const, body: 'synthetic', path }
+    const stored = vi.fn()
+    const load = () => feishuInput({ stored }, verified, row, 'codex', new AbortController().signal)
+    expect((await load()).storedImages).toEqual([path])
+    expect(read).not.toHaveBeenCalled()
+    await rm(path)
+    const expired = await load()
+    expect(read).toHaveBeenCalledOnce()
+    expect(read.mock.calls[0][0]).toContain(`/open-apis/im/v1/messages/${original.message_id}`)
+    expect(expired.storedImages).toBeUndefined()
+    expect(stored).not.toHaveBeenCalled()
+  } finally {
+    read.mockRestore()
+    current.mockRestore()
+    await rm(dir, { recursive: true, force: true })
   }
 })

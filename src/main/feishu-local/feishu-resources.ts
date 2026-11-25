@@ -1,6 +1,8 @@
-import { mkdtemp, open, readdir, rm, stat, watch } from 'node:fs/promises'
+import { lstat, mkdtemp, open, readdir, rm, stat, watch } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+import { errnoCodeOrUnknown } from '../../shared/errors/errno-code'
+import { parseAgentSessionAttachmentStorePath } from '../native-chat/agent-session-attachments/agent-session-attachment-references'
 import { z } from 'zod'
 import { runProcess } from '@orca/process-host'
 import {
@@ -178,8 +180,27 @@ async function storeFeishuResource(
 }
 
 /** The resource and any follow-up reach the same native conversation through the normal start. */
+/** Unclaimed uploads may have been swept between inbox attempts. Only reuse a regular store file. */
+async function storedResourceAvailable(path: string): Promise<boolean> {
+  const store = getAgentSessionAttachmentStore()
+  const ref = store && parseAgentSessionAttachmentStorePath(store.rootDir, path)
+  if (!ref || path !== join(store.rootDir, ref.uploadId, ref.name)) {
+    return false
+  }
+  try {
+    const [dir, file] = await Promise.all([lstat(dirname(path)), lstat(path)])
+    return dir.isDirectory() && file.isFile()
+  } catch (error) {
+    const code = errnoCodeOrUnknown(error)
+    if (code === 'ENOENT' || code === 'ENOTDIR') {
+      return false
+    }
+    throw error
+  }
+}
+
 export async function feishuInput(
-  inbox: FeishuStore,
+  inbox: Pick<FeishuStore, 'stored'>,
   binding: Binding,
   row: NonNullable<Awaited<ReturnType<FeishuStore['next']>>>,
   agent: string,
@@ -195,7 +216,8 @@ export async function feishuInput(
     }
   }
   let path = row.path
-  if (!path) {
+  if (!path || !(await storedResourceAvailable(path))) {
+    signal.throwIfAborted()
     try {
       path = await storeFeishuResource(binding, row.mid, row.kind, signal)
     } catch {
