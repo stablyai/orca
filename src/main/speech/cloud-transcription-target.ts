@@ -11,6 +11,7 @@ import {
   openAiCompatibleTranscriptionUrl,
   readOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
+import { canReadSonioxSpeechApiKey, hasSonioxSpeechApiKey } from './soniox-api-key-store'
 
 export const OPENAI_TRANSCRIPTION_URL = 'https://api.openai.com/v1/audio/transcriptions'
 
@@ -28,6 +29,9 @@ export type CloudTranscriptionTarget = {
 }
 
 export async function hasCloudSpeechCredentials(provider: SpeechModelProvider): Promise<boolean> {
+  if (provider === 'soniox') {
+    return await hasSonioxSpeechApiKey()
+  }
   return provider === 'openai-compatible'
     ? await hasOpenAiCompatibleSpeechProvider()
     : await hasOpenAiSpeechApiKey()
@@ -37,6 +41,9 @@ export async function hasCloudSpeechCredentials(provider: SpeechModelProvider): 
 export async function canReadCloudSpeechCredentials(
   provider: SpeechModelProvider
 ): Promise<boolean> {
+  if (provider === 'soniox') {
+    return await canReadSonioxSpeechApiKey()
+  }
   return provider === 'openai-compatible'
     ? await canReadOpenAiCompatibleSpeechProvider()
     : await canReadOpenAiSpeechApiKey()

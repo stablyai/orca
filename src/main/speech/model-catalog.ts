@@ -219,6 +219,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'soniox-stt-rt',
+    label: 'Soniox Real-time',
+    type: 'soniox',
+    provider: 'soniox',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: true
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     type: 'openai',

@@ -8,6 +8,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
+  cloudModelServiceLabel,
   cloudModelNeedsKey,
   dictationModelRowAction,
   isModelInFlight,
@@ -36,7 +37,7 @@ function formatSize(bytes: number | null | undefined, t: Translate): string {
 
 function modelMeta(model: MobileSpeechModel, t: Translate): string {
   if (model.provider === 'openai') {
-    return 'OpenAI API'
+    return cloudModelServiceLabel(model)
   }
   const inFlight = isModelInFlight(model)
   if (inFlight && model.progress != null) {

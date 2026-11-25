@@ -4,7 +4,7 @@ export const MAX_CLOUD_TRANSCRIPTION_SECONDS = 10 * 60
 const WAV_HEADER_BYTES = 44
 // Room to answer plus the upload time of the WAV at 1 Mbit/s (125 bytes per ms).
 const CLOUD_RESPONSE_ALLOWANCE_MS = 30_000
-const UPLOAD_BYTES_PER_MS = 125
+export const UPLOAD_BYTES_PER_MS = 125
 
 // A finishing on-device dictation fails once the engine goes this long without answering.
 export const LOCAL_DICTATION_STOP_TIMEOUT_MS = 60_000
