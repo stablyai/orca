@@ -4,7 +4,6 @@ import type {
   CliStatusResult,
   RuntimeStatus
 } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
   isOrchestrationMutation,
@@ -14,9 +13,8 @@ import {
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './app-launch/open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
-import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
+import { getCliStatus, getOfflineRuntimeAdmission, projectRemoteCliStatus } from './status/status'
 import type { OfflineRuntimeAdmission } from './status/status'
-import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
 import { sendRequest } from './connection/transport'
 import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
 import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
@@ -159,7 +157,8 @@ export class RuntimeClient {
           params,
           timeoutMs: effectiveTimeoutMs,
           envelope,
-          requestSelection: options?.requestSelection
+          requestSelection: options?.requestSelection,
+          expectedRuntimeSource: options?.expectedRuntimeSource
         })
       } catch (error) {
         throw recover(error, null)
@@ -176,7 +175,11 @@ export class RuntimeClient {
     }
     const metadata = readMetadata(this.userDataPath)
     // Refusal precedes sending, so there is no request to recover.
-    const expectedRuntimeSource = await this.runtimeSourceFence.check(metadata, method)
+    const expectedRuntimeSource = await this.runtimeSourceFence.check(
+      metadata,
+      method,
+      options?.expectedRuntimeSource
+    )
     let response
     try {
       response = await sendRequest<TResult>(
@@ -232,37 +235,7 @@ export class RuntimeClient {
     if (this.remoteSelected) {
       const response = await this.call<RuntimeStatus>('status.get')
       this.remoteCompat.noteVerifiedStatus(response.result)
-      const graphState = response.result.graphStatus
-      return {
-        id: response.id,
-        ok: true,
-        result: {
-          target: {
-            kind: 'environment',
-            environment: this.environmentSelector ?? 'pairing-code'
-          },
-          app: projectRemoteAppStatus(response.result),
-          runtime: {
-            state: graphState === 'ready' ? 'ready' : 'graph_not_ready',
-            reachable: true,
-            connectionState: runtimeHostConnectionState({
-              hasStatusEntry: true,
-              status: response.result
-            }),
-            runtimeId: response.result.runtimeId,
-            ...(response.result.appVersion ? { appVersion: response.result.appVersion } : {}),
-            ...(response.result.remoteUpdateSupport
-              ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
-              : {}),
-            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
-            ...(response.result.degradations ? { degradations: response.result.degradations } : {})
-          },
-          graph: {
-            state: graphState
-          }
-        },
-        _meta: response._meta
-      }
+      return projectRemoteCliStatus(response, this.environmentSelector)
     }
     return getCliStatus(this.userDataPath)
   }

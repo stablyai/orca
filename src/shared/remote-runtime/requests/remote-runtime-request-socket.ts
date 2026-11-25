@@ -28,6 +28,7 @@ import {
   prepareCurrentRuntimeRequest
 } from './remote-runtime-request-preparation'
 import type {
+  ExpectedRuntimeSource,
   RuntimeRequestPreparation,
   RuntimeRequestGuard,
   RuntimeRequestSelection,
@@ -52,7 +53,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
   latchedHostCheck?: RemoteRuntimeClientHandshake,
   prepareGuard?: RuntimeRequestGuard,
   /** Replaces timeoutMs once the host authenticates, so only a reachable host gets a long reply wait. */
-  responseTimeoutMs?: number
+  responseTimeoutMs?: number,
+  expectedRuntimeSource?: ExpectedRuntimeSource
 ): Promise<RuntimeRpcResponse<TResult>> {
   throwIfSignalAborted(signal)
   if (!isSafeTimerDelayMs(timeoutMs) || !isSafeTimerDelayMs(responseTimeoutMs ?? timeoutMs)) {
@@ -69,7 +71,8 @@ export async function sendRemoteRuntimeRequestOnSocket<TResult>(
       envelope,
       prepareRequest,
       Boolean(validateStatus),
-      Boolean(requestSelection)
+      Boolean(requestSelection),
+      expectedRuntimeSource
     )
   // Why a redial is safe: nothing but the handshake is sent before the host authenticates us.
   const attempt = (handshake: RemoteRuntimeClientHandshake) =>

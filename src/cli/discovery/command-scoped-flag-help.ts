@@ -12,6 +12,12 @@ const AGENT_ID_FLAG_HELP =
 const SKILLS_FORCE_FLAG_HELP =
   '--force                Replace skipped copies where possible, moving each to ~/.agents/.orca-skill-backups first.'
 
+const AGENT_REQUEST_SCOPE_HELP = {
+  worktree: '--worktree <selector>   Explicit workspace that owns the session',
+  session: '--session <id>          Native agent session ID in that workspace',
+  turn: '--turn <turnItemId>     Limit requests to this journal turn item'
+}
+
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'bot item add': {
     title: BOT_ITEM_TITLE_HELP,
@@ -26,6 +32,17 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'bot item list': { cursor: '--cursor <c>           Cursor printed with the previous page' },
   'agent list': {
     state: '--state <state>        Only agents in this state: working, blocked, waiting or done'
+  },
+  'agent requests list': AGENT_REQUEST_SCOPE_HELP,
+  'agent requests get': {
+    ...AGENT_REQUEST_SCOPE_HELP,
+    item: '--item <id>             Current approval or question item ID'
+  },
+  'agent requests answer': {
+    ...AGENT_REQUEST_SCOPE_HELP,
+    'request-file':
+      '--request-file <path>   UTF-8 JSON file containing the inspected request and answer',
+    retry: '--retry <operationUUID> Resubmit the same operation ID and answer'
   },
   'agent show': { id: AGENT_ID_FLAG_HELP },
   'agent read': {
