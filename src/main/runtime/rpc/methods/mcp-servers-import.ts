@@ -131,7 +131,8 @@ export async function importAgentMcpServer(
     if (!added) {
       throw error
     }
-    // It's in Orca's list now even though an agent file kept its copy (onHost tells every client).
+    // It's in Orca's list now even though an agent file kept its copy: every client re-reads.
+    context.runtime.notifyMcpServersChanged()
     throw error instanceof AgentMcpConfigEditError ? new Error(editFailure(error)) : error
   }
 }

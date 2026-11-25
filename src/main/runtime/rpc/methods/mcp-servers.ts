@@ -264,22 +264,14 @@ export const MCP_SERVER_METHODS = [
     permission: 'workspace',
     params: McpServerImport,
     handler: (params, context) =>
-      onHost(
-        context,
-        () => importAgentMcpServer(context, params.key, moveAgentMcpServer),
-        'written'
-      )
+      onHost(context, () => importAgentMcpServer(context, params.key, moveAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.copy',
     permission: 'workspace',
     params: McpServerImport,
     handler: (params, context) =>
-      onHost(
-        context,
-        () => importAgentMcpServer(context, params.key, copyAgentMcpServer),
-        'written'
-      )
+      onHost(context, () => importAgentMcpServer(context, params.key, copyAgentMcpServer), true)
   }),
   defineMethod({
     name: 'mcpServers.agentFiles.allow',
