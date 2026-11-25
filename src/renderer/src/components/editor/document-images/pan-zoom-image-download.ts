@@ -1,5 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
+import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoom-view'
+import { renderImagePngDataUrl } from './image-png-export'
 
 const EXTENSION_BY_TYPE: Record<string, string> = {
   'image/png': 'png',
@@ -9,29 +11,57 @@ const EXTENSION_BY_TYPE: Record<string, string> = {
   'image/svg+xml': 'svg',
   'image/avif': 'avif'
 }
+const FILE_EXTENSION = /\.[a-z0-9]{2,5}$/i
+
+function safeBaseName(title: string): string {
+  return title.replace(/[/\\:*?"<>|]+/g, '-').trim() || 'image'
+}
 
 /** The viewer's title as a file name, with an extension that matches the image's type. */
 function imageDownloadFileName(title: string, type: string): string {
-  const base = title.replace(/[/\\:*?"<>|]+/g, '-').trim() || 'image'
-  const extension = EXTENSION_BY_TYPE[type]
-  return extension && !/\.[a-z0-9]{2,5}$/i.test(base) ? `${base}.${extension}` : base
+  const base = safeBaseName(title)
+  const extension = EXTENSION_BY_TYPE[type.split(';', 1)[0]]
+  return extension && !FILE_EXTENSION.test(base) ? `${base}.${extension}` : base
+}
+
+async function fetchImageBlob(src: string): Promise<Blob | null> {
+  try {
+    const response = await fetch(src)
+    return response.ok ? await response.blob() : null
+  } catch {
+    return null
+  }
+}
+
+function saveAs(href: string, fileName: string): void {
+  const link = document.createElement('a')
+  link.href = href
+  link.download = fileName
+  link.click()
 }
 
 /** Saves the shown image as a file; the browser (or Electron's save dialog) picks where. */
-export async function downloadImage(src: string, title: string): Promise<void> {
+export async function downloadImage(
+  src: string,
+  title: string,
+  size: PanZoomSize | null,
+  background: string | undefined
+): Promise<void> {
   try {
-    const response = await fetch(src)
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
+    const blob = await fetchImageBlob(src)
+    if (blob) {
+      const url = URL.createObjectURL(blob)
+      saveAs(url, imageDownloadFileName(title, blob.type))
+      // The download has its own copy of the bytes once started.
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      return
     }
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = imageDownloadFileName(title, blob.type)
-    link.click()
-    // The download has its own copy of the bytes once started.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    if (!size) {
+      throw new Error('Could not load image')
+    }
+    // Sources fetch can't read (e.g. orca-media://) save the same PNG that Copy makes.
+    const png = await renderImagePngDataUrl(src, size, background ?? null, false)
+    saveAs(png, `${safeBaseName(title).replace(FILE_EXTENSION, '')}.png`)
   } catch (error) {
     toast.error(
       translate(

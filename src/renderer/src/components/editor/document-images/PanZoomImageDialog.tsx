@@ -372,7 +372,7 @@ function PanZoomImageCanvas({
             <ToolbarButton
               label={t('auto.components.editor.PanZoomImageDialog.download', 'Download')}
               disabled={!imageSrc}
-              onClick={() => imageSrc && void downloadImage(imageSrc, title)}
+              onClick={() => imageSrc && void downloadImage(imageSrc, title, content, background)}
             >
               <Download />
             </ToolbarButton>
