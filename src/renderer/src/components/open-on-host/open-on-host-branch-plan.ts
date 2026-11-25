@@ -1,7 +1,7 @@
 import type { GitUpstreamStatus } from '../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 
-export type WorkspaceSyncOffer = 'none' | 'push' | 'publish'
+type WorkspaceSyncOffer = 'none' | 'push' | 'publish'
 
 export function getWorkspaceSyncOffer(
   upstream: GitUpstreamStatus,

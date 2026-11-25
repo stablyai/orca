@@ -74,11 +74,11 @@ export type OpenOnHostRequest = {
   displayName: string
   target: OpenOnHostTarget
   location: Exclude<OpenOnHostLocation, { kind: 'unavailable' }>
-  /** Absent for a project open (Goal 1). */
+  /** Absent for a project open. */
   workspace?: { worktree: Worktree; plan: Extract<WorkspaceOnHostPlan, { kind: 'ready' }> }
 }
 
-export type OpenOnHostResult = { worktreeId: string; notice: string | null }
+type OpenOnHostResult = { worktreeId: string; notice: string | null }
 
 /** Null after a failure it has already toasted; 'failed-after-clone' when a retry must not clone again. */
 export async function runOpenOnHost(
