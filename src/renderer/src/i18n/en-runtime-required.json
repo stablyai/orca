@@ -2555,6 +2555,7 @@
         "someMemberAccess": "Someone on Who can ask sent this when it ran.",
         "someoneWrote": "Someone wrote",
         "startError": "Error",
+        "thenAt": "Runs once at {{time}}",
         "thenLine": "Then",
         "thenOnce": "Runs once, when it happens",
         "thenOnceBy": "Runs once; at {{time}} if nothing came",
@@ -3128,26 +3129,12 @@
         "changedFiles_other": "{{count}} changed files"
       },
       "workerDock": {
-        "agentCount_one": "{{count}} agent",
-        "agentCount_other": "{{count}} agents",
         "clearAllLabel_one": "Clear failed worker",
         "clearAllLabel_other": "Clear all {{count}} failed workers",
-        "cleared_one": "Cleared 1 worker",
-        "cleared_other": "Cleared {{count}} workers",
-        "commandCount_one": "{{count}} command",
-        "commandCount_other": "{{count}} commands",
-        "monitorCount_one": "{{count}} monitor",
-        "monitorCount_other": "{{count}} monitors",
         "newQuestions_one": "{{count}} new worker question waiting on you",
         "newQuestions_other": "{{count}} new worker questions waiting on you",
-        "pillLabel_one": "{{count}} worker, latest: {{title}}",
-        "pillLabel_other": "{{count}} workers, latest: {{title}}",
-        "taskCount_one": "{{count}} task",
-        "taskCount_other": "{{count}} tasks",
         "workerCount_one": "{{count}} worker",
-        "workerCount_other": "{{count}} workers",
-        "workflowCount_one": "{{count}} workflow",
-        "workflowCount_other": "{{count}} workflows"
+        "workerCount_other": "{{count}} workers"
       },
       "writeNotice": {
         "agentRefused": "The agent turned this down.",
