@@ -40,7 +40,9 @@ type AnchoredWindowCallbacks = {
   measureRow: (node: HTMLElement | null) => void
   alignToViewportTop: (element: HTMLElement, edge?: NativeChatAlignEdge) => void
   cancelAlign: () => void
+  releaseEndPin: () => void
   scrollToEnd: () => void
+  restoreScrollOffset: (offset: number) => void
   reconcileReaderScroll: (isTakingOver: boolean) => void
   consumeProgrammaticScroll: (event: Event) => boolean
 }
@@ -126,6 +128,12 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
     anchorState.row = null
   }, [anchorState])
   useEffect(() => release, [release])
+  // A hidden chat has no layout to hold a place against; its boxes would read as zero.
+  useLayoutEffect(() => {
+    if (!isVisible) {
+      release()
+    }
+  }, [isVisible, release])
 
   // A row's ref attaches before the virtualizer's layout effect applies a landing page's scroll
   // write; measured then, the unseen-write guard would rightly refuse to compensate it.
@@ -224,6 +232,10 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
       // measuring); any reader scroll ends this.
       let inset = placeInRow(node)?.inset ?? anchor.inset
       const hold = () => {
+        // Released (reader scroll or intent, a new page, hide): never write from this state again.
+        if (anchorState.row !== anchored) {
+          return
+        }
         const place = node.isConnected ? placeInRow(node) : null
         if (!place || place.row !== anchor.row) {
           return
@@ -257,7 +269,9 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
   const {
     alignToViewportTop,
     cancelAlign,
+    releaseEndPin,
     scrollToEnd,
+    restoreScrollOffset,
     reconcileReaderScroll,
     consumeProgrammaticScroll
   } = transcriptWindow
@@ -272,6 +286,17 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
     release()
     cancelAlign()
   }, [cancelAlign, release])
+  const releaseReaderEndPin = useCallback(() => {
+    release()
+    releaseEndPin()
+  }, [release, releaseEndPin])
+  const restoreReaderOffset = useCallback(
+    (offset: number) => {
+      release()
+      restoreScrollOffset(offset)
+    },
+    [release, restoreScrollOffset]
+  )
   const scrollReaderToEnd = useCallback(() => {
     release()
     scrollToEnd()
@@ -302,7 +327,9 @@ export function useNativeChatContentAnchor<Window extends AnchoredWindowCallback
     measureRow,
     alignToViewportTop: alignReaderContent,
     cancelAlign: cancelReaderAlign,
+    releaseEndPin: releaseReaderEndPin,
     scrollToEnd: scrollReaderToEnd,
+    restoreScrollOffset: restoreReaderOffset,
     reconcileReaderScroll: reconcileReaderTakeover,
     consumeProgrammaticScroll: consumeReaderScroll,
     snapshotContent,

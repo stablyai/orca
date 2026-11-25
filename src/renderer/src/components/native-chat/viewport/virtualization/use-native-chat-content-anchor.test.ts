@@ -124,7 +124,9 @@ function anchorWith(container: HTMLDivElement, rows: HTMLDivElement[]) {
         measureRow: (node: HTMLElement | null) => virtualizer.measureElement(node),
         alignToViewportTop: vi.fn(),
         cancelAlign: vi.fn(),
+        releaseEndPin: vi.fn(),
         scrollToEnd: vi.fn(),
+        restoreScrollOffset: vi.fn(),
         reconcileReaderScroll,
         consumeProgrammaticScroll
       }
@@ -214,6 +216,23 @@ it('stops settling once a scroll this app did not write arrives', () => {
 
   // The anchor's own row observer is gone; only the virtualizer's measurement observer remains.
   expect(watching()).toBe(whileSettling - 1)
+  expect(container.scrollTop).toBe(START_OFFSET)
+})
+
+it('writes nothing from a growth delivered after the reader took the scroll', () => {
+  const { container, rows, run, header, line } = transcript()
+  const { anchor, readerScrolls } = anchorWith(container, rows)
+  anchor.reconcileContent()
+  const settling = anchorObserver(run)
+
+  readerScrolls()
+  anchor.consumeProgrammaticScroll(new Event('scroll'))
+  // A delivery already in flight when the reader scrolled.
+  place(run, -300, RUN_SIZE + 64)
+  place(header, 54, 120)
+  place(line, 184, 80)
+  settling.deliver()
+
   expect(container.scrollTop).toBe(START_OFFSET)
 })
 
