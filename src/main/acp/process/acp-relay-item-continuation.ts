@@ -20,12 +20,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
   private readonly seen = new Set<string>()
-  private boundary = false
+  /** Sessions past their first message or a boundary: their later messages start whole. */
+  private readonly started = new Set<string | undefined>()
 
   /** Each attach's replay is read from its own first line. */
   reset(): void {
     this.seen.clear()
-    this.boundary = false
+    this.started.clear()
   }
 
   item(line: string): { key: string; start: boolean; end: boolean } | null {
@@ -35,7 +36,7 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
       return null
     }
     if (ACP_MESSAGE_ENDS.has(kind)) {
-      this.boundary = true
+      this.started.add(update.sessionId)
       return null
     }
     if (!ACP_MESSAGE_CHUNKS.has(kind) || update.messageId === undefined) {
@@ -45,10 +46,12 @@ export class AcpRelayItemContinuation implements ProviderRelayItemContinuation {
     if (this.seen.has(key)) {
       return { key, start: false, end: false }
     }
-    const start = this.boundary || this.seen.size > 0
+    // Per session, as the floor cuts: only a session's first message a replay meets was cut.
+    const start = this.started.has(update.sessionId)
     const full = this.seen.size >= MAX_SEEN_MESSAGES
     if (!full) {
       this.seen.add(key)
+      this.started.add(update.sessionId)
     }
     return { key, start: start || full, end: false }
   }

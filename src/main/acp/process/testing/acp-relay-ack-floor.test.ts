@@ -25,8 +25,8 @@ function rig() {
     durable: async () => true,
     // Where a reattach would replay from, less one: the daemon keeps lines from `keepFrom` on, and
     // never gets back lines it already dropped.
-    ack: async (seq, keepFrom, cut) => {
-      if (cut) {
+    ack: async (seq, keepFrom, flags) => {
+      if (flags?.cut) {
         cuts.push(seq)
       }
       const replayedFrom = (keepFrom ?? seq + 1) - 1

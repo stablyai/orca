@@ -20,8 +20,9 @@ const RETRY_AFTER_MS = 30_000
 /** Every daemon answered once: `listed` is the whole set, not part of it. */
 let complete = false
 
-/** Chats listed with a live or unread agent; reattaching drops a chat from `listed`, not from here. */
-const keptThisRun = new Set<string>()
+/** Chats listed with a live or unread agent, with its spawn time; reattaching drops a chat from
+ *  `listed`, not from here. */
+const keptThisRun = new Map<string, number>()
 
 /** The kept agent's own spawn token, so its reattach records the identity the process carries. */
 const spawnTokens = new Map<string, string>()
@@ -53,7 +54,7 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
     if (!info.attached && info.chatKey) {
       listed.set(info.chatKey, { channel, info })
       if (keptProviderRelayOutstanding(info)) {
-        keptThisRun.add(info.chatKey)
+        keptThisRun.set(info.chatKey, info.spawnedAtMs)
       }
       const token = info.pid !== null && info.exit === null ? await readSpawnToken(info.pid) : null
       if (token) {
@@ -122,7 +123,7 @@ export function keptProviderRelaysComplete(): boolean {
 }
 
 /** Every chat a listing this run found an agent kept for, reattached since or not. */
-export function providerRelayChatsKeptThisRun(): ReadonlySet<string> {
+export function providerRelayChatsKeptThisRun(): ReadonlyMap<string, number> {
   return keptThisRun
 }
 

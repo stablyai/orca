@@ -60,4 +60,32 @@ describe('ACP relay item continuation', () => {
       attachContinuation(hook, 'r1', 10, attach([{ id: 7, method: 'session/prompt' }]))
     ).toBeNull()
   })
+
+  it("moves each session's cut message, whatever another session's lines replay first", () => {
+    const hook = new AcpRelayItemContinuation()
+    const child = (fields: Record<string, unknown>) =>
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'opencode/session/child_update',
+        params: { rootSessionId: 's', childSessionId: 'c', type: 'update', update: fields }
+      })
+    const text = { type: 'text', text: 'x' }
+    const replay = [
+      child({ sessionUpdate: 'tool_call', toolCallId: 'c1' }),
+      chunk('m1', 'root tail'),
+      child({ sessionUpdate: 'agent_message_chunk', messageId: 'k2', content: text })
+    ]
+    const cut = attachContinuation(
+      hook,
+      'r1',
+      10,
+      attach([{ id: 7, method: 'session/prompt' }], 10)
+    )
+    const ids = replay.map((line, at) => {
+      const [out = ''] = cut?.lines(11 + at, line, undefined) ?? [line]
+      return JSON.parse(out).params.update.messageId
+    })
+    // The child's boundary came first, so its next message starts whole; the root's tail moves.
+    expect(ids).toEqual([undefined, 'relay:r1:12:m1', 'k2'])
+  })
 })

@@ -56,12 +56,14 @@ export type ProviderRelayRequest =
    * `keepFrom` on are kept in the spool file, and a later attach replays from there. A kept span
    * longer than the file cap is released through `seq` rather than stalling the agent. `cut` says
    * this ack gives up a kept span still open (through `seq`, or before `keepFrom` when it keeps
-   * from a later line), so a later attach reports `truncatedThrough`.
+   * from a later line), so a later attach reports `truncatedThrough`. `held` marks the kept lines as
+   * a replay the client holds unsaved: past the memory cap they go to the file. The reply's
+   * `ackedThrough` is how far the daemon released, which passes `keepFrom` after a file-cap release.
    */
   | {
       id: string
       type: 'relayAck'
-      payload: { relayId: string; seq: number; keepFrom?: number; cut?: true }
+      payload: { relayId: string; seq: number; keepFrom?: number; cut?: true; held?: true }
     }
   | { id: string; type: 'relayClose'; payload: { relayId: string; grace?: 'brief' } }
   | { id: string; type: 'relayList' }
