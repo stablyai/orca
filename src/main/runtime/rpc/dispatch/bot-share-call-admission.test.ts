@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { z } from 'zod'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
@@ -21,6 +22,10 @@ import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-met
 import { defineMethod } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
+import { BOT_METHODS } from '../methods/bots'
+import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../methods/structured-sessions/subscriptions/structured-agent-session-status-stream'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import { makeTestBot } from '../../../bots/bot.test-fixture'
 
 const SHARED = { id: 'bot-shared', folderWorkspaceId: 'home-shared' }
 const OTHER = { id: 'bot-other', folderWorkspaceId: 'home-other' }
@@ -86,8 +91,25 @@ beforeEach(() => {
   vi.spyOn(runtime, 'getOrchestrationDb').mockReturnValue(db)
   // The guard opens the chat host first; this one is already installed below.
   vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockRejectedValue(new Error('installed'))
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the guard reads only a bot's id and home folder.
-  vi.spyOn(runtime.bots, 'list').mockReturnValue([SHARED, OTHER] as Bot[])
+  const linkedBot = (bot: typeof SHARED): Bot =>
+    makeTestBot({
+      ...bot,
+      slack: { appId: 'A-SECRET', teamId: 'T-SECRET', ownerUserId: 'U-OWNER' },
+      chatSessionId: ids.ownersChat
+    })
+  vi.spyOn(runtime, 'restoreStructuredAgentSessionTabs').mockResolvedValue(undefined)
+  vi.spyOn(runtime.bots, 'list').mockReturnValue([linkedBot(SHARED), linkedBot(OTHER)])
+  // What the owner's roster holds: where each bot is linked and what its SOUL.md says.
+  vi.spyOn(runtime.bots, 'roster').mockResolvedValue(
+    [SHARED, OTHER].map((bot) => ({
+      id: bot.id,
+      name: bot.id,
+      agent: 'claude',
+      paused: false,
+      specialty: 'SECRET specialty',
+      linked: ['Slack workspace T-SECRET']
+    }))
+  )
   const workspaceOf = new Map<string, string>()
   for (const { id, bot, actsFor } of SESSIONS) {
     workspaceOf.set(id, folderWorkspaceKey(bot.folderWorkspaceId))
@@ -104,6 +126,20 @@ beforeEach(() => {
           getConversation: (id: string) =>
             workspaceOf.has(id) ? { location: { workspaceId: workspaceOf.get(id) } } : null
         }
+      },
+      // Every chat on the host, as the owner's own stream carries them.
+      subscribeStatus: ({ emit }: { emit: (event: unknown) => void }) => {
+        const summary = (sessionId: string) => ({ sessionId, agent: 'claude' })
+        emit({
+          type: 'snapshot',
+          sessions: SESSIONS.map(({ id }) => summary(id)),
+          conversationNames: SESSIONS.map(({ id }) => ({ sessionId: id, conversationName: id })),
+          namingActiveSessionIds: SESSIONS.map(({ id }) => id)
+        })
+        for (const { id } of SESSIONS) {
+          emit({ type: 'status', session: summary(id) })
+        }
+        return () => {}
       }
     } as unknown as StructuredAgentSessionHost
   )
@@ -131,7 +167,14 @@ beforeEach(() => {
         params: AttachmentUploadStartParams,
         handler: ran
       }),
-      defineMethod({ name: 'bots.chats.seen', permission: 'workspace', params: null, handler: ran })
+      defineMethod({
+        name: 'bots.chats.seen',
+        permission: 'workspace',
+        params: null,
+        handler: ran
+      }),
+      ...BOT_METHODS.filter((method) => method.name === 'bots.roster'),
+      ...STRUCTURED_AGENT_SESSION_STATUS_METHODS
     ]
   })
 })
@@ -147,6 +190,46 @@ async function call(method: string, params: unknown) {
     { id: 'r1', authToken: '', method, params },
     { callerScope: SCOPE, pairedDeviceId: 'share-device', clientKind: 'runtime' }
   )
+}
+
+const Session = z.object({ sessionId: z.string() })
+const StatusEvent = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('snapshot'),
+    sessions: z.array(Session),
+    conversationNames: z.array(Session),
+    namingActiveSessionIds: z.array(z.string())
+  }),
+  z.object({ type: z.literal('status'), session: Session })
+])
+
+async function streamStatus(): Promise<string[]> {
+  const streamed: string[] = []
+  await dispatcher.dispatchStreamingObjects(
+    { id: 'r1', authToken: '', method: 'agentSession.subscribeStatus', params: undefined },
+    (response) => {
+      if (response.ok && response.streaming) {
+        const event = StatusEvent.parse(response.result)
+        streamed.push(
+          ...(event.type === 'snapshot'
+            ? [
+                ...event.sessions.map((session) => `snapshot:${session.sessionId}`),
+                ...event.conversationNames.map((note) => `name:${note.sessionId}`),
+                ...event.namingActiveSessionIds.map((sessionId) => `naming:${sessionId}`)
+              ]
+            : [`status:${event.session.sessionId}`])
+        )
+      }
+    },
+    {
+      callerScope: SCOPE,
+      pairedDeviceId: 'share-device',
+      clientKind: 'runtime',
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      connectionId: 'share-connection'
+    }
+  )
+  return streamed
 }
 
 const errorCode = (response: Awaited<ReturnType<typeof call>>) =>
@@ -202,6 +285,32 @@ describe('the share guard', () => {
     expect(errorCode(await call('bots.chats', { botId: OTHER.id }))).toBe('not_found')
     expect(errorCode(await call('bots.chats', {}))).toBe('not_found')
     expect(errorCode(await call('bots.chats.seen', undefined))).toBe('forbidden')
+  })
+
+  it('streams a teammate the status of their own chats on the shared bot alone', async () => {
+    const theirs = [ids.alicesChat, ids.alicesSlackChat]
+    expect(await streamStatus()).toEqual([
+      ...theirs.map((id) => `snapshot:${id}`),
+      ...theirs.map((id) => `name:${id}`),
+      ...theirs.map((id) => `naming:${id}`),
+      ...theirs.map((id) => `status:${id}`)
+    ])
+  })
+
+  it('gives a teammate the shared bot’s roster line without where it is linked or its SOUL.md', async () => {
+    const response = await call('bots.roster', {})
+    expect(response.ok && response.result).toEqual({
+      bots: [
+        {
+          id: SHARED.id,
+          name: 'Reviewer',
+          agent: 'codex',
+          paused: false,
+          specialty: null,
+          linked: []
+        }
+      ]
+    })
   })
 
   it('lists only methods this host serves', () => {
