@@ -2,7 +2,7 @@
 // Notes and their image stay recoverable together through draft moves, held-note hand-offs, Send,
 // export-time editing, image-rejecting message boxes, other windows and a reordered image set.
 import { act, renderHook } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi, type Mock } from 'vitest'
 import {
   appendToNativeChatComposerDraft,
   readNativeChatComposerDraft,
@@ -227,7 +227,7 @@ function chatWithComposer(handle: NativeChatComposerHandle): {
   }
 }
 
-const composerHandle = (): NativeChatComposerHandle & { submit: ReturnType<typeof vi.fn> } => ({
+const composerHandle = (): NativeChatComposerHandle & { submit: Mock<() => void> } => ({
   insertAgentReferences: () => false,
   focus: () => true,
   insertTypedText: () => false,
@@ -237,7 +237,7 @@ const composerHandle = (): NativeChatComposerHandle & { submit: ReturnType<typeo
   pasteFromClipboard: () => {},
   contains: () => false,
   notesBlocked: () => null,
-  submit: vi.fn()
+  submit: vi.fn<() => void>()
 })
 
 it('Send submits once, only to the message box and draft it was pressed for', () => {

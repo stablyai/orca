@@ -45,11 +45,12 @@ vi.mock('./native-chat-media-notes-draw', () => ({
 
 const SCOPE = 'agent-session:notes'
 const ATTACHMENT_NOTES_KEY = 'orca.nativeChat.attachmentNotes.v1'
-// What another window sharing this storage writes for one entry.
+// What another window sharing this storage writes for one entry, later than any write here.
+const OTHER_WINDOW_WRITE_AT = 4_000_000_000_000
 const itemOf = (scope: string, id: string): string =>
   `${ATTACHMENT_NOTES_KEY}:${encodeURIComponent(`${scope}\u0000${id}`)}`
 const saveFromOtherWindow = (scope: string, id: string, value: NativeChatAttachmentNotes): void =>
-  localStorage.setItem(itemOf(scope, id), JSON.stringify({ t: Date.now() + 1000, v: value }))
+  localStorage.setItem(itemOf(scope, id), JSON.stringify({ t: OTHER_WINDOW_WRITE_AT, v: value }))
 const note = (number: number, text = `Note ${number}`): NativeChatMediaNote => ({
   id: `n${number}`,
   number,
