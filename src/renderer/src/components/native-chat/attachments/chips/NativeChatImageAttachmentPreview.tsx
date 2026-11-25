@@ -13,7 +13,10 @@ import {
 } from '../../media/notes/native-chat-chip-notes'
 import { showNativeChatNotesNotice } from '../../media/notes/native-chat-notes-notice'
 import { nativeChatNotesImageName } from '../../media/notes/native-chat-media-notes'
-import { useNativeChatHeldNotesCount } from '../../media/notes/native-chat-held-notes'
+import {
+  nativeChatNotesMediaKey,
+  useNativeChatHeldNotesCount
+} from '../../media/notes/native-chat-held-notes'
 import {
   copyableNativeChatImageSrc,
   keepPreviewOpenForChatMenu
@@ -233,7 +236,14 @@ function NativeChatImageThumbnail({
   // The thumbnail may be the downscaled clipboard preview; copy only the file.
   const copySrc = copyableNativeChatImageSrc(localSrc)
   // Notes kept for this image while the message box held a command mark it too.
-  const keptCount = useNativeChatHeldNotesCount(notesScopeKey, attachment.path || undefined)
+  const plainSource = {
+    path: attachment.path,
+    ...(attachment.connectionId ? { connectionId: attachment.connectionId } : {})
+  }
+  const keptCount = useNativeChatHeldNotesCount(
+    notesScopeKey,
+    attachment.path ? nativeChatNotesMediaKey(plainSource) : undefined
+  )
   const notesLabel = notes
     ? t('components.native-chat.notes.chipCount', '{{count}} notes', {
         defaultValue_one: '{{count}} note',
@@ -318,7 +328,7 @@ function NativeChatImageThumbnail({
         key={notes ? (original.src ? 'original' : 'marked') : 'plain'}
         src={(notes ? original.src : null) ?? fullSizeSrc ?? null}
         title={notes?.mediaName ?? label}
-        source={notes?.source ?? { path: attachment.path }}
+        source={notes?.source ?? plainSource}
         opener={thumbnailRef}
         initialNotes={notes && original.src ? notes.notes : undefined}
         // Without its clean original a marked image can only be viewed: new marks would land on old ones.

@@ -17,6 +17,8 @@ export type NativeChatMediaNote = {
 
 /** Outputs are drawn at most this long on their long edge. */
 export const NATIVE_CHAT_NOTE_IMAGE_MAX_EDGE = 2048
+/** Characters one note may hold; the note editor stops taking text here. */
+export const NATIVE_CHAT_NOTE_TEXT_MAX = 2000
 /** Distinct video frames one message may carry. */
 export const NATIVE_CHAT_NOTE_MAX_FRAMES = 8
 

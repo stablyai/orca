@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import {
   groupNativeChatNotesByFrame,
   NATIVE_CHAT_NOTE_MAX_FRAMES,
@@ -37,6 +37,13 @@ export function useNativeChatNotesEditor(initial: {
   // Every change to the notes can be undone and redone, as in Orca's other annotation tools.
   const [past, setPast] = useState<NativeChatMediaNote[][]>([])
   const [future, setFuture] = useState<NativeChatMediaNote[][]>([])
+  // While Send prepares the marked image, the notes it draws can't change under it.
+  const lockedRef = useRef(false)
+  const [locked, setLockedState] = useState(false)
+  const setLocked = useCallback((next: boolean) => {
+    lockedRef.current = next
+    setLockedState(next)
+  }, [])
   const record = useCallback((before: NativeChatMediaNote[]) => {
     setPast((current) => [...current.slice(1 - HISTORY_MAX), before])
     setFuture([])
@@ -60,6 +67,9 @@ export function useNativeChatNotesEditor(initial: {
   /** Starts a note on a new mark; false when the user must first add or discard the open one. */
   const place = useCallback(
     (mark: NativeChatNoteMark, time?: number): boolean => {
+      if (lockedRef.current) {
+        return false
+      }
       if (hasUnadded) {
         setConfirm({ reason: 'replace' })
         return false
@@ -90,6 +100,9 @@ export function useNativeChatNotesEditor(initial: {
 
   const open = useCallback(
     (id: string): boolean => {
+      if (lockedRef.current) {
+        return false
+      }
       if (hasUnadded) {
         setConfirm({ reason: 'replace' })
         return false
@@ -109,7 +122,7 @@ export function useNativeChatNotesEditor(initial: {
   /** Adds the open note or saves the change; false when there are no words to keep. */
   const commit = useCallback((): boolean => {
     const text = draftText.trim()
-    if (!text) {
+    if (!text || lockedRef.current) {
       return false
     }
     record(notes)
@@ -127,7 +140,7 @@ export function useNativeChatNotesEditor(initial: {
   const remove = useCallback(
     (id: string) => {
       const at = notes.findIndex((note) => note.id === id)
-      if (at === -1) {
+      if (at === -1 || lockedRef.current) {
         return
       }
       record(notes)
@@ -147,14 +160,19 @@ export function useNativeChatNotesEditor(initial: {
   )
 
   const clear = useCallback(() => {
-    if (notes.length === 0) {
+    if (notes.length === 0 || lockedRef.current) {
+      return
+    }
+    // Words not yet added would be lost with no Undo: they are added or discarded first.
+    if (hasUnadded) {
+      setConfirm({ reason: 'replace' })
       return
     }
     record(notes)
     setNotes([])
     closeEditor()
     setStatus({ kind: 'removed', count: notes.length })
-  }, [closeEditor, notes, record])
+  }, [closeEditor, hasUnadded, notes, record])
 
   /** Shows an earlier or later set of notes. A note being written stays open, numbered after them;
    *  an edit of a note that isn't in that set closes. */
@@ -172,7 +190,7 @@ export function useNativeChatNotesEditor(initial: {
 
   const undo = useCallback((): boolean => {
     const previous = past.at(-1)
-    if (!previous) {
+    if (!previous || lockedRef.current) {
       return false
     }
     setPast(past.slice(0, -1))
@@ -183,7 +201,7 @@ export function useNativeChatNotesEditor(initial: {
 
   const redo = useCallback((): boolean => {
     const next = future[0]
-    if (!next) {
+    if (!next || lockedRef.current) {
       return false
     }
     setFuture(future.slice(1))
@@ -200,6 +218,9 @@ export function useNativeChatNotesEditor(initial: {
 
   const move = useCallback(
     (id: string, mark: NativeChatNoteMark) => {
+      if (lockedRef.current) {
+        return
+      }
       setPending((current) => (current?.id === id ? { ...current, mark } : current))
       if (notes.some((note) => note.id === id)) {
         record(notes)
@@ -222,6 +243,8 @@ export function useNativeChatNotesEditor(initial: {
       status,
       setStatus,
       canUndo: past.length > 0,
+      locked,
+      setLocked,
       place,
       open,
       commit,
@@ -242,6 +265,8 @@ export function useNativeChatNotesEditor(initial: {
       confirm,
       status,
       past,
+      locked,
+      setLocked,
       redo,
       restore,
       place,

@@ -6,6 +6,12 @@ import {
 } from '../../drafts/native-chat-composer-draft-store'
 import { clearNativeChatComposerDraftsForTests } from '../../drafts/native-chat-draft-reset'
 import { deleteNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-removal'
+import { moveNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-move'
+import { hydrateNativeChatComposerDrafts } from '../../drafts/native-chat-composer-draft-load'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from '../../drafts/native-chat-composer-draft-storage'
 import {
   NATIVE_CHAT_ATTACHMENT_NOTES_MAX,
   clearNativeChatAttachmentNotes,
@@ -35,6 +41,7 @@ vi.mock('./native-chat-media-notes-draw', () => ({
 }))
 
 const SCOPE = 'agent-session:notes'
+const ATTACHMENT_NOTES_KEY = 'orca.nativeChat.attachmentNotes.v1'
 const note = (number: number, text = `Note ${number}`): NativeChatMediaNote => ({
   id: `n${number}`,
   number,
@@ -108,14 +115,48 @@ it('ends the notes line once notes are sent, so its Undo no longer applies', () 
   expect(line.result.current).toBeNull()
 })
 
-it('over the cap drops notes whose image left its draft, never notes on an image still in one', () => {
-  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'kept', path: '/tmp/k.png' }] })
-  setNativeChatAttachmentNotes(SCOPE, 'kept', record([note(1)]))
-  for (let index = 0; index < NATIVE_CHAT_ATTACHMENT_NOTES_MAX; index += 1) {
+it('over the cap drops notes whose image left its draft, never notes on an image still in one', async () => {
+  setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
+  // Before saved drafts load, no image is known to have left its draft: nothing is dropped.
+  for (let index = 0; index <= NATIVE_CHAT_ATTACHMENT_NOTES_MAX; index += 1) {
     setNativeChatAttachmentNotes(SCOPE, `gone-${index}`, record([note(1)]))
   }
+  expect(readNativeChatAttachmentNotes(SCOPE, 'gone-0')).not.toBeNull()
+  await hydrateNativeChatComposerDrafts()
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'kept', path: '/tmp/k.png' }] })
+  setNativeChatAttachmentNotes(SCOPE, 'kept', record([note(1)]))
   expect(readNativeChatAttachmentNotes(SCOPE, 'kept')).not.toBeNull()
   expect(readNativeChatAttachmentNotes(SCOPE, 'gone-0')).toBeNull()
+})
+
+it('a write keeps notes another window saved meanwhile', () => {
+  setNativeChatAttachmentNotes(SCOPE, 'img-1', record([note(1)]))
+  // Another window sharing this storage saves notes of its own.
+  const stored: unknown[] = JSON.parse(localStorage.getItem(ATTACHMENT_NOTES_KEY) ?? '[]')
+  localStorage.setItem(
+    ATTACHMENT_NOTES_KEY,
+    JSON.stringify([...stored, ['agent-session:other\u0000img-9', record([note(1)])]])
+  )
+  setNativeChatAttachmentNotes(SCOPE, 'img-2', record([note(1)]))
+  resetNativeChatAttachmentNotesForTests()
+  expect(readNativeChatAttachmentNotes('agent-session:other', 'img-9')).not.toBeNull()
+  expect(readNativeChatAttachmentNotes(SCOPE, 'img-1')).not.toBeNull()
+  expect(readNativeChatAttachmentNotes(SCOPE, 'img-2')).not.toBeNull()
+})
+
+it('notes on a draft’s images, and notes held for its chat, follow the draft to its new scope', () => {
+  const launch = 'native-chat-launch:pane'
+  appendToNativeChatComposerDraft(launch, {
+    text: '',
+    images: [{ id: 'img-3', path: '/tmp/m.png' }]
+  })
+  setNativeChatAttachmentNotes(launch, 'img-3', record([note(1)]))
+  holdNativeChatNotes(launch, '/tmp/dashboard.png', [note(1), note(2)])
+  moveNativeChatComposerDraft(launch, SCOPE)
+  expect(imageIds()).toEqual(['img-3'])
+  expect(readNativeChatAttachmentNotes(SCOPE, 'img-3')?.notes).toHaveLength(1)
+  expect(takeHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(2)
+  expect(readNativeChatAttachmentNotes(launch, 'img-3')).toBeNull()
 })
 
 it('a batch that fails part-way takes back the images it already attached', async () => {

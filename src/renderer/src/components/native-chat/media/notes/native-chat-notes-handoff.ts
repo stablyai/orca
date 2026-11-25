@@ -1,7 +1,7 @@
 // Hands finished notes to the chat's message box: one marked image per media item (or video frame),
 // attached like a pasted picture, with its notes kept on that attachment.
 
-import { nativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
+import { nativeChatComposerDestinationIn } from '../../composer/focus/native-chat-composer-destination'
 import {
   readNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft
@@ -21,9 +21,10 @@ export type NativeChatNotesComposer = { scopeKey: string; handle: NativeChatComp
 /** The chat's message box, found from inside its chat; null outside a chat or with no box. */
 export function nativeChatNotesComposer(from: Element | null): NativeChatNotesComposer | null {
   const root = from?.closest<HTMLElement>('[data-native-chat-root]') ?? null
-  const scopeKey = nativeChatNotesScopeKey(from)
-  const handle = root ? nativeChatComposerDestination(root, null) : null
-  return scopeKey && handle ? { scopeKey, handle } : null
+  // The draft the image goes into and the draft its notes are kept with are the same message box's.
+  const destination = root ? nativeChatComposerDestinationIn(root) : null
+  const scopeKey = destination?.element.dataset.nativeChatComposerScope
+  return destination && scopeKey ? { scopeKey, handle: destination.handle } : null
 }
 
 /** The chat's draft scope, even while its message box is hidden behind a question card. */

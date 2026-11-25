@@ -18,6 +18,8 @@ import {
   moveNativeChatStagedFiles,
   reconcileNativeChatStagedDraft
 } from './native-chat-draft-attachment-staging'
+import { moveNativeChatAttachmentNotes } from '../media/notes/native-chat-attachment-notes'
+import { moveNativeChatHeldNotes } from '../media/notes/native-chat-held-notes'
 
 /** Transfer the live draft synchronously; storage acknowledgement only governs source cleanup. */
 export function moveNativeChatComposerDraft(
@@ -32,6 +34,9 @@ export function moveNativeChatComposerDraft(
   const source = readNativeChatComposerDraft(sourceScope)
   moveNativeChatStagedFiles(sourceScope, destinationScope)
   moveNativeChatPendingAttachments(sourceScope, destinationScope)
+  // Notes on the draft's marked images, and notes held for its chat, go where the draft goes.
+  moveNativeChatAttachmentNotes(sourceScope, destinationScope)
+  moveNativeChatHeldNotes(sourceScope, destinationScope)
   for (const operation of nativeChatPastedTextOperations.values()) {
     if (operation.scopeKey === sourceScope) {
       operation.scopeKey = destinationScope

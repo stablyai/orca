@@ -73,6 +73,8 @@ export type NativeChatGalleryRecord =
       messageId: string
       blocks: readonly NativeChatGalleryBlock[]
       images: readonly NativeChatGalleryImage[]
+      /** Opens this block in the message's own viewer with notes, ready to annotate. */
+      annotate?: (block: NativeChatGalleryBlock) => void
     }
 
 export type NativeChatGalleryController = {

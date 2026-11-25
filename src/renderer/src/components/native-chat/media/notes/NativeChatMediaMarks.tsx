@@ -56,7 +56,13 @@ export function NativeChatMediaMarks({
       // focus and Enter belong to the viewport around it.
       className={cn('absolute inset-0', annotating && 'cursor-crosshair')}
       onPointerDown={(event) => {
-        if (!annotating || event.button !== 0 || event.target !== layerRef.current) {
+        // An Alt press is a pan: it goes on to the viewport rather than placing a mark.
+        if (
+          !annotating ||
+          event.button !== 0 ||
+          event.altKey ||
+          event.target !== layerRef.current
+        ) {
           return
         }
         event.stopPropagation()

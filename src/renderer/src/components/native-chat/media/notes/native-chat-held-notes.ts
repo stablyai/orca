@@ -1,5 +1,10 @@
 import { useSyncExternalStore } from 'react'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
+import type { NativeChatNotesSource } from './native-chat-attachment-notes'
+import {
+  createNativeChatNotesStorage,
+  moveNativeChatNotesEntries
+} from './native-chat-notes-storage'
 
 // Notes a closed viewer could not hand to the message box (it held a command), kept with their chat
 // and media so reopening that media brings them back, across reloads too. They are never sent from
@@ -8,14 +13,18 @@ import type { NativeChatMediaNote } from './native-chat-media-notes'
 
 const STORAGE_KEY = 'orca.nativeChat.heldNotes.v1'
 export const NATIVE_CHAT_HELD_NOTES_MAX = 60
-const NOTE_TEXT_MAX = 2000
 
 type HeldEntry = { scopeKey: string; notes: readonly NativeChatMediaNote[] }
-const held = new Map<string, HeldEntry>()
-let loaded = false
-const listeners = new Set<() => void>()
 
 const keyOf = (scopeKey: string, mediaKey: string): string => `${scopeKey}\0${mediaKey}`
+
+/** Which media held notes belong to: the same path on another connection is another file. */
+export function nativeChatNotesMediaKey(source: NativeChatNotesSource, fallback = ''): string {
+  if (source.path) {
+    return source.connectionId ? `${source.connectionId}\0${source.path}` : source.path
+  }
+  return source.url ?? fallback
+}
 
 function isNote(value: unknown): value is NativeChatMediaNote {
   return (
@@ -33,60 +42,40 @@ function isNote(value: unknown): value is NativeChatMediaNote {
   )
 }
 
-function load(): void {
-  if (loaded) {
-    return
-  }
-  loaded = true
-  try {
-    const entries: unknown = JSON.parse(globalThis.localStorage?.getItem(STORAGE_KEY) ?? '[]')
-    for (const entry of Array.isArray(entries) ? entries : []) {
-      if (
-        Array.isArray(entry) &&
-        typeof entry[0] === 'string' &&
-        typeof entry[1]?.scopeKey === 'string' &&
-        Array.isArray(entry[1]?.notes) &&
-        entry[1].notes.every(isNote)
-      ) {
-        held.set(entry[0], { scopeKey: entry[1].scopeKey, notes: entry[1].notes })
-      }
-    }
-  } catch {
-    // Unreadable storage only costs held notes from an earlier session.
-  }
+function isHeldEntry(value: unknown): value is HeldEntry {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'scopeKey' in value &&
+    typeof value.scopeKey === 'string' &&
+    'notes' in value &&
+    Array.isArray(value.notes) &&
+    value.notes.every(isNote)
+  )
 }
 
-function save(): void {
-  for (const listener of listeners) {
-    listener()
-  }
-  try {
-    globalThis.localStorage?.setItem(STORAGE_KEY, JSON.stringify([...held]))
-  } catch {
-    // Quota or blocked storage: the notes are still held for this session.
-  }
-}
+const storage = createNativeChatNotesStorage<HeldEntry>(STORAGE_KEY, (value) =>
+  isHeldEntry(value) ? { scopeKey: value.scopeKey, notes: value.notes } : null
+)
 
 export function holdNativeChatNotes(
   scopeKey: string,
   mediaKey: string,
   notes: readonly NativeChatMediaNote[]
 ): void {
-  load()
-  const key = keyOf(scopeKey, mediaKey)
-  held.delete(key)
-  held.set(key, {
-    scopeKey,
-    notes: notes.map((note) => ({ ...note, text: note.text.slice(0, NOTE_TEXT_MAX) }))
-  })
-  while (held.size > NATIVE_CHAT_HELD_NOTES_MAX) {
-    const oldest = held.keys().next().value
-    if (oldest === undefined) {
-      break
+  storage.update((held) => {
+    const key = keyOf(scopeKey, mediaKey)
+    held.delete(key)
+    held.set(key, { scopeKey, notes })
+    while (held.size > NATIVE_CHAT_HELD_NOTES_MAX) {
+      const oldest = held.keys().next().value
+      if (oldest === undefined) {
+        break
+      }
+      held.delete(oldest)
     }
-    held.delete(oldest)
-  }
-  save()
+    return true
+  })
 }
 
 /** The notes held for this media in this chat, removed from the hold as the viewer takes them back. */
@@ -94,35 +83,34 @@ export function takeHeldNativeChatNotes(
   scopeKey: string,
   mediaKey: string
 ): readonly NativeChatMediaNote[] | null {
-  load()
   const key = keyOf(scopeKey, mediaKey)
-  const entry = held.get(key)
-  if (!entry) {
-    return null
-  }
-  held.delete(key)
-  save()
-  return entry.notes
+  let taken: readonly NativeChatMediaNote[] | null = null
+  storage.update((held) => {
+    taken = held.get(key)?.notes ?? null
+    return held.delete(key)
+  })
+  return taken
 }
 
 /** Drops held notes whose chat draft is deleted, such as a closed chat or a removed workspace. */
 export function clearNativeChatHeldNotesWhere(matches: (scopeKey: string) => boolean): void {
-  load()
-  let changed = false
-  for (const [key, entry] of held) {
-    if (matches(entry.scopeKey)) {
-      held.delete(key)
-      changed = true
+  storage.update((held) => {
+    let changed = false
+    for (const [key, entry] of held) {
+      if (matches(entry.scopeKey)) {
+        held.delete(key)
+        changed = true
+      }
     }
-  }
-  if (changed) {
-    save()
-  }
+    return changed
+  })
 }
 
-function subscribeToHeldNotes(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+/** Held notes follow their chat's draft when it moves to another scope. */
+export function moveNativeChatHeldNotes(from: string, to: string): void {
+  storage.update((held) =>
+    moveNativeChatNotesEntries(held, from, to, (entry) => ({ ...entry, scopeKey: to }))
+  )
 }
 
 /** How many notes this chat holds for this media, for the "Notes kept" mark on its tile. */
@@ -130,17 +118,12 @@ export function useNativeChatHeldNotesCount(
   scopeKey: string | undefined,
   mediaKey: string | undefined
 ): number {
-  return useSyncExternalStore(subscribeToHeldNotes, () => {
-    if (!scopeKey || !mediaKey) {
-      return 0
-    }
-    load()
-    return held.get(keyOf(scopeKey, mediaKey))?.notes.length ?? 0
-  })
+  return useSyncExternalStore(storage.subscribe, () =>
+    scopeKey && mediaKey ? (storage.get(keyOf(scopeKey, mediaKey))?.notes.length ?? 0) : 0
+  )
 }
 
 /** Test-only: forget held notes and reload from storage on next read. */
 export function resetNativeChatHeldNotesForTests(): void {
-  held.clear()
-  loaded = false
+  storage.resetForTests()
 }

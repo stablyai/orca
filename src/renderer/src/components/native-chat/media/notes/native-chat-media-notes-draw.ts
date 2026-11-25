@@ -9,17 +9,21 @@ const MARK_BLUE = '#2f5bd3'
 const MARK_FILL = 'rgba(47, 91, 211, 0.16)'
 const MARK_EDGE = '#ffffff'
 
-/** Where a mark's number badge sits, in output pixels: a pin's badge above-right of its tip, a box's at its top-left corner. */
+/** Where a mark's number badge sits, in output pixels: a pin's badge above-right of its tip, a box's
+ *  at its top-left corner; always whole inside the image, so a mark at an edge keeps its number. */
 export function nativeChatNoteBadgePoint(
   mark: NativeChatNoteMark,
   width: number,
   height: number,
   radius: number
 ): { x: number; y: number } {
-  if (mark.kind === 'box') {
-    return { x: mark.x * width, y: mark.y * height }
-  }
-  return { x: mark.x * width + radius * 0.8, y: mark.y * height - radius * 1.1 }
+  const inside = (value: number, size: number): number =>
+    Math.min(Math.max(value, radius), Math.max(radius, size - radius))
+  const point =
+    mark.kind === 'box'
+      ? { x: mark.x * width, y: mark.y * height }
+      : { x: mark.x * width + radius * 0.8, y: mark.y * height - radius * 1.1 }
+  return { x: inside(point.x, width), y: inside(point.y, height) }
 }
 
 /** Draws `source` with each note's numbered mark into a PNG no larger than the output limit. */

@@ -18,7 +18,11 @@ import {
   watchNativeChatNotesLeaveDraft,
   type NativeChatNotesComposer
 } from './native-chat-notes-handoff'
-import { holdNativeChatNotes, takeHeldNativeChatNotes } from './native-chat-held-notes'
+import {
+  holdNativeChatNotes,
+  nativeChatNotesMediaKey,
+  takeHeldNativeChatNotes
+} from './native-chat-held-notes'
 
 type Editor = ReturnType<typeof useNativeChatNotesEditor>
 
@@ -62,7 +66,7 @@ export function useNativeChatNotesDelivery({
 }) {
   const t = useTranslate()
   const { notes } = editor
-  const mediaKey = source.path ?? source.url ?? title
+  const mediaKey = nativeChatNotesMediaKey(source, title)
   const [busy, setBusy] = useState(false)
   // One hand-off at a time: Esc or × while Send is still preparing must not start a second one.
   const busyRef = useRef(false)
@@ -127,6 +131,8 @@ export function useNativeChatNotesDelivery({
       }
       busyRef.current = true
       setBusy(true)
+      // The image is drawn from these notes: no change to them until it is handed off or fails.
+      editor.setLocked(true)
       let handed = false
       try {
         const ids = await attachNativeChatNotes({
@@ -176,6 +182,7 @@ export function useNativeChatNotesDelivery({
       }
       busyRef.current = false
       setBusy(false)
+      editor.setLocked(false)
       return handed
     },
     [
@@ -226,7 +233,9 @@ export function useNativeChatNotesDelivery({
           { name: title }
         )
       })
-      // Before the image is read its notes are unchanged, so closing then leaves them where they were.
+    } else if (notes.length > 0 && !initialNotes && !loaded && scopeKey) {
+      // Held notes came back before the image was read: with nothing to draw them on, they go back.
+      holdNativeChatNotes(scopeKey, mediaKey, notes)
     } else if (notes.length > 0 && loaded && !(await handOff(false))) {
       return
     }

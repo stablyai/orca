@@ -47,6 +47,8 @@ export type NativeChatMediaViewerProps = {
   fallback?: React.ReactNode
   /** False for web images: drawing them would need a cross-origin read, so they are view-only. */
   annotatable?: boolean
+  /** Opens ready to place notes (Annotate pressed in the chat's image set). */
+  startAnnotating?: boolean
   /** Keeps the viewer open while the chat's own image menu is used over it. */
   onInteractOutside?: React.ComponentProps<typeof DialogContent>['onInteractOutside']
   /** The image the chat's context menu copies. */
@@ -81,6 +83,7 @@ function ViewerBody({
   replacesAttachmentId,
   fallback,
   annotatable = true,
+  startAnnotating = false,
   onInteractOutside,
   copySrc,
   onPrevious,
@@ -88,7 +91,9 @@ function ViewerBody({
   position
 }: NativeChatMediaViewerProps): React.JSX.Element {
   const editor = useNativeChatNotesEditor({ notes: initialNotes ?? [], offset })
-  const [annotating, setAnnotating] = useState(Boolean(initialNotes?.length))
+  const [annotating, setAnnotating] = useState(
+    Boolean(initialNotes?.length) || (startAnnotating && annotatable)
+  )
   const [panelHidden, setPanelHidden] = useState(false)
   const [narrow, setNarrow] = useState(() => window.innerWidth < NARROW_WIDTH)
   const [loaded, setLoaded] = useState<{ size: PanZoomSize; image: HTMLImageElement } | null>(null)

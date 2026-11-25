@@ -9,8 +9,15 @@ export const NATIVE_CHAT_NOTES_ERROR_ID = 'native-chat-notes-error'
 import { ShortcutKeyCombo } from '@/components/ui/ShortcutKeyCombo'
 import { isMacPlatform } from '@/components/native-chat/pane/routing/native-chat-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
-import { formatNativeChatNoteTime, type NativeChatMediaNote } from './native-chat-media-notes'
+import {
+  formatNativeChatNoteTime,
+  NATIVE_CHAT_NOTE_TEXT_MAX,
+  type NativeChatMediaNote
+} from './native-chat-media-notes'
 import type { NativeChatNotesEditor } from './use-native-chat-notes-editor'
+
+/** The note editor shows its length from here on. */
+const NOTE_TEXT_WARN = NATIVE_CHAT_NOTE_TEXT_MAX - 200
 
 /** The notes list and its editor, in the white card the viewer floats at the right (a bottom sheet when narrow). */
 export function NativeChatMediaNotesPanel({
@@ -274,6 +281,7 @@ function NoteEditor({
         value={editor.draftText}
         aria-label={heading}
         placeholder={t('components.native-chat.notes.placeholder', 'Add a note')}
+        maxLength={NATIVE_CHAT_NOTE_TEXT_MAX}
         onChange={(event) => editor.setDraftText(event.target.value)}
         onKeyDown={(event) => {
           if (isImeCompositionKeyDown(event)) {
@@ -292,7 +300,13 @@ function NoteEditor({
         }}
         className="w-full resize-none bg-transparent text-sm text-media-paper-foreground outline-none placeholder:text-media-paper-muted"
       />
-      <div className="flex justify-end">
+      <div className="flex items-center justify-end gap-2">
+        {/* Near the limit, how much room is left, so text that stops going in isn't a surprise. */}
+        {editor.draftText.length >= NOTE_TEXT_WARN ? (
+          <span className="text-xs text-media-paper-muted tabular-nums">
+            {editor.draftText.length} / {NATIVE_CHAT_NOTE_TEXT_MAX}
+          </span>
+        ) : null}
         <Button
           type="button"
           variant="media-note"

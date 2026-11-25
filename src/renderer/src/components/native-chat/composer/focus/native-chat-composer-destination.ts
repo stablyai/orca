@@ -78,15 +78,22 @@ export function nativeChatComposerDestination(
   root: HTMLElement | null,
   fallback: NativeChatComposerHandle | null
 ): NativeChatComposerHandle | null {
-  return selectDestination(root ? descendants.get(root) : undefined, true) ?? fallback
+  return selectDestination(root ? descendants.get(root) : undefined, true)?.handle ?? fallback
+}
+
+/** The shown message box in `root` that takes input, with the element it registered from. */
+export function nativeChatComposerDestinationIn(
+  root: HTMLElement
+): { handle: NativeChatComposerHandle; element: HTMLElement } | null {
+  const selected = selectDestination(descendants.get(root), true)
+  return selected ? { handle: selected.handle, element: selected.entry.root } : null
 }
 
 function selectDestination(
   entries: Iterable<Destination> = [],
   shownOnly = false
-): NativeChatComposerHandle | null {
-  let selected: Destination | undefined
-  let handle: NativeChatComposerHandle | null = null
+): { entry: Destination; handle: NativeChatComposerHandle } | null {
+  let selected: { entry: Destination; handle: NativeChatComposerHandle } | null = null
   for (const entry of entries) {
     const current = entry.handle.current
     // A composer hidden behind a question card keeps its draft but must not take its keys or paste.
@@ -95,20 +102,19 @@ function selectDestination(
     }
     if (
       !selected ||
-      entry.active > selected.active ||
-      (entry.active === selected.active && entry.primary)
+      entry.active > selected.entry.active ||
+      (entry.active === selected.entry.active && entry.primary)
     ) {
-      selected = entry
-      handle = current
+      selected = { entry, handle: current }
     }
   }
-  return handle
+  return selected
 }
 
 export function nativeChatComposerScopeDestination(
   scopeKey: string
 ): NativeChatComposerHandle | null {
-  return selectDestination(scopes.get(currentDraftScope(scopeKey)) ?? [])
+  return selectDestination(scopes.get(currentDraftScope(scopeKey)) ?? [])?.handle ?? null
 }
 
 export function moveNativeChatComposerDestinations(from: string, to: string): void {
