@@ -75,7 +75,7 @@ export class SharedMcpProcess {
   /** The child's answer to Orca's initialize, which every agent session is introduced with. */
   private child: InitializeResult | null = null
   private readonly sessions = new Map<string, AgentSession>()
-  private readonly subscriptions = new SharedMcpResourceSubscriptions()
+  private readonly subscriptions = new SharedMcpResourceSubscriptions((id) => this.sessions.has(id))
   private process: ChildProcessWithoutNullStreams | null = null
   /** Settles once its child has exited, or at once if it never started one. */
   exited: Promise<void> = Promise.resolve()
@@ -282,21 +282,23 @@ export class SharedMcpProcess {
     request: JSONRPCRequest,
     extra: RequestHandlerExtra<Request, Notification>
   ): Promise<Result> {
-    const send = () => this.send(session, request, extra)
-    return this.subscriptions.forward(request, session.transport.sessionId ?? '', send) ?? send()
+    // A call its agent cancelled gets no reply, so its response stream ends here instead, even
+    // while it waits on a resource's first subscribe.
+    const cancelled = (): void => session.transport.closeSSEStream(extra.requestId)
+    extra.signal.addEventListener('abort', cancelled, { once: true })
+    const send = () => this.send(request, extra)
+    const reply =
+      this.subscriptions.forward(request, session.transport.sessionId ?? '', send) ?? send()
+    return reply.finally(() => extra.signal.removeEventListener('abort', cancelled))
   }
 
   /** An agent's request, sent on to the child as Orca's own; its progress and cancel go along. */
   private send(
-    session: AgentSession,
     { method, params }: JSONRPCRequest,
     extra: RequestHandlerExtra<Request, Notification>
   ): Promise<Result> {
     const token = params?._meta?.progressToken
-    // A call its agent cancelled gets no reply, so its response stream ends here instead.
-    const cancelled = (): void => session.transport.closeSSEStream(extra.requestId)
-    extra.signal.addEventListener('abort', cancelled, { once: true })
-    const reply = this.client.request({ method, ...(params ? { params } : {}) }, ResultSchema, {
+    return this.client.request({ method, ...(params ? { params } : {}) }, ResultSchema, {
       signal: extra.signal,
       timeout: CALL_TIMEOUT_MS,
       resetTimeoutOnProgress: true,
@@ -312,7 +314,6 @@ export class SharedMcpProcess {
                 .catch(() => {})
           })
     })
-    return reply.finally(() => extra.signal.removeEventListener('abort', cancelled))
   }
 
   private ended(session: AgentSession): void {
