@@ -137,6 +137,7 @@ export default function TerminalPaneHeaderOverlay({
         destination={{ pane, tabId, worktreeId, cwd, managerRef, paneTransportsRef }}
         className="pane-title-bar"
         data-terminal-tab-id={tabId}
+        data-pane-title-leaf-id={pane.leafId}
         data-pane-prevent-terminal-focus=""
         {...(isActivePane ? { 'data-active-pane': '' } : {})}
         {...(isChromeless ? { 'data-chromeless': '' } : {})}

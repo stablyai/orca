@@ -86,6 +86,9 @@ const buttonVariants = cva(
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',
         xs: "h-6 gap-1 rounded-md px-2 text-xs has-[>svg]:px-1.5 [&_svg:not([class*='size-'])]:size-3",
+        // `xs` trimmed to its text, for an action inside a 32px status line.
+        'xs-compact':
+          "h-5 gap-1 rounded-md px-1.5 py-0.5 text-xs [&_svg:not([class*='size-'])]:size-3",
         // A `link` inside a sentence: no box of its own, so it wraps with the text and lines up with its edge.
         inlineText:
           "h-auto gap-1 rounded-sm p-0 align-baseline text-xs [&_svg:not([class*='size-'])]:size-3",
