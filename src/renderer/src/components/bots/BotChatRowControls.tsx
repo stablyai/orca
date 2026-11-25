@@ -8,6 +8,7 @@ import type { Bot } from '../../../../shared/bot-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import { flashChatPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
+import { tabOfBotHost } from './use-bot-sidebar-older-chats'
 
 /** Whether a chat's tab is the one in front, its fold toggle, and a flash of its pane for a press
  *  on the row of the chat already in front, for a row whose list reads its fold. */
@@ -29,7 +30,8 @@ export function useBotChatPress(
     }
     const tab = selectFrontTab(s)
     return (
-      tab?.contentType === 'agent-session' &&
+      tab !== null &&
+      tabOfBotHost(tab, bot.hostId) &&
       (tab.entityId === chatId || tab.entityId === liveSessionId)
     )
   })
@@ -39,7 +41,8 @@ export function useBotChatPress(
     highlight: () => {
       const tab = selectFrontTab(useAppStore.getState())
       if (
-        tab?.contentType === 'agent-session' &&
+        tab !== null &&
+        tabOfBotHost(tab, bot.hostId) &&
         (tab.entityId === chatId || tab.entityId === liveSessionId)
       ) {
         flashChatPaneRim(tab.id)
