@@ -1,3 +1,4 @@
+import type { WorktreeCheckoutIdentity } from '../../../shared/worktree/removal/worktree-checkout-identity'
 import { GIT_READ_TIMEOUT_MS } from '../../../shared/git/commands/git-command-timeout'
 import type {
   LocalBaseRefRefreshResult,
@@ -53,6 +54,9 @@ export type RemoveWorktreeOptions = GitWorktreeExecOptions & {
   knownRemovedWorktree?: Pick<GitWorktreeInfo, 'branch' | 'head' | 'locked' | 'lockReason'> | null
   /** Stops only `git worktree remove`; a killed branch cleanup could strand a ref lock. */
   checkoutDeleteSignal?: AbortSignal
+  checkoutDeleteGuard?: () => void
+  checkoutDeleteIdentity?: WorktreeCheckoutIdentity
+  onCheckoutDeleteStart?: () => void
   /** Runs inside the acquired deletion slot, immediately before the checkout is deleted. */
   beforeCheckoutDelete?: () => Promise<void>
   expectedMarker?: string

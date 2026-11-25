@@ -56,6 +56,8 @@ import {
   runtimeWorktreeListingFor
 } from './runtime-worktree-catalog-read'
 import * as ScanCache from './runtime-worktree-scan-cache'
+import { bumpWorktreeScanGeneration } from '../../../git/worktrees/catalog/worktree-scan-cache'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
@@ -116,18 +118,43 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     return (await this.listResolvedWorktreeSnapshot()).worktrees
   }
 
-  protected async listResolvedWorktreeSnapshot(): Promise<ResolvedWorktreeSnapshot> {
+  protected async listResolvedWorktreeSnapshot(
+    /** A repo id, null for every local repo, or exactly these repos; any of them must list completely. */
+    freshScope?: string | null | ReadonlySet<string>
+  ): Promise<ResolvedWorktreeSnapshot> {
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
+    const requireComplete =
+      freshScope === undefined
+        ? undefined
+        : (repo: Repo) =>
+            (!freshScope ||
+              (typeof freshScope === 'string'
+                ? repo.id === freshScope
+                : freshScope.has(repo.id))) &&
+            getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+            !isFolderRepo(repo)
+    if (requireComplete) {
+      for (const repo of this.store.getRepos()) {
+        if (requireComplete(repo)) {
+          bumpWorktreeScanGeneration(repo.path)
+        }
+      }
+      // A strict read fails or waits on any selected repo; computed on its own so ordinary catalog
+      // readers neither join it nor lose their per-repo fallback to it.
+      return this.computeResolvedWorktrees(requireComplete)
+    }
     return this.resolvedWorktrees.getSnapshot(
-      () => this.computeResolvedWorktrees(),
+      () => this.computeResolvedWorktrees(requireComplete),
       RESOLVED_WORKTREE_CACHE_TTL_MS,
       getWorktreeScanMutationRevision()
     )
   }
 
-  protected async computeResolvedWorktrees(): Promise<ResolvedWorktreeSnapshot> {
+  protected async computeResolvedWorktrees(
+    requireComplete?: (repo: Repo) => boolean
+  ): Promise<ResolvedWorktreeSnapshot> {
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
@@ -136,7 +163,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     const repoOwners = createRepoRowExecutionHostLookup(repos)
     const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
     const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
-    const deps = this.repoWorktreeRowDeps()
+    const deps = this.repoWorktreeRowDeps(requireComplete)
     const perRepoWorktrees = await Promise.all(
       repos.map(
         async (repo) =>
@@ -199,10 +226,11 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  protected repoWorktreeRowDeps(): RepoWorktreeRowDeps {
+  protected repoWorktreeRowDeps(requireComplete?: (repo: Repo) => boolean): RepoWorktreeRowDeps {
     const store = this.requireStore()
     return {
       store,
+      requireComplete,
       scanRepo: (repo, projectRuntimeByRepoId) =>
         this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
       getCachedSuccessfulScan: (repo) => {

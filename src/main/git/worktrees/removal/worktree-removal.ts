@@ -27,6 +27,12 @@ import { removeWindowsCheckout, usesNativeWindowsRemoval } from './windows-workt
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
 import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
+import { canSpawnOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  WorktreeRemovalIdentityUnverifiableError,
+  WorktreeRemovalIncompleteError,
+  isWorktreeIdentityUnverifiable
+} from '../../../../shared/worktree/removal/worktree-checkout-identity'
 
 const branchCleanupQueueByRepo = new Map<string, Promise<void>>()
 
@@ -42,10 +48,11 @@ export async function removeWorktree(
   options = removalWorkerOptions({
     ...options,
     observeChildTermination: (terminated, writes) => {
-      observe?.(terminated, writes)
       if (writes) {
+        options.onCheckoutDeleteStart?.()
         writers.push(terminated)
       }
+      observe?.(terminated, writes)
     }
   })
   try {
@@ -89,8 +96,19 @@ async function performRemoveWorktree(
     admissionExempt: true as const
   }
   const execOptions = {
+    ...(options.checkoutDeleteIdentity
+      ? { worktreeCheckoutGuard: { identity: options.checkoutDeleteIdentity } }
+      : {}),
     ...finalizationOptions,
-    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {})
+    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {}),
+    ...(options.checkoutDeleteGuard
+      ? {
+          canStart: () => {
+            options.checkoutDeleteGuard!()
+            return options.canStart?.() !== false
+          }
+        }
+      : {})
   }
   const args = [...longPathArgs, 'worktree', 'remove']
   if (force) {
@@ -100,7 +118,12 @@ async function performRemoveWorktree(
   await runUnderWorktreeDeleteLimit(async () => {
     // Inside the slot: a checkout swapped in while this request queued must still be refused.
     await options.beforeCheckoutDelete?.()
+    options.checkoutDeleteGuard?.()
     if (usesNativeWindowsRemoval(worktreePath, options)) {
+      // Its last Git step needs the worker's identity check: without a worker, delete nothing.
+      if (options.checkoutDeleteIdentity && !canSpawnOnWorkerThread()) {
+        throw new WorktreeRemovalIdentityUnverifiableError()
+      }
       await removeWindowsCheckout(repoPath, worktreePath, force, {
         ...options,
         knownRemovedWorktree: removedWorktree
@@ -116,10 +139,35 @@ async function performRemoveWorktree(
             `Worktree path appeared during deletion: ${worktreePath}. Retry deletion.`
           )
         }
-        await gitExecFileAsync(
-          [...longPathArgs, 'worktree', 'remove', '--force', '--', worktreePath],
-          finalizationOptions
-        )
+        try {
+          await gitExecFileAsync(
+            [
+              ...longPathArgs,
+              'worktree',
+              'remove',
+              ...(options.checkoutDeleteIdentity ? [] : ['--force']),
+              '--',
+              worktreePath
+            ],
+            {
+              ...finalizationOptions,
+              ...(options.checkoutDeleteIdentity
+                ? {
+                    spawnOnWorkerThread: true,
+                    worktreeCheckoutGuard: {
+                      identity: options.checkoutDeleteIdentity,
+                      checkoutRemoved: true as const
+                    }
+                  }
+                : {})
+            }
+          )
+        } catch (error) {
+          if (isWorktreeIdentityUnverifiable(error)) {
+            throw new WorktreeRemovalIncompleteError(error)
+          }
+          throw error
+        }
       }
     } else {
       await gitExecFileAsync(args, execOptions)
@@ -215,7 +263,9 @@ export async function deleteBranchOfUnregisteredWorktree(
 
 function removalWorkerOptions(options: RemoveWorktreeOptions): RemoveWorktreeOptions {
   // uv_spawn can block even for async Git; keep native process creation off Electron's UI loop.
-  return process.platform === 'darwin' ? { ...options, spawnOnWorkerThread: true } : options
+  return process.platform === 'darwin' || options.checkoutDeleteIdentity
+    ? { ...options, spawnOnWorkerThread: true }
+    : options
 }
 
 export async function localBranchExists(
@@ -250,6 +300,9 @@ async function removeCheckoutLeftByGit(
       return
     }
     throw error
+  }
+  if (options.checkoutDeleteGuard) {
+    throw new Error('The checkout remains after Git deletion; automatic cleanup left it in place.')
   }
   // Git removed the accepted checkout; files here now cannot be told from a folder recreated in place.
   await removeUnregisteredHostCheckout(worktreePath, options.checkoutDeleteSignal, {

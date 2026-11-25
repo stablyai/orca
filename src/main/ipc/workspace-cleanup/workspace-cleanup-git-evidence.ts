@@ -93,6 +93,7 @@ export async function readWorkspaceCleanupGitEvidence(
     status = await withWorkspaceCleanupTimeout(
       (signal) =>
         getStatus(worktree.path, {
+          fresh: true,
           includeLineStats: false,
           signal,
           ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
@@ -131,7 +132,8 @@ export async function readWorkspaceCleanupGitEvidence(
     prCache,
     repoRefs,
     signal,
-    coordinatorBranch
+    coordinatorBranch,
+    status.head
   )
   // Commits already in the base, a merged review or the coordinator's branch are not at risk, even after a squash rewrote them.
   const headLanded = isWorkspaceCleanupHeadLanded(merge)
@@ -150,6 +152,25 @@ export async function readWorkspaceCleanupGitEvidence(
   const atRiskLocalFiles = await readCleanupAtRiskLocalFiles(worktree, repo, signal)
   if (hasWorktreeAtRiskLocalFiles(atRiskLocalFiles)) {
     blockers.push('ignored-files')
+  }
+
+  try {
+    const head = await withWorkspaceCleanupTimeout(
+      (signal) =>
+        gitExecFileAsync(['rev-parse', '--verify', 'HEAD^{commit}'], {
+          cwd: worktree.path,
+          signal
+        }),
+      WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS,
+      'Timed out rechecking workspace HEAD.',
+      signal
+    )
+    if (!status.head || head.stdout.trim() !== status.head) {
+      return { ...createEmptyWorkspaceCleanupGitEvidence(), blockers: ['git-status-error'] }
+    }
+  } catch {
+    throwIfWorkspaceCleanupScanAborted(signal)
+    return { ...createEmptyWorkspaceCleanupGitEvidence(), blockers: ['git-status-error'] }
   }
 
   return {

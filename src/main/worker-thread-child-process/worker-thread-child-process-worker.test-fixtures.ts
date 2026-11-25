@@ -10,11 +10,36 @@ import type {
   WorkerThreadChildSpec
 } from './worker-thread-child-process-protocol'
 
-export async function createWorkerThreadChildProcessTestEntry() {
+export async function createWorkerThreadChildProcessTestEntry(
+  options: { latchRemoval?: boolean } = {}
+) {
   const directory = await mkdtemp(join(tmpdir(), 'orca-worker-child-'))
   const entryPath = join(directory, 'worker-thread-child-process-entry.cjs')
+  const input = options.latchRemoval
+    ? {
+        stdin: {
+          resolveDir: __dirname,
+          sourcefile: 'latched-worker-entry.ts',
+          contents: `
+        import { parentPort, workerData } from 'node:worker_threads'
+        import { serveWorkerThreadChildProcesses } from './worker-thread-child-process-server'
+        const latch = workerData?.removalLatch ? new Int32Array(workerData.removalLatch) : null
+        serveWorkerThreadChildProcesses({
+          postMessage: (...args) => parentPort.postMessage(...args),
+          on: (event, handle) => parentPort.on(event, request => {
+            handle(request)
+            if (request.type === 'spawn' && request.spec.args.includes('worktree') && request.spec.args.includes('remove') && latch && Atomics.load(latch, 0) === 0) {
+              parentPort.postMessage({ type: 'test-removal-queued' })
+              Atomics.wait(latch, 0, 0)
+            }
+          })
+        })
+      `
+        }
+      }
+    : { entryPoints: [join(__dirname, 'worker-thread-child-process-entry.ts')] }
   await build({
-    entryPoints: [join(__dirname, 'worker-thread-child-process-entry.ts')],
+    ...input,
     outfile: entryPath,
     bundle: true,
     platform: 'node',
@@ -25,7 +50,10 @@ export async function createWorkerThreadChildProcessTestEntry() {
 }
 
 export function createWorkerThreadChildProcessTestHost(entryPath: string) {
-  const worker = new Worker(entryPath)
+  const removalLatch = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.store(removalLatch, 0, 1)
+  let queued = Promise.withResolvers<void>()
+  const worker = new Worker(entryPath, { workerData: { removalLatch: removalLatch.buffer } })
   const transport = new EventEmitter()
   const acknowledgements: Extract<WorkerThreadChildRequest, { type: 'output-consumed' }>[] = []
   let holdingOutput = true
@@ -34,7 +62,13 @@ export function createWorkerThreadChildProcessTestHost(entryPath: string) {
   const backlogged = new Promise<void>((resolve) => {
     notifyBacklog = resolve
   })
-  worker.on('message', (event) => transport.emit('message', event))
+  worker.on('message', (event) => {
+    if (event.type === 'test-removal-queued') {
+      queued.resolve()
+    } else {
+      transport.emit('message', event)
+    }
+  })
   worker.on('error', (error) => transport.emit('error', error))
   worker.on('exit', (code) => transport.emit('exit', code))
   const host = new WorkerThreadChildProcessHost(() =>
@@ -61,7 +95,17 @@ export function createWorkerThreadChildProcessTestHost(entryPath: string) {
       worker.postMessage(request)
     }
   }
+  const releaseRemoval = (): void => {
+    Atomics.store(removalLatch, 0, 1)
+    Atomics.notify(removalLatch, 0)
+  }
   return {
+    holdRemoval() {
+      queued = Promise.withResolvers<void>()
+      Atomics.store(removalLatch, 0, 0)
+      return queued.promise
+    },
+    releaseRemoval,
     spawn(spec: WorkerThreadChildSpec) {
       const child = host.spawn(spec)
       let closed = false
@@ -83,6 +127,7 @@ export function createWorkerThreadChildProcessTestHost(entryPath: string) {
     backlogged,
     releaseOutput,
     async dispose(): Promise<void> {
+      releaseRemoval()
       releaseOutput()
       for (const child of children) {
         child.kill()

@@ -31,8 +31,12 @@ export function WorkspaceCleanupProtectionSection({
           label={search.keepIgnoredFiles.title}
           description={search.keepIgnoredFiles.description}
           checked={keepIgnoredFiles}
-          disabled={disabled}
-          onChange={onToggleKeepIgnoredFiles}
+          ariaDisabled={disabled}
+          onChange={() => {
+            if (!disabled) {
+              onToggleKeepIgnoredFiles()
+            }
+          }}
         />
       </SearchableSetting>
     </SettingsGroup>

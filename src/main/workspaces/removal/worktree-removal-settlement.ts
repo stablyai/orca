@@ -5,6 +5,7 @@ import {
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import { pendingWorktreeRemovals } from './worktree-removal-table'
+import { WorktreeRemovalIncarnationChangedError } from '../../../shared/worktree/removal/worktree-checkout-identity'
 
 export type RemovalSettlement = {
   accepted: Promise<void>
@@ -53,12 +54,17 @@ export function waitForWorktreeRemovalAcceptance(
 export function waitForPendingWorktreeRemoval(
   worktreeId: string,
   hostId?: ExecutionHostId,
-  deleteBranch?: boolean
+  deleteBranch?: boolean,
+  expectedInstanceId?: string
 ): Promise<RemoveWorktreeResult> | undefined {
   if ((hostId ?? LOCAL_EXECUTION_HOST_ID) !== LOCAL_EXECUTION_HOST_ID) {
     return undefined
   }
-  assertAcceptedBranchChoice(pendingWorktreeRemovals.get(worktreeId), deleteBranch)
+  const record = pendingWorktreeRemovals.get(worktreeId)
+  if (record && expectedInstanceId && record.expectedInstanceId !== expectedInstanceId) {
+    throw new WorktreeRemovalIncarnationChangedError()
+  }
+  assertAcceptedBranchChoice(record, deleteBranch)
   return settlementsByWorktreeId.get(worktreeId)?.result
 }
 
@@ -73,6 +79,20 @@ export function assertAcceptedBranchChoice(
   }
 }
 
+// A fast failure can clear the pending entry before the caller looks it up; the accepted reply keeps its own.
+const acceptedCompletions = new WeakMap<object, Promise<RemoveWorktreeResult>>()
+
+/** Ties an accepted `removing` reply to its removal's outcome without putting it on the wire. */
+export function withAcceptedCompletion<T extends RemoveWorktreeResult>(
+  accepted: T,
+  completion: Promise<RemoveWorktreeResult> | undefined
+): T {
+  if (completion) {
+    acceptedCompletions.set(accepted, completion)
+  }
+  return accepted
+}
+
 /** Await the delete while preserving the acceptance result fields. */
 export async function finishAcceptedWorktreeRemoval<T extends RemoveWorktreeResult>(
   accepted: T,
@@ -80,6 +100,8 @@ export async function finishAcceptedWorktreeRemoval<T extends RemoveWorktreeResu
   hostId?: ExecutionHostId
 ): Promise<Omit<T, 'removing'>> {
   const { removing, ...acceptance } = accepted
-  const pending = removing ? waitForPendingWorktreeRemoval(worktreeId, hostId) : undefined
+  const pending = removing
+    ? (acceptedCompletions.get(accepted) ?? waitForPendingWorktreeRemoval(worktreeId, hostId))
+    : undefined
   return pending ? { ...acceptance, ...(await pending) } : acceptance
 }

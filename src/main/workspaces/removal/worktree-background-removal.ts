@@ -9,7 +9,8 @@ export { readCheckoutMarkerIdentity as markerIdentity } from './worktree-removal
 export {
   waitForPendingWorktreeRemoval,
   waitForWorktreeRemovalAcceptance,
-  finishAcceptedWorktreeRemoval
+  finishAcceptedWorktreeRemoval,
+  withAcceptedCompletion
 } from './worktree-removal-settlement'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -23,7 +24,11 @@ import { runWorktreeChangeInvalidators } from '../../ipc/worktrees/listing/workt
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktree-removal-records'
 import { failureLeftByGit } from './worktree-removal-failure'
-import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
+import {
+  differentCheckoutAtPathError,
+  isCheckoutRegistered,
+  recordedRootKey
+} from './worktree-removal-leftover'
 import {
   closeWorktreeRemovalRecords,
   failedWorktreeRemovals,
@@ -102,14 +107,22 @@ export function startBackgroundWorktreeRemoval(
   args: {
     removal: Pick<
       WorktreeRemovalRecord,
-      'worktreeId' | 'repoId' | 'repoPath' | 'deleteBranch' | 'force' | 'gitdir'
+      | 'worktreeId'
+      | 'repoId'
+      | 'repoPath'
+      | 'deleteBranch'
+      | 'force'
+      | 'expectedInstanceId'
+      | 'expectedCheckoutIdentity'
+      | 'gitdir'
     > & { worktree: Pick<GitWorktreeInfo, 'path' | 'branch' | 'head'> }
   } & BackgroundWorktreeRemovalJob
 ): Promise<RemoveWorktreeResult> {
   const pending = waitForPendingWorktreeRemoval(
     args.removal.worktreeId,
     undefined,
-    args.removal.deleteBranch
+    args.removal.deleteBranch,
+    args.removal.expectedInstanceId
   )
   if (pending) {
     return pending
@@ -149,8 +162,17 @@ export function retryFailedWorktreeRemoval(
   assertAcceptedBranchChoice(failed, deleteBranch)
   const release = worktreeRemovalLifetime.acquirePreparation()
   try {
-    const { failure: _failure, ...original } = failed
-    const record = { ...original, force: force ?? original.force }
+    // Retry is the user's own delete of an unregistered leftover, so cleanup's review binding no longer
+    // applies; the recorded checkout marker and the re-registration check below still guard it.
+    const {
+      failure: _failure,
+      expectedInstanceId: _reviewedInstance,
+      expectedCheckoutIdentity: _reviewedCheckout,
+      ...original
+    } = failed
+    // The reviewed root stays bound: an empty folder recreated at the path is not this leftover.
+    const rootKey = recordedRootKey(failed)
+    const record = { ...original, force: force ?? original.force, ...(rootKey ? { rootKey } : {}) }
     const settlement = addPendingRemoval(record)
     const job = jobFor(record)
     const leftoverOnly: BackgroundWorktreeRemovalJob = {

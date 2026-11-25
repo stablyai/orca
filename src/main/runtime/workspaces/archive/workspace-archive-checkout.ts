@@ -103,10 +103,17 @@ export function archiveMarkStep(
 export async function unmarkArchiveIfCheckoutRemains(
   store: RuntimeStore,
   target: RuntimeWorktreeRemovalTarget,
-  hostId: ExecutionHostId
+  hostId: ExecutionHostId,
+  expectedInstanceId?: string
 ): Promise<void> {
   const owner = resolveWorktreeRemovalRepoOwner(store, target.repoId, hostId)
   const mark = readWorktreeMetaForHost(store, target.id, hostId)?.archivedCheckout
+  if (
+    expectedInstanceId &&
+    readWorktreeMetaForHost(store, target.id, hostId)?.instanceId !== expectedInstanceId
+  ) {
+    return
+  }
   if (owner.kind !== 'resolved' || !mark) {
     return
   }
@@ -115,6 +122,12 @@ export async function unmarkArchiveIfCheckoutRemains(
     getLocalProjectWorktreeGitOptions(store, owner.repo)
   ).catch(() => null)
   if (registered?.some((worktree) => areWorktreePathsEqual(worktree.path, target.path))) {
+    if (
+      expectedInstanceId &&
+      readWorktreeMetaForHost(store, target.id, hostId)?.instanceId !== expectedInstanceId
+    ) {
+      return
+    }
     store.setWorktreeMeta(hostWorktreeTarget({ id: target.id, hostId }), {
       isArchived: mark.wasArchived === true,
       archivedCheckout: undefined

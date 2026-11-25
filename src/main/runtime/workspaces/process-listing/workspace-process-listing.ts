@@ -1,3 +1,4 @@
+import { freshInventoryScope } from '../catalog/fresh-inventory-scope'
 import { crewChatStatusChange } from '../../orchestration/crew/crew-changes'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
@@ -10,10 +11,7 @@ import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/
 import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
-import {
-  buildRuntimeWorktreeSummaryPathIndex,
-  createRuntimeWorktreePsSummaryLookup
-} from './runtime-worktree-summary-paths'
+import { indexRuntimeWorktreePs } from './runtime-worktree-summary-paths'
 import {
   applyRuntimeWorktreePsSessionActivity,
   applyRuntimeWorktreePsTerminalActivity
@@ -76,13 +74,16 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     limit = 200,
     sourceDefaultsSupported = true,
     includeAgentWait = false,
-    worktreeId?: string
+    worktreeId?: string,
+    repoId?: string,
+    /** True for a complete read of `repoId` (or every local repo); a list makes exactly those complete. */
+    freshInventory: boolean | readonly string[] = false
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
     }
     const { worktrees: resolvedWorktrees, platformByRepoId } = this.visibleResolvedWorktreeSnapshot(
-      await this.listResolvedWorktreeSnapshot(),
+      await this.listResolvedWorktreeSnapshot(freshInventoryScope(freshInventory, repoId)),
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
@@ -90,12 +91,10 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       store: this.store,
       resolvedWorktrees,
       platformByRepoId,
-      worktreeId
+      worktreeId,
+      repoId
     })
-    const getSummary = createRuntimeWorktreePsSummaryLookup(
-      summaries,
-      buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
-    )
+    const getSummary = indexRuntimeWorktreePs(summaries, platformByRepoId)
     const session = this.store?.getWorkspaceSession?.()
     const countedPtyIds = new Set<string>()
     const terminalTitleEvidenceByRow = applyRuntimeWorktreePsTerminalActivity({

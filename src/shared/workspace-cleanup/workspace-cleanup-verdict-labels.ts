@@ -34,7 +34,8 @@ export const WORKSPACE_CLEANUP_KEEP_CAUSE_LABELS: Record<WorkspaceCleanupKeepCau
   'archive-unavailable': 'archive not available',
   'archive-script': 'has an archive script',
   removing: 'already being removed',
-  'folder-workspace-sibling': 'another repository in this workspace is still in use'
+  'folder-workspace-sibling': 'another repository in this workspace is still in use',
+  'identity-unverified': "couldn't verify it right before deleting, so it was kept"
 }
 
 // A newer host can send a value this build has no label for; show it raw rather than nothing.

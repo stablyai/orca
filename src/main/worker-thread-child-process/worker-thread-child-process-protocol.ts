@@ -1,5 +1,7 @@
+import type { WorktreeCheckoutSpawnGuard } from '../../shared/worktree/removal/worktree-checkout-identity'
 /** Structured-clone-safe subset of ProcessSpec; stdio is always three pipes. */
 export type WorkerThreadChildSpec = {
+  worktreeCheckoutGuard?: WorktreeCheckoutSpawnGuard
   program: string
   args: string[]
   cwd?: string

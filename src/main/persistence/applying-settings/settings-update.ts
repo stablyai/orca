@@ -1,3 +1,6 @@
+import type { WorkspaceCleanupGuardedUpdate } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import { beginWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
+import { noteWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-durability'
 import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
@@ -57,10 +60,18 @@ export type SettingsMutationOperations = {
 
 export function updateSettings(
   operations: SettingsMutationOperations,
-  updates: Partial<GlobalSettings>,
+  updates: Partial<GlobalSettings> & WorkspaceCleanupGuardedUpdate,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
+  const { workspaceCleanupGuard, ...policyUpdates } = updates
+  if (workspaceCleanupGuard && !('workspaceCleanupPolicy' in updates)) {
+    throw new Error('workspace_cleanup_policy_conflict')
+  }
+  beginWorkspaceCleanupPolicyWrite(operations.state, workspaceCleanupGuard, null)
+  if ('workspaceCleanupPolicy' in updates) {
+    noteWorkspaceCleanupPolicyWrite()
+  }
+  const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(policyUpdates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

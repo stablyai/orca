@@ -174,3 +174,28 @@ export function folderGroupOf(
   const siblings = new Set(folderSiblingsOf(target))
   return [target, ...owned.filter((summary) => siblings.has(summaryIdentity(summary)))]
 }
+
+/** Whether a listed workspace's folder has a member the listing lacks. */
+export function hasUnlistedFolderSibling(
+  listed: readonly RuntimeWorktreePsSummary[],
+  folderSiblingsOf: (summary: RuntimeWorktreePsSummary) => string[]
+): boolean {
+  const identities = new Set(listed.map(summaryIdentity))
+  return listed.some((summary) => folderSiblingsOf(summary).some((id) => !identities.has(id)))
+}
+
+/** A project's workspaces, then other projects' worktrees in the same folder workspaces. */
+export function projectFolderGroups(
+  owned: readonly RuntimeWorktreePsSummary[],
+  projectId: string,
+  folderSiblingsOf: (summary: RuntimeWorktreePsSummary) => string[]
+): RuntimeWorktreePsSummary[] {
+  const project = owned.filter((summary) => summary.repoId === projectId)
+  const siblings = new Set(project.flatMap(folderSiblingsOf))
+  return [
+    ...project,
+    ...owned.filter(
+      (summary) => summary.repoId !== projectId && siblings.has(summaryIdentity(summary))
+    )
+  ]
+}

@@ -25,10 +25,39 @@ export function createWorkspaceCleanupReleasedWorkerLookup(
   getOrchestrationDb: (() => OrchestrationDb | null) | undefined
 ): WorkspaceCleanupReleasedWorkerLookup {
   let workerCreatedWorktrees: ReadonlyMap<string, WorkerCreatedWorktree> | undefined
+  const parents = new WeakMap<readonly Worktree[], ReturnType<typeof indexParents>>()
   return (worktree, repoWorktrees) => {
     workerCreatedWorktrees ??= readWorkerCreatedWorktrees(getOrchestrationDb)
-    return resolveReleasedWorker(worktree, repoWorktrees, workerCreatedWorktrees, store)
+    return resolveReleasedWorker(
+      worktree,
+      () => {
+        let index = parents.get(repoWorktrees)
+        if (!index) {
+          index = indexParents(repoWorktrees)
+          parents.set(repoWorktrees, index)
+        }
+        return index
+      },
+      workerCreatedWorktrees,
+      store
+    )
   }
+}
+
+function indexParents(worktrees: readonly Worktree[]) {
+  const index = new Map<string, { any: Worktree | null; hosts: Map<string, Worktree | null> }>()
+  for (const row of worktrees) {
+    const key = JSON.stringify([row.id, row.instanceId])
+    const entry = index.get(key)
+    if (entry) {
+      entry.any = null
+      const host = row.hostId ?? ''
+      entry.hosts.set(host, entry.hosts.has(host) ? null : row)
+    } else {
+      index.set(key, { any: row, hosts: new Map([[row.hostId ?? '', row]]) })
+    }
+  }
+  return index
 }
 
 function readWorkerCreatedWorktrees(
@@ -45,7 +74,7 @@ function readWorkerCreatedWorktrees(
 
 function resolveReleasedWorker(
   worktree: Worktree,
-  repoWorktrees: readonly Worktree[],
+  parents: () => ReturnType<typeof indexParents>,
   workerCreatedWorktrees: ReadonlyMap<string, WorkerCreatedWorktree>,
   store: RuntimeStore
 ): WorkspaceCleanupReleasedWorker | undefined {
@@ -59,11 +88,19 @@ function resolveReleasedWorker(
     return undefined
   }
   const lineage = store.getWorktreeLineage?.(worktree.id)
-  const coordinator = lineage
-    ? repoWorktrees.find((candidate) =>
-        isValidResolvedWorktreeLineageEdge(worktree, candidate, lineage)
-      )
+  const entry = lineage
+    ? parents().get(JSON.stringify([lineage.parentWorktreeId, lineage.parentWorktreeInstanceId]))
     : undefined
+  const candidate = worktree.hostId
+    ? entry?.hosts.has(worktree.hostId) && entry.hosts.has('')
+      ? undefined
+      : (entry?.hosts.get(worktree.hostId) ??
+        (entry?.hosts.has(worktree.hostId) ? undefined : entry?.hosts.get('')))
+    : entry?.any
+  const coordinator =
+    candidate && lineage && isValidResolvedWorktreeLineageEdge(worktree, candidate, lineage)
+      ? candidate
+      : undefined
   const coordinatorBranch = normalizeLocalBranchName(coordinator?.branch)
   return {
     coordinatorBranch:

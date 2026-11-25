@@ -1,3 +1,5 @@
+import { persistGuardedProjectPolicy } from '../../workspaces/cleanup/workspace-cleanup-policy-durability'
+import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
@@ -69,6 +71,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
           workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+          workspaceCleanupGuard?: WorkspaceCleanupPolicyGuard
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
@@ -265,6 +268,12 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (!target) {
         return null
       }
+      const beforePolicy = store
+        .getRepos()
+        .find(
+          (repo) =>
+            repo.id === target.id && getRepoExecutionHostId(repo) === getRepoExecutionHostId(target)
+        )?.workspaceCleanupPolicy
       const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
         if (isWslMoveSourceHost(args.hostId)) {
           assertWslMoveProjectWritable(store, { repoId: args.repoId })
@@ -281,6 +290,9 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           row && isFolderRepo(row) ? await commitProvenRepoKindChange(store, row, write) : write({})
       } else {
         updated = write({})
+      }
+      if (updated && args.updates.workspaceCleanupGuard) {
+        await persistGuardedProjectPolicy(store, updated, beforePolicy)
       }
       if (updated) {
         if ('worktreeBasePath' in updates) {

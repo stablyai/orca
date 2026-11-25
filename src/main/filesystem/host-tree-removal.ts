@@ -12,6 +12,7 @@ import { isWindowsAbsolutePathLike } from '../../shared/file-access/cross-platfo
 import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { stripWin32LongPathPrefix } from '../../shared/file-access/windows-path-access'
 import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
+import { deleteHostChildren } from './host-checkout-children-removal'
 
 /** Convert a native host filesystem path to the Win32 long-path namespace. */
 export function toHostFilesystemPath(targetPath: string): string {
@@ -37,19 +38,6 @@ export async function removeHostTree(
     await removeTree(toHostRemovalPath(targetPath), { rm, signal: options.signal })
   } catch (error) {
     throw describeRemovalFailure(error)
-  }
-}
-
-async function deleteHostChildren(root: string, names: readonly string[]): Promise<void> {
-  const results = await Promise.allSettled(
-    names.map((name) => rm(join(root, name), { recursive: true, force: true }))
-  )
-  const failures = results.filter((result) => result.status === 'rejected')
-  const failure =
-    failures.find(({ reason }) => !['EBUSY', 'EPERM', 'ENOTEMPTY'].includes(reason?.code)) ??
-    failures[0]
-  if (failure) {
-    throw failure.reason
   }
 }
 
@@ -96,7 +84,8 @@ export async function removeHostCheckout(
   authorize: (checkClean: boolean) => Promise<boolean>,
   signal?: AbortSignal,
   verifyBeforeChildDelete?: () => Promise<boolean>,
-  expectedRoot?: { dev?: bigint; ino?: bigint }
+  expectedRoot?: { dev?: bigint; ino?: bigint },
+  guard?: (markerGone: boolean) => Promise<void>
 ): Promise<void> {
   const root = toHostRemovalPath(targetPath)
   let initialRoot = expectedRoot
@@ -123,13 +112,14 @@ export async function removeHostCheckout(
               markerGone = !(await verifyBeforeChildDelete())
             }
             if (!markerGone) {
-              await deleteHostChildren(root, names)
+              await deleteHostChildren(root, names, guard)
               // Child promises settled; their internal Node sibling walks may still be running.
               markerGone = !(await authorize(false))
               if (!markerGone) {
                 if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
                   return
                 }
+                await guard?.(false)
                 await unlink(join(root, '.git')).catch((error: unknown) => {
                   if (getErrorCode(error) !== 'ENOENT') {
                     throw error
@@ -143,6 +133,7 @@ export async function removeHostCheckout(
         if (!(await inspectHostDirectoryRoot(root, targetPath, initialRoot))) {
           return
         }
+        await guard?.(markerGone)
         await removeHostEmptyDirectory(root)
       }
     })

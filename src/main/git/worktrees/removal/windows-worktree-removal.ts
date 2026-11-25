@@ -1,3 +1,4 @@
+import { assertWorktreeCheckoutIdentity } from '../../../workspaces/removal/worktree-checkout-identity'
 import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import { join, resolve } from 'node:path'
 import { readFile } from 'node:fs/promises'
@@ -64,7 +65,7 @@ export async function removeWindowsCheckout(
           throw differentCheckoutAtPathError(root)
         }
       }
-      return authorizeWindowsCheckout(
+      const authorized = await authorizeWindowsCheckout(
         repo,
         root,
         force,
@@ -76,6 +77,9 @@ export async function removeWindowsCheckout(
         false,
         checkClean
       )
+      options.checkoutDeleteGuard?.()
+      options.onCheckoutDeleteStart?.()
+      return authorized
     },
     options.checkoutDeleteSignal,
     async (): Promise<boolean> => {
@@ -99,7 +103,11 @@ export async function removeWindowsCheckout(
       const markerMissing = await nativeWindowsMarkerMissing(root, options)
       throwIfSignalAborted(options.checkoutDeleteSignal)
       return !markerMissing
-    }
+    },
+    undefined,
+    options.checkoutDeleteIdentity
+      ? (markerGone) => assertWorktreeCheckoutIdentity(options.checkoutDeleteIdentity!, markerGone)
+      : undefined
   )
 }
 
