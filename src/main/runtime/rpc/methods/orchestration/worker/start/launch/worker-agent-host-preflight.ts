@@ -73,10 +73,20 @@ export async function preflightWorkerAgentOnHost(args: {
   const mode = await resolveWorkerStartModeOnHost(runtime, args.mode, hostWorktreeId, agent)
   const repoSelector = creationTarget?.repoSelector ?? args.resolvedWorktree?.repoId
   // Installed is checked for every mode: a chat check without a checkout to run in proves nothing.
-  if (!agent || args.terminal || !repoSelector) {
-    return mode
+  await refuseUninstalledWorkerAgent(runtime, { agent, repoSelector, terminal: args.terminal })
+  return mode
+}
+
+/** Every worker start's installed-agent check, before any workspace, terminal or Dispatch exists. An
+ *  unreadable host (an unserved SSH target, a folder without one repo) is left to the launch. */
+export async function refuseUninstalledWorkerAgent(
+  runtime: Pick<OrcaRuntimeService, 'detectProjectLaunchContext'>,
+  target: { agent: TuiAgent | undefined; repoSelector: string | undefined; terminal?: string }
+): Promise<void> {
+  const { agent, repoSelector } = target
+  if (!agent || target.terminal || !repoSelector) {
+    return
   }
-  // An unreadable host (an unserved SSH target, a folder without one repo) is left to the launch.
   const installed = await runtime
     .detectProjectLaunchContext(repoSelector)
     .then((context): readonly string[] => context.agents)
@@ -88,5 +98,4 @@ export async function preflightWorkerAgentOnHost(args: {
       { effectsApplied: false, agent, reason: 'not_installed' }
     )
   }
-  return mode
 }
