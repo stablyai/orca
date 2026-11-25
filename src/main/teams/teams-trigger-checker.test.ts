@@ -130,7 +130,10 @@ describe('TeamsTriggerChecker', () => {
     now = T0 + 60_000
     await checker.tick()
     expect(started).toEqual([])
-    expect(state.cursor).toBe(T0)
+    // The window the run path didn't take is kept, and offered again next check.
+    expect(state.backlog).toEqual({
+      [RELEASE]: { from: T0 - 120_000, until: T0 + 60_001, topic: 'Release' }
+    })
 
     refuse = false
     await checker.tick()
@@ -153,11 +156,84 @@ describe('TeamsTriggerChecker', () => {
       ]
     ])
     expect(state.cursor).toBe(T0 + 60_000)
+    expect(state.backlog).toBeUndefined()
     // The quiet chat had nothing new, and the page ended on it, so neither it nor a next page was read.
     expect(
       reads.every(
         (path) => !path.includes(encodeURIComponent(QUIET)) && !path.includes('skiptoken')
       )
     ).toBe(true)
+  })
+
+  it('reads on, at the next check, the part of a busy chat its page budget left unread', async () => {
+    const reads: string[] = []
+    const started: AutomationRunEvent[] = []
+    let state: TeamsTriggerState = { userId: ME, cursor: T0, listeners: { 'b-on': T0 } }
+    let now = T0 + 60_000
+    // Every page of new messages links to another, so the budget always stops before the mention.
+    const chatter = (n: number) => ({
+      value: [message(`17325576${n}0000`, DANA, [], T0 + 50_000 - n * 1000)],
+      '@odata.nextLink': `https://graph.microsoft.com/v1.0/chats/x/messages?$skiptoken=${n}`
+    })
+    const busy: TeamsGraph = {
+      account: async () => ({ userId: ME, grantedScopes: ['Chat.Read'] }),
+      post: () => Promise.reject(new Error('the check never posts')),
+      get: async (path, shape) => {
+        reads.push(path)
+        if (path.startsWith('/me/chats?')) {
+          return shape.parse({
+            value: [
+              {
+                id: RELEASE,
+                topic: 'Release',
+                chatType: 'group',
+                lastMessagePreview: { createdDateTime: iso(T0 + 50_000) }
+              }
+            ]
+          })
+        }
+        if (path.includes('lastModifiedDateTime lt')) {
+          return shape.parse({ value: [message('1732557620000', DANA, [ME], T0 + 20_000)] })
+        }
+        const n = path.includes('skiptoken=') ? Number(path.split('skiptoken=')[1]) + 1 : 1
+        return shape.parse(chatter(n))
+      }
+    }
+    const checker = new TeamsTriggerChecker({
+      automations: () => [
+        {
+          id: 'a-on',
+          enabled: true,
+          bot: { botId: 'b-on', runsIn: 'new', resultsTo: 'chat' },
+          on: [{ id: 'on-1', source: 'teams', event: 'mentioned' }]
+        }
+      ],
+      bots: () => [{ id: 'b-on', teams: true }],
+      graph: () => busy,
+      runForEvent: async (_automationId, event) => {
+        started.push(event)
+      },
+      readState: async () => structuredClone(state),
+      writeState: async (next) => {
+        state = next
+      },
+      now: () => now
+    })
+
+    await checker.tick()
+    expect(started).toEqual([])
+    expect(state.cursor).toBe(T0 + 60_000)
+    expect(state.backlog?.[RELEASE]).toEqual({
+      from: T0 - 120_000,
+      until: T0 + 47_001,
+      topic: 'Release'
+    })
+
+    now = T0 + 120_000
+    await checker.tick()
+    expect(started.map((event) => event.key)).toEqual([`teams:chat/${RELEASE}/1732557620000`])
+    expect(reads.filter((path) => path.includes('lastModifiedDateTime lt'))).toEqual([
+      `/chats/${encodeURIComponent(RELEASE)}/messages?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt ${iso(T0 - 120_000)} and lastModifiedDateTime lt ${iso(T0 + 47_001)}`
+    ])
   })
 })

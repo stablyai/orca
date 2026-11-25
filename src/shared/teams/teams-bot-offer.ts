@@ -4,7 +4,10 @@ import type { TeamsAccountView } from './teams-connect-types'
 
 export const TEAMS_OFFER_SOURCE = 'teams'
 
-export type TeamsBotState = { account: Pick<TeamsAccountView, 'status'> | null; botOn: boolean }
+export type TeamsBotState = {
+  account: Pick<TeamsAccountView, 'status' | 'tenantId' | 'clientId' | 'channels'> | null
+  botOn: boolean
+}
 
 /** The line the owner sees, or null when nothing is missing. */
 export function teamsOfferLine(state: TeamsBotState, botName: string): string | null {
@@ -13,7 +16,9 @@ export function teamsOfferLine(state: TeamsBotState, botName: string): string | 
     return `${botName} asks to use Microsoft Teams as you. On the computer it runs on, run \`orca teams connect --tenant <tenant> --client <app id>\` (\`orca teams connect --help\` covers the Entra app it needs), then ${turnOn}. Then tell ${botName}.`
   }
   if (state.account.status !== 'connected') {
-    return `${botName} asks to use Microsoft Teams, and the Teams sign-in on its computer has ended. Run \`orca teams connect\` there again${state.botOn ? '' : `, then ${turnOn}`}. Then tell ${botName}.`
+    const { tenantId, clientId, channels } = state.account
+    const connect = `\`orca teams connect --tenant ${tenantId} --client ${clientId}${channels ? '' : ' --chats-only'}\``
+    return `${botName} asks to use Microsoft Teams, and the Teams sign-in on its computer has ended. Run ${connect} there again${state.botOn ? '' : `, then ${turnOn}`}. Then tell ${botName}.`
   }
   return state.botOn
     ? null

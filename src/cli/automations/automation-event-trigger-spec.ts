@@ -1,6 +1,7 @@
 // `--on "<source>.<event> in=... contains=... subject=..."`: one event trigger, written by a bot or a person.
 import { createHash } from 'node:crypto'
 import { GITHUB2_EVENT_KINDS } from '../../shared/automation-github-triggers'
+import { triggerRunNote } from './automation-trigger-run-note'
 import {
   AUTOMATION_EVENT_KINDS,
   isWebhookTrigger,
@@ -316,7 +317,7 @@ export function formatAutomationTriggerOptions(
     ...(bot?.cloudSignedOut ? [signedOutTriggerOptionsNote(bot)] : []),
     ...sources,
     'Besides these, only a time starts one: `--trigger` for a schedule, or `--once --by <ISO time>` alone for a one-time reminder ("in 10 minutes"). For an event that isn\'t listed, tell your owner instead of polling for it on a schedule. This list grows as connectors and Orca update: run this again before saying an event can\'t start one.',
-    "A run gets your prompt, then the event: its source, kind and time; for Slack, the channel id and message ts (and thread ts in a thread); then, quoted, who did it, where, a link and the text. With --results-to thread (the default when only these events start it), the run answers in the event's thread: `orca bot reply` posts there, and so does its final message. `orca skills get orca-cli --reference automations` has each source's fields."
+    triggerRunNote(offeredEventSources(only, bot))
   ].join('\n\n')
 }
 

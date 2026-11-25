@@ -13,7 +13,16 @@ const StateSchema = z.object({
   /** Messages created before this (ms) were already looked at. */
   cursor: z.number().optional(),
   /** Bot id to when it began listening: older messages never start it. */
-  listeners: z.record(z.string(), z.number()).default({})
+  listeners: z.record(z.string(), z.number()).default({}),
+  /** Chat id to the part of a window still to read: past a page budget, or not taken by the run path. */
+  backlog: z
+    .record(
+      z.string(),
+      z.object({ from: z.number(), until: z.number(), topic: z.string().nullish() })
+    )
+    .optional(),
+  /** The chat list's page a budget stopped at, and the window it was read for. */
+  chatsNext: z.object({ link: z.string(), from: z.number() }).optional()
 })
 
 export type TeamsTriggerState = z.infer<typeof StateSchema>

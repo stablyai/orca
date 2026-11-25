@@ -11,7 +11,14 @@ import type { Automation } from '../../shared/automations/automation-definition'
 import type { Bot } from '../../shared/bot-types'
 import { TeamsNotConnectedError } from './teams-account-tokens'
 import { TeamsGraphError, type TeamsGraph } from './teams-graph'
-import { ChatPage, MessagePage, type GraphChat, type GraphMessage } from './teams-graph-shapes'
+import type { GraphChat, GraphMessage } from './teams-graph-shapes'
+import {
+  CHATS_BY_LAST_MESSAGE,
+  changedChats,
+  mentionOf,
+  messagesIn,
+  type ChatWindow
+} from './teams-mention-reads'
 import { teamsMessageText } from './teams-message-text'
 import { formatTeamsRef, parseTeamsPlace } from './teams-place-ref'
 import type { TeamsTriggerState } from './teams-trigger-state'
@@ -20,8 +27,8 @@ import type { TeamsTriggerState } from './teams-trigger-state'
 const MAX_CATCH_UP_MS = 60 * 60_000
 // Graph's clock and this host's differ a little; repeats from the overlap are dropped by key.
 const OVERLAP_MS = 2 * 60_000
-const CHAT_PAGES = 4
-const MESSAGE_PAGES = 3
+// Chats left to read again, read a few per check after the new window.
+const BACKLOG_CHATS_PER_CHECK = 5
 const RATE_LIMIT_BACKOFF_MS = 60_000
 const ERROR_BACKOFF_MS = 5 * 60_000
 const MAX_BACKOFF_MS = 30 * 60_000
@@ -58,61 +65,6 @@ function teamsRuleTargets(
 const teamsOn = (bots: ReturnType<TeamsTriggerCheckerDeps['bots']>, botId: string) =>
   bots.find((bot) => bot.id === botId)?.teams === true
 
-const at = (iso: string | null | undefined): number => (iso ? Date.parse(iso) : Number.NaN)
-
-/** Chats with a message since `from`, newest first; only `only` when every rule names its chats. */
-async function changedChats(
-  graph: TeamsGraph,
-  from: number,
-  only: Set<string> | null
-): Promise<GraphChat[]> {
-  const changed: GraphChat[] = []
-  let next: string | undefined =
-    '/me/chats?$expand=lastMessagePreview&$orderby=lastMessagePreview/createdDateTime desc&$top=50'
-  for (let pages = 0; next && pages < CHAT_PAGES; pages++) {
-    const page = await graph.get(next, ChatPage)
-    const chats = page.value ?? []
-    const fresh = chats.filter((chat) => at(chat.lastMessagePreview?.createdDateTime) >= from)
-    changed.push(
-      ...fresh.filter(
-        (chat) => !only || only.has(formatTeamsRef({ kind: 'chat', chatId: chat.id }))
-      )
-    )
-    // Newest first, so a page that ends on an older chat is the last one needed.
-    next = fresh.length === chats.length ? page['@odata.nextLink'] : undefined
-  }
-  return changed
-}
-
-async function messagesSince(
-  graph: TeamsGraph,
-  chatId: string,
-  from: number
-): Promise<GraphMessage[]> {
-  const messages: GraphMessage[] = []
-  let next: string | undefined =
-    `/chats/${encodeURIComponent(chatId)}/messages?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt ${new Date(from).toISOString()}`
-  for (let pages = 0; next && pages < MESSAGE_PAGES; pages++) {
-    const page = await graph.get(next, MessagePage)
-    messages.push(...(page.value ?? []))
-    next = page['@odata.nextLink']
-  }
-  return messages
-}
-
-/** A new message from someone else that @mentions the signed-in person; edits of older ones never count. */
-function mentionOf(message: GraphMessage, userId: string, from: number): number | null {
-  const created = at(message.createdDateTime)
-  const mentioned = (message.mentions ?? []).some((entry) => entry.mentioned?.user?.id === userId)
-  return message.messageType === 'message' &&
-    !message.deletedDateTime &&
-    message.from?.user?.id !== userId &&
-    created >= from &&
-    mentioned
-    ? created
-    : null
-}
-
 function ruleMatches(rule: AutomationTeamsTrigger, chatRef: string, text: string): boolean {
   return (
     (!rule.in?.length || rule.in.includes(chatRef)) &&
@@ -122,7 +74,7 @@ function ruleMatches(rule: AutomationTeamsTrigger, chatRef: string, text: string
 
 function runEvent(
   rule: AutomationTeamsTrigger,
-  chat: GraphChat,
+  chat: Pick<GraphChat, 'id' | 'topic'>,
   message: GraphMessage,
   ref: string,
   occurredAt: number,
@@ -224,43 +176,111 @@ export class TeamsTriggerChecker {
     if (state.userId !== userId || state.cursor === undefined) {
       state.userId = userId
       state.cursor = now
+      delete state.backlog
+      delete state.chatsNext
       return
     }
     if (state.cursor < now - MAX_CATCH_UP_MS) {
       console.warn('[teams] mention check was away over an hour; older mentions are skipped')
     }
+    const floor = now - MAX_CATCH_UP_MS - OVERLAP_MS
     const from = Math.max(state.cursor, now - MAX_CATCH_UP_MS) - OVERLAP_MS
     const only = targets.every((target) => target.rule.in?.length)
       ? new Set(targets.flatMap((target) => target.rule.in ?? []))
       : null
-    let started = true
-    for (const chat of await changedChats(graph, from, only)) {
-      const chatRef = formatTeamsRef({ kind: 'chat', chatId: chat.id })
-      const messages = await messagesSince(graph, chat.id, from)
-      for (const message of messages.toReversed()) {
-        const occurredAt = mentionOf(message, userId, from)
-        const place = parseTeamsPlace(`${chatRef}/${message.id}`)
-        if (occurredAt === null || !place) {
-          continue
-        }
-        const ref = formatTeamsRef(place)
-        const text = teamsMessageText(message.body, message.attachments ?? [])
-        for (const target of targets) {
-          const since = state.listeners[target.botId] ?? now
-          if (occurredAt >= since && ruleMatches(target.rule, chatRef, text)) {
-            const event = runEvent(target.rule, chat, message, ref, occurredAt, text)
-            started = (await this.fire(target, event)) && started
-          }
-        }
+    // Built aside and saved only once every read succeeded, so a failed check loses nothing.
+    const listed: { chat: Pick<GraphChat, 'id' | 'topic'>; window: ChatWindow }[] = []
+    let chatsNext: TeamsTriggerState['chatsNext']
+    const resumed = state.chatsNext && state.chatsNext.from >= floor ? state.chatsNext : undefined
+    if (resumed) {
+      const page = await changedChats(graph, resumed.link, resumed.from, only)
+      listed.push(...page.chats.map((chat) => ({ chat, window: { from: resumed.from } })))
+      chatsNext = page.next ? { link: page.next, from: resumed.from } : undefined
+    }
+    const fresh = await changedChats(graph, CHATS_BY_LAST_MESSAGE, from, only)
+    listed.push(...fresh.chats.map((chat) => ({ chat, window: { from } })))
+    if (fresh.next && chatsNext) {
+      console.warn('[teams] over 200 chats changed in a row of checks; some are skipped')
+    }
+    chatsNext ??= fresh.next ? { link: fresh.next, from } : undefined
+    const backlog: NonNullable<TeamsTriggerState['backlog']> = {}
+    const keep = (chat: Pick<GraphChat, 'id' | 'topic'>, rest: Required<ChatWindow>) => {
+      const had = backlog[chat.id]
+      backlog[chat.id] = {
+        from: Math.min(had?.from ?? rest.from, rest.from),
+        until: Math.max(had?.until ?? rest.until, rest.until),
+        topic: chat.topic ?? null
       }
     }
-    // Moves only once every match is handed over, so a failed start is retried next check.
-    if (started) {
-      state.cursor = now
+    const pending = Object.entries(state.backlog ?? {})
+      .filter(([, window]) => window.until > floor)
+      .map(([id, window]) => ({
+        chat: { id, topic: window.topic },
+        window: { from: Math.max(window.from, floor), until: window.until }
+      }))
+    for (const { chat, window } of [...listed, ...pending.slice(0, BACKLOG_CHATS_PER_CHECK)]) {
+      const read = await messagesIn(graph, chat.id, window)
+      if (read.rest) {
+        keep(chat, read.rest)
+      }
+      // A match the run path didn't take keeps its window, so the next check offers it again.
+      if (
+        !(await this.fireMatches(targets, state, chat, read.messages, userId, window.from, now))
+      ) {
+        keep(chat, { from: window.from, until: window.until ?? now + 1 })
+      }
+    }
+    for (const { chat, window } of pending.slice(BACKLOG_CHATS_PER_CHECK)) {
+      keep(chat, window)
+    }
+    state.cursor = now
+    if (Object.keys(backlog).length > 0) {
+      state.backlog = backlog
+    } else {
+      delete state.backlog
+    }
+    if (chatsNext) {
+      state.chatsNext = chatsNext
+    } else {
+      delete state.chatsNext
     }
   }
 
-  /** False when the run path failed, so the cursor stays and the next check retries. */
+  /** False when any match wasn't handed to the run path. */
+  private async fireMatches(
+    targets: Target[],
+    state: TeamsTriggerState,
+    chat: Pick<GraphChat, 'id' | 'topic'>,
+    messages: GraphMessage[],
+    userId: string,
+    from: number,
+    now: number
+  ): Promise<boolean> {
+    const chatRef = formatTeamsRef({ kind: 'chat', chatId: chat.id })
+    let handed = true
+    for (const message of messages.toReversed()) {
+      const occurredAt = mentionOf(message, userId, from)
+      const place = parseTeamsPlace(`${chatRef}/${message.id}`)
+      if (occurredAt === null || !place) {
+        continue
+      }
+      const ref = formatTeamsRef(place)
+      const text = teamsMessageText(message.body, message.attachments ?? [])
+      for (const target of targets) {
+        const since = state.listeners[target.botId] ?? now
+        if (occurredAt >= since && ruleMatches(target.rule, chatRef, text)) {
+          const event = runEvent(target.rule, chat, message, ref, occurredAt, text)
+          handed = (await this.fire(target, event)) && handed
+        }
+      }
+    }
+    return handed
+  }
+
+  /**
+   * False when the hand-off to the run path threw, so the next check offers the match again. A run
+   * that is created but fails to launch is the run path's to record, as for Gmail and Calendar.
+   */
   private async fire(target: Target, event: AutomationRunEvent): Promise<boolean> {
     const id = `${target.automationId} ${event.key}`
     if (this.fired.has(id) || !teamsOn(this.deps.bots(), target.botId)) {
