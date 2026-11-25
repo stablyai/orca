@@ -150,7 +150,12 @@ function addItem(store: BotItemsStore, place: string | null): string {
 /** The hint the helper reads beside its item's worker report, from the persisted item. */
 async function reportHint(store: BotItemsStore, uid: string): Promise<string | null> {
   reportedUid = uid
-  const items = { store: () => store as unknown as BotItemsRemote }
+  // The report reads only reportFact, which the real store answers directly.
+  const remote: Pick<BotItemsRemote, 'reportFact'> = {
+    reportFact: async (id) => store.reportFact(id)
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: botItemOfReport calls only store().reportFact.
+  const items = { store: () => remote as BotItemsRemote }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked dispatch reads ignore both.
   const fact = await botItemOfReport(items)({} as OrchestrationDb, {} as MessageRow)
   return fact ? formatBotItemReportHint(fact) : null
@@ -312,7 +317,8 @@ describe('what a helper owes the thread a request started in', () => {
   })
 
   it('a closed item’s report names no thread, even for a handoff', async () => {
-    for (const status of ['done', 'canceled'] as BotItemStatus[]) {
+    const closed: BotItemStatus[] = ['done', 'canceled']
+    for (const status of closed) {
       const { store } = openStore()
       const uid = addItem(store, THREAD_URL)
       store.set(uid, { status, ...(status === 'canceled' ? { reason: 'dropped' } : {}) }, HELPER)
