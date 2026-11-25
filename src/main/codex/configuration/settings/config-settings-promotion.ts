@@ -15,7 +15,9 @@ import {
   readPromotedSettingValues,
   readPromotedSettingValuesFromContent
 } from '../toml/config-toml-promoted-setting-values'
+import { recoverInterruptedGuardedFileOperation } from '../../../filesystem/atomic-file-publication'
 import {
+  getCodexSettingsBaselinePath,
   observeCodexSettingsBaseline,
   writeCodexSettingsBaseline,
   type CodexSettingsConflict
@@ -172,7 +174,12 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
     return regenerateFromGuestPlan(observeCodexSettingsBaseline(runtimeHomePath))
   }
   // Scalars need a baseline to distinguish stale copies from new Codex edits.
-  const baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
+  let baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
+  if (baselineObservation.kind === 'absent') {
+    // Retiring the native mark swaps the baseline aside; a quit mid-swap must not read as no baseline.
+    recoverInterruptedGuardedFileOperation(getCodexSettingsBaselinePath(runtimeHomePath))
+    baselineObservation = observeCodexSettingsBaseline(runtimeHomePath)
+  }
   const knownNative =
     baselineObservation.kind === 'present' &&
     baselineObservation.baseline.nativeSource === true &&

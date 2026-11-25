@@ -6,6 +6,7 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   symlinkSync,
@@ -599,6 +600,20 @@ describe('managed Codex config for a WSL distro config', () => {
 
         expect(readRuntimeConfig()).toMatch(/^model = "gpt-5"$/m)
         expect(readFileSync(join(guestCodexDir, 'config.toml'), 'utf-8')).toBe('model = "gpt-5"\n')
+      })
+
+      it('keeps a tab edit when retiring the mark was cut off mid-swap', async () => {
+        await linkAfterNativePasses()
+        syncSystemConfigIntoManagedCodexHome()
+        simulateCodexSettingWrite('model', '"o4"')
+        await nativeSourceCheckSettled()
+        // A quit after the guarded write moved the baseline aside, before it published the new one.
+        const baselinePath = join(runtimeConfigPath(), '..', '.orca-config-settings-baseline.json')
+        renameSync(baselinePath, `${baselinePath}.orca-guarded`)
+
+        syncSystemConfigIntoManagedCodexHome()
+
+        expect(readRuntimeConfig()).toMatch(/^model = "o4" # orca: /m)
       })
 
       it('keeps a tab edit made before the check confirms the link', async () => {

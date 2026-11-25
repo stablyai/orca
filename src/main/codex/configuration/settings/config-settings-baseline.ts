@@ -7,7 +7,10 @@ import {
   readAgentStateFileSync,
   readAgentStateJsonFileSync
 } from '../agent-state-file-reader'
-import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
+import {
+  writeFileAtomically,
+  writeFileAtomicallyIfUnchanged
+} from '../../../filesystem/atomic-file-publication'
 import {
   EMPTY_GUEST_CARRY_FORWARD,
   isGuestCarryForwardEmpty,
@@ -273,8 +276,10 @@ export function retireCodexNativeSourceMark(runtimeHomePath: string, regenerated
   const next: StoredSettingsBaseline = regenerated
     ? { ...rest, guestCarryForward: { settings: {}, registrations: [] } }
     : rest
-  // Read and replaced in one synchronous step, like every baseline write; a rename never leaves it missing.
-  writeFileAtomically(baselinePath, `${JSON.stringify(next, null, 2)}\n`, { mode: 0o600 })
+  // Its content comes from this read, so a baseline another thread saved since must win.
+  writeFileAtomicallyIfUnchanged(baselinePath, existing, `${JSON.stringify(next, null, 2)}\n`, {
+    mode: 0o600
+  })
 }
 
 export function getCodexSettingsBaselinePath(runtimeHomePath: string): string {
