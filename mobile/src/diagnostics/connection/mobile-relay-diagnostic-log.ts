@@ -19,7 +19,8 @@ export function logRelayDialFailure(
     return
   }
   const credentialRejected = isExplicitCredentialRejection(error)
-  const base = `${error.name}: ${String(error.message).slice(0, 80)}${credentialRejected ? ' (relay-hello refusal)' : ''}`
+  const helloRefusal = credentialRejected && error instanceof RelayOuterError
+  const base = `${error.name}: ${String(error.message).slice(0, 80)}${helloRefusal ? ' (relay-hello refusal)' : ''}`
   const detail =
     error instanceof RelayDirectorHttpError && error.retryAfterMs != null
       ? `${base}; retry-after=${error.retryAfterMs}ms`

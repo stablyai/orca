@@ -127,18 +127,19 @@ export function applyResumeConfirmation(
   confirmation: DeviceResumeConfirmed
 ): MobileRelayCredentialBundle {
   const pending = pendingRelayCredentialLease(bundle)
-  if (
-    pending?.version === usedCredentialVersion &&
-    confirmation.acceptedAs === 'current' &&
-    confirmation.currentVersion === usedCredentialVersion
-  ) {
-    // The rotation committed but its reply was lost; adopt it exactly as direct reconciliation would.
+  const usedPendingOrCurrent =
+    confirmation.acceptedAs === 'current'
+      ? usedCredentialVersion === pending?.version
+      : usedCredentialVersion === bundle.current.version
+  if (pending && confirmation.currentVersion === pending.version && usedPendingOrCurrent) {
+    // The relay names pending's version as current, so a rotation committed but its reply was lost.
+    // Adopt it as direct reconciliation would; resumeExpiresAt is always the relay's current expiry.
     return MobileRelayCredentialBundleSchema.parse({
       ...bundle,
       current: {
         token: pending.token,
         hash: pending.hash,
-        version: usedCredentialVersion,
+        version: pending.version,
         expiresAt: confirmation.resumeExpiresAt
       },
       grace: confirmation.graceExpiresAt

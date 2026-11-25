@@ -45,7 +45,10 @@ export async function dialRelayThroughDirectorFallback(args: {
     if (persistentHostOffline && unchanged) {
       return first
     }
-    await args.persistResolvedRelay(resolved)
+    // An unchanged route needs no write; persisting it rereads every saved host.
+    if (!unchanged) {
+      await args.persistResolvedRelay(resolved)
+    }
     return await args.dial()
   } catch (error) {
     return { ok: false, error: toError(error) }
