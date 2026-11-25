@@ -2,6 +2,7 @@
 // question line, what the comment box sent for it (its words, the images and skills that came with
 // them). The set is stored as one string, and the comment it posts as is built here at send time,
 // where each line's [Image #N] are numbered after the images of the lines before it.
+import * as z from 'zod'
 import { AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT } from '../agent-session/agent-session-attachments'
 import {
   offsetSentImagePromptMarkers,
@@ -43,27 +44,19 @@ export function botItemHeldAnswer(
 // Bumped only with a change to what a stored line holds; anything else reads as the old text.
 const FORMAT = 2
 
+const StoredLines = z.object({
+  v: z.literal(FORMAT),
+  lines: z.array(
+    z.object({
+      question: z.string(),
+      words: z.string(),
+      images: z.array(z.string()),
+      skills: z.array(z.object({ name: z.string(), path: z.string() }))
+    })
+  )
+})
+
 type StoredLine = BotItemHeldAnswer & { question: string }
-
-function isSkill(value: unknown): value is BotItemCommentSkill {
-  const skill = value as BotItemCommentSkill | null
-  return typeof skill?.name === 'string' && typeof skill.path === 'string'
-}
-
-function parseLine(value: unknown): StoredLine[] {
-  const line = value as Partial<Record<keyof StoredLine, unknown>> | null
-  if (
-    typeof line?.question !== 'string' ||
-    typeof line.words !== 'string' ||
-    !Array.isArray(line.images) ||
-    !line.images.every((path) => typeof path === 'string') ||
-    !Array.isArray(line.skills) ||
-    !line.skills.every(isSkill)
-  ) {
-    return []
-  }
-  return [{ question: line.question, words: line.words, images: line.images, skills: line.skills }]
-}
 
 /** Stored lines by their question; null for text an older build stored. */
 function storedLines(stored: string): StoredLine[] | null {
@@ -71,10 +64,8 @@ function storedLines(stored: string): StoredLine[] | null {
     return null
   }
   try {
-    const parsed = JSON.parse(stored) as { v?: unknown; lines?: unknown }
-    return parsed.v === FORMAT && Array.isArray(parsed.lines)
-      ? parsed.lines.flatMap(parseLine)
-      : null
+    const parsed = StoredLines.safeParse(JSON.parse(stored))
+    return parsed.success ? parsed.data.lines : null
   } catch {
     return null
   }

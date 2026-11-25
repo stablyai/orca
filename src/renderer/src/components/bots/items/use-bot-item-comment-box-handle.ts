@@ -36,14 +36,15 @@ export function useBotItemCommentBoxHandle(
     setDraft
   }: {
     scopeKey: string
-    input: RefObject<NativeChatComposerInput | null>
+    /** The editor's input, read when a handle method runs. */
+    input: () => NativeChatComposerInput | null
     composer: RefObject<NativeChatComposerHandle | null>
     reply: BotItemReplyMark
     setDraft: (next: string) => void
   }
 ): () => void {
   const caretToEnd = (): void => {
-    const node = input.current
+    const node = input()
     node?.focus()
     node?.setSelectionRange(node.value.length, node.value.length)
   }
@@ -51,13 +52,14 @@ export function useBotItemCommentBoxHandle(
   const show = (text: string, plain: boolean | undefined): void => {
     const mark = plain ? reply.hide : reply.show
     mark()
-    if (input.current) {
-      input.current.value = text
+    const node = input()
+    if (node) {
+      node.value = text
     }
     caretToEnd()
   }
   useImperativeHandle(ref, () => ({
-    focus: () => input.current?.focus(),
+    focus: () => input()?.focus(),
     focusEnd: caretToEnd,
     ...composerQuoteTarget(composer),
     type: (typed) => void composer.current?.insertTypedText(typed),

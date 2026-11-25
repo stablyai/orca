@@ -212,7 +212,13 @@ function BotItemCommentField({
   const reply = useBotItemReplyMark(box, question ?? null, scopeKey, onShowQuestion)
   // Replying to a question, the text has its own row and room for an answer from the start.
   const { field, stacked, height } = useBotItemCommentStacked(draft, reply.quote !== null)
-  const caretToEnd = useBotItemCommentBoxHandle(ref, { scopeKey, input, composer, reply, setDraft })
+  const caretToEnd = useBotItemCommentBoxHandle(ref, {
+    scopeKey,
+    input: () => input.current,
+    composer,
+    reply,
+    setDraft
+  })
   const images = attachments.imageAttachments
   // The thumbnails' order numbers their pills, as in chat.
   const imageRow = useMemo(() => images.map(({ id }) => id), [images])
