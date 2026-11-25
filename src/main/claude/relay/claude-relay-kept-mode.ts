@@ -25,10 +25,10 @@ export function feedClaudeKeptModeLines(
     .filter(({ name }) => names.has(name))
     .sort((a, b) => a.seq - b.seq)
     .flatMap(({ seq }) => {
-      const line = child.kept.keptLines.get(seq)
+      const line = child.kept.lines.get(seq)
       return line === undefined ? [] : [line]
     })
-  child.kept.dropKeptLines()
+  child.kept.drop()
   let mode: string | null | undefined
   for (const line of lines) {
     observe?.(`${line}\n`)

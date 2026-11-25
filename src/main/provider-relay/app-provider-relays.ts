@@ -14,7 +14,7 @@ export {
 } from './provider-relay-launch-inventory'
 import {
   forgetKeptProviderRelay,
-  keptProviderRelayReattachable,
+  keptProviderRelayOutstanding,
   noteProviderRelayReattachedFromLastRun,
   keptProviderRelay,
   listKeptProviderRelays,
@@ -182,7 +182,7 @@ async function reattachListed(launch: ProviderRelayLaunch): Promise<RelayedProvi
   const { channel, info } = relay
   let endedSince = false
   if (
-    keptProviderRelayReattachable(info) &&
+    keptProviderRelayOutstanding(info) &&
     info.pid !== null &&
     (await connected(channel.client))
   ) {

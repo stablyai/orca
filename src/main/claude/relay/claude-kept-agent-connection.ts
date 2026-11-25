@@ -249,8 +249,7 @@ export async function openKeptClaudeAgentConnection(
     keptQuery.close()
     // Messages it never took are provably unwritten; the next send cold-resumes with a new agent.
     inbox.fail(terminalError)
-    // The daemon idle-stopped it while detached, its work done: an ordinary end, not a fault.
-    const expected = (closing && !inputBroken) || child.attachResult?.exit?.idleStopped === true
+    const expected = closing && !inputBroken
     if (!expected) {
       withObservedProviderExit(terminalError)
       handlers.onFault?.(terminalError)

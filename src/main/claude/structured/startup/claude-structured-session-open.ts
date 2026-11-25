@@ -11,7 +11,7 @@ import { openClaudeSession, readClaudeStartupFacts } from './claude-structured-s
 import { catchUpClaudeTranscript } from '../../transcripts/claude-transcript-catch-up'
 import { readyClaudePromptSuggestionPause } from '../claude-prompt-suggestion-pause'
 import { keptClaudeAgentRelay } from '../../relay/claude-kept-agent-connection'
-import { noteKeptClaudeReattach } from '../../relay/claude-kept-permission'
+import { applyKeptClaudeModeOwed, noteKeptClaudeReattach } from '../../relay/claude-kept-permission'
 import { restateKeptClaudeBackgroundTasks } from '../../relay/claude-kept-background-tasks'
 import {
   keptClaudeBackgroundTasks,
@@ -136,9 +136,21 @@ async function openStartingClaudeSession(
       session.reportedOptions.reportedPermissionMode = kept.confirmedMode
     }
     noteKeptClaudeReattach(session)
+    // Claude runs another mode than the chat's (a pick made while it last reattached): written now,
+    // not with the next message, which a steer would skip. Plan is left by its own exit.
+    const confirmed = kept.confirmedMode
+    if (
+      confirmed != null &&
+      confirmed !== 'plan' &&
+      confirmed !== session.launchIntent?.permissionMode
+    ) {
+      void applyKeptClaudeModeOwed(session, undefined).catch(() => {})
+    }
     input.publishChildWork?.(request.sessionId, session)
   }
-  if (!kept && resumesTranscript && (leafUuid || origin?.kind === 'native_copy') && events) {
+  // With no turn end saved (the first turn never finished here), what came after its prompt.
+  const fromFirstPrompt = !leafUuid && origin?.kind !== 'native_copy'
+  if (!kept && resumesTranscript && events) {
     const catchUp = withStructuredHistoryInvocation(
       session,
       request.signal,
@@ -149,6 +161,7 @@ async function openStartingClaudeSession(
             sessionId: request.sessionId,
             providerSessionId: session.providerSessionId,
             leafUuid: leafUuid ?? '',
+            fromFirstPrompt,
             claudeConfigDir: session.initialization.claudeConfigDir,
             cwd: session.initialization.cwd,
             sink: events,
@@ -169,10 +182,12 @@ async function openStartingClaudeSession(
         }
       }
     )
-    history.covered = await waitForPromiseWithSignal(
+    const caughtUp = await waitForPromiseWithSignal(
       startup.race(catchUp, request.signal),
       request.signal
     )
+    // A first turn's import is display only: the resume point stays the chat's start.
+    history.covered = fromFirstPrompt ? history.covered : caughtUp
     current()
   }
   startup.open()

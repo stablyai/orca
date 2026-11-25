@@ -16,6 +16,7 @@ import type { StructuredAgentSessionLogger } from '../../native-chat/agent-sessi
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { createClaudeTranscriptImportPlan } from './claude-transcript-import-plan'
 import { readClaudeTranscriptTail } from './claude-transcript-tail'
+import { isClaudeTranscriptRootPrompt } from './claude-transcript-root-prompt'
 import {
   claudeTranscriptItemKeys,
   createClaudeTranscriptItemReader
@@ -28,6 +29,8 @@ type ClaudeHistoryView = {
   covered?: ReadonlySet<string>
   hasRows: boolean
   newest: { key: string; sequence: number; index: number } | null
+  /** Root turns the chat holds. */
+  turns: number
 }
 
 // Rows after the saved turn-end leaf come from an external resume or interrupted local turn; skip items already held.
@@ -37,6 +40,8 @@ export async function catchUpClaudeTranscript(input: {
   sessionId: string
   providerSessionId: string
   leafUuid: string
+  /** No turn end was saved (the first turn never finished in Orca): import after the first prompt. */
+  fromFirstPrompt?: boolean
   claudeConfigDir: string
   cwd: string
   sink: StructuredAgentSessionEventSink
@@ -59,12 +64,14 @@ export async function catchUpClaudeTranscript(input: {
       captureHistoryCatchUpView(history, async () => {
         const hasRows = await history.reads.hasItems()
         let newest: { key: string; sequence: number; index: number } | null = null
+        let turns = 0
         await history.reads.visitItems(
           { kinds: ['turn'] },
           (key, sequence, _body, linkage, item) => {
             if (!isRootAgentJournalItem(linkage)) {
               return
             }
+            turns += 1
             const index = item.sequenceIndex ?? 0
             if (
               !newest ||
@@ -85,7 +92,7 @@ export async function catchUpClaudeTranscript(input: {
           copy.providerHandle.sessionId === input.providerSessionId
             ? nativeCopyIds(copy)
             : undefined
-        return { hasRows, newest, origin, covered }
+        return { hasRows, newest, origin, covered, turns }
       }),
     prepare: async ({ view, history, signal, check, yieldTurn, warn }) => {
       const claudeProjectsDir = join(input.claudeConfigDir, 'projects')
@@ -101,7 +108,13 @@ export async function catchUpClaudeTranscript(input: {
         return null
       }
       const planned = await view()
-      let leafAbsent = input.leafUuid === '' && !!planned.covered
+      // Only a chat on its first turn: an older one without a saved leaf is left as it is.
+      const afterFirstPrompt =
+        input.leafUuid === '' && !planned.covered && !!input.fromFirstPrompt && planned.turns === 1
+      if (input.leafUuid === '' && !planned.covered && !afterFirstPrompt) {
+        return null
+      }
+      let leafAbsent = input.leafUuid === '' && (!!planned.covered || afterFirstPrompt)
       const tail = leafAbsent
         ? null
         : await readClaudeTranscriptTail({
@@ -113,7 +126,7 @@ export async function catchUpClaudeTranscript(input: {
             }
           })
       check()
-      if (!tail && !(leafAbsent && planned.covered)) {
+      if (!tail && !(leafAbsent && (planned.covered || afterFirstPrompt))) {
         warn('leaf-not-in-tail')
         return null
       }
@@ -135,13 +148,17 @@ export async function catchUpClaudeTranscript(input: {
         providerSessionId: input.providerSessionId,
         epoch: history.cursor().epoch,
         items,
-        rewound: planned.hasRows ? (tail?.rewound ?? true) : null,
+        rewound: planned.hasRows ? (tail?.rewound ?? !afterFirstPrompt) : null,
         check
       })
       try {
+        let prompted = !afterFirstPrompt
         const restore = async (row: Record<string, unknown>) => {
           check()
-          if (!planned.covered?.has(String(row.uuid))) {
+          if (!prompted) {
+            // The chat already shows its first prompt; the active chain after it is what's missing.
+            prompted = isClaudeTranscriptRootPrompt(row)
+          } else if (!planned.covered?.has(String(row.uuid))) {
             await items.loadRow(row, input.providerSessionId)
             await staging.restore(row)
           }
