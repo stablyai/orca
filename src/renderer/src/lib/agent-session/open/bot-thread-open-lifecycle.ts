@@ -9,6 +9,7 @@ let pending:
       result: Promise<void>
       chat?: ThreadChat
       currentHost?: () => boolean
+      hoveredPane?: { tabId: string; leafId: string }
     }
   | undefined
 
@@ -17,6 +18,29 @@ export function cancelPendingBotThreadOpen(): void {
   const previous = pending
   pending = undefined
   previous?.controller.abort()
+}
+
+export function noteBotThreadPaneActivation(
+  tabId: string,
+  leafId: string,
+  interaction: 'user' | 'hover' | undefined,
+  changed: boolean
+): void {
+  if (!pending) {
+    return
+  }
+  const hovered = pending.hoveredPane
+  // Clicking a pane just focused by hover confirms the user's destination.
+  if (
+    interaction === 'user' &&
+    (changed || (hovered?.tabId === tabId && hovered.leafId === leafId))
+  ) {
+    cancelPendingBotThreadOpen()
+  } else if (interaction === 'hover' && changed) {
+    pending.hoveredPane = { tabId, leafId }
+  } else if (changed && hovered?.tabId === tabId) {
+    pending.hoveredPane = undefined
+  }
 }
 
 export function bindPendingBotThreadChat(signal: AbortSignal, chat: ThreadChat): void {

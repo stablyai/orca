@@ -36,7 +36,14 @@ export function activateManagedPane(
   }
 
   if (changed) {
-    host.options.onActivePaneChange?.(toPublicPane(pane), opts)
+    host.options.onActivePaneChange?.(toPublicPane(pane))
+  }
+  if (
+    host.options.onPaneActivation &&
+    (changed || opts?.interaction === 'user') &&
+    host.getActivePaneId() === pane.id
+  ) {
+    host.options.onPaneActivation(pane.leafId, opts?.interaction, changed)
   }
 }
 
@@ -84,7 +91,7 @@ export function createManagedPaneInternal(
       if (!host.isDestroyed()) {
         host.setActivePane(paneId, {
           focus: options?.focusTerminal !== false,
-          userInitiated: true
+          interaction: 'user'
         })
       }
     },
@@ -130,6 +137,6 @@ function handleManagedPaneMouseEnter(
       managerDestroyed: host.isDestroyed()
     })
   ) {
-    host.setActivePane(paneId, { focus: true })
+    host.setActivePane(paneId, { focus: true, interaction: 'hover' })
   }
 }

@@ -1,5 +1,9 @@
 import { expect, it } from 'vitest'
-import { bindPendingBotThreadHost, runBotThreadOpen } from './bot-thread-open-lifecycle'
+import {
+  bindPendingBotThreadHost,
+  noteBotThreadPaneActivation,
+  runBotThreadOpen
+} from './bot-thread-open-lifecycle'
 
 function holdOpen(): { promise: Promise<void>; finish: () => void } {
   let finish!: () => void
@@ -32,4 +36,26 @@ it('an earlier pairing cannot absorb or retire a replacement click', async () =>
 
   newer.finish()
   await second
+})
+
+it('only deliberate focus confirms a pane reached by hover during a pending link', async () => {
+  const held = holdOpen()
+  let signal!: AbortSignal
+  const open = runBotThreadOpen('linked thread', (openSignal) => {
+    signal = openSignal
+    return held.promise
+  })
+  try {
+    noteBotThreadPaneActivation('terminal', 'left', 'user', false)
+    expect(signal.aborted).toBe(false)
+
+    noteBotThreadPaneActivation('terminal', 'right', 'hover', true)
+    expect(signal.aborted).toBe(false)
+
+    noteBotThreadPaneActivation('terminal', 'right', 'user', false)
+    expect(signal.aborted).toBe(true)
+  } finally {
+    held.finish()
+    await open
+  }
 })

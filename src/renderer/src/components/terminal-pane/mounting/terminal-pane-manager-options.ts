@@ -1,7 +1,7 @@
 import type { IDisposable } from '@xterm/xterm'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { PaneManagerOptions } from '@/lib/pane-manager/pane-manager-types'
-import { cancelPendingBotThreadOpen } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
+import { noteBotThreadPaneActivation } from '@/lib/agent-session/open/bot-thread-open-lifecycle'
 import { useAppStore } from '@/store/index'
 import { resolveTerminalLigaturesEnabled } from '../../../../../shared/terminal/appearance/terminal-ligatures'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
@@ -55,7 +55,9 @@ export function createTerminalPaneManagerOptions(
   return {
     onPaneCreated: createTerminalPaneCreatedHandler(context),
     onPaneClosed: createTerminalPaneClosedHandler(context),
-    onActivePaneChange: (pane, activation) => {
+    onPaneActivation: (leafId, interaction, changed) =>
+      noteBotThreadPaneActivation(tabId, leafId, interaction, changed),
+    onActivePaneChange: (pane) => {
       const layout = useAppStore.getState().terminalLayoutsByTabId[tabId]
       const ptyIdsByLeafId = layout?.ptyIdsByLeafId ?? {}
       if (Object.keys(ptyIdsByLeafId).length > 0 && !ptyIdsByLeafId[pane.leafId]) {
@@ -71,9 +73,6 @@ export function createTerminalPaneManagerOptions(
           managerRef.current?.setActivePane(fallbackPaneId, { focus: true })
           return
         }
-      }
-      if (activation?.userInitiated) {
-        cancelPendingBotThreadOpen()
       }
       scheduleRuntimeGraphSync()
       context.syncPaneLayoutRevision()

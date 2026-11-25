@@ -16,7 +16,7 @@ export function useTerminalPaneHeaderActions({
 >) {
   const activatePaneTitleInteraction = useCallback(
     (paneId: number): void => {
-      managerRef.current?.setActivePane(paneId, { focus: false, userInitiated: true })
+      managerRef.current?.setActivePane(paneId, { focus: false, interaction: 'user' })
     },
     [managerRef]
   )
