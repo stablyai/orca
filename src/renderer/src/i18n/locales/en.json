@@ -2073,6 +2073,12 @@
       "description": "On supported desktop installs, Orca downloads eligible updates on its regular check schedule and restarts to install them automatically.",
       "info": "About automatic updates"
     },
+    "automaticUpdateChecks": {
+      "title": "Check for updates automatically",
+      "description": "Orca checks for new versions at startup, on wake, and once a day. When off, Orca only checks when you click Check for updates.",
+      "info": "About automatic update checks",
+      "saveFailed": "Could not save automatic update checks."
+    },
     "cloudConsole": {
       "manageInBrowser": "Manage in browser",
       "openFailed": "Couldn’t open the browser. Try again.",

@@ -4,7 +4,6 @@ import type { ReleaseBuild, ReleaseChannel } from '../../../shared/updater/relea
 import type { ReleaseBuildListOptions } from '../releases/updater-release-build-cache'
 import {
   managesUpdates,
-  requiredMinimumVersion,
   sameTeamUpdatePolicy,
   type TeamUpdatePolicy
 } from '../releases/updater-release-policy'
@@ -51,6 +50,7 @@ export type UpdaterSetupOptions = {
   teamRestart?: TeamRestartOptions
   getUpdateDelayDays?: () => number
   getAutomaticUpdates?: () => boolean
+  getAutomaticUpdateChecks?: () => boolean
   installMode?: UpdateInstallMode
   onBeforeQuitFailure?: PreQuitCleanupFailureMode
 }
@@ -157,6 +157,7 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     this.teamRestartOptions = opts?.teamRestart
     this.getUpdateDelayDays = opts?.getUpdateDelayDays ?? null
     this.getAutomaticUpdates = opts?.getAutomaticUpdates ?? null
+    this.getAutomaticUpdateChecks = opts?.getAutomaticUpdateChecks ?? null
     this.updateInstallMode = opts?.installMode ?? 'interactive'
     this.lastInstallDeferralVersion = { download: null, install: null }
 
@@ -320,18 +321,6 @@ export class UpdaterSetup extends UpdaterDownloadInstall {
     powerMonitor.on('resume', checkDailyOnWake)
     app.on('browser-window-focus', checkDailyOnWake)
 
-    const lastUpdateCheckAt = opts?.getLastUpdateCheckAt?.() ?? null
-    const msSinceLastCheck =
-      lastUpdateCheckAt === null ? Number.POSITIVE_INFINITY : Date.now() - lastUpdateCheckAt
-    if (
-      msSinceLastCheck >= AUTO_UPDATE_CHECK_INTERVAL_MS ||
-      previousPolicy?.forceUpdates ||
-      requiredMinimumVersion(previousPolicy, app.getVersion())
-    ) {
-      this.runBackgroundUpdateCheck()
-      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS)
-    } else {
-      this.scheduleAutomaticUpdateCheck(AUTO_UPDATE_CHECK_INTERVAL_MS - msSinceLastCheck)
-    }
+    this.startAutomaticUpdateChecks()
   }
 }

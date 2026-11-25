@@ -16,7 +16,7 @@ import {
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { UpdateDelaySetting } from './UpdateDelaySetting'
-import { AutomaticUpdatesSetting } from './AutomaticUpdatesSetting'
+import { AutomaticUpdateChecksSetting, AutomaticUpdatesSetting } from './AutomaticUpdatesSetting'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { formatUpdateDelayDate } from './update-delay-copy'
 import { useNow } from '@/lib/window-activity/use-now'
@@ -342,7 +342,12 @@ export function GeneralUpdateSettingsSection({
                     ))}
         </p>
       </SearchableSetting>
-      {isWebClientLocation() ? null : <AutomaticUpdatesSetting />}
+      {isWebClientLocation() ? null : (
+        <>
+          <AutomaticUpdateChecksSetting />
+          <AutomaticUpdatesSetting />
+        </>
+      )}
       <UpdateDelaySetting />
       {channelSwitcherRevealed ? <ReleaseChannelSection /> : null}
       <GeneralRemoteServerUpdates />

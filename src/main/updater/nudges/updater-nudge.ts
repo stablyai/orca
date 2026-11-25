@@ -5,7 +5,7 @@ import { UpdaterBuildSelection } from '../releases/updater-build-selection'
 
 export abstract class UpdaterNudge extends UpdaterBuildSelection {
   protected async checkForUpdateNudge(): Promise<void> {
-    if (!app.isPackaged) {
+    if (!app.isPackaged || !this.automaticUpdateChecksAllowed()) {
       return
     }
     if (this.nudgeCheckInFlight) {
