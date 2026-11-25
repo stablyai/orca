@@ -27738,7 +27738,8 @@
         "signedIn": "✓ 已登录",
         "done": "✓ 已完成",
         "takeOver": "✓ 接下来由 {{bot}} 接手",
-        "chose": "✓ 你选择了“{{what}}”"
+        "chose": "✓ 你选择了“{{what}}”",
+        "stopped": "设置已停止"
       },
       "ended": "此 Google 设置已结束",
       "heading": "连接 Google",
@@ -27782,7 +27783,8 @@
         "waiting": "等待你处理",
         "working": "工作中",
         "heading": "正在设置 Google",
-        "you": "你"
+        "you": "你",
+        "stopped": "已停止"
       },
       "letMe": "这一步我来做",
       "step": {
@@ -27828,7 +27830,8 @@
         "checkFailed": "Orca 无法检查 {{services}}"
       },
       "notNow": "暂不",
-      "importSetupFile": "导入配置文件"
+      "importSetupFile": "导入配置文件",
+      "stop": "停止设置"
     },
     "apps": {
       "paste": {
@@ -28467,7 +28470,12 @@
         "signedOut": "此电脑上未连接",
         "remove": "移除 Google…",
         "removeNoteOnHost": "{{name}} 将无法再使用你的 Gmail、日历和云端硬盘。Google 在 {{host}} 上仍保持连接",
-        "signedOutOnHost": "{{host}} 上未连接"
+        "signedOutOnHost": "{{host}} 上未连接",
+        "account": "账户",
+        "accounts": "账户",
+        "chooseAccounts": "选择账户…",
+        "reconnectAccount": "重新连接 {{email}}",
+        "settingUp": "正在配置"
       },
       "copied": "已复制。请发送给你的 Google 管理员",
       "share": {
@@ -28480,11 +28488,13 @@
       "appAdded": "已添加你团队的 Google 应用",
       "disconnect": {
         "title": "要断开 {{email}} 的连接吗？",
-        "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限",
-        "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击“连接 Google”即可重新开启",
+        "revokeNote": "Bots 将停止在此处使用此账户，Google 也会在所有已授权的地方撤销 Orca 的访问权限。",
+        "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击“连接 Google”即可重新开启。",
         "confirm": "断开连接",
         "remove": "从此电脑移除",
-        "revoke": "移除并在 Google 撤销授权"
+        "revoke": "移除并在 Google 撤销授权",
+        "promotes": "{{email}} 将成为默认账户。",
+        "removeOneNote": "Bots 将停止在此处使用此账户。"
       },
       "account": "Google 账户 · {{email}}",
       "reconnect": "重新连接",
@@ -28608,6 +28618,32 @@
         "noAccount": "Google 已登录，但主机没有发送账号。",
         "alreadyRunning": "已有 Google 登录正在进行。请先完成或取消它。",
         "notWaiting": "没有等待中的 Google 登录。请重新开始。"
+      },
+      "accountActions": "{{email}} 的操作",
+      "defaultBadge": "默认",
+      "row": {
+        "adminBlocked": "{{service}} 已被管理员阻止",
+        "apiOff": "{{service}} 已在 Google Cloud 中停用",
+        "error": "无法检查 {{service}}",
+        "notAllowed": "不允许使用 {{service}}",
+        "signedOut": "登录已失效"
+      },
+      "setDefault": "设为默认",
+      "addServiceMenu": "添加服务…",
+      "updateToAdd": "请更新 {{host}} 上的 Orca 以添加其他 Google 账户",
+      "accessBlocked": "看到“访问被阻止”（Access blocked）？",
+      "setUpNewApp": "设置新的 Google 应用",
+      "useAnother": "使用其他账户",
+      "useAnotherSignIn": "使用 Google 登录",
+      "useAnotherSignInDetail": "使用你当前的 Google 应用",
+      "setUpNewAppDetail": "如果当前应用不适用于此账户或组织",
+      "updateToSetUpNewApp": "请更新 {{host}} 上的 Orca 以设置新的 Google 应用",
+      "updateToChooseAccounts": "请更新 {{host}} 上的 Orca 以选择账户",
+      "picker": {
+        "label": "Google 账户",
+        "addAccount": "添加其他账户",
+        "caption": "{{bot}} 可以使用的账户",
+        "save": "保存"
       }
     },
     "toolApp": {
