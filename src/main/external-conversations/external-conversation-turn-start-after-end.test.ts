@@ -37,13 +37,15 @@ function endedTurn(
   begin: (
     chats: ChatTurns,
     show: (next: Row) => void,
-    hostRuns: (next: string) => void
+    hostRuns: (next: string, waits?: boolean) => void
   ) => void = told
 ) {
   const events: ConversationEvent[] = []
   let row: Row = { state: 'working', stateStartedAt: SENT }
   // The message that opened the turn the host runs now.
   let opener = 'send-a'
+  // Whether a delivery the chat took waits for a turn to name it.
+  let waiting = false
   const chats = new ChatTurns({
     setTimer: () => ({ cancel: () => {} }),
     now: () => ENDED,
@@ -56,7 +58,7 @@ function endedTurn(
     // Published turn state lags the host's feed: the delivery still reads as the chat's.
     chatTurnDelivered: () => true,
     chatTurnDelivery: () => 'delivery-1',
-    chatTurnWaiting: () => false,
+    chatTurnWaiting: () => waiting,
     runningTurnReported: () => false,
     workLinks: async () => [],
     promptsAudience: () => true,
@@ -69,9 +71,11 @@ function endedTurn(
     chats.observe(paneKey)
   }
   const starts = () => events.flatMap((event) => (event.kind === 'turn-started' ? [event.at] : []))
-  begin(chats, show, (next) => {
+  begin(chats, show, (next, waits = false) => {
     opener = next
+    waiting = waits
   })
+  waiting = false
   chats.news({
     kind: 'turn-ended',
     sessionId,
@@ -80,10 +84,7 @@ function endedTurn(
     readTurn: () => new Promise<EndedChatTurn>(() => {}),
     at: ENDED
   })
-  const hostRuns = (next: string) => {
-    opener = next
-  }
-  return { chats, show, starts, hostRuns }
+  return { chats, show, starts }
 }
 
 describe('a chat turn’s status row after the turn ended', () => {
@@ -153,5 +154,25 @@ describe('a chat turn’s status row after the turn ended', () => {
     expect(starts()).toEqual([SENT])
     show({ state: 'working', stateStartedAt: ENDED + 100 })
     expect(starts()).toEqual([SENT, ENDED + 100])
+  })
+
+  it('keeps the next turn running when its row came before the last turn’s end', () => {
+    const { chats, show, starts } = endedTurn((_chats, show, hostRuns) => {
+      told(_chats, show)
+      // A follow-up waits; the row reads it working before the last turn's end is heard.
+      hostRuns('send-b', true)
+      show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+    })
+    expect(starts()).toEqual([SENT, ENDED - 1_000])
+    // The end heard belongs to the turn before: the follow-up's row is still a running turn.
+    show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+    expect(
+      chats.dates.leadWorking(paneKey, {
+        state: 'working',
+        stateStartedAt: ENDED - 1_000,
+        structuredHost: true
+      } as unknown as AgentStatusIpcPayload)
+    ).toBe(true)
+    expect(chats.turnOf(paneKey)).toBe(ENDED - 1_000)
   })
 })

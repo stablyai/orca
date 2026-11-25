@@ -15,9 +15,15 @@ export class TurnDates {
   // is the host's next turn, never this one's.
   private readonly openers = new Map<string, string>()
   private readonly ended = new Map<string, ReadonlySet<number>>()
+  // A turn a newer one replaced before its end was heard: the next end is its, not the newer one's.
+  private readonly replaced = new Map<string, number[]>()
 
   /** A new turn begins on this date: the ended turn's dates no longer matter. */
   started(paneKey: string, at: number, opener?: string | null): void {
+    const before = this.open.get(paneKey)
+    if (before) {
+      this.replaced.set(paneKey, before)
+    }
     this.open.set(paneKey, [at])
     this.ended.delete(paneKey)
     if (opener) {
@@ -48,8 +54,15 @@ export class TurnDates {
     }
   }
 
-  /** The open turn ended: its dates now name the ended turn. */
+  /** The open turn ended (or the one it replaced, whose end is still owed): its dates now name the
+   *  ended turn. */
   endedTurn(paneKey: string): void {
+    const replaced = this.replaced.get(paneKey)
+    if (replaced) {
+      this.replaced.delete(paneKey)
+      this.ended.set(paneKey, new Set(replaced))
+      return
+    }
     const dates = this.open.get(paneKey)
     this.open.delete(paneKey)
     this.openers.delete(paneKey)
@@ -72,12 +85,14 @@ export class TurnDates {
 
   forget(paneKey: string): void {
     this.open.delete(paneKey)
+    this.replaced.delete(paneKey)
     this.openers.delete(paneKey)
     this.ended.delete(paneKey)
   }
 
   clear(): void {
     this.open.clear()
+    this.replaced.clear()
     this.openers.clear()
     this.ended.clear()
   }
