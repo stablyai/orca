@@ -102,10 +102,7 @@ export const GITHUB_REPO_WORK_ITEM_METHODS = [
         },
         params.number,
         params.type,
-        {
-          preview: params.preview === true,
-          ...(params.allowSameHost === true ? { allowSameHost: true } : {})
-        }
+        { preview: params.preview === true, allowSameHost: params.allowSameHost === true }
       )
   }),
   defineMethod({

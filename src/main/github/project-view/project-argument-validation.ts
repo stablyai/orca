@@ -1,25 +1,14 @@
 import type { GitHubProjectViewError } from '../../../shared/github/projects/project-result-types'
 import { isGitHubOwnerSlug as isValidOwnerSlug } from '../../../shared/github/repositories/owner-slug'
+import { isGitHubRepositorySlug } from '../../../shared/github/repositories/repository-slug'
 
-// Shared owner rules differ from repo names; validate both before interpolating authenticated REST paths.
-const REPO_SLUG_RE = /^[A-Za-z0-9._-]+$/
-
-const REPO_SLUG_RESERVED = new Set(['.', '..'])
-
-export function isValidRepoSlug(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    REPO_SLUG_RE.test(value) &&
-    !REPO_SLUG_RESERVED.has(value)
-  )
-}
+// Validate owner and repo before interpolating authenticated REST paths.
 
 export function assertSlug(
   value: unknown,
   field: 'owner' | 'repo'
 ): { ok: true; slug: string } | { ok: false; error: GitHubProjectViewError } {
-  const valid = field === 'owner' ? isValidOwnerSlug(value) : isValidRepoSlug(value)
+  const valid = field === 'owner' ? isValidOwnerSlug(value) : isGitHubRepositorySlug(value)
   if (!valid) {
     return {
       ok: false,

@@ -167,7 +167,7 @@ export function useSmartWorkspaceNameFieldActions(
           ...crossRepoPrompt.link.slug,
           number: crossRepoPrompt.link.number,
           type: crossRepoPrompt.link.type,
-          ...(allowSameHost && crossRepoPrompt.link.type === 'issue' ? { allowSameHost: true } : {})
+          ...(allowSameHost ? { allowSameHost: true } : {})
         })
         if (!item) {
           return

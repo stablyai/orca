@@ -175,10 +175,7 @@ export function registerGitHubWorkItemHandlers(store: Store): void {
         args.type,
         getGitHubRepoConnectionId(repo),
         getGitHubLocalGitOptionArgs(store, repo)[0],
-        {
-          preview: args.preview === true,
-          ...(args.allowSameHost === true ? { allowSameHost: true } : {})
-        }
+        { preview: args.preview === true, allowSameHost: args.allowSameHost === true }
       )
     }
   )
