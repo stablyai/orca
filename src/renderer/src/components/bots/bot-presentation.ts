@@ -19,6 +19,7 @@ import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { useAppStore } from '@/store'
 import { GoogleAccountsNeedHostUpdate } from './google/set-bot-google'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { BOT_MEMORY_NO_FACT } from '../../../../shared/bot-memory-quick-add'
 
 /** Bots name their agent as the product does ("Claude Code"); the shared catalog's "Claude" stays app-wide. */
 export function botAgentLabel(agent: TerminalAgent): string {
@@ -111,6 +112,9 @@ export function botErrorMessage(error: unknown): string {
       'bots.errors.avatarHomeUnreadable',
       "Couldn't read the saved picture. Choose it again."
     )
+  }
+  if (error instanceof Error && error.message === BOT_MEMORY_NO_FACT) {
+    return translate('settings.bots.memoryNoFact', 'Add some words first.')
   }
   if (error instanceof Error && error.message === 'bot_folder_not_owned') {
     return translate('bots.errors.folderNotOwned', "Couldn't verify this bot's folder.")

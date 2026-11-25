@@ -2230,7 +2230,8 @@
         "ownShort": "Skills próprias",
         "showMore": "Mostrar mais {{count}}"
       },
-      "memoryAlreadySaved": "Essa informação já está na memória."
+      "memoryAlreadySaved": "Essa informação já está na memória.",
+      "memoryNoFact": "Escreva algumas palavras primeiro."
     },
     "automaticUpdates": {
       "title": "Atualizações automáticas",

@@ -4101,7 +4101,8 @@
         "unlinked": "未关联",
         "notInstalled": "未安装 Orca"
       },
-      "memoryAlreadySaved": "这条已经在记忆里了"
+      "memoryAlreadySaved": "这条已经在记忆里了",
+      "memoryNoFact": "请先输入一些文字"
     },
     "sharedLinks": {
       "title": "分享链接",

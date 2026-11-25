@@ -11,6 +11,10 @@ import {
   findBotMemoryFact,
   parseBotMemoryFacts
 } from '../../../../src/shared/bot-memory-lines'
+import {
+  BOT_MEMORY_NO_FACT,
+  botMemoryFactHasWords
+} from '../../../../src/shared/bot-memory-quick-add'
 import { TextField } from '../../components/composer-input/TextField'
 import { MobileSegmentedControl } from '../../components/controls/MobileSegmentedControl'
 import {
@@ -50,7 +54,12 @@ function saveBotMemory(
 ): Promise<boolean> {
   return actions.run(async (client) => {
     const { alreadyInMemory } = botMemoryEdit.interpret(
-      await botMemoryEdit.request(client, params, { failWhenDisconnected: true })
+      await botMemoryEdit.request(client, params, { failWhenDisconnected: true }).catch((error) => {
+        // A host stricter than this app's check refuses the add: say why in the owner's language.
+        throw error instanceof Error && error.message === BOT_MEMORY_NO_FACT
+          ? new Error(t('settings.bots.memoryNoFact', 'Add some words first.'))
+          : error
+      })
     )
     if (alreadyInMemory) {
       actions.showToast(t('settings.bots.memoryAlreadySaved', 'That fact is already in memory.'))
@@ -198,7 +207,7 @@ function Facts(
   const add = async () => {
     const submitted = quickAdd
     const text = submitted.trim()
-    if (locked || text === '') {
+    if (locked || !botMemoryFactHasWords(text)) {
       return
     }
     const saved = await saveBotMemory(actions, t, { botId, text })
@@ -221,7 +230,7 @@ function Facts(
       <TextField
         leading={<Plus size={18} color={colors.textMuted} strokeWidth={2} />}
         trailing={
-          quickAdd.trim() ? (
+          botMemoryFactHasWords(quickAdd) ? (
             <MobileBotTextButton
               label={t('bots.memory.save', 'Save')}
               disabled={locked}

@@ -3054,7 +3054,8 @@
       "phoneChecking": "Wird geprüft…"
     },
     "bots": {
-      "memoryAlreadySaved": "Diese Erinnerung ist bereits gespeichert."
+      "memoryAlreadySaved": "Diese Erinnerung ist bereits gespeichert.",
+      "memoryNoFact": "Gib zuerst ein paar Wörter ein."
     }
   },
   "sourceControl": {

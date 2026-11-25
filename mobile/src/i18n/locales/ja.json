@@ -3051,7 +3051,8 @@
       "phoneChecking": "確認中…"
     },
     "bots": {
-      "memoryAlreadySaved": "その内容はすでにメモリーにあります。"
+      "memoryAlreadySaved": "その内容はすでにメモリーにあります。",
+      "memoryNoFact": "まず言葉を入力してください。"
     }
   },
   "sourceControl": {

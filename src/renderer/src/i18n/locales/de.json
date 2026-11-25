@@ -1194,7 +1194,8 @@
         "showMore": "{{count}} weitere anzeigen",
         "notLoaded": "Kein Agent lädt ihn"
       },
-      "memoryAlreadySaved": "Diese Erinnerung ist bereits gespeichert."
+      "memoryAlreadySaved": "Diese Erinnerung ist bereits gespeichert.",
+      "memoryNoFact": "Gib zuerst ein paar Wörter ein."
     },
     "automaticUpdates": {
       "title": "Automatische Updates",

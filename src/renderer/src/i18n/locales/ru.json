@@ -1236,7 +1236,8 @@
         "ownShort": "Собственные навыки",
         "showMore": "Показать ещё {{count}}"
       },
-      "memoryAlreadySaved": "Это уже есть в памяти."
+      "memoryAlreadySaved": "Это уже есть в памяти.",
+      "memoryNoFact": "Сначала введите несколько слов."
     },
     "automaticUpdates": {
       "title": "Автоматические обновления",

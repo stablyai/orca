@@ -889,7 +889,8 @@
         "showMore": "{{count}} 더 보기",
         "notLoaded": "불러오는 에이전트 없음"
       },
-      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다."
+      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다.",
+      "memoryNoFact": "먼저 내용을 입력하세요."
     },
     "windowMaterial": {
       "description": "반투명 터미널 뒤에 보이는 것을 정합니다. 다시 시작해야 합니다.",

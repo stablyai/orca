@@ -7,7 +7,7 @@ import {
   botMemoryChange,
   parseBotMemoryFacts
 } from '../../shared/bot-memory-lines'
-import { quickAddBotMemoryChange } from '../../shared/bot-memory-quick-add'
+import { BOT_MEMORY_NO_FACT, quickAddBotMemoryChange } from '../../shared/bot-memory-quick-add'
 import { createBotMemoryHistory } from './bot-memory-history'
 import type { BotMemoryHistoryRow } from '../../shared/bots/bot-memory-history'
 import { createBotMemoryRecord } from './bot-memory-record'
@@ -299,7 +299,7 @@ describe("a bot's memory history", () => {
   it('rejects a Quick add that is only a bullet or separator, saving nothing', async () => {
     const { quickAdd, read, rows } = bot(OLD)
     for (const fact of ['-', ':', ' - ']) {
-      await expect(quickAdd(fact)).rejects.toThrow('Missing text')
+      await expect(quickAdd(fact)).rejects.toThrow(BOT_MEMORY_NO_FACT)
     }
     expect(read()).toBe(OLD)
     expect(await rows()).toEqual([])
@@ -329,7 +329,7 @@ describe("a bot's memory history", () => {
   it('rejects a blank Quick add, saving nothing', async () => {
     const { quickAdd, read, rows } = bot(OLD)
 
-    await expect(quickAdd(' \n\t')).rejects.toThrow('Missing text')
+    await expect(quickAdd(' \n\t')).rejects.toThrow(BOT_MEMORY_NO_FACT)
     expect(read()).toBe(OLD)
     expect(await rows()).toEqual([])
   })

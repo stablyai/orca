@@ -1809,6 +1809,7 @@
       "addMemoryPlaceholder": "Remember something new…",
       "memoryEmpty": "No facts saved yet.",
       "memoryAlreadySaved": "That fact is already in memory.",
+      "memoryNoFact": "Add some words first.",
       "saving": "Saving…",
       "unsaved": "Unsaved",
       "saved": "Saved",

@@ -3229,7 +3229,8 @@
       "phoneChecking": "확인 중…"
     },
     "bots": {
-      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다."
+      "memoryAlreadySaved": "이미 메모리에 있는 내용입니다.",
+      "memoryNoFact": "먼저 내용을 입력하세요."
     }
   },
   "sourceControl": {

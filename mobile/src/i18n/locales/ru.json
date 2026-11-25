@@ -4464,7 +4464,8 @@
         "unlinked": "Не привязано",
         "notInstalled": "Orca не установлена"
       },
-      "memoryAlreadySaved": "Это уже есть в памяти."
+      "memoryAlreadySaved": "Это уже есть в памяти.",
+      "memoryNoFact": "Сначала введите несколько слов."
     },
     "sharedLinks": {
       "title": "Общие ссылки",

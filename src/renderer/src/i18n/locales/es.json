@@ -591,7 +591,8 @@
         "showMore": "Mostrar {{count}} más",
         "notLoaded": "Ningún agente la carga"
       },
-      "memoryAlreadySaved": "Ese dato ya está en la memoria."
+      "memoryAlreadySaved": "Ese dato ya está en la memoria.",
+      "memoryNoFact": "Escribe algunas palabras primero."
     },
     "automaticUpdates": {
       "title": "Actualizaciones automáticas",
