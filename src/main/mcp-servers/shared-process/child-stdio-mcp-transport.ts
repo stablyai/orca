@@ -68,3 +68,19 @@ export class ChildStdioMcpTransport implements Transport {
     this.onclose?.()
   }
 }
+
+const STDERR_LOG_BUDGET_BYTES = 4 * 1024
+
+/** The first few KiB of what the child writes to stderr, as warnings under its name. */
+export function logChildStderr(name: string, child: ChildProcessWithoutNullStreams): void {
+  let budget = STDERR_LOG_BUDGET_BYTES
+  child.stderr.on('data', (chunk: Buffer) => {
+    if (budget <= 0) {
+      return
+    }
+    const text = chunk.toString('utf8', 0, Math.min(chunk.length, budget)).trimEnd()
+    budget -= chunk.length
+    console.warn(`[mcp-servers] ${name}: ${text}${budget <= 0 ? ' (further output dropped)' : ''}`)
+  })
+  child.stderr.on('error', () => {})
+}

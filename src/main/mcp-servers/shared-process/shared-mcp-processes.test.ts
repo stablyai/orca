@@ -5,11 +5,12 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
-import { CallToolResultSchema } from '@modelcontextprotocol/sdk/types.js'
+import { CallToolResultSchema, EmptyResultSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { McpCommandServer } from '../mcp-shared-process-servers'
 import { SharedMcpProcesses } from './shared-mcp-processes'
 
-// A stdio MCP server whose one tool names the process that answered and its MARK env.
+// A stdio MCP server whose one tool names the process that answered and its MARK env; it logs the
+// resource subscriptions it's asked for.
 const SERVER = `
 require('node:fs').appendFileSync(process.argv[2], process.pid + '\\n')
 let buf = ''
@@ -19,9 +20,10 @@ process.stdin.on('data', (c) => {
   for (let i; (i = buf.indexOf('\\n')) >= 0; ) {
     const m = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1)
     if (m.id === undefined) continue
-    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params.protocolVersion, capabilities: { tools: {} }, serverInfo: { name: 'pid', version: '1' } } })
+    if (m.method === 'initialize') send({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params.protocolVersion, capabilities: { tools: {}, resources: { subscribe: true } }, serverInfo: { name: 'pid', version: '1' } } })
     else if (m.method === 'tools/list') send({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'whoami', inputSchema: { type: 'object' } }] } })
     else if (m.method === 'tools/call') send({ jsonrpc: '2.0', id: m.id, result: { content: [{ type: 'text', text: process.pid + ':' + process.env.MARK }] } })
+    else if (m.method.startsWith('resources/')) { require('node:fs').appendFileSync(process.argv[2] + '.subs', m.method + ' ' + m.params.uri + '\\n'); send({ jsonrpc: '2.0', id: m.id, result: {} }) }
     else send({ jsonrpc: '2.0', id: m.id, error: { code: -32601, message: 'no' } })
   }
 })
@@ -120,6 +122,14 @@ describe('SharedMcpProcesses', () => {
     }
   }
 
+  const readSubs = (): string[] => {
+    try {
+      return readFileSync(join(dir, 'pids.subs'), 'utf8').split('\n').filter(Boolean)
+    } catch {
+      return []
+    }
+  }
+
   const stopped = (pid: number) => expect.poll(() => alive(pid), POLL).toBe(false)
 
   it('runs one child for every session and stops it once the last session ends', async () => {
@@ -185,6 +195,22 @@ describe('SharedMcpProcesses', () => {
     release()
     await expect.poll(() => readPids().length, POLL).toBe(1)
     await stopped(readPids()[0]!)
+  })
+
+  it('holds one child subscription per resource until its last agent lets go', async () => {
+    const a = await connect()
+    const b = await connect()
+    const subscribe = (client: Client, method: 'resources/subscribe' | 'resources/unsubscribe') =>
+      client.request({ method, params: { uri: 'file:///x' } }, EmptyResultSchema)
+    await subscribe(a.client, 'resources/subscribe')
+    await subscribe(b.client, 'resources/subscribe')
+    await subscribe(a.client, 'resources/unsubscribe')
+    expect(readSubs()).toEqual(['resources/subscribe file:///x'])
+
+    await b.transport.terminateSession()
+    await expect
+      .poll(readSubs, POLL)
+      .toEqual(['resources/subscribe file:///x', 'resources/unsubscribe file:///x'])
   })
 
   it('starts nothing while the MCP servers switch is off', async () => {
