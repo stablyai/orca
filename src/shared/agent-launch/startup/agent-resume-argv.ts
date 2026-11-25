@@ -19,7 +19,6 @@ export function getAgentResumeArgv(
       return providerSession.key === 'session_id'
         ? [
             'claude',
-            ...(providerSession.model ? ['--model', providerSession.model] : []),
             ...(providerSession.effort ? ['--effort', providerSession.effort] : []),
             '--resume',
             id

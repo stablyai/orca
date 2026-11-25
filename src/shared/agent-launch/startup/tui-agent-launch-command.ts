@@ -185,12 +185,10 @@ export function resolveAgentLaunchCommand(args: {
       : initialTokens
   // Restart retains explicit policy and surviving raw pins. agy --conversation also needs the
   // launch's --model or custom models fail with "model is empty" (#43154); --effort stays out
-  // because combining it with --model makes agy run a different model (#39556). Claude's resume
-  // starts on the default model otherwise, so a woken agent keeps its launch model too; its effort
-  // comes from the session. Codex restores its thread's own model and permissions on resume.
+  // because combining it with --model makes agy run a different model (#39556).
   const resumeOptionArgs =
-    args.agent === 'antigravity' || args.agent === 'claude'
-      ? [...launchModelArgs(resolvedOptions.args), ...(resolvedOptions.permissionArgs ?? [])]
+    args.agent === 'antigravity'
+      ? [...antigravityModelArgs(resolvedOptions.args), ...(resolvedOptions.permissionArgs ?? [])]
       : (resolvedOptions.permissionArgs ?? [])
   const resumeArgs = render(insertBeforeTerminator(args.agent, keptTokens, resumeOptionArgs))
   return {
@@ -213,7 +211,7 @@ export function resolveAgentLaunchCommand(args: {
 }
 
 /** The resolved `--model <id>` (or `--model=<id>`) tokens, without any other launch option. */
-function launchModelArgs(tokens: readonly string[]): string[] {
+function antigravityModelArgs(tokens: readonly string[]): string[] {
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (token.startsWith('--model=')) {

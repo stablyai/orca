@@ -3,7 +3,6 @@
 import { agentVerdictFields } from '../../../agent-status/lifecycle/agent-main-agent-verdict'
 import {
   isResumableTuiAgent,
-  readAgentModelId,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
@@ -34,7 +33,6 @@ export type ResumeRecordStatus = Pick<
   | 'interrupted'
   | 'mainAgent'
   | 'worktreeId'
-  | 'model'
 >
 
 export type ResumeRecordTab = { id: string; title?: string }
@@ -75,7 +73,7 @@ export function resumeRecordFromStatus(args: {
     ...(tab ? { tabId: tab.id } : {}),
     worktreeId: args.worktreeId,
     agent,
-    providerSession: withObservedModel(agent, args.entry.providerSession, args.entry.model),
+    providerSession: args.entry.providerSession,
     ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
     prompt: args.entry.prompt,
     state: args.entry.state,
@@ -91,16 +89,6 @@ export function resumeRecordFromStatus(args: {
     ...agentVerdictFields(args.entry),
     ...(args.origin ? { origin: args.origin } : {})
   }
-}
-
-/** Claude's resume replays the model it last reported, so a /model choice outlives a relaunch. */
-function withObservedModel(
-  agent: string,
-  providerSession: AgentProviderSessionMetadata,
-  model: string | undefined
-): AgentProviderSessionMetadata {
-  const observed = agent === 'claude' ? readAgentModelId(model) : undefined
-  return observed ? { ...providerSession, model: observed } : providerSession
 }
 
 /** A status without a provider session keeps the one its pane's previous status named. */
@@ -183,8 +171,7 @@ export function liveResumeRecordChange(
             providerSession: {
               ...existing.providerSession,
               effort: live.providerSession.effort,
-              permissionMode: live.providerSession.permissionMode,
-              model: live.providerSession.model
+              permissionMode: live.providerSession.permissionMode
             },
             launchConfig: live.launchConfig ?? existing.launchConfig
           }

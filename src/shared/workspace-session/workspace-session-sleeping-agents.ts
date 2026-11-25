@@ -23,8 +23,7 @@ const agentProviderSessionSchema = z.preprocess(
     transcriptPath: z.string().min(1).optional(),
     cwd: z.string().min(1).optional(),
     effort: z.string().regex(AGENT_EFFORT_LEVEL).optional(),
-    permissionMode: z.string().optional(),
-    model: z.string().min(1).max(200).optional()
+    permissionMode: z.string().optional()
   })
 )
 

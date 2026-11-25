@@ -54,8 +54,6 @@ export type AgentProviderSessionMetadata = {
   effort?: string
   /** Claude's live permission mode; a resume with no recorded recipe takes its permission from it. */
   permissionMode?: string
-  /** Claude's last observed model; resume replays it over the launch model so a later /model choice survives. */
-  model?: string
 }
 
 export type { SleepingAgentLaunchConfig } from './resume/sleeping-agent-launch-config'
@@ -188,21 +186,14 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   const cwd = readPathFromKeys(record, ['cwd'])
   const effort = readAgentEffortLevel(record.effort)
   const permissionMode = readClaudePermissionMode(record.permissionMode)
-  const model = readAgentModelId(record.model)
   return {
     key: record.key,
     id,
     ...(transcriptPath ? { transcriptPath } : {}),
     ...(cwd ? { cwd } : {}),
     ...(effort ? { effort } : {}),
-    ...(permissionMode ? { permissionMode } : {}),
-    ...(model ? { model } : {})
+    ...(permissionMode ? { permissionMode } : {})
   }
-}
-
-/** A model id crosses into a shell command, so whitespace and controls are refused. */
-export function readAgentModelId(value: unknown): string | undefined {
-  return typeof value === 'string' && /^[^\s'"`]{1,200}$/.test(value) ? value : undefined
 }
 
 export function extractAgentProviderSession(

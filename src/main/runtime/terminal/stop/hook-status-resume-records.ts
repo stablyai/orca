@@ -86,8 +86,7 @@ export function resumeStatusFromHookRow(
     ...(row.executionHost === 'shared' || (reused && previous.executionHost === 'shared')
       ? { executionHost: 'shared' as const }
       : {}),
-    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {}),
-    ...(row.model ? { model: row.model } : {})
+    ...(row.worktreeId ? { worktreeId: row.worktreeId } : {})
   }
 }
 
