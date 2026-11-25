@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../../../shared/app-profiles/app-profile-homes'
 import path from 'node:path'
 import { z } from 'zod'
 import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
@@ -129,7 +129,7 @@ export async function readClaudeOAuthCredentials(
     const file = parseClaudeOAuthCredentialsJson(
       await readFile(
         path.join(
-          options?.credentialsFileConfigDir ?? path.join(homedir(), '.claude'),
+          options?.credentialsFileConfigDir ?? defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'),
           '.credentials.json'
         ),
         'utf8'

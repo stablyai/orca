@@ -1,4 +1,4 @@
-import { homedir } from 'node:os'
+import { defaultAgentHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import { getClaudeProfileRouter } from '../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
@@ -14,7 +14,7 @@ const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   conversationStore: ({ accountHomePath }) => join(accountHomePath, 'projects'),
   accountHomeCandidates: ({ selectedAccountHomePath }) => [
     selectedAccountHomePath,
-    join(homedir(), '.claude'),
+    defaultAgentHomeDir('CLAUDE_CONFIG_DIR', '.claude'),
     ...(getClaudeProfileRouter()?.accountHomes() ?? [])
   ],
   findTranscript: ({ providerSessionId, store, workspaceCwd, strictErrors }) =>

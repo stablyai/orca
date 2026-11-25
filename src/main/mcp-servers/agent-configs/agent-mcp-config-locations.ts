@@ -5,6 +5,7 @@ import type { AgentMcpConfigDialect } from '../../../shared/mcp/agent-mcp-config
 import { resolveClaudeGlobalConfigFile } from '../../claude/configuration/claude-folder-trust-file'
 import { readUserClaudeConfigDir } from '../../claude-accounts/profiles/claude-profile-paths'
 import { hasCustomCodexHomeOverride } from '../../codex/configuration/homes/codex-real-home-path'
+import { agentHomeDirIn } from '../../../shared/app-profiles/app-profile-homes'
 
 /** The agents whose own MCP config Orca reads, in the order merged rows name them. */
 export const MCP_CONFIG_AGENTS = [
@@ -42,7 +43,7 @@ const envDir = (env: NodeJS.ProcessEnv, name: string): string | undefined =>
 export function codexSourceHome(context: AgentMcpConfigContext): string {
   return hasCustomCodexHomeOverride(context.env) && context.env.CODEX_HOME
     ? context.env.CODEX_HOME.trim()
-    : join(context.homeDir, '.codex')
+    : agentHomeDirIn(context.homeDir, 'CODEX_HOME', '.codex')
 }
 
 const xdgConfigHome = (context: AgentMcpConfigContext): string =>

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
+import { defaultAgentHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { readFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type {
   ExternalAutomationManager,
@@ -9,7 +9,8 @@ import type {
 import { mapOpenClawJobs } from './openclaw-job-records'
 import { isExternalAutomationCommandOnPath } from './external-manager-local-command'
 
-const OPENCLAW_JOBS_FILE = join(homedir(), '.openclaw', 'cron', 'jobs.json')
+const openClawJobsFile = (): string =>
+  join(defaultAgentHomeDir('OPENCLAW_STATE_DIR', '.openclaw'), 'cron', 'jobs.json')
 const PROVIDER_LABELS: Record<ExternalAutomationProvider, string> = {
   openclaw: 'OpenClaw'
 }
@@ -19,10 +20,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 async function readLocalOpenClawJobs(): Promise<unknown[]> {
-  if (!existsSync(OPENCLAW_JOBS_FILE)) {
+  if (!existsSync(openClawJobsFile())) {
     return []
   }
-  const content = await readFile(OPENCLAW_JOBS_FILE, 'utf-8')
+  const content = await readFile(openClawJobsFile(), 'utf-8')
   const parsed = JSON.parse(content) as unknown
   return isRecord(parsed) && Array.isArray(parsed.jobs) ? parsed.jobs : []
 }

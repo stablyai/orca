@@ -1,12 +1,12 @@
 import { credentialFileExists } from '../../credentials/credential-file-io'
 import { mkdir } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { orcaHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 
 export const LEGACY_WORKSPACE_ID = 'legacy'
 
 function getOrcaDir(): string {
-  return join(homedir(), '.orca')
+  return orcaHomeDir()
 }
 
 function getLegacyTokenPath(): string {

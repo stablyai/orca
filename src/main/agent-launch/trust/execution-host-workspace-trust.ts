@@ -1,6 +1,7 @@
 import { realpathSync } from 'node:fs'
+import { agentHomeDirIn } from '../../../shared/app-profiles/app-profile-homes'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { resolve } from 'node:path'
 import { markQoderWorkspaceTrusted } from '../../qoder/workspace-trust'
 import { markQwenWorkspaceTrusted } from '../../qwen-code/workspace-trust'
 import {
@@ -120,7 +121,7 @@ async function writePreset(
     case 'kimi':
       return markKimiWorkspaceTrusted(
         storedPath,
-        host.kimiHome || join(host.agentHome, '.kimi-code')
+        host.kimiHome || agentHomeDirIn(host.agentHome, 'KIMI_CODE_HOME', '.kimi-code')
       )
   }
 }

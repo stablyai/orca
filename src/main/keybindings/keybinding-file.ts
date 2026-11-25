@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { orcaHomeDir } from '../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import { findKeybindingConflicts, formatKeybindingList } from '../../shared/keybindings/formatting'
 import { getKeybindingPlatform, isKeybindingActionId } from '../../shared/keybindings/definitions'
@@ -26,7 +27,7 @@ import {
 } from './keybinding-file-parser'
 
 export function getUserKeybindingsPath(homePath: string): string {
-  return join(homePath, '.orca', 'keybindings.json')
+  return join(orcaHomeDir(homePath), 'keybindings.json')
 }
 
 export function readKeybindingFile(

@@ -1,6 +1,6 @@
 // Seal legacy integration credentials after key loading; gh/glab own their tokens separately.
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { homedir } from 'node:os'
+import { orcaHomeDir } from '../../../shared/app-profiles/app-profile-homes'
 import { join } from 'node:path'
 import type { SecretStore } from '../../../shared/secure-storage/secret-store'
 import { classifyUnenvelopedCredential } from '../../../shared/secure-storage/secret-at-rest-protection'
@@ -48,7 +48,7 @@ function encFilesIn(dir: string): string[] {
 
 /** Keep credentials outside disposable ORCA_USER_DATA roots. */
 export function orcadCredentialRoot(): string {
-  return join(homedir(), '.orca')
+  return orcaHomeDir()
 }
 
 function listPlaintextCredentialTargets(): PlaintextCredentialTarget[] {
