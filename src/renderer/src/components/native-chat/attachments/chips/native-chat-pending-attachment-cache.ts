@@ -23,6 +23,7 @@ import {
   savingImageChips
 } from './native-chat-pending-attachment-scopes'
 
+type Owner = NativeChatComposerDraftOwner
 const EMPTY: readonly NativeChatComposerImageAttachment[] = Object.freeze([])
 const pendingCache = new Map<string, readonly NativeChatComposerImageAttachment[]>()
 const pendingOwners = new Map<string, NativeChatComposerDraftOwner>()
@@ -155,10 +156,14 @@ function heldAfter(
   return queue.slice(index + 1).find(({ id }) => held.has(id))?.id
 }
 
-/** Move outstanding operations with their draft; completion resolves by chip identity after the source closes. */
-export function moveNativeChatPendingAttachments(from: string, to: string): void {
-  const owner =
-    pendingOwners.get(to) ?? resolveNativeChatComposerDraftOwner(to) ?? pendingOwners.get(from)
+/**
+ * Move outstanding operations with their draft; completion resolves by chip identity after the source closes.
+ * `given`: the workspace and host the caller confirmed for `to`; it outranks any looked-up owner,
+ * so a moved notice or report route is retired with the workspace it now belongs to.
+ */
+export function moveNativeChatPendingAttachments(from: string, to: string, given?: Owner): void {
+  const looked = pendingOwners.get(to) ?? resolveNativeChatComposerDraftOwner(to)
+  const owner = given ?? looked ?? pendingOwners.get(from)
   if (owner) {
     pendingOwners.set(to, owner)
   }

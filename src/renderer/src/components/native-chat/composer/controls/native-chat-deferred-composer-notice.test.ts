@@ -4,6 +4,7 @@ import type { NativeChatComposerDraftOwner } from '../../drafts/native-chat-comp
 import {
   closeNativeChatComposerNoticeRoute,
   deferNativeChatComposerNotice,
+  hasDeferredNativeChatComposerNotice,
   openNativeChatComposerNoticeRoute,
   takeDeferredNativeChatComposerNotices
 } from './native-chat-deferred-composer-notice'
@@ -17,6 +18,7 @@ import {
   deleteNativeChatComposerDraft,
   deleteNativeChatComposerDraftsOwnedBy
 } from '../../drafts/native-chat-composer-draft-removal'
+import { moveNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-move'
 
 // A failure reported before its draft moves is published where the draft went; once the draft is
 // deleted for good, neither a waiting nor a late notice survives it.
@@ -78,4 +80,38 @@ it('keeps a route opened before the chip drop through a move or deletion during 
     takeNativeChatPendingAttachment(from, `drop-${deleted}`)
     expect(closeNativeChatComposerNoticeRoute(route)).toBe(deleted ? null : to)
   }
+})
+
+// An empty draft that carries only a waiting notice and an open report route moves under the owner
+// the caller confirmed for the destination, so removing that workspace retires both.
+it('moves a notice-only draft under the destination owner the move was given', () => {
+  const before: NativeChatComposerDraftOwner = {
+    workspaceId: 'notice-move-old',
+    executionHostId: 'local'
+  }
+  const after: NativeChatComposerDraftOwner = {
+    workspaceId: 'notice-move-new',
+    executionHostId: 'local'
+  }
+  const route = openNativeChatComposerNoticeRoute('notice-move-source', before)
+  deferNativeChatComposerNotice('notice-move-source', 'Image paste failed.', undefined, before)
+
+  moveNativeChatComposerDraft('notice-move-source', 'notice-move-destination', after)
+  deleteNativeChatComposerDraftsOwnedBy(after)
+
+  expect(closeNativeChatComposerNoticeRoute(route)).toBeNull()
+  expect(shownFor('notice-move-destination')).toEqual([])
+})
+
+// A failure still waiting for, or being reported to, a draft is that draft's feedback until shown.
+it('reports a draft as holding feedback while a failure is waiting or being reported', () => {
+  const scope = 'notice-presence'
+  expect(hasDeferredNativeChatComposerNotice(scope)).toBe(false)
+  const route = openNativeChatComposerNoticeRoute(scope)
+  expect(hasDeferredNativeChatComposerNotice(scope)).toBe(true)
+  closeNativeChatComposerNoticeRoute(route)
+  deferNativeChatComposerNotice(scope, 'Image paste failed.')
+  expect(hasDeferredNativeChatComposerNotice(scope)).toBe(true)
+  expect(shownFor(scope)).toEqual(['Image paste failed.'])
+  expect(hasDeferredNativeChatComposerNotice(scope)).toBe(false)
 })

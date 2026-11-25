@@ -31,7 +31,7 @@ export function moveNativeChatComposerDraft(
   }
   const source = readNativeChatComposerDraft(sourceScope)
   moveNativeChatStagedFiles(sourceScope, destinationScope)
-  moveNativeChatPendingAttachments(sourceScope, destinationScope)
+  moveNativeChatPendingAttachments(sourceScope, destinationScope, owner)
   for (const operation of nativeChatPastedTextOperations.values()) {
     if (operation.scopeKey === sourceScope) {
       operation.scopeKey = destinationScope

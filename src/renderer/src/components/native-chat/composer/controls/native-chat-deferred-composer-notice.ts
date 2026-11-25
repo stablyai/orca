@@ -43,6 +43,12 @@ function forgetOwnerIfIdle(scopeKey: string): void {
   }
 }
 
+/** A paste failure is waiting for, or still being reported to, this draft: it is the draft's feedback. */
+export function hasDeferredNativeChatComposerNotice(scopeKey: string): boolean {
+  scopeKey = currentDraftScope(scopeKey)
+  return deferred.has(scopeKey) || routes.has(scopeKey)
+}
+
 export function deferredNativeChatComposerNoticeOwner(
   scopeKey: string
 ): NativeChatComposerDraftOwner | undefined {

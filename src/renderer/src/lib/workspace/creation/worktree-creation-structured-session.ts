@@ -12,8 +12,10 @@ import {
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import {
   moveWorktreeCreationDraftToTarget,
-  readWorktreeCreationHandoffTarget
+  readWorktreeCreationHandoffTarget,
+  releaseFirstSendFilesWhenHeld
 } from '@/lib/workspace/creation/worktree-creation-handoff-target'
+import { hasDeferredNativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-deferred-composer-notice'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/workspace-mounting/background-terminal-worktree-mount'
 import {
   nativeChatComposerSelection,
@@ -89,9 +91,12 @@ export async function launchStructuredWorktreeSession(
     text: request.launchDraftPrompt ?? request.quickPrompt,
     attachments: promptAttachments
   })
-  // The composer's own input (typing, chips still saving, staged files), apart from the first send.
+  // The composer's own input (typing, chips still saving, staged files), apart from the first send,
+  // and a paste failure waiting for it: with no chat to show it, that may be the only feedback left.
   const sourceHoldsInput = (): boolean =>
-    nativeChatComposerHasUserContent(sourceScope) || hasNativeChatStagedFiles(sourceScope)
+    nativeChatComposerHasUserContent(sourceScope) ||
+    hasNativeChatStagedFiles(sourceScope) ||
+    hasDeferredNativeChatComposerNotice(sourceScope)
   const needsChat = (): boolean =>
     Boolean(promptAttachments?.length || pending?.heldChatSkills?.length) || sourceHoldsInput()
   const retainInput = (): WorktreeCreationStructuredSessionResult => {
@@ -230,7 +235,11 @@ export async function launchStructuredWorktreeSession(
       // Keep the pending chat until the layout owner's answering frame provides its replacement.
       primaryTabId = await tabOpen.promise
       if (primaryTabId !== null) {
-        void launch.promptDeliveryResult?.then(() => prepareInput.release())
+        releaseFirstSendFilesWhenHeld(
+          launch.promptDeliveryResult,
+          () => draftTransferred,
+          prepareInput
+        )
       }
       if (abandoned.signal.aborted || isCancelled()) {
         launch.cancel()

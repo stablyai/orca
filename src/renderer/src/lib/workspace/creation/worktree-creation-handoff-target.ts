@@ -3,6 +3,7 @@ import { getStructuredAgentSessionLaunchOwner } from '@/lib/agent-session/launch
 import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/structured-agent-session-launch-draft'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { StructuredPromptDeliveryResult } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
 
 /** The chat that should receive a new worktree's pending draft: its tab, session and host. */
 export type WorktreeCreationHandoffTarget = {
@@ -66,4 +67,21 @@ export function moveWorktreeCreationDraftToTarget(
     selection
   )
   return true
+}
+
+/**
+ * The first send's staged browser files stay leased until someone holds them: the send was delivered,
+ * or the draft moved into a confirmed chat that now owns them. An undelivered send to a chat that went
+ * stale keeps them for Retry; dismissing the pending creation releases them with its draft.
+ */
+export function releaseFirstSendFilesWhenHeld(
+  delivery: Promise<StructuredPromptDeliveryResult> | undefined,
+  draftTransferred: () => boolean,
+  files: { release: () => void }
+): void {
+  void delivery?.then((result) => {
+    if (result.delivered || draftTransferred()) {
+      files.release()
+    }
+  })
 }
