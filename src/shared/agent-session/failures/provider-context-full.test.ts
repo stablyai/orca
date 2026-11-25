@@ -12,8 +12,8 @@ describe('provider context overflow classification', () => {
     { code: 'invalid_request_error', status: 400, message: 'Prompt is too long' },
     { message: 'Request size exceeds model context window' },
     { message: "Request exceeds the model's context window." },
-    { message: "This model's maximum context length is 128000 tokens. You requested 128001." },
     { message: 'Context window exceeded for this request' },
+    { status: null, code: 'context_length_exceeded' },
     { message: "Codex ran out of room in the model's context window" }
   ])('recognizes explicit provider overflow evidence: %j', (error) => {
     expect(providerContextFullFailure(error)).toEqual({ kind: 'contextFull' })
@@ -35,7 +35,11 @@ describe('provider context overflow classification', () => {
     { status: 429, message: 'Prompt is too long' },
     { status: 401, code: 'context_length_exceeded' },
     { code: 'future_error', message: 'Prompt is too long' },
-    { message: 'context_length_exceeded' }
+    { message: 'context_length_exceeded' },
+    // Input-plus-output budgets and generic input limits are not proof the context is full.
+    { message: "This model's maximum context length is 128000 tokens. You requested 128001." },
+    { message: 'input length and `max_tokens` exceed context limit: 188000 + 21333 > 200000' },
+    { message: 'Input is too long for requested model.' }
   ])('leaves ambiguous or unrelated failures unclassified: %j', (error) => {
     expect(providerContextFullFailure(error)).toBeNull()
   })

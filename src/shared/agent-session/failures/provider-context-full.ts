@@ -27,7 +27,6 @@ const GENERIC_ERROR_CODES = new Set([
 const CONTEXT_FULL_MESSAGES = [
   /^(?:the )?prompt is too long(?:$|[:.!])/i,
   /^request (?:size )?exceeds (?:the )?model(?:'s)? context window\b/i,
-  /^(?:this model's )?maximum context length (?:is \d|exceeded\b)/i,
   /^context (?:length|window) (?:has been )?exceeded\b/i,
   /^Codex ran out of room in the model's context window(?:$|[.!])/i
 ]
@@ -36,7 +35,8 @@ const CONTEXT_FULL_MESSAGES = [
 export function providerContextFullFailure(
   error: ProviderContextError
 ): AgentSessionFailureFact | null {
-  if (error.status !== undefined && error.status !== 400 && error.status !== 413) {
+  // An absent status (undefined or null) leaves the code and message to decide.
+  if (error.status != null && error.status !== 400 && error.status !== 413) {
     return null
   }
   if (error.code !== undefined && error.code !== null) {
