@@ -5,6 +5,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BotItemsListRead } from '../../../../src/shared/bots/bot-item-schema'
 import type { BotItem } from '../../../../src/shared/bots/bot-items'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import {
+  botItemAskCardDraftsClock,
+  retireClosedBotItemAskCardDrafts
+} from './bot-item-ask-card-drafts'
 import { readBotItems } from './bot-item-operations'
 
 export type PhoneBotItems = {
@@ -43,12 +47,16 @@ type Pages = {
 
 export function usePhoneBotItems({
   client,
+  hostKey,
   botId,
   chatIds,
   showing,
   reads
 }: {
   client: RpcClient | null
+  /** The phone's key for the bot's host (`hostBotsKey`): a read's closed items drop their kept
+   *  answer cards. */
+  hostKey: string
   botId: string
   /** These chats' items (the filter); null for all. */
   chatIds: readonly string[] | null
@@ -68,7 +76,12 @@ export function usePhoneBotItems({
       return
     }
     let current = true
+    const askedAt = botItemAskCardDraftsClock()
     void readBotItems(client, botId, { chatIds }).then((answer) => {
+      if (answer.kind === 'read') {
+        // Whether shown or not, the host said these items closed.
+        retireClosedBotItemAskCardDrafts(hostKey, botId, answer.value.items, askedAt)
+      }
       if (!current) {
         return
       }
@@ -84,7 +97,7 @@ export function usePhoneBotItems({
     return () => {
       current = false
     }
-  }, [client, botId, chatIds, key, showing, reads, attempt])
+  }, [client, hostKey, botId, chatIds, key, showing, reads, attempt])
 
   const read = shown?.key === key ? shown.read : null
   const ownPages = pages?.key === key ? pages : null
