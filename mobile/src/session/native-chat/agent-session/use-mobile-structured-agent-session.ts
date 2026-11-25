@@ -69,8 +69,8 @@ export function useMobileStructuredAgentSession(
   const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
   const commandPendingRef = useRef(false)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected, onCommandsChanged }
-  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } =
-    useMobileStructuredAgentState(stateArgs)
+  const read = useMobileStructuredAgentState(stateArgs)
+  const { state, stateRef, queuedMessages, queuePause, olderPages, loadEarlier, savedAt } = read
 
   const mutate = useMobileStructuredAgentMutate({
     client,
@@ -123,9 +123,9 @@ export function useMobileStructuredAgentSession(
     confirmRecorded: useMobileStructuredSendRecorded(client, sessionId, hostSupport)
   })
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
-  const { clearing, messages, receipts, timing, onClearSent, sendingCards } =
+  const { clearing, messages, receipts, timing, onClearSent, sending, sendingCards } =
     useMobileStructuredTranscript(
-      { agent, state, optimistic: sends.optimistic, sessionKey, turnId },
+      { agent, read, optimistic: sends.optimistic, sessionKey, turnId },
       isWorking || queueSendsNext
     )
   const backgroundTasks = useMobileStructuredBackgroundTasks({
@@ -277,6 +277,7 @@ export function useMobileStructuredAgentSession(
     turnId,
     turnIndicator,
     ...timing,
+    sending,
     sendWithOutcome,
     holdUnconfirmed: sends.holdUnconfirmed,
     cancel: () => void stopPress.track(() => requestCancel()),

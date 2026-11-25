@@ -83,7 +83,7 @@ export function MobileNativeChatView({
   workingStartedAt,
   settledTurns,
   turnJournal = null,
-  sendingItemIds,
+  structuredSending,
   transcriptLoading = false,
   receipts = null,
   actionablePromptIds,
@@ -157,8 +157,8 @@ export function MobileNativeChatView({
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   const { font, lineSpacing } = useNativeChatTextSettings()
 
-  const { data, hasDisplayedMessage } = useMobileNativeChatTransientData(
-    { folded, streaming, pending, imagePreviewsByMessageId },
+  const { data, hasDisplayedMessage, sendingItemIds } = useMobileNativeChatTransientData(
+    { folded, streaming, pending, imagePreviewsByMessageId, structuredSending },
     sendSurfaceId
   )
   const tail = useMobileNativeChatTailFollow({ hasItems: data.length > 0, scopeKey: sendSurfaceId })
@@ -231,7 +231,7 @@ export function MobileNativeChatView({
     workingStartedAt,
     settledTurns,
     turnJournal,
-    sendingItemIds: turnJournal ? sendingItemIds : undefined,
+    sendingItemIds,
     thinking: turnIndicator?.thinking === true,
     activityText: turnIndicator?.activityText ?? null,
     stopping: turnIndicator?.stopping === true,

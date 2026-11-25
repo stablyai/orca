@@ -18,9 +18,9 @@ import type { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion
 import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'
 import type {
   AgentJournalSkillRef,
-  AgentJournalSnapshot,
-  AgentJournalSubmission
+  AgentJournalSnapshot
 } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../src/shared/agent-session/view/structured-agent-session-submissions'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
@@ -36,16 +36,18 @@ import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-cha
 import type { MobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredAccountUsage } from '../usage/use-mobile-structured-account-usage'
 import type { MobileStructuredAsyncQuestionSkip } from './use-mobile-structured-async-questions'
+import type { MobileStructuredSending } from '../transcript/ingestion/use-mobile-structured-sending-item-ids'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
   'contextUsageSupport' | 'accountUsageReported'
 > &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
-    journal: Pick<AgentJournalSnapshot, 'items' | 'submissions'>
+    sending: MobileStructuredSending
+    journal: Pick<AgentJournalSnapshot, 'items'> & { submissions: StructuredAgentSubmission[] }
     /** The composer ring's readout; null until the session reports usage. */
     contextUsage: NativeChatContextUsageSummary | null
-    submissions: readonly AgentJournalSubmission[]
+    submissions: readonly StructuredAgentSubmission[]
     session: MobileNativeChatSession
     asyncQuestionSourceScope: string
     asyncQuestionSkip: MobileStructuredAsyncQuestionSkip | null

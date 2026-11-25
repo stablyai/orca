@@ -5,7 +5,7 @@ import {
   type JournalDomainSubmissionCommit,
   type JournalDomainSubmissionTarget
 } from './journal-domain-submission-records'
-import { writeJournalDomainDispatchAttempt } from './journal-domain-dispatch-attempt'
+import { advanceJournalDomainSubmissionRevision } from './journal-domain-submission-revision'
 import type { JournalWriterOperation } from './journal-writer-command'
 
 /** Stamp provider receipt once per pending handover. */
@@ -51,10 +51,16 @@ export function applyJournalDomainDispatchWritten(
   ) {
     return result
   }
-  writeJournalDomainDispatchAttempt(db, target, {
-    ...attempt,
-    submission: { ...submission, writtenAt: operation.observedAt }
-  })
+  const payload = JSON.stringify({ ...submission, writtenAt: operation.observedAt })
+  advanceJournalDomainSubmissionRevision(db, target, operation.clientMessageId, payload)
+  // Receipt leaves dispatch and request outcomes unchanged.
+  db.prepare(`UPDATE journal_submission_attempts SET payload_json=?
+    WHERE session_id=? AND epoch=? AND message_id=? AND current=1`).run(
+    payload,
+    target.sessionId,
+    target.epoch,
+    operation.clientMessageId
+  )
   const sequence = cursor.sequence + 1
   appendJournalSqlEvent(
     db,

@@ -5,6 +5,10 @@ import {
 } from './mobile-native-chat-render-data'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { orderNativeChatDisplayMessages } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-message-order'
+import {
+  useMobileStructuredSendingItemIds,
+  type MobileStructuredSending
+} from '../ingestion/use-mobile-structured-sending-item-ids'
 
 type Input = Parameters<typeof buildMobileNativeChatTransientData>[0]
 type Preview = { urls: readonly string[]; row: NativeChatMessage }
@@ -110,7 +114,11 @@ export function projectMobileNativeChatTransientData(
   }
 }
 
-export function useMobileNativeChatTransientData(input: Input, scope: string) {
+export function useMobileNativeChatTransientData(
+  input: Input & { structuredSending?: MobileStructuredSending },
+  scope: string
+) {
+  const sendingItemIds = useMobileStructuredSendingItemIds(input.structuredSending)
   const [state, setState] = useState(() => ({
     scope,
     projection: projectMobileNativeChatTransientData(input)
@@ -123,12 +131,17 @@ export function useMobileNativeChatTransientData(input: Input, scope: string) {
     input.pending === previous.pending &&
     input.imagePreviewsByMessageId === previous.imagePreviewsByMessageId
   ) {
-    return state.projection
+    const { data, hasDisplayedMessage } = state.projection
+    return { data, hasDisplayedMessage, sendingItemIds }
   }
   const projection = projectMobileNativeChatTransientData(
     input,
     state.scope === scope ? state.projection : undefined
   )
   setState({ scope, projection })
-  return projection
+  return {
+    data: projection.data,
+    hasDisplayedMessage: projection.hasDisplayedMessage,
+    sendingItemIds
+  }
 }

@@ -10,10 +10,8 @@ import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-
 import type { NativeChatSubagentView } from './subagents/native-chat-open-subagent'
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../shared/agent-session/view/structured-agent-session-submissions'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/transcript/turns/native-chat-terminal-turn'
@@ -27,7 +25,7 @@ export type NativeChatMessageListProps = {
   structuredAttachments?: boolean
   journalItems?: readonly AgentJournalRenderItem[]
   /** With the items, what places each row in its turn (structured lane). */
-  journalSubmissions?: readonly AgentJournalSubmission[]
+  journalSubmissions?: readonly StructuredAgentSubmission[]
   /** The host's newest turn record, which places a live turn whose record is not loaded. */
   journalLatestTurn?: AgentSessionLatestTurn | null
   /** The host's prompts still waiting on the person and its working answer (an older host: none). */

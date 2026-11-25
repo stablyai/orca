@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { AgentJournalSubmission } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { StructuredAgentSubmission } from '../../../../../../shared/agent-session/view/structured-agent-session-submissions'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { useStructuredAgentSendingItemIds } from '../../session/structured/delivery/use-structured-agent-sending-item-ids'
 import { MessageRow } from './NativeChatMessageRow'
@@ -8,8 +8,8 @@ import { NativeChatHostSetupContext } from '../../host-access/native-chat-host-s
 
 const signInView = { signIn: { signingIn: false, signIn: () => {} }, install: null }
 
-function RecordedSteer({ state }: { state: AgentJournalSubmission['dispatchState'] }) {
-  const submissions: AgentJournalSubmission[] = [
+function RecordedSteer({ state }: { state: StructuredAgentSubmission['dispatchState'] }) {
+  const submissions: StructuredAgentSubmission[] = [
     {
       clientMessageId: 'steer',
       fence: 1,

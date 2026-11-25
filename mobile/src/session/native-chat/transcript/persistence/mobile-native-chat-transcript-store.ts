@@ -4,6 +4,7 @@ import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-c
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { encodeNativeChatTranscriptIdentity } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-retention'
 import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
+import type { AgentJournalSubmission } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { decodeDeviceStoreValue } from '../../../../device-store/device-store-value-codec'
 import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-storage/page-device-store'
 import {
@@ -27,8 +28,8 @@ export type StoredTerminalChatTranscript = {
 // Only the journal: what the agent is doing now (K1) comes from the live read.
 export type StoredStructuredJournal = Pick<
   StructuredAgentSessionState,
-  'epoch' | 'cursor' | 'fence' | 'items' | 'submissions' | 'hasOlder'
->
+  'epoch' | 'cursor' | 'fence' | 'items' | 'hasOlder'
+> & { submissions: AgentJournalSubmission[] }
 
 export type StoredStructuredChatTranscript = {
   kind: 'structured'

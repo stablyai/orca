@@ -1,4 +1,5 @@
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
+import type { MobileStructuredReceiptSource } from './use-mobile-structured-sending-item-ids'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   agentSessionContextClearOutstanding,
@@ -35,23 +36,25 @@ const mobileStructuredTranscript = createStructuredQuestionProjection(
 export function useMobileStructuredTranscript(
   {
     agent,
-    state,
+    read: { state, submissionReceipts },
     optimistic,
     sessionKey,
     turnId
   }: {
     agent: string | null
-    state: Pick<
-      StructuredAgentSessionState,
-      | 'epoch'
-      | 'items'
-      | 'submissions'
-      | 'latestTurn'
-      | 'working'
-      | 'hostClock'
-      | 'queuedMessages'
-      | 'writtenAtById'
-    >
+    read: {
+      state: Pick<
+        StructuredAgentSessionState,
+        | 'epoch'
+        | 'items'
+        | 'submissions'
+        | 'latestTurn'
+        | 'working'
+        | 'hostClock'
+        | 'queuedMessages'
+      >
+      submissionReceipts: MobileStructuredReceiptSource
+    }
     optimistic: readonly StructuredAgentSessionOptimisticMessage[]
     sessionKey: string
     turnId: string | null
@@ -123,11 +126,20 @@ export function useMobileStructuredTranscript(
     () => omitNativeChatThreadGoalRows(projectedMessages),
     [projectedMessages]
   )
+  const sending = useMemo(
+    () => ({
+      receipts: submissionReceipts,
+      submissions: state.submissions,
+      pending: transcriptPending
+    }),
+    [state.submissions, submissionReceipts, transcriptPending]
+  )
   return {
     clearing,
     onClearSent,
-    timing: useMobileStructuredAgentTurnTiming(state, turnId, transcriptPending, transcriptItems),
+    timing: useMobileStructuredAgentTurnTiming(state, turnId, transcriptItems),
     messages,
+    sending,
     sendingCards,
     receipts: questionTranscript(transcriptItems).receipts
   }
