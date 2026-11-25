@@ -29,7 +29,10 @@ import {
   type BotItem,
   type BotItemEvent
 } from '../../../../src/shared/bots/bot-items'
-import type { BotItemPendingComments } from '../../../../src/shared/bots/bot-item-pending-comments'
+import {
+  isBotItemReplyingTo,
+  type BotItemPendingComments
+} from '../../../../src/shared/bots/bot-item-pending-comments'
 import {
   isBotItemSentComment,
   type BotItemSentAnswers
@@ -300,8 +303,6 @@ export function MobileBotItemActivity({
           })
         }
       : null
-  // A reply already sent answers the question, before the host's read says so.
-  const answered = pending.shown.some(({ failed }) => !failed)
   return (
     <View>
       {entries.map((entry) =>
@@ -311,7 +312,12 @@ export function MobileBotItemActivity({
             <MobileBotItemCommentCard
               key={entry.key}
               item={item}
-              entry={answered ? { ...entry, waiting: false } : entry}
+              // A reply already sent for this question answers it, before the host's read says so.
+              entry={
+                pending.shown.some((sent) => isBotItemReplyingTo(sent, entry.event.id))
+                  ? { ...entry, waiting: false }
+                  : entry
+              }
               attachments={attachments}
               ref={(node) => {
                 if (node) {
