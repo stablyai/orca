@@ -43,14 +43,16 @@ const PALETTE_CENTRE_SNAP = 0.04
 /**
  * Offset in px along one axis for a 0–1 fraction of the free travel.
  * Both axes measure travel inset from both edges, so a saved fraction means the same spot in any pane size.
+ * Travel starts at `min`: under an open find bar 0 is just below it, so the top stays the top when find closes.
  */
 export function paletteOffsetForRatio(
   ratio: number,
   boundsSize: number,
-  paletteSize: number
+  paletteSize: number,
+  min: number = PALETTE_EDGE_INSET_PX
 ): number {
-  const travel = Math.max(0, boundsSize - paletteSize - PALETTE_EDGE_INSET_PX * 2)
-  return PALETTE_EDGE_INSET_PX + travel * Math.min(1, Math.max(0, ratio))
+  const travel = Math.max(0, boundsSize - paletteSize - PALETTE_EDGE_INSET_PX - min)
+  return min + travel * Math.min(1, Math.max(0, ratio))
 }
 
 /** Inverse of paletteOffsetForRatio; with no travel the fraction is meaningless, so keep `fallback`. */
@@ -58,13 +60,28 @@ export function paletteRatioForOffset(
   offset: number,
   boundsSize: number,
   paletteSize: number,
-  fallback: number
+  fallback: number,
+  min: number = PALETTE_EDGE_INSET_PX
 ): number {
-  const travel = boundsSize - paletteSize - PALETTE_EDGE_INSET_PX * 2
+  const travel = boundsSize - paletteSize - PALETTE_EDGE_INSET_PX - min
   if (travel <= 0) {
     return fallback
   }
-  return Math.min(1, Math.max(0, (offset - PALETTE_EDGE_INSET_PX) / travel))
+  return Math.min(1, Math.max(0, (offset - min) / travel))
+}
+
+/** Fractions the palette shows at now; the vertical one counts from the current top limit. */
+export function paletteShownPosition(layout: PaletteLayout): AnnotatePalettePosition {
+  return {
+    x: paletteRatioForOffset(layout.left, layout.boundsWidth, layout.paletteWidth, 0.5),
+    y: paletteRatioForOffset(
+      layout.top,
+      layout.boundsHeight,
+      layout.paletteHeight,
+      0,
+      layout.topMin
+    )
+  }
 }
 
 /**

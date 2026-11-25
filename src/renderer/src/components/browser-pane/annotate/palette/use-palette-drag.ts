@@ -11,6 +11,7 @@ import {
   paletteKeyMove,
   paletteOffsetForRatio,
   paletteRatioForOffset,
+  paletteShownPosition,
   samePaletteLayout,
   snapPaletteRatio,
   type PaletteLayout
@@ -121,7 +122,7 @@ export function usePaletteDrag({
           prev.y === y &&
           prev.topMin === topMin
         const top = clampPaletteOffset(
-          keepTop ? prev.top : paletteOffsetForRatio(y, boundsHeight, paletteHeight),
+          keepTop ? prev.top : paletteOffsetForRatio(y, boundsHeight, paletteHeight, topMin),
           boundsHeight,
           paletteHeight,
           topMin
@@ -165,12 +166,7 @@ export function usePaletteDrag({
     layout !== null &&
     layout.boundsHeight - layout.paletteHeight - PALETTE_EDGE_INSET_PX - layout.topMin > 0
   const canMove = canMoveX || canMoveY
-  const shownPosition = layout
-    ? {
-        x: paletteRatioForOffset(layout.left, layout.boundsWidth, layout.paletteWidth, 0.5),
-        y: paletteRatioForOffset(layout.top, layout.boundsHeight, layout.paletteHeight, 0)
-      }
-    : position
+  const shownPosition = layout ? paletteShownPosition(layout) : position
 
   const commitPosition = (next: AnnotatePalettePosition, animate: boolean): void => {
     if (animate) {
@@ -185,7 +181,12 @@ export function usePaletteDrag({
         ...layout,
         left: paletteOffsetForRatio(clamped.x, layout.boundsWidth, layout.paletteWidth),
         top: clampPaletteOffset(
-          paletteOffsetForRatio(clamped.y, layout.boundsHeight, layout.paletteHeight),
+          paletteOffsetForRatio(
+            clamped.y,
+            layout.boundsHeight,
+            layout.paletteHeight,
+            topMinRef.current
+          ),
           layout.boundsHeight,
           layout.paletteHeight,
           topMinRef.current
@@ -296,7 +297,7 @@ export function usePaletteDrag({
               ? currentLeft
               : paletteOffsetForRatio(snappedX, boundsWidth, paletteWidth)
           const restTop = clampPaletteOffset(currentTop, boundsHeight, paletteHeight, restTopMin)
-          const nextY = paletteRatioForOffset(restTop, boundsHeight, paletteHeight, 0)
+          const nextY = paletteRatioForOffset(restTop, boundsHeight, paletteHeight, 0, restTopMin)
           setLayout((prev) =>
             prev ? { ...prev, left: restLeft, top: restTop, topMin: restTopMin } : prev
           )

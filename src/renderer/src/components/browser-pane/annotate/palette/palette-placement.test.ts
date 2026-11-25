@@ -26,6 +26,15 @@ describe('annotate palette placement', () => {
     expect(clampPaletteOffset(0, 80, 38, 52)).toBe(52)
   })
 
+  it('saves the highest spot under an open find bar as the top', () => {
+    // A 38px palette in a 400px page, find bar limit at 52px: resting right under it is the top (0)…
+    expect(paletteRatioForOffset(52, 400, 38, 0, 52)).toBe(0)
+    expect(paletteRatioForOffset(354, 400, 38, 0, 52)).toBe(1)
+    expect(paletteOffsetForRatio(0, 400, 38, 52)).toBe(52)
+    // …so once find closes, the same saved place is the page's top inset again.
+    expect(paletteOffsetForRatio(0, 400, 38)).toBe(8)
+  })
+
   it('keeps the same place on the page when the pane resizes', () => {
     const ratio = paletteRatioForOffset(paletteOffsetForRatio(0.8, 600, 200), 600, 200, 0.5)
     expect(ratio).toBeCloseTo(0.8)
