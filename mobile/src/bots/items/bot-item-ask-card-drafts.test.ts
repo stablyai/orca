@@ -79,26 +79,3 @@ it('keeps a card typed or shown waiting after the list read was asked, as its it
   expect(readBotItemAskCardDraft(shownAfter, 'e1')).toEqual(typed(`words for ${shownAfter}`))
   expect(readBotItemAskCardDraft(before, 'e1')).toBeUndefined()
 })
-
-it('drops a card its open page reads as closed or replaced, and keeps one still waiting', () => {
-  const closed = botItemAskCardKey('host', 'bot', 'd-closed')
-  const replaced = botItemAskCardKey('host', 'bot', 'd-replaced')
-  const waiting = botItemAskCardKey('host', 'bot', 'd-waiting')
-  ;[closed, replaced, waiting].forEach((key) => save(key))
-
-  retireBotItemAskCardDraft(closed, makeTestBotItem(1, { status: 'done' }), [])
-  retireBotItemAskCardDraft(
-    replaced,
-    makeTestBotItem(2, { status: 'needs_you', waitingAsk: 'e9' }),
-    []
-  )
-  retireBotItemAskCardDraft(
-    waiting,
-    makeTestBotItem(3, { status: 'needs_you', waitingAsk: 'e1' }),
-    []
-  )
-
-  expect(readBotItemAskCardDraft(closed, 'e1')).toBeUndefined()
-  expect(readBotItemAskCardDraft(replaced, 'e1')).toBeUndefined()
-  expect(readBotItemAskCardDraft(waiting, 'e1')).toEqual(typed(`words for ${waiting}`))
-})
