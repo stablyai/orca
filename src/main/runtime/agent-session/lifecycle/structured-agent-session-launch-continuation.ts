@@ -80,22 +80,24 @@ export async function continueStructuredAgentSessionsAtLaunch(
       }
     }
   )
-  try {
-    const continuation = await continueColdChats(deps, listedKept, onReserved)
-    await rebinds
-    const cuts = [...gone].flatMap((sessionId) => {
-      const replaced = deps.store.replacedRuntime(sessionId)
-      return deps.store.listHeldSessionIds().includes(sessionId) && replaced?.runtime
-        ? [{ sessionId, crashedRuntime: replaced.runtime }]
-        : []
+  const continued = continueColdChats(deps, listedKept, onReserved)
+  // A kept agent that ended before its reattach takes the ordinary crash cut, after the offers.
+  void Promise.all([rebinds, continued.catch(() => null)])
+    .then(async () => {
+      const cuts = [...gone].flatMap((sessionId) => {
+        const replaced = deps.store.replacedRuntime(sessionId)
+        return deps.store.listHeldSessionIds().includes(sessionId) && replaced?.runtime
+          ? [{ sessionId, crashedRuntime: replaced.runtime }]
+          : []
+      })
+      if (cuts.length > 0) {
+        await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
+      }
     })
-    if (cuts.length > 0) {
-      await deps.restartResume.adoptCrashCuts(cuts, deps.startedAt)
-    }
-    return { ...continuation, cutByLastRun: new Set([...continuation.cutByLastRun, ...gone]) }
-  } finally {
-    await rebinds
-  }
+    .catch((error: unknown) => {
+      console.warn('[agent-session] cutting kept chats whose agent ended failed', error)
+    })
+  return continued
 }
 
 async function continueColdChats(

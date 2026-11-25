@@ -1,5 +1,7 @@
 import { DEFAULT_CODEX_REQUEST_TIMEOUT_MS } from '../../app-server/codex-app-server-connection'
 import {
+  keptCodexSpawns,
+  keptCodexThreadIds,
   restateKeptCodexBackgroundWork,
   seedCarriedKeptCodexCommands,
   seedKeptCodexCommandOutput,
@@ -169,16 +171,14 @@ export async function openCodexStructuredSession(
     current()
   }
   let keptTurns: readonly KeptCodexTurn[] = []
+  const keptSpawns = keptRunning ? keptCodexSpawns(opened.threadId, returnedTurns) : []
   if (keptRunning && translator) {
     keptTurns = await waitForPromiseWithSignal(
       seedKeptCodexTurnOrdinals({
         connection,
         translator,
         threadId: opened.threadId,
-        carriedThreadIds: [
-          ...(connection.relay?.openWork()?.turn ?? []),
-          ...(connection.relay?.endedWork()?.turn ?? [])
-        ].flatMap(([threadId]) => threadId ?? []),
+        carriedThreadIds: keptCodexThreadIds(connection.relay, keptSpawns),
         timeoutMs: deps.requestTimeoutMs ?? DEFAULT_CODEX_REQUEST_TIMEOUT_MS,
         onError: (threadId, error) =>
           deps.logger?.warn('numbering a kept turn from history failed', {
@@ -273,7 +273,8 @@ export async function openCodexStructuredSession(
     session.backgroundTasks,
     keptTurns,
     connection.relay?.endedWork()?.command,
-    connection.relay?.openWork()?.command
+    connection.relay?.openWork()?.command,
+    keptSpawns
   )
   connection.relay?.releaseOutput()
   current()

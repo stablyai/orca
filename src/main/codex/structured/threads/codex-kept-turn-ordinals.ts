@@ -106,6 +106,39 @@ export async function seedKeptCodexTurnOrdinals(input: {
   return fetched
 }
 
+/** A subagent spawn (or other collab call) in a kept thread's history, from any of its turns. */
+export type KeptCodexSpawn = { threadId: string; turnId: string; item: CodexThreadItem }
+
+/** The thread's collab calls across every turn it returned: a subagent spawned turns ago may still run. */
+export function keptCodexSpawns(threadId: string, turns: readonly unknown[]): KeptCodexSpawn[] {
+  return turns.flatMap((value) => {
+    const turn = readRecord(value)
+    const items = typeof turn.id === 'string' && Array.isArray(turn.items) ? turn.items : []
+    return items.flatMap((entry) => {
+      const item = readCodexThreadItem(entry)
+      return item?.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE
+        ? [{ threadId, turnId: String(turn.id), item }]
+        : []
+    })
+  })
+}
+
+/**
+ * Threads beside the chat's own whose latest turn may replay: those the daemon carried a turn of
+ * (open or ended), then every spawn's subagent, newest first, found even when nothing was carried.
+ */
+export function keptCodexThreadIds(
+  relay: Pick<NonNullable<CodexAppServerConnection['relay']>, 'openWork' | 'endedWork'> | undefined,
+  spawns: readonly KeptCodexSpawn[]
+): string[] {
+  return [
+    ...[...(relay?.openWork()?.turn ?? []), ...(relay?.endedWork()?.turn ?? [])].flatMap(
+      ([threadId]) => threadId ?? []
+    ),
+    ...spawns.toReversed().flatMap(({ item }) => readReceiverThreadIds(item))
+  ]
+}
+
 /** Each thread's latest turn as Codex reported it at reattach. */
 export type KeptCodexTurn = {
   threadId: string
@@ -193,11 +226,20 @@ export function restateKeptCodexBackgroundWork(
   tracker: Pick<CodexBackgroundTaskTracker, 'observe' | 'publishChildWork'>,
   turns: readonly KeptCodexTurn[],
   ended: readonly (readonly string[])[] = [],
-  open: readonly (readonly string[])[] = []
+  open: readonly (readonly string[])[] = [],
+  spawns: readonly KeptCodexSpawn[] = []
 ): void {
-  if (turns.length === 0 && open.length === 0) {
+  if (turns.length === 0 && open.length === 0 && spawns.length === 0) {
     return
   }
+  // Spawns announced before the reattach register their subagents, so Stop still reaches them.
+  const announce = ({ threadId, turnId, item }: KeptCodexSpawn) =>
+    tracker.observe({
+      method: item.status === 'inProgress' ? 'item/started' : 'item/completed',
+      threadId,
+      params: { turnId, item }
+    })
+  spawns.forEach(announce)
   const restated = new Set<string>()
   const endedHere = new Set(ended.map(([threadId, itemId]) => `${threadId}\u0000${itemId}`))
   for (const { threadId, turnId, status, items } of turns) {
@@ -206,6 +248,9 @@ export function restateKeptCodexBackgroundWork(
       tracker.observe({ method: 'turn/started', threadId, params: { turn } })
     }
     for (const item of items) {
+      if (item.type === CODEX_COLLAB_AGENT_TOOL_CALL_ITEM_TYPE) {
+        announce({ threadId, turnId, item })
+      }
       const endedDetached = endedHere.has(`${threadId}\u0000${item.id}`)
       const carried = openHere(open, threadId, item.id)
       if (

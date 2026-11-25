@@ -428,6 +428,31 @@ describe('codex rows across a reattach', () => {
     expect(ordinals.ordinalFor('older', 'turn-o', 'o2')).toBe(1)
   })
 
+  it('registers a subagent spawned before the reattach, so Stop still reaches its running turn', () => {
+    const tracker = new CodexBackgroundTaskTracker('main')
+    const spawn = {
+      threadId: 'main',
+      turnId: 'turn-1',
+      item: {
+        type: 'collabAgentToolCall',
+        id: 'x',
+        tool: 'spawnAgent',
+        status: 'completed',
+        receiverThreadIds: ['sub']
+      }
+    }
+    restateKeptCodexBackgroundWork(
+      tracker,
+      [{ threadId: 'sub', turnId: 'turn-s', status: 'inProgress', items: [] }],
+      [],
+      [],
+      [spawn]
+    )
+    expect(tracker.subagentStopTargets(['sub']).turns).toEqual([
+      { threadId: 'sub', turnId: 'turn-s' }
+    ])
+  })
+
   it('restates a command that ended while no app was attached, so its replayed end settles it', () => {
     const tracker = new CodexBackgroundTaskTracker('main')
     const turn = {
@@ -485,7 +510,7 @@ describe('codex rows across a reattach', () => {
     ])
   })
 
-  it("numbers a cut message's continuation after the message itself, so it never takes the saved row", () => {
+  it("keeps a cut message's number and gives its continuation none, so no later message moves", () => {
     const ordinals = new CodexTurnOrdinals()
     // History at reattach has the user's message only: the message still streaming isn't in it.
     ordinals.ordinalFor('t', 'turn-a', 'user-1')
@@ -497,8 +522,10 @@ describe('codex rows across a reattach', () => {
         ordinals
       })
     const continuation = identity('relay:r-1-abc:6872:msg-a')
-    expect(identity('msg-a')).toEqual({ ...continuation, ordinal: 1 })
-    expect(continuation).toMatchObject({ ordinal: 2 })
+    expect(identity('msg-a')).toMatchObject({ ordinal: 1 })
+    expect(continuation).not.toHaveProperty('ordinal')
+    // The next message numbers as Codex's history will after another restart (no gap at 2).
+    expect(identity('msg-b')).toMatchObject({ ordinal: 2 })
   })
 
   it("restores a carried command's row from its saved body when Codex's history leaves it out", async () => {

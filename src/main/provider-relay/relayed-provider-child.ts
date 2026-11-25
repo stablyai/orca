@@ -9,7 +9,7 @@ import type {
 } from '../daemon/protocol/daemon-provider-relay-protocol'
 import { RELAY_WRITE_CHUNK_CHARS } from '../daemon/protocol/daemon-provider-relay-protocol'
 import type { ProviderRelayChannel } from './provider-relay-channel'
-import { RelayInputBackoff, RELAY_INPUT_FULL } from './provider-relay-input-backoff'
+import { sendRelayedInput, type RelayState } from './relayed-provider-input'
 import { RelayedProviderOutput, type ProviderRelayAckFloor } from './relayed-provider-output'
 import type { ProviderRelayRecordTaking } from './relayed-provider-consumption'
 import {
@@ -22,8 +22,6 @@ import {
 const PREAMBLE_WAIT_MS = 10_000
 /** A reader paused this long past an exit (a stuck journal drain) no longer holds the exit back. */
 const EXIT_AFTER_OUTPUT_WAIT_MS = 10_000
-
-type RelayState = 'attaching' | 'attached' | 'reattaching' | 'detached' | 'exited'
 
 export type RelayedProviderChildOptions = {
   channel: ProviderRelayChannel
@@ -241,29 +239,16 @@ export class RelayedProviderChild extends EventEmitter implements ProviderChild 
     )
   }
 
-  private async send(data: string): Promise<void> {
-    const backoff = new RelayInputBackoff()
-    for (;;) {
-      if (this.state === 'detached') {
-        return
-      }
-      if (this.state === 'exited') {
-        throw Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })
-      }
-      try {
-        await this.options.channel.write(this.relayId, data)
-        return
-      } catch (error) {
-        if (!(error instanceof Error) || !error.message.includes(RELAY_INPUT_FULL)) {
-          if (this.state === 'reattaching' || this.state === 'attaching') {
-            await Promise.all([this.ready.catch(() => {}), this.reattached])
-            continue
-          }
-          throw error
-        }
-        await backoff.wait()
-      }
-    }
+  private send(data: string): Promise<void> {
+    return sendRelayedInput(
+      {
+        state: () => this.state,
+        ready: () => this.ready,
+        reattached: () => this.reattached,
+        write: (chunk) => this.options.channel.write(this.relayId, chunk)
+      },
+      data
+    )
   }
 
   /** The daemon detached us when the stream dropped; the same daemon resumes from our cursor. */
