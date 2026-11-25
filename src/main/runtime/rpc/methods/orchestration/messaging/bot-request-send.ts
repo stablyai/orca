@@ -69,11 +69,12 @@ export async function sendToBot(
     messageId?: string
     /** The recipient isn't woken until the caller runs `nudge`: an item it names is made first. */
     holdNudge?: boolean
+    /** `item add --for --from-item`: the request the named item was made for, which this one joins. */
+    fromItemKey?: string
   } & Pick<SendBotRequestArgs, 'senderSnapshot' | 'pairedSender' | 'images' | 'onAdmitted'>
 ): Promise<{ receipt: unknown; nudge: () => void } | null> {
   const { runtime } = context
   const db = runtime.getOrchestrationDb()
-  const senderRunId = mail.routing.run?.id
   const reach = botAddressReach(runtime, db, mail.to, mail.sender)
   const found = await receivingBot(runtime, reach, mail.to)
   if (!found) {
@@ -96,8 +97,8 @@ export async function sendToBot(
     db,
     ...mail,
     receiving,
-    acting,
-    senderRunId,
+    acting: mail.fromItemKey ? { ...acting, fromItemKey: mail.fromItemKey } : acting,
+    senderRunId: mail.routing.run?.id,
     senderPaneKey: mail.sender.paneKey ?? undefined,
     recordMutationReceipt: context.recordMutationReceipt,
     ...(mail.holdNudge ? { held } : {})
@@ -147,7 +148,7 @@ async function admitBotRequestMail(
   asked: Pick<BotRequestRecord, 'askedInConversation'>
 ): Promise<unknown> {
   const { runtime, db, params, receiving, acting } = args
-  const chain = botRequestChain(db, acting.sessionId, acting.turn)
+  const chain = botRequestChain(db, acting.sessionId, acting.turn, acting)
   /** Checked now and again just before storing, after every wait, against the bot as it is then. */
   const check = () => {
     const bot = runtime.bots.list().find((entry) => entry.id === receiving.bot.id)

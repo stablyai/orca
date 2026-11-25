@@ -142,6 +142,8 @@ export type ActingSender = {
   triggeredBy?: AutomationTriggeredBy | null
   /** A bot's worker's Dispatch: it acts for its conversation's record, not another asker's newer turn. */
   worker?: string
+  /** `item add --for --from-item`: the request the named item was made for, which the send joins. */
+  fromItemKey?: string
 }
 
 const OWNER_TURN: BotActingTurn = {

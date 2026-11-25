@@ -37,6 +37,8 @@ export type BotItemAddInput = {
   startedIn?: string
   /** The request the adding turn acted on, kept on its `made` event. */
   origin?: BotItemOrigin
+  /** `--from-item`: the item whose work this one comes from, kept on its `made` event. */
+  fromItem?: { uid: string }
 }
 
 export type BotItemSetInput = {

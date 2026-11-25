@@ -191,20 +191,34 @@ export class BotItemsReads extends BotItemsTables {
 
   /** The request each item's `made` event records; none for items made before Orca recorded it. */
   originsOf(uids: readonly string[]): Record<string, BotItemOrigin> {
+    return this.madeFacts(uids).origins
+  }
+
+  /** Where each item's `made` event says it came from: its request, and the item `--from-item` named. */
+  private madeFacts(uids: readonly string[]): {
+    origins: Record<string, BotItemOrigin>
+    fromItems: Record<string, { uid: string }>
+  } {
     const origins: Record<string, BotItemOrigin> = {}
+    const fromItems: Record<string, { uid: string }> = {}
     for (const row of this.db
       .prepare(
-        `SELECT item_uid, json_extract(data, '$.origin') AS origin FROM item_events
+        `SELECT item_uid, json_extract(data, '$.origin') AS origin,
+           json_extract(data, '$.fromItem.uid') AS from_item FROM item_events
           WHERE id IN (SELECT MIN(id) FROM item_events
             WHERE item_uid IN (SELECT value FROM json_each(?)) GROUP BY item_uid)`
       )
       .all(JSON.stringify(uids))) {
+      const uid = text(row, 'item_uid')
       const origin = originOf(json(row, 'origin'))
       if (origin) {
-        origins[text(row, 'item_uid')] = origin
+        origins[uid] = origin
+      }
+      if (typeof row.from_item === 'string' && row.from_item) {
+        fromItems[uid] = { uid: row.from_item }
       }
     }
-    return origins
+    return { origins, fromItems }
   }
 
   /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits,
@@ -222,6 +236,7 @@ export class BotItemsReads extends BotItemsTables {
     othersLast: Record<string, number>
     waitingAsks: Record<string, string>
     origins: Record<string, BotItemOrigin>
+    fromItems: Record<string, { uid: string }>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -273,7 +288,7 @@ export class BotItemsReads extends BotItemsTables {
       waits,
       othersLast,
       waitingAsks,
-      origins: this.originsOf(uids)
+      ...this.madeFacts(uids)
     }
   }
 }

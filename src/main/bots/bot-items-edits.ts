@@ -72,7 +72,8 @@ export class BotItemsEdits extends BotItemsReads {
         ...(input.doneMeans !== undefined ? { doneMeans: input.doneMeans } : {}),
         ...(input.links.length > 0 ? { links: input.links.map(linkWords) } : {}),
         ...(input.startedIn ? { startedIn: input.startedIn } : {}),
-        ...(input.origin ? { origin: input.origin } : {})
+        ...(input.origin ? { origin: input.origin } : {}),
+        ...(input.fromItem ? { fromItem: input.fromItem } : {})
       },
       false,
       now

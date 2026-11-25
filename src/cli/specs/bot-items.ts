@@ -17,7 +17,7 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
     hidden: true,
     summary: 'Track a deliverable or a decision for your owner as an item',
     usage:
-      'orca bot item add --title <text> [--description <markdown>] [--done-means <text>] [--status planned|in-progress] [--link <ref>]... [--for bot:<name>] [--chat <id>] [--json]',
+      'orca bot item add --title <text> [--description <markdown>] [--done-means <text>] [--status planned|in-progress] [--link <ref>]... [--for bot:<name>] [--chat <id>] [--from-item <id>] [--json]',
     allowedFlags: [
       ...WRITE_FLAGS,
       'title',
@@ -28,14 +28,16 @@ export const BOT_ITEM_COMMAND_SPECS: CommandSpec[] = [
       'status',
       'link',
       'for',
-      'chat'
+      'chat',
+      'from-item'
     ],
     repeatableFlags: ['link'],
     notes: [
       ...ITEM_NOTES,
       'Before adding an item about a PR, issue or thread, run `orca bot item list --link <it>`; if one already covers it, update that item.',
       'For work already underway, --link its workers (dispatch:<ctx_id>) and its PR by full URL when known; workers started later with `worker-start --item <n>` link themselves.',
-      '--for bot:<name> makes the item for another bot, in its Home Chat or --chat; --chat alone makes it in another of your own chats. Either is sent as a request, carrying whom your turn is for, and a refused request makes no item.'
+      '--for bot:<name> makes the item for another bot, in its Home Chat or --chat; --chat alone makes it in another of your own chats. Either is sent as a request, carrying whom your turn is for, and a refused request makes no item.',
+      "--from-item <id> names one of your own items this one's work comes from: the new item, and with --for its request, join that item's request (origin.rootKey), so a report's follow-up lists with it."
     ]
   },
   {

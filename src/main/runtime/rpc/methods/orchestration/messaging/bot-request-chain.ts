@@ -54,23 +54,32 @@ function recordedStart(record: string): BotRequestStart {
   }
 }
 
+/** An earlier request the chain joins in place of its own. */
+export type BotRequestJoins = {
+  /** `item add --from-item`: the request the named item was made for. Only the key is joined; who
+   *  started the request, when and their words stay this chain's own. */
+  fromItemKey?: string
+}
+
 /** Read from Orca's records of the waking requests, never from the sender's text. */
 export function botRequestChain(
   db: OrchestrationDb,
   sessionId: string | null,
-  turn: ChainTurn
+  turn: ChainTurn,
+  joins: BotRequestJoins = {}
 ): BotRequestChain {
+  const { fromItemKey } = joins
   const turnKey = sessionId && turn.rootItemId ? `${sessionId}:${turn.rootItemId}` : null
   const parents = turn.requestIds.flatMap((id) => {
     const row = db.getBotRequest(id)
     return row ? [row] : []
   })
   if (parents.length === 0) {
-    return { depth: 1, rootKey: turnKey, turnKey, start: turnStart(sessionId, turn) }
+    return { depth: 1, rootKey: fromItemKey ?? turnKey, turnKey, start: turnStart(sessionId, turn) }
   }
   return {
     depth: Math.max(...parents.map((row) => row.depth)) + 1,
-    rootKey: parents[0].root_key,
+    rootKey: fromItemKey ?? parents[0].root_key,
     turnKey,
     start: recordedStart(parents[0].record)
   }
@@ -87,9 +96,10 @@ export function botRequestOrigin(db: OrchestrationDb, messageId: string): BotIte
 export function botTurnRequestOrigin(
   db: OrchestrationDb,
   sessionId: string,
-  turn: ChainTurn
+  turn: ChainTurn,
+  joins: BotRequestJoins = {}
 ): BotItemOrigin | null {
-  const { rootKey, start } = botRequestChain(db, sessionId, turn)
+  const { rootKey, start } = botRequestChain(db, sessionId, turn, joins)
   return rootKey ? { rootKey, ...start } : null
 }
 

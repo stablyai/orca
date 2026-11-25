@@ -19,9 +19,11 @@ import { readBotTurn } from './orchestration/messaging/bot-recipient'
 import { botRequestOrigin, botTurnRequestOrigin } from './orchestration/messaging/bot-request-chain'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
+import type { BotItemsRemote } from '../../../bots/bot-items-ops'
 import {
   botNamed,
   parseItemLink,
+  resolveItem,
   writeResult,
   writerOf,
   type BotItemWriteResult
@@ -35,6 +37,7 @@ export async function addItem(
   const writer = writerOf(params, context)
   const store = runtime.botItems.store()
   const typed = (params.links ?? []).map(parseItemLink)
+  const from = params.fromItem ? await fromItemOf(store, params.fromItem, writer.bot.id) : null
   const startedIn = await originUrl(context, writer.sessionId)
   const links = uniqueBotItemLinks(startedIn ? withOrigin(typed, startedIn) : typed)
   const target = params.forBot
@@ -46,10 +49,11 @@ export async function addItem(
     ...(params.doneMeans !== undefined ? { doneMeans: params.doneMeans } : {}),
     status: params.status ?? 'planned',
     links,
-    ...(startedIn ? { startedIn } : {})
+    ...(startedIn ? { startedIn } : {}),
+    ...(from ? { fromItem: { uid: from.uid } } : {})
   }
   if (target.id === writer.bot.id && params.chat === undefined) {
-    const origin = await turnRequestOrigin(context, writer.sessionId)
+    const origin = await turnRequestOrigin(context, writer.sessionId, from?.rootKey)
     const outcome = await store.add(
       {
         ...fields,
@@ -71,7 +75,8 @@ export async function addItem(
       ? await botChatAddress(runtime, `bot:${target.name}`, params.chat)
       : `bot:${target.name}`,
     messageId,
-    ...botItemRequestMail({ uid, ...fields, doneMeans: params.doneMeans ?? null })
+    ...botItemRequestMail({ uid, ...fields, doneMeans: params.doneMeans ?? null }),
+    ...(from?.rootKey ? { fromItemKey: from.rootKey } : {})
   })
   try {
     const chatId = runtime.botItems.chatRootOf(sent.landed)
@@ -124,16 +129,33 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
  *  send's chain; none when the turn can't be read, which never stops the add. */
 async function turnRequestOrigin(
   context: RpcContext,
-  sessionId: string
+  sessionId: string,
+  fromItemKey: string | undefined
 ): Promise<BotItemOrigin | null> {
   try {
     const db = context.runtime.getOrchestrationDb()
     const { turn } = await readBotTurn(context.runtime, db, sessionId)
-    return botTurnRequestOrigin(db, sessionId, turn)
+    return botTurnRequestOrigin(db, sessionId, turn, { fromItemKey })
   } catch (error) {
     console.warn('[bots] could not read the request an item came from', error)
     return null
   }
+}
+
+/** `--from-item`: one of the calling bot's own items, and the request it was made for (none for one
+ *  made before Orca recorded it). Another bot's item is refused, so no bot files its work under a
+ *  request it never served. */
+export async function fromItemOf(
+  store: Pick<BotItemsRemote, 'byNumber' | 'get' | 'originsOf'>,
+  ref: string,
+  botId: string
+): Promise<{ uid: string; rootKey?: string }> {
+  const item = await resolveItem(store, ref)
+  if (item.ownerBotId !== botId) {
+    throw new BotItemError('invalid_argument', '--from-item names one of your own items.')
+  }
+  const rootKey = (await store.originsOf([item.uid]))[item.uid]?.rootKey
+  return rootKey ? { uid: item.uid, rootKey } : { uid: item.uid }
 }
 
 /** The typed links plus the origin's, unless one names the same page (a Slack link may add
@@ -158,6 +180,8 @@ export async function sendItemRequest(
     messageId: string
     subject: string
     body: string
+    /** `--from-item`: the request the mail joins in place of its turn's. */
+    fromItemKey?: string
   }
 ): Promise<{ landed: string; nudge: () => void }> {
   const { runtime } = context
@@ -175,7 +199,8 @@ export async function sendItemRequest(
       sender: caller,
       routing: { run: undefined },
       messageId: mail.messageId,
-      holdNudge: true
+      holdNudge: true,
+      ...(mail.fromItemKey ? { fromItemKey: mail.fromItemKey } : {})
     }
   )
   const message = sent ? db.getMessageById(mail.messageId) : undefined

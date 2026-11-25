@@ -49,7 +49,10 @@ export function writerOf(params: { callerSessionId?: string }, context: RpcConte
 }
 
 /** The item a number (as the CLI shows it) or uid names on this host. */
-export async function resolveItem(store: BotItemsRemote, ref: string): Promise<BotItemRecord> {
+export async function resolveItem(
+  store: Pick<BotItemsRemote, 'byNumber' | 'get'>,
+  ref: string
+): Promise<BotItemRecord> {
   const trimmed = ref.trim()
   const item = /^\d+$/.test(trimmed)
     ? await store.byNumber(Number(trimmed))
