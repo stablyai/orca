@@ -1,33 +1,23 @@
 import type { BranchContext } from './worktree-agent-branch-context'
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { useShallow } from 'zustand/react/shallow'
-import { shallow } from 'zustand/shallow'
 import { useAppStore } from '@/store/index'
 import { agentAttentionTurnAt } from '@/attention/agent-attention-acknowledgement'
-import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/lib/window-activity/use-now'
-import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
-import {
-  selectSendTargetControlInputs,
-  selectSendTargetInputs
-} from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
 import { useHostRootKeys } from './use-worktree-agent-host-roots'
 import { KeyedSummary } from './worktree-card-agent-keyed-summary'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
-import { recomputeOn } from '@/lib/recompute-on'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
 import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { useTranslate } from '@/i18n/use-translate'
-import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
-import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
+import { useWorktreeSendTargets } from './use-worktree-send-targets'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
 import type { AgentChildren } from '@/store/slices/agent-status/projection/agent-row-display-model'
@@ -69,54 +59,13 @@ function WorktreeCardAgentsBody({
   hostFiltered,
   className
 }: Props & { roots: readonly string[]; hostFiltered: boolean }) {
-  const t = useTranslate(),
-    languageRevision = useUiLanguageRevision()
+  const t = useTranslate()
   const display = useWorktreeAgentDisplay()
   const expansion = useWorktreeAgentExpansionState(worktreeId, executionHostId)
   const focusedPaneKey = useFocusedAgentPaneKey(worktreeId)
   const onActivate = useWorktreeAgentActivation(worktreeId, executionHostId)
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
-  const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
-  const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
-  const inputs = useAppStoreWithHostStatuses(
-    (s, statuses) => selectSendTargetInputs(s, statuses, worktreeId),
-    shallow
-  )
-  const targets = useMemo(
-    () =>
-      recomputeOn([languageRevision], () => {
-        if (!control.targetMode) {
-          return null
-        }
-        return new Map(
-          deriveRunningAgentSendTargets(inputs, worktreeId).map((target) => [
-            target.paneKey,
-            control.targetMode?.status === 'sending' &&
-            control.targetMode.sendingPaneKey === target.paneKey
-              ? {
-                  status: 'sending' as const,
-                  disabledReason: t(
-                    'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
-                    'Sending...'
-                  )
-                }
-              : {
-                  status: target.status,
-                  ...(target.disabledReason
-                    ? { disabledReason: agentSendDisabledReasonLabel(target.disabledReason) }
-                    : {})
-                }
-          ])
-        )
-      }),
-    [control, inputs, worktreeId, t, languageRevision]
-  )
-  const onSend = useCallback(
-    (key: string) => {
-      void send(key)
-    },
-    [send]
-  )
+  const { targets, onSend } = useWorktreeSendTargets(worktreeId)
   const { toggleLineageParent: toggleLineage, toggleIdleChildGroup: toggleIdle } = expansion
   const now = useNow(30_000)
   const context = useMemo(

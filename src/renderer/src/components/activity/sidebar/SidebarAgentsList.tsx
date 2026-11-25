@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { SidebarActivityBadge } from './sidebar-activity-badge'
@@ -13,6 +13,8 @@ import { useAgentPaneThreads } from '@/components/activity/threads/use-agent-pan
 import { getFocusedAgentPaneKeyForWorktree } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
 import '@/components/activity/thread-list/activity-thread-controls'
 import { ActivityThreadOptionsMenu } from '@/components/activity/thread-list/activity-thread-options-menu'
+import { ActivityThreadSendTargetsContext } from '@/components/activity/thread-list/activity-thread-send-targets'
+import { useWorktreeSendTargets } from '@/components/sidebar/workspace-card/activity/use-worktree-send-targets'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
@@ -109,6 +111,12 @@ function SidebarAgentsListBody({
   const showChildAgents = useAppStore((s) => s.agentsShowChildAgents)
   const setShowChildAgents = useAppStore((s) => s.setAgentsShowChildAgents)
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
+  const sendTargetWorktreeId = useAppStore((s) => s.agentSendPopoverTargetMode?.worktreeId ?? null)
+  const { targets: sendTargets, onSend } = useWorktreeSendTargets(sendTargetWorktreeId)
+  const sendTargetsContext = useMemo(
+    () => (sendTargets ? { targets: sendTargets, onSend } : null),
+    [sendTargets, onSend]
+  )
 
   const handleShowSearchChange = useCallback(
     (visible: boolean) => {
@@ -193,39 +201,41 @@ function SidebarAgentsListBody({
           />
         </div>
       ) : null}
-      <ActivityThreadListPane
-        activityFilterInputRef={activityFilterInputRef}
-        query={query}
-        onQueryChange={setQuery}
-        groupBy={groupBy}
-        onGroupByChange={setGroupBy}
-        readFilter={readFilter}
-        onReadFilterChange={setReadFilter}
-        compactMode={compactMode}
-        showChildAgents={showChildAgents}
-        hasUnreadThreads={hasUnreadThreads}
-        onCompactModeChange={setCompactMode}
-        onShowChildAgentsChange={setShowChildAgents}
-        onMarkAllThreadsRead={markAllThreadsRead}
-        hasCompletedThreads={hasCompletedThreads}
-        onClearCompleted={handleClearCompleted}
-        visibleThreadGroups={visibleThreadGroups}
-        visibleThreadCount={visibleThreads.length}
-        selectedPaneKey={effectiveSelectedPaneKey}
-        onSelectThread={selectThread}
-        onJumpToWorkspace={jumpToWorkspace}
-        onMarkThreadRead={markThreadRead}
-        onMarkThreadUnread={markThreadUnread}
-        onMarkThreadsRead={markThreadsRead}
-        onMarkThreadsUnread={markThreadsUnread}
-        canJumpToWorkspace={canJumpToWorkspace}
-        allowMarkUnreadWhenSelected
-        showJumpAction={false}
-        showFilterControls={false}
-        showOptionsMenu={false}
-        showInlineActions={false}
-        scrollTopRef={scrollTopRef}
-      />
+      <ActivityThreadSendTargetsContext.Provider value={sendTargetsContext}>
+        <ActivityThreadListPane
+          activityFilterInputRef={activityFilterInputRef}
+          query={query}
+          onQueryChange={setQuery}
+          groupBy={groupBy}
+          onGroupByChange={setGroupBy}
+          readFilter={readFilter}
+          onReadFilterChange={setReadFilter}
+          compactMode={compactMode}
+          showChildAgents={showChildAgents}
+          hasUnreadThreads={hasUnreadThreads}
+          onCompactModeChange={setCompactMode}
+          onShowChildAgentsChange={setShowChildAgents}
+          onMarkAllThreadsRead={markAllThreadsRead}
+          hasCompletedThreads={hasCompletedThreads}
+          onClearCompleted={handleClearCompleted}
+          visibleThreadGroups={visibleThreadGroups}
+          visibleThreadCount={visibleThreads.length}
+          selectedPaneKey={effectiveSelectedPaneKey}
+          onSelectThread={selectThread}
+          onJumpToWorkspace={jumpToWorkspace}
+          onMarkThreadRead={markThreadRead}
+          onMarkThreadUnread={markThreadUnread}
+          onMarkThreadsRead={markThreadsRead}
+          onMarkThreadsUnread={markThreadsUnread}
+          canJumpToWorkspace={canJumpToWorkspace}
+          allowMarkUnreadWhenSelected
+          showJumpAction={false}
+          showFilterControls={false}
+          showOptionsMenu={false}
+          showInlineActions={false}
+          scrollTopRef={scrollTopRef}
+        />
+      </ActivityThreadSendTargetsContext.Provider>
       {optionsTarget
         ? createPortal(
             <ActivityThreadOptionsMenu
