@@ -37,6 +37,7 @@ describe('standing instructions on every start', () => {
       aug: true,
       kilo: true,
       'mimo-code': true,
+      muse: true,
       droid: true,
       'qwen-code': true,
       cline: true,
