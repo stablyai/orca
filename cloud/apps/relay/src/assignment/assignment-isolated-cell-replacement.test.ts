@@ -354,6 +354,64 @@ describe('re-placing a host off a cell isolated for a roll', () => {
     }
   })
 
+  // A retire that failed after its isolate leaves the cell migration-only, draining and stamped
+  // past the bound: its 4503s must not re-pin a host that keeps dialling (production c23, 11-24).
+  it('moves a stranded host off a cell whose roll stamp is past the bound', async () => {
+    const { store, heartbeat, isolateForRoll, setNow } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await isolateForRoll(first.cellId)
+
+    const stale = START_MS + 2 * 60 * 60_000 + 1
+    setNow(stale)
+    for (const cell of CELLS) await heartbeat(cell, stale)
+    const pinned = await store.assign(IDENTITY, 'us-central1')
+    expect(pinned).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch })
+
+    // That grant had ample time to attach and produced nothing live.
+    const retry = stale + 61_000
+    setNow(retry)
+    for (const cell of CELLS) await heartbeat(cell, retry)
+    const moved = await store.assign(IDENTITY, 'us-central1')
+    expect(moved.cellId).not.toBe(first.cellId)
+    expect(moved.assignmentEpoch).toBe(first.assignmentEpoch + 1)
+  })
+
+  it('keeps a host with live activity on a cell whose roll stamp is past the bound', async () => {
+    const { store, database, heartbeat, isolateForRoll, setNow } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await isolateForRoll(first.cellId)
+
+    const stale = START_MS + 2 * 60 * 60_000 + 1
+    setNow(stale)
+    for (const cell of CELLS) await heartbeat(cell, stale)
+    await store.assign(IDENTITY, 'us-central1')
+    // A live claimed control proves the cell still serves this host.
+    await database.query(
+      `INSERT INTO relay_assignment_activity_leases
+       (user_id, relay_host_id, activity_id, activity_kind, cell_id,
+        request_units, expires_at, updated_at)
+       VALUES (?, ?, ?, 'control', ?, 1, ?, ?)`,
+      [IDENTITY.userId, IDENTITY.relayHostId, 'control:live-1', first.cellId, stale + 600_000, stale]
+    )
+    const retry = stale + 61_000
+    setNow(retry)
+    for (const cell of CELLS) await heartbeat(cell, retry)
+    const kept = await store.assign(IDENTITY, 'us-central1')
+    expect(kept).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch })
+  })
+
+  it('keeps a retrying host on an unstamped migration-only cell', async () => {
+    const { store, heartbeat, park, setNow } = await setup()
+    const first = await store.assign(IDENTITY, 'us-central1')
+    await park(first.cellId, 'migration-only')
+
+    const retry = START_MS + 61_000
+    setNow(retry)
+    for (const cell of CELLS) await heartbeat(cell, retry)
+    const kept = await store.assign(IDENTITY, 'us-central1')
+    expect(kept).toMatchObject({ cellId: first.cellId, assignmentEpoch: first.assignmentEpoch })
+  })
+
   // Why its own site: the drain-return lane's service time is either this lock or
   // the inventory, and only a separate p99 can say which.
   it('samples the regional target rows it locks under their own hold site', async () => {
