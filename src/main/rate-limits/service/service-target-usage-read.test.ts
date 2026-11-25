@@ -126,3 +126,16 @@ it('fails a WSL read closed off Windows but leaves a Windows distro-less target 
   expect(mac.claude?.reading?.session).toBeNull()
   expect(claudeTargets).toHaveLength(1)
 })
+
+it('reads only the providers it knows', async () => {
+  const service = new RateLimitService()
+  const probed: unknown[] = []
+  service.setCodexHomePathResolver(async (target) => {
+    probed.push(target)
+    return { kind: 'skip' }
+  })
+  const untrusted: unknown = ['grok']
+  const providers = Array.isArray(untrusted) ? untrusted : []
+  await service.readUsageForRuntimeTarget(ubuntu, providers, () => ({ claude: null, codex: null }))
+  expect(probed).toEqual([])
+})
