@@ -882,6 +882,7 @@
         "widthDescription": "How wide messages and the message box can grow in a wide pane.",
         "resetAppearance": "Reset chat appearance",
         "resetDescription": "Restore the defaults above.",
+        "resetKeyword": "reset",
         "comfortable": "Comfortable",
         "wide": "Wide",
         "full": "Full",
@@ -26746,7 +26747,8 @@
       "bots": "Bots"
     },
     "searchKeyword": {
-      "worktreePaletteFormerTitle": "Switch worktree"
+      "worktreePaletteFormerTitle": "Switch worktree",
+      "quickCommandsMenuFormerTitle": "Toggle Quick Commands menu"
     }
   },
   "gpuFallback": {
