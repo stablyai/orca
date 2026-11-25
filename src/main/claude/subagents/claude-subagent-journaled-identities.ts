@@ -193,6 +193,11 @@ function read(journal: Pick<ClaudeLinkageJournal, 'visitItemsWithLinkage'>): Rea
         if (block.type === 'subagent' && block.background === true) {
           reading.backgroundSubagents.add(block.id)
         }
+        // The saved roster row names its launching call, so a reattach maps a subagent that saved
+        // no row of its own yet; the subagent's own rows, where saved, name it too.
+        if (block.type === 'subagent' && block.run && !reading.canonicalByToolUse.has(block.run)) {
+          reading.canonicalByToolUse.set(block.run, block.id)
+        }
       }
     }
   })
