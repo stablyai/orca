@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
+import { writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
@@ -17,7 +18,7 @@ import {
 export async function observeProofRuntime(
   page: Page,
   electronApp: ElectronApplication,
-  registerPostElectronShutdownCleanup: (cleanup: () => void) => void,
+  registerPostElectronShutdownCleanup: (cleanup: () => Promise<void>) => void,
   testInfo: TestInfo
 ) {
   const build: ReturnType<typeof recordBuildInputs> = JSON.parse(
@@ -53,10 +54,10 @@ export async function observeProofRuntime(
     }
   })
   const appProcess = electronApp.process()
-  registerPostElectronShutdownCleanup(() => {
+  registerPostElectronShutdownCleanup(async () => {
     assert.ok(appProcess.exitCode !== null || appProcess.signalCode !== null)
     assert.equal(existsSync(identity.userData), false)
-    writeFileSync(
+    await writeFile(
       testInfo.outputPath('teardown.json'),
       JSON.stringify({
         pid: appProcess.pid,

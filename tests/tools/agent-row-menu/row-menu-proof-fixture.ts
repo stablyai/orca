@@ -52,7 +52,7 @@ async function setupRowMenuProof(
   page: Page,
   electronApp: ElectronApplication,
   seededRepoPath: string,
-  registerPostElectronShutdownCleanup: (cleanup: () => void) => void,
+  registerPostElectronShutdownCleanup: (cleanup: () => Promise<void>) => void,
   testInfo: TestInfo
 ) {
   const runtime = await observeProofRuntime(

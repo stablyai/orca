@@ -19,6 +19,7 @@ import { hasTerminalTabRenameListener } from '@/components/tab-bar/terminal-tabs
 import { resolveUnmirroredAgentTerminalOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { selectKnownWorktreeById } from '@/store/workspaces/selection/known-worktree-selection'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
+import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { isWorktreeRetiredByRemoval } from '../../../../../../shared/worktree/removal/removal-visibility'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
@@ -227,7 +228,7 @@ function canForkOnThisComputer(state: AppState, target: AgentRowMenuTarget): boo
     return false
   }
   if (
-    findIndexedDetectedWorktrees(state.detectedWorktreesByRepo, target.worktreeId).some(
+    findIndexedDetectedWorktrees(selectDetectedWorktreesByRepo(state), target.worktreeId).some(
       (row) => row.hostId !== LOCAL_EXECUTION_HOST_ID || row.runtimeOwnerEnvironmentId?.trim()
     )
   ) {
