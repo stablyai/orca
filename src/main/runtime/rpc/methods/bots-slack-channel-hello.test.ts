@@ -25,10 +25,15 @@ vi.mock('../../../bots/bot-turn-for', () => ({
 }))
 vi.mock('../../../bots/bot-chat-status-line', () => ({ writeInChat: vi.fn() }))
 // A run's token names its bot; 'ended' is one Orca no longer knows.
+// As the real one: no token, or one over a pairing (which this host can't check), is the owner.
 vi.mock('../../../bots/bot-of-caller', () => ({
   BOT_TOKEN_ENDED: 'token ended',
-  botOfToken: (runtime: { bots: { list: () => Bot[] } }, token: string | undefined) =>
-    !token
+  botOfToken: (
+    runtime: { bots: { list: () => Bot[] } },
+    token: string | undefined,
+    pairedDeviceId: string | undefined
+  ) =>
+    !token || pairedDeviceId !== undefined
       ? { kind: 'owner' }
       : token === 'ended'
         ? { kind: 'ended' }
