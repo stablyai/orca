@@ -183,10 +183,6 @@ function* cliInstallDirectories(platform: NodeJS.Platform, homePath: string): Cl
   ]
 }
 
-function getCliInstallDirectories(platform: NodeJS.Platform, homePath: string): string[] {
-  return runCliFsReadsSync(cliInstallDirectories(platform, homePath))
-}
-
 export function cliPathLookup(
   platform: NodeJS.Platform,
   pathEnv: string | null,
@@ -266,20 +262,27 @@ export function resolveCliCommands(
   commandNames: readonly string[],
   options: ResolveCommandOptions = {}
 ): Map<string, string> {
+  return runCliFsReadsSync(cliCommandsLookup(commandNames, options))
+}
+
+export function* cliCommandsLookup(
+  commandNames: readonly string[],
+  options: ResolveCommandOptions = {}
+): CliFsReads<Map<string, string>> {
   const platform = options.platform ?? process.platform
   const pathEnv = options.pathEnv ?? process.env.PATH ?? process.env.Path ?? null
   const pathDirectories = splitPath(pathEnv, platform)
   const homePath = options.homePath ?? homedir()
-  const installDirectories = getCliInstallDirectories(platform, homePath)
+  const installDirectories = yield* cliInstallDirectories(platform, homePath)
   const resolved = new Map<string, string>()
 
   for (const commandName of new Set(commandNames)) {
     const executableNames = getExecutableNames(platform, commandName)
     const pathCandidate = options.skipPathSearch
       ? undefined
-      : findFirstExecutable(platform, pathDirectories, executableNames)
+      : yield* firstRunnable(platform, pathDirectories, executableNames)
     const installCandidate =
-      pathCandidate ?? findFirstExecutable(platform, installDirectories, executableNames)
+      pathCandidate ?? (yield* firstRunnable(platform, installDirectories, executableNames))
     resolved.set(commandName, installCandidate ?? commandName)
   }
 

@@ -39,7 +39,7 @@ export async function detectAgentCommandsOnHost(
   // Resolve cold-GUI install dirs once; use the same WSL-filtered PATH while retaining process PATH elsewhere.
   const guestMounts = readGuestWindowsDriveMounts()
   // The batch includes the fallback's PATH normalization and Windows executable names.
-  const installDirCommands = detectCommandsInInstallDirs(
+  const installDirCommands = await detectCommandsInInstallDirs(
     missedCommands,
     guestMounts.length > 0 ? buildLocalPreflightEnv(guestMounts)?.PATH : undefined,
     { skipPathSearch: true }
