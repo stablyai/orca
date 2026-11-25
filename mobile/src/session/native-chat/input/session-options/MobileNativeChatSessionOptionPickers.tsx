@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, View } from 'react-native'
 import { Clock } from 'lucide-react-native'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
@@ -119,8 +119,22 @@ export function MobileNativeChatSessionOptionPickers({
     ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
     : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
+  // Decided on arriving at a page and kept through the close, so a listing landing mid-visit never swaps the sheet's layout.
+  const page = presentation?.page ?? null
+  const [searchLayout, setSearchLayout] = useState<{ page: string | null; search: boolean }>({
+    page: null,
+    search: false
+  })
+  if (page !== null && page !== searchLayout.page) {
+    setSearchLayout({
+      page,
+      search:
+        activeDescriptor !== undefined && activeDescriptor === model && modelListNeedsSearch(model)
+    })
+  }
+  const searchSheet = searchLayout.search
   const modelSearchView =
-    activeDescriptor !== undefined && activeDescriptor === model && modelListNeedsSearch(model)
+    searchSheet && activeDescriptor !== undefined && activeDescriptor === model
   // Permission mode and structured picks apply to the next send, so only the rest lock mid-turn.
   const locksMidTurn = (descriptor: SessionOptionDescriptor | undefined): boolean =>
     descriptor !== undefined &&
@@ -233,16 +247,17 @@ export function MobileNativeChatSessionOptionPickers({
         // Each page opens at its top, not at the last page's scroll.
         scrollResetKey={presentation?.page ?? null}
         // A searchable list holds its own scroll and keeps a fixed height, so the keyboard and filtering never resize it.
-        fillAvailable={modelSearchView}
-        contentScrollable={!modelSearchView}
+        fillAvailable={searchSheet}
+        contentScrollable={!searchSheet}
         onClose={closePicker}
         onAfterClose={() => {
           moreModels.reset()
+          setSearchLayout({ page: null, search: false })
           onDrawerAfterClose?.()
         }}
       >
         {homeView || activeDescriptor ? (
-          <View style={[styles.sheet, modelSearchView && styles.sheetFill]}>
+          <View style={[styles.sheet, searchSheet && styles.sheetFill]}>
             <View style={styles.header}>
               <SheetHeader
                 title={

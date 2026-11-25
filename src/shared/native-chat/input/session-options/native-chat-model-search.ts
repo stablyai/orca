@@ -1,17 +1,22 @@
-// Spaces, dashes, slashes and dots read alike, so "anthropic/claude", "claude sonnet" and "gpt5" all find a model.
+// Spaces, dashes, slashes and dots inside a word read alike, so "anthropic/claude" and "gpt5" find their model.
 const SEPARATORS = /[\s\-_/.:]+/g
 
-/** A model search's test of one model's id, label and description, or null for an empty search. */
-export function nativeChatModelSearchMatcher(
-  query: string
-): ((fields: readonly string[]) => boolean) | null {
-  const terms = query.toLowerCase().split(SEPARATORS).filter(Boolean)
+/** A model's id, label and description as one searchable string. */
+export function nativeChatModelSearchText(fields: readonly string[]): string {
+  // Why: NUL between fields, so a term never matches across two of them.
+  return fields.join('\u0000').toLowerCase().replace(SEPARATORS, '')
+}
+
+/** A model search's test of `nativeChatModelSearchText`, or null for an empty search. */
+export function nativeChatModelSearchMatcher(query: string): ((text: string) => boolean) | null {
+  // Words split only on spaces, so "gpt-5.5" stays one term and never matches gpt-5.6.
+  const terms = query
+    .toLowerCase()
+    .split(/\s+/)
+    .map((term) => term.replace(SEPARATORS, ''))
+    .filter(Boolean)
   if (terms.length === 0) {
     return null
   }
-  return (fields) => {
-    // Why: NUL between fields, so a term never matches across two of them.
-    const haystack = fields.join('\u0000').toLowerCase().replace(SEPARATORS, '')
-    return terms.every((term) => haystack.includes(term))
-  }
+  return (text) => terms.every((term) => text.includes(term))
 }
