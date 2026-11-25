@@ -10,7 +10,7 @@ import {
 } from '../workspace-sessions/workspace-session-write-listeners'
 import { ptyBindingGenerationOf } from '../terminal-bindings/pty-binding-generations'
 import type { PartitionEditorViews } from '../workspace-sessions/layout-editor-views'
-import type { ProfileSaveDomains } from '../../profile-save-domains'
+import { isLineageRecordDomain, type ProfileSaveDomains } from '../../profile-save-domains'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 
 export type StateWriteOptions = {
@@ -73,6 +73,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'activeViewPreference'
   | 'automationListProjectionCache'
+  | 'lineageChildIndex'
   | 'pendingAutomationRunsAfter'
   | 'dirtyProfileStateDomains'
   | 'firstPendingSaveAt'
@@ -208,6 +209,10 @@ function scheduleDomainSave(
     }
   }
   runtime.automationListProjectionCache = null
+  // Every lineage write saves a lineage domain, or the whole profile; either drops the child index.
+  if (dirtyDomains === undefined || dirtyDomains.some(isLineageRecordDomain)) {
+    runtime.lineageChildIndex = null
+  }
   // A run list replaced outside the run-delta path saves as a whole row; an older pending delta is stale.
   if (
     dirtyDomains?.includes('automationRuns') &&

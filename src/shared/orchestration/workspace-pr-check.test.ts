@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { checkWorkspacePullRequests, type WorkspacePrSnapshot } from './workspace-pr-check'
 import type { Repo } from '../repository/repo-types'
 import { LineageUncertaintyKeyIndex } from '../worktree/lineage/lineage-uncertainty'
+import { buildLineageChildIndex } from './lineage-child-index'
 
 const p: Repo = {
   id: 'p',
@@ -36,8 +37,15 @@ const snapshot = (): WorkspacePrSnapshot => ({
   primaries: ['p::/p/work']
 })
 const ref = { forgeHost: 'github.com', owner: 'org', repo: 'q', number: 17 }
-const check = (spec = '', input = snapshot(), subject = 'Opened org/q#17') =>
-  checkWorkspacePullRequests(input, { subject, body: '', spec, host: 'local' })
+// Every case also runs with the Store's child index: it must answer exactly as the full scan does.
+const check = (spec = '', input = snapshot(), subject = 'Opened org/q#17') => {
+  const report = { subject, body: '', spec, host: 'local' }
+  const scanned = checkWorkspacePullRequests(input, report)
+  const records = [input.lineage, input.workspaceLineage, input.crossStoreLineage] as const
+  const indexed = { ...input, childIndex: buildLineageChildIndex(records) }
+  expect(checkWorkspacePullRequests(indexed, report)).toEqual(scanned)
+  return scanned
+}
 
 describe('completion report repository coverage', () => {
   it('warns for an uncovered registered repository', () => {
@@ -170,6 +178,33 @@ describe('completion report repository coverage', () => {
       ])
     )
     expect(check('', { ...snapshot(), uncertainty })).toEqual({
+      version: 1,
+      state: 'partial',
+      outside: []
+    })
+  })
+  it('keeps the lineage row limit when the rows belong to unrelated projects', () => {
+    const lineage = Object.fromEntries(
+      Array.from({ length: 5001 }, (_, n) => [
+        `r::/r/${n}`,
+        {
+          worktreeId: `r::/r/${n}`,
+          worktreeInstanceId: `i${n}`,
+          parentWorktreeId: 'r::/r/root',
+          parentWorktreeInstanceId: 'root',
+          origin: 'cli' as const,
+          capture: { source: 'explicit-cli-flag' as const, confidence: 'explicit' as const },
+          createdAt: 1
+        }
+      ])
+    )
+    const r: Repo = {
+      ...p,
+      id: 'r',
+      path: '/r',
+      gitRemoteIdentity: { ...p.gitRemoteIdentity!, canonicalKey: 'github.com/org/r' }
+    }
+    expect(check('', { ...snapshot(), repos: [p, q, r], lineage })).toEqual({
       version: 1,
       state: 'partial',
       outside: []

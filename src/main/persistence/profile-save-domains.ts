@@ -16,6 +16,12 @@ export const WORKSPACE_LINEAGE_DOMAINS = [
   'crossStoreLineageByChildKey'
 ] as const
 
+/** The three records the lineage child index groups; a save naming any of them drops the index. */
+export const isLineageRecordDomain = (domain: string): boolean =>
+  domain === 'worktreeLineageById' ||
+  domain === 'workspaceLineageByChildKey' ||
+  domain === 'crossStoreLineageByChildKey'
+
 /** A workspace-row lineage write: the row, any cross-store record it replaces, and folder-edge uncertainty. */
 export const WORKSPACE_LINEAGE_ROW_DOMAINS = [
   'workspaceLineageByChildKey',

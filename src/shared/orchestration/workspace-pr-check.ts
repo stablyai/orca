@@ -5,7 +5,7 @@ import type { WorkspaceLineage, WorktreeLineage } from '../worktree/lineage-type
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { decodeLineageUncertaintyKey } from '../worktree/lineage/lineage-uncertainty'
 import { getRepoExecutionHostId } from '../execution-host/execution-host'
-import { getRepoIdFromWorktreeId } from '../worktree/id'
+import { lineageNodeProject, type LineageChildIndex } from './lineage-child-index'
 import {
   specNamesPr,
   boundedUtf8,
@@ -26,6 +26,8 @@ export type WorkspacePrSnapshot = {
   lineage: Readonly<Record<string, WorktreeLineage>>
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>
   crossStoreLineage: Readonly<Record<string, unknown>>
+  /** Store-kept grouping of the three lineage records' keys; used only for those exact objects. */
+  childIndex?: LineageChildIndex
   uncertainty: unknown
   decodeUncertaintyKey?: typeof decodeLineageUncertaintyKey
   folders: readonly FolderWorkspace[]
@@ -102,14 +104,7 @@ export function checkWorkspacePullRequests(
       hosts.add(slash === -1 ? key : key.slice(0, slash))
     }
   }
-  const projectOf = (workspace: string): string | undefined => {
-    if (workspace.startsWith('folder:')) {
-      return undefined
-    }
-    const id = workspace.startsWith('worktree:') ? workspace.slice(9) : workspace
-    const project = getRepoIdFromWorktreeId(id)
-    return project.length < id.length ? project : undefined
-  }
+  const projectOf = lineageNodeProject
   const primaryRepos = new Set<string>()
   for (const id of input.primaries) {
     const project = projectOf(id)

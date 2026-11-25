@@ -12,9 +12,18 @@ import {
 } from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from '../store-runtime-state'
+import {
+  buildLineageChildIndex,
+  indexMatchesRecords,
+  type LineageChildIndex,
+  type LineageRecords
+} from '../../../../shared/orchestration/lineage-child-index'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 
-type CrossStoreLineageRuntime = Pick<StoreRuntimeState, 'state'>
+type CrossStoreLineageRuntime = Pick<StoreRuntimeState, 'state' | 'lineageChildIndex'>
+
+// One shared empty record, so an absent cross-store map keeps the same identity for the child index.
+const NO_CROSS_STORE_LINEAGE: Record<string, unknown> = Object.freeze({})
 
 const crossStoreLineagePersistenceContext = Symbol('CrossStoreLineagePersistence')
 type CrossStoreLineagePersistenceContext = {
@@ -50,7 +59,25 @@ export class CrossStoreLineagePersistence {
   }
 
   getRawCrossStoreWorkspaceLineage(): Record<string, unknown> {
-    return this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey ?? {}
+    return (
+      this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey ??
+      NO_CROSS_STORE_LINEAGE
+    )
+  }
+
+  /** The child index of the current lineage records; rebuilt when a save dropped it or a record
+   *  object was replaced (load, reload). */
+  getLineageChildIndex(): LineageChildIndex {
+    const runtime = this[crossStoreLineagePersistenceContext].runtime
+    const records: LineageRecords = [
+      runtime.state.worktreeLineageById,
+      runtime.state.workspaceLineageByChildKey,
+      this.getRawCrossStoreWorkspaceLineage()
+    ]
+    if (!indexMatchesRecords(runtime.lineageChildIndex ?? undefined, records)) {
+      runtime.lineageChildIndex = buildLineageChildIndex(records)
+    }
+    return runtime.lineageChildIndex!
   }
 
   getAllCrossStoreWorkspaceLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {

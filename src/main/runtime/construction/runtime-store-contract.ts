@@ -57,6 +57,7 @@ export type RuntimeStore = {
   getCrossStoreWorkspaceLineage?: Store['getCrossStoreWorkspaceLineage']
   getAllCrossStoreWorkspaceLineage?: Store['getAllCrossStoreWorkspaceLineage']
   getRawCrossStoreWorkspaceLineage?: Store['getRawCrossStoreWorkspaceLineage']
+  getLineageChildIndex?: Store['getLineageChildIndex']
   setCrossStoreWorkspaceLineage?: Store['setCrossStoreWorkspaceLineage']
   removeCrossStoreWorkspaceLineage?: Store['removeCrossStoreWorkspaceLineage']
   getGitHubCache: Store['getGitHubCache']

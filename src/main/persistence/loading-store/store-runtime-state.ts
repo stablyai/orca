@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { removeStaleDurableWriteTempFiles } from '../../filesystem/durable-file-write'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import type { LineageChildIndex } from '../../../shared/orchestration/lineage-child-index'
 import type {
   WorkspaceSessionOperationListener,
   WorkspaceSessionWriteListener
@@ -63,6 +64,8 @@ export class StoreRuntimeState {
   readonly paneShellPath: (defaultShell: string | undefined) => string
   readonly deferredShellHistoryWorktreeIds = new Set<string>()
   automationListProjectionCache: AutomationListProjectionCache | null = null
+  /** Lineage keys grouped by project; dropped by every lineage save and rebuilt on next read. */
+  lineageChildIndex: LineageChildIndex | null = null
   activeViewPreference!: ActiveViewPreference
   readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   readonly orcadMigrationBlobRoot: string

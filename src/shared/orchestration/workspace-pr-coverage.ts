@@ -7,6 +7,7 @@ import {
 } from '../worktree/lineage/lineage-uncertainty'
 import type { Repo } from '../repository/repo-types'
 import type { WorkspacePrSnapshot } from './workspace-pr-check'
+import { indexMatchesRecords, lineageRecordNode } from './lineage-child-index'
 
 type Edge = { parent: string }
 
@@ -200,25 +201,27 @@ export function possibleWorkspacePrRepositories(
     return answer
   }
   const relevantProjects = new Map<string, boolean>()
-  const consider = (child: string) => {
-    const project = projectOf(child)
+  const relevant = (project: string): boolean => {
+    let answer = relevantProjects.get(project)
+    if (answer === undefined) {
+      const owners = repos.get(project)
+      answer = !owners || owners.some((repo) => getRepoExecutionHostId(repo) === host)
+      if (answer) {
+        const ids = identities(project)
+        answer = !ids || [...ids].some((id) => interested.has(id))
+      }
+      relevantProjects.set(project, answer)
+    }
+    return answer
+  }
+  const consider = (child: string, project: string | undefined) => {
     if (!project) {
       if (!child.startsWith('folder:')) {
         incomplete = true
       }
       return
     }
-    let relevant = relevantProjects.get(project)
-    if (relevant === undefined) {
-      const owners = repos.get(project)
-      relevant = !owners || owners.some((repo) => getRepoExecutionHostId(repo) === host)
-      if (relevant) {
-        const ids = identities(project)
-        relevant = !ids || [...ids].some((id) => interested.has(id))
-      }
-      relevantProjects.set(project, relevant)
-    }
-    if (!relevant || !possible(child)) {
+    if (!relevant(project) || !possible(child)) {
       return
     }
     const ids = identities(project)
@@ -231,12 +234,40 @@ export function possibleWorkspacePrRepositories(
       }
     }
   }
-  for (const rows of [input.lineage, input.workspaceLineage, input.crossStoreLineage]) {
-    for (const child in rows) {
+  const records = [input.lineage, input.workspaceLineage, input.crossStoreLineage] as const
+  const index = input.childIndex
+  if (indexMatchesRecords(index, records)) {
+    // Every indexed key counts toward the same row limit a full scan applies.
+    if (rawRows + index.size > LINEAGE_SCAN_ROW_LIMIT) {
+      return { candidateRepos, incomplete: true }
+    }
+    for (let i = 0; i < records.length; i++) {
+      for (const key of index.unprojected[i]!) {
+        consider(lineageRecordNode(i, key), undefined)
+      }
+      // Only relevant projects' children are walked. A key deleted since indexing reads as no edge
+      // here, the same answer its own record gives, so it cannot add or hide a candidate.
+      for (const [project, keys] of index.byProject[i]!) {
+        if (!relevant(project)) {
+          continue
+        }
+        for (const key of keys) {
+          consider(lineageRecordNode(i, key), project)
+          if (candidateRepos.size === interested.size) {
+            return { candidateRepos, incomplete }
+          }
+        }
+      }
+    }
+    return { candidateRepos, incomplete }
+  }
+  for (let i = 0; i < records.length; i++) {
+    for (const child in records[i]) {
       if (!admit()) {
         return { candidateRepos, incomplete }
       }
-      consider(rows === input.lineage ? child : nodeKey(child))
+      const node = lineageRecordNode(i, child)
+      consider(node, projectOf(node))
       if (candidateRepos.size === interested.size) {
         return { candidateRepos, incomplete }
       }
