@@ -60,7 +60,13 @@ const WORKSPACES: Line[] = [
   { id: 'twin', host: 'local' },
   { id: 'twin', host: 'remote' },
   { id: 'idle-twin', host: 'local' },
-  { id: 'idle-twin', host: 'remote' }
+  { id: 'idle-twin', host: 'remote' },
+  // Two roots in a lineage loop, the held line found only after the loop closes.
+  { id: 'loop-a', host: 'local' },
+  { id: 'loop-b', host: 'local' },
+  // A workspace whose twin sits under a root no chat claims.
+  { id: 'x-twin', host: 'local' },
+  { id: 'unclaimed-root', host: 'remote' }
 ]
 const WORKSPACE_CHATS: Record<string, string> = {
   'old-done-line': 'failed-1',
@@ -72,7 +78,10 @@ const WORKSPACE_CHATS: Record<string, string> = {
   'asking-paged-out': 'holds-paged-out-line',
   twin: 'holds-remote-twin-descendant',
   // Two physical workspaces share this id: which chat each belongs to can't be told, so it holds.
-  'idle-twin': 'holds-ambiguous-twins'
+  'idle-twin': 'holds-ambiguous-twins',
+  'loop-a': 'holds-loop-a',
+  'loop-b': 'holds-loop-b',
+  'x-twin': 'holds-twin-under-unclaimed'
 }
 const identityOf = (line: Line): string => `${line.host}/${line.id}`
 const CHILDREN: Record<string, Line[]> = {
@@ -84,7 +93,13 @@ const CHILDREN: Record<string, Line[]> = {
     { id: 'asking-grandchild', host: 'local' },
     { id: 'parent-line', host: 'local' }
   ],
-  'remote/twin': [{ id: 'twin-asking-child', host: 'remote' }]
+  'remote/twin': [{ id: 'twin-asking-child', host: 'remote' }],
+  'local/loop-a': [
+    { id: 'loop-b', host: 'local' },
+    { id: 'loop-held-child', host: 'local' }
+  ],
+  'local/loop-b': [{ id: 'loop-a', host: 'local' }],
+  'remote/unclaimed-root': [{ id: 'x-twin', host: 'remote' }]
 }
 
 function split(
@@ -114,7 +129,8 @@ function split(
       'open-line',
       'asking-grandchild',
       'asking-paged-out',
-      'twin-asking-child'
+      'twin-asking-child',
+      'loop-held-child'
     ]),
     workspaces: WORKSPACES,
     workspaceChats: WORKSPACE_CHATS,
@@ -157,6 +173,9 @@ const CHATS = [
   chat('holds-paged-out-line'),
   chat('holds-remote-twin-descendant'),
   chat('holds-ambiguous-twins'),
+  chat('holds-loop-a'),
+  chat('holds-loop-b'),
+  chat('holds-twin-under-unclaimed'),
   // A valid recent focus on its own id survives an invalid sample on its /clear successor.
   chat('alias-valid-today', { liveSessionId: 'alias-invalid' }),
   chat('turn-failed-today', { turnDone: { paneKey: 'p', at: NOW - 60_000 } }),
