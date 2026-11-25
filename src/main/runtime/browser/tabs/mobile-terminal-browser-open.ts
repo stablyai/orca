@@ -65,10 +65,12 @@ export async function openUrlForMobileOrClient(options: {
       { clientKind: 'mobile', signal: options.signal }
     )
     const delivered =
-      (await options.host.followBrowserTabOnMobile?.(worktree.id, created.browserPageId, {
-        paneKey,
-        signal: options.signal
-      })) ?? false
+      (await options.host
+        .followBrowserTabOnMobile?.(worktree.id, created.browserPageId, {
+          paneKey,
+          signal: options.signal
+        })
+        ?.catch(() => false)) ?? false
     if (!delivered && options.params.onlyWhenMobileViewing) {
       await options.closeServerTab?.(created.browserPageId, options.params.worktree).catch(() => {})
       return { browserPageId: null }
