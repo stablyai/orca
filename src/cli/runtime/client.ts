@@ -34,10 +34,8 @@ import {
   type RuntimeSourceFence
 } from './connection/runtime-source-fence'
 import { resolveRemoteConnection } from './pairing/runtime-remote-pairing'
-import {
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY } from '../../shared/orchestration/orchestration-runtime-capabilities'
+import { buildRuntimeRequestEnvelope } from './connection/runtime-request-envelope'
 import { RemoteRuntimeCompatGate } from './connection/remote-runtime-compat-gate'
 import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
 import * as requestTimeout from './connection/runtime-request-timeout'
@@ -140,14 +138,12 @@ export class RuntimeClient {
       mutation: orchestrationMutation,
       requestId: orchestrationRequestId
     })
-    const envelope = {
-      orchestrationCapability: options?.orchestrationCapability,
-      orchestrationContractVersion: method.startsWith('orchestration.')
-        ? ORCHESTRATION_CONTRACT_VERSION
-        : undefined,
+    const envelope = buildRuntimeRequestEnvelope(
+      method,
+      options,
       orchestrationRequestId,
-      ...compatibilityEnvelope
-    }
+      compatibilityEnvelope
+    )
     if (this.remoteSelected) {
       const transport = await loadWebSocketTransport()
       let response

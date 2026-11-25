@@ -4,6 +4,7 @@ import { OrchestrationError } from '../../orchestration-error'
 import { ensureMutationReceiptCapacity } from './mutation-receipt-capacity'
 import type { OrchestrationDb } from '../orchestration-db'
 import { MUTATION_RECEIPT_COLUMN_LIST } from '../row-column-lists'
+import { RETRY_RECEIPT_ABSENT_CODE } from '../../../../../shared/orchestration/orchestration-retry-request-id'
 
 export function getOrCreateLocalMutationCallerFingerprint(this: OrchestrationDb): string {
   if (this.localMutationCallerFingerprint) {
@@ -40,7 +41,9 @@ export function beginMutationReceipt(
     requestId: string
     method: string
     payloadHash: string
-  }
+  },
+  /** The caller may already have committed this key; never admit it as new work. */
+  { requireExisting = false }: { requireExisting?: boolean } = {}
 ):
   | { disposition: 'started'; row: MutationReceiptRow }
   | { disposition: 'pending'; row: MutationReceiptRow }
@@ -58,6 +61,9 @@ export function beginMutationReceipt(
       this.db.exec('COMMIT')
       return { disposition: existing.state, row: existing }
     }
+    if (requireExisting) {
+      throw retryReceiptAbsent(params.requestId)
+    }
     ensureMutationReceiptCapacity(this.db)
     this.db
       .prepare(
@@ -73,6 +79,15 @@ export function beginMutationReceipt(
     this.db.exec('ROLLBACK')
     throw error
   }
+}
+
+// Capacity eviction can drop a completed receipt; a fresh write could then duplicate the original.
+export function retryReceiptAbsent(requestId: string): OrchestrationError {
+  return new OrchestrationError(
+    RETRY_RECEIPT_ABSENT_CODE,
+    `Mutation request ${requestId} has no receipt to replay; it may already have taken effect, so it was not run again.`,
+    { requestId }
+  )
 }
 
 export function completeMutationReceipt(

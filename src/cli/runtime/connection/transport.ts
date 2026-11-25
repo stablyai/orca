@@ -242,6 +242,7 @@ export async function sendRequest<TResult>(
           orchestrationCapability: envelope?.orchestrationCapability,
           orchestrationContractVersion: envelope?.orchestrationContractVersion,
           orchestrationRequestId: envelope?.orchestrationRequestId,
+          orchestrationRetryAfterTimeout: envelope?.orchestrationRetryAfterTimeout,
           compatibilityInvocationId: envelope?.compatibilityInvocationId,
           orchestrationCompatibilityEvidence: envelope?.orchestrationCompatibilityEvidence,
           expectedRuntimeSource

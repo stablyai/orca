@@ -5,6 +5,7 @@ import {
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { OrchestrationEntryCaller } from '../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
+import { retryReceiptAbsent } from '../../../orchestration/db/mutation-receipts/mutation-receipt-store'
 import type { RpcRequest } from '../../core'
 import {
   attachMutationReceipt,
@@ -99,6 +100,8 @@ export class OrchestrationMutationExecutor {
           )}`
         : basePayloadHash
     const identity = { callerFingerprint, requestId, method: request.method, payloadHash }
+    // A retry after a possibly delivered timeout must replay or join; absence may mean eviction.
+    const requireExisting = request.orchestrationRetryAfterTimeout === true
     const atomicWorkerAcceptance =
       request.method === 'orchestration.workerStart' ||
       request.method === 'orchestration.federationAttachStart'
@@ -121,6 +124,9 @@ export class OrchestrationMutationExecutor {
         ? (() => {
             const row = db.getMutationReceipt(callerFingerprint, requestId)
             if (!row) {
+              if (requireExisting) {
+                throw retryReceiptAbsent(requestId)
+              }
               return { disposition: 'started' as const }
             }
             if (row.method !== request.method || row.payload_hash !== payloadHash) {
@@ -131,7 +137,7 @@ export class OrchestrationMutationExecutor {
             }
             return { disposition: row.state, row }
           })()
-        : db.beginMutationReceipt(identity)
+        : db.beginMutationReceipt(identity, { requireExisting })
     const resumedPendingWorkerDone =
       begun.disposition === 'pending' &&
       isResumablePendingWorkerDone(request.method, params, begun.row.receipt)

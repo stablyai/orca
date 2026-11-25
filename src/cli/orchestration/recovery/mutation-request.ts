@@ -4,8 +4,11 @@ import type { RuntimeClient } from '../../runtime/client'
 import { readRetryRequestFlag } from './retry-request-flag'
 import { orchestrationMutationRecoveryError } from './orchestration-mutation-recovery'
 import { isRequestUnsent } from '../../runtime/connection/client-error-recovery'
+import { RETRY_RECEIPT_ABSENT_CODE } from '../../../shared/orchestration/orchestration-retry-request-id'
 
-const MAX_UNAVAILABLE_RETRY_DELAY_MS = 15_000
+const MAX_RETRY_DELAY_MS = 15_000
+// The same request id replays a committed mutation or joins one still running, so these are safe to resend.
+const KEYED_RETRY_CODES = new Set(['runtime_unavailable', 'runtime_timeout'])
 
 export async function callOrchestrationMutation<TResult>(
   client: RuntimeClient,
@@ -13,31 +16,40 @@ export async function callOrchestrationMutation<TResult>(
   method: string,
   params: unknown,
   options?: { timeoutMs?: number; orchestrationCapability?: string },
-  unavailableRetryMs = 0
+  retryBudgetMs = 0
 ) {
   // Reuse one request id so retries replay the mutation instead of applying it twice.
   const retryRequest = readRetryRequestFlag(flags)
-  const requestId = retryRequest ?? (unavailableRetryMs > 0 ? randomUUID() : undefined)
-  const deadline = Date.now() + unavailableRetryMs
+  const requestId = retryRequest ?? (retryBudgetMs > 0 ? randomUUID() : undefined)
+  const deadline = Date.now() + retryBudgetMs
   let sentError: RuntimeClientError | undefined
-  for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_UNAVAILABLE_RETRY_DELAY_MS)) {
+  // Once a timeout may have reached the runtime, only a replay or join of that attempt is safe.
+  let retryAfterTimeout = false
+  for (let delayMs = 1_000; ; delayMs = Math.min(delayMs * 2, MAX_RETRY_DELAY_MS)) {
     try {
       return requestId
         ? await client.call<TResult>(method, params, {
             ...options,
-            orchestrationRequestId: requestId
+            orchestrationRequestId: requestId,
+            ...(retryAfterTimeout ? { orchestrationRetryAfterTimeout: true as const } : {})
           })
         : options
           ? await client.call<TResult>(method, params, options)
           : await client.call<TResult>(method, params)
     } catch (error) {
-      const unavailable =
-        error instanceof RuntimeClientError && error.code === 'runtime_unavailable'
-      const sent = carriesRequestId(error) && !isRequestUnsent(error)
+      const retryable = error instanceof RuntimeClientError && KEYED_RETRY_CODES.has(error.code)
+      // The runtime refused to run a retry whose receipt is gone; report the earlier timeout instead.
+      const receiptAbsent =
+        retryAfterTimeout &&
+        error instanceof RuntimeClientError &&
+        error.code === RETRY_RECEIPT_ABSENT_CODE
+      const sent = !receiptAbsent && carriesRequestId(error) && !isRequestUnsent(error)
       if (sent) {
         sentError = error
+        retryAfterTimeout ||= error.code === 'runtime_timeout'
       }
-      if (!unavailable || Date.now() + delayMs > deadline) {
+      // Callers without a budget never retry, even if the wall clock steps backward.
+      if (!retryable || retryBudgetMs <= 0 || Date.now() + delayMs > deadline) {
         // A later failure may lack the request id even though an earlier attempt landed.
         throw orchestrationMutationRecoveryError(sent ? error : (sentError ?? error), {
           // Only a fresh id that never got past the contract check is known not to have run.

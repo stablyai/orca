@@ -24,6 +24,7 @@ import { CONNECTOR_ACT_ERROR_CODES } from '../../../../shared/connector-action-c
 import { BOTS_DISABLED_CODE } from '../../../../shared/bots-switch'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../../shared/orchestration/orchestration-session-caller-codes'
 import { ORCHESTRATION_FEDERATION_ERROR_CODES } from '../../../../shared/orchestration/orchestration-federation-error-codes'
+import { RETRY_RECEIPT_ABSENT_CODE } from '../../../../shared/orchestration/orchestration-retry-request-id'
 import { computerUseErrorRecoveryData } from '../../../../shared/computer/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../../shared/computer/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-outcome'
@@ -135,6 +136,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_cannot_take_over_run',
   'request_mismatch',
   'mutation_ledger_full',
+  // A timeout retry whose receipt is gone was refused; the CLI reports the original timeout.
+  RETRY_RECEIPT_ABSENT_CODE,
   'legacy_read_only',
   'orchestration_migration_required',
   'operation_unknown',

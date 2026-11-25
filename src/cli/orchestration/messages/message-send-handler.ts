@@ -27,7 +27,7 @@ import {
   throwNoActiveSenderTerminal
 } from '../identity/terminal-identity'
 
-const WORKER_DONE_UNAVAILABLE_RETRY_MS = 120_000
+const WORKER_DONE_RETRY_MS = 120_000
 
 type LifecycleSendResult =
   | {
@@ -138,8 +138,8 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       'orchestration.send',
       sendParams,
       dispatchCapability ? { orchestrationCapability: dispatchCapability } : undefined,
-      // Workers report once before ending their turn; retry brief outages so worker_done is not lost.
-      type === 'worker_done' ? WORKER_DONE_UNAVAILABLE_RETRY_MS : 0
+      // Workers report once before ending their turn; retry outages and timeouts so worker_done is not lost.
+      type === 'worker_done' ? WORKER_DONE_RETRY_MS : 0
     )
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
