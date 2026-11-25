@@ -43,10 +43,7 @@ type WorkspaceKanbanLaneGridProps = {
   onDrop: (event: React.DragEvent, statusId: string) => void
   onActivate: () => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
-  onContextMenuSelect: (
-    event: React.UIEvent<HTMLElement>,
-    worktree: Worktree
-  ) => readonly Worktree[]
+  onContextMenuSelect: (worktree: Worktree) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCreateWorktree: (statusId: string) => void
   onColumnResizeStart: (event: React.PointerEvent<HTMLElement>) => void

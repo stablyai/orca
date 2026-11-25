@@ -88,9 +88,8 @@ export function useSidebarWorktreeSelection(args: {
     [repoByWorktree, updateSelection]
   )
   const { selectForContextMenu: selectItemForContextMenu } = selection
-  // Why keep the event arg: kanban and list cards share the onContextMenuSelect prop shape.
   const selectForContextMenu = useCallback(
-    (_event: React.UIEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
+    (worktree: Worktree): readonly Worktree[] => {
       setFocusedKey(getWorktreeHostIdentity(worktree))
       return selectItemForContextMenu(worktree)
     },

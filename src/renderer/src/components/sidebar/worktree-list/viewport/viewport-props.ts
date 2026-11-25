@@ -79,10 +79,7 @@ export type VirtualizedWorktreeViewportProps = {
   onKeyboardSelect?: (worktree: Worktree) => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onImmediateWorktreeActivate: (worktreeId: string, rowKey: string | undefined) => void
-  onContextMenuSelect: (
-    event: React.UIEvent<HTMLElement>,
-    worktree: Worktree
-  ) => readonly Worktree[]
+  onContextMenuSelect: (worktree: Worktree) => readonly Worktree[]
   repoMap: Map<string, Repo>
   defaultHostId: ExecutionHostId
   worktreeMap: Map<string, Worktree>

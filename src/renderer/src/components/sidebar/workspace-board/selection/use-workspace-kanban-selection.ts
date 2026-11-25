@@ -88,7 +88,7 @@ export function useWorkspaceKanbanSelection(
   )
 
   const selectForContextMenu = useCallback(
-    (_event: React.UIEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
+    (worktree: Worktree): readonly Worktree[] => {
       const worktreeIdentity = getWorktreeHostIdentity(worktree)
       if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
         return selectedWorktrees

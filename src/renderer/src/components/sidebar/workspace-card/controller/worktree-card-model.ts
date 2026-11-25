@@ -55,10 +55,7 @@ export type WorktreeCardProps = {
   onWorktreeCardClick?: () => void
   onImmediateActivate?: (worktreeId: string, rowKey: string | undefined) => void
   onSelectionGesture?: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
-  onContextMenuSelect?: (
-    event: React.UIEvent<HTMLElement>,
-    worktree: Worktree
-  ) => readonly Worktree[]
+  onContextMenuSelect?: (worktree: Worktree) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onCardDragStart?: (
     event: React.DragEvent<HTMLDivElement>,

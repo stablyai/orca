@@ -46,7 +46,7 @@ export type WorktreeContextMenuProps = {
   children: React.ReactNode
   contentClassName?: string
   selectedWorktrees?: readonly Worktree[]
-  onContextMenuSelect?: (event: React.UIEvent<HTMLElement>) => readonly Worktree[]
+  onContextMenuSelect?: () => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   onOpenChange?: (open: boolean) => void
   onLifecycleComplete?: () => void

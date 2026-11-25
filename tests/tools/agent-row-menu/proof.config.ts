@@ -16,9 +16,10 @@ export default defineConfig({
   globalSetup: '../../e2e/global-setup.ts',
   globalTeardown: '../../e2e/global-teardown.ts',
   timeout: 180_000,
+  expect: { timeout: 10_000 },
   workers: 1,
   retries: 0,
-  reporter: 'list',
+  reporter: [['list', { printSteps: true }]],
   outputDir: process.env.ORCA_ROW_MENU_EVIDENCE_DIR ?? '../../../test-results/agent-row-menu',
   captureGitInfo: { commit: false, diff: false }
 })

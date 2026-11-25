@@ -34,10 +34,7 @@ export type WorktreeItemRowContext = {
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onWorktreeCardClick?: () => void
-  onContextMenuSelect: (
-    event: React.UIEvent<HTMLElement>,
-    worktree: Worktree
-  ) => readonly Worktree[]
+  onContextMenuSelect: (worktree: Worktree) => readonly Worktree[]
   onImmediateActivate: (worktreeId: string, rowKey: string | undefined) => void
   onRowClickCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   onRowPointerDown: (

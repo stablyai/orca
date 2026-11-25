@@ -25,10 +25,7 @@ type WorkspaceKanbanLaneCardListProps = {
   nativeDragEnabled: boolean
   onActivate: () => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktreeId: string) => boolean
-  onContextMenuSelect: (
-    event: React.UIEvent<HTMLElement>,
-    worktree: Worktree
-  ) => readonly Worktree[]
+  onContextMenuSelect: (worktree: Worktree) => readonly Worktree[]
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
 }
 

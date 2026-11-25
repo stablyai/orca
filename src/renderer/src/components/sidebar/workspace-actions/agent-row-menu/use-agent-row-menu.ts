@@ -135,7 +135,7 @@ export function useAgentRowMenu(model: WorktreeContextMenuModel) {
       current.setContextWorktrees(
         fromPortal
           ? [current.worktree]
-          : (current.onContextMenuSelect?.(event) ?? current.effectiveSelectedWorktrees)
+          : (current.onContextMenuSelect?.() ?? current.effectiveSelectedWorktrees)
       )
       const bounds = scope?.getBoundingClientRect()
       const left = bounds?.left ?? 0

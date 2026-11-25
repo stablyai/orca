@@ -165,8 +165,8 @@ function WorkspaceKanbanDrawerContent({
   )
   // Narrow the context-menu payload because its selection callback closes over unfiltered cards.
   const selectRenderedForContextMenu = useCallback(
-    (event: React.UIEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
-      const selection = selectForContextMenu(event, worktree)
+    (worktree: Worktree): readonly Worktree[] => {
+      const selection = selectForContextMenu(worktree)
       return matchingWorktreeIds
         ? selection.filter((item) => matchingWorktreeIds.has(getWorktreeHostIdentity(item)))
         : selection

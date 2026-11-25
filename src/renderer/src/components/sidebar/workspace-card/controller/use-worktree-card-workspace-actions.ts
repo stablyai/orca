@@ -131,7 +131,7 @@ export function useWorktreeCardWorkspaceActions({
   )
 
   const handleContextMenuSelect = useCallback(
-    (event: React.UIEvent<HTMLElement>) => onContextMenuSelect?.(event, worktree) ?? [worktree],
+    () => onContextMenuSelect?.(worktree) ?? [worktree],
     [onContextMenuSelect, worktree]
   )
 
