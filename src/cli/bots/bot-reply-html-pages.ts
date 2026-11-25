@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { CONNECTOR_REPLY_MAX_FILES } from '../../shared/connector-action-contract'
 import { splitHtmlDocumentFences } from '../../shared/markdown/html-document-fences'
-import { RuntimeClientError } from '../runtime/connection/types'
 import type { LocalFile } from '../slack/slack-action-files'
 
 // Names Windows reserves for devices, whatever the extension.
@@ -27,8 +26,8 @@ function htmlFileName(document: string, taken: Set<string>): string {
 }
 
 /** Each whole HTML page in the text goes as an .html file (written to a temporary folder, removed
- *  after) with the words left around them as one post. Null when a page couldn't be staged: nothing
- *  has posted then, so the caller can send the words inline. */
+ *  after) with the words left around them as one post. Null when the pages can't go as files (too
+ *  many, unwritable, or not staged): nothing has posted then, so the caller sends the words inline. */
 export async function replyWithHtmlPages<T>(
   text: string,
   stage: (files: LocalFile[]) => Promise<string[]>,
@@ -36,27 +35,30 @@ export async function replyWithHtmlPages<T>(
 ): Promise<{ files: number; sent: T } | null> {
   const split = splitHtmlDocumentFences(text)
   if (split.documents.length > CONNECTOR_REPLY_MAX_FILES) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      `A reply takes up to ${CONNECTOR_REPLY_MAX_FILES} HTML pages; send the rest in another reply.`
-    )
+    return null
   }
+  const staged = await stagePages(split.documents, stage).catch(() => null)
+  return staged
+    ? { files: split.documents.length, sent: await post(staged, split.text || undefined) }
+    : null
+}
+
+async function stagePages(
+  documents: string[],
+  stage: (files: LocalFile[]) => Promise<string[]>
+): Promise<string[]> {
   const dir = await mkdtemp(join(tmpdir(), 'orca-reply-html-'))
-  let staged: string[] | null
   try {
     const files: LocalFile[] = []
     const taken = new Set<string>()
-    for (const document of split.documents) {
+    for (const document of documents) {
       const name = htmlFileName(document, taken)
       const path = join(dir, name)
       await writeFile(path, document)
       files.push({ path, name, size: Buffer.byteLength(document) })
     }
-    staged = await stage(files).catch(() => null)
+    return await stage(files)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
   }
-  return staged
-    ? { files: split.documents.length, sent: await post(staged, split.text || undefined) }
-    : null
 }
