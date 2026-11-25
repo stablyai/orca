@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { SharedBotHostView } from '../../../../shared/bots/shared-bot-hosts'
+import {
+  newSharedBotHostEntry,
+  SharedBotHostStore
+} from '../../../bots/shared-with-me/shared-bot-host-store'
 
 type Handler = (event: unknown, args: unknown) => Promise<RuntimeRpcResponse<unknown>>
 const ipc = vi.hoisted(() => ({ handlers: new Map<string, Handler>() }))
@@ -53,9 +60,15 @@ const view: SharedBotHostView = {
   held: []
 }
 let views: SharedBotHostView[] = []
+let storeDir = ''
+let store = new SharedBotHostStore('/nowhere')
+const sharedEntry = () => ({ ...newSharedBotHostEntry(view), environmentId: SHARED })
 const hosts = {
   ready: vi.fn(async () => {}),
   views: () => views,
+  get store() {
+    return store
+  },
   reaches: (environmentId: string) => environmentId === SHARED,
   call: vi.fn(async (_environmentId: string, method: string) => answer(method)),
   subscribe: vi.fn(
@@ -107,7 +120,10 @@ function windowSubscribe(document: DocumentDeliveryEndpoint, selector: string, m
   )
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  storeDir = await mkdtemp(join(tmpdir(), 'orca-shared-host-status-'))
+  store = new SharedBotHostStore(storeDir)
+  store.put(sharedEntry())
   registry.resolve.mockReset().mockRejectedValue(new Error('paired-server registry'))
   hosts.call.mockClear()
   hosts.subscribe.mockClear()
@@ -121,8 +137,10 @@ beforeEach(() => {
   registerRuntimeEnvironmentPassiveHandlers(() => '/nowhere')
 })
 
-afterEach(() => {
+afterEach(async () => {
   routeSharedHostsThrough(null)
+  await store.flushed()
+  await rm(storeDir, { recursive: true, force: true })
 })
 
 describe('a shared agent’s host, reached through runtimeEnvironments', () => {
@@ -207,19 +225,34 @@ describe('a shared agent’s host status, as a paired server’s', () => {
     expect(registry.resolve).not.toHaveBeenCalled()
   })
 
-  it('stays ready on its last answer while its owner is away and messages are held', async () => {
-    await windowGetStatus(SHARED)
-    hosts.call.mockResolvedValueOnce({
-      id: 'status.get',
-      ok: false,
-      error: { code: 'offline', message: '' }
-    })
+  const offline = { id: 'status.get', ok: false, error: { code: 'offline', message: '' } } as const
+
+  // The owner's computer away since this Orca launched: no live answer this run.
+  it('answers verified and ready while its owner is away and messages are held, with no earlier answer', async () => {
     views = [{ ...view, link: 'offline' }]
-    sharedHostsChanged()
-    expect(await windowGetStatus(SHARED)).toEqual(answer('status.get'))
+    hosts.call.mockResolvedValue(offline)
+    expect(await windowGetStatus(SHARED)).toMatchObject({ ok: true })
     expect(sharedHostStatusSnapshots()[0]).toMatchObject({
       transport: 'ready',
       verification: 'verified'
+    })
+    hosts.call.mockImplementation(async (_environmentId: string, method: string) => answer(method))
+  })
+
+  it('keeps the host’s last answer with its share, so it still reads that way after a restart', async () => {
+    await windowGetStatus(SHARED)
+    await store.flushed()
+    store = new SharedBotHostStore(storeDir)
+    await store.load()
+    routeSharedHostsThrough({
+      hosts,
+      methods: { allows: isBotShareMethod, streams: isBotShareStreamMethod }
+    })
+    views = [{ ...view, link: 'offline' }]
+    hosts.call.mockResolvedValueOnce(offline)
+    expect(await windowGetStatus(SHARED)).toMatchObject({
+      ok: true,
+      result: { runtimeId: SHARED }
     })
   })
 

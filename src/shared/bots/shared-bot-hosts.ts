@@ -58,5 +58,7 @@ export const SHARED_BOT_HOST_ERRORS = {
   // The message is held in Orca Cloud until the host is back.
   held: 'shared_host_send_held',
   // Past the cloud's limit for one held message.
-  tooLarge: 'shared_host_send_too_large'
+  tooLarge: 'shared_host_send_too_large',
+  // The owner stopped sharing it: nothing is sent or held.
+  unshared: 'shared_host_unshared'
 } as const

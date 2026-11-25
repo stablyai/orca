@@ -38,6 +38,16 @@ const ResumeCredential = z.object({
   relay: z.object({ cellUrl: Text, relayHostId: Text })
 })
 
+/** The host's last status answer, kept so a host away reads as it last said after a restart too. */
+const KeptStatus = z.object({
+  runtimeId: Text,
+  runtimeProtocolVersion: z.number().int().optional(),
+  minCompatibleRuntimeClientVersion: z.number().int().optional(),
+  capabilities: z.array(z.string()).optional(),
+  appVersion: z.string().optional()
+})
+export type SharedBotKeptStatus = z.infer<typeof KeptStatus>
+
 const SharedBotHostEntry = z.object({
   shareId: BotShareIdSchema,
   // The paired-server id the app routes this host's calls by; minted once, kept for the share's life.
@@ -61,6 +71,7 @@ const SharedBotHostEntry = z.object({
   acceptedAt: z.number().int().nonnegative().optional(),
   // This computer's folder workspace its chats open in; absent until made (and in a store from before).
   homeWorkspaceId: Text.optional(),
+  status: KeptStatus.optional(),
   held: z.array(SharedBotHeldMessage)
 })
 export type SharedBotHostEntry = z.infer<typeof SharedBotHostEntry>
@@ -133,6 +144,15 @@ export class SharedBotHostStore {
 
   put(entry: SharedBotHostEntry): void {
     this.write([...this.entries.filter((other) => other.shareId !== entry.shareId), entry])
+  }
+
+  /** Keeps the host's status answer with its share; written only when it changed. */
+  keepStatus(environmentId: string, status: SharedBotKeptStatus): void {
+    const entry = this.entries.find((other) => other.environmentId === environmentId)
+    const kept = KeptStatus.safeParse(status).data
+    if (entry && kept && JSON.stringify(entry.status) !== JSON.stringify(kept)) {
+      this.put({ ...entry, status: kept })
+    }
   }
 
   remove(shareIds: ReadonlySet<string>): void {

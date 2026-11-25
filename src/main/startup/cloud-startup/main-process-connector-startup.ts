@@ -1,4 +1,4 @@
-import { powerMonitor } from 'electron'
+import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import { installConnectorHost } from '../../connector-cloud/connector-host-install'
@@ -59,8 +59,19 @@ export function installMainProcessConnectorCloud(serve: boolean): void {
     }
   })
   powerMonitor.on('resume', refreshSharedBotHosts)
+  // A share made while this window was in the background shows on return, not at the next idle read.
+  let readOnFocusAt = 0
+  app.on('browser-window-focus', () => {
+    if (Date.now() - readOnFocusAt >= SHARED_BOT_HOSTS_FOCUS_READ_GAP_MS) {
+      readOnFocusAt = Date.now()
+      refreshSharedBotHosts()
+    }
+  })
   registerAvatarGenerationHandlers(() => runtime.getCommitMessageAgentEnvironmentResolvers())
 }
+
+// At most one focus read a minute: switching windows must not poll the cloud.
+const SHARED_BOT_HOSTS_FOCUS_READ_GAP_MS = 60_000
 
 /** Re-reads the agents shared with this account, as after a sign-in or a wake. */
 export function refreshSharedBotHosts(): void {

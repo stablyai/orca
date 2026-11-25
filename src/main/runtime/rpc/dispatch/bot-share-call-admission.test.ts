@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Bot } from '../../../../shared/bot-types'
 import { OWNER_ACTS_FOR, type BotRequestAsker } from '../../../../shared/bots/bot-acts-for'
 import { BotChats } from '../../../../shared/rpc-contract/bots-params'
-import { AttachmentUploadStartParams } from '../../../../shared/rpc-contract/structured-agent-session/agent-session-attachment-params'
+import {
+  AttachmentReadParams,
+  AttachmentUploadStartParams
+} from '../../../../shared/rpc-contract/structured-agent-session/agent-session-attachment-params'
 import { emptyChatReusableBy } from '../../../bots/team-share/bot-share-chats'
 import {
   HistoryParams,
@@ -20,12 +23,15 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
 import {
   BOT_SHARE_SCOPED_METHODS,
+  SHARE_BY_ATTACHMENT,
   SHARE_BY_BOT,
   SHARE_BY_ENVELOPE_SESSION,
   SHARE_BY_SESSION
 } from '../../../../shared/bots/bot-share-rpc-methods'
 import { botShareMethodNames } from '../methods/rpc-method-share'
 import { defineMethod } from '../core'
+import { AgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store'
+import { setAgentSessionAttachmentStore } from '../../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'
 import { BOT_METHODS } from '../methods/bots'
@@ -184,6 +190,13 @@ beforeEach(() => {
         handler: ran
       }),
       defineMethod({
+        name: 'agentSessionAttachment.read',
+        permission: 'workspace',
+        share: SHARE_BY_ATTACHMENT,
+        params: AttachmentReadParams,
+        handler: ran
+      }),
+      defineMethod({
         name: 'bots.chats.seen',
         permission: 'workspace',
         share: 'not-shared',
@@ -198,6 +211,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  setAgentSessionAttachmentStore(null)
   setStructuredAgentSessionHost(null)
   db.close()
   rmSync(directory, { recursive: true, force: true })
@@ -287,6 +301,28 @@ describe('the share guard', () => {
     expect(errorCode(await upload(ids.alicesChat))).toBeNull()
     expect(errorCode(await upload(ids.ownersChat))).toBe('not_found')
     expect(errorCode(await upload(ids.alicesOtherBotChat))).toBe('not_found')
+  })
+
+  // A stored file's upload id is claimed by the chats whose messages carry it (the journal's claims).
+  it('previews a stored attachment only when one of the teammate’s own chats claims it', async () => {
+    const root = join(directory, 'attachments')
+    const theirs = join(root, '11111111-1111-4111-8111-111111111111', 'a.png')
+    const owners = join(root, '22222222-2222-4222-8222-222222222222', 'b.png')
+    const claims = new Map([
+      ['11111111-1111-4111-8111-111111111111', [ids.alicesChat]],
+      ['22222222-2222-4222-8222-222222222222', [ids.ownersChat]]
+    ])
+    setAgentSessionAttachmentStore(
+      new AgentSessionAttachmentStore(root, {
+        hasSession: () => true,
+        claimingSessions: async (uploadId) => claims.get(uploadId) ?? []
+      }),
+      async () => {}
+    )
+    const read = (path: string) => call('agentSessionAttachment.read', { path })
+    expect(errorCode(await read(theirs))).toBeNull()
+    expect(errorCode(await read(owners))).toBe('not_found')
+    expect(errorCode(await read(join(directory, 'elsewhere.png')))).toBe('not_found')
   })
 
   it('lets New chat reopen only an empty chat of the asker’s own', () => {
@@ -379,6 +415,8 @@ describe('the share guard', () => {
         'agentSession.subscribe',
         'agentSession.subscribeStatus',
         'agentSession.unsubscribe',
+        'agentSessionAttachment.read',
+        'agentSessionAttachment.readTextChunk',
         'agentSessionAttachment.uploadAbort',
         'agentSessionAttachment.uploadAppend',
         'agentSessionAttachment.uploadCommit',

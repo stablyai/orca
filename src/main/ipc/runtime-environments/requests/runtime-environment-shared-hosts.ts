@@ -13,7 +13,10 @@ import type {
 import type { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import { SharedHostStatuses } from './runtime-environment-shared-host-status'
 
-type SharedHosts = Pick<SharedBotHosts, 'ready' | 'reaches' | 'call' | 'subscribe' | 'views'>
+type SharedHosts = Pick<
+  SharedBotHosts,
+  'ready' | 'reaches' | 'call' | 'subscribe' | 'views' | 'store'
+>
 type OnResponse = (response: RuntimeRpcResponse<unknown>) => void
 type StatusOptions = Parameters<RuntimeHostStatusOwner['refresh']>[0]
 

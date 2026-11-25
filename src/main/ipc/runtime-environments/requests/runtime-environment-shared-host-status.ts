@@ -11,13 +11,19 @@ import {
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
+import type { SharedBotHostStore } from '../../../bots/shared-with-me/shared-bot-host-store'
+import {
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  RUNTIME_PROTOCOL_VERSION
+} from '../../../../shared/remote-runtime/protocol/protocol-version'
 
 type StatusHosts = {
   call: (selector: string, method: string, params: unknown) => Promise<RuntimeRpcResponse<unknown>>
   views: () => readonly SharedBotHostView[]
+  store: Pick<SharedBotHostStore, 'list' | 'keepStatus'>
 }
 
-type Kept = { owner: RuntimeHostStatusOwner; answered: RuntimeHostStatusResponse | null }
+type Kept = { owner: RuntimeHostStatusOwner }
 
 // A share has no pairing revisions; the window keys its status by this one.
 const SHARED_HOST_PAIRING_REVISION = 0
@@ -45,18 +51,18 @@ export class SharedHostStatuses {
       return existing.owner
     }
     const kept: Kept = {
-      answered: null,
       owner: new RuntimeHostStatusOwner({
         environmentId: selector,
         pairingRevision: SHARED_HOST_PAIRING_REVISION,
         request: async () => {
           const response = statusResponse(await this.hosts.call(selector, 'status.get', undefined))
           if (response.ok) {
-            kept.answered = response
+            this.hosts.store.keepStatus(selector, response.result)
             return response
           }
-          // A host away that holds messages is as it last said: its sends wait for it, not fail.
-          return this.view(selector)?.holds && kept.answered ? kept.answered : response
+          // A host away that holds messages is as it last said (or, never reached, as this build
+          // is): its sends wait for it, not fail.
+          return this.view(selector)?.holds ? this.heldStatus(selector) : response
         },
         // Link changes, not the owner's retries, say when to ask again.
         verified: () => true,
@@ -97,6 +103,28 @@ export class SharedHostStatuses {
   private retire(selector: string, owner: RuntimeHostStatusOwner): void {
     owner.dispose()
     this.kept.delete(selector)
+  }
+
+  private heldStatus(selector: string): RuntimeHostStatusResponse {
+    const kept = this.hosts.store.list().find((entry) => entry.environmentId === selector)?.status
+    return {
+      id: 'status.get',
+      ok: true,
+      result: {
+        runtimeId: kept?.runtimeId ?? selector,
+        rendererGraphEpoch: 0,
+        graphStatus: 'ready',
+        authoritativeWindowId: null,
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        runtimeProtocolVersion: kept?.runtimeProtocolVersion ?? RUNTIME_PROTOCOL_VERSION,
+        minCompatibleRuntimeClientVersion:
+          kept?.minCompatibleRuntimeClientVersion ?? MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+        capabilities: kept?.capabilities ?? [],
+        ...(kept?.appVersion ? { appVersion: kept.appVersion } : {})
+      },
+      _meta: { runtimeId: kept?.runtimeId ?? selector }
+    }
   }
 
   private view(selector: string): SharedBotHostView | undefined {

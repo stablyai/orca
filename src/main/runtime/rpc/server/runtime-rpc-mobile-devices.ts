@@ -121,6 +121,11 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     deviceId: string,
     connectionClaim?: DeviceOrcaAccount | null
   ): PairedDeviceTypist | null {
+    // A shared agent's teammate (their desktop or its phone) types as the account the share names.
+    const teammate = this.botShareDevices?.get(deviceId)
+    if (teammate) {
+      return { id: teammate.accountId, name: teammate.name }
+    }
     const registry = this.deviceRegistry
     return registry
       ? pairedDeviceTypistOf(

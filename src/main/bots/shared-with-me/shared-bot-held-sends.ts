@@ -1,5 +1,6 @@
 // A teammate's messages held in Orca Cloud for a shared agent's host: where a send goes, the held
 // states the cloud reports, and Send again for one the host refused.
+import { UNKNOWN_SHARE_REFUSAL } from '../../../shared/connector-share-contract'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
@@ -153,6 +154,15 @@ export class SharedBotHeldSends {
         'agentSession.send',
         SHARED_BOT_HOST_ERRORS.tooLarge,
         `Too large to hold; send it when ${entry.ownerName}’s computer is online`
+      )
+    }
+    if (result?.kind === 'failed' && result.error === UNKNOWN_SHARE_REFUSAL) {
+      // Revoked: the cloud's list drops it now, not at the next idle read.
+      this.deps.changed()
+      return sharedBotFailure(
+        'agentSession.send',
+        SHARED_BOT_HOST_ERRORS.unshared,
+        `${entry.ownerName} no longer shares this agent with you`
       )
     }
     // Not held (refused, unsupported, no cloud): still never sent live ahead of the queue.

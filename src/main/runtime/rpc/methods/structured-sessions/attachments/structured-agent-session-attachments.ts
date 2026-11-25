@@ -1,4 +1,8 @@
-import { SHARE_BY_SESSION, SHARE_SELF } from '../../../../../../shared/bots/bot-share-rpc-methods'
+import {
+  SHARE_BY_ATTACHMENT,
+  SHARE_BY_SESSION,
+  SHARE_SELF
+} from '../../../../../../shared/bots/bot-share-rpc-methods'
 // Store client chat attachments on this host under the structured-session gate, separate from session-host access.
 // Negotiate attachments.v1; older hosts return method_not_found.
 
@@ -33,7 +37,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   defineMethod({
     name: 'agentSessionAttachment.readTextChunk',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_ATTACHMENT,
     params: AttachmentTextReadParams,
     handler: async (params, ctx) => {
       const { store } = await requireStore(ctx)
@@ -83,7 +87,7 @@ export const STRUCTURED_AGENT_SESSION_ATTACHMENT_METHODS = [
   defineMethod({
     name: 'agentSessionAttachment.read',
     permission: 'workspace',
-    share: 'not-shared',
+    share: SHARE_BY_ATTACHMENT,
     params: AttachmentReadParams,
     handler: async (params, ctx) => {
       const { store } = await requireStore(ctx)

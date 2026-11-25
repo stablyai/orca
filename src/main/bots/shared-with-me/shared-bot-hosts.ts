@@ -41,7 +41,7 @@ export type SharedBotHostsDeps = {
 }
 
 export class SharedBotHosts {
-  private readonly store: SharedBotHostStore
+  readonly store: SharedBotHostStore
   private readonly links = new Map<string, SharedBotHostLink>()
   // Null until the cloud first answers: every kept share is listed meanwhile, none dropped.
   private shares: Map<string, MineShare> | null = null
@@ -322,7 +322,13 @@ export class SharedBotHosts {
         platform: this.deps.platform,
         entry: () => this.store.get(entry.shareId),
         save: (next) => this.store.put(next),
-        onLinkChanged: () => this.publish()
+        // Unpaired means the host refused this device (a revoke): the cloud's list says so now.
+        onLinkChanged: (next) => {
+          this.publish()
+          if (next === 'unpaired') {
+            void this.refresh()
+          }
+        }
       })
       this.links.set(entry.shareId, link)
     }

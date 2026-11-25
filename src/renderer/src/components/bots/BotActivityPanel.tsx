@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useSharedBotHostOf } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { useAppStore } from '@/store'
 import { botRefKey } from '@/lib/bot-hosts'
 import { useBotHostOffline } from '@/lib/bot-host-views'
@@ -59,7 +60,13 @@ export default function BotActivityPanel(): React.JSX.Element | null {
   if (!bot) {
     return <ChatWorkersActivity />
   }
-  return <BotActivityOrSettings key={bot.id} bot={bot} />
+  return <BotActivityForBot key={bot.id} bot={bot} />
+}
+
+/** A shared agent's activity, items and settings are its owner's: none of them is shared, so the
+ *  panel offers nothing for it rather than reads that fail and buttons that can't work. */
+function BotActivityForBot({ bot }: { bot: Bot }): React.JSX.Element | null {
+  return useSharedBotHostOf(bot.hostId) ? null : <BotActivityOrSettings bot={bot} />
 }
 
 function BotActivityOrSettings({ bot }: { bot: Bot }): React.JSX.Element {

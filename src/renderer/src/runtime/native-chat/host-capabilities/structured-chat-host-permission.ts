@@ -13,6 +13,7 @@ import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import { subscribeRuntimeHostContactRegained } from '../../hosts/connections/runtime-host-contact-regained'
+import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 /** `unverified`: the host could not say what it runs, so nothing may start there yet. */
 export type StructuredChatHostPermissionVerdict = ChatPermissionHostVerdict | { kind: 'unverified' }
@@ -36,7 +37,8 @@ export async function readStructuredChatHostPermissionVerdict(
   agent: string,
   requested: unknown = requestedChatPermissionMode(agent)
 ): Promise<StructuredChatHostPermissionVerdict> {
-  if (target.kind === 'local' || !agentChatPermissionModes(agent)) {
+  // Every host that takes shares applies per-chat modes (they predate sharing), reached or away.
+  if (target.kind === 'local' || !agentChatPermissionModes(agent) || sharedBotHostFor(target)) {
     return { kind: 'allowed' }
   }
   const advertised = await runtimeEnvironmentSupportsCapability(
