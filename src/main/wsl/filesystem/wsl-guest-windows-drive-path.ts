@@ -158,9 +158,10 @@ export function resolveGuestNativeProgram(
   }
   const native = resolve(command, {
     ...options,
-    pathEnv: guestNativePathEnv(options.pathEnv, mounts)
+    pathEnv: guestNativePathEnv(options.pathEnv, mounts),
+    installDirAllowed: (dir) => !isUnderWindowsDriveMount(dir.replace(/\/+$/, ''), mounts)
   })
-  if (isAbsolute(native)) {
+  if (isAbsolute(native) && !isUnderWindowsDriveMount(dirname(native), mounts)) {
     return native
   }
   return hasWindowsDriveCopy(command, options, resolve, mounts) ? null : native
@@ -181,9 +182,10 @@ export async function resolveGuestNativeProgramAsync(
     pathValue === null ? undefined : withoutWindowsDriveMountDirs(pathValue, resolvedMounts)
   const native = await resolveCliCommandAsync(command, {
     ...options,
-    ...(filteredPath === undefined ? {} : { pathEnv: filteredPath })
+    ...(filteredPath === undefined ? {} : { pathEnv: filteredPath }),
+    installDirAllowed: (dir) => !isUnderWindowsDriveMount(dir.replace(/\/+$/, ''), resolvedMounts)
   })
-  if (isAbsolute(native)) {
+  if (isAbsolute(native) && !isUnderWindowsDriveMount(dirname(native), resolvedMounts)) {
     return native
   }
   const windows = await resolveCliCommandAsync(command, options)

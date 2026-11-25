@@ -12,6 +12,8 @@ export type ResolveCommandOptions = {
   homePath?: string
   /** Skip the PATH scan; the caller already established absence there (agent detection batches it). */
   skipPathSearch?: boolean
+  /** Reject fallback install directories the caller cannot run, e.g. a Windows mount in WSL. */
+  installDirAllowed?: (dir: string) => boolean
 }
 
 export function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
@@ -199,7 +201,9 @@ export function* cliCommandLookup(
     (yield* firstRunnable(platform, splitPath(pathEnv, platform), names)) ??
     (yield* firstRunnable(
       platform,
-      yield* cliInstallDirectories(platform, options.homePath ?? homedir()),
+      (yield* cliInstallDirectories(platform, options.homePath ?? homedir())).filter(
+        options.installDirAllowed ?? (() => true)
+      ),
       names
     )) ??
     commandName
