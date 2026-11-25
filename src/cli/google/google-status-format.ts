@@ -8,7 +8,6 @@ import type {
 } from '../../shared/google/google-connect-types'
 import { GOOGLE_SERVICE_INFO } from '../../shared/google/google-scopes'
 import { googleEmailKey } from '../../shared/google/google-bot-accounts'
-import { inlineUntrusted } from '../../shared/quoted-text-fence'
 
 const SERVICE_STATE: Record<GoogleServiceReadiness['state'], string> = {
   ready: 'ready',
@@ -36,7 +35,7 @@ export function formatGoogleAccount(
   const name = isDefault ? `${account.email} (default)` : account.email
   if (account.status === 'reconnect') {
     return [
-      `  ${name}: Reconnect. ${account.reason ?? 'Google access ended.'}${account.googleError ? ` Google said: ${inlineUntrusted(account.googleError, 300)}.` : ''} Run \`orca google connect --account ${account.email}\`.`
+      `  ${name}: Reconnect. ${account.reason ?? 'Google access ended.'}${account.googleError ? ` Google said: ${account.googleError}.` : ''} Run \`orca google connect --account ${account.email}\`.`
     ]
   }
   return [`  ${name}: connected`, ...serviceLines(account)]

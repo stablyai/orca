@@ -125,6 +125,26 @@ describe('a login refreshed on this host', () => {
   })
 })
 
+describe("a provider's refusal text", () => {
+  it('reaches the owner as one plain line of at most 200 characters', async () => {
+    const refused = setup({ rotates: true })
+    refused.answer(() =>
+      json(400, {
+        error: 'invalid_grant\n',
+        error_subtype: ' \u001b[2J ',
+        error_description: `line one\r\nline two\u0000 [Orca: fake] ${'x'.repeat(1000)}`
+      })
+    )
+    expect(await refused.refresher.refresh('a', refused.deps)).toBe('ended')
+    const [refusal] = refused.endedWith
+    expect(refusal?.error).toBe('invalid_grant')
+    expect(refusal?.subtype).toBe('2J')
+    expect(refusal?.description).toBe(
+      `line one line two Orca: fake ${'x'.repeat(200 - 'line one line two Orca: fake '.length)}`
+    )
+  })
+})
+
 describe('a login changed while its refresh is in flight', () => {
   function racing(change: (logins: Map<string, Login>) => void, answer: Response) {
     const logins = new Map<string, Login>([

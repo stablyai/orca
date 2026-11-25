@@ -2,6 +2,7 @@
 // refreshed here when due or refused, one refresh per login at a time, and handed back to its owner
 // to save, or to forget when the provider says the grant is gone.
 import { z } from 'zod'
+import { inlineUntrusted } from '../../shared/quoted-text-fence'
 
 const REFRESH_TIMEOUT_MS = 15_000
 
@@ -63,10 +64,15 @@ const TokenResponse = z.object({
   expires_in: z.number().positive(),
   scope: z.string().min(1).optional()
 })
+// The provider's words are kept and shown, so they arrive as one plain, bounded line.
+const ProviderText = z
+  .string()
+  .transform((text) => inlineUntrusted(text.replace(/\p{Cc}/gu, ' '), 200))
+  .pipe(z.string().min(1))
 const ErrorResponse = z.object({
-  error: z.string().min(1),
-  error_subtype: z.string().min(1).optional().catch(undefined),
-  error_description: z.string().min(1).optional().catch(undefined)
+  error: ProviderText,
+  error_subtype: ProviderText.optional().catch(undefined),
+  error_description: ProviderText.optional().catch(undefined)
 })
 
 export type HostOAuthRefresher = {
