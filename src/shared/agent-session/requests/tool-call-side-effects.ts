@@ -232,13 +232,14 @@ export function shellCommandOnlyReads(command: string): boolean {
   }
   const commands = line.split(/&&|\|\||[;|\n]/)
   return commands.every((part) => {
-    const words = plainWords(part)
-    if (words === null || words.length === 0) {
-      return words !== null
+    const parsed = plainWords(part)
+    if (parsed === null || parsed.words.length === 0) {
+      return parsed !== null
     }
-    const [program, ...args] = words
+    const [program, ...args] = parsed.words
     const reads = program !== undefined && Object.hasOwn(READ_PROGRAMS, program)
-    return reads && READ_PROGRAMS[program!]!(args)
+    // A glob can expand to a file named like a writing flag (`-delete`, `-i`), which the checks never see.
+    return reads && (!parsed.globbed || GLOB_SAFE.has(program!)) && READ_PROGRAMS[program!]!(args)
   })
 }
 
@@ -247,16 +248,39 @@ export function shellCommandOnlyReads(command: string): boolean {
 const WORD = /(?<=^|\s)(?:'([^']*)'|"([^"$`\\]*)"|([A-Za-z0-9._/:=@,+%^*?-]+))(?=\s|$)/g
 
 /** A command's words as the program gets them, or null when the shell would change one. */
-function plainWords(part: string): string[] | null {
+function plainWords(part: string): { words: string[]; globbed: boolean } | null {
   const words: string[] = []
   let consumed = ''
+  let globbed = false
   for (const match of part.matchAll(WORD)) {
     words.push(match[1] ?? match[2] ?? match[3] ?? '')
+    globbed ||= /[*?^]/.test(match[3] ?? '')
     consumed += match[0]
   }
   const bare = (text: string) => text.replace(/\s/g, '')
-  return bare(consumed) === bare(part) ? words : null
+  return bare(consumed) === bare(part) ? { words, globbed } : null
 }
+
+/** Programs no flag can make write or run something, so a glob that expands to one is still a read. */
+const GLOB_SAFE: ReadonlySet<string> = new Set([
+  'cat',
+  'head',
+  'tail',
+  'ls',
+  'wc',
+  'grep',
+  'egrep',
+  'diff',
+  'cmp',
+  'stat',
+  'du',
+  'nl',
+  'basename',
+  'dirname',
+  'realpath',
+  'echo',
+  'printf'
+])
 
 /** Whether a journal item is work that may have changed something: an edit recorded as a diff
  *  (Codex and Pi file changes), or a tool call not known to only read. */

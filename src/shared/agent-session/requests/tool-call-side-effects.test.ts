@@ -52,6 +52,8 @@ describe('toolCallHasSideEffects', () => {
       ['Bash', { command: "rm${IFS}-rf${IFS}build;/bin/bash -lc 'ls'" }],
       ['Bash', { command: ">out;/bin/sh -c 'cat a'" }],
       ['Bash', { command: 'cat a 2>&1out' }],
+      ['Bash', { command: 'find *' }],
+      ['Bash', { command: 'sed -n 1p *' }],
       ['Bash', { command: 'gh pr view -w 12' }],
       ['Bash', { command: 'tree -H . -L 1 -R' }],
       ['Bash', { command: 'date 010100002027' }]
