@@ -114,6 +114,7 @@ function findSessionTabsRead(
   ) {
     return existing
   }
+  return undefined
 }
 
 function startSessionTabsRead(
