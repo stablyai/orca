@@ -205,8 +205,14 @@ function BotSidebarList({
       setBotSidebarChildren(entryKey, { chats: chatTree.chats.length > 0 })
     }
   }, [entryKey, chatTree.state, chatTree.chats.length])
-  const { showAllWorkspaces, toggleWorkspaces, chatSteps, setChatSteps } =
-    useBotSidebarPaging(entryKey)
+  const {
+    showAllWorkspaces,
+    toggleWorkspaces,
+    chatSteps,
+    setChatSteps,
+    showOlderChats,
+    toggleOlderChats
+  } = useBotSidebarPaging(entryKey)
   // Once the host answers (or can't), the rows a reveal waits for are as listed as they will get.
   useBotsRevealSettle(entryKey, chatTree.state !== 'loading')
   if (chatTree.state === 'loading') {
@@ -222,6 +228,8 @@ function BotSidebarList({
         activeLine={activeLine}
         steps={chatSteps}
         onStep={setChatSteps}
+        showOlder={showOlderChats}
+        onToggleOlder={toggleOlderChats}
         onOpen={onOpen}
       />
     )

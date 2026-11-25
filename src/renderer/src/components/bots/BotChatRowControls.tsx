@@ -130,8 +130,9 @@ export function BotChatPaging({
         className
       )}
     >
+      {/* Keyed by place, so a link whose label flips (Show N older, Show fewer) keeps keyboard focus. */}
       {links.map((link, index) => (
-        <Fragment key={link.label}>
+        <Fragment key={index}>
           {index > 0 ? <span aria-hidden>·</span> : null}
           <button
             type="button"

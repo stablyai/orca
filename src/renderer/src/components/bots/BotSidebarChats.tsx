@@ -4,15 +4,21 @@ import { AttachedWorktreeCards } from '@/components/sidebar/AttachedWorktreeCard
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { openBotHomeTab } from '@/lib/bot-catalog'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
+import { useNow } from '@/lib/window-activity/use-now'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
+import { selectFrontTab } from '@/store/slices/tabs/active-tab-selection'
 import type { Bot } from '../../../../shared/bot-types'
 import {
   botChatFoldKey,
   chatFoldSummary,
   type BotChatTreeChat
 } from '../../../../shared/bots/bot-chat-tree'
-import { botSidebarListedChats } from '../../../../shared/bots/bot-sidebar-chat-groups'
+import {
+  botLiveWorkspaceIds,
+  botSidebarListedChats
+} from '../../../../shared/bots/bot-sidebar-chat-groups'
+import { splitOlderBotSidebarChats } from '../../../../shared/bots/bot-sidebar-older-chats'
 import {
   botSidebarWorkerPagingLabel,
   buildBotSidebarTree,
@@ -20,6 +26,7 @@ import {
   type BotSidebarChatView
 } from '../../../../shared/bots/bot-sidebar-tree'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { BotChatStatusSlot, useBotChatLabel } from './BotChatOriginIcon'
 import { BotChatPaging, BotChatRowEnd, useBotChatPress } from './BotChatRowControls'
 import type { BotChatTree } from './use-bot-chat-tree'
@@ -28,7 +35,11 @@ import { openBotSession } from './bot-session-open'
 import { botSidebarEntryKey } from './bot-sidebar-entry-keys'
 import { useBotsRevealRequest } from './bots-sidebar-reveal-context'
 
-/** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by indent. */
+/** How often a chat's age is re-read, so one a day old folds without a new chat read. */
+const OLDER_CHATS_CLOCK_MS = 5 * 60_000
+
+/** The bot's open chat tabs in the panel's order, each with the workspaces its workers have, nested by
+ *  indent; settled ones a day old fold under one "Show N older" link. */
 export function BotSidebarChats({
   bot,
   tree,
@@ -37,6 +48,8 @@ export function BotSidebarChats({
   activeLine,
   steps,
   onStep,
+  showOlder,
+  onToggleOlder,
   onOpen
 }: {
   bot: Bot
@@ -47,6 +60,8 @@ export function BotSidebarChats({
   activeLine: Worktree | undefined
   steps: Readonly<Record<string, number>>
   onStep: (chatId: string, steps: number) => void
+  showOlder: boolean
+  onToggleOlder: () => void
   onOpen: () => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -70,6 +85,31 @@ export function BotSidebarChats({
       activeLineId: activeLine?.id ?? null
     })
   }, [chats, listed, workspaceChats, workspaces, folds, steps, activeLine])
+  const homeKey = useMemo(() => folderWorkspaceKey(bot.folderWorkspaceId), [bot.folderWorkspaceId])
+  const homeTabs = useAppStore((s) => s.unifiedTabsByWorktree[homeKey])
+  const activeChatId = useAppStore((s) => {
+    if ((s.activeWorkspaceKey ?? s.activeWorktreeId) !== homeKey) {
+      return null
+    }
+    const tab = selectFrontTab(s)
+    return tab?.contentType === 'agent-session' ? tab.entityId : null
+  })
+  const now = useNow(OLDER_CHATS_CLOCK_MS)
+  const { recent, older } = useMemo(() => {
+    const focusedAt = new Map<string, number>()
+    for (const tab of homeTabs ?? []) {
+      if (tab.contentType === 'agent-session' && tab.lastFocusedAt !== undefined) {
+        focusedAt.set(tab.entityId, Math.max(tab.lastFocusedAt, focusedAt.get(tab.entityId) ?? 0))
+      }
+    }
+    return splitOlderBotSidebarChats(view.chats, {
+      now,
+      focusedAt,
+      activeChatId,
+      liveLineIds: botLiveWorkspaceIds(chats),
+      activeLineId: activeLine?.id ?? null
+    })
+  }, [view.chats, homeTabs, activeChatId, now, chats, activeLine])
   // A reveal of a worker line under a folded chat opens that chat, once per request.
   const reveal = useBotsRevealRequest(botSidebarEntryKey(bot))
   const revealWorker = reveal?.target.hostDown ? undefined : reveal?.target.worker
@@ -102,19 +142,36 @@ export function BotSidebarChats({
     return labels
   }, [view.notes, t])
 
+  const chatRow = (chatView: BotSidebarChatView<Worktree>): React.JSX.Element => (
+    <BotSidebarChat
+      key={chatView.chat.chatId}
+      bot={bot}
+      view={chatView}
+      notes={notes}
+      lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
+      onStep={(next) => onStep(chatView.chat.chatId, next)}
+      onOpen={onOpen}
+    />
+  )
+
   return (
     <>
-      {view.chats.map((chatView) => (
-        <BotSidebarChat
-          key={chatView.chat.chatId}
-          bot={bot}
-          view={chatView}
-          notes={notes}
-          lineageChildrenByParentIdentity={lineageChildrenByParentIdentity}
-          onStep={(next) => onStep(chatView.chat.chatId, next)}
-          onOpen={onOpen}
-        />
-      ))}
+      {recent.map(chatRow)}
+      {showOlder ? older.map(chatRow) : null}
+      <BotChatPaging
+        more={
+          older.length > 0 && !showOlder
+            ? [
+                {
+                  label: t('bots.chats.older', 'Show {{count}} older', { count: older.length }),
+                  onClick: onToggleOlder
+                }
+              ]
+            : []
+        }
+        onFewer={older.length > 0 && showOlder ? onToggleOlder : null}
+        className="pr-2 pb-1 pl-1"
+      />
       {view.stray.length > 0 ? (
         <AttachedWorktreeCards
           roots={view.stray}
