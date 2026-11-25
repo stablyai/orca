@@ -1,10 +1,27 @@
-import { rmSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import type { AgentHookInstallStatus } from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { CLAUDE_HOOK_PLUGIN_NAME } from '../../../shared/agent-hook-listener/providers/claude/claude-hook-plugin'
 import type { HooksConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
-import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
+import { writeHooksJsonAsync } from '../../agent-hooks/installation/configuration/hooks-json-write-async'
+
+const PLUGIN_MANIFEST = {
+  name: CLAUDE_HOOK_PLUGIN_NAME,
+  version: '1.0.0',
+  description: 'Orca agent status hooks for Claude config folders Orca does not manage',
+  author: { name: 'stablyai' },
+  license: 'MIT'
+}
+
+// Serialized so a quick on/off toggle can't leave the plugin behind after removal.
+let tail: Promise<void> = Promise.resolve()
+
+function enqueue(label: string, run: () => Promise<void>): void {
+  tail = tail.then(run).catch((error: unknown) => {
+    console.warn(`[agent-hooks] Claude hook plugin ${label} failed`, error)
+  })
+}
 
 /** Fixed path, so a pane's env stays valid while the hook set changes underneath it. */
 export function getClaudeHookPluginDir(userDataPath: string): string {
@@ -20,21 +37,16 @@ export function publishClaudeHookPlugin(
     return
   }
   const root = getClaudeHookPluginDir(getAppEnvironment().getPath('userData'))
-  writeHooksJson(join(root, '.claude-plugin', 'plugin.json'), {
-    name: CLAUDE_HOOK_PLUGIN_NAME,
-    version: '1.0.0',
-    description: 'Orca agent status hooks for Claude config folders Orca does not manage',
-    author: { name: 'stablyai' },
-    license: 'MIT'
+  const hooks = { hooks: buildHooks() ?? {} }
+  enqueue('publish', async () => {
+    await writeHooksJsonAsync(join(root, '.claude-plugin', 'plugin.json'), PLUGIN_MANIFEST)
+    await writeHooksJsonAsync(join(root, 'hooks', 'hooks.json'), hooks)
   })
-  writeHooksJson(join(root, 'hooks', 'hooks.json'), { hooks: buildHooks() ?? {} })
 }
 
 export function removeClaudeHookPlugin(agent: AgentHookInstallStatus['agent']): void {
   if (agent === 'claude') {
-    rmSync(getClaudeHookPluginDir(getAppEnvironment().getPath('userData')), {
-      recursive: true,
-      force: true
-    })
+    const root = getClaudeHookPluginDir(getAppEnvironment().getPath('userData'))
+    enqueue('removal', () => rm(root, { recursive: true, force: true }))
   }
 }
