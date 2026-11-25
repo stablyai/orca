@@ -64,7 +64,7 @@ function endedTurn(
     runningTurnReported: () => false,
     workLinks: async () => [],
     promptsAudience: () => true,
-    turnOpener: () => ({ itemId: opener }) as unknown as AgentJournalRenderItem,
+    turnOpener: () => (opener ? ({ itemId: opener } as unknown as AgentJournalRenderItem) : null),
     keepAdoptedTurn: () => {},
     turnStartedAt: () => null
   })
@@ -231,5 +231,32 @@ describe('a chat turn’s status row after the turn ended', () => {
     end()
     show({ state: 'working', stateStartedAt: ENDED + 5_000 })
     expect(starts()).toEqual([SENT, ENDED - 1_000, ENDED - 1_000, ENDED + 5_000])
+  })
+
+  it('tells the host’s next turn after a takeover whose opener couldn’t be read', () => {
+    const { show, starts } = endedTurn((chats, show, hostRuns, _end, put) => {
+      hostRuns('')
+      put({ state: 'working', stateStartedAt: HANDED_OVER })
+      chats.adopt(paneKey)
+      hostRuns('send-b')
+      show({ state: 'working', stateStartedAt: ENDED + 100 })
+    })
+    show({ state: 'working', stateStartedAt: ENDED + 100 })
+    expect(starts()).toEqual([ENDED + 100])
+  })
+
+  it('ends the replaced turn, not the newer one, when a watch gap came between', () => {
+    const { chats, show, starts } = endedTurn((chats, show, hostRuns, _end, put) => {
+      told(chats, show)
+      hostRuns('send-b', true)
+      show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+      // The watch goes and comes back, taking over the newer turn from its row.
+      chats.clear()
+      put({ state: 'working', stateStartedAt: ENDED - 1_000 })
+      chats.adopt(paneKey)
+    })
+    expect(starts()).toEqual([SENT, ENDED - 1_000])
+    show({ state: 'working', stateStartedAt: ENDED - 1_000 })
+    expect(chats.turnOf(paneKey)).toBe(ENDED - 1_000)
   })
 })

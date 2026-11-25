@@ -53,7 +53,7 @@ export class ChatTurns {
       hears: (link) => this.hears(link),
       remember: (paneKey, at) => {
         this.startedAt.set(paneKey, at)
-        this.dates.showed(paneKey, at, this.openerOf(paneKey))
+        this.dates.tookOver(paneKey, at, this.openerOf(paneKey))
         const row = deps.readHookRow(paneKey)
         if (row) {
           this.leadState.set(paneKey, leadOf(row).state)
@@ -110,7 +110,7 @@ export class ChatTurns {
     const at = this.turnOf(paneKey)
     if (at !== null) {
       this.startedAt.set(paneKey, at)
-      this.dates.showed(paneKey, at, this.openerOf(paneKey))
+      this.dates.tookOver(paneKey, at, this.openerOf(paneKey))
       this.leadState.set(paneKey, 'working')
       // A turn adopted for its prompt stays adopted: its end tells no words.
       if (!this.prompts.adopted.has(paneKey)) {
@@ -204,7 +204,7 @@ export class ChatTurns {
     }
     this.leadState.set(paneKey, lead.state)
     this.startedAt.set(paneKey, lead.stateStartedAt)
-    this.dates.started(paneKey, lead.stateStartedAt, this.openerOf(paneKey))
+    this.dates.started(paneKey, lead.stateStartedAt, this.openerOf(paneKey) ?? null)
     this.tell(paneKey, linked, lead.stateStartedAt)
     this.news({ kind: 'prompt', sessionId })
   }
