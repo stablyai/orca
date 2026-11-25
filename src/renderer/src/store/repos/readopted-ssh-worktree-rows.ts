@@ -1,5 +1,8 @@
 import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
 type HostedWorktree = {
   id: string

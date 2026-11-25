@@ -1,11 +1,11 @@
 import type { Project, ProjectHostSetup } from '../project-types'
 import type { Repo } from '../../repository/repo-types'
-import { reconcileCatalogRows } from '../../catalog-row-reconcile'
+import { reconcileCatalogRows } from '../../collections/catalog-row-reconcile'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import {
   type ProjectCatalogRows,
   getProjectHostSetupOwnerKey,

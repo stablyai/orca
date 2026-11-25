@@ -6,7 +6,7 @@ import { mobileStructuredAgentSessionWorking } from '../../agent-session/mobile-
 import { structuredSessionBackgroundTasksView } from '../../../../../../src/shared/agent-session/view/structured-session-background-tasks-view'
 import { agentSessionVisibleFailureFacts } from '../../../../../../src/shared/agent-session/failures/agent-session-visible-failures'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { pendingPromptsAllUnanswerableHere } from '../../../../../../src/shared/agent-session/agent-session-approval-subject'
+import { pendingPromptsAllUnanswerableHere } from '../../../../../../src/shared/agent-session/requests/prompts/agent-session-approval-subject'
 import {
   SkillRefLimitError,
   structuredAgentSessionSendBody,
@@ -15,13 +15,11 @@ import {
 } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import { MAX_SKILL_REFS } from '../../../../../../src/shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
-import {
-  structuredAgentSessionGoalObjective,
-  type StructuredAgentSessionComposerOptions
-} from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
+import type { StructuredAgentSessionComposerOptions } from '../../../../../../src/shared/agent-session/view/structured-agent-session-composer'
+import { structuredAgentSessionGoalObjective } from '../../../../../../src/shared/agent-session/view/structured-agent-session-goal-mode'
 import { translate } from '../../../../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../../../../src/shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import { mobileStructuredSendQueues } from './mobile-structured-send-queue-rule'
 import type { RpcClient } from '../../../../transport/rpc/rpc-client-contract'
 import type {
@@ -74,6 +72,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     | 'conversationCommands'
     | 'compactInstructions'
     | 'changeThreadGoal'
+    | 'openMcpPanel'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter

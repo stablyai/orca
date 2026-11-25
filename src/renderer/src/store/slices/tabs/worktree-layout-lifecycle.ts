@@ -8,7 +8,7 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'
 import './rename-worktree-layout'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { recordDraft, tabBucketDraft } from '../../keyed-record-transitions'
+import { recordDraft, tabBucketDraft } from '../../record-transitions/keyed-record-transitions'
 import { collapseEmptiedKeptGroups, type GroupLayoutDrafts } from './collapse-emptied-kept-groups'
 import {
   createKeptWorktreeSurfacePruners,

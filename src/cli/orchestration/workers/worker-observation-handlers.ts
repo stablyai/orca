@@ -1,7 +1,8 @@
 import type { CommandHandler } from '../../dispatch/dispatch'
 import { printResult } from '../../output/command-result-output'
 import { printOrchestrationReceipt, printOrchestrationResult } from '../agent-view'
-import { WORKER_SHOW_VIEW, type WorkerShowResult } from './worker-agent-views'
+import { WORKER_SHOW_VIEW } from './worker-agent-views'
+import type { WorkerShowResult } from './worker-view-results'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

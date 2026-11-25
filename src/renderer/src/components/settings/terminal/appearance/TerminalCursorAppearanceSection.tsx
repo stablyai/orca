@@ -8,7 +8,7 @@ import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
 import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 type TerminalCursorAppearanceSectionProps = {
   settings: GlobalSettings

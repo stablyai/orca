@@ -23,7 +23,7 @@
 3 src/main/filesystem/atomic-file-publication.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 1 src/main/git/repositories/discovery/repo-detection-command.ts
-1 src/main/ipc/worktree-logic.ts
+1 src/main/ipc/worktrees/paths/worktree-logic.ts
 1 src/main/network/macos-tailscale-dns-diagnostic.ts
 1 src/main/opencode/status-hooks/legacy-plugin-acl-retry.ts
 2 src/main/orcad/native-runtime/node-pty-precondition.ts

@@ -1,5 +1,5 @@
 import { useAppStore } from '../../index'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { selectKnownWorktreeById, selectFileListWorktree } from './known-worktree-selection'
 
 export const useActiveWorktreeId = () => useAppStore((s) => s.activeWorktreeId)

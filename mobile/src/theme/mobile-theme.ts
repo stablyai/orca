@@ -54,6 +54,11 @@ const darkColors = {
   // --status-success, --status-warning, --destructive
   statusGreen: '#86efac',
   statusAmber: '#eab308',
+  // Desktop's --agent-question: something waits on the owner (an item that needs you).
+  agentQuestion: '#f97316',
+  // Desktop's --agent-question-text and bg-agent-question/12: the Needs you tag's words and fill.
+  agentQuestionText: '#fdba74',
+  agentQuestionTint: 'rgba(249, 115, 22, 0.12)',
   statusRed: '#ff6568',
   // Desktop's --destructive-foreground: dark ink on the light-red dark fill.
   onStatusRed: '#450a0a',
@@ -64,6 +69,7 @@ const darkColors = {
   statusPurple: '#d8b4fe',
   gitDecorationAdded: '#81b88b',
   gitDecorationDeleted: '#c74e39',
+  gitDecorationModified: '#e2c08d',
   // GitHub's (Primer) diff colours, Kelvin's choice for every phone diff: row ground, line-number cell over it,
   // the +/− sign, unchanged line numbers, and the blue "unchanged lines" fold band.
   diffAddedBg: 'rgba(46, 160, 67, 0.15)',
@@ -135,6 +141,9 @@ const lightColors: MobilePalette = {
 
   statusGreen: '#147638',
   statusAmber: '#ca8a04',
+  agentQuestion: '#ea580c',
+  agentQuestionText: '#c2410c',
+  agentQuestionTint: 'rgba(234, 88, 12, 0.12)',
   statusRed: '#e40014',
   onStatusRed: '#ffffff',
   mergeGreen: '#16a34a',
@@ -142,6 +151,7 @@ const lightColors: MobilePalette = {
   statusPurple: '#9333ea',
   gitDecorationAdded: '#587c0c',
   gitDecorationDeleted: '#ad0707',
+  gitDecorationModified: '#895503',
   diffAddedBg: '#dafbe1',
   diffDeletedBg: '#ffebe9',
   diffAddedGutter: '#aceebb',
@@ -204,6 +214,8 @@ export function subscribeMobileColorScheme(listener: () => void): () => void {
 }
 
 export const spacing = {
+  /** Between quiet lines that read as one list (item lines in a chat). */
+  xxs: 2,
   xs: 4,
   sm: 8,
   md: 12,

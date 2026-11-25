@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   listEnvironments,
@@ -24,6 +24,11 @@ export function createOrchestrationEnvironmentTransport(): OrchestrationEnvironm
         pairingRevision: environment.pairingRevision ?? environment.createdAt
       }
     },
+    list: async () =>
+      (await listEnvironments(registryRoot())).map((environment) => ({
+        environmentId: environment.id,
+        name: environment.name
+      })),
     hasEnvironment: async (environmentId) =>
       (await listEnvironments(registryRoot())).some(
         (environment) => environment.id === environmentId

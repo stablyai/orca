@@ -19,10 +19,23 @@ export type WorkerStartReceipt = {
   effects?: unknown[]
   residualResources?: unknown[]
   nextCommands?: string[]
+  /** `--item`: the item the worker was linked to. */
+  linkedItem?: LinkedItem
+}
+
+type LinkedItem = { number: number; title: string; chatTitle: string | null }
+
+/** Printed on every link so a wrong `--item` number is seen at once. */
+export function formatLinkedItem(item: LinkedItem): string {
+  const chat = item.chatTitle ? ` (owned by chat ${JSON.stringify(item.chatTitle)})` : ''
+  return `Linked to item ${item.number} ${JSON.stringify(item.title)}${chat}`
 }
 
 export function formatWorkerStart(value: WorkerStartReceipt): string {
   const lines = [`Worker ${value.dispatchId} [${value.state}] for ${value.taskId}`]
+  if (value.linkedItem) {
+    lines.push(formatLinkedItem(value.linkedItem))
+  }
   if (value.run) {
     lines.push(
       `${value.run.created ? 'Created and bound Run' : 'In Run'} ${value.run.id}: ${value.run.objective}`

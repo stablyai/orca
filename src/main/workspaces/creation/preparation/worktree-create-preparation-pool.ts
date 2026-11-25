@@ -10,7 +10,7 @@ import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import {
   WORKTREE_CREATE_PREPARATION_DIRECTORY,
   createWorktreePreparationLockReason

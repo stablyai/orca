@@ -1,5 +1,5 @@
 import type { RemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   PHONE_RELAY_OPEN_BUDGET_MS,

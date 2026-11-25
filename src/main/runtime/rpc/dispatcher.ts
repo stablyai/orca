@@ -9,6 +9,7 @@ import {
   type RpcResponse,
   type RpcStreamingMethod
 } from './core'
+import { guardedRpcCallContext, rpcCallContext } from './rpc-call-context'
 
 import { successResponse } from './responses/rpc-response'
 import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
@@ -22,10 +23,7 @@ import {
   type OrchestrationMutationExecutor
 } from './orchestration/mutations/orchestration-mutation-executor'
 import { OrchestrationLegacyCompatibility } from './orchestration/compatibility/orchestration-legacy-compatibility'
-import {
-  rpcContextFromTransport,
-  type RpcDispatchStreamingOptions
-} from './dispatch/dispatcher-stream-options'
+import type { RpcDispatchStreamingOptions } from './dispatch/dispatcher-stream-options'
 import { mapDispatcherError } from './responses/dispatcher-error-response'
 import { createDispatcherStreamingFeatureEmitter } from './dispatch/dispatcher-streaming-feature-emitter'
 import { recordRuntimeFeatureInteraction } from './dispatch/runtime-feature-interaction'
@@ -168,7 +166,7 @@ export class RpcDispatcher {
     try {
       const result = await method.handler(
         params,
-        rpcContextFromTransport(this.runtime, request, options, caller, params),
+        rpcCallContext(this.runtime, request, options, this.pinnedCallerScope, caller, params),
         emit
       )
       recordRuntimeFeatureInteraction(
@@ -206,8 +204,8 @@ export class RpcDispatcher {
     { request, method, params, caller }: AdmittedUnaryCall,
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
-    const { runtime, orchestrationMutations, legacyOrchestration } = this
-    const context = rpcContextFromTransport(runtime, request, options, caller, params)
+    const { runtime, orchestrationMutations, legacyOrchestration, pinnedCallerScope: scope } = this
+    const context = guardedRpcCallContext(runtime, request, options, scope, caller, params)
     // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,
@@ -292,7 +290,8 @@ export class RpcDispatcher {
               compatibility.orchestrationCompatibilityCallerAuthority,
             orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
           }),
-        request.orchestrationCompatibilityEvidence?.agentSessionId
+        request.orchestrationCompatibilityEvidence?.agentSessionId,
+        context.deviceSelf?.clientInstanceId()
       )
     }
     const result = await orchestrationMutations.run(

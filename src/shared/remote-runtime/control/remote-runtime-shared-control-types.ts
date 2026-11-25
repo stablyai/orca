@@ -1,7 +1,7 @@
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import type {
   RemoteRuntimeSocketDeathCause,
   RemoteRuntimeSocketLivenessOptions
@@ -120,6 +120,10 @@ export type RemoteRuntimeSharedControlConnectionOptions = {
   clientCapabilities?: readonly RuntimeCapability[]
   isManuallyDisconnected?: () => boolean
   isCapabilityPaused?: () => boolean
+  /** Orca's own idle stop holds this server down: no socket is opened or retried until cleared. */
+  isIdleStopped?: () => boolean
+  /** The server closed this socket saying it stopped idle, before the close is handled. */
+  onIdleStop?: () => void
   /** The server's VM is asleep: no socket is opened or retried until its workspace wakes it. */
   prepareSleepCheck?: () => (() => boolean) | Promise<() => boolean>
   /** Publishes local transport diagnostics after a meaningful state transition. */

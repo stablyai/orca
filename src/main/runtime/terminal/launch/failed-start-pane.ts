@@ -1,6 +1,6 @@
 // Main-owned starts retain a failed pane with its reason, even when failure preceded layout persistence.
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isHibernationDoneRecord } from '../../../../shared/hibernation-done-record'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import { isHibernationDoneRecord } from '../../../../shared/agent-session/lifecycle/resume/hibernation-done-record'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { PaneStartArgsOf } from './runtime-pane-admission'
@@ -44,17 +44,18 @@ export async function startKeepingFailedPane<T>(
 }
 
 export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCreateTerminal {
-  protected abstract markPaneLiveTitlesDirty(): void
+  /** `ref` is the terminal whose title changed or the pane key whose start facts did. */
+  protected abstract markPaneLiveTitlesDirty(ref: string): void
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
 
   /** Switch point: main's starts into panes it already holds, published until each binds. */
   protected readonly paneStartStatuses = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? new PaneStartStatuses(() => this.markPaneLiveTitlesDirty())
+    ? new PaneStartStatuses((paneKey) => this.markPaneLiveTitlesDirty(paneKey))
     : null
 
   /** Switch point: whether main's start of a pane resumed its agent, published while it stays bound. */
   protected readonly paneResumeOutcomes = ORCA_LAYOUT_OWNER_IS_MAIN
-    ? new PaneResumeOutcomes(() => this.markPaneLiveTitlesDirty())
+    ? new PaneResumeOutcomes((paneKey) => this.markPaneLiveTitlesDirty(paneKey))
     : null
 
   /**

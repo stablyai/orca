@@ -18,23 +18,28 @@ export type AcpAccountBinding = {
   }): Promise<AgentSessionAccountHome>
   /** Throws if the pinned account belongs to another kind. */
   environment(home: AgentSessionAccountHome, env: Record<string, string>): Record<string, string>
-  /** Runs before every spawn, never on reads. */
+  /** Runs before every spawn, never on reads; `listing` for a model listing, not a chat. */
   prepare?(
     env: Readonly<Record<string, string>>,
     antigravityChatAuth?: AntigravityChatAuthConfig,
-    assertCurrent?: () => void
+    assertCurrent?: () => void,
+    purpose?: 'chat' | 'listing'
   ): Promise<void>
 }
 
 export function directoryAccountBinding(
   variable: string,
-  defaultHome: (homePath: string) => string
+  defaultHome: (homePath: string, launchEnv: NodeJS.ProcessEnv) => string
 ): AcpAccountBinding {
   return {
     pin: { accountHomeVariable: variable },
     resolve: async ({ launchEnv }) => ({
       variable,
-      path: resolveStructuredEnvAccountHomePath({ launchEnv, variable, defaultPath: defaultHome })
+      path: resolveStructuredEnvAccountHomePath({
+        launchEnv,
+        variable,
+        defaultPath: (homePath) => defaultHome(homePath, launchEnv)
+      })
     }),
     environment: (home, env) => {
       if (!isLegacyAgentSessionAccountHome(home) || home.variable !== variable) {

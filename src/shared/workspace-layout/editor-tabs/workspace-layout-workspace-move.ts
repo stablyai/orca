@@ -13,7 +13,7 @@ import { sameEditorFile } from './workspace-layout-editor-tab-file'
 import type { LayoutTab, WorkspaceLayout, WorkspaceLayoutModel } from '../workspace-layout-model'
 import { removeTabFromWorkspace, withWorkspace } from '../commands/workspace-layout-removal'
 import { withoutKey } from '../persistence/stored-record-fields'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 
 export const EDITOR_KINDS: ReadonlySet<LayoutTab['kind']> = new Set<LayoutTab['kind']>([
   'editor',

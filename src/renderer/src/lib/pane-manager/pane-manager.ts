@@ -32,7 +32,11 @@ import {
   suspendPaneRendering
 } from './terminal-rendering/pane-rendering-control'
 import type { TerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
-import { registerLivePaneManager, unregisterLivePaneManager } from './pane-manager-registry'
+import {
+  notePaneManagerVisibility,
+  registerLivePaneManager,
+  unregisterLivePaneManager
+} from './pane-manager-registry'
 import { releaseHiddenWebglRetention } from './terminal-rendering/terminal-webgl-hidden-retention'
 import {
   schedulePaneRevealPresent,
@@ -63,7 +67,7 @@ import {
 import { collectPaneRenderingDiagnostics } from './terminal-rendering/pane-rendering-diagnostics'
 import { applyPaneLayoutGeometry } from './pane-layout/pane-layout-geometry-apply'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 
 export class PaneManager {
   private root: HTMLElement
@@ -270,6 +274,11 @@ export class PaneManager {
 
   setAtlasRecoveryVisible(visible: boolean): void {
     this.atlasRecoveryVisible = visible
+    notePaneManagerVisibility(this)
+  }
+
+  containsElement(element: Element): boolean {
+    return this.root.contains(element)
   }
 
   isVisibleForAtlasRecovery(): boolean {

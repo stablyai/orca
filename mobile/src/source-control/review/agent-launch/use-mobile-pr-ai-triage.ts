@@ -139,7 +139,7 @@ export function useMobilePrAiTriage(input: Input) {
         ...NO_LAUNCH_NOTICE,
         error:
           notice.kind === 'waitingForDesktop'
-            ? t('session.usePrAiTriage.waitingForDesktop', 'Waiting for desktop…')
+            ? t('common.waitingForHost', 'Waiting for host…')
             : t('session.usePrAiTriage.launchFailed', 'Failed to launch agent')
       }
     },

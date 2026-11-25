@@ -9,7 +9,7 @@ import {
 import {
   buildActivityTabHostIndex,
   resolveActivityExecutionHostId
-} from '@/components/activity/activity-event-builder-context'
+} from '@/components/activity/events/activity-event-builder-context'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { selectLiveAgentStatusEntriesForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'

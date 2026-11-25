@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { NativeChatTextAttachmentOpener } from '../../media/text/NativeChatTextAttachments'
-import { isCommittedChatAttachmentCandidate } from '../../../../../../shared/native-chat-text-attachment-references'
+import { isCommittedChatAttachmentCandidate } from '../../../../../../shared/native-chat/attachments/native-chat-text-attachment-references'
 import {
   useNativeChatPastedTextScope,
   useNativeChatPastedTextState
@@ -11,7 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { getFileTypeIcon } from '@/lib/file-icons/file-type-icons'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
-import { isNativeChatPastedTextPath } from '../../../../../../shared/native-chat/native-chat-image-label'
+import { isNativeChatPastedTextPath } from '../../../../../../shared/native-chat/attachments/native-chat-image-label'
 import {
   nativeChatPastedTextOperations,
   nativeChatPasteNotSavedNotice,
@@ -30,15 +30,21 @@ export function NativeChatFileReferencePill({ node, selected }: NodeViewProps): 
   const live = pasteId ? nativeChatPastedTextOperations.get(pasteId) : undefined
   const canOpen = open && (live?.scopeKey === scope || isCommittedChatAttachmentCandidate(path))
   const unsaved = state === 'unsaved'
+  const pasted = unsaved || Boolean(pasteId) || isNativeChatPastedTextPath(path)
+  const label = unsaved
+    ? t('components.native-chat.composer.pasteNotSavedLabel', 'Paste not saved')
+    : pasted
+      ? nativeChatPastedTextLabel(t)
+      : basename(path)
   const pill = (
     <NativeChatPromptPill
       icon={unsaved ? FileX : state === 'saving' ? Hourglass : getFileTypeIcon(path)}
-      label={
-        unsaved
-          ? t('components.native-chat.composer.pasteNotSavedLabel', 'Paste not saved')
-          : pasteId || isNativeChatPastedTextPath(path)
-            ? nativeChatPastedTextLabel(t)
-            : basename(path)
+      label={label}
+      // A paste's own label ("Pasted text") already says what it is.
+      spokenLabel={
+        pasted
+          ? undefined
+          : t('components.native-chat.composer.filePillLabel', 'File: {{name}}', { name: label })
       }
       selected={selected}
       title={unsaved ? nativeChatPasteNotSavedNotice(t) : path || undefined}

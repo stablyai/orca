@@ -1,7 +1,7 @@
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
 import { statSync } from 'node:fs'
 import path from 'node:path'
-import type { LinuxRootPackageType } from '../../../shared/update-status-types'
+import type { LinuxRootPackageType } from '../../../shared/updater/update-status-types'
 
 // User-writable PATH entries cannot be trusted for privileged package installation.
 const TRUSTED_EXECUTABLE_DIRECTORIES = ['/usr/bin', '/bin', '/usr/sbin', '/sbin']

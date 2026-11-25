@@ -9,7 +9,7 @@ import type { TerminalPaneLifecycleRefs } from '../mounting/use-terminal-pane-li
 import type { UseTerminalPaneLifecycleDeps } from '../mounting/terminal-pane-lifecycle-types'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import { resolveParkRevealLiveTuiLeafIds } from '../parking/lifecycle/park-reveal-live-tui-leaves'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { mapRestoredPaneTitlesByPaneId } from '../titles/restored-pane-titles'
 import { replayLayoutWithOneShotParkIntent } from '../parking/one-shot-park-replay'
 

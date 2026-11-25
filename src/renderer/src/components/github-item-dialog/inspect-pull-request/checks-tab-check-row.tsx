@@ -1,12 +1,13 @@
 import React from 'react'
 import { ChevronDown, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/class-names'
+import { SpinnerFrame } from '@/components/ui/LoadingSpinner'
 import {
   CHECK_COLOR,
   CHECK_ICON,
   checkPresentationKey
 } from '@/components/right-sidebar/checks-panel/presentation/check-presentation'
-import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
+import type { CheckDetailsLoadState } from '@/components/github/github-checks-tab-state'
 import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { ChecksTabCheckDetails } from './checks-tab-check-details'
@@ -78,9 +79,13 @@ export function ChecksTabCheckRow({
             !expanded && '-rotate-90'
           )}
         />
-        <Icon
-          className={cn('size-3.5 shrink-0', color, conclusion === 'pending' && 'animate-spin')}
-        />
+        {conclusion === 'pending' ? (
+          <SpinnerFrame>
+            <Icon className={cn('block size-3.5', color)} />
+          </SpinnerFrame>
+        ) : (
+          <Icon className={cn('size-3.5 shrink-0', color)} />
+        )}
         <span className="min-w-0 flex-1 truncate text-[12px] text-foreground">{check.name}</span>
         <span className="shrink-0 text-[11px] text-muted-foreground">{statusLabel}</span>
       </button>

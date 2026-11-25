@@ -1,4 +1,4 @@
-import type { UpdateStatus } from '../../shared/update-status-types'
+import type { UpdateStatus } from '../../shared/updater/update-status-types'
 import type { ElectronAutoUpdater } from './electron-updater-loader'
 
 export type UpdaterHandlerContext = {
@@ -26,9 +26,12 @@ export type UpdaterHandlerContext = {
   markMissingManifestPrereleaseFallbackChecking: () => void
   performQuitAndInstall: () => void | Promise<void>
   commitStagedMacInstall: () => void
+  finishMacStaging: () => string | null
   failMacStaging: (error: unknown) => void
   isAwaitingMacStaging: () => boolean
   isMacStagingDeferredToInstall: () => boolean
+  shouldAcceptDownloadedUpdate: (version: string, obsolete: boolean) => boolean
+  watchMacStaging: (version: string) => void
   shouldDeferMacQuitForInstall: () => boolean
   recordCompletedUpdateCheck: () => void
   restoreReleaseUpdateSource: () => void
@@ -40,6 +43,10 @@ export type UpdaterHandlerContext = {
   ) => Promise<void>
   sendErrorStatus: (message: string, userInitiated?: boolean) => void
   sendStatus: (status: UpdateStatus) => void
+  publishUpdateOffer: (
+    status: UpdateStatus,
+    options: { eligible: boolean; backgroundCheck: boolean }
+  ) => void
   scheduleAutomaticUpdateCheck: (delayMs: number) => void
   shouldSuppressMissingManifestPrereleaseFallbackEvent: (message: string, error: unknown) => boolean
   suppressMissingManifestPrereleaseFallbackPromiseFailure: (message: string) => void

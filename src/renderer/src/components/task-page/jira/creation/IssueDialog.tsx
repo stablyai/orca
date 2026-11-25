@@ -11,7 +11,7 @@ import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel } from '@/components/jira-project-picker-filter'
+import { getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel } from '@/components/task-page/jira/project-selection/jira-project-picker-filter'
 import { ChevronDown, Check, LoaderCircle } from 'lucide-react'
 import { TaskPageJiraIssueTitleField } from './IssueTitleField'
 import {

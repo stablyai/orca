@@ -229,6 +229,7 @@ export async function rewindStructuredAgentSession(
             }
           )
           context.publish(sessionId, journal)
+          context.clearPromptSuggestion?.(sessionId)
           const cursor = await journal.reads.cursor()
           return {
             ok: true,

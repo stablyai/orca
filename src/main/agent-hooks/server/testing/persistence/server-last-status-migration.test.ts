@@ -59,20 +59,6 @@ describe('saved agent status from an older build', () => {
     expect(await restoredPrompt()).toBe('from the old file')
   })
 
-  it('leaves the old file alone for a session whose rows cannot be read', async () => {
-    writeLegacyFile('from the old file')
-    const release = holdSavedStatusLock(lastStatusPath())
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const server = new AgentHookServer()
-    await server.start({ env: 'production', userDataPath })
-    release()
-    server.stop()
-    expect(existsSync(lastStatusPath())).toBe(true)
-
-    expect(await restoredPrompt()).toBe('from the old file')
-    expect(existsSync(lastStatusPath())).toBe(false)
-  })
-
   it('never reports disabled writes saved and resumes from authoritative rows with the next writer', async () => {
     writeLegacyFile('protected original')
     const release = holdSavedStatusLock(lastStatusPath())

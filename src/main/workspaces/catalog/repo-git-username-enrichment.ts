@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { resolveLocalGitUsernameDetailed } from '../../git/repositories/git-username'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
@@ -88,17 +88,4 @@ export function enrichRepoGitUsernames(
         enrichRepoGitUsernames(store, options)
       }
     })
-}
-
-export async function flushRepoGitUsernameEnrichmentForTests(): Promise<void> {
-  // A queued rerun replaces enrichmentInFlight when the first pass settles.
-  while (enrichmentInFlight) {
-    await enrichmentInFlight
-  }
-}
-
-export function resetRepoGitUsernameEnrichmentForTests(): void {
-  attemptedLocations.clear()
-  enrichmentInFlight = null
-  rerunRequested = false
 }

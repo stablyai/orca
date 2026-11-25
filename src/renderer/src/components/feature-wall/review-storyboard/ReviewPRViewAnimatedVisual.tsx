@@ -1,7 +1,7 @@
 import { useRef } from 'react'
 import type { ComponentType, JSX, ReactNode } from 'react'
 import { Files, GitBranch, ListChecks, MessageSquare, Search } from 'lucide-react'
-import { useShortcutLabel } from '@/hooks/useShortcutLabel'
+import { useShortcutLabel } from '@/lib/keyboard/useShortcutLabel'
 import { isUnassignedShortcutLabel } from '@/i18n/unassigned-label'
 import { ReviewPRViewVisualStyles } from './review-animated-visual-pr-view-styles'
 import {

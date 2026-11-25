@@ -7,7 +7,7 @@ import type {
   FolderFlag,
   IcloudManaged,
   VolumeType
-} from '../../../shared/daemon-tcc-denial-capture'
+} from '../../../shared/terminal/daemon/daemon-tcc-denial-capture'
 
 const PROBE_TIMEOUT_MS = 1_500
 // sys/stat.h SF_DATALESS: the entry's contents live in a file provider, not on disk.

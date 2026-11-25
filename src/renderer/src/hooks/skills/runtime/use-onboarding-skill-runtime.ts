@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { nativeChatPreferenceFor } from '../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   chatProviderAgents,
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
-import { getNativeChatAgentProfile } from '../../../../../shared/native-chat/native-chat-agent-profiles'
+import { getNativeChatAgentProfile } from '../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { isSkillInstallProviderId } from '../../../../../shared/skills/installation/skill-install-providers'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SkillDiscoveryTarget } from '../../../../../shared/skills/discovery/skills'

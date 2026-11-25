@@ -56,8 +56,16 @@ export function useNativeChatPastedTextFile(args: {
   resolveAttachmentOwner: () => NativeChatAttachmentOwner
   insertTypedText: (text: string) => boolean
   setNotice: (notice: string | null, errorText?: string) => void
+  longPasteThreshold?: number
 }): (text: string) => boolean {
-  const { scopeKey, scopeEditor, resolveAttachmentOwner, insertTypedText, setNotice } = args
+  const {
+    scopeKey,
+    scopeEditor,
+    resolveAttachmentOwner,
+    insertTypedText,
+    setNotice,
+    longPasteThreshold
+  } = args
   return useCallback(
     (text: string): boolean => {
       const input = scopeEditor?.()
@@ -69,7 +77,7 @@ export function useNativeChatPastedTextFile(args: {
         scopeKey,
         `${value.slice(0, selectionStart ?? 0)}${text}${value.slice(selectionEnd ?? 0)}`
       )
-      const long = isNativeChatLongPaste(text)
+      const long = isNativeChatLongPaste(text, longPasteThreshold)
       const owner = resolveAttachmentOwner()
       const target =
         owner.kind === 'runtime-session' ? cachedNativeChatPasteUploadTarget(owner) : null
@@ -124,6 +132,6 @@ export function useNativeChatPastedTextFile(args: {
         )
       return true
     },
-    [insertTypedText, resolveAttachmentOwner, scopeEditor, scopeKey, setNotice]
+    [insertTypedText, longPasteThreshold, resolveAttachmentOwner, scopeEditor, scopeKey, setNotice]
   )
 }

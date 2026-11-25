@@ -101,7 +101,24 @@ export const SEARCH_KEYWORD_OVERRIDES = {
     compose: '작성',
     verify: '검증',
     keep: '유지',
-    'check #': '체크 #'
+    'check #': '체크 #',
+    // Why: MT read these settings search keywords by an everyday sense (tray as a serving
+    // tray 쟁반, permission as 허가, dialog as a conversation 대화) or left them half in
+    // English (repos 아이콘). Pin the term the Korean UI shows so a Korean query reaches the
+    // setting.
+    tray: '트레이',
+    permission: '권한',
+    dialog: '대화 상자',
+    repository: '저장소',
+    'repository icon': '저장소 아이콘',
+    'repository name': '저장소 이름',
+    'commit message': '커밋 메시지',
+    monorepo: '모노레포',
+    'opt out': '거부',
+    modifier: '보조 키',
+    placement: '위치',
+    margin: '여백',
+    loudness: '음량'
   },
   zh: {
     dark: '深色',

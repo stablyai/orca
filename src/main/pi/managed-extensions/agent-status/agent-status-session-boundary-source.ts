@@ -7,6 +7,8 @@ function getPiSessionShutdownHandlerSourceLines(): string[] {
   return [
     "  onStatus('session_shutdown', (event) => {",
     '    clearPendingAgentEndCheck()',
+    // The replacement registration re-arms on session_start, so this one never posts after it.
+    '    clearHeldTurnRepostCheck()',
     '    if (isOmpRuntime()) {',
     '      clearRunnerExitCheck()',
     '      resetPostQueue()',
@@ -78,7 +80,10 @@ export function getAgentStatusRunCloseOutSourceLines(): string[] {
     '      lifecycleState.active.add(id)',
     '      subagentDetails.set(id, detail)',
     '    }',
+    '    nativeChatRosterChanged()',
     '    if (!isHeldByChildren()) return',
+    '    lifecycleState.lastChildEventAt = Date.now()',
+    '    syncHeldTurnRepostCheck()',
     '    lifecycleState.waiting = true',
     '    lifecycleState.completionPostedGeneration = -1',
     '  }',

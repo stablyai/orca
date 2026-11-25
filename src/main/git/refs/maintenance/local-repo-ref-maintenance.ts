@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { RepoRefMaintenance } from '../../../../shared/git/maintenance/repo-ref-maintenance'
 import {
   PACK_REFS_ARGS,
@@ -89,14 +89,20 @@ export function disposeLocalRepoRefMaintenance(): Promise<void> {
 /** Wait out packed-refs rewrites before ref work; killing the pack can strand persistent per-ref locks. */
 export async function withRepoRefMaintenancePaused<T>(
   reason: string,
-  run: () => Promise<T>
+  run: () => Promise<T>,
+  releaseAfter?: () => Promise<void> | null
 ): Promise<T> {
   // Pause even before arming: run may schedule maintenance. Recreated shutdown instances fail closed.
   const release = await getLocalRepoRefMaintenance().pause(reason)
   try {
     return await run()
   } finally {
-    release()
+    const termination = releaseAfter?.()
+    if (termination) {
+      void termination.then(release, release)
+    } else {
+      release()
+    }
   }
 }
 
@@ -108,17 +114,6 @@ export function awaitPackedRefsLockRelease(): Promise<void> {
 /** User ref work postpones every repo; resolving one would add a probe to the interactive path. */
 export function postponeRepoRefMaintenance(): void {
   shared?.postponeAll()
-}
-
-/** `overrides` preseeds the shared instance so a test can shorten the quiet period. */
-export function _resetLocalRepoRefMaintenanceForTests(
-  overrides?: Partial<RepoRefMaintenanceOptions>
-): void {
-  shared?.dispose()
-  shared = overrides ? new RepoRefMaintenance({ ...localMaintenanceOptions(), ...overrides }) : null
-  activityProbe = null
-  repoBusyProbes.clear()
-  clearRepoPackIndexMaintenanceCache()
 }
 
 /** Translate WSL Git's common dir to a UNC refs directory the main process can enumerate. */
@@ -231,6 +226,7 @@ export function createLocalRepoRefMaintenanceTarget(
       }
       // Cancel admission only: killing a running pack can strand persistent per-ref locks.
       const watch = owner?.watchLock((held) => lock.setHeld(held))
+      let termination: Promise<void> | undefined
       try {
         await gitExecFileAsync([...PACK_REFS_ARGS], {
           cwd: args.repoPath,
@@ -238,9 +234,19 @@ export function createLocalRepoRefMaintenanceTarget(
           admissionTier: 'background',
           timeout: PACK_REFS_TIMEOUT_MS,
           admissionSignal,
-          canStart
+          canStart,
+          ...(process.platform === 'win32'
+            ? {
+                observeChildTermination: (ended: Promise<void>) => {
+                  termination = ended
+                }
+              }
+            : {})
         })
       } finally {
+        if (termination) {
+          await termination
+        }
         watch?.stop()
         lock.setHeld(false)
         await owner?.release()

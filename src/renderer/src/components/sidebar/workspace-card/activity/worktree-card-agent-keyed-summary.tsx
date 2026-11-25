@@ -31,7 +31,7 @@ export function KeyedSummary({
     useCallback((p) => p.revision(worktreeId), [worktreeId])
   )
   const selectUnread = useMemo(() => createRootsUnreadSelector(worktreeId), [worktreeId])
-  // Same acknowledgement records the rows read, so the pill's unread dot matches theirs.
+  // Same acknowledgement records the rows read, so the pill's unread count matches theirs.
   const unread = useAppStateValue(useCallback((s) => selectUnread(s, roots), [selectUnread, roots]))
   const unreadByPaneKey = useMemo(
     () =>

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import type { RegisterSshRequest } from '../../ssh/application/ssh-application-requests'
 import type {
   SshConfigHostListArgs,
   SshRepoReadoption,
@@ -23,11 +23,11 @@ import {
   isManagedOrcadSshTarget,
   isRuntimeOwnedSshTarget
 } from '../../ssh/targets/ssh-target-runtime-ownership'
-import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
+import { connectionManager } from './ssh-ipc-context'
+import { sshDesktopHost } from '../../ssh/application/ssh-desktop-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { fingerprintRuntimeSshTarget } from '../../ssh/runtime-access/runtime-ssh-target-fingerprint'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
-import { notifyReposChanged } from '../repos/repos-changed-notification'
 import {
   requestDesktopBrowserBridgeReconcile,
   setDesktopBrowserBridgeHostStopped
@@ -55,7 +55,7 @@ function publishRepoReadoptions(repoReadoptions: SshRepoReadoption[]): SshRepoRe
     rotateSshProviderAuthority(targetId)
   }
   // Paired clients refetch repositories only on this event.
-  notifyReposChanged(getCurrentMainWindow())
+  sshDesktopHost().reposChanged()
   return repoReadoptions
 }
 
@@ -160,9 +160,7 @@ async function removeSshTarget(id: string): Promise<void> {
   requestDesktopBrowserBridgeReconcile()
 }
 
-export function registerSshTargetCrudHandlers(
-  handle: typeof ipcMain.handle = ipcMain.handle.bind(ipcMain)
-): void {
+export function registerSshTargetCrudHandlers(handle: RegisterSshRequest): void {
   // Apply identical mutation rules to paired RPC and local Settings.
   setSshTargetMutations({ add: addSshTarget, update: updateSshTarget, remove: removeSshTarget })
 
@@ -174,24 +172,22 @@ export function registerSshTargetCrudHandlers(
     return getSshTargetRegistryStore()!.listRemovedTargetLabels()
   })
 
-  handle('ssh:addTarget', (_event, args: { target: SshTargetCreateInput }) =>
-    addSshTarget(args.target)
-  )
+  handle('ssh:addTarget', (args: { target: SshTargetCreateInput }) => addSshTarget(args.target))
 
-  handle('ssh:updateTarget', (_event, args: { id: string; updates: SshTargetUpdateInput }) =>
+  handle('ssh:updateTarget', (args: { id: string; updates: SshTargetUpdateInput }) =>
     updateSshTarget(args.id, args.updates)
   )
 
-  handle('ssh:removeTarget', (_event, args: { id: string }) => removeSshTarget(args.id))
+  handle('ssh:removeTarget', (args: { id: string }) => removeSshTarget(args.id))
 
-  handle('ssh:importConfig', async (_event, args?: { reAdopt?: boolean }) => {
+  handle('ssh:importConfig', async (args?: { reAdopt?: boolean }) => {
     const { targets, repoReadoptions } =
       await getSshTargetRegistryStore()!.importFromSshConfig(args)
     return { targets, repoReadoptions: publishRepoReadoptions(repoReadoptions) }
   })
 
   // Prefill the add-host form without importing targets; bulk sync belongs to Settings.
-  handle('ssh:listConfigHosts', (_event, args?: SshConfigHostListArgs) => {
+  handle('ssh:listConfigHosts', (args?: SshConfigHostListArgs) => {
     const store = getSshTargetRegistryStore()!
     // The import's own decision, read without waiting on ssh -G; until one exists the flags are alias-only.
     const snapshot = store.currentSshRouteSnapshot()
@@ -209,7 +205,7 @@ export function registerSshTargetCrudHandlers(
     )
   })
 
-  handle('ssh:resolveConfigHost', (_event, args: { alias: string }) => {
+  handle('ssh:resolveConfigHost', (args: { alias: string }) => {
     return resolveUserSshConfigHost(args.alias)
   })
 }

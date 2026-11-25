@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../../../src/shared/execution-host'
+import { parseExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { assertFileMutationOwnershipCapability } from '../../../../src/shared/file-write/file-mutation-ownership'
 import type {
   SshConnectionState,

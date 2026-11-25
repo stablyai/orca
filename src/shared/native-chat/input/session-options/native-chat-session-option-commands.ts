@@ -11,8 +11,13 @@ import {
   flattenNativeChatSessionOptionRecord,
   isFlipOnlyMidSession,
   matchNativeChatCatalogModelId,
+  setTrackedSessionOption,
   type NativeChatSessionOptionRecord
 } from './native-chat-session-option-state'
+import {
+  carryNativeChatValuesWithoutModel,
+  nativeChatOptionsWithoutModel
+} from './native-chat-session-option-values-without-model'
 import { resolveEffectiveNativeChatModelId } from './native-chat-session-option-snapshot'
 
 export function parseBuiltSessionOptionCommand(
@@ -88,7 +93,7 @@ function recordCommandApply(args: {
   command: string
   /** Validate/canonicalize parsed values: command templates also match leading prose, which would become raw option labels and erase model-scoped options. */
   canonicalize: (value: string) => string | null
-  /** Picker’s effective model, including CLI default; otherwise typed options are lost and retyping that default falsely resets state. */
+  /** Picker’s effective model, including CLI default, so retyping that default keeps state and typed options persist under it. */
   effectiveModelId: string | null
   persist?: PersistSessionOption
 }): boolean {
@@ -97,7 +102,7 @@ function recordCommandApply(args: {
     return false
   }
   if (isFlipOnlyMidSession(midSession) && command === midSession.command) {
-    clearTrackedSessionOption(record, effectiveModelId, optionId)
+    clearTrackedSessionOption(record, optionId)
     return true
   }
   if (isSessionOptionAgentPickerCommand(midSession, command)) {
@@ -120,18 +125,14 @@ function recordCommandApply(args: {
     if (previousModelId !== value) {
       // Switching models can reset live options; previously tracked destination values are no longer evidence.
       delete record.valuesByModel[value]
+    } else {
+      carryNativeChatValuesWithoutModel(record, value)
     }
-    record.model = { value, source: 'dispatched' }
+    setTrackedSessionOption(record, 'model', value, 'dispatched')
     persist?.(value, optionId, value)
     return true
   }
-  if (!previousModelId) {
-    return true
-  }
-  record.valuesByModel[previousModelId] = {
-    ...record.valuesByModel[previousModelId],
-    [optionId]: { value, source: 'dispatched' }
-  }
+  setTrackedSessionOption(record, optionId, value, 'dispatched')
   persist?.(previousModelId, optionId, value)
   return true
 }
@@ -164,7 +165,7 @@ export function recordNativeChatSessionOptionCommand(args: {
   // Re-resolved: the command above may have just tracked a model.
   const modelId = resolveEffectiveNativeChatModelId(catalog, models, record)
   const model = modelId ? models.find((candidate) => candidate.id === modelId) : undefined
-  for (const option of model?.options ?? []) {
+  for (const option of model?.options ?? (modelId ? [] : nativeChatOptionsWithoutModel(catalog))) {
     opensAgentPicker =
       opensAgentPicker || isSessionOptionAgentPickerCommand(option.apply.midSession, command)
     changed =

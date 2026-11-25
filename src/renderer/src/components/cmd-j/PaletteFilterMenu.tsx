@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, ListFilter, X } from 'lucide-react'
 import { Command, CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
@@ -64,13 +65,16 @@ export default function PaletteFilterMenu({
   filter,
   onFilterChange,
   onRequestInputFocus,
-  portalContainer
+  portalContainer,
+  pausedReason = null
 }: {
   model: PaletteFilterModel
   filter: PaletteFilterState
   onFilterChange: (next: PaletteFilterState) => void
   onRequestInputFocus: () => void
   portalContainer: HTMLElement | null
+  /** Set while filters don't apply (showing only bots): the trigger keeps its count but never opens. */
+  pausedReason?: string | null
 }): React.JSX.Element | null {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
@@ -157,6 +161,47 @@ export default function PaletteFilterMenu({
     return null
   }
 
+  const triggerContent = (
+    <>
+      <ListFilter className="size-3.5" aria-hidden="true" />
+      <span>{t('worktreeJumpPalette.filter.label', 'Filter')}</span>
+      {active ? (
+        <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
+          {selectionCount}
+        </span>
+      ) : null}
+    </>
+  )
+
+  if (pausedReason) {
+    // Focusable so keyboard users get the reason too; aria-disabled rather than disabled for that.
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Dimmed as a whole: filters stay set but don't apply while showing only bots. */}
+          <span className="ml-2 inline-flex opacity-50">
+            <Button
+              type="button"
+              variant={active ? 'secondary' : 'outline'}
+              size="xs"
+              aria-label={t('worktreeJumpPalette.filter.trigger', 'Filter results')}
+              aria-disabled="true"
+              aria-description={pausedReason}
+              data-active={active ? 'true' : undefined}
+              className="cursor-default"
+              onClick={(event) => event.preventDefault()}
+            >
+              {triggerContent}
+            </Button>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>
+          {pausedReason}
+        </TooltipContent>
+      </Tooltip>
+    )
+  }
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
@@ -168,13 +213,7 @@ export default function PaletteFilterMenu({
           data-active={active ? 'true' : undefined}
           className="ml-2"
         >
-          <ListFilter className="size-3.5" aria-hidden="true" />
-          <span>{t('worktreeJumpPalette.filter.label', 'Filter')}</span>
-          {active ? (
-            <span className="rounded-full bg-primary/85 px-1.5 text-[10px] font-semibold tabular-nums text-primary-foreground">
-              {selectionCount}
-            </span>
-          ) : null}
+          {triggerContent}
         </Button>
       </PopoverTrigger>
       <PopoverContent

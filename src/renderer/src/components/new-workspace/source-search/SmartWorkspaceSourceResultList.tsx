@@ -1,5 +1,5 @@
 import React from 'react'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import { Button } from '@/components/ui/button'
 import { CommandGroup, CommandItem, CommandList } from '@/components/ui/command'
 import { useTranslate } from '@/i18n/use-translate'

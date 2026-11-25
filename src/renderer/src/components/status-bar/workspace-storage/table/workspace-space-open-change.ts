@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { WorkspaceSpaceWorktree } from '../../../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceSpaceChange } from '../../../../../../shared/workspace-disk-space/workspace-space-change'

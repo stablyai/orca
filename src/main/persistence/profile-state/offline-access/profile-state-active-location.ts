@@ -3,9 +3,9 @@ import { join } from 'node:path'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile
-} from '../../../../shared/profile-state-storage-paths'
+} from '../../../../shared/orca-profiles/profile-state-storage-paths'
 import type { ProfileStateOfflineLocation } from './profile-state-offline-settings'
-import { ProfileStateRecoveryCommandError } from '../../../../shared/profile-state-recovery-command'
+import { ProfileStateRecoveryCommandError } from '../../../../shared/orca-profiles/profile-state-recovery-command'
 
 export function getActiveProfileStateLocation(
   userDataPath: string,

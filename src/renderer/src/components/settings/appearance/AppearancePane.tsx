@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useLayoutEffect } from 'react'
 
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 import { AppearanceInterfaceSection } from './AppearanceInterfaceSection'
 import { AppearanceWindowSidebarSection } from './AppearanceWindowSidebarSection'
@@ -9,6 +9,7 @@ import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 import { USAGE_PERCENTAGE_DISPLAY_SETTING_ID } from './appearance-usage-percentage-search'
 import { getAppIconEntries } from './appearance-app-icon-search'
 import {
@@ -17,6 +18,7 @@ import {
   getLayoutEntries,
   getStatusBarEntries,
   getThemeEntries,
+  getTilingWindowModeEntry,
   getTitlebarEntries,
   getTypographyEntries,
   getZoomEntries
@@ -33,7 +35,7 @@ import { TerminalAppearanceSection } from '../terminal/appearance/TerminalAppear
 import type { UseTerminalConfigImportReturn } from '../terminal/configuration/useTerminalConfigImport'
 import type { UseWarpThemeImportReturn } from '../terminal/themes/useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
-import { normalizeAppIconId } from '../../../../../shared/app-icon'
+import { normalizeAppIconId } from '../../../../../shared/app-lifecycle/identity/app-icon'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
@@ -72,6 +74,11 @@ export function AppearancePane({
   // Windows web clients have no local system tray; require desktop Electron.
   const isDesktopWindows = getRendererAppPlatform() === 'win32' && !isWebClient
   const isDesktopMac = getRendererAppPlatform() === 'darwin' && !isWebClient
+  const tilingWindowModeEntry =
+    getRendererAppPlatform() === 'linux' && !isWebClient ? getTilingWindowModeEntry(t) : undefined
+  // The new card style ignores the layout, and switching it would reset the user's card picks.
+  const drawsNewWorktreeCards = useAppStore(selectDrawsNewWorktreeCards)
+  const workspaceCardLayoutEntry = drawsNewWorktreeCards ? undefined : getWorkspaceCardLayoutEntry()
 
   useLayoutEffect(() => {
     if (!appearanceAccordionDeepLink) {
@@ -124,8 +131,9 @@ export function AppearancePane({
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
     ...getLayoutEntries(),
+    ...(tilingWindowModeEntry ? [tilingWindowModeEntry] : []),
     getLeftSidebarAppearanceEntry(),
-    getWorkspaceCardLayoutEntry()
+    ...(workspaceCardLayoutEntry ? [workspaceCardLayoutEntry] : [])
   ]
 
   const interfaceMatches = matchesSettingsSearch(searchQuery, interfaceSearchEntries)
@@ -176,6 +184,8 @@ export function AppearancePane({
           <AppearanceWindowSidebarSection
             settings={settings}
             updateSettings={updateSettings}
+            tilingWindowModeEntry={tilingWindowModeEntry}
+            workspaceCardLayoutEntry={workspaceCardLayoutEntry}
             forceVisiblePrimary={windowLabelMatches}
           />
         </SettingsGroup>

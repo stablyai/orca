@@ -94,15 +94,27 @@ export function useMobileStructuredOptionState(args: {
   useEffect(() => () => reader.markAway(), [reader])
   // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
   const projectRuntimeReports = <
-    T extends { reportedPermissionMode?: string | null; reportedEffort?: string }
+    T extends {
+      reportedPermissionMode?: string | null
+      reportedEffort?: string
+      launchPermissionMode?: string
+      runningPermissionMode?: string
+    }
   >(
     state: T
-  ): T =>
-    projectRuntimePermission(
+  ): T => ({
+    ...projectRuntimePermission(
       structuredAgentSessionReportsAtFence(state, reader.getSnapshot().support?.fence, fence),
       summary,
       fence
-    )
+    ),
+    ...(typeof summary?.launchPermissionMode === 'string'
+      ? { launchPermissionMode: summary.launchPermissionMode }
+      : {}),
+    ...(typeof summary?.runningPermissionMode === 'string'
+      ? { runningPermissionMode: summary.runningPermissionMode }
+      : {})
+  })
   const { optionState, support } = useSyncExternalStore(reader.subscribe, reader.getSnapshot)
   const {
     optionStateRef,
@@ -136,7 +148,8 @@ export function useMobileStructuredOptionState(args: {
               commands: support.result.conversationCommands ?? [],
               compactInstructions: support.result.compactInstructions === true,
               forkSupport: support.result.forkSupport,
-              contextUsage: support.result.contextUsage
+              contextUsage: support.result.contextUsage,
+              accountUsage: support.result.accountUsage === true
             },
             imageSupport: {
               sessionId: support.sessionId,

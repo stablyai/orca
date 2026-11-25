@@ -1,10 +1,10 @@
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
+import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
@@ -46,7 +46,7 @@ import type { CodexSharedServerStatus } from '../../../shared/agent-launch/start
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../shared/newer-daemon-hold'
+} from '../../../shared/terminal/daemon/newer-daemon-hold'
 
 export type PtyApi = {
   spawn: (opts: {
@@ -139,7 +139,8 @@ export type PtyApi = {
   clearBuffer: (id: string) => void
   resetInputModes: (id: string) => void
   killFenced: (request: PtyFencedTerminationRequest) => Promise<PtyFencedTerminationOutcome>
-  kill: (id: string, opts?: { keepHistory?: boolean }) => Promise<void>
+  /** `replaced` stops a restarted pane's old PTY without retiring the pane. */
+  kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }) => Promise<void>
   /** Acknowledge the pane that actually painted the restored frame. */
   ackColdRestore: (id: string, pane?: PaintedRestorePane) => void
   /** Hidden-output recovery painted main's snapshot; retires the hidden-delivery drop latch. */
@@ -161,7 +162,7 @@ export type PtyApi = {
   setActiveRendererPty: (id: string, active: boolean) => void
   setRendererPtyVisible: (id: string, visible: boolean) => void
   /** Hidden panes may skip renderer bytes after model ingestion; reveal restores a snapshot. */
-  setHiddenRendererPty: (id: string, hidden: boolean) => void
+  setHiddenRendererPty: (id: string, hidden: boolean, retainGraphics?: boolean) => void
   /** Ref-counted raw-byte consumers suppress the hidden-delivery gate. */
   setPtyDeliveryInterest: (id: string, interested: boolean) => void
   /** Main uses the composed appearance for hidden-PTY OSC/DSR color replies. */
@@ -174,6 +175,8 @@ export type PtyApi = {
       expectedIncarnationId?: string
       scanChildProcesses?: boolean
       steadyState?: boolean
+      jobMembershipOnly?: boolean
+      foregroundOnly?: boolean
     }
   ) => Promise<TerminalProcessInspection>
   confirmForegroundProcess: (id: string) => Promise<string | null>
@@ -274,6 +277,8 @@ export type PtyApi = {
   onReplay: (callback: (data: { id: string; data: string }) => void) => () => void
   /** Out-of-band byte-drop signal; restore the model snapshot instead of waiting on pty:data. */
   onModelRestoreNeeded: (callback: (event: PtyModelRestoreNeededEvent) => void) => () => void
+  /** Hidden PTYs that printed output main dropped (throttled, batched); bytes are not included. */
+  onHiddenOutputActivity: (callback: (event: { ids: string[] }) => void) => () => void
   /** Covers only PTYs whose bytes transit local main. */
   onSideEffect: (callback: (batch: TerminalSideEffectBatch) => void) => () => void
   /** Title-only replay snapshot for (re)attach; attention facts never replay. */

@@ -2,7 +2,7 @@ import {
   getSshTargetIdForExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { FolderWorkspace } from '../../folder-workspaces/folder-workspace-types'
 import { projectGroupIdFromRepoId } from '../../folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'

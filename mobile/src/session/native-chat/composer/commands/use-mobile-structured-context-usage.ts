@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionOptionsResult } from '../../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
-import { selectStructuredAgentSessionContextUsage } from '../../../../../../src/shared/agent-session/structured-agent-session-context-usage'
+import { selectStructuredAgentSessionContextUsage } from '../../../../../../src/shared/agent-session/conversation-context/structured-agent-session-context-usage'
 import {
   summarizeContextUsage,
   type NativeChatContextUsageSummary

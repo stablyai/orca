@@ -1,6 +1,6 @@
 import { stripAnsiEscapeSequences } from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import { sliceCheckLogTail } from '../logs/check-job-log-tail-slice'
-import type { GitLabJobTraceResult } from '../../../gitlab-types'
+import type { GitLabJobTraceResult } from '../../../gitlab/gitlab-types'
 
 // GitLab wraps collapsible sections in `section_start:<unix>:<name>\r<CSI>0K<visible header>`;
 // strip only through the CR so the human-readable header on the same line survives.

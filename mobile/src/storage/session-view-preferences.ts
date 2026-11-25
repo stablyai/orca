@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { persistMirrored } from './mirrored-storage-keys'
+import type { AgentLaunchSurface } from '../../../src/shared/agent-launch/contracts/agent-launch-surface'
+import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat/native-chat-agent-support'
 
 export type MobileSessionView = 'terminal' | 'chat'
 
@@ -46,6 +48,16 @@ export async function loadDefaultSessionView(): Promise<MobileSessionView> {
   return (await readDefaultSessionViewPreference()).value ?? DEFAULT_SESSION_VIEW
 }
 
+/** The view to ask the host for on an agent tab this phone starts, so a chat here opens as a chat on the desktop too. */
+export async function hostViewModeForNewAgentTab(
+  agent: string | null | undefined
+): Promise<'chat' | undefined> {
+  if (!isNativeChatSupportedAgent(agent)) {
+    return undefined
+  }
+  return (await loadDefaultSessionView()) === 'chat' ? 'chat' : undefined
+}
+
 export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
   // Share the write barrier across route remounts so an older save cannot overwrite a newer choice.
   const write = (defaultViewWriteBarrier ?? Promise.resolve()).then(() => {
@@ -55,6 +67,22 @@ export function saveDefaultSessionView(view: MobileSessionView): Promise<void> {
   defaultViewWriteBarrier = barrier
   void barrier.then(() => clearDefaultViewWriteBarrier(barrier))
   return write
+}
+
+const NEW_AGENT_SURFACE_KEY = 'orca:newAgentSurface'
+
+/** The Chat or CLI pick from the New Tab sheet; null until this device has made one. */
+export async function loadNewAgentSurface(): Promise<AgentLaunchSurface | null> {
+  try {
+    const raw = await AsyncStorage.getItem(NEW_AGENT_SURFACE_KEY)
+    return raw === 'chat' || raw === 'terminal' ? raw : null
+  } catch {
+    return null
+  }
+}
+
+export function saveNewAgentSurface(surface: AgentLaunchSurface | null): Promise<void> {
+  return persistMirrored(NEW_AGENT_SURFACE_KEY, surface)
 }
 
 export type SessionViewOverridesPreference = {

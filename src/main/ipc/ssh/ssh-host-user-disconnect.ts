@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
@@ -149,10 +149,6 @@ export async function holdLaunchReconnectOptOuts(
       }
     }
   })())
-}
-
-export function resetLaunchReconnectOptOutsForTests(): void {
-  launchReconnectOptOutsHeld = undefined
 }
 
 /** Stop and remove persists across reloads and restarts: automatic dials must not deploy a new server. */

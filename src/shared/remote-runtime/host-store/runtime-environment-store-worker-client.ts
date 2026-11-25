@@ -168,7 +168,7 @@ function dispatch(): void {
               currentWorkerEntryLayout(__dirname),
               'runtime-environment-store-worker-entry.js'
             ),
-            { execArgv: [] }
+            { name: 'orca-environment-store', execArgv: [] }
           )
       const current: Owner = { worker, writes: 0 }
       owner = current

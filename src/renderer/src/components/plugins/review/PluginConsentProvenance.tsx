@@ -4,6 +4,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
+import { managedCatalogLabel } from '../presentation/plugin-author'
 
 export type PluginConsentSource = {
   kind: 'local-path' | 'git' | 'marketplace' | 'bundled'
@@ -15,7 +16,10 @@ export type PluginConsentSource = {
 type PluginConsentProvenanceProps = {
   official: boolean
   publisher: string
+  managedByTeams?: string[] | undefined
   source?: PluginConsentSource
+  /** False where the publisher badge is already shown beside the plugin's name. */
+  badge?: boolean
 }
 
 function shortCommit(commit: string | null | undefined): string | null {
@@ -45,6 +49,9 @@ function provenanceBadge(
   props: PluginConsentProvenanceProps,
   t: Translate = translate
 ): React.JSX.Element {
+  if (props.managedByTeams) {
+    return <Badge variant="outline">{managedCatalogLabel(props.managedByTeams, t)}</Badge>
+  }
   if (props.official) {
     return (
       <Badge variant="secondary" className="gap-1">
@@ -76,13 +83,23 @@ function provenanceBadge(
   )
 }
 
+/** "Official · publisher" or "Community · publisher": who the user is trusting. */
+export function PluginPublisherBadge(props: {
+  official: boolean
+  publisher: string
+  managedByTeams?: string[] | undefined
+}): React.JSX.Element {
+  const t = useTranslate()
+  return provenanceBadge(props, t)
+}
+
 export function PluginConsentProvenance(props: PluginConsentProvenanceProps): React.JSX.Element {
   const t = useTranslate()
   const { source } = props
   const pinned = shortCommit(source?.resolvedCommit)
   return (
     <div className="flex items-center gap-1.5">
-      {provenanceBadge(props, t)}
+      {props.badge === false ? null : provenanceBadge(props, t)}
       {source ? (
         <Popover>
           <PopoverTrigger asChild>

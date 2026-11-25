@@ -2,7 +2,7 @@ import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/
 import type {
   GitHubIssueCloseReason,
   GitHubIssueUpdate
-} from '../../../../../../shared/issue-mutation-types'
+} from '../../../../../../shared/work-items/issue-mutation-types'
 
 export type TaskPageGitHubCloseAction =
   | { stateReason: Exclude<GitHubIssueCloseReason, 'duplicate'> }

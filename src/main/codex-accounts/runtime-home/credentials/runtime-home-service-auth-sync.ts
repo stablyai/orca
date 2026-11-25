@@ -35,14 +35,17 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
       const provenanceStatus = this.resolveSharedRuntimeAuthProvenanceStatus()
       const provenance = provenanceStatus.kind === 'committed' ? provenanceStatus.provenance : null
       if (provenance?.owner === 'managed') {
-        this.captureSystemDefaultSnapshot({ force: true })
-        if (!existsSync(systemDefaultAuthPath)) {
-          this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
+        if (existsSync(systemDefaultAuthPath)) {
+          this.captureSystemDefaultSnapshot({ force: true })
+          const systemDefaultAuth = readFileSync(systemDefaultAuthPath, 'utf-8')
+          this.writeRuntimeAuth(systemDefaultAuth, { owner: 'system-default' })
           return
         }
-        this.writeRuntimeAuth(readFileSync(systemDefaultAuthPath, 'utf-8'), {
-          owner: 'system-default'
-        })
+        const snapshot = this.systemDefaultAuthIsGone()
+        if (snapshot) {
+          this.captureSystemDefaultSnapshot({ force: true })
+        }
+        this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath, snapshot)
         return
       }
       const {
@@ -50,6 +53,10 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         mirroredAuthJson: mirroredSystemDefaultAuth
       } = this.resolveSystemDefaultMirrorClaim(runtimeAuth, provenanceStatus)
       if (!existsSync(systemDefaultAuthPath)) {
+        // An unreadable auth.json is no logout: the runtime copy may hold the only refreshed token.
+        if (!this.systemDefaultAuthIsGone()) {
+          return
+        }
         if (mirroredSystemDefaultAuth !== null && runtimeAuth === mirroredSystemDefaultAuth) {
           this.clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath)
           return
@@ -124,6 +131,9 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
               ? (this.lastWrittenAuthJson ?? snapshot?.authJson)
               : undefined
         if (systemAuth === null) {
+          if (!this.systemDefaultAuthIsGone()) {
+            return
+          }
           if (
             provenanceStatus.kind === 'committed' &&
             provenanceStatus.provenance.owner === 'system-default' &&
@@ -147,9 +157,7 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         ) {
           const replaced = this.writeRuntimeAuth(
             systemAuth,
-            {
-              owner: 'system-default'
-            },
+            { owner: 'system-default' },
             { expectedContents: null }
           )
           if (replaced) {
@@ -176,11 +184,13 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
         (provenance?.owner === 'system-default' &&
           systemAuth === null &&
           this.runtimeAuthMatchesSystemDefaultIdentity(runtimeAuthBeforeSync, knownSharedAuth))
-      if (!sharedAuthOwnedBySystemDefault) {
+      if (!sharedAuthOwnedBySystemDefault || this.systemAuthUnreadable(systemAuth !== null)) {
         return
       }
       if (systemAuth === null) {
-        removeFileAtomicallyIfUnchanged(runtimeAuthPath, runtimeAuthBeforeSync)
+        removeFileAtomicallyIfUnchanged(runtimeAuthPath, runtimeAuthBeforeSync, {
+          credential: true
+        })
         if (existsSync(runtimeAuthPath)) {
           this.persistSharedRuntimeAuthProvenance({ owner: 'fenced' })
           return
@@ -283,7 +293,8 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
       writeFileAtomically(systemDefaultAuthPath, contents, { mode: 0o600 })
     } else if (
       !writeFileAtomicallyIfUnchanged(systemDefaultAuthPath, options.expectedContents, contents, {
-        mode: 0o600
+        mode: 0o600,
+        credential: true
       })
     ) {
       return false
@@ -292,10 +303,11 @@ export abstract class CodexRuntimeHomeAuthSync extends CodexRuntimeHomeLaunch {
     return true
   }
 
-  protected clearRuntimeAuthAfterSystemDefaultLogout(runtimeAuthPath: string): void {
-    // System logout revokes the mirrored login even after a runtime token refresh.
-    rmSync(runtimeAuthPath, { force: true })
-    this.captureSystemDefaultSnapshot({ force: true })
+  protected clearRuntimeAuthAfterSystemDefaultLogout(path: string, snapshot = true): void {
+    rmSync(path, { force: true })
+    if (snapshot) {
+      this.captureSystemDefaultSnapshot({ force: true })
+    }
     this.persistRuntimeLogoutMarker()
     this.lastWrittenAuthJson = null
     this.persistSharedRuntimeAuthProvenance({

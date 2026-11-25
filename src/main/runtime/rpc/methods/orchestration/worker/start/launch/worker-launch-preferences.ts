@@ -1,10 +1,10 @@
-import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { checkAgentLaunchModelPreferences } from '../../../../../../../../shared/agent-launch/choices/agent-launch-model-preferences'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
-import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 
 export type OrchestrationWorkerLaunchSelection = {
@@ -29,6 +29,21 @@ export function createWorkerLaunchReceipt(args: {
     effort: args.effort ?? null
   }
   return { requested: selection, effective: { ...selection } }
+}
+
+/** A chat worker launches with the model and effort its session was seeded with, not only those the caller asked for. */
+export function structuredWorkerLaunchReceipt(
+  receipt: OrchestrationWorkerLaunchReceipt,
+  options: Readonly<Record<string, string>> | undefined
+): OrchestrationWorkerLaunchReceipt {
+  return {
+    ...receipt,
+    effective: {
+      ...(receipt.effective ?? receipt.requested),
+      model: options?.model ?? null,
+      effort: options?.effort ?? null
+    }
+  }
 }
 
 /** A reuse start launches nothing; the agent already running there is its effective agent, so

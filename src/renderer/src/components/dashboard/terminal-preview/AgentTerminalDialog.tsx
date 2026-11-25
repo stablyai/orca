@@ -2,14 +2,14 @@ import { useEffect, useId, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import { agentStateLabel } from '@/components/AgentStateDot'
+import { agentStateLabel } from '@/components/agent/status/AgentStateDot'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import {
   dashboardCardDisplayState,
   type DashboardCard,
   type DashboardRevealAgentArgs as AgentRevealArgs
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { AgentTerminalPreview } from './AgentTerminalPreview'
 import { AgentCardLastMessages, hasAgentCardLastMessages } from '../board/AgentCardLastMessages'
 import { terminalPreviewUnavailableMessage } from './terminal-preview-unavailable-message'

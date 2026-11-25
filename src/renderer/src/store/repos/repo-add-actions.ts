@@ -13,7 +13,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { RepoSlice } from './repo-state'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { fetchRuntimeAddProjectPathStatus, getRuntimeEnvironmentDisplayName } from './owner-routing'
@@ -64,7 +64,8 @@ export function createRepoAddActions(
                   target,
                   'repo.add',
                   { path, kind, ...(displayName ? { displayName } : {}) },
-                  { timeoutMs: 15_000 }
+                  // Adding a repo is the user's act: it may wake an idle-stopped WSL host (#46567).
+                  { timeoutMs: 15_000, wake: true }
                 )
               ).repo
               clearPendingRuntimeRepoRemoval(environmentId, added.id)

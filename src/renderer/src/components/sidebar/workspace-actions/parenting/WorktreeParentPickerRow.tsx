@@ -10,7 +10,7 @@ import { branchDisplayName } from '../../workspace-card/identity/worktree-branch
 import StatusIndicator from '../../workspace-card/surface/StatusIndicator'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { ParentMachineBadge } from './ParentMachineBadge'
 
 // The picker batches status reads once; memoized rows keep no store subscriptions.

@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../src/shared/gitlab/gitlab-types'
 import type { LinearIssue } from '../../../../src/shared/linear/issue-types'
-import { resolveComposerManualBranchNameChange } from '../../../../src/shared/composer-branch-selection'
+import { resolveComposerManualBranchNameChange } from '../../../../src/shared/new-workspace/composer-branch-selection'
 import { resolveGitHubWorkItemIdentity } from '../../../../src/shared/new-workspace/github-work-item-identity'
 import { getForkPushWarning } from '../../../../src/shared/new-workspace/fork-push-warning'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -56,10 +56,10 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
   const { name, setName, setNameState, lastAutoNameRef, applyAutoName, isNameAutoManaged } =
     useMobileComposerName(linkedWorkItem)
 
-  const clearBaseAndBranch = useCallback(() => {
+  const clearBaseAndBranch = useCallback((nextBase: ComposerBaseState = {}) => {
     branchSelectionRef.current = null
     setBranchCreateIntent(false)
-    setBase({})
+    setBase(nextBase)
     setReuseEligibleBranch(null)
     setReuseSelectedBranch(false)
     setForkPushWarning(null)
@@ -183,7 +183,8 @@ export function useMobileComposerSource(args: UseMobileComposerSourceArgs) {
       } else {
         applyAutoName(args.suggested, name)
       }
-      clearBaseAndBranch()
+      // As desktop: Linear's suggested branch, kept through name edits.
+      clearBaseAndBranch({ branchNameOverride: args.linked.linearBranchName })
     },
     [applyAutoName, clearBaseAndBranch, lastAutoNameRef, linkedWorkItem, name, setNameState]
   )

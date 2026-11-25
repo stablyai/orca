@@ -15,7 +15,7 @@ import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktre
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   TERMINAL_PATH_CROSS_WORKSPACE_RUNTIME_CAPABILITY,
   type RuntimeTerminalPathResolution

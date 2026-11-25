@@ -33,7 +33,7 @@ import {
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../shared/app-environment'
+} from '../../../shared/app-lifecycle/app-environment'
 import {
   assembleOrcadArtifact,
   getOrcadTemplateCandidates,

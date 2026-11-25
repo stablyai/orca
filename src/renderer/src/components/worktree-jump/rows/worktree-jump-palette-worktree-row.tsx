@@ -3,6 +3,7 @@ import { Server, ServerOff } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { PaletteWorktreeStatusDot } from '@/components/cmd-j/palette-live-status'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
+import { RepoMark } from '@/components/repo/RepoMark'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import {
   resolveWorktreeBranchLabel,
@@ -12,7 +13,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   isRuntimeOwnedSshTargetId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   isPaletteCurrentWorktree,
   getPaletteWorktreeExecutionHostId,
@@ -161,7 +162,7 @@ export function WorktreeJumpPaletteWorktreeRow({
             <PaletteHostBadgeChip badge={hostBadge} />
             {repoName && (
               <span className="inline-flex max-w-[180px] items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-[11px] font-semibold leading-none text-foreground">
-                <RepoBadgeMark color={repo?.badgeColor} />
+                {repo ? <RepoMark repo={repo} /> : <RepoBadgeMark color={undefined} />}
                 <span className="truncate">
                   <HighlightedText text={repoName} matchRanges={entry.match.repoRanges} />
                 </span>

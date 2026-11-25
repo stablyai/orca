@@ -77,7 +77,7 @@ export function StatusBarUsageChangeNoticeCard({
     }
     update()
 
-    // Density changes can move meters without resizing the window; track the anchor itself.
+    // Usage changes can move meters without resizing the window; track the anchor itself.
     const observer = new ResizeObserver(update)
     observer.observe(anchor)
     window.addEventListener('resize', update)

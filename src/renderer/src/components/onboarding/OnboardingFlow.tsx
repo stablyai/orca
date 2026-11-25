@@ -1,4 +1,5 @@
 import { OnboardingLanguageSwitcher } from './OnboardingLanguageSwitcher'
+import { useOnboardingLanguageOffer } from './use-onboarding-language-offer'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '@/lib/class-names'
 import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
@@ -49,6 +50,7 @@ export default function OnboardingFlow({
     (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
       ? t('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : t('components.onboarding.flow.actions.continue', 'Continue'))
+  const languageOffer = useOnboardingLanguageOffer(onboarding.lastCompletedStep)
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
   const [skipConfirmOpen, setSkipConfirmOpen] = useState(false)
   const skipConfirmAdvancedViaRef = useRef<'button' | 'keyboard'>('button')
@@ -144,6 +146,7 @@ export default function OnboardingFlow({
                 <span>{t('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
               </div>
               <OnboardingLanguageSwitcher
+                offer={languageOffer}
                 open={languagePickerOpen}
                 onOpenChange={setLanguagePickerOpen}
               />

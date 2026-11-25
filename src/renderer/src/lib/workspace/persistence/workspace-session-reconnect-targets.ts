@@ -1,6 +1,6 @@
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { isOwnedSshTargetId } from '../../../../../shared/execution-host'
+import { isOwnedSshTargetId } from '../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 
 export function buildActiveConnectionIdsAtShutdown(

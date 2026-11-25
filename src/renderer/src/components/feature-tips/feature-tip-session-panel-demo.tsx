@@ -7,7 +7,7 @@ import {
 import {
   getLocalExecutionHostLabel,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { AgentSessionHistoryIcon } from '@/components/right-sidebar/activity-bar/agent-session-history-icon'
 import { AiVaultPanelHeader } from '@/components/right-sidebar/ai-vault/panel/AiVaultPanelHeader'
 import { highlightedSearchSnippet } from '@/components/right-sidebar/ai-vault/search/AiVaultSearchEvidence'

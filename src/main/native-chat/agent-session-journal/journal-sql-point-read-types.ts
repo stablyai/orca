@@ -2,7 +2,7 @@ import type { JournalOutlineCache } from './journal-domain-outline'
 import type { JournalMailAttempt, JournalMailObservation } from './journal-mail-observation'
 import type { JournalRequestFailureRead } from './journal-request-failure'
 import type { JournalRewindCut, JournalRewindSelection } from './journal-domain-rewind-cut'
-import type { AgentSessionConversationOutline } from '../../../shared/agent-session/agent-session-conversation-outline'
+import type { AgentSessionConversationOutline } from '../../../shared/agent-session/view/messages/agent-session-conversation-outline'
 import type { JournalForkBoundary, JournalSavedContent } from './journal-domain-fork-reads'
 import type { JournalRequestFailureResult } from './journal-sql-request-failure-read'
 import type {
@@ -29,7 +29,7 @@ import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { JournalInputRead, JournalInputReadResult } from './journal-input-reads'
 import type { HostUsageLimitCut } from '../agent-session-wire/recovery/structured-agent-session-usage-limit-chain'
 import type { JournalStatusState } from './journal-status-state'
-import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { NativeChatOrcaStopCut } from '../../../shared/native-chat/transcript/continuation/native-chat-orca-stop-cut'
 import type {
   JournalStatusIndicatorRead,
   JournalStatusIndicators
@@ -37,6 +37,14 @@ import type {
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import type { JournalSqlQueueRead, JournalSqlQueueReadResult } from './journal-sql-queued-messages'
 import type { JournalSqlItemRead, JournalSqlItemReadResult } from './journal-sql-item-reads'
+import type {
+  JournalAcpHistory,
+  JournalAcpHistoryItems,
+  JournalAcpHistoryItemsRead,
+  JournalAcpHistoryRead,
+  JournalAcpHistoryRow,
+  JournalAcpHistoryRowsRead
+} from './journal-domain-acp-history'
 
 export type JournalSqlPointRead = {
   sessionId: string
@@ -53,8 +61,11 @@ export type JournalSqlPointRead = {
     | { kind: 'rewind-target'; itemId: string }
     | { kind: 'rewind-cut'; target: JournalRewindSelection }
     | { kind: 'history-source-items'; clientMessageIds: readonly string[] }
-    | { kind: 'provider-turn-in-namespace'; namespace: string }
+    | { kind: 'provider-turn-in-namespace'; namespace: string; sinceFence?: number }
     | { kind: 'saved-item-ids'; itemIds: readonly string[] }
+    | JournalAcpHistoryRead
+    | JournalAcpHistoryItemsRead
+    | JournalAcpHistoryRowsRead
     | { kind: 'generation'; input: JournalGenerationRead }
     | { kind: 'observer'; input: JournalObserverRead }
     | { kind: 'work'; input: JournalSqlWorkRead }
@@ -67,7 +78,7 @@ export type JournalSqlPointRead = {
     | { kind: 'item'; itemId: string }
     | { kind: 'item-detail'; itemId: string }
     | { kind: 'submission'; clientMessageId: string }
-    | { kind: 'submission-body'; clientMessageId: string }
+    | { kind: 'submission-body'; clientMessageId: string; family?: true }
     | { kind: 'acceptance'; clientMessageId: string }
     | { kind: 'item-provenance'; itemId: string }
     | { kind: 'has-recorded-item'; itemId: string }
@@ -100,6 +111,9 @@ export type JournalSqlPointReadResult =
   | { kind: 'history-source-items'; items: AgentJournalRenderItem[] }
   | { kind: 'provider-turn-in-namespace'; present: boolean }
   | { kind: 'saved-item-ids'; itemIds: string[] }
+  | { kind: 'acp-history'; history: JournalAcpHistory }
+  | ({ kind: 'acp-history-items' } & JournalAcpHistoryItems)
+  | { kind: 'acp-history-rows'; rows: JournalAcpHistoryRow[] }
   | { kind: 'generation'; generation: JournalGenerationResult }
   | { kind: 'observer'; observation: JournalObserverResult }
   | { kind: 'work'; answer: JournalSqlWorkResult }

@@ -4,8 +4,8 @@ import {
   getRepoExecutionHostId,
   getRepoExecutionHostIdOrDefault,
   getWorktreeExecutionHostId
-} from '../../execution-host'
-import type { ExecutionHostId } from '../../execution-host'
+} from '../../execution-host/execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import {
   getHostContextLabel,
   getMixedHostContextLabels as getSharedMixedHostContextLabels

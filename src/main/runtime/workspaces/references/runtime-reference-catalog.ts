@@ -4,9 +4,9 @@ import type {
   RuntimeReferenceListResult
 } from '../../../../shared/workspace-attachments/runtime-reference-contracts'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
+import { mergeWorktree } from '../../../ipc/worktrees/metadata/worktree-metadata-merge'
 import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -20,7 +20,7 @@ import {
   isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { branchSelectorMatches, runtimePathsEqual } from '../catalog/runtime-worktree-path-identity'
 

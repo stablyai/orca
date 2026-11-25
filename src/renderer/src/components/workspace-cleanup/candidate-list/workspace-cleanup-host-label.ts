@@ -1,7 +1,7 @@
 // @protected-copy scope=file
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { getTranslatedExecutionHostLabel } from '../../sidebar/execution-host-label'
+import { getTranslatedExecutionHostLabel } from '../../../runtime/hosts/display/execution-host-label'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
 import '../candidate-evidence/workspace-cleanup-host-indexes'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'

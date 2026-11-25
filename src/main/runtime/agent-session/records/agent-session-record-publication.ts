@@ -12,11 +12,32 @@ export abstract class AgentSessionRecordPublication {
     return () => this.transactions.deathEvidenceListeners.delete(listener)
   }
 
-  /** Notify first committed record; listeners must not throw. */
-  onFirstRecord(listener: () => void): () => void {
-    this.transactions.firstRecordListeners.add(listener)
-    return () => this.transactions.firstRecordListeners.delete(listener)
+  /** Notify when committed records start or stop holding any chat; listeners must not throw. */
+  onHeldChange(listener: () => void): () => void {
+    this.transactions.heldChangeListeners.add(listener)
+    return () => this.transactions.heldChangeListeners.delete(listener)
   }
+
+  /** Each commit's written or removed record ids, and whether it changed which chats have tabs, once
+   *  the commit is published. */
+  onRecordsChanged = (
+    listener: (sessionIds: readonly string[], tabsChanged: boolean) => void
+  ): (() => void) => {
+    this.transactions.recordsChanged.listeners.add(listener)
+    return () => {
+      this.transactions.recordsChanged.listeners.delete(listener)
+    }
+  }
+
+  /** How many conversations `listConversations` lists, without listing them. */
+  conversationCount = (): number =>
+    this.transactions.state.records.size +
+    [...this.transactions.state.unreadableRecords.values()].filter((row) => row.conversation).length
+
+  /** The record's frozen row: a commit that writes it replaces it, so identity says it changed. */
+  recordStamp = (sessionId: string): object | undefined =>
+    this.transactions.state.records.get(sessionId) ??
+    this.transactions.state.unreadableRecords.get(sessionId)
 
   protected commitRecordCommand<C extends AgentSessionRecordCommand>(
     id: string,

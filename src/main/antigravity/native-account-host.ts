@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type { AntigravityAccountTarget } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import type { AntigravityNativeCredential } from './native-credential-codec'

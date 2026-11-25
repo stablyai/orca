@@ -32,7 +32,7 @@ import {
 import { PRRefreshRetryState } from './pr-refresh-retry-state'
 import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
-import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { getPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   deliverablePRBranchOutcome,
   setPRBranchReadCompletion,
@@ -284,22 +284,6 @@ export function reportVisiblePRRefreshCandidates(
     })
   }
   drainer.schedule()
-}
-
-export function _getVisiblePRRefreshWindowCountForTests(): number {
-  return visibility.windowCount
-}
-
-export function _getPRRefreshErrorBackoffCountForTests(): number {
-  return retry.errorBackoffCount
-}
-
-export function _getPRRefreshQueueSizeForTests(): number {
-  return queue.size
-}
-
-export function _getPRRefreshAliasCountForTests(key: string): number {
-  return queue.aliasCount(key)
 }
 
 export function refreshPRNow(

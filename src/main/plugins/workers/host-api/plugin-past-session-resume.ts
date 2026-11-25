@@ -11,7 +11,7 @@ import {
   type AiVaultPrepareSessionResumeArgs,
   type AiVaultPrepareSessionResumeResult
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { ProviderSession } from '../../../../shared/rpc-contract/terminal/agent-session-params'
 import { codexDatedRolloutRelativePath } from '../../../codex/history/resume/codex-session-resume-home'
 import type { PluginHostMethodContext } from './plugin-host-method-bind'

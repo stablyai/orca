@@ -15,10 +15,9 @@ import {
   type AiVaultResumeLaunchSettings,
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
-  buildAiVaultLocalResumeStartup,
-  getAiVaultResumeCodexHome,
-  resolveAiVaultCopiedSessionAgentArgs
+  buildAiVaultLocalResumeStartup
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-startup'
+import { getAiVaultResumeCodexHome } from '../../../../shared/ai-vault/resume/ai-vault-resume-path'
 
 /** One native execution fact builds the line and chooses the shell that receives it. */
 export function buildMobileTerminalChatFork(args: {
@@ -61,14 +60,7 @@ export function buildMobileTerminalChatFork(args: {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)
   }
   const startup = prepared.forkedSession
-    ? buildAiVaultLocalResumeStartup({
-        ...startupArgs,
-        agentArgs: resolveAiVaultCopiedSessionAgentArgs({
-          ...startupArgs,
-          sourceAgent: source.sourceAgent
-        }),
-        embedCwd: false
-      })
+    ? buildAiVaultLocalResumeStartup({ ...startupArgs, embedCwd: false })
     : buildAiVaultForkStartup(startupArgs)
   if (!startup) {
     throw new Error('chat_fork_source_unavailable')

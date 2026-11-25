@@ -35,6 +35,17 @@ export abstract class AgentBrowserBridgeLifecycle extends AgentBrowserBridgeRawP
     this.pendingInterceptRestore.delete(sessionName)
   }
 
+  /** The agent routed requests or is capturing HAR on this page; freeing the page would drop both. */
+  holdsPageNetworkState(browserPageId: string): boolean {
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    const session = this.sessions.get(sessionName)
+    return (
+      session?.activeCapture === true ||
+      (session?.activeInterceptPatterns.length ?? 0) > 0 ||
+      this.pendingInterceptRestore.has(sessionName)
+    )
+  }
+
   async onProcessSwap(
     browserPageId: string,
     _newWebContentsId: number,

@@ -6,7 +6,8 @@ import { resolveTerminalPasteRuntime } from '@/components/terminal-pane/input/pa
 import { TERMINAL_PASTE_MAX_BYTES } from '@/components/terminal-pane/input/paste/terminal-paste-limits'
 import { pasteTerminalText } from '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
 import { isTerminalPanePasteFocusCurrent } from '@/components/terminal-pane/input/paste/terminal-paste-target-state'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
+import { noteTerminalWebglAtlasTyping } from '@/lib/pane-manager/terminal-rendering/terminal-webgl-atlas-rebuild-interaction'
 
 export type PreviewTerminalPasteSource = 'keyboard' | 'app-menu' | 'right-click'
 
@@ -62,7 +63,11 @@ export function createPreviewClipboardPaster(deps: {
     })
     await executeTerminalPastePlan(plan, {
       pasteText: (text, options) => pasteTerminalText(pasteTerminal, text, options),
-      writePty: (data) => deps.writeInput(data),
+      writePty: (data) => {
+        // Chunked pastes skip xterm's onData; they still hold atlas rebuilds like typing.
+        noteTerminalWebglAtlasTyping()
+        return deps.writeInput(data)
+      },
       isTargetCurrent: targetIsCurrent,
       // Why: if focus changes mid-bracketed paste, the closing marker must still reach the live PTY.
       canContinue: () => true

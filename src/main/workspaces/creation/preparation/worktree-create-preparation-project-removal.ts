@@ -2,7 +2,7 @@ import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../execution-host/project-runtime-git-options'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import { discardRepoPreparations } from './worktree-create-preparation-pool'

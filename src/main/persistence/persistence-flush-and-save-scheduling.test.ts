@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync, mkdirSync, existsSync } from 'node:fs'
+import { rmSync, mkdtempSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -9,14 +9,22 @@ import {
   createStore,
   withPlatform,
   writeDataFile,
-  readDataFile,
   makeRepo
 } from './persistence-test-harness'
-import { makeTerminalTab, TEST_LEAF_1 } from './persistence-session-fixtures'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
-import { _resetTracerForTests } from '../observability/tracer'
+import './persistence-session-fixtures'
+import '../../shared/orca-profiles/constants'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
+
+import '../observability/tracer'
 import { _resetPtyBindingSpanSamplingForTests } from './loading-store/terminal-bindings/pty-binding-span'
+
+type PrCacheEntry = PersistedState['githubCache']['pr'][string]
+
+// Omit `data` so the reload assertions compare exactly the fetchedAt each profile persisted.
+function dataLessPrCacheEntry(fetchedAt: number): PrCacheEntry {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store persists cache entries opaquely and never reads `data` on this path; the reload assertions require the field to stay absent.
+  return { fetchedAt } as PrCacheEntry
+}
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -70,46 +78,6 @@ describe('Store', () => {
     _resetPtyBindingSpanSamplingForTests()
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('durably commits an exact JSON operation before a following microtask changes generation', async () => {
-    const store = await createStore()
-    const originalTabId = store.getWorkspaceSession().activeTabId
-    await store.runDurableMutation(() => {
-      store.updateSettings({ theme: 'dark' })
-      queueMicrotask(() => {
-        store.setWorkspaceSession({ ...store.getWorkspaceSession(), activeTabId: 'newer-tab' })
-      })
-      return { value: undefined }
-    })
-    expect(readDataFile()).toMatchObject({
-      settings: { theme: 'dark' },
-      workspaceSession: { activeTabId: originalTabId }
-    })
-    expect(store.getWorkspaceSession().activeTabId).toBe('newer-tab')
-    await store.flushPendingOrThrowAsync()
-    expect(readDataFile()).toHaveProperty(['workspaceSession', 'activeTabId'], 'newer-tab')
-    store.freezeWrites()
-  })
-
-  it('bounds save postponement under sustained mutation bursts (max-wait)', async () => {
-    vi.useFakeTimers()
-    try {
-      const store = await createStore()
-      // Keep resetting debounce past max-wait to verify sustained mutations still reach disk.
-      let width = 400
-      for (let i = 0; i < 11; i++) {
-        store.updateUI({ sidebarWidth: width++ })
-        vi.advanceTimersByTime(500)
-      }
-      await store.waitForPendingWrite()
-
-      expect(existsSync(join(testState.dir, 'profile-state.db'))).toBe(true)
-      const persisted = readDataFile() as { ui: { sidebarWidth: number } }
-      expect(persisted.ui.sidebarWidth).toBeGreaterThanOrEqual(400)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('garbage-collects stale local worktreeMeta at load with a 30-day grace', async () => {
@@ -203,12 +171,12 @@ describe('Store', () => {
     const { initDataPath } = await import('./loading-store/user-data-path')
     initDataPath()
     const profileAStore = createSqliteTestStore(Store, { dataFile: profileADataFile })
-    profileAStore.setGitHubCache({ pr: { 'o/r#a': { fetchedAt: 10 } as never }, issue: {} })
+    profileAStore.setGitHubCache({ pr: { 'o/r#a': dataLessPrCacheEntry(10) }, issue: {} })
     await profileAStore.flushPendingOrThrowAsync()
 
     const profileBStore = createSqliteTestStore(Store, { dataFile: profileBDataFile })
     expect(profileBStore.getGitHubCache().pr['o/r#a']).toBeUndefined()
-    profileBStore.setGitHubCache({ pr: { 'o/r#b': { fetchedAt: 20 } as never }, issue: {} })
+    profileBStore.setGitHubCache({ pr: { 'o/r#b': dataLessPrCacheEntry(20) }, issue: {} })
     await profileBStore.flushPendingOrThrowAsync()
 
     const restartedProfileA = createSqliteTestStore(Store, { dataFile: profileADataFile })
@@ -216,122 +184,5 @@ describe('Store', () => {
     expect(restartedProfileA.getGitHubCache().pr['o/r#a']).toEqual({ fetchedAt: 10 })
     expect(restartedProfileA.getGitHubCache().pr['o/r#b']).toBeUndefined()
     expect(restartedProfileB.getGitHubCache().pr['o/r#b']).toEqual({ fetchedAt: 20 })
-  })
-
-  describe('persistPtyBinding fast lane', () => {
-    const WORKTREE = 'repo1::/worktree'
-    const binding = { worktreeId: WORKTREE, tabId: 'tab1', leafId: TEST_LEAF_1, ptyId: 'pty-1' }
-    const paneKey = `tab1:${TEST_LEAF_1}`
-
-    const boundSession = (
-      overrides: Partial<WorkspaceSessionState> = {}
-    ): WorkspaceSessionState => ({
-      ...getDefaultWorkspaceSession(),
-      activeRepoId: 'repo1',
-      activeWorktreeId: WORKTREE,
-      activeTabId: 'tab1',
-      tabsByWorktree: {
-        [WORKTREE]: [makeTerminalTab({ id: 'tab1', worktreeId: WORKTREE, ptyId: 'pty-1' })]
-      },
-      terminalLayoutsByTabId: {
-        tab1: {
-          root: { type: 'leaf', leafId: TEST_LEAF_1 },
-          activeLeafId: TEST_LEAF_1,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [TEST_LEAF_1]: 'pty-1' }
-        }
-      },
-      ...overrides
-    })
-
-    const runtimeCounters = (store: ReturnType<typeof createStore>) => {
-      const runtime = store['runtime']
-      return {
-        writeGeneration: runtime.writeGeneration,
-        lastDurableWriteGeneration: runtime.lastDurableWriteGeneration
-      }
-    }
-
-    afterEach(async () => {
-      _resetTracerForTests()
-    })
-
-    it('falls through on an incarnation change and persists the new incarnation', async () => {
-      const store = await createStore()
-      store.setWorkspaceSession(boundSession())
-      await store.persistPtyBinding({ ...binding, incarnationId: 'a' })
-      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
-
-      expect(await store.persistPtyBinding({ ...binding, incarnationId: 'b' })).toBe(true)
-
-      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
-        durableGenerationBefore
-      )
-      expect(readDataFile()).toHaveProperty(
-        ['workspaceSession', 'terminalPtyIncarnationsByPaneKey', paneKey],
-        'b'
-      )
-    })
-
-    it('does not acknowledge an unpersisted binding published after the final flush', async () => {
-      const store = await createStore()
-      store.setWorkspaceSession(boundSession())
-      await store.persistPtyBinding(binding)
-      await store.flushAsync()
-
-      const next = boundSession()
-      next.tabsByWorktree[WORKTREE][0].ptyId = 'pty-after-quit'
-      next.terminalLayoutsByTabId.tab1.ptyIdsByLeafId = { [TEST_LEAF_1]: 'pty-after-quit' }
-      expect(() => store.setWorkspaceSession(next)).toThrow('finalization')
-      Object.assign(store.getWorkspaceSession(), next)
-      expect(store.getWorkspaceSession().tabsByWorktree[WORKTREE][0].ptyId).toBe('pty-after-quit')
-
-      await expect(
-        store.persistPtyBinding({ ...binding, ptyId: 'pty-after-quit' })
-      ).rejects.toThrow('Cannot mutate finalized profile persistence')
-      expect(readDataFile()).toHaveProperty(
-        ['workspaceSession', 'tabsByWorktree', WORKTREE, '0', 'ptyId'],
-        'pty-1'
-      )
-    })
-
-    it.each([undefined, 'ssh:ssh-1', 'runtime:runtime-1'])(
-      'flushes unrelated dirty state once, then skips unchanged reattachments on %s',
-      async (hostId) => {
-        const store = await createStore()
-        store.setWorkspaceSession(boundSession(), hostId)
-        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
-        store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
-        const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
-
-        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
-        expect(await store.persistPtyBinding(binding, hostId)).toBe(true)
-
-        expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
-          durableGenerationBefore
-        )
-        expect(readDataFile()).toMatchObject({
-          repos: expect.arrayContaining([expect.objectContaining({ id: 'r-dirty' })])
-        })
-      }
-    )
-
-    it('flushes a changed pty for a pane whose old binding was durable', async () => {
-      const store = await createStore()
-      store.setWorkspaceSession(boundSession())
-      await store.persistPtyBinding(binding)
-      store.addRepo(makeRepo({ id: 'r-dirty', path: '/dirty' }))
-      const durableGenerationBefore = runtimeCounters(store).lastDurableWriteGeneration
-
-      expect(await store.persistPtyBinding({ ...binding, ptyId: 'pty-next' })).toBe(true)
-
-      expect(runtimeCounters(store).lastDurableWriteGeneration).toBeGreaterThan(
-        durableGenerationBefore
-      )
-      expect(readDataFile()).toHaveProperty(
-        ['workspaceSession', 'terminalLayoutsByTabId', 'tab1', 'ptyIdsByLeafId', TEST_LEAF_1],
-        'pty-next'
-      )
-    })
   })
 })

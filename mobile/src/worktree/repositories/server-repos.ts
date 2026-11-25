@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { nativeChatRepoListRead } from '../../session/agent-launch/mobile-runtime-repo-operations'
 import type { Repo as SharedRepo } from '../../../../src/shared/repository/repo-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

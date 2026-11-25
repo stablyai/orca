@@ -1,5 +1,6 @@
+import type { NativeChatMcpTrayState } from '@/components/native-chat/mcp/use-native-chat-mcp-tray'
 import type { CaptureStructuredAgentSessionPresentation } from '../../session/structured/writes/use-structured-agent-session-mutate'
-import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/conversation-context/agent-session-conversation-command'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
 import type { StructuredAgentSessionSendRequest } from '../../session/structured/delivery/structured-agent-session-send-slot'
 import type { NativeChatSendFollowUp } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
@@ -9,8 +10,11 @@ import type {
   SessionOptionDescriptor
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from '../../session/options/controls/native-chat-option-picker-request'
-import type { AgentSessionSlashCommand } from '../../../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentContextUsage } from '../../../../../../shared/agent-session/structured-agent-session-context-usage'
+import type {
+  AgentSessionPromptSuggestion,
+  AgentSessionSlashCommand
+} from '../../../../../../shared/agent-session/agent-session-wire'
+import type { StructuredAgentContextUsage } from '../../../../../../shared/agent-session/conversation-context/structured-agent-session-context-usage'
 import type { NativeChatComposerErrorDetail } from '../controls/native-chat-composer-error-detail'
 import type { NativeChatSideChat } from '../../messages/actions/use-native-chat-side-chat'
 
@@ -48,6 +52,10 @@ export type NativeChatStructuredComposerTransport = {
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
   contextUsage?: StructuredAgentContextUsage | null
+  /** The agent's guess at the next prompt, absent while a queued message will be sent next. */
+  promptSuggestion?: AgentSessionPromptSuggestion | null
+  /** Presentation owner of a staged composer; its transport and attachments remain local. */
+  pendingCreationId?: string
   worktreeId?: string
   /** Present only where the host can set this session's goal. */
   threadGoal?: { setObjective: (objective: string) => Promise<boolean> }
@@ -55,6 +63,8 @@ export type NativeChatStructuredComposerTransport = {
   sideChat?: NativeChatSideChat
   /** Present only where the host can read this chat's Codex account usage. */
   accountUsage?: { open: () => void }
+  /** Present only where the host manages this agent's MCP servers; `/mcp` opens Orca's MCP tray. */
+  mcpPanel?: NativeChatMcpTrayState
   /** Present only where this chat can fork; `run` answers with a notice when it didn't fork. */
   fork?: { run: () => string | null }
   onError: (message: string | null, detail?: NativeChatComposerErrorDetail) => void

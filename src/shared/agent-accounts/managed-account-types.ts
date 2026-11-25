@@ -1,4 +1,5 @@
 import type { CodexAccountSelectionTarget } from './codex/codex-selection-lane'
+import type { ClaudeAccountSwitchRunningSessions } from './claude/claude-account-switch-settings'
 
 export type ManagedDataAccountProvider = 'opencode' | 'devin'
 
@@ -32,6 +33,8 @@ export type CodexManagedAccount = {
 export type CodexManagedAccountSummary = {
   id: string
   email: string
+  /** The name the user gave this account; the email stays its sign-in identity. */
+  displayName?: string
   managedHomeRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   providerAccountId?: string | null
@@ -86,6 +89,8 @@ export type ClaudeManagedAccount = {
 export type ClaudeManagedAccountSummary = {
   id: string
   email: string
+  /** The name the user gave this account; the email stays its sign-in identity. */
+  displayName?: string
   managedAuthRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   authMethod: 'subscription-oauth' | 'unknown'
@@ -135,7 +140,31 @@ export type ClaudeAccountSelectionChange = {
   target: CodexAccountSelectionTarget
   before: { state: ClaudeRateLimitAccountsState; accountId: string | null }
   after: { state: ClaudeRateLimitAccountsState; accountId: string | null }
+  /** The switching client's own choice for running sessions; absent, the host's setting decides. */
+  runningSessions?: ClaudeAccountSwitchRunningSessions
+  /** Nothing was selected: this answers the Ask a switch to this account left open. */
+  answersAskFor?: string | null
 }
+
+/** What a server did with its running Claude terminals when its account switched. */
+export type ClaudeHostRunningSessionsMove = {
+  /** Restarting on the new account, each resuming its conversation. */
+  restarting: number
+  /** Running Claude terminals that may still be on the previous account. */
+  notMoved: number
+  /** Of `notMoved`, those the server restarts when the same switch is sent again with `restart`. */
+  canRestart?: number
+}
+
+/** `runningSessions` is absent from older servers, and from hosts whose window moves its own. */
+export type ClaudeAccountSelectResult = ClaudeRateLimitAccountsState & {
+  runningSessions?: ClaudeHostRunningSessionsMove
+}
+
+/** Moves a host's running Claude sessions after a switch; a host without a window reports them. */
+export type ClaudeAccountSelectedHandler = (
+  change: ClaudeAccountSelectionChange
+) => Promise<ClaudeHostRunningSessionsMove | undefined>
 
 export type ClaudeManagedAccountRuntimeSelection = {
   host: string | null

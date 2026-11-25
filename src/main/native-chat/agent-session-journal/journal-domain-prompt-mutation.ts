@@ -13,7 +13,7 @@ import {
   type JournalDomainLifecycleCommit
 } from './journal-domain-lifecycle'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
-import { isPlanApprovalSubject } from '../../../shared/agent-session/agent-session-approval-subject'
+import { isPlanApprovalSubject } from '../../../shared/agent-session/requests/prompts/agent-session-approval-subject'
 
 /** Revision and answer ownership are checked after every preceding writer command. */
 export function applyJournalDomainPromptMutation(

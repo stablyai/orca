@@ -40,7 +40,7 @@ async function remoteWorkerServer(
 
 /** The paired server's name; one removed from this Orca since keeps the name a link recorded, else its environment ID. */
 export async function remoteServerName(
-  runtime: ReadsRuntime,
+  runtime: Pick<ReadsRuntime, 'resolveOrchestrationWorkerServer'>,
   environmentId: string,
   recorded?: string | null
 ): Promise<string> {

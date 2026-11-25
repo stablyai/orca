@@ -40,7 +40,8 @@ import {
 export async function inspectLocalPtyChildProcesses(
   id: string,
   fresh = true,
-  ignoreDetached = false
+  ignoreDetached = false,
+  jobMembershipOnly = false
 ): Promise<PtyChildProcessVerdict> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
@@ -55,7 +56,8 @@ export async function inspectLocalPtyChildProcesses(
         proc,
         ptyShellPath.get(id) ?? '',
         fresh,
-        ignoreDetached
+        ignoreDetached,
+        jobMembershipOnly
       )
       return ptyProcesses.get(id) === proc ? verdict : 'unverifiable'
     }

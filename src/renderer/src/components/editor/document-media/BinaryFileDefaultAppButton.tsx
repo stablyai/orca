@@ -60,10 +60,7 @@ export function BinaryFileDefaultAppButton({
       <Button variant="outline" size="sm" disabled={pending} onClick={() => void open()}>
         {local
           ? t('auto.components.editor.BinaryFileDefaultAppButton.open', 'Open with default app')
-          : t(
-              'auto.components.editor.BinaryFileDefaultAppButton.downloadOpen',
-              'Download & open with default app'
-            )}
+          : t('auto.components.editor.BinaryFileDefaultAppButton.downloadOpen', 'Download & open')}
       </Button>
       {openFailed && (
         <p className="text-xs text-muted-foreground" role="alert">

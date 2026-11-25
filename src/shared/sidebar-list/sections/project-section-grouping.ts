@@ -1,15 +1,15 @@
 // The desktop sidebar's Project sections; the paired phone calls these same functions.
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { orderProjectSections, type ActivityItem } from './project-section-order'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
-import { toSshExecutionHostId } from '../../execution-host'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
+import { toSshExecutionHostId } from '../../execution-host/execution-host'
 import type { Project, ProjectHostSetup } from '../../project/project-types'
 import type { Repo } from '../../repository/repo-types'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 
 /** The project fields grouping reads. */
 export type ProjectSectionProject = Pick<Project, 'id' | 'displayName'>

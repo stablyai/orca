@@ -8,10 +8,13 @@ import {
   orcadMigrationPartitionScope,
   type OrcadMigrationSourceScope
 } from '../catalog/orcad-source-scope'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { collectSessionOwnerKeys } from './orcad-source-workspace-session-fragments'
 import type { OrcadMigrationManifest } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
 
 /** Mutate a delta-view copy only. */
 export function subtractOrcadMigrationSourceWorkspaceSession(

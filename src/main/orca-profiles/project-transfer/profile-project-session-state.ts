@@ -1,9 +1,12 @@
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
-import { markdownFileIdCandidates } from './profile-session-markdown-transfer'
+import {
+  SESSION_FIELDS_PRUNED_BY_OWNER_KEY,
+  sessionFieldsRemovedWithWorkspace
+} from './profile-project-session-field-disposition'
+import { removeWorkspaceSessionOwners } from '../../persistence/restoring-sessions/session-owner-removal'
 import {
   isRepoWorktreeId,
   ownerKeyBelongsToRepo,
@@ -148,67 +151,32 @@ export function removeRepoFromWorkspaceSession(
   session: WorkspaceSessionState | undefined,
   repoId: string
 ): WorkspaceSessionState {
-  const next = structuredClone(session ?? getDefaultWorkspaceSession())
-  const removedTerminalTabIds = new Set<string>()
-  const removedMarkdownFileIds = new Set<string>()
-  for (const [ownerKey, files] of Object.entries(next.openFilesByWorktree ?? {})) {
-    if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
-      continue
-    }
-    for (const file of files) {
-      markdownFileIdCandidates(file.filePath, ownerKey, file.runtimeEnvironmentId).forEach((id) =>
-        removedMarkdownFileIds.add(id)
-      )
-    }
-  }
-  for (const [ownerKey, tabs] of Object.entries(next.tabsByWorktree)) {
-    if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
-      continue
-    }
-    tabs.forEach((tab) => removedTerminalTabIds.add(tab.id))
-    delete next.tabsByWorktree[ownerKey]
-  }
-  for (const tabId of removedTerminalTabIds) {
-    delete next.terminalLayoutsByTabId[tabId]
-    delete next.localOnlyScrollbackByTabId?.[tabId]
-  }
-  const removedBrowserWorkspaceIds = new Set<string>()
-  for (const [ownerKey, workspaces] of Object.entries(next.browserTabsByWorktree ?? {})) {
-    if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
-      continue
-    }
-    workspaces.forEach((workspace) => removedBrowserWorkspaceIds.add(workspace.id))
-    delete next.browserTabsByWorktree![ownerKey]
-  }
-  if (next.browserPagesByWorkspace) {
-    for (const workspaceId of removedBrowserWorkspaceIds) {
-      delete next.browserPagesByWorkspace[workspaceId]
+  const base = session ?? getDefaultWorkspaceSession()
+  // Workspace removal owns the per-workspace field census, including tab, pane and file entries;
+  // the rules below cover keys no workspace owner names (bare repo IDs, orphaned rows).
+  const ownerKeys = new Set<string>()
+  for (const field of [
+    'tabsByWorktree',
+    'browserTabsByWorktree',
+    ...sessionFieldsRemovedWithWorkspace('ownerKey')
+  ] as const) {
+    for (const ownerKey of Object.keys(base[field] ?? {})) {
+      if (ownerKeyBelongsToRepo(ownerKey, repoId)) {
+        ownerKeys.add(ownerKey)
+      }
     }
   }
+  const next =
+    ownerKeys.size > 0 ? removeWorkspaceSessionOwners(base, ownerKeys)! : structuredClone(base)
   for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
     const record = next[field] as Record<string, unknown> | undefined
     ;(next as Record<string, unknown>)[field] = removeRepoWorktreeRecord(record, repoId)
-  }
-  if (next.markdownFrontmatterVisible) {
-    next.markdownFrontmatterVisible = Object.fromEntries(
-      Object.entries(next.markdownFrontmatterVisible).filter(
-        ([fileId]) => !removedMarkdownFileIds.has(fileId)
-      )
-    )
   }
   if (next.terminalSurfaceTombstonesByPaneKey) {
     next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(
       Object.entries(next.terminalSurfaceTombstonesByPaneKey).filter(
         ([, tombstone]) => !ownerKeyBelongsToRepo(tombstone.worktreeId, repoId)
       )
-    )
-  }
-  if (next.terminalPtyIncarnationsByPaneKey) {
-    next.terminalPtyIncarnationsByPaneKey = Object.fromEntries(
-      Object.entries(next.terminalPtyIncarnationsByPaneKey).filter(([paneKey]) => {
-        const separator = paneKey.lastIndexOf(':')
-        return separator < 1 || !removedTerminalTabIds.has(paneKey.slice(0, separator))
-      })
     )
   }
   if (next.activeWorktreeId && isRepoWorktreeId(repoId, next.activeWorktreeId)) {

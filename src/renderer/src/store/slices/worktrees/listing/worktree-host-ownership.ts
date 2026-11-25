@@ -11,7 +11,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { toVisibleWorktree } from './worktree-catalog-visibility'
 import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import type { WorktreeHostMatchOptions, RepoHostSummary } from './worktree-slice-types'

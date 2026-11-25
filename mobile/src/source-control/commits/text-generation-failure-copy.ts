@@ -1,7 +1,7 @@
 import {
   TEXT_GENERATION_FAILURE_COPY as EN,
   type TextGenerationFailureCode
-} from '../../../../src/shared/text-generation-failure-copy'
+} from '../../../../src/shared/text-generation/text-generation-failure-copy'
 import { translate } from '../../i18n/mobile-i18n'
 import { AGENT_OUTPUT_FAILURE_COPY } from './agent-output-failure-copy'
 import { TEXT_GENERATION_PLAN_FAILURE_COPY } from './text-generation-plan-failure-copy'

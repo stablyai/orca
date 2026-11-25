@@ -1,6 +1,6 @@
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
 import type * as PostHogSdk from 'posthog-node'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { getMainHttpClient } from '../network/http-client'
 import type { CommonProps, EventName } from '../../shared/telemetry/telemetry-event-classification'
 import type { ConsentState } from './consent'

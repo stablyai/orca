@@ -6,7 +6,7 @@ import {
   isEquivalentPaneKey,
   paneKeyMatchSuffix
 } from '../pane-key-match'
-import type { OrchestrationDb } from '../orchestration-db'
+import type { OrchestrationDb, OrchestrationDbConnection } from '../orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../row-column-lists'
 import {
   activeDispatchMailboxBranch,
@@ -31,7 +31,7 @@ const ASSIGNEE_SQL = {
 }
 
 export function hasRecordedStructuredWorkerSession(
-  this: OrchestrationDb,
+  this: OrchestrationDbConnection,
   session: string,
   process: string
 ): boolean {

@@ -6,7 +6,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
 import type {
   BrowserSlice,
@@ -141,10 +141,13 @@ export function createBrowserPageConversionActions(
           get,
           sentPlan.workspace.worktreeId,
           {
-            type: 'replaceBrowserPage',
-            browserTabId: sentPlan.workspace.id,
-            pageId,
-            newPageId: sentPlan.newPage.id
+            type: 'replaceTabContent',
+            replacement: {
+              kind: 'browser-page',
+              browserTabId: sentPlan.workspace.id,
+              pageId,
+              newPageId: sentPlan.newPage.id
+            }
           },
           {
             here: () => convertHere(sentPlan.newPage.id),

@@ -8,7 +8,7 @@ import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership
 import { resolveIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { withRepoHostOwnership } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

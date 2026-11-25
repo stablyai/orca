@@ -34,7 +34,7 @@ import { buildDocPreviewShareControl } from './doc-preview-artifact-share'
 import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
-import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { useConfirmationDialog } from '@/components/dismiss/confirmation/confirmation-dialog-context'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
@@ -377,7 +377,7 @@ export function HtmlDocPreview({
           annotationSend={annotationSend}
           grabAnnotations={grabAnnotations}
           containerRef={containerRef}
-          webviewRef={webviewRef}
+          guestSurfaceRef={webviewRef}
           browserOverlayViewport={browserOverlayViewport}
           worktreeId={worktreeId}
         />

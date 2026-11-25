@@ -13,7 +13,7 @@ import {
   sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-metadata'
-import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/persisted-ui-equality'
+import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import { createBoundedGenerationMap } from '../../../lib/bounded-generation-map'
 
 export type SshCredentialRequest = {
@@ -39,7 +39,7 @@ export type SshSlice = {
   sshCredentialQueue: SshCredentialRequest[]
   /** Connected-transition epoch lets failed consumers retry loads. */
   sshConnectedGeneration: number
-  /** Use immutable Record updates for Zustand selector identity; per-connection forwards arrive via main push events. */
+  /** Keyed by SSH target id or paired server environment id; immutable Records keep Zustand selector identity. Forwards arrive via main push events. */
   portForwardsByConnection: Record<string, PortForwardEntry[]>
   /** Saved forwards that aren't open, keyed by connection ID, so one that can't start stays removable. */
   unrestoredPortForwardsByConnection: Record<string, UnrestoredPortForward[]>

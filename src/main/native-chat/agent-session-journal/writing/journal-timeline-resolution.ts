@@ -49,6 +49,7 @@ type TimelineItemResolution =
       kind: 'text-snapshot'
       identity: AgentJournalItemIdentity
       body: AgentJournalMessageItem
+      final?: true
     }
   | {
       kind: 'guarded-item'

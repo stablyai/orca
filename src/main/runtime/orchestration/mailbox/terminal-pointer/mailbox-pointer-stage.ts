@@ -30,7 +30,7 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   messages: readonly OrchestrationMailboxPointerMessage[]
   heldDeliveryId?: string
   newestSequence: number
-  enterDelayMs: number
+  enterDelayMs: (pointer: string) => number
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -79,13 +79,27 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   }
   // The watermark must not outlive its DB reservation or concurrent delivery stays parked.
   args.state.setWatermark(args.mailboxHandle, args.newestSequence, ptyId)
+  const pointer = formatMessagePointer(
+    args.messages.length,
+    args.mailboxHandle,
+    args.deps.getCliCommand(expectedTarget.terminal.handle),
+    args.heldDeliveryId,
+    expectedTarget.terminal.handle
+  )
   // Only `refused` proves no bytes left, so only `refused` may release the reservation.
   const settlePointerWrite = (settlement: WriteSettlement): void => {
     if (settlement.outcome === 'unverifiable') {
       preserveAmbiguousWrite()
       return
     }
-    finishPointerWriteAndStageEnter(args, ptyId, flight, expectedTarget, settlement)
+    finishPointerWriteAndStageEnter(
+      args,
+      ptyId,
+      flight,
+      expectedTarget,
+      settlement,
+      args.enterDelayMs(pointer)
+    )
   }
   const preserveAmbiguousWrite = (): void => {
     if (!args.state.isCurrentFlight(ptyId, flight)) {
@@ -95,15 +109,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
     args.settle(ptyId, flight)
   }
   try {
-    const writeResult = args.deps.writePty(
-      ptyId,
-      formatMessagePointer(
-        args.messages.length,
-        args.mailboxHandle,
-        args.deps.getCliCommand(expectedTarget.terminal.handle),
-        args.heldDeliveryId
-      )
-    )
+    const writeResult = args.deps.writePty(ptyId, pointer)
     if (isSettledWrite(writeResult)) {
       settlePointerWrite(writeResult)
       return
@@ -119,7 +125,8 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
   ptyId: string,
   flight: OrchestrationMailboxDeliveryFlight,
   expectedTarget: OrchestrationMailboxPointerSubmitTarget,
-  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>
+  settlement: Extract<WriteSettlement, { outcome: 'accepted' | 'refused' }>,
+  enterDelayMs: number
 ): void {
   let delayedSettle = false
   try {
@@ -166,7 +173,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
         flight.enterTimer = null
         flight.submitEnter = null
         submitEnter()
-      }, args.enterDelayMs)
+      }, enterDelayMs)
     }
     delayedSettle = true
     deferredEnter?.()

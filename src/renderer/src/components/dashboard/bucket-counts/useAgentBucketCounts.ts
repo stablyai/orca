@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { DashboardBucket } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardBucket } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { useAgentPresentation } from '../../sidebar/workspace-card/activity/useWorktreeAgentRows'
 
 export type AgentBucketCounts = Readonly<Record<DashboardBucket, number>>

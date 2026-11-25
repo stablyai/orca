@@ -10,7 +10,7 @@ import {
   readStablePaneResolutionFailure
 } from '../evidence/web-session-terminal-orphan-recovery-cache'
 import { latestTerminalRetirementProof } from '../surfaces/web-session-terminal-orphan-recovery-surface-index'
-import { hostSnapshotAffirmsWorktreeContents } from '../../../web-session-tabs-sync/hydration/host-session-snapshot-authority'
+import { hostSnapshotAffirmsWorktreeContents } from '../../../../../../shared/remote-runtime/session-graph/host-session-snapshot-authority'
 import type {
   RecoverySurface,
   UnresolvedRecoverySurface

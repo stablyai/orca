@@ -7,7 +7,7 @@ import {
   CLIPBOARD_TEXT_WRITE_TOO_LARGE_ERROR
 } from '../../../shared/clipboard/clipboard-text'
 import { CLIPBOARD_IMAGE_MAX_BASE64_CHARS } from '../../../shared/clipboard/clipboard-image'
-import { isLinuxWaylandSession } from '../../../shared/linux-wayland-session'
+import { isLinuxWaylandSession } from '../../../shared/app-lifecycle/launch/linux-wayland-session'
 import { writeClipboardTextAndVerify } from './clipboard-text-write-verify'
 import { stageClipboardPublisher } from './clipboard-publisher-executable'
 import { envWithoutAppImageRuntime } from '../../pty/shell-startup/appimage-terminal-env'

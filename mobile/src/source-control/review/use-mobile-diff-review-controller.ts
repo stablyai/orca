@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useReducer, useState } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { DiffComment } from '../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../src/shared/file-review/diff-comment-types'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { getWorktreeLabel } from '../../worktree/row-presentation/worktree-label'

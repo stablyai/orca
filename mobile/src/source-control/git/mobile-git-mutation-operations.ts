@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { TextGenerationFailureFields } from '../../../../src/shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../../../src/shared/text-generation/text-generation-failure-copy'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 

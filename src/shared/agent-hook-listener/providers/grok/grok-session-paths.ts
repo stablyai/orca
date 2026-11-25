@@ -4,11 +4,8 @@ import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { blake3 } from '@noble/hashes/blake3'
 import { bytesToHex } from '@noble/hashes/utils'
-import { resolveAbsoluteDirOverride } from '../../../absolute-dir-override'
-import {
-  GrokSessionPathLookupQueue,
-  type GrokSessionPathScanner
-} from './grok-session-path-lookup-queue'
+import { resolveAbsoluteDirOverride } from '../../../file-access/absolute-dir-override'
+import { GrokSessionPathLookupQueue } from './grok-session-path-lookup-queue'
 
 export const GROK_CHAT_HISTORY_FILE = 'chat_history.jsonl'
 // Grok switches encoded cwd names above 255 bytes to slug+hash groups.
@@ -221,27 +218,11 @@ async function scanGrokChatHistoryBySessionId(
   }
 }
 
-/** Test isolation for the module-level inflight/success caches. */
-export function clearGrokSessionPathLookupCacheForTests(): void {
-  sessionPathLookupQueue.clearForTests()
-  sessionDirectoryOpener = defaultSessionDirectoryOpener
-}
-
 function normalizeGroupEntryLimit(requestedMax: number): number {
   return Math.min(
     GROK_SESSION_GROUP_SCAN_MAX_ENTRIES,
     Math.max(0, Math.floor(Number.isFinite(requestedMax) ? requestedMax : 0))
   )
-}
-
-/** Replace directory IO for bounded-iterator tests. */
-export function setGrokSessionDirectoryOpenerForTests(opener: GrokSessionDirectoryOpener): void {
-  sessionDirectoryOpener = opener
-}
-
-/** Replace scan IO for queue/concurrency tests. */
-export function setGrokSessionPathScannerForTests(scanner: GrokSessionPathScanner): void {
-  sessionPathLookupQueue.setScannerForTests(scanner)
 }
 
 function isPathWithin(root: string, candidate: string): boolean {

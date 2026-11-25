@@ -13,7 +13,7 @@ import type {
   WorkspacePortPageProbeResult,
   WorkspacePortScanResult
 } from '../../../../shared/workspace/ports/workspace-ports'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_PORTS_HOST_SCOPED_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
 import { translate } from '@/i18n/i18n'
 
@@ -107,7 +107,8 @@ function requireWorkspacePortScanResult(value: unknown): WorkspacePortScanResult
 
 export async function runWorkspacePortScanForTarget(
   target: RuntimeClientTarget,
-  repoId?: string
+  repoId?: string,
+  options?: { background?: boolean }
 ): Promise<WorkspacePortScanResult> {
   const params = repoId ? { repoId } : {}
   if (target.kind === 'local') {
@@ -118,7 +119,7 @@ export async function runWorkspacePortScanForTarget(
       target,
       'workspacePorts.scan',
       params,
-      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS }
+      { timeoutMs: WORKSPACE_PORT_RPC_TIMEOUT_MS, background: options?.background }
     )
     return requireWorkspacePortScanResult(result)
   } catch (error) {

@@ -11,6 +11,7 @@ import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutover
 } from '../../../../shared/wsl-move/wsl-move-cutover'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 import { createUncToLinuxPathRewriter } from '../manifest-scope/wsl-move-path-rewriter'
 import type { WslMoveRetainedMark } from './wsl-move-retained-marks'
 import { isLocalWslMoveRow } from '../quiescence/wsl-move-scope-guard'
@@ -32,9 +33,13 @@ function identity(row: IdentityRow, toLinux: (path: string) => string): string {
     : JSON.stringify([row.id, toLinux(row.path), row.displayName])
 }
 
-/** The local row as the move would export it today. */
-export function wslMoveLocalRowIdentity(row: IdentityRow, distro: string): string {
-  const rewriter = createUncToLinuxPathRewriter(distro)
+/** The local row as the move would export it today, with the mapped drives the move read. */
+export function wslMoveLocalRowIdentity(
+  row: IdentityRow,
+  distro: string,
+  mappedDrives: readonly WslMappedDrive[] = []
+): string {
+  const rewriter = createUncToLinuxPathRewriter(distro, mappedDrives)
   return identity(row, (path) => rewriter.path(path, 'absolute'))
 }
 
@@ -114,7 +119,7 @@ export function planWslMoveRetainedMarks(input: {
     }
     const changed =
       wslMoveTakenRowIdentity(owner, ref) !==
-      wslMoveLocalRowIdentity(row, owner.manifest.source.distro)
+      wslMoveLocalRowIdentity(row, owner.manifest.source.distro, owner.mappedDrives)
     if (changed) {
       plan.changed.push(ref)
     }

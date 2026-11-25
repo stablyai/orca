@@ -66,7 +66,7 @@ export class StructuredAgentSessionLeaseRenewer {
   }
 
   private async renewOnce(): Promise<void> {
-    const records = this.input.store.listRecords().filter(
+    const records = this.input.store.listLeaseHolders().filter(
       (record) =>
         !record.lease.unreconciled &&
         record.lease.claimStatus === 'live' &&
@@ -74,11 +74,14 @@ export class StructuredAgentSessionLeaseRenewer {
         // Recovery has no owned transport; renewing would make an orphan PID appear healthy.
         record.lease.handoffStage !== 'recovering'
     )
+    if (records.length === 0) {
+      return
+    }
     // Held children prove ownership even when PID probes lack start-time/token evidence.
     const holds = (record: AgentSessionRecord): boolean =>
       this.input.holdsLiveChild(record.sessionId, record.lease.runtimeFence)
-    const held = records.filter(holds)
-    const unheld = records.filter((record) => !held.includes(record))
+    const held = new Set(records.filter(holds))
+    const unheld = records.filter((record) => !held.has(record))
     const probes =
       unheld.length > 0 ? await this.probe(unheld) : new Map<string, AgentSessionOwnerProbe>()
     for (const record of held) {
@@ -105,6 +108,9 @@ export class StructuredAgentSessionLeaseRenewer {
         childProbe: probe,
         now
       })
+    }
+    if (renewals.length === 0) {
+      return
     }
     // Batch healthy renewals; retry superseded entries individually to preserve isolation.
     let results: PromiseSettledResult<AgentSessionRecord>[]

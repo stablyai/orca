@@ -1,4 +1,4 @@
-import type { CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'

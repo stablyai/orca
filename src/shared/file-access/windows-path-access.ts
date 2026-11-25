@@ -1,5 +1,5 @@
 /** Translate Windows access only for the resource owner’s WSL host, using its registered distro. Pure desktop-side path work; SSH/paired/local hosts have no translation. */
-import { parseRoutableExecutionHostId } from '../execution-host'
+import { parseRoutableExecutionHostId } from '../execution-host/execution-host'
 import { parseWslUncPath, toWindowsWslUncPath } from './wsl-paths'
 
 export type WindowsPathAccess = {

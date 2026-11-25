@@ -1,4 +1,4 @@
-import type { CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import { getBridgePathFromCommandPath, getPosixDirname } from './wsl-cli-scripts'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
 

@@ -1,5 +1,6 @@
 import type { HostRelay } from './host-relay'
 import type { SpliceRelay } from './splice-relay'
+import type { UserHosts } from './user-hosts'
 import { INGRESS_SECRET_MIN_LENGTH } from '../../../packages/relay-contract/src/ingress-header'
 import { parseCidr, type Cidr } from './ingress'
 import { metric } from './metrics'
@@ -7,6 +8,9 @@ import { metric } from './metrics'
 export type Env = {
   HOST_RELAY: DurableObjectNamespace<HostRelay>
   SPLICE_RELAY: DurableObjectNamespace<SpliceRelay>
+  // Erasure index, one object per user (user-hosts.ts). Optional until every deploy config binds
+  // it: unbound, its admin ops answer 404 and a host's index write stays pending (retried).
+  USER_HOSTS?: DurableObjectNamespace<UserHosts>
   // Pooled connection to the relay's Postgres (credentials, invites, devices, assignments).
   HYPERDRIVE?: Hyperdrive
   // 'postgres' (MVP and production) or 'spike' (no database: stub credentials, no epoch check).
@@ -69,6 +73,12 @@ export type Env = {
   INGRESS_TOKENS?: string
   INGRESS_ORIGINS?: string
   INGRESS_SOURCE_CIDRS?: string
+  // Edge-native director endpoints (director-config.ts), dark: answered only for requests to
+  // DIRECTOR_HOSTNAME. Unset (every environment): the Worker routes exactly as without them.
+  DIRECTOR_HOSTNAME?: string
+  DIRECTOR_EDGE_URL?: string
+  DIRECTOR_FRONT_DOOR_URL?: string
+  DIRECTOR_FRONT_DOOR_COUNTRIES?: string
 }
 
 export type EdgeClaims = {

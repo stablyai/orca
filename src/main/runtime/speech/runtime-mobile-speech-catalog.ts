@@ -4,7 +4,7 @@ import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
-import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../shared/orca-profiles/constants'
 import { dictationShortcutModeSettings } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
   getCatalogModel,
@@ -141,8 +141,11 @@ export class RuntimeMobileSpeechCatalog {
   }
 
   /** Set cloud dictation keys over RPC for headless hosts without Settings; seal with the transcribing host's secret store. */
-  openAiKeyStatus(): OpenAiSpeechKeyStatus {
-    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+  async openAiKeyStatus(): Promise<OpenAiSpeechKeyStatus> {
+    return {
+      configured: await hasOpenAiSpeechApiKey(),
+      protection: await getOpenAiSpeechApiKeyProtection()
+    }
   }
 
   async setOpenAiKey(apiKey: string): Promise<OpenAiSpeechKeyStatus> {
@@ -150,8 +153,8 @@ export class RuntimeMobileSpeechCatalog {
     return this.openAiKeyStatus()
   }
 
-  clearOpenAiKey(): OpenAiSpeechKeyStatus {
-    clearOpenAiSpeechApiKey()
+  async clearOpenAiKey(): Promise<OpenAiSpeechKeyStatus> {
+    await clearOpenAiSpeechApiKey()
     return this.openAiKeyStatus()
   }
 

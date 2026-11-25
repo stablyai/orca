@@ -5,7 +5,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
@@ -22,6 +22,7 @@ import {
   sshPartitionCatalogAttribution,
   workspacesHeldByManagedServers
 } from './workspace-session-ssh-partition-attribution'
+import { noteUnreadSessionHost } from './desktop-relay-writes'
 
 type SessionReadApi = {
   get: (hostId?: ExecutionHostId) => Promise<WorkspaceSessionState>
@@ -159,6 +160,7 @@ export async function fetchWorkspaceSessionWithRuntimeHostOwners(
       return await api.get(hostId)
     } catch (err) {
       console.warn(`[session] skipping unreadable host partition ${hostId}:`, err)
+      noteUnreadSessionHost(hostId)
       return null
     }
   }

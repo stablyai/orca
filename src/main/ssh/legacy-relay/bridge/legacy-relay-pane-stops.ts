@@ -2,7 +2,7 @@
 import { parseAppSshPtyId, toAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
-import type { LegacyRelayBridgeCloseResult } from '../../../../shared/legacy-relay-bridge-contract'
+import type { LegacyRelayBridgeCloseResult } from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { isStoppingLease, listedAppPtyIds } from './legacy-relay-bridge-leases'
 import { LegacyRelayExitProofs, LegacyRelayRetry } from './legacy-relay-bridge-timers'
 import type { LegacyRelayClient } from './legacy-relay-client'

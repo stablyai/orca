@@ -312,10 +312,7 @@ export function renderMobileTasksLinearConnectDrawer(model: ConnectionPresentati
         >
           <ExternalLink size={13} color={colors.textSecondary} />
           <Text style={styles.inlineTextLinkText}>
-            {translate(
-              'tasks.tasksCreateDrawers.linearSettingsLink',
-              'Linear Settings / Security / New API key'
-            )}
+            {translate('tasks.tasksCreateDrawers.linearSettingsLink', 'Open Linear settings')}
           </Text>
         </Pressable>
         <View style={styles.securityHintRow}>

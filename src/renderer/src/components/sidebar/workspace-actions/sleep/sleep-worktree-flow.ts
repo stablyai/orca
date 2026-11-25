@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { workspaceSleepTarget } from './workspace-sleep-target'
 

@@ -1,4 +1,4 @@
-import { pullRequestKey } from '../../../shared/native-chat/native-chat-pull-request-event'
+import { pullRequestKey } from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
 import type Database from '../../sqlite/sync-database'
 import { numberColumn, textColumn, textColumnValues } from './pr-watch-sqlite-columns'

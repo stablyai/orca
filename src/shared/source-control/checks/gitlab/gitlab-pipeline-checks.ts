@@ -1,4 +1,4 @@
-import type { GitLabPipeline, GitLabPipelineJob } from '../../../gitlab-types'
+import type { GitLabPipeline, GitLabPipelineJob } from '../../../gitlab/gitlab-types'
 import type { PRCheckDetail } from '../../../github/checks/check-types'
 import type { CheckStatus } from '../../../github/pull-requests/pull-request-types'
 import { checkRunTimes } from '../pr-check-time'

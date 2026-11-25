@@ -47,10 +47,6 @@ type CursorChatMetaScan = {
 // Share index validation across discovery and parsing to avoid repeated directory reads and workspace stats.
 const scanScopedIndex = new AsyncLocalStorage<CursorChatMetaScan>()
 
-export function resetCursorChatMetaIndexCacheForTests(): void {
-  cursorChatMetaIndexCache.clear()
-}
-
 export function withCursorChatMetaScan<T>(fn: () => Promise<T>): Promise<T> {
   return scanScopedIndex.run(
     { index: new Map(), refusals: new Map(), refusedTranscripts: new Set() },

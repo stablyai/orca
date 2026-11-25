@@ -27,7 +27,7 @@ import {
   buildWorkspaceReviewFacts
 } from '../../../shared/sidebar-list/feed-facts/workspace-review-facts'
 import { buildPairedServerActivityFacts } from '../../../shared/sidebar-list/feed-facts/paired-server-activity-facts'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { keyWorkspaceActivityByRow } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 
 export type SidebarInputsFeedSources = {

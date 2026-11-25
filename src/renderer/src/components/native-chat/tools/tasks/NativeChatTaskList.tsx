@@ -174,7 +174,7 @@ export function NativeChatTaskList({
                 {t('components.native-chat.taskList.showAll', 'Full task list')}
               </button>
             </CollapsibleTrigger>
-            <CollapsibleContent animation="height" data-native-chat-member-detail>
+            <CollapsibleContent animation="height">
               <Checklist list={list} />
             </CollapsibleContent>
           </Collapsible>

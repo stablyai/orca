@@ -8,7 +8,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'
 import {
   getWorktreeCardPrDisplay,

@@ -1,4 +1,4 @@
-import type { TextGenerationFailureFields } from '../text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../text-generation/text-generation-failure-copy'
 
 /** Jira rejects summaries longer than 255 characters. */
 export const JIRA_ISSUE_SUMMARY_MAX_LENGTH = 255

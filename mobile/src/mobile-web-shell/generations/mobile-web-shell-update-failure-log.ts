@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { MobileWebBundleErrorCodeSchema } from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import { joinUri } from './generation-cache-uri'
 import type { GenerationFileSystem } from './generation-store-file-system'

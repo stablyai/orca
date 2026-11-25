@@ -4,7 +4,7 @@ import {
   toLinuxPath,
   toWindowsWslUncPath
 } from '../../../../shared/file-access/wsl-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../../../wsl/discovery/distro-catalog'
 import { getCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'
 import { isWslDistroRunning } from '../../../wsl/discovery/wsl-background-distro-gate'
@@ -15,6 +15,7 @@ import {
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
 import { syncSystemConfigIntoManagedCodexHome } from '../../../codex/configuration/settings/codex-config-mirror'
+import { codexHookService } from '../../../codex/hooks/installation/hook-service'
 import { normalizeCodexRuntimeSelection } from '../../account-management/runtime-selection'
 import {
   getWslSelectionKey,
@@ -218,7 +219,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     homePath: string | null
   ): void {
     this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(
@@ -255,17 +255,18 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     pinnedWslDistro?: string
   ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      return {
-        kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
-      }
+      return this.getPreparedWslRateLimitHome(target, pinnedWslDistro)
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
         // Quota probes read account auth in place; resource synchronization belongs to launch prep.
-        return { kind: 'ready', codexHomePath: resolved.homePath }
+        return {
+          kind: 'ready',
+          codexHomePath: resolved.homePath,
+          readingAccount: { accountId: selfContainedAccount.id, runtime: 'host', wslDistro: null }
+        }
       }
       if (resolved.kind === 'indeterminate') {
         return { kind: 'skip' }
@@ -285,15 +286,23 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
   }
 
   /** Sync shared-mirror credentials for catalog probes; per-account homes already own their auth. */
-  prepareHostCodexHomeForReadOnlyAppServer(homePath: string, launchEnv?: NodeJS.ProcessEnv): void {
+  async prepareHostCodexHomeForReadOnlyAppServer(
+    homePath: string,
+    launchEnv?: NodeJS.ProcessEnv
+  ): Promise<void> {
+    const mirrorHome = resolveOrcaManagedCodexHomePath()
     if (
       this.getSelfContainedManagedHostAccount() ||
-      normalizeRuntimePathForComparison(homePath) !==
-        normalizeRuntimePathForComparison(resolveOrcaManagedCodexHomePath())
+      normalizeRuntimePathForComparison(homePath) !== normalizeRuntimePathForComparison(mirrorHome)
     ) {
       return
     }
-    this.syncMirrorForReadOnlyAppServer(launchEnv)
+    this.syncForCurrentSelection(undefined, launchEnv)
+    syncSystemCodexResourcesIntoManagedHome()
+    // Launch preparation already mirrored these exact files; repeating it costs a full TOML merge.
+    if (!(await codexHookService.isConfigPreparationCurrent(mirrorHome))) {
+      syncSystemConfigIntoManagedCodexHome()
+    }
   }
 
   private syncMirrorForReadOnlyAppServer(launchEnv?: NodeJS.ProcessEnv): void {

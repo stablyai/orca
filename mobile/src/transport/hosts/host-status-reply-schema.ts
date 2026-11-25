@@ -21,6 +21,11 @@ export const hostStatusSchema = z.looseObject({
   hostPlatform: salvagedOptional('hostPlatform', z.enum(NODE_PLATFORM_NAMES)),
   machineName: salvagedOptional('machineName', z.string()),
   hostMachine: salvagedOptional('hostMachine', HostMachineSchema),
+  // Strings, not enums: a future install mode or reason still shows the generic update steps.
+  remoteUpdateSupport: salvagedOptional(
+    'remoteUpdateSupport',
+    z.looseObject({ installMode: z.string(), automatic: z.boolean(), reason: z.string() })
+  ),
   hostDescriptor: salvagedOptional(
     'hostDescriptor',
     z.looseObject({ installationId: salvagedOptional('installationId', z.string()) })

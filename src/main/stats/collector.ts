@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import type { StatsSummary } from '../../shared/diagnostics/process-stats-types'
 import type { StatsEvent, StatsAggregates, StatsFile } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'

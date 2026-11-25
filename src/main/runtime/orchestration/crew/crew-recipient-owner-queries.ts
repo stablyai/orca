@@ -9,6 +9,7 @@ import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL
 } from '../db/pane-key-match'
 import { workerSeatGrabSql } from '../db/runs/run-coordinator-mail-routing'
+import { formerlyOwnedResourceIdSql } from '../db/worker-terminal/worker-terminal-prior-owner-index'
 
 const nullable = z.string().nullable()
 const sessionId = z.custom<OrcaSessionId>(
@@ -197,7 +198,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
   }
   const resourceFor = (id: string) => `COALESCE(
     (SELECT id FROM worker_terminal_resources WHERE owner_dispatch_id = ${id}),
-    (SELECT id FROM worker_terminal_resources WHERE prior_owner_dispatch_ids LIKE '%"' || ${id} || '"%' ORDER BY updated_at DESC LIMIT 1))`
+    ${formerlyOwnedResourceIdSql(id)})`
   const followUps = (ids: string[]) => {
     return Dispatch.extend({
       lineage_resource: nullable.transform((value) =>

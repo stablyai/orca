@@ -8,7 +8,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId,
   getRepoExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey

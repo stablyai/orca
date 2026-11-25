@@ -2,6 +2,7 @@ import {
   activePaneIsCoveredByNativeChat,
   paneIsCoveredByNativeChat
 } from '@/components/terminal-pane/chat/native-chat-covered-pane'
+import { isTerminalImeInputContextRefocusPending } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { resolveLeafIdForManager } from '@/lib/pane-manager/pane-key-resolution'
 
@@ -18,16 +19,18 @@ export type RegisteredTerminalTabKey = string
 
 const registeredTabs = new Map<RegisteredTerminalTabKey, RegisteredTerminalTab>()
 const tabRegisteredAt = new Map<RegisteredTerminalTabKey, number>()
-const changeListeners = new Set<() => void>()
+const changeListeners = new Set<(tab?: RegisteredTerminalTab) => void>()
 
-function notifyMountedTerminalTabsChanged(): void {
+function notifyMountedTerminalTabsChanged(tab: RegisteredTerminalTab): void {
   for (const listener of changeListeners) {
-    listener()
+    listener(tab)
   }
 }
 
 /** Called on mount, unmount, and an explicit leaf focus. */
-export function subscribeMountedTerminalTabChanges(listener: () => void): () => void {
+export function subscribeMountedTerminalTabChanges(
+  listener: (tab?: RegisteredTerminalTab) => void
+): () => void {
   changeListeners.add(listener)
   return () => {
     changeListeners.delete(listener)
@@ -86,7 +89,7 @@ export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => vo
   const key = registeredTerminalTabKey(tab.worktreeId, tab.tabId)
   registeredTabs.set(key, tab)
   tabRegisteredAt.set(key, Date.now())
-  notifyMountedTerminalTabsChanged()
+  notifyMountedTerminalTabsChanged(tab)
   return () => {
     // React can mount a replacement before the old effect cleans up.
     if (registeredTabs.get(key) !== tab) {
@@ -94,7 +97,7 @@ export function registerRuntimeTerminalTab(tab: RegisteredTerminalTab): () => vo
     }
     registeredTabs.delete(key)
     tabRegisteredAt.delete(key)
-    notifyMountedTerminalTabsChanged()
+    notifyMountedTerminalTabsChanged(tab)
   }
 }
 
@@ -118,7 +121,11 @@ export function focusRuntimeTerminalSurface(
       return false
     }
     pane.terminal.focus()
-    return !!pane.terminal.textarea && document.activeElement === pane.terminal.textarea
+    const textarea = pane.terminal.textarea
+    return (
+      !!textarea &&
+      (document.activeElement === textarea || isTerminalImeInputContextRefocusPending(textarea))
+    )
   }
   const resolution = resolveLeafIdForManager(tabId, leafId, manager)
   if (resolution.status !== 'resolved') {
@@ -131,6 +138,6 @@ export function focusRuntimeTerminalSurface(
   manager.setActivePane(resolution.numericPaneId, {
     focus: !paneIsCoveredByNativeChat(requestedPane)
   })
-  notifyMountedTerminalTabsChanged()
+  notifyMountedTerminalTabsChanged(registered!)
   return true
 }

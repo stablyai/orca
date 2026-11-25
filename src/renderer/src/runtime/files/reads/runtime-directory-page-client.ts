@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store/index'
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import type { DirEntry } from '../../../../../shared/file-listing/directory-entry'
 import {
   dirEntryPageAfter,
@@ -17,7 +17,7 @@ import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { readRuntimeDirectory } from './runtime-directory-read'
 
 function hostServesDirPages(environmentId: string): boolean {
-  const entry = useAppStore.getState().runtimeStatusByEnvironmentId.get(environmentId)
+  const entry = readRuntimeStatuses().get(environmentId)
   return (
     !isRuntimeHostContactRevoked(entry) &&
     lastVerifiedRuntimeStatus(entry)?.capabilities?.includes(

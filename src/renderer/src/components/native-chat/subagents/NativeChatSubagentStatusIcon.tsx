@@ -1,4 +1,4 @@
-import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
+import { AgentStateDot, type AgentDotState } from '@/components/agent/status/AgentStateDot'
 import type { NativeChatSubagentState } from '../../../../../shared/native-chat/native-chat-types'
 
 const DOT_STATE: Record<NativeChatSubagentState, AgentDotState> = {

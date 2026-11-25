@@ -1,3 +1,6 @@
+import { journalLegacyFailureKey } from './database/journal-legacy-source'
+import { journalDatabasePath } from './database/journal-host-database'
+import { captureJournalLegacySourceReceipt } from './database/journal-legacy-source-capture'
 import { journalForkAttachmentHeld } from './journal-fork-stage-state'
 import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import type Database from '../../sqlite/sync-database'
@@ -8,7 +11,7 @@ import {
 } from '../../github/pr-watch/pr-watch-storage'
 import type { AgentSessionStoreRowWrites } from './journal-writer-store-row-changes'
 import type { AgentSessionStoreMutation } from '../../runtime/agent-session/records/agent-session-store-mutation'
-import type { AgentSessionRuntimeFacts } from '../../runtime/agent-session/agent-session-runtime-attribution'
+import type { AgentSessionRuntimeFacts } from '../../runtime/agent-session/records/agent-session-runtime-attribution'
 import { applyJournalWriterStoreEffect } from './journal-writer-store-effect'
 import {
   claimAgentSessionAttachmentsInTransaction,
@@ -127,11 +130,19 @@ export function applyJournalWriterEffect(
         return null
       }
       const held = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+      const failed = db.prepare('SELECT 1 FROM agent_session_store_meta WHERE key=?')
+      let originalPresent: boolean | undefined
+      const hasOriginal = () =>
+        (originalPresent ??=
+          captureJournalLegacySourceReceipt(journalDatabasePath(stateDirectory)).disposition !==
+          'no-source-at-initialization')
       return pruneAgentSessionAttachmentClaims(db, {
         root: agentSessionAttachmentStoreRoot(stateDirectory),
         recordedSessionIds: {
           has: (sessionId) =>
-            journalForkAttachmentHeld(db, sessionId) || Boolean(held.get(sessionId))
+            journalForkAttachmentHeld(db, sessionId) ||
+            Boolean(held.get(sessionId)) ||
+            (Boolean(failed.get(journalLegacyFailureKey(sessionId))) && hasOriginal())
         },
         pairs: operation.pairs
       })

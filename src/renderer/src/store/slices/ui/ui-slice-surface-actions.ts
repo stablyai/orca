@@ -6,7 +6,7 @@ import {
   PET_SIZE_MAX,
   PET_SIZE_MIN,
   type CustomPet
-} from '../../../../../shared/pet-types'
+} from '../../../../../shared/pets/pet-types'
 import { clampPetSize } from './ui-slice-hydration-sanitizers'
 import { readPersistedFloatingTerminalPanelViewState } from '../../../components/floating-terminal/state/floating-terminal-panel-view-state'
 

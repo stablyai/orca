@@ -10,7 +10,7 @@ import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type {
   PreparedCheckoutMissReason,
   PreparedCheckoutOrigin,
@@ -45,15 +45,18 @@ import {
   getLocalProjectWorktreeGitOptions,
   getWorktreeMirrorDistro
 } from '../../execution-host/project-runtime-git-options'
-import { computeWorkspaceRootAsync, getWorktreePathSettings } from '../../../ipc/worktree-logic'
+import {
+  computeWorkspaceRootAsync,
+  getWorktreePathSettings
+} from '../../../ipc/worktrees/paths/worktree-logic'
 import {
   recordPreparationConsume,
   resetPreparationConsumeHistoryForTests
 } from './worktree-create-preparation-burst'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
-import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
+import type { ConsumePreparedWorktreeArgs } from './worktree-preparation-consumption'
 
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()
@@ -75,20 +78,6 @@ export type PreparedWorktreeCreateAttempt =
       rearm: () => void
     }
   | { status: 'miss'; reason: PreparedCheckoutMissReason; rearm?: () => void }
-
-type ConsumePreparedWorktreeArgs = {
-  repoPath: string
-  workspaceRoot: string
-  worktreePath: string
-  branch: string
-  baseBranch: string
-  refreshLocalBaseRef?: boolean
-  options?: AddWorktreeOptions
-  timing?: Pick<
-    WorktreeCreateTimingRecorder,
-    'time' | 'recordPreparedCheckout' | 'recordAdoptedPreparation'
-  >
-}
 
 function timePhase<T>(
   args: ConsumePreparedWorktreeArgs,

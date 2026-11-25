@@ -1,5 +1,8 @@
 export type BrowserUserAgentMode = 'clean' | 'native'
 
+/** Applies until the user picks a mode; Cloudflare's full-page check rejects the cleaned identity. */
+export const DEFAULT_BROWSER_USER_AGENT_MODE = 'native' satisfies BrowserUserAgentMode
+
 export type BrowserIdentityModeSnapshot =
   | {
       state: 'missing' | 'valid'
@@ -11,7 +14,7 @@ export type BrowserIdentityModeSnapshot =
     }
   | {
       state: 'corrupt' | 'future' | 'unreadable'
-      appliedMode: 'clean'
+      appliedMode: typeof DEFAULT_BROWSER_USER_AGENT_MODE
       configuredMode: null
       explicitSelection: null
       migrationNoticePending: null

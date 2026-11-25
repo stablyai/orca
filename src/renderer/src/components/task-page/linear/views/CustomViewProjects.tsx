@@ -5,7 +5,7 @@ import { ChevronLeft, ExternalLink } from 'lucide-react'
 import {
   LinearProjectTable,
   LinearCollectionNotice
-} from '@/components/linear-project-view-surfaces'
+} from '@/components/task-page/linear/projects/linear-project-view-surfaces'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearCustomViewProjects({
   model

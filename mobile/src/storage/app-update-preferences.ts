@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { z } from 'zod'
+import * as z from 'zod'
 
 const LAST_CHECKED_AT_KEY = 'orca:appUpdate:lastCheckedAt'
 const LATEST_KEY = 'orca:appUpdate:latest'

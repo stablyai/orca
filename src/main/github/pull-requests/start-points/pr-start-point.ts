@@ -10,8 +10,8 @@ import { getWorkItem } from '../../client/fetch/get-work-item'
 import {
   githubPullRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
-} from '../../../../shared/review-head-tracking-ref'
-import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
+} from '../../../../shared/worktree/hosted-review/review-head-tracking-ref'
+import { reviewStartPointFailure } from '../../../../shared/worktree/hosted-review/review-start-point-failure-copy'
 
 type GitExec = (args: string[]) => Promise<{ stdout: string; stderr: string }>
 

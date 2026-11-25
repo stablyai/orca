@@ -1,5 +1,5 @@
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 type DirectoryTab = {
   id: string
@@ -24,9 +24,9 @@ function indexTabs(tabs: readonly DirectoryTab[] | undefined): StructuredTabInde
     const bySessionId = new Map<string, DirectoryTab>()
     const firstRegisteredById = new Map<string, DirectoryTab>()
     tabs.forEach((tab) => {
+      byId.set(tab.id, tab)
       if (tab.contentType === 'agent-session') {
         const id = tab.id
-        byId.set(id, tab)
         if (tab.entityId !== undefined) {
           bySessionId.set(tab.entityId, tab)
         }
@@ -59,6 +59,14 @@ export function structuredChatTabById(
   id: string
 ): Tab | undefined {
   const tabs = workspaceTabs(tabsByWorkspace, workspaceId)
+  const tab = indexedTab(tabs, 'byId', id)
+  return tab?.contentType === 'agent-session' ? tab : undefined
+}
+
+export function workspaceTabById<T extends DirectoryTab>(
+  tabs: readonly T[] | undefined,
+  id: string
+): T | undefined {
   return indexedTab(tabs, 'byId', id)
 }
 

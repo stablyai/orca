@@ -1,10 +1,10 @@
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
+import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
@@ -176,8 +176,8 @@ export const ptySessionControlApi = {
   setRendererPtyVisible: (id: string, visible: boolean): void => {
     ipcRenderer.send('pty:setRendererPtyVisible', { id, visible })
   },
-  setHiddenRendererPty: (id: string, hidden: boolean): void => {
-    ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden })
+  setHiddenRendererPty: (id: string, hidden: boolean, retainGraphics?: boolean): void => {
+    ipcRenderer.send('pty:setHiddenRendererPty', { id, hidden, retainGraphics })
   },
   setPtyDeliveryInterest: (id: string, interested: boolean): void => {
     ipcRenderer.send('pty:setPtyDeliveryInterest', { id, interested })
@@ -187,8 +187,12 @@ export const ptySessionControlApi = {
   },
   killFenced: (request: PtyFencedTerminationRequest): Promise<PtyFencedTerminationOutcome> =>
     ipcRenderer.invoke('pty:killFenced', request),
-  kill: (id: string, opts?: { keepHistory?: boolean }): Promise<void> =>
-    ipcRenderer.invoke('pty:kill', { id, keepHistory: opts?.keepHistory ?? false }),
+  kill: (id: string, opts?: { keepHistory?: boolean; replaced?: boolean }): Promise<void> =>
+    ipcRenderer.invoke('pty:kill', {
+      id,
+      keepHistory: opts?.keepHistory ?? false,
+      replaced: opts?.replaced ?? false
+    }),
   listSessions: (
     scope?: PtySessionListScope,
     admission?: ResourceViewAdmission

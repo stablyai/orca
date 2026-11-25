@@ -4,7 +4,10 @@
 import { nativeChatSemanticRowId, type NativeChatMessage } from '../native-chat-types'
 import { compareAgentJournalPositions } from '../../agent-session/journal/agent-session-journal-position'
 import { agentJournalItemSubagentId } from '../../agent-session/journal/agent-session-journal-producer'
-import { stripNoiseMessages } from '../native-chat-noise'
+import { stripNoiseMessages } from './messages/native-chat-noise'
+import { automationRunCoversWaitEnded } from '../../automations/automation-run-message'
+import type { WaitEnding } from '../../automation-once'
+import type { BotAutomationFacts } from '../../bots/bot-automation-rows'
 import { foldToolMessages } from '../tools/native-chat-tool-fold'
 import { foldSubagentItems } from './subagents/native-chat-subagent-items'
 import {
@@ -113,6 +116,105 @@ function projectRows(messages: readonly NativeChatMessage[]): NativeChatMessage[
   return stripNoiseMessages(foldToolMessages(foldSubagentItems(messages)))
 }
 
+/** Whether a row takes part in foldAutomationRunCards; appending or revising one can change another. */
+export function joinsAutomationRunFold(message: NativeChatMessage): boolean {
+  return Boolean(
+    message.automationRun ||
+    message.automationRunNotStarted ||
+    message.waitEnded ||
+    message.automationSaved?.automation.once
+  )
+}
+
+/** Hosts before the run row was a wait's only record also wrote a Wait over card for a run; it says
+ *  nothing the row doesn't, so it goes. A Couldn't start row whose run a later message carries was
+ *  sent again. A wait's creation row learns how it ended from its run or card. Applied to the
+ *  conversation's rows before any scope folds them, by every projection (the phone's too). */
+export function foldAutomationRunCards(messages: NativeChatMessage[]): NativeChatMessage[] {
+  const runs = messages.flatMap((message) => {
+    const run = message.automationRun ?? message.automationRunNotStarted?.run
+    return run ? [run] : []
+  })
+  const endings = waitEndings(messages)
+  if (runs.length === 0 && endings.size === 0) {
+    return messages
+  }
+  const sent = new Set(messages.flatMap((message) => message.automationRun?.runId ?? []))
+  return messages.flatMap((message) => {
+    const card = message.waitEnded
+    if (card && runs.some((run) => automationRunCoversWaitEnded(run, card))) {
+      return []
+    }
+    const ending = message.automationSaved?.automation.once
+      ? endings.get(message.automationSaved.automation.id)
+      : undefined
+    if (ending) {
+      return [endedWait(message, ending.ending, ending.on)]
+    }
+    return message.automationRunNotStarted && sent.has(message.automationRunNotStarted.run.runId)
+      ? [sentAgain(message)]
+      : [message]
+  })
+}
+
+type WaitEndingFacts = { ending: WaitEnding; on: BotAutomationFacts['on'] }
+
+// One shared snapshot for a wait with no rules, so the cached row below matches by reference; still
+// explicit, so an edited card never falls back to rules it had before.
+const NO_RULES: NonNullable<BotAutomationFacts['on']> = []
+
+/** How each wait in the chat ended, by automation id: its run that started, or its ended card, with
+ *  the rules it had then, so every card of it tells the same outcome after an edit. */
+function waitEndings(messages: readonly NativeChatMessage[]): Map<string, WaitEndingFacts> {
+  const endings = new Map<string, WaitEndingFacts>()
+  for (const message of messages) {
+    const run = message.automationRun
+    if (run?.wait) {
+      endings.set(run.automation.id, { ending: run.wait, on: run.automation.on ?? NO_RULES })
+    } else if (message.waitEnded) {
+      const { automation, ending } = message.waitEnded
+      endings.set(automation.id, { ending, on: automation.on ?? NO_RULES })
+    }
+  }
+  return endings
+}
+
+// One marked creation row per source row and ending, so a re-projection keeps its rendered row.
+const endedWaitRows = new WeakMap<NativeChatMessage, NativeChatMessage>()
+
+function endedWait(
+  message: NativeChatMessage,
+  ending: WaitEnding,
+  on: BotAutomationFacts['on']
+): NativeChatMessage {
+  const marked = endedWaitRows.get(message)
+  if (
+    marked?.savedWaitEnded?.kind === ending.kind &&
+    marked.savedWaitEnded.at === ending.at &&
+    marked.savedWaitEndedOn === on
+  ) {
+    return marked
+  }
+  const next = { ...message, savedWaitEnded: ending, savedWaitEndedOn: on }
+  endedWaitRows.set(message, next)
+  return next
+}
+
+// One marked row per source row, so a re-projection keeps its identity and its rendered row.
+const sentAgainRows = new WeakMap<NativeChatMessage, NativeChatMessage>()
+
+function sentAgain(message: NativeChatMessage): NativeChatMessage {
+  let marked = sentAgainRows.get(message)
+  if (!marked) {
+    marked = {
+      ...message,
+      automationRunNotStarted: { ...message.automationRunNotStarted!, sentAgain: true }
+    }
+    sentAgainRows.set(message, marked)
+  }
+  return marked
+}
+
 /** Preserve canonical sequence, inserting ordinary supplemental rows by their actual clocks. */
 export function orderNativeChatTranscriptEntries<T>(
   entries: readonly T[],
@@ -184,7 +286,7 @@ export function projectNativeChatTranscript(
       }
     }
   }
-  const conversation = projectScope(own)
+  const conversation = projectScope(foldAutomationRunCards(own))
   if (byAgent.size === 0) {
     return { conversation, subagentRows: NO_SUBAGENT_ROWS }
   }

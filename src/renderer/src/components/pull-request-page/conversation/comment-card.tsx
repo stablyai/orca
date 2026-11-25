@@ -3,7 +3,7 @@ import React from 'react'
 import { ExternalLink, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
+import CommentMarkdown from '@/components/comment-markdown/CommentMarkdown'
 import { cn } from '@/lib/class-names'
 import {
   PR_COMMENT_OPEN_AUTHOR_CLASS,

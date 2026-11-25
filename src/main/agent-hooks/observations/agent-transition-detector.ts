@@ -14,7 +14,7 @@ import {
   getConnectionExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import type { AgentHookServer } from '../server/agent-hook-server'
 
 export type AgentTransitionStore = Pick<

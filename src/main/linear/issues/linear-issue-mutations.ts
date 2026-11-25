@@ -1,6 +1,6 @@
 import { taskProviderFailure } from '../../../shared/work-items/task-provider-failure'
 import type { LinearClient } from '@linear/sdk'
-import type { LinearIssueUpdate } from '../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import { acquire, release } from '../requests/linear-request-concurrency'
 import { clearToken } from '../accounts/linear-token-store'
 import { getClients, isAuthError } from '../accounts/linear-account-client'
@@ -37,7 +37,7 @@ export async function createIssue(
   | { ok: true; id: string; identifier: string; title: string; url: string }
   | { ok: false; error: string }
 > {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
@@ -77,7 +77,7 @@ export async function createIssue(
     }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -106,7 +106,7 @@ export async function createIssueForAgent(
     beforeInvoke?: () => void
   }
 ): Promise<LinearIssueWriteRecord> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }
@@ -170,7 +170,7 @@ export async function updateIssue(
   updates: LinearIssueUpdate,
   workspaceId?: string | null
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     return taskProviderFailure('linear.notConnected', 'Not connected to Linear')
   }
@@ -219,7 +219,7 @@ export async function updateIssue(
     return { ok: true }
   } catch (error) {
     if (isAuthError(error)) {
-      clearToken(entry.workspace.id)
+      await clearToken(entry.workspace.id)
       throw error
     }
     const message = error instanceof Error ? error.message : String(error)
@@ -235,7 +235,7 @@ export async function updateIssueForAgent(
   workspaceId: string,
   options: { signal?: AbortSignal; beforeInvoke?: () => void } = {}
 ): Promise<LinearIssueWriteRecord> {
-  const entry = getClients(workspaceId)[0]
+  const entry = (await getClients(workspaceId))[0]
   if (!entry) {
     throw new LinearWriteFailure('failed', 'Not connected to Linear')
   }

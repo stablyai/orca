@@ -1,9 +1,6 @@
 import * as z from 'zod'
-import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
-import { salvagedOptional } from '../../../src/shared/validation/zod-salvage'
 import {
   automationListSchema,
   automationSchema,
@@ -128,30 +125,6 @@ export const automationWorkspacesRead = bindDeferredRpcOperation(
         totalCount: z.number(),
         truncated: z.boolean(),
         hostScope: z.object({ hostIds: z.array(z.string()), omittedHostIds: z.array(z.string()) })
-      })
-    )
-  })
-)
-
-export const automationAgentSettingsRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'settings.mobile-automation-agent-policy',
-    method: 'settings.getAgentLaunch',
-    acceptance: 'require-result-or-throw',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant(
-      'agent-policy',
-      z.object({
-        settings: z.object({
-          // A newer host's default agent reads as unset, so agent discovery still loads.
-          defaultTuiAgent: salvagedOptional(
-            'defaultTuiAgent',
-            z
-              .custom<TuiAgent | 'blank'>((value) => isTuiAgent(value) || value === 'blank')
-              .nullable()
-          ),
-          disabledTuiAgents: z.array(z.string()).optional()
-        })
       })
     )
   })

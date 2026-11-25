@@ -38,10 +38,13 @@ type WorkerStartModePlacement = {
 export function decideWorkerStartMode(args: {
   params: WorkerStartModePlacement
   settings: AgentLaunchModeSettings | null | undefined
+  /** The caller's lineage starts its workers as chats, whatever the settings say. */
+  chatLineage?: boolean
 }): WorkerStartModeReceipt {
   return decideAgentLaunchMode({
     placement: args.params,
     settings: args.settings,
+    chatLineage: args.chatLineage,
     vocabulary: WORKER_START_VOCABULARY
   })
 }

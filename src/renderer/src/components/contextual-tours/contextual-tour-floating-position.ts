@@ -50,20 +50,24 @@ export async function getContextualTourFloatingPosition(args: {
   floatingElement: HTMLElement
   panelHost: HTMLElement | null
   preferredPlacement?: ContextualTourStepPlacement
+  /** Align the panel with the target's start edge instead of centering it. */
+  alignStart?: boolean
   targetElement: Element
 }): Promise<ContextualTourFloatingPosition> {
   const initialPlacement = args.preferredPlacement ?? 'right'
+  const aligned = (side: ContextualTourPanelPlacement): Placement =>
+    args.alignStart ? `${side}-start` : side
   const boundary = getContextualTourCollisionBoundary(args.panelHost)
   const result = await computePosition(args.targetElement, args.floatingElement, {
     // Match hosted absolute/floating fixed CSS; apply offsetParent-relative coordinates without subtracting the host again.
     strategy: args.panelHost ? 'absolute' : 'fixed',
-    placement: initialPlacement,
+    placement: aligned(initialPlacement),
     middleware: [
       offset(PANEL_GAP),
       flip({
         boundary,
         padding: COLLISION_PADDING,
-        fallbackPlacements: FALLBACK_PLACEMENTS[initialPlacement]
+        fallbackPlacements: FALLBACK_PLACEMENTS[initialPlacement].map(aligned)
       }),
       // Allow target overlap when nothing fits so host overflow clipping cannot hide panel buttons.
       shift({ boundary, padding: COLLISION_PADDING, crossAxis: true }),
@@ -87,6 +91,7 @@ export function watchContextualTourFloatingPosition(args: {
   floatingElement: HTMLElement
   panelHost: HTMLElement | null
   preferredPlacement?: ContextualTourStepPlacement
+  alignStart?: boolean
   targetElement: Element
   onPosition: (position: ContextualTourFloatingPosition) => void
 }): () => void {

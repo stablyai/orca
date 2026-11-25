@@ -1,5 +1,5 @@
 import { canonicalOrcaSessionFromEdges } from '../addressing/session-lineage/canonical-orca-session-id'
-import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId,
@@ -15,8 +15,12 @@ import type { CrewReadDependencies, CrewIdentityRead } from './crew-read-depende
 
 export type Party = AgentMessageSender['party'] & { paneKey: string | null }
 
-export function createCrewPartyRegistry(deps: CrewReadDependencies) {
-  const recordList = deps.records?.listRecords() ?? []
+export function createCrewPartyRegistry({
+  records: sourceRecords,
+  ...identityInputs
+}: CrewReadDependencies) {
+  // Closures must not capture the source reader: it is the previous generation's, and holding it chains every generation's maps.
+  const recordList = sourceRecords?.listRecords() ?? []
   const recordMap = new Map(recordList.map((record) => [record.sessionId, record]))
   const adjacent = new Map<string, Set<string>>()
   const incoming = new Map<string, number>()
@@ -70,9 +74,9 @@ export function createCrewPartyRegistry(deps: CrewReadDependencies) {
     }
   }
   const root = (id: string) => roots.get(id) ?? id
-  const records = deps.records
+  const records = sourceRecords
     ? {
-        ...deps.records,
+        ...sourceRecords,
         listRecords: () => [...recordMap.values()],
         getRecord: (id: string) => recordMap.get(id) ?? null
       }
@@ -103,7 +107,7 @@ export function createCrewPartyRegistry(deps: CrewReadDependencies) {
       process?: string | null,
       read?: CrewIdentityRead
     ): Party | undefined => {
-      const inputs = read ?? identity ?? deps.openIdentityRead?.() ?? deps
+      const inputs = read ?? identity ?? identityInputs.openIdentityRead?.() ?? identityInputs
       const sessionId = session ? root(session) : null
       const liveHandle = pane ? inputs.handleForPane(pane) : null
       const candidateHandle =

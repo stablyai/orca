@@ -1,4 +1,4 @@
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 
 // Tunnel hosts share this source without importing Electron into the plain-Node runtime.
 let resolveNetworkProxySettings: (() => NetworkProxySettings) | null = null

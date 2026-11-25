@@ -5,15 +5,15 @@ import type {
   TabContentType,
   TabGroup,
   WorkspaceVisibleTabType
-} from '../../../../../../shared/tab-types'
-import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
+} from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-authority/pane-foreground-agent'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalAgent } from '../../../../../../shared/agent-status/identity/terminal-agent'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AgentMetadata, WorkspaceTabAgentMetadataState } from './workspace-tab-agent-metadata'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import './workspace-tab-palette-entry-builder'

@@ -5,7 +5,10 @@ import type {
 } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslHostDistroCandidate } from './wsl-host-distro-list'
 import type { WslOrcadConnection } from '../orcad/wsl-orcad-connection-types'
-import type { WslOrcadConnectIntent } from '../orcad/wsl-orcad-connection-status'
+import type {
+  WslOrcadConnectIntent,
+  WslOrcadConnectionStatus
+} from '../orcad/wsl-orcad-connection-status'
 
 /** `stopped` and `unreachable` rest on a confirmed running list; `unavailable` could not read it. */
 export type WslHostReachability = 'available' | 'unreachable' | 'stopped' | 'unavailable'
@@ -43,6 +46,8 @@ export type WslHostServiceDependencies = {
   /** Whether this build ships the orcad template a WSL host deploys from. */
   hasServerFiles: () => boolean
   publish: (status: WslHostStatus) => void
+  /** Every connection change, for an Add dialog whose distro has no host status yet. */
+  publishAddProgress?: (distro: string, status: WslOrcadConnectionStatus) => void
   /** The environment's pairing changed: transports that authenticate with the old one retire. */
   pairingChanged: (environmentId: string) => void
   /** A connection came up: verify the server now rather than on the status owner's backoff. */

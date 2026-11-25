@@ -16,7 +16,7 @@ import {
 import { formatPaletteSessionAge } from '@/components/cmd-j/palette-session-age'
 import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export function WorktreeJumpPaletteWorkspaceTabRow({
   entry,

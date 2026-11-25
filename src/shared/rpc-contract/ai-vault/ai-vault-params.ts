@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import { AI_VAULT_AGENTS, boundedAiVaultScopeArgs } from '../../ai-vault/contracts/ai-vault-types'
 import { OptionalBoolean } from '../rpc-param-primitives'
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../ai-vault/contracts/ai-vault-session-title'
@@ -105,4 +105,23 @@ export const AiVaultPrepareSessionHandoffParams = z.object({
   agent: z.enum(AI_VAULT_AGENTS),
   sessionId: z.string().min(1).max(512).optional(),
   filePath: z.string().min(1).max(AI_VAULT_SCOPE_PATH_MAX_LENGTH)
+})
+
+// Longer preview text is cut, not refused: the host bounds the transcript it builds anyway.
+const HANDOFF_PREVIEW_TEXT_MAX = 16 * 1024
+const handoffText = z.string().transform((value) => value.slice(0, HANDOFF_PREVIEW_TEXT_MAX))
+
+// The phone sends the History row it shows; the host saves a database row and builds desktop's prompt.
+export const AiVaultPrepareSessionHandoffPromptParams = AiVaultPrepareSessionHandoffParams.extend({
+  title: handoffText,
+  cwd: z.string().max(AI_VAULT_SCOPE_PATH_MAX_LENGTH).nullable(),
+  lastUserPrompt: handoffText.nullable().optional(),
+  previewMessages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant', 'system', 'tool', 'unknown']),
+        text: handoffText
+      })
+    )
+    .max(200)
 })

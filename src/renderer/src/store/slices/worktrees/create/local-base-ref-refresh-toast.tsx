@@ -6,7 +6,7 @@ import { getKeepLocalMainUpToDateTitle } from '@/components/settings/source-cont
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { LocalBaseRefRefreshResult } from '../../../../../../shared/worktree/base-refs/base-ref-drift-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 
@@ -205,7 +205,7 @@ function runUnshallowInNewTerminalTab(
   // Why lazy: the terminal launchers import the store, which imports this slice.
   void Promise.all([
     import('@/lib/workspace/activation/worktree-activation'),
-    import('@/components/terminal/terminal-tab-create')
+    import('@/components/terminal/tab-lifecycle/terminal-tab-create')
   ]).then(
     ([{ activateAndRevealWorktree }, { createNewTerminalTab }]) => {
       if (

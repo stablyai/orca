@@ -3,7 +3,7 @@ import { ipcMain, type BrowserWindow } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { RuntimeWorktreeLifecycleEvent } from '../runtime/workspaces/lifecycle/worktree-lifecycle-event'
-import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import { createSenderScopedRequestCancellations } from './renderer-requests/sender-scoped-request-cancellation'
 import { registerWorktreeCreateHandlers } from './worktrees/create/register-worktree-create-handlers'
 import { registerWorktreePrefetchHandler } from './worktrees/create/register-worktree-prefetch-handler'
 import { registerReviewBaseHandlers } from './worktrees/create/register-review-base-handlers'
@@ -16,6 +16,7 @@ import { registerWorktreeCatalogHandlers } from './worktrees/listing/register-wo
 import { registerDetectedWorktreeScanInvalidation } from './worktrees/listing/register-detected-worktree-scan-invalidation'
 import { registerSparseCheckoutCacheInvalidation } from './worktrees/listing/register-sparse-checkout-cache-invalidation'
 import { registerWorktreeMetadataHandlers } from './worktrees/metadata/register-worktree-metadata-handlers'
+import { registerBranchAutoRenameRetryHandlers } from './worktrees/metadata/register-branch-auto-rename-retry-handlers'
 import { registerWorktreeForgetHandlers } from './worktrees/removal/register-worktree-forget-handlers'
 import { registerWorktreeRemovalHandlers } from './worktrees/removal/register-worktree-removal-handlers'
 import {
@@ -54,6 +55,8 @@ const WORKTREE_HANDLER_CHANNELS = [
   'worktrees:updateLineage',
   'worktrees:persistSortOrder',
   'worktrees:getBranchRenameFailureOutput',
+  'worktrees:getBranchAutoRenameRetryAvailability',
+  'worktrees:retryBranchAutoRename',
   'hooks:check',
   'hooks:inspectSetupScriptImports',
   'hooks:readIssueCommand',
@@ -95,6 +98,7 @@ export function registerWorktreeHandlers(
   registerWorktreeSleepHandlers(context)
   registerWorktreeForgetHandlers(context)
   registerWorktreeMetadataHandlers(context)
+  registerBranchAutoRenameRetryHandlers(context)
   registerWorktreeHookCheckHandler(context)
   registerWorktreeHookInspectionHandler(context)
   registerWorktreeHookFileHandlers(context)

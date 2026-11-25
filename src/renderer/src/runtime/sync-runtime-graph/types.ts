@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileTerminalTheme } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RuntimeMobileSessionSyncKey = {
@@ -20,12 +20,13 @@ export type RuntimeMobileSessionSyncKey = {
   activeTabTypeByWorktree: AppState['activeTabTypeByWorktree']
   activeTabId: AppState['activeTabId']
   activeBrowserTabIdByWorktree: AppState['activeBrowserTabIdByWorktree']
-  agentStatusEpoch: number
-  agentStatusProjection: object
+  // Sound changes nothing else a row reads, so a host's speaker icon needs its own publish trigger.
+  browserAudiblePageIds: AppState['browserAudiblePageIds']
+  browserAudioMutedTabIds: AppState['browserAudioMutedTabIds']
   generatedTabTitlesEnabled: boolean
   systemPrefersDark: boolean | null
   terminalThemeProjection: string
-  tabsProjection: string
+  tabsProjection: number
   openFilesProjection: string
   browserProjection: string
   editorDraftsProjection: ReadonlyMap<string, string>
@@ -41,14 +42,15 @@ export type FallbackEditorTabTarget = {
   groupId: string | null
 }
 export type TabsProjectionCacheEntry = {
+  worktreeId: string
   tabs: NonNullable<AppState['tabsByWorktree'][string]>
-  worktreeIdJson: string
   projection: string
 }
 export type TabsProjectionCache = {
   source: AppState['tabsByWorktree']
+  /** In source order; addressed writes keep surviving keys in place and append added ones. */
   entries: Map<string, TabsProjectionCacheEntry>
-  projection: string
+  revision: number
 }
 export type OpenFilesProjectionCacheEntry = {
   file: AppState['openFiles'][number]
@@ -90,16 +92,11 @@ export type EditorDraftHashCache = {
   entries: Map<string, EditorDraftHashCacheEntry>
   hashByFileId: Map<string, string>
 }
-export type MobileSessionAgentStatusByWorktree = ReadonlyMap<
-  string,
-  ReadonlyMap<string, NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>>
->
 /** Slices shared by every worktree in one publication; derived from `AppState` exactly once. */
 export type MobileSessionPublicationInputs = {
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   openFileIndexes: OpenFileIndexes
   editorDraftVersionByFileId: ReadonlyMap<string, string>
-  agentStatusByWorktreeId: MobileSessionAgentStatusByWorktree
   generatedTitlesEnabled: boolean
   terminalTheme: RuntimeMobileTerminalTheme | undefined
 }
@@ -134,10 +131,6 @@ export type MobileSessionWorktreeInputs = {
     string,
     NonNullable<AppState['nativeChatLaunchDraftByTabId']>[string]
   >
-  agentStatusByPaneKey: ReadonlyMap<
-    string,
-    NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>
-  >
   editorDraftVersionByFileId: ReadonlyMap<string, string>
   pagesByBrowserWorkspaceId: ReadonlyMap<
     string,
@@ -147,6 +140,8 @@ export type MobileSessionWorktreeInputs = {
     string,
     NonNullable<AppState['browserCertificateFailuresByPageId']>[string]
   >
+  audibleBrowserPageIds: ReadonlyMap<string, true>
+  audioMutedBrowserWorkspaceIds: ReadonlyMap<string, true>
   activeEditorFileId: string | null
   activeEditorTabType: AppState['activeTabType'] | null
   activeTerminalTabId: string | null

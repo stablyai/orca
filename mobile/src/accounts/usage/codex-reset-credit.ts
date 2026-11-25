@@ -1,5 +1,6 @@
 import {
-  buildCodexResetCreditExpectedScope,
+  buildActiveCodexResetCreditExpectedScope,
+  getActiveCodexAccountIdForRateLimitTarget,
   type CodexResetCreditExpectedScope
 } from '../../../../src/shared/agent-accounts/codex/codex-reset-credit-scope'
 import {
@@ -181,33 +182,12 @@ export function getCodexResetCreditOutcomeCopy(outcome: CodexResetCreditOutcome)
   }
 }
 
-export function getActiveCodexAccountIdForRateLimitTarget(
-  snapshot: AccountsSnapshot
-): string | null {
-  const target = snapshot.rateLimits.codexTarget
-  const selection = snapshot.codex.activeAccountIdsByRuntime
-  if (!selection) {
-    return null
-  }
-  if (target.runtime === 'host') {
-    return target.wslDistro === null ? selection.host : null
-  }
-  const distro = target.wslDistro?.trim()
-  return distro ? (selection.wsl[distro] ?? null) : null
-}
+export { getActiveCodexAccountIdForRateLimitTarget }
 
 export function getCodexResetCreditScope(
   snapshot: AccountsSnapshot
 ): CodexResetCreditExpectedScope | null {
-  const activeAccountId = getActiveCodexAccountIdForRateLimitTarget(snapshot)
-  const account = activeAccountId
-    ? (snapshot.codex.accounts.find((candidate) => candidate.id === activeAccountId) ?? null)
-    : null
-  const scope = buildCodexResetCreditExpectedScope({
-    target: snapshot.rateLimits.codexTarget,
-    account,
-    limits: snapshot.rateLimits.codex
-  })
+  const scope = buildActiveCodexResetCreditExpectedScope(snapshot)
   if (!scope) {
     return null
   }

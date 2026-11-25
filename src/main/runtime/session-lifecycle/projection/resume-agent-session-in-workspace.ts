@@ -10,7 +10,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import {
   getConnectionExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import type { OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal as OwnedMobileTerminalCreate } from '../../terminal/launch/mobile-terminal-owned-create'
 import { deterministicAgentSessionUuid } from '../../terminal/launch/runtime-agent-launch-resolution'
 import { isUnclaimedRunningSleepRecord } from './sleep-record-pane-claim'

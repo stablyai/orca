@@ -12,7 +12,7 @@ import { requireRuntimeTargetForFileOwner } from '@/lib/files/access/file-owner-
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
-import { relativePathInsideRoot } from '../../../../../../shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 import { openMarkdownExternalUrl } from '../../markdown/link-routing/markdown-external-url-open'
 import { resolveMarkdownLinkTarget } from '../../markdown/link-routing/markdown-internal-links'
 import {

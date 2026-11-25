@@ -1,5 +1,5 @@
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   authorityKey,
   type HostAuthority

@@ -1,7 +1,7 @@
 import type {
   ComputerActionMetadata,
   ComputerProviderCapabilities
-} from '../../../shared/computer-use-runtime-types'
+} from '../../../shared/computer/computer-use-runtime-types'
 
 export type NativeMethod =
   | 'handshake'
@@ -59,7 +59,8 @@ export type BridgeSnapshot = {
   windowId?: number | null
   windowIndex?: number | null
   windowBounds?: BridgeFrame | null
-  screenshotPngBase64?: string | null
+  screenshotBase64?: string | null
+  screenshotFormat?: 'png' | 'jpeg' | null
   screenshotWidth?: number | null
   screenshotHeight?: number | null
   screenshotScale?: number | null
@@ -162,6 +163,9 @@ export type BridgeRequest = {
   windowId?: number
   windowIndex?: number
   noScreenshot?: boolean
+  screenshotFormat?: 'jpeg'
+  screenshotScale?: number
+  screenshotMaxEdge?: number
   restoreWindow?: boolean
   /** launch_app: let the started app take the foreground. */
   activate?: boolean

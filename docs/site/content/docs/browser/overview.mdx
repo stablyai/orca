@@ -43,7 +43,7 @@ A nested **Hold Shift…** toggle inverts that default for one click with the pl
 - When links open in **Orca**, the modifier sends one link to the system browser.
 - When links open in the **system browser**, turn the toggle on so the modifier opens one link in Orca's built-in browser instead (plain click stays system).
 
-A capability-verified paired runtime can offer the same Orca/system-browser choice for its terminal links. SSH-owned terminal links and links from older runtimes remain system-browser only. See [Terminal → Link actions](/docs/terminal#link-actions).
+A capability-verified paired runtime can offer the same Orca/system-browser choice for its terminal links; links from older runtimes remain system-browser only. SSH links whose host is routed follow link routing. When the host's SSH browsing is set to **This device**, they open in an Orca tab that browses from this device only while links open in Orca; otherwise they stay system-browser only. See [Terminal → Link actions](/docs/terminal#link-actions).
 
 ## Downloads
 
@@ -51,7 +51,7 @@ Browser downloads appear in a shelf under the toolbar while they are active or r
 
 ## Share as artifact
 
-Local HTML files opened in the worktree browser can use **Share as artifact** in the toolbar to mint a public view link through your signed-in Orca account (same opt-in gate and management surface as Markdown). Relative HTML assets are not uploaded — share a self-contained file or use absolute asset URLs. See [Settings → Artifacts](/docs/settings#artifacts) and [CLI reference → Artifacts](/docs/cli/reference#artifacts).
+Local HTML files opened in the worktree browser can use **Share as artifact** in the toolbar to mint a public view link through your signed-in Orca account (same publishing gate and management surface as Markdown). Relative HTML assets are not uploaded — share a self-contained file or use absolute asset URLs. See [Settings → Artifacts](/docs/settings#artifacts) and [CLI reference → Artifacts](/docs/cli/reference#artifacts).
 
 ## Viewport-size emulation
 

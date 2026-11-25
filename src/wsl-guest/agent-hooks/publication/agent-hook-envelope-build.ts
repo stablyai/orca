@@ -40,6 +40,7 @@ export function buildRelayHookEnvelope(
     hookEventName: event.hookEventName,
     providerPromptId: event.providerPromptId,
     grokPromptBoundary: event.grokPromptBoundary,
+    ...(event.opensTurn ? { opensTurn: true } : {}),
     compactTrigger: event.compactTrigger,
     toolUseId: event.toolUseId,
     // A live batch end carries the requests it resolved; replays attach retained history separately.

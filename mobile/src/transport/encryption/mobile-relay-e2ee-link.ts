@@ -11,7 +11,7 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { receiveBinaryAsBase64, websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from '../relay/mobile-relay-connect-url'
-import { WsInboundMessageQueue } from '../../../../src/shared/ws-inbound-message-queue'
+import { WsInboundMessageQueue } from '../../../../src/shared/network/websocket/ws-inbound-message-queue'
 
 // Native WebSockets normally emit close immediately after error or a relay-hello
 // refusal; bound the missing-close case so recovery is never left pending.
@@ -58,14 +58,15 @@ export class MobileRelayE2eeLink {
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
-    this.socket = (options.createSocket ?? ((url) => receiveBinaryAsBase64(new WebSocket(url))))(
-      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
-    )
+    // Why first: a malformed saved desktop key throws here, before any socket exists to leak.
     const session = MobileE2EEV2ClientSession.create({
       desktopPublicKeyB64: options.desktopPublicKeyB64,
       transport: 'relay',
       relayHostId: options.endpoint.relayHostId
     })
+    this.socket = (options.createSocket ?? ((url) => receiveBinaryAsBase64(new WebSocket(url))))(
+      relayConnectWebSocketUrl(options.endpoint.cellUrl, options.endpoint.relayHostId)
+    )
     this.channel = new MobileE2EEV2PhysicalChannel({
       session,
       socket: this.socket,

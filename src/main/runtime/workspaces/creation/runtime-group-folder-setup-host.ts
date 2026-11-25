@@ -16,6 +16,7 @@ import {
 } from '../startup/runtime-worktree-agent-startup'
 import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { TerminalCreateOptions } from '../../terminal/launch/terminal-create-options'
 
 export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
   protected finishGroupFolderCreation = async (
@@ -41,7 +42,11 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
       group,
       workspace,
       settings: store.getSettings(),
-      ports: this.localWorktreeTerminalPorts(activation, () => {}, worktree),
+      ports: this.localWorktreeTerminalPorts(
+        { ...activation, terminalImageViewerSupported: input.terminalImageViewerSupported },
+        () => {},
+        worktree
+      ),
       wait: (handle, signal) => this.waitForSetupTerminalCompletion(handle, signal),
       startupBuilders: {
         agent: (agent, prompt, launchPreferences, inputs) =>
@@ -82,23 +87,31 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
     })
   }
   protected localWorktreeTerminalPorts(
-    args: { navigation?: RuntimeNavigationTarget; wslUserAct?: true },
+    args: Pick<TerminalCreateOptions, 'terminalImageViewerSupported' | 'wslUserAct'> & {
+      navigation?: RuntimeNavigationTarget
+    },
     activate: RuntimeLocalWorktreeTerminalPorts['activate'],
     worktree?: Worktree
   ): RuntimeLocalWorktreeTerminalPorts {
+    const launchContext = {
+      ...wslUserAct(args),
+      ...(args.terminalImageViewerSupported !== undefined
+        ? { terminalImageViewerSupported: args.terminalImageViewerSupported }
+        : {})
+    }
     return {
       canSpawn: Boolean(this.ptyController?.spawn),
       provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
       createTerminal: (selector, options) =>
         worktree
-          ? this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree)
-          : this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
+          ? this.createTerminal(selector, { ...options, ...launchContext }, worktree)
+          : this.createTerminal(selector, { ...options, ...launchContext }),
       pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
       sendFollowup: (handle, followup, terminal) => {
         void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal })
       },
       provision: (options) =>
-        this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
+        this.provisionManagedWorktreeTerminals({ ...options, ...launchContext }, worktree),
       activate
     }
   }

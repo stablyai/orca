@@ -32,28 +32,38 @@ import type { WorktreeHostContextOf } from '../row-presentation/worktree-host-co
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   buildProjectGroupingIndex,
   buildProjectSections,
   getProjectGroupingForRepo,
   type ProjectSectionModel
 } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
-import { withRepoSectionDisplayLabels } from '../../../../src/shared/sidebar-list/sections/project-section-order'
-import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   indexHiddenProjects,
   isRepoHidden,
   withoutHiddenFilterRepoIds
-} from '../../../../src/shared/hidden-projects'
-import { filterWorktrees } from './workspace-row-filtering'
+} from '../../../../src/shared/project/catalog/hidden-projects'
+import { filterWorktrees, isPhoneRowInHiddenProject } from './workspace-row-filtering'
+import { buildSectionRepoMap } from './section-repo-map'
+import { keepHiddenRowsBelowFolders } from '../../../../src/shared/sidebar-list/folders/folder-workspace-occurrences'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
+import {
+  placeInProjectGroupTree,
+  planProjectGroupTree,
+  bindGroupFolderRows,
+  type GroupTreePlacement
+} from '../project-sections/project-group-tree-sections'
 
 export type ProjectSectionCatalog = {
   /** Catalog repos of the hosts the list shows; each without rows gets an empty section. */
   repos: readonly SectionRepo[]
   /** Null until the desktop's catalog answers; rows then group by repo, as the desktop's would. */
   grouping: ProjectSectionModel | null
+  /** The desktop's project groups on the shown hosts; projects nest under them as in its sidebar. */
+  projectGroups: readonly ProjectGroup[]
   /** Manual header rank; undefined keeps first-row order. */
   repoOrder: ReadonlyMap<string, number> | undefined
   projectOrderBy: ProjectOrderBy
@@ -62,27 +72,9 @@ export type ProjectSectionCatalog = {
 export const NO_PROJECT_SECTION_CATALOG: ProjectSectionCatalog = {
   repos: [],
   grouping: null,
+  projectGroups: [],
   repoOrder: undefined,
   projectOrderBy: 'manual'
-}
-
-export function buildSectionRepoMap(
-  catalogRepos: readonly SectionRepo[],
-  worktrees: readonly Worktree[]
-): Map<string, SectionRepo> {
-  const repoMap = new Map(catalogRepos.map((repo) => [repo.id, repo]))
-  for (const w of worktrees) {
-    if (!repoMap.has(w.repoId)) {
-      repoMap.set(w.repoId, {
-        id: w.repoId,
-        displayName: w.repo || translate('common.unknown', 'Unknown'),
-        // Why: labels key on host + path, so a shared '' would let one stand-in rename another.
-        path: w.repoId,
-        executionHostId: w.hostId
-      })
-    }
-  }
-  return repoMap
 }
 
 // A section before lineage expansion: host rows only, no per-row view yet.
@@ -130,16 +122,32 @@ export function buildMobileWorkspacePlan(
     closed: translate('worktree.workspaceListSections.closed', 'Closed')
   }
   const hiddenProjects = indexHiddenProjects(projectCatalog.repos, LOCAL_EXECUTION_HOST_ID)
-  const filtered = filterWorktrees(worktrees, filters, search, repoHostIdByRepoId, hiddenProjects)
   const listedFilterIds = withoutHiddenFilterRepoIds(filters.filterRepoIds, hiddenProjects)
-  const sorted = sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees))
   const childrenByParentIdentity = getMobileWorkspaceLineageChildren(
     worktrees,
     lineageStores,
     listedFilterIds
   )
+  const filtered = filterWorktrees(
+    worktrees,
+    filters,
+    search,
+    repoHostIdByRepoId,
+    hiddenProjects,
+    childrenByParentIdentity
+  )
+  const isHiddenRow = (w: Worktree) =>
+    isPhoneRowInHiddenProject(w, repoHostIdByRepoId, hiddenProjects)
+  const sorted = keepHiddenRowsBelowFolders({
+    rows: sortWorktrees(filtered, sortMode, Date.now(), hostSortsByStamps(worktrees)),
+    folderRows: filtered.filter((w) => w.workspaceKind === 'folder-workspace'),
+    childrenByParentIdentity,
+    identityOf: getWorktreeRowIdentity,
+    isHidden: isHiddenRow
+  })
   const repoMap = buildSectionRepoMap(projectCatalog.repos, worktrees)
   const projectIndex = buildProjectGroupingIndex(projectCatalog.grouping ?? undefined)
+  let groupTreePlacements = new Map<string, GroupTreePlacement>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
     rows: sorted,
     childrenByParentIdentity,
@@ -161,6 +169,13 @@ export function buildMobileWorkspacePlan(
           )
         }
       } else if (groupMode === 'repo') {
+        const folderLane = bindGroupFolderRows(
+          canonicalGroupWorktrees,
+          projectCatalog.projectGroups,
+          (w) => displayRootByIdentity.get(getWorktreeRowIdentity(w)) ?? w,
+          childrenByParentIdentity,
+          isHiddenRow
+        )
         const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
         const query = search.trim().toLowerCase()
         const placeholderRepoIds = projectCatalog.repos
@@ -172,26 +187,37 @@ export function buildMobileWorkspacePlan(
               (!query || repo.displayName.toLowerCase().includes(query))
           )
           .map((repo) => repo.id)
-        const projectSections = withRepoSectionDisplayLabels(
-          buildProjectSections({
-            items: canonicalGroupWorktrees,
-            repoIdOf: (w) => w.repoId,
-            displayRepoIdOf: (w) =>
-              (displayRootByIdentity.get(getWorktreeRowIdentity(w)) ?? w).repoId,
-            repoMap,
-            projectIndex,
-            placeholderRepoIds,
-            repoOrder: projectCatalog.repoOrder,
-            projectOrderBy: projectCatalog.projectOrderBy
-          })
-        )
-        for (const [key, section] of projectSections) {
-          sections.push(
-            makeSection(key, section.label, orderMainWorktreeFirst(section.items, sortMode), {
-              repo: section.repo
-            })
-          )
+        const projectSections = buildProjectSections({
+          items: folderLane.projectRows,
+          repoIdOf: (w) => w.repoId,
+          displayRepoIdOf: (w) => folderLane.groupingRootOf(w).repoId,
+          repoMap,
+          projectIndex,
+          placeholderRepoIds,
+          repoOrder: projectCatalog.repoOrder,
+          projectOrderBy: projectCatalog.projectOrderBy
+        })
+        const projectSection = ([
+          key,
+          { label, items, repo }
+        ]: (typeof projectSections)[number]) => {
+          const shown = items.filter((w) => !folderLane.bound.has(w))
+          return {
+            ...makeSection(key, label, orderMainWorktreeFirst(shown, sortMode), { repo }),
+            ...(shown.length < items.length ? { count: items.length } : {})
+          }
         }
+        const tree = planProjectGroupTree({
+          entries: projectSections,
+          catalog: projectCatalog,
+          folderRowsByGroupId: folderLane.folderRowsByGroupId,
+          narrowed: query.length > 0,
+          projectSection,
+          groupSection: (key, title, rows) =>
+            makeSection(key, title, withFolderWorkspacesLast(rows))
+        })
+        groupTreePlacements = tree.placements
+        sections.push(...tree.sections)
       } else if (groupMode === 'workspace-status') {
         const renderableWorkspaceStatuses = withDefaultWorkspaceStatuses(workspaceStatuses)
         const byStatus = new Map<string, Worktree[]>()
@@ -254,13 +280,17 @@ export function buildMobileWorkspacePlan(
       collapsed: ReadonlySet<string>,
       hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
     ): Section[] =>
-      occurrencePlan.sections.map((section) => ({
-        key: section.key,
-        title: section.title,
-        ...(section.icon ? { icon: section.icon } : {}),
-        ...(section.repo ? { repo: section.repo } : {}),
-        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
-      }))
+      occurrencePlan.sections.flatMap(({ items: _items, placement: _placement, ...section }) => {
+        const listed = placeInProjectGroupTree(
+          {
+            ...section,
+            data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
+          },
+          groupTreePlacements.get(section.key),
+          collapsed
+        )
+        return listed ? [listed] : []
+      })
   }
 }
 

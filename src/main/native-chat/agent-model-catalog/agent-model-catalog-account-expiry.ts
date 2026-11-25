@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
 
 const ACCOUNT_SETTINGS = {
@@ -36,6 +36,8 @@ type AgentLaunchSettings = Partial<
     | 'nativeChatShellEnvironmentVariables'
     | 'terminalWindowsShell'
     | 'terminalWindowsPowerShellImplementation'
+    | 'httpProxyUrl'
+    | 'httpProxyBypassRules'
   >
 >
 
@@ -85,7 +87,9 @@ export function createAgentModelCatalogSettingsExpiry(
         value.nativeChatInheritShellEnvironment,
         value.nativeChatShellEnvironmentVariables,
         value.terminalWindowsShell,
-        value.terminalWindowsPowerShellImplementation
+        value.terminalWindowsPowerShellImplementation,
+        value.httpProxyUrl,
+        value.httpProxyBypassRules
       ])
     if (environment(launch) !== environment(settings)) {
       store.expireLaunchScopes()

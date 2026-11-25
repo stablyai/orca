@@ -4,7 +4,7 @@ import type {
   ExternalAutomationJob,
   ExternalAutomationManager
 } from '../../../../shared/automations/external/external-automation'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import type { AutomationDraft } from './authoring/AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME } from './authoring/automation-draft-model'
@@ -135,6 +135,7 @@ export function useAutomationsPageLocalState(store: AutomationsPageStoreState) {
     prompt: '',
     agentId: defaultAgent,
     extraAgentArgs: '',
+    bot: null,
     projectId: '',
     workspaceMode: 'existing',
     workspaceId: '',

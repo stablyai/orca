@@ -1,3 +1,4 @@
+import { remoteTerminalViewer } from './terminal-remote-viewer'
 import { defineStreamingMethod } from '../../core'
 import { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import {
@@ -23,7 +24,15 @@ export const TERMINAL_MULTIPLEX_METHODS = [
     params: TerminalMultiplex,
     handler: async (
       _params,
-      { runtime, connectionId, sendBinary, registerBinaryStreamHandler, signal, clientId },
+      {
+        runtime,
+        connectionId,
+        sendBinary,
+        registerBinaryStreamHandler,
+        signal,
+        clientId,
+        clientCapabilities
+      },
       emit
     ) => {
       if (!sendBinary || !registerBinaryStreamHandler || !connectionId) {
@@ -38,7 +47,7 @@ export const TERMINAL_MULTIPLEX_METHODS = [
       const state = {
         runtime,
         connectionId,
-        viewerDeviceId: clientId,
+        viewer: remoteTerminalViewer(clientId, clientCapabilities),
         sendBinary,
         registerBinaryStreamHandler,
         signal,

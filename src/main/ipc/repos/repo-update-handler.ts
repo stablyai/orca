@@ -8,7 +8,7 @@ import {
   type ExecutionHostId,
   getRepoExecutionHostId,
   normalizeExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import {
@@ -74,6 +74,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | null
           hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
+          browserProfileId?: string | null
         }
       }
     ): Promise<Repo | null> => {

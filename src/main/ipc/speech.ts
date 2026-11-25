@@ -5,7 +5,7 @@ import {
   type IpcMainInvokeEvent,
   type MessagePortMain
 } from 'electron'
-import { abortWhenRendererGone } from './renderer-lifetime-abort'
+import { abortWhenRendererGone } from './renderer-requests/renderer-lifetime-abort'
 import { dictationTermsFor } from '../../shared/speech/dictation/dictation-dictionary'
 import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictation-cleanup'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
@@ -81,22 +81,25 @@ export function registerSpeechHandlers(
   })
 
   ipcMain.handle('speech:getOpenAiApiKeyStatus', async () => {
-    return { configured: hasOpenAiSpeechApiKey(), protection: getOpenAiSpeechApiKeyProtection() }
+    return {
+      configured: await hasOpenAiSpeechApiKey(),
+      protection: await getOpenAiSpeechApiKeyProtection()
+    }
   })
 
   ipcMain.handle('speech:saveOpenAiApiKey', async (_event, apiKey: string) => {
     await saveVerifiedOpenAiSpeechApiKey(apiKey)
-    return { configured: true, protection: getOpenAiSpeechApiKeyProtection() }
+    return { configured: true, protection: await getOpenAiSpeechApiKeyProtection() }
   })
 
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
-    clearOpenAiSpeechApiKey()
+    await clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
   })
 
-  ipcMain.handle('speech:getOpenAiCompatibleProvider', () => {
+  ipcMain.handle('speech:getOpenAiCompatibleProvider', async () => {
     try {
-      return summarizeOpenAiCompatibleSpeechProvider()
+      return await summarizeOpenAiCompatibleSpeechProvider()
     } catch {
       return null
     }
@@ -109,8 +112,8 @@ export function registerSpeechHandlers(
     }
   )
 
-  ipcMain.handle('speech:clearOpenAiCompatibleProvider', () => {
-    clearOpenAiCompatibleSpeechProvider()
+  ipcMain.handle('speech:clearOpenAiCompatibleProvider', async () => {
+    await clearOpenAiCompatibleSpeechProvider()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {

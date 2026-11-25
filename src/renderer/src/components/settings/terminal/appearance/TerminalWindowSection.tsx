@@ -15,7 +15,7 @@ import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { WindowMaterialSetting } from '../../appearance/WindowMaterialSetting'
 import { useTranslate } from '@/i18n/use-translate'
 import { COLOR_OVERRIDE_GROUPS } from './terminal-window-color-groups'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 type TerminalWindowSectionProps = {
   settings: GlobalSettings

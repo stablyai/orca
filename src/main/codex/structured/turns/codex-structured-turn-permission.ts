@@ -124,12 +124,23 @@ export async function admitCodexTurnPermission(
   }
 }
 
+/** Codex applies a pick when its next turn starts. */
+export function codexRunningPermissionMode(
+  sessions: ReadonlyMap<string, CodexSession>
+): NonNullable<StructuredAgentSessionAdapter['runningPermissionMode']> {
+  return (sessionId) => {
+    const state = sessions.get(sessionId)?.permissions
+    return state && (state.appliedMode ?? state.acquiredMode)
+  }
+}
+
 export function codexNativeResumeRequirement(
   sessions: ReadonlyMap<string, CodexSession>
 ): NonNullable<StructuredAgentSessionAdapter['permissionModeRequiresAcquisition']> {
+  const running = codexRunningPermissionMode(sessions)
   return (sessionId, mode) => {
-    const state = sessions.get(sessionId)?.permissions
-    return mode === 'own' && !!state && (state.appliedMode ?? state.acquiredMode) !== 'own'
+    const current = running(sessionId)
+    return mode === 'own' && current !== undefined && current !== 'own'
   }
 }
 

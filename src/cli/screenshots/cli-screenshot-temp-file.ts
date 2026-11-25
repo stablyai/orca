@@ -9,6 +9,8 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { toLinuxPath } from '../../shared/file-access/wsl-paths'
+import { getWslCallerDistro } from '../hosts/wsl-caller-distro'
 
 const SCREENSHOT_TTL_MS = 24 * 60 * 60 * 1000
 const SCREENSHOT_CLEANUP_INTERVAL_MS = 60 * 60 * 1000
@@ -28,7 +30,11 @@ export function writeCliScreenshotTempFile(
   cleanupExpiredScreenshots(outputDir)
   const path = join(outputDir, `${safeCliFileStem(requestId)}-screenshot.${extension}`)
   writeFileSync(path, Buffer.from(data, 'base64'), { mode: 0o600 })
-  return { path, expiresAt: new Date(Date.now() + SCREENSHOT_TTL_MS).toISOString() }
+  return {
+    // A WSL shell opens the Windows temp file through its drive mount, not as C:\...
+    path: getWslCallerDistro() ? toLinuxPath(path) : path,
+    expiresAt: new Date(Date.now() + SCREENSHOT_TTL_MS).toISOString()
+  }
 }
 
 function screenshotTempDir(dir: CliScreenshotTempDir): string {

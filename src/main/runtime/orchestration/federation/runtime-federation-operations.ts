@@ -10,6 +10,11 @@ export abstract class RuntimeFederationOperations extends OrcaRuntimeWithHasExac
     return await this.orchestrationFederation.resolveWorkerServer(selector)
   }
 
+  /** Every server paired to this host; none in a runtime that can't dial servers. */
+  listOrchestrationWorkerServers(): Promise<readonly { environmentId: string; name: string }[]> {
+    return this.orchestrationFederation.listWorkerServers()
+  }
+
   callOrchestrationWorkerServer(
     selector: string,
     method: string,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useRuntimeStatusByEnvironmentId } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import { useAppStore } from '@/store/index'
 import type {
   SkillInstallDestination,
@@ -47,12 +48,10 @@ export function SkillInstallDialog({
 }): React.JSX.Element {
   const t = useTranslate()
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const runtimeStatus = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatus = useRuntimeStatusByEnvironmentId()
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
   const repos = useAppStore((state) => state.repos)
   const folderWorkspaces = useAppStore((state) => selectFolderWorkspaces(state))
-  const sshConnectionStates = useAppStore((state) => state.sshConnectionStates)
-  const sshTargetLabels = useAppStore((state) => state.sshTargetLabels)
   const [link, setLink] = useState(initialLink)
   const [preview, setPreview] = useState<ResolvedSkillShare | null>(null)
   const [environmentId, setEnvironmentId] = useState<string>('local')
@@ -80,15 +79,6 @@ export function SkillInstallDialog({
   const workspaceChoices = useMemo(
     () => skillInstallWorkspaceChoices({ environmentId, folderWorkspaces, repos, worktreesByRepo }),
     [environmentId, folderWorkspaces, repos, worktreesByRepo]
-  )
-  const sshConnections = useMemo(
-    () =>
-      [...sshTargetLabels.entries()].map(([id, label]) => ({
-        id,
-        label,
-        connected: sshConnectionStates.get(id)?.status === 'connected'
-      })),
-    [sshConnectionStates, sshTargetLabels]
   )
 
   const resolveLink = useCallback(async (value: string): Promise<void> => {
@@ -160,23 +150,13 @@ export function SkillInstallDialog({
     try {
       const destination: SkillInstallDestination =
         scope === 'global'
-          ? environmentId.startsWith('ssh:')
-            ? {
-                scope: 'global',
-                executionTarget: {
-                  kind: 'ssh',
-                  connectionId: environmentId.slice('ssh:'.length)
-                }
-              }
-            : { scope: 'global', ...(executionTarget ? { executionTarget } : {}) }
+          ? { scope: 'global', ...(executionTarget ? { executionTarget } : {}) }
           : choice?.kind === 'worktree'
             ? { scope: 'workspace', worktreeId: choice.id }
             : { scope: 'workspace', folderWorkspaceId: choice!.id }
       if (!discardLocal) {
         const checked = await window.api.skills.previewInstall({
-          ...(environmentId === 'local' || environmentId.startsWith('ssh:')
-            ? {}
-            : { environmentId }),
+          ...(environmentId === 'local' ? {} : { environmentId }),
           name: preview.version.name,
           package: {
             packageId: preview.version.packageId,
@@ -206,7 +186,7 @@ export function SkillInstallDialog({
         shareId: preview.shareId,
         versionId: preview.version.versionId,
         operationId,
-        ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId }),
+        ...(environmentId === 'local' ? {} : { environmentId }),
         destination,
         providers: [...providers],
         ...(discardLocal ? { conflictResolution: 'replace-and-discard-local' } : {})
@@ -250,7 +230,7 @@ export function SkillInstallDialog({
     }
     const cancelled = await window.api.skills.cancelInstall({
       operationId: installProgress.activeOperationId,
-      ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
+      ...(environmentId === 'local' ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
       setError(
@@ -348,7 +328,6 @@ export function SkillInstallDialog({
               busy={busy}
               runtimeEnvironments={runtimeEnvironments}
               runtimeStatus={runtimeStatus}
-              sshConnections={sshConnections}
               workspaceChoices={workspaceChoices}
             />
           </SkillInstallReview>

@@ -1,4 +1,4 @@
-import { legacyBaseRefSearchResult } from '../../../../src/shared/base-ref-search-result'
+import { legacyBaseRefSearchResult } from '../../../../src/shared/worktree/base-refs/base-ref-search-result'
 import type { WorkspaceCreateProjectionModel } from '../project-board/use-mobile-tasks-workspace-create-projection'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import { useEffect } from 'react'

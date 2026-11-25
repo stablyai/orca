@@ -1,4 +1,4 @@
-import { nativeChatRowOffersFork } from '../../../../../../shared/native-chat/native-chat-fork-offer'
+import { nativeChatRowOffersFork } from '../../../../../../shared/native-chat/transcript/turns/native-chat-fork-offer'
 import type { NativeChatMessageSlot } from '../../conversation/slots/native-chat-transcript-slots'
 
 /** Where a side chat forks: the newest response "Fork from this response" offers, or why none is. */

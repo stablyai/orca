@@ -35,6 +35,20 @@ export class AcpAgentError extends AcpRpcError {
   }
 }
 
+/** Only an agent-declared temporary answer permits retrying a saved conversation. */
+export function temporaryAcpProviderAnswer(error: unknown): boolean {
+  return (
+    error instanceof AcpAgentError &&
+    error.code === -32603 &&
+    typeof error.data === 'object' &&
+    error.data !== null &&
+    'errorName' in error.data &&
+    (error.data.errorName === 'ServerUnavailable' ||
+      error.data.errorName === 'CatalogNotReady' ||
+      error.data.errorName === 'ServiceUnavailableError')
+  )
+}
+
 export class AcpAuthRequiredError extends AcpAgentError {
   constructor(
     message: string,

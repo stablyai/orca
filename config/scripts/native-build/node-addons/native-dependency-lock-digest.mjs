@@ -116,7 +116,9 @@ export function nativeWorkspaceSettings(contents, closure) {
     Object.entries(parse(contents) ?? {})
       .filter(([setting]) => !RESOLUTION_ONLY_WORKSPACE_SETTINGS.has(setting))
       .map(([setting, value]) =>
-        setting === 'allowBuilds' && value && typeof value === 'object'
+        (setting === 'allowBuilds' || setting === 'permissions') &&
+        value &&
+        typeof value === 'object'
           ? [setting, Object.fromEntries(Object.entries(value).filter(([name]) => names.has(name)))]
           : [setting, value]
       )

@@ -1,7 +1,7 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { isUnprovenServerSshRoute } from '../ownership/resolve-owner'
 import { resolveOwnerOrLocal } from '../ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '../ownership/worktree-runtime-owner-state'

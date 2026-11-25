@@ -1,4 +1,4 @@
-import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../shared/file-access/cross-platform-path'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/launch/terminal-git-credential-guard'
 import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { isFolderRepo } from '../../shared/repository/repo-kind'

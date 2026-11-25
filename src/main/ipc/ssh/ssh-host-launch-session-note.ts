@@ -1,5 +1,5 @@
 /** Flag macOS managed servers that outlive their launching SSH session. */
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { readManagedOrcadLaunchSshSession } from '../../managed-server/lifecycle/orcad-managed-launch-session'
 import { knownSshHostPlatform } from '../../ssh/remote-host/ssh-host-platform-memo'

@@ -139,6 +139,9 @@ export function buildManagedWorktreeCreateArgs(
         : {}),
       noParent: params.noParent === true,
       callerTerminalHandle: params.callerTerminalHandle,
+      ...(params.callerAgentSessionId && !origin?.pairedDeviceId
+        ? { callerAgentSessionId: params.callerAgentSessionId }
+        : {}),
       orchestrationContext: params.orchestrationContext
     }
   }

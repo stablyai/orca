@@ -1,4 +1,7 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../src/shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../src/shared/execution-host/execution-host'
 import type { Worktree } from '../workspace-list/workspace-list-types'
 
 // Kept free of storage and React Native: the e2e phone-list helper builds sections through this.

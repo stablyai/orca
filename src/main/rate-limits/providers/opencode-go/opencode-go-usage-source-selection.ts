@@ -1,4 +1,4 @@
-import type { NetworkProxySettings } from '../../../../shared/network-proxy'
+import type { NetworkProxySettings } from '../../../../shared/network/network-proxy'
 import type {
   ProviderRateLimits,
   UsageRateLimitMetadata

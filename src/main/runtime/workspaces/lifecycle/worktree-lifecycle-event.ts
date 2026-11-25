@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 /** Host-qualified identity of the worktree, when it has one. Captured before a removal purges
  *  the metadata row, since listeners hear `removed` only after. */

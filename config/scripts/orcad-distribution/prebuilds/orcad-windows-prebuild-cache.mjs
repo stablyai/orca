@@ -23,6 +23,8 @@ export const WINDOWS_PREBUILD_LOCKED_PACKAGES = ['node-pty', 'node-gyp']
 const WINDOWS_PREBUILD_PACKAGE_SCRIPTS = ['build:orcad-prebuilds', 'build:packages']
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   '.github/actions/prepare-orcad-prebuilds/action.yml',
+  'native/journal-file-lock/main.c',
+  'config/scripts/native-build/build-journal-file-lock.mjs',
   'config/patches/node-pty@1.1.0.patch',
   'src/shared/node-runtime/node-runtime-pin.ts',
   'config/scripts/orcad-distribution/prebuilds/build-orcad-prebuilds.mjs',
@@ -42,6 +44,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'src/packages/process-host/scripts/build-dist.mjs',
   'src/packages/process-host/tsconfig.json',
   'src/packages/process-host/src/run-process.ts',
+  'src/packages/process-host/src/run-process-sync.ts',
+  'src/packages/process-host/src/posix-group-termination.ts',
   'src/packages/process-host/src/spawn-resolution.ts',
   'src/packages/process-host/src/process-tree-termination.ts',
   'src/packages/process-host/src/process-tree-kill-gate.ts',
@@ -54,7 +58,8 @@ export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   'src/packages/process-host/src/windows-cmd-shim-resolution.ts',
   'src/packages/process-host/src/windows-system-binary.ts',
   'src/packages/process-host/src/windows-tree-kill.ts',
-  'src/packages/process-host/src/wsl-distro-allowlist.ts'
+  'src/packages/process-host/src/wsl-distro-allowlist.ts',
+  'src/packages/process-host/src/wsl-not-installed-latch.ts'
 ]
 
 function windowsSlot(platform, arch) {

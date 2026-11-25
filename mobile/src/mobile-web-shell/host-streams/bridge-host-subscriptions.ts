@@ -1,5 +1,5 @@
 import { utf8ByteLength } from '../bridge/protocol/bridge-caps'
-import { MOBILE_BRIDGE_MAX_FRAME_BYTES as BRIDGE_MAX_MESSAGE_BYTES } from '../../../../src/shared/mobile-bridge-frame-bytes'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES as BRIDGE_MAX_MESSAGE_BYTES } from '../../../../src/shared/mobile-bridge/mobile-bridge-frame-bytes'
 import { BRIDGE_PROTOCOL_VERSION } from '../bridge/protocol/bridge-frame-fields'
 import type { BridgeHostMessage } from '../bridge/protocol/bridge-envelope'
 import {

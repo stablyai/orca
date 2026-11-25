@@ -5,8 +5,8 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export function hasConflictingStoredWorktreeOwner(
   store: Store,

@@ -3,7 +3,7 @@ import {
   clampCombinedDiffFileTreeWidth,
   COMBINED_DIFF_FILE_TREE_RESIZE_STEP,
   computeCombinedDiffFileTreeWidthBounds
-} from '../../../../../../shared/combined-diff-file-tree-width'
+} from '../../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useAppStore } from '@/store'
 

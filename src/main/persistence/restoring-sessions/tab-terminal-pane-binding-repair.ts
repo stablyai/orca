@@ -1,5 +1,5 @@
-import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'

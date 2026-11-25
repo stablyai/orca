@@ -24,9 +24,11 @@ export async function resolveRefOid(
   ref: string,
   options: GitRuntimeOptions = {}
 ): Promise<string> {
-  const { stdout } = await gitExecFileAsync(['rev-parse', '--verify', '--end-of-options', ref], {
-    ...gitOptionsForWorktree(worktreePath, options)
-  })
+  // --quiet makes a missing ref exit 1, distinct from git's own failures (exit 128).
+  const { stdout } = await gitExecFileAsync(
+    ['rev-parse', '--verify', '--quiet', '--end-of-options', ref],
+    gitOptionsForWorktree(worktreePath, options)
+  )
   return stdout.trim()
 }
 

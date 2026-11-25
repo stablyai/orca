@@ -3,7 +3,10 @@ import type { GitStatusEntry, GitStatusResult } from '../../shared/git/status/gi
 import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
 import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeNavigationTarget } from '../../shared/remote-runtime/session-graph/runtime-navigation'
-import { isRuntimePathAbsolute, relativePathInsideRoot } from '../../shared/cross-platform-path'
+import {
+  isRuntimePathAbsolute,
+  relativePathInsideRoot
+} from '../../shared/file-access/cross-platform-path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/file-access/wsl-paths'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'

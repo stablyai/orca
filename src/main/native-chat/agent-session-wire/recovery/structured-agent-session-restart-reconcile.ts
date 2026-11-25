@@ -131,7 +131,7 @@ async function reconcileCurrentLease(
 
 function hasUnreconciledLease(store: AgentSessionRecordStore, sessionId?: string): boolean {
   return sessionId === undefined
-    ? store.listRecords().some((record) => record.lease.unreconciled)
+    ? store.listLeaseHolders().some((record) => record.lease.unreconciled)
     : store.getRecord(sessionId)?.lease.unreconciled === true
 }
 

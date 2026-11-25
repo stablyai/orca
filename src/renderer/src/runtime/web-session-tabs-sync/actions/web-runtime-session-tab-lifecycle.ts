@@ -36,7 +36,7 @@ import {
   matchesWebSessionIntentOwner
 } from '../identity/web-runtime-session-environment'
 import { refreshWebRuntimeSessionTabsSnapshot } from '../inventory/web-runtime-session-snapshot'
-import { isServerFrameDrawnWorkspace } from '../frame-drawn-server-workspace-set'
+import { isServerFrameDrawnWorkspace } from '../frame-drawn/frame-drawn-server-workspace-set'
 import { redrawServerLayoutWorkspace } from '../../workspace-layout/server/server-layout-apply-routes'
 import { userTabCloseParams } from '../closing/web-session-user-tab-close-params'
 
@@ -206,7 +206,8 @@ async function callWebRuntimeSessionTabMethod(
   }
 
   try {
-    const { resolveHostSessionTabIdForWebSessionTab } = await import('../tracking-mappings')
+    const { resolveHostSessionTabIdForWebSessionTab } =
+      await import('../identity/tracking-mappings')
     const state = useAppStore.getState()
     const hostTabId =
       resolveHostSessionTabIdForWebSessionTab(state, {

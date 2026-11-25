@@ -7,14 +7,17 @@ import { getAppIconPath } from './desktop-integration/app-icon'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import { getBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { formatBrowserClientHostIdArgument } from '../../shared/browser/client-hosting/browser-client-host-id-argument'
-import { formatWindowMaterialArgument, resolveWindowMaterial } from '../../shared/window-material'
+import {
+  formatWindowMaterialArgument,
+  resolveWindowMaterial
+} from '../../shared/app-lifecycle/windows/window-material'
 import { windowMaterialOptions } from './presentation/window-material-options'
 import { rememberWindowMaterial } from './presentation/window-material-suppression'
 import { markSystemSessionEnding } from '../crash-reporting/process-exits/expected-teardown-state'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
-import type { Store } from '../persistence/loading-store/store'
+import type { NativeSettingsProjection } from '../core-desktop/native-settings-projection'
 import { closeDashboardPopout } from './dashboard-popout-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import { installMainWindowCloseLifecycle } from './main-window/main-window-close-lifecycle'
@@ -32,7 +35,7 @@ import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 import {
   formatHiddenWindowFramePumpArgument,
   shouldPumpHiddenWindowFrames
-} from '../../shared/hidden-window-frame-pump'
+} from '../../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import {
   forceRepaint,
   installMacosVisibilityRepaint,
@@ -47,11 +50,7 @@ import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-val
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
 import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
-
-// Node warns past this many listeners per event name. Headroom above normal subsystem fan-out,
-// still low enough that a real leak warns. Per-request listeners belong on addFanoutListener,
-// not a higher cap.
-const MAIN_WINDOW_MAX_LISTENERS_PER_EVENT = 30
+import { WEB_CONTENTS_MAX_LISTENERS_PER_EVENT } from './web-contents-listener-budget'
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(
@@ -81,10 +80,10 @@ export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowL
 }
 
 export function createMainWindow(
-  store: Store | null,
+  nativeSettings: NativeSettingsProjection | null,
   opts?: CreateMainWindowOptions
 ): BrowserWindow {
-  const rawSavedBounds = store?.getUI().windowBounds
+  const rawSavedBounds = nativeSettings?.getUI().windowBounds
   // Reject tiny/off-screen saved bounds so the titlebar stays reachable after display changes.
   const savedBounds =
     rawSavedBounds &&
@@ -99,8 +98,8 @@ export function createMainWindow(
       rawSavedBounds
     )
   }
-  const savedMaximized = store?.getUI().windowMaximized ?? false
-  const savedFullScreen = store?.getUI().windowFullScreen ?? false
+  const savedMaximized = nativeSettings?.getUI().windowMaximized ?? false
+  const savedFullScreen = nativeSettings?.getUI().windowFullScreen ?? false
   // Fill the primary work area on first launch; later launches honor saved bounds.
   const defaultBounds = (() => {
     try {
@@ -111,9 +110,9 @@ export function createMainWindow(
     }
   })()
 
-  const settings = store?.getSettings()
+  const settings = nativeSettings?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
-    const voice = store?.getSettings().voice
+    const voice = nativeSettings?.getSettings().voice
     // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
     return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
@@ -174,8 +173,8 @@ export function createMainWindow(
     }
   })
   rememberWindowMaterial(mainWindow, windowMaterial)
-  mainWindow.setMaxListeners(MAIN_WINDOW_MAX_LISTENERS_PER_EVENT)
-  mainWindow.webContents.setMaxListeners(MAIN_WINDOW_MAX_LISTENERS_PER_EVENT)
+  mainWindow.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
+  mainWindow.webContents.setMaxListeners(WEB_CONTENTS_MAX_LISTENERS_PER_EVENT)
   const rendererWebContentsId = mainWindow.webContents.id
   installWindowsPathRegistryChangeListener(mainWindow)
   // Native paste fallback is privileged; trust only the top-level renderer.
@@ -220,7 +219,7 @@ export function createMainWindow(
     revealInBackground: opts?.revealInBackground,
     savedMaximized,
     savedFullScreen,
-    store
+    nativeSettings
   })
   installMainWindowWebviewSecurity(mainWindow)
   installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
@@ -237,14 +236,14 @@ export function createMainWindow(
   })
   // Register after focus is initialized because the resume callback uses it.
   powerMonitor.on('resume', onSystemResume)
-  installMainWindowShortcutRouting({ focus, mainWindow, opts, store })
+  installMainWindowShortcutRouting({ focus, mainWindow, opts, nativeSettings })
   const closeLifecycle = installMainWindowCloseLifecycle({
     focus,
     mainWindow,
     opts,
     rendererWebContentsId,
     state,
-    store
+    nativeSettings
   })
 
   mainWindow.on('closed', () => {

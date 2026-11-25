@@ -113,12 +113,9 @@ export function GitHubItemDialogPRHeader({
               size="sm"
               onClick={() => onUse(workItem)}
               className="gap-1.5 whitespace-nowrap"
-              aria-label={t(
-                'auto.components.GitHubItemDialog.0caac1a18f',
-                'Start workspace from PR'
-              )}
+              aria-label={t('auto.components.GitHubItemDialog.0caac1a18f', 'Start workspace')}
             >
-              {t('auto.components.GitHubItemDialog.0caac1a18f', 'Start workspace from PR')}
+              {t('auto.components.GitHubItemDialog.0caac1a18f', 'Start workspace')}
               <ArrowRight className="size-3.5" />
             </Button>
           )}

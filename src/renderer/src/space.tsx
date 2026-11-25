@@ -3,7 +3,7 @@ import { StrictMode, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Toaster } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { ConfirmationDialogProvider } from './components/confirmation-dialog'
+import { ConfirmationDialogProvider } from './components/dismiss/confirmation/confirmation-dialog'
 import DeleteWorktreeDialog from './components/sidebar/workspace-actions/deletion/DeleteWorktreeDialog'
 import PreservedBranchBatchReviewModal from './components/sidebar/workspace-actions/deletion/PreservedBranchBatchReviewModal'
 import WorkspaceSpacePage from './components/workspace-space/WorkspaceSpacePage'
@@ -19,7 +19,8 @@ import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store/index'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
-import { useReduceVisualEffects } from './hooks/use-reduce-visual-effects'
+import { useReduceVisualEffects } from './hooks/theme/use-reduce-visual-effects'
+import { registerBackgroundWorkerPausedIpcBridge } from './hooks/ipc-events/native-app/background-worker-paused-ipc-bridge'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
 import.meta.hot?.dispose(disposeBodyOverlayAttributes)
@@ -60,6 +61,13 @@ function SpaceWindowRoot(): React.JSX.Element {
       offState?.()
       offProgress()
     }
+  }, [])
+
+  // A scan run from this window can pause background work; the notice belongs here too.
+  useEffect(() => {
+    const unsubs: (() => void)[] = []
+    registerBackgroundWorkerPausedIpcBridge(unsubs)
+    return () => unsubs.forEach((unsub) => unsub())
   }, [])
 
   useEffect(() => {

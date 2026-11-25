@@ -1,7 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getTabIdToWorktreeId } from '../tabs/tab-worktree-index'
 import { createAgentStatusEpochSelector } from '../../agent-status/evidence/agent-status-epoch-selector'
-import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'

@@ -1,4 +1,4 @@
-import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../shared/execution-host/execution-host'
 import {
   automationRequiresHostReselection,
   findAutomationRepo
@@ -6,7 +6,7 @@ import {
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   automationCapturedHostIssue as resolveAutomationCapturedHostIssue,
   automationSelectorMatchesScope,

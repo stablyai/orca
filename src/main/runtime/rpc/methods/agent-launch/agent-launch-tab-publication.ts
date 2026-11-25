@@ -27,7 +27,7 @@ import {
 import type { RpcContext } from '../../core'
 import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 /** Paired launches move only the caller's view; both early publication and spawn must obey this. */
 export function agentLaunchMovesHostWindow(

@@ -6,6 +6,7 @@ import { runningTurnLifecycleRevisions } from '../agent-session-wire/termination
 import { applyJournalDomainLifecycle } from './journal-domain-lifecycle'
 
 import type { JournalWriterOperation } from './journal-writer-command'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 export function applyJournalDomainLifecycleOperation(
   db: Database.Database,
@@ -49,7 +50,9 @@ function applyJournalDomainTakenStop(
     WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0 AND lifecycle_state='running'
     ORDER BY sequence,sequence_index,ordinal`)
     .all(...prefix)
-    .map((row): AgentJournalRenderItem => JSON.parse(String(row.payload_json)))
+    .map((row): AgentJournalRenderItem =>
+      readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json)
+    )
   const result = applyJournalDomainLifecycle(
     db,
     target,

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   MAX_BROWSER_MEMORY_SAVER_HOURS,
   MIN_BROWSER_MEMORY_SAVER_HOURS,

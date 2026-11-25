@@ -1,6 +1,6 @@
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { hostedReviewRepoOwnerTarget } from '@/store/slices/hosted-review/hosted-review-cache-state'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   HostedReviewForBranchArgs,
   HostedReviewInfo

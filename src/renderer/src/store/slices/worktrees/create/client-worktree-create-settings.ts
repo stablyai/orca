@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 const CLIENT_WORKTREE_CREATE_SETTING_KEYS = [
   'nestWorkspaces',

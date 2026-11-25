@@ -1,12 +1,16 @@
-import { afterEach } from 'vitest'
+import { afterEach, beforeEach } from 'vitest'
+import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrchestrationDb } from '../db/orchestration-db'
 import '../db/contract-constants'
 import '../db/messages/mailbox-routing-page'
 import '../db/dispatch-row-writer'
 import '../db/attempt-outcome-projection'
 import type { CrewReadDependencies } from './crew-read-dependencies'
+import { workerIdentity } from '../workers/identity/worker-identity'
 const opened: OrchestrationDb[] = []
 afterEach(() => opened.splice(0).forEach((db) => db.close()))
+// These reads assume no chat host; a shared test worker may still hold another file's stub.
+beforeEach(() => setStructuredAgentSessionHost(null))
 export function fixture() {
   const db = new OrchestrationDb(':memory:')
   opened.push(db)
@@ -34,7 +38,9 @@ export function fixture() {
     paneForHandle: (handle) => handles.get(handle) ?? null,
     livePaneForHandle: (handle) => handles.get(handle) ?? null,
     processForHandle: (handle) => (handles.has(handle) ? `process:${handle}` : null),
-    name: (_identity, task) => task ?? 'Duplicate name'
+    name: (_identity, assignment) =>
+      (assignment && (assignment.taskTitle || workerIdentity(db, assignment.dispatchId)?.title)) ||
+      'Duplicate name'
   }
   const run = db.createRun({
     objective: 'Crew',

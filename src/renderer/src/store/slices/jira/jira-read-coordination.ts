@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { CacheEntry } from '../../github/cache/cache-model'
 import type { JiraSlice, JiraSliceSet } from './jira-slice-contract'
 import type {

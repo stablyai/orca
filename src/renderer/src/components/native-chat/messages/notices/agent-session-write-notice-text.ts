@@ -67,6 +67,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.historyUnusable', COPY.historyUnusable),
   historyUnavailable: () =>
     translate('components.native-chat.writeNotice.historyUnavailable', COPY.historyUnavailable),
+  diskFull: () => translate('components.native-chat.writeNotice.diskFull', COPY.diskFull),
+  freeDiskSpace: () =>
+    translate('components.native-chat.writeNotice.freeDiskSpace', COPY.freeDiskSpace),
+  savedInOtherFolder: () =>
+    translate('components.native-chat.writeNotice.savedInOtherFolder', COPY.savedInOtherFolder),
   savedByNewerOrca: () =>
     translate('components.native-chat.writeNotice.savedByNewerOrca', COPY.savedByNewerOrca),
   updateOrcaToKeepUsing: () =>

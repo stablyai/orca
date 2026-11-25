@@ -1,4 +1,4 @@
-import type { CliInstallState, CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallState, CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import { listWslDistrosAsync } from '../../wsl/discovery/distro-catalog'
 import {
   deferUntilWslDistroRunning,

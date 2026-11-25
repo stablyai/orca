@@ -1,5 +1,5 @@
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
-import type { DashboardCard } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCard } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 

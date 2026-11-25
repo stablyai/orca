@@ -18,7 +18,8 @@ export const KIMI_HOOK_EVENTS = [
   'PostToolUseFailure',
   'PermissionRequest',
   'Stop',
-  'StopFailure'
+  'StopFailure',
+  'Interrupt'
 ] as const
 
 const MARKERS: ManagedTomlMarkers = {

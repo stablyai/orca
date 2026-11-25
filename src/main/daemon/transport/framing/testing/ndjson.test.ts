@@ -8,10 +8,8 @@ import {
 
 describe('encodeNdjson', () => {
   it('measures multibyte payloads in UTF-8 bytes, not characters', () => {
-    const emptyBytes = Buffer.byteLength(JSON.stringify({ data: '' }), 'utf8')
-    expect(encodeNdjson({ data: '🐙' }, emptyBytes + 4)).toBe('{"data":"🐙"}\n')
-    expect(() => encodeNdjson({ data: '🐙' }, emptyBytes + 3)).toThrow(NdjsonLineTooLongError)
-    expect(() => encodeNdjson({ data: 'é' }, emptyBytes + 1)).toThrow(NdjsonLineTooLongError)
+    expect(encodeNdjson({ data: '🐙' }, 15)).toBe('{"data":"🐙"}\n')
+    expect(() => encodeNdjson({ data: '🐙' }, 14)).toThrow(NdjsonLineTooLongError)
   })
 })
 

@@ -1,4 +1,4 @@
-import type { AgentSessionBackgroundTask } from '../../agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../agent-session/background-tasks/agent-session-background-task-wire'
 import type { AgentSubagentSnapshot } from '../contracts/agent-status-subagent-snapshot'
 import { isAgentChildWorkKind } from './agent-status-child-work-liveness'
 import type { AgentChildWorkOutcome, AgentChildWorkState } from './agent-status-child-work'

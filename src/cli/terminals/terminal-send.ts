@@ -1,5 +1,5 @@
 import type { RuntimeTerminalSend } from '../../shared/terminal/runtime/runtime-terminal-send-contract'
-import '../../shared/protocol-version'
+import '../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { formatTerminalSend, terminalSendWarnings } from './terminal-format'

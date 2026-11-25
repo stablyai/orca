@@ -13,7 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import { sourceKindLabel } from '../presentation/skill-display-labels'
 import { skillAgentLabel } from './skill-agent-filter'

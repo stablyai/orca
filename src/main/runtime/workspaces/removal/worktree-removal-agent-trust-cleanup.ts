@@ -2,8 +2,10 @@ import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
   splitWorktreeId
 } from '../../../../shared/worktree/id'
-import { removeOrcaCreatedProjectTrustEntries } from '../../../codex/trust/toml/config-toml-trust'
-import { removeOrcaCreatedAntigravityTrust } from '../../../agent-launch/trust/antigravity-workspace-trust-ownership'
+import {
+  removeOrcaCreatedAntigravityTrustOffMain,
+  removeOrcaCreatedProjectTrustEntries
+} from '../../../codex/trust/project-trust/codex-project-trust-worker-client'
 
 /**
  * Drops the workspace trust entries Orca's preflight wrote for a removed
@@ -23,8 +25,10 @@ export function dropOrcaCreatedAgentTrustForRemovedWorktree(worktreeId: string):
   if (!worktreePath || worktreePath.includes(FOLDER_WORKSPACE_INSTANCE_SEPARATOR)) {
     return Promise.resolve()
   }
-  removeOrcaCreatedAntigravityTrust(worktreePath)
-  return removeOrcaCreatedProjectTrustEntries(worktreePath).catch((error) => {
-    console.warn('[codex-config] Failed to drop an Orca-created project trust entry:', error)
-  })
+  return Promise.all([
+    removeOrcaCreatedAntigravityTrustOffMain(worktreePath),
+    removeOrcaCreatedProjectTrustEntries(worktreePath).catch((error) => {
+      console.warn('[codex-config] Failed to drop an Orca-created project trust entry:', error)
+    })
+  ]).then(() => undefined)
 }

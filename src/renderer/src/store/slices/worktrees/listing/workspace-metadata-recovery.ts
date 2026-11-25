@@ -1,7 +1,7 @@
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { WorktreeFetchOptions } from './worktree-fetch-options'
 
 type FetchWorktrees = (repoId: string, options: WorktreeFetchOptions) => Promise<unknown>

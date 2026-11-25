@@ -69,7 +69,7 @@ export function TerminalPaneMobileDriverPortals({
             hasFitOverride={hasFitOverride}
             rootClassName="mobile-driver-banner"
             onAction={() => restorePaneTerminalFit(pane, ptyId)}
-            onAllAction={() => restoreAllTerminalFits(pane)}
+            onAllAction={() => restoreAllTerminalFits(pane, driver.kind === 'mobile')}
           />,
           pane.container,
           `mobile-driver-banner-${pane.id}`

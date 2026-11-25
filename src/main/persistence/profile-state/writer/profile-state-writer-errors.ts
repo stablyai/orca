@@ -1,4 +1,4 @@
-import { storageCapacityErrorCode } from '../../../../shared/storage-capacity-error'
+import { storageCapacityErrorCode } from '../../../../shared/errors/storage-capacity-error'
 import {
   ProfileStateDocumentCorruptionError,
   ProfileStateRevisionConflictError
@@ -21,6 +21,14 @@ export class ProfileStateWriterError extends Error {
     super(message, options)
     this.name = 'ProfileStateWriterError'
   }
+}
+
+export function closedProfileStateWriterError(): ProfileStateWriterError {
+  return new ProfileStateWriterError(
+    'profile-state-writer-closed',
+    'Profile state writer is closing',
+    'known-failure'
+  )
 }
 
 export function profileStateWriterFailureOutcome(error: unknown): ProfileStateWriterFailureOutcome {

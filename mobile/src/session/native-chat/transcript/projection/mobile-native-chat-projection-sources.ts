@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { getVerifiedNativeChatCommands } from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import { surfaceSkillInvocationUserTurns } from '../../../../../../src/shared/native-chat/native-chat-command-envelope'
+import { getVerifiedNativeChatCommands } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
+import { surfaceSkillInvocationUserTurns } from '../../../../../../src/shared/native-chat/transcript/messages/native-chat-command-envelope'
 import {
   nativeChatCommandName,
   nativeChatCommandOutputParentId,

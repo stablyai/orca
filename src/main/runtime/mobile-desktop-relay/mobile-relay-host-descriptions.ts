@@ -1,5 +1,5 @@
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { describePairedServerHosts } from '../../../shared/remote-runtime/host-catalog/paired-server-hosts'
 import type {
   MobileRelayHost,

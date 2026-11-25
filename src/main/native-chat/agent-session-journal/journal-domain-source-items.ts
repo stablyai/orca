@@ -1,3 +1,4 @@
+import { boundedStoredJson, boundedStoredJsonSql } from './journal-stored-json-bounds'
 import type {
   AgentJournalMessageItem,
   AgentJournalRenderItem
@@ -163,11 +164,11 @@ export function readJournalDomainSourceItems(
   return clientMessageIds.flatMap((id) => {
     const itemId = agentJournalSubmissionKey(id)
     const visible = scope.db
-      .prepare(`SELECT payload_json FROM journal_items
+      .prepare(`SELECT ${boundedStoredJsonSql('payload_json', 'payload_json')} FROM journal_items
       WHERE session_id=? AND epoch=? AND item_id=? AND hidden=0`)
       .get(...scope.prefix, itemId)
     if (visible) {
-      return [scope.decode<AgentJournalRenderItem>(visible.payload_json)]
+      return [scope.decode<AgentJournalRenderItem>(boundedStoredJson(visible, 'payload_json'))]
     }
     const owner = scope.db
       .prepare(`SELECT attempt_sequence,attempt_index,facts_json

@@ -1,3 +1,4 @@
+import { pendingChatAccountOwner } from '@/lib/workspace/ownership/visible-account-surface'
 import { workspaceTabs } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
@@ -18,12 +19,12 @@ import {
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
-} from '../../../../../../shared/floating-workspace-worktree'
+} from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { createNativeChatTabOwnerSelector } from '../../pane/ownership/native-chat-tab-owner'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../../links/actions/native-chat-file-link-context'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
@@ -41,13 +42,15 @@ const OWNER_CONTEXT_INPUT_KEYS = FILE_LINK_CONTEXT_INPUT_KEYS.filter(
 
 export type NativeChatComposerWorkspaceTarget = Pick<
   NativeChatStructuredComposerTransport,
-  'worktreeId' | 'runtimeEnvironmentId'
+  'worktreeId' | 'runtimeEnvironmentId' | 'pendingCreationId'
 >
 
 export function createNativeChatComposerWorkspaceSelector(
   tabId: string,
-  target?: NativeChatComposerWorkspaceTarget
+  target?: NativeChatComposerWorkspaceTarget,
+  pendingCreationId?: string
 ) {
+  const creationId = pendingCreationId ?? target?.pendingCreationId
   const selectOwner = createNativeChatTabOwnerSelector(tabId)
   let unifiedBucket: ReturnType<typeof workspaceTabs>
   let tabHost: ExecutionHostId | undefined
@@ -68,18 +71,23 @@ export function createNativeChatComposerWorkspaceSelector(
     head?: string
   } = {}
   return (state: AppState) => {
-    const worktreeId = target?.worktreeId ?? selectOwner(state)
+    const pendingOwner = creationId ? pendingChatAccountOwner(state, creationId) : undefined
+    const worktreeId = pendingOwner
+      ? pendingOwner.sourceWorktreeId
+      : (target?.worktreeId ?? selectOwner(state))
     const unified = worktreeId ? workspaceTabs(state.unifiedTabsByWorktree, worktreeId) : undefined
     if (unifiedBucket !== unified) {
       tabHost = unified?.find((tab) => tab.id === tabId)?.executionHostId
       unifiedBucket = unified
     }
     // A structured transport's null environment positively identifies this host.
-    const explicitHost = target
-      ? target.runtimeEnvironmentId
-        ? toRuntimeExecutionHostId(target.runtimeEnvironmentId)
-        : 'local'
-      : tabHost
+    const explicitHost = pendingOwner
+      ? (pendingOwner.hostId ?? undefined)
+      : target
+        ? target.runtimeEnvironmentId
+          ? toRuntimeExecutionHostId(target.runtimeEnvironmentId)
+          : 'local'
+        : tabHost
     const catalog = {
       repos: state.repos,
       projectGroups: state.projectGroups,
@@ -98,6 +106,7 @@ export function createNativeChatComposerWorkspaceSelector(
     const next = [
       worktreeId,
       explicitHost,
+      pendingOwner?.hostId,
       unified,
       state.structuredSessionLaunchDirectoryByTabId[tabId],
       ...Object.values(catalog),
@@ -112,7 +121,9 @@ export function createNativeChatComposerWorkspaceSelector(
     ]
     if (!inputs || next.some((input, index) => input !== inputs?.[index])) {
       inputs = next
-      const host = explicitHost ?? getKnownExecutionHostIdForWorktree(state, worktreeId)
+      const host = pendingOwner
+        ? pendingOwner.hostId
+        : (explicitHost ?? getKnownExecutionHostIdForWorktree(state, worktreeId))
       const path = worktreeId ? resolveNativeChatTabDirectory(state, tabId, worktreeId, host) : null
       const row =
         path && worktreeId

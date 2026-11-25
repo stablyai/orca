@@ -25,10 +25,14 @@ type Keys = Pick<MobileNativeChatRowKeys, 'current' | 'placement'>
 
 export type MobileNativeChatReadingUnit = {
   key: string
+  /** From the scroller's top, so a place saved on an earlier visit holds if the scroller moved. */
   top: number
   member?: string
   placed: string
 }
+
+/** How many screens of rows the page list draws above the view. */
+export const DRAW_AHEAD_SCREENS = 3
 
 const ROW = 'chat-row:'
 const MEMBER = 'chat-member:'
@@ -80,7 +84,7 @@ function unitsOf(
       break
     }
     if (id === 'run' ? box.top >= view.top : onScreen(box, view)) {
-      shown.push({ ...self, top: box.top, member: id })
+      shown.push({ ...self, top: box.top - view.top, member: id })
     }
   }
   const lines = shown.filter((unit) => unit.member !== 'run')
@@ -137,6 +141,15 @@ function nearestRow(
   return undefined
 }
 
+/** How far the drawn row `key` starts below the view's top; undefined when it is not drawn. */
+export function mobileNativeChatRowOffset(
+  scroller: MobileNativeChatScrollNode,
+  key: string
+): number | undefined {
+  const row = drawnRows(scroller).find((node) => rowIdOf(node) === key)
+  return row && row.getBoundingClientRect().top - scroller.getBoundingClientRect().top
+}
+
 // The nearest row wholly more than `distance` above the view; it ends at or above that line.
 export function mobileNativeChatRowAbove(
   scroller: MobileNativeChatScrollNode,
@@ -160,7 +173,7 @@ export function mobileNativeChatReadingPlace(
   }
   const unit = ({ id, node }: { id: string; node: Tagged }): MobileNativeChatReadingUnit => ({
     key: id,
-    top: node.getBoundingClientRect().top,
+    top: node.getBoundingClientRect().top - view.top,
     placed: placement(id)
   })
   const units = rows.slice(low, end).flatMap((node) => {
@@ -191,12 +204,13 @@ function drawn(
   return row && tagged(row, MEMBER).find((m) => m.id === member || m.id === paired)?.node
 }
 
+/** How far the place's first still-drawn unit moved; undefined when none of it is drawn. */
 export function mobileNativeChatReadingDrift(
   place: readonly MobileNativeChatReadingUnit[],
   scroller: MobileNativeChatScrollNode,
   keys: Keys,
   roots?: MobileNativeChatScrollRoots
-): number {
+): number | undefined {
   const rows = new Map(
     drawnRows(scroller).flatMap((node) => {
       const id = rowIdOf(node)
@@ -206,8 +220,8 @@ export function mobileNativeChatReadingDrift(
   for (const unit of place) {
     const node = drawn(unit, rows, keys, roots)
     if (node) {
-      return node.getBoundingClientRect().top - unit.top
+      return node.getBoundingClientRect().top - scroller.getBoundingClientRect().top - unit.top
     }
   }
-  return 0
+  return undefined
 }

@@ -26,17 +26,15 @@ const BAR_CLASS: Record<UsageHealthTone, string> = {
   urgent: 'bg-red-500'
 }
 
-// Why the light-mode shades: small text on light popovers needs 4.5:1.
-const TEXT_CLASS: Record<UsageHealthTone, string> = {
-  healthy: 'text-emerald-700 dark:text-emerald-400',
-  warning: 'text-yellow-700 dark:text-yellow-400',
-  urgent: 'text-red-600 dark:text-red-400'
-}
+/** Grey fill for bars outside a provider's details card, where usage stays uncolored. */
+export const PLAIN_USAGE_BAR_CLASS = 'bg-muted-foreground/40'
 
-export function usageBarClass(usedPercent: number): string {
-  return BAR_CLASS[getUsageHealthTone(usedPercent)]
-}
+/**
+ * 'health' colors the fill green/yellow/red by consumption (provider details card only);
+ * 'plain' keeps it grey everywhere else.
+ */
+export type UsageBarTone = 'health' | 'plain'
 
-export function usageTextClass(usedPercent: number): string {
-  return TEXT_CLASS[getUsageHealthTone(usedPercent)]
+export function usageBarClass(usedPercent: number, tone: UsageBarTone = 'health'): string {
+  return tone === 'plain' ? PLAIN_USAGE_BAR_CLASS : BAR_CLASS[getUsageHealthTone(usedPercent)]
 }

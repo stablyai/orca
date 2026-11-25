@@ -1,6 +1,6 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { editorFormatterSchema } from '../../../shared/editor-formatter'
+import { editorFormatterSchema } from '../../../shared/editor/formatting/editor-formatter'
 import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
@@ -88,6 +88,7 @@ export function sanitizeRepoUpdatesForPersistence<
     >
   > & {
     ghAccount?: GhAccountBinding | null
+    browserProfileId?: string | null
   }
 >(updates: T): T {
   const sanitized = { ...updates }
@@ -165,6 +166,13 @@ export function sanitizeRepoUpdatesForPersistence<
     } else {
       sanitized.agentWorkspaceTrust = agentWorkspaceTrust
     }
+  }
+  if (
+    'browserProfileId' in sanitized &&
+    sanitized.browserProfileId != null &&
+    (typeof sanitized.browserProfileId !== 'string' || !sanitized.browserProfileId.trim())
+  ) {
+    delete sanitized.browserProfileId
   }
   // Null explicitly clears ghAccount; only malformed shapes are discarded.
   if ('ghAccount' in sanitized && sanitized.ghAccount != null) {

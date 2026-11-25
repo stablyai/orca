@@ -74,17 +74,17 @@ export function installTerminalLinkPtyMouseSuppression(
     capturesPtyInput = true
   }
   const handleMouseDown = (event: MouseEvent): void => {
-    if (isTerminalLinkActionActivation(event) && shouldDeferPlainMouseEvent(event)) {
+    if (
+      (isTerminalLinkActionActivation(event) || isTerminalMiddleClickActivation(event)) &&
+      shouldDeferPlainMouseEvent(event)
+    ) {
       finishDeferredInput()
       deferredPtyInput = []
       addDeferredListeners()
       captureCurrentMouseEvent()
       return
     }
-    if (
-      (!isTerminalLinkDirectActivation(event) && !isTerminalMiddleClickActivation(event)) ||
-      !shouldSuppressMouseEvent(event)
-    ) {
+    if (!isTerminalLinkDirectActivation(event) || !shouldSuppressMouseEvent(event)) {
       return
     }
     restore()

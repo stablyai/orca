@@ -1,8 +1,9 @@
+import { readRuntimeStatuses } from '@/store/slices/runtime-status/views/runtime-status-owner'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
 } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
@@ -104,9 +105,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         session.transport.getRuntimeEnvironmentId?.() ?? null,
         connectionId
       ),
-      runtimeHostPlatform: resolveRuntimeHostReportedPlatform(state, session.executionHostId),
+      runtimeHostPlatform: resolveRuntimeHostReportedPlatform(
+        readRuntimeStatuses(),
+        session.executionHostId
+      ),
       runtimeHostTerminalWindowsShell: resolveRuntimeHostTerminalWindowsShell(
-        state,
+        readRuntimeStatuses(),
         session.executionHostId
       )
     })

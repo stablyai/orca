@@ -6,7 +6,7 @@ import {
   matchesGitHubWorkItemTarget
 } from '../../../../../shared/github/work-items/work-item-target'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
-import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { useGitHubTaskItems } from '@/lib/work-items/github/useGitHubTaskItems'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
 import { addressedGitHubIssueItem } from '@/lib/work-items/github/github-task-target'
 import {

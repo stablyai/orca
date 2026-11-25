@@ -5,21 +5,114 @@ import {
   ManagedRuntimeAgentParams,
   ManagedRuntimeCancelParams
 } from '../../../../../shared/rpc-contract/host-management/managed-runtime-install-params'
-import { acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
-import { resolveAcpLaunchCommand } from '../../../../acp/launch/acp-launch-command'
+import { ACP_LAUNCH_SPECS, acpLaunchSpecFor } from '../../../../acp/launch/acp-launch-registry'
+import type { ManagedCopySettings } from '../../../../acp/launch/acp-launch-contract'
+import {
+  acpHostBackendInput,
+  findHostProgram,
+  resolveAcpLaunchCommand
+} from '../../../../acp/launch/acp-launch-command'
+import type { ManagedRuntimeProgram } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
 import { ManagedRuntimeInstallation } from '../../../../node-runtime/managed-runtime-installation'
+import { onManagedServerUse } from '../../../../node-runtime/managed-runtime-release'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
-import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
-import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
+import {
+  resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostAlternativeReady
+} from '../../../agent-session/launch/structured-agent-launch-support'
+import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
-import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
+import { homedir } from 'node:os'
+import {
+  isManagedAgentCli,
+  MANAGED_AGENT_CLI_IDS,
+  managedAgentCli,
+  onManagedAgentUse,
+  rememberManagedAgentRelease,
+  type ManagedAgentCliId
+} from '../../../../managed-agent-cli/managed-agent-cli-registry'
+import { createRevisionClock, type RevisionClock } from '../../../events/revisioned-state'
+import { streamManagedRuntimeInstall } from './managed-runtime-install-stream'
+import {
+  managedCopyMayRun,
+  noteManagedReleasesRead,
+  provideManagedAgentDetection,
+  standInSpec
+} from './managed-copy-detection'
+import { hasExplicitTuiLaunchCommand } from '../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 
 const installations = new Map<string, ManagedRuntimeInstallation>()
+const revisionClocks = new Map<string, RevisionClock>()
 
-function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRuntimeInstallation {
+/** What Orca keeps for `agent`: its ACP launch's own server, its copy of the CLI, or both. */
+function installationPrograms(agent: string): ManagedRuntimeProgram[] {
+  const kinds: ManagedRuntimeProgram[] = []
+  if (acpLaunchSpecFor(agent)?.managedRuntime || !isManagedAgentCli(agent)) {
+    kinds.push('server')
+  }
+  if (isManagedAgentCli(agent)) {
+    kinds.push('cli')
+  }
+  return kinds
+}
+
+function installationOf(
+  agent: string,
+  program: ManagedRuntimeProgram,
+  runtime: OrcaRuntimeService
+): ManagedRuntimeInstallation {
+  const key = `${program}:${agent}`
+  const existing = installations.get(key)
+  if (existing) {
+    return existing
+  }
+  const revisions = revisionClockFor(agent)
+  const installation =
+    program === 'cli' && isManagedAgentCli(agent)
+      ? agentCliInstallation(agent, runtime, revisions)
+      : acpInstallation(agent, runtime, revisions)
+  installations.set(key, installation)
+  return installation
+}
+
+function revisionClockFor(agent: string): RevisionClock {
+  const clock = revisionClocks.get(agent) ?? createRevisionClock()
+  revisionClocks.set(agent, clock)
+  return clock
+}
+
+/** The installation `program` names, or the one Install, its status and removal act on now. */
+async function selectedInstallation(
+  agent: string,
+  runtime: OrcaRuntimeService,
+  program?: ManagedRuntimeProgram
+): Promise<ManagedRuntimeInstallation> {
+  const programs = installationPrograms(agent)
+  if (program && programs.includes(program)) {
+    return installationOf(agent, program, runtime)
+  }
+  const spec = acpLaunchSpecFor(agent)
+  const choose = spec?.hostBackend?.installsManagedRuntime
+  if (programs.length < 2 || !spec || !choose) {
+    return installationOf(agent, programs.includes('cli') ? 'cli' : 'server', runtime)
+  }
+  const settings = runtime.requireStore().getSettings()
+  const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+  const input = await acpHostBackendInput(spec, env, getProfileUserDataPath(), settings, {
+    startsProgram: true
+  })
+  const server = input !== null && (await choose(input))
+  return installationOf(agent, server ? 'server' : 'cli', runtime)
+}
+
+function acpInstallation(
+  agent: string,
+  runtime: OrcaRuntimeService,
+  revisions: RevisionClock
+): ManagedRuntimeInstallation {
   const spec = acpLaunchSpecFor(agent)
   if (!spec?.managedRuntime) {
     throw new Error(`Orca installs no runtime for ${agent}.`)
@@ -27,7 +120,7 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
   const dataDirectory = getProfileUserDataPath()
   const releases = spec.managedRuntime.root(dataDirectory)
   // Use the launch's own lookup to find external runtimes.
-  const findExternal = async (): Promise<boolean> => {
+  const findExternalCommand = async (): Promise<boolean> => {
     const settings = runtime.requireStore().getSettings()
     const env = {
       ...(await resolveHostStructuredAgentLaunchEnvironment(agent, settings)),
@@ -47,6 +140,9 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
       throw error
     }
   }
+  // New chats start on a ready host program (e.g. the user's agy) instead, so it needs no install.
+  const findExternal = async (): Promise<boolean> =>
+    (await findExternalCommand()) || (await structuredAgentHostAlternativeReady(agent, runtime))
   const { launchGate } = spec
   const managedRuntime = spec.managedRuntime
   // Chats, starts, copies, sign-ins and children not proven gone all hold the gate's fence.
@@ -54,16 +150,120 @@ function installationFor(agent: string, runtime: OrcaRuntimeService): ManagedRun
     launchGate
       ? launchGate.run(() => stopStructuredAgentChats(agent, managedRuntime.label), work)
       : Promise.reject(new Error(`${managedRuntime.label} cannot be removed on this host.`))
-  const installation =
-    installations.get(agent) ??
-    // The chat host's own state root, where its launches look.
-    new ManagedRuntimeInstallation(agent, managedRuntime, {
-      dataDirectory,
-      findExternal,
-      fence
+  // The chat host's own state root, where its launches look. Its kill switch is this host's own
+  // setting, read when used: the store may not exist yet when this installation is created.
+  const updatesAllowed = (settings: ManagedCopySettings) =>
+    spec.managedRuntimeUpdatesAllowed?.(settings) !== false
+  return new ManagedRuntimeInstallation(agent, managedRuntime, {
+    dataDirectory,
+    program: 'server',
+    findExternal,
+    updatesEnabled: () => updatesAllowed(runtime.requireStore().getSettings()),
+    // Turned off while an automatic update downloads, it stops instead of finishing. Only changes the
+    // store publishes reach this; a hand edit of the settings file applies at the next check.
+    watchUpdatesEnabled: (onDisabled) =>
+      runtime.requireStore().onSettingsChanged?.((_updates, settings) => {
+        if (!updatesAllowed(settings)) {
+          onDisabled()
+        }
+      }) ?? (() => undefined),
+    fence,
+    revisions
+  })
+}
+
+/** These chats run the user's own install when the host has one, so Orca's copy is the fallback. */
+function agentCliInstallation(
+  agent: ManagedAgentCliId,
+  runtime: OrcaRuntimeService,
+  revisions: RevisionClock
+): ManagedRuntimeInstallation {
+  const managedRuntime = managedAgentCli(agent).runtime
+  const dataDirectory = getProfileUserDataPath()
+  const spec = standInSpec(agent)
+  const findExternal = async (): Promise<boolean> => {
+    const settings = runtime.requireStore().getSettings()
+    if (!spec?.ignoreAgentCommandSetting && hasExplicitTuiLaunchCommand(settings, agent)) {
+      return true
+    }
+    const env = await resolveHostStructuredAgentLaunchEnvironment(agent, settings)
+    const homePath = env.HOME ?? env.USERPROFILE ?? homedir()
+    const dirs = spec?.installDirectories({ env, homePath }) ?? []
+    const found = await findHostProgram(spec?.command ?? agent, env, dirs)
+    return found !== null && !isPathInsideOrEqual(managedRuntime.root(dataDirectory), found)
+  }
+  return new ManagedRuntimeInstallation(agent, managedRuntime, {
+    dataDirectory,
+    program: 'cli',
+    findExternal,
+    hostHasBuild: () => managedAgentCli(agent).available(),
+    updatesEnabled: () => managedCopyMayRun(agent, runtime),
+    onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
+    // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.
+    fence: (work) => stopStructuredAgentChats(agent, managedRuntime.label).then(work),
+    revisions
+  })
+}
+
+/** Each installation reclaims stale releases when created, so create them every launch, not only when a client asks. */
+export function reclaimManagedRuntimeReleasesAtLaunch(runtime: OrcaRuntimeService): void {
+  provideManagedAgentDetection(runtime)
+  const agents = new Set([
+    ...ACP_LAUNCH_SPECS.filter((spec) => spec.managedRuntime).map((spec) => spec.agent),
+    ...MANAGED_AGENT_CLI_IDS
+  ])
+  for (const agent of agents) {
+    for (const program of installationPrograms(agent)) {
+      try {
+        installationOf(agent, program, runtime)
+      } catch (error) {
+        console.warn(`[managed-runtime] ${agent} releases not reclaimed at launch:`, error)
+      }
+    }
+  }
+  noteManagedReleasesRead()
+}
+
+const AUTO_UPDATE_FIRST_CHECK_MS = 2 * 60_000
+const AUTO_UPDATE_USE_THROTTLE_MS = 10 * 60_000
+let autoUpdatesStarted = false
+const lastUseCheck = new Map<string, number>()
+
+/** Use is the signal a copy matters; the installation's own backoff decides whether it downloads. */
+function checkForUpdateOnUse(key: string): void {
+  const now = Date.now()
+  if (now - (lastUseCheck.get(key) ?? 0) >= AUTO_UPDATE_USE_THROTTLE_MS) {
+    lastUseCheck.set(key, now)
+    checkForUpdate(key)
+  }
+}
+
+function checkForUpdate(key: string): void {
+  installations
+    .get(key)
+    ?.updateIfBehind()
+    .catch((error: unknown) => {
+      console.warn(`[managed-runtime] ${key} update check failed:`, error)
     })
-  installations.set(agent, installation)
-  return installation
+}
+
+/** Keep Orca's own copies current without a client ever prompting: once after launch, then as they're used.
+ *  Installs only add a release folder, so chats on the older one keep running it. */
+export function startManagedRuntimeAutoUpdates(): void {
+  if (autoUpdatesStarted) {
+    return
+  }
+  autoUpdatesStarted = true
+  // Wait out startup so the first check never competes with launching the app.
+  setTimeout(() => {
+    for (const key of installations.keys()) {
+      checkForUpdate(key)
+    }
+    // A server's download is large, so a chat started during startup never begins it early.
+    onManagedServerUse((agent) => checkForUpdateOnUse(`server:${agent}`))
+  }, AUTO_UPDATE_FIRST_CHECK_MS).unref()
+  // The release lookup itself is cached for an hour.
+  onManagedAgentUse((agent) => checkForUpdateOnUse(`cli:${agent}`))
 }
 
 export const MANAGED_RUNTIME_INSTALL_METHODS = [
@@ -71,53 +271,22 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     name: 'managedRuntime.subscribe',
     permission: 'workspace',
     params: ManagedRuntimeAgentParams,
-    handler: async ({ agent }, ctx, emit) => {
-      const installation = installationFor(agent, ctx.runtime)
-      // A failed first read fails the subscribe; a later one keeps the client's last snapshot.
-      let shown = await installation.status()
-      const frame = ctx.requestId ? `:${ctx.requestId}` : ''
-      const subscriptionId = `managedRuntime:${ctx.connectionId ?? 'local'}:${agent}${frame}`
-      let dispose = (): void => {}
-      const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
-      if (stream.isClosed()) {
-        return
-      }
-      let reading = false
-      let again = false
-      // One read at a time; revisions during it coalesce into one more read.
-      const follow = async (): Promise<void> => {
-        again = true
-        if (reading) {
-          return
-        }
-        reading = true
-        try {
-          while (again && !stream.isClosed()) {
-            again = false
-            const next = await installation.status(false)
-            if (next.revision !== shown.revision && !stream.isClosed()) {
-              shown = next
-              emit(next)
-            }
-          }
-        } catch (error) {
-          console.warn(`[managed-runtime] ${agent} status not read for a subscriber:`, error)
-        } finally {
-          reading = false
-        }
-      }
-      dispose = installation.subscribe(() => void follow())
-      emit(shown)
-      // Catches a revision between the first read and the subscribe.
-      void follow()
-    }
+    handler: async ({ agent }, ctx, emit) =>
+      streamManagedRuntimeInstall(agent, ctx, emit, {
+        selected: () => selectedInstallation(agent, ctx.runtime),
+        all: installationPrograms(agent).map((program) =>
+          installationOf(agent, program, ctx.runtime)
+        ),
+        revisions: revisionClockFor(agent),
+        onChoiceChanged: acpLaunchSpecFor(agent)?.hostBackend?.onSelectionChanged
+      })
   }),
   defineMethod({
     name: 'managedRuntime.install',
     permission: 'host-admin',
     params: ManagedRuntimeAgentParams,
-    handler: async ({ agent }, { runtime }) => {
-      const installation = installationFor(agent, runtime)
+    handler: async ({ agent, program }, { runtime }) => {
+      const installation = await selectedInstallation(agent, runtime, program)
       installation.install()
       return installation.status()
     }
@@ -128,15 +297,22 @@ export const MANAGED_RUNTIME_INSTALL_METHODS = [
     params: ManagedRuntimeCancelParams,
     handler: async ({ agent, operationId }, { runtime }) => {
       // The outcome once the run has unwound: `cancelled`, or `succeeded` if it had committed.
-      return await installationFor(agent, runtime).cancel(operationId)
+      const running = installationPrograms(agent)
+        .map((program) => installationOf(agent, program, runtime))
+        .find((installation) => installation.runs(operationId))
+      return await (running ?? (await selectedInstallation(agent, runtime))).cancel(operationId)
     }
   }),
   defineMethod({
     name: 'managedRuntime.remove',
     permission: 'host-admin',
     params: ManagedRuntimeAgentParams,
-    handler: async ({ agent }, { runtime }) => {
-      const installation = installationFor(agent, runtime)
+    handler: async ({ agent, program }, { runtime }) => {
+      // An older client names a program this host no longer has; removing another would surprise.
+      if (program && !installationPrograms(agent).includes(program)) {
+        throw new Error('That runtime is no longer used on this host.')
+      }
+      const installation = await selectedInstallation(agent, runtime, program)
       installation.remove()
       return installation.status()
     }

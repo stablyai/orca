@@ -3,8 +3,9 @@
  * terminals, reached over its paired runtime.
  */
 import { z } from 'zod'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { WslMoveCutover } from '../../../shared/wsl-move/wsl-move-cutover'
+import { withoutReleasedWslMovedProjectKeys } from '../../../shared/wsl-move/wsl-moved-project'
 import type { Store } from '../../persistence/loading-store/store'
 import { wslMoveDesktopRewriteContext } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite'
 import {
@@ -48,6 +49,8 @@ export type WslMoveUndoPorts = {
   stopHostAutomations?: (move: WslMoveCutover) => Promise<WslMoveHostAutomationStop>
   /** After the release, with window writes held: focus on the host copy returns here. */
   refocusHere?: (move: WslMoveCutover) => void
+  /** After the release: its projects' hidden sidebar entries are forgotten, so a later move lists them. */
+  unhideMovedEntries?: (move: WslMoveCutover) => void
 }
 
 // What undo reads of the host's terminal list: whether each terminal is still running.
@@ -91,7 +94,12 @@ async function connectUndoHost(
 
 type UndoStore = Pick<
   Store,
-  'getWorkspaceSession' | 'patchWorkspaceSession' | 'listAutomations' | 'updateAutomation'
+  | 'getWorkspaceSession'
+  | 'patchWorkspaceSession'
+  | 'listAutomations'
+  | 'updateAutomation'
+  | 'getUI'
+  | 'updateUI'
 >
 
 /** The host's terminals in the move's scope, reached over its runtime, handed to `read`. */
@@ -254,6 +262,18 @@ export function createWslMoveUndoPorts(
         wslMoveRewriteScope(wslMoveDesktopRewriteContext(userDataPath, move)),
         wslMoveReleasedSessionFocusPatch
       )
+    },
+    unhideMovedEntries: (move) => {
+      const hidden = store.getUI().hiddenWslMovedProjectKeys ?? []
+      const { distro, scopeRepoIds, scopeFolderWorkspaceIds } = move.manifest.source
+      const kept = withoutReleasedWslMovedProjectKeys(hidden, {
+        distro,
+        repoIds: scopeRepoIds,
+        folderWorkspaceIds: scopeFolderWorkspaceIds
+      })
+      if (kept.length !== hidden.length) {
+        store.updateUI({ hiddenWslMovedProjectKeys: kept })
+      }
     }
   }
 }

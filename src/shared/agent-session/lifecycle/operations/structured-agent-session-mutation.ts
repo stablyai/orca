@@ -3,7 +3,7 @@ import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../structured-agent-session-create'
+} from './structured-agent-session-create'
 import type { StructuredAgentId } from '../provider-handles/agent-session-provider-handle'
 
 function canonicalize(value: unknown): string {

@@ -1,11 +1,11 @@
-import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import type { PaneForegroundAgentEntry } from '../../../../store/slices/agent-status/pane-foreground-agent'
+import type { PaneForegroundAgentEntry } from '../../../../store/slices/agent-status/pane-authority/pane-foreground-agent'
 import type { TerminalPasteTextOptions } from './terminal-paste-model'
 
 /** Replay/ConPTY can lose DECSET 2004; unbracketed CR submits an agent’s parked draft. Shell silence cannot distinguish deliberate opt-out from bare cat, so require live agent identity. Verified Windows input-record agents need modified Enter instead. This chooses paste encoding, unlike the stricter keystroke-routing resolvers; downstream sanitizes ESC bytes. */

@@ -3,8 +3,8 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+} from '../../../../../shared/execution-host/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey

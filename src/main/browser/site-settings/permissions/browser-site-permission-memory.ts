@@ -1,6 +1,7 @@
+import type { Session } from 'electron'
 import type {
-  BrowserSitePermission,
-  BrowserSitePermissionDecision
+  BrowserSitePermissionDecision,
+  BrowserSitePermissionKey
 } from '../../../../shared/browser/site-settings/browser-site-permission'
 import {
   getBrowserSitePermissionDecision,
@@ -8,10 +9,13 @@ import {
 } from './browser-site-permission-store'
 
 export type BrowserSitePermissionMemory = {
-  get(origin: string, permission: BrowserSitePermission): BrowserSitePermissionDecision | undefined
+  get(
+    origin: string,
+    permission: BrowserSitePermissionKey
+  ): BrowserSitePermissionDecision | undefined
   set(
     origin: string,
-    permissions: readonly BrowserSitePermission[],
+    permissions: readonly BrowserSitePermissionKey[],
     decision: BrowserSitePermissionDecision
   ): void
 }
@@ -43,4 +47,23 @@ export function sessionBrowserSitePermissions(partition: string): BrowserSitePer
   }
   sessionMemories.set(partition, memory)
   return memory
+}
+
+const memoryBySession = new WeakMap<Session, BrowserSitePermissionMemory>()
+
+/** Lets prompts outside the permission handler, like opening apps, use the session's answers. */
+export function registerBrowserSessionSitePermissions(
+  sess: Session,
+  memory: BrowserSitePermissionMemory | null
+): void {
+  if (memory) {
+    memoryBySession.set(sess, memory)
+  } else {
+    memoryBySession.delete(sess)
+  }
+}
+
+/** Null for sessions that never ask sites, such as previews that deny every permission. */
+export function browserSessionSitePermissions(sess: Session): BrowserSitePermissionMemory | null {
+  return memoryBySession.get(sess) ?? null
 }

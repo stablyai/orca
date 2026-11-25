@@ -94,7 +94,7 @@ export function hostUnionArms<U extends string = never>(
   return Object.keys(coverage) as U[]
 }
 
-/** Drop invalid elements; absence remains fatal. Bare transforms set neither optin nor optout, both required for Zod to suppress missing-key issues. Wrappers supply fallback semantics; zod-salvage-absence.test.ts pins this boundary. */
+/** Drop invalid elements; absence remains fatal. Bare transforms set neither optin nor optout, both required for Zod to suppress missing-key issues. Wrappers supply fallback semantics. */
 export function salvagingArray<T extends z.ZodType>(item: T): z.ZodType<z.output<T>[], unknown> {
   return z.unknown().transform((raw, ctx) => {
     if (!Array.isArray(raw)) {

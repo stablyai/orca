@@ -3,12 +3,12 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import type { AgentPaneConversationIdentity } from '@/store/slices/agent-status/agent-pane-conversation'
+import type { AgentPaneConversationIdentity } from '@/store/slices/agent-status/conversation/agent-pane-conversation'
 import '../../../components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { collectLayoutLeafIdsInOrder } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'

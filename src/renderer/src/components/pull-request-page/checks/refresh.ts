@@ -9,7 +9,7 @@ import {
   resetGitHubChecksTabForSource,
   updateGitHubChecksTabLocalChecks,
   type GitHubChecksTabState
-} from '@/components/github-checks-tab-state'
+} from '@/components/github/github-checks-tab-state'
 import { translate } from '@/i18n/i18n'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
@@ -111,11 +111,7 @@ export async function refreshPullRequestChecks(args: {
     }
     args.setChecksState((current) =>
       current.contextOwner === refreshContextOwner
-        ? updateGitHubChecksTabLocalChecks(
-            resetGitHubChecksTabForSource(current),
-            nextChecks,
-            observation.owner
-          )
+        ? updateGitHubChecksTabLocalChecks(resetGitHubChecksTabForSource(current), nextChecks)
         : current
     )
     args.onChecksUpdated(nextChecks)

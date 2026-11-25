@@ -4,7 +4,7 @@ import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getTaskSourceCacheScope } from '../../../../../../shared/work-items/task-source-context'
 import { getGitHubIssueUrlRepository } from '../../../../../../shared/worktree/github-issue-repository'
 import { issueCacheSuffix } from '@/store/github/cache/cache-identity'
@@ -65,6 +65,7 @@ export function getWorkspaceReferenceLookup(request: WorkspaceReferenceRequest, 
           repoId: repo.id,
           repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
           admissionTier: request.admissionTier ?? 'interactive',
+          background: request.background,
           linkedGitHubPR: item.provider === 'github' ? item.number : null,
           linkedGitLabMR: item.provider === 'gitlab' ? item.number : null,
           linkedBitbucketPR: item.provider === 'bitbucket' ? item.number : null,

@@ -7,7 +7,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
-import { IntegrationStatusPill } from '@/components/integration-status-pill'
+import { IntegrationStatusPill } from '@/components/integrations/presentation/integration-status-pill'
 import { SkillFreshnessStatusPill } from '@/components/skills/freshness/SkillFreshnessStatusPill'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {

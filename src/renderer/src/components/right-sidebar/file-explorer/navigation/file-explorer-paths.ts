@@ -3,7 +3,7 @@ import {
   isPathInsideOrEqual,
   relativePathInsideRoot,
   splitPathSegments
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import { shouldIncludeFileExplorerEntry } from '../tree/file-explorer-entries'
 
 export function isPathEqualOrDescendant(candidatePath: string, targetPath: string): boolean {

@@ -5,9 +5,10 @@ import {
   type AgentSessionContextReport,
   type AgentSessionContextUsageCategory,
   type AgentSessionTokenUsage
-} from '../../../shared/agent-session/agent-session-context-usage'
+} from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import type { ClaudeJournalTranslator } from '../structured/journal/claude-journal-translator-contract'
+import { baseModelId } from '../../../shared/agent-session/options/model-catalog/model-id-label'
 
 export const CLAUDE_CONTEXT_USAGE_TIMEOUT_MS = 5_000
 
@@ -47,14 +48,6 @@ function modelId(value: unknown): string | null {
   return model.length > 0 && model.length <= MAX_CONTEXT_MODEL_ID_CHARS ? model : null
 }
 
-/** Window suffixes and casing do not change model identity. */
-function contextBaseModelId(model: string): string {
-  return model
-    .replace(/\[[^\]]*\]$/u, '')
-    .trim()
-    .toLowerCase()
-}
-
 export function claudeContextWindowHint(model: string): number | null {
   // Bare names vary by provider and plan mode; only an explicit [1m] gives a reliable hint.
   if (!/\[1m\]$/iu.test(model.trim())) {
@@ -73,7 +66,7 @@ export function claudeMatchingInitModel({
     return initModel
   }
   // Under opusplan, init can name the resting model while Opus answers.
-  if (contextBaseModelId(initModel) !== contextBaseModelId(responseModel)) {
+  if (baseModelId(initModel) !== baseModelId(responseModel)) {
     return null
   }
   return initModel
@@ -93,12 +86,12 @@ export function claudeContextWindowFromResult(
       return []
     }
     const canonicalModel = modelId(usage.canonicalModel)
-    const bases = [key, ...(canonicalModel ? [canonicalModel] : [])].map(contextBaseModelId)
+    const bases = [key, ...(canonicalModel ? [canonicalModel] : [])].map(baseModelId)
     return [{ key, window, bases }]
   })
   const initModel = claudeMatchingInitModel(main)
   const names = [main.responseModel ?? initModel].flatMap((model) =>
-    model ? [contextBaseModelId(model)] : []
+    model ? [baseModelId(model)] : []
   )
   // Fall back to the largest window when no named entry matches.
   let pool = entries

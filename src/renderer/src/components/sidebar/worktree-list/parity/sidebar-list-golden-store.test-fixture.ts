@@ -1,4 +1,4 @@
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { Project, ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'

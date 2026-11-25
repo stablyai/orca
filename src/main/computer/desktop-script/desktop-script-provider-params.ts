@@ -1,4 +1,5 @@
 import { RuntimeClientError } from '../runtime-client-error'
+import type { BridgeRequest } from './desktop-script-provider-types'
 
 export function stringParam(params: Record<string, unknown>, key: string): string {
   const value = params[key]
@@ -22,4 +23,18 @@ export function optionalNumberParam(
 ): number | undefined {
   const value = params[key]
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+export function screenshotRequestParams(
+  params: Record<string, unknown>
+): Pick<
+  BridgeRequest,
+  'noScreenshot' | 'screenshotFormat' | 'screenshotScale' | 'screenshotMaxEdge'
+> {
+  return {
+    noScreenshot: params.noScreenshot === true,
+    screenshotFormat: params.screenshotFormat === 'jpeg' ? 'jpeg' : undefined,
+    screenshotScale: optionalNumberParam(params, 'screenshotScale'),
+    screenshotMaxEdge: optionalNumberParam(params, 'screenshotMaxEdge')
+  }
 }

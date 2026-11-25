@@ -1,12 +1,12 @@
-import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../../agent-session-fork'
+import { AGENT_SESSION_FORKED_FROM_PRESENTATION } from '../records/agent-session-fork'
 import { isAgentSessionRewindTarget, savedRewindKeys } from './agent-session-rewind'
 import { readAgentJournalTurn } from '../records/agent-session-turn-record'
-import type { StructuredAgentSessionState } from '../../structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../view/live-read/structured-agent-session-reducer'
 import type { AgentJournalCursor } from '../../journal/agent-session-journal-identity'
 import {
   agentSessionContextFloorSequence,
   isAgentSessionContextClear
-} from '../../agent-session-context-clear'
+} from '../../conversation-context/agent-session-context-clear'
 
 /** User messages past `floor` the host can rewind to. */
 export function agentSessionRewindTargetIds(

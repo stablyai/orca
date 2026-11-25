@@ -3,7 +3,7 @@ import type { AgentStatusState } from '../../../../../../shared/agent-status/con
 import {
   nativeChatHookHasWorkingSubagents,
   resolveNativeChatHookState
-} from '../../../../../../shared/native-chat/native-chat-live-status'
+} from '../../../../../../shared/native-chat/transcript/streaming/native-chat-live-status'
 
 export function useNativeChatHookStatus(
   paneKey: string

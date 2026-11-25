@@ -7,7 +7,7 @@ import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/w
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { findRepoForHost } from '../../../repos/repo-host-identity'

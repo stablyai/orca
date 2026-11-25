@@ -4,6 +4,7 @@ import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from '../native-capabilities/bridge-hapt
 import { BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS } from '../native-capabilities/bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from '../page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
+import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
 import {
   BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
@@ -115,6 +116,14 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     type: z.literal('notify'),
     name: z.literal(BRIDGE_PAGE_LOCATION),
     href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
+  }),
+  // The answer to an `appResumed` frame; the shell reloads onto a waiting build only on true.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_SWAP_SAFE_NOTIFY),
+    safe: z.boolean(),
+    round: z.number().int().nonnegative()
   }),
   // Behind the `terminalKeyRail` grant, which is what keeps it off a shell that has no rail. Whole
   // state rather than a toggle, for the reason the Back claim is.

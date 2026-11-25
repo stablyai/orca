@@ -48,6 +48,11 @@ export function isWorkspaceKey(value: string): value is WorkspaceKey {
   return parseWorkspaceKey(value) !== null
 }
 
+/** A sidebar row's workspace key: a folder row's id already is one. */
+export function workspaceKeyOfRow(id: string): WorkspaceKey {
+  return isWorkspaceKey(id) ? id : worktreeWorkspaceKey(id)
+}
+
 // Folder workspaces use the scoped active key; older worktree paths still use activeWorktreeId.
 export function getActiveSidebarWorkspaceId(
   activeWorkspaceKey: string | null,

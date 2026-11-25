@@ -7,7 +7,10 @@ import {
   MAX_DICTATION_TERM_LENGTH,
   type DictationTerm
 } from '../../../../../shared/speech/dictation/dictation-dictionary'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store'
 import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
 import { useTranslate } from '@/i18n/use-translate'

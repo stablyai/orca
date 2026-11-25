@@ -32,6 +32,11 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
     borderColor: colors.composerBorder,
     overflow: 'hidden'
   },
+  // A box docked inside the composer's own inset (goal, MCP servers): as wide as the queue, tucked under it.
+  composerTab: {
+    marginHorizontal: spacing.xs,
+    marginBottom: -COMPOSER_TUCK
+  },
   // Full editors and menus scroll above the ordinary composer instead of tucking under it.
   inlineList: { flexShrink: 1, minHeight: 0, marginBottom: 0 },
   inlineBox: { flexShrink: 1, minHeight: 0, paddingBottom: 0 },
@@ -234,8 +239,5 @@ export const queuedMessageStyles = themedStyleSheet(() => ({
   },
   litActionLabel: {
     color: colors.bgBase
-  },
-  disabled: {
-    opacity: 0.5
   }
 }))

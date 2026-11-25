@@ -1,8 +1,8 @@
 import { projectGroupIdFromRepoId } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
-import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host/execution-host'
+import { scopeHooksToRepoKind } from '../../../../shared/folder-workspaces/folder-workspace-hooks'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
 import type { RunApprovedWorktreeSetupResult } from '../../../../shared/worktree/create-types'
 import {
@@ -30,7 +30,9 @@ type ApprovedSetupRuntime = {
     options?: { matchFolders?: boolean }
   ) => Promise<Pick<Worktree, 'id' | 'repoId' | 'path' | 'displayName'>>
   requireStore: () => Pick<RuntimeStore, 'getRepo' | 'getSettings' | 'getProjectGroups'>
-  provisionManagedWorktreeTerminals: (args: WorktreeTerminalProvisioningArgs) => Promise<unknown>
+  provisionManagedWorktreeTerminals: (
+    args: WorktreeTerminalProvisioningArgs
+  ) => Promise<{ failed?: true }>
 }
 
 /**
@@ -79,12 +81,12 @@ export async function runApprovedCreatedWorktreeSetup(
   if (!setup && !defaultTabs) {
     return { status: 'not_configured' }
   }
-  await runtime.provisionManagedWorktreeTerminals({
+  const provisioned = await runtime.provisionManagedWorktreeTerminals({
     worktreeSelector: `id:${worktree.id}`,
     worktreeId: worktree.id,
     worktreePath: worktree.path,
     ...(setup ? { setup: { ...setup, ...(group ? { cwd: hooksRoot } : {}) } } : {}),
-    ...(defaultTabs ? { defaultTabs } : {}),
+    ...(defaultTabs ? { defaultTabs, defaultTabsBesideExisting: true as const } : {}),
     hasStartupTerminal: true,
     setupCommandPlatform: getSetupRunnerCommandPlatformForPath(
       setup?.runnerScriptPath ?? '',
@@ -92,5 +94,9 @@ export async function runApprovedCreatedWorktreeSetup(
     ),
     ...options
   })
+  if (provisioned.failed) {
+    // An error reaches every client's existing failure handling; a new status would be ignored by older ones.
+    throw new Error('Could not start the approved setup commands in this workspace.')
+  }
   return { status: 'started' }
 }

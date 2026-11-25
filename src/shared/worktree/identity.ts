@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 
 /** Stable fields needed to identify one checkout occupant. */
 export type WorktreeIdentityRef = {

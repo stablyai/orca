@@ -2,6 +2,7 @@ import type { MobileWebBundleReusableAssets } from '../../transport/web-bundle/m
 import type { MobileWebBundleAssetRead } from '../../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { requireStorablePath } from './generation-asset-path'
 import { joinUri } from './generation-cache-uri'
+import { listGenerationHostDirectories } from './generation-host-directories'
 import type { ActiveGeneration } from './generation-store'
 import type { GenerationFileSystem } from './generation-store-file-system'
 
@@ -9,13 +10,18 @@ type ReusableGenerationAssets = MobileWebBundleReusableAssets & {
   copyTo(asset: MobileWebBundleAssetRead, target: string): Promise<void>
 }
 
+// This host's build first, then every other cached host's.
 export async function reusableAssetsOfHosts(
   fs: GenerationFileSystem,
-  hostKeys: readonly string[],
-  readGeneration: (hostKey: string) => Promise<ActiveGeneration | null>
+  hostKey: string,
+  readGeneration: (hostKey: string) => Promise<ActiveGeneration | null>,
+  kept?: ActiveGeneration
 ): Promise<ReusableGenerationAssets> {
-  const generations: ActiveGeneration[] = []
-  for (const host of hostKeys) {
+  const others = (await listGenerationHostDirectories(fs))
+    .map((host) => host.name)
+    .filter((key) => key !== hostKey)
+  const generations: ActiveGeneration[] = kept === undefined ? [] : [kept]
+  for (const host of [hostKey, ...others]) {
     const active = await readGeneration(host).catch(() => null)
     if (active !== null) {
       generations.push(active)

@@ -1,13 +1,13 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import {
   normalizeProxyBypassRules,
   normalizeProxyUrl,
   PROXY_URL_FAILURE_COPY,
   type ProxyUrlFailureCode
-} from '../../../../../../shared/network-proxy'
+} from '../../../../../../shared/network/network-proxy'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Button } from '../../../ui/button'

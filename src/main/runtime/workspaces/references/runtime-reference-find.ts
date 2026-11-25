@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceAttachmentOrigin } from '../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export type ReferenceAgentCandidate = Omit<RuntimeReferenceAgent, 'linked'> & {
   hostId: ExecutionHostId

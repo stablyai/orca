@@ -1,5 +1,5 @@
 import type { GitStatusMetadataChangedEvent } from '../../../../../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 
 const REFRESH_EVERY_OBSERVER = (): boolean => true
 

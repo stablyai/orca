@@ -1,4 +1,4 @@
-import { toRuntimeExecutionHostId } from '../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { RuntimeTerminalShow } from '../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalReveal } from '../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import { RuntimeClient } from '../runtime/client'

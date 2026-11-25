@@ -17,16 +17,12 @@ export function useImeTextFieldProps<T extends HTMLInputElement | HTMLTextAreaEl
       }
       props.onKeyDown?.(event)
     },
-    onKeyUp(event) {
-      ime.onKeyUp(event)
-      props.onKeyUp?.(event)
-    },
     onCompositionStart(event) {
       ime.setComposing(true)
       props.onCompositionStart?.(event)
     },
     onCompositionEnd(event) {
-      ime.onCompositionEnd(event.data)
+      ime.setComposing(false)
       props.onCompositionEnd?.(event)
     },
     onBlur(event) {

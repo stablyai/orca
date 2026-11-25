@@ -3,8 +3,8 @@ import type {
   OrcadMigrationManifestSource
 } from '../../../../../shared/orcad-migration/orcad-migration-manifest'
 import type { OrcadMigrationTerminalScrollbackSnapshot } from '../../../../../shared/orcad-migration/orcad-migration-scrollback'
-import type { PersistedState } from '../../../../../shared/persisted-state-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import type { PersistedState } from '../../../../../shared/orca-profiles/persisted-state-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { keepUnsavedDrafts } from '../../../../../shared/workspace-session/workspace-session-draft-retention'
 import {
   filterWorkspaceRows,

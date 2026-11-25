@@ -193,8 +193,3 @@ export function getDaemonFolderAccessMismatch(
     freshDaemonAccess: entry.freshDaemonAccess
   }
 }
-
-export function resetDaemonFolderAccessMismatchForTests(): void {
-  stored = null
-  probeInFlight = null
-}

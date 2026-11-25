@@ -11,6 +11,7 @@ import { readCodexErrorWillRetry } from '../../codex/app-server/codex-structured
 import type { JournalInputEnd } from './input-order/journal-input-obligations'
 import type { JournalDomainSubmissionStoredFacts } from './journal-domain-submission-records'
 import type { JournalItemRow, JournalStopEvent } from './durable-rows/journal-row-schema'
+import { readJournalStoredItem } from './journal-stored-output-rows'
 
 type Target = { sessionId: string; epoch: string }
 export type JournalDomainInputItemObservation = Pick<
@@ -184,7 +185,7 @@ export function observeJournalDomainInputStop(
           WHERE session_id=? AND epoch=? AND item_id=?`)
           .get(target.sessionId, target.epoch, scope.turnItemId)
         const item: AgentJournalRenderItem | null = current
-          ? JSON.parse(String(current.payload_json))
+          ? readJournalStoredItem(db, [target.sessionId, target.epoch], current.payload_json)
           : null
         turnId = readAgentJournalTurn(item?.body)?.turnId
       }

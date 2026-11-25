@@ -20,10 +20,6 @@ export function registerRemoteRuntimePtyControlReadyReviver(
   }
 }
 
-export function getControlReadyReviverCountForTests(environmentId: string): number {
-  return controlReadyRevivers.get(environmentId)?.size ?? 0
-}
-
 export function reviveRemoteRuntimePtyRecoveriesForEnvironment(environmentId: string): number {
   let revived = 0
   for (const revive of Array.from(controlReadyRevivers.get(environmentId) ?? [])) {

@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   isRuntimeOwnedSshTargetId,
   parseExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   getOrcadSshDeployment,
   type PublicKnownRuntimeEnvironment

@@ -1,4 +1,4 @@
-import { isValidAppVersion, parseCliVersion } from '../../app-version'
+import { isValidAppVersion, parseCliVersion } from '../../app-lifecycle/identity/app-version'
 
 export const CODEX_MINIMUM_SUPPORTED_VERSION = '0.136.0'
 

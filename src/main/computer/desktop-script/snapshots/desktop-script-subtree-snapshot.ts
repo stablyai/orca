@@ -1,8 +1,8 @@
-import type { ComputerSnapshotResult } from '../../../../shared/computer-use-runtime-types'
-import { renumberComputerTreeLine } from '../../../../shared/computer-use-tree-text'
+import type { ComputerSnapshotResult } from '../../../../shared/computer/computer-use-runtime-types'
+import { renumberComputerTreeLine } from '../../../../shared/computer/computer-use-tree-text'
 import { RuntimeClientError } from '../../runtime-client-error'
 import { elementParam } from '../actions/desktop-script-action'
-import { optionalNumberParam } from '../desktop-script-provider-params'
+import { optionalNumberParam, screenshotRequestParams } from '../desktop-script-provider-params'
 import type {
   BridgeElement,
   BridgeRequest,
@@ -35,7 +35,7 @@ export async function readSubtreeSnapshot(
     root: elementParam(base, rootElementIndex),
     windowId: base.windowId ?? undefined,
     windowIndex: base.windowIndex ?? undefined,
-    noScreenshot: params.noScreenshot === true,
+    ...screenshotRequestParams(params),
     restoreWindow: params.restoreWindow === true
   })
   if (!response.snapshot) {

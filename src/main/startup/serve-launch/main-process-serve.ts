@@ -1,7 +1,7 @@
 import { app } from 'electron'
 import { notifyServeSupervisorReady } from '../../updater/serve-update-handoff'
 import { clearServeAbortPark } from '../../../shared/remote-runtime/serve-supervisor/serve-abort-park'
-import { findBundledWebClientRoot } from '../../../shared/bundled-web-client-root'
+import { findBundledWebClientRoot } from '../../../shared/web-client/bundled-web-client-root'
 import { buildServePairingReadiness, servePublishMode } from '../../server/serve-pairing-readiness'
 import { mainProcessState as state } from '../main-process-state'
 import type { ServeOptions } from './serve-options'
@@ -11,14 +11,14 @@ export function getBundledWebClientRoot(): string | undefined {
 }
 
 export async function printServeReady(options: ServeOptions): Promise<void> {
-  const runtime = state.runtime
-  const runtimeRpc = state.runtimeRpc
+  const runtime = state.core.runtime
+  const runtimeRpc = state.core.runtimeRpc
   if (!runtime || !runtimeRpc) {
     throw new Error('Runtime server must be initialized before printing serve readiness')
   }
   // Validate project root before pairing publication can persist a pending device.
   const output = servePublishMode(options)
-  await state.serveReadinessPublisher.publish(
+  await state.core.serveReadinessPublisher.publish(
     {
       runtimeId: runtime.getRuntimeId(),
       ...(await buildServePairingReadiness(options, runtimeRpc)),

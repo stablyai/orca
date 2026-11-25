@@ -1,13 +1,14 @@
-import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createContext } from 'react'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/status-ownership/accepted-agent-statuses'
 import {
   requestVirtualizedScrollAnchorRecord,
   supersedeVirtualizedScrollAnchorRestore
-} from '@/hooks/requestVirtualizedScrollAnchorRecord'
+} from '@/lib/list-interaction/virtualized-scrolling/requestVirtualizedScrollAnchorRecord'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
@@ -17,12 +18,17 @@ import { getProjectedWorktreeLineage } from '../../../../../../shared/worktree/l
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translate } from '@/i18n/i18n'
+import {
+  workspaceKeyOfRow,
+  worktreeWorkspaceKey
+} from '../../../../../../shared/workspace/identity/workspace-scope'
 import type { Translate } from '@/i18n/use-translate'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { lineageStoreKeyOfRow } from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 
 export const WORKTREE_CONTEXT_MENU_SCOPE_ATTR = 'data-worktree-context-menu-scope'
 export const WORKTREE_NATIVE_CONTEXT_MENU_ATTR = 'data-worktree-native-context-menu'
+export const WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR = 'data-worktree-context-menu-portal-scope'
+export const WorktreeContextMenuPortalScope = createContext<string | null>(null)
 const CONTEXT_MENU_CLICK_SUPPRESSION_MS = 500
 const DELETE_POSITION_RESTORE_MAX_FRAMES = 180
 const DELETE_POSITION_RESTORE_STABLE_FRAMES = 6
@@ -68,37 +74,50 @@ export function hasWorktreeParentLink(
   const storeKey = lineageStoreKeyOfRow(worktree)
   return Boolean(
     getProjectedWorktreeLineage(worktree, lineageById) ||
-    workspaceLineageByChildKey[worktreeWorkspaceKey(worktree.id)] ||
+    workspaceLineageByChildKey[workspaceKeyOfRow(worktree.id)] ||
     // A saved parent on another machine is removable even while it can't be found.
     (storeKey !== undefined &&
       crossStoreLineageByStoreKey?.[storeKey]?.[worktreeWorkspaceKey(worktree.id)])
   )
 }
 
-export function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
+function closestContextMenuElement(target: EventTarget | null, selector: string): Element | null {
   const maybeElement = target as {
     closest?: (selector: string) => Element | null
     parentElement?: { closest?: (selector: string) => Element | null }
   } | null
-  const nativeContextMenuSelector = `[${WORKTREE_NATIVE_CONTEXT_MENU_ATTR}]`
   return (
-    (maybeElement?.closest?.(nativeContextMenuSelector) ??
-      maybeElement?.parentElement?.closest?.(nativeContextMenuSelector)) != null
+    maybeElement?.closest?.(selector) ?? maybeElement?.parentElement?.closest?.(selector) ?? null
   )
+}
+
+export function shouldUseNativeContextMenu(target: EventTarget | null): boolean {
+  return closestContextMenuElement(target, `[${WORKTREE_NATIVE_CONTEXT_MENU_ATTR}]`) !== null
+}
+
+export function isFromWorkspaceAgentRow(scope: Element, target: EventTarget | null): boolean {
+  const row = closestContextMenuElement(target, '[data-workspace-agent-row]')
+  return row?.closest(`[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`) === scope
+}
+
+/** A right-click on an agent row that this menu's owner rendered into a portal, such as its details hover. */
+export function isOwnedWorktreeContextMenuPortal(
+  target: EventTarget | null,
+  scopeId: string
+): boolean {
+  const scope = closestContextMenuElement(target, `[${WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR}]`)
+  if (scope?.getAttribute(WORKTREE_CONTEXT_MENU_PORTAL_SCOPE_ATTR) !== scopeId) {
+    return false
+  }
+  const row = closestContextMenuElement(target, '.agent-disclosure-row')
+  return row !== null && scope.contains(row)
 }
 
 export function shouldIgnoreNestedWorktreeContextMenuScope(
   currentTarget: EventTarget,
   target: EventTarget | null
 ): boolean {
-  const maybeScopedTarget = target as {
-    closest?: (selector: string) => Element | null
-    parentElement?: { closest?: (selector: string) => Element | null }
-  } | null
-  const scopeSelector = `[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`
-  const closestScope =
-    maybeScopedTarget?.closest?.(scopeSelector) ??
-    maybeScopedTarget?.parentElement?.closest?.(scopeSelector)
+  const closestScope = closestContextMenuElement(target, `[${WORKTREE_CONTEXT_MENU_SCOPE_ATTR}]`)
   // Nested lineage previews own context menus even though they sit inside the parent DOM.
   return closestScope != null && closestScope !== currentTarget
 }

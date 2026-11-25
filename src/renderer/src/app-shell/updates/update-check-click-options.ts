@@ -1,4 +1,4 @@
-import type { UpdateCheckOptions } from '../../../../shared/update-status-types'
+import type { UpdateCheckOptions } from '../../../../shared/updater/update-status-types'
 import { translate } from '@/i18n/i18n'
 import { getShortcutPlatform } from '../../lib/keyboard/shortcut-platform'
 

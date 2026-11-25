@@ -1,5 +1,5 @@
 import type { BrowserPageDocLocation } from './browser-workspace-types'
-import { relativePathInsideRoot, resolveRuntimePath } from '../../cross-platform-path'
+import { relativePathInsideRoot, resolveRuntimePath } from '../../file-access/cross-platform-path'
 
 /** Compare fields: mirrors rebuild object identity on every page update, which would otherwise republish unchanged workspace tabs. */
 export function browserPageDocLocationsEqual(

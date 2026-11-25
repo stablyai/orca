@@ -1,7 +1,7 @@
 import type {
   GitHubCreateIssueFields,
   GitHubCreateIssueResult
-} from '../../../shared/issue-mutation-types'
+} from '../../../shared/work-items/issue-mutation-types'
 import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import {
@@ -11,7 +11,7 @@ import {
 import { acquire, release } from '../execution/github-operation-slots'
 import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
-import { codeHostFailure } from '../../../shared/code-host-failure-copy'
+import { codeHostFailure } from '../../../shared/source-control/code-host-failure-copy'
 
 function githubIssueErrorMessage(error: unknown): string {
   const { stderr, stdout } = extractExecError(error)

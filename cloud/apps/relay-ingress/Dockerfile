@@ -4,6 +4,7 @@ FROM node:24.22.2-alpine@sha256:8a32c8cf649a49915a66e81e7a609223c708d0adabf288ee
 WORKDIR /app
 ENV PATH="/opt/pnpm/node_modules/.bin:$PATH"
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY patches patches
 RUN npm install --prefix /opt/pnpm --ignore-scripts --no-audit --no-fund "$(node -p 'require("./package.json").packageManager.split("+")[0]')" \
   && npm audit signatures --prefix /opt/pnpm
 COPY packages/relay-contract/package.json packages/relay-contract/package.json

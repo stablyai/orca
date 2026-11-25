@@ -7,9 +7,11 @@ import {
 import { isTranscriptSourceFailure } from '../../ai-vault/parsing/session-scanner-jsonl-reader'
 import {
   physicalSessionCandidates,
+  type SessionFileCandidate,
   type SessionFileChoice
 } from '../../ai-vault/session-scanner-types'
 import { fileIdentity } from '../storage/session-search-file-cursor'
+import { REMOVALS_PER_FLUSH } from '../discovery/session-search-deleted-sources'
 import { sessionSearchReadDecision } from './session-search-read-decision'
 import type {
   SessionSearchFileRow,
@@ -29,13 +31,16 @@ export async function runSessionSearchIndexPass(
   store: SessionSearchIndexStore,
   candidates: readonly SessionFileChoice[],
   options: SessionSearchIndexPassOptions
-): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
+): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number; retired: string[] }> {
   const stats = createSessionParseStats()
   const cutoffMs = store.retentionCutoff
   const acceptsReads = () => store.acceptingReads !== false
   let read = 0
   let outOfTime = false
   let left = 0
+  let heldRemovals = 0
+  let retirementOverdue = false
+  const retired: string[] = []
   for (const choice of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
     if (!acceptsReads()) {
@@ -44,7 +49,8 @@ export async function runSessionSearchIndexPass(
     let deferred = false
     let due = false
     let admitted = false
-    for (const candidate of physicalSessionCandidates(choice)) {
+    const aliases = physicalSessionCandidates(choice)
+    for (const [position, candidate] of aliases.entries()) {
       throwIfAiVaultScanCancelled(options.signal)
       if (!acceptsReads()) {
         break
@@ -60,6 +66,24 @@ export async function runSessionSearchIndexPass(
           cursor !== null
         ) {
           deferred = false
+          // Later sweeps finish a large first cleanup; the preferred copy stays current.
+          const copies = choice.outrankedCopies
+          if (position + 1 < aliases.length || copies) {
+            const outranked = aliases.slice(position + 1)
+            for (const copyPath of retirableAliasRows(options.rows, candidate, outranked, copies)) {
+              if (outOfTime || retirementOverdue) {
+                break
+              }
+              store.removeFile(copyPath)
+              retired.push(copyPath)
+              if (++heldRemovals >= REMOVALS_PER_FLUSH) {
+                heldRemovals = 0
+                await store.flush?.()
+                throwIfAiVaultScanCancelled(options.signal)
+                retirementOverdue = options.overdue?.() === true
+              }
+            }
+          }
           break
         }
         continue
@@ -116,5 +140,26 @@ export async function runSessionSearchIndexPass(
       left += 1
     }
   }
-  return { stats, outOfTime, left }
+  return { stats, outOfTime, left, retired }
+}
+
+/** Hardlinks, moves and Codex archives keep mtime; same-format copies must also match size. */
+function* retirableAliasRows(
+  rows: ReadonlyMap<string, SessionSearchFileRow>,
+  preferred: SessionFileCandidate,
+  ...outranked: (readonly SessionFileCandidate[] | undefined)[]
+): Generator<string> {
+  for (const copies of outranked) {
+    for (const copy of copies ?? []) {
+      if (
+        copy.file.path !== preferred.file.path &&
+        rows.has(copy.file.path) &&
+        copy.file.mtimeMs === preferred.file.mtimeMs &&
+        (copy.file.path.endsWith('.zst') !== preferred.file.path.endsWith('.zst') ||
+          copy.file.sizeBytes === preferred.file.sizeBytes)
+      ) {
+        yield copy.file.path
+      }
+    }
+  }
 }

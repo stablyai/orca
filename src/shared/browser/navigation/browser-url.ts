@@ -1,6 +1,7 @@
-import '../../constants'
+import '../../orca-profiles/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../browser-blank-page'
-import { getCurrentLocalPlatform } from '../../execution-host'
+import { getCurrentLocalPlatform } from '../../execution-host/execution-host'
+import { encodeWellFormedURIComponent } from '../../text/well-formed-uri-component'
 
 const LOCAL_ADDRESS_PATTERN =
   /^(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[[0-9a-f:]+\])(?::\d+)?(?:[/?#].*)?$/i
@@ -220,7 +221,7 @@ export function buildSearchUrl(
       return sessionSearchUrl
     }
   }
-  return `${SEARCH_ENGINE_URLS[engine]}${encodeURIComponent(query.toWellFormed())}`
+  return `${SEARCH_ENGINE_URLS[engine]}${encodeWellFormedURIComponent(query)}`
 }
 
 export function looksLikeSearchQuery(input: string): boolean {

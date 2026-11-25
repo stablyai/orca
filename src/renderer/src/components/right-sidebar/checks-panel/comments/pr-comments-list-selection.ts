@@ -90,27 +90,6 @@ export function clearPRCommentsListSelection(contextKey: string | undefined): vo
   }
 }
 
-export function clearPRCommentsListSelectionsForTests(): void {
-  persistedSelectionByContextKey.clear()
-}
-
-export function getPRCommentsListSelectionCountForTests(): number {
-  return persistedSelectionByContextKey.size
-}
-
-// Seed LRU tests without 1024 React mounts per case.
-export function seedPRCommentsListSelectionForTests(
-  contextKey: string,
-  selectedGroupIds: Iterable<string>,
-  isSelectingForAI = true
-): void {
-  persistSelectionState({
-    contextKey,
-    isSelectingForAI,
-    selectedGroupIds: new Set(selectedGroupIds)
-  })
-}
-
 export function usePRCommentsListSelection(
   comments: PRComment[],
   selectionContextKey: string | undefined,

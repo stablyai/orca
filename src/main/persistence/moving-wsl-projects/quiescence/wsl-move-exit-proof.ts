@@ -9,6 +9,7 @@ import {
   isLinuxSpelled
 } from '../manifest-scope/wsl-move-comparable-path'
 import type { SessionInfo } from '../../../daemon/protocol/daemon-session-info'
+import type { WslMappedDrive } from '../../../../shared/wsl-move/wsl-mapped-drive-paths'
 
 export type WslMoveExitProof =
   | { verdict: 'exited' }
@@ -27,6 +28,8 @@ export type WslMoveExitProofSources = {
 
 export type WslMoveExitProofScope = {
   distro: string
+  /** The move's mapped drives, from its cutover: a Windows shell in `W:\x` is in the distro. */
+  mappedDrives?: readonly WslMappedDrive[]
   /** Session workspace keys: <repoId>::<path> or folder:<id>. */
   workspaceKeys: ReadonlySet<string>
   /** Cover sessions whose IDs predate the minted workspace format. */
@@ -62,11 +65,10 @@ export async function proveWslMoveTerminalsExited(
   if (fallbackSessions > 0) {
     return { verdict: 'unverifiable', reason: 'terminals are running outside the daemon' }
   }
-  const { distro } = scope
-  const scopeKeys = new Set([...scope.workspaceKeys].map((key) => comparableKey(key, distro)))
+  const scopeKeys = new Set([...scope.workspaceKeys].map((key) => comparableKey(key, scope)))
   const roots = [...scope.workspaceKeys].flatMap((key) => {
     const path = keyPath(key)
-    const root = path === null ? null : comparableWslPath(path, distro)
+    const root = path === null ? null : comparableWslPath(path, scope.distro, scope.mappedDrives)
     return root === null ? [] : [root]
   })
   const live: string[] = []
@@ -104,19 +106,19 @@ function attributeSession(
   }
   const { worktreeId } = parsePtySessionId(session.sessionId)
   if (worktreeId !== null) {
-    if (scopeKeys.has(comparableKey(worktreeId, scope.distro))) {
+    if (scopeKeys.has(comparableKey(worktreeId, scope))) {
       return 'in-scope'
     }
     // Another workspace's shell can still have changed into a moved folder.
-    return attributeByCwd(session, scope.distro, roots) === 'in-scope' ? 'in-scope' : 'elsewhere'
+    return attributeByCwd(session, scope, roots) === 'in-scope' ? 'in-scope' : 'elsewhere'
   }
-  return attributeByCwd(session, scope.distro, roots)
+  return attributeByCwd(session, scope, roots)
 }
 
 // Without workspace identity, cwd is the only attribution evidence.
 function attributeByCwd(
   session: CensusSession,
-  distro: string,
+  { distro, mappedDrives }: Pick<WslMoveExitProofScope, 'distro' | 'mappedDrives'>,
   roots: readonly string[]
 ): Attribution {
   const { cwd, wslDistro } = session
@@ -124,7 +126,7 @@ function attributeByCwd(
     return 'unknown'
   }
   const inDistro = typeof wslDistro === 'string' && sameDistro(wslDistro, distro)
-  const path = comparableWslPath(cwd, distro)
+  const path = comparableWslPath(cwd, distro, mappedDrives)
   const underRoot = path !== null && roots.some((root) => isAtOrUnder(path, root))
   // A POSIX folder is a Linux path only inside WSL. A Git Bash `/c/...` is not, but a native-tagged
   // or untagged `wsl.exe` shell's may be, so only one in a moved folder stays unknown.
@@ -142,9 +144,12 @@ function keyPath(key: string): string | null {
 }
 
 // Canonicalize distro case, UNC aliases, Linux spelling and trailing separators.
-function comparableKey(key: string, distro: string): string {
+function comparableKey(
+  key: string,
+  { distro, mappedDrives }: Pick<WslMoveExitProofScope, 'distro' | 'mappedDrives'>
+): string {
   const path = keyPath(key)
-  const comparable = path === null ? null : comparableWslPath(path, distro)
+  const comparable = path === null ? null : comparableWslPath(path, distro, mappedDrives)
   if (comparable === null) {
     return key
   }

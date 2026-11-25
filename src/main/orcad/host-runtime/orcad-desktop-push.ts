@@ -1,5 +1,5 @@
 import process from 'node:process'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { DesktopPushService } from '../../runtime/push/desktop-push-service'
 import { resolvePushGatewayOrigin } from '../../runtime/push/push-gateway-origin'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'

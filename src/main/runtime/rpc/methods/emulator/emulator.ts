@@ -71,6 +71,12 @@ export const EMULATOR_METHODS = [
     handler: async (params, { runtime }) => runtime.emulatorButton(params)
   }),
   defineMethod({
+    name: 'emulator.syncKeyboardLayout',
+    permission: 'workspace',
+    params: WorktreeParam,
+    handler: async (params, { runtime }) => runtime.emulatorSyncKeyboardLayout(params)
+  }),
+  defineMethod({
     name: 'emulator.checkInput',
     permission: 'workspace',
     params: WorktreeParam,

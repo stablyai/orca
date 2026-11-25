@@ -5,7 +5,7 @@ import {
 } from '../../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import type { AgentSessionRefusalReference } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import { STRUCTURED_AGENT_SESSION_RESUME_WRITER_ADMISSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/capabilities/structured-agent-session-surface-capabilities'
 import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'

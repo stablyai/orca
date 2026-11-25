@@ -1,7 +1,7 @@
 import type React from 'react'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition

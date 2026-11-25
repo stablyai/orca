@@ -17,6 +17,7 @@ vi.mock('./session-search-worker-client', async (importOriginal) => {
           spawnWorkerThread(
             `require(${JSON.stringify(loader)}); require(${JSON.stringify(entry)})`,
             {
+              name: 'orca-session-search',
               eval: true,
               execArgv: ['--conditions=orca-source']
             }
