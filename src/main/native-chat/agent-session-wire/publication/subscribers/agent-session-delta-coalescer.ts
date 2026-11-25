@@ -94,6 +94,8 @@ export function createAgentSessionDeltaCoalescer(
       return true
     }
     if (deps.shouldEmit?.(key, stream.textLength) === false) {
+      // Joined anyway, so a skipped window's deltas are kept as copies and pin no larger string.
+      joined(stream)
       stream.dirty = false
       return true
     }
