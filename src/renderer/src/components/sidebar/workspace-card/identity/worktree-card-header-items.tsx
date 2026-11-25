@@ -56,7 +56,7 @@ export function WorktreeCardRepoChip({
           }
         }}
         onFocus={hover?.onFocus}
-        className="inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex size-[18px] shrink-0 items-center justify-center rounded-[4px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <RepoMark repo={repo} />
       </button>

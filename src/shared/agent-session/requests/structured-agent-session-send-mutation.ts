@@ -54,6 +54,7 @@ export function agentSessionMessagePayload(body: AgentJournalMessageItem): Agent
     leaveEligible: _leaveEligible,
     connectorDelivery: _connectorDelivery,
     connectorClaim: _connectorClaim,
+    carriedCards: _carriedCards,
     memorySource: _memorySource,
     triggeredBy: _triggeredBy,
     automationRun: _automationRun,

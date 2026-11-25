@@ -449,7 +449,7 @@
 5 src/main/daemon/providers/lifecycle/daemon-provider-state.ts
 4 src/main/daemon/providers/lifecycle/daemon-severed-restart.ts
 1 src/main/daemon/providers/lifecycle/daemon-uninstall-shutdown.ts
-3 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
+2 src/main/daemon/providers/routing/daemon-legacy-adapters.ts
 8 src/main/daemon/providers/routing/daemon-newer-protocol-hold.ts
 2 src/main/daemon/providers/routing/daemon-unlisted-session.ts
 1 src/main/daemon/providers/wsl/daemon-wsl-bridge-boot-identity.ts

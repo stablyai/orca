@@ -898,6 +898,7 @@
         "edit": "Edit",
         "nameTaken": "You already have a bot named {{name}}.",
         "open": "Open",
+        "openBot": "Open {{name}}",
         "origin": "Proposed by {{bot}}",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
         "rename": "Rename",

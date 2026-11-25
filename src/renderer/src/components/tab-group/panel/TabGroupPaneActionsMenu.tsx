@@ -83,12 +83,13 @@ export function TabGroupPaneActionsMenu({
   }
 
   // Why: drop ⋯ whole once it can't fit beside the tab floor (and "+", unless that folded in here); the +N chip still outlasts it.
+  // A pinned bot Home beside other tabs adds a second 40px floor, so each threshold moves up 40.
   return (
     <div
       className={
         menuFoldLevel === 2
-          ? 'contents @max-[78px]/tab-strip:hidden'
-          : 'contents @max-[114px]/tab-strip:hidden'
+          ? 'contents @max-[78px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[118px]/tab-strip:hidden'
+          : 'contents @max-[114px]/tab-strip:hidden group-has-[[data-pinned-home-with-strip]]/tab-strip-row:@max-[154px]/tab-strip:hidden'
       }
     >
       <Tooltip>

@@ -196,6 +196,7 @@ function agentCliInstallation(
     dataDirectory,
     program: 'cli',
     findExternal,
+    hostHasBuild: () => managedAgentCli(agent).available(),
     updatesEnabled: () => managedCopyMayRun(agent, runtime),
     onRelease: (folder) => rememberManagedAgentRelease(agent, folder),
     // No launch gate tracks these processes; stopping the agent's chats first is the closest fence.

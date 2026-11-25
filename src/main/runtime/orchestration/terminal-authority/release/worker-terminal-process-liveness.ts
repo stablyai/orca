@@ -12,10 +12,11 @@ export function matchesProcessIncarnation(
   return `${ptyId}:${incarnationId}` === processIncarnation
 }
 
-/** Exact live match proves life; missing/dirty candidate incarnation remains unverifiable, otherwise classify exited. */
+/** Exact live match proves life; absence proves exit only for a minted fence the answering owner can vouch for. */
 export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
-  sessions: readonly PtyProcessInfo[]
+  sessions: readonly PtyProcessInfo[],
+  absenceProvesExit: boolean
 ): 'live' | 'exited' | 'unverifiable' {
   const possibleMatches = sessions.filter((session) =>
     processIncarnation.startsWith(`${session.id}:`)
@@ -27,6 +28,9 @@ export function classifyWorkerTerminalProcessIncarnation(
   ) {
     return 'live'
   }
+  if (!absenceProvesExit || !isMintedPtyIncarnation(processIncarnation)) {
+    return 'unverifiable'
+  }
   return possibleMatches.some(
     (session) => !session.incarnationId || session.incarnationId !== session.incarnationId.trim()
   )
@@ -36,6 +40,12 @@ export function classifyWorkerTerminalProcessIncarnation(
 
 /** A host's listed sessions by id, so each incarnation looks up its few candidates instead of scanning. */
 export type WorkerTerminalProcessIndex = ReadonlyMap<string, readonly PtyProcessInfo[]>
+
+/** One host's listing; `inProcessOwner` marks this process's own provider, which vouches only for exits it saw. */
+export type WorkerTerminalHostInventory = {
+  index: WorkerTerminalProcessIndex
+  inProcessOwner: boolean
+}
 
 export function indexWorkerTerminalProcesses(
   sessions: readonly PtyProcessInfo[]
@@ -55,7 +65,8 @@ export function indexWorkerTerminalProcesses(
 /** The same verdict as the list form; a pty id may itself contain colons, so try each prefix. */
 export function classifyIndexedWorkerTerminalProcessIncarnation(
   processIncarnation: string,
-  index: WorkerTerminalProcessIndex
+  index: WorkerTerminalProcessIndex,
+  absenceProvesExit: boolean
 ): 'live' | 'exited' | 'unverifiable' {
   const candidates: PtyProcessInfo[] = []
   for (
@@ -65,7 +76,7 @@ export function classifyIndexedWorkerTerminalProcessIncarnation(
   ) {
     candidates.push(...(index.get(processIncarnation.slice(0, at)) ?? []))
   }
-  return classifyWorkerTerminalProcessIncarnation(processIncarnation, candidates)
+  return classifyWorkerTerminalProcessIncarnation(processIncarnation, candidates, absenceProvesExit)
 }
 
 const MINTED_INCARNATION = /:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
