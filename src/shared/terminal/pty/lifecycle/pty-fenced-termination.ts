@@ -14,6 +14,8 @@ export type PtyFencedTerminationRequest = {
 /** Main-local hooks for a fenced stop; never sent to the daemon. */
 export type PtyFencedTerminationLocalOptions = {
   beforeRequest?: () => boolean
+  /** Sleep semantics: keep the session's history and no kill tombstone, so the pane can wake on it. */
+  keepHistory?: boolean
 }
 
 export type PtyFencedTerminationOutcome =

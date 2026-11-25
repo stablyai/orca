@@ -23,16 +23,37 @@ describe('daemon fenced kill', () => {
   it('writes no kill when the caller revokes after the lock and connection waits', async () => {
     const requestKill = vi.fn(async () => ({ outcome: 'ended' }))
     await expect(
-      killDaemonPtyFenced(deps(requestKill), request, { beforeRequest: () => false })
+      killDaemonPtyFenced(deps(requestKill), request, {
+        beforeRequest: () => false
+      })
     ).resolves.toEqual({ outcome: 'refused', reason: 'unverifiable' })
     expect(requestKill).not.toHaveBeenCalled()
   })
 
   it('writes the kill when the grant still stands', async () => {
-    const requestKill = vi.fn(async () => ({ outcome: 'ended', writersExited: true }))
+    const requestKill = vi.fn(async () => ({
+      outcome: 'ended',
+      writersExited: true
+    }))
     await expect(
-      killDaemonPtyFenced(deps(requestKill), request, { beforeRequest: () => true })
+      killDaemonPtyFenced(deps(requestKill), request, {
+        beforeRequest: () => true
+      })
     ).resolves.toEqual({ outcome: 'ended', writersExited: true })
     expect(requestKill).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps history and leaves no kill tombstone when the stop is a sleep', async () => {
+    // The account restart wakes the pane on this same session; a closing stop would refuse it.
+    const complete = vi.fn(async () => {})
+    const sleepDeps = {
+      ...deps(vi.fn(async () => ({ outcome: 'ended' }))),
+      completeShutdownWithHistoryLock: complete
+    }
+    await killDaemonPtyFenced(sleepDeps, request, { keepHistory: true })
+    expect(complete).toHaveBeenCalledWith('pty-a', { keepHistory: true })
+    complete.mockClear()
+    await killDaemonPtyFenced(sleepDeps, request)
+    expect(complete).toHaveBeenCalledWith('pty-a', { keepHistory: false })
   })
 })

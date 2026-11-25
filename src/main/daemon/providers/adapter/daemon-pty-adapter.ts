@@ -57,7 +57,8 @@ export class DaemonPtyAdapter extends DaemonPtyPreservedHostLoss implements IPty
         sessionIncarnation: (id) => this.sessionIncarnations.get(id),
         ensureConnected: () => this.ensureConnected(),
         requestKill: (args) => this.client.request<unknown>('kill', args),
-        completeShutdownWithHistoryLock: (id) => this.completeShutdownWithHistoryLock(id, {})
+        completeShutdownWithHistoryLock: (id, opts) =>
+          this.completeShutdownWithHistoryLock(id, opts)
       },
       request,
       options

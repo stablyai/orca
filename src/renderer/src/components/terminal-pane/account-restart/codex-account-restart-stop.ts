@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { sleepPaneForAccountRestart } from './codex-account-restart-sleep'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   CODEX_ACCOUNT_RESTART_RESUME_ERROR,
@@ -28,12 +29,15 @@ export async function stopCodexPaneForAccountRestart(
   const operation = { ...pane, opId: mintOpId(), generation: noticeGenerationOf(pane.ptyId) }
   currentOperationByPtyId.set(pane.ptyId, operation)
   watchNoticeGenerations()
+  // Sleep first, then stop: the restart exit wakes the pane from this record on the new account.
+  const undoSleep = sleepPaneForAccountRestart(pane)
   let result: CodexAccountRestartStopResult
   try {
     result = await window.api.pty.stopCodexForAccountRestart(toRequest(operation))
   } catch {
     result = { outcome: 'unknown', opIds: [operation.opId] }
   }
+  undoSleep?.(result.outcome === 'stopped')
   const current = currentOperationByPtyId.get(pane.ptyId)
   // A joined click shares the stop, so its opId is in the reply too; Dismiss or a newer question
   // removed the row's operation, and its own answer settles that newer notice.

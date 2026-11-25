@@ -253,9 +253,34 @@ describe('account restart exits arriving out of order', () => {
       claimed.push([...t.runtime.intentionalPtyStops.claimExit(id, incarnationId)])
     )
     t.emitExit()
-    expect(claimed).toEqual([['replaced']])
+    // A sleep (main keeps the pane's agent resume) that the pane's restart replacement wakes.
+    expect(claimed).toEqual([['reversible', 'replaced']])
     t.release({ outcome: 'ended', writersExited: true })
     await result
+  })
+
+  it('stops as a sleep: history kept, no kill tombstone, and the receipt exit labeled a sleep', async () => {
+    const t = setup()
+    const claimed: string[][] = []
+    t.sendPtyExitToRenderer.mockImplementation(({ id, incarnationId }) =>
+      claimed.push([...t.runtime.intentionalPtyStops.claimExit(id, incarnationId)])
+    )
+    const result = t.request()
+    await t.stopDispatched()
+    // A closing stop tombstones the session, and the pane's wake on it is refused.
+    expect(h.killFenced.mock.calls[0][1]).toMatchObject({ keepHistory: true })
+    t.release({ outcome: 'ended', writersExited: true })
+    await expect(result).resolves.toMatchObject({ outcome: 'stopped' })
+    expect(claimed).toEqual([['reversible', 'replaced']])
+  })
+
+  it('leaves no sleep label when the stop is refused, so a later exit is ordinary', async () => {
+    const t = setup()
+    const result = t.request()
+    await t.stopDispatched()
+    t.release({ outcome: 'refused', reason: 'claimed' })
+    await expect(result).resolves.toMatchObject({ outcome: 'not-started' })
+    expect(t.runtime.intentionalPtyStops.claimExit(t.pane.ptyId, t.pane.incarnationId)).toEqual([])
   })
 
   it('keeps a host-loss exit as the logical exit but never as writer proof', async () => {
@@ -482,7 +507,8 @@ describe('account restart exits arriving out of order', () => {
       incarnationId: t.pane.incarnationId
     })
     // Still a pane-keeping restart exit, and runtime is not told again.
-    expect(claimed).toEqual([['replaced']])
+    expect(claimed).toHaveLength(1)
+    expect(claimed[0]).toContain('replaced')
     expect(t.runtime.onPtyExit).toHaveBeenCalledTimes(1)
     // Owed once: a second ready signal sends nothing.
     redeliverOwedCodexRestartExits({

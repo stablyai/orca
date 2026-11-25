@@ -2,6 +2,8 @@ import type {
   CodexAccountRestartPane,
   CodexAccountRestartWithdrawRequest
 } from '../../../../shared/agent-accounts/codex/codex-account-restart-stop'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtyFencedTerminationOutcome } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -144,10 +146,39 @@ async function stopCodexRestartOccupant(
   if (!authorize()) {
     return 'not-authorized'
   }
-  let revoked = false
-  let outcome: Awaited<ReturnType<NonNullable<typeof provider.killFenced>>>
+  // A sleep, as hibernation's stop is: the pane's agent keeps its resume identity through the exit.
+  const settleSleep = current().runtime?.intentionalPtyStops?.mark(
+    occupant.ptyId,
+    'reversible',
+    occupant.incarnationId
+  )
+  let outcome: CodexRestartStopOutcome | 'not-authorized' = 'unknown'
   try {
-    outcome = await provider.killFenced(
+    outcome = await killCodexRestartOccupant(
+      current,
+      provider.killFenced.bind(provider),
+      occupant,
+      authorize
+    )
+    return outcome
+  } finally {
+    // Only a stop that never ran leaves the process awake; an unknown one may still exit.
+    settleSleep?.(
+      outcome !== 'not-authorized' && outcome !== 'refused' && outcome !== 'service-outdated'
+    )
+  }
+}
+
+async function killCodexRestartOccupant(
+  current: () => CodexAccountRestartIpcDeps,
+  killFenced: NonNullable<IPtyProvider['killFenced']>,
+  occupant: CodexRestartOccupant,
+  authorize: () => boolean
+): Promise<CodexRestartStopOutcome | 'not-authorized'> {
+  let revoked = false
+  let outcome: PtyFencedTerminationOutcome
+  try {
+    outcome = await killFenced(
       {
         id: occupant.ptyId,
         expectedIncarnationId: occupant.incarnationId,
@@ -155,6 +186,8 @@ async function stopCodexRestartOccupant(
         requireUnattached: false
       },
       {
+        // Sleep, not close: the pane wakes on this session, so no kill tombstone may refuse it.
+        keepHistory: true,
         // Re-checked after route, lock and connection waits, right before the kill is written.
         beforeRequest: () => {
           revoked = !authorize()

@@ -17,7 +17,7 @@ export type DaemonPtyFencedKillDeps = {
     requireNoAgentOwner: boolean
     requireUnattached: boolean
   }) => Promise<unknown>
-  completeShutdownWithHistoryLock: (id: string) => Promise<void>
+  completeShutdownWithHistoryLock: (id: string, opts: { keepHistory?: boolean }) => Promise<void>
 }
 
 /** One exact-incarnation stop through the daemon, holding the spawn lock through local removal. */
@@ -56,7 +56,9 @@ export async function killDaemonPtyFenced(
         (currentIncarnationId === undefined || currentIncarnationId === expectedIncarnationId)
       ) {
         // Exit may clear the incarnation first; hold the spawn lock through removal to protect replacement sessions.
-        await deps.completeShutdownWithHistoryLock(id)
+        await deps.completeShutdownWithHistoryLock(id, {
+          keepHistory: options?.keepHistory === true
+        })
       }
       return result
     })
