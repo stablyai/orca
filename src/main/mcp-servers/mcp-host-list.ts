@@ -2,7 +2,7 @@
 // sign-ins and relay addresses key by that folder exactly as a bot's do. Each server's id, agents,
 // workspaces and shared-process choice ride on the entry's extra keys, which bot tools keep as they are.
 import { createHash, randomUUID } from 'node:crypto'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
 import {
@@ -17,7 +17,6 @@ import {
 import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
 import {
   botToolCredentialsFingerprint,
-  readBotToolOAuth,
   withSavedBotToolHeaders
 } from '../bots/bot-tool-credentials'
 import {
@@ -28,11 +27,8 @@ import {
 } from '../bots/bot-tools-file'
 import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { classifyAddedBotTool } from '../bots/tool-oauth/bot-tool-owned-sign-in'
-import { onBotToolSignInChanged } from '../bots/bot-tool-sign-in-changed'
-import type { BotToolOAuthKey } from '../bots/tool-oauth/bot-tool-oauth'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { McpServersError } from './mcp-servers-error'
-import { isMcpServersFeatureEnabled } from './mcp-servers-feature'
 
 /** `<userData>/mcp-servers`; the list is `.orca/bot-tools.json` inside, as in a bot's home. */
 export const mcpHostListFolder = (): string => join(getProfileUserDataPath(), 'mcp-servers')
@@ -128,7 +124,7 @@ function agentFilesOf(file: Readonly<Record<string, unknown>>): McpAgentFiles {
   return { grok: allowed('grok'), cursor: allowed('cursor'), droid: allowed('droid') }
 }
 
-async function entryById(folder: string, id: string): Promise<HostEntry> {
+export async function entryById(folder: string, id: string): Promise<HostEntry> {
   const entry = (await readHostEntries(folder)).entries.find((candidate) => candidate.id === id)
   if (!entry) {
     throw gone()
@@ -137,7 +133,7 @@ async function entryById(folder: string, id: string): Promise<HostEntry> {
 }
 
 /** The server as the write stored it: its credential id and sign-in are the file's, not the input's. */
-async function storedView(folder: string, id: string): Promise<McpServer> {
+export async function storedView(folder: string, id: string): Promise<McpServer> {
   return viewOf(await entryById(folder, id), folder)
 }
 
@@ -325,26 +321,6 @@ export function setMcpServerSharedProcess(
 export async function mcpServerDetails(id: string, folder = mcpHostListFolder()) {
   const { server } = await entryById(folder, id)
   return { id, ...botToolDetailsOf(folder, server, serverVersion(folder, server)) }
-}
-
-/** The server's sign-in, when Orca signs in to it. */
-export async function mcpServerSignInKey(
-  id: string,
-  folder = mcpHostListFolder()
-): Promise<BotToolOAuthKey | null> {
-  const { server } = await entryById(folder, id)
-  return 'url' in server && server.credential && readBotToolOAuth(folder, server.credential)
-    ? { folder, credentialId: server.credential }
-    : null
-}
-
-/** Calls `changed` when a sign-in in the host's list changes what its row shows, while the switch is on. */
-export function onMcpHostListSignInChanged(changed: () => void): () => void {
-  return onBotToolSignInChanged((folder) => {
-    if (isMcpServersFeatureEnabled() && folder === resolve(mcpHostListFolder())) {
-      changed()
-    }
-  })
 }
 
 /** Each server's name to its id, for answers keyed by name (the bots' health checks). */

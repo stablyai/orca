@@ -20,5 +20,6 @@ export const MOBILE_MCP_SERVER_RPC_METHODS = [
   'mcpServers.signIn.finish',
   'mcpServers.signIn.start',
   'mcpServers.signIn.wait',
+  'mcpServers.signOut',
   'mcpServers.update'
 ] as const

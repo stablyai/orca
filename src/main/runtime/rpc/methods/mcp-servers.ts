@@ -1,7 +1,6 @@
 // mcpServers.*: the host's own MCP server list, for any of the user's clients. Every method refuses
 // while the host's switch is off; every change tells the other clients to re-read.
 import { join } from 'node:path'
-import type { BotToolSignInAttemptView } from '../../../../shared/bot-tool-sign-in'
 import type { McpServer } from '../../../../shared/mcp-servers/mcp-servers'
 import {
   McpServerAdd,
@@ -13,10 +12,6 @@ import {
   McpServerSetAgentEnabled,
   McpServerSetSharedProcess,
   McpServerSetWorkspaces,
-  McpServerSignInFinish,
-  McpServerSignInFlow,
-  McpServerSignInStart,
-  McpServerSignInWait,
   McpServerTarget,
   McpServerUpdate,
   McpServersList
@@ -27,12 +22,6 @@ import {
   sharedBotToolHealthCheck
 } from '../../../bots/bot-tool-health-checks'
 import { resolveBotToolInput } from '../../../bots/bot-tool-details'
-import {
-  cancelBotToolSignInAttempt,
-  finishBotToolSignInAttempt,
-  startBotToolSignInAttempt,
-  waitBotToolSignInAttempt
-} from '../../../bots/tool-oauth/bot-tool-sign-in-attempts'
 import { MCP_HOST_LIST_RELAY_OWNER } from '../../../bots/tool-relay/bot-tool-relay'
 import {
   addMcpServer,
@@ -41,7 +30,6 @@ import {
   mcpHostListFolder,
   mcpServerDetails,
   mcpServerIdsByName,
-  mcpServerSignInKey,
   removeMcpServer,
   setMcpServerAgentEnabled,
   setMcpServerSharedProcess,
@@ -50,13 +38,15 @@ import {
 } from '../../../mcp-servers/mcp-host-list'
 import { McpServersError } from '../../../mcp-servers/mcp-servers-error'
 import { assertMcpServersFeatureEnabled } from '../../../mcp-servers/mcp-servers-feature'
-import { rpcCallerOperationKey } from '../callers/rpc-caller-identity'
-import { defineMethod, InvalidArgumentError, type RpcContext } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 import { botToolServerOf, toolsHomeFor } from './bots-tools'
-import { inHostWords } from './bots-tools-owned-sign-in'
 
 /** Runs `work` with the switch on; a change also tells every other client to re-read the list. */
-async function onHost<T>(context: RpcContext, work: () => Promise<T>, changes = false): Promise<T> {
+export async function onHost<T>(
+  context: RpcContext,
+  work: () => Promise<T>,
+  changes = false
+): Promise<T> {
   assertMcpServersFeatureEnabled()
   const result = await work()
   if (changes) {
@@ -65,15 +55,7 @@ async function onHost<T>(context: RpcContext, work: () => Promise<T>, changes = 
   return result
 }
 
-const changed = (server: McpServer) => ({ server })
-
-/** The device asking, by the identity its connection proved; only it may wait on, finish or cancel. */
-function signInOwner(context: RpcContext): string {
-  if (!context.caller) {
-    throw new Error('This client can’t sign in to servers on this computer.')
-  }
-  return rpcCallerOperationKey(context.caller)
-}
+export const changed = (server: McpServer) => ({ server })
 
 /** A method later hosts fill in; this one refuses it in words a client can tell apart. */
 async function notYet(method: string): Promise<never> {
@@ -186,51 +168,6 @@ export const MCP_SERVER_METHODS = [
         cancelBotToolHealthChecks(MCP_HOST_LIST_RELAY_OWNER)
         return { cancelled: true }
       })
-  }),
-  defineMethod({
-    name: 'mcpServers.signIn.start',
-    permission: 'workspace',
-    params: McpServerSignInStart,
-    handler: (params, context): Promise<BotToolSignInAttemptView> =>
-      onHost(context, async () => {
-        const owner = signInOwner(context)
-        const key = await mcpServerSignInKey(params.id)
-        if (!key) {
-          throw new InvalidArgumentError('Orca doesn’t sign in to this server.')
-        }
-        return inHostWords(() => startBotToolSignInAttempt(owner, key, params.mode))
-      })
-  }),
-  defineMethod({
-    name: 'mcpServers.signIn.wait',
-    permission: 'workspace',
-    params: McpServerSignInWait,
-    handler: (params, context) =>
-      onHost(context, () =>
-        waitBotToolSignInAttempt(
-          signInOwner(context),
-          params.flowId,
-          params.afterRevision,
-          context.signal
-        )
-      )
-  }),
-  defineMethod({
-    name: 'mcpServers.signIn.finish',
-    permission: 'workspace',
-    params: McpServerSignInFinish,
-    handler: (params, context) =>
-      onHost(context, async () => {
-        const owner = signInOwner(context)
-        return inHostWords(() => finishBotToolSignInAttempt(owner, params.flowId, params.query))
-      })
-  }),
-  defineMethod({
-    name: 'mcpServers.signIn.cancel',
-    permission: 'workspace',
-    params: McpServerSignInFlow,
-    handler: (params, context) =>
-      onHost(context, async () => cancelBotToolSignInAttempt(signInOwner(context), params.flowId))
   }),
   defineMethod({
     name: 'mcpServers.setAgentEnabled',

@@ -1924,6 +1924,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'mcpServers.signIn.finish': McpServerSignInFinish,
   'mcpServers.signIn.start': McpServerSignInStart,
   'mcpServers.signIn.wait': McpServerSignInWait,
+  'mcpServers.signOut': McpServerTarget,
   'mcpServers.update': McpServerUpdate,
   'mobileRelay.hosts.list': null,
   'mobileRelay.hosts.worktrees': MobileRelayHostWorktreesParamsSchema,
