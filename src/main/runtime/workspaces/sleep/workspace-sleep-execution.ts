@@ -21,6 +21,7 @@ import {
 } from './remote-workspace-terminal-sleep'
 import type { LifecycleCommand } from '../lifecycle/workspace-lifecycle-command'
 import { teardownStops } from '../removal/owned-session-teardown-policy'
+import type { WorkspaceChatStopAdmission } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-workspace-sleep'
 
 export type WorkspaceSleepDeps = {
   /** The window follows: it hides the workspace's browsers and panes before any terminal stops. */
@@ -29,7 +30,8 @@ export type WorkspaceSleepDeps = {
   callEnvironment: (environmentId: string) => RemoteWorkspaceCall
   stopOwnChats: (
     worktreeId: string,
-    markAsleep: boolean
+    markAsleep: boolean,
+    admit?: WorkspaceChatStopAdmission
   ) => Promise<AgentSessionWorkspaceSleepResult>
   /** Settles once a wake of the workspace's VM that is under way has finished (whatever its
    *  outcome): a sleep stops what the woken server runs. */
@@ -139,7 +141,8 @@ type ChatStops = { receipts: WorkspaceChatStopReceipt[]; failed: boolean; lostCo
 async function stopChats(
   deps: WorkspaceSleepDeps,
   target: WorkspaceSleepTarget,
-  markAsleep: boolean
+  markAsleep: boolean,
+  admit?: WorkspaceChatStopAdmission
 ): Promise<ChatStops> {
   const stops: ChatStops = { receipts: [], failed: false, lostContact: false }
   await Promise.all(
@@ -148,7 +151,7 @@ async function stopChats(
       try {
         result =
           host.kind === 'self'
-            ? await deps.stopOwnChats(target.worktreeId, markAsleep)
+            ? await deps.stopOwnChats(target.worktreeId, markAsleep, admit)
             : await stopEnvironmentChats(
                 deps.callEnvironment(host.environmentId),
                 target.worktreeId,
@@ -185,7 +188,8 @@ async function sleepWorkspace(
   markAsleep: boolean,
   batch: { chatsSettled: () => void; batchChatsSettled: Promise<unknown> },
   reopened: () => boolean,
-  projectMovePauseId?: string
+  projectMovePauseId?: string,
+  admit?: WorkspaceChatStopAdmission
 ): Promise<WorkspaceSleepAttempt> {
   const { worktreeId } = target
   const move = projectMovePauseId ? { projectMovePauseId } : {}
@@ -196,6 +200,10 @@ async function sleepWorkspace(
   let unverifiable = false
   let stoppedPtyIds: string[] | null = null
   let chats: ChatStops = { receipts: [], failed: false, lostContact: false }
+  // A refused chat stays awake, so the workspace is not asleep and the window keeps it open.
+  let refused = false
+  const gate: WorkspaceChatStopAdmission | undefined =
+    admit && ((sessionId, work) => admit(sessionId, work) || ((refused = true), false))
   try {
     try {
       stoppedPtyIds = await sleepTerminals(deps, target)
@@ -208,13 +216,13 @@ async function sleepWorkspace(
           : null
     }
     if (teardownStops('sleep', 'structured-chat')) {
-      chats = await stopChats(deps, target, markAsleep)
+      chats = await stopChats(deps, target, markAsleep, gate)
     }
   } finally {
     batch.chatsSettled()
   }
   // A VM may carry another workspace's host: the whole batch's chats settle before any suspends.
-  if (!failure && deps.suspendVm) {
+  if (!failure && !refused && deps.suspendVm) {
     await batch.batchChatsSettled
     try {
       // Reopened mid-sleep, even while the suspend waits its turn: it is the user's again, so
@@ -226,7 +234,14 @@ async function sleepWorkspace(
     }
   }
   const records = target.terminalHost.kind === 'self' ? deps.ownRecords(worktreeId) : null
-  deps.notify({ worktreeId, phase: 'ended', slept: !failure, stoppedPtyIds, records, ...move })
+  deps.notify({
+    worktreeId,
+    phase: 'ended',
+    slept: !failure && !refused,
+    stoppedPtyIds,
+    records,
+    ...move
+  })
   return {
     worktreeId,
     ...(failure ? { failure } : {}),
@@ -241,7 +256,8 @@ async function sleepWorkspace(
 export async function sleepWorkspaces(
   deps: WorkspaceSleepDeps,
   queue: WorkspaceSleepQueue,
-  request: WorkspaceSleepRequest
+  request: WorkspaceSleepRequest,
+  admit?: WorkspaceChatStopAdmission
 ): Promise<WorkspaceSleepOutcome[]> {
   // Why unique: both copies of a twin share one id, and sleeping it sleeps the whole workspace.
   const targets = [
@@ -271,7 +287,8 @@ export async function sleepWorkspaces(
                 batchChatsSettled
               },
               reopened,
-              request.projectMovePauseId
+              request.projectMovePauseId,
+              admit
             ),
           outcome: (attempt) => (attempt.unverifiable ? 'unverifiable' : 'settled')
         })

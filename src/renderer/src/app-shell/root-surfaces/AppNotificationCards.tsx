@@ -1,5 +1,6 @@
 import { Suspense, type JSX } from 'react'
 import type { TopLevelView } from '../../../../shared/ui-chrome/ui-chrome-types'
+import { AgentCliUpdateCard } from '../../components/agent-cli-update/AgentCliUpdateCard'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../../components/terminal-pane/provider-notices/codex-settings/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../../components/notifications/NotificationCardStack'
@@ -44,6 +45,9 @@ export function AppNotificationCards({
           </OverlayBoundary>
         </Suspense>
       ) : null}
+      <OverlayBoundary boundaryId="overlay.agent-cli-update-card" resetKey={activeView}>
+        <AgentCliUpdateCard />
+      </OverlayBoundary>
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>
           <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>

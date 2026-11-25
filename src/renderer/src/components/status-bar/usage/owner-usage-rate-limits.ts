@@ -43,7 +43,6 @@ type UsageProviderKey = {
 const USAGE_PROVIDER_IDS: Record<UsageProviderKey, ProviderRateLimits['provider']> = {
   claude: 'claude',
   codex: 'codex',
-  gemini: 'gemini',
   opencodeGo: 'opencode-go',
   kimi: 'kimi',
   antigravity: 'antigravity',

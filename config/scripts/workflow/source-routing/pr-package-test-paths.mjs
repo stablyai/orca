@@ -82,11 +82,12 @@ const SHARED_PACKAGE_PREFIXES = [
   'resources/onboarding/',
   'resources/plugins/',
   'resources/skills/',
-  // Packaged CLI startup, skills resolution, and Electron entry/native loading.
-  'src/cli/index.ts',
-  'src/cli/arguments/',
-  'src/cli/runtime/',
-  'src/cli/skills/',
+  // The packaged CLI ships tsc output beside node_modules, so any CLI module's imports can break it (#48778).
+  'src/cli/',
+  // The MCP SDK is a bundled devDependency here: `orca mcp connect`'s bridge and the shared server
+  // processes import it, and only the packaged app checks what that pulls in (#48770 shipped ajv).
+  'src/main/mcp-servers/',
+  // Packaged CLI launch and Electron entry/native loading.
   'src/main/cli/',
   'src/main/index.ts',
   'src/main/node-runtime/',

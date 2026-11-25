@@ -1,5 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
-import { workerDockKindCount } from './worker-dock-labels'
+import { workerDockWorkerCount } from './worker-dock-labels'
 import type { WorkerDockRowView } from './WorkerDockRow'
 
 export function workerDockSummary(
@@ -23,11 +23,8 @@ export function workerDockSummary(
     }
   }
   const total = identities.length
-  const workers = kinds.get('worker')
-  const onlyKind = kinds.size === 1 ? kinds.keys().next().value : undefined
-  const countLabel = total
-    ? workerDockKindCount(t, workers ? 'worker' : (onlyKind ?? 'task'), workers ?? total)
-    : ''
+  // One count for everything listed: workers, subagents and background tasks alike.
+  const countLabel = total ? workerDockWorkerCount(t, total) : ''
   const status = failures
     ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', { count: failures })
     : needsYou
@@ -44,6 +41,35 @@ export function workerDockSummary(
     needsYou,
     mixed: kinds.size > 1,
     total,
+    label: countLabel,
     count: [countLabel, status].filter(Boolean).join(' · ')
   }
+}
+
+/** The folded chip's text, never empty: "3 workers", "2 failed" once only failures remain, or the
+ *  empty copy with no rows. A held roster can outlive its live count by a gesture, so it then
+ *  counts its own rows. */
+export function workerDockChipLabel(
+  t: Translate,
+  {
+    summary,
+    rows,
+    empty
+  }: {
+    summary: { total: number; failures: number; label: string }
+    rows: number
+    empty: string | null
+  }
+): string {
+  if (empty !== null) {
+    return empty
+  }
+  if (!summary.total) {
+    return workerDockWorkerCount(t, rows)
+  }
+  return summary.failures === summary.total
+    ? t('components.native-chat.workerDock.failedCount', '{{count}} failed', {
+        count: summary.failures
+      })
+    : summary.label
 }

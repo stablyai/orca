@@ -10,7 +10,18 @@ import {
   type EphemeralVmRecipeOption
 } from './run-target-options'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
+import type { WslHostDistro } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
+import {
+  useWslHostsAcceptNewWork,
+  useWslHostsPaused
+} from '@/runtime/hosts/wsl/use-wsl-hosts-enabled'
+import { getWslHostsPausedShortLabel } from '@/components/sidebar/host-admission/wsl/wsl-host-row-status'
+import { WslDistroSubmenuRow } from './WslDistroSubmenuRow'
+import { stepSubmenuOptionFocus } from './submenu-option-focus'
+import { pointerHeadsFor, useDelayedSubmenuClose } from './use-delayed-submenu-close'
 
+/** How long a pointer may cross other Add host rows on its way into the WSL list. */
+const WSL_CLOSE_DELAY_MS = 200
 const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
 
 /** The "Per-Workspace Environment" row and its nested recipe list. */
@@ -97,7 +108,8 @@ export function AddHostSubmenuRow({
   optionId,
   onArm,
   onAddSshHost,
-  onAddRemoteServer
+  onAddRemoteServer,
+  onAddWslDistro
 }: {
   open: boolean
   focusOnOpen: boolean
@@ -108,10 +120,45 @@ export function AddHostSubmenuRow({
   onArm: () => void
   onAddSshHost?: () => void
   onAddRemoteServer?: () => void
+  /** Sets up a distro found on this PC; shown only where WSL hosts take new work (Windows, setting on). */
+  onAddWslDistro?: (distro: WslHostDistro) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const [hoveredKey, setHoveredKey] = React.useState<string | null>(null)
+  const wslAcceptsNewWork = useWslHostsAcceptNewWork()
+  const wslPaused = useWslHostsPaused()
+  const showWsl = Boolean(onAddWslDistro) && wslAcceptsNewWork
+  // Its own state, not the highlight: crossing the gap to the nested list leaves this list's rows.
+  const [wslOpenedBy, setWslOpenedBy] = React.useState<'pointer' | 'keyboard' | null>(null)
+  if (!open && wslOpenedBy !== null) {
+    setWslOpenedBy(null)
+  }
+  const wslOpen = open && showWsl && wslOpenedBy !== null
   const listRef = React.useRef<HTMLDivElement>(null)
+  // A pointer heading diagonally for a lower distro crosses SSH and Remote; close only if it stays.
+  const closeWsl = React.useCallback(() => setWslOpenedBy(null), [])
+  const { schedule: scheduleWslClose, cancel: keepWslOpen } = useDelayedSubmenuClose(
+    closeWsl,
+    WSL_CLOSE_DELAY_MS
+  )
+  // While the pointer keeps closing in on the open list, its close waits (a light safe triangle).
+  const lastPointer = React.useRef<{ x: number; y: number } | null>(null)
+  const headingForWsl = React.useRef(false)
+  const trackPointer = (event: React.MouseEvent): void => {
+    const to = { x: event.clientX, y: event.clientY }
+    const list = document.querySelector('[data-wsl-distro-menu]')?.getBoundingClientRect()
+    headingForWsl.current = Boolean(
+      list && lastPointer.current && pointerHeadsFor(list, lastPointer.current, to)
+    )
+    lastPointer.current = to
+  }
+  const armOther = (key: string): void => {
+    setHoveredKey(key)
+    if (headingForWsl.current) {
+      keepWslOpen()
+    }
+    scheduleWslClose()
+  }
   React.useEffect(() => {
     if (open && focusOnOpen) {
       listRef.current?.querySelector<HTMLElement>('[role="option"]')?.focus()
@@ -174,20 +221,42 @@ export function AddHostSubmenuRow({
           role="listbox"
           aria-label={addHostLabel}
           onMouseLeave={() => setHoveredKey(null)}
+          onMouseMoveCapture={trackPointer}
           onKeyDown={(event) => {
             if (event.key === 'ArrowLeft') {
               event.preventDefault()
               backToPicker()
             } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
               event.preventDefault()
-              const items = [
-                ...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')
-              ]
-              const next = event.key === 'ArrowDown' ? items.at(-1) : items[0]
-              next?.focus()
+              stepSubmenuOptionFocus(event.currentTarget, event.key === 'ArrowDown' ? 1 : -1)
             }
           }}
         >
+          {showWsl && onAddWslDistro ? (
+            <WslDistroSubmenuRow
+              open={wslOpen}
+              focusOnOpen={wslOpenedBy === 'keyboard'}
+              onOpenChange={(next) => setWslOpenedBy(next ? (wslOpenedBy ?? 'pointer') : null)}
+              armed={hoveredKey === 'wsl' || wslOpen}
+              onArm={() => setHoveredKey('wsl')}
+              onHoverOpen={() => {
+                keepWslOpen()
+                setHoveredKey('wsl')
+                setWslOpenedBy((current) => current ?? 'pointer')
+              }}
+              onKeyboardOpen={() => {
+                keepWslOpen()
+                setWslOpenedBy('keyboard')
+              }}
+              onPointerEnterList={keepWslOpen}
+              onReturnFocus={() =>
+                listRef.current
+                  ?.querySelector<HTMLElement>('[data-wsl-distro-row] [role="option"]')
+                  ?.focus()
+              }
+              onPickDistro={onAddWslDistro}
+            />
+          ) : null}
           {onAddSshHost ? (
             <RunTargetRow
               icon={<Server className="size-3.5 shrink-0 text-muted-foreground" />}
@@ -201,7 +270,7 @@ export function AddHostSubmenuRow({
               keyboardFocusable
               stacked
               optionId={undefined}
-              onArm={() => setHoveredKey('ssh')}
+              onArm={() => armOther('ssh')}
               onCommit={onAddSshHost}
             />
           ) : null}
@@ -221,9 +290,14 @@ export function AddHostSubmenuRow({
               keyboardFocusable
               stacked
               optionId={undefined}
-              onArm={() => setHoveredKey('remote')}
+              onArm={() => armOther('remote')}
               onCommit={onAddRemoteServer}
             />
+          ) : null}
+          {onAddWslDistro && !wslAcceptsNewWork && wslPaused ? (
+            <p className="px-2 py-1.5 text-2xs text-muted-foreground">
+              {getWslHostsPausedShortLabel(t)}
+            </p>
           ) : null}
         </div>
       </PopoverContent>

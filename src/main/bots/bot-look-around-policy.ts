@@ -1,6 +1,21 @@
 // What a look-around run may do: read. Enforced where tools are called and where Orca's own
 // commands are answered, never by asking the model. Anything not listed is refused.
 import type { ConnectorActionArgs } from '../../shared/connector-action-contract'
+import {
+  BOT_CLI_PREFIX,
+  chainParts,
+  characterRefusal,
+  type LookAroundShell,
+  powerShellWordRefusal,
+  shellSyntaxRefusal,
+  TRAILING_REDIRECT,
+  trimBlanks,
+  unwrapShell,
+  windowsLauncherWordRefusal,
+  words
+} from './bot-look-around-shell-syntax'
+
+export type { LookAroundShell } from './bot-look-around-shell-syntax'
 
 export const LOOK_AROUND_REFUSAL =
   'Looking around can only read. Suggest this as a next step instead.'
@@ -90,81 +105,33 @@ function ghStaysOnGitHub(args: readonly string[]): boolean {
 /** `git branch` only lists: with these, or none. */
 const GIT_BRANCH_LISTING: ReadonlySet<string> = new Set(['-a', '-r', '--all', '--remotes'])
 
-/** A shell can read nothing else into these: no globs, braces, tildes, history or expansion. */
-const PLAIN_WORD = /^[A-Za-z0-9._/:=@,+-]+$/
-
-/**
- * Splits a command into words: plain words, or single-quoted text with no quote inside. Null for
- * anything else, so no shell syntax (chaining, redirection, expansion, globs) reaches the checks.
- */
-function words(command: string): string[] | null {
-  const out: string[] = []
-  let consumed = ''
-  for (const match of command.matchAll(/(?<=^|[ \t])(?:'([^'\n\r]*)'|([^\s']+))(?=[ \t]|$)/g)) {
-    const [whole, quoted, plain] = match
-    if (plain !== undefined && (!PLAIN_WORD.test(plain) || plain.startsWith('='))) {
-      return null
-    }
-    out.push(quoted ?? plain ?? '')
-    consumed += whole
-  }
-  // Anything a word didn't take (a stray quote, a newline) is syntax this check can't read.
-  const gaps = (text: string) => text.replace(/[ \t]/g, '')
-  return gaps(consumed) === gaps(command) ? out : null
-}
-
-/** Codex wraps commands as `/bin/zsh -lc '<command>'`; the inner command is what runs. */
-export function unwrapShell(command: string): string {
-  const wrapped = /^(?:\S*\/)?(?:ba|z)?sh\s+-l?c\s+'((?:[^']|'\\'')*)'$/.exec(command.trim())
-  return wrapped ? wrapped[1].replace(/'\\''/g, "'") : command.trim()
-}
-
-/** How a bot's preamble names this session's own CLI on POSIX; Orca seals the variable. */
-const BOT_CLI_PREFIX = '"${ORCA_CLI_COMMAND:-orca}" '
-
-/** Shell syntax a look-around command may not use, named for the refusal, with the matched text or not. */
-const SHELL_SYNTAX: readonly (readonly [RegExp, string, boolean])[] = [
-  [/\n|\r/, 'a second line', false],
-  [/"/, "double quotes (use 'single quotes')", false],
-  [/&&|\|\||;/, 'chaining', true],
-  [/\|/, 'a pipe', true],
-  [/\d*(?:>>?|<)(?:&\d*-?)?/, 'a redirect', true],
-  [/&/, 'running in the background', true],
-  [/\$\(?|`/, 'expansion', true]
-]
-
-/** Names the shell syntax that kept `command` from splitting into plain words. */
-function shellSyntaxRefusal(command: string): string {
-  const unquoted = command.replace(/'[^'\n\r]*'/g, "''")
-  for (const [pattern, name, show] of SHELL_SYNTAX) {
-    const match = pattern.exec(unquoted)
-    if (match) {
-      const shown = show ? ` ("${match[0]}")` : ''
-      return `Looking around runs one plain command at a time: ${name}${shown} isn't allowed. Run one plain read, with values in 'single quotes'.`
-    }
-  }
-  const word = unquoted.split(/[ \t]+/).find((part) => part && !PLAIN_WORD.test(part))
-  return `Looking around runs one plain command at a time: "${word ?? command}" is shell syntax it can't run. Use plain words or 'single quotes'.`
-}
-
 function notARead(what: string): string {
   return `Looking around can only read: ${what}. Suggest this as a next step instead.`
 }
 
-/** Why a shell command is not one read the run may make, or null when it is. */
-export function lookAroundCommandRefusal(command: string): string | null {
-  const unwrapped = unwrapShell(command)
-  const inner = unwrapped.startsWith(BOT_CLI_PREFIX)
-    ? `orca ${unwrapped.slice(BOT_CLI_PREFIX.length)}`
-    : unwrapped
-  const parts = words(inner)
-  if (!parts) {
+/** Why one part of a chain is not a read the run may make, or null when it is. */
+function partRefusal(part: string, shell: LookAroundShell): string | null {
+  const read = part.replace(TRAILING_REDIRECT[shell], '')
+  const inner =
+    shell === 'bash' && read.startsWith(BOT_CLI_PREFIX)
+      ? `orca ${read.slice(BOT_CLI_PREFIX.length)}`
+      : read
+  const parsed = words(inner)
+  if (!parsed) {
     return shellSyntaxRefusal(inner)
   }
-  if (parts.length === 0) {
+  const wordRefusal =
+    (shell === 'powershell' ? powerShellWordRefusal(parsed) : null) ??
+    (shell === 'powershell' || process.platform === 'win32'
+      ? windowsLauncherWordRefusal(parsed)
+      : null)
+  if (wordRefusal !== null) {
+    return wordRefusal
+  }
+  if (parsed.length === 0) {
     return notARead('an empty command runs nothing')
   }
-  const [program, ...rest] = parts
+  const [program, ...rest] = parsed.map((word) => word.text)
   // A bare name, so PATH picks the real program, not `./gh` or `node_modules/.bin/git`; an
   // environment assignment (`FOO=1 gh`) is no name at all.
   const allowed = Object.hasOwn(READ_COMMANDS, program) ? READ_COMMANDS[program] : undefined
@@ -189,9 +156,33 @@ export function lookAroundCommandRefusal(command: string): string | null {
   return null
 }
 
-/** Whether a shell command is one read the run may make. */
-export function lookAroundCommandAllowed(command: string): boolean {
-  return lookAroundCommandRefusal(command) === null
+/** Why a shell command is not reads the run may make, or null when it is: each part of a chain is
+ *  held to the same rules, and one refused part refuses the whole command. */
+export function lookAroundCommandRefusal(
+  command: string,
+  shell: LookAroundShell = 'bash'
+): string | null {
+  const unwrapped = shell === 'bash' ? unwrapShell(command) : trimBlanks(command)
+  const characters = characterRefusal(unwrapped)
+  if (characters !== null) {
+    return characters
+  }
+  const parts = chainParts(unwrapped)
+  for (const part of parts) {
+    const refusal = partRefusal(part, shell)
+    if (refusal !== null) {
+      return parts.length > 1 ? `${refusal} Refused part: ${part || '(empty)'}` : refusal
+    }
+  }
+  return null
+}
+
+/** Whether a shell command is reads the run may make. */
+export function lookAroundCommandAllowed(
+  command: string,
+  shell: LookAroundShell = 'bash'
+): boolean {
+  return lookAroundCommandRefusal(command, shell) === null
 }
 
 /** Claude tools that only read, or only look up other tools. */
@@ -204,7 +195,39 @@ const READ_TOOLS: ReadonlySet<string> = new Set([
   'ToolSearch'
 ])
 
+/** Claude's shell tools; PowerShell is Claude Code's shell on Windows. */
+const SHELL_TOOLS: ReadonlyMap<string, LookAroundShell> = new Map([
+  ['Bash', 'bash'],
+  ['PowerShell', 'powershell']
+])
+
 export type LookAroundToolDecision = { decision: 'allow' } | { decision: 'deny'; reason: string }
+
+/** The shells a Codex command may run in here: on Windows that is PowerShell, or Bash under WSL
+ *  or Git Bash, so a command must pass both. */
+export function codexCommandShells(
+  platform: NodeJS.Platform = process.platform
+): readonly LookAroundShell[] {
+  return platform === 'win32' ? ['powershell', 'bash'] : ['bash']
+}
+
+/** The one answer to a shell command, for Claude's shell tools and Codex's approvals alike: it
+ *  must be reads in every shell it may run in. */
+export function lookAroundShellDecision(
+  command: unknown,
+  shells: readonly LookAroundShell[]
+): LookAroundToolDecision {
+  for (const shell of shells) {
+    const refusal =
+      typeof command === 'string'
+        ? lookAroundCommandRefusal(command, shell)
+        : notARead('the command is missing')
+    if (refusal !== null) {
+      return { decision: 'deny', reason: refusal }
+    }
+  }
+  return { decision: 'allow' }
+}
 
 /** Claude's PreToolUse answer: an explicit allow, so a read never waits on a prompt nobody sees;
  *  a refusal names what was refused, so the model doesn't retry variants of it. */
@@ -212,17 +235,14 @@ export function lookAroundToolDecision(toolName: string, input: unknown): LookAr
   if (READ_TOOLS.has(toolName)) {
     return { decision: 'allow' }
   }
-  if (toolName === 'Bash' && typeof input === 'object' && input !== null && 'command' in input) {
-    const refusal =
-      typeof input.command === 'string'
-        ? lookAroundCommandRefusal(input.command)
-        : notARead('the command is missing')
-    return refusal === null ? { decision: 'allow' } : { decision: 'deny', reason: refusal }
+  const shell = SHELL_TOOLS.get(toolName)
+  if (shell && typeof input === 'object' && input !== null && 'command' in input) {
+    return lookAroundShellDecision(input.command, [shell])
   }
   // MCP tools, writes, web fetches, subagents and anything new.
   return {
     decision: 'deny',
-    reason: `Looking around can only read: the ${toolName} tool isn't allowed. Reads run through Read, Grep, Glob or Bash; suggest anything else as a next step instead.`
+    reason: `Looking around can only read: the ${toolName} tool isn't allowed. Reads run through Read, Grep, Glob, Bash or PowerShell; suggest anything else as a next step instead.`
   }
 }
 
