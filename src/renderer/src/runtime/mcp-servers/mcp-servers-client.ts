@@ -9,7 +9,12 @@ import type {
   McpServer,
   McpServerWorkspaces
 } from '../../../../shared/mcp-servers/mcp-servers'
+import {
+  emitMcpServersChangedWindowEvent,
+  onMcpServersChanged
+} from '@/lib/mcp-servers-changed-window-event'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { getRuntimeTargetHostId } from '../rpc/targets/runtime-client-target'
 import { RuntimeRpcCallError } from '../rpc/calls/runtime-rpc-result'
 
 /** A server as a later host may send it: `plugin` names the plugin that contributes it. */
@@ -45,8 +50,30 @@ function call<T>(
   return callRuntimeRpc<T>(target, `mcpServers.${method}`, params)
 }
 
-// Changes need no local re-read: the host tells every client, this one included (mcpServersChanged).
-const change = call
+/**
+ * The host tells every client of a write (mcpServersChanged), but a change that writes nothing (a
+ * stale view's switch already set there) tells none: then the asking window re-reads its list itself.
+ */
+async function change<T>(
+  target: RuntimeClientTarget,
+  method: string,
+  params: McpCallParams = {}
+): Promise<T> {
+  const hostId = getRuntimeTargetHostId(target)
+  let told = false
+  const stop = onMcpServersChanged(() => {
+    told = true
+  }, hostId)
+  try {
+    const result = await call<T>(target, method, params)
+    if (!told) {
+      emitMcpServersChangedWindowEvent(hostId)
+    }
+    return result
+  } finally {
+    stop()
+  }
+}
 
 const served = (server: { server: McpServerView }): McpServerView => server.server
 
