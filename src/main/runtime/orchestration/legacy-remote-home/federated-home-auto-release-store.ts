@@ -1,6 +1,6 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { toSqliteUtcTimestamp } from '../db/utc-timestamp'
-import { WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS } from '../db/worker-terminal/worker-terminal-auto-release'
+import { WORKER_AUTO_CLOSE_GRACE_MS } from '../../../../shared/orchestration/workers/worker-auto-close'
 
 /** Only for a host that cannot release on its own; arms once, so a retain or release before settlement still wins. */
 export function armFederatedHomeAutoRelease(
@@ -14,7 +14,7 @@ export function armFederatedHomeAutoRelease(
           SET home_auto_release_at = ?, home_auto_release_state = 'armed', updated_at = datetime('now')
         WHERE dispatch_id = ? AND home_auto_release_state IS NULL`
     )
-    .run(toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS), dispatchId)
+    .run(toSqliteUtcTimestamp(nowMs + WORKER_AUTO_CLOSE_GRACE_MS), dispatchId)
   if (changes > 0) {
     this.workerTerminalAutoReleaseListener?.()
   }
@@ -48,7 +48,7 @@ export function claimDueFederatedHomeAutoReleases(this: OrchestrationDb, nowMs: 
         SET home_auto_release_at = ?, updated_at = datetime('now')
       WHERE dispatch_id = ? AND home_auto_release_state = 'armed' AND home_auto_release_at <= ?`
   )
-  const retryAt = toSqliteUtcTimestamp(nowMs + WORKER_TERMINAL_AUTO_RELEASE_GRACE_MS)
+  const retryAt = toSqliteUtcTimestamp(nowMs + WORKER_AUTO_CLOSE_GRACE_MS)
   return due.flatMap(({ dispatch_id }) =>
     claim.run(retryAt, dispatch_id, toSqliteUtcTimestamp(nowMs)).changes > 0 ? [dispatch_id] : []
   )

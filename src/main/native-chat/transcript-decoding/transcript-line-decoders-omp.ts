@@ -7,6 +7,7 @@ import {
   type NativeChatMessage
 } from '../../../shared/native-chat/native-chat-types'
 import type { AgentSessionTokenUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import { NATIVE_CHAT_ADVISOR_PRESENTATION } from '../../../shared/native-chat/transcript/notices/native-chat-notice'
 import { buildImageDataUri } from '../../../shared/file-preview/image-data-uri'
 import { asRecord } from '../../ai-vault/parsing/session-record-fields'
 import { extractString } from '../../../shared/text/trimmed-string'
@@ -213,7 +214,9 @@ function ompCustomMessageBlocks(record: Record<string, unknown>): NativeChatBloc
     const severity = extractString(entry?.severity)
     return [`${source}${severity ? ` (${severity})` : ''}: ${note}`]
   })
-  return lines.length === 0 ? [] : [{ type: 'text', text: lines.join('\n') }]
+  return lines.length === 0
+    ? []
+    : [{ type: 'text', text: lines.join('\n'), presentation: NATIVE_CHAT_ADVISOR_PRESENTATION }]
 }
 
 function ompContentBlocks(content: unknown): NativeChatBlock[] {

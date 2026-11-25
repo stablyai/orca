@@ -94,6 +94,8 @@ export const CONNECTOR_LIMITS = {
   // People one bot's hello lists in sharedWith: a size budget, not a product limit. At every cap they
   // add under 24 KB to the bot, inside its share of a hello.
   maxBotShares: 50,
+  // A bot's purpose, as its owner wrote it, in its hello and on a teammate's share list.
+  maxBotPurposeLength: 1000,
   maxShareEmailLength: 254,
   // One held message, sealed and in base64, with room for its request beside it under maxRequestBytes.
   maxHeldMessageChars: 1024 * 1024 - 4 * 1024,

@@ -1,6 +1,6 @@
 import type { ResumableTuiAgent } from '../../agent-session/lifecycle/agent-session-resume'
+import { findAgentExecutableIndex, isAgentExecutableToken } from './agent-executable-args'
 import {
-  isPosixStartupShell,
   quoteStartupArg,
   tokenizeStartupCommand,
   type AgentStartupShell
@@ -17,37 +17,14 @@ function isClaudeResumeSelector(token: string): boolean {
   return token === '-r' || token.startsWith('-r=') || token === '-c' || token.startsWith('-c=')
 }
 
-function isClaudeExecutableToken(token: string): boolean {
-  const base = token.split(/[\\/]/).pop() ?? ''
-  return /^claude(\.(exe|cmd|bat|ps1))?$/i.test(base)
-}
-
 /** Accept claude only in command position (start, wrapper --, PowerShell &, or POSIX assignments); path-shaped arguments cannot claim execution. */
 export function findClaudeExecutableIndex(
   tokens: readonly string[],
   shell: AgentStartupShell
 ): number {
-  let commandPosition = true
-  for (let i = 0; i < tokens.length; i += 1) {
-    const token = tokens[i]
-    if (commandPosition) {
-      if (isClaudeExecutableToken(token)) {
-        return i
-      }
-      if (
-        // NAME=value prefixes are POSIX/fish3.1+ syntax; Windows shells treat them as executable names.
-        (isPosixStartupShell(shell) && /^[A-Za-z_][A-Za-z0-9_]*=/.test(token)) ||
-        (shell === 'powershell' && token === '&' && i === 0)
-      ) {
-        continue
-      }
-      commandPosition = false
-    }
-    if (token === '--') {
-      commandPosition = true
-    }
-  }
-  return -1
+  return findAgentExecutableIndex(tokens, shell, (token) =>
+    isAgentExecutableToken(token, ['claude'])
+  )
 }
 
 export function buildAgentResumeLaunchCommand(

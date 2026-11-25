@@ -5714,6 +5714,12 @@
                 "message": "Claude 用量将在下次运行 Claude 时更新"
               }
             },
+            "codex": {
+              "waiting": {
+                "label": "运行 Codex 时更新",
+                "message": "Codex 用量将在下次运行 Codex 时更新"
+              }
+            },
             "1804cd8c3f": "正在刷新登录",
             "bf2e739f18": "登录不可用",
             "f8f0f9d8cc": "网络问题",
@@ -6000,6 +6006,7 @@
       "shuffle": "换一张头像",
       "namePlaceholder": "为你的 bot 命名",
       "purposeLabel": "身份",
+      "purposeTooLongForHost": "{{host}} 上的 Orca 最多接受 200 个字符的用途说明。请缩短内容，或更新 {{host}} 上的 Orca。",
       "purposePlaceholder": "它是谁，负责做什么",
       "create": "创建",
       "fromTemplate": "使用模板",

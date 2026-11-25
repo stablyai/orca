@@ -8,6 +8,10 @@ import type {
   ShellOpenLocalPathResult
 } from '../../../shared/shell/opening/shell-open-types'
 import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtime-editor-file-open'
+import type {
+  ForwardedUrlOpenRequest,
+  ForwardedUrlOpenResult
+} from '../../../shared/workspace/ports/forwarded-url-open'
 
 export type ShellApi = {
   /** Every OS open names the path's owner; main refuses anything not owned by this computer. */
@@ -20,6 +24,8 @@ export type ShellApi = {
     request: ShellOpenExternalEditorRequest
   ) => Promise<ShellOpenExternalEditorResult>
   openUrl: (url: string) => Promise<void>
+  /** Desktop only: opens a forward's local URL, choosing 127.0.0.1 when another app holds [::1]. */
+  openForwardedUrl?: (request: ForwardedUrlOpenRequest) => Promise<ForwardedUrlOpenResult>
   openFilePath: (
     path: string,
     ownerHostId: ExecutionHostId,
