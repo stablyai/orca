@@ -5,6 +5,7 @@ import {
   clearNativeChatPendingAttachments,
   deferNativeChatPasteReference,
   flushNativeChatWaitingPasteReferences,
+  moveNativeChatPendingAttachments,
   settleNativeChatPendingAttachment,
   settleNativeChatPendingAttachmentReferences
 } from './native-chat-pending-attachment-cache'
@@ -61,4 +62,26 @@ it('keeps a pasted image reference behind an earlier pasted image that is still 
   expect(readNativeChatComposerDraft(scope).text).toBe(
     '@/tmp/report.txt @/tmp/early.png @/tmp/late.png'
   )
+})
+
+// A saving image follows its draft to the new scope (worktree hand-off, queued-edit hand-back) and
+// survives that composer going unavailable; a deliberate discard there is final.
+it('settles a saving image into the draft it moved to, and not after that draft is discarded', () => {
+  const from = 'pending-move-source'
+  const to = 'pending-move-destination'
+  addNativeChatPendingAttachment(from, { id: 'moved', path: '', pending: true })
+  addNativeChatPendingAttachment(from, { id: 'discarded', path: '', pending: true })
+  holdNativeChatPendingImageSave('moved')
+  holdNativeChatPendingImageSave('discarded')
+  moveNativeChatPendingAttachments(from, to)
+
+  clearNativeChatPendingAttachments(to, { keepSaving: true })
+  expect(settleNativeChatPendingAttachment(from, 'moved', '/tmp/moved.png')).toBe(true)
+  releaseNativeChatPendingImageSave('moved')
+  clearNativeChatPendingAttachments(to)
+  expect(settleNativeChatPendingAttachment(from, 'discarded', '/tmp/discarded.png')).toBe(false)
+  releaseNativeChatPendingImageSave('discarded')
+
+  expect(readNativeChatComposerDraft(to).images.map(({ path }) => path)).toEqual(['/tmp/moved.png'])
+  expect(readNativeChatComposerDraft(from).images).toEqual([])
 })

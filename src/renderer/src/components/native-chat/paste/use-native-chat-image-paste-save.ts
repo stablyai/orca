@@ -25,6 +25,28 @@ import type { useNativeChatPasteLifetime } from './use-native-chat-paste-lifetim
 
 type PasteLifetime = ReturnType<typeof useNativeChatPasteLifetime>
 
+/**
+ * Hold the chip only while main saves it, so a composer going unavailable then cannot discard it;
+ * release it and run `afterSave` however the save ends. Module-level so the hook compiles.
+ */
+async function holdingPendingImageSave(
+  pendingId: string | null,
+  save: () => Promise<boolean>,
+  afterSave: () => void
+): Promise<boolean> {
+  if (pendingId) {
+    holdNativeChatPendingImageSave(pendingId)
+  }
+  try {
+    return await save()
+  } finally {
+    if (pendingId) {
+      releaseNativeChatPendingImageSave(pendingId)
+    }
+    afterSave()
+  }
+}
+
 /** Save a pasted image and settle it into its chip's draft; every loss is reported or traced. */
 export function useNativeChatImagePasteSave({
   attachmentScopeKey,
@@ -131,11 +153,7 @@ export function useNativeChatImagePasteSave({
         followChip()
         notice = { text, errorText }
       }
-      // Held only while main saves it: a composer going unavailable then must not discard the chip.
-      if (pendingId) {
-        holdNativeChatPendingImageSave(pendingId)
-      }
-      try {
+      const settleSaved = async (): Promise<boolean> => {
         const { stagingScope } = owner.kind === 'local' ? owner : { stagingScope: undefined }
         let saved = await saveNativeChatPastedClipboardImage(owner, {
           besideText,
@@ -161,7 +179,9 @@ export function useNativeChatImagePasteSave({
         if (lostTo) {
           recordNativeChatImagePasteDropped(lostTo)
         }
-        const kept = keepStoreUploadAfterUnmount(pendingId, saved, { stagingScope })
+        const kept = keepStoreUploadAfterUnmount(pendingId, saved, {
+          stagingScope
+        })
         if (saved.status !== 'saved') {
           if (!kept) {
             dropImagePaste(pendingId)
@@ -184,10 +204,8 @@ export function useNativeChatImagePasteSave({
           report(nativeChatImagePasteFailedNotice())
         }
         return false
-      } finally {
-        if (pendingId) {
-          releaseNativeChatPendingImageSave(pendingId)
-        }
+      }
+      const flushAndNotify = (): void => {
         if (liveScope !== undefined) {
           flushNativeChatWaitingPasteReferences(liveScope)
         }
@@ -205,6 +223,7 @@ export function useNativeChatImagePasteSave({
           }
         }
       }
+      return holdingPendingImageSave(pendingId, settleSaved, flushAndNotify)
     },
     [
       attachmentScopeKey,
