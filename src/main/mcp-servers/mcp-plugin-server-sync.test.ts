@@ -56,7 +56,7 @@ it('keeps the user’s switches across plugin updates, writes nothing unchanged,
   const id = added?.id ?? ''
   await setMcpServerAgentEnabled(id, 'codex', false, folder)
   const workspaces = { later: false, on: ['repo-1'], off: [] }
-  await setMcpServerWorkspaces(id, workspaces, folder)
+  await setMcpServerWorkspaces(id, workspaces, { folder })
 
   const text = readFileSync(botToolsPath(folder), 'utf8')
   const epoch = botToolsEpoch(folder)

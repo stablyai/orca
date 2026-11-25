@@ -110,9 +110,10 @@ export async function setMcpServerAgent(
 export async function setMcpServerWorkspaces(
   target: RuntimeClientTarget,
   id: string,
-  workspaces: McpServerWorkspaces
+  workspaces: McpServerWorkspaces,
+  base: McpServerWorkspaces
 ): Promise<McpServerView> {
-  return served(await change(target, 'setWorkspaces', { id, workspaces }))
+  return served(await change(target, 'setWorkspaces', { id, workspaces, base }))
 }
 
 export async function setMcpServerSharedProcess(

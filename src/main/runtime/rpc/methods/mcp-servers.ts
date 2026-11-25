@@ -229,7 +229,10 @@ export const MCP_SERVER_METHODS = [
     handler: (params, context) =>
       onHost(
         context,
-        async () => changed(await setMcpServerWorkspaces(params.id, params.workspaces)),
+        async () =>
+          changed(
+            await setMcpServerWorkspaces(params.id, params.workspaces, { base: params.base })
+          ),
         true
       )
   }),

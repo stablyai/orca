@@ -92,9 +92,12 @@ export const McpServerSetAgentEnabled = z.object({
   enabled: z.boolean()
 })
 
+// `base` is the choice the edit was made from, so the host writes only what changed; an older host
+// drops it and stores `workspaces` whole.
 export const McpServerSetWorkspaces = z.object({
   id: ServerId,
-  workspaces: McpServerWorkspacesSchema
+  workspaces: McpServerWorkspacesSchema,
+  base: McpServerWorkspacesSchema.optional()
 })
 
 export const McpServerSetSharedProcess = z.object({ id: ServerId, enabled: z.boolean() })

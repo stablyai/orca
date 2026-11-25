@@ -177,14 +177,19 @@ export function useMcpServerActions(args: {
     [list, enable, run, t]
   )
 
-  // Each write names the whole choice, so they go one at a time in the order they were made.
+  // Writes go one at a time in the order they were made; a tap's names the choice it edited
+  // (`base`), so the host keeps what another client saved meanwhile.
   const workspaceWrites = useRef<Promise<void>>(Promise.resolve())
   const setWorkspaces = useCallback(
-    (server: PhoneMcpServer, workspaces: PhoneMcpWorkspaces): Promise<void> => {
+    (
+      server: PhoneMcpServer,
+      workspaces: PhoneMcpWorkspaces,
+      base?: PhoneMcpWorkspaces
+    ): Promise<void> => {
       const write = workspaceWrites.current.then(() =>
         change(async (live) =>
           mcpServerSetWorkspaces.interpret(
-            await mcpServerSetWorkspaces.request(live, { id: server.id, workspaces })
+            await mcpServerSetWorkspaces.request(live, { id: server.id, workspaces, base })
           )
         )
       )

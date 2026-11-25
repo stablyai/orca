@@ -73,7 +73,7 @@ describe("a host's MCP server list", () => {
     const { version } = await mcpServerDetails(added.id, folder)
     // A switch flipped while the editor is open doesn't make its save stale.
     const workspaces = { later: false, on: ['repo-1', 'folder:notes'], off: ['repo-2'] }
-    await setMcpServerWorkspaces(added.id, workspaces, folder)
+    await setMcpServerWorkspaces(added.id, workspaces, { folder })
     // A bot-tools write that knows nothing of these keys keeps them.
     await changeBotToolServers(folder, (servers) => [...servers])
     const updated = await updateMcpServer(
@@ -133,5 +133,27 @@ describe("a host's MCP server list", () => {
       docs?.id
     ])
     expect((await listMcpServers(folder)).map((server) => server.id)).toEqual([pg?.id, docs?.id])
+  })
+
+  // Two editors open on "All workspaces": each saves its own exclusion from what it was showing.
+  it('keeps an exclusion another editor saved while this one still showed the old choice', async () => {
+    const folder = tempDir('mcp-host-list-')
+    const added = await addMcpServer(
+      { name: 'postgres', command: 'npx', args: ['-y', 'server-postgres'] },
+      { nameGiven: true },
+      folder
+    )
+    const shown = { later: true, on: [], off: [] }
+    await setMcpServerWorkspaces(
+      added.id,
+      { later: true, on: [], off: ['repo-x'] },
+      { base: shown, folder }
+    )
+    const saved = await setMcpServerWorkspaces(
+      added.id,
+      { later: true, on: [], off: ['repo-y'] },
+      { base: shown, folder }
+    )
+    expect(saved.workspaces).toEqual({ later: true, on: [], off: ['repo-x', 'repo-y'] })
   })
 })
