@@ -9,9 +9,11 @@ import {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
+import { focusNativeChatPromptCard } from '../prompts/use-native-chat-prompt-card-focus'
 import {
   closeNativeChatSubagentOnEscape,
   openNativeChatSubagent,
+  takeNativeChatSubagentPromptFocus,
   useNativeChatOpenSubagent
 } from './native-chat-open-subagent'
 import { NativeChatInSubagentSheet } from './native-chat-subagent-sheet-context'
@@ -48,6 +50,7 @@ export function NativeChatSubagentSheetPromptSlot({
   const host = useContext(NativeChatSubagentSheetHost)
   const openId = useNativeChatOpenSubagent(host?.paneKey ?? '')?.agentId
   const slot = host?.promptSlot ?? null
+  const paneKey = host?.paneKey
   const inSheet = slot !== null && agentId !== undefined && agentId === openId
   // One portal box for the card's whole life: moving the box, not the card, keeps a half-typed answer.
   const [box] = useState(() => {
@@ -74,13 +77,18 @@ export function NativeChatSubagentSheetPromptSlot({
     const sheet = box.parentElement?.closest<HTMLElement>('[role="dialog"]')
     const hadFocus = box.contains(document.activeElement)
     target.appendChild(box)
+    // A Show that swapped the sheet to this prompt's subagent: the card takes focus as it arrives,
+    // since its own focus effect ran when it mounted under the conversation.
+    if (inSheet && agentId && paneKey && takeNativeChatSubagentPromptFocus(paneKey, agentId)) {
+      focusNativeChatPromptCard(box, null)
+      return
+    }
     // Leaving a sheet that stays open (Esc up a level) takes the card's focus with it; the sheet keeps it.
     if (hadFocus && sheet?.isConnected && !sheet.contains(box)) {
       sheet.focus({ preventScroll: true })
     }
-  }, [box, inSheet, slot])
+  }, [agentId, box, inSheet, paneKey, slot])
   useLayoutEffect(() => () => box.remove(), [box])
-  const paneKey = host?.paneKey
   return (
     <>
       <div ref={placeAtAnchor} className="contents" />

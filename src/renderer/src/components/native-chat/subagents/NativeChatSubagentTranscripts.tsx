@@ -13,6 +13,7 @@ import {
   NATIVE_CHAT_SUBAGENT_SHEET_ATTRIBUTE,
   noteNativeChatSubagentParent,
   openNativeChatSubagent,
+  openNativeChatSubagentToPrompt,
   takeNativeChatSubagentOpener,
   useNativeChatOpenSubagent,
   type NativeChatSubagentView
@@ -64,8 +65,10 @@ export function NativeChatSubagentTranscripts({
   const titleId = useId()
   const showWaiting = useCallback(
     (agentId: string | null) =>
-      agentId === null ? closeNativeChatSubagentToPrompt(paneKey) : open(agentId),
-    [open, paneKey]
+      agentId === null
+        ? closeNativeChatSubagentToPrompt(paneKey)
+        : openNativeChatSubagentToPrompt(paneKey, agentId),
+    [paneKey]
   )
   const shown = useMemo<NativeChatSubagentView | null>(
     () =>

@@ -34,6 +34,8 @@ export type NativeChatOpenSubagent = { agentId: string; parentId: string | null 
 const openByPane = new Map<string, NativeChatOpenSubagent>()
 // What had focus when the sheet opened, to hand it back on close; 'prompt': the pane's waiting prompt.
 const openerByPane = new Map<string, Element | 'prompt'>()
+// The subagent a Show swapped the sheet to; its waiting prompt takes focus as it moves into the sheet.
+const promptFocusByPane = new Map<string, string>()
 const listeners = new Set<() => void>()
 
 function subscribe(listener: () => void): () => void {
@@ -51,6 +53,9 @@ function publish(): void {
 export function openNativeChatSubagent(paneKey: string, agentId: string | null): void {
   if ((openByPane.get(paneKey)?.agentId ?? null) === agentId) {
     return
+  }
+  if (promptFocusByPane.get(paneKey) !== agentId) {
+    promptFocusByPane.delete(paneKey)
   }
   if (agentId === null) {
     openByPane.delete(paneKey)
@@ -71,6 +76,21 @@ export function closeNativeChatSubagentToPrompt(paneKey: string): void {
   openNativeChatSubagent(paneKey, null)
 }
 
+/** Swaps the pane's sheet to the subagent whose prompt waits; that prompt takes focus as it draws in the sheet. */
+export function openNativeChatSubagentToPrompt(paneKey: string, agentId: string): void {
+  promptFocusByPane.set(paneKey, agentId)
+  openNativeChatSubagent(paneKey, agentId)
+}
+
+/** Whether this subagent's prompt, now in the pane's sheet, was asked for by Show; true once. */
+export function takeNativeChatSubagentPromptFocus(paneKey: string, agentId: string): boolean {
+  if (promptFocusByPane.get(paneKey) !== agentId) {
+    return false
+  }
+  promptFocusByPane.delete(paneKey)
+  return true
+}
+
 /** Where the pane's sheet hands focus back on close, once: what opened it, or its waiting prompt. */
 export function takeNativeChatSubagentOpener(paneKey: string): Element | 'prompt' | undefined {
   const opener = openerByPane.get(paneKey)
@@ -85,6 +105,7 @@ export function retireNativeChatSubagentViews(tabId: string): void {
     if (paneKey.startsWith(`${tabId}:`)) {
       openByPane.delete(paneKey)
       openerByPane.delete(paneKey)
+      promptFocusByPane.delete(paneKey)
       retired = true
     }
   }
