@@ -2,6 +2,7 @@ import { refreshBotHost } from '@/lib/bot-host-refresh'
 import { refreshRuntimeEnvironmentSshTargetMetadata } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { toRuntimeExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store'
+import { refreshRemoteAgentOrchestration } from '@/runtime/agent-orchestration/remote-agent-orchestration'
 import {
   createRuntimeProjectRefreshScheduler,
   refreshRuntimeProjectWorktreesAndLineage,
@@ -18,6 +19,8 @@ export function createRuntimeProjectCatalogRefreshScheduler(): RuntimeProjectRef
       void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       // A bot's link to its home changes with this event, as for this app's own catalog; unlisted hosts skip it.
       void refreshBotHost(toRuntimeExecutionHostId(environmentId))
+      // Workers that started while this window was away, or the host slept, announced themselves to no one here.
+      refreshRemoteAgentOrchestration(environmentId, { reconnected: true })
       const repos = await useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
       // Group/folder edits share reposChanged; refresh groups before folders to resolve their owners.
       const runtimeOwner = { runtimeEnvironmentId: environmentId }

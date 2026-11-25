@@ -18,9 +18,25 @@ export abstract class OrcaRuntimeWithOrchestrationDatabaseBinding extends OrcaRu
     this.emitClientEvent({ type: 'peerMailReturned' })
   }
 
+  private agentOrchestrationNoticeQueued = false
+  /** One notice per tick, after the writes commit, for every Dispatch however its creator ran. */
+  private noteAgentOrchestrationChanged(): void {
+    if (this.agentOrchestrationNoticeQueued) {
+      return
+    }
+    this.agentOrchestrationNoticeQueued = true
+    queueMicrotask(() => {
+      this.agentOrchestrationNoticeQueued = false
+      this.emitClientEvent({ type: 'agentOrchestrationChanged' })
+    })
+  }
+
   protected bindWorkerTerminalAutoRelease(db: OrchestrationDb): void {
     // A worker can settle with no agent phase change (a failed start, a release); bots re-read.
-    db.workerStatusListener = (dispatchId, change) => this.botDispatchChanged(dispatchId, change)
+    db.workerStatusListener = (dispatchId, change) => {
+      this.botDispatchChanged(dispatchId, change)
+      this.noteAgentOrchestrationChanged()
+    }
     db.workerTerminalAutoReleaseListener = () => {
       if (this._orchestrationDb === db) {
         getWorkerTerminalAutoReleaseScheduler(this).rearm()

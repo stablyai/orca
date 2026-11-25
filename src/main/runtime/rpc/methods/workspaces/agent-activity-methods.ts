@@ -1,5 +1,6 @@
 import { defineMethod } from '../../core'
 import {
+  AGENT_ACTIVITY_ORCHESTRATION_MAX_CONTEXTS,
   AGENT_ACTIVITY_ORCHESTRATION_METHOD,
   AgentActivityClearParams,
   AgentActivitySetReadParams,
@@ -35,7 +36,12 @@ export const AGENT_ACTIVITY_METHODS = [
     permission: 'workspace',
     params: null,
     handler: async (_params, { runtime }): Promise<AgentActivityOrchestrationResult> => ({
-      contexts: runtime.agentOrchestrationByPaneKey() ?? {}
+      contexts: Object.fromEntries(
+        Object.entries(runtime.agentOrchestrationByPaneKey() ?? {}).slice(
+          0,
+          AGENT_ACTIVITY_ORCHESTRATION_MAX_CONTEXTS
+        )
+      )
     })
   })
 ]

@@ -17,3 +17,6 @@ export const AGENT_ACTIVITY_ORCHESTRATION_METHOD = 'agentActivity.orchestration'
 export type AgentActivityOrchestrationResult = {
   contexts: Record<string, AgentStatusOrchestrationContext>
 }
+
+/** Bounds one reply; a host past it sends its first contexts, and a reader ignores the rest. */
+export const AGENT_ACTIVITY_ORCHESTRATION_MAX_CONTEXTS = 2_000

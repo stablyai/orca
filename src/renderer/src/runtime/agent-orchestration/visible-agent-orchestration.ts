@@ -27,12 +27,26 @@ export type VisibleOrchestrationState = WorktreeRuntimeOwnerState &
       | 'unifiedTabsByWorktree'
       | 'agentStatusByPaneKey'
       | 'runtimeAgentOrchestrationByPaneKey'
+      | 'remoteAgentOrchestrationByHost'
       | 'ptyIdsByTabId'
     >
   > & {
     tabsByWorktree?: Record<string, readonly { id: string; ptyId?: string | null }[]>
   }
 const EMPTY: Record<string, never> = {}
+// A row on a remote host reads that host's contexts first; the local map holds this computer's.
+function storedContext(
+  state: VisibleOrchestrationState,
+  row: { key: string; host: string | null } | undefined,
+  paneKey: string
+): AgentStatusOrchestrationContext | undefined {
+  const key = row?.key ?? paneKey
+  const remote =
+    row?.host && row.host !== LOCAL_EXECUTION_HOST_ID
+      ? state.remoteAgentOrchestrationByHost?.[row.host]?.[key]
+      : undefined
+  return remote ?? state.runtimeAgentOrchestrationByPaneKey?.[key]
+}
 const producerByContext = new WeakMap<AgentStatusOrchestrationContext, string>()
 export function orchestrationProducer(context: AgentStatusOrchestrationContext): string {
   return producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID
@@ -144,6 +158,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   const terminals = terminalProvenance(state)
   const inputs = [
     state.runtimeAgentOrchestrationByPaneKey,
+    state.remoteAgentOrchestrationByHost,
     state.agentStatusByPaneKey,
     terminals,
     rows
@@ -175,6 +190,13 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
   for (const [key, context] of Object.entries(state.runtimeAgentOrchestrationByPaneKey ?? EMPTY)) {
     adapt(key, context, producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID)
   }
+  for (const [host, hostContexts] of Object.entries(
+    state.remoteAgentOrchestrationByHost ?? EMPTY
+  )) {
+    for (const [key, context] of Object.entries(hostContexts)) {
+      adapt(key, context, host)
+    }
+  }
   const embedded = (
     entry: NonNullable<ReturnType<AppState['agentStatusByPaneKey']['get']>>,
     worktreeId = entry.worktreeId
@@ -184,7 +206,7 @@ function projection(state: VisibleOrchestrationState): NonNullable<typeof cache>
       return
     }
     const row = canonical.get(entry.paneKey)
-    const runtime = state.runtimeAgentOrchestrationByPaneKey?.[row?.key ?? entry.paneKey]
+    const runtime = storedContext(state, row, entry.paneKey)
     if (
       runtime &&
       (!row || row.host === orchestrationProducer(runtime)) &&
@@ -244,7 +266,7 @@ export function canonicalOrchestrationForRow(
   paneKey: string
 ): AgentStatusOrchestrationContext | undefined {
   const row = rowIdentities(state).canonical.get(paneKey)
-  const context = state.runtimeAgentOrchestrationByPaneKey?.[row?.key ?? paneKey]
+  const context = storedContext(state, row, paneKey)
   return context &&
     (!row || row.host === (producerByContext.get(context) ?? LOCAL_EXECUTION_HOST_ID))
     ? context
