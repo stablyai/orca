@@ -2637,7 +2637,6 @@
       "failedAfter": "Falló tras {{duration}}",
       "failed": "Fallido",
       "checkActions": "Más opciones para {{name}}",
-      "rerun": "Volver a ejecutar",
       "copyErrorFailed": "No se pudo copiar el error.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",

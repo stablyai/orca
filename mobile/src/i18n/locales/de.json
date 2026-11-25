@@ -2564,7 +2564,6 @@
       "failedAfter": "Fehlgeschlagen nach {{duration}}",
       "failed": "Fehlgeschlagen",
       "checkActions": "Weitere Optionen für {{name}}",
-      "rerun": "Erneut ausführen",
       "copyErrorFailed": "Der Fehler konnte nicht kopiert werden.",
       "durationSeconds": "{{seconds}} s",
       "durationMinutes": "{{minutes}} min {{seconds}} s",

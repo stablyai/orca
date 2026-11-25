@@ -2559,7 +2559,6 @@
       "failedAfter": "{{duration}} 後に失敗",
       "failed": "失敗",
       "checkActions": "{{name}} のその他の操作",
-      "rerun": "再実行",
       "copyErrorFailed": "エラーをコピーできませんでした。",
       "durationSeconds": "{{seconds}}秒",
       "durationMinutes": "{{minutes}}分 {{seconds}}秒",

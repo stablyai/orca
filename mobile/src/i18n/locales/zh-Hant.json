@@ -2854,7 +2854,6 @@
       "failedAfter": "{{duration}} 後失敗",
       "failed": "失敗",
       "checkActions": "{{name}} 的更多操作",
-      "rerun": "重新執行",
       "copyErrorFailed": "無法複製錯誤訊息。",
       "durationSeconds": "{{seconds}} 秒",
       "durationMinutes": "{{minutes}} 分 {{seconds}} 秒",
