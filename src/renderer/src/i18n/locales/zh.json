@@ -27735,7 +27735,8 @@
         "signedIn": "✓ 已登录",
         "done": "✓ 已完成",
         "takeOver": "✓ 接下来由 {{bot}} 接手",
-        "chose": "✓ 你选择了“{{what}}”"
+        "chose": "✓ 你选择了“{{what}}”",
+        "stopped": "配置已停止"
       },
       "ended": "此 Google 设置已结束",
       "heading": "连接 Google",
@@ -27779,7 +27780,8 @@
         "waiting": "等待你处理",
         "working": "工作中",
         "heading": "正在设置 Google",
-        "you": "你"
+        "you": "你",
+        "stopped": "已停止"
       },
       "letMe": "这一步我来做",
       "step": {
@@ -27825,7 +27827,8 @@
         "checkFailed": "Orca 无法检查 {{services}}"
       },
       "notNow": "暂不",
-      "importSetupFile": "导入配置文件"
+      "importSetupFile": "导入配置文件",
+      "stop": "停止配置"
     },
     "apps": {
       "paste": {
@@ -28481,7 +28484,9 @@
         "removeNote": "Bots 将停止在此处使用此账户。Bot 设置会保留，之后点击“连接 Google”即可重新开启",
         "confirm": "断开连接",
         "remove": "从此电脑移除",
-        "revoke": "移除并在 Google 撤销授权"
+        "revoke": "移除并在 Google 撤销授权",
+        "promotes": "{{email}} 将成为默认账户。",
+        "removeOneNote": "bot 将不再使用这个账户。"
       },
       "account": "Google 账户 · {{email}}",
       "reconnect": "重新连接",
@@ -28605,7 +28610,23 @@
         "noAccount": "Google 已登录，但主机没有发送账号。",
         "alreadyRunning": "已有 Google 登录正在进行。请先完成或取消它。",
         "notWaiting": "没有等待中的 Google 登录。请重新开始。"
-      }
+      },
+      "accessBlocked": "看到“访问被阻止”？",
+      "addServiceMenu": "添加服务…",
+      "picker": {
+        "addAccount": "添加其他账户",
+        "caption": "{{bot}} 可以使用的账户",
+        "label": "Google 账户",
+        "save": "保存"
+      },
+      "setUpNewApp": "设置新的 Google 应用",
+      "setUpNewAppDetail": "如果你当前的应用不适用于这个账户或组织",
+      "updateToAdd": "要添加另一个 Google 账户，请先更新 {{host}} 上的 Orca。",
+      "updateToChooseAccounts": "要选择账户，请先更新 {{host}} 上的 Orca。",
+      "updateToSetUpNewApp": "要设置新的 Google 应用，请先更新 {{host}} 上的 Orca。",
+      "useAnother": "使用其他账户",
+      "useAnotherSignIn": "使用 Google 登录",
+      "useAnotherSignInDetail": "使用你当前的 Google 应用"
     },
     "toolApp": {
       "address": "地址",
