@@ -7,12 +7,33 @@ import {
   writeFileAtomically,
   writeFileAtomicallyIfUnchanged
 } from '../../../filesystem/atomic-file-publication'
-import {
-  EMPTY_GUEST_CARRY_FORWARD,
-  type CodexGuestCarriedRegistration,
-  type CodexGuestCarryForward
-} from './codex-config-guest-carry-forward'
 import type { CodexRegistrationPromotion } from './config-plugin-registration-promotion'
+
+/**
+ * Tab edits a one-way WSL build (v1.4.27x) kept as marked lines in the managed copy instead of
+ * writing the distro's config. Read for one release so the first two-way pass promotes them.
+ */
+export type CodexGuestCarryForward = {
+  /** Structured key -> runtime raw, plus the distro raw it overrides. */
+  settings: ReadonlyMap<string, { raw: string; system: string | null }>
+  /** `system` is the distro's normalized field value (null for appends or an absent field) and `identity` its source. */
+  registrations: readonly CodexGuestCarriedRegistration[]
+}
+
+export type CodexGuestCarriedRegistration = {
+  promotion: CodexRegistrationPromotion
+  system: string | null
+  identity: string | null
+}
+
+export const EMPTY_GUEST_CARRY_FORWARD: CodexGuestCarryForward = {
+  settings: new Map(),
+  registrations: []
+}
+
+export function isGuestCarryForwardEmpty(carry: CodexGuestCarryForward): boolean {
+  return carry.settings.size === 0 && carry.registrations.length === 0
+}
 
 const SETTINGS_BASELINE_FILE = '.orca-config-settings-baseline.json'
 

@@ -15,6 +15,7 @@ import {
 import { recoverInterruptedGuardedFileOperation } from '../../../filesystem/atomic-file-publication'
 import {
   getCodexSettingsBaselinePath,
+  isGuestCarryForwardEmpty,
   observeCodexSettingsBaseline,
   writeCodexSettingsBaseline,
   type CodexSettingsConflict
@@ -31,10 +32,7 @@ import {
   isCodexNativeSourceCheckPending,
   startCodexNativeSourceCheck
 } from './codex-native-source-check'
-import {
-  isGuestCarryForwardEmpty,
-  migrateGuestCarryForward
-} from './codex-config-guest-carry-forward'
+import { migrateGuestCarryForward } from './codex-config-guest-carry-forward'
 
 export type CodexSettingsBaselineSnapshotOptions = {
   conflicts?: ReadonlyMap<string, CodexSettingsConflict>
