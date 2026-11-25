@@ -91,8 +91,8 @@ export function MobileNativeChatAsk({
   const [viewedOption, setViewedOption] = useState<number | null>(null)
   // Which footer control started the in-flight operation, so its busy state lands there.
   const [busyControl, setBusyControl] = useState<'confirm' | 'cancel'>('confirm')
-  const answers = useMobileNativeChatAskAnswers(prompt, freeTextInputs, questionKeys, drafts)
-  const { selections, setSelections, setPicks, otherText, setOtherText, setOther, seed } = answers
+  const [[selections, setSelections], [otherText, setOtherText], { setPicks, setOther, seeds }] =
+    useMobileNativeChatAskAnswers(prompt, freeTextInputs, questionKeys, drafts)
   const [operation, setOperation] = useState<NativeChatAnswerOperation | null>(null)
   const operationRef = useRef<NativeChatAnswerOperation | null>(null)
   const operationId = operation?.clientMessageId
@@ -131,8 +131,8 @@ export function MobileNativeChatAsk({
     // A pending auto-advance holds the old lines' picks.
     autoAdvance.cancel()
     setShownKeys(questionKeys)
-    setSelections(carry(selections, (qi) => seed(qi, questionKeys).picks))
-    setOtherText(carry(otherText, (qi) => seed(qi, questionKeys).other))
+    setSelections(carry(selections, (qi) => [...(seeds[qi]?.picks ?? [])]))
+    setOtherText(carry(otherText, (qi) => seeds[qi]?.other ?? ''))
     const at = questionKeys.indexOf(shownKeys[index]!)
     setIndex(Math.max(0, at))
     if (at === -1) {
