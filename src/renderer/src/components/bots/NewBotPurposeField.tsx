@@ -5,18 +5,22 @@ import { useId } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { BOT_PURPOSE_MAX_LENGTH } from '../../../../shared/bots/bot-proposal'
-const COUNTER_FROM = 160
+// The count shows once the text nears the limit.
+const COUNTER_FROM = Math.floor(BOT_PURPOSE_MAX_LENGTH * 0.8)
 
 export function NewBotPurposeField({
   value,
   prefilled,
   tooLong,
+  sentLength,
   onChange
 }: {
   value: string
   /** A template's text: no counter until it is edited, since it is sent as the template wrote it. */
   prefilled?: string
   tooLong: boolean
+  /** How long the purpose Create sends is; a cleared box sends a proposal's own. */
+  sentLength: number
   onChange: (value: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
@@ -42,7 +46,7 @@ export function NewBotPurposeField({
           onChange={(event) => onChange(event.target.value)}
         />
       </div>
-      {value.length >= COUNTER_FROM && value !== prefilled ? (
+      {tooLong || (value.length >= COUNTER_FROM && value !== prefilled) ? (
         <p
           id={counterId}
           role={tooLong ? 'alert' : undefined}
@@ -52,7 +56,7 @@ export function NewBotPurposeField({
           )}
         >
           {tooLong ? `${t('bots.new.validation.identityTooLong', 'Too long')} · ` : null}
-          {value.length}/{BOT_PURPOSE_MAX_LENGTH}
+          {tooLong ? sentLength : value.length}/{BOT_PURPOSE_MAX_LENGTH}
         </p>
       ) : null}
     </div>

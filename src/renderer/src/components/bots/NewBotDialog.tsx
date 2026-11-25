@@ -365,6 +365,7 @@ export function NewBotDialog({
                   value={shown.purpose}
                   prefilled={shownIdentity}
                   tooLong={submitted && purposeTooLong}
+                  sentLength={editedProposal(proposal, draft, trimmedName, t)?.purpose.length ?? 0}
                   onChange={(purpose) => keepDraft({ ...draft, purpose })}
                 />
               )}
