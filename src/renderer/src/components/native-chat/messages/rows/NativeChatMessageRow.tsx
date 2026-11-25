@@ -45,6 +45,8 @@ export type NativeChatDeliveryNotice =
       onDismiss?: never
       onEdit?: never
       onSend?: never
+      onSendAgain?: never
+      waiting?: never
       detail?: never
       failureKind?: never
       signIn?: never
@@ -59,6 +61,9 @@ export type NativeChatDeliveryNotice =
       onDismiss?: () => void
       onEdit?: () => void
       onSend?: () => void
+      onSendAgain?: () => void
+      /** Not a failure: the message waits for its host, so the line reads quiet. */
+      waiting?: true
     }
 
 export type MessageRowProps = {

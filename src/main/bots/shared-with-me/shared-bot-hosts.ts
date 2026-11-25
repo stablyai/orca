@@ -16,6 +16,7 @@ import {
   type SharedBotHostEntry
 } from './shared-bot-host-store'
 import {
+  namesSharedBotNewChat,
   SharedBotHeldSends,
   sharedBotFailure as failure,
   sharedBotOffline
@@ -99,7 +100,9 @@ export class SharedBotHosts {
               botName: entry.botName,
               ownerName: entry.ownerName,
               homeWorkspaceId: entry.homeWorkspaceId ?? null,
-              link: this.linkFor(entry).current()
+              link: this.linkFor(entry).current(),
+              holds: entry.hostKey !== undefined,
+              held: this.held.views(entry)
             }
           ]
         : []
@@ -157,7 +160,11 @@ export class SharedBotHosts {
     this.timer.unref?.()
   }
 
-  async call(environmentId: string, method: string, params: unknown) {
+  async call(
+    environmentId: string,
+    method: string,
+    params: unknown
+  ): Promise<RuntimeRpcResponse<unknown>> {
     await this.ready()
     const entry = this.entryFor(environmentId)
     if (!entry) {
@@ -170,11 +177,22 @@ export class SharedBotHosts {
         return handedOff
       }
     }
-    if (link !== 'live') {
+    const local = this.held.answerHere(entry, link, method, params)
+    if (local) {
+      return local
+    }
+    // The host doesn't know a placeholder chat yet; nothing of it can be read there.
+    if (link !== 'live' || namesSharedBotNewChat(params)) {
       return sharedBotOffline(entry, method)
     }
     try {
-      return this.withMeta(entry, await this.linkFor(entry).request(method, params))
+      const link = this.linkFor(entry)
+      const response =
+        method === 'agentSession.send'
+          ? await this.held.sendWithKept(params, (sent, args) => link.request(sent, args))
+          : await link.request(method, params)
+      this.held.noteAnswer(entry, method, params, response)
+      return this.withMeta(entry, response)
     } catch {
       // The link closed or timed out under the request: an answer the window can read.
       return sharedBotOffline(entry, method)
@@ -189,7 +207,7 @@ export class SharedBotHosts {
   ): Promise<() => void> {
     await this.ready()
     const entry = this.entryFor(environmentId)
-    if (!entry || (await this.reach(entry)) !== 'live') {
+    if (!entry || namesSharedBotNewChat(params) || (await this.reach(entry)) !== 'live') {
       onResponse(
         entry
           ? sharedBotOffline(entry, method)
@@ -205,6 +223,13 @@ export class SharedBotHosts {
           : failure(method, SHARED_BOT_HOST_ERRORS.offline, error)
       )
     })
+  }
+
+  /** Sends a held message the host refused again; false when it isn't one, or wasn't held. */
+  async sendAgain(environmentId: string, clientMessageId: string): Promise<boolean> {
+    await this.ready()
+    const entry = this.entryFor(environmentId)
+    return entry ? this.held.sendAgain(entry, clientMessageId) : false
   }
 
   /** Applies the cloud's list; returns the kept shares it no longer lists, now removed. */

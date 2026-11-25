@@ -12,7 +12,10 @@ import { hasRecentUserGestureFor, isBackgroundRuntimeCall } from './runtime-rpc-
 import { captureRuntimeEnvironmentRequestRevision } from '../environment-revisions/runtime-environment-revision'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { ensureRuntimeEnvironmentCompatible } from '../compatibility/runtime-compatibility-probe'
-import { sharedBotHostFor } from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
+import {
+  sharedBotHostFor,
+  sharedBotHostRefusal
+} from '../../hosts/shared-bot-hosts/shared-bot-host-catalog'
 
 type RuntimeRpcCallOptions = {
   timeoutMs?: number
@@ -52,11 +55,12 @@ export async function callRuntimeRpcResponse<TResult>(
   if (sharedHost) {
     // Reached over its relay link: no paired-server pairing revision or compatibility probe.
     return successOf<TResult>(
-      await window.api.sharedBotHosts.call({
-        environmentId: sharedHost.environmentId,
-        method,
-        params
-      }),
+      sharedBotHostRefusal(method) ??
+        (await window.api.sharedBotHosts.call({
+          environmentId: sharedHost.environmentId,
+          method,
+          params
+        })),
       target
     )
   }

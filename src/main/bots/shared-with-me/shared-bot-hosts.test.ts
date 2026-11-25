@@ -2,16 +2,25 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import nacl from 'tweetnacl'
+import { z } from 'zod'
 import { afterEach, describe, expect, it } from 'vitest'
 import { NODE_RELAY_CLIENT_PLATFORM } from '../../../shared/remote-runtime/relay/client/node/node-relay-client-platform'
 import { SharedBotHosts } from './shared-bot-hosts'
 import { UNREADABLE_ANSWER } from '../../connector-cloud/connector-cloud-request'
 import { SharedBotHeldSends } from './shared-bot-held-sends'
+import { SharedBotHeldUploads } from './shared-bot-held-uploads'
+import { SendParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { SHARED_BOT_HOSTS_FILENAME, SharedBotHostStore } from './shared-bot-host-store'
 import {
+  isSharedBotNewChatId,
   SHARED_BOT_HOST_ERRORS,
   type SharedBotHostView
 } from '../../../shared/bots/shared-bot-hosts'
+import {
+  openBotTeamShareHeldMessage,
+  sealBotTeamShareOffer
+} from '../../../shared/bots/bot-team-share-seal'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
 import { structuredAgentSessionMessageSendMutation } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { SharedBotHostEntry } from './shared-bot-host-store'
 import {
@@ -23,14 +32,13 @@ import {
 } from './shared-bot-pairing'
 import type { SharedBotsCloud } from './shared-bots-cloud'
 import { memorySharedBotHomes } from './shared-bot-home.test-fixture'
-import type { ConnectorShareAcceptRequest } from '../../../shared/connector-share-contract'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
-import {
-  openBotTeamShareHeldMessage,
-  sealBotTeamShareOffer
-} from '../../../shared/bots/bot-team-share-seal'
+import type {
+  ConnectorShareAcceptRequest,
+  ConnectorShareHoldRequest
+} from '../../../shared/connector-share-contract'
 
-const HOST_KEY = Buffer.from(nacl.box.keyPair().publicKey).toString('base64')
+const HOST = nacl.box.keyPair()
+const HOST_KEY = Buffer.from(HOST.publicKey).toString('base64')
 const dirs: string[] = []
 
 afterEach(() => {
@@ -88,20 +96,43 @@ function hosts(
   now: () => number,
   hold: SharedBotsCloud['hold'] = async () => ({ ok: true, value: { status: 'held' } })
 ) {
+  const holds: [string, ConnectorShareHoldRequest][] = []
   const dir = mkdtempSync(join(tmpdir(), 'shared-bot-hosts-'))
   dirs.push(dir)
   const accepts: [string, ConnectorShareAcceptRequest][] = []
   let mineReads = 0
+  // As the cloud does, a read lists every message it has taken, waiting unless `mine` says more.
+  const taken: [string, string][] = []
   const cloud: SharedBotsCloud = {
     mine: async () => {
       mineReads += 1
-      return { ok: true, value: { v: 1, shares: await mine() } }
+      const shares = (await mine()).map((listed) => ({
+        ...listed,
+        held: [
+          ...listed.held,
+          ...taken
+            .filter(
+              ([shareId, id]) =>
+                shareId === listed.shareId &&
+                !listed.held.some((message) => message.clientMessageId === id)
+            )
+            .map(([, clientMessageId]) => ({ clientMessageId, state: 'waiting' as const }))
+        ]
+      }))
+      return { ok: true, value: { v: 1, shares } }
     },
     accept: async (shareId, request) => {
       accepts.push([shareId, request])
       return { ok: true, value: { status: 'queued' } }
     },
-    hold
+    hold: async (shareId, request) => {
+      holds.push([shareId, request])
+      const answer = await hold(shareId, request)
+      if (answer.ok) {
+        taken.push([shareId, request.clientMessageId])
+      }
+      return answer
+    }
   }
   const published: string[][] = []
   const memory = memorySharedBotHomes(dir)
@@ -113,7 +144,7 @@ function hosts(
     homes: memory.homes,
     now
   })
-  return { service, accepts, published, mineReads: () => mineReads, dir, memory }
+  return { service, accepts, holds, published, mineReads: () => mineReads, dir, memory }
 }
 
 describe('shared agent pairing', () => {
@@ -180,7 +211,7 @@ describe('where a message to a shared agent goes', () => {
   it('keeps a chat’s follow-ups on the held queue until its first held message lands', () => {
     const held = entry({
       hostKey: HOST_KEY,
-      held: [{ clientMessageId: 'm1', chat, sentAt: 0 }]
+      held: [{ clientMessageId: 'm1', chat, text: 'hi', sentAt: 0 }]
     })
     expect(sendsHeld(held, 'live', chat, new Map([['m1', 'waiting' as const]]))).toBe(true)
     expect(sendsHeld(held, 'live', { sessionId: 'chat-2' }, noStates)).toBe(false)
@@ -313,7 +344,7 @@ describe('the held queue’s order', () => {
         publicKeyB64: Buffer.from(nacl.sign.keyPair().publicKey).toString('base64'),
         secretKeyB64: Buffer.from(nacl.sign.keyPair().secretKey).toString('base64')
       },
-      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, sentAt: 0 }]
+      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, text: 'hi', sentAt: 0 }]
     })
     const answer = await held.send(waiting, 'live', sendParams('chat-0001', 'm2'))
     expect(answer?.ok).toBe(false)
@@ -381,7 +412,7 @@ describe('a held message and a cloud read that cross', () => {
     // Held, then Orca quit before any read listed it; the cloud aged it out meanwhile.
     const kept = entry({
       hostKey: HOST_KEY,
-      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, sentAt: 0 }]
+      held: [{ clientMessageId: 'm1', chat: { sessionId: 'chat-0001' }, text: 'Hi', sentAt: 0 }]
     })
     writeFileSync(join(dir, SHARED_BOT_HOSTS_FILENAME), JSON.stringify({ v: 1, shares: [kept] }))
     const service = new SharedBotHosts({
@@ -497,5 +528,208 @@ describe('a shared agent’s home on this computer', () => {
     const store = new SharedBotHostStore(dir)
     await store.load()
     expect(store.list().map((kept) => kept.shareId)).toEqual(['share-2'])
+  })
+})
+
+const StartedChat = z.object({ sessionId: z.string() })
+
+describe('a teammate’s messages while the shared agent’s computer is away', () => {
+  const send = (sessionId: string, clientOperationId: string, text: string) =>
+    structuredAgentSessionMessageSendMutation({
+      sessionId,
+      clientOperationId,
+      expectedRuntimeFence: null,
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
+    })
+  const away = (held: MineShare['held'] = []) => [
+    share({ hostOnline: false, hostKey: HOST_KEY, held })
+  ]
+
+  it('starts a new chat as a placeholder whose first message is held for the host to start it', async () => {
+    const { service, holds } = hosts(
+      () => away(),
+      () => 1_000
+    )
+    await service.refresh()
+    const environmentId = service.views()[0]!.environmentId
+    const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+    const sessionId = StartedChat.parse(started.ok ? started.result : null).sessionId
+    expect(isSharedBotNewChatId(sessionId)).toBe(true)
+    // The host doesn't know the placeholder: nothing of it is read there.
+    const read = await service.call(environmentId, 'agentSession.history', { sessionId })
+    expect(read.ok ? null : read.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+    const sent = await service.call(environmentId, 'agentSession.send', send(sessionId, 'm1', 'Hi'))
+    service.stop()
+    expect(sent.ok ? null : sent.error.code).toBe(SHARED_BOT_HOST_ERRORS.held)
+    const opened = openBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
+      hostSecretKey: HOST.secretKey,
+      hostKey: HOST_KEY,
+      sealed: holds[0]![1].sealed,
+      expect: { shareId: 'share-1', botId: 'bot-1', clientMessageId: 'm1' }
+    })
+    expect(opened?.chat).toEqual({ newChatId: sessionId })
+    expect(service.views()[0]!.held).toEqual([
+      {
+        clientMessageId: 'm1',
+        sessionId,
+        text: 'Hi',
+        attachments: [],
+        sentAt: 1_000,
+        state: 'waiting'
+      }
+    ])
+  })
+
+  it('starts no placeholder for a host that holds nothing', async () => {
+    const { service } = hosts(
+      () => [share({ hostOnline: false })],
+      () => 0
+    )
+    await service.refresh()
+    const started = await service.call(service.views()[0]!.environmentId, 'bots.session.start', {
+      botId: 'bot-1'
+    })
+    service.stop()
+    expect(started.ok ? null : started.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+  })
+
+  it('keeps a placeholder whose swap meets a dropped link, never minting another for it', async () => {
+    const { service } = hosts(
+      () => away(),
+      () => 0
+    )
+    await service.refresh()
+    const environmentId = service.views()[0]!.environmentId
+    const started = await service.call(environmentId, 'bots.session.start', { botId: 'bot-1' })
+    const placeholder = StartedChat.parse(started.ok ? started.result : null).sessionId
+    const swap = await service.call(environmentId, 'bots.session.start', {
+      botId: 'bot-1',
+      newChatId: placeholder
+    })
+    service.stop()
+    expect(swap.ok ? null : swap.error.code).toBe(SHARED_BOT_HOST_ERRORS.offline)
+  })
+
+  it('sends a refused message again under a new id, in its place', async () => {
+    let held: MineShare['held'] = []
+    const { service, holds } = hosts(
+      () => away(held),
+      () => 0
+    )
+    await service.refresh()
+    const environmentId = service.views()[0]!.environmentId
+    await service.call(environmentId, 'agentSession.send', send('chat-0001', 'm1', 'Check #40189'))
+    expect(await service.sendAgain(environmentId, 'm1')).toBe(false)
+    held = [{ clientMessageId: 'm1', state: 'not_sent' }]
+    await service.refresh()
+    expect(service.views()[0]!.held.map((message) => message.state)).toEqual(['not_sent'])
+    expect(await service.sendAgain(environmentId, 'm1')).toBe(true)
+    service.stop()
+    const again = holds[1]![1].clientMessageId
+    expect(again).not.toBe('m1')
+    expect(service.views()[0]!.held).toEqual([
+      {
+        clientMessageId: again,
+        sessionId: 'chat-0001',
+        text: 'Check #40189',
+        attachments: [],
+        sentAt: 0,
+        state: 'waiting'
+      }
+    ])
+  })
+})
+
+describe('a new chat the host started from its placeholder id', () => {
+  it('draws its held messages in the started chat, and keeps that chat’s follow-ups behind them', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'shared-bot-started-'))
+    dirs.push(dir)
+    const store = new SharedBotHostStore(dir)
+    await store.load()
+    const placeholder = entry({
+      hostKey: HOST_KEY,
+      held: [{ clientMessageId: 'm1', chat: { newChatId: 'shared-new-1' }, text: 'hi', sentAt: 0 }]
+    })
+    store.put(placeholder)
+    let changed = 0
+    const held = new SharedBotHeldSends({
+      store,
+      cloud: () => null,
+      now: () => 0,
+      changed: () => {
+        changed += 1
+      }
+    })
+    held.started(placeholder, 'shared-new-1', 'chat-real-01')
+    const started = store.get('share-1')!
+    expect(changed).toBe(1)
+    expect(held.views(started).map((view) => view.sessionId)).toEqual(['chat-real-01'])
+    expect(sendsHeld(started, 'live', { sessionId: 'chat-real-01' }, new Map())).toBe(true)
+    expect(sendsHeld(started, 'live', { sessionId: 'chat-other-1' }, new Map())).toBe(false)
+  })
+})
+
+describe('attachments kept while the host was away, sent once it is back', () => {
+  it('go to the host’s store first, and the send names them there', async () => {
+    const uploads = new SharedBotHeldUploads()
+    const ok = (result: unknown) => ({ id: 'x', ok: true as const, result })
+    const started = uploads.call(
+      'agentSessionAttachment.uploadStart',
+      { sessionId: 'chat-0001', name: 'shot.png', byteLength: 3 },
+      'Jinwoo Hong'
+    )
+    const { uploadId } = z.object({ uploadId: z.string() }).parse(started.ok && started.result)
+    uploads.call(
+      'agentSessionAttachment.uploadAppend',
+      { uploadId, offset: 0, contentBase64: Buffer.from('png').toString('base64') },
+      'Jinwoo Hong'
+    )
+    const committed = uploads.call(
+      'agentSessionAttachment.uploadCommit',
+      { uploadId },
+      'Jinwoo Hong'
+    )
+    const keptPath = z.object({ path: z.string() }).parse(committed.ok && committed.result).path
+    const sent: string[] = []
+    let sendParams: unknown = null
+    let hostTakesSend = false
+    const send = () =>
+      uploads.sendWithKept(
+        structuredAgentSessionMessageSendMutation({
+          sessionId: 'chat-0001',
+          clientOperationId: 'm1',
+          expectedRuntimeFence: null,
+          body: { kind: 'message', role: 'user', blocks: [{ type: 'image-ref', path: keptPath }] }
+        }),
+        async (method, params) => {
+          sent.push(method)
+          if (method === 'agentSession.send') {
+            sendParams = params
+            return hostTakesSend
+              ? ok({})
+              : { id: 'x', ok: false as const, error: { code: 'unavailable', message: 'gone' } }
+          }
+          return method === 'agentSessionAttachment.uploadStart'
+            ? ok({ uploadId: 'host-upload' })
+            : method === 'agentSessionAttachment.uploadCommit'
+              ? ok({ path: '/host/attachments/shot.png', name: 'shot.png', byteLength: 3 })
+              : ok({})
+        }
+      )
+    // The host didn't take the send: the file stays here for the retry.
+    await send()
+    expect(sent).toEqual([
+      'agentSessionAttachment.uploadStart',
+      'agentSessionAttachment.uploadAppend',
+      'agentSessionAttachment.uploadCommit',
+      'agentSession.send'
+    ])
+    expect(SendParams.parse(sendParams).body.blocks).toEqual([
+      { type: 'image-ref', path: '/host/attachments/shot.png' }
+    ])
+    expect(uploads.isKept(keptPath)).toBe(true)
+    hostTakesSend = true
+    expect((await send()).ok).toBe(true)
+    expect(uploads.isKept(keptPath)).toBe(false)
   })
 })

@@ -9,18 +9,21 @@ export function useStructuredAgentSessionTransport(args: {
   target: RuntimeClientTarget
   isVisible: boolean
   enabled: boolean
+  /** False while its host has nothing of the chat to read; sends still go. */
+  readable: boolean
   agentName?: string
 }) {
-  const { agentName, enabled, isVisible, sessionId, target } = args
+  const { agentName, enabled, isVisible, readable, sessionId, target } = args
   const providerVisible = isVisible && enabled
+  const readVisible = providerVisible && readable
   useStructuredAgentSessionHold({
     sessionId,
     target,
     surface: 'desktop-chat',
-    enabled: providerVisible
+    enabled: readVisible
   })
   // A message sent from here is settled by its own reply, so a hidden pane reads nothing.
-  const read = useStructuredAgentSessionRead({ sessionId, target, isVisible: providerVisible })
+  const read = useStructuredAgentSessionRead({ sessionId, target, isVisible: readVisible })
   const stateRef = useRef(read.state)
   const mutation = useStructuredAgentSessionMutate({
     sessionId,
@@ -32,5 +35,5 @@ export function useStructuredAgentSessionTransport(args: {
   useEffect(() => {
     stateRef.current = read.state
   }, [read.state])
-  return { ...read, ...mutation, providerVisible, stateRef }
+  return { ...read, ...mutation, providerVisible, readVisible, stateRef }
 }

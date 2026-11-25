@@ -9,15 +9,9 @@ import type { SharedBotsCloud } from './shared-bots-cloud'
 
 export type HandOffResult =
   | { kind: 'held'; held: SharedBotHeldMessage }
-  // Past the cloud's 1 MiB for one held message.
+  // Past the cloud's 1 MiB for one held message, attachments included.
   | { kind: 'too-large' }
-  // Only text is held: an attachment waits until the host can take it live.
-  | { kind: 'unsupported' }
   | { kind: 'failed'; error: string | null }
-
-type TextBlock = { type: 'text'; text: string }
-
-const isTextBlock = (block: { type: string }): block is TextBlock => block.type === 'text'
 
 /** Holds one message for `entry`'s host, sealed to `hostKey` (see `sharedBotHostKey`). */
 export async function handOffSharedBotMessage(
@@ -27,14 +21,13 @@ export async function handOffSharedBotMessage(
   message: {
     chat: SharedBotHeldMessage['chat']
     clientMessageId: string
-    blocks: readonly { type: string }[]
+    text: string
+    attachments: readonly { name: string; contentBase64: string }[]
     sentAt: number
   }
 ): Promise<HandOffResult> {
-  if (!message.blocks.every(isTextBlock)) {
-    return { kind: 'unsupported' }
-  }
   const secretKey = Buffer.from(entry.deviceKey.secretKeyB64, 'base64')
+  const { text, attachments } = message
   const sealed = await sealBotTeamShareHeldMessage(NODE_PAIRED_E2EE_PRIMITIVES, {
     hostKey,
     message: {
@@ -43,8 +36,8 @@ export async function handOffSharedBotMessage(
       botId: entry.botId,
       chat: message.chat,
       clientMessageId: message.clientMessageId,
-      text: message.blocks.map((block) => block.text).join('\n\n'),
-      attachments: [],
+      text,
+      attachments: [...attachments],
       sentAt: message.sentAt,
       devicePublicKey: entry.deviceKey.publicKeyB64
     },
@@ -63,6 +56,12 @@ export async function handOffSharedBotMessage(
   }
   return {
     kind: 'held',
-    held: { clientMessageId: message.clientMessageId, chat: message.chat, sentAt: message.sentAt }
+    held: {
+      clientMessageId: message.clientMessageId,
+      chat: message.chat,
+      text,
+      ...(attachments.length > 0 ? { attachments: [...attachments] } : {}),
+      sentAt: message.sentAt
+    }
   }
 }

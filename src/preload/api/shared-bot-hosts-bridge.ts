@@ -12,6 +12,7 @@ export const sharedBotHostsApi = {
     return () => ipcRenderer.removeListener('sharedBotHosts:changed', listener)
   },
   call: (args) => ipcRenderer.invoke('sharedBotHosts:call', args),
+  sendAgain: (args) => ipcRenderer.invoke('sharedBotHosts:sendAgain', args),
   subscribe: async (args, callback) => {
     const subscriptionId = `shared-${crypto.randomUUID()}`
     const channel = `sharedBotHosts:subscription:${subscriptionId}`

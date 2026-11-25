@@ -17,7 +17,7 @@ import type { StructuredAgentSessionHost } from '../../../native-chat/agent-sess
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { BotShareCallerScope } from '../callers/rpc-caller-scope'
-import { BOT_SHARE_RPC_METHODS } from '../callers/bot-share-rpc-methods'
+import { BOT_SHARE_RPC_METHODS } from '../../../../shared/bots/bot-share-rpc-methods'
 import { defineMethod } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ALL_RPC_METHODS } from '../methods/rpc-method-registry'

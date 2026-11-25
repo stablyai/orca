@@ -46,9 +46,14 @@ export function structuredChatHistoryPhase(
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
     transportEnabled: boolean
   },
-  readStatus: 'idle' | 'loading' | 'ready' | 'error'
+  read: {
+    status: 'idle' | 'loading' | 'ready' | 'error'
+    /** False when its host has nothing of the chat to read: what is drawn here is all of it. */
+    readable: boolean
+  }
 ): 'reading' | 'unread' | 'known' {
-  if (launch.launch?.kind === 'new') {
+  const readStatus = read.status
+  if (launch.launch?.kind === 'new' || !read.readable) {
     return 'known'
   }
   if (launch.transportEnabled) {

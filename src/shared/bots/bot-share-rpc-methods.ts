@@ -1,4 +1,4 @@
-// What a teammate's share connection may call: one bot's chats and nothing else on this host. Every
+// What a teammate's share connection may call: one bot's chats and nothing else on the host. Every
 // method names how the share guard admits it, so a method can't be allowed without its check.
 import { z } from 'zod'
 

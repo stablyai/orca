@@ -115,7 +115,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   )
   const [optionPickerRequest, setOptionPickerRequest] =
     useState<NativeChatOptionPickerRequest | null>(null)
-  const historyPhase = structuredChatHistoryPhase(provisionalLaunch, controller.status)
+  const historyPhase = structuredChatHistoryPhase(provisionalLaunch, controller)
   const hostOutage = useNativeChatHostOutage(props.target)
   const hostNotice = useNativeChatHostOutageNotice(hostOutage)
   const session = useStructuredChatLiveSession(
@@ -141,9 +141,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     needsFailureFacts || props.agent === 'claude'
   )
   const deliveryNotices = useStructuredAgentSessionDeliveryNotices({
-    pending: controller.pending,
-    submissions: controller.submissions,
-    journalItems: controller.journalItems,
+    ...controller,
     startFailures,
     agentName: agentLabel
   })
