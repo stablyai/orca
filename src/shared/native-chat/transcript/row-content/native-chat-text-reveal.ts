@@ -252,10 +252,8 @@ export function playNativeChatSaveReveal(
     return () => {}
   }
   if (reveal.halfDrawnAt !== savedAt) {
-    const middle = pacedTextEnd(reveal.source, from + (end - from) / 2, true)
-    if (middle > from) {
-      draw(middle, savedAt)
-    }
+    // Recorded even when the midpoint adds nothing (one unfinished word), so it isn't sought again.
+    draw(Math.max(from, pacedTextEnd(reveal.source, from + (end - from) / 2, true)), savedAt)
   }
   const timer = setTimeout(() => draw(end), wait)
   return () => clearTimeout(timer)
