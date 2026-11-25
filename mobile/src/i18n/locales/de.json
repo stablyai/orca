@@ -1216,7 +1216,7 @@
       "pairingInvalid": "Kopplung ungültig – erneut mit dem Computer koppeln",
       "rePairDetail": "Erneut mit dem Computer koppeln",
       "reconnecting": "Verbindung wird wiederhergestellt…",
-      "relayAccessExpired": "Relay-Zugriff für {{host}} abgelaufen",
+      "relayAccessRefused": "Relay hat den Zugriff für {{host}} verweigert",
       "relayConnectFailed": "Verbindung über Relay fehlgeschlagen",
       "relayUnreachable": "Relay nicht erreichbar",
       "signInDetail": "Auf dem Computer bei Orca anmelden, um die Verbindung wiederherzustellen",

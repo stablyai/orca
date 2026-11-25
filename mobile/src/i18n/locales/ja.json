@@ -1210,7 +1210,7 @@
       "pairingInvalid": "ペアリングが無効です。デスクトップと再度ペアリングしてください。",
       "rePairDetail": "デスクトップと再度ペアリングしてください。",
       "reconnecting": "再接続中…",
-      "relayAccessExpired": "{{host}} のリレーアクセスの有効期限が切れています",
+      "relayAccessRefused": "{{host}} へのリレーアクセスが拒否されました",
       "relayConnectFailed": "リレー経由で接続できません",
       "relayUnreachable": "リレーに接続できません",
       "signInDetail": "再接続するには、デスクトップで Orca にサインインしてください。",
