@@ -189,7 +189,8 @@ export class CodexConfigMirror {
     accounts: readonly { id?: string; managedHomePath: string }[],
     options: { forLaunch: boolean }
   ): Promise<void> {
-    const homes = await Promise.all(
+    // One account's unreadable home must not hold back the others in its distro.
+    const settled = await Promise.allSettled(
       accounts.map(async (account) => {
         const runtimeHomePath = await this.assertManagedHomePath(
           account.managedHomePath,
@@ -207,7 +208,14 @@ export class CodexConfigMirror {
           : null
       })
     )
-    const owned = homes.filter((home) => home !== null)
+    const owned = []
+    for (const result of settled) {
+      if (result.status === 'rejected') {
+        console.warn('[codex-accounts] Failed to sync managed config:', result.reason)
+      } else if (result.value) {
+        owned.push(result.value)
+      }
+    }
     const linuxSystemHome = owned[0]?.linuxSystemHome
     if (!linuxSystemHome) {
       return
