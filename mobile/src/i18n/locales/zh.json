@@ -600,6 +600,8 @@
       "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前为 {{active}}",
       "permissionAppliesNextMessageCompact": "{{saved}} · 下一条消息",
       "permissionAppliesNextMessageTiming": "下一条消息生效 · 当前为 {{active}}",
+      "modelsLoading": "正在加载模型…",
+      "signInForModels": "登录后可查看你能使用的模型",
       "setWhenSessionStarts": "请在会话开始时设置",
       "speed": "速度",
       "standard": "标准",
@@ -921,7 +923,8 @@
         "needsAuth_other": "{{count}} 个需要登录",
         "failed": "{{count}} 个失败"
       },
-      "pasteHint": "当浏览器跳转到一个无法加载的页面时，复制它的地址并粘贴到这里"
+      "pasteHint": "当浏览器跳转到一个无法加载的页面时，复制它的地址并粘贴到这里",
+      "manage": "管理 MCP 服务器"
     },
     "fork": {
       "busy": "另一个聊天或终端正在打开。请稍候，再次为 {{agent}} 聊天创建分支",
@@ -969,6 +972,7 @@
         "edit": "编辑",
         "create": "创建 bot",
         "open": "打开",
+        "openBot": "打开 {{name}}",
         "origin": "由 {{bot}} 提议",
         "originTemplate": "基于 {{template}}，由 {{bot}} 提议",
         "watches": "关注",
@@ -7816,6 +7820,7 @@
       "toolCredentialsRaced": "机器人的工具凭据已在另一个 Orca 中更改。请重试",
       "toolSourceManaged": "这个工具由 Orca 管理。请到你设置它的地方更改",
       "toolValuesUnmoved": "有个工具仍保存着它的值。请重新打开机器人的工具以迁移这些值",
+      "googleAccountsChanged": "打开后其 Google 账户已发生变化。请检查后重新保存",
       "toolCodexCheckFailed": "Codex 无法检查或连接这些工具。请检查它的设置后重试",
       "toolCodexNoThread": "Codex 没有启动用于检查工具的线程",
       "toolSignInFolderFailed": "无法准备登录文件夹：{{detail}}",

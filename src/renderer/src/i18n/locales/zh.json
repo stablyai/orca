@@ -1357,6 +1357,11 @@
     },
     "artifacts": {
       "teamDisabled": "你的团队已关闭产物分享"
+    },
+    "navigation": {
+      "accounts": {
+        "description": "可选的账户切换与用量设置，适用于 Claude、Codex、Antigravity、OpenCode Go、MiniMax 和 Grok"
+      }
     }
   },
   "menu": {
@@ -2051,7 +2056,7 @@
             "failed": "无法从 {{host}} 转发端口 {{port}}，请检查连接后重试",
             "forwarded": "已从 {{host}} 转发端口 {{port}}",
             "opened": "已在默认浏览器中打开 {{address}}",
-            "otherMachine": "无法转发端口 {{port}}：此工作区并非运行在 {{host}} 本身上",
+            "otherMachine": "无法转发端口 {{port}}：此工作区并非直接运行在 {{host}} 上",
             "useSshPorts": "无法从 {{host}} 转发端口 {{port}}，请先在\"端口\"中转发，然后重试",
             "restoredMoved": "已将 {{host}} 的端口 {{port}} 转发到 localhost:{{localPort}}",
             "restoredMovedReason": "这台电脑上的 localhost:{{previousPort}} 已被占用"
@@ -6322,7 +6327,7 @@
           "installAvailable": "可安装",
           "otherBuild": "由其他版本的 Orca 安装",
           "otherBuildKept": "已保留：由其他版本的 Orca 写入",
-          "differsFromOrca": "此副本与 Orca 的副本不同",
+          "differsFromOrca": "此副本与 Orca 的版本不同",
           "replaceMovesFolder": "替换会将整个文件夹（包括所有额外文件）移动到 {{folder}}",
           "replaceMovesFolderOnHost": "替换会将整个文件夹（包括所有额外文件）移动到 {{host}} 上的 {{folder}}",
           "replaceMovesLink": "替换会将此链接移动到 {{folder}}",
@@ -8489,8 +8494,8 @@
           },
           "sharedCodexServers": {
             "title": "共享 Codex 服务器",
-            "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
-            "copy": "占用内存更少，新聊天启动更快。如果共享进程崩溃，其所有聊天都会重新连接。更改后仅对这台电脑上新启动的聊天生效，远程和 WSL 主机仍为每个聊天一个进程",
+            "description": "配置相同的 Codex 聊天共用一个后台进程，而不是每个聊天各启动一个",
+            "copy": "占用更少内存，新聊天启动更快。如果共享进程崩溃，它的所有聊天都会重新连接。仅对更改后在这台电脑上开始的聊天生效；远程主机和 WSL 主机仍为每个聊天使用一个进程",
             "toggleLabel": "切换共享 Codex 服务器"
           }
         },
@@ -10660,7 +10665,7 @@
             },
             "sharedCodexServers": {
               "title": "共享 Codex 服务器",
-              "description": "设置相同的 Codex 聊天共享一个后台进程，而不是每个聊天各启动一个",
+              "description": "配置相同的 Codex 聊天共用一个后台进程，而不是每个聊天各启动一个",
               "codex": "codex",
               "memory": "内存"
             }
@@ -12507,6 +12512,7 @@
         "PluginConsentDialog": {
           "reconsent": "自你批准后已更改",
           "instructionalWarning": "其命令可代表你或你的代理执行操作",
+          "mcpServersWarning": "向你的智能体提供它的 MCP 服务器，这些服务器可以启动程序并代表智能体执行操作",
           "declarativeWarning": "仅内容。不运行代码",
           "enable": "启用插件",
           "capability": {
@@ -13599,7 +13605,7 @@
           "defaultHostHelp": "现有项目保持不变",
           "defaultHostWebHelp": "此浏览器会在所选服务器上打开新项目",
           "updateAll": "全部更新",
-          "shareRowHint": "让另一个 Orca 连接到这里",
+          "shareRowHint": "允许另一个 Orca 连接到这里",
           "manageShare": "管理",
           "share": "共享",
           "serversCaption": "服务器",
@@ -13675,7 +13681,7 @@
           "attentionSharedNotCurrent": "需要处理 · 此文件夹使用的共享副本不是 Orca 的副本",
           "resultUpdateSkippedPlaces": "{{result}} · 已跳过 {{places}} 个位置的更新：{{reason}}",
           "resultUpdateSkippedAgent": "{{result}} · 已跳过 {{agent}} 中的更新：{{reason}}",
-          "attentionDiffersFromOrca": "需要处理 · 此副本与 Orca 的副本不同",
+          "attentionDiffersFromOrca": "需要处理 · 此副本与 Orca 的版本不同",
           "replaceMovesCopyToBackup": "替换会将当前副本（包括所有额外文件）移动到备份",
           "replaceMovesCopyToFolder": "替换会将当前副本（包括所有额外文件）移动到 {{folder}}",
           "replaceMovesCopyToFolderOnHost": "替换会将当前副本（包括所有额外文件）移动到 {{host}} 上的 {{folder}}"
@@ -13812,6 +13818,7 @@
           "command": "命令",
           "panel": "侧边栏面板",
           "recipe": "机器配方",
+          "mcpServer": "MCP 服务器",
           "access": "可访问",
           "accessLoading": "正在读取插件…",
           "logs": "日志",
@@ -13888,6 +13895,7 @@
           "newEvents": "响应更多 Orca 事件",
           "newPanels": "添加面板",
           "newRecipes": "机器配方",
+          "newMcpServers": "MCP 服务器",
           "newShortcuts": "键盘快捷键",
           "update": "更新",
           "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行",
@@ -14002,6 +14010,7 @@
           "contentOnly": "仅内容",
           "fullAccess": "完全访问权限",
           "addsVmRecipes": "添加虚拟机配置",
+          "addsMcpServers": "添加 MCP 服务器",
           "opensAndEditsFiles": "打开并编辑文件",
           "runsPluginCode": "运行插件代码"
         },
@@ -14089,7 +14098,8 @@
             "windows": "时间窗口的已用或剩余百分比",
             "reset": "距重置的时间，例如 3h 15m",
             "resetAt": "重置时刻，例如 20:50",
-            "optional": "其中的占位符为空时省略该组"
+            "optional": "其中的占位符为空时省略该组",
+            "usagePools": "命名的用量池，例如 Antigravity 模型"
           }
         },
         "editorTypography": {
@@ -20268,6 +20278,8 @@
         "permissionAppliesNextMessage": "{{saved}} 从下一条消息起生效；当前使用 {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "模型和推理强度",
+        "modelsLoading": "正在加载模型…",
+        "signInForModels": "登录后可查看你能使用的模型",
         "draftNotSaved": "此草稿尚未保存成功，Orca 会继续尝试",
         "imageNotBroughtBack": "无法随此草稿恢复 {{name}}，请重新附加或将其移除",
         "pastedImageNotBroughtBack": "无法随此草稿恢复这张粘贴的图片，请将其移除，如仍需要请重新粘贴",
@@ -21262,6 +21274,7 @@
         "template": "模板",
         "nameTaken": "你已经有一个名为 {{name}} 的 bot",
         "open": "打开",
+        "openBot": "打开 {{name}}",
         "edit": "编辑",
         "rename": "重命名",
         "create": "创建 bot",
@@ -21474,7 +21487,8 @@
           "addressLabel": "登录页面地址",
           "unfinished": "尚未完成登录，请在打开的页面上完成，然后点击\"完成\"",
           "pastePlaceholder": "http://localhost:…"
-        }
+        },
+        "manage": "管理 MCP 服务器"
       },
       "ciResultLine": {
         "failingLead": "CI 失败于",
@@ -21697,7 +21711,8 @@
         "signIn": "登录",
         "signsInClaudeAccount": "登录此 Claude 账户",
         "runsCommand": "在终端中运行 {{command}}",
-        "thenSlashCommand": "请先登录，然后输入 {{slashCommand}}"
+        "thenSlashCommand": "请先登录，然后输入 {{slashCommand}}",
+        "signsInAgy": "在浏览器中使用 Google 登录 agy"
       },
       "antigravityAuth": {
         "chipLabel": "更改 Antigravity 登录方式（当前：{{method}}）",
@@ -21731,7 +21746,16 @@
         "yourAgyVersion": "你的 agy · v{{version}}",
         "orcasAgy": "Orca 自带的 agy",
         "orcasAgyVersion": "Orca 自带的 agy · v{{version}}",
-        "runsOn": "运行于：{{program}}"
+        "runsOn": "运行于：{{program}}",
+        "keepsOwnLogin": "此聊天保留 agy 自己的 Google 登录。新聊天使用 {{method}}",
+        "apiKeyEnvironment": "来自你的环境变量",
+        "foundGcloud": "你的 gcloud 登录也可以使用",
+        "foundKey": "你的 Gemini API 密钥也可以使用",
+        "foundKeyAndGcloud": "你的 Gemini API 密钥和 gcloud 登录也可以使用",
+        "gcloudProject": "项目 {{project}}",
+        "otherWaysMenu": "其他登录方式…",
+        "useGcloudLogin": "使用你的 gcloud 登录",
+        "otherWaysLabel": "其他登录方式"
       },
       "pairedServerAsk": {
         "always": "始终允许 {{server}}",
@@ -22442,7 +22466,7 @@
         "ciResultLinesSearchChecks": "检查",
         "ciResultLinesSearchPr": "PR",
         "promptSuggestionsTitle": "建议的提示词",
-        "promptSuggestionsCopy": "Claude 或 Codex 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入该智能体的用量。",
+        "promptSuggestionsCopy": "Claude 或 Codex 回复后，它对你下一条消息的猜测会显示在空的消息框中。按 Tab 即可使用。每次猜测都是一次额外请求，会计入该智能体的用量",
         "promptSuggestionsSearchNext": "下一条提示词",
         "promptSuggestionsSearchGhost": "幽灵文本"
       },
@@ -23089,7 +23113,7 @@
         "bannerFinishedStatus": "编排工作代理已完成 · 即将关闭",
         "boundRunning": "随 {{worker}} 一同关闭",
         "boundFinished": "{{worker}} 已完成 · {{countdown}}后关闭",
-        "boundFallbackName": "其工作代理"
+        "boundFallbackName": "其工作者"
       }
     },
     "wslHostMark": {
@@ -23456,6 +23480,9 @@
     "guestRecovery": {
       "title": "浏览器页面已停止",
       "failed": "浏览器页面意外停止，请重试以恢复"
+    },
+    "claimedDownload": {
+      "saved": "已保存到 {{place}}"
     },
     "serverPage": {
       "download": {
@@ -24822,6 +24849,19 @@
       "terminalTitle": "终端中的 agy",
       "terminalDescription": "使用 agy 自己保存的账户。切换会应用于新的 agy 会话",
       "addAccountHelp": "要添加账户，请在 agy 中运行 /logout 并重新登录，然后在这里点击\"保存\"",
+      "description": "聊天和终端中的 agy 共用 agy 的 Google 账户。聊天也可以改用 Gemini API 密钥或 gcloud 登录",
+      "descriptionWindows": "聊天和终端中的 agy 共用 agy 的 Google 账户。切换会应用到主机默认的 agy 凭据。聊天也可以改用 Gemini API 密钥或 gcloud 登录",
+      "signInGoogle": "使用 Google 登录",
+      "addAccount": "添加账户",
+      "addAccountInApp": "登录另一个 Google 账户。两个账户都会保存在这里，方便切换",
+      "chatCancelSignIn": "取消登录",
+      "chatCopied": "已复制",
+      "chatCopySignInLink": "复制登录链接",
+      "chatFinishInBrowser": "在浏览器中完成登录，然后粘贴授权码",
+      "chatOtherWindow": "另一个窗口中正在进行登录",
+      "chatPageDidntOpen": "页面没有打开？",
+      "chatPasteCode": "粘贴授权码",
+      "chatPasteCodeLabel": "登录后 Google 显示的授权码，或该页面的地址",
       "apiKeyGet": "获取 API 密钥"
     },
     "claude": {
@@ -28514,7 +28554,10 @@
         "removeNoteOnHost": "{{name}} 将无法再使用你的 Gmail、日历和云端硬盘。Google 在 {{host}} 上仍保持连接",
         "signedOutOnHost": "{{host}} 上未连接",
         "account": "账户",
-        "settingUp": "正在设置"
+        "settingUp": "正在设置",
+        "reconnectAccount": "重新连接 {{email}}",
+        "chooseAccounts": "选择账户…",
+        "accounts": "账户"
       },
       "copied": "已复制。请发送给你的 Google 管理员",
       "share": {
@@ -28676,7 +28719,14 @@
       "useAnotherSignIn": "使用 Google 登录",
       "useAnotherSignInDetail": "使用你当前 Google 应用",
       "setUpNewAppDetail": "如果你当前应用不适用于此账户或组织",
-      "updateToSetUpNewApp": "在 {{host}} 上更新 Orca 后才能设置新的 Google 应用"
+      "updateToSetUpNewApp": "在 {{host}} 上更新 Orca 后才能设置新的 Google 应用",
+      "updateToChooseAccounts": "在 {{host}} 上更新 Orca 后才能选择账户",
+      "picker": {
+        "label": "Google 账户",
+        "addAccount": "添加另一个账户",
+        "caption": "{{bot}} 可以使用的账户",
+        "save": "保存"
+      }
     },
     "toolApp": {
       "address": "地址",
@@ -29463,7 +29513,16 @@
           "reply": "收到，马上处理"
         },
         "connectTitle": "连接 GitHub",
-        "manage": "管理"
+        "manage": "管理",
+        "cancel": "取消",
+        "installApp": "安装应用",
+        "add": "添加",
+        "addTitle": "添加 {{name}}",
+        "addShort": "添加",
+        "allRepos": "所有仓库",
+        "repoCount_other": "{{count}} 个仓库",
+        "finishInYourBrowser": "请在浏览器中完成…",
+        "whoCanAsk": "谁可以提问"
       },
       "account": {
         "defaultBot": "处理我的请求的默认 bot",
@@ -29553,6 +29612,7 @@
       "controlBriefIfAdded": "你添加的人可以在这里以你的身份操作",
       "controlBriefOnHost": "他们可以在{{computer}}上以你的身份操作",
       "controlBriefIfAddedOnHost": "你添加的人可以在{{computer}}上以你的身份操作",
+      "actsAsYou": "他们会在 {{computer}} 上以你的身份操作",
       "reachHeading": "{{name}} 可以访问的内容",
       "reachComputer": "你在 {{computer}} 上的文件、命令和账户",
       "reachComputerDetail": "以你的身份，在下方权限允许的范围内",
@@ -30177,6 +30237,7 @@
       "toolCredentialsRaced": "机器人的工具凭据已在另一个 Orca 中更改。请重试",
       "toolSourceManaged": "这个工具由 Orca 管理。请到你设置它的地方更改",
       "toolValuesUnmoved": "有个工具仍保存着它的值。请重新打开机器人的工具以迁移这些值",
+      "googleAccountsChanged": "打开后其 Google 账户已发生变化。请检查后重新保存",
       "toolCodexCheckFailed": "Codex 无法检查或连接这些工具。请检查它的设置后重试",
       "toolCodexNoThread": "Codex 没有启动用于检查工具的线程",
       "toolSignInFolderFailed": "无法准备登录文件夹：{{detail}}",
@@ -30557,7 +30618,27 @@
     "failedChipTooltip": "更新失败，点击查看详情",
     "failedTitle": "无法更新 {{product}}",
     "failedDescription": "Orca 在 <strong>{{host}}</strong> 上运行了 <code>{{command}}</code>，以将你的 {{product}} 从 <strong>{{installedVersion}}</strong> 更新到 <strong>{{latestVersion}}</strong>，但运行失败",
-    "failedDescriptionNoCommand": "Orca 无法更新你在 <strong>{{host}}</strong> 上的 {{product}}"
+    "failedDescriptionNoCommand": "Orca 无法更新你在 <strong>{{host}}</strong> 上的 {{product}}",
+    "cardLabel": "智能体 CLI 更新",
+    "cardSingleTitle": "{{name}} {{version}} 已发布",
+    "cardSingleInstalled": "你当前的版本是 {{version}}",
+    "cardNamesTwo": "{{first}}和{{second}}",
+    "cardNamesThree": "{{first}}、{{second}}和{{third}}",
+    "cardDismiss": "关闭",
+    "cardDetails": "详情",
+    "cardLater": "稍后",
+    "copyCommandFull": "复制命令",
+    "cardDoneOne": "{{name}} 已是最新版本",
+    "cardFailedOne": "{{name}} 未能更新",
+    "cardProgress": "{{done}}/{{total}}",
+    "cardShowEach": "显示各个 CLI",
+    "cardNamesSome_other": "{{first}}、{{second}}和另外 {{count}} 个",
+    "cardNamesMany_other": "{{first}}和另外 {{count}} 个",
+    "cardHostsTitle_other": "{{hosts}} 台主机上有 {{count}} 个 CLI 更新",
+    "cardUpdateSome_other": "更新 {{count}} 个 CLI",
+    "cardDone_other": "全部 {{count}} 个 CLI 已是最新版本",
+    "cardFailed_other": "{{count}} 个 CLI 未能更新",
+    "cardSingleInstalledOn": "{{host}} 上的版本是 {{version}}"
   },
   "backgroundWorkerPaused": {
     "title": "部分后台任务因反复崩溃已暂停",
@@ -30624,6 +30705,15 @@
       "moreTabs_other": "还有 {{count}} 个标签页",
       "needAttention_other": "，{{count}} 个需要处理",
       "openTabs_other": "{{count}} 个打开的标签页"
+    }
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "请直接把值写进 mcp add 命令：Orca 无法填入 $VARIABLES 或其他 shell 表达式",
+      "unsupported": "Orca 无法按原样添加此服务器：它使用了 SSE、自己的 OAuth 客户端，或从环境中读取的值",
+      "badAddCommand": "请检查 mcp add 命令：需要名称，以及 URL 或命令",
+      "badJson": "请检查粘贴的 JSON：无法解析",
+      "none": "Orca 没有找到可以添加的服务器。不支持 SSE 服务器、带有自己 OAuth 客户端或工具过滤器的服务器，以及从环境中读取的值（${VAR}）"
     }
   }
 }
