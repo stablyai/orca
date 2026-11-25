@@ -226,6 +226,8 @@ export function usePaletteDrag({
         const dragStart = { ...layout, saved: position }
         let currentLeft = startLeft
         let currentTop = startTop
+        // Only pointer motion moves the top: the find bar's limit can also clamp it while the pointer goes sideways.
+        let movedY = false
         setDragging(true)
 
         const onMove = (moveEvent: PointerEvent): void => {
@@ -241,6 +243,7 @@ export function usePaletteDrag({
             boundsWidth,
             paletteWidth
           )
+          movedY ||= moveEvent.clientY !== startY
           currentTop = clampPaletteOffset(
             startTop + moveEvent.clientY - startY,
             boundsHeight,
@@ -281,7 +284,7 @@ export function usePaletteDrag({
           const restTopMin = topMinRef.current
           const rest = paletteDragRest(
             dragStart,
-            commit ? { left: currentLeft, top: currentTop } : null,
+            commit ? { left: currentLeft, top: movedY ? currentTop : startTop } : null,
             restTopMin
           )
           setLayout((prev) =>
