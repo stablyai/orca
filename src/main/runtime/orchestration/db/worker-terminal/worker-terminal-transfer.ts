@@ -1,6 +1,7 @@
 import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { closedWorkerFollowUpHint } from '../../workers/reports/closed-worker-follow-up-hint'
 import { createPreviousCustodianLookup } from './worker-custody-read'
 import type { OrchestrationDb } from '../orchestration-db'
 
@@ -32,14 +33,13 @@ export function findTransferableWorkerTerminalResource(
       candidate.process_incarnation === params.processIncarnation &&
       candidate.host_scope === params.hostScope
   )
-  if (
-    exact.some((candidate) =>
-      ['requested', 'releasing', 'unknown'].includes(candidate.release_state)
-    )
-  ) {
+  const releasing = exact.find((candidate) =>
+    ['requested', 'releasing', 'unknown'].includes(candidate.release_state)
+  )
+  if (releasing) {
     throw new OrchestrationError(
       'terminal_release_in_progress',
-      `Terminal ${params.terminalHandle} has a release in progress; wait for cleanup or use another terminal.`
+      `Terminal ${params.terminalHandle} has a release in progress; wait for cleanup or use another terminal.${closedWorkerFollowUpHint(this, releasing.owner_dispatch_id)}`
     )
   }
   return exact.find(

@@ -25,6 +25,10 @@ import {
 import type { AgentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { canonicalOrcaSessionId } from '../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
+import {
+  chatWorkerDispatchId,
+  closedWorkerFollowUpHint
+} from '../../../../orchestration/workers/reports/closed-worker-follow-up-hint'
 import { agentHookServer } from '../../../../../agent-hooks/server/agent-hook-server'
 
 /** `address` is the named session's own spelling; the mailbox mail lands in is its identity address. */
@@ -136,7 +140,8 @@ export function refuseUndeliverableSessionRecipient(
     recipient,
     store,
     (records, found) => structuredSessionMailReach(records, found, db),
-    noEffect
+    noEffect,
+    (sessionId) => closedWorkerFollowUpHint(db, chatWorkerDispatchId(db, sessionId))
   )
 }
 
@@ -162,7 +167,8 @@ function refuseUnreachableSessionRecipient(
     records: AgentSessionRecordReader,
     found: AgentSessionConversationView
   ) => StructuredSessionMailReach,
-  noEffect: string
+  noEffect: string,
+  closedHint: (sessionId: string) => string = () => ''
 ): SessionRecipientRefusal | null {
   const { sessionId } = recipient
   if (!store) {
@@ -204,7 +210,7 @@ function refuseUnreachableSessionRecipient(
       message:
         reached.reason === 'worker-identity-lost'
           ? `Agent session ${sessionId} is a structured worker whose worker identity this host no longer has, so it can never read that mail. ${noEffect}`
-          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}`,
+          : `Agent session ${sessionId} has ended: its chat was closed. ${noEffect}${closedHint(sessionId)}`,
       unreachable: reached.reason === 'worker-identity-lost' ? 'unverifiable' : 'ended'
     }
   }

@@ -2,6 +2,9 @@
 
 export const ORCHESTRATION_SESSION_WORKERS_METHOD = 'orchestration.sessionWorkers'
 
+/** A workspace's finished chat workers whose chat Orca closed; one click reopens each. */
+export const ORCHESTRATION_WORKSPACE_RETAINED_CHATS_METHOD = 'orchestration.workspaceRetainedChats'
+
 /** A result line is a glance, not the report; the full text stays in `worker-show`. */
 export const ORCHESTRATION_SESSION_WORKER_SUMMARY_MAX = 280
 

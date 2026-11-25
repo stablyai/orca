@@ -28,3 +28,8 @@ export const WorkerListParams = z.object({
 
 /** A native chat's own Orca session id: the workers it started. */
 export const SessionWorkersParams = z.object({ session: requiredString('Missing --session') })
+
+/** A workspace by its id: the finished chat workers it keeps. */
+export const WorkspaceRetainedChatsParams = z.object({
+  worktreeId: requiredString('Missing worktreeId')
+})

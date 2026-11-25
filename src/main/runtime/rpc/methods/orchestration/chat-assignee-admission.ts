@@ -16,6 +16,11 @@ import {
   resolveTerminalAgentRecipient
 } from './messaging/session-recipient'
 
+import {
+  chatWorkerDispatchId,
+  closedWorkerFollowUpHint
+} from '../../../orchestration/workers/reports/closed-worker-follow-up-hint'
+
 const NO_EFFECTS = 'No effects were applied.'
 
 /** A chat with no worker handle has no pane or process; its Dispatch names it by its Orca session ID alone. */
@@ -51,7 +56,7 @@ export async function admitChatAssignee(
   if (observed.status !== 'live') {
     throw new OrchestrationError(
       CODES.notLive,
-      `Agent session ${sessionId} cannot take a task here: ${observed.reason} ${NO_EFFECTS}`,
+      `Agent session ${sessionId} cannot take a task here: ${observed.reason} ${NO_EFFECTS}${observed.status === 'exited' ? closedWorkerFollowUpHint(db, chatWorkerDispatchId(db, sessionId)) : ''}`,
       { effectsApplied: false }
     )
   }

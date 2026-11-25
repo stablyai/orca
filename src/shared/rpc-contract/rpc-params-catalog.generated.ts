@@ -751,7 +751,8 @@ import {
   SessionWorkersParams,
   WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerReleaseSchemasParams,
   WorkerListParams,
-  WorkerRetainParams
+  WorkerRetainParams,
+  WorkspaceRetainedChatsParams
 } from './orchestration/orchestration-worker-release-schemas-params'
 import { WorkerStartParams } from './orchestration/orchestration-worker-start-params'
 import { WorkerDispatchParams as WorkerDispatchParamsOfOrchestrationWorkerStopParams } from './orchestration/orchestration-worker-stop-params'
@@ -2035,6 +2036,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.workerStop': WorkerDispatchParamsOfOrchestrationWorkerStopParams,
   'orchestration.workerTerminalUserInput': OrchestrationWorkerSubjectParams,
   'orchestration.workerTranscript': WorkerTranscriptParams,
+  'orchestration.workspaceRetainedChats': WorkspaceRetainedChatsParams,
   'pairedServerAsks.allow': PairedServerAllowParams,
   'pairedServerAsks.allowances': PairedServerAllowancesParams,
   'pairedServerAsks.decide': PairedServerAskDecideParams,

@@ -17,7 +17,8 @@ export function NativeChatEmptyState({
   headline,
   agent,
   persona,
-  retrying = false
+  retrying = false,
+  children
 }: {
   kind: 'loading' | 'empty' | 'error' | 'not-agent'
   message?: string
@@ -27,6 +28,8 @@ export function NativeChatEmptyState({
   persona?: NativeChatPersona | null
   /** Structured reads retry automatically; show a loading failure without directing users back to a terminal. */
   retrying?: boolean
+  /** Below the copy: what the empty chat's workspace already holds. */
+  children?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const {
@@ -85,6 +88,7 @@ export function NativeChatEmptyState({
               {copy.subtitle}
             </p>
           ) : null}
+          {children}
         </div>
       </div>
     </div>
