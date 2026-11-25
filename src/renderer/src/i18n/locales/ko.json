@@ -7554,8 +7554,8 @@
           "stopped": "중지됨",
           "unverifiable": "알 수 없음",
           "title": "WSL 배포판 추가",
-          "descriptionMoveFromSidebar": "Orca는 배포판 안에서 서버를 실행하므로 Git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 이 배포판에서 \\\\wsl.localhost를 통해 연 프로젝트는 사이드바 메뉴에서 옮기기 전까지 이 컴퓨터에 남습니다. Windows 드라이브(/mnt/…)에 있는 프로젝트도 여기에 남습니다. 옮긴 프로젝트는 사이드바에서 다시 되돌릴 수 있습니다.",
-          "descriptionAutoMove": "Orca는 배포판 안에서 서버를 실행하므로 Git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 이 배포판에서 \\\\wsl.localhost를 통해 연 프로젝트는 터미널이 유휴 상태가 되면 자동으로 이 호스트로 옮겨집니다. Windows 드라이브(/mnt/…)에 있는 프로젝트는 이 컴퓨터에 남습니다. 옮긴 프로젝트는 사이드바에서 다시 되돌릴 수 있습니다.",
+          "descriptionMoveFromSidebar": "Git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. 기존 WSL 프로젝트는 프로젝트 메뉴에서 … 호스트로 이동을 선택하기 전까지 Windows에 남아 있습니다.",
+          "descriptionAutoMove": "Git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다. WSL 프로젝트는 터미널이 유휴 상태가 되면 여기로 옮겨집니다.",
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",
@@ -13299,7 +13299,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "WSL 배포판을 호스트로 전환",
           "title": "호스트로 사용할 WSL 배포판",
-          "description": "WSL 2 배포판을 호스트로 추가합니다. Orca는 배포판 안에서 서버를 실행하므로, 그곳의 새 프로젝트에서 git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다.",
+          "description": "WSL 2 배포판 안에서 Orca 서버를 실행해 Git, 파일, 터미널이 Linux에서 네이티브로 실행됩니다.",
           "keywordWsl": "wsl",
           "keywordLinux": "리눅스",
           "keywordDistro": "배포판"
@@ -13307,17 +13307,17 @@
         "wslHosts": {
           "title": "WSL 호스트",
           "experimental": "실험적",
-          "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 프로젝트를 열어도 중지된 배포판은 시작되지 않습니다. [시작]을 클릭하거나, 새 터미널을 열거나, 여기에서 연결하세요.",
+          "description": "Orca는 각 배포판 안에서 서버를 실행합니다. 중지된 배포판을 시작하려면 시작을 클릭하거나, 터미널을 열거나, 여기서 연결하세요.",
           "add": "WSL 배포판 추가",
           "connect": "연결",
           "turnOn": "실험 기능 열기",
           "forceUpdate": "강제 업데이트",
           "chip": "WSL",
-          "notStartedAsWslHost": "이 호스트의 서버는 WSL 호스트가 아니라 SSH 호스트가 시작했기 때문에 프로젝트를 여기로 옮길 수 없습니다. 해결하려면 WSL 호스트로 다시 시작하세요.",
+          "notStartedAsWslHost": "SSH 호스트가 이 서버를 시작했기 때문에 프로젝트를 여기로 옮길 수 없습니다. 해결하려면 WSL 호스트로 다시 시작하세요.",
           "restartAsWslHost": {
             "button": "WSL 호스트로 다시 시작",
             "title": "WSL 호스트로 다시 시작할까요?",
-            "description": "{{host}}에서 실행 중인 모든 터미널과 에이전트가 종료됩니다. SSH 호스트가 그곳에서 연 것도 포함됩니다. 그런 다음 Orca가 WSL 호스트로 서버를 다시 시작하므로 프로젝트를 이 호스트로 옮길 수 있습니다.",
+            "description": "{{host}}에서 실행 중인 모든 터미널과 에이전트(SSH 호스트가 연 것 포함)를 종료한 뒤 Orca 서버를 WSL 호스트로 다시 시작합니다.",
             "cancel": "취소",
             "action": "터미널 종료 후 다시 시작"
           }
