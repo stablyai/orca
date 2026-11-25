@@ -18,8 +18,10 @@ describe('missingBareImports', () => {
   it('reports every real load of a missing package, including one inside a template', () => {
     const source =
       'const a=require("ajv");const b=`${require("ajv-formats")}`;' +
-      'import("smol-toml").then(()=>{});const c=require(`yaml`);const d=x.require("tldts")'
+      'import("smol-toml").then(()=>{});const c=require(`yaml`);const d=x.require("tldts");' +
+      'const e=require("@scope/missing/entr\\u00E9e")'
     expect(missingBareImports(source, 'chunk.js', everyPackageMissing).sort()).toEqual([
+      '@scope/missing/entr\u00E9e',
       'ajv',
       'ajv-formats',
       'smol-toml',

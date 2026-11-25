@@ -9,17 +9,12 @@ const CANDIDATE_RE = /(?:(?<![.\w])|(?<=\.\.\.))(?:require|import)\s*\(\s*(["'`]
  * with a flagged candidate is parsed to keep only real calls.
  */
 function missingBareImports(source, file, isMissing) {
-  const candidates = new Set()
-  for (const match of source.matchAll(CANDIDATE_RE)) {
-    if (isMissing(match[2])) {
-      candidates.add(match[2])
-    }
-  }
-  if (candidates.size === 0) {
+  const hasCandidate = [...source.matchAll(CANDIDATE_RE)].some((match) => isMissing(match[2]))
+  if (!hasCandidate) {
     return []
   }
-  const loaded = new Set(runtimeImportSpecifiers(source, file))
-  return [...candidates].filter((specifier) => loaded.has(specifier))
+  // Decoded by the parser, so an escaped specifier (ASCII-only output) still matches its package.
+  return [...new Set(runtimeImportSpecifiers(source, file).filter(isMissing))]
 }
 
 module.exports = { missingBareImports }
