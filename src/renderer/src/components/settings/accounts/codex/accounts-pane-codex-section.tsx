@@ -10,6 +10,7 @@ import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'
 import { getCodexSystemDefaultSubtitle } from '../scope/accounts-pane-runtime'
+import { getSystemDefaultLanes, runSystemDefaultSelect } from '../scope/system-default-lanes'
 import type { AccountsPaneSectionModel } from '../accounts-pane-types'
 import { renderCodexAccountRow } from './accounts-pane-codex-account-row'
 import { signInCodexAccountOnHost } from '@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client'
@@ -32,6 +33,7 @@ export function renderCodexAccountsSection(
     accountRuntimeUnavailable,
     activeCodexAccountId,
     activeCodexAuthWarning,
+    codexAccounts,
     codexAction,
     codexConfigSync,
     codexConfigSyncWarning,
@@ -225,12 +227,16 @@ export function renderCodexAccountsSection(
             <button
               type="button"
               onClick={() =>
-                void runCodexAccountAction('select:system', () =>
-                  selectCodexProviderAccount(accountOwner, {
-                    accountId: null,
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
+                void runSystemDefaultSelect(
+                  getSystemDefaultLanes(
+                    accountRuntime,
+                    visibleCodexAccounts,
+                    codexAccounts,
+                    isRemoteAccountScope
+                  ),
+                  accountOwner,
+                  runCodexAccountAction,
+                  selectCodexProviderAccount
                 )
               }
               disabled={codexAction !== 'idle' || accountRuntimeUnavailable}

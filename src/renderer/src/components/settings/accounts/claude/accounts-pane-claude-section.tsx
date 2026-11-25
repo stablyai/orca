@@ -1,7 +1,15 @@
 import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
+import {
+  claudeRemoteWslDefaultUnavailableMessage,
+  selectClaudeProviderAccount
+} from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
+import {
+  getSystemDefaultLanes,
+  runSystemDefaultSelect,
+  systemDefaultBlockedForClaude
+} from '../scope/system-default-lanes'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
@@ -48,6 +56,16 @@ export function renderClaudeAccountsSection(
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
+  const systemDefaultLanes = getSystemDefaultLanes(
+    accountRuntime,
+    visibleClaudeAccounts,
+    claudeAccounts,
+    isRemoteAccountScope
+  )
+  const systemDefaultBlocked = systemDefaultBlockedForClaude(
+    systemDefaultLanes,
+    isRemoteAccountScope
+  )
   // System default belongs to the host home, never a WSL distro.
   const systemDefaultEmail =
     accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
@@ -172,15 +190,16 @@ export function renderClaudeAccountsSection(
             <button
               type="button"
               onClick={() =>
-                void runClaudeAccountAction('select:system', () =>
-                  selectClaudeProviderAccount(accountOwner, {
-                    accountId: null,
-                    runtime: accountRuntime.runtime,
-                    wslDistro: accountRuntime.wslDistro
-                  })
+                void runSystemDefaultSelect(
+                  systemDefaultLanes,
+                  accountOwner,
+                  runClaudeAccountAction,
+                  selectClaudeProviderAccount
                 )
               }
-              disabled={claudeAction !== 'idle' || accountRuntimeUnavailable}
+              disabled={
+                claudeAction !== 'idle' || accountRuntimeUnavailable || systemDefaultBlocked
+              }
               className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
                 systemClaudeActive
                   ? 'border-foreground/20 bg-accent/15'
@@ -206,11 +225,13 @@ export function renderClaudeAccountsSection(
                   ) : null}
                 </div>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {t(
-                    'auto.components.settings.AccountsPane.e05d0ff737',
-                    'Use your current {{value0}} Claude login.',
-                    { value0: accountRuntimeSentenceLabel }
-                  )}
+                  {systemDefaultBlocked
+                    ? claudeRemoteWslDefaultUnavailableMessage()
+                    : t(
+                        'auto.components.settings.AccountsPane.e05d0ff737',
+                        'Use your current {{value0}} Claude login.',
+                        { value0: accountRuntimeSentenceLabel }
+                      )}
                 </span>
               </div>
             </button>

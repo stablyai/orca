@@ -9,7 +9,10 @@ import { useAppStore } from '../../../store/index'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { emptyClaudeAccountsState } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
-import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
+import {
+  claudeRemoteWslDefaultUnavailableMessage,
+  selectClaudeProviderAccount
+} from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../../../lib/provider-accounts/provider-account-action-errors'
 import { useTranslate } from '@/i18n/use-translate'
@@ -244,7 +247,7 @@ export function ClaudeSwitcherForOwner({
     // Why: accounts.selectClaude takes no runtime, so clearing a remote WSL slot would clear the host's.
     target:
       hasActiveRuntimeEnvironment && target.id === null && target.runtimeTarget.runtime === 'wsl'
-        ? { ...target, disabled: true }
+        ? { ...target, disabled: true, detail: claudeRemoteWslDefaultUnavailableMessage() }
         : target,
     inactiveUsage: inactiveClaudeAccounts.find((a) => a.accountId === claudeRowUsageId(target)),
     // Why local only: the hidden sign-in runs on this device, not a remote server.

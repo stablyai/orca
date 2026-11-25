@@ -41,6 +41,21 @@ describe('remote provider account selection', () => {
     )
   })
 
+  it('keeps concrete WSL account IDs on the plain Codex method for older hosts', async () => {
+    await selectCodexProviderAccount(remote, {
+      accountId: 'wsl-account',
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu'
+    })
+
+    expect(mocks.rpc).toHaveBeenCalledWith(
+      remote,
+      'accounts.selectCodex',
+      { accountId: 'wsl-account' },
+      expect.any(Object)
+    )
+  })
+
   it('keeps host selections on the plain Codex method', async () => {
     await selectCodexProviderAccount(remote, { accountId: null, runtime: 'host' })
 
