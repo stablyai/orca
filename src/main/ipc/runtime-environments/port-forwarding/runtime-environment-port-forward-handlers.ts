@@ -105,7 +105,7 @@ export function registerRuntimeEnvironmentPortForwardHandlers(options: {
         z.object({ environmentId: EnvironmentId, remotePort: Port, label: Label }).parse(input)
       )
   )
-  ipcMain.handle('runtimeEnvironments:takeRestoredPortForwardMoves', () =>
+  handleRuntimeEnvironmentChannel('runtimeEnvironments:takeRestoredPortForwardMoves', () =>
     takeRestoredPairedPortForwardMoves()
   )
 }

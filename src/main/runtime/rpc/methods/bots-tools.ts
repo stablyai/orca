@@ -53,7 +53,7 @@ import { structuredAgentHostLaunchSources } from '../../agent-session/launch/str
 import { structuredAgentRuntimeMetadata } from '../../agent-session/installation/structured-agent-runtime-metadata'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { appendOrcaChatCard } from '../../orca-chat-card'
-import { defineMethod, InvalidArgumentError } from '../core'
+import { defineMethod, InvalidArgumentError, notShared } from '../core'
 import { refuseFromLook, targetBot } from './bots-tools-target'
 
 const botToolSignInFolder = (botId: string): string =>
@@ -152,8 +152,7 @@ export function botToolServerOf(source: string, name?: string): BotToolServer {
 export const BOT_TOOLS_METHODS = [
   defineMethod({
     name: 'bots.tools.list',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolsList,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
@@ -165,8 +164,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.problems',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolProblems,
     handler: async (params, context) => {
       const bot = targetBot(params, context)
@@ -184,8 +182,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.cancelProblems',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolsList,
     handler: (params, context) => {
       cancelBotToolHealthChecks(targetBot(params, context).id)
@@ -194,8 +191,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.add',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolAdd,
     handler: async (params, context): Promise<{ tool: BotOwnTool }> => {
       refuseFromLook(params, context)
@@ -223,8 +219,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.context',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolsList,
     handler: async (params, context) => {
       const cli = await botToolsHome(context.runtime, targetBot(params, context))
@@ -233,8 +228,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.details',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolTarget,
     handler: async (params, context) =>
       readBotToolDetails(
@@ -244,8 +238,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.update',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolUpdate,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -258,8 +251,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.remove',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolTarget,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -271,8 +263,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.connect',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolTarget,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -286,8 +277,7 @@ export const BOT_TOOLS_METHODS = [
   }),
   defineMethod({
     name: 'bots.tools.finishSignIn',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolFinishSignIn,
     handler: async (params, context) => {
       refuseFromLook(params, context)
@@ -306,8 +296,7 @@ export const BOT_TOOLS_METHODS = [
   defineMethod({
     // What a Connect is waiting on; read from memory and the tools file, so a client can ask often.
     name: 'bots.tools.signInStatus',
-    permission: 'workspace',
-    share: 'not-shared',
+    ...notShared('workspace'),
     params: BotToolTarget,
     handler: async (params, context) => {
       const bot = targetBot(params, context)

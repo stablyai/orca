@@ -36,6 +36,7 @@ export const MCP_SERVER_SIGN_IN_METHODS = [
   defineMethod({
     name: 'mcpServers.signIn.start',
     permission: 'workspace',
+    share: 'not-shared',
     params: McpServerSignInStart,
     handler: (params, context): Promise<BotToolSignInAttemptView> =>
       onHost(context, async () => {
@@ -50,6 +51,7 @@ export const MCP_SERVER_SIGN_IN_METHODS = [
   defineMethod({
     name: 'mcpServers.signOut',
     permission: 'workspace',
+    share: 'not-shared',
     params: McpServerTarget,
     handler: (params, context) =>
       onHost(context, async () => changed(await signOutMcpServer(params.id)), true)
@@ -57,6 +59,7 @@ export const MCP_SERVER_SIGN_IN_METHODS = [
   defineMethod({
     name: 'mcpServers.signIn.wait',
     permission: 'workspace',
+    share: 'not-shared',
     params: McpServerSignInWait,
     handler: (params, context) =>
       onHost(context, () =>
@@ -71,6 +74,7 @@ export const MCP_SERVER_SIGN_IN_METHODS = [
   defineMethod({
     name: 'mcpServers.signIn.finish',
     permission: 'workspace',
+    share: 'not-shared',
     params: McpServerSignInFinish,
     handler: (params, context) =>
       onHost(context, async () => {
@@ -81,6 +85,7 @@ export const MCP_SERVER_SIGN_IN_METHODS = [
   defineMethod({
     name: 'mcpServers.signIn.cancel',
     permission: 'workspace',
+    share: 'not-shared',
     params: McpServerSignInFlow,
     handler: (params, context) =>
       onHost(context, async () => cancelBotToolSignInAttempt(signInOwner(context), params.flowId))

@@ -37,6 +37,7 @@ const NOT_SAVED = LEAVE_THREAD_REFUSALS.thread_mute_not_saved
 export const CONNECTOR_LEAVE_THREAD_METHOD = defineMethod({
   name: 'connector.leaveThread',
   permission: 'workspace',
+  share: 'not-shared',
   params: ConnectorLeaveThread,
   handler: async ({ sessionId }, context) => {
     const { runtime } = context

@@ -90,6 +90,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.continueRebase',
     permission: 'workspace',
+    share: 'not-shared',
     params: GitContinueRebase,
     handler: async (params, { runtime }) =>
       runtime.continueRuntimeGitRebase(params.worktree, params.action, {
@@ -99,6 +100,7 @@ export const GIT_METHODS = [
   defineMethod({
     name: 'git.rebaseAutoStash',
     permission: 'workspace',
+    share: 'not-shared',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.readRuntimeGitRebaseAutoStash(params.worktree)
   }),

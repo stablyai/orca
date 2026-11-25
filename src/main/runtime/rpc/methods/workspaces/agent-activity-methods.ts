@@ -36,6 +36,7 @@ export const AGENT_ACTIVITY_METHODS = [
   defineMethod({
     name: AGENT_ACTIVITY_ORCHESTRATION_METHOD,
     permission: 'workspace',
+    share: 'not-shared',
     params: null,
     handler: async (_params, { runtime }): Promise<AgentActivityOrchestrationResult> => ({
       contexts: Object.fromEntries(

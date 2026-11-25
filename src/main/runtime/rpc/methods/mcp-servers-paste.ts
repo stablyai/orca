@@ -11,6 +11,7 @@ export const MCP_SERVER_PASTE_METHODS = [
   defineMethod({
     name: 'mcpServers.previewPaste',
     permission: 'workspace',
+    share: 'not-shared',
     params: McpServerPreviewPaste,
     handler: (params, context) =>
       onHost(context, async () => {
