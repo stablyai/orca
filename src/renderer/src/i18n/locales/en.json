@@ -1571,6 +1571,8 @@
         "nothingToUndo": "Nothing left to undo: those lines changed since.",
         "empty": "No changes yet."
       },
+      "muteNotifications": "Mute notifications",
+      "muteNotificationsDescription": "Stop sending system notifications. Unread indicators still appear.",
       "notifyNeedsPermission": "Needs permission",
       "notifyNeedsPermissionDescription": "When the bot or a worker needs your approval.",
       "notifyTaskComplete": "Task complete",
