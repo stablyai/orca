@@ -10,8 +10,12 @@ import {
   type McpServer,
   type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
-import { botToolCredentialFingerprints } from '../bots/bot-tool-credentials'
-import { botToolEntries, readBotToolsSnapshot } from '../bots/bot-tools-file'
+import {
+  botToolEntries,
+  readBotToolsSnapshot,
+  type BotToolsSnapshot
+} from '../bots/bot-tools-file'
+import type { BotToolEntry } from '../bots/bot-tool-entry-extras'
 import { mcpHostListFolder } from './mcp-host-list-folder'
 import { sharedIds, type McpLaunchServers } from './mcp-shared-process-servers'
 
@@ -52,6 +56,9 @@ function isOnForLaunch(
   )
 }
 
+/** Reads the host list as it stands now (`readBotToolsSnapshot`), or as another reader just did. */
+export type McpHostListRead = (folder: string) => Promise<BotToolsSnapshot>
+
 /**
  * The servers a new session of `agent` gets: those on for the agent and on in the workspace with
  * `key` (null for none). A bot's session (`'any'`) takes them whichever workspaces they're on in.
@@ -61,7 +68,10 @@ export async function mcpServersForLaunch(
   workspace: LaunchWorkspace,
   folder = mcpHostListFolder()
 ): Promise<McpLaunchServers> {
-  const { all, on } = await launchEntries(agent, workspace, folder)
+  return launchServersIn(await launchEntries(agent, workspace, folder))
+}
+
+function launchServersIn({ all, on }: LaunchEntries): McpLaunchServers {
   const names = new Set(on.map(({ server }) => server.name))
   const shared = [...sharedIds(all)].filter(([name]) => names.has(name))
   return { servers: on.map(({ server }) => server), sharedProcesses: new Map(shared) }
@@ -75,15 +85,13 @@ export async function mcpServersForLaunch(
 export async function mcpServersWithDigestsForLaunch(
   agent: string,
   workspace: LaunchWorkspace,
-  folder = mcpHostListFolder()
+  folder = mcpHostListFolder(),
+  read: McpHostListRead = readBotToolsSnapshot
 ): Promise<McpLaunchServers & { digests: Record<string, string> }> {
-  const { servers, sharedProcesses } = await mcpServersForLaunch(agent, workspace, folder)
-  const saved = savedValues(
-    folder,
-    new Set(
-      servers.flatMap((server) => ('url' in server && server.credential ? [server.credential] : []))
-    )
-  )
+  const entries = await launchEntries(agent, workspace, folder, read)
+  const { servers, sharedProcesses } = launchServersIn(entries)
+  // The snapshot's own read of the credential store, as the tools revision counts each credential.
+  const saved = entries.credentials
   const digests = Object.fromEntries(
     servers.map((server) => [
       server.name,
@@ -102,21 +110,6 @@ export async function mcpServersWithDigestsForLaunch(
   return { servers, sharedProcesses, digests }
 }
 
-/**
- * Each credential's saved values or sign-in, as the tools revision counts them, from one read of
- * the store. A store Orca can't read never keeps the servers from launching.
- */
-function savedValues(folder: string, credentials: ReadonlySet<string>): Map<string, unknown> {
-  if (credentials.size === 0) {
-    return new Map()
-  }
-  try {
-    return botToolCredentialFingerprints(folder, credentials)
-  } catch {
-    return new Map([...credentials].map((id) => [id, 'unreadable']))
-  }
-}
-
 /** The server with `id` as a session of `agent` in `workspace` gets it; null when it's off there or gone. */
 export async function mcpServerForLaunch(
   id: string,
@@ -130,11 +123,27 @@ export async function mcpServerForLaunch(
   return entry?.server ?? null
 }
 
+type LaunchEntries = {
+  all: BotToolEntry[]
+  on: BotToolEntry[]
+  credentials: BotToolsSnapshot['credentials']
+}
+
 /** The whole list, and the entries on for this launch. */
-async function launchEntries(agent: string, workspace: LaunchWorkspace, folder: string) {
+async function launchEntries(
+  agent: string,
+  workspace: LaunchWorkspace,
+  folder: string,
+  read: McpHostListRead = readBotToolsSnapshot
+): Promise<LaunchEntries> {
   // Read only: a launch never writes the list, even to give an entry edited outside Orca its id.
-  const all = botToolEntries(await readBotToolsSnapshot(folder))
-  return { all, on: all.filter(({ extras }) => isOnForLaunch(extras, agent, workspace)) }
+  const snapshot = await read(folder)
+  const all = botToolEntries(snapshot)
+  return {
+    all,
+    on: all.filter(({ extras }) => isOnForLaunch(extras, agent, workspace)),
+    credentials: snapshot.credentials
+  }
 }
 
 /** A server a launch gets, with its id (null for an entry edited outside Orca that has none yet). */

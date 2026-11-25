@@ -131,14 +131,30 @@ function projectFiles(agent: McpConfigAgent, projectPath: string): string[] {
   }
 }
 
+const formatOf = (agent: McpConfigAgent): AgentMcpConfigLocation['format'] =>
+  agent === 'codex' || agent === 'grok' ? 'toml' : 'json'
+
+/** The agent's files in `projectPath`'s repo only. */
+export function agentMcpProjectConfigLocations(
+  agent: McpConfigAgent,
+  projectPath: string
+): AgentMcpConfigLocation[] {
+  const format = formatOf(agent)
+  return projectFiles(agent, projectPath).map((path) => ({
+    agent,
+    path,
+    format,
+    scope: 'project' as const
+  }))
+}
+
 /** The agent's user files, plus its files in `projectPath`'s repo when one is given. */
 export async function agentMcpConfigLocations(
   agent: McpConfigAgent,
   context: AgentMcpConfigContext,
   projectPath?: string
 ): Promise<AgentMcpConfigLocation[]> {
-  const format: AgentMcpConfigLocation['format'] =
-    agent === 'codex' || agent === 'grok' ? 'toml' : 'json'
+  const format = formatOf(agent)
   return [
     ...(await userFiles(agent, context)).map((path) => ({
       agent,
@@ -146,12 +162,7 @@ export async function agentMcpConfigLocations(
       format,
       scope: 'user' as const
     })),
-    ...(projectPath ? projectFiles(agent, projectPath) : []).map((path) => ({
-      agent,
-      path,
-      format,
-      scope: 'project' as const
-    }))
+    ...(projectPath ? agentMcpProjectConfigLocations(agent, projectPath) : [])
   ]
 }
 

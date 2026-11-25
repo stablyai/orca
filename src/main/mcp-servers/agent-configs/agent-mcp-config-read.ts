@@ -15,6 +15,7 @@ import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesyste
 import {
   MCP_CONFIG_AGENTS,
   agentMcpConfigLocations,
+  agentMcpProjectConfigLocations,
   agentMcpServerBlocks,
   type AgentMcpConfigContext,
   type AgentMcpConfigLocation,
@@ -122,6 +123,17 @@ async function readLocation(
     console.warn(`[mcp-servers] ${location.path} doesn't parse; its servers aren't listed`)
   }
   return servers ?? []
+}
+
+/** The servers the agent's own files in `projectPath`'s repo define; its user files go unread. */
+export async function readAgentProjectMcpServers(
+  agent: McpConfigAgent,
+  projectPath: string
+): Promise<AgentMcpConfigServer[]> {
+  const read = await Promise.all(
+    agentMcpProjectConfigLocations(agent, projectPath).map((location) => readLocation(location))
+  )
+  return read.flat()
 }
 
 /**
