@@ -20,6 +20,7 @@ import { withLostProviderOutcome } from '../../provider-process/provider-process
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { createClaudeControlSurface } from '../sdk-transport/claude-agent-sdk-control-requests'
 import { relayedClaudeChildTree } from './claude-relayed-child-tree'
+import { feedClaudeKeptModeLines } from './claude-relay-kept-mode'
 import { DaemonProtocolError } from '../../daemon/protocol/daemon-errors'
 
 /** Present on a connection to an agent that kept running while Orca was closed. */
@@ -144,6 +145,8 @@ export async function openKeptClaudeAgentConnection(
   }
   const { managed, child } = relayed
   const reattachedStdout = handlers.onReattach?.()
+  // Ahead of every replayed or pending line, so a waiting request reads the mode Claude confirmed.
+  feedClaudeKeptModeLines(child, handlers.onStdout)
   const records = child.stdout.relayRecords
   records.claim()
   const exited = Promise.withResolvers<Error>()

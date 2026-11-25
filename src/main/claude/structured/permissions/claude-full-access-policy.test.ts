@@ -43,4 +43,15 @@ describe('live Full access policy', () => {
     expect(launched.allows('stale-report')).toBe(false)
     expect(launched.allows('repicked')).toBe(true)
   })
+
+  it("reads a reattached agent's waiting request under the mode Claude last confirmed", () => {
+    const kept = createClaudeFullAccessPolicy('s1')
+    kept.reattached()
+    kept.observe(request('unknown-mode'))
+    kept.observe(status('default'))
+    kept.observe(status('bypassPermissions'))
+    kept.observe(request('confirmed-full-access'))
+    expect(kept.allows('unknown-mode')).toBe(false)
+    expect(kept.allows('confirmed-full-access')).toBe(true)
+  })
 })

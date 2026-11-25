@@ -13,6 +13,7 @@ import {
   providerRelayRouteInstalled
 } from '../../provider-relay/app-provider-relays'
 import { CLAUDE_RELAY_WORK_MARKERS } from '../relay/claude-relay-markers'
+import { CLAUDE_RELAY_KEEP } from '../relay/claude-relay-kept-mode'
 import { ClaudeRelaySpawnStandIn } from '../relay/claude-relay-spawn-stand-in'
 import { relayedClaudeChildTree } from '../relay/claude-relayed-child-tree'
 import { claudeRelaySdkRecordTaking } from '../relay/claude-relay-sdk-record-taking'
@@ -124,6 +125,7 @@ export function createClaudeCodeProcessSpawn(
         const kept = await launchRelayedProviderProcess(processLaunch, {
           chatKey: relayChatKey,
           markers: CLAUDE_RELAY_WORK_MARKERS,
+          keep: CLAUDE_RELAY_KEEP,
           inheritedEnv,
           only: 'spawn'
         })
