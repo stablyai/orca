@@ -151,3 +151,10 @@ export function isFailedSetupBinding(db: OrchestrationDb, bound: WorkerBoundTerm
     FAILED_SETUP_STATES.has(db.getWorkerDispatch(bound.dispatch_id)?.setup_state ?? '')
   )
 }
+
+/** A setup terminal whose setup has not finished: closing it would cut the install off partway. */
+export function isRunningSetupBinding(db: OrchestrationDb, bound: WorkerBoundTerminalRow): boolean {
+  return (
+    bound.role === 'setup' && db.getWorkerDispatch(bound.dispatch_id)?.setup_state === 'running'
+  )
+}

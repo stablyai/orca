@@ -53,7 +53,7 @@ describe('terminals bound to a worker', () => {
 
   function startWorker(
     creatorChat: OrcaSessionId,
-    setupState = 'running',
+    setupState = 'succeeded',
     creatorDispatchId?: string,
     chat = false
   ) {
@@ -143,7 +143,7 @@ describe('terminals bound to a worker', () => {
   it('a worker a bot started is not kept open, and its setup terminal closes with it', async () => {
     const worker = startWorker(botChat)
     expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
-    const helper = startWorker(personChat, 'running', worker.dispatchId)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId)
     expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
 
     const { runtime, closed } = host(worker)
@@ -152,8 +152,8 @@ describe('terminals bound to a worker', () => {
   })
 
   it("a chat worker a bot's home chat started, and the chat workers under it, close with their terminals", async () => {
-    const worker = startWorker(botChat, 'running', undefined, true)
-    const helper = startWorker(personChat, 'running', worker.dispatchId, true)
+    const worker = startWorker(botChat, 'succeeded', undefined, true)
+    const helper = startWorker(personChat, 'succeeded', worker.dispatchId, true)
     expect(db.getDispatchContextById(helper.dispatchId)?.chat_lineage).toBe(1)
     expect(workerKeepOpenByDefault(db, 'new-child', worker.dispatchId, isBotChat)).toBe(false)
     expect(workerKeepOpenByDefault(db, 'new-child', helper.dispatchId, isBotChat)).toBe(false)
@@ -180,6 +180,23 @@ describe('terminals bound to a worker', () => {
 
     await closeRetriedFailedSetup(runtime, db, worker.dispatchId)
     expect(closed).toEqual([worker.tab.terminalHandle, worker.setup.terminalHandle])
+  })
+
+  it('a stop during a running setup leaves it running, and no longer bound to the worker', async () => {
+    const worker = startWorker(botChat, 'running')
+    const { runtime, closed } = host(worker)
+    await closeStoppedWorkerTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.tab.terminalHandle])
+    expect(paneAutoCloseState(db, worker.setup.paneKey)).toBeNull()
+
+    // Finishing later does not close it with a worker that is gone.
+    db.updateWorkerSetupEvidence({
+      dispatchId: worker.dispatchId,
+      setupState: 'succeeded',
+      effects: []
+    })
+    await closeWorkerBoundTerminals(runtime, db, worker.dispatchId)
+    expect(closed).toEqual([worker.tab.terminalHandle])
   })
 
   it('a retry that becomes ready closes the failed setups of every attempt before it', async () => {
@@ -317,7 +334,7 @@ describe('terminals bound to a worker', () => {
   })
 
   it('a terminal a chat worker opens closes with it', async () => {
-    const worker = startWorker(botChat, 'running', undefined, true)
+    const worker = startWorker(botChat, 'succeeded', undefined, true)
     const { runtime, closed } = host(worker)
     // A chat names itself by its session, which leads to its worker's record.
     bindTerminalToCallingWorker(

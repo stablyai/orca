@@ -3,6 +3,7 @@ import type { OrchestrationDb } from '../../../../../orchestration/db/orchestrat
 import { isEquivalentPaneKey } from '../../../../../orchestration/db/pane-key-match'
 import {
   isFailedSetupBinding,
+  isRunningSetupBinding,
   listWorkerBoundTerminals,
   unbindWorkerTerminal,
   type WorkerBoundTerminalRow
@@ -14,8 +15,9 @@ type BoundTerminalCloseRuntime = Pick<
 >
 
 /** After a worker closed: close the terminals bound to it. A failed setup stays open, and bound, to
- *  show its error until the user closes it or a retry succeeds (`closeRetriedFailedSetup`). Never
- *  rejects: the worker's own close has settled, and a row left bound closes on the next release call. */
+ *  show its error until the user closes it or a retry succeeds (`closeRetriedFailedSetup`). A setup
+ *  still running leaves the worker and keeps running, as an ordinary terminal. Never rejects: the
+ *  worker's own close has settled, and a row left bound closes on the next release call. */
 export async function closeWorkerBoundTerminals(
   runtime: BoundTerminalCloseRuntime,
   db: OrchestrationDb,
@@ -25,6 +27,10 @@ export async function closeWorkerBoundTerminals(
     for (const bound of listWorkerBoundTerminals(db, originDispatchId)) {
       // Checked per row: earlier closes await, and Keep open or a setup failure may land meanwhile.
       if (isFailedSetupBinding(db, bound)) {
+        continue
+      }
+      if (isRunningSetupBinding(db, bound)) {
+        unbindWorkerTerminal(db, bound.terminal_handle)
         continue
       }
       await closeBound(runtime, db, bound)
