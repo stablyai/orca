@@ -146,7 +146,12 @@ export function BotSidebarChats({
     held
   })
   useLayoutEffect(() => {
-    olderChatIds.current = new Set(older.map((chatView) => chatView.chat.chatId))
+    const ids = new Set(older.map((chatView) => chatView.chat.chatId))
+    // A chat that leaves the older list no longer counts as a focused older row, even if it folds again.
+    if (focusedOlderChat.current !== null && !ids.has(focusedOlderChat.current)) {
+      focusedOlderChat.current = null
+    }
+    olderChatIds.current = ids
   }, [older])
   // Focus is in one of this list's older rows: its own DOM, or a portal its row opened while it is still
   // listed as older. Another bot's list, an outside input or a lifted row never counts.

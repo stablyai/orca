@@ -35,6 +35,8 @@ export function pruneBotSidebarOlderChats(liveKeys: ReadonlySet<string>): void {
   }
 }
 
+const NO_IDS: string[] = []
+
 /** Card statuses that say nothing is going on in a workspace. */
 const IDLE_STATUSES: ReadonlySet<WorktreeStatus> = new Set([
   'inactive',
@@ -207,28 +209,25 @@ export function useBotSidebarOlderChats(input: {
   }, [dueCount, now, workspaces, input.workspaceChats, baseTimes, childrenOf])
   const watchedIds = useMemo(() => [...watched.keys()], [watched])
   // Any sign a workspace is not idle: its card's status (titles and permission prompts included) or any
-  // agent pane not done, read per pane so a failed pane can't mask a working one. Joined, so a write that
-  // changes none of them compares equal; nothing is read while nothing is due.
+  // agent pane not done, read per pane so a failed pane can't mask a working one; nothing is read while
+  // fewer than two chats are due.
   const selectAttention = useCallback(
-    (state: AppState) =>
+    (state: AppState): string[] =>
       watchedIds.length === 0
-        ? ''
-        : watchedIds
-            .filter(
-              (id) =>
-                !IDLE_STATUSES.has(selectWorktreeActivityStatus(state, id)) ||
-                selectLiveAgentStatusEntriesForWorktree(state, id).some(
-                  (entry) => entry.state !== 'done'
-                )
-            )
-            .join('\n'),
+        ? NO_IDS
+        : watchedIds.filter(
+            (id) =>
+              !IDLE_STATUSES.has(selectWorktreeActivityStatus(state, id)) ||
+              selectLiveAgentStatusEntriesForWorktree(state, id).some(
+                (entry) => entry.state !== 'done'
+              )
+          ),
     [watchedIds]
   )
-  const attentionIds = useAppStore(selectAttention)
+  // Compared item by item, so a write that changes none of them doesn't re-render (ids stay whole).
+  const attentionIds = useAppStore(useShallow(selectAttention))
   const foldTimes = useMemo(() => {
-    const held = attentionIds
-      ? attentionIds.split('\n').flatMap((id) => [...(watched.get(id) ?? [])])
-      : []
+    const held = attentionIds.flatMap((id) => [...(watched.get(id) ?? [])])
     // Attention no chat claims could be any chat's: then nothing folds.
     const heldChats = new Set(held)
     const unplaced = heldChats.has(null)
