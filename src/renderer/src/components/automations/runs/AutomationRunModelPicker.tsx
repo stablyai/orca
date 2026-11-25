@@ -135,6 +135,10 @@ export function AutomationRunModelSelect({
       open={open && !busy}
       onOpenChange={(next) => setOpen(next && !busy)}
       onValueChange={(next) => {
+        // Why: a closed trigger still picks on typed letters (typeahead), even while saving.
+        if (busy) {
+          return
+        }
         const option = options.find((candidate) => `model:${candidate.id}` === next)
         if (
           option &&
@@ -151,6 +155,12 @@ export function AutomationRunModelSelect({
         aria-labelledby={`${nameId} ${valueId}`}
         title={currentLabel}
         aria-disabled={busy || undefined}
+        // Why: aria-disabled keeps focus but not Radix's key handling; only Tab leaves while saving.
+        onKeyDown={(event) => {
+          if (busy && event.key !== 'Tab') {
+            event.preventDefault()
+          }
+        }}
         data-automation-model-picker=""
         className="max-w-[45%] min-w-0 @max-[33rem]:max-w-none"
       >
