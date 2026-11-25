@@ -241,8 +241,12 @@ export type BotHostListing = {
  * Sets which hosts list bots. A new host starts from its kept last read, or unread; a dropped one
  * takes its bots with it.
  * Returns the hosts that just became live, which need a read. Nothing changes, nothing is told.
+ * `beforePublish` sees those hosts before any listener is told they are live.
  */
-export function setBotHostListing(next: BotHostListing): ExecutionHostId[] {
+export function setBotHostListing(
+  next: BotHostListing,
+  beforePublish?: (becameLive: readonly ExecutionHostId[]) => void
+): ExecutionHostId[] {
   const nextIds = next.hosts.map((host) => host.hostId)
   let changed =
     nextIds.length !== hostIds.length ||
@@ -274,6 +278,7 @@ export function setBotHostListing(next: BotHostListing): ExecutionHostId[] {
   liveHostIds = nextIds.filter((id) => hosts.get(id)?.state === 'live')
   updateNeeded = next.updateNeeded
   reflatten()
+  beforePublish?.(becameLive)
   listeners.forEach((listener) => listener())
   return becameLive
 }

@@ -67,12 +67,23 @@ export function noteBotHostLinkRead(
 }
 
 /**
+ * The host is about to show as back: its new coming-back is counted before any view can act on it, so
+ * a read sent as the listing publishes it belongs to this return, not to before it went away. The
+ * caller then tells everyone through noteBotHostCameBack(hostId, true).
+ */
+export function advanceBotHostGeneration(hostId: ExecutionHostId): void {
+  generations.set(hostId, botHostGeneration(hostId) + 1)
+  reads.delete(hostId)
+}
+
+/**
  * The host came back: what it said before it went away proves nothing about it now, including reads
  * still out from before. Its account reads follow this too (onBotHostCameBack).
  */
-export function noteBotHostCameBack(hostId: ExecutionHostId): void {
-  generations.set(hostId, botHostGeneration(hostId) + 1)
-  reads.delete(hostId)
+export function noteBotHostCameBack(hostId: ExecutionHostId, advanced = false): void {
+  if (!advanced) {
+    advanceBotHostGeneration(hostId)
+  }
   notify()
   cameBackListeners.forEach((listener) => listener(hostId))
 }

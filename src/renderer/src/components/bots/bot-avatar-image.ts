@@ -27,6 +27,15 @@ type UploadEntry = {
 // upload's bytes, so a picture read once is kept; a failed read is dropped so the next try reads
 // again, and an empty answer is read again once its host comes back (it may have changed while away).
 const uploads = new Map<string, UploadEntry>()
+// Told a bot's key (botRefKey) when a picture lands in the cache, so a view showing that bot's initial
+// from its own failed or empty read takes the picture another view read.
+const loadListeners = new Set<(key: string) => void>()
+
+/** Hears each bot picture that lands in the shared cache, by botRefKey. */
+export function subscribeToBotUploadLoads(listener: (key: string) => void): () => void {
+  loadListeners.add(listener)
+  return () => loadListeners.delete(listener)
+}
 
 function uploadRead(bot: BotRef, version: string, generation: number): Promise<UploadRead> {
   const key = botRefKey(bot)
@@ -42,8 +51,20 @@ function uploadRead(bot: BotRef, version: string, generation: number): Promise<U
   }
   entry.read = readBotAvatarPng(bot).then(
     (png): UploadRead => {
+      // An empty answer ('' from a zero-length file) shows no picture, so it is read again like null.
       entry.src = png ? `data:image/png;base64,${png}` : null
-      entry.loaded = png !== null
+      entry.loaded = entry.src !== null
+      if (entry.loaded) {
+        // The version names the bytes, so a picture read for it stays good even if a later read for
+        // the same version (after its host came back) took this one's place and is still out or failed.
+        const current = uploads.get(key)
+        if (current !== entry && (!current || (current.version === version && !current.loaded))) {
+          uploads.set(key, entry)
+        }
+        if (uploads.get(key) === entry) {
+          loadListeners.forEach((listener) => listener(key))
+        }
+      }
       return { src: entry.src }
     },
     (): UploadRead => {

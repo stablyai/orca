@@ -120,6 +120,31 @@ describe('useBotAvatarLook on a paired server', () => {
     expect(hook.result.current).toBe('data:image/png;base64,UE5H')
   })
 
+  it('reads an empty-string answer again when the server comes back, then keeps the picture', async () => {
+    avatars.answer = () => ''
+    hostIs(CONNECTED)
+    const { id, hook } = mountAvatar()
+    await flush()
+    expect(hook.result.current).toBeNull()
+    const sameGeneration = mountAvatar('upload:v1', id)
+    await flush()
+    expect(sameGeneration.hook.result.current).toBeNull()
+    expect(avatars.reads.filter((read) => read === id)).toHaveLength(1)
+
+    avatars.answer = () => 'UE5H'
+    hostIs(DISCONNECTED)
+    hostIs(CONNECTED)
+    await flush()
+    expect(hook.result.current).toBe('data:image/png;base64,UE5H')
+    expect(avatars.reads.filter((read) => read === id)).toHaveLength(2)
+
+    hostIs(DISCONNECTED)
+    hostIs(CONNECTED)
+    await flush()
+    expect(hook.result.current).toBe('data:image/png;base64,UE5H')
+    expect(avatars.reads.filter((read) => read === id)).toHaveLength(2)
+  })
+
   it('shows a loaded picture in a row mounted while its server is away, without a read', async () => {
     avatars.answer = () => 'UE5H'
     hostIs(CONNECTED)
