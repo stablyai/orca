@@ -52,24 +52,32 @@ async function runCheckIgnoredPathChunks(
 // Code units below U+0300 never change under NFC, so ASCII and Latin-1 paths skip normalize().
 const MAY_CHANGE_UNDER_NFC = /[\u0300-\uffff]/
 
-/** Listed paths keyed by the composed (NFC) path to ask Git about; null when no path would change. */
-function composedQueriesOnDarwin(relativePaths: string[]): Map<string, string[]> | null {
+/** Listed paths keyed by their composed (NFC) spelling; null when no listed path changes under NFC. */
+function composedSpellingsOnDarwin(relativePaths: string[]): Map<string, string[]> | null {
   // Why: macOS Git precomposes argv and directory reads but not stdin, so a decomposed (NFD)
-  // listed name never matches a composed .gitignore pattern.
-  if (process.platform !== 'darwin' || !relativePaths.some((p) => MAY_CHANGE_UNDER_NFC.test(p))) {
+  // listed name never matches a composed .gitignore pattern. NFC also rewrites characters Git
+  // leaves alone (CJK compatibility ideographs, U+212B), so both spellings are asked.
+  if (process.platform !== 'darwin') {
     return null
   }
-  const listedByQuery = new Map<string, string[]>()
+  let listedByComposed: Map<string, string[]> | null = null
   for (const listed of relativePaths) {
-    const query = MAY_CHANGE_UNDER_NFC.test(listed) ? listed.normalize('NFC') : listed
-    const group = listedByQuery.get(query)
+    if (!MAY_CHANGE_UNDER_NFC.test(listed)) {
+      continue
+    }
+    const composed = listed.normalize('NFC')
+    if (composed === listed) {
+      continue
+    }
+    listedByComposed ??= new Map()
+    const group = listedByComposed.get(composed)
     if (group) {
       group.push(listed)
     } else {
-      listedByQuery.set(query, [listed])
+      listedByComposed.set(composed, [listed])
     }
   }
-  return listedByQuery
+  return listedByComposed
 }
 
 export async function checkIgnoredPaths(
@@ -80,13 +88,28 @@ export async function checkIgnoredPaths(
   if (relativePaths.length === 0) {
     return []
   }
-  const listedByQuery = composedQueriesOnDarwin(relativePaths)
-  if (!listedByQuery) {
+  const listedByComposed = composedSpellingsOnDarwin(relativePaths)
+  if (!listedByComposed) {
     return checkPathsAsGiven(worktreePath, relativePaths, options)
   }
-  const ignored = await checkPathsAsGiven(worktreePath, [...listedByQuery.keys()], options)
-  // Answer with the names the caller listed, not the composed queries.
-  return ignored.flatMap((query) => listedByQuery.get(query) ?? [query])
+  const listed = new Set(relativePaths)
+  const composedOnly = [...listedByComposed.keys()].filter((composed) => !listed.has(composed))
+  const ignored = await checkPathsAsGiven(
+    worktreePath,
+    [...relativePaths, ...composedOnly],
+    options
+  )
+  // A listed path is ignored when either of its spellings matches; answer with listed names only.
+  const answer = new Set<string>()
+  for (const query of ignored) {
+    if (listed.has(query)) {
+      answer.add(query)
+    }
+    for (const listedPath of listedByComposed.get(query) ?? []) {
+      answer.add(listedPath)
+    }
+  }
+  return [...answer]
 }
 
 async function checkPathsAsGiven(
