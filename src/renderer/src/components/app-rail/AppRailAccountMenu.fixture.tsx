@@ -6,6 +6,7 @@ import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orc
 import { AppRailAccountMenu } from './AppRailAccountMenu'
 import { AppRail } from './AppRail'
 import { useAppStore } from '@/store'
+import { ConfirmationDialogProvider } from '../dismiss/confirmation/confirmation-dialog'
 
 const SIGNED_OUT: OrcaProfileAuthStatus = {
   activeProfileId: 'fixture',
@@ -152,9 +153,12 @@ function RailWithPage(): React.JSX.Element {
       </div>
       <div data-fixture-active-view={activeView} className="flex min-w-0 flex-1 flex-col">
         {activeView === 'settings' ? (
-          <React.Suspense fallback={null}>
-            <SettingsPage />
-          </React.Suspense>
+          // The app shell provides the confirmation dialog Settings uses for unsaved changes.
+          <ConfirmationDialogProvider>
+            <React.Suspense fallback={null}>
+              <SettingsPage />
+            </React.Suspense>
+          </ConfirmationDialogProvider>
         ) : (
           <div className="p-4 text-sm text-muted-foreground">Workspaces</div>
         )}
