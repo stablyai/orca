@@ -120,20 +120,26 @@ test('retry replaces an unusable generation without changing another cached gene
   const other = manifest('cached fallback')
   const otherDirectory = await fetcher(root, 'cached fallback').ensureBundle(other)
   fs.writeFileSync(asset, 'faulty bundle')
-  const openAsset = fs.openSync(asset, 'r')
+  // Windows refuses to replace a file a reader holds open. HarmonyOS renames as POSIX does and
+  // keeps that reader on the content it opened, so only there is the reader held across the retry.
+  const openAsset = process.platform === 'win32' ? null : fs.openSync(asset, 'r')
   try {
     loader.constructor.invalidateCompletedBundle({ cacheDir: root }, offered)
     assert.equal(loader.completedDirectory(offered), null)
     await loader.ensureBundle(offered)
     assert.equal(fs.readFileSync(asset, 'utf8'), 'normal bundle')
-    assert.equal(fs.readFileSync(openAsset, 'utf8'), 'faulty bundle')
+    if (openAsset !== null) {
+      assert.equal(fs.readFileSync(openAsset, 'utf8'), 'faulty bundle')
+    }
     assert.equal(loader.completedDirectory(other), otherDirectory)
     assert.equal(
       fs.readFileSync(path.join(otherDirectory, 'index.html'), 'utf8'),
       'cached fallback'
     )
   } finally {
-    fs.closeSync(openAsset)
+    if (openAsset !== null) {
+      fs.closeSync(openAsset)
+    }
   }
 })
 
