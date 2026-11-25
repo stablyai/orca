@@ -45,4 +45,11 @@ describe('buildFontFamily', () => {
       `"D2Coding", "Consolas", ${FALLBACKS.replace('"Consolas", ', '')}`
     )
   })
+
+  it('keeps quoted font names with commas intact', () => {
+    // A quoted font name containing a comma should not be split
+    expect(buildFontFamily(`"Cascadia Mono, D2Coding"`)).toBe(
+      `"Cascadia Mono, D2Coding", ${FALLBACKS}`
+    )
+  })
 })

@@ -28,14 +28,16 @@ export function buildFontFamily(fontFamily: string): string {
   if (families.length > 1) {
     return buildFontFamilyList(families, FALLBACKS)
   }
-  // Why: a single family is quoted as typed, keyword or not, and drops each fallback its name contains.
+  // Why: a single family is quoted as typed, keyword or not, and drops each fallback it ends with.
   const family = families[0] ?? ''
   const parts = family ? [`"${family}"`] : []
   const lowerFamily = family.toLowerCase()
   // Why: a plugin family such as "Menlo (acme.fonts)" is never a fallback, so it must keep all of them.
+  // Why: endsWith, not includes, so "Cascadia Mono, D2Coding" does not drop "Cascadia Mono"
+  // but "ui-monospace" still drops "monospace".
   const isPluginFamily = isPluginFontFamilyName(family)
   for (const fallback of FALLBACKS) {
-    if (isPluginFamily || !lowerFamily.includes(fallback.lower)) {
+    if (isPluginFamily || !lowerFamily.endsWith(fallback.lower)) {
       parts.push(fallback.quoted)
     }
   }
