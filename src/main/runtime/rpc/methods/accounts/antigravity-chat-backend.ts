@@ -16,7 +16,8 @@ import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storag
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   antigravityAgySignIn,
-  savedChatAuthIsPersonal
+  savedChatAuthIsPersonal,
+  savedChatAuthUsesAgyLogin
 } from '../../../../antigravity/antigravity-chat-route'
 import { withTimeout } from '../../../../../shared/concurrency/promise-timeout-fallback'
 import { antigravityUsesFileStoreAsync } from '../../../../antigravity/native-file-credentials'
@@ -27,8 +28,10 @@ const LAUNCH_HOME_WAIT_MS = 1_000
 /** Where new chats on this host run, and agy's own sign-in for those on its home. */
 async function hostChatRoute(runtime: OrcaRuntimeService) {
   const settings = runtime.requireStore().getSettings()
-  if (!savedChatAuthIsPersonal(settings.antigravityChatAuth)) {
-    return { agy: false as const, orcaHome: true }
+  const orcaHome = !savedChatAuthIsPersonal(settings.antigravityChatAuth)
+  // Enterprise runs on Orca's home but with agy's login, so its sign-in is read too.
+  if (orcaHome && !savedChatAuthUsesAgyLogin(settings.antigravityChatAuth)) {
+    return { agy: false as const, orcaHome }
   }
   const env = await resolveHostStructuredAgentLaunchEnvironment('antigravity', settings)
   // Someone is looking (a chat or Settings), so agy may be started once to answer.
@@ -39,7 +42,7 @@ async function hostChatRoute(runtime: OrcaRuntimeService) {
     settings,
     { startsProgram: true }
   )
-  return { agy: input ? await antigravityAgySignIn(input) : ('unknown' as const), orcaHome: false }
+  return { agy: input ? await antigravityAgySignIn(input) : ('unknown' as const), orcaHome }
 }
 
 /** Asks agy's sign-in for Google-account chats without waiting, so every surface that subscribes
@@ -90,7 +93,7 @@ export async function withAntigravityChatBackend(
   if (route === null) {
     return state
   }
-  const { agy } = route
+  const agy = route.orcaHome ? false : route.agy
   const version = agy === 'signedIn' ? readyAntigravityHostAcpVersion() : null
   return {
     ...state,

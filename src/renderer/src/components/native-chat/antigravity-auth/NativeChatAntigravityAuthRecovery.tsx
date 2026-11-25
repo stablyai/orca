@@ -72,7 +72,8 @@ export function NativeChatAntigravityAuthRecovery({
   if (!reason || antigravityAuthFailureOutlived(reason, text, auth.detection.method)) {
     return null
   }
-  const [option] = antigravityChatAuthAlternatives(auth.detection)
+  // A chat with history on agy's own login stays there, so switching method can't fix it.
+  const [option] = auth.ownLogin ? [] : antigravityChatAuthAlternatives(auth.detection)
   if (!option && (ROW_SAYS_IT.has(reason) || !auth.keyAndAdc)) {
     return null
   }

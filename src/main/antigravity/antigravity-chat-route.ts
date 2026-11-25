@@ -15,19 +15,34 @@ export type AntigravityAgySignIn = 'signedIn' | 'signedOut' | 'unknown' | 'notIn
 /** Whether new chats run on agy's own home and login: only the Google account method. Every other
  *  choice, a malformed one, or one still being saved runs on Orca's home, whose settings.json
  *  names the method agy then uses. */
-export function savedChatAuthIsPersonal(value: unknown): boolean {
+function savedChatAuthMethod(value: unknown): string | null {
   try {
     assertAntigravityChatAuthPublished(value)
   } catch {
-    return false
+    return null
   }
   const parsed = AntigravityChatAuthConfigSchema.safeParse(
     value === undefined ? { method: 'oauth-personal' } : value
   )
-  return parsed.success && parsed.data.method === 'oauth-personal'
+  return parsed.success ? parsed.data.method : null
+}
+
+export const savedChatAuthIsPersonal = (value: unknown): boolean =>
+  savedChatAuthMethod(value) === 'oauth-personal'
+
+/** Google sign-in, personal or Enterprise: chats use agy's own login, wherever they run. */
+export function savedChatAuthUsesAgyLogin(value: unknown): boolean {
+  const method = savedChatAuthMethod(value)
+  return method === 'oauth-personal' || method === 'oauth-business'
 }
 
 let lastAgySignIn: AntigravityAgySignIn | null = null
+let agyLoginGeneration = 0
+
+/** agy's login changed (a sign-in, an account switch): checks already under way are stale. */
+export function noteAgyLoginChanged(): void {
+  agyLoginGeneration += 1
+}
 let lastRunsInOrcaHome = false
 
 /** Whether the latest new-chat answer runs chats in a home Orca owns, which loads skill folders but
@@ -73,7 +88,12 @@ export function lastAntigravityAgySignedOut(): boolean | null {
 export async function antigravityAgySignIn(
   input: AcpHostBackendInput
 ): Promise<AntigravityAgySignIn> {
+  const generation = agyLoginGeneration
   const answer = await readAgySignIn(input)
+  // A login since this check began answers for itself; this answer describes the old one.
+  if (generation !== agyLoginGeneration) {
+    return answer
+  }
   lastAgySignIn = answer
   // Every surface showing agy's sign-in reads it from here, and re-reads when it changes.
   const auth = answer === 'signedIn' || answer === 'signedOut' ? answer : null

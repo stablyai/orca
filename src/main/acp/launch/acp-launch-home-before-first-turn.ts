@@ -15,7 +15,7 @@ type LaunchBasis = Parameters<StructuredAgentLaunchPartResolver<unknown>>[0]
 export async function homeBeforeFirstTurn(
   agentSpec: AcpLaunchSpec,
   record: AgentSessionRecord,
-  basis: Pick<LaunchBasis, 'baseEnvironment' | 'commandSettings'>,
+  basis: Pick<LaunchBasis, 'environment' | 'commandSettings'>,
   dataDirectory: string
 ): Promise<AgentSessionAccountHome | null> {
   const backend = agentSpec.hostBackend
@@ -28,7 +28,8 @@ export async function homeBeforeFirstTurn(
   }
   const selected = await selectAcpHostAccountHome(
     agentSpec,
-    await basis.baseEnvironment(),
+    // The agent's own environment, so a per-agent HOME picks the same home the launch uses.
+    await basis.environment(),
     dataDirectory,
     basis.commandSettings?.() ?? {}
   )
