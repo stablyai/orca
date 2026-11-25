@@ -237,16 +237,16 @@ export function buildOrderedTabItems({
 
 export function buildTabDropIndicators(
   items: readonly TabBarItem[],
-  insertion: HoveredTabInsertion | null
+  insertion: HoveredTabInsertion | null,
+  wrapTabs = false
 ): Map<string, DropIndicator> {
-  const indicators = new Map<string, DropIndicator>()
-  for (const edge of resolveTabIndicatorEdges(
-    items.map((item) => item.id),
-    insertion
-  )) {
-    indicators.set(edge.visibleTabId, edge.side)
-  }
-  return indicators
+  return new Map(
+    resolveTabIndicatorEdges(
+      items.map((item) => item.id),
+      insertion,
+      wrapTabs
+    ).map(({ visibleTabId, side }) => [visibleTabId, side])
+  )
 }
 
 export function findActiveVisibleTabId(

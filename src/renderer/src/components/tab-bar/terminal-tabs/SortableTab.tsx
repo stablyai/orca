@@ -191,6 +191,7 @@ export default function SortableTab({
       ref={setNodeRef}
       data-testid="sortable-tab"
       data-tab-id={tab.id}
+      data-unified-tab-id={dragData.unifiedTabId}
       data-tab-title={tabTitle}
       data-pinned={isPinned ? 'true' : 'false'}
       // Expose rendered selection so E2E catches visual regressions missed by store-only assertions.

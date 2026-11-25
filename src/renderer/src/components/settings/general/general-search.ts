@@ -6,6 +6,7 @@ import { GENERAL_SETTING_ANCHORS, generalSetting } from './general-setting-ancho
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { searchKeywords, translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
@@ -95,6 +96,17 @@ export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() =>
   })
 ])
 
+export function getWorkspaceTabWrapEntry(t: Translate = translate) {
+  return {
+    title: t('settings.general.wrapWorkspaceTabs.title', 'Wrap workspace tabs'),
+    description: t(
+      'settings.general.wrapWorkspaceTabs.description',
+      'Show tabs across multiple rows when the tab bar fills up.'
+    ),
+    keywords: translateSearchKeyword('settings.general.search.keywords.tabs', 'tabs')
+  }
+}
+
 export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate('auto.components.settings.general.search.b180c1041b', 'Tab order'),
@@ -117,6 +129,7 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.fb84767421', 'switch')
     ]
   },
+  getWorkspaceTabWrapEntry(),
   {
     title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(

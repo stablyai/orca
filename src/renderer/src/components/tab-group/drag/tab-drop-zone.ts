@@ -54,7 +54,7 @@ export function resolvePaneColumnEdgeZone(
   }
 
   const tabStripHeight = options?.tabStripHeightPx ?? TAB_GROUP_TAB_STRIP_HEIGHT_PX
-  const tabStripBottom = panelRect.top + tabStripHeight
+  const tabStripBottom = Math.max(panelRect.top + tabStripHeight, options?.bodyRect?.top ?? 0)
   // Reserve the strip for reordering; vertical split targets belong to the pane body.
   if (point.y < tabStripBottom) {
     return null

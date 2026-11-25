@@ -81,6 +81,7 @@ export default function TabGroupPanel({
   const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
+  const wrapTabs = useAppStore((state) => state.settings?.wrapWorkspaceTabs === true)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   // A bot's page chrome sits in the top-right strip, the one that spacing flag marks, so splits show it once.
@@ -247,12 +248,14 @@ export default function TabGroupPanel({
       }}
       tabBarOrder={tabBarOrder}
       hoveredTabInsertion={hoveredTabInsertion}
+      wrapTabs={wrapTabs}
     />
   )
 
   // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
   const actionChromeClassName = cn(
     'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
+    wrapTabs && 'h-(--workspace-tab-row-height) self-start',
     !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
   )
   return (
@@ -288,6 +291,7 @@ export default function TabGroupPanel({
         <div
           className="h-(--workspace-tab-row-height) shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
+          data-tab-group-strip-layout={wrapTabs ? 'wrapped' : undefined}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
         >

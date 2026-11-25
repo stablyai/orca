@@ -224,6 +224,7 @@ export default function EditorFileTab({
     <div
       ref={setNodeRef}
       data-tab-id={file.tabId ?? file.id}
+      data-unified-tab-id={dragData.unifiedTabId}
       data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}

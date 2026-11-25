@@ -46,13 +46,15 @@ export function renderTabBarItems({
   includeTopTabBorder,
   activeClientHostedBrowserRowId,
   segments,
-  itemOffset = 0
+  itemOffset = 0,
+  columns = null
 }: {
   items: TabBarItem[]
   /** Mounted runs of `items` from `itemOffset` on; gaps render as fixed-width spacers. */
   segments: readonly TabStripSegment[]
   /** Items before the strip, such as a pinned Home: segment indices start after them. */
   itemOffset?: number
+  columns?: number | null
   props: TabBarItemSurfaceProps
   runtime: TabBarItemSurfaceRuntime
   actions: TabBarItemActions
@@ -171,7 +173,14 @@ export function renderTabBarItems({
           data-tab-strip-gap-start={segment.start}
           data-tab-strip-gap-end={segment.end}
           className="flex-none"
-          style={{ width: (segment.end - segment.start) * TAB_STRIP_WINDOW_SLOT_PX }}
+          style={
+            columns === null
+              ? { width: (segment.end - segment.start) * TAB_STRIP_WINDOW_SLOT_PX }
+              : {
+                  gridColumn: '1 / -1',
+                  gridRowEnd: `span ${Math.ceil((segment.end - segment.start) / columns)}`
+                }
+          }
         />
       )
       continue

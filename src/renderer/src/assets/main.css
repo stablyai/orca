@@ -1231,16 +1231,53 @@ body[data-modal-overlay-open]
 
 /* Why: horizontal tab strips scroll via chevrons, wheel, and trackpad; a
    native scrollbar thumb overlays tab labels and looks broken. */
-.terminal-tab-strip,
+.terminal-tab-strip:not([data-wrapped-tab-strip]),
 .project-view-tab-strip {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
 
-.terminal-tab-strip::-webkit-scrollbar,
+.terminal-tab-strip:not([data-wrapped-tab-strip])::-webkit-scrollbar,
 .project-view-tab-strip::-webkit-scrollbar {
   width: 0;
   height: 0;
+}
+
+[data-tab-group-strip-layout='wrapped'] {
+  display: flex;
+  flex-direction: column;
+  height: auto;
+  min-height: calc(var(--workspace-tab-row-height) + 1px);
+  max-height: 50%;
+}
+
+[data-tab-group-strip-layout='wrapped'] > div {
+  height: auto;
+  min-height: 0;
+}
+
+[data-tab-group-strip-layout='wrapped'] :has(> [data-wrapped-tab-bar]) {
+  display: flex;
+  height: auto;
+}
+
+[data-wrapped-tab-strip] {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 144px), 1fr));
+  grid-auto-rows: var(--workspace-tab-row-height);
+  max-height: calc(var(--workspace-tab-row-height) * 4);
+  scrollbar-gutter: stable;
+}
+
+[data-wrapped-tab-strip] > [data-tab-strip-slot] {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+[data-wrapped-tab-bar] > [data-pinned-home-slot] {
+  align-self: flex-start;
+  height: var(--workspace-tab-row-height);
 }
 
 /* Why: mask fades avoid painting card-colored overlays that mismatch active tabs. */

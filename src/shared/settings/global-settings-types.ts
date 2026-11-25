@@ -26,7 +26,6 @@ import type {
   CodexManagedAccountRuntimeSelection
 } from '../agent-accounts/managed-account-types'
 import type { NotificationSettings } from '../notifications/notification-settings-types'
-import type { CtrlTabOrderMode } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { ZcodePlanSite } from '../agent-accounts/usage-credentials/zcode-plan-sites'
@@ -262,8 +261,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
-  /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
-  ctrlTabOrderMode?: CtrlTabOrderMode
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */

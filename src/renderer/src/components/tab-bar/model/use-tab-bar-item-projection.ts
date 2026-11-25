@@ -136,8 +136,8 @@ export function useTabBarItemProjection({
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(
-    () => buildTabDropIndicators(orderedItems, activeIndicator),
-    [activeIndicator, orderedItems]
+    () => buildTabDropIndicators(orderedItems, activeIndicator, props.wrapTabs),
+    [activeIndicator, orderedItems, props.wrapTabs]
   )
   const activeVisibleTabId = useMemo(
     () =>

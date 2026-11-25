@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo } from 'react'
-import { useTabStripOverflowNavigation } from './strip/tab-strip-overflow-navigation'
+import { useTabStripViewportNavigation } from './strip/tab-strip-viewport-navigation'
 import { useTabStripDragScrollHandlers } from './strip/tab-strip-drag-scroll'
 import type { TabBarProps } from './tab-bar-props'
 import type { TabBarItem } from './model/tab-bar-item-model'
@@ -42,7 +42,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewSimulatorTab,
     onNewFileTab,
     onOpenFileTab,
-    onPinFile
+    onPinFile,
+    wrapTabs = false
   } = props
   const runtime = useTabBarRuntimeModel({ worktreeId, groupId })
   const botGroup = useBotGroupForWorkspace(worktreeId)
@@ -110,8 +111,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     () =>
       orderedItems === projectedItems.orderedItems
         ? null
-        : buildTabDropIndicators(orderedItems, projectedItems.hoveredInsertion),
-    [orderedItems, projectedItems.orderedItems, projectedItems.hoveredInsertion]
+        : buildTabDropIndicators(orderedItems, projectedItems.hoveredInsertion, wrapTabs),
+    [orderedItems, projectedItems.orderedItems, projectedItems.hoveredInsertion, wrapTabs]
   )
   const itemProjection = {
     ...projectedItems,
@@ -161,15 +162,18 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
       ].join('|'),
     [clientHostedBrowserRows, itemProjection.tabStripLayoutKey]
   )
-  const tabStripNavigation = useTabStripOverflowNavigation({
-    activeVisibleTabId: itemProjection.activeVisibleTabId,
-    activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
-    layoutKey: stripLayoutKey,
-    slotIds,
-    worktreeId
-  })
+  const tabStripNavigation = useTabStripViewportNavigation(
+    {
+      activeVisibleTabId: itemProjection.activeVisibleTabId,
+      activeDockSlotId: activeClientHostedBrowserRowId ?? itemProjection.activeVisibleTabId,
+      layoutKey: stripLayoutKey,
+      slotIds,
+      worktreeId
+    },
+    wrapTabs
+  )
   useTabStripScrollMemory(
-    groupId,
+    wrapTabs ? undefined : groupId,
     worktreeId,
     tabStripNavigation.tabStripRef,
     itemProjection.activeVisibleTabId

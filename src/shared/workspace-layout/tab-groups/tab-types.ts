@@ -36,6 +36,11 @@ export type WorkspaceVisibleTabType =
   | 'simulator'
 export type CtrlTabOrderMode = 'mru' | 'sequential'
 
+export type WorkspaceTabSettings = {
+  ctrlTabOrderMode?: CtrlTabOrderMode
+  wrapWorkspaceTabs?: boolean
+}
+
 /** What each tab kind is, in one place, so a new kind must state every trait. */
 export const TAB_CONTENT_TRAITS: Record<
   TabContentType,

@@ -239,13 +239,6 @@ export function resolveActivePaneColumnSplitTarget({
   const overData = event.over?.data.current
   const panelHit = findTabGroupPanelUnderPointer(worktreeId, pointer, { geometry })
 
-  if (isTabDragData(overData)) {
-    // Reserve tab-strip hovers for insertion/reordering; create splits only on pane-body edges.
-    if (!panelHit || pointer.y < panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX) {
-      return null
-    }
-  }
-
   const targetGroupId =
     panelHit?.groupId ??
     (isTabDragData(overData) ? overData.groupId : null) ??
@@ -258,6 +251,15 @@ export function resolveActivePaneColumnSplitTarget({
   const targetGeometry = geometry?.byGroupId.get(targetGroupId)
   const panelRect =
     panelHit?.groupId === targetGroupId ? panelHit.panelRect : targetGeometry?.panelRect
+  const bodyRect = targetGeometry?.bodyRect ?? getTabGroupBodyRect(targetGroupId, worktreeId)
+  if (
+    isTabDragData(overData) &&
+    (!panelHit ||
+      pointer.y <
+        Math.max(panelHit.panelRect.top + TAB_GROUP_TAB_STRIP_HEIGHT_PX, bodyRect?.top ?? 0))
+  ) {
+    return null
+  }
   const splitTarget = resolvePanelEdgePaneColumnSplit({
     activeDrag: activeData,
     targetGroupId,
@@ -266,7 +268,7 @@ export function resolveActivePaneColumnSplitTarget({
     groupsByWorktree,
     layoutByWorktree,
     panelRect,
-    bodyRect: targetGeometry?.bodyRect
+    bodyRect
   })
   return splitTarget ? { ...splitTarget, panelRect } : null
 }
