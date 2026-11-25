@@ -7,6 +7,7 @@ import {
   subscribeToNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
 import { removeImageWithReferences } from '../../composer/editor/native-chat-composer-image-references'
+import { withoutImageReference } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import {
   clearNativeChatAttachmentNotes,
@@ -56,8 +57,8 @@ export class NativeChatNotesSupersededError extends Error {
 export function settleNativeChatNotesReplacement(
   scopeKey: string,
   ids: readonly string[],
-  restore: (() => void) | void | false
-): (() => void) | undefined {
+  restore: (() => boolean | void) | void | false
+): (() => boolean | void) | undefined {
   if (restore === false) {
     detachNativeChatNotes(scopeKey, ids)
     throw new NativeChatNotesSupersededError()
@@ -98,14 +99,24 @@ export function submitNativeChatNotesIfApproved(
   const now = approved.root ? nativeChatNotesComposer(approved.root) : null
   const { scopeKey } = approved.composer
   const draft = readNativeChatComposerDraft(scopeKey)
-  const expected = new Set([...approved.imageIds.filter((id) => id !== replacedId), ...ids])
+  const kept = approved.imageIds.filter((id) => id !== replacedId)
+  const expected = new Set([...kept, ...ids])
+  // The editor writes a chip token into the text for each image it adds or removes; those are this
+  // hand-off's own changes, so only the words around them must match.
+  const words = (text: string, tokens: readonly (string | undefined)[]): string =>
+    tokens
+      .reduce<string>((rest, id) => (id ? withoutImageReference(rest, id) : rest), text)
+      .replace(/\s+/g, ' ')
+      .trim()
   if (
     now?.scopeKey !== scopeKey ||
     now.handle !== approved.composer.handle ||
     now.handle.notesBlocked?.() !== null ||
-    draft.text !== approved.text ||
+    words(draft.text, [...ids, replacedId]) !== words(approved.text, [replacedId]) ||
     draft.images.length !== expected.size ||
-    draft.images.some(({ id }) => !expected.has(id))
+    draft.images.some(({ id }) => !expected.has(id)) ||
+    // The images that were already there keep their order.
+    draft.images.filter(({ id }) => kept.includes(id)).some(({ id }, index) => id !== kept[index])
   ) {
     return false
   }
@@ -158,11 +169,9 @@ export async function attachNativeChatNotes(args: {
         }
         return attach(blob)
       })
-      // A chat that can't take images keeps the file as a text reference: no image, no notes.
-      if (
-        !id ||
-        !readNativeChatComposerDraft(composer.scopeKey).images.some((image) => image.id === id)
-      ) {
+      // A chat that can't take images keeps no image: no notes either. A draft that moved to its
+      // session meanwhile is read (and its notes are keyed) where it is now.
+      if (!id || !nativeChatNotesStillInDraft(composer.scopeKey, [id])) {
         throw new Error('The marked image could not be attached.')
       }
       ids.push(id)
@@ -233,7 +242,8 @@ export function afterComposerRender(): Promise<void> {
 export function announceNativeChatNotesHandOff(
   scopeKey: string,
   ids: string[],
-  undo: () => void,
+  /** Puts back what these notes replaced; false when that couldn't be saved, so they stay. */
+  undo: () => boolean,
   count: number
 ): void {
   const dismiss = showNativeChatNotesNotice(scopeKey, {
@@ -244,9 +254,8 @@ export function announceNativeChatNotesHandOff(
     ),
     ids,
     undo: () => {
-      if (nativeChatNotesStillInDraft(scopeKey, ids)) {
+      if (nativeChatNotesStillInDraft(scopeKey, ids) && undo()) {
         detachNativeChatNotes(scopeKey, ids)
-        undo()
       }
     }
   })

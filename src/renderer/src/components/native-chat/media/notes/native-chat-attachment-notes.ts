@@ -9,10 +9,9 @@ import {
   type NativeChatMediaNote
 } from './native-chat-media-notes'
 import { dismissNativeChatNotesNotice } from './native-chat-notes-notice'
-import {
-  readNativeChatComposerDraft,
-  updateNativeChatComposerDraft
-} from '../../drafts/native-chat-composer-draft-store'
+import { releaseHeldNativeChatNotesHandedTo } from './native-chat-held-notes'
+import { readNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-store'
+import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
 import { load as draftLoad } from '../../drafts/native-chat-composer-draft-memory'
 import {
   createNativeChatNotesStorage,
@@ -37,7 +36,10 @@ const STORAGE_KEY = 'orca.nativeChat.attachmentNotes.v1'
 /** Marked images remembered at once; older ones are dropped first. */
 export const NATIVE_CHAT_ATTACHMENT_NOTES_MAX = 60
 
-const keyOf = (scopeKey: string, attachmentId: string): string => `${scopeKey}\u0000${attachmentId}`
+// Keyed where the draft is now, as its images are read: notes saved while a launch draft became its
+// session's land with that draft, not under the scope it left.
+const keyOf = (scopeKey: string, attachmentId: string): string =>
+  `${currentDraftScope(scopeKey)}\u0000${attachmentId}`
 
 function isNotes(value: unknown): value is NativeChatAttachmentNotes {
   return (
@@ -90,12 +92,17 @@ export function setNativeChatAttachmentNotes(
   })
 }
 
-/** Also ends the chat's notes line: once notes are sent or taken out, its Undo no longer applies. */
+/** Also ends the chat's notes line (unless `endsNotice` is false): once notes are sent or taken out,
+ *  its Undo no longer applies. */
 export function clearNativeChatAttachmentNotes(
   scopeKey: string,
-  attachmentIds: readonly string[]
+  attachmentIds: readonly string[],
+  endsNotice = true
 ): void {
-  dismissNativeChatNotesNotice(scopeKey)
+  if (endsNotice) {
+    dismissNativeChatNotesNotice(scopeKey)
+  }
+  releaseHeldNativeChatNotesHandedTo(scopeKey, attachmentIds)
   storage.update((entries) => {
     let removed = false
     for (const id of attachmentIds) {
@@ -137,15 +144,16 @@ export function saveNativeChatAttachmentNotes(): boolean {
 }
 
 /** A command takes no notes and none of their images: the draft's marked images, with their notes,
- *  stay in the message box for the next message while `clear` removes the rest. */
-export function clearNativeChatImagesKeepingNoted(scopeKey: string, clear: () => void): void {
-  const kept = readNativeChatComposerDraft(scopeKey).images.filter(
-    ({ id }) => readNativeChatAttachmentNotes(scopeKey, id) !== null
+ *  stay in the message box for the next message while `clear` removes the rest in the same write. */
+export function clearNativeChatImagesKeepingNoted(
+  scopeKey: string,
+  clear: (keep: readonly string[]) => void
+): void {
+  clear(
+    readNativeChatComposerDraft(scopeKey)
+      .images.filter(({ id }) => readNativeChatAttachmentNotes(scopeKey, id) !== null)
+      .map(({ id }) => id)
   )
-  clear()
-  if (kept.length > 0) {
-    updateNativeChatComposerDraft(scopeKey, { images: kept }, 'immediate')
-  }
 }
 
 /** Notes for the images a draft holds, so chips can show their count. */

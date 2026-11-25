@@ -3,6 +3,12 @@ import type { NativeChatMediaNote } from './native-chat-media-notes'
 import type { NativeChatNotesSource } from './native-chat-attachment-notes'
 import { nativeChatComposerDraftSaved } from '../../drafts/native-chat-composer-draft-saved'
 import {
+  readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraft
+} from '../../drafts/native-chat-composer-draft-store'
+import { load as draftLoad } from '../../drafts/native-chat-composer-draft-memory'
+import { currentDraftScope } from '../../drafts/native-chat-launch-draft-source'
+import {
   createNativeChatNotesStorage,
   moveNativeChatNotesEntries
 } from './native-chat-notes-storage'
@@ -15,10 +21,19 @@ import {
 const STORAGE_KEY = 'orca.nativeChat.heldNotes.v1'
 export const NATIVE_CHAT_HELD_NOTES_MAX = 60
 
-/** `hold`: which hold this is, so a viewer ends only the hold it opened, never a newer one. */
-type HeldEntry = { scopeKey: string; notes: readonly NativeChatMediaNote[]; hold?: string }
+/** `hold`: which hold this is, so a viewer ends only the hold it opened, never a newer one.
+ *  `handedTo`: the marked images these notes went into; while the chat's draft holds one of them, the
+ *  hold is spent and offers nothing to reopen. */
+type HeldEntry = {
+  scopeKey: string
+  notes: readonly NativeChatMediaNote[]
+  hold?: string
+  handedTo?: readonly string[]
+}
 
-const keyOf = (scopeKey: string, mediaKey: string): string => `${scopeKey}\0${mediaKey}`
+// Keyed where the chat's draft is now (a launch draft that became its session's moved there).
+const keyOf = (scopeKey: string, mediaKey: string): string =>
+  `${currentDraftScope(scopeKey)}\0${mediaKey}`
 
 /** Which media held notes belong to: the same path on another connection is another file. */
 export function nativeChatNotesMediaKey(source: NativeChatNotesSource, fallback = ''): string {
@@ -61,10 +76,32 @@ const storage = createNativeChatNotesStorage<HeldEntry>(STORAGE_KEY, (value) =>
     ? {
         scopeKey: value.scopeKey,
         notes: value.notes,
-        ...('hold' in value && typeof value.hold === 'string' ? { hold: value.hold } : {})
+        ...('hold' in value && typeof value.hold === 'string' ? { hold: value.hold } : {}),
+        ...('handedTo' in value &&
+        Array.isArray(value.handedTo) &&
+        value.handedTo.every((id) => typeof id === 'string')
+          ? { handedTo: value.handedTo }
+          : {})
       }
     : null
 )
+
+/** A hold whose notes the chat's draft already holds as a marked image. Until saved drafts load,
+ *  that can't be known, so a handed-off hold counts as spent. */
+function spent(entry: HeldEntry | undefined): boolean {
+  if (!entry?.handedTo?.length) {
+    return false
+  }
+  if (!draftLoad.hydrated) {
+    return true
+  }
+  const ids = new Set(readNativeChatComposerDraft(entry.scopeKey).images.map(({ id }) => id))
+  return entry.handedTo.some((id) => ids.has(id))
+}
+const live = (key: string): HeldEntry | undefined => {
+  const entry = storage.get(key)
+  return spent(entry) ? undefined : entry
+}
 
 let holdSequence = 0
 const nextHold = (): string => `hold-${Date.now().toString(36)}-${(holdSequence += 1)}`
@@ -77,7 +114,7 @@ export function holdNativeChatNotes(
   return storage.update((held) => {
     const key = keyOf(scopeKey, mediaKey)
     held.delete(key)
-    held.set(key, { scopeKey, notes, hold: nextHold() })
+    held.set(key, { scopeKey: currentDraftScope(scopeKey), notes, hold: nextHold() })
     while (held.size > NATIVE_CHAT_HELD_NOTES_MAX) {
       const oldest = held.keys().next().value
       if (oldest === undefined) {
@@ -95,7 +132,7 @@ export function readHeldNativeChatNotes(
   scopeKey: string,
   mediaKey: string
 ): readonly NativeChatMediaNote[] | null {
-  return storage.get(keyOf(scopeKey, mediaKey))?.notes ?? null
+  return live(keyOf(scopeKey, mediaKey))?.notes ?? null
 }
 
 /** The hold a viewer read back: it ends that one only, never a newer one held from another viewer. */
@@ -105,7 +142,7 @@ export function claimHeldNativeChatNotes(
   scopeKey: string,
   mediaKey: string
 ): NativeChatHeldNotesClaim {
-  return { scopeKey, mediaKey, hold: storage.get(keyOf(scopeKey, mediaKey))?.hold ?? '' }
+  return { scopeKey, mediaKey, hold: live(keyOf(scopeKey, mediaKey))?.hold ?? '' }
 }
 
 /** Ends the claimed hold, once its notes are deliberately removed, while it is still that hold. */
@@ -117,15 +154,58 @@ export function releaseHeldNativeChatNotes(claim: NativeChatHeldNotesClaim): voi
   })
 }
 
-/** Ends the claimed hold once its notes were handed to the message box and the chat's draft holding
- *  them is saved; a refused draft write keeps the hold, so a restart still finds the notes. */
-export function releaseHeldNativeChatNotesOnceSaved(
-  claim: NativeChatHeldNotesClaim
-): Promise<void> {
-  return nativeChatComposerDraftSaved(claim.scopeKey).then((saved) => {
-    if (saved) {
-      releaseHeldNativeChatNotes(claim)
+/** The claimed hold's notes went into these marked images. The hold records them at once, so that
+ *  while the draft holds them (also after a restart) the notes aren't offered twice, and if the draft
+ *  lost them the hold is still there. It ends once the chat's draft is saved: now, or at the first
+ *  later save if this one is refused. */
+export function handOffHeldNativeChatNotes(
+  claim: NativeChatHeldNotesClaim,
+  ids: readonly string[]
+): Promise<boolean> {
+  storage.update((held) => {
+    const key = keyOf(claim.scopeKey, claim.mediaKey)
+    const entry = held.get(key)
+    if (!entry || (entry.hold ?? '') !== claim.hold) {
+      return false
     }
+    held.set(key, { ...entry, handedTo: [...ids] })
+    return true
+  })
+  // Resolves after the first attempt: whether the hold ended. A refused save retries on each later
+  // change to the draft, without forcing its debounced writes out.
+  let done = false
+  let stop = (): void => {}
+  const attempt = (flush: boolean): Promise<boolean> =>
+    nativeChatComposerDraftSaved(claim.scopeKey, flush).then((saved) => {
+      if (saved && !done) {
+        done = true
+        stop()
+        releaseHeldNativeChatNotes(claim)
+      }
+      return done
+    })
+  return attempt(true).then((ended) => {
+    if (!ended) {
+      stop = subscribeToNativeChatComposerDraft(claim.scopeKey, () => void attempt(false))
+    }
+    return ended
+  })
+}
+
+/** These marked images were sent or taken out of the chat's draft: holds handed to them are spent. */
+export function releaseHeldNativeChatNotesHandedTo(scopeKey: string, ids: readonly string[]): void {
+  storage.update((held) => {
+    let changed = false
+    for (const [key, entry] of held) {
+      if (
+        entry.scopeKey === currentDraftScope(scopeKey) &&
+        entry.handedTo?.some((id) => ids.includes(id))
+      ) {
+        held.delete(key)
+        changed = true
+      }
+    }
+    return changed
   })
 }
 
@@ -188,7 +268,7 @@ export function useNativeChatHeldNotesCount(
   mediaKey: string | undefined
 ): number {
   return useSyncExternalStore(storage.subscribe, () =>
-    scopeKey && mediaKey ? (storage.get(keyOf(scopeKey, mediaKey))?.notes.length ?? 0) : 0
+    scopeKey && mediaKey ? (live(keyOf(scopeKey, mediaKey))?.notes.length ?? 0) : 0
   )
 }
 

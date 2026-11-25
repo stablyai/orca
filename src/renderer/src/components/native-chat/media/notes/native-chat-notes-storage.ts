@@ -66,30 +66,11 @@ export function createNativeChatNotesStorage<T>(
       return false
     }
   }
-  // Notes saved by an earlier version as one item move to an item each, then the old item goes.
-  const migrate = (storage: Storage): void => {
-    const legacy = storage.getItem(storageKey)
-    if (legacy === null) {
-      return
-    }
-    const parsed: unknown = JSON.parse(legacy)
-    let order = 0
-    for (const entry of Array.isArray(parsed) ? parsed : []) {
-      if (Array.isArray(entry) && typeof entry[0] === 'string') {
-        order += 1
-        if (storage.getItem(itemKey(entry[0])) === null) {
-          storage.setItem(itemKey(entry[0]), JSON.stringify({ t: order, v: entry[1] }))
-        }
-      }
-    }
-    storage.removeItem(storageKey)
-  }
   const read = (): Map<string, T> => {
     const found: { key: string; t: number; value: T }[] = []
     const storage = globalThis.localStorage
     try {
       if (storage) {
-        migrate(storage)
         for (let index = 0; index < storage.length; index += 1) {
           const item = storage.key(index)
           if (!item?.startsWith(prefix)) {
@@ -132,7 +113,7 @@ export function createNativeChatNotesStorage<T>(
     if (!listening && typeof globalThis.addEventListener === 'function') {
       listening = true
       globalThis.addEventListener('storage', (event: StorageEvent) => {
-        if (event.key !== null && event.key !== storageKey && !event.key.startsWith(prefix)) {
+        if (event.key !== null && !event.key.startsWith(prefix)) {
           return
         }
         // One write per entry arrives as one event each: read them all once.

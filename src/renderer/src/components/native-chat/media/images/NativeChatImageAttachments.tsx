@@ -4,7 +4,10 @@ import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { basename } from '../../../../lib/path'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatCapturedImageIndex } from './native-chat-captured-image'
+import {
+  nativeChatCapturedImageIndex,
+  useNativeChatFollowedImage
+} from './native-chat-captured-image'
 import { NativeChatMediaViewer } from '../notes/NativeChatMediaViewer'
 import { nativeChatSentNotesNumberMax } from '../notes/native-chat-media-notes'
 import {
@@ -298,7 +301,6 @@ export function NativeChatImageAttachments({
   className?: string
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const [viewing, setViewing] = useState<number | null>(null)
   // Opened from the chat's image set by Annotate: the viewer starts ready to place notes.
   const [annotateOnOpen, setAnnotateOnOpen] = useState(false)
   // The image set can outlive this row (scrolled out of range): only a mounted row takes Annotate.
@@ -310,6 +312,8 @@ export function NativeChatImageAttachments({
     }
   }, [])
   const images = blocks.filter((block) => block.type === 'image-ref')
+  // The image open in this message's viewer, followed by identity as the message's images change.
+  const [viewing, setViewing] = useNativeChatFollowedImage(images)
   // Annotate from the image set acts on the row's images as they are when it is pressed.
   const latestImages = useRef(images)
   useLayoutEffect(() => {
@@ -338,7 +342,7 @@ export function NativeChatImageAttachments({
               return false
             }
             setAnnotateOnOpen(true)
-            setViewing(at)
+            setViewing(at, latestImages.current)
             return true
           }
         }

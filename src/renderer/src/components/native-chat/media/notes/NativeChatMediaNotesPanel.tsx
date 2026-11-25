@@ -313,7 +313,9 @@ function NoteEditor({
           type="button"
           variant="media-note"
           size="xs"
-          disabled={!canCommit || editor.locked}
+          disabled={!canCommit}
+          // Locked while Send makes the marked image: still focusable, so focus isn't dropped.
+          aria-disabled={editor.locked || undefined}
           onClick={() => editor.commit() && onClosed()}
         >
           {adding

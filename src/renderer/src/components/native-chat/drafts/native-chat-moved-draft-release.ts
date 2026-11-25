@@ -17,6 +17,9 @@ type KeptNotes = {
 let kept: KeptNotes = { release: () => {}, save: () => true }
 // Sources whose removal is being written; their notes go once it is confirmed.
 const retiring = new Set<string>()
+// Sources whose scope was reused before the notes copied away from them were saved: their copies go
+// only once a later save of those notes lands.
+const releaseWhenSaved = new Set<string>()
 
 /** Sets what a moved draft's source keeps until it is gone for good. */
 export function setMovedNativeChatDraftSourceRelease(next: KeptNotes): void {
@@ -37,6 +40,7 @@ export function retireMovedNativeChatDraftSource(sourceScope: string): void {
  *  be written now; false while the notes copied to the destination are still unsaved, so the source
  *  stays as it was until a later confirmed write finds them saved. */
 export function releaseMovedNativeChatDraftSource(sourceScope: string): boolean {
+  retryMovedNativeChatDraftReleases()
   if (deferredRemovals.get(sourceScope)?.notesPending && !kept.save()) {
     return false
   }
@@ -52,15 +56,45 @@ export function movedNativeChatDraftSourceRemoved(sourceScope: string): void {
   }
 }
 
-/** The source scope holds a new draft: what it kept for the moved one is no longer its to recover. */
+/** The source scope holds a new draft, so it will no longer recover the moved one. Its copies of the
+ *  notes go once the copies at the destination are saved; while those are refused, the source's
+ *  copies are the only saved words, so they stay. */
 export function movedNativeChatDraftSourceReused(sourceScope: string): void {
   const wasKept = deferredRemovals.delete(sourceScope)
   if (retiring.delete(sourceScope) || wasKept) {
+    releaseWhenSaved.add(sourceScope)
+    retryMovedNativeChatDraftReleases()
+  }
+}
+
+/** Lets go of reused sources' copies once the notes copied away from them are saved. */
+export function retryMovedNativeChatDraftReleases(): void {
+  if (releaseWhenSaved.size === 0 || !kept.save()) {
+    return
+  }
+  for (const sourceScope of releaseWhenSaved) {
     kept.release(sourceScope)
+  }
+  releaseWhenSaved.clear()
+}
+
+/** A moved draft moves again before its first move settled: the earlier source now waits for the new
+ *  destination's confirmed write, not the scope the draft left. */
+export function redirectMovedNativeChatDraftSources(
+  from: string,
+  to: string,
+  savedAt: number
+): void {
+  for (const pending of deferredRemovals.values()) {
+    if (pending.destinationScope === from) {
+      pending.destinationScope = to
+      pending.savedAt = savedAt
+    }
   }
 }
 
 /** Test-only. */
 export function resetMovedNativeChatDraftSourcesForTests(): void {
   retiring.clear()
+  releaseWhenSaved.clear()
 }

@@ -32,7 +32,7 @@ import {
   claimHeldNativeChatNotes,
   readHeldNativeChatNotes,
   releaseHeldNativeChatNotes,
-  releaseHeldNativeChatNotesOnceSaved,
+  handOffHeldNativeChatNotes,
   type NativeChatHeldNotesClaim
 } from './native-chat-held-notes'
 
@@ -65,7 +65,7 @@ export function useNativeChatNotesDelivery({
   /** The marked images now in the draft. A returned function undoes what the caller replaced
    *  (a reopened chip goes back as it was); without one, Undo holds the notes with the media.
    *  False: what they replace is gone from the draft, so they are taken back out. */
-  onAttached: ((ids: string[]) => (() => void) | void | false) | undefined
+  onAttached: ((ids: string[]) => (() => boolean | void) | void | false) | undefined
   /** A reopened marked image whose notes were all deleted: the caller takes them out of the draft
    *  and returns what puts them back. */
   onCleared?: () => () => void
@@ -172,7 +172,7 @@ export function useNativeChatNotesDelivery({
         handed = true
         if (heldIn.current) {
           // The hold ends once the draft holding the marked image is saved, not before.
-          releaseHeldNativeChatNotesOnceSaved(heldIn.current)
+          void handOffHeldNativeChatNotes(heldIn.current, ids)
           heldIn.current = null
         }
         if (approved) {
@@ -185,17 +185,22 @@ export function useNativeChatNotesDelivery({
           announceNativeChatNotesHandOff(
             composer.scopeKey,
             ids,
+            // What was there before comes back first; the new pair goes only once that is saved.
             () => {
-              if (restore) {
-                restore()
-              } else if (!holdNativeChatNotes(composer.scopeKey, mediaKey, notes)) {
-                showNativeChatNotesNotice(composer.scopeKey, {
-                  text: t(
-                    'components.native-chat.notes.keptUnsaved',
-                    'Notes kept, but they couldn’t be saved and won’t survive a restart.'
-                  )
-                })
+              if (
+                restore
+                  ? restore() !== false
+                  : holdNativeChatNotes(composer.scopeKey, mediaKey, notes)
+              ) {
+                return true
               }
+              showNativeChatNotesNotice(composer.scopeKey, {
+                text: t(
+                  'components.native-chat.notes.undoUnsaved',
+                  'Couldn’t undo: the earlier notes couldn’t be saved. These stay in your message.'
+                )
+              })
+              return false
             },
             notes.length
           )

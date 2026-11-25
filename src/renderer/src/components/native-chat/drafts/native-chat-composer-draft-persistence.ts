@@ -8,7 +8,8 @@ import {
 import {
   movedNativeChatDraftSourceRemoved,
   movedNativeChatDraftSourceReused,
-  releaseMovedNativeChatDraftSource
+  releaseMovedNativeChatDraftSource,
+  retryMovedNativeChatDraftReleases
 } from './native-chat-moved-draft-release'
 import {
   dirtyScopes,
@@ -47,6 +48,7 @@ const scopeWrites = new Map<string, Set<Promise<boolean>>>()
 let channel: BroadcastChannel | null = null
 
 function completeDeferredRemovals(destinationScope: string, savedAt: number): void {
+  retryMovedNativeChatDraftReleases()
   let released = false
   for (const [sourceScope, pending] of deferredRemovals) {
     if (

@@ -42,7 +42,7 @@ export type NativeChatMediaViewerProps = {
   initialNotes?: readonly NativeChatMediaNote[]
   offset?: number
   /** The marked images a hand-off attached; a returned function undoes what the caller replaced. */
-  onAttached?: (ids: string[]) => (() => void) | void | false
+  onAttached?: (ids: string[]) => (() => boolean | void) | void | false
   /** A reopened marked image whose notes were all deleted on close; returns its Undo. */
   onCleared?: () => () => void
   /** The draft image these notes replace (a chip opened from the message box). */

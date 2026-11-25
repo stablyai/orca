@@ -19,6 +19,8 @@ import {
 import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
 import type { NativeChatComposerHandle } from '../../composer/native-chat-composer-types'
 import {
+  clearNativeChatAttachmentNotes,
+  clearNativeChatImagesKeepingNoted,
   resetNativeChatAttachmentNotesForTests,
   setNativeChatAttachmentNotes,
   type NativeChatAttachmentNotes
@@ -28,14 +30,20 @@ import {
   holdNativeChatNotes,
   readHeldNativeChatNotes,
   releaseHeldNativeChatNotes,
-  releaseHeldNativeChatNotesOnceSaved,
+  handOffHeldNativeChatNotes,
   resetNativeChatHeldNotesForTests
 } from './native-chat-held-notes'
 import { createNativeChatNotesStorage } from './native-chat-notes-storage'
 import {
+  announceNativeChatNotesHandOff,
   captureNativeChatNotesSend,
   submitNativeChatNotesIfApproved
 } from './native-chat-notes-handoff'
+import {
+  resetNativeChatNotesNoticesForTests,
+  useNativeChatNotesNotice
+} from './native-chat-notes-notice'
+import { clearNativeChatComposerImagesExcept } from '../../attachments/chips/native-chat-composer-images-clear'
 import { useNativeChatNotesEditor } from './use-native-chat-notes-editor'
 import {
   markNativeChatNotedImageEditing,
@@ -45,7 +53,10 @@ import {
   markNativeChatImageOnlyPending,
   useNativeChatImageOnlyResolve
 } from '../../attachments/chips/use-native-chat-image-only-resolve'
-import { nativeChatCapturedImageIndex } from '../images/native-chat-captured-image'
+import {
+  nativeChatCapturedImageIndex,
+  useNativeChatFollowedImage
+} from '../images/native-chat-captured-image'
 import type { NativeChatPendingAttachmentChips } from '../../attachments/intake/native-chat-session-attachment-drop'
 import type { NativeChatMediaNote } from './native-chat-media-notes'
 
@@ -80,6 +91,7 @@ beforeEach(async () => {
   clearNativeChatComposerDraftsForTests()
   resetNativeChatAttachmentNotesForTests()
   resetNativeChatHeldNotesForTests()
+  resetNativeChatNotesNoticesForTests()
   drafts = createMemoryNativeChatComposerDraftStorage()
   setNativeChatComposerDraftStorageForTests(drafts)
   await hydrateNativeChatComposerDrafts()
@@ -172,12 +184,6 @@ it('a change storage refused keeps winning for its entry until it lands', () => 
   expect(createNativeChatNotesStorage<number>(NOTES_KEY, parse).get('k')).toBe(1)
 })
 
-it('notes saved as one item by an earlier version are read and moved to an item each', () => {
-  localStorage.setItem(NOTES_KEY, JSON.stringify([[`${SCOPE}\u0000img-1`, record([note(1)])]]))
-  expect(coldNotes(SCOPE, 'img-1')).not.toBeNull()
-  expect(localStorage.getItem(NOTES_KEY)).toBeNull()
-})
-
 it('a viewer ends only the hold it read, never a newer one held from another viewer', () => {
   holdNativeChatNotes(SCOPE, '/tmp/dashboard.png', [note(1)])
   const older = claimHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')
@@ -188,22 +194,164 @@ it('a viewer ends only the hold it read, never a newer one held from another vie
   expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toBeNull()
 })
 
-it('handed-off held notes stay held until the draft holding the marked image is saved', async () => {
-  holdNativeChatNotes(SCOPE, '/tmp/dashboard.png', [note(1)])
-  const claim = claimHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')
+const MEDIA = '/tmp/dashboard.png'
+const rawHeld = (): unknown =>
+  createNativeChatNotesStorage('orca.nativeChat.heldNotes.v1', (value) => value).get(
+    `${SCOPE}\u0000${MEDIA}`
+  ) ?? null
+
+it('held notes handed off while the draft save is refused are never offered twice, and end at the next save', async () => {
+  holdNativeChatNotes(SCOPE, MEDIA, [note(1)])
+  const claim = claimHeldNativeChatNotes(SCOPE, MEDIA)
   drafts.refuseWrites = true
-  appendToNativeChatComposerDraft(SCOPE, {
-    text: '',
-    images: [{ id: 'marked', path: '/tmp/m.png' }]
-  })
-  await releaseHeldNativeChatNotesOnceSaved(claim)
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
+  setNativeChatAttachmentNotes(SCOPE, 'marked', record([note(1)]))
+  expect(await handOffHeldNativeChatNotes(claim, ['marked'])).toBe(false)
+  // While the draft holds the marked image, reopening the media offers no second copy, also after a
+  // restart; the hold itself stays saved in case the draft lost the image.
   resetNativeChatHeldNotesForTests()
-  expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toHaveLength(1)
+  expect(readHeldNativeChatNotes(SCOPE, MEDIA)).toBeNull()
+  expect(rawHeld()).not.toBeNull()
+  // The next ordinary save of the draft ends the hold, with nothing calling it again.
   drafts.refuseWrites = false
   updateNativeChatComposerDraft(SCOPE, { text: 'retry' }, 'immediate')
-  await releaseHeldNativeChatNotesOnceSaved(claim)
+  await vi.waitFor(() => expect(rawHeld()).toBeNull())
+})
+
+it('a hold handed to a marked image ends when that image is sent, so it never comes back', async () => {
+  holdNativeChatNotes(SCOPE, MEDIA, [note(1)])
+  const claim = claimHeldNativeChatNotes(SCOPE, MEDIA)
+  drafts.refuseWrites = true
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
+  await handOffHeldNativeChatNotes(claim, ['marked'])
+  // Sent: the image and its notes leave the draft.
+  updateNativeChatComposerDraft(SCOPE, { images: [] }, 'immediate')
+  clearNativeChatAttachmentNotes(SCOPE, ['marked'])
   resetNativeChatHeldNotesForTests()
-  expect(readHeldNativeChatNotes(SCOPE, '/tmp/dashboard.png')).toBeNull()
+  expect(readHeldNativeChatNotes(SCOPE, MEDIA)).toBeNull()
+  expect(rawHeld()).toBeNull()
+})
+
+it('a reused source keeps its copy of the words while the destination’s copy is still refused', async () => {
+  appendToNativeChatComposerDraft(SOURCE, { text: '', images: [{ id: 'img-1', path: '/m.png' }] })
+  setNativeChatAttachmentNotes(SOURCE, 'img-1', record([note(1, 'the words')]))
+  await nativeChatComposerDraftSaved(SOURCE)
+  const refused = refuseNotesWrites()
+  moveNativeChatComposerDraft(SOURCE, SCOPE)
+  await nativeChatComposerDraftSaved(SCOPE)
+  // The source scope takes a new draft before the destination's notes were saved.
+  refused.mockRestore()
+  const again = refuseNotesWrites()
+  appendToNativeChatComposerDraft(SOURCE, { text: 'something new', images: [] })
+  await nativeChatComposerDraftSaved(SOURCE)
+  expect(coldNotes(SOURCE, 'img-1')).not.toBeNull()
+  // Once the destination's copy lands, the source's goes.
+  again.mockRestore()
+  updateNativeChatComposerDraft(SCOPE, { text: 'and now' }, 'immediate')
+  await nativeChatComposerDraftSaved(SCOPE)
+  expect(coldNotes(SCOPE, 'img-1')).not.toBeNull()
+  expect(coldNotes(SOURCE, 'img-1')).toBeNull()
+})
+
+it('a draft that moves on again before its first move settled keeps its first source until the last destination is saved', async () => {
+  const MIDDLE = 'agent-session:custody-middle'
+  appendToNativeChatComposerDraft(SOURCE, { text: 'words', images: [] })
+  await nativeChatComposerDraftSaved(SOURCE)
+  const write = drafts.write
+  drafts.write = (scope, draft) =>
+    scope === SCOPE
+      ? Promise.reject(new DOMException('refused', 'QuotaExceededError'))
+      : write(scope, draft)
+  moveNativeChatComposerDraft(SOURCE, MIDDLE)
+  moveNativeChatComposerDraft(MIDDLE, SCOPE)
+  await nativeChatComposerDraftSaved(MIDDLE)
+  await nativeChatComposerDraftSaved(SCOPE)
+  await nativeChatComposerDraftSaved(SOURCE)
+  // The last destination refused its write: the first source is still the saved copy.
+  expect(drafts.drafts.get(SOURCE)?.text).toBe('words')
+  drafts.write = write
+  updateNativeChatComposerDraft(SCOPE, { text: 'words!' }, 'immediate')
+  await nativeChatComposerDraftSaved(SCOPE)
+  await nativeChatComposerDraftSaved(SOURCE)
+  expect(drafts.drafts.has(SOURCE)).toBe(false)
+})
+
+it('a terminal command keeps marked images in every write of the draft', async () => {
+  appendToNativeChatComposerDraft(SCOPE, {
+    text: '/compact',
+    images: [
+      { id: 'marked', path: '/m.png' },
+      { id: 'plain', path: '/p.png' }
+    ]
+  })
+  setNativeChatAttachmentNotes(SCOPE, 'marked', record([note(1)]))
+  await nativeChatComposerDraftSaved(SCOPE)
+  const written: string[][] = []
+  const write = drafts.write
+  drafts.write = (scope, draft) => {
+    written.push(draft.images.map(({ id }) => id))
+    return write(scope, draft)
+  }
+  // As the message box clears a command's images.
+  clearNativeChatImagesKeepingNoted(SCOPE, (keep) =>
+    clearNativeChatComposerImagesExcept(SCOPE, keep)
+  )
+  await nativeChatComposerDraftSaved(SCOPE)
+  expect(written.length).toBeGreaterThan(0)
+  expect(written.every((ids) => ids.includes('marked'))).toBe(true)
+  expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual(['marked'])
+})
+
+it('Undo puts back what the notes replaced before taking the new pair out, and keeps it when that fails', async () => {
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
+  setNativeChatAttachmentNotes(SCOPE, 'marked', record([note(1)]))
+  announceNativeChatNotesHandOff(SCOPE, ['marked'], () => false, 1)
+  const { result } = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  act(() => result.current?.action?.onClick())
+  // The earlier state couldn't be saved: the new pair stays, with its words.
+  expect(readNativeChatComposerDraft(SCOPE).images.map(({ id }) => id)).toEqual(['marked'])
+  announceNativeChatNotesHandOff(SCOPE, ['marked'], () => true, 1)
+  const { result: second } = renderHook(() => useNativeChatNotesNotice(SCOPE))
+  act(() => second.current?.action?.onClick())
+  expect(readNativeChatComposerDraft(SCOPE).images).toEqual([])
+})
+
+it('Send counts the editor’s own image tokens as part of the hand-off, not a changed draft', () => {
+  const handle = composerHandle()
+  const chat = chatWithComposer(handle)
+  appendToNativeChatComposerDraft(SCOPE, {
+    text: 'look at [Image](orca-image:chip) ',
+    images: [{ id: 'chip', path: '/a.png' }]
+  })
+  const approved = captureNativeChatNotesSend(chat.opener, { scopeKey: SCOPE, handle })
+  // The structured editor swaps the chip's token for the marked copy's.
+  appendToNativeChatComposerDraft(SCOPE, { text: '', images: [{ id: 'marked', path: '/m.png' }] })
+  updateNativeChatComposerDraft(
+    SCOPE,
+    {
+      text: 'look at [Image](orca-image:marked) ',
+      images: readNativeChatComposerDraft(SCOPE).images.filter(({ id }) => id !== 'chip')
+    },
+    'immediate'
+  )
+  expect(submitNativeChatNotesIfApproved(approved, ['marked'], 'chip')).toBe(true)
+  expect(handle.submit).toHaveBeenCalledTimes(1)
+})
+
+it('the viewer follows the open image when the message’s images reorder', () => {
+  const image = (path: string) => ({ type: 'image-ref' as const, path })
+  const { result, rerender } = renderHook(({ images }) => useNativeChatFollowedImage(images), {
+    initialProps: { images: [image('/a.png'), image('/b.png')] }
+  })
+  act(() => result.current[1](1))
+  expect(result.current[0]).toBe(1)
+  rerender({ images: [image('/b.png'), image('/a.png')] })
+  expect(result.current[0]).toBe(0)
+  // The same picture twice: it stays where it was rather than jump to the other copy.
+  rerender({ images: [image('/b.png'), image('/b.png')] })
+  expect(result.current[0]).toBe(0)
+  rerender({ images: [image('/c.png')] })
+  expect(result.current[0]).toBeNull()
 })
 
 function chatWithComposer(handle: NativeChatComposerHandle): {

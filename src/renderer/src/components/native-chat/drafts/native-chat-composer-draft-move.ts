@@ -29,6 +29,7 @@ import {
   saveNativeChatHeldNotes
 } from '../media/notes/native-chat-held-notes'
 import {
+  redirectMovedNativeChatDraftSources,
   retireMovedNativeChatDraftSource,
   setMovedNativeChatDraftSourceRelease
 } from './native-chat-moved-draft-release'
@@ -71,12 +72,15 @@ export function moveNativeChatComposerDraft(
   if (source.text !== '' || source.images.length > 0) {
     const durable = appendToNativeChatComposerDraft(destinationScope, source, owner, position)
     const destination = records.get(destinationScope)
+    const savedAt = !durable && destination ? destination.savedAt : 0
+    // An earlier move into this source, still unsettled, now waits for this destination instead.
+    redirectMovedNativeChatDraftSources(sourceScope, destinationScope, savedAt)
     // The source stays saved until the destination's write holding the draft is confirmed and the
     // notes copied there are saved; already durable, only the notes can hold it back.
     if ((!durable && destination) || !notesSaved) {
       deferredRemovals.set(sourceScope, {
         destinationScope,
-        savedAt: !durable && destination ? destination.savedAt : 0,
+        savedAt,
         notesPending: !notesSaved
       })
     } else {
