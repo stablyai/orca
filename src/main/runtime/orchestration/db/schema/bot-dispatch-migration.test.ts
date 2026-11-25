@@ -8,6 +8,7 @@ import { createRootDispatch } from '../root-dispatch-test-fixture'
 
 const runId = 'run_legacy_local'
 const NEW_INDEXES = [
+  'idx_worker_terminal_resources_worktree',
   'idx_dispatch_contexts_origin',
   'idx_dispatch_creator_orca_session_id',
   'idx_dispatch_creator_pane_key',
@@ -69,7 +70,7 @@ describe('v47-v48 bot dispatch migrations', () => {
   function expectCurrentSchema(path: string, seededTaskId?: string): void {
     const db = new OrchestrationDb(path)
     try {
-      expect(db.db.pragma('user_version', { simple: true })).toBe(51)
+      expect(db.db.pragma('user_version', { simple: true })).toBe(52)
       expect(db.hasColumn('dispatch_contexts', 'chat_lineage')).toBe(true)
       expect(TAKE_COLUMNS.filter(([table, column]) => !db.hasColumn(table, column))).toEqual([])
       expect(db.hasColumn('dispatch_contexts', 'creator_turn_source')).toBe(true)

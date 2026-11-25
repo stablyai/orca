@@ -209,6 +209,8 @@ CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_identity
   ON worker_terminal_resources(process_incarnation, host_scope);
 CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_release
   ON worker_terminal_resources(release_state);
+CREATE INDEX IF NOT EXISTS idx_worker_terminal_resources_worktree
+  ON worker_terminal_resources(worktree_id);
 
 -- Read and written only by builds that sent chats a count notice per mailbox; kept for them.
 CREATE TABLE IF NOT EXISTS structured_pointer_operations (
