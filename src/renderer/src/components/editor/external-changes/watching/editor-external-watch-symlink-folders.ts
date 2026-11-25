@@ -160,7 +160,13 @@ export class SymlinkedTabFolderWatches {
     ownPathOnly = false
   ): void {
     folder.link = link
-    const plan = this.planWatch(folder, link, heldWatchRoots)
+    // Why own path only after a failure: re-homed folders skip sharing, so an outage costs one move per folder.
+    const plan = ownPathOnly
+      ? {
+          watch: this.watches.get(normalizeRuntimePathForComparison(folder.path)),
+          startAt: folder.path
+        }
+      : this.planWatch(folder, link, heldWatchRoots)
     // Why: only a folder's own-path watch is returned failed; joining it retries it, as a fresh request would.
     if (plan.watch && isWatchRootFailed(heldWatchRoots, toWatchRoot(plan.watch.path))) {
       const failed = plan.watch
@@ -168,9 +174,7 @@ export class SymlinkedTabFolderWatches {
         this.watchFailed(failed, folder.target, error, heldWatchRoots)
       )
     }
-    const watch =
-      plan.watch ??
-      this.startWatch(ownPathOnly ? folder.path : plan.startAt, folder.target, heldWatchRoots)
+    const watch = plan.watch ?? this.startWatch(plan.startAt, folder.target, heldWatchRoots)
     folder.watch = watch
     watch.folders.add(folder)
     const entry = watch.targets.get(folder.targetKey)
@@ -276,7 +280,7 @@ export class SymlinkedTabFolderWatches {
     return watch
   }
 
-  /** Why: nested folders joined it while it was pending; each finds another working watch or starts one at its own path. */
+  /** Why: nested folders joined it while it was pending; each moves to a watch at its own path. */
   private watchFailed(
     watch: FolderWatch,
     owner: EditorExternalWatchTarget,
