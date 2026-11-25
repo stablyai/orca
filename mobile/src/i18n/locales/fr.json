@@ -1828,6 +1828,9 @@
       "emptyUsesBranch": "Laissez vide pour utiliser le nom de la branche.",
       "emptyUsesFolder": "Laissez vide pour utiliser le nom du dossier.",
       "failed": "Impossible de renommer l’espace de travail. {{reason}}"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "Supprimer l’espace de travail"
     }
   },
   "navigation": {

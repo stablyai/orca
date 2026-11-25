@@ -1828,6 +1828,9 @@
       "emptyUsesBranch": "Déjalo vacío para usar el nombre de la rama.",
       "emptyUsesFolder": "Déjalo vacío para usar el nombre de la carpeta.",
       "failed": "No se pudo cambiar el nombre del espacio de trabajo. {{reason}}"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "Eliminar espacio de trabajo"
     }
   },
   "navigation": {

@@ -1977,6 +1977,9 @@
     },
     "identity": {
       "hostNotFound": "Host não encontrado"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "Excluir espaço de trabalho"
     }
   },
   "navigation": {

@@ -1781,6 +1781,9 @@
       "emptyUsesBranch": "Leer lassen, um den Branchnamen zu verwenden.",
       "emptyUsesFolder": "Leer lassen, um den Ordnernamen zu verwenden.",
       "failed": "Der Arbeitsbereich konnte nicht umbenannt werden. {{reason}}"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "Arbeitsbereich löschen"
     }
   },
   "navigation": {

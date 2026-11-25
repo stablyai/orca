@@ -1777,6 +1777,9 @@
       "emptyUsesBranch": "비워 두면 브랜치 이름을 사용합니다.",
       "emptyUsesFolder": "비워 두면 폴더 이름을 사용합니다.",
       "failed": "워크스페이스 이름을 변경하지 못했습니다. {{reason}}"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "워크스페이스 삭제"
     }
   },
   "navigation": {

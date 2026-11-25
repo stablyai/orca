@@ -1777,6 +1777,9 @@
       "emptyUsesBranch": "空欄の場合はブランチ名を使用します。",
       "emptyUsesFolder": "空欄の場合はフォルダー名を使用します。",
       "failed": "ワークスペースの名前を変更できませんでした。{{reason}}"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "ワークスペースを削除"
     }
   },
   "navigation": {

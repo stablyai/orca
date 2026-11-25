@@ -204,7 +204,7 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           // Desktop's folder rows say Remove Workspace: the folder stays on disk.
           label: isFolderWorkspaceRoute
             ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
-            : t('common.delete', 'Delete'),
+            : t('hostScreen.deleteConfirm.deleteTitle', 'Delete Workspace'),
           icon: Trash2,
           destructive: true,
           disabled: connState !== 'connected' || primaryCheckout,

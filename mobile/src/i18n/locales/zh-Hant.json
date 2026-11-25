@@ -1775,6 +1775,9 @@
       "emptyUsesBranch": "留空以使用分支名稱。",
       "emptyUsesFolder": "留空以使用資料夾名稱。",
       "failed": "無法重新命名工作區。{{reason}}"
+    },
+    "deleteConfirm": {
+      "deleteTitle": "刪除工作區"
     }
   },
   "navigation": {
