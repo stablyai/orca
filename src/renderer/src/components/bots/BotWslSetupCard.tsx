@@ -93,9 +93,11 @@ function FailedBody({
         </p>
         {state.detail ? (
           <Collapsible>
-            <CollapsibleTrigger className="group flex items-center gap-1 text-2xs text-muted-foreground hover:text-foreground">
-              <ChevronRight className="size-3 transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
-              {t('bots.new.wslSetup.details', 'Details')}
+            <CollapsibleTrigger asChild>
+              <Button type="button" variant="ghost" size="xs" className="group -ml-1.5">
+                <ChevronRight className="transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
+                {t('bots.new.wslSetup.details', 'Details')}
+              </Button>
             </CollapsibleTrigger>
             <CollapsibleContent animation="height">
               <pre className="mt-1 max-h-32 overflow-auto rounded-md bg-muted/50 p-2 font-mono text-2xs whitespace-pre-wrap text-muted-foreground scrollbar-sleek">

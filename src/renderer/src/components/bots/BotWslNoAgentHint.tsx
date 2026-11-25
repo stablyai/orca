@@ -6,6 +6,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { agentSessionInstallCommand } from '../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 
 const REPROBE_MS = 10_000
@@ -14,17 +15,20 @@ const REPROBE_MS = 10_000
 function useWslAgentReprobe(environmentId: string): void {
   useEffect(() => {
     const probe = (): void => {
-      if (document.visibilityState === 'visible') {
-        void useAppStore
-          .getState()
-          .refreshRuntimeDetectedAgents(environmentId)
-          .catch(() => {})
-      }
+      void useAppStore
+        .getState()
+        .refreshRuntimeDetectedAgents(environmentId)
+        .catch(() => {})
     }
-    const timer = window.setInterval(probe, REPROBE_MS)
+    // Paused while hidden and slowed while unfocused; regaining focus checks at once.
+    const stop = installWindowVisibilityInterval({
+      run: probe,
+      intervalMs: REPROBE_MS,
+      slowWhileUnfocused: true
+    })
     window.addEventListener('focus', probe)
     return () => {
-      window.clearInterval(timer)
+      stop()
       window.removeEventListener('focus', probe)
     }
   }, [environmentId])

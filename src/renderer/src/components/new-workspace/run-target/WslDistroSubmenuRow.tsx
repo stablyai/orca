@@ -16,6 +16,7 @@ import { RunTargetRow } from './RunTargetComboboxRow'
 import { wslDistroMenuRows } from './wsl-distro-menu-rows'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 
+const SUBMENU_CONTENT = cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)
 const PENGUIN = <LinuxPenguinIcon className="size-3.5 shrink-0 text-muted-foreground" />
 
 /** Add host's "WSL distro" row and its nested list of this PC's distros that aren't hosts yet. */
@@ -72,7 +73,7 @@ export function WslDistroSubmenuRow({
         side="right"
         align="start"
         sideOffset={6}
-        className={cn('w-72 p-1', COMBOBOX_POPOVER_SURFACE)}
+        className={SUBMENU_CONTENT}
         onOpenAutoFocus={(event) => event.preventDefault()}
         onCloseAutoFocus={(event) => event.preventDefault()}
         data-wsl-distro-menu=""
