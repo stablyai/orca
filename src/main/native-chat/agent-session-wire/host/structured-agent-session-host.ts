@@ -341,6 +341,7 @@ export class StructuredAgentSessionHost {
   readUsageLimitContinue = async (id: string) =>
     this.usageLimitContinue.readState(id, await this.clientDelivery.readUsageLimitCut(id))
   publishedWork = this.clientDelivery.readPublishedWork
+  readUsageLimitCut = (id: string) => this.clientDelivery.readUsageLimitCut(id)
 
   private collaborators = () => ({
     deps: this.deps,

@@ -112,8 +112,10 @@ export function startBotRunChatCloser(runtime: OrcaRuntimeService, store: Store)
       if (automationChats.has(sessionId) || automationChats.has(live) || botTurns.running(live)) {
         return 'busy'
       }
+      // A continue still coming holds the chat, also while it waits for room or an unknown reset.
       const host = getStructuredAgentSessionHost()
-      if ((await host?.readUsageLimitContinue(live))?.state === 'scheduled') {
+      const cut = await host?.readUsageLimitCut(live)
+      if (cut && (await host?.usageLimitContinue.disposition(live, cut.turnItemId)) === 'pending') {
         return 'busy'
       }
       return (await runtime.botItems.chatHasOpenItems(bot.id, sessionId)) ? 'item' : null

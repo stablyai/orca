@@ -64,8 +64,11 @@ export class BotRunChatCloser {
   // Every read and write of the list runs here, one at a time.
   private queue: Promise<void> = Promise.resolve()
 
+  private targets: ReadonlySet<string>
+
   constructor(private readonly deps: BotRunChatCloseDeps) {
     this.list = new RunChatList(deps)
+    this.targets = deps.automationChats()
   }
 
   /** A run's own conversation just finished: its countdown starts now. A bot on Never tracks none. */
@@ -112,6 +115,16 @@ export class BotRunChatCloser {
     void this.serial(async () => {
       await this.unpark([...(await this.list.load()).values()])
     })
+  }
+
+  /** Automations were edited: a chat one no longer targets may count down again. */
+  automationsChanged(): void {
+    const before = this.targets
+    this.targets = this.deps.automationChats()
+    const released = [...before].filter((id) => !this.targets.has(id))
+    if (released.length > 0) {
+      this.wake(released)
+    }
   }
 
   /** These bots' items changed, so an item holding one of their parked chats may have closed. */

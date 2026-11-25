@@ -23,6 +23,8 @@ function closerWith(input: {
   inUse?: string[]
   /** Owes a reply from the start, or (`late`) only once its close is being admitted. */
   asked?: string[]
+  /** Targeted by an automation, which holds it. */
+  targets?: string[]
   /** What happens to a chat between the sweep's checks and its close. */
   late?: Record<string, 'asked' | 'opened'>
 }) {
@@ -33,6 +35,7 @@ function closerWith(input: {
   const closed: string[] = []
   const owes = new Set(input.asked)
   const inUse = new Set(input.inUse)
+  const targets = new Set(input.targets)
   const deps: BotRunChatCloseDeps = {
     path: () => 'list.jsonl',
     read: async () => file,
@@ -54,7 +57,7 @@ function closerWith(input: {
       // A chat in `inUse` stands for one with an open tab, which an agent's reopen doesn't count.
       return chat ? { ...chat, inUse: inUse.has(sessionId) && !reopened } : null
     },
-    automationChats: () => new Set(input.busy?.slice(0, 1)),
+    automationChats: () => new Set([...(input.busy?.slice(0, 1) ?? []), ...targets]),
     rootOf: (sessionId) => sessionId,
     wasRunChat: () => true,
     busy: async (_bot, sessionId, automationChats) =>
@@ -80,6 +83,7 @@ function closerWith(input: {
   return {
     closer,
     owes,
+    targets,
     /** A new launch reading the same list. */
     restart: () => new BotRunChatCloser(deps),
     closed,
@@ -240,6 +244,31 @@ describe('BotRunChatCloser', () => {
     expect(launchReads).toBe(2)
     expect(secondReads).toBe(0)
     expect(afterCheck).toBe(54 * HOUR)
+  })
+
+  it('a chat an automation stops targeting counts down again', async () => {
+    const bots = [botOf('follows')]
+    const run = closerWith({
+      bots,
+      chats: { target: { lastActivityAt: 0, kept: false } },
+      targets: ['target']
+    })
+    run.closer.arm(bots[0], 'target')
+    run.at(25 * HOUR)
+    await run.closer.sweep()
+    const held = run.closer.nextSweepAt()
+    run.targets.delete('target')
+    run.at(30 * HOUR)
+    run.closer.automationsChanged()
+    await run.closer.sweep()
+    const released = run.closer.nextSweepAt()
+    run.at(54 * HOUR)
+    await run.closer.sweep()
+    run.closer.clear()
+
+    expect(held).toBeUndefined()
+    expect(released).toBe(54 * HOUR)
+    expect(run.closed).toEqual(['target'])
   })
 
   it("an agent's reopen tracks a run chat again from its next turn, despite the tab it opened", async () => {
