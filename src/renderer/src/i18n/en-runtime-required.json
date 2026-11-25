@@ -1746,6 +1746,12 @@
       "toolValueMissing": "Enter a value for each row, or remove the row.",
       "toolValuesUnmoved": "A tool still holds its saved values. Reopen the bot’s tools to move them."
     },
+    "feishu": {
+      "reviewRetryable_one": "A Feishu message didn’t reach a chat. Retry sends it again; Dismiss drops it.",
+      "reviewRetryable_other": "{{count}} Feishu messages didn’t reach a chat. Retry sends them again; Dismiss drops them.",
+      "reviewUnknown_one": "A Feishu message may not have been answered. Check the DM and the chat, then dismiss.",
+      "reviewUnknown_other": "{{count}} Feishu messages may not have been answered. Check the DM and the chat, then dismiss."
+    },
     "github": {
       "pill": {
         "addedRepositories_one": "Added {{count}} repository",

@@ -21736,6 +21736,10 @@
         "removed": "已移除",
         "remove": "移除",
         "added": "已添加"
+      },
+      "feishuDm": {
+        "only": "仅在 Orca 中",
+        "tooltip": "你在飞书私聊里发的消息会收到回复。在这里输入的内容只留在 Orca。"
       }
     },
     "tab": {
@@ -27070,7 +27074,16 @@
       "selectProfile": "选择配置",
       "copyCommand": "复制设置命令",
       "copyCode": "复制验证码",
-      "openDm": "打开飞书私聊"
+      "openDm": "打开飞书私聊",
+      "reviewRetryable_other": "{{count}} 条飞书消息没有进入对话。重试会重新发送；忽略会丢弃它们。",
+      "reviewUnknown_other": "{{count}} 条飞书消息可能没有得到回复。请核对飞书私聊和 Orca 对话后忽略。",
+      "retry": "重试",
+      "dismiss": "忽略",
+      "needsLook": "需要处理",
+      "streamingCards": "回复会在一张飞书卡片里实时显示 Orca 的步骤和回答。",
+      "streamingMissing": "实时回复已关闭：应用缺少 {{scopes}} 权限。飞书会先收到提示，再收到最终回答。请授予该权限并发布新版本。",
+      "streamingDenied": "实时回复已关闭：飞书提示应用缺少某项权限。飞书会先收到提示，再收到最终回答。",
+      "openConversation": "打开对话"
     },
     "deepLink": {
       "missing": "该对话未在此电脑上打开",

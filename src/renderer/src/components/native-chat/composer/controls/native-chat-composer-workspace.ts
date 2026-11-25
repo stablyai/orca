@@ -43,7 +43,8 @@ const OWNER_CONTEXT_INPUT_KEYS = FILE_LINK_CONTEXT_INPUT_KEYS.filter(
 export type NativeChatComposerWorkspaceTarget = Pick<
   NativeChatStructuredComposerTransport,
   'worktreeId' | 'runtimeEnvironmentId' | 'pendingCreationId'
->
+> &
+  Partial<Pick<NativeChatStructuredComposerTransport, 'sessionId'>>
 
 export function createNativeChatComposerWorkspaceSelector(
   tabId: string,

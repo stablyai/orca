@@ -23074,6 +23074,10 @@
         "sampleCall": "Sample call",
         "sampleNote": "Starts a real run",
         "send": "Send"
+      },
+      "feishuDm": {
+        "only": "Only in Orca",
+        "tooltip": "Your Feishu DM gets replies to what you send there. What you type here stays in Orca."
       }
     },
     "tab": {
@@ -27661,7 +27665,18 @@
       "selectProfile": "Choose a profile",
       "copyCommand": "Copy setup command",
       "copyCode": "Copy code",
-      "openDm": "Open Feishu DM"
+      "openDm": "Open Feishu DM",
+      "reviewRetryable_one": "A Feishu message didn’t reach a chat. Retry sends it again; Dismiss drops it.",
+      "reviewRetryable_other": "{{count}} Feishu messages didn’t reach a chat. Retry sends them again; Dismiss drops them.",
+      "reviewUnknown_one": "A Feishu message may not have been answered. Check the DM and the chat, then dismiss.",
+      "reviewUnknown_other": "{{count}} Feishu messages may not have been answered. Check the DM and the chat, then dismiss.",
+      "retry": "Retry",
+      "dismiss": "Dismiss",
+      "needsLook": "Needs a look",
+      "streamingCards": "Replies show Orca’s steps and answer in one Feishu card as it works.",
+      "streamingMissing": "Live replies are off: the app lacks {{scopes}}. Feishu gets a notice, then the final answer. Grant it and publish a new app version.",
+      "streamingDenied": "Live replies are off: Feishu says the app lacks a permission. Feishu gets a notice, then the final answer.",
+      "openConversation": "Open conversation"
     },
     "row": {
       "deleteTitle": "Delete {{name}}?",

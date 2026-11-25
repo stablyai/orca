@@ -15,6 +15,7 @@ import {
 } from './native-chat-composer-workspace'
 import { NativeChatComposerBranchPicker } from './NativeChatComposerBranchPicker'
 import { NativeChatSlackMirrorItem } from '../../slack-mirror/NativeChatSlackMirrorItem'
+import { NativeChatFeishuDmItem } from '../../feishu-dm/NativeChatFeishuDmItem'
 import { NativeChatAntigravityAuthChip } from '../../antigravity-auth/NativeChatAntigravityAuthChip'
 
 // Trim to cap height so flex centering aligns glyphs with icons; clip x only to keep descenders.
@@ -179,6 +180,7 @@ export function NativeChatComposerWorkspace({
         </Tooltip>
       )}
       <NativeChatSlackMirrorItem />
+      <NativeChatFeishuDmItem sessionId={structuredTransport?.sessionId} />
       {identity && (
         <div className="flex min-w-[min(100%,calc(var(--spacing)*18))] flex-1 items-center">
           {identity.kind === 'branch' &&

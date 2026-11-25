@@ -108,16 +108,19 @@ export function useBotConnectorInventory(
         key: 'feishu-local',
         title: { service: 'Feishu', name: null },
         state: feishu,
-        needsOwner: [
-          'expired',
-          'review',
-          'pairing',
-          'verification-failed',
-          'permission',
-          'subscription',
-          'cli-missing',
-          'profile-changed'
-        ].includes(feishu.status)
+        needsOwner:
+          (feishu.review?.count ?? 0) > 0 ||
+          feishu.streaming?.mode === 'fallback' ||
+          [
+            'expired',
+            'review',
+            'pairing',
+            'verification-failed',
+            'permission',
+            'subscription',
+            'cli-missing',
+            'profile-changed'
+          ].includes(feishu.status)
       })
     }
     return {
