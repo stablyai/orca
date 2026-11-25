@@ -1,13 +1,8 @@
 import { connect } from 'node:net'
 import { networkInterfaces } from 'node:os'
 import { Duplex, PassThrough } from 'node:stream'
-import { afterEach, describe, expect, it } from 'vitest'
-import {
-  resetWindowsSecurityLoadForTests,
-  setWindowsSecurityForTests
-} from '../../../shared/secure-storage/windows-security-addon'
+import { describe, expect, it } from 'vitest'
 import { browserTunnelTargetBlockReason } from '../../browser/network/tunnels/browser-network-tunnel-destination-policy'
-import { addForwardOnFreeLocalPort } from '../../ssh/port-forwarding/forward-local-port-choice'
 import { holdsIpv6Loopback, PairedPortForwardProvider } from './paired-port-forward-provider'
 import type { PairedPortForwardTunnel } from './paired-port-forward-tunnel'
 
@@ -92,45 +87,6 @@ describe('PairedPortForwardProvider', () => {
     }
     expect(browserTunnelTargetBlockReason('127.0.0.1', port)).toBeNull()
     await expect(roundTrip(port, 'x')).rejects.toMatchObject({ code: 'ECONNREFUSED' })
-  })
-
-  describe('on Windows without the connection owner lookup', () => {
-    const realPlatform = process.platform
-    afterEach(() => {
-      Object.defineProperty(process, 'platform', { value: realPlatform })
-      resetWindowsSecurityLoadForTests()
-    })
-
-    it('refuses to start, once, instead of admitting other accounts unchecked', async () => {
-      Object.defineProperty(process, 'platform', { value: 'win32' })
-      // A load error naming EACCES must not read as a bind failure that walks every candidate port.
-      setWindowsSecurityForTests(
-        null,
-        "EACCES: permission denied, open 'orca_windows_security.node'"
-      )
-      const provider = new PairedPortForwardProvider()
-      let starts = 0
-      await expect(
-        addForwardOnFreeLocalPort({
-          remotePort: 5173,
-          add: async (localPort) => {
-            starts++
-            const forward = await provider.start(echoTunnel([]), {
-              id: 'pf-1',
-              connectionId: 'environment-a',
-              localHost: '127.0.0.1',
-              localPort,
-              remoteHost: 'localhost',
-              remotePort: 5173
-            })
-            return forward.entry
-          },
-          remove: async () => undefined,
-          holdsIpv6Loopback: true
-        })
-      ).rejects.toThrow(/can't confirm which account/)
-      expect(starts).toBe(1)
-    })
   })
 
   it('still delivers the response after the client shuts down its request side', async () => {

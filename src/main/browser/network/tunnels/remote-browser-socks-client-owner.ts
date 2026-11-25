@@ -129,12 +129,6 @@ async function readOwnerLookup(): Promise<OwnerLookup> {
     : { kind: 'uid', uid }
 }
 
-/** Why this computer can't name a loopback client's account, or null when it can or has no lookup (macOS). */
-export async function socksClientOwnerLookupGap(): Promise<string | null> {
-  const lookup = await readOwnerLookup()
-  return lookup.kind === 'unavailable' ? lookup.reason : null
-}
-
 /** Refuses to open a listener whose connections would all be refused for want of an owner lookup. */
 export async function assertSocksClientOwnerLookup(listener: string): Promise<void> {
   const lookup = await readOwnerLookup()

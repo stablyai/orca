@@ -14,8 +14,8 @@ import {
 } from '../../../../shared/secure-storage/windows-security-addon.test-fixture'
 import type { TcpClientOwner } from '@orca/windows-security'
 import {
+  assertSocksClientOwnerLookup,
   findProcNetTcpClientUid,
-  socksClientOwnerLookupGap,
   verifySocksClientOwner
 } from './remote-browser-socks-client-owner'
 
@@ -168,7 +168,7 @@ describe('verifySocksClientOwner on Windows', () => {
       reason: 'foreign-owner'
     })
 
-    await expect(socksClientOwnerLookupGap()).resolves.toBeNull()
+    await expect(assertSocksClientOwnerLookup('port forward')).resolves.toBeUndefined()
   })
 
   it('refuses connections and listener starts when the owner lookup is missing', async () => {
@@ -180,7 +180,9 @@ describe('verifySocksClientOwner on Windows', () => {
         allowed: false,
         reason: 'lookup-failed'
       })
-      await expect(socksClientOwnerLookupGap()).resolves.toEqual(expect.any(String))
+      await expect(assertSocksClientOwnerLookup('port forward')).rejects.toThrow(
+        /can't confirm which account/
+      )
     }
   })
 })
