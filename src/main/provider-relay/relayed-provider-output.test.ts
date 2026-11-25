@@ -286,4 +286,36 @@ describe('relayed provider output', () => {
     expect(seen).toHaveLength(50_001)
     expect(seen.every((line, index) => line === `line-${index + 1}`)).toBe(true)
   })
+
+  it("names a cut's items on each try, so a retry after a failed ack never carries a stale cut's keys", async () => {
+    let open = ['a']
+    let cuts = 1
+    const sent: (string[] | undefined)[] = []
+    let fail = true
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      durable: async () => true,
+      ackFloor: {
+        observe: () => {},
+        floor: () => null,
+        tookCut: () => cuts-- > 0,
+        cutKeys: () => open
+      },
+      ack: async (_seq, _keepFrom, flags) => {
+        sent.push(flags?.cutKeys)
+        if (fail) {
+          throw new Error('daemon away')
+        }
+      }
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, 'line-1')
+    await output.settle()
+    // The cut is still owed; by the retry the floor names a different item.
+    open = ['b']
+    fail = false
+    output.line('relayData', 2, 'line-2')
+    await output.settle()
+    expect(sent).toEqual([['a'], ['b']])
+  })
 })
