@@ -13,6 +13,7 @@ import { useActiveClientHostedBrowserRowId } from '@/runtime/browser/client-host
 import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { useBotForWorkspace, useBotGroupForWorkspace } from '../bots/bot-workspace'
 import { useTranslate } from '@/i18n/use-translate'
+import { useTabStripScrollMemory } from './strip/tab-strip-scroll-memory'
 import { useTabDragActive } from '../tab-group/drag/tab-drag-context'
 import { useTabStripCondense } from './strip/use-tab-strip-condense'
 import type { TabStripEntry } from './strip/TabStripOverflowChip'
@@ -140,6 +141,12 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     slotIds,
     worktreeId
   })
+  useTabStripScrollMemory(
+    groupId,
+    worktreeId,
+    tabStripNavigation.tabStripRef,
+    itemProjection.activeVisibleTabId
+  )
   const isTabDragActive = useTabDragActive()
   const condense = useTabStripCondense({
     ids: stripIds,

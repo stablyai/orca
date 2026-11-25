@@ -2,7 +2,7 @@ import type { TabBarCreateMenuController } from './tab-bar-create-menu-contract'
 
 import { useAgentLaunchPickerInventorySource } from '../../agent/use-agent-launch-picker-inventory'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import { useAppStore } from '../../../store/index'
@@ -67,12 +67,18 @@ export function useTabBarCreateMenuController({
 }): TabBarCreateMenuController {
   // Why: <webview> clicks are out-of-process, so Radix's document-pointerdown outside-click check misses them; use window blur.
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false)
-  const [createMenuQuery, setCreateMenuQuery] = useState('')
+  // Only whether the search holds a query: the search keeps its own text, so a keystroke that
+  // leaves this unchanged doesn't re-render the tab bar and rebuild its agent menu.
+  const [createMenuHasQuery, setCreateMenuHasQuery] = useState(false)
+  const setCreateMenuQuery = useCallback(
+    (query: string) => setCreateMenuHasQuery(query.trim().length > 0),
+    []
+  )
   const agentMenu = useNewTabAgentMenuRows(
     worktreeId,
     newTabMenuOpen && showAgentLaunchItems,
     agentDetectionTarget,
-    { wakeOnOpen: true }
+    { wakeOnOpen: true, observationGroup: { worktreeId, groupId: resolvedGroupId } }
   )
   const [selectedPickerAgent, selectPickerAgent] = useState<AgentPickerEntry['agent']>()
   // Why: subscribed inside the open menu only; catalog reads landing here would re-render the tab bar.
@@ -271,7 +277,7 @@ export function useTabBarCreateMenuController({
   if (prevNewTabMenuOpen !== newTabMenuOpen) {
     setPrevNewTabMenuOpen(newTabMenuOpen)
     if (!newTabMenuOpen) {
-      setCreateMenuQuery('')
+      setCreateMenuHasQuery(false)
     }
   }
   return {
@@ -291,6 +297,6 @@ export function useTabBarCreateMenuController({
     queueNewActiveTerminalFocusAfterNewTabMenuClose,
     queueTerminalTabFocusAfterNewTabMenuClose,
     queueFocusAfterNewTabMenuClose,
-    showStaticCreateMenuItems: createMenuQuery.trim().length === 0
+    showStaticCreateMenuItems: !createMenuHasQuery
   }
 }

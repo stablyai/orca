@@ -38,7 +38,7 @@ export function installOrcadOrcaAccount(
     serveOrcaProfile: (profileId: string) => void
     getConnectorCloud: () => Pick<
       ConnectorCloud,
-      'accountChanged' | 'signOutStarted' | 'signOutFinished'
+      'accountChanged' | 'signOutStarted' | 'signOutFinished' | 'signedIn'
     > | null
   },
   relay: Pick<OrcadRelay, 'accountChanged' | 'signOutStarted'>,
@@ -65,6 +65,7 @@ export function installOrcadOrcaAccount(
         relay.accountChanged()
         runtime.getConnectorCloud()?.accountChanged()
       },
+      onSignedIn: () => runtime.getConnectorCloud()?.signedIn(),
       onBeforeSignOut: () => {
         relay.signOutStarted()
         runtime.getConnectorCloud()?.signOutStarted()

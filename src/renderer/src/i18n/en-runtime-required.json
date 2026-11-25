@@ -454,7 +454,13 @@
             "discardFailed_one": "Failed to discard {{count}} file",
             "discardFailed_other": "Failed to discard {{count}} files",
             "noteCount_one": "{{count}} note",
-            "noteCount_other": "{{count}} notes"
+            "noteCount_other": "{{count}} notes",
+            "rebaseConflictCount_one": "{{count}} conflict",
+            "rebaseConflictCount_other": "{{count}} conflicts",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeFileCount_one": "{{count}} file",
+            "scopeFileCount_other": "{{count}} files"
           },
           "checks": {
             "panel": {
@@ -1506,6 +1512,7 @@
   },
   "bots": {
     "access": {
+      "actsAsYou": "They act as you on {{computer}}.",
       "adviceHeading": "Before you share",
       "codexAsk": "Codex sandbox: read-only until a request is approved.",
       "codexNoSandbox": "No Codex sandbox.",
@@ -1657,6 +1664,7 @@
       "commentImageNotStored": "Only pasted or attached images can go on a comment.",
       "commentImagesTooLarge": "These images add up to {{totalMb}} MB. A comment takes up to {{maxMb}} MB.",
       "commentImagesTooMany": "Comments take up to {{max}} images.",
+      "googleAccountsChanged": "Its Google accounts changed since you opened them. Check them and save again.",
       "groupAttachFailed": "Couldn't attach the files. Try sending again in a moment.",
       "groupAttachmentsUnavailable": "This computer can't take attachments right now. Try sending again in a moment.",
       "groupBotGone": "A selected bot is no longer available.",
@@ -1741,7 +1749,11 @@
         "addedRepositories_other": "Added {{count}} repositories"
       },
       "repositoryCount_one": "{{count}} repository in {{accounts}}",
-      "repositoryCount_other": "{{count}} repositories in {{accounts}}"
+      "repositoryCount_other": "{{count}} repositories in {{accounts}}",
+      "setup": {
+        "repoCount_one": "{{count}} repo",
+        "repoCount_other": "{{count}} repos"
+      }
     },
     "groups": {
       "allBotsCount": "All bots · {{count}}",
@@ -2683,6 +2695,7 @@
         "edit": "Edit",
         "nameTaken": "You already have a bot named {{name}}.",
         "open": "Open",
+        "openBot": "Open {{name}}",
         "origin": "Proposed by {{bot}}",
         "originTemplate": "From {{template}}, proposed by {{bot}}",
         "rename": "Rename",
