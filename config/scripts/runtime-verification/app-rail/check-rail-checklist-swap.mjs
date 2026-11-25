@@ -112,6 +112,14 @@ await runRailProof('check-rail-checklist-swap', async ({ page, url, served }) =>
       const from = rows.findIndex((row) => row.trim() === focus?.row)
       const to = rows.findIndex((row) => row.trim() === name)
       await page.keyboard.press(to > from ? 'ArrowDown' : 'ArrowUp')
+      // Radix moves roving focus in a timeout after the key, so wait for it to leave the row it was on.
+      await page
+        .waitForFunction(
+          (previous) => document.activeElement?.textContent?.trim() !== previous,
+          focus?.row,
+          { polling: 50, timeout: 5000 }
+        )
+        .catch(() => {})
     }
     assert.equal((await checklistFocus())?.row, name, `keyboard reaches ${name}`)
     await page.keyboard.press(' ')
