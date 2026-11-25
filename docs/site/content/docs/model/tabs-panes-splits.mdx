@@ -51,3 +51,14 @@ Pane boundaries stay where you put them. Resizing the window doesn't shuffle you
 ## Tab groups across worktrees
 
 Each worktree owns its own tab layout. Switching worktrees swaps the entire pane tree — your browser tab, terminal, and diff reappear exactly as you left them.
+
+## Side pane
+
+To keep one terminal in view while you work in another workspace, right-click its tab and choose **Keep in Side Pane**. The terminal opens in a pane on the right that stays when you switch workspaces.
+
+- The tab still belongs to its own workspace and keeps that workspace's folder and host. Its pane there shows a note with a **Show here** button.
+- The pane is saved with the window and returns after a restart.
+- Closing the pane, or pressing `Cmd+W` on macOS or `Ctrl+W` on Windows / Linux inside it, sends the tab back. The tab keeps running.
+- The pane does not wake a sleeping workspace. It says the workspace is asleep until you select that workspace.
+
+The side pane holds one terminal tab.

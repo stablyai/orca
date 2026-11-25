@@ -11,6 +11,7 @@ import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/ho
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { WslMovedProject } from '../../../../../shared/wsl-move/wsl-moved-project'
+import type { CrossWorkspacePane } from '../../../../../shared/workspace-view/cross-workspace-pane'
 
 export type WorktreeCardsIntroChoice = 'new' | 'classic'
 
@@ -160,4 +161,7 @@ export type UISliceContextual = {
   hideWslMovedProject: (project: Pick<WslMovedProject, 'kind' | 'id' | 'distro'>) => void
   /** Drops hidden keys of projects no longer moved, so a later move lists again. */
   retainHiddenWslMovedProjects: (projects: readonly WslMovedProject[]) => void
+  /** A tab from any workspace shown beside the workspace area; null when no pane is open. */
+  crossWorkspacePane: CrossWorkspacePane | null
+  setCrossWorkspacePane: (pane: CrossWorkspacePane | null) => void
 }

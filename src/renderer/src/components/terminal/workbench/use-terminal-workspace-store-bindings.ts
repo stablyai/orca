@@ -61,8 +61,9 @@ export function useTerminalWorkspaceStoreBindings(controller: TerminalWorkspaceF
   const tabBarOrder = renderedActiveWorktreeId
     ? tabBarOrderByWorktree[renderedActiveWorktreeId]
     : undefined
+  const crossWorkspacePaneOpen = useAppStore((state) => state.crossWorkspacePane !== null)
   const activityTerminalPortals: ActivityTerminalPortalTarget[] = useActivityTerminalPortals(
-    activeView === 'activity'
+    activeView === 'activity' || crossWorkspacePaneOpen
   )
 
   return {

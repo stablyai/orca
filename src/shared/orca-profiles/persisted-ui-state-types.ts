@@ -36,6 +36,7 @@ import type { WorkspaceStatusDefinition } from '../worktree/types'
 import type { PersistedAutomationHostFilter } from '../automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from '../remote-runtime/host-catalog/pending-runtime-repo-removal'
 import type { BotSidebarView } from '../bots/bot-sidebar-view'
+import type { CrossWorkspacePane } from '../workspace-view/cross-workspace-pane'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
@@ -245,6 +246,8 @@ export type PersistedUIState = {
   browserDevToolsDock?: BrowserDevToolsDockLayout
   /** Width of extension side panels, in CSS px; one width for every extension, like Chrome. */
   browserExtensionSidePanelWidth?: number
+  /** A tab from any workspace shown beside the workspace area; absent or null when no pane is open. */
+  crossWorkspacePane?: CrossWorkspacePane | null
   /** Saved window bounds so the app restores last position/size instead of maximizing each launch. */
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */

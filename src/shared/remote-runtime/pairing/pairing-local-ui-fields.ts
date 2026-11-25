@@ -37,7 +37,9 @@ export const PAIRING_LOCAL_UI_FIELDS = [
   'manuallyUnreadTurnsByPaneKey',
   // The moved-to-WSL list belongs to the desktop that ran the move; hosts' strict ui.set rejects both.
   'wslMovedSectionCollapsed',
-  'hiddenWslMovedProjectKeys'
+  'hiddenWslMovedProjectKeys',
+  // Each window lays out its own side pane; hosts' strict ui.set rejects the key.
+  'crossWorkspacePane'
 ] as const satisfies readonly (keyof PersistedUIState)[]
 
 export type PairingLocalUiField = (typeof PAIRING_LOCAL_UI_FIELDS)[number]

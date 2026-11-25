@@ -78,6 +78,10 @@ export const UI_STATE_DISPOSITIONS = {
   hiddenWslMovedProjectKeys: notApplicableDisposition(
     38,
     'Names already-moved projects by the ids a move keeps; pruned once a project is no longer moved.'
+  ),
+  crossWorkspacePane: notApplicableDisposition(
+    38,
+    "This window's layout; a pane whose tab moved says the tab is unavailable."
   )
 } as const satisfies Partial<Record<keyof PersistedUIState, WslMoveFieldDisposition>>
 

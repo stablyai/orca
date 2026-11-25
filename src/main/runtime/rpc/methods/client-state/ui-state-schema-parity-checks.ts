@@ -26,6 +26,8 @@ type MainOwnedUIState =
   // The moved-to-WSL list exists only on the desktop that moved the projects.
   | 'wslMovedSectionCollapsed'
   | 'hiddenWslMovedProjectKeys'
+  // A window's own layout: a paired client keeps its copy locally and must not overwrite this one.
+  | 'crossWorkspacePane'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>
