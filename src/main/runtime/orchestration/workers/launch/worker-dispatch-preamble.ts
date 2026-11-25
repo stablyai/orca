@@ -114,10 +114,11 @@ ${checkLines({ chat, unreadMail: params.unreadMail, cli, workerHandle: params.wo
   ${cli} orchestration send --from ${params.workerHandle} --type escalation --subject "Blocked: <reason>" --body "<details>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
   # Finish: send exactly once. --body is three sentences: what you did, what
-  # you found, what is left. Use --outcome failed if the work is not done;
-  # never hide failure in prose. Add --files-modified or --report-path only
-  # with real values. You are done when it confirms; if it fails, follow the
-  # recovery it prints.
+  # you found, what is left. --outcome failed means only that you could not
+  # finish (e.g. no access to the repo). Finished work is succeeded even when
+  # results are bad (e.g. tests found bugs); list the problems in --body.
+  # Add --files-modified or --report-path only with real values. You are
+  # done when it confirms; if it fails, follow the recovery it prints.
   ${cli} orchestration send --from ${params.workerHandle} --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded
 \`\`\`
 
