@@ -102,10 +102,8 @@ function ViewerBody({
   useViewerZoomCommands(panZoom, 'popup')
   const [broken, setBroken] = useState(false)
   const openerFocus = useRef<Element | null>(null)
-  // Set when the close prompt is answered: the viewer closes once the answered note is settled.
-  const closeRequested = useRef(false)
-  // Set when Clear's prompt is answered: the notes clear once the answered note is settled.
-  const clearRequested = useRef(false)
+  // Set when the close or Clear prompt is answered: it goes on once the answered note is settled.
+  const afterPrompt = useRef<'close' | 'clear' | null>(null)
   const { setCanvas, canvasHandlers, cursor, scale, offset: viewOffset } = panZoom
   const viewportRef = useRef<HTMLDivElement | null>(null)
   const t = useTranslate()
@@ -158,18 +156,17 @@ function ViewerBody({
       : null
 
   useEffect(() => {
-    if (clearRequested.current && !editor.hasUnadded && !editor.confirm) {
-      clearRequested.current = false
-      editor.clear()
-      viewportRef.current?.focus({ preventScroll: true })
+    const action = afterPrompt.current
+    if (action && !editor.hasUnadded && !editor.confirm) {
+      afterPrompt.current = null
+      if (action === 'close') {
+        void close()
+      } else {
+        editor.clear()
+        viewportRef.current?.focus({ preventScroll: true })
+      }
     }
-  }, [editor])
-  useEffect(() => {
-    if (closeRequested.current && !editor.hasUnadded && !editor.confirm) {
-      closeRequested.current = false
-      void close()
-    }
-  }, [close, editor.confirm, editor.hasUnadded])
+  }, [close, editor])
   const finishAnnotating = (): void => {
     if (editor.hasUnadded) {
       setPanelHidden(false)
@@ -388,11 +385,9 @@ function ViewerBody({
             narrow={narrow}
             onHide={() => setPanelHidden(true)}
             onConfirmed={(reason) => {
-              if (reason === 'close') {
-                // Closes on the next render, once the answered note is added or gone.
-                closeRequested.current = true
-              } else if (reason === 'clear') {
-                clearRequested.current = true
+              if (reason === 'close' || reason === 'clear') {
+                // Goes on at the next render, once the answered note is added or gone.
+                afterPrompt.current = reason
               } else if (reason === 'done') {
                 setAnnotating(false)
               } else {
