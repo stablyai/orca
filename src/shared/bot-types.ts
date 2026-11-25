@@ -181,6 +181,9 @@ export const BotSchema = z.object({
   slackMirror: z.boolean().optional().catch(undefined),
   /** The bot may use the Google accounts signed in on its host, for its owner's own requests. Absent is off. */
   google: z.boolean().optional(),
+  /** The accounts it may use while `google` is on; absent is every account, now and later. A malformed
+   *  list reads as none, never as every account. */
+  googleAccounts: z.array(z.string().min(1).max(320)).max(100).optional().catch([]),
   /** Projects (repo ids) whose skills the bot loads when a chat starts; absent is none. */
   skillProjects: z.array(z.string().min(1)).max(BOT_MAX_SKILL_PROJECTS).optional(),
   /** Its place in the sidebar's Bots list, set by a drag; a bot without one follows the placed bots. */
@@ -372,20 +375,4 @@ export function normalizePersistedBots(value: unknown): Bot[] {
   return bots
 }
 
-const WINDOWS_RESERVED_NAME = /^(con|prn|aux|nul|com\d|lpt\d)$/
-
-/** A folder name every supported filesystem accepts. */
-export function botFolderName(botName: string): string {
-  const slug = botName
-    .normalize('NFKD')
-    .toLowerCase()
-    // Why: NFKD leaves an accent as a combining mark; drop it so it doesn't split the word.
-    .replace(/(\p{M}+)|[^a-z0-9]+/gu, (_run, marks) => (marks ? '' : '-'))
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40)
-    .replace(/-+$/, '')
-  if (!slug) {
-    return 'bot'
-  }
-  return WINDOWS_RESERVED_NAME.test(slug) ? `${slug}-bot` : slug
-}
+export { botFolderName } from './bots/bot-folder-name'

@@ -183,7 +183,7 @@ function HookDetail({
         botName={bot.name}
         resultsTo={summary.resultsTo}
       />
-      <div className="mt-3 -ml-1.5 flex items-center gap-0.5">
+      <div className="mt-3 -ml-1.5 flex flex-wrap items-center gap-0.5">
         <Button
           variant="ghost"
           size="xs"

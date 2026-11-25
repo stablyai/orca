@@ -32,7 +32,7 @@ import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
-import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
+import { EditorFileTabCloseSlot } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from '../strip/tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from '../strip/tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/files/access/local-file-access'
@@ -270,7 +270,13 @@ export default function EditorFileTab({
       ) : (
         tabIcon(`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`)
       )}
-      {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
+      {isPinned && (
+        <Pin
+          className="mr-1 size-3 shrink-0 text-muted-foreground"
+          aria-hidden
+          data-tab-compact-hide=""
+        />
+      )}
       <span className="mr-1 flex min-w-0 flex-1 items-baseline gap-1">
         {isRenaming ? (
           <Input
@@ -336,6 +342,7 @@ export default function EditorFileTab({
                 ? ''
                 : ' [.light_[data-unfocused-split-group]_&]:text-tab-inactive-foreground'
             }`}
+            data-tab-compact-hide=""
           >
             {file.externalMutation}
           </span>
@@ -344,24 +351,18 @@ export default function EditorFileTab({
           <span
             className="shrink-0 text-[10px] leading-none font-semibold tracking-wide"
             style={tabStatusStyle}
+            data-tab-compact-hide=""
           >
             {STATUS_LABELS[tabStatus]}
           </span>
         )}
       </span>
-      {/* Share one dot/close slot so autosave cannot change tab width. */}
-      <div className="relative flex items-center justify-center w-4 h-4 shrink-0">
-        {file.isDirty && (
-          <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
-        )}
-        {!isPinned && (
-          <EditorFileTabCloseButton
-            fileIsDirty={file.isDirty}
-            showsSelectionChrome={isActive}
-            onClose={onClose}
-          />
-        )}
-      </div>
+      <EditorFileTabCloseSlot
+        fileIsDirty={file.isDirty}
+        isPinned={isPinned}
+        showsSelectionChrome={isActive}
+        onClose={onClose}
+      />
     </div>
   )
 

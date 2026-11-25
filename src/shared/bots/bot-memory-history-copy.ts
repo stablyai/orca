@@ -84,7 +84,7 @@ export function botMemoryHistoryAuthor(t: BotChatTranslate, row: BotMemoryHistor
 
 function authorOf(t: BotChatTranslate, { by, chat }: BotMemoryHistoryView): string {
   const named = chat
-    ? t('settings.bots.memoryHistory.chat', 'Chat "{{title}}"', { title: chat })
+    ? t('settings.bots.memoryHistory.chat', 'Chat “{{title}}”', { title: chat })
     : t('settings.bots.memoryHistory.aChat', 'A chat')
   switch (by.kind) {
     case 'chat':

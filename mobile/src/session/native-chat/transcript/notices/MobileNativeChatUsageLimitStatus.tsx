@@ -1,6 +1,6 @@
-import { useCallback, useContext, useSyncExternalStore } from 'react'
+import { useCallback, useContext, useSyncExternalStore, type ReactNode } from 'react'
 import { Text, View } from 'react-native'
-import { ArrowLeftRight, Play } from 'lucide-react-native'
+import { ArrowLeftRight, Gauge, Play } from 'lucide-react-native'
 import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/agent-session/failures/agent-session-failure'
 import type { NativeChatTextBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { colors, feedback, spacing, typography } from '../../../../theme/mobile-theme'
@@ -12,6 +12,37 @@ import { MobileNativeChatNoticePill } from './MobileNativeChatNoticePill'
 import { scaledType } from '../messages/mobile-native-chat-message-styles'
 import { nativeChatUsageLimitStatusText } from './native-chat-usage-limit-copy'
 import { MobileNativeChatNoticeContext } from './mobile-native-chat-notice-context'
+import { MobileNativeChatEventRow } from '../messages/MobileNativeChatEventRow'
+
+/** A usage stop is a pause, not an error: one quiet line, its reset and actions under it. */
+export function MobileNativeChatUsageLimitRow({
+  notice,
+  text,
+  fontScale,
+  onLongPress,
+  details
+}: {
+  notice: NativeChatTextBlock
+  text: string
+  fontScale: number
+  onLongPress?: () => void
+  details: ReactNode
+}): React.JSX.Element {
+  useMobileColorScheme()
+  return (
+    <MobileNativeChatEventRow
+      icon={<Gauge size={14} color={colors.textMuted} strokeWidth={2} />}
+      label={text}
+      fontScale={fontScale}
+      onLongPress={onLongPress}
+      wordsLines={0}
+      subtitle={<MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />}
+      details={details}
+    >
+      {text}
+    </MobileNativeChatEventRow>
+  )
+}
 
 /** True from the reset on; re-renders once when it passes. */
 function useResetPassed(resetsAt: number | undefined): boolean {

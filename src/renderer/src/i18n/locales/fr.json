@@ -15,10 +15,6 @@
     "terminalPromptFailed": "Orca a ouvert un terminal pour {{value0}}, mais n’a pas pu lui transmettre votre prompt. Envoyez le prompt dans ce terminal."
   },
   "app": {
-    "saving": {
-      "delayedTitle": "Le stockage du profil prend plus de temps que d’habitude",
-      "delayedDescription": "Les prochains enregistrements peuvent être retardés jusqu’à la fin de cette opération."
-    },
     "recoverableError": {
       "rootTitle": "Orca a rencontré une erreur de rendu.",
       "rootDescription": "Le shell de l'application n'a pas pu terminer son rendu. Réessayez pour le remonter, ou relancez Orca si l'erreur persiste.",
@@ -5812,7 +5808,16 @@
           "repairAvailable": "Réparation disponible",
           "installAvailable": "Installation disponible",
           "otherBuild": "Installé par une autre version d’Orca",
-          "otherBuildKept": "Conservé : écrit par une autre version d’Orca"
+          "otherBuildKept": "Conservé : écrit par une autre version d’Orca",
+          "differsFromOrca": "Cette copie diffère de celle d’Orca",
+          "replaceMovesFolder": "Le remplacement déplace tout le dossier, y compris les fichiers supplémentaires, vers {{folder}}.",
+          "replaceMovesFolderOnHost": "Le remplacement déplace tout le dossier, y compris les fichiers supplémentaires, vers {{folder}} sur {{host}}.",
+          "replaceMovesLink": "Le remplacement déplace ce lien vers {{folder}}.",
+          "replaceMovesLinkOnHost": "Le remplacement déplace ce lien vers {{folder}} sur {{host}}.",
+          "replaceMovesFile": "Le remplacement déplace ce fichier vers {{folder}}.",
+          "replaceMovesFileOnHost": "Le remplacement déplace ce fichier vers {{folder}} sur {{host}}.",
+          "replaceMovesCopy": "Le remplacement déplace cette copie vers {{folder}}.",
+          "replaceMovesCopyOnHost": "Le remplacement déplace cette copie vers {{folder}} sur {{host}}."
         },
         "installResult": {
           "installed": "Installé et vérifié.",
@@ -5828,6 +5833,11 @@
           "removedPreserved_one": "Supprimés : {{removed}} · {{count}} skill modifié conservé.",
           "removedPreserved_other": "Supprimés : {{removed}} · {{count}} skills modifiés conservés.",
           "removedPreserved_many": "Supprimés : {{removed}} · {{count}} skills modifiés conservés."
+        },
+        "SkillBackupPathLine": {
+          "movedTo": "Ancienne copie déplacée vers :",
+          "movedToOnHost": "Ancienne copie déplacée sur {{host}} vers :",
+          "showFolder": "Afficher le dossier"
         }
       },
       "sidebar": {
@@ -13064,7 +13074,11 @@
           "attentionOther": "Attention requise · Une autre compétence utilise déjà ce nom",
           "attentionSharedNotCurrent": "Attention requise · La copie partagée utilisée par ce dossier n’est pas celle d’Orca",
           "resultUpdateSkippedPlaces": "{{result}} · Mise à jour ignorée dans {{places}} emplacements : {{reason}}",
-          "resultUpdateSkippedAgent": "{{result}} · Mise à jour ignorée pour {{agent}} : {{reason}}"
+          "resultUpdateSkippedAgent": "{{result}} · Mise à jour ignorée pour {{agent}} : {{reason}}",
+          "attentionDiffersFromOrca": "Attention requise · Cette copie diffère de celle d’Orca",
+          "replaceMovesCopyToBackup": "Le remplacement déplace la copie actuelle, y compris les fichiers supplémentaires, vers une sauvegarde.",
+          "replaceMovesCopyToFolder": "Le remplacement déplace la copie actuelle, y compris les fichiers supplémentaires, vers {{folder}}.",
+          "replaceMovesCopyToFolderOnHost": "Le remplacement déplace la copie actuelle, y compris les fichiers supplémentaires, vers {{folder}} sur {{host}}."
         },
         "ReleaseBuildPicker": {
           "build": "Version",
@@ -13600,13 +13614,6 @@
             "c76693e456": "Impossible de charger les fichiers de cet espace de travail :"
           },
           "GitHistoryPanel": {
-            "cf7cad58d2": "Aucun commit pour le moment",
-            "d0fb0f4bf2": "Actualiser les commits",
-            "9f7535d22b": "Les refs sont des noms de branche ou de tag pointant vers ce commit exact. Elles n'apparaissent que là où Git possède une ref nommée pour ce commit.",
-            "9289ba0cb9": "Que sont les refs ?",
-            "d836037d02": "Commits",
-            "8232c8b2f2": "Ouvrir le commit {{value0}} : {{value1}}",
-            "e5e81e59a6": "Redimensionner les commits",
             "6d1e0a7c3b": "Échec du chargement des fichiers du commit"
           },
           "HostedReviewActions": {
@@ -13990,7 +13997,62 @@
             "markResolved": "Marquer comme résolu",
             "keepFile": "Conserver le fichier",
             "keepDeletion": "Conserver la suppression",
-            "refreshAll": "Tout actualiser"
+            "refreshAll": "Tout actualiser",
+            "baseUpToDate": "À jour",
+            "rebaseOperationInProgress": "Attendez la fin de l’opération Git en cours",
+            "rebaseButton": "Rebaser",
+            "rebaseConflictCount_one": "{{count}} conflit",
+            "rebaseConflictCount_other": "{{count}} conflits",
+            "rebaseConflictCount_many": "{{count}} conflits",
+            "rebasePaused": "Rebase en pause",
+            "rebaseResolveConflictsFirst": "Résolvez d’abord les conflits",
+            "rebaseAbort": "Annuler",
+            "rebaseContinue": "Continuer",
+            "continueRebasePausedAgain": "Rebase en pause au conflit suivant",
+            "continueRebaseFailed": "Échec de la poursuite du rebase",
+            "rebaseAutostashConflict": "Rebase effectué. Vos modifications non commitées n’ont pas pu être réappliquées proprement ; elles sont conservées dans le stash.",
+            "rebaseStoppedByGit": "Git a mis le rebase en pause",
+            "continueRebaseUnconfirmed": "Impossible de confirmer le résultat. Le contrôle de source a été actualisé pour afficher l’état actuel.",
+            "noRebaseInProgress": "Aucun rebase en cours",
+            "rebaseStopMovedOn": "Le rebase a déjà avancé. Vérifiez le panneau et réessayez.",
+            "rebaseEmptyStep": "Rien à commiter à cette étape. Annulez le rebase ou terminez-le dans un terminal.",
+            "rebaseStepUnreadableShort": "Échec de vérification",
+            "rebaseCheckAgain": "Vérifier à nouveau",
+            "rebaseRetryInspect": "Réessayer",
+            "rebaseRetryInspectLabel": "Revérifier l’étape du rebase",
+            "rebaseStoppedFinishInTerminal": "Git a mis cette étape en pause. Terminez-la dans un terminal ou annulez.",
+            "rebaseCheckingStep": "Vérification de l’étape du rebase",
+            "rebaseEmptyStepShort": "Étape vide",
+            "rebaseAbortLabel": "Annuler le rebase",
+            "scopeFileCount_one": "{{count}} fichier",
+            "scopeFileCount_other": "{{count}} fichiers",
+            "scopeFileCount_many": "{{count}} fichiers",
+            "scopeCommitCount_one": "{{count}} commit",
+            "scopeCommitCount_other": "{{count}} commits",
+            "scopeCommitCount_many": "{{count}} commits",
+            "scopeUncommitted": "Non validées",
+            "scopeAllChanges": "Toutes les modifications",
+            "scopeNone": "Aucune",
+            "scopeOpenDiff": "Ouvrir le diff",
+            "scopeShowAll": "Afficher toutes les modifications",
+            "scopeLoadingBranchChanges": "Chargement des modifications de la branche…",
+            "scopeBranchCommits": "Commits sur cette branche",
+            "scopeRecentCommits": "Commits récents",
+            "scopeCompareTo": "Comparer à {{ref}}",
+            "scopeFilterCommits": "Filtrer les commits",
+            "scopeCommitsFailed": "Impossible de charger les commits.",
+            "scopeFilesFailed": "Impossible de charger les fichiers.",
+            "scopeLoadingFiles": "Chargement des fichiers…",
+            "scopeNoSharedHistory": "Aucun historique commun avec {{ref}}",
+            "scopeRetryCommits": "Réessayer",
+            "scopeLoadingCommits": "Chargement des commits…",
+            "scopeNoMatchingCommits": "Aucun commit correspondant",
+            "scopeNoBranchCommitsYet": "Aucun commit sur cette branche pour le moment",
+            "scopeNoCommitsYet": "Aucun commit pour le moment",
+            "scopeOlderHistory": "Historique plus ancien dans Git Graph",
+            "scopeNoUncommitted": "Aucune modification non validée.",
+            "scopeCommitFiles": "Fichiers",
+            "gitGraphButton": "Graphe"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Impossible de démarrer l'agent sélectionné.",
@@ -14435,7 +14497,6 @@
                   "titleCommitAndPush": "Committer les modifications indexées et pousser",
                   "commitForcePush": "Commit & Force Push",
                   "commitPush": "Commit & Push",
-                  "titleOperationInProgress": "Opération en cours…",
                   "titleAbortRebaseInProgress": "Abandonner le rebase en cours",
                   "titleAbortMergeInProgress": "Abandonner le merge en cours",
                   "titleNothingToPushTo": "Rien à pousser vers {{upstreamName}}",
@@ -14501,10 +14562,8 @@
                   "titlePublishBranchFirst": "Publiez d'abord la branche pour synchroniser des commits",
                   "titleUseForcePush": "Utilisez Commit & Force Push — le remote n'a que d'anciennes copies des commits locaux",
                   "titleCommitThenPullPush": "Committer, puis tirer et pousser",
-                  "rebaseFromNamedBase": "Rebaser depuis {{baseRef}}",
                   "rebaseFromBase": "Rebaser depuis la base",
                   "rebaseChooseRemoteBase": "Choisissez une branche de base distante depuis laquelle rebaser",
-                  "rebaseDirtyHint": "Tentez un rebase ; git peut exiger de committer ou de stasher les modifications locales d'abord",
                   "rebaseWithLatestFrom": "Rebaser la branche actuelle sur les derniers commits de {{baseRef}}",
                   "blockedCommitFirst": "Committez d'abord les modifications",
                   "blockedCheckOutBranchFirst": "Effectuez d'abord un checkout d'une branche",
@@ -14517,7 +14576,13 @@
                   "blockedExistingReview": "Une {{reviewLabel}} existe déjà",
                   "blockedForkHeadUnsupported": "Head de fork non pris en charge",
                   "blockedBaseNotOnRemote": "La branche de base n'est pas sur le remote",
-                  "blockedBranchNotReady": "La branche n'est pas prête"
+                  "blockedBranchNotReady": "La branche n'est pas prête",
+                  "rebaseOntoNamedBase": "Rebaser sur {{base}}",
+                  "rebaseCommitOrStashFirst": "Commitez ou remisez d’abord les modifications",
+                  "continueRebase": "Continuer le rebase",
+                  "titleContinueRebase": "Continuer le rebase en pause",
+                  "rebaseFromNamedBase": "Rebaser depuis {{baseRef}}",
+                  "rebaseDirtyHint": "Tentez un rebase ; git peut exiger de committer ou de stasher les modifications locales d'abord"
                 }
               },
               "primary": {
@@ -14560,7 +14625,8 @@
                   "e9b5d1f470": "Effectuez un checkout d'une branche avant de créer une {{value0}}.",
                   "f0c6e2a581": "Cette branche n'est pas encore prête pour une {{value0}}.",
                   "8f9a0b1c2d": "Rien à commiter. La branche est à jour.",
-                  "h3i4j5k607": "Vérification de la possibilité de créer une {{value0}} pour cette branche…"
+                  "h3i4j5k607": "Vérification de la possibilité de créer une {{value0}} pour cette branche…",
+                  "nothingToCommit": "Rien à commiter"
                 }
               },
               "branch": {
@@ -14864,12 +14930,7 @@
             "f8a2c4d1e0": "Mode de recherche de l'explorateur"
           },
           "GitHistoryCommitFiles": {
-            "b2c3d4e5f6": "Aucune modification de fichier dans ce commit",
-            "c3d4e5f6a7": "Ouvrir toutes les modifications"
-          },
-          "GitHistoryRow": {
-            "2f9c41ab07": "Afficher les fichiers du commit {{value0}} : {{value1}}",
-            "4a8d9e0c1f": "Masquer les fichiers du commit {{value0}} : {{value1}}"
+            "b2c3d4e5f6": "Aucune modification de fichier dans ce commit"
           },
           "GitHistoryCommitContextMenu": {
             "7b1c4e9a02": "Ouvrir le commit dans le navigateur",
@@ -19142,7 +19203,8 @@
         "thisComputer": "cet ordinateur"
       },
       "runtimeGitSyncClient": {
-        "completeMergeNeedsNewerHost": "Pour terminer une fusion, une version plus récente d’Orca est nécessaire sur cet hôte. Mettez Orca à jour sur cet hôte."
+        "completeMergeNeedsNewerHost": "Pour terminer une fusion, une version plus récente d’Orca est nécessaire sur cet hôte. Mettez Orca à jour sur cet hôte.",
+        "continueRebaseNeedsNewerHost": "Poursuivre un rebase nécessite une version plus récente d’Orca sur cet hôte. Mettez Orca à jour sur cet hôte."
       },
       "runtimeGitWorkingTreeClient": {
         "resolveConflictNeedsNewerHost": "Pour résoudre les conflits, une version plus récente d’Orca est nécessaire sur cet hôte. Mettez Orca à jour sur cet hôte."
@@ -19578,7 +19640,6 @@
         "moreControls": "Plus de commandes de conversation",
         "exitPlanMode": "Quitter le mode plan",
         "permissionAppliesNextMessage": "{{saved}} s’applique à votre prochain message ; réglage utilisé actuellement : {{active}}",
-        "botFor": "Pour : {{detail}}",
         "bots": "Bots"
       },
       "tool": {
@@ -19729,7 +19790,11 @@
       },
       "resumeInNewChat": {
         "hostUpdateRequired": "Mettez à jour Orca sur cet hôte pour continuer dans l'interface de chat.",
+        "exitUnconfirmedFromTerminal": "{{agent}} exécute encore cette conversation dans ce terminal. Quittez {{agent}} ici, puis ouvrez cette conversation depuis l’historique des sessions.",
         "notSavedYet": "{{agent}} n'a pas encore enregistré cette conversation. Réessayez après sa réponse.",
+        "terminalChanged": "Le terminal qui exécutait {{agent}} a changé avant sa fermeture, Orca l’a donc laissé ouvert. Réessayez.",
+        "terminalExitUnproven": "Orca a fermé le terminal de {{agent}} mais n’a pas pu confirmer son arrêt, le chat ne s’est donc pas ouvert. Vérifiez la connexion à l’hôte, puis ouvrez la conversation depuis l’historique des sessions.",
+        "resumeFailed": "{{agent}} n’a pas pu continuer dans le chat. Vérifiez ce terminal et la connexion à l’hôte, puis réessayez.",
         "exitUnconfirmed": "{{agent}} exécute cette conversation dans un autre terminal. Quittez-le là-bas ou fermez ce terminal, puis réessayez."
       },
       "state": {
@@ -19943,7 +20008,14 @@
         "stateMonitoringCount": "{{value0}} en surveillance",
         "stateUnverifiableCount": "{{value0}} au statut indisponible",
         "stateWaitingCount": "{{value0}} en attente",
-        "stateWorkingCount": "{{value0}} en cours"
+        "stateWorkingCount": "{{value0}} en cours",
+        "openAgent": "Ouvrir {{value0}}",
+        "needsAttention_one": "{{count}} requiert votre attention",
+        "needsAttention_other": "{{count}} requièrent votre attention",
+        "needsAttention_many": "{{count}} requièrent votre attention",
+        "workerBadge": "Worker",
+        "subagentBadge": "Sous-agent",
+        "nameInMessage": "Ajouter {{name}} au message"
       },
       "railLabel": "Vos messages",
       "railImageMessage": "Image jointe",
@@ -19997,7 +20069,24 @@
         "started_many": "A lancé {{count}} sous-agents",
         "ran_one": "A exécuté {{count}} sous-agent",
         "ran_other": "A exécuté {{count}} sous-agents",
-        "ran_many": "A exécuté {{count}} sous-agents"
+        "ran_many": "A exécuté {{count}} sous-agents",
+        "backToMain": "Retour à l’agent principal",
+        "mainAgent": "Agent principal",
+        "promptFromMain": "Demande de l’agent principal",
+        "backTo": "Retour à {{value0}}",
+        "path": "Chemin du sous-agent",
+        "stateHeading": {
+          "completed": "Terminé",
+          "working": "En cours",
+          "idle": "Inactif",
+          "failed": "Échec",
+          "stopped": "Arrêté",
+          "unverifiable": "Statut indisponible"
+        },
+        "noSteps": "Aucune étape pour l’instant",
+        "beforeClear": "Ce sous-agent s’est exécuté avant l’effacement du chat",
+        "stoppedBeforeReply": "Arrêté avant de répondre",
+        "noReply": "Terminé sans réponse"
       },
       "drop": {
         "messageTitle": "Déposez pour joindre à ce message",
@@ -20089,10 +20178,15 @@
         "imageCount_many": "{{count}} images",
         "queued": "En file d'attente",
         "clearAll": "Tout effacer",
+        "editReturned": "Votre modification se trouve dans le champ de discussion.",
+        "commandsUnsupported": "Les commandes ne peuvent pas être enregistrées dans un message en file d’attente.",
         "moveChanged": "La file d'attente a changé avant ce déplacement. Essayez de faire glisser le message à nouveau.",
         "reorderHint": "Faites glisser pour réorganiser, ou utilisez les touches fléchées Haut et Bas.",
         "reorderMessage": "Réorganiser le message",
         "imageCount": "{{count}} images",
+        "queuedCount_one": "{{count}} en file d’attente",
+        "queuedCount_other": "{{count}} en file d’attente",
+        "queuedCount_many": "{{count}} en file d’attente",
         "couldNotSend": "Envoi impossible",
         "retry": "Réessayer",
         "showLessRows": "Afficher moins",
@@ -20304,6 +20398,9 @@
         "modelApplyFailed": "Impossible d’appliquer le modèle {{value}}.",
         "effortApplyFailed": "Impossible d’appliquer l’effort {{value}}."
       },
+      "workers": {
+        "stopUnconfirmed": "Orca n’a pas pu confirmer l’arrêt du worker."
+      },
       "usageLimitActions": {
         "switchAccount": "Changer de compte",
         "addAccount": "Ajouter un compte…",
@@ -20351,7 +20448,10 @@
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
         "failedDetail": "Votre conversation est inchangée. Réessayez.",
+        "commandDescription": "Créer une branche de ce chat à partir de sa dernière réponse",
         "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée.",
+        "commandNothing": "Il n’y a pas encore de réponse à partir de laquelle créer une branche.",
+        "commandTakesNoText": "Envoyez /fork seul, puis écrivez dans le nouveau chat.",
         "mark": "Branche ·",
         "markedName": "{{mark}} {{name}}",
         "accessibleName": "Branche : {{name}}",
@@ -20394,6 +20494,27 @@
       },
       "splitRight": "Diviser à droite",
       "splitDown": "Diviser vers le bas",
+      "sideChat": {
+        "description": "Poser une question annexe dans une branche à côté de ce chat",
+        "argumentHint": "<question>",
+        "pill": "Chat annexe",
+        "placeholder": "Poser une question annexe",
+        "notReady": "Les chats annexes ne sont pas encore prêts. Réessayez dans un instant.",
+        "replyRunning": "Disponible quand cette réponse sera terminée.",
+        "noReply": "Disponible après la première réponse.",
+        "textOnly": "Les chats annexes n’acceptent que du texte. Retirez les pièces jointes, puis renvoyez le message.",
+        "questionNotSent": "{{agent}} n’a pas reçu votre question",
+        "questionNotSentDetail": "Votre question est toujours dans ce chat. Renvoyez /btw pour réessayer.",
+        "questionUnconfirmed": "{{agent}} n’a pas pu confirmer que le chat annexe a reçu votre question",
+        "questionUnconfirmedDetail": "Vérifiez le chat annexe avant de reposer la question. Votre question est toujours dans ce chat."
+      },
+      "memoryUpdated": {
+        "added": "Ajouté",
+        "removed": "Supprimé",
+        "noteChanged": "Note modifiée",
+        "indexChanged": "MEMORY.md modifié",
+        "openMemory": "Ouvrir la mémoire"
+      },
       "automationRun": {
         "waitOver": "Attente terminée",
         "scheduled": "Planifiée",
@@ -20509,6 +20630,11 @@
         "waiting": "En attente",
         "waitsFor": "Attend"
       },
+      "typedBy": {
+        "anotherComputer": "un autre ordinateur",
+        "fromVia": "De {{name}} via {{computer}}",
+        "fromViaPhone": "De {{name}}, saisi sur {{phone}} via {{computer}}"
+      },
       "eventRow": {
         "showLess": "Afficher moins",
         "showMore": "Afficher plus",
@@ -20517,6 +20643,92 @@
       },
       "dock": {
         "label": "Zone de message et demandes"
+      },
+      "workerDock": {
+        "commandOutputPending": "La sortie de la commande n’est pas encore disponible.",
+        "notNow": "Pas maintenant",
+        "retry": "Réessayer",
+        "dismiss": "Ignorer",
+        "openWorker": "Ouvrir le worker",
+        "remoteOwner": "Arrêtez ou effacez-le depuis l’ordinateur sur lequel il s’exécute",
+        "restore": "Réafficher dans le dock",
+        "alreadyStopped": "Déjà arrêté",
+        "cantStop": "Arrêt impossible pour le moment",
+        "clearAllLabel_one": "Effacer le worker en échec",
+        "clearAllLabel_other": "Effacer les {{count}} workers en échec",
+        "clearAllLabel_many": "Effacer les {{count}} workers en échec",
+        "loadingWorker": "Chargement du worker…",
+        "resultUnavailable": "Résultat du worker indisponible",
+        "showDetails": "Afficher les détails",
+        "hideDetails": "Masquer les détails",
+        "close": "Fermer",
+        "workersRegion": "Workers",
+        "doneResult": "Terminé · ouvrir le résultat",
+        "clearName": "Effacer {{name}}",
+        "stopUnavailable": "Arrêter {{name}} · {{title}} indisponible · {{reason}}",
+        "stopName": "Arrêter {{name}} · {{title}}",
+        "stopping": "Arrêt en cours…",
+        "clear": "Effacer",
+        "stop": "Arrêter",
+        "coordinator": "En attente du coordinateur",
+        "starting": "Démarrage",
+        "running": "En cours",
+        "idle": "Inactif",
+        "saving": "Enregistrement du résultat…",
+        "failed": "Échec",
+        "unexpected": "Arrêté de manière inattendue",
+        "unavailableState": "Statut indisponible",
+        "needsYou": "En attente de votre réponse",
+        "worker": "Worker",
+        "agent": "Agent",
+        "command": "Commande",
+        "workflow": "Flux de travail",
+        "monitor": "Moniteur",
+        "task": "Tâche",
+        "taskCount_one": "{{count}} tâche",
+        "taskCount_other": "{{count}} tâches",
+        "taskCount_many": "{{count}} tâches",
+        "workerCount_one": "{{count}} worker",
+        "workerCount_other": "{{count}} workers",
+        "workerCount_many": "{{count}} workers",
+        "commandCount_one": "{{count}} commande",
+        "commandCount_other": "{{count}} commandes",
+        "commandCount_many": "{{count}} commandes",
+        "workflowCount_one": "{{count}} flux de travail",
+        "workflowCount_other": "{{count}} flux de travail",
+        "workflowCount_many": "{{count}} flux de travail",
+        "monitorCount_one": "{{count}} moniteur",
+        "monitorCount_other": "{{count}} moniteurs",
+        "monitorCount_many": "{{count}} moniteurs",
+        "agentCount_one": "{{count}} agent",
+        "agentCount_other": "{{count}} agents",
+        "agentCount_many": "{{count}} agents",
+        "stoppedByYou": "Arrêté par vous",
+        "finished": "Terminé",
+        "failedCount": "{{count}} en échec",
+        "needsYouCount": "En attente de votre réponse : {{count}}",
+        "newQuestions_one": "{{count}} nouvelle question d’un worker attend votre réponse",
+        "newQuestions_other": "{{count}} nouvelles questions de workers attendent votre réponse",
+        "newQuestions_many": "{{count}} nouvelles questions de workers attendent votre réponse",
+        "waitingOnYouName": "{{name}} · En attente de votre réponse",
+        "moreQuestions": "Autres questions en attente de votre réponse : {{count}}",
+        "questions": "En attente de votre réponse : {{count}}",
+        "queuedQuestions": "Questions de workers en file d’attente",
+        "showQuestion": "Afficher la question de {{name}}",
+        "show": "Afficher",
+        "runningCount": "{{count}} en cours",
+        "cleared_one": "1 worker effacé",
+        "cleared_other": "{{count}} workers effacés",
+        "cleared_many": "{{count}} workers effacés",
+        "stopAll": "Tout arrêter",
+        "clearFailed": "Effacer les échecs",
+        "pillLabel_one": "{{count}} worker, le plus récent : {{title}}",
+        "pillLabel_other": "{{count}} workers, le plus récent : {{title}}",
+        "pillLabel_many": "{{count}} workers, le plus récent : {{title}}",
+        "unlistedDetail": "Certaines tâches en arrière-plan ne sont pas listées ici",
+        "unlisted": "Tâches en arrière-plan en cours",
+        "unread": "Impossible de charger les workers",
+        "unreadDetail": "Les workers s’afficheront ici une fois chargés"
       },
       "automationSaved": {
         "resultsInRuns": "résultats dans chaque exécution",
@@ -21156,7 +21368,7 @@
         "turnDiffsSearchChangedFiles": "fichiers modifiés",
         "turnDiffsSearchEdits": "modifications",
         "promptSuggestionsTitle": "Prompts suggérés",
-        "promptSuggestionsCopy": "Après une réponse de Claude, sa suggestion pour votre prochain message s’affiche dans la zone de message vide. Appuyez sur Tab pour l’utiliser. Chaque suggestion est une requête supplémentaire qui compte dans votre utilisation de Claude.",
+        "promptSuggestionsCopy": "Après une réponse de Claude ou de Codex, sa suggestion pour votre prochain message s’affiche dans la zone de message vide. Appuyez sur Tab pour l’utiliser. Chaque suggestion est une requête supplémentaire qui compte dans votre utilisation de cet agent.",
         "promptSuggestionsSearchNext": "prochain prompt",
         "promptSuggestionsSearchGhost": "texte fantôme"
       },
@@ -24847,7 +25059,8 @@
     "branchCreated": "{{branch}} créée sur {{commit}}",
     "branchName": "Nom de la branche",
     "invalidBranchName": "Ce nom de branche n’est pas valide. Choisissez un autre nom.",
-    "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez."
+    "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez.",
+    "openDiff": "Ouvrir le diff"
   },
   "bots": {
     "deepLink": {
@@ -24963,8 +25176,6 @@
       "composio": {
         "withComposio": "Avec Composio"
       },
-      "allApps": "Toutes les apps",
-      "onBot": "Sur {{bot}}",
       "mcp": {
         "addTitle": "Ajouter {{app}}",
         "advanced": "Avancé",
@@ -25171,7 +25382,10 @@
       "runNow": "Exécuter maintenant",
       "openOnPage": "Ouvrir sur la page Automatisations",
       "pauseShort": "Pause",
-      "resumeShort": "Reprendre"
+      "resumeShort": "Reprendre",
+      "deleting": "Suppression…",
+      "deleteFailed": "Impossible de supprimer {{name}}",
+      "deleteDescription": "Supprimer <name/> et son historique d’exécution."
     },
     "access": {
       "thisComputer": "cet ordinateur",
@@ -25192,7 +25406,7 @@
       "controlBriefIfAdded": "Toute personne que vous ajoutez peut agir en votre nom ici.",
       "controlBriefOnHost": "Ces personnes peuvent agir en votre nom sur {{computer}}.",
       "controlBriefIfAddedOnHost": "Toute personne que vous ajoutez peut agir en votre nom sur {{computer}}.",
-      "reachSlack": "Publier dans Slack en tant que @{{name}}",
+      "reachSlack": "Publier dans Slack en tant que {{name}}",
       "here": "ici",
       "thisServer": "ce serveur",
       "there": "là-bas",

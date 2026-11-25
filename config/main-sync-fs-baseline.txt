@@ -65,7 +65,6 @@
 1 src/main/browser/identity/mode/browser-identity-mode-record.ts
 2 src/main/browser/identity/mode/browser-identity-mode-store.ts
 2 src/main/browser/network/egress/browser-route-egress-electron-launch.ts
-4 src/main/browser/network/execution-routes/wsl-browser-network-relay-launch.ts
 5 src/main/browser/routing/partitions/browser-route-partition-binding-file.ts
 3 src/main/browser/routing/partitions/browser-route-partition-binding-store.ts
 4 src/main/browser/routing/partitions/browser-route-partition-pending-deletes.ts
