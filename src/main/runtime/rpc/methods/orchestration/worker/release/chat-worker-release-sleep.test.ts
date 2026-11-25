@@ -68,6 +68,9 @@ describe('releasing a bot chat worker sleeps the workspace made for it', () => {
   let runtime: WorkerTerminalReleaseRuntime
   // What the workspace holds besides the worker's own chat, and how its session lane finds the chat.
   let tabs: { type: string; sessionId?: string }[]
+  let snapshot: Record<string, unknown>
+  let savedTabs: { contentType: string; entityId: string }[]
+  let pendingChats: string[]
   let conversations: { sessionId: string; location: { workspaceId: string } }[]
   let laneWork: { sessionId: string | null; state: 'idle' | 'busy' | 'unknown' }
   let laneProvesStop: boolean
@@ -85,6 +88,9 @@ describe('releasing a bot chat worker sleeps the workspace made for it', () => {
     }).id
     mocks.close.mockClear()
     tabs = [{ type: 'agent-session', sessionId: 'worker-chat' }]
+    snapshot = { publicationEpoch: 'epoch-1' }
+    savedTabs = [{ contentType: 'agent-session', entityId: 'worker-chat' }]
+    pendingChats = []
     conversations = []
     laneWork = { sessionId: 'worker-chat', state: 'idle' }
     laneProvesStop = true
@@ -92,7 +98,8 @@ describe('releasing a bot chat worker sleeps the workspace made for it', () => {
     autoReleaseAtSleep = []
     mocks.host = {
       isSessionTabVisible: () => true,
-      deps: { store: { listConversations: () => conversations, getRecord: () => ({}) } }
+      deps: { store: { listConversations: () => conversations, getRecord: () => ({}) } },
+      sleepWorkspace: { pendingChats: () => pendingChats }
     }
     // Stands in for Sleep: each chat's stop asks `admit` in its session lane first.
     sleepWorkspaces = vi.fn(
@@ -125,7 +132,8 @@ describe('releasing a bot chat worker sleeps the workspace made for it', () => {
       forgetStructuredSessionMail: forgetMail,
       notifyMessageArrived: vi.fn(),
       isWorkerAgentInTurn: () => false,
-      listMobileSessionTabs: async () => ({ tabs })
+      listMobileSessionTabs: async () => ({ ...snapshot, tabs }),
+      savedTabsForWorktree: () => savedTabs
     } as unknown as WorkerTerminalReleaseRuntime
   })
   afterEach(() => {
@@ -272,6 +280,51 @@ describe('releasing a bot chat worker sleeps the workspace made for it', () => {
       expect(sleepWorkspaces).not.toHaveBeenCalled()
       expect(mocks.close).toHaveBeenCalledTimes(1)
     })
+  })
+
+  describe.each([
+    ['a combined diff', { contentType: 'diff', entityId: 'combined-all' }],
+    ['a workspace doc', { contentType: 'browser', entityId: 'doc-page' }]
+  ])('a workspace whose window saved %s, which the live snapshot leaves out', (_kind, saved) => {
+    it('closes as before', async () => {
+      savedTabs.push(saved)
+      await release(startWorker({ from: BOT_CHAT, worktreeId: 'wt-made', createdIt: true }))
+      expect(sleepWorkspaces).not.toHaveBeenCalled()
+      expect(mocks.close).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe.each([
+    ['not yet published', { publicationEpoch: 'none' }],
+    ['missing browser pages after a restart', { clientHostedPagesUnreconciled: true }],
+    ['unable to read its chats', { agentSessionsUnverifiable: true }]
+  ])('a tab snapshot %s', (_kind, flags) => {
+    it('closes as before', async () => {
+      Object.assign(snapshot, flags)
+      tabs = []
+      await release(startWorker({ from: BOT_CHAT, worktreeId: 'wt-made', createdIt: true }))
+      expect(sleepWorkspaces).not.toHaveBeenCalled()
+      expect(mocks.close).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('closes as before when the tab snapshot cannot be read', async () => {
+    runtime.listMobileSessionTabs = async () => {
+      throw new Error('window unreachable')
+    }
+    const { receipt } = await release(
+      startWorker({ from: BOT_CHAT, worktreeId: 'wt-made', createdIt: true })
+    )
+    expect(sleepWorkspaces).not.toHaveBeenCalled()
+    expect(mocks.close).toHaveBeenCalledTimes(1)
+    expect(receipt.state).toBe('released')
+  })
+
+  it('closes as before while another chat is still being created there', async () => {
+    pendingChats = ['new-chat']
+    await release(startWorker({ from: BOT_CHAT, worktreeId: 'wt-made', createdIt: true }))
+    expect(sleepWorkspaces).not.toHaveBeenCalled()
+    expect(mocks.close).toHaveBeenCalledTimes(1)
   })
 
   it('closes as before when the workspace keeps another chat with no tab', async () => {

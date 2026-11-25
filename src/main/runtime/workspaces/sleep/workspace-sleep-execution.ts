@@ -222,7 +222,7 @@ async function sleepWorkspace(
     batch.chatsSettled()
   }
   // A VM may carry another workspace's host: the whole batch's chats settle before any suspends.
-  if (!failure && deps.suspendVm) {
+  if (!failure && !refused && deps.suspendVm) {
     await batch.batchChatsSettled
     try {
       // Reopened mid-sleep, even while the suspend waits its turn: it is the user's again, so

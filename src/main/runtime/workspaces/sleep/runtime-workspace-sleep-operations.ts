@@ -1,3 +1,4 @@
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce } from '../../session-tabs/chat/structured-session-tab-restoration'
 import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
@@ -94,6 +95,14 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return Object.values(session?.sleepingAgentSessionsByPaneKey ?? {}).filter(
       (record) => record.worktreeId === worktreeId
     )
+  }
+
+  /** The tabs the window last saved for one of this host's workspaces, desktop-only ones included. */
+  savedTabsForWorktree(worktreeId: string): readonly Tab[] {
+    const session = this.store?.getWorkspaceSession?.(
+      this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+    )
+    return session?.unifiedTabs?.[worktreeId] ?? []
   }
 
   /** `worktree.sleep` from a phone or the CLI: this host's own workspace, its chats included. */

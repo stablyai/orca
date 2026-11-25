@@ -1,4 +1,5 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../../shared/execution-host/execution-host'
+import { UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH } from '../../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { workerEffectsCreatedWorktree } from '../../../../../orchestration/db/worker-dispatch/worker-created-worktrees'
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
@@ -51,29 +52,47 @@ export function workspaceMadeForWorker(
  *  admitted there but Sleep did not prove the stop. `not_applicable`: nothing was judged; close instead. */
 export type ChatWorkerReleaseSleep = 'slept' | 'refused' | 'unproven' | 'not_applicable'
 
-/** Whether the workspace holds nothing but this worker's chat: Sleep stops and hides everything in it. */
+/** Whether the workspace provably holds nothing but this worker's chat: Sleep stops and hides
+ *  everything in it, so anything Orca cannot see for certain counts as something else. */
 async function workspaceHoldsOnlyWorkerChat(
-  runtime: Pick<WorkerTerminalReleaseRuntime, 'listMobileSessionTabs'>,
+  runtime: Pick<WorkerTerminalReleaseRuntime, 'listMobileSessionTabs' | 'savedTabsForWorktree'>,
   worktreeId: string,
   workerSessionIds: ReadonlySet<string>
 ): Promise<boolean> {
   const host = getStructuredAgentSessionHost()
-  if (!host || !runtime.listMobileSessionTabs) {
+  if (!host || !runtime.listMobileSessionTabs || !runtime.savedTabsForWorktree) {
     return false
   }
-  const otherChat = host.deps.store
-    .listConversations()
-    .some(
-      (record) =>
-        record.location.workspaceId === worktreeId && !workerSessionIds.has(record.sessionId)
+  const otherChat =
+    host.sleepWorkspace.pendingChats(worktreeId).some((id) => !workerSessionIds.has(id)) ||
+    host.deps.store
+      .listConversations()
+      .some(
+        (record) =>
+          record.location.workspaceId === worktreeId && !workerSessionIds.has(record.sessionId)
+      )
+  // The window's saved tabs include desktop-only ones the live snapshot leaves out (combined diffs, docs).
+  const workerChatTab = (tab: { contentType: string; entityId: string }): boolean =>
+    tab.contentType === 'agent-session' && workerSessionIds.has(tab.entityId)
+  if (otherChat || !runtime.savedTabsForWorktree(worktreeId).every(workerChatTab)) {
+    return false
+  }
+  let snapshot: Awaited<ReturnType<NonNullable<typeof runtime.listMobileSessionTabs>>>
+  try {
+    snapshot = await runtime.listMobileSessionTabs(`id:${worktreeId}`, undefined, {
+      includeAgentSenders: false
+    })
+  } catch {
+    return false
+  }
+  return (
+    snapshot.publicationEpoch !== UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH &&
+    !snapshot.clientHostedPagesUnreconciled &&
+    !snapshot.agentSessionsUnverifiable &&
+    snapshot.tabs.every(
+      (tab) => tab.type === 'agent-session' && workerSessionIds.has(tab.sessionId)
     )
-  if (otherChat) {
-    return false
-  }
-  const { tabs } = await runtime.listMobileSessionTabs(`id:${worktreeId}`, undefined, {
-    includeAgentSenders: false
-  })
-  return tabs.every((tab) => tab.type === 'agent-session' && workerSessionIds.has(tab.sessionId))
+  )
 }
 
 /** A bot's chat worker in a workspace made for it, and holding nothing else, is released by

@@ -43,7 +43,7 @@ export function createStructuredAgentSessionWorkspaceSleeper(
     runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
   }
 ) {
-  return (workspaceId: string, markAsleep?: boolean, admit?: WorkspaceChatStopAdmission) => {
+  const sleep = (workspaceId: string, markAsleep?: boolean, admit?: WorkspaceChatStopAdmission) => {
     const host = readHost()
     return sleepStructuredAgentSessionWorkspace(
       {
@@ -62,6 +62,10 @@ export function createStructuredAgentSessionWorkspaceSleeper(
       admit
     )
   }
+  /** Chats still being created in a local workspace, which this Sleep would stop too. */
+  const pendingChats = (workspaceId: string): string[] =>
+    readHost().tasks.pendingMembers(workspaceId, LOCAL_EXECUTION_HOST_ID)
+  return Object.assign(sleep, { pendingChats })
 }
 
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null

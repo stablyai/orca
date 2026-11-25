@@ -27,4 +27,9 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'isWorkerAgentInTurn'
   > &
   // Lower runtime layers declare neither; without them a release closes its chat.
-  Partial<Pick<OrcaRuntimeService, 'sleepWorkspaces' | 'bots' | 'listMobileSessionTabs'>>
+  Partial<
+    Pick<
+      OrcaRuntimeService,
+      'sleepWorkspaces' | 'bots' | 'listMobileSessionTabs' | 'savedTabsForWorktree'
+    >
+  >
