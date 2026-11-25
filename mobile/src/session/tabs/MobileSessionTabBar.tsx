@@ -39,8 +39,6 @@ const SWIPE_SETTLE_MS = 250
 // A tab arriving from the side starts this far out, as a share of the tab cell's width.
 const SWIPE_ENTRY_SHARE = 0.4
 const FLICK_VELOCITY = 600
-// With no tab on that side, the tab gives only this share of the drag.
-const EDGE_RESISTANCE = 0.25
 const DRAG_CLICK_WINDOW_MS = 400
 
 // A tab drawn before it had any agent state (from the phone's store) fades its dot in when one lands.
@@ -113,8 +111,9 @@ export function MobileSessionTabBar({
   )
   const activeIndex = rows.findIndex((row) => row.tab.id === activeSessionTabId)
   const active: MobileSessionTabSummary | undefined = rows[activeIndex]
-  const previous = activeIndex > 0 ? rows[activeIndex - 1] : undefined
-  const next = activeIndex !== -1 ? rows[activeIndex + 1] : undefined
+  const canSwitchTabs = activeIndex !== -1 && rows.length > 1
+  const previous = canSwitchTabs ? rows[(activeIndex + rows.length - 1) % rows.length] : undefined
+  const next = canSwitchTabs ? rows[(activeIndex + 1) % rows.length] : undefined
   const othersNeedYou = rows.some(
     (row) => row.tab.id !== activeSessionTabId && row.group === 'needs-you'
   )
@@ -147,12 +146,11 @@ export function MobileSessionTabBar({
   // Callbacks run on JS: the session page is a web document, and stepping switches React state.
   const pan = Gesture.Pan()
     .runOnJS(true)
-    .enabled(rows.length > 1)
+    .enabled(canSwitchTabs)
     .activeOffsetX([-12, 12])
     .failOffsetY([-10, 10])
     .onUpdate((event) => {
-      const target = event.translationX > 0 ? previous : next
-      offset.value = target ? event.translationX : event.translationX * EDGE_RESISTANCE
+      offset.value = event.translationX
     })
     .onEnd((event, success) => {
       // oxlint-disable-next-line react/purity -- runs when the drag ends, never during render.
