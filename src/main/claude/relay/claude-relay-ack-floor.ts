@@ -53,7 +53,11 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   const backgroundLaunches = new Set<string>()
   /** Each running task's launching call, for one moved to the background after it started. */
   const launchOf = new Map<string, string>()
+  /** Streams whose open message a forced ack released: every ack is a cut until it ends, so a
+   *  reattach moves the tail it replays to a continuation row instead of a fresh one. */
+  const releasedOpen = new Set<string>()
   const closeScope = (scope: string): void => {
+    releasedOpen.delete(scope)
     open.delete(scope)
     starts.delete(scope)
     for (const id of toolsByScope.get(scope) ?? []) {
@@ -82,6 +86,11 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
   return {
     released: (seq) => {
       // The daemon dropped them through `seq`: they can't replay whole, so they hold nothing.
+      for (const [scope, from] of open) {
+        if (from <= seq) {
+          releasedOpen.add(scope)
+        }
+      }
       for (const map of [open, starts]) {
         for (const [scope, from] of map) {
           if (from <= seq) {
@@ -96,7 +105,7 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
       }
     },
     tookCut: () => {
-      const took = cut
+      const took = cut || releasedOpen.size > 0
       cut = false
       return took
     },
@@ -168,11 +177,13 @@ export function claudeRelayAckFloor(): ProviderRelayAckFloor {
         frame.event.type === 'message_stop'
       ) {
         open.delete(scopeOf(frame))
+        releasedOpen.delete(scopeOf(frame))
       } else if (
         frame.type === 'stream_event' &&
         isRecord(frame.event) &&
         frame.event.type === 'message_start'
       ) {
+        releasedOpen.delete(scopeOf(frame))
         open.set(scopeOf(frame), seq)
         starts.set(scopeOf(frame), seq)
       }

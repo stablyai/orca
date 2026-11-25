@@ -104,4 +104,14 @@ describe('Claude relay ack floor', () => {
     floor.released?.(1)
     expect(floor.floor()).toBe(2)
   })
+
+  it('reports every ack as a cut while a message a cap release dropped still streams', () => {
+    const floor = claudeRelayAckFloor()
+    floor.observe(1, stream('message_start'))
+    floor.released?.(1)
+    expect(floor.tookCut?.()).toBe(true)
+    expect(floor.tookCut?.()).toBe(true)
+    floor.observe(2, stream('message_stop'))
+    expect(floor.tookCut?.()).toBe(false)
+  })
 })
