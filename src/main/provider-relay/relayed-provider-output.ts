@@ -21,6 +21,13 @@ const RELEASE_SLICE_CHARS = 64 * 1024
  * line is handed on, and names the seq of the earliest item still open. Acks stay below it, so a
  * reattach replays that item whole onto its own row (rows are keyed by the provider's own ids).
  */
+/** The longest the app's hand-offs (a quit's, all chats at once) wait in all for paused readers;
+ *  lines one hasn't taken by then stay unacked and replay at the next launch. */
+const HAND_OFF_READER_WAIT_MS = 2_000
+let handOffDeadline: number | null = null
+const handOffWaitMs = (): number =>
+  Math.max(0, (handOffDeadline ??= Date.now() + HAND_OFF_READER_WAIT_MS) - Date.now())
+
 export type ProviderRelayAckFloor = {
   observe: (seq: number, line: string) => void
   /** The first line still needed after a crash, for an ack covering lines through `through`. */
@@ -238,7 +245,7 @@ export class RelayedProviderOutput {
 
   /** Before a hand-off: streamed text is saved first, so the last ack covers every line handed on
    *  (a cut item isn't kept whole, so a replay of a line the journal holds would show it twice). */
-  async flush(waitMs = 0): Promise<void> {
+  async flush(waitMs = handOffWaitMs()): Promise<void> {
     // A reader paused by its sink takes its buffered lines once that drains; they count too.
     await this.allTaken(waitMs)
     this.askedThrough = Math.max(this.askedThrough, this.deliveredSeq)
