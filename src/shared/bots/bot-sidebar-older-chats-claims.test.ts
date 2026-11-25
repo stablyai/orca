@@ -47,7 +47,7 @@ function record(run: Run): OrchestrationSessionWorker {
     runId: 'run',
     title: run.id,
     agent: 'claude',
-    state: 'completed',
+    state: run.undated ? 'failed' : 'completed',
     liveness: 'exited',
     host: run.hostEnvironmentId ? 'remote' : 'local',
     ...(run.hostEnvironmentId ? { hostEnvironmentId: run.hostEnvironmentId } : {}),
@@ -66,7 +66,7 @@ function read(runs: readonly Run[]): BotChatTreeRead {
       id: run.id,
       chatId: run.chatId,
       settled: true,
-      failed: false,
+      failed: run.undated === true,
       at: run.at,
       worktreeId: run.worktreeId,
       ...(run.undated ? { undated: true as const } : {})
@@ -161,6 +161,8 @@ describe('botSidebarChatFoldTimes: a settled Dispatch with no completion time', 
     // Still ordered (and paged) by the time it was read with; flagged as no settle evidence.
     expect(undated.settledAt).toBe(DAYS_AGO_4)
     expect(undated.settledUndated).toBe(true)
+    // The row still reads as failed, not as going.
+    expect(undated.state).toBe('failed')
     const times = foldTimes(tree, [])
     expect(times.get('chat-a')).toBe(Number.POSITIVE_INFINITY)
     expect(times.get('chat-b')).toBe(DAYS_AGO_4 + OLDER_BOT_CHAT_AGE_MS)

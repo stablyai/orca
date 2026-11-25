@@ -62,7 +62,13 @@ describe('botDispatches: settle times', () => {
       .get(legacy) as { ms: number }
 
     const byId = new Map(placed(db).map((dispatch) => [dispatch.id, dispatch]))
-    expect(byId.get(legacy)).toMatchObject({ settled: true, undated: true, at: created.ms })
+    // Still a failure: only its time is uncertain.
+    expect(byId.get(legacy)).toMatchObject({
+      settled: true,
+      failed: true,
+      undated: true,
+      at: created.ms
+    })
     expect(byId.get(dated)?.settled).toBe(true)
     expect(byId.get(dated)?.undated).toBeUndefined()
   })
