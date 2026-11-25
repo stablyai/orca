@@ -1,4 +1,5 @@
 import { appendWithinUtf8ByteLimit } from './agent-session-delta-prefix'
+import { ownRetainedString } from '../../../../../shared/text/own-retained-string'
 
 // Coalesce token deltas into text snapshots to reduce journal writes and subscriber frames.
 // Flush text before lifecycle events so completion/approval rows cannot overtake preceding text.
@@ -10,6 +11,8 @@ export const AGENT_SESSION_STREAMED_TEXT_MAX_BYTES = 16 * 1024 * 1024
 export const AGENT_SESSION_STREAMED_TEXT_TOTAL_MAX_BYTES = 32 * 1024 * 1024
 export { AGENT_SESSION_STREAMED_TEXT_TRUNCATION_MARKER } from './agent-session-delta-prefix'
 export const AGENT_SESSION_MAX_STREAMS = 256
+/** A stream's text is copied flat once per this many windows that added to it. */
+const APPENDS_PER_COPY = 64
 
 export type AgentSessionDeltaSnapshot = {
   text: string
@@ -75,6 +78,8 @@ export function createAgentSessionDeltaCoalescer(
       observedBytes: number
       truncated: boolean
       dirty: boolean
+      /** Appends since the text was last copied flat. */
+      links: number
     }
   >()
   let totalRetainedBytes = 0
@@ -113,11 +118,19 @@ export function createAgentSessionDeltaCoalescer(
   type Stream = NonNullable<ReturnType<typeof streams.get>>
   // Keep the joined text so rereading an unchanged stream copies nothing. New text is appended to
   // it rather than copied with it: every window reads every stream, and copying a long reply each
-  // time is garbage at the window rate; whoever needs it flat (a save, a shown reply) flattens once.
+  // time is garbage at the window rate. The appended text is its own copy, so it pins no larger
+  // string, and every APPENDS_PER_COPY appends the text is copied flat, which bounds the chain.
   const joined = (stream: Stream): string => {
     const [head = '', ...added] = stream.chunks
-    const text = added.length === 0 ? head : head + added.join('')
-    stream.chunks = text ? [text] : []
+    if (added.length === 0) {
+      return head
+    }
+    stream.links = (stream.links + 1) % APPENDS_PER_COPY
+    const text =
+      stream.links === 0
+        ? ownRetainedString(head + added.join(''))
+        : head + ownRetainedString(added.join(''))
+    stream.chunks = [text]
     return text
   }
 
@@ -164,6 +177,8 @@ export function createAgentSessionDeltaCoalescer(
         }
         stream = {
           chunks: [],
+          // The first join copies too: until then the text is the raw first delta.
+          links: APPENDS_PER_COPY - 1,
           retainedBytes: 0,
           textLength: 0,
           observedBytes: 0,
