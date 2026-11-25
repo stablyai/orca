@@ -66,7 +66,7 @@ const turnOutcome = (items: AgentJournalRenderItem[]) =>
 const failureKinds = (items: AgentJournalRenderItem[]) =>
   items.flatMap((item) =>
     item.body.kind === 'status' && item.body.tone === 'error'
-      ? [readAgentSessionFailureFact((item.body as { failure?: unknown }).failure)?.kind]
+      ? [readAgentSessionFailureFact('failure' in item.body ? item.body.failure : undefined)?.kind]
       : []
   )
 

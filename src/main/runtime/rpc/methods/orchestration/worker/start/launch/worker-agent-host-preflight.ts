@@ -17,13 +17,17 @@ export function workerAgentNotInstalledMessage(agent: TuiAgent, computer: string
 /** A paired server's not-installed refusal, naming the server as this Orca calls it. */
 export function nameRefusingComputer(error: unknown, computer: string): unknown {
   const data =
-    error instanceof OrchestrationError && error.code === WORKER_AGENT_UNAVAILABLE
-      ? (error.data as { agent?: unknown; reason?: unknown } | undefined)
-      : undefined
-  return data?.reason === 'not_installed' && isTuiAgent(data.agent)
+    error instanceof OrchestrationError &&
+    error.code === WORKER_AGENT_UNAVAILABLE &&
+    typeof error.data === 'object' &&
+    error.data !== null
+      ? error.data
+      : null
+  const agent = data && 'agent' in data ? data.agent : undefined
+  return data && 'reason' in data && data.reason === 'not_installed' && isTuiAgent(agent)
     ? new OrchestrationError(
         WORKER_AGENT_UNAVAILABLE,
-        workerAgentNotInstalledMessage(data.agent, computer),
+        workerAgentNotInstalledMessage(agent, computer),
         data
       )
     : error
@@ -77,7 +81,7 @@ export async function preflightWorkerAgentOnHost(args: {
   // An unreadable host (an unserved SSH target, a folder without one repo) is left to the launch.
   const installed = await runtime
     .detectProjectLaunchContext(repoSelector)
-    .then((context) => context.agents as readonly string[])
+    .then((context): readonly string[] => context.agents)
     .catch(() => null)
   if (installed && !installed.includes(agent)) {
     throw new OrchestrationError(

@@ -39,8 +39,8 @@ it('refuses a worker whose agent its computer lacks before any terminal or Dispa
     db.db.prepare('SELECT count(*) AS n FROM dispatch_contexts WHERE task_id = ?').get(task.id)
   ).toEqual({ n: 0 })
   // A paired server's refusal names that server, as this Orca calls it.
-  expect(String((nameRefusingComputer(refused, 'g16') as Error).message)).toContain(
-    "Codex isn't installed on g16"
-  )
+  expect(nameRefusingComputer(refused, 'g16')).toMatchObject({
+    message: expect.stringContaining("Codex isn't installed on g16")
+  })
   db.close()
 })
