@@ -154,6 +154,8 @@ type ListRowProps = {
   leading?: ReactNode
   /** The current value in grey, e.g. "This computer". */
   value?: string
+  /** A value that is a status, e.g. "2 failing", in its tone's colour. */
+  valueColor?: string
   /** A small mark before the value, e.g. an agent's logo. */
   valueIcon?: ReactNode
   /** Anything after the value: a switch, a badge, a spinner. */
@@ -195,6 +197,7 @@ export function ListRow({
   detail,
   leading,
   value,
+  valueColor,
   valueIcon,
   accessory,
   navigates = false,
@@ -276,7 +279,10 @@ export function ListRow({
       )}
       {value !== undefined ? (
         <WithIcon icon={valueIcon} shrink>
-          <Text style={listRowStyles.value} numberOfLines={1}>
+          <Text
+            style={[listRowStyles.value, valueColor !== undefined && { color: valueColor }]}
+            numberOfLines={1}
+          >
             {value}
           </Text>
         </WithIcon>
