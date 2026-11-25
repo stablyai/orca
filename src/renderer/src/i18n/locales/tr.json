@@ -22660,7 +22660,8 @@
         "signIn": "Oturum aç",
         "signsInClaudeAccount": "Bu Claude hesabında oturum açar",
         "runsCommand": "Terminalde {{command}} komutunu çalıştırır",
-        "thenSlashCommand": "Oturum açtıktan sonra {{slashCommand}} yazın."
+        "thenSlashCommand": "Oturum açtıktan sonra {{slashCommand}} yazın.",
+        "signsInAgy": "agy oturumunu tarayıcınızda Google ile açar"
       },
       "antigravityAuth": {
         "chipLabel": "Antigravity oturum açma yöntemi: {{method}}. Değiştir",
@@ -22694,7 +22695,16 @@
         "yourAgyVersion": "Sizin agy sürümünüz · v{{version}}",
         "orcasAgy": "Orca'nın agy kopyası",
         "orcasAgyVersion": "Orca’nın agy sürümü · v{{version}}",
-        "runsOn": "Çalıştığı program: {{program}}"
+        "runsOn": "Çalıştığı program: {{program}}",
+        "keepsOwnLogin": "Bu sohbet agy’nin kendi Google oturumunu kullanmaya devam eder. Yeni sohbetlerde kullanılacak yöntem: {{method}}.",
+        "apiKeyEnvironment": "Ortamınızdan",
+        "foundGcloud": "gcloud oturumunuz da kullanılabilir.",
+        "foundKey": "Gemini API anahtarınız da kullanılabilir.",
+        "foundKeyAndGcloud": "Gemini API anahtarınız ve gcloud oturumunuz da kullanılabilir.",
+        "gcloudProject": "Proje: {{project}}",
+        "otherWaysMenu": "Diğer oturum açma yolları…",
+        "useGcloudLogin": "gcloud oturumunuzu kullanın",
+        "otherWaysLabel": "Diğer oturum açma yolları"
       },
       "pairedServerAsk": {
         "always": "{{server}} için her zaman izin ver",
@@ -22875,6 +22885,7 @@
           "unfinished": "Oturum açma henüz tamamlanmadı. Açılan sayfada tamamlayıp “Bitti” düğmesine basın.",
           "pastePlaceholder": "http://localhost:…"
         },
+        "manage": "MCP sunucularını yönet",
         "title": "MCP sunucuları",
         "close": "Kapat",
         "loading": "Yükleniyor…",
