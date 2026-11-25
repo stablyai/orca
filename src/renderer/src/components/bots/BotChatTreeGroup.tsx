@@ -125,7 +125,9 @@ function BotChatPreview({
     chat.preview ??
     (chat.origin === 'home'
       ? t('bots.chats.sayHi', 'Say hi to {{name}}', { name: bot.name })
-      : t('bots.chats.noMessages', 'No messages yet'))
+      : chat.live === 'idle'
+        ? t('bots.chats.noMessages', 'No messages yet')
+        : null)
   const person = hidePerson ? null : (chat.person?.name ?? null)
   const place = botChatPlace(chat)
   const rest = [closed, preview].filter(Boolean).join(' · ')
