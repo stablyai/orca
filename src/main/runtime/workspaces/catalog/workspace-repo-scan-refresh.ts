@@ -11,6 +11,7 @@ import {
 } from './worktree-scan-admin-budget'
 import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {
+  isWorktreeReconcileProbeWithoutAdminDir,
   readRepoWorktreeAdminFingerprint,
   readRepoWorktreeReconcileProbe
 } from './repo-worktree-admin-fingerprint'
@@ -66,6 +67,7 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
     listProbeableRepos: () =>
       (this.store?.getRepos() ?? []).filter((repo) => this.isLocalProbeableRepo(repo)),
     probe: (repo) => readRepoWorktreeReconcileProbe(repo.path),
+    isEmptyAdminDir: isWorktreeReconcileProbeWithoutAdminDir,
     notifyChanged: (repoId) => this.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   })
 
@@ -171,6 +173,9 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
       return { ok: false, worktrees: this.listStoredWorktreesForResolution(repo) }
     }
     const result = runtimeResultForObservation(observation)
+    if (result.worktrees.some((worktree) => !worktree.isMainWorktree)) {
+      this.remoteClientWorktreeReconcile.noteLinkedWorktreesObserved(repo.id)
+    }
     // Mutations kept overtaking scans: publish the rows as non-authoritative, never as current truth.
     return superseded && result.ok ? { ok: false, worktrees: result.worktrees } : result
   }

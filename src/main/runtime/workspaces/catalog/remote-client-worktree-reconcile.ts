@@ -10,6 +10,8 @@ type RemoteClientWorktreeReconcileDeps<R extends { id: string }> = {
   /** Local Git repos readable without waking a distro or a remote host. */
   listProbeableRepos: () => R[]
   probe: (repo: R) => Promise<string | null>
+  /** True when the probe saw no `.git/worktrees` directory (single-worktree repo). */
+  isEmptyAdminDir?: (fingerprint: string) => boolean
   notifyChanged: (repoId: string) => void
   intervalMs?: number
   probeTimeoutMs?: number
@@ -22,11 +24,23 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
   private epoch = 0
   private timer: ReturnType<typeof setInterval> | null = null
   private readonly fingerprints = new Map<string, string>()
+  // Clients that read a linked worktree between ticks need a push if `.git/worktrees` vanishes again before the next tick.
+  private readonly observedLinkedWorktreeVersion = new Map<string, number>()
   // Timeouts do not cancel readdir/stat, so a wedged mount must not stack probes.
   private readonly inFlight = new Set<string>()
   private readonly abandoned = new Map<string, number>()
 
   constructor(private readonly deps: RemoteClientWorktreeReconcileDeps<R>) {}
+
+  noteLinkedWorktreesObserved(repoId: string): void {
+    if (this.retainers === 0) {
+      return
+    }
+    this.observedLinkedWorktreeVersion.set(
+      repoId,
+      (this.observedLinkedWorktreeVersion.get(repoId) ?? 0) + 1
+    )
+  }
 
   retain(): () => void {
     this.retainers++
@@ -52,6 +66,7 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
         }
         this.epoch++
         this.fingerprints.clear()
+        this.observedLinkedWorktreeVersion.clear()
       }
     }
   }
@@ -70,6 +85,11 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
         this.fingerprints.delete(repoId)
       }
     }
+    for (const repoId of this.observedLinkedWorktreeVersion.keys()) {
+      if (!live.has(repoId)) {
+        this.observedLinkedWorktreeVersion.delete(repoId)
+      }
+    }
     await mapWithConcurrency(repos, PROBE_CONCURRENCY, (repo) => this.reconcileRepo(repo))
   }
 
@@ -81,6 +101,7 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
       return
     }
     const epoch = this.epoch
+    const observedVersion = this.observedLinkedWorktreeVersion.get(repo.id) ?? 0
     this.inFlight.add(repo.id)
     try {
       const fingerprint = await this.probeWithTimeout(repo)
@@ -90,7 +111,15 @@ export class RemoteClientWorktreeReconcile<R extends { id: string }> {
       }
       const previous = this.fingerprints.get(repo.id)
       this.fingerprints.set(repo.id, fingerprint)
-      if (previous !== undefined && previous !== fingerprint) {
+      const vanishedAfterObservedRead =
+        observedVersion > 0 && this.deps.isEmptyAdminDir?.(fingerprint) === true
+      if (
+        observedVersion > 0 &&
+        this.observedLinkedWorktreeVersion.get(repo.id) === observedVersion
+      ) {
+        this.observedLinkedWorktreeVersion.delete(repo.id)
+      }
+      if ((previous !== undefined && previous !== fingerprint) || vanishedAfterObservedRead) {
         this.deps.notifyChanged(repo.id)
       }
     } catch (error) {

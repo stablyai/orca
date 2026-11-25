@@ -50,6 +50,10 @@ export async function readRepoWorktreeReconcileProbe(repoPath: string): Promise<
     : [fingerprint, changeStamp].join(FIELD_SEPARATOR)
 }
 
+export function isWorktreeReconcileProbeWithoutAdminDir(probe: string): boolean {
+  return probe.endsWith(`${FIELD_SEPARATOR}${MISSING}`)
+}
+
 async function readRepoWorktreeAdminChangeStamp(repoPath: string): Promise<string | null> {
   try {
     const commonDir = await resolveGitCommonDirectory(repoPath)
@@ -57,7 +61,8 @@ async function readRepoWorktreeAdminChangeStamp(repoPath: string): Promise<strin
       return null
     }
     try {
-      return String((await stat(path.join(commonDir, 'worktrees'))).mtimeMs)
+      const stats = await stat(path.join(commonDir, 'worktrees'))
+      return `${stats.mtimeMs}:${stats.ctimeMs}:${stats.ino}`
     } catch (err) {
       // No admin dir: nothing git read/write activity leaves untouched can stand in.
       if (isMissingEntryError(err)) {
