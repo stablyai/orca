@@ -37,6 +37,12 @@ export function isSessionErrorVerdict(verdict: ConnectionVerdict): boolean {
   return isConnectionOutage(verdict) || verdict.kind === 'auth-failed'
 }
 
+/** Whether the header and composer offer a redial: only for outages a redial can heal. */
+export function sessionRetryAvailable(verdict: ConnectionVerdict, canReconnect: boolean): boolean {
+  // A refused pairing or Relay credential needs a re-pair, which no redial gives.
+  return canReconnect && isConnectionOutage(verdict) && verdict.relay !== 'credential-refused'
+}
+
 /** The header's status line, or null while it shows the connected place label instead. */
 export type SessionStatusLine = { label: string; withRetrySuffix: boolean } | null
 
@@ -45,20 +51,13 @@ export function sessionStatusLine(args: {
   /** The calmed state: a short self-healing drop still reads connected. */
   presentedConnState: ConnectionState
   pendingPath: MobileConnectionPath | null
-  relayHostReachability: RelayHostReachability
+  /** sessionRetryAvailable, so the suffix appears exactly when the line is a retry button. */
   retryShown: boolean
 }): SessionStatusLine {
   const { verdict } = args
   // Why: errors skip the calm window, like the host header; a short drop never produces one.
   if (isSessionErrorVerdict(verdict)) {
-    return {
-      label: verdictDisplayLabel(verdict),
-      // Retrying cannot repair a refused pairing or credential; their copy asks for a re-pair.
-      withRetrySuffix:
-        args.retryShown &&
-        isConnectionOutage(verdict) &&
-        args.relayHostReachability !== 'credential-refused'
-    }
+    return { label: verdictDisplayLabel(verdict), withRetrySuffix: args.retryShown }
   }
   if (args.presentedConnState === 'connected') {
     return null

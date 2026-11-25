@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
 import {
   sessionConnectionVerdict,
+  sessionRetryAvailable,
   sessionStatusDot,
   sessionStatusLine,
   type SessionConnectionVerdictInputs
@@ -24,17 +25,18 @@ function verdict(overrides: Partial<SessionConnectionVerdictInputs> = {}): Conne
   })
 }
 
+// The hook passes sessionRetryAvailable as retryShown; with canReconnect the line mirrors it.
 function line(
   overrides: Partial<SessionConnectionVerdictInputs> = {},
   presentedConnState: SessionConnectionVerdictInputs['state'] = 'reconnecting',
-  retryShown = false
+  canReconnect = false
 ) {
+  const current = verdict(overrides)
   return sessionStatusLine({
-    verdict: verdict(overrides),
+    verdict: current,
     presentedConnState,
     pendingPath: overrides.pendingPath ?? null,
-    relayHostReachability: overrides.relayHostReachability ?? 'connecting',
-    retryShown
+    retryShown: sessionRetryAvailable(current, canReconnect)
   })
 }
 
@@ -85,6 +87,25 @@ describe('sessionStatusLine', () => {
       label: 'Relay refused access for Work laptop',
       withRetrySuffix: false
     })
+  })
+})
+
+describe('sessionRetryAvailable', () => {
+  it('offers a redial for outages only, never for a refused pairing or Relay credential', () => {
+    expect(sessionRetryAvailable(verdict({ relayHostReachability: 'host-offline' }), true)).toBe(
+      true
+    )
+    expect(sessionRetryAvailable(verdict({ relayHostReachability: 'unreachable' }), true)).toBe(
+      true
+    )
+    expect(
+      sessionRetryAvailable(verdict({ relayHostReachability: 'credential-refused' }), true)
+    ).toBe(false)
+    expect(sessionRetryAvailable(verdict({ pairingRejected: true }), true)).toBe(false)
+    expect(sessionRetryAvailable(verdict({ reconnectAttempts: 1 }), true)).toBe(false)
+    expect(sessionRetryAvailable(verdict({ relayHostReachability: 'host-offline' }), false)).toBe(
+      false
+    )
   })
 })
 

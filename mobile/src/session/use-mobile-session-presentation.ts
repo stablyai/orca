@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { MobileAnimatedInterpolation } from '../platform/animated-handles'
-import { isConnectionOutage } from '../transport/connection/connection-health'
 import { useRelayRecoveryStatus } from '../transport/connection/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useInitialSessionTerminalAutoCreate } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
@@ -12,6 +11,7 @@ import { useCalmConnectionState } from '../transport/connection/calm-connection-
 import {
   isSessionErrorVerdict,
   sessionConnectionVerdict,
+  sessionRetryAvailable,
   sessionStatusDot,
   sessionStatusLine
 } from './session-connection-verdict'
@@ -83,8 +83,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
   })
   // Errors, refused pairings included, keep the title block visible beside side-rail tabs.
   const connectionEscalated = isSessionErrorVerdict(connectionVerdict)
-  // auth-failed needs a re-pair, which a redial cannot give.
-  const showConnectionRetry = isConnectionOutage(connectionVerdict) && forceReconnectHost !== null
+  const showConnectionRetry = sessionRetryAvailable(connectionVerdict, forceReconnectHost !== null)
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
@@ -94,7 +93,6 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     verdict: connectionVerdict,
     presentedConnState,
     pendingPath: relayRecovery.pendingPath,
-    relayHostReachability: relayRecovery.relayHostReachability,
     retryShown: showConnectionRetry
   })
   const statusDot = sessionStatusDot({ verdict: connectionVerdict, connState, presentedConnState })
