@@ -1,6 +1,6 @@
 import { linearIssueReadError } from '@/lib/work-items/linear/linear-read-error'
 import type { TaskPageProviderMetadataModel } from '../../use-task-page-provider-metadata'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../../shared/linear/issue-read-limits'
 import { useTranslate } from '@/i18n/use-translate'
 import type { LinearTeam } from '../../../../../../shared/linear/workspace-types'
@@ -46,7 +46,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
     linearCustomViewContentsError,
     availableTeams
   } = model
-  // Memoize normalized selection because its state-writing effect would otherwise rerun on every render.
+  // Memoize normalized selection because its render-time reconcile would otherwise rerun on every render.
   const rawLinearTeamSelection = settings?.defaultLinearTeamSelection
   const defaultLinearTeamSelection = useMemo(
     () => storedLinearTeamSelection(rawLinearTeamSelection),
@@ -182,14 +182,25 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
   }, [availableTeams, linearIssueTeams])
 
   // Why: team IDs belong to one workspace, so a workspace switch must not leave the list filtered by stale team IDs.
-  useEffect(() => {
-    if (linearTeamOptions.length === 0) {
-      return
-    }
+  // Reconcile during render, keyed on team ids: options are rebuilt every render while an issue target change is pending.
+  const linearTeamOptionIds = useMemo(
+    () => linearTeamOptions.map((team) => team.id).join('\n'),
+    [linearTeamOptions]
+  )
+  const [reconciledTeamInputs, setReconciledTeamInputs] = useState<{
+    teamIds: string
+    selection: string[] | null
+  } | null>(null)
+  if (
+    linearTeamOptions.length > 0 &&
+    (reconciledTeamInputs?.teamIds !== linearTeamOptionIds ||
+      reconciledTeamInputs.selection !== defaultLinearTeamSelection)
+  ) {
+    setReconciledTeamInputs({ teamIds: linearTeamOptionIds, selection: defaultLinearTeamSelection })
     setLinearTeamSelection(
       reconcileLinearTeamSelection(linearTeamOptions, defaultLinearTeamSelection)
     )
-  }, [linearTeamOptions, defaultLinearTeamSelection])
+  }
   const nextModel = model as typeof model & {
     defaultLinearTeamSelection: typeof defaultLinearTeamSelection
     linearTeamSelection: typeof linearTeamSelection

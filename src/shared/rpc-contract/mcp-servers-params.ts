@@ -21,10 +21,14 @@ const PasteSource = z
   .min(1, 'Paste a URL or the command that starts the server')
   .max(4096)
 
+// `workspaces`: where it's on from the start, in the same write (a repo's "Add a server for this
+// repo"); all workspaces without it.
+const AddedWorkspaces = { workspaces: McpServerWorkspacesSchema.optional() }
+
 export const McpServerAdd = z.union([
   // `name` renames a paste that names one server; a paste naming several adds each.
-  z.strictObject({ source: PasteSource, name: ServerName.optional() }),
-  z.strictObject({ config: BotToolInputSchema })
+  z.strictObject({ source: PasteSource, name: ServerName.optional(), ...AddedWorkspaces }),
+  z.strictObject({ config: BotToolInputSchema, ...AddedWorkspaces })
 ])
 
 export const McpServerUpdate = z.strictObject({
@@ -88,9 +92,12 @@ export const McpServerSetAgentEnabled = z.object({
   enabled: z.boolean()
 })
 
+// `base` is the choice the edit was made from, so the host writes only what changed; an older host
+// drops it and stores `workspaces` whole.
 export const McpServerSetWorkspaces = z.object({
   id: ServerId,
-  workspaces: McpServerWorkspacesSchema
+  workspaces: McpServerWorkspacesSchema,
+  base: McpServerWorkspacesSchema.optional()
 })
 
 export const McpServerSetSharedProcess = z.object({ id: ServerId, enabled: z.boolean() })

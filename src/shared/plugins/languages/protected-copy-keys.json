@@ -1660,6 +1660,7 @@
     "settings.mcpServers.agents.all",
     "settings.mcpServers.agents.allOff",
     "settings.mcpServers.agents.allOn",
+    "settings.mcpServers.agents.blocked",
     "settings.mcpServers.agents.none",
     "settings.mcpServers.agents.some",
     "settings.mcpServers.agents.someOff",

@@ -199,8 +199,9 @@ worker. `orca/worker` holds only types, so import it with `import type`; a value
 the worker starts.
 
 A worker does not inherit Orca's full environment: tokens, shell-rc variables and display variables
-(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, locale and temp-dir
-variables, plus `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
+(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, the login name (`USER`,
+`LOGNAME`, `USERNAME`), locale and temp-dir variables, plus `XDG_RUNTIME_DIR`,
+`DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
 environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
 Orca started in. `GIT_TERMINAL_PROMPT=0` is set, so `git` fails instead of asking for a password.
 This filter only keeps secrets held in Orca's environment out of plugins; it is not a sandbox. A

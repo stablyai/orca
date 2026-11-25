@@ -7500,7 +7500,9 @@
         "replaced": "Ajan yeni bir soru sordu. Soruyu okuyup yanıtlayın.",
         "notNow": "Şimdi değil",
         "replacedByNewer": "Daha yeni bir soruyla değiştirildi",
-        "skipped": "Atlandı"
+        "skipped": "Atlandı",
+        "heldImagesLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} fotoğraf alır. Birkaçını kaldırıp yeniden dene.",
+        "heldSkillsLimit": "Yanıtların tek bir yorum olarak gider ve bir yorum en fazla {{max}} beceri alır. Birkaçını kaldırıp yeniden dene."
       }
     },
     "needs": {
@@ -8568,5 +8570,8 @@
       "needsWindow": "Güncellenemedi. {{desktop}} üzerinde Orca’yı açın.",
       "failed": "Ajan listesi güncellenemedi."
     }
+  },
+  "mcpServers": {
+    "agentBlocked": "Kuruluşunuzun Claude ayarları tarafından engellendi"
   }
 }
