@@ -109,9 +109,14 @@ type Item = { session?: string; child: boolean }
 /** The tag a continuation puts before a moved message's id (`relay:<relay>:<seq>:`). */
 const CONTINUED_ID = /^relay:[^:]*:\d+:/
 
-function moveSession(from: Map<string, Item>, to: Map<string, Item>, session?: string): void {
+function moveSession(
+  from: Map<string, Item>,
+  to: Map<string, Item>,
+  session?: string,
+  except?: string
+): void {
   for (const [id, item] of from) {
-    if (item.session === session) {
+    if (item.session === session && id !== except) {
       from.delete(id)
       to.set(id, item)
     }
@@ -295,8 +300,14 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private closeMessages(session: string | undefined, except?: string): void {
     if (except === undefined) {
       this.current.delete(session)
+    } else {
+      // Another message only pauses a cut one: OpenCode resumes a message's id after another's.
+      moveSession(this.cutMessages, this.pausedCuts, session, except)
     }
-    for (const open of [this.messages, this.cutMessages, this.pausedCuts]) {
+    for (const open of [this.messages, this.cutMessages, except ? null : this.pausedCuts]) {
+      if (!open) {
+        continue
+      }
       for (const [id, item] of open) {
         if (id !== except && item.session === session) {
           open.delete(id)

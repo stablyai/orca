@@ -122,11 +122,14 @@ describe('ACP relay ack floor', () => {
     expect(cuts).toEqual([2, 3])
     // Each cut names the message it splits, so a reattach moves exactly that one.
     expect(cutKeys[0]).toEqual([JSON.stringify(['s', 'm1'])])
-    // A plan or call doesn't end it (it may resume under its id); the next message does.
+    // A plan, call or another message doesn't end it (it may resume under its id); a user chunk does.
     await send(update('plan', { entries: [] }))
     await send(chunk('c2', 'm1'))
     await send(chunk('d', 'm2'))
-    expect(cuts).toEqual([2, 3, 4, 5])
+    expect(cuts).toEqual([2, 3, 4, 5, 6])
+    await send(update('user_message_chunk', { content: { type: 'text', text: 'next' } }))
+    await send(chunk('e', 'm3'))
+    expect(cuts).toEqual([2, 3, 4, 5, 6])
   })
 
   it('never holds a cut message that resumes after a call, so a replay never repeats its saved text', async () => {
@@ -136,6 +139,18 @@ describe('ACP relay ack floor', () => {
     await output.settle(true)
     await send(update('plan', { entries: [] }), chunk('b', 'm1'))
     expect(acks.at(-1)).toBe(3)
+  })
+
+  it('never holds a cut message that resumes after another message, as OpenCode resumes ids', async () => {
+    const { output, acks, cutKeys, send, prompt } = rig()
+    prompt()
+    await send(chunk('a', 'm1'))
+    await output.settle(true)
+    await send(chunk('b', 'm2'), chunk('a2', 'm1'))
+    expect(acks.at(-1)).toBeGreaterThanOrEqual(2)
+    await send(chunk('a3', 'm1'))
+    expect(acks.at(-1)).toBe(4)
+    expect(cutKeys.at(-1)).toContain(JSON.stringify(['s', 'm1']))
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {
