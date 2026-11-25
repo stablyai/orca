@@ -322,10 +322,6 @@
     }
   },
   "app": {
-    "saving": {
-      "delayedTitle": "Profile storage is taking longer than usual",
-      "delayedDescription": "Further saves may be delayed while this operation finishes."
-    },
     "recoverableError": {
       "rootTitle": "Orca hit a renderer error.",
       "rootDescription": "The app shell could not finish rendering. Retry to remount it, or relaunch Orca if the error persists.",

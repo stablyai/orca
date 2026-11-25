@@ -322,10 +322,6 @@
     }
   },
   "app": {
-    "saving": {
-      "delayedTitle": "Profilin depolanması normalden uzun sürüyor",
-      "delayedDescription": "Bu işlem tamamlanana kadar sonraki kaydetme işlemleri gecikebilir."
-    },
     "recoverableError": {
       "rootTitle": "Orca bir render hatasıyla karşılaştı.",
       "rootDescription": "Uygulama kabuğu oluşturmayı tamamlayamadı. Yeniden bağlamak için tekrar deneyin veya hata devam ederse Orca'yı yeniden başlatın.",
