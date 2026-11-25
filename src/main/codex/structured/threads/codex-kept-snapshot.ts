@@ -170,6 +170,8 @@ export async function readKeptCodexSnapshot(input: {
   >
   threadId: string
   carriedThreadIds?: readonly string[]
+  /** The app-server runs for this chat alone (never a shared one). */
+  ownServer: boolean
   timeoutMs: number
   onError: (threadId: string, error: unknown) => void
 }): Promise<KeptCodexSnapshot> {
@@ -178,13 +180,13 @@ export async function readKeptCodexSnapshot(input: {
   const spawns: KeptCodexSpawn[] = []
   /** Children whose parent couldn't be read: placed under the chat only if no read turn spawned them. */
   const unparented: string[] = []
-  // The kept app-server is this chat's own: every other thread it has loaded is one of its agents.
-  const loaded = await loadedThreadIds(input.connection, input.timeoutMs).catch(
-    (error: unknown) => {
-      input.onError(input.threadId, error)
-      return []
-    }
-  )
+  // Only a chat's own app-server's loaded threads are all its agents; a shared one holds others'.
+  const loaded = input.ownServer
+    ? await loadedThreadIds(input.connection, input.timeoutMs).catch((error: unknown) => {
+        input.onError(input.threadId, error)
+        return []
+      })
+    : []
   let wave = [input.threadId, ...(input.carriedThreadIds ?? []), ...loaded]
   while (wave.length > 0) {
     const threads = [...new Set(wave)].filter((id) => !seen.has(id))
@@ -283,7 +285,8 @@ export async function openKeptCodexState(input: {
   const { connection, translator, journal } = input
   const snapshot = await readKeptCodexSnapshot({
     ...input,
-    carriedThreadIds: keptCodexThreadIds(connection.relay)
+    carriedThreadIds: keptCodexThreadIds(connection.relay),
+    ownServer: connection.relay?.ownServer === true
   }).catch(async (error: unknown) => {
     input.onError(input.threadId, error)
     await connection.relay?.keep?.()

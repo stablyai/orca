@@ -448,6 +448,7 @@ describe('codex rows across a reattach', () => {
       translator,
       threadId: 'main',
       carriedThreadIds: [],
+      ownServer: true,
       timeoutMs: 1_000,
       onError: () => {}
     })
@@ -491,6 +492,7 @@ describe('codex rows across a reattach', () => {
         },
         relay: {
           reattached: true,
+          ownServer: true,
           releaseOutput: () => {},
           endedWork: () => undefined,
           openWork: () => undefined,
