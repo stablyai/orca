@@ -32,7 +32,6 @@ import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/sessi
 import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import { resolveWorktreeModelDiscoveryRuntime } from '../native-chat/session/options/catalog/native-chat-session-option-discovery'
-import { agentPickerListsCliModels } from './agent-launch-picker-cli-model-catalog'
 import {
   agentPickerModelCatalogReads,
   readAgentPickerLaunchSupport
@@ -218,7 +217,7 @@ export function useAgentLaunchPickerInventorySource(
         ).map((entry) => ({
           ...entry,
           coherentCatalog,
-          ...((!target && !(cliDiscoveryRuntime && agentPickerListsCliModels(entry))) ||
+          ...(!reads.readsCatalog(entry) ||
           !entry.surfaces.length ||
           (registeredAgents &&
             !registeredAgents.some(({ agent }) => agent === entry.agent) &&

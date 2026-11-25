@@ -48,6 +48,13 @@ export function nativeChatPermissionModeDescription(
 ): string {
   switch (mode) {
     case 'ask':
+      // dima's read-only preset refuses what Ask would ask about.
+      if (agent === 'dima') {
+        return t(
+          'components.native-chat.composer.permissionAskReadOnlyDescription',
+          'Only reads; refuses edits and commands instead of asking'
+        )
+      }
       if (agent !== 'claude') {
         return t(
           'components.native-chat.composer.permissionAskSharedDescription',
@@ -59,7 +66,7 @@ export function nativeChatPermissionModeDescription(
         "Asks before edits and commands your settings don't allow"
       )
     case 'accept-edits':
-      if (agent === 'antigravity') {
+      if (agent === 'antigravity' || agent === 'dima') {
         return t(
           'components.native-chat.composer.permissionAcceptEditsAntigravityDescription',
           'Approves file edits; asks for the rest'

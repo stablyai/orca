@@ -130,7 +130,9 @@ const NATIVE_CHAT_AGENT_PROFILES: Record<NativeChatAgent, NativeChatAgentProfile
   codebuddy: {
     skillPrefix: '/',
     skillSourceOwner: 'codebuddy'
-  }
+  },
+  // dima's ACP reports its own commands, and its skills are not among them.
+  dima: null
 }
 
 /** Whether `skill` under `source` reaches `profile`'s agent: shared roots unless the profile sets

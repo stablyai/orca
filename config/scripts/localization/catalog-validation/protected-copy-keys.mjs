@@ -59,6 +59,7 @@ export const PINNED_PROTECTED_COPY = [
       'components.native-chat.composer.permissionAppliesNextMessage',
       'components.native-chat.composer.permissionAsk',
       'components.native-chat.composer.permissionAskDescription',
+      'components.native-chat.composer.permissionAskReadOnlyDescription',
       'components.native-chat.composer.permissionAskSharedDescription',
       'components.native-chat.composer.permissionAuto',
       'components.native-chat.composer.permissionAutoDescription',

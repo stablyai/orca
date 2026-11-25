@@ -12,9 +12,15 @@ import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git
 /** Agents with no structured chat have no host model catalog, so they list models through their CLI. */
 export function agentPickerListsCliModels(entry: Pick<AgentPickerEntry, 'agent'>): boolean {
   return (
-    !isNativeChatAgent(entry.agent) &&
+    (!isNativeChatAgent(entry.agent) || agentPickerListsOnlyCliModels(entry)) &&
     getAgentSessionOptionCatalog(entry.agent)?.listModels !== undefined
   )
+}
+
+/** Its picker names terminal selectors that a chat launch translates, so its chat's host catalog,
+ *  whose ids a terminal would misread, never stands in for them. */
+export function agentPickerListsOnlyCliModels(entry: Pick<AgentPickerEntry, 'agent'>): boolean {
+  return getAgentSessionOptionCatalog(entry.agent)?.chatModelId !== undefined
 }
 
 export async function readAgentPickerCliModelCatalog(

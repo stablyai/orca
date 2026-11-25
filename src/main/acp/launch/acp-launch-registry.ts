@@ -43,6 +43,7 @@ import { QWEN_CODE_LAUNCH_SPEC } from '../../qwen-code/qwen-code-acp-launch-spec
 import { CLINE_LAUNCH_SPEC } from '../../cline/cline-acp-launch-spec'
 import { DEVIN_LAUNCH_SPEC } from '../../devin/devin-acp-launch-spec'
 import { CODEBUDDY_LAUNCH_SPEC } from '../../codebuddy/codebuddy-acp-launch-spec'
+import { DIMA_LAUNCH_SPEC } from '../../dima/dima-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { OPENCODE_MINIMUM_VERSIONS, OPENCODE2_MINIMUM_VERSIONS } from './acp-minimum-versions'
 
@@ -186,7 +187,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   QWEN_CODE_LAUNCH_SPEC,
   CLINE_LAUNCH_SPEC,
   DEVIN_LAUNCH_SPEC,
-  CODEBUDDY_LAUNCH_SPEC
+  CODEBUDDY_LAUNCH_SPEC,
+  DIMA_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

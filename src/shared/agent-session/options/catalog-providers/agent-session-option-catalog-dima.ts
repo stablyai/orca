@@ -1,6 +1,10 @@
 import { agentChoiceCliApply } from '../../../agent-launch/choices/agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
-import { dimaModelLaunchArgs, parseDimaModelList } from '../model-catalog/dima-model-list-probe'
+import {
+  dimaModelLaunchArgs,
+  parseDimaModelList,
+  parseDimaModelSelector
+} from '../model-catalog/dima-model-list-probe'
 
 /** Private enrichment-gate parser with option-free rows; actual probes run in main (agent-model-probe-spec.ts). */
 function parseDimaCatalogModels(stdout: string): CatalogModel[] {
@@ -35,6 +39,12 @@ export const DIMA_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   },
   // Only a listing proves a selector; with no daemon to ask, saved picks stay and Default runs bare `dima`.
   discoveredModelsAreAuthoritative: true,
+  // A chat's model option takes the provider's own model id, and lists none two providers share.
+  chatModelId: (model, listed) => {
+    const modelId = parseDimaModelSelector(model)?.modelId
+    const sharing = listed.filter((id) => parseDimaModelSelector(id)?.modelId === modelId)
+    return modelId !== undefined && sharing.length === 1 && sharing[0] === model ? modelId : null
+  },
   // No dima command lists every provider's models; the gate names the App Server read main makes.
   listModels: { command: 'provider.models.query', parse: parseDimaCatalogModels }
 }

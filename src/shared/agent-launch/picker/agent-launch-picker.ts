@@ -3,6 +3,7 @@ import type { TextActionPickerCatalog } from './agent-launch-picker-text-action'
 import { agentPickerLaunchChoices } from './agent-launch-picker-effective-choices'
 import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
 import { agentPickerArgumentsKnown } from './agent-launch-picker-authority'
+import { agentPickerChatLaunchModel } from './agent-launch-picker-chat-model'
 
 import { agentPickerOptions } from './agent-launch-picker-catalog'
 import { projectAgentLaunchInputViews } from '../choices/agent-launch-profile'
@@ -173,7 +174,21 @@ export function agentPickerFreshLaunchInputs(
     // Why: choosing a control can materialize settings text without authoring Arguments.
     return agentPickerLaunchInputs({ ...draft, arguments: undefined })
   }
-  return agentPickerLaunchInputs(draft, entry)
+  const inputs = agentPickerLaunchInputs(draft, entry)
+  // A chat runs a listed terminal selector by its own id; launchers refuse an unproven one first.
+  const chat =
+    destination.surface === 'chat' && entry
+      ? agentPickerChatLaunchModel(entry, draft.choices.model)
+      : undefined
+  return chat && 'model' in chat && chat.model !== undefined && chat.model !== draft.choices.model
+    ? {
+        ...inputs,
+        chatSessionOptions: {
+          ...(inputs.chatSessionOptions ?? inputs.sessionOptions),
+          model: chat.model
+        }
+      }
+    : inputs
 }
 
 export function agentPickerButtonOrder(entry: AgentPickerEntry): AgentPickerSurface[] {

@@ -11,6 +11,7 @@ import {
 } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
+import { agentPickerChatLaunchRefusal } from '@/components/agent/agent-launch-picker-chat-model-refusal'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
 import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
@@ -102,6 +103,15 @@ export function useTabAgentMenuLaunch({
             worktreeId
           }))
       ) {
+        return false
+      }
+      // The form stays open on a pick its chat can't run, so the person can choose another.
+      const refusal =
+        row.kind === 'chat' && draft && pickerEntry
+          ? agentPickerChatLaunchRefusal(pickerEntry, draft)
+          : null
+      if (refusal) {
+        toast.error(refusal)
         return false
       }
       const { agent } = row

@@ -41,7 +41,8 @@ describe('standing instructions on every start', () => {
       'qwen-code': true,
       cline: true,
       devin: false,
-      codebuddy: true
+      codebuddy: true,
+      dima: false
     })
   })
 

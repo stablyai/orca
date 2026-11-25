@@ -27,6 +27,7 @@ const WELL_KNOWN_LABELS: Record<string, string> = {
   hermes: 'Hermes',
   goose: 'Goose',
   devin: 'Devin',
+  dima: 'DimAgent',
   ante: 'Ante',
   trae: 'Trae',
   kimi: 'Kimi',

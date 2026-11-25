@@ -120,6 +120,13 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     slashCommand: '/login',
     installCommand: 'npm install -g @tencent-ai/codebuddy-code'
   },
+  // dima's /connect signs in to an account or adds a provider's key.
+  {
+    agent: 'dima',
+    loginCommand: ['dima'],
+    slashCommand: '/connect',
+    installCommand: 'npm install -g dimcode-alpha'
+  },
   // An `agy` login signs in only chats on agy (`system`); chats on Orca's server keep their own.
   {
     agent: 'antigravity',

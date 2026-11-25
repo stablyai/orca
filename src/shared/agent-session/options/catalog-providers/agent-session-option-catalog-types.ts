@@ -77,6 +77,9 @@ export type AgentSessionOptionCatalog = {
   /** For a host too old to say so itself: its model listing names the model the account is
    *  configured to run, so a new chat may run the listed default. */
   hostListingNamesConfiguredModel?: true
+  /** Its ids are terminal launch selectors its structured chat can't take: the chat's own id for
+   *  `model`, or null unless `listed` (a complete listing) proves exactly one. */
+  chatModelId?: (model: string, listed: readonly string[]) => string | null
   listModels?: {
     command: string
     parse: (stdout: string) => CatalogModel[]
