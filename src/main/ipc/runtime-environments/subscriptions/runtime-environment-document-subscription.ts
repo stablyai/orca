@@ -239,7 +239,7 @@ export async function subscribeRuntimeEnvironmentForDocument(
         pendingSubscriptions.get(subscriptionId) !== pending ||
         setupController.signal.aborted ||
         rendererGone ||
-        document.isGone() ||
+        !document.isCurrent() ||
         transportClosed
       ) {
         disposeRendererLifetime()
