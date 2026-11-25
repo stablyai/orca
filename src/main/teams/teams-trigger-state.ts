@@ -21,8 +21,8 @@ const StateSchema = z.object({
       z.object({ from: z.number(), until: z.number(), topic: z.string().nullish() })
     )
     .optional(),
-  /** The chat list's page a budget stopped at, and the window it was read for. */
-  chatsNext: z.object({ link: z.string(), from: z.number() }).optional()
+  /** The chat list's pages a budget stopped at, oldest first, each with the window it was read for. */
+  chatsNext: z.array(z.object({ link: z.string(), from: z.number() })).optional()
 })
 
 export type TeamsTriggerState = z.infer<typeof StateSchema>

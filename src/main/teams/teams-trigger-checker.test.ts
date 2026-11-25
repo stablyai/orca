@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AutomationRunEvent } from '../../shared/automation-event-triggers'
 import type { TeamsGraph } from './teams-graph'
+import { messagesIn } from './teams-mention-reads'
 import { TeamsTriggerChecker } from './teams-trigger-checker'
 import type { TeamsTriggerState } from './teams-trigger-state'
 
@@ -234,6 +235,73 @@ describe('TeamsTriggerChecker', () => {
     expect(started.map((event) => event.key)).toEqual([`teams:chat/${RELEASE}/1732557620000`])
     expect(reads.filter((path) => path.includes('lastModifiedDateTime lt'))).toEqual([
       `/chats/${encodeURIComponent(RELEASE)}/messages?$top=50&$orderby=lastModifiedDateTime desc&$filter=lastModifiedDateTime gt ${iso(T0 - 120_000)} and lastModifiedDateTime lt ${iso(T0 + 47_001)}`
+    ])
+  })
+
+  it('keeps every chat-list page a budget stopped at, and shrinks a window whose budget shares one change time', async () => {
+    const reads: string[] = []
+    let page = 0
+    const endless: TeamsGraph = {
+      account: async () => ({ userId: ME, grantedScopes: ['Chat.Read'] }),
+      post: () => Promise.reject(new Error('the check never posts')),
+      get: async (path, shape) => {
+        reads.push(path)
+        if (path.includes('/messages?')) {
+          return shape.parse({
+            value: [message(`1732557${page}`, DANA, [], T0 + 30_000)],
+            '@odata.nextLink': 'https://graph.microsoft.com/v1.0/chats/x/messages?$skiptoken=tie'
+          })
+        }
+        page += 1
+        return shape.parse({
+          value: [
+            {
+              id: `19:chat${page}@thread.v2`,
+              topic: null,
+              chatType: 'group',
+              lastMessagePreview: { createdDateTime: iso(T0 + 30_000) }
+            }
+          ],
+          '@odata.nextLink': `https://graph.microsoft.com/v1.0/me/chats?$skiptoken=${page}`
+        })
+      }
+    }
+
+    // Graph lists by change time only, so a read whose whole budget shares one time reads before it.
+    const tied = await messagesIn(endless, RELEASE, { from: T0, until: T0 + 30_001 })
+    expect(tied.rest).toEqual({ from: T0, until: T0 + 30_000 })
+
+    const resumedLink = 'https://graph.microsoft.com/v1.0/me/chats?$skiptoken=saved'
+    let state: TeamsTriggerState = {
+      userId: ME,
+      cursor: T0,
+      listeners: { 'b-on': T0 },
+      chatsNext: [{ link: resumedLink, from: T0 - 180_000 }]
+    }
+    const checker = new TeamsTriggerChecker({
+      automations: () => [
+        {
+          id: 'a-on',
+          enabled: true,
+          bot: { botId: 'b-on', runsIn: 'new', resultsTo: 'chat' },
+          on: [{ id: 'on-1', source: 'teams', event: 'mentioned' }]
+        }
+      ],
+      bots: () => [{ id: 'b-on', teams: true }],
+      graph: () => endless,
+      runForEvent: async () => {},
+      readState: async () => structuredClone(state),
+      writeState: async (next) => {
+        state = next
+      },
+      now: () => T0 + 60_000
+    })
+    await checker.tick()
+    expect(reads).toContain(resumedLink)
+    // Both lists ran out of budget: the resumed one and the fresh one each keep their next page.
+    expect(state.chatsNext).toEqual([
+      { link: 'https://graph.microsoft.com/v1.0/me/chats?$skiptoken=4', from: T0 - 180_000 },
+      { link: 'https://graph.microsoft.com/v1.0/me/chats?$skiptoken=8', from: T0 - 120_000 }
     ])
   })
 })

@@ -33,6 +33,8 @@ const RATE_LIMIT_BACKOFF_MS = 60_000
 const ERROR_BACKOFF_MS = 5 * 60_000
 const MAX_BACKOFF_MS = 30 * 60_000
 const MAX_REMEMBERED_FIRES = 500
+// Chat-list pages left to read; one is read per check, oldest first.
+const MAX_CHAT_PAGES_KEPT = 4
 const TEAMS_LINK = /^https:\/\/(teams\.microsoft\.com|teams\.cloud\.microsoft)\//
 
 type Target = { automationId: string; botId: string; rule: AutomationTeamsTrigger }
@@ -176,6 +178,10 @@ export class TeamsTriggerChecker {
     if (state.userId !== userId || state.cursor === undefined) {
       state.userId = userId
       state.cursor = now
+      // The next read overlaps the time before now; no bot counts a message from then.
+      for (const botId of Object.keys(state.listeners)) {
+        state.listeners[botId] = now
+      }
       delete state.backlog
       delete state.chatsNext
       return
@@ -190,19 +196,25 @@ export class TeamsTriggerChecker {
       : null
     // Built aside and saved only once every read succeeded, so a failed check loses nothing.
     const listed: { chat: Pick<GraphChat, 'id' | 'topic'>; window: ChatWindow }[] = []
-    let chatsNext: TeamsTriggerState['chatsNext']
-    const resumed = state.chatsNext && state.chatsNext.from >= floor ? state.chatsNext : undefined
+    const [resumed, ...chatsNext] = (state.chatsNext ?? []).filter((page) => page.from >= floor)
     if (resumed) {
       const page = await changedChats(graph, resumed.link, resumed.from, only)
       listed.push(...page.chats.map((chat) => ({ chat, window: { from: resumed.from } })))
-      chatsNext = page.next ? { link: page.next, from: resumed.from } : undefined
+      if (page.next) {
+        chatsNext.unshift({ link: page.next, from: resumed.from })
+      }
     }
     const fresh = await changedChats(graph, CHATS_BY_LAST_MESSAGE, from, only)
     listed.push(...fresh.chats.map((chat) => ({ chat, window: { from } })))
-    if (fresh.next && chatsNext) {
-      console.warn('[teams] over 200 chats changed in a row of checks; some are skipped')
+    if (fresh.next) {
+      chatsNext.push({ link: fresh.next, from })
     }
-    chatsNext ??= fresh.next ? { link: fresh.next, from } : undefined
+    if (chatsNext.length > MAX_CHAT_PAGES_KEPT) {
+      console.warn(
+        '[teams] over 200 chats changed in each of several checks; the oldest are skipped'
+      )
+      chatsNext.splice(0, chatsNext.length - MAX_CHAT_PAGES_KEPT)
+    }
     const backlog: NonNullable<TeamsTriggerState['backlog']> = {}
     const keep = (chat: Pick<GraphChat, 'id' | 'topic'>, rest: Required<ChatWindow>) => {
       const had = backlog[chat.id]
@@ -239,7 +251,7 @@ export class TeamsTriggerChecker {
     } else {
       delete state.backlog
     }
-    if (chatsNext) {
+    if (chatsNext.length > 0) {
       state.chatsNext = chatsNext
     } else {
       delete state.chatsNext

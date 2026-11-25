@@ -67,10 +67,13 @@ export async function messagesIn(
   const oldest = Math.min(
     ...messages.map((message) => at(message.lastModifiedDateTime)).filter(Number.isFinite)
   )
-  // The next check reads from the oldest change seen; one read twice is dropped by its ref.
-  return next && Number.isFinite(oldest)
-    ? { messages, rest: { from: window.from, until: oldest + 1 } }
-    : { messages }
+  if (!next || !Number.isFinite(oldest)) {
+    return { messages }
+  }
+  // The next check reads from the oldest change seen; one read twice is dropped by its ref. When a
+  // whole budget shares that change time, it reads before it, so the window always shrinks.
+  const until = oldest + 1 < (window.until ?? Number.POSITIVE_INFINITY) ? oldest + 1 : oldest
+  return { messages, rest: { from: window.from, until } }
 }
 
 /** A new message from someone else that @mentions the signed-in person; edits of older ones never count. */
