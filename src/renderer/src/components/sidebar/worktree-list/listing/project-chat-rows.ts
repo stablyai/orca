@@ -50,45 +50,56 @@ function useWorkspacesWithAgents(ids: readonly string[]): ReadonlySet<string> {
   return useMemo(() => new Set(withAgents.split('\n').filter(Boolean)), [withAgents])
 }
 
-type ProjectChatRowsArgs = {
-  groupBy: WorktreeGroupBy
-  collapsedGroups: ReadonlySet<string>
+/** Where a header's main checkouts come from. */
+type ProjectHomes = {
   worktreesByRepo: Readonly<Record<string, readonly Worktree[] | undefined>>
   isRowHidden: HiddenProjects['isRowHidden']
+  /** Each project section's repo ids: one project can span registrations with different ids. */
+  sectionRepoIds: ReadonlyMap<string, ReadonlySet<string>>
+}
+
+type ProjectChatRowsArgs = ProjectHomes & {
+  groupBy: WorktreeGroupBy
+  collapsedGroups: ReadonlySet<string>
+}
+
+type PlannedSections = {
+  occurrencePlan: { sections: readonly { key: string; group: { repoIds: ReadonlySet<string> } }[] }
 }
 
 /** The viewport's rows: the plan's, plus the Tree card style's section lines. */
 export function useProjectTreeRows(
   rows: HostSectionRow[],
   { groupBy, repos, defaultHostId }: Pick<SectionRowsArgs, 'groupBy' | 'repos' | 'defaultHostId'>,
-  collapsedGroups: ReadonlySet<string>
+  collapsedGroups: ReadonlySet<string>,
+  { occurrencePlan: { sections } }: PlannedSections
 ): HostSectionRow[] {
   const worktreesByRepo = useAppStore(selectWorktreesByRepo)
   const enabled = useAppStore((s) => isProjectTreeOn(s.settings))
   // Cached per repos array, so this is the same index the plan used.
   const { isRowHidden } = indexHiddenProjects(repos, defaultHostId)
+  const homes = useMemo<ProjectHomes>(
+    () => ({
+      worktreesByRepo,
+      isRowHidden,
+      sectionRepoIds: new Map(sections.map((section) => [section.key, section.group.repoIds]))
+    }),
+    [worktreesByRepo, isRowHidden, sections]
+  )
   const mainIds = useMemo(
     () =>
       rows.flatMap((row) =>
         row.type === 'header' && row.repo
-          ? headerMainCheckouts(row, row.repo, { worktreesByRepo, isRowHidden }).map(
-              (home) => home.id
-            )
+          ? headerMainCheckouts(row, row.repo, homes).map((home) => home.id)
           : []
       ),
-    [rows, worktreesByRepo, isRowHidden]
+    [rows, homes]
   )
   const withChats = useWorkspacesWithAgents(enabled ? mainIds : [])
   return useMemo(
     () =>
-      enabled
-        ? withProjectChatRows(
-            rows,
-            { groupBy, collapsedGroups, worktreesByRepo, isRowHidden },
-            withChats
-          )
-        : rows,
-    [enabled, rows, groupBy, collapsedGroups, worktreesByRepo, isRowHidden, withChats]
+      enabled ? withProjectChatRows(rows, { ...homes, groupBy, collapsedGroups }, withChats) : rows,
+    [enabled, rows, homes, groupBy, collapsedGroups, withChats]
   )
 }
 
@@ -100,7 +111,7 @@ export function isProjectHome(worktree: Worktree): boolean {
 /** The main checkout on this host; a project checked out on several hosts lists each copy. */
 export function mainCheckoutOf(
   repo: Repo,
-  worktreesByRepo: ProjectChatRowsArgs['worktreesByRepo'],
+  worktreesByRepo: ProjectHomes['worktreesByRepo'],
   hostId: ExecutionHostId
 ): Worktree | undefined {
   return worktreesByRepo[repo.id]?.find(
@@ -114,17 +125,21 @@ export function headerHostId(hostId: ExecutionHostId | undefined, repo: Repo): E
 }
 
 /** The main checkouts a header's Chats stand for. An unsplit all-hosts header covers every shown
- * host copy, rows or not, so it reads the catalog rather than the hosts its rows happen to sit on. */
+ * host copy of each repo id in its section, rows or not, so it reads the catalog rather than the
+ * hosts its rows happen to sit on. */
 function headerMainCheckouts(
   row: GroupHeaderRow,
   repo: Repo,
-  { worktreesByRepo, isRowHidden }: Pick<ProjectChatRowsArgs, 'worktreesByRepo' | 'isRowHidden'>
+  { worktreesByRepo, isRowHidden, sectionRepoIds }: ProjectHomes
 ): Worktree[] {
   if (row.hostId !== undefined) {
     const home = mainCheckoutOf(repo, worktreesByRepo, row.hostId)
     return home ? [home] : []
   }
-  return worktreesByRepo[repo.id]?.filter((home) => isProjectHome(home) && !isRowHidden(home)) ?? []
+  return [...(sectionRepoIds.get(row.key) ?? [repo.id])].flatMap(
+    (repoId) =>
+      worktreesByRepo[repoId]?.filter((home) => isProjectHome(home) && !isRowHidden(home)) ?? []
+  )
 }
 
 function isOpen(row: GroupHeaderRow, collapsedGroups: ReadonlySet<string>): boolean {
@@ -134,9 +149,10 @@ function isOpen(row: GroupHeaderRow, collapsedGroups: ReadonlySet<string>): bool
 /** Adds each open project's Chats, "Worktrees" label and "+ chat / + worktree" line, and a folder group's Chats label. */
 export function withProjectChatRows(
   rows: HostSectionRow[],
-  { groupBy, collapsedGroups, worktreesByRepo, isRowHidden }: ProjectChatRowsArgs,
+  { groupBy, collapsedGroups, ...homes }: ProjectChatRowsArgs,
   mainsWithChats: ReadonlySet<string>
 ): HostSectionRow[] {
+  const { worktreesByRepo } = homes
   if (groupBy !== 'repo') {
     return rows
   }
@@ -195,7 +211,7 @@ export function withProjectChatRows(
     }
     // Listing a hidden main checkout's chats is the point of Tree: "Hide default branch" hides the
     // checkout's row, not its chats. A visible one's card already lists them; empty sections hide.
-    const chatSources = headerMainCheckouts(row, repo, { worktreesByRepo, isRowHidden }).filter(
+    const chatSources = headerMainCheckouts(row, repo, homes).filter(
       (home) => !renderedIds.has(getWorktreeHostIdentity(home)) && mainsWithChats.has(home.id)
     )
     const chatsShown = chatSources.length > 0
