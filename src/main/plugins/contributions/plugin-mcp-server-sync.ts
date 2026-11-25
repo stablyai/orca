@@ -5,6 +5,7 @@ import type { PluginChangeEvent } from '../../../shared/plugins/events/plugin-ch
 import { isMcpServersFeatureEnabled } from '../../mcp-servers/mcp-servers-feature'
 import type { PluginActivationState } from '../../../shared/plugins/approval/plugin-consent-state'
 import {
+  pluginMcpServersVersion,
   syncPluginMcpServers,
   type PluginMcpServers
 } from '../../mcp-servers/mcp-plugin-server-sync'
@@ -22,7 +23,7 @@ type PluginSource = {
   whenReady(): Promise<void>
   onChanged(listener: (event: PluginChangeEvent) => void): () => void
   getDiscovered(): readonly DiscoveredPlugin[]
-  findApprovedPlugin(pluginKey: string): ValidDiscoveredPlugin | null
+  isApprovedPlugin(plugin: ValidDiscoveredPlugin): boolean
   activationState(plugin: ValidDiscoveredPlugin): PluginActivationState
   options: { getPluginConsents(): Record<string, string> }
 }
@@ -39,16 +40,15 @@ export function pluginMcpServers(service: PluginSource): PluginMcpServers {
     if (isInvalidDiscoveredPlugin(plugin)) {
       return []
     }
-    const approved = service.findApprovedPlugin(plugin.pluginKey)
-    if (!approved) {
+    if (!service.isApprovedPlugin(plugin)) {
       if (service.activationState(plugin) === 'pending' && plugin.pluginKey in consents) {
         held.add(plugin.pluginKey)
       }
       return []
     }
-    return approved.manifest.contributes.mcpServers.map((contribution) => ({
-      pluginKey: approved.pluginKey,
-      pluginName: approved.manifest.name,
+    return plugin.manifest.contributes.mcpServers.map((contribution) => ({
+      pluginKey: plugin.pluginKey,
+      pluginName: plugin.manifest.name,
       server: pluginMcpServerTool(contribution)
     }))
   })
@@ -59,6 +59,7 @@ export function pluginMcpServers(service: PluginSource): PluginMcpServers {
  * Syncs after each plugin refresh (startup's first one included) and uninstall; `changed` tells
  * clients when a sync wrote. One sync at a time: a request during one cancels its unwritten
  * snapshot, so a plugin disabled meanwhile is never written back, and runs once more after it.
+ * The same plugin servers as the last settled sync skip the list, as after an appearance change.
  */
 export function installPluginMcpServerSync(
   service: PluginSource,
@@ -70,8 +71,11 @@ export function installPluginMcpServerSync(
   // Why retry: only plugin changes start a sync, so a failed removal would otherwise stay put.
   let failures = 0
   let retry: ReturnType<typeof setTimeout> | null = null
+  let settled: string | null = null
   const sync = async (): Promise<void> => {
     if (!isMcpServersFeatureEnabled()) {
+      // The list may change while off, so the first sync once it's back on reads it.
+      settled = null
       return
     }
     if (retry) {
@@ -90,10 +94,18 @@ export function installPluginMcpServerSync(
         running = run
         // Why after settling: mid-refresh nothing reads as approved, which would drop every server.
         await service.whenReady()
+        const plugins = pluginMcpServers(service)
+        const version = await pluginMcpServersVersion(plugins)
+        if (version === settled) {
+          continue
+        }
+        settled = null
         try {
-          if (await syncPluginMcpServers(pluginMcpServers(service), { signal: run.signal })) {
+          const result = await syncPluginMcpServers(plugins, { signal: run.signal })
+          if (result.wrote) {
             changed()
           }
+          settled = result.settled ? version : null
           failures = 0
         } catch (error) {
           log(`[mcp-servers] could not sync plugin servers: ${String(error)}`)

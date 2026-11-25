@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { hasAwakeStructuredChat } from '@/store/slices/agent-status/structured-sessions/structured-chat-slept-at'
-import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+import { resolveWorktreeStatusParts } from '@/lib/workspace/activity/worktree-status'
 import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { EMPTY_BROWSER_TABS, EMPTY_TABS } from './worktree-card-empty-inputs'
 import {
@@ -52,7 +52,12 @@ function selectStoppedWorktreeEnvironmentId(state: AppState, worktreeId: string)
   return owner && selectStoppedWslDistro(state, owner) !== null ? owner : null
 }
 
-type StatusMemo = { inputs: readonly unknown[]; status: WorktreeStatus }
+type StatusMemo = {
+  inputs: readonly unknown[]
+  status: WorktreeStatus
+  /** The terminal-title status before explicit agent rows rank over it. */
+  titleStatus: WorktreeStatus
+}
 
 // Carry only the workspaces read in the previous snapshot, regardless of how many were visible.
 let generation: {
@@ -79,6 +84,16 @@ export function selectWorktreeActivityStatus(
     byWorktreeId.set(worktreeId, memo)
   }
   return memo.status
+}
+
+/** What a workspace's terminal titles say before explicit agent rows rank over them: a failed hook on one
+ *  pane outranks another tab's working title for the dot, but the work is still there. Same memo. */
+export function selectWorktreeTitleActivityStatus(
+  statusInputs: AppState,
+  worktreeId: string
+): WorktreeStatus {
+  selectWorktreeActivityStatus(statusInputs, worktreeId)
+  return generation!.byWorktreeId.get(worktreeId)!.titleStatus
 }
 
 function resolveMemoizedStatus(
@@ -112,7 +127,7 @@ function resolveMemoizedStatus(
     runtimePaneTitlesByTabId,
     terminalLayoutRootsByTabId
   ] = inputs
-  const status = resolveWorktreeStatus({
+  const { status, heuristic } = resolveWorktreeStatusParts({
     tabs,
     browserTabs,
     hasStructuredChat,
@@ -131,7 +146,7 @@ function resolveMemoizedStatus(
     hasUnconfirmed: summary.hasUnconfirmed,
     hasLiveDone: summary.hasLiveDone
   })
-  return { inputs, status }
+  return { inputs, status, titleStatus: heuristic }
 }
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {

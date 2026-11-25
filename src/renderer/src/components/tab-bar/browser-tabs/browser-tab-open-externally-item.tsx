@@ -16,6 +16,7 @@ import {
   useSshRoutedPagePortForwards,
   useSshWorkspaceBrowsesThroughHost
 } from '../../browser-pane/assemble-chrome/profile-routing/use-ssh-workspace-browser-route'
+import { openSshRoutedUrlInSystemBrowser } from '@/lib/workspace-ports/forwarded-url-system-browser-open'
 
 /** Mounted only while the tab menu is open; opens what the page's own menus open for its network. */
 export function BrowserTabOpenExternallyItem({
@@ -47,7 +48,19 @@ export function BrowserTabOpenExternallyItem({
       ? getSshRoutedOpenableExternalUrl(liveUrl, sshPortForwards)
       : getOpenableExternalUrl(liveUrl)
   return (
-    <ContextMenuItem onSelect={() => externalUrl && onOpen(externalUrl)} disabled={!externalUrl}>
+    <ContextMenuItem
+      onSelect={() => {
+        if (!externalUrl) {
+          return
+        }
+        if (sshRouted) {
+          openSshRoutedUrlInSystemBrowser(externalUrl, sshPortForwards)
+        } else {
+          onOpen(externalUrl)
+        }
+      }}
+      disabled={!externalUrl}
+    >
       <ExternalLink className="size-3.5" />
       {t('auto.components.tab.bar.BrowserTab.6e0bc8f3a8', 'Open In Browser')}
     </ContextMenuItem>

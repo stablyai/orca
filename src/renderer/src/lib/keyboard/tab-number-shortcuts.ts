@@ -25,7 +25,7 @@ export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
   index: number,
   /** Defaults to the bot catalog, as the tab bar reads it. */
-  homeBotFor?: HomeBotLookup
+  homeBotFor?: HomeBotLookup | null
 ): Tab | null {
   if (state.activeView !== 'terminal' || state.activeWorktreeId === null || index < 0) {
     return null

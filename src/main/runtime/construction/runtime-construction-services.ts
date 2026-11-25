@@ -280,6 +280,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract isWorkerAgentInTurn(
     resource: Pick<WorkerTerminalResourceRow, 'pane_key' | 'terminal_handle'>
   ): boolean
+  abstract isSetupTerminalRunning(handle: string): boolean
   protected abstract getWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
