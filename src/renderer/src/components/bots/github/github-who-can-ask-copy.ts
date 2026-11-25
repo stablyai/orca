@@ -9,8 +9,8 @@ import {
 export const gitHubCheckingUsername = (t: Translate): string =>
   t('bots.github.whoCanAsk.checkingUsername', 'Checking username…')
 
-export const gitHubSnapshotCount = (count: string, snapshot: string, t: Translate): string =>
-  t('bots.github.whoCanAsk.snapshotCount', '{{count}} · {{snapshot}}', { count, snapshot })
+export const gitHubSnapshotCount = (summary: string, snapshot: string, t: Translate): string =>
+  t('bots.github.whoCanAsk.snapshotCount', '{{summary}} · {{snapshot}}', { summary, snapshot })
 
 export function orgSearchCopy(
   {

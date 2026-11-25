@@ -28290,7 +28290,7 @@
         "snapshotDate": "List from {{time}}",
         "refreshList": "Restart Orca",
         "refreshListRemote": "Restart the bot’s Orca",
-        "snapshotCount": "{{count}} · {{snapshot}}",
+        "snapshotCount": "{{summary}} · {{snapshot}}",
         "statusAndRestart": "{{status}} · {{restart}}",
         "statusAndReader": "{{status}} · read as @{{login}}",
         "partialList": "Partial list",
