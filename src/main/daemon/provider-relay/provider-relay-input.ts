@@ -36,6 +36,8 @@ export class ProviderRelayInput {
   /** A line the daemon writes itself (no app is attached to answer it); an app's cut-off line ends first. */
   writeLine(line: string): true {
     this.stdin.write(this.lineEnded ? line : `\n${line}`, () => {})
+    // A surrogate held back from the cut-off write belongs to it, not to the next app's.
+    this.carry = ''
     this.lineEnded = true
     return true
   }

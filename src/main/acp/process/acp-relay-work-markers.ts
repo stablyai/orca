@@ -4,7 +4,7 @@ import {
   registerReattachableProviderRelayAgent,
   type ProviderRelayWorkMarkers
 } from '../../provider-relay/app-provider-relays'
-import { ACP_SESSION_UPDATE_METHODS } from './acp-relay-ack-floor'
+import { ACP_SESSION_UPDATE_METHODS } from './acp-session-update-fields'
 
 /**
  * These launch as today: a private temp folder is the launch's own and goes at its exit; a sign-in

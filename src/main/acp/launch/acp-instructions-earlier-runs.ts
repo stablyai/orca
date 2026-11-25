@@ -89,12 +89,14 @@ async function clearEarlierRuns(root: string, remove: (path: string) => Promise<
     )
   }
   const names = await readdir(root).catch(() => [])
-  const gone = [
-    ...names.filter((name) => !keptBy(name)),
-    ...(await olderLaunches(root, names.filter(keptBy), spawnedAt))
-  ]
+  const older = new Set(await olderLaunches(root, names.filter(keptBy), spawnedAt))
+  const gone = [...names.filter((name) => !keptBy(name)), ...older]
   for (let at = 0; at < gone.length; at += REMOVE_BATCH) {
-    await Promise.all(gone.slice(at, at + REMOVE_BATCH).map((name) => remove(join(root, name))))
+    // Checked again per batch: a launch since names its chat before its first write.
+    const batch = gone
+      .slice(at, at + REMOVE_BATCH)
+      .filter((name) => older.has(name) || !keptBy(name))
+    await Promise.all(batch.map((name) => remove(join(root, name))))
   }
   return true
 }

@@ -7,7 +7,7 @@ import {
   ACP_MESSAGE_ENDS,
   acpChildSessionEnded,
   acpSessionUpdateFields
-} from './acp-relay-ack-floor'
+} from './acp-session-update-fields'
 
 const PROMPT = 'session/prompt'
 

@@ -1,108 +1,15 @@
-import { leadingJsonEnvelope } from '../../../shared/json-stream/json-rpc-record-prefix'
 import type { ProviderRelayAckFloor } from '../../provider-relay/relayed-provider-output'
+import {
+  ACP_MESSAGE_BOUNDARIES,
+  ACP_MESSAGE_CHUNKS,
+  ACP_MESSAGE_ENDS,
+  acpSessionUpdateFields
+} from './acp-session-update-fields'
 
-/** The methods ACP agents send session updates under: the standard one and Grok's. */
-export const ACP_SESSION_UPDATE_METHODS = new Set([
-  'session/update',
-  'x.ai/session_notification',
-  '_x.ai/session_notification',
-  'x.ai/session/update',
-  '_x.ai/session/update'
-])
-
-/** Those and OpenCode's child sessions' updates, which carry their own messages and calls. */
-const ACP_UPDATE_METHODS = new Set([
-  ...ACP_SESSION_UPDATE_METHODS,
-  'opencode/session/child_update',
-  '_opencode/session/child_update'
-])
-
-const ENVELOPE_SCAN_CHARS = 4096
-/** A long line's fields are read from its start and end; no line is parsed here. */
-const FIELD_WINDOW_CHARS = 4096
-/** More open items than this can't be real; the oldest stay held, so nothing is acked past them. */
 const MAX_OPEN_ITEMS = 256
-export const ACP_MESSAGE_CHUNKS = new Set(['agent_message_chunk', 'agent_thought_chunk'])
-/** An OpenCode child's status report, read as an update of its session. */
-const CHILD_STATUS = 'orca:child_status'
-/** Updates after which no message of a session continues. A message with an id goes on past calls
- *  under that id (OpenCode keeps one per step), so only another message or these end it. */
-export const ACP_MESSAGE_ENDS = new Set([CHILD_STATUS, 'user_message_chunk'])
-/** Updates after which a session's next message starts whole in a replay; a message with an id may
- *  still resume past one. */
-export const ACP_MESSAGE_BOUNDARIES = new Set(['tool_call', 'tool_call_update', 'plan'])
-
-export type AcpUpdateFields = {
-  sessionId?: string
-  sessionUpdate?: string
-  messageId?: string
-  toolCallId?: string
-  /** An OpenCode child session's update. */
-  child?: boolean
-}
-
-/** A key outside any string: an unescaped quote can't sit inside a JSON string. */
-const field = (name: string): RegExp => new RegExp(`"${name}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"`)
-const SESSION_ID = field('sessionId')
-const CHILD_SESSION_ID = field('childSessionId')
-const SESSION_UPDATE = field('sessionUpdate')
-const MESSAGE_ID = field('messageId')
-const TOOL_CALL_ID = field('toolCallId')
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-/** The fields the floor needs, scanned from the line's ends. A call's end is read by the
- *  connection, which parses every line anyway (`AcpRelayTurns.observeUpdate`). */
-function updateFields(line: string): AcpUpdateFields {
-  const windows =
-    line.length <= 2 * FIELD_WINDOW_CHARS
-      ? [line]
-      : [line.slice(0, FIELD_WINDOW_CHARS), line.slice(-FIELD_WINDOW_CHARS)]
-  const find = (pattern: RegExp): string | undefined =>
-    windows.map((text) => pattern.exec(text)?.[1]).find((value) => value !== undefined)
-  const sessionUpdate = find(SESSION_UPDATE)
-  if (sessionUpdate === 'tool_call') {
-    return {
-      sessionId: find(CHILD_SESSION_ID) ?? find(SESSION_ID),
-      sessionUpdate,
-      toolCallId: find(TOOL_CALL_ID)
-    }
-  }
-  return {
-    sessionId: find(CHILD_SESSION_ID) ?? find(SESSION_ID),
-    sessionUpdate,
-    ...(sessionUpdate && ACP_MESSAGE_CHUNKS.has(sessionUpdate)
-      ? { messageId: find(MESSAGE_ID) }
-      : {})
-  }
-}
-
-/** A session update's fields, or null for any other line; only the envelope's start is read. */
-export function acpSessionUpdateFields(line: string): AcpUpdateFields | null {
-  const { properties } = leadingJsonEnvelope(line.slice(0, ENVELOPE_SCAN_CHARS), {
-    stopAtContainer: true,
-    maxFields: 8
-  })
-  const method = properties.find((property) => property.key === 'method')?.value
-  if (typeof method !== 'string' || !ACP_UPDATE_METHODS.has(method)) {
-    return null
-  }
-  const fields = updateFields(line)
-  return ACP_SESSION_UPDATE_METHODS.has(method)
-    ? fields
-    : { ...fields, child: true, sessionUpdate: fields.sessionUpdate ?? CHILD_STATUS }
-}
-
-const CHILD_ENDED = /"status"\s*:\s*"(?:completed|failed|interrupted)"/
-
-/** The OpenCode child session a status line reports ended, if this line is one. */
-export function acpChildSessionEnded(line: string): string | null {
-  const fields = acpSessionUpdateFields(line)
-  return fields?.sessionUpdate === CHILD_STATUS && fields.sessionId && CHILD_ENDED.test(line)
-    ? fields.sessionId
-    : null
 }
 
 type Item = { session?: string; child: boolean }
@@ -153,6 +60,11 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   private readonly pausedCuts = new Map<string, Item>()
   /** Sessions whose latest update was a call or plan. */
   private readonly pastBoundary = new Set<string | undefined>()
+  /** Messages another one followed, by their start: one resuming is held from that start again if
+   *  no ack passed it, else it is cut (its start may be acked). */
+  private readonly superseded = new Map<string, Item & { seq: number }>()
+  /** How far acks may have reached: past this, a line may not replay again. */
+  private ackable = 0
   /** Per session, the message its latest chunk named: only a new one ends the others. */
   private readonly current = new Map<string | undefined, string>()
 
@@ -187,8 +99,8 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         this.numbered = true
       } else {
         this.givesIds = true
-        // Another message started: earlier ones of its session are done. One resuming its id
-        // after a call is cut again.
+        // Another message started: earlier ones of its session pause. One resuming its id after a
+        // call or another message is held whole again, or cut once acks passed its start.
         if (this.current.get(session) !== id) {
           this.closeMessages(session, id)
           if (this.current.size < MAX_OPEN_ITEMS || this.current.has(session)) {
@@ -199,6 +111,16 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
         if (paused) {
           this.pausedCuts.delete(id)
           this.cutMessages.set(id, paused)
+        }
+        const earlier = this.superseded.get(id)
+        if (earlier) {
+          this.superseded.delete(id)
+          const { seq: start, ...item } = earlier
+          if (start <= this.ackable) {
+            this.cutMessages.set(id, item)
+          } else {
+            this.open(this.messages, id, earlier)
+          }
         }
         // A cut message is never held: a replay can't rewrite it whole, and holding it from here
         // would replay text already saved onto its continuation row.
@@ -212,12 +134,17 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     }
   }
 
-  floor(): number | null {
+  floor(through?: number): number | null {
     const turn = this.numbered || !this.givesIds ? this.turnStart : null
     const held = [first(this.calls), first(this.messages), turn].filter(
       (seq): seq is number => seq !== null
     )
-    return held.length > 0 ? Math.min(...held) : null
+    const floor = held.length > 0 ? Math.min(...held) : null
+    this.ackable = Math.max(
+      this.ackable,
+      floor === null ? (through ?? 0) : Math.min(floor - 1, through ?? floor - 1)
+    )
+    return floor
   }
 
   /** `adopted`: an earlier app's prompt, whose turn began at this attach's first replayed line;
@@ -233,6 +160,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** A forced ack released through `seq`: what started there is acked already, so later items
    *  (a new call, a new message) hold the floor on their own. */
   released(seq: number): void {
+    this.ackable = Math.max(this.ackable, seq)
     for (const [id, { seq: start, ...item }] of this.messages) {
       const cuts = this.pastBoundary.has(item.session) ? this.pausedCuts : this.cutMessages
       if (start <= seq && cuts.size < MAX_OPEN_ITEMS) {
@@ -282,7 +210,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   endTurn(): void {
     this.calls.clear()
     // A subagent's message goes on past its parent's prompt, until its own next message or status.
-    for (const open of [this.messages, this.cutMessages, this.pausedCuts]) {
+    for (const open of [this.messages, this.cutMessages, this.pausedCuts, this.superseded]) {
       for (const [id, item] of open) {
         if (!item.child) {
           open.delete(id)
@@ -299,15 +227,22 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** Ends a session's messages, all but `except`. */
   private closeMessages(session: string | undefined, except?: string): void {
     if (except !== undefined) {
-      // Another message ends none: OpenCode resumes a message's id after another's, so each stays
-      // held from its start (a cut one only pauses) until a user chunk, child status or turn end.
+      // OpenCode resumes a message's id after another's: a cut one pauses, others are superseded.
       moveSession(this.cutMessages, this.pausedCuts, session, except)
+      for (const [id, item] of this.messages) {
+        if (id !== except && item.session === session) {
+          this.messages.delete(id)
+          if (this.superseded.size < MAX_OPEN_ITEMS) {
+            this.superseded.set(id, item)
+          }
+        }
+      }
       return
     }
     this.current.delete(session)
-    for (const open of [this.messages, this.cutMessages, this.pausedCuts]) {
+    for (const open of [this.messages, this.cutMessages, this.pausedCuts, this.superseded]) {
       for (const [id, item] of open) {
-        if (id !== except && item.session === session) {
+        if (item.session === session) {
           open.delete(id)
         }
       }

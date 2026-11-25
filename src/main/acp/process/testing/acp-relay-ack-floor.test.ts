@@ -81,11 +81,12 @@ describe('ACP relay ack floor', () => {
     await send(done)
     parsed(done)
     expect(await send()).toEqual([])
-    // Another message doesn't end it (OpenCode resumes ids after another's): both hold until the
-    // prompt's answer.
-    expect(await send(chunk('c', 'm2'))).toEqual([])
+    // Another message supersedes it; that one holds until its prompt's answer.
+    expect(await send(chunk('c', 'm2'))).toEqual([5])
     answer.resolve()
-    await vi.waitFor(async () => expect(await send(update('plan', { entries: [] }))).toEqual([7]))
+    await vi.waitFor(async () =>
+      expect(await send(update('plan', { entries: [] }))).toEqual([5, 7])
+    )
   })
 
   it("holds an unnumbered agent's prompt from its first line until it ends, even by failing", async () => {
@@ -140,15 +141,20 @@ describe('ACP relay ack floor', () => {
     expect(acks.at(-1)).toBe(3)
   })
 
-  it('keeps a message held from its start across another message, cut or not, as OpenCode resumes ids', async () => {
-    const { output, acks, cutKeys, send, prompt } = rig()
+  it('cuts a message that resumes after another once acks passed its start, and holds it whole if not', async () => {
+    const { acks, cuts, cutKeys, send, prompt } = rig()
     prompt()
-    await send(chunk('a', 'm1'), chunk('b', 'm2'), chunk('a2', 'm1'))
-    // m1 holds from its first line, so a replay rewrites it whole, not from where it resumed.
-    expect(acks).toEqual([])
-    await output.settle(true)
-    await send(chunk('c', 'm2'), chunk('a3', 'm1'))
-    expect(cutKeys.at(-1)).toContain(JSON.stringify(['s', 'm1']))
+    await send(chunk('a', 'm1'), chunk('b', 'm2'))
+    // m2 supersedes m1, so acks pass m1's start.
+    expect(acks).toEqual([1])
+    await send(chunk('a2', 'm1'))
+    // m1 resumes with its start acked: it is cut, named exactly, and never held from here.
+    expect(acks).toEqual([1, 3])
+    expect(cuts).toEqual([3])
+    expect(cutKeys).toEqual([[JSON.stringify(['s', 'm1'])]])
+    // m3 resumes before any ack passed its start: held whole from it, no cut.
+    await send(chunk('c', 'm3'), chunk('d', 'm4'), chunk('c2', 'm3'))
+    expect(acks.at(-1)).toBe(3)
   })
 
   it('acks every line handed on at a hand-off, saving streamed text first', async () => {
