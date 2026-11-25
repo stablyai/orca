@@ -88,9 +88,17 @@ export function browserUrlForPortForwardEntry(entry: PortForwardEntry): string {
   return `${protocol}://${host}:${entry.localPort}`
 }
 
-// Browsers resolve *.localhost to loopback themselves; hosts are matched case-insensitively.
+/** Case-insensitive, unbracketed and without a root dot (localhost. names localhost too). */
+function loopbackMatchName(host: string): string {
+  return host
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '')
+}
+
+// Browsers resolve *.localhost to loopback themselves.
 function forwardMatchKey(host: string, port: number): string {
-  const hostname = host.toLowerCase().replace(/^\[|\]$/g, '')
+  const hostname = loopbackMatchName(host)
   return portForwardKey(hostname.endsWith('.localhost') ? 'localhost' : hostname, port)
 }
 
@@ -124,7 +132,7 @@ export function forwardedTargetForRemoteUrl(
   if (!forward) {
     return null
   }
-  const hostname = url.hostname.toLowerCase()
+  const hostname = loopbackMatchName(url.hostname)
   // Keep the page's own localhost name for its Host header, cookies and redirect URIs; opening it
   // through its forward names 127.0.0.1 instead when another local app holds [::1] on the port.
   if (hostname !== 'localhost' && !hostname.endsWith('.localhost') && hostname !== '127.0.0.1') {
