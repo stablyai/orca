@@ -8,10 +8,8 @@ import React, { useCallback, useState } from 'react'
 import { useAppStore } from '../../../store/index'
 import type { AccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import {
-  selectClaudeProviderAccount,
-  emptyClaudeAccountsState
-} from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { emptyClaudeAccountsState } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../../../lib/provider-accounts/provider-account-action-errors'
 import { useTranslate } from '@/i18n/use-translate'

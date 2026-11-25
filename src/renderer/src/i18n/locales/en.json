@@ -25547,6 +25547,9 @@
       }
     },
     "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "Switching this host's WSL lane back to the system default isn't available from here yet."
+    },
     "rename": {
       "action": "Rename",
       "title": "Rename account",

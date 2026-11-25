@@ -1,7 +1,7 @@
 import { Loader2, Plus, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-account-selection'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
