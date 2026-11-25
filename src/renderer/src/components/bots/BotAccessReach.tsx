@@ -263,11 +263,11 @@ function BotAccessAdvice({
       return
     }
     if (fix === 'google-off') {
-      // Undo gives back the same accounts it had.
-      const accounts = bot.googleAccounts
+      // Undo gives back the same accounts it had, from off: a change made since is refused.
+      const undo = (): Promise<boolean> => turnOnGoogle(bot, bot.googleAccounts, { on: false })
       run(
         () => setBotGoogle(bot, false),
-        () => setApplied((all) => [...all, { fix, undo: () => turnOnGoogle(bot, accounts) }])
+        () => setApplied((all) => [...all, { fix, undo }])
       )
       return
     }

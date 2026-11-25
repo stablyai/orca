@@ -26,7 +26,7 @@ export const MUSE_LAUNCH_SPEC: AcpLaunchSpec = {
   },
   keepsEverySession: true,
   // Muse reads the folder's rules at session/new and session/load.
-  instructions: deliverMuseBotInstructions,
+  instructions: { eachStart: true, launch: deliverMuseBotInstructions },
   instructionsInWorkspace: true,
   transcriptImport: null,
   sessionHistory: {

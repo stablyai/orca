@@ -7,9 +7,8 @@
     "newStyle": "options.style == 'new'",
     "folder": "ws.kind == 'folder'",
     "pinnedRepo": "place.inPinnedSection && repo != null && !place.showProjectName",
-    "inlineRepo": "!vars.classic && repo != null && !place.hideRepoBadge && !vars.folder && !vars.pinnedRepo && !place.compactLine",
+    "inlineRepo": "repo != null && !place.hideRepoBadge && (!vars.folder || vars.classic) && !vars.pinnedRepo && !place.compactLine",
     "lineRepo": "place.compactLine && repo != null && !vars.folder",
-    "metaRepo": "vars.classic && repo != null && !place.hideRepoBadge && !vars.pinnedRepo",
     "hostLabel": "options.show.host ? host.contextLabel : null",
     "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
     "detailsRow": "!vars.newStyle || options.detailsRow",
@@ -23,7 +22,7 @@
     "details": "links.count > 0 || (options.show.issue && links.issue) || (options.show.linearIssue && links.linearIssue) || (options.show.jiraIssue && links.jiraIssue) || (!vars.newStyle && options.show.pr && review != null) || (options.show.comment && vars.hasComment) || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli) || provenance.bot",
     "ports": "options.show.ports && ports.count > 0",
     "indicators": "vars.details || vars.ports",
-    "metaLead": "vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive",
+    "metaLead": "vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive",
     "metaIndicators": "vars.metaRow && vars.indicators && (vars.classic || vars.metaLead)",
     "titleIndicators": "vars.indicators && !vars.metaIndicators",
     "hasMetaRow": "vars.metaRow ? vars.metaLead || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
@@ -55,7 +54,7 @@
               "children": [
                 {
                   "el": "RepoChip",
-                  "when": "vars.pinnedRepo",
+                  "when": "vars.pinnedRepo || vars.inlineRepo",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 {
@@ -66,11 +65,6 @@
                 {
                   "el": "RuntimeHostMark",
                   "when": "host.kind == 'runtime' && place.lineHostLabel == null"
-                },
-                {
-                  "el": "RepoChip",
-                  "when": "vars.inlineRepo",
-                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
                 { "el": "LineAgents", "when": "place.compactLine" },
                 { "el": "LineAgentMore", "when": "place.compactLine" },
@@ -164,11 +158,6 @@
               "el": "Row",
               "props": { "grow": true, "align": "center", "gap": "md", "overflow": "clip" },
               "children": [
-                {
-                  "el": "MetaRepoBadge",
-                  "when": "vars.metaRepo",
-                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
-                },
                 {
                   "el": "HostBadge",
                   "when": "vars.metaRow && vars.hostBadge",

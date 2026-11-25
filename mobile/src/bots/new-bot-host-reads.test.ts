@@ -1,7 +1,8 @@
 import { expect, it } from 'vitest'
 import { BotSessionStart } from '../../../src/shared/rpc-contract/bots-params'
+import { createFakeRpcClient } from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
-import { readBotAgentChoices } from './new-bot-host-reads'
+import { readBotAgentChoices, readNewBotAgentChoices } from './new-bot-host-reads'
 
 it('keeps a host-advertised Muse side chat through the mobile launch contract', async () => {
   const client = new FakeSession('connected')
@@ -15,4 +16,15 @@ it('keeps a host-advertised Muse side chat through the mobile launch contract', 
   const choices = await readBotAgentChoices(client)
   expect(choices).toEqual(['muse'])
   expect(BotSessionStart.parse({ botId: 'local-bot', agent: choices[0] }).agent).toBe('muse')
+})
+
+it("reads the host's New bot default agent", async () => {
+  const client = createFakeRpcClient()
+  const read = readNewBotAgentChoices(client)
+  client.requests[0]?.resolve({
+    id: 'rpc-1',
+    ok: true,
+    result: { agents: ['claude', 'codex'], defaultAgent: 'codex' }
+  })
+  expect(await read).toEqual({ agents: ['claude', 'codex'], defaultAgent: 'codex' })
 })
