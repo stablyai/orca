@@ -67,9 +67,12 @@ describe('the work record through the bots DB worker', () => {
     vi.spyOn(Date, 'now').mockImplementation(() => (clock += 1))
     const record = new BotWorkRecord({
       store: () => store,
-      workers: async (ids) => new Map(ids.map((id) => [id, worker(id)])),
-      // d-gone's workspace was deleted: its row closes on this read.
-      workspaces: () => async (w) => (w.dispatchId === 'd-gone' ? 'gone' : { ...WORKSPACE }),
+      // d-gone's worker was stopped: its row closes on this read.
+      workers: async (ids) =>
+        new Map(
+          ids.map((id) => [id, id === 'd-gone' ? { ...worker(id), stopped: true } : worker(id)])
+        ),
+      workspaces: () => async () => ({ ...WORKSPACE }),
       conversationTitle: (address) => (address.source === 'chat' ? 'Home' : 'Slack thread'),
       turnAddress: async (sessionId) =>
         sessionId === 'slack-chat' ? { botId: 'bot-1', address: THREAD } : null
@@ -110,6 +113,33 @@ describe('the work record through the bots DB worker', () => {
     expect(viaWorker.forgotten).toBe(true)
     expect(viaWorker.afterForget).toEqual(['d-done'])
   })
+
+  // Absence is not proof the work ended: closing here would drop the thread's follow-up routing.
+  it.each(['workspace', 'worker', 'host'] as const)(
+    'keeps a row open when only its %s is missing',
+    async (missing) => {
+      const work = workerBotWork(storePath())
+      opened.push(work)
+      const record = new BotWorkRecord({
+        store: () => work.store,
+        workers: async (ids) =>
+          new Map(
+            ids.map((id) => [
+              id,
+              missing === 'worker'
+                ? null
+                : { ...worker(id), host: missing === 'host' ? 'other' : 'local' }
+            ])
+          ),
+        workspaces: () => async () => (missing === 'workspace' ? 'gone' : { ...WORKSPACE }),
+        conversationTitle: () => 'Slack thread',
+        turnAddress: async () => null
+      })
+      await record.started({ botId: 'bot-1', address: THREAD }, start('d-1'))
+      expect((await record.list('bot-1')).map((row) => row.dispatchId)).toEqual(['d-1'])
+      expect((await work.store.liveRows()).map((row) => row.dispatchId)).toEqual(['d-1'])
+    }
+  )
 
   it('records every one of several starts for one conversation that land at once', async () => {
     const work = workerBotWork(storePath())

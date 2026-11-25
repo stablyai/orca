@@ -7,7 +7,9 @@ type WorkerRead =
   | { row: BotWorkRow; worker: BotWorkWorker | null }
   | { row: BotWorkRow; closeReason: BotWorkCloseReason }
 
-/** The proof a row's work is over from its worker as read, or the worker to read on with. */
+/** The proof a row's work is over from its worker as read, or the worker to read on with. Only an
+ *  explicit stop or start failure is proof; a missing worker or one on another host proves nothing,
+ *  so the row stays open for follow-ups with its data unknown. */
 function judge(
   row: BotWorkRow,
   workers: ReadonlyMap<string, BotWorkWorker | null> | null
@@ -18,7 +20,7 @@ function judge(
   }
   const worker = workers.get(row.dispatchId) ?? null
   if (!worker || worker.host !== row.host) {
-    return { row, closeReason: 'task_gone' }
+    return { row, worker: null }
   }
   if (worker.stopped) {
     return { row, closeReason: 'stopped' }
@@ -57,9 +59,8 @@ export async function* readBotWorkRows(
       yield { row, worker: null, workspace: null }
       continue
     }
+    // A missing workspace is also absence, not proof: the row keeps routing with no workspace data.
     const found = await workspace(read.worker).catch(() => null)
-    yield found === 'gone'
-      ? { row, closeReason: 'workspace_gone' }
-      : { row, worker: read.worker, workspace: found }
+    yield { row, worker: read.worker, workspace: found === 'gone' ? null : found }
   }
 }
