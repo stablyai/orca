@@ -239,13 +239,16 @@ export function NativeChatImageAttachments({
   blocks,
   runtimeContext,
   enablePreview = runtimeContext !== undefined,
-  className
+  className,
+  viewerBlocks
 }: {
   blocks: NativeChatBlock[]
   runtimeContext?: RuntimeFileOperationArgs | null
   /** Callers without an image owner get label-only chips. */
   enablePreview?: boolean
   className?: string
+  /** All of the message's images when it draws them in several groups, so the viewer steps through every one. */
+  viewerBlocks?: readonly ImageRef[]
 }): React.JSX.Element | null {
   const t = useTranslate()
   const [viewing, setViewing] = useState<number | null>(null)
@@ -329,14 +332,14 @@ export function NativeChatImageAttachments({
             runtimeContext={runtimeContext}
             onOpen={() => {
               if (!(group.current && gallery?.tryOpen(group.current, image))) {
-                setViewing(index)
+                setViewing(viewerBlocks ? Math.max(0, viewerBlocks.indexOf(image)) : index)
               }
             }}
           />
         )
       })}
       <NativeChatImageViewer
-        blocks={images}
+        blocks={viewerBlocks ?? images}
         index={viewing}
         onIndexChange={setViewing}
         runtimeContext={runtimeContext}

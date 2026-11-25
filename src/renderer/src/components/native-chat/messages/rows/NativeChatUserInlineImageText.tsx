@@ -36,6 +36,7 @@ export function NativeChatUserInlineImageText({
           <NativeChatImageAttachments
             key={key}
             blocks={[image]}
+            viewerBlocks={images}
             runtimeContext={runtimeContext}
             enablePreview={runtimeContext !== undefined}
             className="my-2 first:mt-0 last:mb-0"

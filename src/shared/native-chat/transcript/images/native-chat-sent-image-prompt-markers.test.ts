@@ -16,6 +16,14 @@ describe('splitSentImagePromptMarkers', () => {
       '```\n[Image #1]\n```\n',
       1
     ])
+    expect(splitSentImagePromptMarkers('    [Image #1]\n\tstill code\n\n[Image #1]', 1)).toEqual([
+      '    [Image #1]\n\tstill code\n\n',
+      1
+    ])
+    expect(splitSentImagePromptMarkers('- item\n\n    [Image #1]', 1)).toEqual([
+      '- item\n\n    ',
+      1
+    ])
     expect(splitSentImagePromptMarkers('[Image #1]', 0)).toEqual(['[Image #1]'])
   })
 })
