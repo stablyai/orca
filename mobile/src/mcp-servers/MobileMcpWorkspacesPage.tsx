@@ -24,7 +24,7 @@ export function MobileMcpWorkspacesPage(props: {
   online: boolean
   onBack: () => void
   /** Settles once the host has the choice; writes made meanwhile follow it in order. */
-  onChange: (workspaces: PhoneMcpWorkspaces) => Promise<void>
+  onChange: (workspaces: PhoneMcpWorkspaces, base: PhoneMcpWorkspaces) => Promise<void>
 }) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -35,7 +35,7 @@ export function MobileMcpWorkspacesPage(props: {
   const choose = (next: PhoneMcpWorkspaces) => {
     setDraft(next)
     const write = (writes.current += 1)
-    void props.onChange(next).finally(() => write === writes.current && setDraft(null))
+    void props.onChange(next, chosen).finally(() => write === writes.current && setDraft(null))
   }
   const all = isAllMcpWorkspaces(chosen)
   return (

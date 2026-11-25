@@ -4,11 +4,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { freeBotToolName, type BotToolInput, type BotToolServer } from '../../shared/bot-tools'
-import type {
-  McpAgentFiles,
-  McpFileAgent,
-  McpServer,
-  McpServerWorkspaces
+import {
+  McpServerWorkspacesSchema,
+  mergeMcpServerWorkspaces,
+  type McpAgentFiles,
+  type McpFileAgent,
+  type McpServer,
+  type McpServerWorkspaces
 } from '../../shared/mcp-servers/mcp-servers'
 import { botToolDetailsOf, resolveBotToolInput } from '../bots/bot-tool-details'
 import {
@@ -272,12 +274,28 @@ export function setMcpServerAgentEnabled(
   )
 }
 
+/**
+ * With `base` (the choice the editor showed), only what the editor changed is written, so a save
+ * from another client since then survives; without it (an older client), `workspaces` replaces it.
+ */
 export function setMcpServerWorkspaces(
   id: string,
   workspaces: McpServerWorkspaces,
-  folder = mcpHostListFolder()
+  { base, folder = mcpHostListFolder() }: { base?: McpServerWorkspaces; folder?: string } = {}
 ): Promise<McpServer> {
-  return changeMcpServerExtras(id, (entry) => ({ ...entry.extras, workspaces }), folder)
+  return changeMcpServerExtras(
+    id,
+    (entry) => ({
+      ...entry.extras,
+      // Parsed again: a merge past the schema's caps would read back as on nowhere.
+      workspaces: base
+        ? McpServerWorkspacesSchema.parse(
+            mergeMcpServerWorkspaces(settingsOf(entry.extras).workspaces, base, workspaces)
+          )
+        : workspaces
+    }),
+    folder
+  )
 }
 
 export function setMcpServerSharedProcess(

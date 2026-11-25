@@ -156,3 +156,24 @@ export function isMcpServerOnInWorkspace(
   }
   return workspaces.later
 }
+
+/**
+ * `next` applied onto `stored` as the edit it was from `base`: only the workspaces (and `later`)
+ * the editor changed take `next`'s value; every other one keeps what `stored` says, so another
+ * client's save since `base` survives.
+ */
+export function mergeMcpServerWorkspaces(
+  stored: McpServerWorkspaces,
+  base: McpServerWorkspaces,
+  next: McpServerWorkspaces
+): McpServerWorkspaces {
+  const later = base.later === next.later ? stored.later : next.later
+  const keys = new Set([stored, base, next].flatMap((value) => [...value.on, ...value.off]))
+  const isOn = (key: string): boolean =>
+    isMcpServerOnInWorkspace(base, key) === isMcpServerOnInWorkspace(next, key)
+      ? isMcpServerOnInWorkspace(stored, key)
+      : isMcpServerOnInWorkspace(next, key)
+  return later
+    ? { later, on: [], off: [...keys].filter((key) => !isOn(key)) }
+    : { later, on: [...keys].filter(isOn), off: [] }
+}
