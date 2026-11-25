@@ -10,6 +10,10 @@ export const sessionOptionPickerStyles = themedStyleSheet(() => ({
   sheet: {
     paddingBottom: spacing.xs
   },
+  sheetFill: {
+    flex: 1,
+    minHeight: 0
+  },
   header: {
     marginTop: -spacing.xs
   },

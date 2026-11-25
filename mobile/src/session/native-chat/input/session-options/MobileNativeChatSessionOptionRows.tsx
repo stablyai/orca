@@ -11,6 +11,7 @@ import { LIST_ROW_PADDING, ListRow } from '../../../../components/list/ListGroup
 import {
   sessionOptionValueMarker,
   type SessionOptionDescriptor,
+  type SessionOptionSelectChoice,
   type SessionOptionValue
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import {
@@ -22,6 +23,7 @@ import {
   loneFastTier,
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
+import { nativeChatModelSearchMatcher } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-model-search'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { orderEffortLevels } from '../../../../../../src/shared/agent-session/options/view/effort-level-order'
 import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
@@ -144,6 +146,8 @@ type DescriptorRowsProps = {
   choiceLeading?: (value: string) => ReactNode
   /** Whether search-only choices are revealed; without it they stay off the list. */
   moreChoices?: { shown: boolean; onToggle: () => void }
+  /** The model list's search: every match, search-only and folded ones included. */
+  query?: string
 }
 
 /** A Fast-only speed, which toggles on one row like Claude's Fast mode. */
@@ -168,7 +172,8 @@ export function descriptorRowElements(
     onSetOption,
     onInvokeAction,
     choiceLeading,
-    moreChoices
+    moreChoices,
+    query = ''
   }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
@@ -242,7 +247,11 @@ export function descriptorRowElements(
       onPress={() => onSetOption(choice.value)}
     />
   )
-  // No search here, so search-only rows stay out; folded ones follow a More models toggle.
+  const searched = searchedChoices(descriptor, query)
+  if (searched) {
+    return searched.map(choiceRow)
+  }
+  // Browsing, search-only rows stay out; folded ones follow a More models toggle.
   const listed = choices.filter(
     (choice) =>
       !choice.hidden ||
@@ -267,6 +276,24 @@ export function descriptorRowElements(
         ]
       : [])
   ]
+}
+
+/** A select's choices matching `query` by id, label or description, in the host's order; null for no search. */
+export function searchedChoices(
+  descriptor: SessionOptionDescriptor,
+  query: string
+): SessionOptionSelectChoice[] | null {
+  const matches = nativeChatModelSearchMatcher(query)
+  if (!matches || descriptor.kind.type !== 'select') {
+    return null
+  }
+  return descriptor.kind.choices.filter((choice) =>
+    matches([
+      choice.value,
+      nativeChatSessionChoiceLabel(choice, say, descriptor.id),
+      choice.description ?? ''
+    ])
+  )
 }
 
 export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {

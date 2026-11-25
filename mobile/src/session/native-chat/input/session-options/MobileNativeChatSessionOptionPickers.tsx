@@ -9,6 +9,10 @@ import { translate, type Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useMoreModelsShown } from './use-more-models-shown'
 import {
+  MobileNativeChatModelSearchList,
+  modelListNeedsSearch
+} from './MobileNativeChatModelSearchList'
+import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
@@ -115,6 +119,8 @@ export function MobileNativeChatSessionOptionPickers({
     ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
     : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
+  const modelSearchView =
+    activeDescriptor !== undefined && activeDescriptor === model && modelListNeedsSearch(model)
   // Permission mode and structured picks apply to the next send, so only the rest lock mid-turn.
   const locksMidTurn = (descriptor: SessionOptionDescriptor | undefined): boolean =>
     descriptor !== undefined &&
@@ -226,6 +232,9 @@ export function MobileNativeChatSessionOptionPickers({
         visible={homeView || activeDescriptor !== undefined}
         // Each page opens at its top, not at the last page's scroll.
         scrollResetKey={presentation?.page ?? null}
+        // A searchable list holds its own scroll and keeps a fixed height, so the keyboard and filtering never resize it.
+        fillAvailable={modelSearchView}
+        contentScrollable={!modelSearchView}
         onClose={closePicker}
         onAfterClose={() => {
           moreModels.reset()
@@ -233,7 +242,7 @@ export function MobileNativeChatSessionOptionPickers({
         }}
       >
         {homeView || activeDescriptor ? (
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, modelSearchView && styles.sheetFill]}>
             <View style={styles.header}>
               <SheetHeader
                 title={
@@ -257,19 +266,28 @@ export function MobileNativeChatSessionOptionPickers({
             <View style={styles.pageTop} />
             {activeDescriptor ? (
               <>
-                <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
-                  {descriptorRowElements(
-                    {
-                      descriptor: activeDescriptor,
-                      disabled: locked(activeDescriptor),
-                      onSetOption: (value) => applyOption(activeDescriptor, value),
-                      onInvokeAction: () => invokeAction(activeDescriptor),
-                      ...(activeDescriptor === model ? { moreChoices: moreModels } : {}),
-                      ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
-                    },
-                    t
-                  )}
-                </ListGroup>
+                {modelSearchView ? (
+                  <MobileNativeChatModelSearchList
+                    model={activeDescriptor}
+                    disabled={locked(activeDescriptor)}
+                    moreChoices={moreModels}
+                    onSetOption={(value) => applyOption(activeDescriptor, value)}
+                  />
+                ) : (
+                  <ListGroup separatorInset={permissionView ? LIST_LEADING_INSET : undefined}>
+                    {descriptorRowElements(
+                      {
+                        descriptor: activeDescriptor,
+                        disabled: locked(activeDescriptor),
+                        onSetOption: (value) => applyOption(activeDescriptor, value),
+                        onInvokeAction: () => invokeAction(activeDescriptor),
+                        ...(activeDescriptor === model ? { moreChoices: moreModels } : {}),
+                        ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
+                      },
+                      t
+                    )}
+                  </ListGroup>
+                )}
                 {showWorkingNotice ? <LockCaption /> : null}
                 {sessionOptionDispatchUnconfirmed(activeDescriptor) ? (
                   <SessionOptionCaption>
