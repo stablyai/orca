@@ -12,13 +12,43 @@ import {
 } from './structured-agent-session-host-test-data.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { childRecord } from '../../recovery/testing/structured-agent-session-restart-resume.test-fixture'
-import { appendUsageLimitedTurn } from './structured-agent-session-rewind-usage-limit.test-fixture'
 import { releaseIdleChatsOnOtherAccount } from '../structured-agent-session-account-switch'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
+import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 
 let rig: QueuedMessageTestRig | undefined
 afterEach(async () => rig?.dispose())
+
+/** A finished root turn ended by its account's usage limit, resetting a minute after `clock`. */
+async function appendUsageLimitedTurn(journal: AgentSessionJournal, clock: number, name: string) {
+  const turnItemId = agentJournalItemKey({ provider: 'orca', clientMessageId: `limited-${name}` })
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: `limited-${name}` },
+    {
+      kind: 'turn',
+      turnId: name,
+      providerTurnId: name,
+      state: 'completed',
+      outcome: 'failure',
+      startedAt: clock,
+      completedAt: clock
+    },
+    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: `${name}-limit` },
+    {
+      kind: 'status',
+      ...agentSessionFailureWords(
+        agentSessionFailureFact('usageLimitReached', { usageLimit: { resetsAt: clock + 60_000 } }),
+        { surface: 'row' }
+      )
+    },
+    { fence: 1, turnScope: { kind: 'turn', turnItemId } }
+  )
+}
 
 const home = (path: string) => ({ variable: 'CLAUDE_CONFIG_DIR', path })
 const settledTask = () =>
