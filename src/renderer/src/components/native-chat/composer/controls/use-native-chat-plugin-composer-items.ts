@@ -190,8 +190,12 @@ export function useNativeChatPluginComposerItems(
       return invokeComposerItemCommand(item, commandId, chat)
         .then(async () => {
           const current = resolver.current
-          if (current && current.items === items && shallow(current.chat, chat)) {
-            await current.resolve(item)
+          if (!current || !shallow(current.chat, chat)) {
+            return
+          }
+          const currentItem = current.items.find((candidate) => candidate.key === item.key)
+          if (currentItem && sameItem(currentItem, item)) {
+            await current.resolve(currentItem)
           }
         })
         .finally(() => {
@@ -199,7 +203,7 @@ export function useNativeChatPluginComposerItems(
           setRunning(new Set(pendingCommands.current))
         })
     },
-    [chat, items]
+    [chat]
   )
 
   return useMemo(() => {
