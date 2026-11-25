@@ -7,10 +7,29 @@ import { feishuThreadContext } from './feishu-thread-history'
 
 export class FeishuMessageIngress {
   private botOpenId?: string
+  private botName?: string
   constructor(
     private readonly store: FeishuStore,
     private readonly signal: AbortSignal
   ) {}
+  async displayName(app: string): Promise<string> {
+    if (!this.botName) {
+      const response = await feishuCommand(
+        ['--profile', app, 'api', 'GET', '/open-apis/bot/v3/info', '--as', 'bot'],
+        this.signal
+      )
+      const { data } = z
+        .object({
+          ok: z.literal(true),
+          identity: z.literal('bot'),
+          data: z.object({ open_id: z.string(), app_name: z.string().trim().min(1) })
+        })
+        .parse(response)
+      this.botOpenId = data.open_id
+      this.botName = data.app_name
+    }
+    return this.botName
+  }
   async receive(b: Binding, m: FeishuMessage): Promise<void> {
     if (b.owner !== m.sender_id || m.sender_type === 'bot') {
       return
@@ -24,19 +43,7 @@ export class FeishuMessageIngress {
       return
     }
     if (m.chat_type === 'group' && !known) {
-      if (!this.botOpenId) {
-        const response = await feishuCommand(
-          ['--profile', b.app, 'api', 'GET', '/open-apis/bot/v3/info', '--as', 'bot'],
-          this.signal
-        )
-        this.botOpenId = z
-          .object({
-            ok: z.literal(true),
-            identity: z.literal('bot'),
-            data: z.object({ open_id: z.string() })
-          })
-          .parse(response).data.open_id
-      }
+      await this.displayName(b.app)
       if (!m.mentions?.some((mention) => mention.id === this.botOpenId)) {
         return
       }

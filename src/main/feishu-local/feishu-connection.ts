@@ -258,14 +258,15 @@ export class FeishuConnection {
       () => this.changed(),
       this.interactions
     )
+    const displayName = await this.ingress.displayName(b.app)
     // Answer cards before draining their resulting user messages on the next pass.
     try {
-      await this.interactions.drain(bot.name)
+      await this.interactions.drain(displayName)
     } finally {
-      await this.sendOwed()
+      await this.sendOwed(displayName)
     }
   }
-  private async sendOwed(): Promise<void> {
+  private async sendOwed(displayName: string): Promise<void> {
     const b = this.binding
     const bot = this.bot()
     if (!b.chat || !bot) {
@@ -285,7 +286,7 @@ export class FeishuConnection {
       () => !this.signal.aborted && Boolean(this.bot()),
       () => this.checkProfile(),
       () => this.changed(),
-      bot.name
+      displayName
     )
   }
 }
