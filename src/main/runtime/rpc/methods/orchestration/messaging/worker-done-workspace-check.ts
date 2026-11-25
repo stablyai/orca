@@ -1,5 +1,5 @@
 import type { WorkspaceCheck } from '../../../../../../shared/orchestration/workspace-pr-check'
-import { displayPrRef } from '../../../../../../shared/orchestration/workspace-pr-refs'
+import { displayPrRepo } from '../../../../../../shared/orchestration/workspace-pr-refs'
 import { workspacePrCopy } from '../../../../../../shared/orchestration/workspace-pr-copy'
 import { recordWorkspacePrCheck } from '../../../../orchestration/db/messages/record-workspace-pr-check'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
@@ -30,7 +30,8 @@ export function checkWorkerDoneWorkspacePrs(args: {
     code: 'pull_request_outside_workspace',
     recipient: to,
     message: workspacePrCopy.worker(
-      displayPrRef(ref),
+      displayPrRepo(ref),
+      ref.number,
       runtime.getTerminalOrchestrationCliCommand(from),
       primary,
       runtime.getOrchestrationWorkspaceSelectorArgument(from, primary)

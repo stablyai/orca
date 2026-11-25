@@ -143,13 +143,18 @@ export abstract class RuntimeWorkspaceMetadata extends RuntimeWorktreeReviewBase
    *  the computer `homeInstallationId` names. */
   releaseBotHome(botHomeKey: WorkspaceKey, homeInstallationId?: string): { released: number } {
     const store = this.requireStore()
+    // A child that survives its home stays unknown to report checks rather than reading as outside.
+    const keep = { keepFolderUncertainty: true }
     const released = [
-      ...(store.removeWorkspaceLineage?.((lineage) => lineage.parentWorkspaceKey === botHomeKey) ??
-        []),
+      ...(store.removeWorkspaceLineage?.(
+        (lineage) => lineage.parentWorkspaceKey === botHomeKey,
+        keep
+      ) ?? []),
       ...(homeInstallationId
         ? (store.removeCrossStoreWorkspaceLineage?.(
             ({ parent }) =>
-              parent.workspaceKey === botHomeKey && parent.installationId === homeInstallationId
+              parent.workspaceKey === botHomeKey && parent.installationId === homeInstallationId,
+            keep
           ) ?? [])
         : [])
     ]

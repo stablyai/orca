@@ -201,7 +201,9 @@ export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithRe
             store.getRawCrossStoreWorkspaceLineage?.() ??
             store.getAllCrossStoreWorkspaceLineage?.() ??
             {},
-          childIndex: store.getLineageChildIndex?.(),
+          childIndex: store.getLineageChildIndex
+            ? (limit) => store.getLineageChildIndex!(limit)
+            : undefined,
           uncertainty: store.getWorkspaceLineageUncertainty?.() ?? {},
           decodeUncertaintyKey: (key) => this.lineageUncertaintyKeys.decode(key),
           folders,

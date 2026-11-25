@@ -26,8 +26,9 @@ export type WorkspacePrSnapshot = {
   lineage: Readonly<Record<string, WorktreeLineage>>
   workspaceLineage: Readonly<Record<string, WorkspaceLineage>>
   crossStoreLineage: Readonly<Record<string, unknown>>
-  /** Store-kept grouping of the three lineage records' keys; used only for those exact objects. */
-  childIndex?: LineageChildIndex
+  /** Store-kept grouping of the three lineage records' keys, built at most `limit` keys deep and
+   *  requested only when a negative check must walk lineage; used only for those exact objects. */
+  childIndex?: (limit: number) => LineageChildIndex
   uncertainty: unknown
   decodeUncertaintyKey?: typeof decodeLineageUncertaintyKey
   folders: readonly FolderWorkspace[]

@@ -1,11 +1,14 @@
-import { preserveFolderLineageUncertainty } from '../../../../shared/worktree/lineage/lineage-uncertainty'
+import {
+  markLineageUncertainty,
+  preserveFolderLineageUncertainty
+} from '../../../../shared/worktree/lineage/lineage-uncertainty'
 import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
 import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../../shared/worktree/lineage-types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
-import { releaseMatchingLineage } from './workspace-lineage-release'
+import { type LineageReleaseOptions, releaseMatchingLineage } from './workspace-lineage-release'
 import {
   isCrossStoreWorkspaceLineage,
   validCrossStoreLineage
@@ -14,6 +17,7 @@ import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import {
   buildLineageChildIndex,
+  indexCoversLimit,
   indexMatchesRecords,
   type LineageChildIndex,
   type LineageRecords
@@ -65,17 +69,19 @@ export class CrossStoreLineagePersistence {
     )
   }
 
-  /** The child index of the current lineage records; rebuilt when a save dropped it or a record
-   *  object was replaced (load, reload). */
-  getLineageChildIndex(): LineageChildIndex {
+  /** The child index of the current lineage records, built on first use and bounded by `limit`;
+   *  rebuilt when a save dropped it, a record object was replaced (load, reload), or a larger budget
+   *  is asked of a cached overflow. */
+  getLineageChildIndex(limit: number): LineageChildIndex {
     const runtime = this[crossStoreLineagePersistenceContext].runtime
     const records: LineageRecords = [
       runtime.state.worktreeLineageById,
       runtime.state.workspaceLineageByChildKey,
       this.getRawCrossStoreWorkspaceLineage()
     ]
-    if (!indexMatchesRecords(runtime.lineageChildIndex ?? undefined, records)) {
-      runtime.lineageChildIndex = buildLineageChildIndex(records)
+    const cached = runtime.lineageChildIndex ?? undefined
+    if (!indexMatchesRecords(cached, records) || !indexCoversLimit(cached, limit)) {
+      runtime.lineageChildIndex = buildLineageChildIndex(records, limit)
     }
     return runtime.lineageChildIndex!
   }
@@ -109,13 +115,28 @@ export class CrossStoreLineagePersistence {
 
   /** Drops the links that match; returns the children it released. */
   removeCrossStoreWorkspaceLineage(
-    matches: (lineage: CrossStoreWorkspaceLineage) => boolean
+    matches: (lineage: CrossStoreWorkspaceLineage) => boolean,
+    options?: LineageReleaseOptions
   ): WorkspaceKey[] {
-    const saved =
-      this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
+    const { state } = this[crossStoreLineagePersistenceContext].runtime
     const all = Object.values(this.getAllCrossStoreWorkspaceLineage())
-    return releaseMatchingLineage(saved, all, matches, () =>
-      scheduleSave(this[crossStoreLineagePersistenceContext].scheduling, WORKSPACE_LINEAGE_DOMAINS)
+    return releaseMatchingLineage(
+      state.crossStoreLineageByChildKey,
+      all,
+      matches,
+      () =>
+        scheduleSave(
+          this[crossStoreLineagePersistenceContext].scheduling,
+          WORKSPACE_LINEAGE_DOMAINS
+        ),
+      options?.keepFolderUncertainty
+        ? // The parent lives in the other store, so its form here is the only folder evidence.
+          ({ parent, childWorkspaceKey }) => {
+            if (parent.workspaceKey.startsWith('folder:')) {
+              markLineageUncertainty(state, childWorkspaceKey)
+            }
+          }
+        : undefined
     )
   }
 }

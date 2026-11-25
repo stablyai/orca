@@ -3,8 +3,9 @@ export type RepoKey = string
 export const repoKey = (ref: Omit<PullRequestRef, 'number'>): RepoKey =>
   `${ref.forgeHost}/${ref.owner}/${ref.repo}`
 export const refKey = (ref: PullRequestRef): string => `${repoKey(ref)}#${ref.number}`
-export const displayPrRef = (ref: PullRequestRef): string =>
-  `${ref.forgeHost === 'github.com' ? '' : `${ref.forgeHost}/`}${ref.owner}/${ref.repo}#${ref.number}`
+/** owner/repo, prefixed with the forge host when it is not github.com so host identity is visible. */
+export const displayPrRepo = (ref: Omit<PullRequestRef, 'number'>): string =>
+  `${ref.forgeHost === 'github.com' ? '' : `${ref.forgeHost}/`}${ref.owner}/${ref.repo}`
 
 export function bareSpecRefMatches(
   n: number,
@@ -58,7 +59,14 @@ function urlRefAt(text: string, index: number, token: string): PullRequestRef | 
     return undefined
   }
   try {
-    const url = new URL(token.replace(/[.,;:'!?*]+$/, ''))
+    const trimmed = token.replace(/[.,;:'!?*]+$/, '')
+    const url = new URL(trimmed)
+    // Only a path already in its normalized form counts. Dot segments, encoded dots and backslashes
+    // could name a PR only after normalization, and report scanning and spec matching both admit
+    // URLs here, so a spelling one side cannot see is rejected on both.
+    if (/^https?:\/\/[^/?#\\]*([^?#]*)/i.exec(trimmed)?.[1] !== url.pathname) {
+      return undefined
+    }
     const path = /^\/([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)\/pull\/([0-9]+)(?:\/|$)/.exec(
       url.pathname
     )

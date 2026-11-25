@@ -42,7 +42,10 @@ const check = (spec = '', input = snapshot(), subject = 'Opened org/q#17') => {
   const report = { subject, body: '', spec, host: 'local' }
   const scanned = checkWorkspacePullRequests(input, report)
   const records = [input.lineage, input.workspaceLineage, input.crossStoreLineage] as const
-  const indexed = { ...input, childIndex: buildLineageChildIndex(records) }
+  const indexed = {
+    ...input,
+    childIndex: (limit: number) => buildLineageChildIndex(records, limit)
+  }
   expect(checkWorkspacePullRequests(indexed, report)).toEqual(scanned)
   return scanned
 }

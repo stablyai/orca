@@ -12,8 +12,11 @@ export type LineageRecords = readonly [
 export type LineageChildIndex = {
   /** The exact record objects indexed; a snapshot holding any other object must not use it. */
   readonly records: LineageRecords
-  /** Every key across the three records, so row limits apply exactly as a full scan would. */
+  /** Keys across the three records, so row limits apply exactly as a full scan would. When
+   *  `overflow` is set, construction stopped here: there are at least this many keys. */
   readonly size: number
+  /** Construction passed its row budget; the grouping is empty and must never vouch for absence. */
+  readonly overflow: boolean
   /** Per record: project id → child keys as stored in that record. */
   readonly byProject: readonly ReadonlyMap<string, readonly string[]>[]
   /** Per record: keys that name no project (folders, or malformed keys). */
@@ -34,7 +37,9 @@ export function lineageNodeProject(node: string): string | undefined {
   return project.length < id.length ? project : undefined
 }
 
-export function buildLineageChildIndex(records: LineageRecords): LineageChildIndex {
+/** Groups at most `limit` keys. One key past it ends construction with an empty, overflowing index,
+ *  so work stays bounded by the row limit however much lineage is saved. */
+export function buildLineageChildIndex(records: LineageRecords, limit: number): LineageChildIndex {
   let size = 0
   const byProject: Map<string, string[]>[] = []
   const unprojected: string[][] = []
@@ -42,7 +47,9 @@ export function buildLineageChildIndex(records: LineageRecords): LineageChildInd
     const projects = new Map<string, string[]>()
     const loose: string[] = []
     for (const key in records[i]) {
-      size++
+      if (++size > limit) {
+        return { records, size, byProject: [], unprojected: [], overflow: true }
+      }
       const project = lineageNodeProject(lineageRecordNode(i, key))
       if (project === undefined) {
         loose.push(key)
@@ -58,7 +65,13 @@ export function buildLineageChildIndex(records: LineageRecords): LineageChildInd
     byProject.push(projects)
     unprojected.push(loose)
   }
-  return { records, size, byProject, unprojected }
+  return { records, size, byProject, unprojected, overflow: false }
+}
+
+/** Whether a cached index answers a request with this row budget without rebuilding: a complete one
+ *  always does; an overflow does only when it already proved more rows than the budget allows. */
+export function indexCoversLimit(index: LineageChildIndex, limit: number): boolean {
+  return !index.overflow || index.size > limit
 }
 
 export function indexMatchesRecords(

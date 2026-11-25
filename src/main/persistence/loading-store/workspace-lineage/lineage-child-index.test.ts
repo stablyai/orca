@@ -61,7 +61,7 @@ const check = (store: Store) =>
       lineage: store.getAllWorktreeLineage(),
       workspaceLineage: store.getAllWorkspaceLineage(),
       crossStoreLineage: store.getRawCrossStoreWorkspaceLineage(),
-      childIndex: store.getLineageChildIndex(),
+      childIndex: (limit) => store.getLineageChildIndex(limit),
       uncertainty: store.getWorkspaceLineageUncertainty(),
       folders: [],
       primaries: ['p::/p/work']
@@ -91,4 +91,27 @@ it('drops the cached child index when a lineage write adds a child under the pri
 
   addChild(store, 'q::/q/assigned', 'a', 'p::/p/work', 'primary')
   expect(check(store)).toEqual({ version: 1, state: 'partial', outside: [] })
+})
+
+it('caches a bounded overflow and rebuilds only for a larger budget', () => {
+  const store = createStore()
+  store.addRepo(repo('p'))
+  store.setWorktreeMeta(hostWorktreeTarget({ id: 'p::/p/work', hostId: 'local' }), {
+    instanceId: 'primary',
+    createdAt: 1
+  })
+  for (const name of ['a', 'b', 'c']) {
+    addChild(store, `p::/p/${name}`, name, 'p::/p/work', 'primary')
+  }
+  // Three raw rows plus their three workspace rows.
+  const overflow = store.getLineageChildIndex(2)
+  expect(overflow).toMatchObject({ size: 3, overflow: true })
+  // Already proves more than any budget below 3; no rebuild.
+  expect(store.getLineageChildIndex(1)).toBe(overflow)
+  expect(store.getLineageChildIndex(2)).toBe(overflow)
+  const complete = store.getLineageChildIndex(6)
+  expect(complete).toMatchObject({ size: 6, overflow: false })
+  expect(store.getLineageChildIndex(0)).toBe(complete)
+  addChild(store, 'p::/p/d', 'd', 'p::/p/work', 'primary')
+  expect(store.getLineageChildIndex(6)).toMatchObject({ size: 7, overflow: true })
 })

@@ -37,7 +37,7 @@ import {
   setWorktreeMetaForHost as setWorktreeMetaForHostOperation
 } from '../worktree-metadata/worktree-identity-metadata'
 import * as saved from '../../profile-save-domains'
-import { releaseMatchingLineage } from './workspace-lineage-release'
+import * as release from './workspace-lineage-release'
 import {
   pruneSessionlessMissingLocalWorktreeMetadataForRepo as pruneSessionlessMissingLocalWorktreeMetadataForRepoOperation,
   selectProbeableLocalWorktreeMetadataCandidates as selectProbeableLocalWorktreeMetadataCandidatesOperation
@@ -309,10 +309,12 @@ export class MetadataLineageOperations {
   }
 
   /** Drops the workspace links that match; returns the children it released. */
-  removeWorkspaceLineage(matches: (lineage: WorkspaceLineage) => boolean): WorkspaceKey[] {
+  removeWorkspaceLineage(
+    matches: (lineage: WorkspaceLineage) => boolean,
+    options?: release.LineageReleaseOptions
+  ): WorkspaceKey[] {
     const { runtime, scheduling } = this[metadataLineageOperationsContext]
-    const links = runtime.state.workspaceLineageByChildKey
-    return releaseMatchingLineage(links, Object.values(links), matches, () =>
+    return release.releaseWorkspaceLineageRows(runtime.state, matches, options, () =>
       scheduleSave(scheduling, saved.WORKSPACE_LINEAGE_DOMAINS)
     )
   }

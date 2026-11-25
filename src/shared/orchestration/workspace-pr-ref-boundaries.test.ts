@@ -88,3 +88,43 @@ it.each([['folder:primary'], ['p::/p/work', 'e::/e/work']])(
     })
   }
 )
+
+// One grammar both ways: a path that only names Q#17 after URL normalization is no reference at all,
+// whether it appears in the report or in the assignment.
+const NORMALIZED_ONLY = [
+  'https://github.com/org/q/pull/./17',
+  'https://github.com/org/q/pull/%2e/17',
+  'https://github.com/org/x/../q/pull/17',
+  'https://github.com/org/q/pull/18/../17',
+  'https://github.com/org\\q/pull/17'
+]
+
+it.each(NORMALIZED_ONLY)('does not read a report reference from %s', (subject) => {
+  expect(check(subject)).toEqual({ version: 1, state: 'complete', outside: [] })
+  expect(check(`${subject} https://github.com/org/q/pull/17`)).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: [ref]
+  })
+})
+
+it.each(NORMALIZED_ONLY)('does not read an assigned reference from %s', (spec) => {
+  expect(check('https://github.com/org/q/pull/17', spec)).toEqual({
+    version: 1,
+    state: 'complete',
+    outside: [ref]
+  })
+  expect(check('org/q#17', spec)).toEqual({ version: 1, state: 'complete', outside: [ref] })
+})
+
+it.each([
+  'https://github.com/org/q/pull/17',
+  'https://github.com/org/q/pull/17/',
+  'https://github.com/org/q/pull/17.',
+  'https://GitHub.com/org/q/pull/17',
+  'https://github.com/org/q/pull/17/commits/abc'
+])('keeps the canonical spelling in both directions: %s', (url) => {
+  expect(check(url)).toEqual({ version: 1, state: 'complete', outside: [ref] })
+  expect(check(url, url)).toEqual({ version: 1, state: 'complete', outside: [] })
+  expect(check('org/q#17', url)).toEqual({ version: 1, state: 'complete', outside: [] })
+})

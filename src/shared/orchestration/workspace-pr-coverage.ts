@@ -235,10 +235,11 @@ export function possibleWorkspacePrRepositories(
     }
   }
   const records = [input.lineage, input.workspaceLineage, input.crossStoreLineage] as const
-  const index = input.childIndex
+  // Built only now, after the marker scan, within the rows the markers left.
+  const index = input.childIndex?.(LINEAGE_SCAN_ROW_LIMIT - rawRows)
   if (indexMatchesRecords(index, records)) {
-    // Every indexed key counts toward the same row limit a full scan applies.
-    if (rawRows + index.size > LINEAGE_SCAN_ROW_LIMIT) {
+    // Every indexed key counts toward the same row limit a full scan applies; an overflow always does.
+    if (index.overflow || rawRows + index.size > LINEAGE_SCAN_ROW_LIMIT) {
       return { candidateRepos, incomplete: true }
     }
     for (let i = 0; i < records.length; i++) {

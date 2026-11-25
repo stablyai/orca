@@ -96,6 +96,15 @@ export function preserveFolderLineageUncertainty(state: State, childKey: string)
   if (!row?.parentWorkspaceKey?.startsWith('folder:')) {
     return
   }
+  markLineageUncertainty(state, childKey)
+}
+
+/** Marks a child whose folder-parent evidence is about to go, wherever that evidence was saved: the
+ *  host is the child's single owning host, or null (every host) when that is not certain. */
+export function markLineageUncertainty(
+  state: Pick<State, 'workspaceLineageUncertaintyByChild' | 'worktreeMeta' | 'repos'>,
+  childKey: string
+): void {
   const markers = (state.workspaceLineageUncertaintyByChild ??= {})
   const child = parseWorkspaceKey(childKey)
   if (!child || child.type !== 'worktree') {
