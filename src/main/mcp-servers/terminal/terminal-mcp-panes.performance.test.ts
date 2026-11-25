@@ -64,8 +64,10 @@ async function writesForBurst(spawns: number): Promise<number> {
   }
   release()
   const file = join(userData, 'mcp-terminal-panes.json')
-  const saved = (): Record<string, unknown> =>
-    (JSON.parse(readFileSync(file, 'utf8')) as { panes: Record<string, unknown> }).panes
+  const saved = (): Record<string, unknown> => {
+    const written: { panes: Record<string, unknown> } = JSON.parse(readFileSync(file, 'utf8'))
+    return written.panes
+  }
   // Every record of the burst still reaches the file.
   await vi.waitFor(() => {
     expect(Object.keys(saved())).toHaveLength(Math.min(spawns + 1, 500))
