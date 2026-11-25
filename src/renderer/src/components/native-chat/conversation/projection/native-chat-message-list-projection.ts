@@ -20,6 +20,7 @@ import {
 } from '../../../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import { stripNoiseMessages } from '../../../../../../shared/native-chat/transcript/messages/native-chat-noise'
+import { isVisuallyEmptyNativeChatAssistantMessage } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { reuseUnits } from './native-chat-message-list-reuse'
 import { subagentTurnKeys } from './native-chat-message-list-turns'
@@ -174,8 +175,12 @@ export function createNativeChatMessageListProjection(): (
 ) => NativeChatTranscriptProjection {
   let state: NativeChatListState | null = null
   return (messages, journal) => {
+    const visibleMessages = messages.filter(
+      (message) => !isVisuallyEmptyNativeChatAssistantMessage(message)
+    )
     state =
-      (state && reuseUnits(state, messages, journal)) ?? projectFully(messages, journal, state)
+      (state && reuseUnits(state, visibleMessages, journal)) ??
+      projectFully(visibleMessages, journal, state)
     return state.projection
   }
 }
