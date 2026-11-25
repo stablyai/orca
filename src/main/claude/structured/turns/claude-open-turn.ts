@@ -177,12 +177,12 @@ export class ClaudeOpenTurn {
   }
 
   /** The turn a kept agent was running when the last app quit: its row exists, so only its end is
-   *  published, and the replay continues it instead of opening another. */
+   *  published, the replay continues it instead of opening another, and a follow-up steers it. */
   adoptKept(turn: ClaudeCurrentTurn): void {
     if (!this.current) {
       this.current = turn
       this.cycleTurn = turn
-      this.cycleWorkObserved = true
+      this.cycleWorkObserved = this.inputChoiceWorkObserved = true
     }
   }
 

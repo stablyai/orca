@@ -104,11 +104,22 @@ export async function applyClaudeMessageOptions(
   if (options.interactionMode !== undefined) {
     if (options.interactionMode === 'plan') {
       claimClaudePermissionModeRequest(session)
-      await waitForPromiseWithSignal(
-        session.connection.setPermissionMode('plan', { timeoutMs }),
-        signal
-      )
+      // Recorded ahead of the answer, so a live pick meanwhile only records its mode for later.
+      const before = session.appliedInputOptions.get('interactionMode')
       session.appliedInputOptions.set('interactionMode', 'plan')
+      try {
+        await waitForPromiseWithSignal(
+          session.connection.setPermissionMode('plan', { timeoutMs }),
+          signal
+        )
+      } catch (error) {
+        if (before === undefined) {
+          session.appliedInputOptions.delete('interactionMode')
+        } else {
+          session.appliedInputOptions.set('interactionMode', before)
+        }
+        throw error
+      }
     } else {
       await waitForClaudeStartupSettings(session, signal)
       const leavingPlan = claudeInPlan(session)
