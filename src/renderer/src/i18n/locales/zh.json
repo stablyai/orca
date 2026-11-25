@@ -576,7 +576,9 @@
       "agentActions": "{{agent}} 操作",
       "defaultAutoBadge": "默认 · 自动",
       "newAgentsTitle": "新智能体",
-      "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循“这台电脑”的选择"
+      "defaultSurfaceServerDescription": "{{host}} 自行启动的智能体（例如通过其 CLI 或编排工作者启动）所用的默认设置。你从这台电脑打开的智能体遵循“这台电脑”的选择",
+      "hideAgentDetails": "隐藏 {{agent}} 详情",
+      "showAgentDetails": "显示 {{agent}} 详情"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -2195,6 +2197,10 @@
             "useSshPorts": "无法从 {{host}} 转发端口 {{port}}，请先在“端口”中转发，然后重试",
             "restoredMoved": "已将 {{host}} 的端口 {{port}} 转发到 localhost:{{localPort}}",
             "restoredMovedReason": "这台电脑上的 localhost:{{previousPort}} 已被占用"
+          },
+          "forwardedUrl": {
+            "openedIpv4": "已打开 127.0.0.1:{{port}}，而不是 localhost",
+            "openedIpv4Reason": "这台电脑上的另一个应用正在使用 localhost:{{port}}。"
           }
         }
       },
@@ -20006,6 +20012,11 @@
         "notAttachedShort": "未重新连接。",
         "dispatchRejectedShort": "智能体拒绝继续。",
         "unsupportedShort": "Orca 无法恢复此智能体。"
+      },
+      "RunTargetCombobox": {
+        "noWslDistros": "没有找到 WSL 发行版",
+        "wslDistro": "WSL 发行版",
+        "wslDistroHint": "这台电脑上的 Linux 发行版"
       }
     },
     "i18n": {
@@ -23882,6 +23893,9 @@
       "failed": "无法清除 {{host}} 上 {{profile}} 中的 Cookie，请重试",
       "failedLocal": "无法清除这台电脑上 {{profile}} 中的 Cookie，请重试",
       "sshHostOption": "{{host}} (SSH)"
+    },
+    "claimedDownload": {
+      "saved": "已保存到 {{place}}"
     }
   },
   "runtimeRpc": {
@@ -24401,7 +24415,10 @@
       "title": "拉取请求已取消关联",
       "description": "此工作区已隐藏 PR #{{number}}，请重新关联，以恢复检查和评审详情",
       "relink": "关联 PR #{{number}}"
-    }
+    },
+    "commentsUnavailable": "无法加载评论。",
+    "linkedReviewUnavailable": "无法加载关联的拉取请求。",
+    "loadingReviewDetails": "正在加载评审详情…"
   },
   "sourceControl": {
     "sectionAgentStarted": "已在 {{value0}} 中启动",
@@ -25396,7 +25413,11 @@
       "singleTitle": "要删除 {{name}} 吗？",
       "forceExplanation": "存在更改，Git 无法删除该工作树。强制删除仍会移除这些更改。",
       "errorDetails": "详细信息",
-      "changesIncomplete": "部分更改未能完整检查。"
+      "changesIncomplete": "部分更改未能完整检查。",
+      "parentWorkspace": "父工作区",
+      "workspaceDetails": "所选工作区的详细信息",
+      "workspaceKept": "将保留",
+      "workspacesToReview": "要检查的工作区"
     }
   },
   "mediaPreview": {
@@ -30822,7 +30843,10 @@
     "toolsLabel": "应用工具",
     "workspaces": "工作区",
     "more": "更多",
-    "customize": "自定义"
+    "customize": "自定义",
+    "account": "账户",
+    "pageRegion": "页面",
+    "signIn": "登录"
   },
   "chats": {
     "delete": {
