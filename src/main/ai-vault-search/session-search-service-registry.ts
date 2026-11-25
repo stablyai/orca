@@ -53,8 +53,9 @@ export async function searchSessionService(
           supportsJcodeHistory
         }
   )
+  // Always name the agents: an index built before an agent was removed (Gemini CLI) still holds its hits.
   const compatibleRequest =
-    compatibleAgents.length === 0 || compatibleAgents.length === agents.length
+    compatibleAgents.length === 0
       ? request
       : {
           ...request,

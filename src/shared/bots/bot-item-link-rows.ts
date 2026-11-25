@@ -139,82 +139,139 @@ function prKey(ref: string): string {
   return ref.trim().toLowerCase()
 }
 
+/** Rows a Links list draws at first and adds per Show more: an item holds up to 1,000 links. */
+export const BOT_ITEM_LINK_ROWS = 50
+
+/** The rows a Links list draws with `shown` of them open. A list that fits one page keeps the grouped
+ *  order; a longer one runs newest first (by its newest link), so live workers and recent PRs need no
+ *  Show more and each Show more adds older rows below. `more`: the rows the next Show more adds. */
+export function botItemLinkPage(
+  links: readonly BotItemLinkView[],
+  shown: number
+): { rows: BotItemLinkRow[]; more: number } {
+  const { rows, newestAt } = linkRowsWithRecency(links)
+  if (rows.length <= BOT_ITEM_LINK_ROWS) {
+    return { rows, more: 0 }
+  }
+  const at = (row: BotItemLinkRow) => newestAt.get(row.key) ?? -1
+  // Stable: a worker and its PR, from one link, keep the grouped order.
+  const newest = rows.toSorted((a, b) => at(b) - at(a))
+  return {
+    rows: newest.slice(0, shown),
+    more: Math.min(Math.max(rows.length - shown, 0), BOT_ITEM_LINK_ROWS)
+  }
+}
+
 export function botItemLinkRows(links: readonly BotItemLinkView[]): BotItemLinkRow[] {
+  return linkRowsWithRecency(links).rows
+}
+
+/** The rows, and by row key the newest link each one stands for (its index in `links`). */
+function linkRowsWithRecency(links: readonly BotItemLinkView[]): {
+  rows: BotItemLinkRow[]
+  newestAt: Map<string, number>
+} {
   const rows: BotItemLinkRow[] = []
+  const newestAt = new Map<string, number>()
+  const seen = (map: Map<string, number>, key: string, index: number): void => {
+    map.set(key, Math.max(map.get(key) ?? -1, index))
+  }
+  const indexOf = new Map(links.map((link, index) => [link, index]))
+  // A worker's row stands for every step of its chain.
+  const chainAt = new Map<string, number>()
+  links.forEach((link, index) => {
+    if (link.kind === 'dispatch') {
+      seen(chainAt, link.latest ?? link.ref, index)
+    }
+  })
   const prs = new Map<string, Extract<BotItemPullRequest, { shown: true }>>()
+  const prAt = new Map<string, number>()
   const unread = new Map<string, string>()
-  let serverPr = false
-  const addPr = (pr: BotItemPullRequest): void => {
+  let serverPrAt = -1
+  const addPr = (pr: BotItemPullRequest, index: number): void => {
     if (!pr.shown) {
-      serverPr = true
+      serverPrAt = Math.max(serverPrAt, index)
       return
     }
     const key = prKey(botItemPrRefOfUrl(pr.url) ?? pr.ref)
+    seen(prAt, key, index)
     const known = prs.get(key)
     // A worker's read carries the workspace the page reports for refresh; keep it over a bare link.
     if (!known || (!known.worktreeId && pr.worktreeId)) {
       prs.set(key, pr)
     }
   }
-  const addUnread = (ref: string): void => {
+  const addUnread = (ref: string, index: number): void => {
+    seen(prAt, prKey(ref), index)
     if (!unread.has(prKey(ref))) {
       unread.set(prKey(ref), ref)
     }
   }
+  const push = (row: BotItemLinkRow, index: number): void => {
+    rows.push(row)
+    seen(newestAt, row.key, index)
+  }
   for (const link of botItemLinksOnePerChain(links)) {
+    const index = indexOf.get(link) ?? -1
     switch (link.kind) {
       case 'dispatch':
-        rows.push({ kind: 'worker', key: `dispatch:${link.ref}`, link })
+        push(
+          { kind: 'worker', key: `dispatch:${link.ref}`, link },
+          chainAt.get(link.latest ?? link.ref) ?? index
+        )
         if (link.pr) {
-          addPr(link.pr)
+          addPr(link.pr, index)
         }
         break
       case 'pr':
         if (link.pr) {
-          addPr(link.pr)
+          addPr(link.pr, index)
         } else {
-          addUnread(link.ref)
+          addUnread(link.ref, index)
         }
         break
       case 'url': {
         const pr = botItemPrRefOfUrl(link.ref)
         if (pr) {
-          addUnread(pr)
+          addUnread(pr, index)
         } else {
-          rows.push(githubRow(link.ref, link.issue) ?? webRow(link.ref))
+          push(githubRow(link.ref, link.issue) ?? webRow(link.ref), index)
         }
         break
       }
       case 'file':
-        rows.push(fileRow(link.ref))
+        push(fileRow(link.ref), index)
         break
       case 'automation':
-        rows.push({
-          kind: 'automation',
-          key: `automation:${link.ref}`,
-          name: link.name,
-          active: link.active
-        })
+        push(
+          {
+            kind: 'automation',
+            key: `automation:${link.ref}`,
+            name: link.name,
+            active: link.active
+          },
+          index
+        )
         break
     }
   }
-  for (const pr of prs.values()) {
-    rows.push(prRow(pr))
+  for (const [key, pr] of prs) {
+    push(prRow(pr), prAt.get(key) ?? -1)
   }
   for (const [key, ref] of unread) {
     // A PR the cache has not read yet: a link to it, unless another link already shows its state.
     if (!prs.has(key)) {
       const url = botItemPrUrl(ref)
       const row = url ? githubRow(url, undefined) : null
-      rows.push(row ? { ...row, key: `pr:${key}` } : webRow(ref))
+      push(row ? { ...row, key: `pr:${key}` } : webRow(ref), prAt.get(key) ?? -1)
     }
   }
-  if (serverPr) {
-    rows.push({ kind: 'server-pr', key: 'server-pr' })
+  if (serverPrAt >= 0) {
+    push({ kind: 'server-pr', key: 'server-pr' }, serverPrAt)
   }
   markOtherRepos(rows)
   // Sort is stable: each group keeps the item's own order.
-  return rows.sort((a, b) => group(a) - group(b))
+  return { rows: rows.sort((a, b) => group(a) - group(b)), newestAt }
 }
 
 /** The item's repo is the one most of its GitHub links share; only links elsewhere name theirs. */

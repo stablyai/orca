@@ -5,12 +5,6 @@ import {
 } from '../../../../../shared/agent-status/title/agent-title-status'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import {
-  resolvePaneRendererPolicy,
-  type RendererPolicyDecision,
-  type ResolvePaneRendererPolicyInput,
-  type TerminalGpuAccelerationMode
-} from '../render-health/terminal-renderer-policy'
 
 /** Normalize display title using resolved compatible ownership instead of raw wrapper text. */
 export function resolvePaneDisplayTitle(
@@ -21,15 +15,13 @@ export function resolvePaneDisplayTitle(
   return normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, { ownerIsLaunch })
 }
 
-/** One interpretation feeds tab/pane labels, completion tracking and GPU policy for each OSC title. */
+/** One interpretation feeds tab/pane labels and completion tracking for each OSC title. */
 export type PaneTitleDecision = {
   displayTitle: string
   rawTitle: string
-  rendererPolicy: RendererPolicyDecision
 }
 
 export type ResolvePaneTitleDecisionInput = {
-  isGeminiTerminalTitle?: ResolvePaneRendererPolicyInput['isGeminiTerminalTitle']
   /** Normalized title from the transport (may already be display-shaped). */
   normalizedTitle: string
   rawTitle: string
@@ -38,11 +30,6 @@ export type ResolvePaneTitleDecisionInput = {
   displayOwnerAgentType: AgentType | null | undefined
   /** True when displayOwnerAgentType is user-selected launch ownership. */
   displayOwnerIsLaunch?: boolean
-  /** GPU veto requires current pane ownership; sticky sibling/reused launch identity cannot hide genuine Gemini. */
-  rendererOwnerAgentType: AgentType | null | undefined
-  userGpuMode: TerminalGpuAccelerationMode
-  webglUnavailable?: boolean
-  inContextLossContainment?: boolean
 }
 
 export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): PaneTitleDecision {
@@ -58,13 +45,5 @@ export function resolvePaneTitleDecision(input: ResolvePaneTitleDecisionInput): 
     input.displayOwnerAgentType,
     input.displayOwnerIsLaunch === true
   )
-  const rendererPolicy = resolvePaneRendererPolicy({
-    rawTitle: input.rawTitle,
-    isGeminiTerminalTitle: input.isGeminiTerminalTitle,
-    ownerAgentType: input.rendererOwnerAgentType,
-    userGpuMode: input.userGpuMode,
-    webglUnavailable: input.webglUnavailable,
-    inContextLossContainment: input.inContextLossContainment
-  })
-  return { displayTitle, rawTitle: input.rawTitle, rendererPolicy }
+  return { displayTitle, rawTitle: input.rawTitle }
 }
