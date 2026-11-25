@@ -10,6 +10,7 @@ import type { StructuredAgentRegistry } from '../providers/structured-agent-regi
 import {
   listProviderRelaysAtLaunch,
   liveProviderRelayChats,
+  providerRelayChatsIdleStoppedThisRun,
   providerRelayKeptFromLastRun
 } from '../../../provider-relay/app-provider-relays'
 import {
@@ -59,9 +60,14 @@ async function withoutKeptRunningChats(
   }
   await listProviderRelaysAtLaunch()
   const kept = liveProviderRelayChats()
-  // Still held by the daemon, or already reattached: either way its agent never stopped.
+  const finished = providerRelayChatsIdleStoppedThisRun()
+  // Still held by the daemon, or already reattached: either way its agent never stopped. One the
+  // daemon idle-stopped had finished its work, so nothing was cut either.
   return markers.filter(
-    (marker) => !kept.has(marker.sessionId) && !providerRelayKeptFromLastRun(marker.sessionId)
+    (marker) =>
+      !kept.has(marker.sessionId) &&
+      !finished.has(marker.sessionId) &&
+      !providerRelayKeptFromLastRun(marker.sessionId)
   )
 }
 

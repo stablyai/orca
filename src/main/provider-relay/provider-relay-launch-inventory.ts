@@ -20,6 +20,10 @@ let complete = false
 let retryAt = 0
 const RETRY_AFTER_MS = 30_000
 
+/** Chats whose detached agent the daemon idle-stopped: it stops only work that had ended, so
+ *  nothing of theirs was cut and restart offers leave them alone. */
+const idleStoppedThisRun = new Set<string>()
+
 /** The kept agent's own spawn token, so its reattach records the identity the process carries. */
 const spawnTokens = new Map<string, string>()
 
@@ -48,6 +52,9 @@ async function keep(channel: ProviderRelayChannel, relays: readonly ProviderRela
     }
     if (!info.attached && info.chatKey) {
       listed.set(info.chatKey, { channel, info })
+      if (info.exit?.idleStopped) {
+        idleStoppedThisRun.add(info.chatKey)
+      }
       const token = info.pid !== null && info.exit === null ? await readSpawnToken(info.pid) : null
       if (token) {
         spawnTokens.set(info.chatKey, token)
@@ -115,6 +122,10 @@ export function listKeptProviderRelays(clients: () => Promise<DaemonClient[]>): 
 /** Every daemon answered a listing, so a kept agent not in it isn't kept. */
 export function providerRelayInventoryComplete(): boolean {
   return complete
+}
+
+export function providerRelayChatsIdleStoppedThisRun(): ReadonlySet<string> {
+  return idleStoppedThisRun
 }
 
 export function keptProviderRelay(chatKey: string): KeptProviderRelay | undefined {
