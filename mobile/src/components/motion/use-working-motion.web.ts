@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { WorkingMotion } from './use-working-motion'
+import { useWorkingMotionActive } from './working-motion-pause'
 
 // Web Animations on the element run on the compositor, so a busy page cannot stall them the way
 // a JS-driven Animated loop is stalled; every ring shares one phase, like desktop's spinner.
 function useElementLoop(
-  active: boolean,
+  shown: boolean,
   keyframes: Keyframe[],
   options: KeyframeAnimationOptions,
   sharePhase = true
 ): (node: unknown) => void {
+  const active = useWorkingMotionActive(shown)
   const [element, setElement] = useState<HTMLElement | null>(null)
   const ref = useCallback(
     (node: unknown) => setElement(node instanceof HTMLElement ? node : null),
