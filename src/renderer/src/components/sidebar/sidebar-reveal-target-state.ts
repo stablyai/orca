@@ -211,17 +211,22 @@ const readBotListsVersion = (): readonly [readonly Bot[], readonly BotGroup[]] =
 }
 let lastLists: readonly [readonly Bot[], readonly BotGroup[]] | null = null
 
+export type SidebarRevealUnavailableReason = SidebarRevealNoneReason | 'projects-hidden'
+
 /** Why "Reveal current" has nothing to show, or null when it does. Reads the lists as already
  *  loaded; it never starts a bot read of its own. */
-export function useSidebarRevealUnavailableReason(): SidebarRevealNoneReason | null {
+export function useSidebarRevealUnavailableReason(): SidebarRevealUnavailableReason | null {
   const [bots, groups] = useSyncExternalStore(
     subscribeToBotLists,
     readBotListsVersion,
     readBotListsVersion
   )
   const select = useCallback(
-    (state: AppState, statuses: RuntimeStatuses): SidebarRevealNoneReason | null => {
+    (state: AppState, statuses: RuntimeStatuses): SidebarRevealUnavailableReason | null => {
       const target = targetFrom(state, statuses, bots, groups)
+      if (target.section === 'projects' && state.settings?.showProjectsInSidebar === false) {
+        return 'projects-hidden'
+      }
       return target.section === 'none' ? target.reason : null
     },
     [bots, groups]

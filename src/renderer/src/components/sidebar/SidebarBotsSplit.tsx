@@ -87,18 +87,21 @@ export function SidebarProjectsListSlot({
 export function SidebarBotsSplit({
   projectsCollapsed = false,
   projectsFirst = false,
+  projectsShown = true,
   children
 }: {
   /** Folded Projects leaves Bots the whole height, with no seam to drag. */
   projectsCollapsed?: boolean
   projectsFirst?: boolean
+  projectsShown?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const savedHeight = useAppStore((s) => s.sidebarBotsHeight)
   const setSidebarBotsHeight = useAppStore((s) => s.setSidebarBotsHeight)
   const collapsed = useAppStore((s) => s.collapsedGroups.has(BOTS_GROUP_KEY))
-  const fillsSidebar = projectsCollapsed && !collapsed
+  const canSplit = projectsShown && !projectsCollapsed
+  const fillsSidebar = !canSplit && !collapsed
   const resizeDirection = projectsFirst ? -1 : 1
   // Set from drag start until the drag ends: only then do applied sizes move the search hold.
   const dragRef = useRef<ResizeStart | null>(null)
@@ -181,7 +184,7 @@ export function SidebarBotsSplit({
       data-sidebar-bots-split=""
       className={cn(
         'relative flex min-h-12 flex-col border-worktree-sidebar-section-divider pb-2',
-        projectsFirst ? 'scroll-mt-1 border-t' : 'scroll-mb-1 border-b',
+        projectsShown && (projectsFirst ? 'scroll-mt-1 border-t' : 'scroll-mb-1 border-b'),
         '[[data-sidebar-content-viewport]>&]:-mr-1 [[data-sidebar-content-viewport]>&]:pr-1',
         'has-[[data-bot-sidebar-search=single-row]]:min-h-34 has-[[data-bot-sidebar-search=multiple-rows]]:min-h-47',
         SPLIT_SCROLL_GUTTER,
@@ -189,7 +192,7 @@ export function SidebarBotsSplit({
       )}
     >
       {children}
-      {collapsed || projectsCollapsed ? null : (
+      {canSplit && !collapsed ? (
         <div
           role="separator"
           tabIndex={0}
@@ -246,7 +249,7 @@ export function SidebarBotsSplit({
             )}
           />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }

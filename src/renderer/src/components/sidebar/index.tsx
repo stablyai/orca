@@ -116,11 +116,13 @@ function Sidebar({
   useRailPageListFocusRelease(hiddenByRailPage)
   const sidebarWidth = useAppStore((s) => s.sidebarWidth)
   const setSidebarWidth = useAppStore((s) => s.setSidebarWidth)
-  const repos = useAppStore((s) => s.repos)
+  const repoCount = useAppStore((s) => s.repos.length)
   const botsEnabled = useBotsEnabled()
   const startupWorktreeRefreshCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
   const settings = useAppStore((s) => s.settings)
-  const sidebarBody = useAppStore((s) => s.sidebarBody ?? 'workspaces')
+  const projectsShown = settings?.showProjectsInSidebar !== false
+  const agentsView = useAppStore((s) => s.sidebarBody === 'agents')
+  const agentsShown = projectsShown && agentsView
   const showAgentDashboard = settings?.experimentalAgentDashboardPopout === true
   const agentDashboardDrawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setAgentDashboardDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
@@ -174,7 +176,6 @@ function Sidebar({
     cancelWorkspaceBoardDragPreview
   } = useWorkspaceBoardPanel()
 
-  const repoCount = repos.length
   const previousRepoCountRef = React.useRef(repoCount)
   useEffect(() => {
     const repoCountChanged = previousRepoCountRef.current !== repoCount
@@ -197,6 +198,12 @@ function Sidebar({
     }
   }, [agentDashboardDrawerOpen, setAgentDashboardDrawerOpen, showAgentDashboard])
 
+  useEffect(() => {
+    if (!projectsShown && agentsView) {
+      useAppStore.getState().setSidebarBody('workspaces')
+    }
+  }, [agentsView, projectsShown])
+
   const { containerRef, onResizeStart, isResizing } = useSidebarResize<HTMLDivElement>({
     isOpen: sidebarOpen,
     width: sidebarWidth,
@@ -210,14 +217,13 @@ function Sidebar({
   const drawerCoversSeam =
     workspaceBoardRenderedOpen || (showAgentDashboard && agentDashboardDrawerOpen)
 
-  useWorkspaceRevealBodyRedirect(sidebarOpen && sidebarBody === 'agents')
+  useWorkspaceRevealBodyRedirect(sidebarOpen && agentsShown)
   const projectsFirst = useAppStore((s) => s.sidebarProjectsFirst)
-  const setProjectsFirst = useAppStore((s) => s.setSidebarProjectsFirst)
   const sidebarSectionDragSensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 4 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } })
   )
-  const botsShown = sidebarBody !== 'agents' && botsEnabled
+  const botsShown = !agentsShown && botsEnabled
   // Projects folds only when Bots is shown, so turning bots off always brings the list back.
   const projectsCollapsed = useAppStore(
     (s) => botsShown && s.collapsedGroups.has(PROJECTS_SECTION_GROUP_KEY)
@@ -236,27 +242,28 @@ function Sidebar({
       key="bots"
       projectsCollapsed={projectsCollapsed}
       projectsFirst={projectsFirst}
+      projectsShown={projectsShown}
     >
-      <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable />
+      <SidebarBotsSection onOpenBot={closeWorkspaceBoard} reorderable={projectsShown} />
     </SidebarBotsSplit>
   ) : null
   const projectsSection = (
     <React.Fragment key="projects">
-      <SidebarHeader
-        activityBadgeTarget={setAgentBadgeTarget}
-        onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
-        activityOptionsTarget={setAgentOptionsTarget}
-        collapsible={botsShown}
-        projectsCollapseTarget={setProjectsCollapseTarget}
-      />
+      {projectsShown ? (
+        <SidebarHeader
+          activityBadgeTarget={setAgentBadgeTarget}
+          onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}
+          activityOptionsTarget={setAgentOptionsTarget}
+          collapsible={botsShown}
+          projectsCollapseTarget={setProjectsCollapseTarget}
+        />
+      ) : null}
       <SeveredTerminalDaemonBanner />
       <StalledTerminalDaemonBanner />
-      <React.Suspense
-        fallback={sidebarBody === 'agents' ? <div className="min-h-0 flex-1" /> : null}
-      >
+      <React.Suspense fallback={agentsShown ? <div className="min-h-0 flex-1" /> : null}>
         <ActivityThreadCollapseContext.Provider value={agentsCollapseState}>
           <SidebarAgentsList
-            active={sidebarBody === 'agents'}
+            active={agentsShown}
             readFilter={agentReadFilter}
             setReadFilter={setAgentReadFilter}
             groupBy={agentGroupBy}
@@ -269,7 +276,7 @@ function Sidebar({
           />
         </ActivityThreadCollapseContext.Provider>
       </React.Suspense>
-      {sidebarBody !== 'agents' && (
+      {projectsShown && !agentsShown && (
         <>
           {projectsCollapsed ? null : (
             <>
@@ -320,8 +327,8 @@ function Sidebar({
                 modifiers={sidebarSectionDragModifiers}
                 collisionDetection={pointerWithin}
                 onDragEnd={({ active, over }) => {
-                  if (botsShown && over && active.id !== over.id) {
-                    setProjectsFirst(!projectsFirst)
+                  if (projectsShown && botsShown && over && active.id !== over.id) {
+                    useAppStore.getState().setSidebarProjectsFirst(!projectsFirst)
                   }
                 }}
               >
