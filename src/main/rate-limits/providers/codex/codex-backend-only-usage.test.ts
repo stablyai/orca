@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { httpFetch, spawn } = vi.hoisted(() => ({ httpFetch: vi.fn(), spawn: vi.fn() }))
 vi.mock('../../../network/http-client', () => ({ getMainHttpClient: () => ({ fetch: httpFetch }) }))
@@ -26,9 +26,15 @@ function chatgptAuth(expSeconds: number): string {
   return JSON.stringify({ tokens: { access_token: `e30.${payload}.sig`, account_id: 'acct' } })
 }
 
-const nowSeconds = (): number => Math.floor(Date.now() / 1000)
+const NOW_SECONDS = 1_800_000_000
+
+afterEach(() => {
+  vi.useRealTimers()
+})
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(NOW_SECONDS * 1000)
   spawn.mockReset()
   spawn.mockImplementation(() => {
     throw new Error('backend-only reads must not start codex app-server')
@@ -48,7 +54,7 @@ describe('backend-only Codex usage (unselected System default)', () => {
       )
     )
     const result = await fetchCodexRateLimits({
-      codexHomePath: homeWithAuth(chatgptAuth(nowSeconds() + 3600)),
+      codexHomePath: homeWithAuth(chatgptAuth(NOW_SECONDS + 3600)),
       backendUsageOnly: true
     })
     expect(result.status).toBe('ok')
@@ -57,8 +63,8 @@ describe('backend-only Codex usage (unselected System default)', () => {
   })
 
   it.each([
-    ['an expired access token', chatgptAuth(nowSeconds() - 60), 0],
-    ['a rejected access token', chatgptAuth(nowSeconds() + 3600), 1]
+    ['an expired access token', chatgptAuth(NOW_SECONDS - 60), 0],
+    ['a rejected access token', chatgptAuth(NOW_SECONDS + 3600), 1]
   ])('waits for Codex to renew %s instead of reporting a sign-out', async (_, auth, requests) => {
     httpFetch.mockResolvedValue(new Response('', { status: 401 }))
     const result = await fetchCodexRateLimits({
