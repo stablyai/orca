@@ -4,9 +4,10 @@ import { botMemoryFenceOpeners, insertBotMemoryNonFenceLine } from './bot-memory
 /** The non-blank line a fact followed (null: the top of the file). */
 export type BotMemoryAnchor = {
   after: string | null
-  /** The anchor's 1-based occurrence among the lines a fact can follow. Older history rows keep
-   *  only its text. */
+  /** The anchor's 1-based occurrence among the lines a fact can follow, of `afterCopies` then.
+   *  Older history rows keep only its text. */
   afterOccurrence?: number
+  afterCopies?: number
 }
 
 /** Whether a fact can come right after line `index`: no fence opener and no line inside a fence,
@@ -18,8 +19,8 @@ export function isBotMemoryAnchorLine(openers: readonly number[] | null, index: 
 
 /**
  * Puts facts back into `lines`, in place and one by one: after the copy of the line a fact
- * followed; after the last copy for an older row without an occurrence, or when fewer copies are
- * left; at the end when none is; above a fence that place is in.
+ * followed (counted from the end once copies came or went); after the last copy for an older row
+ * without an occurrence; at the end when no copy is left; above a fence that place is in.
  */
 export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMemoryAnchor) => void {
   const found = botMemoryFenceOpeners(lines)
@@ -33,7 +34,7 @@ export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMem
     }
   }
   lines.forEach((_raw, index) => count(index))
-  const place = ({ after, afterOccurrence }: BotMemoryAnchor): number => {
+  const place = ({ after, afterOccurrence, afterCopies }: BotMemoryAnchor): number => {
     if (after === null) {
       return 0
     }
@@ -43,7 +44,11 @@ export function botMemoryPutBack(lines: string[]): (line: string, anchor: BotMem
     }
     // The same copy counted from both ends at once, so one near either end is found without
     // reading the rest of the file.
-    let fromEnd = afterOccurrence === undefined ? 1 : Math.max(1, copies - afterOccurrence + 1)
+    // As many copies as then: the same one. Some came or went: the one as far from the end, which
+    // is where an older row goes too (the last copy), so it never lands worse than one would.
+    const then = afterCopies ?? copies
+    let fromEnd =
+      afterOccurrence === undefined ? 1 : Math.min(copies, Math.max(1, then - afterOccurrence + 1))
     let fromStart = copies - fromEnd + 1
     const copy = (index: number): boolean =>
       lines[index] === after && isBotMemoryAnchorLine(openers, index)

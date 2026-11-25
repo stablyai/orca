@@ -288,6 +288,10 @@ describe("a bot's memory history", () => {
     expect(
       await forgetThenUndo(repeated, (text) => text.replace('## Deploy\n- a\n', '- a\n'))
     ).toBe(`- a\n${filler(0, 10)}## Deploy\n- target\n${filler(10, 250)}`)
+    // A new copy came above it meanwhile: still after the copy it followed.
+    expect(await forgetThenUndo(repeated, (text) => `## Deploy\n- new\n${text}`)).toBe(
+      `## Deploy\n- new\n${repeated}`
+    )
     // A later copy in a code fence never pulls it down.
     const fenced = `## Deploy\n- target\n${filler(0, 250)}\`\`\`md\n## Deploy\n\`\`\`\n`
     expect(await forgetThenUndo(fenced, (text) => text)).toBe(fenced)

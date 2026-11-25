@@ -7,7 +7,8 @@ export const BOT_MEMORY_HISTORY_DAYS = 90
 const BotMemoryLineSchema = z.object({
   line: z.string(),
   after: z.string().nullable(),
-  afterOccurrence: z.number().int().positive().optional()
+  afterOccurrence: z.number().int().positive().optional(),
+  afterCopies: z.number().int().positive().optional()
 })
 
 export const BotMemoryAuthorSchema = z.discriminatedUnion('kind', [

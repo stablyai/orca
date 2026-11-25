@@ -232,7 +232,10 @@ export function botMemoryChange(before: string, after: string): BotMemoryChange 
         occurrences.set(raw, previousOccurrence)
       }
     }
-    return lines
+    // With how many copies there were, so a put-back can tell whether any came or went since.
+    return lines.map((line) =>
+      line.after === null ? line : { ...line, afterCopies: occurrences.get(line.after) }
+    )
   }
   return { added: only(after, before), removed: only(before, after) }
 }

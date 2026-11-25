@@ -132,6 +132,8 @@ export function BotMemoryHistory({
   // Days are named as of the load.
   const [loaded, setLoaded] = useState<{ rows: BotMemoryHistoryView[]; now: Date } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
+  // An Undo writes a row even when the file it reads back is byte for byte the same.
+  const [undone, setUndone] = useState(0)
 
   useEffect(() => {
     let current = true
@@ -141,7 +143,7 @@ export function BotMemoryHistory({
     return () => {
       current = false
     }
-  }, [load, version])
+  }, [load, version, undone])
 
   const undoRow = async (id: string): Promise<void> => {
     try {
@@ -156,6 +158,7 @@ export function BotMemoryHistory({
     } catch (error) {
       toast.error(botErrorMessage(error))
     }
+    setUndone((count) => count + 1)
     await onChanged()
   }
 
