@@ -131,7 +131,7 @@ describe('ACP relay ack floor', () => {
     const { output, acks, send } = rig(async (force) => force)
     await send(chunk('a'), chunk('b'))
     expect(acks).toEqual([])
-    await output.flush()
+    await output.flush(1000)
     expect(acks).toEqual([2])
   })
 
