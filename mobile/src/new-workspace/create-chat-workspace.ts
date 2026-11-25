@@ -73,31 +73,29 @@ export function newChatWorkspaceSubmission() {
         }
       }
       if (intent.agent !== '__blank__') {
-        try {
-          const launch = agentLaunchReplayRun.interpret(
-            await agentLaunchReplayRun.request(
-              client,
-              agentLaunchExistingParams({
-                agent: intent.agent,
-                worktreeId: root.worktreeId,
-                operationId,
-                launchSource: 'mobile-chat-workspace'
-              })
+        const launch = agentLaunchReplayRun.interpret(
+          await agentLaunchReplayRun.request(
+            client,
+            agentLaunchExistingParams({
+              agent: intent.agent,
+              surface: 'chat',
+              worktreeId: root.worktreeId,
+              operationId,
+              launchSource: 'mobile-chat-workspace'
+            })
+          )
+        )
+        if (launch.outcome.kind !== 'structured') {
+          throw new Error(
+            translate(
+              'chats.agentFailed',
+              'Could not start the agent. Check the chat before starting another.'
             )
           )
-          const notice = readAgentLaunchNotice(launch)
-          if (notice) {
-            warnings.push(notice)
-          }
-        } catch (failure) {
-          warnings.push(
-            failure instanceof Error
-              ? failure.message
-              : translate(
-                  'chats.agentFailed',
-                  'Could not start the agent. Check the chat before starting another.'
-                )
-          )
+        }
+        const notice = readAgentLaunchNotice(launch)
+        if (notice) {
+          warnings.push(notice)
         }
       }
       return {
