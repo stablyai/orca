@@ -73,6 +73,12 @@ function claudeRefusal(error: unknown): ClaudeRefusal | null {
     : null
 }
 
+/** Claude's refusal of bypass for this process, if the error is one. */
+export function claudeBypassRefusalOf(error: unknown): ClaudeBypassRefusal | null {
+  const refusal = claudeRefusal(error)
+  return refusal?.kind === 'bypass' ? refusal.reason : null
+}
+
 // Availability and the circuit breaker pass with time; asking sooner only repeats the refusal.
 const CLAUDE_AUTO_RETRY_MS = 60_000
 // An unanswered switch is asked again soon, without making every input wait on it.

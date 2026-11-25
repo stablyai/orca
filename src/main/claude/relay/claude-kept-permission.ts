@@ -4,7 +4,10 @@ import type { ClaudeSession } from '../structured/claude-structured-session-stat
 import type { AgentChatPermissionChoice } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { claudePermissionModeFor } from '../structured/launch/claude-structured-permission-options'
 import { claudeInPlan } from '../structured/permissions/claude-full-access-refusal'
-import { setClaudeAllowedPermissionMode } from '../structured/permissions/claude-permission-mode-ladder'
+import {
+  claudeBypassRefusalOf,
+  setClaudeAllowedPermissionMode
+} from '../structured/permissions/claude-permission-mode-ladder'
 import { keptClaudeAgentRelay } from './claude-kept-agent-connection'
 
 type Adapter = StructuredAgentSessionAdapter
@@ -32,12 +35,35 @@ const isBuildMode = (mode: string | undefined): mode is PermissionMode =>
 const bypassRefused = (session: ClaudeSession, mode: AgentChatPermissionChoice): boolean =>
   mode === 'full-access' && session.bypassDisabled === true
 
+/** Only Claude knows whether this process was launched able to bypass: asked straight, not through
+ *  the ladder (which reads an Ask launch's first init as a refusal). A refusal makes the next send
+ *  start a flagged agent; acceptance proves Full access for this process. */
+async function askKeptBypass(session: ClaudeSession, timeoutMs: number | undefined): Promise<void> {
+  try {
+    await session.connection.setPermissionMode('bypassPermissions', { timeoutMs })
+    session.bypassAccepted = true
+    session.bypassDisabled = false
+    session.bypassRefusal = undefined
+  } catch (error) {
+    const refusal = claudeBypassRefusalOf(error)
+    if (refusal === null) {
+      throw error
+    }
+    session.bypassDisabled = true
+    session.bypassRefusal = refusal
+    throw error
+  }
+}
+
 /** Writes a Build mode and records the one Claude accepted; a failed switch records none. */
 async function applyBuildMode(
   session: ClaudeSession,
   mode: PermissionMode,
   timeoutMs: number | undefined
 ): Promise<void> {
+  if (mode === 'bypassPermissions' && !claudeInPlan(session)) {
+    await askKeptBypass(session, timeoutMs)
+  }
   // The chat now wants this mode from this process: leaving Plan, a refused Full access and the
   // next reattach all read it, not the mode the agent was launched in.
   session.launchIntent = { ...session.launchIntent, permissionMode: mode }

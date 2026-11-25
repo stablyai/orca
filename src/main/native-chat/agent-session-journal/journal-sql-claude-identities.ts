@@ -42,6 +42,17 @@ export function readJournalDomainClaudeIdentities(
     GROUP BY name.subagent_id ORDER BY MIN(item.ordinal)`)
     .all(...prefix)
     .map((row) => String(row.subagent_id))
+  // Only items that already name a subagent, so this never walks the whole journal.
+  const backgroundSubagents = db
+    .prepare(`SELECT DISTINCT name.subagent_id FROM journal_item_subagent_names name
+    JOIN journal_items item ON item.session_id=name.session_id AND item.epoch=name.epoch
+      AND item.item_id=name.item_id, json_each(item.payload_json,'$.body.blocks') block
+    WHERE name.session_id=? AND name.epoch=? AND item.hidden=0
+      AND json_extract(block.value,'$.type')='subagent'
+      AND json_extract(block.value,'$.id')=name.subagent_id
+      AND json_extract(block.value,'$.background')=1`)
+    .all(...prefix)
+    .map((row) => String(row.subagent_id))
   const parents = new Map<string, Map<string | undefined, AgentJournalProducerLinkage>>()
   for (const row of db
     .prepare(`SELECT placement_json FROM journal_items
@@ -89,6 +100,7 @@ export function readJournalDomainClaudeIdentities(
     canonicalByToolUse,
     attemptByAgent,
     subagents,
+    backgroundSubagents,
     parents: [...parents].map(([id, runs]) => [id, [...runs]]),
     backgrounds: [...backgrounds].map(([id, index]) => [
       id,
