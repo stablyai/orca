@@ -837,7 +837,6 @@
       "statusBar": {
         "claudeToggleDescription": "Show Claude token and cost usage for the active workspace.",
         "codexToggleDescription": "Show Codex token and cost usage for the active workspace.",
-        "geminiToggleDescription": "Show Gemini token and cost usage for the active workspace.",
         "opencodeGoToggleDescription": "Show OpenCode Go token and cost usage for the active workspace.",
         "kimiToggleDescription": "Show Kimi subscription usage for the active workspace.",
         "minimaxToggleDescription": "Show MiniMax subscription usage for the active workspace.",
@@ -1572,6 +1571,8 @@
         "nothingToUndo": "Nothing left to undo: those lines changed since.",
         "empty": "No changes yet."
       },
+      "muteNotifications": "Mute notifications",
+      "muteNotificationsDescription": "Stop sending system notifications. Unread indicators still appear.",
       "notifyNeedsPermission": "Needs permission",
       "notifyNeedsPermissionDescription": "When the bot or a worker needs your approval.",
       "notifyTaskComplete": "Task complete",
@@ -2034,6 +2035,139 @@
     },
     "artifacts": {
       "teamDisabled": "Artifact sharing is turned off by your team."
+    },
+    "navigation": {
+      "accounts": {
+        "description": "Optional account switching and usage setup for Claude, Codex, Antigravity, OpenCode Go, MiniMax, and Grok."
+      }
+    },
+    "mcpServers": {
+      "custom": {
+        "noneChecked": "Check a server to add.",
+        "addMany": "Add {{count}} servers",
+        "found": "Found {{count}} servers",
+        "foundUrl": "URL · {{line}}",
+        "foundCommand": "Command · {{line}}",
+        "title": "Custom server",
+        "sourceLabel": "Server URL, start command or config",
+        "sourceHint": "Paste a server URL, start command or config, or enter the details yourself.",
+        "nameTaken": "A server named {{name}} already exists. Choose another name.",
+        "line": "A URL, a start command or a config",
+        "foundTaken": "Already added"
+      },
+      "empty": {
+        "copied": "Copied {{count}} servers from {{host}}",
+        "title": "No MCP servers on {{host}}",
+        "copyFrom": "Copy from {{host}}"
+      },
+      "addServer": "Add a server",
+      "toast": {
+        "allOn": "{{name}} turned on for every agent",
+        "allOff": "{{name}} turned off for every agent",
+        "agentOn": "{{name}} turned on for {{agent}}",
+        "agentOff": "{{name}} turned off for {{agent}}",
+        "saved": "{{name}} saved",
+        "sharedOn": "{{name}} shares one process",
+        "sharedOff": "{{name}} runs once per session",
+        "signedOut": "Signed out of {{name}}",
+        "removed": "{{name}} removed",
+        "workspaces": "{{name}}: {{workspaces}}",
+        "added": "{{name}} added",
+        "newSessions": "Applies to new sessions",
+        "restart": "Restart {{count}} sessions"
+      },
+      "fileAgent": {
+        "title": "Let Orca edit {{agent}}’s MCP file?",
+        "line": "Orca will keep your MCP servers in {{agent}}’s settings file ({{file}}). Your own entries stay as they are.",
+        "allow": "Allow"
+      },
+      "agents": {
+        "title": "Agents",
+        "allOff": "Turn all off",
+        "allOn": "Turn all on",
+        "all": "All agents",
+        "someOff": "{{count}} agents off",
+        "none": "No agents",
+        "some": "{{on}} of {{total}} agents"
+      },
+      "stale": "This server changed elsewhere. Showing it as it is now.",
+      "launch": {
+        "title": "Launch",
+        "command": "Command",
+        "args": "Arguments",
+        "env": "Environment"
+      },
+      "connection": {
+        "title": "Connection",
+        "url": "URL",
+        "headers": "Headers"
+      },
+      "shared": {
+        "title": "Share one process across agents",
+        "line": "Uses less memory. The server runs outside the workspace folder."
+      },
+      "status": {
+        "needsSignIn": "Needs sign-in",
+        "signedIn": "Signed in",
+        "commandFailed": "Command not found on {{host}}",
+        "unreachable": "Can’t reach {{host}}"
+      },
+      "signIn": "Sign in",
+      "signInActions": "Sign-in actions",
+      "signInAgain": "Sign in again",
+      "signOut": "Sign out",
+      "loading": "Reading MCP servers…",
+      "remove": {
+        "title": "Remove {{name}}?",
+        "line": "New sessions on {{host}} won’t have it. Its saved values and sign-in are deleted.",
+        "confirm": "Remove",
+        "button": "Remove server"
+      },
+      "found": {
+        "onlyIn": "{{agents}} · {{projects}} only",
+        "move": "Move to Orca",
+        "actions": "{{name}} actions",
+        "copy": "Copy to Orca",
+        "open": "Open",
+        "copied": "Copied {{name}} to Orca",
+        "title": "In your agents",
+        "summary": "Found {{count}} servers in {{agents}}",
+        "moveAll": "Move all to Orca"
+      },
+      "signedInToast": "Signed in to {{name}}",
+      "pasteRefused": "That address isn’t from this sign-in.",
+      "workspaces": {
+        "title": "Workspaces",
+        "later": "Workspaces added later",
+        "all": "All workspaces",
+        "none": "No workspaces",
+        "allBut": "All but {{names}}",
+        "only": "Only {{names}}"
+      },
+      "catalog": {
+        "noMatch": "No server matches “{{query}}”.",
+        "search": "Search servers",
+        "caption": "Servers"
+      },
+      "add": {
+        "title": "Add an MCP server"
+      },
+      "catalogLine": {
+        "github": "Issues, pull requests and code search",
+        "linear": "Read and update issues and projects"
+      },
+      "move": {
+        "title": "Move {{name}} to Orca?",
+        "allTitle": "Move {{count}} servers to Orca?",
+        "line": "Orca removes it from {{agents}} settings and keeps a backup.",
+        "allLine": "Orca removes them from {{agents}} settings and keeps a backup.",
+        "confirm": "Move"
+      },
+      "yours": "Yours",
+      "fromPlugins": "From plugins",
+      "unsupported": "MCP servers aren’t available on {{host}}.",
+      "title": "MCP servers",
+      "description": "Servers your agents can use. Changes apply to new sessions."
     }
   },
   "menu": {
@@ -2464,7 +2598,6 @@
           "8da11d876c": "Goose",
           "b32627f09b": "Aider",
           "691dd11789": "Antigravity",
-          "12e6baa4f7": "Gemini",
           "09973b4d84": "OMP",
           "302934c5d9": "Pi",
           "e7a4ca5103": "OpenCode",
@@ -2734,6 +2867,10 @@
             "useSshPorts": "Couldn't forward port {{port}} from {{host}}. Forward it in Ports, then try again.",
             "restoredMoved": "Forwarded port {{port}} from {{host}} to localhost:{{localPort}}",
             "restoredMovedReason": "localhost:{{previousPort}} is in use on this computer."
+          },
+          "forwardedUrl": {
+            "openedIpv4": "Opened 127.0.0.1:{{port}} instead of localhost",
+            "openedIpv4Reason": "Another app on this computer uses localhost:{{port}}."
           }
         }
       },
@@ -2884,7 +3021,8 @@
         "projectRemoved": "The project was removed from Orca.",
         "folderWorkspaceRemoved": "The folder workspace was removed.",
         "chatStillStarting": "This chat is still starting. Try again in a moment.",
-        "chatOpenFailed": "Couldn't open this chat.",
+        "chatOpenFailed": "Couldn't open chat",
+        "chatOpenDismiss": "Dismiss",
         "chatOpenRetry": "Retry",
         "chatOpenShowDetails": "Show details",
         "chatOpenHideDetails": "Hide details"
@@ -3094,11 +3232,6 @@
           "failedToLoadUsage": "Failed to load usage data",
           "failedToParseCliOutput": "Failed to parse CLI output",
           "fetchAborted": "Rate-limit fetch aborted",
-          "geminiCredentialsNotFound": "Gemini CLI credentials not found",
-          "geminiOauthDisabled": "Gemini CLI OAuth is disabled in settings",
-          "geminiProjectIdLoadFailed": "Failed to load Gemini project ID (HTTP {{status}})",
-          "geminiProjectIdMissingInResponse": "Gemini project ID not found in API response",
-          "geminiProjectIdNotFound": "Gemini project ID not found",
           "grokAuthInvalid": "Grok auth file is invalid",
           "grokAuthUnreadable": "Unable to read Grok auth file",
           "grokBillingConfigMissing": "Grok billing response did not include config",
@@ -3134,13 +3267,11 @@
           "opencodeNoWorkspaceIdShort": "No workspace ID found",
           "ptyTimeout": "PTY timeout",
           "ptyUsageTimeout": "PTY timeout — /usage panel did not render",
-          "quotaFetchFailed": "Quota fetch failed ({{status}})",
           "rpcFailed": "RPC failed",
           "rpcProcessExited": "RPC process exited unexpectedly",
           "rpcTimeout": "RPC timeout",
           "sessionCookieNotConfigured": "Session cookie not configured",
           "signInWithChatgpt": "Sign in with ChatGPT",
-          "tokenRefreshFailed": "Token refresh failed",
           "unknown": "Unknown error",
           "usagePageFetchFailed": "Usage page fetch failed ({{status}})",
           "waitingForClaudeSession": "Waiting for Claude session",
@@ -3265,7 +3396,6 @@
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
         "58a868e8e4": "Orchestration",
         "7c79d3b7bf": "Optional",
-        "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.",
         "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents",
@@ -5813,8 +5943,6 @@
             "runtime_last_close_reason": "Closed: {{value0}}",
             "runtime_reconnect_attempt": "Attempt {{value0}}",
             "runtime_workspace_window_closed": "Workspace window closed",
-            "connectedHostCount_one": "{{count}} host",
-            "connectedHostCount_other": "{{count}} hosts",
             "searchSshHosts": "Search SSH hosts…",
             "noMatchingSshHosts": "No SSH hosts match.",
             "moreSshHostMatches_one": "{{count}} more match. Keep typing to narrow it down.",
@@ -5828,7 +5956,6 @@
             "24ac89df1a": "Remote Hosts",
             "5e59007df4": "Kimi Usage",
             "8c86cd77b0": "OpenCode Go Usage",
-            "c1df0d67ec": "Gemini Usage",
             "c0909c686e": "Codex Usage",
             "3885eb74d8": "Claude Usage",
             "c8857b40f7": "Refresh usage data",
@@ -7141,13 +7268,24 @@
           "strandedDescription": "Your edits are still in {{value0}}. Copy them somewhere safe before updating again.",
           "preservedTitle": "Your edits to {{value0}} were saved separately",
           "preservedDescription": "Orca updated the skill and saved your edits to {{value0}}.",
+          "preservedBackupOnly": "Orca saved your edits to {{value0}}.",
           "uncertainTitle": "Orca couldn't confirm the skill update on {{value0}}",
-          "uncertainDescription": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}}."
+          "uncertainDescriptionKept": "Orca may have updated skills on {{value0}} but couldn't confirm the result. If you edited a skill during the update, your copy is in {{value1}} or still in the skills folder."
         },
         "SkillBackupPathLine": {
           "movedTo": "Old copy moved to:",
           "movedToOnHost": "Old copy moved to {{host}}:",
           "showFolder": "Show folder"
+        },
+        "skillBackupRefusal": {
+          "inPlaceReason": "Can't back it up: it's on another drive.",
+          "tryAgain": "Move it out of the skills folder, then try again.",
+          "leftoverReason": "Can't back up the left-over copy: it's on another drive.",
+          "movedAsideReason": "Couldn't back up the old copy: it's on another drive.",
+          "keepIt": "Move it out of the skills folder to keep it.",
+          "noReminder": "Move it out of the skills folder. Orca won't remind you.",
+          "copyPathFor": "Copy path for {{value0}}",
+          "copyFailed": "Couldn't copy the path."
         }
       },
       "sidebar": {
@@ -8524,8 +8662,8 @@
           "running": "Running",
           "stopped": "Stopped",
           "title": "Add WSL distro",
-          "descriptionMoveFromSidebar": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.",
-          "descriptionAutoMove": "Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.",
+          "descriptionMoveFromSidebar": "Git, files and terminals run natively in Linux. Existing WSL projects stay on Windows until you choose Move to … host in their project menu.",
+          "descriptionAutoMove": "Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.",
           "distro": "Distro",
           "loading": "Looking for WSL distros…",
           "placeholder": "Choose a distro",
@@ -8760,12 +8898,6 @@
           "0335bd31d5": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
           "ea631977b5": "Configure OpenCode Go provider settings.",
           "4ac10b4d08": "OpenCode Go",
-          "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "96f3649526": "Use Gemini CLI credentials (experimental)",
-          "d676c41fc6": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
-          "0c7f915b01": "Use Gemini CLI credentials",
-          "973741a871": "Keep existing Gemini CLI sessions available. Gemini credentials do not sign you into Antigravity.",
-          "0c64dc2a64": "Gemini CLI (legacy)",
           "db209ee572": "Remove",
           "8a0f870153": "Re-authenticate",
           "3d245ef7d9": "Codex reported this sign-in is out of date",
@@ -10890,13 +11022,6 @@
             "61f7d1fcbe": "cookie",
             "37020a02c2": "console",
             "25591bf95b": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
-            "b7c2cee442": "experimental",
-            "7118d2f908": "credentials",
-            "933deaf732": "oauth",
-            "8630464352": "cli",
-            "e8e1ff3887": "gemini",
-            "bada4a3218": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google.",
-            "d819755b02": "Use Gemini CLI credentials",
             "35b461d817": "sign in",
             "f2d666a886": "optional",
             "8b06729e0f": "active",
@@ -11143,8 +11268,6 @@
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Show OpenCode Go token and cost usage in the status bar.",
             "51b0ccd6a2": "google",
-            "2804a920ad": "gemini",
-            "9660c5b2f1": "Show Gemini token and cost usage in the status bar.",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Show Codex token and cost usage in the status bar.",
@@ -11228,7 +11351,6 @@
             "1b404ee6ad": "Show Orca Mobile button",
             "183e6b8ef9": "ZCode usage",
             "d408ece868": "Minimize to tray on close",
-            "585be839e9": "Gemini usage",
             "20e7d30150": "OpenCode Go usage",
             "ca64c95969": "Grok usage",
             "7f5d534f81": "Show automations button",
@@ -13346,6 +13468,7 @@
         "PluginConsentDialog": {
           "reconsent": "Changed since you approved it",
           "instructionalWarning": "Its commands can act for you or your agents",
+          "mcpServersWarning": "Gives your agents its MCP servers, which can start programs and act for them",
           "declarativeWarning": "Content only. No code runs.",
           "enable": "Enable plugin",
           "capability": {
@@ -14233,7 +14356,7 @@
         "wslHostsExperimental": {
           "toggleLabel": "Toggle WSL distros as hosts",
           "title": "WSL distros as hosts",
-          "description": "Add a WSL 2 distro as a host. Orca runs its server inside the distro, so git, files and terminals in new projects there run natively in Linux.",
+          "description": "Run Orca’s server inside a WSL 2 distro, so git, files and terminals run natively in Linux.",
           "keywordWsl": "wsl",
           "keywordLinux": "linux",
           "keywordDistro": "distro"
@@ -14241,17 +14364,17 @@
         "wslHosts": {
           "title": "WSL hosts",
           "experimental": "Experimental",
-          "description": "Orca runs a server inside each distro. Opening a project never starts a stopped distro: click Start, open a new terminal, or connect it here.",
+          "description": "Orca runs a server inside each distro. To start a stopped distro, click Start, open a terminal, or connect it here.",
           "add": "Add WSL distro",
           "connect": "Connect",
           "forceUpdate": "Force update",
           "turnOn": "Open Experimental",
           "chip": "WSL",
-          "notStartedAsWslHost": "This host's server was started by an SSH host, not as a WSL host, so projects can't move here. Restart it as a WSL host to fix this.",
+          "notStartedAsWslHost": "An SSH host started this server, so projects can't move here. Restart it as a WSL host to fix this.",
           "restartAsWslHost": {
             "button": "Restart as WSL host",
             "title": "Restart as WSL host?",
-            "description": "This ends every terminal and agent running on {{host}}, including ones an SSH host opened there. Orca then starts its server again as a WSL host, so projects can move to it.",
+            "description": "Ends every terminal and agent on {{host}}, including ones an SSH host opened, then restarts Orca’s server as a WSL host.",
             "cancel": "Cancel",
             "action": "End terminals and restart"
           }
@@ -14597,6 +14720,7 @@
           "command": "Command",
           "panel": "Sidebar panel",
           "recipe": "Machine recipe",
+          "mcpServer": "MCP server",
           "access": "Can access",
           "accessLoading": "Reading the plugin…",
           "logs": "Logs",
@@ -14672,6 +14796,7 @@
           "newPanels": "Adds panels",
           "newEvents": "Reacts to more Orca events",
           "newRecipes": "Machine recipes",
+          "newMcpServers": "MCP servers",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
@@ -14774,6 +14899,7 @@
           "contentOnly": "Content only",
           "fullAccess": "Full access",
           "addsVmRecipes": "Adds VM recipes",
+          "addsMcpServers": "Adds MCP servers",
           "opensAndEditsFiles": "Opens and edits files",
           "runsPluginCode": "Runs plugin code"
         },
@@ -14978,8 +15104,8 @@
             "windows": "window percentage",
             "reset": "time until reset, e.g. 3h 15m",
             "resetAt": "reset clock time, e.g. 20:50",
-            "buckets": "Gemini model buckets",
-            "optional": "dropped when a placeholder inside is empty"
+            "optional": "dropped when a placeholder inside is empty",
+            "usagePools": "named usage pools, e.g. Antigravity models"
           }
         },
         "RepositoryRemoveProjectSection": {
@@ -16674,8 +16800,6 @@
           "noRemote": "Local git repo · no remote",
           "openUpstream": "Open {{value0}} in browser",
           "forkOf": "Fork of {{value0}}",
-          "openSettingsPage": "Open settings page",
-          "done": "Done",
           "resetDone": "Icon and color reset",
           "undo": "Undo",
           "styleLetters": "Letters",
@@ -16685,7 +16809,8 @@
           "lettersInput": "Up to 2 letters",
           "lettersPlaceholder": "1–2 letters",
           "useLetters": "Use “{{value0}}”",
-          "usingGitHubAvatar": "Using the GitHub avatar"
+          "usingGitHubAvatar": "Using the GitHub avatar",
+          "openSettings": "Open Settings"
         }
       },
       "pet": {
@@ -20787,6 +20912,11 @@
         "stateNeedsYou": "Needs you",
         "stateResuming": "Resuming",
         "stateStopped": "Stopped"
+      },
+      "RunTargetCombobox": {
+        "noWslDistros": "No WSL distros found",
+        "wslDistro": "WSL distro",
+        "wslDistroHint": "A Linux distro on this PC"
       }
     },
     "i18n": {
@@ -22559,7 +22689,8 @@
           "addressLabel": "Sign-in page address",
           "unfinished": "Sign-in isn’t finished yet. Finish it on the page that opened, then press Done.",
           "pastePlaceholder": "http://localhost:…"
-        }
+        },
+        "manage": "Manage MCP servers"
       },
       "cardKindHidden": {
         "description": "You can change this anytime in",
@@ -22876,6 +23007,7 @@
         "dismiss": "Dismiss",
         "openWorker": "Open worker",
         "remoteOwner": "Stop or clear this from the computer it runs on",
+        "workspaceRemoved": "This worker's workspace was removed",
         "restore": "Show in dock again",
         "alreadyStopped": "Already stopped",
         "cantStop": "Can't stop now",
@@ -22911,7 +23043,7 @@
         "task": "Task",
         "workerCount_one": "{{count}} worker",
         "workerCount_other": "{{count}} workers",
-        "stoppedByYou": "Stopped by you",
+        "stopped": "Stopped",
         "finished": "Finished",
         "failedCount": "{{count}} failed",
         "needsYouCount": "{{count}} needs you",
@@ -24166,9 +24298,9 @@
     "orchestration": {
       "workerAutoClose": {
         "keepOpen": "Keep open",
-        "bannerRunning": "Orchestration worker · Closes 2 minutes after it finishes",
-        "bannerFinished": "Orchestration worker finished · Closes in {{countdown}}",
-        "bannerFinishedStatus": "Orchestration worker finished · Closes soon",
+        "bannerRunning": "Closes {{minutes}} min after finishing",
+        "bannerFinished": "Finished · closes in {{countdown}}",
+        "bannerFinishedStatus": "Worker finished · closes soon",
         "boundRunning": "Closes with {{worker}}",
         "boundFinished": "{{worker}} finished · Closes in {{countdown}}",
         "boundFallbackName": "its worker"
@@ -25543,6 +25675,12 @@
       }
     },
     "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "selection": {
+      "claudeRemoteWslDefaultUnavailable": "Switching this host's WSL lane back to the system default isn't available from here yet.",
+      "claudeWslLanesNotReset": "WSL Claude accounts can't be reset from here yet.",
+      "codexSystemDefaultIncludingWsl": "Use your current {{value0}} Codex login, including WSL.",
+      "systemDefaultIncludingWsl": "{{value0}} · including WSL"
+    },
     "rename": {
       "action": "Rename",
       "title": "Rename account",
@@ -25883,19 +26021,6 @@
         "grokFailed": "Grok could not name this chat. Try generating the name again.",
         "antigravityFailed": "Antigravity could not name this chat. Try generating the name again."
       }
-    }
-  },
-  "tabStrip": {
-    "overflow": {
-      "chipOnlyName_one": "{{title}}, {{count}} tab",
-      "chipOnlyName_other": "{{title}}, {{count}} tabs",
-      "entryNeedsAttention": "{{title}}, needs attention",
-      "moreTabs_one": "{{count}} more tab",
-      "moreTabs_other": "{{count}} more tabs",
-      "needAttention_one": ", {{count}} needs attention",
-      "needAttention_other": ", {{count}} need attention",
-      "openTabs_one": "{{count}} open tab",
-      "openTabs_other": "{{count}} open tabs"
     }
   },
   "updates": {
@@ -27658,7 +27783,36 @@
         "setUpInFirstChat": "Set up in first chat"
       },
       "identityWatches": "Watches {{what}}",
-      "identityReports": "Reports {{what}}"
+      "identityReports": "Reports {{what}}",
+      "wslSetupFailedShort": "Setup didn’t finish",
+      "wslSettingUp": "Setting up…",
+      "wslSetup": {
+        "waiting": "Waiting for {{distro}}…",
+        "starting": "Starting {{distro}}",
+        "installing": "Installing Orca’s server in ~/.orca-remote",
+        "connecting": "Connecting",
+        "findingAgents": "Looking for agents in {{distro}}",
+        "installingHint": "The first time also downloads its Linux Node runtime.",
+        "failedTitle": "Couldn’t set up {{distro}}",
+        "details": "Details",
+        "retry": "Retry",
+        "chooseAnother": "Choose another computer",
+        "title": "Setting up {{distro}} as a host",
+        "subtitle": "About a minute the first time. Your Windows files and other distros aren’t touched.",
+        "cancel": "Cancel",
+        "failedGeneric": "Orca’s server didn’t start in the distro. Details say what stopped it."
+      },
+      "wslNoAgent": {
+        "field": "No agent in {{distro}}",
+        "title": "Install an agent inside {{distro}}",
+        "body": "Agents installed on Windows can’t run inside WSL. Install one in the distro and sign in, and it shows up here.",
+        "copied": "Copied",
+        "copy": "Copy",
+        "checking": "Checking again…"
+      },
+      "hostSleeping": "Sleeping · wakes when used",
+      "wslWaking": "Waking {{distro}}…",
+      "hostWaking": "Waking…"
     },
     "section": {
       "scrollLeft": "Scroll left · {{amount}} hidden",
@@ -27677,6 +27831,7 @@
     },
     "errors": {
       "nameTaken": "Another bot already has that name.",
+      "purposeTooLongForHost": "Orca on {{host}} takes up to 200 characters for what it's for. Shorten it, or update Orca on {{host}}.",
       "generic": "Something went wrong. Try again.",
       "avatarHomeUnreadable": "Couldn't read the saved picture. Choose it again.",
       "folderNotOwned": "Couldn't verify this bot's folder.",
@@ -29886,7 +30041,13 @@
         "context7": "Current docs and examples for code libraries",
         "atlassian": "Jira issues and Confluence pages",
         "notion": "Search, read and edit pages",
-        "stripe": "Look up payments, customers and subscriptions"
+        "stripe": "Look up payments, customers and subscriptions",
+        "clickup": "Manage tasks, lists and docs",
+        "airtable": "Query and edit bases, tables and records",
+        "todoist": "Add, sort and complete tasks",
+        "zapier": "Run actions in the apps you set up in Zapier",
+        "granola": "Search meeting notes and transcripts",
+        "intercom": "Search conversations, contacts and articles"
       },
       "mcp": {
         "adding": "Adding {{app}}…",
@@ -29900,7 +30061,11 @@
           "hostLabel": "GitLab address (optional)",
           "hostHint": "For self-managed or Dedicated. Leave empty for GitLab.com."
         },
+        "intercom": {
+          "siteLabel": "Intercom region"
+        },
         "place": {
+          "unitedStates": "United States",
           "usEast": "US East",
           "usWest": "US West",
           "usCentral": "US Central",
@@ -30197,7 +30362,8 @@
       "delete": "Delete chat",
       "open": "Open",
       "actions": "Chat actions",
-      "needsYouCount": "{{count}} needs you"
+      "needsYouCount": "{{count}} needs you",
+      "hideOlder": "Hide older"
     },
     "cloudSignIn": {
       "automationScheduledOnly": "Runs on its schedule only: its events are paused while signed out of Orca",
@@ -31063,7 +31229,23 @@
     "failedChipTooltip": "Update failed. Click to see details.",
     "failedTitle": "Couldn't update {{product}}",
     "failedDescription": "Orca ran <code>{{command}}</code> on <strong>{{host}}</strong> to update your {{product}} from <strong>{{installedVersion}}</strong> to <strong>{{latestVersion}}</strong>, and it failed.",
-    "failedDescriptionNoCommand": "Orca couldn't update your {{product}} on <strong>{{host}}</strong>."
+    "failedDescriptionNoCommand": "Orca couldn't update your {{product}} on <strong>{{host}}</strong>.",
+    "cardLabel": "Agent CLI updates",
+    "cardLater": "Later",
+    "toastUpdating_one": "Updating {{current}} of {{count}} CLI",
+    "toastUpdating_other": "Updating {{current}} of {{count}} CLIs",
+    "toastDone_one": "{{count}} CLI updated",
+    "toastDone_other": "{{count}} CLIs updated",
+    "hideList": "Hide list",
+    "showList": "Show list",
+    "toastUpdate": "Update {{total}}",
+    "toastRetry": "Retry {{failed}}",
+    "copied": "Copied",
+    "manualSection": "Manual",
+    "toastFailedCount_one": "{{count}} update failed",
+    "toastFailedCount_other": "{{count}} updates failed",
+    "toastClose": "Close",
+    "queued": "Queued"
   },
   "backgroundWorkerPaused": {
     "title": "Some background work paused after crashing repeatedly",
@@ -31097,7 +31279,10 @@
     "toolsLabel": "App tools",
     "workspaces": "Workspaces",
     "more": "More",
-    "pageRegion": "Page"
+    "customize": "Customize",
+    "pageRegion": "Page",
+    "account": "Account",
+    "signIn": "Sign in"
   },
   "chats": {
     "delete": {
@@ -31124,5 +31309,14 @@
     "moveLeft": "Move left",
     "moveRight": "Move right",
     "reset": "Reset tab order"
+  },
+  "mcpServers": {
+    "paste": {
+      "badCommand": "Put the values themselves in the mcp add command: Orca can’t fill in $VARIABLES or other shell expressions.",
+      "unsupported": "Orca can’t add this server as written: it uses SSE, its own OAuth client, or a value read from the environment.",
+      "badAddCommand": "Check the mcp add command: a name and a URL or command.",
+      "badJson": "Check the pasted JSON: it doesn’t parse.",
+      "none": "Orca found no server it can add. SSE servers, servers with their own OAuth client or tool filters, and values read from the environment (${VAR}) aren’t supported."
+    }
   }
 }

@@ -95,11 +95,10 @@
 1 src/main/bots/bot-look-around-store.ts
 1 src/main/bots/bot-memory-history.ts
 1 src/main/bots/bot-package-apply.ts
-2 src/main/bots/bot-structured-session-wiring.ts
-14 src/main/bots/bot-tool-credentials.ts
+15 src/main/bots/bot-tool-credentials.ts # +1 botToolCredentialFingerprints: botToolCredentialsFingerprint split so one store read serves every credential
 3 src/main/bots/bot-tool-details.ts # +1 botToolDetailsOf: readBotToolDetails split so the host MCP list masks one id-keyed read
 3 src/main/bots/bot-tool-secret-scrub.ts
-2 src/main/bots/bot-tools-claude.ts
+4 src/main/bots/bot-tools-claude.ts # claudeOwnServerNames: the user and per-folder config reads readClaudeInheritedTools and readClaudeMirror already do, once per chat launch that has host servers
 21 src/main/bots/bot-tools-file.ts # +1 changeBotToolEntries: the same tools-file write changeBotToolServers now wraps, adding per-server extra keys
 13 src/main/bots/bot-tools-host.ts
 4 src/main/bots/bot-tools-removal.ts
@@ -219,7 +218,7 @@
 3 src/main/claude/hooks/windows-hook-files.ts
 2 src/main/claude/structured/claude-structured-session-adapter.ts
 2 src/main/claude/structured/launch/claude-structured-child-env.ts
-1 src/main/claude/structured/launch/claude-structured-launch-resolution.ts
+2 src/main/claude/structured/launch/claude-structured-launch-resolution.ts # claudeOwnServerNames: one config-file lookup per launch, only when the host list adds servers
 1 src/main/claude/theme-sync/claude-code-theme-sync-schedule.ts
 10 src/main/claude/theme-sync/claude-code-theme-sync.ts
 1 src/main/claude/transcripts/claude-conversation-copy.ts
@@ -240,6 +239,7 @@
 5 src/main/cli/launchers/linux-bare-orca-dispatcher.ts
 14 src/main/cli/launchers/linux-terminal-orca-cli-shim.ts
 1 src/main/cli/launchers/orca-cli-child-path.ts
+1 src/main/cli/launchers/this-app-orca-cli-launcher.ts # resolves this app's CLI launcher once per data folder per run (the Linux packaged shim check), for the MCP agent-file and terminal entries
 1 src/main/cli/wsl/wsl-cli-installer.ts
 1 src/main/cli/wsl/wsl-cli-registration-reconciliation.ts
 6 src/main/cli/wsl/wsl-cli-registration-registry.ts
@@ -291,9 +291,9 @@
 27 src/main/codex/configuration/settings/codex-config-mirror.ts
 2 src/main/codex/configuration/settings/codex-config-path-reference-rewrite.ts
 1 src/main/codex/configuration/settings/codex-config-runtime-owned-values.ts
-2 src/main/codex/configuration/settings/config-settings-baseline.ts
-2 src/main/codex/configuration/settings/config-settings-promotion-write-target.ts # +1 resolveThroughLinkedAncestor: realpathSync of the nearest existing folder, only when config.toml is absent or unresolvable, so a host ~/.codex linked into a WSL distro is never written (#45247)
-9 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247)
+1 src/main/codex/configuration/settings/codex-native-source-check.ts # retireCodexNativeSourceMark, only after the background ~/.codex check finds it now leads into a WSL distro (never on clean passes)
+5 src/main/codex/configuration/settings/config-settings-baseline.ts # same one sync write, now temp file plus rename so a cut-off write keeps the old baseline; +2 retireCodexNativeSourceMark: one baseline read plus a compare-and-swap write, only after a background check finds a trusted native ~/.codex now leads into a WSL distro
+10 src/main/codex/configuration/settings/config-settings-promotion.ts # +1 resolvesIntoWslShare: realpath.native of a drive root only on Windows for a drive-letter target in a write-back or held-back pass (#45247); +1 recoverInterruptedGuardedFileOperation of the baseline, only when it reads absent (fresh home, or a quit while retiring the native mark)
 1 src/main/codex/configuration/settings/config-sync-stall.ts
 1 src/main/codex/configuration/shared-server/codex-daemon-socket-path-guard.ts
 1 src/main/codex/configuration/shared-server/codex-shared-server-fix.ts
@@ -511,7 +511,6 @@
 4 src/main/filesystem/rolling-file-backup.ts # stageRollingFileBackup + commit (same sync copy and rename); the staged-copy rmSync moved into removeFileWithWindowsRetry so Windows AV locks are retried
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 5 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
-6 src/main/gemini/hook-service.ts
 1 src/main/git/command-runner/git-environment/git-ssh-policy-env.ts
 1 src/main/git/command-runner/git-exec-file-sync.ts
 3 src/main/git/command-runner/git-exec-file.ts
@@ -755,8 +754,13 @@
 3 src/main/managed-server/lifecycle/orcad-runtime-maintenance.ts
 1 src/main/managed-server/lifecycle/orcad-runtime-status.ts
 1 src/main/managed-server/migration/cutover/orcad-unreachable-setup-release.ts
+3 src/main/mcp-servers/mcp-host-list-launch.ts # mcpServersForLaunch moved from mcp-host-list.ts: reads the host list per chat launch and per orca mcp connect; +2 the saved-values digests, read at launch and after Orca writes the list
 3 src/main/mcp-servers/mcp-host-list-sign-in.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
 8 src/main/mcp-servers/mcp-host-list.ts # the host MCP list reuses the bot tools file and its synchronous credential store, read per user action as bots-tools.ts does
+1 src/main/mcp-servers/mcp-shared-process-servers.ts # a shared server's relay request reads the host list as a launch does; only its one-time inline-header migration is synchronous
+3 src/main/mcp-servers/session-mcp-launch.ts # per chat launch and turn: the bot launch read of its tools file, its revision check (moved from bot-structured-session-wiring.ts), and the host list read
+1 src/main/mcp-servers/terminal/terminal-mcp-servers.ts # wslGuestOrcaLauncher: the managed WSL CLI launcher, resolved once per data folder per run
+3 src/main/mcp-servers/terminal/terminal-mcp-wsl-servers.ts # resolves the managed WSL CLI launcher (getManagedWslCliDir) once per data folder per run; settleWslAutomountRoot reads a distro mount root once per distro start (cached after)
 1 src/main/media/local-preview-grant-file.ts
 1 src/main/media/media-preview-protocol.ts
 1 src/main/memory/hydrate-local-pty-registry.ts
@@ -1113,7 +1117,7 @@
 2 src/main/runtime/agent-session/environment/structured-session-child-env.ts
 2 src/main/runtime/agent-session/installation/runtime-structured-agent-host.ts
 3 src/main/runtime/agent-session/installation/structured-agent-runtime-metadata.ts
-2 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts
+3 src/main/runtime/agent-session/installation/structured-agent-runtime-registrations.ts # claudeStructuredLaunchPart now names claudeOwnServerNames (one config lookup per launch with host servers)
 1 src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
 1 src/main/runtime/agent-session/installation/structured-agent-session-runtime-teardown.ts
 2 src/main/runtime/agent-session/installation/structured-agent-session-runtime.ts

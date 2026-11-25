@@ -1,10 +1,8 @@
 // Add apps' body: the header, the search, the chips and the list they filter, or the step an Add opened.
-import React, { useCallback, useDeferredValue, useRef, useState } from 'react'
-import { Plus, Search, X } from 'lucide-react'
+import React, { useCallback, useRef, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import { DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Bot } from '../../../../../shared/bot-types'
 import { COMPOSIO_PAGES } from '../../../../../shared/composio/composio-apps'
@@ -24,6 +22,7 @@ import { askBotInChat } from '../webhooks/ask-bot-in-chat'
 import { webhookSetUpDraft } from '../webhooks/use-webhooks-connector'
 import {
   BOT_APP_CATEGORIES,
+  botAppCategoryName,
   DIRECT_APPS,
   type BotAppCategory,
   type BotDirectApp
@@ -36,6 +35,7 @@ import { composioSignedIn, type ComposioActions, type ComposioPick } from './Bot
 import { BotAppsAddedButton, type BotAddedSources } from './BotAppsAdded'
 import { BotAppsChips, type BotAppsView } from './BotAppsChips'
 import { BotAppsList } from './BotAppsList'
+import { AppsCatalogFrame } from './AppsCatalogFrame'
 import { BotAppsNoMatch, DirectAppRow, useCustomApps, type DirectRow } from './BotAppsRows'
 import { botMcpAppUrlTag } from '../../../../../shared/bots/bot-mcp-apps'
 import { botToolApps } from './bot-tool-apps'
@@ -73,8 +73,6 @@ export function BotAppsCatalog({
   const composio = useComposioBot(bot)
   const [view, setView] = useState<BotAppsView>('all')
   const [query, setQuery] = useState('')
-  // Let the dialog and its search field paint before mounting the catalog rows.
-  const showApps = useDeferredValue(true, false)
   const searchRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const switchView = (next: BotAppsView): void => {
@@ -282,73 +280,51 @@ export function BotAppsCatalog({
         ? t('bots.apps.searchAdded', 'Search added apps')
         : t('bots.apps.search', 'Search apps')
   return (
-    <>
-      <div className="flex h-16 shrink-0 items-center gap-2 pr-4.5 pl-6">
-        <DialogTitle className="min-w-0 flex-1">
-          <span className="block truncate" title={title}>
-            {title}
-          </span>
-        </DialogTitle>
+    <AppsCatalogFrame
+      title={title}
+      added={
         <BotAppsAddedButton
           sources={added}
           pressed={view === 'mine'}
           onToggle={() => pickView(view === 'mine' ? 'all' : 'mine')}
         />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('bots.apps.close', 'Close')}
-          onClick={close}
-        >
-          <X className="size-4" />
+      }
+      onClose={close}
+      query={query}
+      onQuery={setQuery}
+      searchLabel={searchLabel}
+      searchRef={searchRef}
+      custom={
+        <Button variant="outline" className="h-9.5 max-w-1/2" onClick={addByUrl}>
+          <Plus />
+          <span className="truncate">{t('bots.apps.addByUrl', 'Add by URL')}</span>
         </Button>
-      </div>
-      <div className="flex shrink-0 flex-col gap-3 px-6">
-        <div className="flex gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={searchRef}
-              autoFocus
-              type="text"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={searchLabel}
-              aria-label={searchLabel}
-              inset="leadingIcon"
-              className="h-9.5"
-            />
-          </div>
-          <Button variant="outline" className="h-9.5 max-w-1/2" onClick={addByUrl}>
-            <Plus />
-            <span className="truncate">{t('bots.apps.addByUrl', 'Add by URL')}</span>
-          </Button>
-        </div>
-        <BotAppsChips view={view} onView={pickView} categories={categories} />
-      </div>
-      <div
-        ref={listRef}
-        aria-busy={!showApps}
-        className="scrollbar-sleek @container mt-1 min-h-0 flex-1 overflow-y-auto px-4 pb-4"
-      >
-        {showApps ? (
-          <BotAppsList
-            bot={bot}
-            view={view}
-            query={query}
-            direct={direct}
-            renderDirect={directRow}
-            custom={custom}
-            onCustom={(id) => setStep({ kind: id === 'url' ? 'custom' : 'webhooks' })}
-            added={added}
-            onManage={manage}
-            composio={composio}
-            composioActions={composioActions}
-            onBrowseAll={browseAll}
-            noMatch={noMatch}
-          />
-        ) : null}
-      </div>
-    </>
+      }
+      chips={
+        <BotAppsChips
+          view={view}
+          onView={pickView}
+          categories={categories}
+          categoryName={botAppCategoryName}
+        />
+      }
+      listRef={listRef}
+    >
+      <BotAppsList
+        bot={bot}
+        view={view}
+        query={query}
+        direct={direct}
+        renderDirect={directRow}
+        custom={custom}
+        onCustom={(id) => setStep({ kind: id === 'url' ? 'custom' : 'webhooks' })}
+        added={added}
+        onManage={manage}
+        composio={composio}
+        composioActions={composioActions}
+        onBrowseAll={browseAll}
+        noMatch={noMatch}
+      />
+    </AppsCatalogFrame>
   )
 }

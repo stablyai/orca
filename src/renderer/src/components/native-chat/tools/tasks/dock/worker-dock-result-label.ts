@@ -12,7 +12,7 @@ export function workerDockResultLabel(
     return t('components.native-chat.workerDock.unexpected', 'Stopped unexpectedly')
   }
   if (outcome === 'stopped') {
-    return t('components.native-chat.workerDock.stoppedByYou', 'Stopped by you')
+    return t('components.native-chat.workerDock.stopped', 'Stopped')
   }
   return t('components.native-chat.workerDock.finished', 'Finished')
 }

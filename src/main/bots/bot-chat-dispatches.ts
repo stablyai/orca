@@ -1,6 +1,6 @@
 // Follows a bot's Dispatches from the chats that started them through the workers they started in turn.
 import type { BotChatTreeDispatch } from '../../shared/bots/bot-chat-tree-model'
-import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-context-store'
+import type { DispatchCreatorLink } from '../runtime/orchestration/db/dispatch-context/dispatch-links-by-id'
 import type { OrchestrationDb } from '../runtime/orchestration/db/orchestration-db'
 
 /** How deep a worker's own workers are followed back to the chat that started the first. */
@@ -137,11 +137,12 @@ export class BotDispatchPlacement {
 }
 
 function dispatchOf(link: DispatchCreatorLink, chatId: string | null): BotChatTreeDispatch {
+  const settled =
+    link.status === 'completed' || link.status === 'failed' || link.status === 'circuit_broken'
   return {
     id: link.id,
     chatId,
-    settled:
-      link.status === 'completed' || link.status === 'failed' || link.status === 'circuit_broken',
+    settled,
     // A stop or an abandon is the user's call, not a failure.
     failed:
       (link.status === 'failed' &&
@@ -149,6 +150,7 @@ function dispatchOf(link: DispatchCreatorLink, chatId: string | null): BotChatTr
         link.lastFailure !== 'abandoned') ||
       link.status === 'circuit_broken',
     at: link.at,
+    ...(settled && !link.completedAtKnown ? { undated: true as const } : {}),
     worktreeId: link.worktreeId,
     ...(link.title ? { title: link.title } : {})
   }

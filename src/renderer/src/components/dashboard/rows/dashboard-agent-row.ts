@@ -9,6 +9,8 @@ import type { AgentChildRowModel } from '../../../../../shared/agent-status/pres
 export type DashboardAgentRow = {
   /** Synthetic subagent keys identify rows only; they have no PTY and must never be parsed as pane keys. */
   paneKey: string
+  /** Title rows only: the live runtime pane slot whose title built the row; legacy `tabId:N` status keys name it. */
+  runtimePaneId?: number
   entry: AgentStatusEntry
   tab: TerminalTab
   agentType: AgentType

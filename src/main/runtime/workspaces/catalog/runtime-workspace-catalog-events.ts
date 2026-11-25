@@ -1,4 +1,5 @@
 import { onMcpHostListSignInChanged } from '../../../mcp-servers/mcp-host-list-sign-in'
+import { noteMcpHostListChanged } from '../../../mcp-servers/mcp-host-list-changes'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
@@ -92,6 +93,7 @@ export abstract class RuntimeWorkspaceCatalogEvents extends OrcaRuntimeWithGetSt
 
   /** This host's MCP server list changed; its windows and every other client re-read it. */
   notifyMcpServersChanged(): void {
+    noteMcpHostListChanged()
     this.notifier?.mcpServersChanged?.()
     this.emitClientEvent({ type: 'mcpServersChanged' })
   }
