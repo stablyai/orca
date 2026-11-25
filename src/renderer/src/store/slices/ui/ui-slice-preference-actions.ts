@@ -42,6 +42,7 @@ import {
 } from '../../../../../shared/workspace/status/workspace-statuses'
 import { createHostWorkspaceStatusActions } from './ui-slice-host-workspace-statuses'
 import { createUiBotPreferenceActions } from './ui-slice-bot-preference-actions'
+import { createUiVerticalTabListActions } from './ui-slice-vertical-tab-list'
 import { toggleCollapsedGroupSet } from './collapsed-group-toggle'
 
 /** Builds preference defaults and setters for the UI slice, leaving durable writes to the persistence layer. */
@@ -114,6 +115,7 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     alwaysShowDefaultBranchWorkspace: true,
     setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
     ...createUiBotPreferenceActions(set, get),
+    ...createUiVerticalTabListActions(set, get),
 
     explorerDisplayRootByWorktree: {},
     /** Stores an explicit root choice while rejecting empty IDs and prototype-related record keys. */

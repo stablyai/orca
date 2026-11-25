@@ -2,8 +2,10 @@ import { cn } from '@/lib/class-names'
 import { useTabDragActive } from '../../tab-group/drag/tab-drag-context'
 import {
   TERMINAL_TAB_CONTAINER_WIDTH_CLASSES,
-  CONTENT_TAB_CONTAINER_WIDTH_CLASSES
+  CONTENT_TAB_CONTAINER_WIDTH_CLASSES,
+  VERTICAL_TAB_ROW_CLASSES
 } from './tab-width-rules'
+import { useTabStripOrientation } from './tab-strip-orientation'
 
 type TabStripSlotProps = {
   className: string
@@ -18,6 +20,15 @@ export function useTabStripSlotProps(
   sizing: 'content' | 'terminal' = 'content'
 ): TabStripSlotProps {
   const isTabDragActive = useTabDragActive()
+  const orientation = useTabStripOrientation()
+  if (orientation === 'vertical') {
+    // Fixed-height rows: the list windows them by index, and the active row scrolls into view instead of docking.
+    return {
+      className: VERTICAL_TAB_ROW_CLASSES,
+      'data-tab-strip-slot': tabId,
+      'data-active-tab-dock': undefined
+    }
+  }
   const docks = isActive && !isTabDragActive
   return {
     className: cn(

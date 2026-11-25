@@ -59,6 +59,10 @@ export type PersistedUIState = {
   activityBarBotOrder?: string[]
   activityBarHidden?: string[]
   markdownTocPanelWidth?: number
+  /** The left vertical tab list's expanded width; shared by every split. */
+  verticalTabListWidth?: number
+  /** The left vertical tab list shows icons only. */
+  verticalTabListCollapsed?: boolean
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
   sortBy: 'name' | 'smart' | 'recent' | 'repo' | 'manual'

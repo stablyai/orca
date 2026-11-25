@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { findTabStripSlot } from './tab-strip-slot-geometry'
+import { VERTICAL_TAB_ROW_PX } from './tab-width-rules'
 
 /** Overflowing tabs sit at their 144px minimum (tab-width-rules.ts), so unmounted runs need no measuring. */
 export const TAB_STRIP_WINDOW_SLOT_PX = 144
@@ -10,6 +11,13 @@ const WINDOW_BLOCK = 16
 
 export type TabStripRange = { start: number; end: number }
 
+/** The top strip scrolls along x; the left vertical tab list scrolls fixed-height rows along y. */
+export type TabStripAxis = 'x' | 'y'
+
+export function tabStripWindowSlotPx(axis: TabStripAxis): number {
+  return axis === 'y' ? VERTICAL_TAB_ROW_PX : TAB_STRIP_WINDOW_SLOT_PX
+}
+
 export type TabStripSegment =
   | { kind: 'tabs'; start: number; end: number }
   | { kind: 'gap'; start: number; end: number }
@@ -17,14 +25,15 @@ export type TabStripSegment =
 /** Tabs to mount: the viewport plus one viewport each side; null renders every tab. */
 export function computeTabStripRange(
   count: number,
-  scrollLeft: number,
-  viewportWidth: number
+  scrollOffset: number,
+  viewportSize: number,
+  slotPx = TAB_STRIP_WINDOW_SLOT_PX
 ): TabStripRange | null {
   if (count < TAB_STRIP_WINDOW_MIN_TABS) {
     return null
   }
-  const perView = Math.max(1, Math.ceil(viewportWidth / TAB_STRIP_WINDOW_SLOT_PX))
-  const first = Math.floor(Math.max(0, scrollLeft) / TAB_STRIP_WINDOW_SLOT_PX)
+  const perView = Math.max(1, Math.ceil(viewportSize / slotPx))
+  const first = Math.floor(Math.max(0, scrollOffset) / slotPx)
   const start = Math.max(0, Math.floor((first - perView) / WINDOW_BLOCK) * WINDOW_BLOCK)
   const end = Math.min(count, Math.ceil((first + 2 * perView) / WINDOW_BLOCK) * WINDOW_BLOCK)
   return { start, end: Math.max(end, Math.min(count, start + WINDOW_BLOCK)) }
@@ -94,7 +103,8 @@ const UNWINDOWED: TabStripWindowState = { range: null, focusedSlotId: null }
 export function useTabStripWindowState(
   stripRef: RefObject<HTMLElement | null>,
   count: number,
-  subscribeToStripResize: (listener: () => void) => () => void
+  subscribeToStripResize: (listener: () => void) => () => void,
+  axis: TabStripAxis = 'x'
 ): TabStripWindowState {
   const [state, setState] = useState<TabStripWindowState>(() => {
     const range = computeTabStripRange(count, 0, 0)
@@ -107,7 +117,10 @@ export function useTabStripWindowState(
       return
     }
     const update = (focusTarget: EventTarget | null = document.activeElement): void => {
-      const range = computeTabStripRange(count, el.scrollLeft, el.clientWidth)
+      const range =
+        axis === 'y'
+          ? computeTabStripRange(count, el.scrollTop, el.clientHeight, VERTICAL_TAB_ROW_PX)
+          : computeTabStripRange(count, el.scrollLeft, el.clientWidth)
       // Why read focus with the range: the first windowed render must already keep a focused tab (a rename) mounted.
       const focusedSlotId = slotIdOf(el, focusTarget)
       setState((previous) =>
@@ -140,7 +153,7 @@ export function useTabStripWindowState(
       unsubscribe()
       cancelAnimationFrame(frame)
     }
-  }, [count, stripRef, subscribeToStripResize])
+  }, [axis, count, stripRef, subscribeToStripResize])
   return state
 }
 

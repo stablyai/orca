@@ -22,6 +22,8 @@ import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-sear
 import { getGeneralSupportSearchEntries } from './general-support-search'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { RecentTabOrderControl } from '../appearance/RecentTabOrderControl'
+import { TabStripPositionControl } from './TabStripPositionControl'
+import { getTabStripPositionSearchEntry } from './tab-strip-position-search'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
@@ -181,6 +183,11 @@ function GeneralRootSettings({
           <RecentTabOrderControl
             ctrlTabOrderMode={settings.ctrlTabOrderMode ?? 'mru'}
             keywords={getTabOrderControlSearchKeywords(tabsEntries)}
+            updateSettings={updateSettings}
+          />
+          <TabStripPositionControl
+            entry={getTabStripPositionSearchEntry()}
+            settings={settings}
             updateSettings={updateSettings}
           />
           <SearchableSetting

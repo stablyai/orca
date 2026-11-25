@@ -13,6 +13,7 @@ import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/dis
 import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
 import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { clampVerticalTabListWidth } from '../../../shared/workspace-layout/tab-strip-position'
 import { normalizeSidebarBotsHeight } from '../../../shared/sidebar-bots-height'
 import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
@@ -172,6 +173,12 @@ export function updatePersistedUI(
     combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),
+    verticalTabListWidth: clampVerticalTabListWidth(
+      sanitizedUpdates.verticalTabListWidth ?? operations.state.ui?.verticalTabListWidth
+    ),
+    verticalTabListCollapsed:
+      (sanitizedUpdates.verticalTabListCollapsed ??
+        operations.state.ui?.verticalTabListCollapsed) === true,
     visibleWorkspaceHostIds: nextVisibleWorkspaceHostIds,
     // Paired clients may write only visible hosts; derive scope so all-hosts cannot override them.
     ...(sanitizedUpdates.visibleWorkspaceHostIds !== undefined &&

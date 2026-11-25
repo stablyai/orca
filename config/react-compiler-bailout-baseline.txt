@@ -565,7 +565,6 @@
 1 src/renderer/src/components/status-bar/resources/session-actions/use-resource-usage-actions.ts
 1 src/renderer/src/components/status-bar/resources/use-resource-view-visible.ts
 1 src/renderer/src/components/status-bar/usage/use-owner-usage-rate-limits.ts
-2 src/renderer/src/components/tab-bar/TabBar.tsx
 2 src/renderer/src/components/tab-bar/create-entry/TabBarCreateEntry.tsx
 1 src/renderer/src/components/tab-bar/strip/TabStripScrollIndicator.tsx
 1 src/renderer/src/components/tab-bar/create-entry/tab-create-entry-network-selection.ts

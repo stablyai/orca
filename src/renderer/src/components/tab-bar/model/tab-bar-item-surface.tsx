@@ -11,7 +11,11 @@ import type { TabBarProps } from '../tab-bar-props'
 import type { TabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import TabBarItemRow from './TabBarItemRow'
-import { TAB_STRIP_WINDOW_SLOT_PX, type TabStripSegment } from '../strip/tab-strip-window'
+import {
+  tabStripWindowSlotPx,
+  type TabStripAxis,
+  type TabStripSegment
+} from '../strip/tab-strip-window'
 
 export type TabBarItemSurfaceProps = Pick<
   TabBarProps,
@@ -46,7 +50,8 @@ export function renderTabBarItems({
   includeTopTabBorder,
   activeClientHostedBrowserRowId,
   segments,
-  itemOffset = 0
+  itemOffset = 0,
+  axis = 'x'
 }: {
   items: TabBarItem[]
   /** Mounted runs of `items` from `itemOffset` on; gaps render as fixed-width spacers. */
@@ -59,6 +64,8 @@ export function renderTabBarItems({
   dropIndicatorByVisibleId: Map<string, DropIndicator>
   includeTopTabBorder: boolean
   activeClientHostedBrowserRowId: string | null
+  /** Gaps span the strip's width, or the vertical list's height. */
+  axis?: TabStripAxis
 }): React.ReactNode[] {
   const {
     worktreeId,
@@ -171,7 +178,10 @@ export function renderTabBarItems({
           data-tab-strip-gap-start={segment.start}
           data-tab-strip-gap-end={segment.end}
           className="flex-none"
-          style={{ width: (segment.end - segment.start) * TAB_STRIP_WINDOW_SLOT_PX }}
+          style={{
+            [axis === 'y' ? 'height' : 'width']:
+              (segment.end - segment.start) * tabStripWindowSlotPx(axis)
+          }}
         />
       )
       continue

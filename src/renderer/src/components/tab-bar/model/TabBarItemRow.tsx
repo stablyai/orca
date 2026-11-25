@@ -37,6 +37,7 @@ import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-labe
 import { botGroupRoomSessions } from '@/lib/bot-group-room-sessions'
 import { terminalTabHasUnreadActivity } from '../terminal-tabs/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
+import { useTabStripOrientation } from '../strip/tab-strip-orientation'
 
 // Why only values and `actions`: anything a tab draws must be a compared prop, or a skipped render shows it stale.
 type TabBarItemRowProps = {
@@ -83,6 +84,7 @@ function TabBarItemRow({
   gitStatus
 }: TabBarItemRowProps): React.JSX.Element {
   const t = useTranslate()
+  const orientation = useTabStripOrientation()
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
   useTranslation()
   const chatNaming = useStructuredChatTabNaming(
@@ -131,7 +133,8 @@ function TabBarItemRow({
     label: getTabDragLabel(item, generatedTabTitlesEnabled, conversationName, t),
     iconPath: item.type === 'editor' ? item.data.filePath : undefined,
     color: item.type === 'terminal' ? (item.data.color ?? null) : null,
-    ...(isBotChat ? { fixedFirst: true as const } : {})
+    ...(isBotChat ? { fixedFirst: true as const } : {}),
+    ...(orientation === 'vertical' ? { stripOrientation: 'vertical' as const } : {})
   }
   const shared = {
     isActive,

@@ -5,6 +5,7 @@ import { useActiveDragVisibleTabId } from '../../tab-group/drag/tab-drag-context
 import {
   buildTabStripSegments,
   useTabStripWindowState,
+  type TabStripAxis,
   type TabStripSegment
 } from './tab-strip-window'
 
@@ -14,17 +15,24 @@ export function WindowedTabStrip({
   subscribeToStripResize,
   sortableIds,
   activeVisibleTabId,
+  axis = 'x',
   renderStrip
 }: {
   stripRef: RefObject<HTMLDivElement | null>
   subscribeToStripResize: (listener: () => void) => () => void
   sortableIds: string[]
   activeVisibleTabId: string | null
+  axis?: TabStripAxis
   /** Renders the scroller (which must attach `stripRef`) with these mounted runs of the tabs. */
   renderStrip: (segments: readonly TabStripSegment[]) => React.ReactNode
 }): React.JSX.Element {
   const count = sortableIds.length
-  const { range, focusedSlotId } = useTabStripWindowState(stripRef, count, subscribeToStripResize)
+  const { range, focusedSlotId } = useTabStripWindowState(
+    stripRef,
+    count,
+    subscribeToStripResize,
+    axis
+  )
   const activeDragVisibleTabId = useActiveDragVisibleTabId()
   const windowed = range !== null
   // Why keyed on sortableIds: they change only when tabs open, close or move, not on every tab write.

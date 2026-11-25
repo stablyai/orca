@@ -3,7 +3,7 @@ import { TabHoverCard } from '../strip/TabHoverCard'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ClientHostedBrowserRow } from '../../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
+  getActiveTabIndicatorClasses,
   getTabRootStateClasses,
   getTabStripBorderClasses
 } from '../strip/drop-indicator'
@@ -14,6 +14,7 @@ import {
 import { preventMiddleButtonDefault } from '../strip/middle-button-default-guard'
 import { TAB_LABEL_WIDTH_CLASSES } from '../strip/tab-width-rules'
 import { useTabStripSlotProps } from '../strip/use-tab-strip-slot-props'
+import { useTabStripOrientation } from '../strip/tab-strip-orientation'
 
 /** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
 export default function ClientHostedBrowserTab({
@@ -33,6 +34,7 @@ export default function ClientHostedBrowserTab({
 }): React.JSX.Element {
   const t = useTranslate()
   const slotProps = useTabStripSlotProps(row.browserPageId, isActive)
+  const orientation = useTabStripOrientation()
   const loading = row.loading && !row.hostAbsent
   const PageIcon = loading ? Loader2 : Laptop
   const label = getClientHostedBrowserRowLabel(row, t)
@@ -48,7 +50,10 @@ export default function ClientHostedBrowserTab({
       >
         <div
           data-client-hosted-browser-row-id={row.browserPageId}
-          className={`w-full group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
+          role={orientation === 'vertical' ? 'tab' : undefined}
+          aria-selected={orientation === 'vertical' ? isActive : undefined}
+          tabIndex={orientation === 'vertical' ? (isActive ? 0 : -1) : undefined}
+          className={`w-full group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder, orientation })} ${getTabRootStateClasses(isActive, orientation)}`}
           onPointerDown={onActivate}
           onMouseDown={(event) => {
             if (event.button === 1) {
@@ -64,7 +69,7 @@ export default function ClientHostedBrowserTab({
             }
           }}
         >
-          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+          {isActive && <span className={getActiveTabIndicatorClasses(orientation)} aria-hidden />}
           <PageIcon
             className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
             aria-hidden

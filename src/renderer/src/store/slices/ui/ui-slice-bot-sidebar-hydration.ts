@@ -4,6 +4,7 @@ import { normalizeBotSidebarView } from '../../../../../shared/bots/bot-sidebar-
 import { normalizeBotChatFolds } from '../../../../../shared/bots/bot-chat-tree'
 import type { UISlice } from './ui-slice-contract'
 import { hydrateAgentReadState } from './ui-slice-hydration-values'
+import { hydrateVerticalTabListState } from './ui-slice-vertical-tab-list'
 
 // Why re-exported: hydration actions import both on one line, keeping that file within max-lines.
 export { hydrateOneShotNoticesSeen, sanitizeTaskResumeState } from './ui-slice-hydration-values'
@@ -27,7 +28,11 @@ export function hydrateBotSidebarState(
   }
 }
 
-/** Agents' read state with the bots sidebar's, so hydration stays one spread. */
+/** Agents' read state with the bots sidebar's and the vertical tab list's, so hydration stays one spread. */
 export function hydrateReadAndBotState(ui: PersistedUIState) {
-  return { ...hydrateAgentReadState(ui), ...hydrateBotSidebarState(ui) }
+  return {
+    ...hydrateAgentReadState(ui),
+    ...hydrateBotSidebarState(ui),
+    ...hydrateVerticalTabListState(ui)
+  }
 }

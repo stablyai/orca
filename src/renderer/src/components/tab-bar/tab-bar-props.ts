@@ -61,4 +61,6 @@ export type TabBarProps = {
   hoveredTabInsertion?: HoveredTabInsertion | null
   /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
   tabStripChrome?: 'default' | 'floating-panel'
+  /** `vertical` renders the left tab list (Tab position: Left) instead of the top strip. */
+  orientation?: 'horizontal' | 'vertical'
 }
