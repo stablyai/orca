@@ -61,6 +61,7 @@ vi.mock('../../../files/media/presentation/MobilePanZoomImage', () => ({
     return null
   }
 }))
+vi.mock('../../../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../../../platform/accessibility/use-reduced-motion', () => ({
   useReducedMotionEnabled: () => motion.reduced
 }))
