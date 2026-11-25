@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BotItemsAddParams } from '../../../../shared/rpc-contract/bots-items-params'
 import { BotItemError } from '../../../bots/bot-item-error'
-import { BOT_ITEM_LIMITS } from '../../../../shared/bots/bot-items'
+import { BOT_ITEM_LIMITS, type BotItemOrigin } from '../../../../shared/bots/bot-items'
 import { botItemRequestMail } from '../../../bots/bot-items-mail-text'
 import {
   assertBotItemAddable,
@@ -15,6 +15,8 @@ import {
 import { sessionCallerOf } from '../../orchestration/addressing/orchestration-caller-identity'
 import type { RpcContext } from '../core'
 import { readBotTurnOrigin } from './orchestration/messaging/bot-turn-origin'
+import { readBotTurn } from './orchestration/messaging/bot-recipient'
+import { botRequestOrigin, botTurnRequestOrigin } from './orchestration/messaging/bot-request-chain'
 import { botChatAddress } from './orchestration/messaging/bot-chat-address'
 import { sendToBot } from './orchestration/messaging/bot-request-send'
 import {
@@ -47,28 +49,39 @@ export async function addItem(
     ...(startedIn ? { startedIn } : {})
   }
   if (target.id === writer.bot.id && params.chat === undefined) {
+    const origin = await turnRequestOrigin(context, writer.sessionId)
     const outcome = await store.add(
-      { ...fields, ownerBotId: writer.bot.id, chatId: writer.actor.chatId, source: writer.source },
+      {
+        ...fields,
+        ...(origin ? { origin } : {}),
+        ownerBotId: writer.bot.id,
+        chatId: writer.actor.chatId,
+        source: writer.source
+      },
       writer.actor
     )
     return writeResult(context, outcome, writer)
   }
   assertBotItemAddable(fields)
   const uid = randomUUID()
+  const messageId = `msg_item_${uid.replaceAll('-', '')}`
   const sent = await sendItemRequest(context, {
     type: 'handoff',
     to: params.chat
       ? await botChatAddress(runtime, `bot:${target.name}`, params.chat)
       : `bot:${target.name}`,
-    messageId: `msg_item_${uid.replaceAll('-', '')}`,
+    messageId,
     ...botItemRequestMail({ uid, ...fields, doneMeans: params.doneMeans ?? null })
   })
   try {
     const chatId = runtime.botItems.chatRootOf(sent.landed)
     const title = runtime.botItems.chatTitleOf(chatId)
+    // The request its mail recorded, which the receiving bot's own items and requests carry on.
+    const origin = botRequestOrigin(runtime.getOrchestrationDb(), messageId)
     const outcome = await store.add(
       {
         ...fields,
+        ...(origin ? { origin } : {}),
         uid,
         ownerBotId: target.id,
         chatId,
@@ -103,6 +116,22 @@ async function originUrl(context: RpcContext, sessionId: string): Promise<string
     if (!(error instanceof Error && error.name === 'JournalWindowNotIndexed')) {
       console.warn('[bots] could not read where an item started', error)
     }
+    return null
+  }
+}
+
+/** The request the calling turn acts on, read as a send from it reads it, so the item shares that
+ *  send's chain; none when the turn can't be read, which never stops the add. */
+async function turnRequestOrigin(
+  context: RpcContext,
+  sessionId: string
+): Promise<BotItemOrigin | null> {
+  try {
+    const db = context.runtime.getOrchestrationDb()
+    const { turn } = await readBotTurn(context.runtime, db, sessionId)
+    return botTurnRequestOrigin(db, sessionId, turn)
+  } catch (error) {
+    console.warn('[bots] could not read the request an item came from', error)
     return null
   }
 }

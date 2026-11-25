@@ -17,6 +17,7 @@ import {
 import { originOf, requestsOriginPlace } from './bot-request-origin-place'
 import { carriedAskersOf, stampedPerson } from './bot-stamped-askers'
 import { personSendsOf, typedInOrcaByOwner, typedOnAnotherDevice } from './bot-typed-in-orca'
+import { ownerRequestOf } from './bot-owner-request-text'
 import { isRootTurnRecord, isRootUserMessage, turnMessages } from './bot-turn-messages'
 import { requestTextOf } from './bot-request-text'
 import { requestTurnAskedBy } from './bot-request-askers-of'
@@ -61,6 +62,14 @@ export type BotActingTurn = {
   typedByAnother?: true
   /** Who did the event behind the automation prompt that opened the turn, for the record only. */
   triggeredBy?: AutomationTriggeredBy
+  /** An automation's run or event prompt opened the turn. */
+  byAutomation?: true
+  /** When the message that opened the turn arrived (its row's observedAt). */
+  openedAt?: number
+  /** The owner's own words that opened the turn (bot-request-chain.ts reads them as the request's):
+   *  a message Orca's record shows the owner typed in Orca. Never anyone else's text, an automation's
+   *  prompt or event, or Orca's own prompt. */
+  ownerRequest?: string
   /** The event this turn acts on, as the host recorded it: its automation prompt's, or the one the
    *  waking request carries. A request the turn sends carries it on, its text marked as content. */
   origin?: AutomationTriggeredBy
@@ -312,6 +321,10 @@ export function readBotActingTurnWithin(
       const ran = openers.some(
         (entry) => entry.reading.kind === 'conversation' && entry.reading.run
       )
+      const automation = openers.some(
+        ({ item: { body } }) => body.kind === 'message' && (body.memorySource || body.automationRun)
+      )
+      const ownerRequest = ownerRequestOf(opener.item, sends)
       // Only the newest turn: one a worker's report reads back to is not the turn now running.
       const typedByOwner = index === 0 && window.every((item) => typedInOrcaByOwner(item, sends))
       // A paired device Orca can't place as the owner asked as someone it can't name.
@@ -347,6 +360,9 @@ export function readBotActingTurnWithin(
         ...(opener.reading.kind === 'conversation' && opener.reading.triggeredBy
           ? { triggeredBy: opener.reading.triggeredBy }
           : {}),
+        ...(automation ? { byAutomation: true as const } : {}),
+        openedAt: opener.item.observedAt,
+        ...(ownerRequest ? { ownerRequest } : {}),
         ...(origin ? { origin } : {})
       }
     }

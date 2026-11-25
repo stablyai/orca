@@ -150,6 +150,7 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
     const botId = selector ? (await findBot(client, selector)).id : undefined
     const status = getOptionalStringFlag(flags, 'status')
     const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    const rootKey = getOptionalStringFlag(flags, 'root-key')
     const result = await callBots<BotItemListView>(client, 'bots.items.list', {
       ...callerChat(),
       ...(botId ? { botId } : {}),
@@ -158,10 +159,22 @@ export const BOT_ITEM_HANDLERS: Record<string, CommandHandler> = {
       ...(flags.has('here') ? { here: true } : {}),
       ...optional('chat', getOptionalStringFlag(flags, 'chat')),
       ...optional('link', getOptionalStringFlag(flags, 'link')),
+      ...optional('rootKey', rootKey),
       ...(limit !== undefined ? { limit } : {}),
       ...optional('cursor', getOptionalStringFlag(flags, 'cursor'))
     })
-    print(result, json, (value) => formatBotItemList(value, Date.now()))
+    // An older runtime ignores rootKey and lists every item, so only that request's are kept.
+    const shown =
+      rootKey === undefined
+        ? result
+        : {
+            ...result,
+            result: {
+              ...result.result,
+              items: result.result.items.filter((item) => item.origin?.rootKey === rootKey)
+            }
+          }
+    print(shown, json, (value) => formatBotItemList(value, Date.now()))
   },
   'bot item show': async ({ flags, client, json }) => {
     const result = await callBots<BotItemShowView>(client, 'bots.items.show', {

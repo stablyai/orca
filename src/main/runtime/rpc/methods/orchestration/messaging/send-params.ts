@@ -60,3 +60,9 @@ export const SendParams = z
       path: ['to']
     })
   })
+
+/** The fields of a send a bot request is made from. */
+export type SendParamsInput = Pick<
+  z.infer<typeof SendParams>,
+  'subject' | 'body' | 'type' | 'priority' | 'threadId'
+>

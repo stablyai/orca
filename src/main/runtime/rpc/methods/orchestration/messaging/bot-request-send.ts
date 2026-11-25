@@ -3,7 +3,6 @@
 import { isBotGroupMemberSession } from '../../../../../../shared/bots/bot-group'
 import { runtimeBotGroups } from '../../../../../bots/bot-group-runtime'
 import { randomUUID } from 'node:crypto'
-import type { z } from 'zod'
 import { runtimeBotChats } from '../../../../../bots/bot-chat-session'
 import {
   failureHeldChat,
@@ -28,7 +27,7 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import type { RunRow } from '../../../../orchestration/db/orchestration-records'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { SendParams } from './send-params'
+import type { SendParamsInput } from './send-params'
 import {
   botAddressReach,
   readActingSender,
@@ -45,11 +44,6 @@ import { answersRequest, askedInConversation, botRequestSender } from './bot-req
 import type { PairedSender } from '../../../../../../shared/orchestration/mailbox/paired-sender-name'
 import { resolveBareOrchestrationRecipient } from './recipient-routing'
 import { sessionCallerOf } from '../../../../orchestration/addressing/orchestration-caller-identity'
-
-type SendParamsInput = Pick<
-  z.infer<typeof SendParams>,
-  'subject' | 'body' | 'type' | 'priority' | 'threadId'
->
 
 /** Whether an address could reach a bot; decided without waiting, so other mail is stored as before. */
 export function mayReachBot(
@@ -203,6 +197,7 @@ async function admitBotRequestMail(
     askers: requestAskersOf(acting.turn),
     askedBy: acting.turn.askedBy,
     request: groupScope?.originalHumanInstruction ?? acting.turn.request,
+    start: chain.start,
     conversation: acting.conversation,
     ...(acting.triggeredBy ? { triggeredBy: acting.triggeredBy } : {}),
     ...(acting.turn.origin ? { origin: acting.turn.origin } : {}),

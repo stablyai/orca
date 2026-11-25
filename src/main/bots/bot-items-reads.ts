@@ -2,6 +2,7 @@
 // item views need in one round trip.
 import {
   type BotItemActor,
+  type BotItemOrigin,
   botItemEventId,
   isOpenBotItemStatus,
   type BotItemLinkKind,
@@ -11,8 +12,10 @@ import {
   eventRecordOf,
   integer,
   itemRecordOf,
+  json,
   linkRecordOf,
   optionalInteger,
+  originOf,
   statusOf,
   text
 } from './bot-items-rows'
@@ -27,6 +30,8 @@ export type BotItemListQuery = {
   chatIds?: readonly string[]
   /** Only items linking this: `item list --link`. */
   link?: { kind: BotItemLinkKind; ref: string }
+  /** Only items whose `made` event records this request: `item list --root-key`. */
+  rootKey?: string
   /** Only these items; the counts stay the whole scope's. */
   uids?: readonly string[]
   limit: number
@@ -100,11 +105,18 @@ export class BotItemsReads extends BotItemsTables {
     const link = query.link
       ? ' AND uid IN (SELECT item_uid FROM item_links WHERE kind = ? AND ref = ?)'
       : ''
-    const scope = `owner_bot_id = ?${chat}${link}`
+    // The first event is the `made` one; the item's own events index finds it.
+    const root =
+      query.rootKey !== undefined
+        ? ` AND (SELECT json_extract(data, '$.origin.rootKey') FROM item_events
+             WHERE item_uid = items.uid ORDER BY id LIMIT 1) = ?`
+        : ''
+    const scope = `owner_bot_id = ?${chat}${link}${root}`
     const scopeArgs = [
       query.botId,
       ...(query.chatIds ? [JSON.stringify(query.chatIds)] : []),
-      ...(query.link ? [query.link.kind, query.link.ref] : [])
+      ...(query.link ? [query.link.kind, query.link.ref] : []),
+      ...(query.rootKey !== undefined ? [query.rootKey] : [])
     ]
     const counts: Partial<Record<BotItemStatus, number>> = {}
     for (const row of this.db
@@ -177,8 +189,26 @@ export class BotItemsReads extends BotItemsTables {
     return closes
   }
 
-  /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits
-   *  and the newest event anyone but the owner made. */
+  /** The request each item's `made` event records; none for items made before Orca recorded it. */
+  originsOf(uids: readonly string[]): Record<string, BotItemOrigin> {
+    const origins: Record<string, BotItemOrigin> = {}
+    for (const row of this.db
+      .prepare(
+        `SELECT item_uid, json_extract(data, '$.origin') AS origin FROM item_events
+          WHERE id IN (SELECT MIN(id) FROM item_events
+            WHERE item_uid IN (SELECT value FROM json_each(?)) GROUP BY item_uid)`
+      )
+      .all(JSON.stringify(uids))) {
+      const origin = originOf(json(row, 'origin'))
+      if (origin) {
+        origins[text(row, 'item_uid')] = origin
+      }
+    }
+    return origins
+  }
+
+  /** What item views need, for many items in one round trip: rows, links, Needs you questions, waits,
+   *  origins and the newest event anyone but the owner made. */
   viewRows(
     uids: readonly string[],
     /** Also each open item's waiting ask, which reads its events: for its own view only. */
@@ -191,6 +221,7 @@ export class BotItemsReads extends BotItemsTables {
     waits: Record<string, BotItemEventRecord>
     othersLast: Record<string, number>
     waitingAsks: Record<string, string>
+    origins: Record<string, BotItemOrigin>
   } {
     const ids = JSON.stringify(uids)
     const rows = this.db
@@ -235,6 +266,14 @@ export class BotItemsReads extends BotItemsTables {
         waitingAsks[item.uid] = botItemEventId(ask)
       }
     }
-    return { items, links, questions, waits, othersLast, waitingAsks }
+    return {
+      items,
+      links,
+      questions,
+      waits,
+      othersLast,
+      waitingAsks,
+      origins: this.originsOf(uids)
+    }
   }
 }

@@ -7,6 +7,7 @@ import type { BotRequestConversation, BotWakingPlace } from './bot-request-asker
 import type { AutomationTriggeredBy, BotRequestAsker } from '../../shared/bots/bot-acts-for'
 import type { BotRequestPurpose } from './bot-request-policy'
 import type { BotGroupPeerScope } from '../../shared/bots/bot-group-schema'
+import type { BotItemOrigin } from '../../shared/bots/bot-items'
 import { clipAtWord } from '../../shared/text/surrogate-safe-text-slice'
 import {
   pairedSenderName,
@@ -37,6 +38,9 @@ export type BotRequestRecord = {
   askedBy?: BotRequestAsker[]
   /** The original message's text, when a person's. */
   request: string | null
+  /** How the chain started (who, when, the owner's own words), carried on by every request it
+   *  sends; the receiving bot's items record it as their origin. Absent on older hosts' records. */
+  start?: Omit<BotItemOrigin, 'rootKey'>
   conversation: BotRequestConversation | null
   /** What started the sending automation's conversation, for the record. */
   triggeredBy?: AutomationTriggeredBy

@@ -46,6 +46,7 @@ const LIST = defineMethod({
       statuses,
       ...(chatId !== undefined ? { chatIds: [chatId] } : {}),
       ...(link ? { link } : {}),
+      ...(params.rootKey !== undefined ? { rootKey: params.rootKey } : {}),
       limit: limit + 1,
       ...(cursor ? { cursor } : {})
     })
