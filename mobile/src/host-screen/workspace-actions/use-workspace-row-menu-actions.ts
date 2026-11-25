@@ -57,6 +57,7 @@ export function useWorkspaceRowMenuActions(args: {
   const serverUnreachable =
     server.server !== null && (server.routeHost === null || server.server.state !== 'connected')
   const isFolder = folderIdOfSelector(row.worktreeId) !== undefined
+  const isChat = actions.chatRemovalTarget(row) !== null
   const menu: ActionSheetAction[] = [
     ...buildWorktreeNavigationActions({
       hostId,
@@ -148,13 +149,16 @@ export function useWorkspaceRowMenuActions(args: {
     {
       id: 'delete',
       // Desktop's folder rows say Remove Workspace: the folder stays on disk.
-      label: isFolder
-        ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
-        : t('common.delete', 'Delete'),
+      label: isChat
+        ? t('chats.remove', 'Remove Chat')
+        : isFolder
+          ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
+          : t('common.delete', 'Delete'),
       destructive: true,
+      disabled: serverUnreachable,
       onPress: () => state.setConfirmDelete(row),
       // Like desktop, git can't remove a primary checkout; older hosts omit the flag.
-      ...(row.isMainWorktree === true
+      ...(row.isMainWorktree === true && !isChat
         ? {
             disabled: true,
             hint: t(

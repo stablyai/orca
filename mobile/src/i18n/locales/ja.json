@@ -5262,6 +5262,7 @@
     }
   },
   "chats": {
+    "remove": "チャットを削除",
     "newProjectDate": "新規プロジェクト-{{date}}",
     "createdNotOpened": "チャットを作成しました。「チャット」から開いてください。",
     "createFailed": "チャットを作成できませんでした",

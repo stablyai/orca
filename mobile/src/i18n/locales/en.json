@@ -8552,6 +8552,7 @@
     }
   },
   "chats": {
+    "remove": "Remove Chat",
     "delete": {
       "title": "Delete this chat?",
       "descriptionHost": "It's deleted permanently from {{host}}. This can't be undone.",

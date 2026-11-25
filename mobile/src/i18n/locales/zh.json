@@ -8325,6 +8325,7 @@
     }
   },
   "chats": {
+    "remove": "移除对话",
     "newProjectDate": "新项目-{{date}}",
     "createdNotOpened": "对话已创建，请从「对话」中打开。",
     "createFailed": "无法创建对话",

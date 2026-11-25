@@ -5293,6 +5293,7 @@
     }
   },
   "chats": {
+    "remove": "Quitar chat",
     "newProjectDate": "Nuevo proyecto-{{date}}",
     "createdNotOpened": "Chat creado. Ábrelo desde Chats.",
     "createFailed": "No se pudo crear el chat",

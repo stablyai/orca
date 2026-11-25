@@ -207,8 +207,11 @@ export const REPO_METHODS = [
   defineMethod({
     name: 'repo.rm',
     permission: 'workspace',
-    params: RepoSelector,
-    handler: async (params, { runtime }) => runtime.removeProject(params.repo)
+    params: RepoShow,
+    handler: async (params, { runtime }) =>
+      runtime.removeProject(
+        await runtime.showRepo(hostQualifiedRepoSelector(params.repo, params.repoHostId))
+      )
   }),
   defineMethod({
     name: 'repo.reorder',

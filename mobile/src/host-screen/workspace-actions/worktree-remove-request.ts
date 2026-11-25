@@ -4,6 +4,8 @@ import { parseWorkspaceKey } from '../../../../src/shared/workspace/identity/wor
 import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { folderWorkspaceRemove, worktreeRemove } from '../host-screen-operations'
+import type { ChatWorkspaceRemovalTarget } from '../../../../src/shared/repository/chat-workspace-removal-target'
+import { chatWorkspaceRemove } from './workspace-row-menu-operations'
 
 export type WorktreeRemoveHooks = {
   runHooks: boolean
@@ -57,8 +59,15 @@ function buildWorktreeRemoveRequest(
 export async function requestWorktreeRemove(
   client: RpcClient,
   item: Pick<Worktree, 'worktreeId' | 'recipeEnvironment'>,
-  hooks: WorktreeRemoveHooks
+  hooks: WorktreeRemoveHooks,
+  chatProject?: ChatWorkspaceRemovalTarget | null
 ): Promise<{ accepted: true } | { accepted: false; refusal?: { code: string; message: string } }> {
+  if (chatProject) {
+    chatWorkspaceRemove.interpret(
+      await chatWorkspaceRemove.request(client, chatProject, { timeoutMs: 15_000 })
+    )
+    return { accepted: true }
+  }
   const request = buildWorktreeRemoveRequest(item, hooks)
   const options = { timeoutMs: request.timeoutMs }
   const reply =

@@ -5175,6 +5175,7 @@
     }
   },
   "chats": {
+    "remove": "移除對話",
     "newProjectDate": "新專案-{{date}}",
     "createdNotOpened": "對話已建立，請從「對話」中開啟。",
     "createFailed": "無法建立對話",

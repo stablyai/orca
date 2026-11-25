@@ -2060,7 +2060,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.list': RepoList,
   'repo.removeSparsePreset': RepoSparsePresetRemove,
   'repo.reorder': RepoReorder,
-  'repo.rm': RepoSelector,
+  'repo.rm': RepoShow,
   'repo.saveSparsePreset': RepoSparsePresetSave,
   'repo.searchRefs': RepoSearchRefs,
   'repo.setBaseRef': RepoSetBaseRef,

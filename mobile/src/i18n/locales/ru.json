@@ -5401,6 +5401,7 @@
     }
   },
   "chats": {
+    "remove": "Убрать чат",
     "newProjectDate": "Новый проект-{{date}}",
     "createdNotOpened": "Чат создан. Откройте его в разделе «Чаты».",
     "createFailed": "Не удалось создать чат",

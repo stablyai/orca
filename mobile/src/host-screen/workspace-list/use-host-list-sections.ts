@@ -257,7 +257,9 @@ const useBaseHostListSections = ORCA_SIDEBAR_INPUTS_IS_MAIN
   ? useFeedHostListSections
   : useLegacyHostListSections
 
-export function useHostListSections(unscoped: HostListSectionsInputs): HostListSections {
+export function useHostListSections(
+  unscoped: HostListSectionsInputs
+): HostListSections & { chatRepos: readonly SectionRepo[] } {
   const scoped = useProjectWorkspaceScope(unscoped)
   const inputs = scoped.projects
   const { bots, displayWorktrees, state } = inputs
@@ -307,9 +309,10 @@ export function useHostListSections(unscoped: HostListSectionsInputs): HostListS
     return {
       ...base,
       ...paused,
+      chatRepos: scoped.chatRepos,
       sections: [...botSections.sections, ...chats.sections, ...base.sections],
       rawSections: [...botSections.sections, ...chats.rawSections, ...base.rawSections],
       repoById: new Map([...base.repoById, ...chats.repoById])
     }
-  }, [base, botSections, chats, showPausedBots])
+  }, [base, botSections, chats, scoped.chatRepos, showPausedBots])
 }

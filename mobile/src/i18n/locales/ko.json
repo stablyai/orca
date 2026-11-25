@@ -5705,6 +5705,7 @@
     }
   },
   "chats": {
+    "remove": "채팅 제거",
     "newProjectDate": "새 프로젝트-{{date}}",
     "createdNotOpened": "채팅이 생성되었습니다. 채팅에서 여세요.",
     "createFailed": "채팅을 생성할 수 없습니다",

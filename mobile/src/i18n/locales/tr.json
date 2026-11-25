@@ -5181,6 +5181,7 @@
     }
   },
   "chats": {
+    "remove": "Sohbeti kaldır",
     "newProjectDate": "Yeni proje-{{date}}",
     "createdNotOpened": "Sohbet oluşturuldu. Sohbetler bölümünden açın.",
     "createFailed": "Sohbet oluşturulamadı",

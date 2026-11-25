@@ -67,6 +67,7 @@ function lossDetail(loss: WorkspaceDeleteLoss, t: Translate): string | null {
 /** The delete confirm: a folder row only leaves Orca; a worktree first says what it loses, as desktop does. */
 export function WorkspaceDeleteConfirmSheet(props: {
   row: Worktree
+  chatWorkspace?: boolean
   hostId: string
   rowClient: RpcClient | null
   routeHost: ExecutionHostId | undefined
@@ -84,12 +85,14 @@ export function WorkspaceDeleteConfirmSheet(props: {
     <View>
       <View style={styles.confirmContent}>
         <Text style={styles.confirmTitle}>
-          {isFolder
-            ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
-            : t('common.delete', 'Delete')}
+          {props.chatWorkspace
+            ? t('chats.remove', 'Remove Chat')
+            : isFolder
+              ? t('hostScreen.deleteConfirm.removeTitle', 'Remove Workspace')
+              : t('common.delete', 'Delete')}
         </Text>
         <Text style={styles.confirmMessage}>
-          {isFolder
+          {isFolder || props.chatWorkspace
             ? t(
                 'hostScreen.deleteConfirm.removeFolderMessage',
                 'Remove "{{name}}" from Orca? The folder on disk is kept.',
@@ -146,7 +149,9 @@ export function WorkspaceDeleteConfirmSheet(props: {
           onPress={onDelete}
         >
           <Text style={styles.confirmBtnDestructiveText}>
-            {isFolder ? t('common.remove', 'Remove') : t('common.delete', 'Delete')}
+            {isFolder || props.chatWorkspace
+              ? t('common.remove', 'Remove')
+              : t('common.delete', 'Delete')}
           </Text>
         </Pressable>
       </View>

@@ -5181,6 +5181,7 @@
     }
   },
   "chats": {
+    "remove": "Chat entfernen",
     "newProjectDate": "Neues Projekt-{{date}}",
     "createdNotOpened": "Chat erstellt. Öffne ihn unter Chats.",
     "createFailed": "Chat konnte nicht erstellt werden",

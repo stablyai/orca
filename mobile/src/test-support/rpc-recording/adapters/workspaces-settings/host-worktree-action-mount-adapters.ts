@@ -50,6 +50,7 @@ export function hostWorktreeActionMountAdapters(
             typeof useActions
           >[0]['forgetHostClient'],
           hostCapabilities: [],
+          chatRepos: [],
           hostId: undefined,
           pathname: '/h/host-1',
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: navigation is observed through the recorded sends, not the router.
