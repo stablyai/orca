@@ -317,7 +317,7 @@ describe('the share guard', () => {
 
   it('answers a teammate’s status with its protocol and capabilities, nothing of this computer', async () => {
     const response = await call('status.get', undefined)
-    const status = response.ok ? (response.result as Record<string, unknown>) : null
+    const status: object | null = response.ok ? Object(response.result) : null
     expect(status).toMatchObject({
       runtimeId: runtime.getRuntimeId(),
       capabilities: runtime.getStatus().capabilities,

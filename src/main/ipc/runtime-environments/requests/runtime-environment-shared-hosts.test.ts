@@ -33,7 +33,7 @@ const PAIRED = 'paired-env'
 const answer = (method: string): RuntimeRpcResponse<unknown> => ({
   id: method,
   ok: true,
-  result: { method },
+  result: { method, runtimeId: SHARED },
   _meta: { runtimeId: SHARED }
 })
 const stop = vi.fn()
@@ -194,7 +194,7 @@ describe('a shared agent’s host status, as a paired server’s', () => {
         sharedHost: true,
         transport: 'ready',
         verification: 'verified',
-        status: { method: 'status.get' }
+        status: { method: 'status.get', runtimeId: SHARED }
       })
     ])
     expect(registry.resolve).not.toHaveBeenCalled()

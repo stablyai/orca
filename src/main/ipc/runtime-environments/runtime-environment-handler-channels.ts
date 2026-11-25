@@ -36,5 +36,8 @@ export const RUNTIME_ENVIRONMENT_HANDLER_CHANNELS = [
   'runtimeEnvironments:previewOrcadDeltaMove',
   'runtimeEnvironments:moveOrcadDelta',
   'runtimeEnvironments:keepOrcadServerVersion',
-  'runtimeEnvironments:allowOrcadMoveLeavingBehind'
+  'runtimeEnvironments:allowOrcadMoveLeavingBehind',
+  'runtimeEnvironments:retryConnectionsNow'
 ] as const
+
+export type RuntimeEnvironmentHandlerChannel = (typeof RUNTIME_ENVIRONMENT_HANDLER_CHANNELS)[number]

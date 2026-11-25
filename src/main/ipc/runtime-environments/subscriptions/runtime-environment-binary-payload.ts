@@ -1,3 +1,4 @@
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import { ipcMain } from 'electron'
 import type {
   PendingRuntimeSubscription,
@@ -20,7 +21,7 @@ export function registerRuntimeEnvironmentSubscriptionControls(
   pendingSubscriptions: Map<string, PendingRuntimeSubscription>,
   remoteRuntimeSubscriptions: Map<string, RetainedRemoteRuntimeSubscription>
 ): void {
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:unsubscribe',
     (event, args: { subscriptionId: string }): { unsubscribed: boolean } => {
       const pending = pendingSubscriptions.get(args.subscriptionId)

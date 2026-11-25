@@ -4,10 +4,12 @@ import type { SharedBotHostView } from '../../../../shared/bots/shared-bot-hosts
 import { RuntimeHostStatusOwner } from '../../../../shared/remote-runtime/host-status/runtime-host-status-owner'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
+  runtimeHostStatusFailure,
   type RuntimeHostStatusResponse,
   type RuntimeHostStatusSnapshot
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getRuntimeDesktopSurface } from '../../../runtime/construction/runtime-desktop-surface'
 
 type StatusHosts = {
@@ -48,11 +50,7 @@ export class SharedHostStatuses {
         environmentId: selector,
         pairingRevision: SHARED_HOST_PAIRING_REVISION,
         request: async () => {
-          const response = (await this.hosts.call(
-            selector,
-            'status.get',
-            undefined
-          )) as RuntimeHostStatusResponse
+          const response = statusResponse(await this.hosts.call(selector, 'status.get', undefined))
           if (response.ok) {
             kept.answered = response
             return response
@@ -104,6 +102,20 @@ export class SharedHostStatuses {
   private view(selector: string): SharedBotHostView | undefined {
     return this.hosts.views().find((view) => view.environmentId === selector)
   }
+}
+
+/** The host's status, or a failure for an answer that isn't one. */
+function statusResponse(response: RuntimeRpcResponse<unknown>): RuntimeHostStatusResponse {
+  if (!response.ok) {
+    return response
+  }
+  return isRuntimeStatus(response.result)
+    ? { ...response, result: response.result }
+    : runtimeHostStatusFailure('invalid_runtime_response', 'The host answered no status.')
+}
+
+function isRuntimeStatus(value: unknown): value is RuntimeStatus {
+  return typeof value === 'object' && value !== null && 'runtimeId' in value
 }
 
 function sharedSnapshot(snapshot: RuntimeHostStatusSnapshot): RuntimeHostStatusSnapshot {

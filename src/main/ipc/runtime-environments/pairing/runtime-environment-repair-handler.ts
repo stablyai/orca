@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { publishVerifiedPairing } from './runtime-environment-verified-pairing-publish'
@@ -10,7 +10,7 @@ export function registerRuntimeEnvironmentRepairHandler({
   getUserDataPath: () => string
   invalidateTransport: (environmentId: string) => Promise<void> | void
 }): void {
-  ipcMain.handle(
+  handleRuntimeEnvironmentChannel(
     'runtimeEnvironments:repairFromPairingCode',
     async (
       _event,

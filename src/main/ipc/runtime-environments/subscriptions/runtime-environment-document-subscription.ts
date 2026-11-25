@@ -14,7 +14,7 @@ import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remo
 import type { DocumentDeliveryEndpoint } from '../../../../shared/backend/document-delivery-endpoint'
 import { getRuntimeEnvironmentTransportGeneration } from '../connections/runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from '../requests/runtime-environment-transport-routing'
-import { sharedHostRoute } from '../requests/runtime-environment-shared-hosts'
+import { resolveRuntimeEnvironmentHost } from '../requests/runtime-environment-shared-hosts'
 import { subscribeSharedHostForDocument } from './runtime-environment-shared-host-subscription'
 
 /** Opens one runtime subscription owned by `document`; it retires with that document. */
@@ -34,12 +34,12 @@ export async function subscribeRuntimeEnvironmentForDocument(
   } = deps
   const subscriptionId = runtimeEnvironmentSubscriptionId(args)
   const crewResult = args.setupResult === 'crew'
-  const sharedHost = crewResult ? null : await sharedHostRoute(args.selector)
-  if (sharedHost) {
+  const host = crewResult ? null : await resolveRuntimeEnvironmentHost(args.selector)
+  if (host?.kind === 'shared') {
     return subscribeSharedHostForDocument(
       remoteRuntimeSubscriptions,
       document,
-      sharedHost,
+      host.route,
       subscriptionId,
       args
     )

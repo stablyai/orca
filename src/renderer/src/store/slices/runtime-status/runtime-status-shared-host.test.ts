@@ -8,7 +8,7 @@ const snapshot = (patch: Partial<RuntimeHostStatusSnapshot>): RuntimeHostStatusS
   environmentId: 'shared-env',
   pairingRevision: 0,
   sequence: sequence++,
-  checkedAt: Date.now(),
+  checkedAt: 1_700_000_000_000,
   status: {
     runtimeId: 'owner-runtime',
     rendererGraphEpoch: 1,

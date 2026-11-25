@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { handleRuntimeEnvironmentChannel } from '../runtime-environment-channel-handling'
 import {
   RuntimeSshAccessLinkRequestSchema,
   RuntimeSshAccessUnlinkRequestSchema
@@ -13,25 +13,31 @@ export function registerRuntimeSshAccessHandlers(options: {
   getUserDataPath: () => string
   invalidateTransport: (environmentId: string) => void | Promise<void>
 }): void {
-  ipcMain.handle('runtimeEnvironments:linkSshAccess', async (event, input: unknown) => {
-    const args = RuntimeSshAccessLinkRequestSchema.parse(input)
-    // Unreachable links hold two lifecycle queues; cancel when their window closes.
-    const controller = new AbortController()
-    const cancel = (): void => controller.abort()
-    const releaseDestroyed = addFanoutListener(event.sender, 'destroyed', cancel)
-    try {
-      return await linkRuntimeSshAccess(options.getUserDataPath(), args, {
-        signal: controller.signal,
+  handleRuntimeEnvironmentChannel(
+    'runtimeEnvironments:linkSshAccess',
+    async (event, input: unknown) => {
+      const args = RuntimeSshAccessLinkRequestSchema.parse(input)
+      // Unreachable links hold two lifecycle queues; cancel when their window closes.
+      const controller = new AbortController()
+      const cancel = (): void => controller.abort()
+      const releaseDestroyed = addFanoutListener(event.sender, 'destroyed', cancel)
+      try {
+        return await linkRuntimeSshAccess(options.getUserDataPath(), args, {
+          signal: controller.signal,
+          invalidateTransport: options.invalidateTransport
+        })
+      } finally {
+        releaseDestroyed()
+      }
+    }
+  )
+  handleRuntimeEnvironmentChannel(
+    'runtimeEnvironments:unlinkSshAccess',
+    async (_event, input: unknown) => {
+      const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
+      return await unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
         invalidateTransport: options.invalidateTransport
       })
-    } finally {
-      releaseDestroyed()
     }
-  })
-  ipcMain.handle('runtimeEnvironments:unlinkSshAccess', async (_event, input: unknown) => {
-    const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
-    return await unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
-      invalidateTransport: options.invalidateTransport
-    })
-  })
+  )
 }

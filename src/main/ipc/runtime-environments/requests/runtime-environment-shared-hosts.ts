@@ -47,8 +47,20 @@ export function sharedHostsChanged(): void {
   sharedHosts?.statuses.changed()
 }
 
-/** The share link `selector` names, or null for a paired server. */
-export async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null> {
+/** The host a runtimeEnvironments selector names: resolved here once, and every caller handles
+ *  both kinds. */
+export type RuntimeEnvironmentHost =
+  | { kind: 'shared'; route: SharedHostRoute }
+  | { kind: 'paired'; selector: string }
+
+export async function resolveRuntimeEnvironmentHost(
+  selector: string
+): Promise<RuntimeEnvironmentHost> {
+  const route = await sharedHostRoute(selector)
+  return route ? { kind: 'shared', route } : { kind: 'paired', selector }
+}
+
+async function sharedHostRoute(selector: string): Promise<SharedHostRoute | null> {
   const route = sharedHosts
   if (!route) {
     return null
@@ -80,7 +92,13 @@ export async function runtimeEnvironmentIdOf(
   selector: string,
   resolve: (selector: string) => Promise<{ id: string }>
 ): Promise<string> {
-  return (await sharedHostRoute(selector)) ? selector : (await resolve(selector)).id
+  const host = await resolveRuntimeEnvironmentHost(selector)
+  switch (host.kind) {
+    case 'shared':
+      return selector
+    case 'paired':
+      return (await resolve(selector)).id
+  }
 }
 
 /**
