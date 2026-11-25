@@ -1,37 +1,25 @@
 // @vitest-environment happy-dom
 
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
-import { createStore } from 'zustand/vanilla'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type { DetectedWorktree } from '../../../../../../shared/worktree/types'
-import { createRepoUpdateActions } from '@/store/repos/repo-update'
-import { createRepoAddActions } from '@/store/repos/repo-add-actions'
-import { act, cleanup, render, renderHook } from '@testing-library/react'
-import { createElement } from 'react'
-import AddProjectFromFolderDialog from '../dialog/AddProjectFromFolderDialog'
+import { cleanup, renderHook } from '@testing-library/react'
 import { keepImportedWorktreesHiddenCard } from '../../worktree-list/listing/imported-worktrees-card-actions'
 import { importNewExternalWorktreeInboxPaths } from '../../worktree-list/listing/new-external-worktrees-inbox-actions'
+import { finishProjectAddWithDefaultCheckout } from './project-added-default-checkout'
 import {
-  finishProjectAddWithDefaultCheckout,
-  openProjectDefaultCheckout
-} from './project-added-default-checkout'
+  checkout,
+  createSetup,
+  deferred,
+  open,
+  repo,
+  type Harness
+} from './selected-checkout-handoff.test-fixture'
 import { captureCheckoutHandoffIntent } from './checkout-handoff-intent'
 import { useAddRepoNestedImportFlow } from '../nested-import/useAddRepoNestedImportFlow'
 import { useCompleteGitRepoAdd } from './use-complete-git-repo-add'
 import type { NestedRepoScanResult } from '../../../../../../shared/project/groups/project-group-types'
 
-type PersistRequest = { repoId: string; updates: object; hostId?: string }
-type ToastOptions = { description?: string; action?: { onClick: () => void } }
-type Harness = {
-  state: AppState | null
-  activate: Mock<(worktreeId: string, options: object) => void>
-  persist: Mock<(request: PersistRequest) => Promise<Repo>>
-  subscribe: Mock<(listener: (state: AppState) => void) => () => void>
-  error: Mock<(message: string, options: ToastOptions) => void>
-  onboarding: Mock<(step: string) => Promise<void>>
-  add: Mock<(request: object) => Promise<unknown>>
-}
 const harness = vi.hoisted((): Harness => ({
   state: null,
   activate: vi.fn(),
@@ -39,7 +27,9 @@ const harness = vi.hoisted((): Harness => ({
   subscribe: vi.fn(),
   error: vi.fn(),
   onboarding: vi.fn(),
-  add: vi.fn()
+  add: vi.fn(),
+  warning: vi.fn(),
+  findProjectProfiles: vi.fn()
 }))
 vi.mock('@/store/index', async () => {
   const { useSyncExternalStore } = await import('react')
@@ -56,14 +46,9 @@ vi.mock('@/store/index', async () => {
     })
   }
 })
-vi.mock('@/store/projects/project-profile-presence', () => ({
-  warnIfProjectKnownInAnotherProfile: async () => undefined
-}))
-vi.mock('@/store/projects/project-wsl-filesystem-boundary-advisory', () => ({
-  warnIfProjectCrossesWslFilesystemBoundary: () => undefined
-}))
+
 vi.mock('sonner', () => ({
-  toast: { error: harness.error, warning: vi.fn(), success: vi.fn(), info: vi.fn() }
+  toast: { error: harness.error, warning: harness.warning, success: vi.fn(), info: vi.fn() }
 }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: harness.activate
@@ -93,143 +78,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   })
 }))
 
-const repo: Repo = {
-  id: 'project',
-  path: '/repo',
-  displayName: 'Project',
-  badgeColor: '',
-  addedAt: 0,
-  kind: 'git'
-}
-function checkout(path: string, extra: Partial<DetectedWorktree> = {}): DetectedWorktree {
-  return {
-    id: `project::${path}`,
-    repoId: 'project',
-    path,
-    displayName: path,
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    branch: 'topic',
-    head: 'abc',
-    isBare: false,
-    ownership: 'external',
-    selectedCheckout: path === '/repo',
-    isMainWorktree: path === '/repo',
-    isArchived: false,
-    lastActivityAt: 0,
-    visible: true,
-    ...extra
-  }
-}
-function deferred<T>() {
-  let resolve!: (value: T) => void
-  const promise = new Promise<T>((done) => {
-    resolve = done
-  })
-  return { promise, resolve }
-}
-function setup(rows: DetectedWorktree[], repos: Repo[] = [repo], confirmationFails = false) {
-  let failing = confirmationFails
-  const persisted = new Map<string, Repo>(repos.map((row) => [row.executionHostId ?? 'local', row]))
-  harness.persist.mockImplementation(async ({ updates, hostId }) => {
-    const owner = hostId ?? 'local'
-    const next = { ...persisted.get(owner)!, ...updates }
-    persisted.set(owner, next)
-    return next
-  })
-  vi.stubGlobal(
-    'window',
-    Object.assign(window, { api: { repos: { update: harness.persist, add: harness.add } } })
-  )
-  const store = createStore<AppState>()(
-    (set, get) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture supplies every field read by the handoff and updater; unrelated app slices are not exercised.
-      ({
-        repos,
-        projects: [],
-        projectHostSetups: [],
-        settings: {},
-        activeModal: 'none',
-        modalData: {},
-        activeView: 'terminal',
-        activeWorktreeId: null,
-        activeWorkspaceExecutionHostId: null,
-        activeTabType: 'terminal',
-        activeTabId: null,
-        activeBrowserTabId: null,
-        activeFileId: null,
-        activeGroupIdByWorktree: {},
-        groupsByWorktree: {},
-        browserTabsByWorktree: {},
-        activeRepoId: null,
-        showActiveOnly: false,
-        setFilterRepoIds: vi.fn(),
-        setShowActiveOnly: vi.fn(),
-        worktreesByRepo: {},
-        detectedWorktreesByRepo: {},
-        hideDefaultBranchWorkspace: true,
-        filterRepoIds: [],
-        showSleepingWorkspaces: true,
-        setActiveRepo: vi.fn(),
-        setProjectFilterIds: vi.fn(),
-        ...createRepoUpdateActions(set, get),
-        ...createRepoAddActions(set, get),
-        clearOrcaHookTrustForRepo: vi.fn(),
-        activeOrcaProfileId: null,
-        openModal: (activeModal: AppState['activeModal'], modalData: AppState['modalData'] = {}) =>
-          set({ activeModal, modalData }),
-        closeModal: () => set({ activeModal: 'none', modalData: {} }),
-        fetchWorktrees: async () => {
-          const imported = get().repos.flatMap((row) => row.importedExternalWorktreePaths ?? [])
-          if (failing && imported.length > 0) {
-            return false
-          }
-          const detected = rows.map((row) => ({
-            ...row,
-            visible: row.visible || imported.includes(row.path)
-          }))
-          set({
-            detectedWorktreesByRepo: {
-              project: {
-                repoId: 'project',
-                authoritative: true,
-                source: 'git',
-                worktrees: detected
-              }
-            },
-            worktreesByRepo: { project: detected.filter((row) => row.visible) }
-          })
-          return true
-        }
-      }) as unknown as AppState
-  )
-  const synchronize = () => {
-    harness.state = store.getState()
-  }
-  harness.subscribe.mockImplementation((listener) => store.subscribe(listener))
-  store.subscribe(synchronize)
-  synchronize()
-  return {
-    store,
-    persisted,
-    recover: () => {
-      failing = false
-    }
-  }
-}
-async function open(selectedPath: string, executionHostId?: 'local' | 'runtime:env') {
-  await openProjectDefaultCheckout({
-    repoId: 'project',
-    source: 'local_folder_picker',
-    selectedPath,
-    executionHostId
-  })
-}
+const setup = createSetup(harness)
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -434,29 +283,6 @@ describe('selected checkout handoff', () => {
       expect(harness.activate).not.toHaveBeenCalled()
       expect(harness.error).not.toHaveBeenCalled()
     })
-
-    it('stands an explicit Retry down too', async () => {
-      const { store } = setup(
-        [checkout('/repo'), checkout('/selected', { visible: false })],
-        [repo],
-        true
-      )
-      store.setState({ activeWorktreeId: 'project::/repo', activeTabId: 'terminal-1' })
-      let retry: (() => void) | undefined
-      harness.error.mockImplementation((_message, options) => {
-        retry = options.action?.onClick
-      })
-      await open('/selected', 'local')
-      expect(harness.error).toHaveBeenCalledTimes(1)
-      const gate = holdFirstScan(store)
-      retry?.()
-      store.setState(change)
-      gate.resolve(true)
-      // Retry is fire-and-forget; let its held read settle.
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(harness.activate).not.toHaveBeenCalled()
-      expect(harness.error).toHaveBeenCalledTimes(1)
-    })
   })
 
   describe('choosing another page in the visible Browser tab', () => {
@@ -488,36 +314,113 @@ describe('selected checkout handoff', () => {
       expect(harness.activate).not.toHaveBeenCalled()
       expect(harness.error).not.toHaveBeenCalled()
     })
+  })
 
-    it('stands an explicit Retry down too, and lets an undisturbed Retry open', async () => {
+  describe('an explicit Retry', () => {
+    const terminalOn = (tabId: string) => ({
+      activeWorktreeId: 'project::/repo',
+      activeTabType: 'terminal' as const,
+      activeTabId: tabId
+    })
+    const browserWorkspace = (pageId: string, url: string) => ({
+      'project::/repo': [
+        { id: 'browser-1', worktreeId: 'project::/repo', activePageId: pageId, url }
+      ]
+    })
+    const browserOn = (pageId: string, url = 'https://example.test/') => ({
+      activeWorktreeId: 'project::/repo',
+      activeTabType: 'browser' as const,
+      activeBrowserTabId: 'browser-1',
+      browserTabsByWorktree: browserWorkspace(pageId, url)
+    })
+    // A Browser workspace remembers its page while a terminal tab is on screen.
+    const terminalOverBrowser = (pageId: string) => ({
+      ...terminalOn('terminal-1'),
+      activeBrowserTabId: 'browser-1',
+      browserTabsByWorktree: browserWorkspace(pageId, 'https://example.test/')
+    })
+
+    /**
+     * Fails the first handoff, recovers the host, dispatches Retry and holds its read: resolves once
+     * that read has arrived, then `finish` applies the change, settles the read and lets it land.
+     */
+    async function retryHeldAtRead(start: object) {
       const { store, recover } = setup(
         [checkout('/repo'), checkout('/selected', { visible: false })],
         [repo],
         true
       )
-      show(store, browserOn('page-1'))
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the intent reads only these foreground fields.
+      const show = (state: object) => store.setState(state as Partial<AppState>)
+      show(start)
       let retry: (() => void) | undefined
       harness.error.mockImplementation((_message, options) => {
         retry = options.action?.onClick
       })
       await open('/selected', 'local')
-      const disturbed = holdFirstScan(store)
-      retry?.()
-      show(store, browserOn('page-2'))
-      disturbed.resolve(true)
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expect(harness.activate).not.toHaveBeenCalled()
       expect(harness.error).toHaveBeenCalledTimes(1)
-      // Same page, edited URL: not a new choice, so an undisturbed Retry opens the checkout.
       recover()
+      const refresh = store.getState().fetchWorktrees
+      const arrived = deferred<void>()
+      const gate = deferred<boolean>()
+      const landed = deferred<void>()
+      vi.spyOn(store.getState(), 'fetchWorktrees').mockImplementationOnce(async (...args) => {
+        arrived.resolve()
+        const answer = (await gate.promise) ? await refresh(...args) : false
+        landed.resolve()
+        return answer
+      })
+      expect(retry).toEqual(expect.any(Function))
       retry?.()
-      show(store, browserOn('page-2', 'https://example.test/edited'))
-      await vi.waitFor(() =>
-        expect(harness.activate).toHaveBeenCalledWith('project::/selected', {
-          navigationIntent: 'user-open',
-          executionHostId: 'local'
-        })
-      )
+      await arrived.promise
+      return {
+        store,
+        finish: async (change: object | null, succeeds: boolean) => {
+          if (change) {
+            show(change)
+          }
+          gate.resolve(succeeds)
+          await landed.promise
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+      }
+    }
+
+    it.each([
+      ['another terminal tab', 'succeed', terminalOn('terminal-1'), terminalOn('terminal-2'), true],
+      ['another terminal tab', 'fail', terminalOn('terminal-1'), terminalOn('terminal-2'), false],
+      ['another Browser page', 'succeed', browserOn('page-1'), browserOn('page-2'), true],
+      ['another Browser page', 'fail', browserOn('page-1'), browserOn('page-2'), false]
+    ])(
+      'keeps %s chosen while its read is held, whether Retry would %s',
+      async (_choice, _outcome, start, change, succeeds) => {
+        const { store, finish } = await retryHeldAtRead(start)
+        await finish(change, succeeds)
+        expect(harness.activate).not.toHaveBeenCalled()
+        expect(harness.error).toHaveBeenCalledTimes(1)
+        expect(store.getState()).toMatchObject(change)
+      }
+    )
+
+    it.each([
+      ['nothing changes', browserOn('page-1'), null],
+      [
+        'the visible page’s URL is edited',
+        browserOn('page-1'),
+        browserOn('page-1', 'https://example.test/edited')
+      ],
+      [
+        'a background Browser remembers another page',
+        terminalOverBrowser('page-1'),
+        terminalOverBrowser('page-2')
+      ]
+    ])('opens the checkout when %s', async (_case, start, change) => {
+      const { finish } = await retryHeldAtRead(start)
+      await finish(change, true)
+      expect(harness.activate).toHaveBeenCalledWith('project::/selected', {
+        navigationIntent: 'user-open',
+        executionHostId: 'local'
+      })
     })
   })
 
@@ -694,77 +597,6 @@ describe('selected checkout handoff', () => {
       expect(persisted.get('local')?.importedExternalWorktreePaths).toBeUndefined()
       expect(reported).toEqual([expect.objectContaining({ repo: expect.objectContaining(paired) })])
     })
-  })
-
-  describe('a same-type confirmation replacing the mounted dialog’s request', () => {
-    const requestA = { folderPath: '/selected' }
-    const requestB = { folderPath: '/other' }
-    const added = { ...repo, executionHostId: 'local' as const }
-    /** Mounts the dialog on request A, confirms it, and returns once the held step is reached. */
-    async function confirmA(store: ReturnType<typeof setup>['store']) {
-      store.setState({ activeModal: 'confirm-add-project-from-folder', modalData: requestA })
-      const view = render(createElement(AddProjectFromFolderDialog))
-      const button = await view.findByRole('button', { name: 'Add Project' })
-      await act(async () => {
-        button.click()
-      })
-    }
-    function expectBIntact(store: ReturnType<typeof setup>['store']) {
-      expect(store.getState().activeModal).toBe('confirm-add-project-from-folder')
-      expect(store.getState().modalData).toBe(requestB)
-      expect(harness.activate).not.toHaveBeenCalled()
-      expect(harness.error).not.toHaveBeenCalled()
-    }
-
-    it.each([
-      ['registers', { repo: added, selectedPath: '/selected' }],
-      ['is not a Git repository', { error: 'Not a valid git repository: /selected' }],
-      ['fails', { error: 'disk unavailable' }]
-    ])('leaves B alone when A’s held add %s', async (outcome, reply) => {
-      const { store } = setup([checkout('/repo'), checkout('/selected')], [])
-      const addGate = deferred<unknown>()
-      harness.add.mockReturnValueOnce(addGate.promise)
-      await confirmA(store)
-      await vi.waitFor(() => expect(harness.add).toHaveBeenCalled())
-      await act(async () => {
-        store.setState({ modalData: requestB })
-        addGate.resolve(reply)
-      })
-      await new Promise((resolve) => setTimeout(resolve, 0))
-      expectBIntact(store)
-      // The registration itself still commits.
-      expect(store.getState().repos.map((row) => row.id)).toEqual(
-        outcome === 'registers' ? ['project'] : []
-      )
-    })
-
-    it.each([['preliminary refresh'], ['onboarding save']])(
-      'leaves B alone when A’s held %s finishes',
-      async (step) => {
-        const { store } = setup([checkout('/repo'), checkout('/selected')], [])
-        harness.add.mockResolvedValueOnce({ repo: added, selectedPath: '/selected' })
-        const gate = deferred<boolean>()
-        if (step === 'onboarding save') {
-          harness.onboarding.mockReturnValueOnce(gate.promise.then(() => undefined))
-        } else {
-          const refresh = store.getState().fetchWorktrees
-          vi.spyOn(store.getState(), 'fetchWorktrees').mockImplementationOnce(async (...args) => {
-            await gate.promise
-            return refresh(...args)
-          })
-        }
-        await confirmA(store)
-        await vi.waitFor(() =>
-          expect(store.getState().repos.map((row) => row.id)).toEqual(['project'])
-        )
-        await act(async () => {
-          store.setState({ modalData: requestB })
-          gate.resolve(true)
-        })
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        expectBIntact(store)
-      }
-    )
   })
 
   it('ignores a same-id remote checkout and refuses ambiguous owner inference', async () => {

@@ -17,7 +17,9 @@ export function formatProjectPresenceProfileNames(profileNames: readonly string[
 
 export async function warnIfProjectKnownInAnotherProfile(
   repo: Repo,
-  activeOrcaProfileId: string | null
+  activeOrcaProfileId: string | null,
+  /** Read after the lookup: a request superseded meanwhile must not warn about its project. */
+  canPublish: () => boolean = () => true
 ): Promise<void> {
   const findProjectProfiles = window.api.orcaProfiles?.findProjectProfiles
   // Why: without an active profile ID the scan can't exclude the current profile and would false-positive on the just-added project.
@@ -34,7 +36,7 @@ export async function warnIfProjectKnownInAnotherProfile(
     const description = formatProjectPresenceProfileNames(
       result.projects.map((project) => project.profileName)
     )
-    if (!description) {
+    if (!description || !canPublish()) {
       return
     }
     toast.warning(

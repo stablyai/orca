@@ -9,7 +9,13 @@ import { waitForSessionReady } from '../../desktop/renderer-probes/store'
 
 test.use({ seedTestRepo: false })
 
-type CheckoutHistoryEvent = { kind: 'activate' | 'tab' | 'pty'; id: string; at: number }
+/** Timed page-side record of one Retry: its trusted click, confirmation reads and their effects. */
+type RetryEvidence = {
+  initial: { activated: boolean; targetTabs: number }
+  reads: { at: number; settledAt?: number; failed: boolean }[]
+  click?: { at: number; activated: boolean; targetTabs: number }
+  effects: { kind: 'activate' | 'tab' | 'pty'; id: string; at: number }[]
+}
 
 function git(repo: string, ...args: string[]) {
   const result = runProcessSync({
@@ -269,32 +275,52 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
       throw new Error('Primary registration failed')
     }
     const target = `${repo.id}::${selected}`
-    // Every activation, tab and PTY binding of the selected checkout, timed, from before the add.
-    const history: { kind: 'activate' | 'tab' | 'pty'; id: string; at: number }[] = []
+    const sample = () => {
+      const state = store.getState()
+      return {
+        activated: state.activeWorktreeId === target,
+        targetTabs: (state.tabsByWorktree[target] ?? []).length
+      }
+    }
+    const evidence: RetryEvidence = { initial: sample(), reads: [], effects: [] }
+    const publish = () => {
+      document.documentElement.dataset.retryEvidence = JSON.stringify(evidence)
+    }
     const seen = new Set<string>()
-    const record = (kind: 'activate' | 'tab' | 'pty', id: string) => {
+    const effect = (kind: 'activate' | 'tab' | 'pty', id: string) => {
       if (!seen.has(`${kind}:${id}`)) {
         seen.add(`${kind}:${id}`)
-        history.push({ kind, id, at: performance.now() })
-        document.documentElement.dataset.selectedCheckoutHistory = JSON.stringify(history)
+        evidence.effects.push({ kind, id, at: performance.now() })
+        publish()
       }
     }
     store.subscribe((state) => {
       if (state.activeWorktreeId === target) {
-        record('activate', target)
+        effect('activate', target)
       }
       for (const tab of state.tabsByWorktree[target] ?? []) {
-        record('tab', tab.id)
+        effect('tab', tab.id)
         for (const ptyId of state.ptyIdsByTabId[tab.id] ?? []) {
-          record('pty', ptyId)
+          effect('pty', ptyId)
         }
       }
     })
+    // Sampled inside the trusted click itself: nothing between a read and the click can hide.
+    document.addEventListener(
+      'click',
+      (event) => {
+        const button = event.target instanceof Element ? event.target.closest('button') : null
+        if (event.isTrusted && button?.textContent?.trim() === 'Retry' && !evidence.click) {
+          evidence.click = { at: performance.now(), ...sample() }
+          publish()
+        }
+      },
+      true
+    )
     const original = store.getState().fetchWorktrees
-    const faults: { repoId: string; importedSelected: boolean }[] = []
-    // Fail the handoff's confirmation: its authoritative local re-read of this repo after saving the
-    // selected import. Another caller making that same read in this window would also match; the
-    // exactly-one assertion below would then fail rather than pass on the wrong read.
+    // Every authoritative local fresh read of this repo after the selected import is saved is a
+    // confirmation candidate. The first fails; all stay recorded, so a second candidate before
+    // Retry (another caller's matching read) is visible rather than hidden by a restored method.
     Object.assign(store.getState(), {
       fetchWorktrees: async (id: string, options?: Parameters<typeof original>[1]) => {
         const importedSelected =
@@ -302,30 +328,35 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
             .getState()
             .repos.find((row) => row.id === id)
             ?.importedExternalWorktreePaths?.includes(selected) === true
-        if (
+        const candidate =
           id === repo.id &&
           importedSelected &&
           options?.forceFresh === true &&
           options.requireAuthoritative === true &&
           options.executionHostId === 'local' &&
           options.suppressRemoteLineageRefresh !== true
-        ) {
-          faults.push({ repoId: id, importedSelected })
-          document.documentElement.dataset.selectedCheckoutFaults = JSON.stringify(faults)
-          store.setState({ fetchWorktrees: original })
-          return false
+        if (!candidate) {
+          return original(id, options)
         }
-        return original(id, options)
+        const read: RetryEvidence['reads'][number] = {
+          at: performance.now(),
+          failed: evidence.reads.length === 0
+        }
+        evidence.reads.push(read)
+        publish()
+        const answer = read.failed ? false : await original(id, options)
+        read.settledAt = performance.now()
+        publish()
+        return answer
       }
     })
+    publish()
     store.getState().openModal('confirm-add-project-from-folder', { folderPath: selected })
     return repo.id
   }, paths)
-  const readHistory = async (): Promise<CheckoutHistoryEvent[]> =>
+  const readEvidence = async (): Promise<RetryEvidence> =>
     JSON.parse(
-      await orcaPage.evaluate(
-        () => document.documentElement.dataset.selectedCheckoutHistory ?? '[]'
-      )
+      await orcaPage.evaluate(() => document.documentElement.dataset.retryEvidence ?? '{}')
     )
   const dialog = orcaPage.getByRole('dialog', { name: 'Add Project', exact: true })
   await expect(dialog).toBeVisible()
@@ -333,11 +364,6 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
   await expect(dialog).toBeHidden({ timeout: 30_000 })
   const retry = orcaPage.getByRole('button', { name: 'Retry', exact: true })
   await expect(retry).toBeVisible()
-  expect(
-    JSON.parse(
-      await orcaPage.evaluate(() => document.documentElement.dataset.selectedCheckoutFaults ?? '[]')
-    )
-  ).toEqual([{ repoId, importedSelected: true }])
   // The failure replaces this add's "already added" toast, so the add never reports both outcomes.
   await expect(orcaPage.getByText('Project already added', { exact: true })).toHaveCount(0)
   expect(
@@ -349,9 +375,6 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
     )
   ).toEqual([paths.selected])
   await orcaPage.screenshot({ path: testInfo.outputPath('failed-confirmation-retry.png') })
-  // Nothing activated or started the selected checkout before Retry, so what follows is Retry's own.
-  const clickedAt = await orcaPage.evaluate(() => performance.now())
-  expect(await readHistory()).toEqual([])
   await retry.click()
   await expect(
     orcaPage.locator('[role="option"][data-worktree-id]').filter({ hasText: 'retry-selected' })
@@ -362,12 +385,33 @@ test('failed confirmation keeps the selected import and lets Retry open it', asy
   const ptyId = await waitForActivePanePtyId(orcaPage)
   await expect
     .poll(async () =>
-      (await readHistory()).find((event) => event.kind === 'pty' && event.id === ptyId)
+      (await readEvidence()).effects.some((e) => e.kind === 'pty' && e.id === ptyId)
     )
-    .toEqual(expect.objectContaining({ kind: 'pty', id: ptyId }))
-  const history = await readHistory()
-  expect(history.every((event) => event.at > clickedAt)).toBe(true)
-  expect(history.map((event) => event.kind)).toEqual(expect.arrayContaining(['activate', 'tab']))
+    .toBe(true)
+  const evidence = await readEvidence()
+  const click = evidence.click
+  expect(evidence.initial).toEqual({ activated: false, targetTabs: 0 })
+  // The trusted click found the selected checkout never opened and no terminal started for it.
+  expect(click).toEqual(expect.objectContaining({ activated: false, targetTabs: 0 }))
+  if (!click) {
+    throw new Error('The Retry click was not trusted')
+  }
+  // Exactly one candidate read before the click (the failed confirmation), then Retry's own read.
+  expect(evidence.reads.filter((read) => read.at < click.at)).toEqual([
+    expect.objectContaining({ failed: true })
+  ])
+  const retryRead = evidence.reads.find((read) => read.at > click.at && !read.failed)
+  expect(retryRead?.settledAt).toBeDefined()
+  // Retry's read settles before the checkout opens, its tab appears and the terminal binds, so an
+  // earlier held start finishing across an inert Retry cannot satisfy this.
+  const retrySettledAt = retryRead?.settledAt ?? Infinity
+  for (const effect of evidence.effects) {
+    expect(effect.at).toBeGreaterThan(retrySettledAt)
+  }
+  expect(evidence.effects.map((e) => e.kind)).toEqual(
+    expect.arrayContaining(['activate', 'tab', 'pty'])
+  )
+  expect(evidence.effects).toContainEqual(expect.objectContaining({ kind: 'pty', id: ptyId }))
   await expect
     .poll(() => orcaPage.evaluate((id) => window.api.pty.getCwd(id), ptyId))
     .toBe(paths.selected)
