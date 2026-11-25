@@ -105,11 +105,11 @@ export function AddWslHostFormPanel({
           {wslMoveAutoMovesBridgeProjects()
             ? t(
                 'auto.components.sidebar.AddWslHostFormPanel.descriptionAutoMove',
-                'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle. Projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
+                'Git, files and terminals run natively in Linux. Your WSL projects move here once their terminals are idle.'
               )
             : t(
                 'auto.components.sidebar.AddWslHostFormPanel.descriptionMoveFromSidebar',
-                'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost stay on this computer until you move them from their sidebar menu. Projects on a Windows drive (/mnt/…) also stay here. You can bring a moved project back from the sidebar.'
+                'Git, files and terminals run natively in Linux. Your existing WSL projects stay on Windows until you move them from the sidebar.'
               )}
         </DialogDescription>
       </DialogHeader>
