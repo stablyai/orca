@@ -11,7 +11,6 @@ import { TooltipProvider } from '../ui/tooltip'
 import { installWebPreloadApi } from '../../web/web-preload-api'
 import { stubBots } from '../../component-fixtures/fixture-bots'
 import { useAppStore } from '../../store'
-import { readBots } from '../../lib/bot-catalog'
 import * as homes from './model/pinned-home-tab'
 import TabBar from './TabBar'
 
@@ -40,11 +39,12 @@ const bot: Bot = {
 const initialStore = useAppStore.getState()
 
 function tabs(count: number, workspace: string): (Tab & { contentType: 'agent-session' })[] {
+  // The first chat has Home's id on another host; only the last chat can own this page's Home.
   return Array.from({ length: count }, (_, index) => ({
     id: index === count - 1 ? 'home' : `tab-${index}`,
-    entityId: index === count - 1 ? 'home-chat' : `chat-${index}`,
+    entityId: index === 0 || index === count - 1 ? 'home-chat' : `chat-${index}`,
     contentType: 'agent-session',
-    executionHostId: 'local',
+    executionHostId: index === 0 ? 'runtime:other' : 'local',
     groupId: GROUP,
     worktreeId: workspace,
     agentSessionAgent: 'codex',
@@ -112,78 +112,47 @@ afterEach(() => {
 })
 
 it.each([750, 7500])(
-  'skips Home discovery for %i mounted ordinary tabs and an order replacement',
+  'skips discovery across empty catalog transitions with %i projected tabs and preserves host-scoped Home',
   (count) => {
-    const finder = vi.spyOn(homes, 'findPinnedHomeTabId')
-    const rows = tabs(count, ORDINARY)
-    const view = render(strip(rows, ORDINARY))
-    expect.soft(finder).toHaveBeenCalledTimes(0)
-    view.rerender(strip([...rows], ORDINARY, true))
-    expect.soft(finder).toHaveBeenCalledTimes(0)
-  }
-)
-
-it.each([750, 7500])(
-  'skips Home discovery in an enabled empty-catalog folder with %i projected tabs',
-  (count) => {
-    expect(useAppStore.getState().settings!.botsEnabled).toBe(true)
-    expect(readBots()).toHaveLength(0)
     const finder = vi.spyOn(homes, 'findPinnedHomeTabId')
     const rows = tabs(count, FOLDER)
-    expect(rows).toHaveLength(count)
     const view = render(strip(rows, FOLDER))
     expect.soft(finder).toHaveBeenCalledTimes(0)
-    expect(view.container.querySelector('[data-pinned-home-slot]')).toBeNull()
     view.rerender(strip([...rows], FOLDER, true))
     expect.soft(finder).toHaveBeenCalledTimes(0)
-  }
-)
-
-it.each([750, 7500])(
-  'admits live Home publication among %i tabs while skipping empty and disabled catalogs',
-  (count) => {
-    const finder = vi.spyOn(homes, 'findPinnedHomeTabId')
-    const rows = tabs(count, FOLDER)
-    expect(rows).toHaveLength(count)
-    const view = render(strip(rows, FOLDER))
+    view.rerender(strip([...rows], FOLDER))
     expect.soft(finder).toHaveBeenCalledTimes(0)
+
     const homeIsPinned = () => {
       expect(finder.mock.calls.some(([items]) => items.length === count)).toBe(true)
       expect(
         finder.mock.results.some((result) => result.type === 'return' && result.value === 'home')
       ).toBe(true)
       const slot = view.container.querySelector('[data-pinned-home-slot]')
-      if (!slot) {
-        throw new Error('The live Home publication did not create a pinned slot')
+      const first = view.container.querySelector('[data-tab-strip-slot]')
+      const scroller = view.container.querySelector('[data-tab-strip-scroller]')
+      if (!slot || !first || !scroller) {
+        throw new Error('Home publication must render both the pinned slot and the scrolling strip')
       }
       expect(slot.querySelector('[data-tab-strip-slot="home"]')).not.toBeNull()
-      const first = view.container.querySelector('[data-tab-strip-slot]')
-      if (!first) {
-        throw new Error('The tab strip did not render a slot')
-      }
       expect(first.getAttribute('data-tab-strip-slot')).toBe('home')
-      const scroller = view.container.querySelector('[data-tab-strip-scroller]')
-      if (!scroller) {
-        throw new Error('The tab strip did not render its scroller')
-      }
       expect(scroller.querySelector('[data-tab-strip-slot="home"]')).toBeNull()
     }
-    const publications = [readBots().length]
+
     act(() => stubBots([bot]))
     homeIsPinned()
-    publications.push(readBots().length)
     finder.mockClear()
     act(() => stubBots([]))
-    publications.push(readBots().length)
-    expect(readBots()).toHaveLength(0)
     expect.soft(finder).toHaveBeenCalledTimes(0)
     expect(view.container.querySelector('[data-pinned-home-slot]')).toBeNull()
     view.rerender(strip([...rows], FOLDER, true))
     expect.soft(finder).toHaveBeenCalledTimes(0)
+    view.rerender(strip([...rows], FOLDER))
+    expect.soft(finder).toHaveBeenCalledTimes(0)
+
     finder.mockClear()
     act(() => stubBots([bot]))
     homeIsPinned()
-    publications.push(readBots().length)
     finder.mockClear()
     act(() =>
       useAppStore.setState((state) => ({ settings: { ...state.settings!, botsEnabled: false } }))
@@ -198,10 +167,7 @@ it.each([750, 7500])(
     finder.mockClear()
     view.rerender(strip(tabs(count, ORDINARY), ORDINARY))
     expect.soft(finder).toHaveBeenCalledTimes(0)
-    expect(publications).toEqual([0, 1, 0, 1])
-    console.info('STA18089 live publication completed', {
-      projectedCount: rows.length,
-      catalogLengths: publications
-    })
+    view.rerender(strip(tabs(count, ORDINARY), ORDINARY, true))
+    expect.soft(finder).toHaveBeenCalledTimes(0)
   }
 )
