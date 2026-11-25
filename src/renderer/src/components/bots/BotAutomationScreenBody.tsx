@@ -1,6 +1,6 @@
 // The Automation screen below its crumb: header, one notice, Recent runs, When, Results,
 // Instructions and Setup, each built from the Automations page's own pieces.
-import { useRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
+import { useRuntimeEnvironmentCapabilityAnswer } from '@/runtime/rpc/compatibility/use-runtime-environment-capability'
 import { AUTOMATION_UPDATE_GUARD_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
 import React, { useRef, useState } from 'react'
 import { BotAutomationRunAgainDialog } from './BotAutomationRunAgainDialog'
@@ -92,11 +92,12 @@ function statusLine(
 export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const t = useTranslate()
   const { bot, owner, snapshot, controller, place } = props
-  const remoteGuard = useRuntimeEnvironmentCapability(
+  const remoteGuard = useRuntimeEnvironmentCapabilityAnswer(
     owner.authority.kind === 'runtime' ? owner.authority.environmentId : null,
     AUTOMATION_UPDATE_GUARD_RUNTIME_CAPABILITY
   )
-  const guardedUpdates = owner.authority.kind === 'desktop' || remoteGuard
+  // Only an answer without the guard counts: no answer says nothing, and Save still checks for it.
+  const guardAnswer = owner.authority.kind === 'desktop' ? 'supported' : remoteGuard
   const now = useNow(60_000)
   const offline = useBotHostOffline(bot.hostId)
   const hostLabel = useBotHostLabel(bot.hostId)
@@ -104,11 +105,15 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
   const [runAttempt, setRunNow] = useState<RunNowAttempt>(null)
   const [oldHost, setOldHost] = useState(false)
-  const [guardUnsupported, setGuardUnsupported] = useState(false)
+  // A save refused as too old holds until a newer answer (reconnect, update) or a save that lands.
+  const [refusal, setRefusal] = useState<{ answer: typeof guardAnswer; saves: number } | null>(null)
   const [deleting, setDeleting] = useState<Automation | null>(null)
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [savedCount, setSavedCount] = useState(0)
+  const guardMissing =
+    guardAnswer === 'unsupported' ||
+    (refusal?.answer === guardAnswer && refusal.saves === savedCount)
   const [confirmingRun, setConfirmingRun] = useState(false)
   const confirmRef = useRef<HTMLButtonElement>(null)
   const automation = snapshot.definition.value
@@ -146,7 +151,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     snapshot,
     controller,
     offline,
-    unsupported: unsupported || !guardedUpdates || guardUnsupported,
+    oldHost: unsupported ? 'read' : guardMissing ? 'edit' : null,
     runNow,
     running,
     runningAction: runningAction
@@ -246,7 +251,7 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     blocked ?? (foreign ? { unavailable: true, describedBy: notices.ids.foreign } : null)
   const editState: AutomationControlState =
     hostActions ??
-    (unsupported || !guardedUpdates || guardUnsupported
+    (unsupported || guardMissing
       ? { unavailable: true, describedBy: notices.ids.oldHost }
       : botAutomationDraftsFull(props.screenKey) && !props.editing
         ? { unavailable: true, describedBy: notices.ids.draftsFull }
@@ -260,8 +265,9 @@ export function BotAutomationScreenBody(props: BodyProps): React.JSX.Element {
     editing: props.editing,
     setEditing: props.setEditing,
     editState,
+    hostName,
     onSaved: () => setSavedCount((count) => count + 1),
-    onUnsupported: () => setGuardUnsupported(true),
+    onUnsupported: () => setRefusal({ answer: guardAnswer, saves: savedCount }),
     askInChat: (sentence) => void props.askInChat(sentence)
   }
   return (

@@ -30763,6 +30763,8 @@
       "checking": "Checking {{name}}'s computer…",
       "offline": "{{host}} is offline.",
       "updateOrca": "Update Orca on {{host}}",
+      "updateOrcaToEdit": "Update Orca on {{host}} to edit here.",
+      "updateOrcaToSave": "Update Orca on {{host}} to save here.",
       "unconfirmed": "Couldn't confirm the run started",
       "checkAgain": "Check again",
       "dismiss": "Dismiss",

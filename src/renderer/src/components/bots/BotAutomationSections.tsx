@@ -81,6 +81,8 @@ export type SectionProps = {
   setEditing: React.Dispatch<React.SetStateAction<Editing | null>>
   /** Why Edit can't open now (offline, old host, …); null when it can. */
   editState: AutomationControlState
+  /** The bot's computer as notices name it. */
+  hostName: string
   onSaved: () => void
   onUnsupported: () => void
   askInChat: ((sentence: string) => void) | null
@@ -170,7 +172,14 @@ function SectionEditor({
       .catch((error: unknown) => {
         if (error instanceof AutomationHostScopeUnsupportedError) {
           props.onUnsupported()
-          setEditing((current) => (current ? { ...current, saving: false, error: null } : current))
+          // Said beside Save, not only in the notice above: the press that failed is here.
+          const error = t(
+            'bots.automationPanel.updateOrcaToSave',
+            'Update Orca on {{host}} to save here.',
+            { host: props.hostName }
+          )
+          setEditing((current) => (current ? { ...current, saving: false, error } : current))
+          requestAnimationFrame(() => saveRef.current?.focus())
           return
         }
         setEditing((current) =>

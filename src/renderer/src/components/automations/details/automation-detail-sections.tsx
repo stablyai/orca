@@ -275,12 +275,15 @@ export type AutomationDetailNotice = {
   cause?: string
   /** Lets disabled controls point at the notice that says why (aria-describedby). */
   id?: string
+  /** Ranks after every other notice, whatever its tone: it explains one control, not the automation. */
+  minor?: true
   content: React.ReactNode
 }
 
 const TONE_ORDER: Record<AutomationDetailNoticeTone, number> = { red: 0, amber: 1, info: 2 }
+const MINOR_ORDER = 3
 
-/** Most urgent first, red before amber before info; a repeated cause keeps its first notice. */
+/** Most urgent first, red before amber before info, minor last; a repeated cause keeps its first notice. */
 export function orderAutomationDetailNotices(
   notices: readonly AutomationDetailNotice[]
 ): AutomationDetailNotice[] {
@@ -289,7 +292,9 @@ export function orderAutomationDetailNotices(
     .map((notice, index) => ({ notice, index }))
     .sort(
       (left, right) =>
-        TONE_ORDER[left.notice.tone] - TONE_ORDER[right.notice.tone] || left.index - right.index
+        (left.notice.minor ? MINOR_ORDER : TONE_ORDER[left.notice.tone]) -
+          (right.notice.minor ? MINOR_ORDER : TONE_ORDER[right.notice.tone]) ||
+        left.index - right.index
     )
     .map(({ notice }) => notice)
     .filter((notice) => {
