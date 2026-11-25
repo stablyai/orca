@@ -138,7 +138,7 @@ export function VoicePane({
   const soniox = useSonioxKeySetup({
     catalog,
     modelStates,
-    selectedModel,
+    getSelectedModelId: () => voiceSettingsRef.current.sttModel,
     onUpdateVoiceSettings: updateVoiceSettings,
     onRefreshModelStates: refreshModelStates
   })

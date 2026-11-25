@@ -15,7 +15,8 @@ import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow
 type SonioxKeySetupOptions = {
   catalog: readonly SpeechModelManifest[]
   modelStates: readonly SpeechModelState[]
-  selectedModel: SpeechModelManifest | undefined
+  /** The model selected now; read after IPC, since the user can pick another one while it runs. */
+  getSelectedModelId: () => string
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
   onRefreshModelStates: () => Promise<void> | void
 }
@@ -32,7 +33,7 @@ type SonioxKeySetup = {
 export function useSonioxKeySetup({
   catalog,
   modelStates,
-  selectedModel,
+  getSelectedModelId,
   onUpdateVoiceSettings,
   onRefreshModelStates
 }: SonioxKeySetupOptions): SonioxKeySetup {
@@ -113,8 +114,9 @@ export function useSonioxKeySetup({
     run(
       async () => {
         await window.api.speech.clearSonioxApiKey()
-        // Dictation can't use the Soniox model without its key.
-        if (selectedModel?.provider === 'soniox') {
+        // Dictation can't use the Soniox model without its key; a selection made meanwhile stays.
+        const selectedId = getSelectedModelId()
+        if (catalog.find((model) => model.id === selectedId)?.provider === 'soniox') {
           onUpdateVoiceSettings({ sttModel: '' })
         }
         toast.success(t('components.settings.voice.soniox.cleared', 'Soniox API key cleared'))

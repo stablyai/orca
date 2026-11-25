@@ -279,10 +279,18 @@ describe('SonioxRealtimeSession', () => {
   })
 
   it('stops taking audio at the 10-minute cap', async () => {
-    const { socket, session } = await setup()
+    const { socket, session, failures } = await setup()
     socket.open()
-    const tenMinutes = new Float32Array(10 * 60 * 16_000)
-    expect(session.feedAudio(tenMinutes, 16_000)).toBe(true)
+    // One-second chunks stay under the send-buffer guard, so only the cap can stop the audio.
+    const second = new Float32Array(16_000)
+    const reachedCap = Array.from({ length: 10 * 60 }, () => session.feedAudio(second, 16_000))
+    expect(reachedCap.indexOf(true)).toBe(10 * 60 - 1)
+    expect(failures).toEqual([])
+    const sentBytes = socket.sent.reduce(
+      (sum, data) => sum + (typeof data === 'string' ? 0 : data.length),
+      0
+    )
+    expect(sentBytes).toBe(10 * 60 * 16_000 * 2)
     const sent = socket.sent.length
     expect(session.feedAudio(new Float32Array(160), 16_000)).toBe(false)
     expect(socket.sent).toHaveLength(sent)
