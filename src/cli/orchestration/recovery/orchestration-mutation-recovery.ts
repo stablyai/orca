@@ -127,14 +127,8 @@ function recoveryTargetArgs(flags?: ReadonlyMap<string, string | boolean>): stri
   if (flags?.has('on')) {
     return ['--environment', 'local']
   }
-  const args: string[] = []
-  for (const name of ['environment', 'host']) {
-    const value = flags?.get(name)
-    if (typeof value === 'string') {
-      args.push(`--${name}`, value)
-    }
-  }
-  return args
+  const environment = flags?.get('environment')
+  return typeof environment === 'string' ? ['--environment', environment] : []
 }
 
 function isUnknownMutationOutcomeCode(code: string): boolean {

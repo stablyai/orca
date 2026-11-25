@@ -23,7 +23,6 @@ describe('recovery guidance inspects the Orca the command chose', () => {
   it.each([
     ['a named environment', ['--environment', 'devbox'], ['--environment', 'devbox']],
     ['an explicit local route', ['--environment', 'local'], ['--environment', 'local']],
-    ['a host', ['--host', 'runtime:env-1'], ['--host', 'runtime:env-1']],
     ['an inline environment', ['--environment=devbox'], ['--environment', 'devbox']],
     ['an outer send via a paired server', ['--on', 'devbox'], ['--environment', 'local']]
   ])('keeps %s in the inspect and retry command', (_case, selection, queryTarget) => {

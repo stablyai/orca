@@ -3,6 +3,7 @@ import {
   ORCHESTRATION_CONTRACT_VERSION,
   ORCHESTRATION_REPLAY_ONLY_CONTRACT_VERSION
 } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { RemoteRuntimeClientError } from '../../../../../shared/remote-runtime/remote-runtime-client-error'
 import type { RpcContext, RpcMethod, RpcRequest } from '../../../rpc/core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
@@ -89,5 +90,21 @@ describe('a replay-only retry about a worker a paired server owns', () => {
   it('leaves an ordinary request forwarded as before', async () => {
     await expect(route(ORCHESTRATION_CONTRACT_VERSION)).resolves.toMatchObject({ handled: true })
     expect(callRemoteOwnedServerMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('preserves caller recovery when a forward times out before its own write', async () => {
+    callRemoteOwnedServerMock.mockRejectedValueOnce(
+      new RemoteRuntimeClientError('runtime_timeout', 'Pairing timed out.', {
+        data: { requestSent: false }
+      })
+    )
+
+    const error = await route(ORCHESTRATION_CONTRACT_VERSION).catch((failure: unknown) => failure)
+
+    expect(error).toMatchObject({
+      code: 'runtime_timeout',
+      data: { server: 'server', reachable: false }
+    })
+    expect(error).not.toHaveProperty('data.requestSent')
   })
 })
