@@ -18,6 +18,7 @@ import { readBotActiveWork } from './bot-active-work-read'
 import { BOT_WORK_NOTE_TIMEOUT_MS } from './bot-work-record'
 import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import type { Bot } from '../../shared/bot-types'
+import { createBotLookupIndex } from '../../shared/bots/bot-lookup-index'
 import type { BotChatRow } from '../../shared/bots/bot-chat-row'
 import { readBotChats } from '../runtime/rpc/methods/bots-chats'
 import { sendBotItemMail } from '../runtime/rpc/methods/bots-items-mail'
@@ -30,10 +31,8 @@ import {
 import { requireStructuredHost } from './bot-chat-session'
 import type { TurnEndedVerdict } from '../native-chat/agent-session-wire/structured-agent-session-turn-context'
 import type { StructuredAgentSessionRequestFailure } from '../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
-import {
-  createCanonicalSessionResolver,
-  readAgentSessionRecordStore
-} from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { readAgentSessionRecordStore } from '../runtime/orchestration/addressing/session-lineage/structured-session-lineage'
+import { createBotIdleItemChatRouter } from './bot-idle-item-chat'
 
 /** A bot session's turn ended: settle the request it answered, and raise its group room. */
 export function botTurnEnded(
@@ -105,6 +104,8 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
   const sections: TurnSectionsMemo = new Map()
   const idleSaid = new Map<string, Map<number, string>>()
   const needsYouSaid = new Map<string, string>()
+  const bots = createBotLookupIndex(() => runtime.bots.list())
+  const routeIdleItem = createBotIdleItemChatRouter()
   return {
     turnEnded: (sessionId, turnId, ended) => botTurnEnded(runtime, sessionId, turnId, ended),
     requestFailed: (failure) =>
@@ -139,22 +140,33 @@ export function botSessionHooks(runtime: OrcaRuntimeService): BotSessionHooks {
         ),
         activeWorkSlot(runtime, botId)
       ])
-      const idle = work?.idle?.length
-        ? botIdleItemsNote(
-            idleSaid,
-            sessionId,
-            work.idle,
-            createCanonicalSessionResolver(readAgentSessionRecordStore())
-          )
-        : null
       const needsYou =
         work?.needsYou && ownerChat(sessionId)
           ? botNeedsYouInChatNote(needsYouSaid, sessionId, work.needsYou)
           : null
-      const text = [unanswered, needsYou?.text, idle?.text].filter(Boolean).join('\n\n')
-      return text
+      const items = work?.idle
+      let idle: ReturnType<typeof botIdleItemsNote> = null
+      return unanswered || needsYou || items?.length
         ? {
-            text,
+            get text() {
+              // Other turn reads may have waited. Use the current chat placement when assembling it.
+              try {
+                const bot = items?.length ? bots.byId(botId) : undefined
+                const records = bot ? readAgentSessionRecordStore() : null
+                idle =
+                  bot && records && items
+                    ? botIdleItemsNote(
+                        idleSaid,
+                        sessionId,
+                        items,
+                        routeIdleItem(bot, records, sessionId, items)
+                      )
+                    : null
+              } catch {
+                idle = null
+              }
+              return [unanswered, needsYou?.text, idle?.text].filter(Boolean).join('\n\n')
+            },
             given: () => {
               needsYou?.given()
               idle?.given()

@@ -184,11 +184,12 @@ export function createBotTurnContext(
         memory !== entry.memory ? botMemoryUpdateText(entry.memoryText, files.memory) : null
       const topicsNow = entry.topics ? botMemoryTopicsUpdateText(entry.topics, topics) : null
       const others = recent && recent.key !== entry.recentChats ? recent.text : null
+      const workNotes = [work, unanswered?.text].filter(Boolean)
       const changed: BotContextChange[] = [
         ...(soul !== entry.soul ? ['soul' as const] : []),
         ...(memoryNow || topicsNow ? ['memory' as const] : [])
       ]
-      if (changed.length === 0 && !work && !skillsNow && !rules && !others && !unanswered) {
+      if (changed.length === 0 && !workNotes.length && !skillsNow && !rules && !others) {
         return withOrcaRules(sessionId, entry, held, null)
       }
       return withOrcaRules(sessionId, entry, held, {
@@ -199,8 +200,7 @@ export function createBotTurnContext(
           ...(topicsNow ? [topicsNow] : []),
           ...(skillsNow ? [skillsNow.text] : []),
           ...(others ? [others] : []),
-          ...(work ? [work] : []),
-          ...(unanswered ? [unanswered.text] : [])
+          ...workNotes
         ].join('\n\n'),
         ...(changed.length > 0
           ? { note: botContextNoteBody({ botId: entry.botId, changed }) }

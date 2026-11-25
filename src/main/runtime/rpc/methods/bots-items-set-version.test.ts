@@ -6,6 +6,7 @@ import {
 } from '../../../../cli/arguments/args'
 import { BOT_ITEM_HANDLERS } from '../../../../cli/bots/bot-items'
 import type { HandlerContext } from '../../../../cli/dispatch/dispatch'
+import type { RuntimeCallOptions } from '../../../../cli/runtime/connection/types'
 import { BOT_ITEM_COMMAND_SPECS } from '../../../../cli/specs/bot-items'
 import { makeTestBotItem } from '../../../../shared/bots/bot-item.test-fixture'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/remote-runtime/protocol/protocol-version'
@@ -73,12 +74,13 @@ describe('changing a bot item from an observed version', () => {
         } as unknown as RpcContext
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this command uses only call; local transport is replaced by the two real contracts.
         const client = {
-          call: async (method: string, params: unknown) => ({
-            result:
-              method === 'status.get'
-                ? { capabilities }
-                : await set.handler(set.params.parse(params), context)
-          })
+          call: async (method: string, params: unknown, options?: RuntimeCallOptions) => {
+            expect(method).toBe('bots.items.set')
+            const request = options?.requestSelection
+              ? options.requestSelection.paramsForStatus({ capabilities })
+              : params
+            return { result: await set.handler(set.params.parse(request), context) }
+          }
         } as unknown as HandlerContext['client']
         const parsed = normalizeCommandPositionals(
           BOT_ITEM_COMMAND_SPECS,

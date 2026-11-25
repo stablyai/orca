@@ -106,7 +106,7 @@ export type LineageRunningSession =
 
 /** The one forward walk: which session runs `sessionId`'s conversation now. */
 export function resolveLineageRunningSession(
-  store: AgentSessionRecordReader | null,
+  store: Pick<AgentSessionRecordReader, 'getRecord'> | null,
   sessionId: string
 ): LineageRunningSession {
   const lineage = [sessionId]
