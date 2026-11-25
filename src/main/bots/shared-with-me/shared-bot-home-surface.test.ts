@@ -20,6 +20,7 @@ it('makes a shared agent’s home without starting a terminal in it', async () =
   const { homes, groups, folders } = memorySharedBotHomes(userData)
   await homes.make({ shareId: 'share-1', botName: 'Ivy' })
   const [{ id, ...input }] = folders
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: creation reads only these fields of the new workspace.
   const workspace = {
     id,
     name: input.name,
@@ -34,6 +35,7 @@ it('makes a shared agent’s home without starting a terminal in it', async () =
     input,
     group: groups[0],
     workspace,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a group with no setup reads only the disabled agents.
     settings: { disabledTuiAgents: [] } as never,
     ports: {
       canSpawn: true,
@@ -43,6 +45,7 @@ it('makes a shared agent’s home without starting a terminal in it', async () =
       sendFollowup: vi.fn(),
       activate: vi.fn()
     },
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a home starts no agent, so no builder is called.
     startupBuilders: {} as never,
     wait: async () => ({ exitCode: 0 })
   })

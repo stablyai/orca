@@ -29,9 +29,12 @@ beforeEach(() => {
     makeTestBot({ id: 'bot-shared', agent: 'claude' })
   ])
   vi.spyOn(runtime.bots, 'assertEnabled').mockImplementation(() => {})
-  vi.spyOn(runtime, 'requireStore').mockReturnValue({
-    getSettings: () => ({ disabledTuiAgents: ['gemini'] })
-  } as never)
+  vi.spyOn(runtime, 'requireStore').mockReturnValue(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the agent menu reads only the disabled agents.
+    {
+      getSettings: () => ({ disabledTuiAgents: ['gemini'] })
+    } as never
+  )
   vi.spyOn(runtime, 'subscribeStructuredAgentAvailability').mockImplementation((read) => {
     read(['claude', 'codex', 'gemini'].map((agent) => ({ agent, state: 'available' as const })))
     return () => {}
