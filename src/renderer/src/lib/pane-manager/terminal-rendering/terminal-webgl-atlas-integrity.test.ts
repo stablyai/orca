@@ -57,12 +57,25 @@ describe('checkAtlasIntegrity', () => {
       outcome: 'healthy',
       reads: 1
     })
-    const mixed: GlyphInkReader = (_c, rect) => (rect.x === 0 ? 'ink' : 'unreadable')
-    const twoQuadrants = atlas([glyph(0), glyph(300)])
-    expect(checkAtlasIntegrity(twoQuadrants, mixed, traversal(), 16)).toEqual({
+    const mixed: GlyphInkReader = (canvas) => (canvas.width === 512 ? 'ink' : 'unreadable')
+    const twoPages = atlas()
+    twoPages.pages.push({ canvas: { width: 1024, height: 1024 }, glyphs: [glyph(0)] })
+    expect(checkAtlasIntegrity(twoPages, mixed, traversal(), 16)).toEqual({
       outcome: 'inconclusive',
       reads: 2
     })
+  })
+
+  it('reads every admitted glyph of a page in turn, one per attempt', () => {
+    const merged = atlas([glyph(0), glyph(9), glyph(512), glyph(0, 512), glyph(512, 512)], 1024)
+    const blankLast: GlyphInkReader = (_c, rect) =>
+      rect.x === 512 && rect.y === 512 ? 'blank' : 'ink'
+    const walk = traversal()
+    const outcomes = Array.from(
+      { length: 5 },
+      () => checkAtlasIntegrity(merged, blankLast, walk, 16).outcome
+    )
+    expect(outcomes).toEqual(['healthy', 'healthy', 'healthy', 'healthy', 'poisoned'])
   })
 
   it('finds an admitted rect that lost its pixels', () => {
@@ -185,6 +198,11 @@ describe('createGlyphInkReader', () => {
     ).toBe('unreadable')
   })
 
+  it('never credits ink from an invalid read', () => {
+    const read = createGlyphInkReader(() => fakeKit({ dropControls: true }))
+    expect(read(pageWithInk(true), { x: 0, y: 0, width: 9, height: 18 })).toBe('unreadable')
+  })
+
   it('recreates a failed scratch once and then succeeds', () => {
     const kits = [fakeKit({ dropControls: true }), fakeKit()]
     const make = vi.fn(() => kits.shift() ?? null)
@@ -246,8 +264,13 @@ let clock = 0
 let timers: { callback: () => void; ms: number }[] = []
 let windowPresented = true
 let deps: (read: GlyphInkReader) => AtlasIntegrityDeps
+let state = createAtlasIntegrityState()
 const registered: object[] = []
 const events: Record<string, unknown>[] = []
+
+function atlasOfPaneFor(pane: FakePane): unknown {
+  return (pane.addon as unknown as { _renderer: { _charAtlas: unknown } })._renderer._charAtlas
+}
 
 function register(visible: boolean, panes: FakePane[]): void {
   const manager = {
@@ -276,7 +299,7 @@ beforeEach(() => {
   timers = []
   windowPresented = true
   events.length = 0
-  const state = createAtlasIntegrityState()
+  state = createAtlasIntegrityState()
   deps = (read) => ({
     now: () => clock,
     read,
@@ -481,6 +504,48 @@ describe('verifyPaneWebglAtlasIntegrity', () => {
     expect(pane.addon.clearTextureAtlas).not.toHaveBeenCalled()
     runTimers()
     expect(events[0]).toMatchObject({ trigger: 'atlas-change', outcome: 'reset' })
+  })
+
+  it('retires an atlas-change hint whose publishing addon was replaced', () => {
+    const pane = fakePane(atlas())
+    register(true, [pane])
+
+    requestAtlasChangeIntegrityCheck(pane, deps(blank))
+    pane.webglAddon = { ...pane.addon } as never
+    runTimers()
+
+    expect(events).toEqual([])
+    expect(state.lastAttemptAt).toBe(Number.NEGATIVE_INFINITY)
+  })
+
+  it('charges an admitted request even when its requester is not eligible', () => {
+    const shared = atlas()
+    const covered = fakePane(shared, { covered: true })
+    const visible = fakePane(atlas())
+    register(true, [covered, visible])
+
+    verifyPaneWebglAtlasIntegrity(covered, 'reveal', deps(blank))
+    verifyPaneWebglAtlasIntegrity(visible, 'reveal', deps(blank))
+
+    expect(visible.addon.clearTextureAtlas).not.toHaveBeenCalled()
+    expect(timers).toHaveLength(1)
+  })
+
+  it('keeps at most eight pending atlases, dropping the oldest', () => {
+    const first = fakePane(atlas())
+    register(true, [first])
+    verifyPaneWebglAtlasIntegrity(first, 'reveal', deps(ink))
+    const waiting = Array.from({ length: 9 }, () => fakePane(atlas()))
+    register(true, waiting)
+    for (const pane of waiting) {
+      verifyPaneWebglAtlasIntegrity(pane, 'reveal', deps(ink))
+    }
+
+    expect(state.pending.size).toBe(8)
+    expect(
+      [...state.pending.keys()].some((ref) => ref.deref() === atlasOfPaneFor(waiting[0]))
+    ).toBe(false)
+    expect(timers).toHaveLength(1)
   })
 
   it('never throws into its caller when atlas internals throw', () => {

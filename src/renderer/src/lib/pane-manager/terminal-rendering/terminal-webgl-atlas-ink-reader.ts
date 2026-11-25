@@ -63,6 +63,12 @@ function readOnce(
   ctx.fillRect(DESTINATION_CONTROL_X, 0, 1, 1)
   ctx.drawImage(control, SOURCE_CONTROL_X, 0)
   const pixels = ctx.getImageData(0, 0, SCRATCH_WIDTH, height).data
+  // An invalid read proves nothing, not even ink.
+  const controlsPassed =
+    pixels[DESTINATION_CONTROL_X * 4 + 3] === 255 && pixels[SOURCE_CONTROL_X * 4 + 3] === 255
+  if (!controlsPassed || !isUsable(ctx)) {
+    return 'control-failed'
+  }
   const rowStride = SCRATCH_WIDTH * 4
   for (let y = 0; y < rect.height; y++) {
     for (let x = 0; x < rect.width; x++) {
@@ -71,13 +77,11 @@ function readOnce(
       }
     }
   }
-  const controlsPassed =
-    pixels[DESTINATION_CONTROL_X * 4 + 3] === 255 && pixels[SOURCE_CONTROL_X * 4 + 3] === 255
-  return controlsPassed && isUsable(ctx) ? 'blank' : 'control-failed'
+  return 'blank'
 }
 
 /**
- * Blank only when both fresh controls drawn after the copy read back opaque. Residual: the controls prove
+ * Ink or blank only when the context is live and both fresh controls drawn after the copy read back opaque. Residual: the controls prove
  * the scratch and a canvas copy work, not the transfer from this particular page canvas.
  */
 export function createGlyphInkReader(makeKit: () => ReadKit | null = createKit): GlyphInkReader {

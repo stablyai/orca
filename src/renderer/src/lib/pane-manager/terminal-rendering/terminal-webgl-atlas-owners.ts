@@ -22,10 +22,7 @@ export function atlasOfPane(pane: ManagedPaneInternal): GlyphAtlasLike | undefin
 }
 
 export function isWindowPresented(): boolean {
-  return (
-    getWindowParkVisible() &&
-    (typeof document === 'undefined' || document.visibilityState !== 'hidden')
-  )
+  return getWindowParkVisible()
 }
 
 /** A leaf currently showing this atlas on screen through a live WebGL context. */

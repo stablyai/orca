@@ -65,9 +65,25 @@ export function admittedRect(glyph: AtlasGlyph, canvas: AtlasCanvas): GlyphRect 
   return rect
 }
 
-/** Per atlas and page: where the next visit starts, so every glyph is reached across attempts. */
+/** Per atlas and page: where the next scan starts, past the last read entry, so admitted glyphs are read in turn. */
 export type Traversal = { layoutVersion: number | undefined; cursors: number[]; startPage: number }
 
+function nextReadCandidate(
+  glyphs: readonly AtlasGlyph[],
+  canvas: AtlasCanvas,
+  start: number,
+  scans: number
+): { rect: GlyphRect | null; next: number } {
+  for (let i = 0; i < scans; i++) {
+    const rect = admittedRect(glyphs[(start + i) % glyphs.length], canvas)
+    if (rect) {
+      return { rect, next: start + i + 1 }
+    }
+  }
+  return { rect: null, next: start + scans }
+}
+
+/** One read per page per attempt; healthy only when every read was a valid ink observation. */
 export function checkAtlasIntegrity(
   atlas: GlyphAtlasLike,
   read: GlyphInkReader,
@@ -80,50 +96,40 @@ export function checkAtlasIntegrity(
   }
   let reads = 0
   let inked = 0
-  let visitsLeft = MAX_VISITS_PER_ATTEMPT
+  let scansLeft = MAX_VISITS_PER_ATTEMPT
   const pageCount = atlas.pages.length
   const firstPage = pageCount ? traversal.startPage % pageCount : 0
   traversal.startPage = firstPage + 1
-  for (let step = 0; step < pageCount && visitsLeft > 0; step++) {
+  for (let step = 0; step < pageCount && scansLeft > 0 && reads < maxReads; step++) {
     const page = (firstPage + step) % pageCount
     const { canvas, glyphs } = atlas.pages[page]
     if (!canvas?.width || !canvas.height || !glyphs?.length) {
       continue
     }
-    const visits = Math.min(glyphs.length, MAX_VISITS_PER_PAGE, visitsLeft)
+    const scans = Math.min(glyphs.length, MAX_VISITS_PER_PAGE, scansLeft)
     const start = (traversal.cursors[page] ?? 0) % glyphs.length
-    traversal.cursors[page] = start + visits
-    visitsLeft -= visits
-    const quadrants: (GlyphRect | undefined)[] = []
-    for (let i = 0; i < visits; i++) {
-      const rect = admittedRect(glyphs[(start + i) % glyphs.length], canvas)
-      if (rect) {
-        const quadrant =
-          (rect.x >= canvas.width / 2 ? 1 : 0) + (rect.y >= canvas.height / 2 ? 2 : 0)
-        quadrants[quadrant] ??= rect
+    const candidate = nextReadCandidate(glyphs, canvas, start, scans)
+    traversal.cursors[page] = candidate.next
+    scansLeft -= scans
+    if (!candidate.rect) {
+      continue
+    }
+    reads++
+    let result: InkRead
+    try {
+      result = read(canvas, candidate.rect)
+    } catch {
+      result = 'unreadable'
+    }
+    if (result === 'blank') {
+      return {
+        outcome: 'poisoned',
+        finding: { reason: 'blank-page-glyph', page, pageSize: canvas.width },
+        reads
       }
     }
-    for (const rect of quadrants) {
-      if (!rect || reads >= maxReads) {
-        continue
-      }
-      reads++
-      let result: InkRead
-      try {
-        result = read(canvas, rect)
-      } catch {
-        result = 'unreadable'
-      }
-      if (result === 'blank') {
-        return {
-          outcome: 'poisoned',
-          finding: { reason: 'blank-page-glyph', page, pageSize: canvas.width },
-          reads
-        }
-      }
-      if (result === 'ink') {
-        inked++
-      }
+    if (result === 'ink') {
+      inked++
     }
   }
   return { outcome: inked > 0 && inked === reads ? 'healthy' : 'inconclusive', reads }

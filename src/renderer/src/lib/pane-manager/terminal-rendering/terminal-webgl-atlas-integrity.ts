@@ -73,6 +73,7 @@ const GLOBAL_SPACING_MS = 50
 const READ_WINDOW_MS = 1_000
 const MAX_READS_PER_WINDOW = 16
 const PENDING_EXPIRY_MS = 30_000
+const MAX_PENDING_ATLASES = 8
 const RESET_INTERVAL_MS = 60_000
 const MAX_RESETS_PER_ATLAS = 3
 const MAX_RESETS_PER_SESSION = 10
@@ -105,19 +106,22 @@ function globalReadyAt(deps: AtlasIntegrityDeps, now: number): number {
   return Math.max(deps.state.lastAttemptAt + GLOBAL_SPACING_MS, budgetAt)
 }
 
-function trace(entry: {
-  trigger: AtlasCheckTrigger
-  outcome: string
-  reads: number
-  page?: number
-}): void {
-  const hook = (globalThis as { __orcaAtlasIntegrityTrace?: (entry: object) => void })
+type TraceStage =
+  | { stage: 'enter'; trigger: AtlasCheckTrigger }
+  | { stage: 'admit' | 'deny'; trigger: AtlasCheckTrigger }
+  | { stage: 'owner'; trigger: AtlasCheckTrigger; pane: number | null }
+  | { stage: 'read'; x: number; y: number; result: string }
+  | { stage: 'action'; trigger: AtlasCheckTrigger; outcome: string; reads: number; page?: number }
+
+/** Session-only observation hook (unset in normal use); content-free stages. */
+function trace(entry: TraceStage): void {
+  const hook = (globalThis as { __orcaAtlasIntegrityTrace?: (entry: TraceStage) => void })
     .__orcaAtlasIntegrityTrace
   if (typeof hook === 'function') {
     try {
       hook(entry)
     } catch {
-      // Dev observation only.
+      // Observation only.
     }
   }
 }
@@ -166,19 +170,23 @@ function reset(
   return outcome
 }
 
+/** Runs one admitted attempt with `owner`; the caller already charged the spacing slot. */
 function attempt(
   owner: ManagedPaneInternal,
   atlas: GlyphAtlasLike,
   trigger: AtlasCheckTrigger,
-  deps: AtlasIntegrityDeps
+  deps: AtlasIntegrityDeps,
+  now: number
 ): void {
-  const now = deps.now()
   const state = stateOf(deps, atlas)
-  deps.state.lastAttemptAt = now
-  const result = checkAtlasIntegrity(atlas, deps.read, state.traversal, readsLeft(deps, now))
-  for (let i = 0; i < result.reads; i++) {
+  const tracedRead: GlyphInkReader = (canvas, rect) => {
     deps.state.readTimes.push(now)
+    const result = deps.read(canvas, rect)
+    trace({ stage: 'read', x: rect.x, y: rect.y, result })
+    return result
   }
+  // Reads are reserved before any traversal or scratch setup.
+  const result = checkAtlasIntegrity(atlas, tracedRead, state.traversal, readsLeft(deps, now))
   if (result.reads > 0) {
     state.completedAt = now
   }
@@ -187,6 +195,7 @@ function attempt(
       ? reset(owner, atlas, state, result.finding, trigger, now, deps)
       : result.outcome
   trace({
+    stage: 'action',
     trigger,
     outcome,
     reads: result.reads,
@@ -194,45 +203,68 @@ function attempt(
   })
 }
 
-function armService(deps: AtlasIntegrityDeps, now: number): void {
+/** Drops collected and expired entries; at most MAX_PENDING_ATLASES checks. */
+function maintainPending(deps: AtlasIntegrityDeps): void {
+  const wallNow = Date.now()
+  for (const [ref, queuedAt] of deps.state.pending) {
+    if (!ref.deref() || wallNow - queuedAt > PENDING_EXPIRY_MS) {
+      deps.state.pending.delete(ref)
+    }
+  }
+}
+
+function armService(deps: AtlasIntegrityDeps, now: number, at: number): void {
   if (deps.state.timerArmed || deps.state.pending.size === 0) {
     return
   }
   deps.state.timerArmed = true
-  deps.setTimer(() => service(deps), Math.max(0, globalReadyAt(deps, now) - now))
+  deps.setTimer(() => service(deps), Math.max(0, at - now))
 }
 
-function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number): void {
-  for (const ref of deps.state.pending.keys()) {
-    if (ref.deref() === atlas) {
-      armService(deps, now)
-      return
+/** Deduplicated by atlas; when full the oldest entry is dropped (best effort). */
+function enqueue(atlas: GlyphAtlasLike, deps: AtlasIntegrityDeps, now: number, at: number): void {
+  maintainPending(deps)
+  const pending = deps.state.pending
+  if (![...pending.keys()].some((ref) => ref.deref() === atlas)) {
+    if (pending.size >= MAX_PENDING_ATLASES) {
+      pending.delete(pending.keys().next().value as WeakRef<GlyphAtlasLike>)
     }
+    pending.set(new WeakRef(atlas), Date.now())
   }
-  deps.state.pending.set(new WeakRef(atlas), Date.now())
-  armService(deps, now)
+  armService(deps, now, at)
 }
 
-/** One renderer-wide service: gates first, then at most one discovery scan and one attempt per firing. */
+function findEligibleOwner(atlas: GlyphAtlasLike): ManagedPaneInternal | undefined {
+  let owner: ManagedPaneInternal | undefined
+  // One walk over visible managers' leaves, stopping at the first eligible owner.
+  forEachVisibleInternalPane((pane) => {
+    if (isEligibleOwner(pane, atlas)) {
+      owner = pane
+      return true
+    }
+    return false
+  })
+  return owner
+}
+
+/** Per firing: maintenance, the gate, <= 8 selection checks, <= 1 discovery walk, <= 1 attempt, <= 1 re-arm. */
 function service(deps: AtlasIntegrityDeps): void {
   try {
     deps.state.timerArmed = false
+    maintainPending(deps)
     const now = deps.now()
-    if (now < globalReadyAt(deps, now)) {
-      armService(deps, now)
+    const gateAt = globalReadyAt(deps, now)
+    if (now < gateAt) {
+      trace({ stage: 'deny', trigger: 'deferred' })
+      armService(deps, now, gateAt)
       return
     }
-    const wallNow = Date.now()
     let chosen: GlyphAtlasLike | undefined
     let soonest = Number.POSITIVE_INFINITY
-    for (const [ref, queuedAt] of deps.state.pending) {
+    for (const ref of deps.state.pending.keys()) {
       const atlas = ref.deref()
-      if (!atlas || wallNow - queuedAt > PENDING_EXPIRY_MS) {
-        deps.state.pending.delete(ref)
-        continue
-      }
-      const readyAt = stateOf(deps, atlas).completedAt + ATLAS_COOLDOWN_MS
-      if (readyAt <= now) {
+      const readyAt = atlas ? stateOf(deps, atlas).completedAt + ATLAS_COOLDOWN_MS : now
+      if (atlas && readyAt <= now) {
         deps.state.pending.delete(ref)
         chosen = atlas
         break
@@ -240,27 +272,17 @@ function service(deps: AtlasIntegrityDeps): void {
       soonest = Math.min(soonest, readyAt)
     }
     if (!chosen) {
-      if (deps.state.pending.size > 0) {
-        deps.state.timerArmed = true
-        deps.setTimer(() => service(deps), Math.max(0, soonest - now))
-      }
+      armService(deps, now, soonest)
       return
     }
+    trace({ stage: 'admit', trigger: 'deferred' })
     deps.state.lastAttemptAt = now
-    let owner: ManagedPaneInternal | undefined
-    if (deps.isWindowPresented()) {
-      forEachVisibleInternalPane((pane) => {
-        if (isEligibleOwner(pane, chosen)) {
-          owner = pane
-          return true
-        }
-        return false
-      })
-    }
+    const owner = deps.isWindowPresented() ? findEligibleOwner(chosen) : undefined
+    trace({ stage: 'owner', trigger: 'deferred', pane: owner?.id ?? null })
     if (owner) {
-      attempt(owner, chosen, 'deferred', deps)
+      attempt(owner, chosen, 'deferred', deps, now)
     }
-    armService(deps, now)
+    armService(deps, now, globalReadyAt(deps, now))
   } catch {
     // Diagnostics-only path.
   }
@@ -273,31 +295,46 @@ export function verifyPaneWebglAtlasIntegrity(
   deps: AtlasIntegrityDeps = defaultDeps
 ): void {
   try {
-    const now = deps.now()
+    trace({ stage: 'enter', trigger })
     const atlas = atlasOfPane(pane)
     if (!atlas || !deps.isWindowPresented()) {
       return
     }
-    const cooldownAt = stateOf(deps, atlas).completedAt + ATLAS_COOLDOWN_MS
-    if (now < Math.max(globalReadyAt(deps, now), cooldownAt)) {
-      enqueue(atlas, deps, now)
+    const now = deps.now()
+    const readyAt = Math.max(
+      globalReadyAt(deps, now),
+      stateOf(deps, atlas).completedAt + ATLAS_COOLDOWN_MS
+    )
+    if (now < readyAt) {
+      trace({ stage: 'deny', trigger })
+      enqueue(atlas, deps, now, readyAt)
       return
     }
-    if (isEligibleOwner(pane, atlas)) {
-      attempt(pane, atlas, trigger, deps)
+    trace({ stage: 'admit', trigger })
+    // An admitted unit is charged even if the requester turns out ineligible.
+    deps.state.lastAttemptAt = now
+    const eligible = isEligibleOwner(pane, atlas)
+    trace({ stage: 'owner', trigger, pane: eligible ? pane.id : null })
+    if (eligible) {
+      attempt(pane, atlas, trigger, deps, now)
     }
   } catch {
     // Diagnostics-only path: a failed check must never fail its caller.
   }
 }
 
-/** xterm reports an atlas change before assigning it, so resolve it on the next task. */
+/** xterm reports an atlas change before assigning it; act next task only if the publishing addon is current. */
 export function requestAtlasChangeIntegrityCheck(
   pane: ManagedPaneInternal,
   deps: AtlasIntegrityDeps = defaultDeps
 ): void {
   try {
-    deps.setTimer(() => verifyPaneWebglAtlasIntegrity(pane, 'atlas-change', deps), 0)
+    const origin = pane.webglAddon
+    deps.setTimer(() => {
+      if (origin && pane.webglAddon === origin) {
+        verifyPaneWebglAtlasIntegrity(pane, 'atlas-change', deps)
+      }
+    }, 0)
   } catch {
     // Same containment as the direct check.
   }
