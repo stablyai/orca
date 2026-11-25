@@ -69,7 +69,7 @@ export async function prepareQueuedStartupCommand(
   })
   const shell = resolveStartupShell(target.platform, target.shell)
   const images = state.settings?.terminalInlineImages !== false
-  if (mayResolveQueuedAgentLaunch(startup.command, shell)) {
+  if (mayResolveQueuedAgentLaunch(startup.command, shell, target.platform)) {
     const launch: QueuedAgentLaunch = {
       terminal: paired?.terminal ?? ptyId,
       command: startup.command,

@@ -15,7 +15,7 @@ export type ResolveCommandOptions = {
 }
 
 export function getExecutableNames(platform: NodeJS.Platform, commandName: string): string[] {
-  if (platform === 'win32') {
+  if (platform === 'win32' && !isSpawnableCommand(platform, commandName)) {
     return [`${commandName}.cmd`, `${commandName}.exe`, `${commandName}.bat`, commandName]
   }
 

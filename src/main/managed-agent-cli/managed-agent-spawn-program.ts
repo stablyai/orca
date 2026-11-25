@@ -1,4 +1,5 @@
-import { delimiter, isAbsolute, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { basename, delimiter, isAbsolute, resolve } from 'node:path'
 import {
   renderCmdLaunchForPowerShell,
   replaceLaunchExecutable,
@@ -146,6 +147,23 @@ async function withStartupFilePath(
   return [seed, ...added].join(delimiter)
 }
 
+function nativeShellPath(path: string, shell: AgentStartupShell): string {
+  return process.platform === 'win32' && shell === 'posix' ? msysDrivePathToWindows(path) : path
+}
+
+async function effectiveLaunchCwd(
+  spawn: SpawnLaunch,
+  shell: AgentStartupShell,
+  cwd: string | undefined
+): Promise<string> {
+  const launchCwd = nativeShellPath(cwd ?? '.', shell)
+  if (isAbsolute(launchCwd)) {
+    return launchCwd
+  }
+  const base = (await spawn.readCwd?.()) || spawn.cwd || process.cwd()
+  return resolve(nativeShellPath(base, shell), launchCwd)
+}
+
 async function effectiveSearchPath(
   spawn: SpawnLaunch,
   shell: AgentStartupShell,
@@ -179,13 +197,11 @@ async function effectiveSearchPath(
     : spawn.queuedPath !== undefined
       ? await withStartupFilePath(spawn.queuedPath, shellOverride)
       : launchPath(await resolveLoginShellEnvironment({ shellOverride, env: initialEnv }))
-  const nativePath =
-    isWindows && shell === 'posix' ? msysDrivePathToWindows : (value: string) => value
   // Profile capture and a PTY's env seed use native delimiters; Bash's inline PATH uses colons.
   const pathDelimiter = isWindows && shell === 'posix' && scopedPath ? ':' : delimiter
   const entries = path !== undefined && (path !== '' || !isWindows) ? path.split(pathDelimiter) : []
   const directories = entries.map((entry) =>
-    nativePath(normalizePathEntry(process.platform, entry))
+    nativeShellPath(normalizePathEntry(process.platform, entry), shell)
   )
   const preserveQuotes = (paths: string[]) =>
     isWindows
@@ -195,10 +211,7 @@ async function effectiveSearchPath(
   if (!searchesCwd && directories.every(isAbsolute)) {
     return preserveQuotes(directories).join(delimiter)
   }
-  const launchCwd = nativePath(launch.cwd ?? '.')
-  const cwd = isAbsolute(launchCwd)
-    ? launchCwd
-    : resolve(nativePath((await spawn.readCwd?.()) || spawn.cwd || process.cwd()), launchCwd)
+  const cwd = await effectiveLaunchCwd(spawn, shell, launch.cwd)
   const absoluteDirectories = preserveQuotes(directories.map((entry) => resolve(cwd, entry)))
   return (searchesCwd ? [cwd, ...absoluteDirectories] : absoluteDirectories).join(delimiter)
 }
@@ -253,14 +266,15 @@ async function resolveLaunchExecutable(
   if (!launch) {
     return command
   }
-  const program =
-    process.platform === 'win32' && sourceShell === 'posix'
-      ? ((spawn.codexRuntime === 'wsl' ? toWindowsWslDrivePath(launch.executable) : null) ??
-        msysDrivePathToWindows(launch.executable))
-      : launch.executable
+  const wslPath =
+    process.platform === 'win32' && sourceShell === 'posix' && spawn.codexRuntime === 'wsl'
+      ? toWindowsWslDrivePath(launch.executable)
+      : null
+  const program = wslPath ?? nativeShellPath(launch.executable, sourceShell)
   const managedAgent = managedPathAgent(program)
-  const agent =
-    managedAgent ?? stockAgents.get(stockProgramKey(launch.executable, process.platform))
+  const name = basename(program)
+  const programKey = stockProgramKey(name, process.platform)
+  const agent = managedAgent ?? stockAgents.get(programKey)
   if (!agent) {
     return command
   }
@@ -286,11 +300,22 @@ async function resolveLaunchExecutable(
     return render(launch.executable)
   }
   const stock = stockLaunchProgram(agent, process.platform)
+  const usesExplicitProgram =
+    !managedAgent &&
+    (program !== name || (process.platform === 'win32' && name.toLowerCase() !== programKey))
+  let executable = usesExplicitProgram ? program : stock
+  if (usesExplicitProgram && program !== name && !isAbsolute(executable)) {
+    executable =
+      sourceShell !== 'cmd' && command.startsWith('~/', launch.start)
+        ? resolve(homedir(), executable.slice(2))
+        : resolve(await effectiveLaunchCwd(spawn, sourceShell, launch.cwd), executable)
+  }
   const pathEnv = await effectiveSearchPath(spawn, shell, launch)
   const paths = await readHostManagedAgentCommands(settings ?? {}, [agent], {
     pathEnv,
     shell,
-    forDelivery: true
+    forDelivery: true,
+    ...(usesExplicitProgram ? { explicitExecutable: executable } : {})
   })
-  return render(paths[agent] ?? stock)
+  return render(paths[agent] ?? (usesExplicitProgram ? launch.executable : stock))
 }

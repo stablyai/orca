@@ -55,6 +55,35 @@ it.runIf(process.platform === 'win32')(
 )
 
 it.runIf(process.platform === 'win32')(
+  'keeps codex.exe when an earlier PATH directory contains codex.cmd',
+  async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orca-codex-path-'))
+    const a = join(dir, 'A')
+    const b = join(dir, 'B')
+    const exe = join(b, 'codex.exe')
+    const launch = (queuedPath: string) =>
+      alignManagedAgentLaunchAtSpawn(
+        {
+          launchCommand: 'codex.exe --version',
+          queuedPath,
+          getSettings: () => ({ agentCmdOverrides: { codex: 'codex.exe' } })
+        },
+        'powershell'
+      )
+    try {
+      await mkdir(a)
+      await mkdir(b)
+      await writeFile(join(a, 'codex.cmd'), '')
+      await writeFile(exe, '')
+      expect(await launch(`${a};${b}`)).toBe('codex.exe --version')
+      expect(await launch(`${a};"${b}"`)).toBe(`& '${exe}' --version`)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }
+)
+
+it.runIf(process.platform === 'win32')(
   'keeps the stock Claude name when a quoted user PATH entry precedes an unquoted one',
   async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orca-claude-path-'))

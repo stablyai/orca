@@ -79,7 +79,7 @@ export function stockLaunchProgram(
   return getTuiAgentLaunchCommand(TUI_AGENT_CONFIG[agent], platform, { isRemote }).split(' ')[0]
 }
 
-/** A program name as that platform's lookup sees it: Windows ignores case and an .exe/.cmd/.bat extension. */
+/** A stock agent's identity, independent of its executable's Windows spelling. */
 export function stockProgramKey(program: string, platform: NodeJS.Platform): string {
   return platform === 'win32' ? program.toLowerCase().replace(/\.(exe|cmd|bat)$/, '') : program
 }
@@ -99,9 +99,12 @@ export function withManagedAgentProgram(
     return command
   }
   const launch = readLaunchPosition(command, args.shell)
+  const stock = stockLaunchProgram(args.agent, args.platform, args.isRemote)
+  // A result for the bare stock program can't answer a lookup for an explicit executable.
   return launch &&
-    stockProgramKey(launch.executable, args.platform) ===
-      stockProgramKey(stockLaunchProgram(args.agent, args.platform, args.isRemote), args.platform)
+    (args.platform === 'win32'
+      ? launch.executable.toLowerCase() === stock.toLowerCase()
+      : launch.executable === stock)
     ? replaceLaunchExecutable(command, args.shell, launch, path)
     : command
 }

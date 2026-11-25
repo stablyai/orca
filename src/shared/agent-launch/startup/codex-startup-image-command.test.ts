@@ -277,7 +277,7 @@ it('keeps PowerShell comma arguments whole through the native launch wrapper', (
   }
 })
 
-it('treats Windows spellings of the stock name as the stock program', () => {
+it('keeps explicit Windows executable spellings when applying a stock program result', () => {
   const managedAgentCommands = { codex: 'C:\\managed\\codex.exe' }
   const launch = (command: string, platform: NodeJS.Platform) =>
     withManagedAgentProgram(command, {
@@ -286,7 +286,7 @@ it('treats Windows spellings of the stock name as the stock program', () => {
       shell: 'powershell',
       managedAgentCommands
     })
-  expect(launch('codex.exe --model x', 'win32')).toBe("& 'C:\\managed\\codex.exe' --model x")
+  expect(launch('codex.exe --model x', 'win32')).toBe('codex.exe --model x')
   expect(launch('CODEX', 'win32')).toBe("& 'C:\\managed\\codex.exe'")
   expect(launch('codex-beta --model x', 'win32')).toBe('codex-beta --model x')
   expect(launch('CODEX', 'linux')).toBe('CODEX')

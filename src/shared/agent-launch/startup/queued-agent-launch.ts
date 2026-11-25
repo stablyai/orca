@@ -3,7 +3,10 @@ import { stockLaunchProgram, stockProgramKey } from './managed-agent-launch-prog
 import { isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { readLaunchPosition } from './launch-position'
 import type { AgentStartupShell } from './tui-agent-startup-shell'
-import { COMMAND_TOKEN_SCAN_MAX_CHARS } from '../../shell/command-resolution/command-token-scanner'
+import {
+  COMMAND_TOKEN_SCAN_MAX_CHARS,
+  getCommandTokenPathBasename
+} from '../../shell/command-resolution/command-token-scanner'
 
 export type QueuedAgentLaunch = {
   /** An app PTY id for desktop IPC, or the serving runtime's terminal handle for RPC. */
@@ -29,7 +32,11 @@ const stockPrograms = new Set(
     ])
 )
 
-export function mayResolveQueuedAgentLaunch(command: string, shell: AgentStartupShell): boolean {
+export function mayResolveQueuedAgentLaunch(
+  command: string,
+  shell: AgentStartupShell,
+  platform: NodeJS.Platform
+): boolean {
   if (
     isFreshOmpLaunchCommand(command) ||
     command.slice(0, COMMAND_TOKEN_SCAN_MAX_CHARS).includes('ORCA_CLAUDE_INJECTED_CONFIG_DIR')
@@ -39,7 +46,7 @@ export function mayResolveQueuedAgentLaunch(command: string, shell: AgentStartup
   const launch = readLaunchPosition(command, shell)
   return Boolean(
     launch &&
-    (stockPrograms.has(stockProgramKey(launch.executable, shell === 'posix' ? 'linux' : 'win32')) ||
+    (stockPrograms.has(stockProgramKey(getCommandTokenPathBasename(launch.executable), platform)) ||
       /[\\/]agent-runtimes[\\/]/i.test(launch.executable))
   )
 }

@@ -251,11 +251,35 @@ function withoutManagedDirectories(
     .join(delimiter)
 }
 
+async function lookUpTerminalProgram(
+  program: string,
+  pathEnv: string,
+  preferUnquotedPath: boolean
+): Promise<string> {
+  if (preferUnquotedPath) {
+    const entries = pathEnv.split(delimiter)
+    const unquotedEntries = entries.filter((entry) => !isQuotedWindowsPathEntry(entry))
+    if (unquotedEntries.length !== entries.length) {
+      const onUnquotedPath = await lookUpOwnProgram(program, unquotedEntries.join(delimiter), true)
+      if (onUnquotedPath !== null) {
+        return onUnquotedPath
+      }
+      pathEnv = entries.filter(isQuotedWindowsPathEntry).join(delimiter)
+    }
+  }
+  return lookUpOwnProgram(program, pathEnv)
+}
+
 /** Launch selection uses the captured shell PATH, installers' directories, then the current registry launcher. */
 export async function readHostManagedAgentCommands(
   settings: LaunchSettings,
   agents: readonly TuiAgent[],
-  options: { pathEnv?: string; shell?: AgentStartupShell; forDelivery?: boolean } = {}
+  options: {
+    pathEnv?: string
+    shell?: AgentStartupShell
+    forDelivery?: boolean
+    explicitExecutable?: string
+  } = {}
 ): Promise<ManagedAgentCommands> {
   const selections = agents.flatMap((agent) => {
     const program = stockLaunchProgram(agent, process.platform)
@@ -278,29 +302,30 @@ export async function readHostManagedAgentCommands(
   await Promise.all(
     selections.map(async ({ agent, program }) => {
       try {
-        let ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
-        if (preferUnquotedPath) {
-          const entries = ownPath.split(delimiter)
-          const unquotedEntries = entries.filter((entry) => !isQuotedWindowsPathEntry(entry))
-          if (unquotedEntries.length !== entries.length) {
-            const onUnquotedPath = await lookUpOwnProgram(
-              program,
-              unquotedEntries.join(delimiter),
-              true
-            )
-            if (onUnquotedPath !== null) {
+        const ownPath = withoutManagedDirectories(agent, pathEnv, options.forDelivery)
+        const explicit = options.explicitExecutable
+        if (explicit) {
+          if (isAbsolute(explicit)) {
+            if (await resolveExecutableCommandAsync(explicit)) {
               return
             }
-            ownPath = entries.filter(isQuotedWindowsPathEntry).join(delimiter)
+          } else {
+            const own = await lookUpTerminalProgram(explicit, ownPath, preferUnquotedPath)
+            if (isAbsolute(own)) {
+              if (!onTerminalPath(own, pathEnv, options.shell)) {
+                commands[agent] = own
+              }
+              return
+            }
           }
         }
-        const own = await lookUpOwnProgram(program, ownPath)
+        const own = await lookUpTerminalProgram(program, ownPath, preferUnquotedPath)
         if (own === program) {
           const managed = await managedCopyFor(agent, program, settings)
           if (managed) {
             commands[agent] = managed
           }
-        } else if (isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
+        } else if (!explicit && isAbsolute(own) && !onTerminalPath(own, pathEnv, options.shell)) {
           commands[agent] = own
         }
       } catch (error) {
