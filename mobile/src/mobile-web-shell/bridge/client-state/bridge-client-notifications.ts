@@ -15,7 +15,10 @@ import {
 } from '../native-capabilities/bridge-haptics-notify'
 import { captureBridgeError } from '../protocol/bridge-error-capture'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../native-capabilities/bridge-liveness-probe-notify'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from '../page-lifecycle/bridge-page-back'
+import {
+  BRIDGE_BACK_CLAIM_NOTIFY,
+  type BridgeBackEdgeGuard
+} from '../page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
 import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
@@ -47,7 +50,8 @@ export type BridgeClientNotifications = {
   notifyLivenessProbe: () => void
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
-  notifyBackClaim: (claimed: boolean) => void
+  /** `edgeGuards` is left out until a page has ever guarded the edge, so other pages' frames stay as they were. */
+  notifyBackClaim: (claimed: boolean, edgeGuards?: readonly BridgeBackEdgeGuard[]) => void
   notifyPageLocation: (href: string) => void
   notifySwapSafe: (safe: boolean, round: number) => void
   notifyTerminalKeyRailClaim: (
@@ -140,8 +144,14 @@ export function createBridgeClientNotifications(
     notifyPagePainted: () => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
     },
-    notifyBackClaim: (claimed) => {
-      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
+    notifyBackClaim: (claimed, edgeGuards) => {
+      post({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: BRIDGE_BACK_CLAIM_NOTIFY,
+        claimed,
+        ...(edgeGuards === undefined ? {} : { edgeGuards: [...edgeGuards] })
+      })
     },
     notifyPageLocation: (href) => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_LOCATION, href })

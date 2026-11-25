@@ -400,6 +400,7 @@ export function MobileWebShellScreen({
         bridgeEnabled={bridge.bridgeEnabled}
         onBridgeMessage={bridge.onBridgeMessage}
         backEdgeSwipe={backClaimed}
+        backEdgeGuards={bridge.backEdgeGuards}
         onBackEdgeSwipe={bridge.sendBack}
         onExternalNavigation={(event) => {
           const target = cancelledShellNavigationTarget(event.nativeEvent.url)

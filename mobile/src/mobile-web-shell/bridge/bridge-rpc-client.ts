@@ -41,6 +41,7 @@ import { createBridgeInboundFrameReader } from './client-state/bridge-client-inb
 import { createBridgeClientNotifications } from './client-state/bridge-client-notifications'
 import { createBridgeClientTerminalKeys } from './client-state/bridge-client-terminal-keys'
 import { createPageBackConsumers } from './page-lifecycle/page-back-consumers'
+import { createPageBackClaimState } from './page-lifecycle/page-back-edge-guards'
 import { BridgeClientRequests } from './client-state/bridge-client-requests'
 import {
   readBridgeRequestFrameOptions,
@@ -127,8 +128,11 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
   }
 
+  const backState = createPageBackClaimState((claimed, edgeGuards) =>
+    notifications.notifyBackClaim(claimed, edgeGuards)
+  )
   const back = createPageBackConsumers({
-    publishClaim: (claimed) => notifications.notifyBackClaim(claimed),
+    publishClaim: backState.publishClaim,
     onUnclaimed: () => {
       report({ kind: 'back-unclaimed' })
       notifications.notifyNavigateBack()
@@ -148,6 +152,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       handshake.stop()
       shellSession.accept(message)
       back.reassert()
+      backState.reassertGuards()
       terminalKeys.reassert()
     },
     acceptState: (connection) => acceptState(cache.apply(connection)),
@@ -326,6 +331,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
       notifications.notifyPageLocation(href)
     },
     claimBack: back.claim,
+    guardBackEdge: backState.guard,
     close,
     ...shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,

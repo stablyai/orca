@@ -134,6 +134,10 @@ class OrcaMobileWebShellModule : Module() {
         view.setBridgeEnabled(value)
       }
 
+      Prop("backEdgeGuards") { view: OrcaMobileWebShellView, value: List<Map<String, Double>> ->
+        view.setBackEdgeGuards(value)
+      }
+
       AsyncFunction("postBridgeMessage") { view: OrcaMobileWebShellView, json: String ->
         view.postBridgeMessage(json)
       }

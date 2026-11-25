@@ -2,7 +2,10 @@ import * as z from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from '../native-capabilities/bridge-haptics-notify'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS } from '../native-capabilities/bridge-liveness-probe-notify'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from '../page-lifecycle/bridge-page-back'
+import {
+  BRIDGE_BACK_CLAIM_NOTIFY,
+  BRIDGE_BACK_EDGE_GUARD_LIMIT
+} from '../page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../page-lifecycle/bridge-page-location'
 import { BRIDGE_SWAP_SAFE_NOTIFY } from '../page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../page-lifecycle/bridge-page-painted'
@@ -108,7 +111,12 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal(BRIDGE_BACK_CLAIM_NOTIFY),
-    claimed: z.boolean()
+    claimed: z.boolean(),
+    // Older shells strip this key and keep their edge swipe everywhere, as before it existed.
+    edgeGuards: z
+      .array(z.object({ top: z.number().finite(), bottom: z.number().finite() }))
+      .max(BRIDGE_BACK_EDGE_GUARD_LIMIT)
+      .optional()
   }),
   // Pages from desktops released with #34484 navigate inside their own document and report where, so a fold can reopen it natively.
   z.object({

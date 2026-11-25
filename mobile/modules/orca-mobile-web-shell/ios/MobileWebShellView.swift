@@ -11,6 +11,10 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
 
   // The page's own Back: the stack's swipe is off while the page claims Back, and a strip overlay would eat taps.
   private let backEdgePan = UIPanGestureRecognizer()
+  /// Page bands (points from the top) where a swipe from the left edge stays with the page.
+  private var backEdgeGuards: [ClosedRange<CGFloat>] = []
+  /// Holds a touch that starts at the edge inside a band, so the stack's Back swipe (an ancestor's) fails there.
+  private let backEdgeGuard = UILongPressGestureRecognizer()
   /// Taken on the first prop commit, not in init: the session id says whether a spare was booted for it.
   private var document: MobileWebShellDocument?
   private var generationDirectory = ""
@@ -28,6 +32,14 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
     backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
     backEdgePan.delegate = self
     addGestureRecognizer(backEdgePan)
+    // Recognizes on touch-down and lets every touch through, so it only ever makes Back wait, never the page.
+    backEdgeGuard.minimumPressDuration = 0
+    backEdgeGuard.allowableMovement = .greatestFiniteMagnitude
+    backEdgeGuard.cancelsTouchesInView = false
+    backEdgeGuard.delaysTouchesBegan = false
+    backEdgeGuard.delaysTouchesEnded = false
+    backEdgeGuard.delegate = self
+    addGestureRecognizer(backEdgeGuard)
   }
 
   private func hostDocument() -> MobileWebShellDocument {
@@ -49,9 +61,49 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
     backEdgePan.isEnabled = value
   }
 
+  func setBackEdgeGuards(_ value: [[String: Double]]) {
+    backEdgeGuards = value.compactMap { band in
+      guard let top = band["top"], let bottom = band["bottom"], bottom > top else { return nil }
+      return CGFloat(top)...CGFloat(bottom)
+    }
+  }
+
+  private func startsAtEdge(_ touch: UITouch) -> Bool {
+    touch.location(in: self).x <= 20
+  }
+
+  private func startsInGuard(_ touch: UITouch) -> Bool {
+    let y = touch.location(in: self).y
+    return backEdgeGuards.contains { $0.contains(y) }
+  }
+
   /// Only touches that start at the shell's left edge; a landscape safe area insets it from the screen's.
+  /// Inside a guarded band the edge belongs to the page (the session tab bar steps tabs there).
   func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
-    recognizer !== backEdgePan || touch.location(in: self).x <= 20
+    if recognizer === backEdgeGuard {
+      return startsAtEdge(touch) && startsInGuard(touch)
+    }
+    return recognizer !== backEdgePan || (startsAtEdge(touch) && !startsInGuard(touch))
+  }
+
+  /// The guard runs beside the page's own gestures, so the WebView still gets every touch.
+  func gestureRecognizer(
+    _ recognizer: UIGestureRecognizer,
+    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+  ) -> Bool {
+    recognizer === backEdgeGuard
+  }
+
+  /// A swipe that an ancestor would turn into Back (the stack's edge swipe) waits on the guard, which
+  /// recognizes at once for a guarded touch, so Back fails there and nowhere else.
+  func gestureRecognizer(
+    _ recognizer: UIGestureRecognizer,
+    shouldBeRequiredToFailBy other: UIGestureRecognizer
+  ) -> Bool {
+    guard recognizer === backEdgeGuard, other is UIPanGestureRecognizer, let view = other.view else {
+      return false
+    }
+    return !view.isDescendant(of: self)
   }
 
   override func gestureRecognizerShouldBegin(_ recognizer: UIGestureRecognizer) -> Bool {

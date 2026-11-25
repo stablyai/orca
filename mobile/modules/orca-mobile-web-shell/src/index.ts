@@ -31,6 +31,9 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
   // iOS only: a left-edge swipe fires onBackEdgeSwipe instead of reaching the page. Android has the hardware key.
   backEdgeSwipe?: boolean
   onBackEdgeSwipe?: () => void
+  // Bands of the page (CSS px from its top) where a swipe from the left edge stays with the page:
+  // iOS refuses its Back swipes there, Android excludes them from the system Back gesture.
+  backEdgeGuards?: readonly { top: number; bottom: number }[]
 }
 
 /** What a ref on the view carries. Expo puts the view's functions on the component prototype. */

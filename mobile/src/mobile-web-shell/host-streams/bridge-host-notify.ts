@@ -10,7 +10,10 @@ import type { BridgeInitRoute } from '../bridge/protocol/bridge-init-route'
 import { BRIDGE_HAPTICS_NOTIFY } from '../bridge/native-capabilities/bridge-haptics-notify'
 import { BRIDGE_LIVENESS_PROBE_NOTIFY } from '../bridge/native-capabilities/bridge-liveness-probe-notify'
 import { bridgeNotifyRefusal } from '../bridge/protocol/bridge-notify-grants'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from '../bridge/page-lifecycle/bridge-page-back'
+import {
+  BRIDGE_BACK_CLAIM_NOTIFY,
+  type BridgeBackEdgeGuard
+} from '../bridge/page-lifecycle/bridge-page-back'
 import { BRIDGE_PAGE_LOCATION } from '../bridge/page-lifecycle/bridge-page-location'
 import { BRIDGE_SWAP_SAFE_NOTIFY } from '../bridge/page-lifecycle/bridge-app-resumed'
 import { BRIDGE_PAGE_PAINTED } from '../bridge/page-lifecycle/bridge-page-painted'
@@ -27,7 +30,7 @@ export function createBridgeNotifyForwarder(args: {
   granted: readonly string[]
   initSent: () => boolean
   route: () => BridgeInitRoute | null
-  onBackClaim: (claimed: boolean) => void
+  onBackClaim: (claimed: boolean, edgeGuards?: readonly BridgeBackEdgeGuard[]) => void
   onTerminalKeyRailClaim: (
     claimed: boolean,
     inputOwner?: string,
@@ -57,7 +60,7 @@ export function createBridgeNotifyForwarder(args: {
     }
     if (message.name === BRIDGE_BACK_CLAIM_NOTIFY) {
       // Forward Back claims to the screen that owns the native key; this host serves only its document.
-      args.onBackClaim(message.claimed)
+      args.onBackClaim(message.claimed, message.edgeGuards)
       return
     }
     if (message.name === BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY) {

@@ -1,3 +1,4 @@
+import type { BridgeBackEdgeGuard } from '../bridge/page-lifecycle/bridge-page-back'
 import type { HostStatusReply } from '../../transport/hosts/host-status-reply-schema'
 import type {
   BridgeTerminalToolbar,
@@ -52,6 +53,8 @@ export type MobileWebShellBridgeView = {
   // Keep bridgeEnabled tied to ready, not client arrival: toggling it reloads native. Without a client, let the page retry ready until a host can answer.
   readonly bridgeEnabled: boolean
   readonly viewRef: (handle: OrcaMobileWebShellViewHandle | null) => void
+  /** Where an edge swipe stays with the page (the session tab bar) instead of going Back. */
+  readonly backEdgeGuards: readonly BridgeBackEdgeGuard[]
   readonly onBridgeMessage: (event: MobileWebShellBridgeMessageEvent) => void
   /**
    * Hands the mounted host a rewritten route for the screen it is already serving. Dropped when
@@ -126,12 +129,16 @@ export type MobileWebShellBridgeArgs = {
 }
 
 // Use reducer-owned session ids for the bridge; remount ids let native origin checks reject retired-document frames.
+const NO_EDGE_GUARDS: readonly BridgeBackEdgeGuard[] = []
+
 export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileWebShellBridgeView {
   const { client, clientId } = useHostClient(args.hostId)
   const ready = args.session.kind === 'ready' ? args.session : null
   const sessionId = ready?.sessionId ?? null
   const buildId = ready?.buildId ?? null
   const viewRef = useRef<MountedView | null>(null)
+  const [backEdgeGuards, setBackEdgeGuards] =
+    useState<readonly BridgeBackEdgeGuard[]>(NO_EDGE_GUARDS)
   const hostRef = useRef<MountedHost | null>(null)
   // Preserve Back across same-document client rebuilds, stamped by session so the next document cannot inherit it.
   const establishedBackRef = useRef<EstablishedBack | null>(null)
@@ -191,7 +198,8 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
           recordShellLifecycleLine(latest.hostId, line)
         }
       }),
-      ...latestBridgeCallbacks(argsRef)
+      ...latestBridgeCallbacks(argsRef),
+      onPageBackEdgeGuards: setBackEdgeGuards
     })
     hostRef.current = { sessionId, host }
     // Reset host-owned drop totals on rebuild so a new lower count cannot look like frames being recovered.
@@ -234,6 +242,7 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
 
   return {
     bridgeEnabled: ready !== null,
+    backEdgeGuards,
     viewRef: useCallback(
       (handle: OrcaMobileWebShellViewHandle | null) => {
         viewRef.current = handle === null || sessionId === null ? null : { sessionId, handle }

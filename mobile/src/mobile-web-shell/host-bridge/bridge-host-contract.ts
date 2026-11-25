@@ -1,3 +1,4 @@
+import type { BridgeBackEdgeGuard } from '../bridge/page-lifecycle/bridge-page-back'
 import type { BridgeAppFrame } from '../bridge/page-lifecycle/bridge-app-resumed'
 import type { HostStatusReply } from '../../transport/hosts/host-status-reply-schema'
 import type {
@@ -122,6 +123,8 @@ export type BridgeHostOptions = {
   onPagePainted: () => void
   // Required for native interception: only a live claim owns Back. Document-ending paths publish false so callers need not infer staleness.
   onPageBackClaim: (claimed: boolean) => void
+  /** Bands of the page where a swipe from the screen's edge stays with the page; empty when none or the document ends. */
+  onPageBackEdgeGuards?: (edgeGuards: readonly BridgeBackEdgeGuard[]) => void
   // Where a host-area page from an older desktop navigated inside its own document; the native route never moves for those hops.
   onPageLocation: (href: string) => void
   // The page's answer to sendAppResumed: whether reloading it onto a newer build now loses nothing.

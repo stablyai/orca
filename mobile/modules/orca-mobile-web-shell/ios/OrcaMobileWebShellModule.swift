@@ -101,6 +101,10 @@ public class OrcaMobileWebShellModule: Module {
         view.setBackEdgeSwipe(value)
       }
 
+      Prop("backEdgeGuards") { (view: OrcaMobileWebShellView, value: [[String: Double]]) in
+        view.setBackEdgeGuards(value)
+      }
+
       AsyncFunction("postBridgeMessage") {
         (view: OrcaMobileWebShellView, json: String, promise: Promise) in
         try view.postBridgeMessage(json, promise: promise)

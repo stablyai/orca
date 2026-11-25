@@ -178,6 +178,7 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
     send,
     deliverable,
     onClaim: (claimed) => options.onPageBackClaim(claimed),
+    onEdgeGuards: (edgeGuards) => options.onPageBackEdgeGuards?.(edgeGuards),
     ...(options.sessionBack === undefined ? {} : { established: options.sessionBack })
   })
 

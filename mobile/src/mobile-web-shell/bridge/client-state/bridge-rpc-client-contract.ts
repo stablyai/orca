@@ -7,6 +7,7 @@ import type { BridgeShellSession } from './bridge-client-session'
 import type { BridgeHapticsKind } from '../native-capabilities/bridge-haptics-notify'
 import type { BridgeNativeVerb } from '../native-capabilities/bridge-native-verbs'
 import type { PageBackConsumer } from '../page-lifecycle/page-back-consumers'
+import type { PageBackEdgeGuard } from '../page-lifecycle/page-back-edge-guards'
 import type { BridgeClearableRouteParam } from '../page-lifecycle/bridge-route-update'
 import type { createBridgeClientTerminalKeys } from './bridge-client-terminal-keys'
 
@@ -43,6 +44,8 @@ export type BridgeRpcClient = RpcClient &
     notifyPageLocation: (href: string) => void
     // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
     claimBack: (consumer: PageBackConsumer) => () => void
+    // A band of the page where a swipe from the screen's edge stays with the page instead of going Back.
+    guardBackEdge: (measure: () => void) => PageBackEdgeGuard
     notifyStorageWrite: (key: string, value: string | null) => boolean
     notifyHaptics: (kind: BridgeHapticsKind) => boolean
     // Never throw from error-boundary reporting. False means no frame left; shell load recovery covers reports that cannot be sent, without retrying this fault.
