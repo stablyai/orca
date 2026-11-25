@@ -27520,6 +27520,7 @@
       "waitingCount": "Waiting on {{count}} events",
       "settings": "Bot settings…",
       "disconnected": "Disconnected",
+      "connecting": "Connecting…",
       "runsOn": "Runs on {{host}}"
     },
     "new": {

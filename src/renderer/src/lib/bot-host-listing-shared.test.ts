@@ -7,7 +7,7 @@ import {
 } from '../../../shared/execution-host/execution-host'
 import { installSharedBotHostCatalog } from '@/runtime/hosts/shared-bot-hosts/shared-bot-host-catalog'
 import { publishBots, readHostBots } from './bot-catalog-snapshot'
-import { installBotHostListing } from './bot-host-listing'
+import { computeBotHostListing, installBotHostListing } from './bot-host-listing'
 import { getBotHomes, isHome } from '../../../shared/bots/bot-homes'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
@@ -135,5 +135,19 @@ describe('a shared agent’s listing in the window', () => {
       executionHostId: HOST
     }
     expect(isHome(ownersHome, readHostBots(HOST))).toBe(false)
+  })
+})
+
+describe('a shared agent just accepted', () => {
+  it('is listed as connecting, not offline, until its link is live', () => {
+    const state = (view: SharedBotHostView) =>
+      computeBotHostListing(
+        { ...store.getState(), sharedBotHosts: [view], sharedBotHostsHydrated: true },
+        { state: () => null, updateNeeded: [] },
+        { webClient: true }
+      ).hosts[0]?.state
+    expect(state({ ...SHARED, link: 'unpaired', accepting: true })).toBe('connecting')
+    expect(state({ ...SHARED, link: 'offline', accepting: false })).toBe('offline')
+    expect(state({ ...SHARED, link: 'live', accepting: true })).toBe('live')
   })
 })

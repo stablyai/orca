@@ -102,23 +102,30 @@ const BUSY_POLL_MS = 30 * 1000
 const ACCEPTING_POLL_MS = 2 * 1000
 const ACCEPTING_WINDOW_MS = 2 * 60 * 1000
 
+/** Whether `entry` was accepted moments ago and waits for its first link: shown as connecting, not
+ *  away, and its share list read fast so the host's offer is dialed within seconds. */
+export function sharedBotAccepting(
+  entry: { resume?: unknown; acceptedAt?: number },
+  link: string,
+  now: number
+): boolean {
+  return (
+    !entry.resume &&
+    link !== 'live' &&
+    entry.acceptedAt !== undefined &&
+    now - entry.acceptedAt < ACCEPTING_WINDOW_MS
+  )
+}
+
 /** How long until the next read of the share list: soon while one is pairing, has a held message or
  *  its host is away, so each settles without a click; sooner still while an Accept awaits its offer. */
 export function sharedBotsPollMs<E extends { resume?: unknown; acceptedAt?: number }>(
+  now: number,
   entries: readonly E[],
-  state: (entry: E) => { link: string; waiting: boolean },
-  now: number
+  state: (entry: E) => { link: string; waiting: boolean }
 ): number {
   const states = entries.map((entry) => ({ entry, ...state(entry) }))
-  if (
-    states.some(
-      ({ entry, link }) =>
-        !entry.resume &&
-        link !== 'live' &&
-        entry.acceptedAt !== undefined &&
-        now - entry.acceptedAt < ACCEPTING_WINDOW_MS
-    )
-  ) {
+  if (states.some(({ entry, link }) => sharedBotAccepting(entry, link, now))) {
     return ACCEPTING_POLL_MS
   }
   return states.some(({ entry, link, waiting }) => !entry.resume || link !== 'live' || waiting)

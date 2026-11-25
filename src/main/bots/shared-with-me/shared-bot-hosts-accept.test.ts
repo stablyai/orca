@@ -110,6 +110,20 @@ describe('a share offered to this account', () => {
     }
   })
 
+  it('reads as connecting from Accept until its link is made or two minutes pass', async () => {
+    let now = 1_000
+    const { service } = hosts(undefined, () => now)
+    await service.refresh()
+    expect(service.views()).toEqual([])
+    await service.accept('share-1')
+    service.stop()
+    expect(service.views()[0]?.accepting).toBe(true)
+    now += 119_000
+    expect(service.views()[0]?.accepting).toBe(true)
+    now += 1_000
+    expect(service.views()[0]?.accepting).toBe(false)
+  })
+
   it('never pairs once declined, tells the cloud, and is not offered again after a restart', async () => {
     const { service, accepts, declines, dir } = hosts()
     await service.refresh()

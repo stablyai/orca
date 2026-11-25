@@ -33,6 +33,9 @@ export type SharedBotHostView = {
   /** This computer's folder workspace the agent's chats open in; null until main has made it. */
   homeWorkspaceId: string | null
   link: SharedBotHostLink
+  /** Accepted moments ago and not live yet: its first link is being made, so it reads as connecting
+   *  rather than away. Absent from an older main. */
+  accepting?: boolean
   /** Whether a message can be held for the host while it is away (it published its key). */
   holds: boolean
   /** This device's held messages the cloud still reports, oldest first. */
@@ -43,7 +46,7 @@ export type SharedBotHostView = {
  *  are off. */
 export function sharedBotHostView(
   share: Pick<SharedBotHostView, 'environmentId' | 'shareId' | 'botId' | 'botName' | 'ownerName'>,
-  reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'holds' | 'held'>
+  reach: Pick<SharedBotHostView, 'homeWorkspaceId' | 'link' | 'accepting' | 'holds' | 'held'>
 ): SharedBotHostView {
   const { environmentId, shareId, botId, botName, ownerName } = share
   const holds = SHARED_HOSTS_HOLD_WHILE_AWAY && reach.holds

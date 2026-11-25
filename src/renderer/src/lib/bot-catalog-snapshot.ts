@@ -14,8 +14,9 @@ import { sharedBotHomeWorkspaceId } from '@/runtime/hosts/shared-bot-hosts/share
 /** What a host's bots.list says of its link to Orca Cloud. */
 export type BotHostConnectorStatus = ConnectorCloudStatus
 
-/** A listed host is read while connected; a disconnected one keeps its last read, shown dimmed. */
-export type BotHostState = 'live' | 'offline'
+/** A listed host is read while connected; a disconnected one keeps its last read, shown dimmed. A
+ *  shared agent accepted moments ago is connecting: not callable yet, but not away either. */
+export type BotHostState = 'live' | 'connecting' | 'offline'
 
 type BotHostEntry = {
   state: BotHostState

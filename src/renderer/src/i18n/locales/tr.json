@@ -24560,6 +24560,7 @@
     "row": {
       "runsOn": "{{host}} üzerinde çalışıyor",
       "disconnected": "Bağlantı kesildi",
+      "connecting": "Bağlanıyor…",
       "idle": "Boşta",
       "paused": "Duraklatıldı",
       "reading": "Mesajınızı okuyor",
