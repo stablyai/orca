@@ -115,6 +115,13 @@ it.each([750, 7500])(
   'skips discovery across empty catalog transitions with %i projected tabs and preserves host-scoped Home',
   (count) => {
     const finder = vi.spyOn(homes, 'findPinnedHomeTabId')
+    const ordinaryRows = tabs(count, ORDINARY)
+    const ordinary = render(strip(ordinaryRows, ORDINARY))
+    expect.soft(finder).toHaveBeenCalledTimes(0)
+    ordinary.rerender(strip([...ordinaryRows], ORDINARY, true))
+    expect.soft(finder).toHaveBeenCalledTimes(0)
+    ordinary.unmount()
+    finder.mockClear()
     const rows = tabs(count, FOLDER)
     const view = render(strip(rows, FOLDER))
     expect.soft(finder).toHaveBeenCalledTimes(0)
