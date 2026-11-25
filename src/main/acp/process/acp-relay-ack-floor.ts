@@ -77,7 +77,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
   /** How far acks may have reached: past this, a line may not replay again. */
   private ackable = 0
   /** Messages of agent-started turns the app ended: a late chunk of one is dropped, as live. */
-  private readonly endedByTurn = new Set<string>()
+  private endedByTurn = new Set<string>()
   private wakeAck: (() => void) | null = null
   /** Per session, the message its latest chunk named: only a new one ends the others. */
   private readonly current = new Map<string | undefined, string>()
@@ -172,7 +172,10 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
    *  the calls and messages already read from that replay stay open. */
   startTurn(adopted: boolean): void {
     if (!adopted) {
+      // The agent turn a prompt follows stays the latest closed one until the prompt's own end.
+      const ended = this.endedByTurn
       this.endTurn()
+      this.endedByTurn = ended
     }
     this.turnStart = adopted ? this.firstSeq : null
     this.turnPending = this.turnStart === null
@@ -221,18 +224,19 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     const keys = new Set<string>()
     const perSession = new Map<string | undefined, number>()
     let overflow = false
+    // One that can't be named still may resume: the reattach then moves all it meets.
     for (const [id, item] of named) {
       const count = perSession.get(item.session) ?? 0
-      const key = JSON.stringify([item.session, id.replace(CONTINUED_ID, '')])
-      if (count >= HELD_PER_SESSION || keys.has(key)) {
+      if (count >= HELD_PER_SESSION || keys.size >= RELAY_CUT_KEYS_MAX - 1) {
+        overflow = true
         continue
       }
-      perSession.set(item.session, count + 1)
-      // One that can't be named still may resume: the reattach then moves all it meets.
-      if (keys.size < RELAY_CUT_KEYS_MAX - 1 && key.length <= RELAY_CUT_KEY_MAX_CHARS) {
-        keys.add(key)
-      } else {
+      const key = JSON.stringify([item.session, id.replace(CONTINUED_ID, '')])
+      if (key.length > RELAY_CUT_KEY_MAX_CHARS) {
         overflow = true
+      } else if (!keys.has(key)) {
+        perSession.set(item.session, count + 1)
+        keys.add(key)
       }
     }
     return overflow ? [...keys, RELAY_CUT_KEYS_OVERFLOW] : [...keys]
@@ -242,19 +246,19 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     this.wakeAck = ack
   }
 
-  /** The app ended an agent-started turn: its messages stream no more, and acks may pass them. */
+  /** The app ended an agent-started turn: its messages stream no more, and acks may pass them.
+   *  Like the app, which drops a late chunk only of its latest closed turn, only its ids are kept. */
   endAgentTurn(): void {
+    const ended = new Set<string>()
     for (const open of [this.messages, this.cutMessages, this.pausedCuts, this.superseded]) {
       for (const [id, item] of open) {
-        if (!item.child) {
-          if (this.endedByTurn.size >= MAX_OPEN_ITEMS) {
-            this.endedByTurn.delete(this.endedByTurn.values().next().value ?? '')
-          }
-          this.endedByTurn.add(id)
+        if (!item.child && ended.size < MAX_OPEN_ITEMS) {
+          ended.add(id)
         }
       }
     }
     this.endTurn()
+    this.endedByTurn = ended
     this.wakeAck?.()
   }
 
@@ -276,6 +280,7 @@ class AcpRelayAckFloor implements ProviderRelayAckFloor {
     }
     this.pastBoundary.clear()
     this.current.clear()
+    this.endedByTurn = new Set()
     this.turnStart = null
     this.turnPending = false
     this.numbered = false

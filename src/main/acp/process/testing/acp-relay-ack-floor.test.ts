@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
+import { ProviderRelayCarriedWork } from '../../../provider-relay/provider-relay-carried-work'
 import { RelayedProviderOutput } from '../../../provider-relay/relayed-provider-output'
 import { RELAY_CUT_KEYS_OVERFLOW } from '../../../daemon/protocol/daemon-provider-relay-protocol'
 import { AcpRelayTurns } from '../acp-relay-ack-floor'
@@ -192,7 +193,9 @@ describe('ACP relay ack floor', () => {
       await output.settle(true)
     }
     const named = cutKeys.at(-1)
-    expect(named).toHaveLength(16)
+    // A session's 16 latest-streamed, and the overflow key for the older ones it can't name.
+    expect(named).toHaveLength(17)
+    expect(named).toContain(RELAY_CUT_KEYS_OVERFLOW)
     expect(named).toContain(JSON.stringify(['s', 'n39']))
     expect(named).not.toContain(JSON.stringify(['s', 'n0']))
   })
@@ -208,6 +211,31 @@ describe('ACP relay ack floor', () => {
     // The app drops a late chunk of the ended turn's message, so the floor holds nothing for it.
     await send(chunk(' late', 'rep'))
     expect(acks.at(-1)).toBe(3)
+  })
+
+  it('asks for the ack through the floor every relay is given, and forgets an ended turn at a prompt', async () => {
+    const turns = new AcpRelayTurns()
+    const acks: number[] = []
+    const output = new RelayedProviderOutput({
+      stdout: new Readable({ read() {} }),
+      ackFloor: new ProviderRelayCarriedWork([]).withFloor(turns.ackFloor()),
+      durable: async () => true,
+      ack: async (seq, keepFrom) => void acks.push((keepFrom ?? seq + 1) - 1)
+    })
+    output.restartAt(0)
+    output.line('relayData', 1, chunk('report', 'rep'))
+    await output.settle()
+    turns.agentTurnEnded()
+    await vi.waitFor(() => expect(acks.at(-1)).toBe(1), { timeout: 3_000 })
+    // A prompt's end closes a later turn: a chunk of the old message is held again, as the app shows it.
+    let answer!: () => void
+    void turns.track(() => new Promise<void>((resolve) => (answer = resolve)))
+    answer()
+    await Promise.resolve()
+    output.line('relayData', 2, chunk(' again', 'rep'))
+    output.line('relayData', 3, update('available_commands_update', { availableCommands: [] }))
+    await output.settle()
+    expect(acks.at(-1)).toBe(1)
   })
 
   it('marks a cut that splits more messages than it can name', async () => {

@@ -182,4 +182,21 @@ describe('ACP relay item continuation', () => {
     }
     expect(cut?.done).toBe(true)
   })
+
+  it('keeps moving after the replay while open work runs, when the cut named fewer than it split', () => {
+    const hook = new AcpRelayItemContinuation(true)
+    const overflowing = {
+      ...attach(undefined, 10),
+      cutKeys: [JSON.stringify(['s', 'm1']), RELAY_CUT_KEYS_OVERFLOW],
+      openWork: { subagent: [['child-1']] }
+    }
+    const cut = attachContinuation(hook, 'r1', 10, overflowing)
+    for (let seq = 11; seq <= 16; seq += 1) {
+      cut?.lines(seq, update({ sessionUpdate: 'available_commands_update' }), undefined)
+    }
+    // An unnamed message of the running subagent may still resume.
+    expect(cut?.done).toBe(false)
+    const [resumed = ''] = cut?.lines(20, chunk('m9', 'resumed'), undefined) ?? []
+    expect(idOf(resumed)).toBe('relay:r1:20:m9')
+  })
 })
