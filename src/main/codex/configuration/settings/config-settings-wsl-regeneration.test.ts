@@ -490,7 +490,7 @@ describe('managed Codex config for a WSL distro config', () => {
   )
 
   it('resolves a native ~/.codex only once, then skips it on clean passes', () => {
-    writeSystemConfig('model = "gpt-5"\n')
+    writeSystemConfig('model = "gpt-5"\n\n[plugins."docs@market"]\nenabled = true\n')
     syncSystemConfigIntoManagedCodexHome()
     syncSystemConfigIntoManagedCodexHome()
     resolveWriteTargetSpy.mockClear()
@@ -500,8 +500,14 @@ describe('managed Codex config for a WSL distro config', () => {
 
     expect(resolveWriteTargetSpy).not.toHaveBeenCalled()
     simulateCodexSettingWrite('model', '"o4"')
+    writeFileSync(
+      runtimeConfigPath(),
+      `${readRuntimeConfig()}\n[plugins."lint@market"]\nenabled = true\n`,
+      'utf-8'
+    )
     syncSystemConfigIntoManagedCodexHome()
-    expect(readFileSync(systemConfigPath(), 'utf-8')).toBe('model = "o4"\n')
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toMatch(/^model = "o4"$/m)
+    expect(readFileSync(systemConfigPath(), 'utf-8')).toContain('[plugins."lint@market"]')
   })
 
   it('keeps a kept plugin when the distro adds a sibling under a bare [plugins] table', () => {
@@ -533,8 +539,14 @@ describe('managed Codex config for a WSL distro config', () => {
 
     syncSystemConfigIntoManagedCodexHome()
     syncSystemConfigIntoManagedCodexHome()
+    // A plugin the distro adds and later removes must not come back as a kept value.
+    writeSystemConfig('model = "gpt-5"\n\n[plugins."docs@market"]\nenabled = true\n')
+    syncSystemConfigIntoManagedCodexHome()
+    writeSystemConfig('model = "gpt-5"\n')
+    syncSystemConfigIntoManagedCodexHome()
 
     expect(readRuntimeConfig()).toContain(`model = ${huge} # orca: `)
+    expect(readRuntimeConfig()).not.toContain('docs@market')
   })
 
   it('keeps kept values through a blank distro config while the managed copy is missing', () => {

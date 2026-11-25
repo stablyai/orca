@@ -189,11 +189,17 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   const updates = new Map<string, string>()
   const conflicts = new Map<string, CodexSettingsConflict>()
   const runtimeValuesToPreserve = new Map<string, string | null>()
+  let systemConfig = ''
   if (baseline) {
+    const systemObservation = observeAgentStateFile(systemTomlPath)
+    if (systemObservation.kind === 'indeterminate') {
+      throw systemObservation.error
+    }
+    systemConfig = systemObservation.kind === 'present' ? systemObservation.value : ''
     collectPromotionChanges({
       baseline,
       runtimeValues: readPromotedSettingValues(runtimeTomlPath),
-      systemValues: readPromotedSettingValues(systemTomlPath),
+      systemValues: readPromotedSettingValuesFromContent(systemConfig),
       updates,
       conflicts,
       runtimeValuesToPreserve
@@ -201,7 +207,16 @@ function promoteCodexRuntimeSettingsToSystemUnsafe(
   }
   // Registrations can promote before the first mirror because untracked tables are additions.
   const nothingToWrite =
-    updates.size === 0 && !hasCodexRegistrationEntries(runtimeTomlObservation.value)
+    updates.size === 0 &&
+    (!hasCodexRegistrationEntries(runtimeTomlObservation.value) ||
+      // A known native source's unchanged tables need no write, so no path lookup either.
+      (knownNative &&
+        systemConfig.trim() !== '' &&
+        planCodexRegistrationPromotion(
+          runtimeTomlObservation.value,
+          systemConfig,
+          baseline?.registrations ?? new Map()
+        ).length === 0))
   const clean = nothingToWrite && conflicts.size === 0 && runtimeValuesToPreserve.size === 0
   if (clean && knownNative) {
     return {

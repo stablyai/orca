@@ -223,14 +223,18 @@ export function writeCodexSettingsBaseline(
     file.nativeSource = true
   }
   const baselinePath = getCodexSettingsBaselinePath(runtimeHomePath)
-  const serialized = `${JSON.stringify(file, null, 2)}\n`
-  // Kept values live only here; keep the last readable file rather than write one the reader drops.
+  let serialized = `${JSON.stringify(file, null, 2)}\n`
+  // Kept values live only here, so never write a file the reader would drop as too large.
   if (
     baseline.guestCarryForward &&
     !isGuestCarryForwardEmpty(baseline.guestCarryForward) &&
     Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES
   ) {
-    throw new Error('Codex settings baseline with kept values exceeds the readable size')
+    // A home regenerated from a distro reads only its kept values and MCP names back.
+    serialized = `${JSON.stringify({ ...file, settings: {}, conflicts: undefined, registrations: undefined }, null, 2)}\n`
+    if (Buffer.byteLength(serialized) > MAX_AGENT_STATE_FILE_BYTES) {
+      throw new Error('Codex settings baseline with kept values exceeds the readable size')
+    }
   }
   let existing: string | null = null
   try {
