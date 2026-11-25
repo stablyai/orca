@@ -135,9 +135,10 @@ export class ProviderRelayDetachedCap {
         continue
       }
       const policy = relay.idleStopPolicy
-      // An approval waiting is work, tracked or not: never stopped, and not counted again.
+      // An approval waiting is work, tracked or not: never stopped while it waits. It stays
+      // counted on a fresh window, so one the agent withdraws later still ends at the cap.
       if (policy.waiting) {
-        this.counted.delete(relay)
+        this.detachedAt.set(relay, now)
         continue
       }
       // Busy again since it counted: not stopped, and not counted until it is idle with unread again.
