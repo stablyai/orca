@@ -20,7 +20,7 @@ import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './settings/source-control-ai-legacy-projection'
 import {
-  getDiscoveredModels,
+  getTextGenerationModels,
   resolveThinkingLevel,
   selectPersistedModelId
 } from './settings/source-control-ai-model-selection'
@@ -218,19 +218,23 @@ export function resolveSourceControlAiForOperation(
     )
   }
   const hostKey = input.discoveryHostKey ?? LOCAL_COMMIT_MESSAGE_HOST_KEY
+  const models = getTextGenerationModels(spec.models, source, legacy, hostKey, resolvedAgent)
   const persistedModelId = selectPersistedModelId({
     source,
     legacy,
     repoOverrides,
     operation: input.operation,
     hostKey,
-    agentId: resolvedAgent
+    agentId: resolvedAgent,
+    isAvailable: (modelId) => models.some((candidate) => candidate.id === modelId)
   })
-  const discoveredModels = getDiscoveredModels(source, legacy, hostKey, resolvedAgent)
-  const pickedModel =
-    spec.models.find((candidate) => candidate.id === persistedModelId) ??
-    discoveredModels.find((candidate) => candidate.id === persistedModelId)
-  const model = pickedModel ?? getCommitMessageModel(resolvedAgent, spec.defaultModelId)
+  const pickedModel = models.find((candidate) => candidate.id === persistedModelId)
+  // An account listing without Orca's default runs the listing's own default instead.
+  const model =
+    pickedModel ??
+    models.find((candidate) => candidate.id === spec.defaultModelId) ??
+    models.find((candidate) => candidate.isDefault) ??
+    getCommitMessageModel(resolvedAgent, spec.defaultModelId)
   if (!model) {
     return resolveFailure(textGenerationFailure('noModelForAgent', { label: spec.label }))
   }

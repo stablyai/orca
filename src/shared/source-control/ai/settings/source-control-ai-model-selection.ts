@@ -4,6 +4,7 @@ import type {
   CommitMessageAiModelCapability
 } from '../generation/commit-message-ai-types'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../generation/commit-message-host-key'
+import { getCommitMessageAgentSpec } from '../generation/commit-message-agent-spec'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type {
   RepoSourceControlAiOverrides,
@@ -146,13 +147,18 @@ export function getTextGenerationModels<T extends CommitMessageAiModelCapability
   hostKey: string,
   agentId: TuiAgent
 ): (T | CommitMessageAiModelCapability)[] {
+  const discovered = getDiscoveredModels(source, legacy, hostKey, agentId)
+  // Codex's model/list is the signed-in account's own list; built-in rows it omits fail on that account.
+  if (discovered.length > 0 && listsAccountModels(agentId)) {
+    return discovered
+  }
   const specIds = new Set(specModels.map((model) => model.id))
-  return [
-    ...specModels,
-    ...getDiscoveredModels(source, legacy, hostKey, agentId).filter(
-      (model) => !specIds.has(model.id)
-    )
-  ]
+  return [...specModels, ...discovered.filter((model) => !specIds.has(model.id))]
+}
+
+function listsAccountModels(agentId: TuiAgent): boolean {
+  const discovery = getCommitMessageAgentSpec(agentId)?.modelDiscovery
+  return discovery !== undefined && 'listing' in discovery
 }
 
 // Dictated text waits on cleanup before it lands, so cleanup starts on each agent's quickest model.
@@ -161,6 +167,7 @@ const DICTATION_CLEANUP_MODEL_BY_AGENT: Partial<Record<TuiAgent, string>> = {
   codex: 'gpt-5.4-mini'
 }
 
+/** The nearest saved pick the host can run; a pick it can't run falls through to the next level. */
 export function selectPersistedModelId(args: {
   source: SourceControlAiSettings
   legacy: CommitMessageAiSettings | null | undefined
@@ -168,22 +175,23 @@ export function selectPersistedModelId(args: {
   operation: AiTextOperation
   hostKey: string
   agentId: TuiAgent
+  isAvailable: (modelId: string) => boolean
 }): string | undefined {
   const { source, legacy, repoOverrides, operation, hostKey, agentId } = args
-  return (
-    (isGlobalAiTextAction(operation)
+  const picks = [
+    isGlobalAiTextAction(operation)
       ? undefined
       : readSourceControlAiModelChoiceForHost(
           repoOverrides?.modelOverridesByOperation?.[operation],
           hostKey,
           agentId
-        )) ??
+        ),
     readSourceControlAiModelChoiceForHost(
       source.modelOverridesByOperation?.[operation],
       hostKey,
       agentId
-    ) ??
-    (operation === 'dictationCleanup' ? DICTATION_CLEANUP_MODEL_BY_AGENT[agentId] : undefined) ??
+    ),
+    operation === 'dictationCleanup' ? DICTATION_CLEANUP_MODEL_BY_AGENT[agentId] : undefined,
     readSourceControlAiModelChoiceForHost(
       {
         selectedModelByAgent: source.selectedModelByAgent,
@@ -191,12 +199,11 @@ export function selectPersistedModelId(args: {
       },
       hostKey,
       agentId
-    ) ??
-    legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId] ??
-    (hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY
-      ? legacy?.selectedModelByAgent?.[agentId]
-      : undefined)
-  )
+    ),
+    legacy?.selectedModelByAgentByHost?.[hostKey]?.[agentId],
+    hostKey === LOCAL_COMMIT_MESSAGE_HOST_KEY ? legacy?.selectedModelByAgent?.[agentId] : undefined
+  ]
+  return picks.find((pick) => pick !== undefined && args.isAvailable(pick))
 }
 
 export function resolveThinkingLevel(args: {

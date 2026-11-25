@@ -15,7 +15,10 @@ import {
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { openCodeVariantRetryPlan } from '../../shared/text-generation/launch/opencode-generation-command'
 import { copilotUnavailableModelRetryPlan } from './failures/copilot-unavailable-model-retry'
-import { codexUnavailableModelRetryPlan } from './failures/codex-unavailable-model-retry'
+import {
+  codexUnavailableModelFailure,
+  codexUnavailableModelRetryPlan
+} from './failures/codex-unavailable-model-retry'
 import { runLocalPlanForAgent } from './execution/source-control-local-generation'
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
 import { cleanAgentAnswer, emptyResultFailure } from './failures/source-control-agent-failure'
@@ -135,6 +138,12 @@ export async function runGenerationRequest(input: {
     const retry = codexUnavailableModelRetryPlan(plan, params, result.failureOutput)
     if (retry) {
       result = await execute(retry)
+    }
+    const unavailable = result.success
+      ? null
+      : codexUnavailableModelFailure(params.model, result.failureOutput)
+    if (!result.success && unavailable) {
+      result = { ...result, ...unavailable }
     }
   }
   // Custom raw models can omit the opening think tag; built-in replies may mention it literally. PR JSON strips only after parsing fails.

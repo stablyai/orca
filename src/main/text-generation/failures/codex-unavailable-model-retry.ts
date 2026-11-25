@@ -14,6 +14,10 @@ import type { CommitMessagePlan } from '../../../shared/source-control/ai/genera
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { escapeRegex } from '../../../shared/text/regex-escaping'
 import type { AgentGenerationFailureOutput } from './agent-failure-output'
+import {
+  textGenerationFailure,
+  type TextGenerationFailureFields
+} from '../../../shared/text-generation/text-generation-failure-copy'
 
 const UNAVAILABLE_MODEL_PHRASE =
   /\b(?:does not exist|not found|not supported|unknown model|invalid model|not a valid model)\b/i
@@ -88,4 +92,14 @@ export function codexUnavailableModelRetryPlan<T extends GenerationArgument>(
     ...plan,
     args: [...plan.args.slice(0, model.index), ...plan.args.slice(modelEnd + (orcaEffort ? 2 : 0))]
   }
+}
+
+/** Codex refused the model it ran: name that model so Settings is where to change it. */
+export function codexUnavailableModelFailure(
+  model: string,
+  failure: AgentGenerationFailureOutput | undefined
+): TextGenerationFailureFields | null {
+  return isModelUnavailableFailure(model, failure)
+    ? textGenerationFailure('planModelUnavailable', { model, label: 'Codex' })
+    : null
 }
